@@ -113,6 +113,7 @@ export interface TimingSignal {
   label: string; // short human-readable, e.g. "Raised Series A this month"
   detail?: string;
   evidenceUrl?: string;
+  detectedOn?: string; // ISO date of the underlying observation; drives decay
 }
 
 export type ProspectStatus = "new" | "queued" | "contacted" | "dismissed";
@@ -121,6 +122,7 @@ export interface Prospect {
   id: string;
   company: string;
   domain?: string;
+  logo?: string; // company logo URL (directory-provided)
   summary: string; // what we know about them, for the card
   icpFit: number; // 0-100 similarity to the operator's ICP
   matchedIcp: string[]; // which ICP attributes matched

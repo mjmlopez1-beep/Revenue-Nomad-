@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Prospect, ProspectScan, ProspectStatus } from "@/lib/types";
+import { SIGNAL_LABELS } from "@/lib/prospects/config";
 
 interface ApiResponse {
   prospects: Prospect[];
@@ -23,15 +24,51 @@ function scoreClass(score: number): string {
   return "score low";
 }
 
-const SIGNAL_ICONS: Record<string, string> = {
-  funding: "💰",
-  "leadership-gap": "🪑",
-  "team-without-leader": "🧭",
-  departure: "🚪",
-  "ai-native": "🤖",
-  "content-gap": "📉",
-  "hiring-role": "📢",
+const DOT_COLORS: Record<string, string> = {
+  departure: "#c2564a",
+  "leadership-gap": "#1e6b42",
+  "team-without-leader": "#2f7d4f",
+  funding: "#b98a1d",
+  "hiring-role": "#3d7ea6",
+  "content-gap": "#8a6db0",
+  "ai-native": "#5c6ac0",
+  "actively-hiring": "#4fa06a",
+  "early-inflection": "#6d9b4f",
 };
+
+function signalAge(iso?: string): string | null {
+  if (!iso) return null;
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (isNaN(days) || days < 0) return null;
+  if (days === 0) return "today";
+  return `${days}d ago`;
+}
+
+function CompanyLogo({ prospect }: { prospect: Prospect }) {
+  const sources = useMemo(
+    () =>
+      [
+        prospect.logo,
+        prospect.domain
+          ? `https://www.google.com/s2/favicons?domain=${prospect.domain}&sz=64`
+          : undefined,
+      ].filter(Boolean) as string[],
+    [prospect.logo, prospect.domain]
+  );
+  const [idx, setIdx] = useState(0);
+  if (idx >= sources.length) {
+    return <span className="avatar avatar-letter">{prospect.company.charAt(0).toUpperCase()}</span>;
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="avatar"
+      src={sources[idx]}
+      alt=""
+      onError={() => setIdx((i) => i + 1)}
+    />
+  );
+}
 
 export default function Prospects() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
@@ -135,13 +172,7 @@ export default function Prospects() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {scanMsg && <span className="crawl-status">{scanMsg}</span>}
           <button className="btn" onClick={runScan} disabled={scanning}>
-            {scanning ? (
-              <>
-                <span className="spin">◌</span> Scanning…
-              </>
-            ) : (
-              <>🔮 Scan for signals</>
-            )}
+            {scanning ? "Scanning…" : "Scan for signals"}
           </button>
         </div>
       </div>
@@ -197,22 +228,28 @@ export default function Prospects() {
           visible.map((p) => (
             <article key={p.id} className="job-card">
               <div className="job-top">
-                <div>
-                  <div className="job-title">
-                    {p.domain ? (
-                      <a href={`https://${p.domain}`} target="_blank" rel="noopener noreferrer">
-                        {p.company}
-                      </a>
-                    ) : (
-                      p.company
-                    )}
-                  </div>
-                  <div className="job-company">
-                    ICP fit {p.icpFit} · timing {p.timing} · first seen {timeAgo(p.firstSeenAt)}
-                    {p.matchedIcp.length > 0 && <> · matches: {p.matchedIcp.join(", ")}</>}
+                <div className="company-head">
+                  <CompanyLogo prospect={p} />
+                  <div>
+                    <div className="job-title">
+                      {p.domain ? (
+                        <a href={`https://${p.domain}`} target="_blank" rel="noopener noreferrer">
+                          {p.company}
+                        </a>
+                      ) : (
+                        p.company
+                      )}
+                    </div>
+                    <div className="job-company">
+                      ICP fit {p.icpFit} · timing {p.timing}
+                      {p.matchedIcp.length > 0 && <> · matches {p.matchedIcp.join(", ")}</>}
+                    </div>
                   </div>
                 </div>
-                <span className={scoreClass(p.overall)} title="Outreach priority (timing 60% + ICP fit 40%)">
+                <span
+                  className={scoreClass(p.overall)}
+                  title="Composite priority: (ICP fit)^1.5 × timing"
+                >
                   {p.overall}
                 </span>
               </div>
@@ -221,13 +258,22 @@ export default function Prospects() {
                 <div className="why-label">Why now</div>
                 {p.signals.map((s, i) => (
                   <div key={i} className="signal-row">
-                    <span>{SIGNAL_ICONS[s.type] || "•"}</span>
+                    <span className="sig-chip">
+                      <span
+                        className="sig-dot"
+                        style={{ background: DOT_COLORS[s.type] || "#6d7a70" }}
+                      />
+                      {SIGNAL_LABELS[s.type] || s.type}
+                    </span>
                     <span>
                       <strong>{s.label}</strong>
+                      {signalAge(s.detectedOn) && (
+                        <span className="signal-detail"> · {signalAge(s.detectedOn)}</span>
+                      )}
                       {s.detail && <span className="signal-detail"> — {s.detail}</span>}{" "}
                       {s.evidenceUrl && (
                         <a href={s.evidenceUrl} target="_blank" rel="noopener noreferrer">
-                          evidence ↗
+                          View source
                         </a>
                       )}
                     </span>
@@ -235,26 +281,29 @@ export default function Prospects() {
                 ))}
               </div>
 
-              <p className="pitch">💡 {p.suggestedPitch}</p>
+              <div className="pitch">
+                <div className="why-label">Suggested angle</div>
+                {p.suggestedPitch}
+              </div>
 
               <div className="job-actions">
                 {p.status !== "queued" && (
                   <button className="action primary" onClick={() => setStatus(p.id, "queued")}>
-                    → Queue outreach
+                    Queue outreach
                   </button>
                 )}
                 {p.status !== "contacted" && (
                   <button className="action" onClick={() => setStatus(p.id, "contacted")}>
-                    ✓ Mark contacted
+                    Mark contacted
                   </button>
                 )}
                 {p.status !== "dismissed" ? (
                   <button className="action danger" onClick={() => setStatus(p.id, "dismissed")}>
-                    ✕ Dismiss
+                    Dismiss
                   </button>
                 ) : (
                   <button className="action" onClick={() => setStatus(p.id, "new")}>
-                    ↩ Restore
+                    Restore
                   </button>
                 )}
               </div>

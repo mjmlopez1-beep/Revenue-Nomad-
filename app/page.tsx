@@ -28,7 +28,7 @@ export default function Home() {
 
       <section className="features">
         <div className="feature">
-          <h3>🕸️ Boards + communities</h3>
+          <h3>Boards + communities</h3>
           <p>
             Pulls open roles from job boards (Remotive, RemoteOK, We Work Remotely, fractionaljobs.io,
             Greenhouse) and community leads from Hacker News and Reddit — founders talking about
@@ -36,7 +36,7 @@ export default function Home() {
           </p>
         </div>
         <div className="feature">
-          <h3>🎯 Truly fractional only</h3>
+          <h3>Truly fractional only</h3>
           <p>
             Every item must show a real fractional signal — fractional/interim wording, ≤4 days a
             week, hourly pricing, or a contract term. Full-time roles are filtered out, and
@@ -44,7 +44,7 @@ export default function Home() {
           </p>
         </div>
         <div className="feature">
-          <h3>🔮 Predictive prospecting</h3>
+          <h3>Predictive prospecting</h3>
           <p>
             Set your ICP once and the engine flags companies to reach out to <em>before</em> they
             post a role — fresh funding, a departed GTM leader, teams hiring without leadership, or
@@ -52,7 +52,7 @@ export default function Home() {
           </p>
         </div>
         <div className="feature">
-          <h3>📋 Operator pipeline</h3>
+          <h3>Operator pipeline</h3>
           <p>
             Save roles, queue outreach, track contacted accounts. Filter by function, engagement,
             source, and score to find your next engagement fast.

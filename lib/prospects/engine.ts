@@ -8,22 +8,7 @@ import type {
 } from "../types";
 import { loadProfile, loadProspects, saveProspects } from "../store";
 import { gatherSignals, type RawSignal } from "./signals";
-
-/**
- * How strongly each signal type indicates "they need THIS role now",
- * per operator role. 0–40 points per signal, cumulative and capped.
- */
-const SIGNAL_WEIGHTS: Record<SignalType, Partial<Record<OperatorProfile["role"], number>> & { default: number }> = {
-  funding: { default: 25 },
-  "leadership-gap": { default: 35 },
-  "team-without-leader": { default: 30 },
-  departure: { default: 35 },
-  "ai-native": { "AI GTM": 35, default: 10 },
-  "content-gap": { Marketing: 35, "AI GTM": 15, default: 10 },
-  "hiring-role": { default: 25 },
-  "actively-hiring": { default: 20 },
-  "early-inflection": { default: 20 },
-};
+import { QUEUE, signalDecay, signalWeight } from "./config";
 
 const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => string> = {
   funding: (p) =>
@@ -105,12 +90,17 @@ export async function runProspectScan(): Promise<ProspectScan> {
       sigs.push(s.signal);
     }
 
-    let timing = 0;
+    // Timing: noisy-OR with per-signal half-life decay (spec §5.1). Signals
+    // compound but saturate — three medium signals beat one strong one, but
+    // ten never blow past 100. Standing signals don't decay; their ceiling
+    // weights are set lower in config.
+    const nowMs = Date.now();
+    let survival = 1;
     for (const sig of sigs) {
-      const w = SIGNAL_WEIGHTS[sig.type];
-      timing += w[profile.role] ?? w.default;
+      const effective = signalWeight(sig.type, profile.role) * signalDecay(sig.type, sig.detectedOn, nowMs);
+      survival *= 1 - effective;
     }
-    timing = Math.min(100, timing);
+    const timing = Math.round(100 * (1 - survival));
 
     const context = group.map((s) => s.context).join(" ").slice(0, 1500);
     // Universe-derived candidates carry a structured, precomputed ICP fit;
@@ -120,20 +110,20 @@ export async function runProspectScan(): Promise<ProspectScan> {
       ? { fit: universeMember.fit!, matched: universeMember.matched || [] }
       : icpFit(profile, context);
 
-    // Timing dominates — "right company, wrong moment" can wait; the reverse can't.
-    const overall = Math.round(timing * 0.6 + fit * 0.4);
-    if (overall < 40) continue;
+    // Composite (spec §5.2): fit exponent > 1 punishes weak fit harder than
+    // weak timing — a perfectly-timed company outside the ICP is noise.
+    const overall = Math.round(Math.pow(fit / 100, 1.5) * timing);
+    if (overall < QUEUE.minComposite) continue;
 
     const primary = [...sigs].sort(
-      (a, b) =>
-        (SIGNAL_WEIGHTS[b.type][profile.role] ?? SIGNAL_WEIGHTS[b.type].default) -
-        (SIGNAL_WEIGHTS[a.type][profile.role] ?? SIGNAL_WEIGHTS[a.type].default)
+      (a, b) => signalWeight(b.type, profile.role) - signalWeight(a.type, profile.role)
     )[0];
 
     scored.push({
       id: createHash("sha1").update(key).digest("hex").slice(0, 16),
       company: group[0].company,
       domain: group.find((s) => s.domain)?.domain,
+      logo: group.find((s) => s.logo)?.logo,
       summary: context.slice(0, 400),
       icpFit: fit,
       matchedIcp: matched,
@@ -151,12 +141,16 @@ export async function runProspectScan(): Promise<ProspectScan> {
   const byId = new Map(db.prospects.map((p) => [p.id, p]));
   let added = 0;
   let updated = 0;
-  for (const p of scored) {
+  // Queue rule (spec §5.3): cap NEW entries per scan so the queue stays
+  // reviewable; refreshes of known prospects are not capped.
+  for (const p of scored.sort((a, b) => b.overall - a.overall)) {
     const existing = byId.get(p.id);
     if (existing) {
       // Keep operator pipeline state; refresh the evidence.
       existing.lastSeenAt = now;
       existing.summary = p.summary;
+      existing.logo = p.logo ?? existing.logo;
+      existing.domain = p.domain ?? existing.domain;
       existing.icpFit = p.icpFit;
       existing.matchedIcp = p.matchedIcp;
       existing.timing = p.timing;
@@ -164,7 +158,7 @@ export async function runProspectScan(): Promise<ProspectScan> {
       existing.overall = p.overall;
       existing.suggestedPitch = p.suggestedPitch;
       updated++;
-    } else {
+    } else if (added < QUEUE.maxNewPerScan) {
       byId.set(p.id, p);
       added++;
     }

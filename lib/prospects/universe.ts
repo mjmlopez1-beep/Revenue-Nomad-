@@ -26,6 +26,7 @@ const CACHE_PATH = path.join(DATA_DIR, "universe-yc.json");
 export interface UniverseCompany {
   name: string;
   domain?: string;
+  logo?: string;
   oneLiner: string;
   industry: string;
   tags: string[];
@@ -53,6 +54,7 @@ interface YcRaw {
   is_hiring?: boolean;
   url?: string;
   slug?: string;
+  small_logo_thumb_url?: string;
 }
 
 function toDomain(website?: string): string | undefined {
@@ -97,6 +99,7 @@ export async function loadUniverse(): Promise<UniverseCompany[]> {
     .map((c) => ({
       name: c.name!,
       domain: toDomain(c.website),
+      logo: c.small_logo_thumb_url || undefined,
       oneLiner: c.one_liner || (c.long_description || "").slice(0, 200),
       industry: [c.industry, c.subindustry].filter(Boolean).join(" · "),
       tags: c.tags || [],

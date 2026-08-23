@@ -14,9 +14,9 @@ export default function PortalTabs() {
       <div className="view-switch">
         {(
           [
-            ["board", "📋 Job Board"],
-            ["prospects", "🎯 Prospects"],
-            ["profile", "👤 Profile"],
+            ["board", "Job Board"],
+            ["prospects", "Prospects"],
+            ["profile", "Profile"],
           ] as [View, string][]
         ).map(([key, label]) => (
           <button

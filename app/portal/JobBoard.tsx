@@ -151,13 +151,7 @@ export default function JobBoard() {
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {crawlMsg && <span className="crawl-status">{crawlMsg}</span>}
           <button className="btn" onClick={runCrawl} disabled={crawling}>
-            {crawling ? (
-              <>
-                <span className="spin">◌</span> Crawling…
-              </>
-            ) : (
-              <>⟳ Run crawl</>
-            )}
+            {crawling ? "Crawling…" : "Run crawl"}
           </button>
         </div>
       </div>
@@ -271,14 +265,17 @@ export default function JobBoard() {
           visible.map((job) => (
             <article key={job.id} className="job-card">
               <div className="job-top">
-                <div>
-                  <div className="job-title">
-                    <a href={job.url} target="_blank" rel="noopener noreferrer">
-                      {job.title}
-                    </a>
-                  </div>
-                  <div className="job-company">
-                    {job.company} · {job.location} · posted {timeAgo(job.postedAt)}
+                <div className="company-head">
+                  <span className="avatar avatar-letter">{job.company.charAt(0).toUpperCase()}</span>
+                  <div>
+                    <div className="job-title">
+                      <a href={job.url} target="_blank" rel="noopener noreferrer">
+                        {job.title}
+                      </a>
+                    </div>
+                    <div className="job-company">
+                      {job.company} · {job.location} · posted {timeAgo(job.postedAt)}
+                    </div>
                   </div>
                 </div>
                 <span className={scoreClass(job.score)} title="Fractional-GTM fit score">
@@ -311,29 +308,29 @@ export default function JobBoard() {
               <div className="job-actions">
                 {job.status !== "saved" ? (
                   <button className="action primary" onClick={() => setStatus(job.id, "saved")}>
-                    ☆ Save
+                    Save
                   </button>
                 ) : (
                   <button className="action active" onClick={() => setStatus(job.id, "new")}>
-                    ★ Saved
+                    Saved
                   </button>
                 )}
                 {job.status !== "applied" ? (
                   <button className="action" onClick={() => setStatus(job.id, "applied")}>
-                    ✓ Mark applied
+                    Mark applied
                   </button>
                 ) : (
                   <button className="action active" onClick={() => setStatus(job.id, "new")}>
-                    ✓ Applied
+                    Applied
                   </button>
                 )}
                 {job.status !== "hidden" ? (
                   <button className="action danger" onClick={() => setStatus(job.id, "hidden")}>
-                    ✕ Hide
+                    Hide
                   </button>
                 ) : (
                   <button className="action" onClick={() => setStatus(job.id, "new")}>
-                    ↩ Restore
+                    Restore
                   </button>
                 )}
               </div>

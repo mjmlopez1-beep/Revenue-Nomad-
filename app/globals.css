@@ -488,7 +488,58 @@ a:hover {
   border-color: var(--green-pale-border);
 }
 
+/* ---------- company identity ---------- */
+.company-head {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  object-fit: contain;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.avatar-letter {
+  background: var(--green-pale);
+  color: var(--green-deep);
+  font-size: 18px;
+  font-weight: 700;
+  border-color: var(--green-pale-border);
+}
+
 /* ---------- prospects ---------- */
+.sig-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4d5a51;
+  background: #eef1ec;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  margin-top: 1px;
+  min-width: 108px;
+  justify-content: flex-start;
+}
+.sig-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 .why-now {
   background: var(--card-nested);
   border: 1px solid var(--border);

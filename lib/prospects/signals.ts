@@ -14,6 +14,7 @@ export interface RawSignal {
   /** Set for universe-derived candidates: structured ICP fit, precomputed. */
   fit?: number;
   matched?: string[];
+  logo?: string;
 }
 
 interface Gathered {
@@ -70,6 +71,7 @@ async function fundingNews(profile: OperatorProfile): Promise<RawSignal[]> {
           label: "Raised funding in the last 30 days",
           detail: stripHtml(item.title).slice(0, 140),
           evidenceUrl: item.link,
+          detectedOn: !isNaN(new Date(item.pubDate).getTime()) ? new Date(item.pubDate).toISOString() : undefined,
         },
       });
     }
@@ -115,6 +117,7 @@ async function departureNews(profile: OperatorProfile): Promise<RawSignal[]> {
           label: "GTM leader recently departed",
           detail: clean.slice(0, 140),
           evidenceUrl: item.link,
+          detectedOn: !isNaN(new Date(item.pubDate).getTime()) ? new Date(item.pubDate).toISOString() : undefined,
         },
       });
     }
@@ -217,6 +220,7 @@ async function hiringSignals(profile: OperatorProfile): Promise<RawSignal[]> {
           label: `Hiring full-time: ${leadership[0].title}`,
           detail: "Searches for FT leaders run 4–6 months — pitch fractional/interim coverage now.",
           evidenceUrl: leadership[0].url,
+          detectedOn: leadership[0].postedAt && !isNaN(new Date(leadership[0].postedAt).getTime()) ? new Date(leadership[0].postedAt).toISOString() : undefined,
         },
       });
     } else if (ics.length >= 2) {
@@ -269,6 +273,7 @@ export async function enrichCompany(company: string, domain: string): Promise<Ti
       label: "No discoverable blog/RSS feed",
       detail: "No public content engine found — opening for a content/marketing pitch.",
       evidenceUrl: `https://${domain}`,
+      detectedOn: new Date().toISOString(),
     });
   } else if (staleDays !== null && staleDays > 60) {
     out.push({
@@ -276,6 +281,7 @@ export async function enrichCompany(company: string, domain: string): Promise<Ti
       label: `Blog silent for ${staleDays} days`,
       detail: "Public content has gone quiet — the engine exists but nobody is running it.",
       evidenceUrl: `https://${domain}`,
+      detectedOn: new Date().toISOString(),
     });
   }
 
@@ -292,6 +298,7 @@ export async function enrichCompany(company: string, domain: string): Promise<Ti
         label: `${gtm.length} open GTM role(s) on their careers page`,
         detail: gtm.slice(0, 3).map((j) => j.title).join("; "),
         evidenceUrl: gtm[0].absolute_url,
+        detectedOn: new Date().toISOString(),
       });
     }
   } catch {
@@ -329,6 +336,7 @@ async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]
       out.push({
         company: c.company.name,
         domain: c.company.domain,
+        logo: c.company.logo,
         context,
         signal,
         fit: c.fit,
