@@ -21,6 +21,8 @@ const SIGNAL_WEIGHTS: Record<SignalType, Partial<Record<OperatorProfile["role"],
   "ai-native": { "AI GTM": 35, default: 10 },
   "content-gap": { Marketing: 35, "AI GTM": 15, default: 10 },
   "hiring-role": { default: 25 },
+  "actively-hiring": { default: 20 },
+  "early-inflection": { default: 20 },
 };
 
 const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => string> = {
@@ -38,6 +40,10 @@ const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => strin
     `Their public content engine is missing or stalled. Pitch a fractional content/marketing engagement with a 90-day publishing plan.`,
   "hiring-role": (p) =>
     `They have open GTM roles in your lane. Pitch fractional ${p.role} to deliver outcomes now while they hire.`,
+  "actively-hiring": (p) =>
+    `They're in build mode and hiring. Pitch fractional ${p.role} as the faster, lower-risk way to get senior GTM horsepower now.`,
+  "early-inflection": (p) =>
+    `They're at the founder-led-sales handoff point. Pitch fractional ${p.role} to build the first real GTM motion before they over-hire.`,
 };
 
 function normCompany(name: string): string {
@@ -48,8 +54,7 @@ function normCompany(name: string): string {
     .trim();
 }
 
-function icpFit(profile: OperatorProfile, context: string, onWatchlist: boolean): { fit: number; matched: string[] } {
-  if (onWatchlist) return { fit: 100, matched: ["On your watchlist"] };
+function icpFit(profile: OperatorProfile, context: string): { fit: number; matched: string[] } {
   const text = context.toLowerCase();
   const matched: string[] = [];
   let fit = 30; // base: it surfaced via role-relevant queries at all
@@ -88,8 +93,6 @@ export async function runProspectScan(): Promise<ProspectScan> {
     groups.get(key)!.push(s);
   }
 
-  const watchlistKeys = new Set(profile.watchlist.map((w) => normCompany(w.company)));
-
   const scored: Prospect[] = [];
   for (const [key, group] of groups) {
     // Dedupe identical signal types per company; keep the first of each.
@@ -110,8 +113,12 @@ export async function runProspectScan(): Promise<ProspectScan> {
     timing = Math.min(100, timing);
 
     const context = group.map((s) => s.context).join(" ").slice(0, 1500);
-    const onWatchlist = watchlistKeys.has(key);
-    const { fit, matched } = icpFit(profile, context, onWatchlist);
+    // Universe-derived candidates carry a structured, precomputed ICP fit;
+    // news-derived companies fall back to text matching against the profile.
+    const universeMember = group.find((s) => s.fit !== undefined);
+    const { fit, matched } = universeMember
+      ? { fit: universeMember.fit!, matched: universeMember.matched || [] }
+      : icpFit(profile, context);
 
     // Timing dominates — "right company, wrong moment" can wait; the reverse can't.
     const overall = Math.round(timing * 0.6 + fit * 0.4);

@@ -78,19 +78,23 @@ export type OperatorRole =
   | "Partnerships"
   | "Sellers";
 
-export interface WatchlistEntry {
-  company: string;
-  domain?: string; // e.g. "acme.com" — enables content-gap / careers checks
-}
-
+/**
+ * Mirrors the Revenue Nomad operator-profile schema (Operator_Entry template):
+ * role category, up to 7 industries, up to 3 company stages, employee/revenue
+ * size buckets, segment fit, and sales motions. The prospect engine deduces
+ * the operator's ICP from these fields — no manual account list required.
+ */
 export interface OperatorProfile {
   name: string;
   headline: string;
   role: OperatorRole;
-  industries: string[]; // e.g. ["B2B SaaS", "fintech"]
-  stages: string[]; // e.g. ["Seed", "Series A"]
-  keywords: string[]; // free-form ICP keywords, e.g. ["PLG", "outbound"]
-  watchlist: WatchlistEntry[]; // target accounts to monitor
+  industries: string[]; // display names or slugs, e.g. ["B2B SaaS", "fintech"]
+  stages: string[]; // pre_seed | seed | series_a | series_b | series_c_plus | growth
+  employeeSizes: string[]; // 1_10 | 11_50 | 51_200 | 201_500 | 501_1000 | 1001_plus
+  revenueSizes: string[]; // pre_revenue | under_1m | 1m_5m | 5m_20m | 20m_50m | 50m_plus
+  segmentFit: string[]; // smb | mid_market | enterprise | all
+  salesMotions: string[]; // plg | channel | inside_sales | enterprise_sales | plg_to_sales | all
+  keywords: string[]; // free-form ICP keywords / fit tags, e.g. ["PLG", "outbound"]
 }
 
 export type SignalType =
@@ -100,7 +104,9 @@ export type SignalType =
   | "departure" // exec departure in the news
   | "ai-native" // leadership talking about becoming AI native
   | "content-gap" // missing or stale public marketing content
-  | "hiring-role"; // hiring in the operator's function
+  | "hiring-role" // hiring in the operator's function
+  | "actively-hiring" // flagged as hiring in the company directory
+  | "early-inflection"; // young company at the stage where GTM gets built
 
 export interface TimingSignal {
   type: SignalType;

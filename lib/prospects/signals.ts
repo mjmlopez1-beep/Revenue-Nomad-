@@ -11,6 +11,9 @@ export interface RawSignal {
   domain?: string;
   context: string; // text used for ICP matching + card summary
   signal: TimingSignal;
+  /** Set for universe-derived candidates: structured ICP fit, precomputed. */
+  fit?: number;
+  matched?: string[];
 }
 
 interface Gathered {
@@ -233,88 +236,106 @@ async function hiringSignals(profile: OperatorProfile): Promise<RawSignal[]> {
 }
 
 /**
- * Watchlist enrichment: for target accounts with a known domain, check for
+ * Per-company enrichment for auto-discovered target accounts: check for
  * missing/stale public marketing content (blog/RSS) — a content-gap signal —
  * and for open GTM roles on a guessed Greenhouse board.
  */
-async function watchlistChecks(profile: OperatorProfile): Promise<RawSignal[]> {
-  const out: RawSignal[] = [];
-  await Promise.allSettled(
-    profile.watchlist.slice(0, 25).map(async (w) => {
-      const context = `${w.company} ${w.domain || ""}`;
-      if (w.domain) {
-        // Content gap: look for an RSS/Atom feed and how fresh it is.
-        let freshest: number | null = null;
-        let feedFound = false;
-        for (const path of ["/feed", "/rss.xml", "/blog/feed", "/blog/rss.xml"]) {
-          try {
-            const res = await fetchWithTimeout(`https://${w.domain}${path}`, {}, 8000);
-            if (!res.ok) continue;
-            const xml = await res.text();
-            if (!/<(rss|feed)[\s>]/i.test(xml)) continue;
-            feedFound = true;
-            for (const item of rssItems(xml).slice(0, 5)) {
-              const t = new Date(item.pubDate).getTime();
-              if (!isNaN(t)) freshest = Math.max(freshest ?? 0, t);
-            }
-            break;
-          } catch {
-            /* keep trying */
-          }
-        }
-        const staleDays = freshest ? Math.floor((Date.now() - freshest) / 86400000) : null;
-        if (!feedFound) {
-          out.push({
-            company: w.company,
-            domain: w.domain,
-            context,
-            signal: {
-              type: "content-gap",
-              label: "No discoverable blog/RSS feed",
-              detail: "No public content engine found — opening for a content/marketing pitch.",
-              evidenceUrl: `https://${w.domain}`,
-            },
-          });
-        } else if (staleDays !== null && staleDays > 60) {
-          out.push({
-            company: w.company,
-            domain: w.domain,
-            context,
-            signal: {
-              type: "content-gap",
-              label: `Blog silent for ${staleDays} days`,
-              detail: "Public content has gone quiet — the engine exists but nobody is running it.",
-              evidenceUrl: `https://${w.domain}`,
-            },
-          });
-        }
+export async function enrichCompany(company: string, domain: string): Promise<TimingSignal[]> {
+  const out: TimingSignal[] = [];
 
-        // Careers: guessed Greenhouse board.
-        const slug = w.company.toLowerCase().replace(/[^a-z0-9]/g, "");
-        try {
-          const gh = await fetchJson<{ jobs: { title: string; absolute_url: string }[] }>(
-            `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`
-          );
-          const gtm = (gh.jobs || []).filter((j) => LEADERSHIP_TITLE.test(j.title) || IC_GTM_TITLE.test(j.title));
-          if (gtm.length > 0) {
-            out.push({
-              company: w.company,
-              domain: w.domain,
-              context: `${context} ${gtm.map((j) => j.title).join(" ")}`,
-              signal: {
-                type: "hiring-role",
-                label: `${gtm.length} open GTM role(s) on their careers page`,
-                detail: gtm.slice(0, 3).map((j) => j.title).join("; "),
-                evidenceUrl: gtm[0].absolute_url,
-              },
-            });
-          }
-        } catch {
-          /* board doesn't exist under that slug — fine */
-        }
+  // Content gap: look for an RSS/Atom feed and how fresh it is.
+  let freshest: number | null = null;
+  let feedFound = false;
+  for (const path of ["/feed", "/rss.xml", "/blog/feed", "/blog/rss.xml"]) {
+    try {
+      const res = await fetchWithTimeout(`https://${domain}${path}`, {}, 8000);
+      if (!res.ok) continue;
+      const xml = await res.text();
+      if (!/<(rss|feed)[\s>]/i.test(xml)) continue;
+      feedFound = true;
+      for (const item of rssItems(xml).slice(0, 5)) {
+        const t = new Date(item.pubDate).getTime();
+        if (!isNaN(t)) freshest = Math.max(freshest ?? 0, t);
       }
+      break;
+    } catch {
+      /* keep trying */
+    }
+  }
+  const staleDays = freshest ? Math.floor((Date.now() - freshest) / 86400000) : null;
+  if (!feedFound) {
+    out.push({
+      type: "content-gap",
+      label: "No discoverable blog/RSS feed",
+      detail: "No public content engine found — opening for a content/marketing pitch.",
+      evidenceUrl: `https://${domain}`,
+    });
+  } else if (staleDays !== null && staleDays > 60) {
+    out.push({
+      type: "content-gap",
+      label: `Blog silent for ${staleDays} days`,
+      detail: "Public content has gone quiet — the engine exists but nobody is running it.",
+      evidenceUrl: `https://${domain}`,
+    });
+  }
+
+  // Careers: guessed Greenhouse board.
+  const slug = company.toLowerCase().replace(/[^a-z0-9]/g, "");
+  try {
+    const gh = await fetchJson<{ jobs: { title: string; absolute_url: string }[] }>(
+      `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`
+    );
+    const gtm = (gh.jobs || []).filter((j) => LEADERSHIP_TITLE.test(j.title) || IC_GTM_TITLE.test(j.title));
+    if (gtm.length > 0) {
+      out.push({
+        type: "hiring-role",
+        label: `${gtm.length} open GTM role(s) on their careers page`,
+        detail: gtm.slice(0, 3).map((j) => j.title).join("; "),
+        evidenceUrl: gtm[0].absolute_url,
+      });
+    }
+  } catch {
+    /* board doesn't exist under that slug — fine */
+  }
+  return out;
+}
+
+/**
+ * ICP × universe cross-reference: match the operator's deduced ICP against
+ * the universal company dataset, then enrich the strongest candidates with
+ * live timing checks (content gap, careers-page GTM roles).
+ */
+async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]> {
+  const { loadUniverse, matchUniverse } = await import("./universe");
+  const universe = await loadUniverse();
+  const candidates = matchUniverse(profile, universe, 40);
+
+  // Live enrichment is network-heavy — only the top candidates with domains.
+  const toEnrich = candidates.filter((c) => c.company.domain).slice(0, 15);
+  const enriched = new Map<string, TimingSignal[]>();
+  await Promise.allSettled(
+    toEnrich.map(async (c) => {
+      enriched.set(c.company.name, await enrichCompany(c.company.name, c.company.domain!));
     })
   );
+
+  const out: RawSignal[] = [];
+  for (const c of candidates) {
+    const signals = [...c.baseSignals, ...(enriched.get(c.company.name) || [])];
+    // No timing signal → not a "reach out now" account; skip until one appears.
+    if (signals.length === 0) continue;
+    const context = `${c.company.name} — ${c.company.oneLiner} (${c.company.industry}; ${c.company.batch})`;
+    for (const signal of signals) {
+      out.push({
+        company: c.company.name,
+        domain: c.company.domain,
+        context,
+        signal,
+        fit: c.fit,
+        matched: c.matched,
+      });
+    }
+  }
   return out;
 }
 
@@ -323,7 +344,7 @@ export async function gatherSignals(profile: OperatorProfile): Promise<Gathered>
     ["funding-news", fundingNews(profile)],
     ["departure-news", departureNews(profile)],
     ["hiring-patterns", hiringSignals(profile)],
-    ["watchlist", watchlistChecks(profile)],
+    ["icp-universe", universeCandidates(profile)],
   ];
   if (profile.role === "AI GTM") tasks.push(["ai-native-chatter", aiNativeChatter()]);
 

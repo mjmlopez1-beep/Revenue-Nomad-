@@ -19,8 +19,8 @@ export async function GET() {
   return NextResponse.json({ profile: await loadProfile() });
 }
 
-const asStrings = (v: unknown): string[] =>
-  Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean).slice(0, 30) : [];
+const asStrings = (v: unknown, max = 30): string[] =>
+  Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean).slice(0, max) : [];
 
 export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -31,20 +31,13 @@ export async function PUT(req: NextRequest) {
     name: String(body.name ?? "").slice(0, 100),
     headline: String(body.headline ?? DEFAULT_PROFILE.headline).slice(0, 200),
     role: ROLES.includes(body.role) ? body.role : DEFAULT_PROFILE.role,
-    industries: asStrings(body.industries),
-    stages: asStrings(body.stages),
-    keywords: asStrings(body.keywords),
-    watchlist: Array.isArray(body.watchlist)
-      ? body.watchlist
-          .map((w: { company?: unknown; domain?: unknown }) => ({
-            company: String(w?.company ?? "").trim().slice(0, 100),
-            domain: w?.domain
-              ? String(w.domain).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "")
-              : undefined,
-          }))
-          .filter((w: { company: string }) => w.company)
-          .slice(0, 50)
-      : [],
+    industries: asStrings(body.industries, 7),
+    stages: asStrings(body.stages, 6),
+    employeeSizes: asStrings(body.employeeSizes, 6),
+    revenueSizes: asStrings(body.revenueSizes, 6),
+    segmentFit: asStrings(body.segmentFit, 4),
+    salesMotions: asStrings(body.salesMotions, 6),
+    keywords: asStrings(body.keywords, 20),
   };
   await saveProfile(profile);
   return NextResponse.json({ profile });

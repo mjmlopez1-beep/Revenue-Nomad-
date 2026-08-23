@@ -71,9 +71,12 @@ export const DEFAULT_PROFILE: OperatorProfile = {
   headline: "Fractional GTM operator",
   role: "Sales Leadership",
   industries: ["B2B SaaS"],
-  stages: ["Seed", "Series A"],
-  keywords: ["outbound", "pipeline"],
-  watchlist: [],
+  stages: ["seed", "series_a"],
+  employeeSizes: ["11_50", "51_200"],
+  revenueSizes: ["1m_5m", "5m_20m"],
+  segmentFit: ["smb", "mid_market"],
+  salesMotions: ["plg"],
+  keywords: [],
 };
 
 export async function loadProfile(): Promise<OperatorProfile> {

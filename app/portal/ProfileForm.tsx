@@ -14,27 +14,55 @@ const ROLES: OperatorRole[] = [
   "Sellers",
 ];
 
-const STAGES = ["Pre-seed", "Seed", "Series A", "Series B", "Series C+"];
+// Value/label pairs mirror the Revenue Nomad operator-entry enums.
+const STAGES: [string, string][] = [
+  ["pre_seed", "Pre-seed"],
+  ["seed", "Seed"],
+  ["series_a", "Series A"],
+  ["series_b", "Series B"],
+  ["series_c_plus", "Series C+"],
+  ["growth", "Growth"],
+];
+const EMPLOYEE_SIZES: [string, string][] = [
+  ["1_10", "1–10"],
+  ["11_50", "11–50"],
+  ["51_200", "51–200"],
+  ["201_500", "201–500"],
+  ["501_1000", "501–1,000"],
+  ["1001_plus", "1,001+"],
+];
+const REVENUE_SIZES: [string, string][] = [
+  ["pre_revenue", "Pre-revenue"],
+  ["under_1m", "< $1M"],
+  ["1m_5m", "$1M–$5M"],
+  ["5m_20m", "$5M–$20M"],
+  ["20m_50m", "$20M–$50M"],
+  ["50m_plus", "$50M+"],
+];
+const SEGMENTS: [string, string][] = [
+  ["smb", "SMB"],
+  ["mid_market", "Mid-market"],
+  ["enterprise", "Enterprise"],
+];
+const MOTIONS: [string, string][] = [
+  ["plg", "PLG"],
+  ["plg_to_sales", "PLG → Sales"],
+  ["inside_sales", "Inside sales"],
+  ["enterprise_sales", "Enterprise sales"],
+  ["channel", "Channel"],
+];
+
+type ListKey = "stages" | "employeeSizes" | "revenueSizes" | "segmentFit" | "salesMotions";
 
 export default function ProfileForm() {
   const [profile, setProfile] = useState<OperatorProfile | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [watchlistText, setWatchlistText] = useState("");
 
   useEffect(() => {
     fetch("/api/profile", { cache: "no-store" })
       .then((r) => r.json())
-      .then((data) => {
-        setProfile(data.profile);
-        setWatchlistText(
-          (data.profile.watchlist || [])
-            .map((w: { company: string; domain?: string }) =>
-              w.domain ? `${w.company}, ${w.domain}` : w.company
-            )
-            .join("\n")
-        );
-      });
+      .then((data) => setProfile(data.profile));
   }, []);
 
   if (!profile) return <div className="empty">Loading profile…</div>;
@@ -42,32 +70,40 @@ export default function ProfileForm() {
   const save = async () => {
     setSaving(true);
     setMsg(null);
-    const watchlist = watchlistText
-      .split("\n")
-      .map((line) => {
-        const [company, domain] = line.split(",").map((s) => s.trim());
-        return company ? { company, domain: domain || undefined } : null;
-      })
-      .filter(Boolean);
     const res = await fetch("/api/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...profile, watchlist }),
+      body: JSON.stringify(profile),
     });
     setSaving(false);
     setMsg(res.ok ? "Profile saved — run a Prospects scan to apply it." : "Save failed.");
   };
 
-  const setList = (key: "industries" | "keywords") => (value: string) =>
-    setProfile({ ...profile, [key]: value.split(",").map((s) => s.trim()).filter(Boolean) });
-
-  const toggleStage = (stage: string) =>
+  const toggle = (key: ListKey, value: string) =>
     setProfile({
       ...profile,
-      stages: profile.stages.includes(stage)
-        ? profile.stages.filter((s) => s !== stage)
-        : [...profile.stages, stage],
+      [key]: profile[key].includes(value)
+        ? profile[key].filter((s) => s !== value)
+        : [...profile[key], value],
     });
+
+  const checks = (key: ListKey, options: [string, string][]) => (
+    <div className="stage-checks">
+      {options.map(([value, label]) => (
+        <label key={value} className="check">
+          <input
+            type="checkbox"
+            checked={profile[key].includes(value)}
+            onChange={() => toggle(key, value)}
+          />
+          {label}
+        </label>
+      ))}
+    </div>
+  );
+
+  const setList = (key: "industries" | "keywords") => (value: string) =>
+    setProfile({ ...profile, [key]: value.split(",").map((s) => s.trim()).filter(Boolean) });
 
   return (
     <>
@@ -75,8 +111,9 @@ export default function ProfileForm() {
         <div>
           <h1>Operator Profile</h1>
           <div className="sub">
-            Mirrors your Revenue Nomad profile — the prospect engine uses this to decide which
-            companies fit your ICP and which timing signals matter for your role.
+            Mirrors your Revenue Nomad profile. The prospect engine deduces your ICP from these
+            fields and cross-references it against a universal company dataset — target accounts
+            are discovered automatically, no manual list needed.
           </div>
         </div>
         <button className="btn" onClick={save} disabled={saving}>
@@ -104,7 +141,7 @@ export default function ProfileForm() {
           />
         </label>
         <label className="field">
-          <span>Role (Revenue Nomad category)</span>
+          <span>Role category</span>
           <select
             value={profile.role}
             onChange={(e) => setProfile({ ...profile, role: e.target.value as OperatorRole })}
@@ -117,43 +154,39 @@ export default function ProfileForm() {
           </select>
         </label>
         <label className="field">
-          <span>ICP industries (comma-separated)</span>
+          <span>Industries — up to 7, comma-separated</span>
           <input
             value={profile.industries.join(", ")}
             onChange={(e) => setList("industries")(e.target.value)}
-            placeholder="B2B SaaS, fintech, devtools"
+            placeholder="B2B SaaS, fintech, developer tools"
           />
         </label>
         <div className="field">
-          <span>ICP stages</span>
-          <div className="stage-checks">
-            {STAGES.map((s) => (
-              <label key={s} className="check">
-                <input
-                  type="checkbox"
-                  checked={profile.stages.includes(s)}
-                  onChange={() => toggleStage(s)}
-                />
-                {s}
-              </label>
-            ))}
-          </div>
+          <span>Company stages</span>
+          {checks("stages", STAGES)}
+        </div>
+        <div className="field">
+          <span>Employee size</span>
+          {checks("employeeSizes", EMPLOYEE_SIZES)}
+        </div>
+        <div className="field">
+          <span>Revenue size</span>
+          {checks("revenueSizes", REVENUE_SIZES)}
+        </div>
+        <div className="field">
+          <span>Segment fit</span>
+          {checks("segmentFit", SEGMENTS)}
+        </div>
+        <div className="field">
+          <span>Sales motions</span>
+          {checks("salesMotions", MOTIONS)}
         </div>
         <label className="field">
-          <span>ICP keywords (comma-separated)</span>
+          <span>ICP keywords / fit tags — comma-separated</span>
           <input
             value={profile.keywords.join(", ")}
             onChange={(e) => setList("keywords")(e.target.value)}
-            placeholder="PLG, outbound, enterprise, AI"
-          />
-        </label>
-        <label className="field full">
-          <span>Target-account watchlist — one per line: Company, domain.com (domain optional, enables content-gap & careers checks)</span>
-          <textarea
-            rows={6}
-            value={watchlistText}
-            onChange={(e) => setWatchlistText(e.target.value)}
-            placeholder={"Acme Analytics, acme.com\nNorthwind Devtools, northwind.dev"}
+            placeholder="AI, outbound, vertical SaaS"
           />
         </label>
       </div>
