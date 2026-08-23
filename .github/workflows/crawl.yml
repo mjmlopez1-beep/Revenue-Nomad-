@@ -1,0 +1,23 @@
+name: Scheduled crawl
+
+# Pings the deployed app's crawl endpoint daily so the board stays fresh.
+# Setup: add a repository variable CRAWL_URL (e.g. https://your-app.vercel.app)
+# and, if the deployment sets CRON_SECRET, a repository secret of the same name.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    if: vars.CRAWL_URL != ''
+    steps:
+      - name: Trigger crawl
+        run: |
+          curl -sS -X POST --fail-with-body \
+            ${CRON_SECRET:+-H "Authorization: Bearer $CRON_SECRET"} \
+            "${{ vars.CRAWL_URL }}/api/crawl"
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

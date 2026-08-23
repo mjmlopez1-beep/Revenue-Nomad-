@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: revenue-nomad
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: RN_DATA_DIR
+        value: /var/data
+    disk:
+      name: revenue-nomad-data
+      mountPath: /var/data
+      sizeGB: 1

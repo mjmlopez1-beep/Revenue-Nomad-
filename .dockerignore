@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+data/jobs.json
+data/jobs.json.tmp
+*.log
+.env*
