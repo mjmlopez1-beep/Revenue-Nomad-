@@ -1,5 +1,5 @@
 import Link from "next/link";
-import JobBoard from "./JobBoard";
+import PortalTabs from "./PortalTabs";
 
 export const metadata = { title: "Operator Portal — Revenue Nomad" };
 
@@ -14,7 +14,7 @@ export default function PortalPage() {
           <Link href="/portal">Operator Portal</Link>
         </div>
       </nav>
-      <JobBoard />
+      <PortalTabs />
     </div>
   );
 }

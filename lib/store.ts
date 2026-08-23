@@ -1,6 +1,13 @@
 import { promises as fs } from "fs";
 import path from "path";
-import type { Database, Job, JobStatus } from "./types";
+import type {
+  Database,
+  Job,
+  JobStatus,
+  OperatorProfile,
+  ProspectDb,
+  ProspectStatus,
+} from "./types";
 
 // On serverless platforms (Vercel/Lambda) the project directory is read-only,
 // so the runtime database falls back to /tmp. Data there survives warm
@@ -53,4 +60,53 @@ export async function updateJobStatus(id: string, status: JobStatus): Promise<Jo
   job.status = status;
   await saveDb(db);
   return job;
+}
+
+/* ---------- operator profile ---------- */
+
+const PROFILE_PATH = path.join(DATA_DIR, "profile.json");
+
+export const DEFAULT_PROFILE: OperatorProfile = {
+  name: "",
+  headline: "Fractional GTM operator",
+  role: "Sales Leadership",
+  industries: ["B2B SaaS"],
+  stages: ["Seed", "Series A"],
+  keywords: ["outbound", "pipeline"],
+  watchlist: [],
+};
+
+export async function loadProfile(): Promise<OperatorProfile> {
+  const p = await readJson<OperatorProfile>(PROFILE_PATH);
+  return p ? { ...DEFAULT_PROFILE, ...p } : DEFAULT_PROFILE;
+}
+
+export async function saveProfile(profile: OperatorProfile): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(PROFILE_PATH, JSON.stringify(profile, null, 2), "utf8");
+}
+
+/* ---------- prospects ---------- */
+
+const PROSPECTS_PATH = path.join(DATA_DIR, "prospects.json");
+
+export async function loadProspects(): Promise<ProspectDb> {
+  const db = await readJson<ProspectDb>(PROSPECTS_PATH);
+  return db && Array.isArray(db.prospects) ? db : { prospects: [], lastScan: null };
+}
+
+export async function saveProspects(db: ProspectDb): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const tmp = PROSPECTS_PATH + ".tmp";
+  await fs.writeFile(tmp, JSON.stringify(db, null, 2), "utf8");
+  await fs.rename(tmp, PROSPECTS_PATH);
+}
+
+export async function updateProspectStatus(id: string, status: ProspectStatus) {
+  const db = await loadProspects();
+  const p = db.prospects.find((x) => x.id === id);
+  if (!p) return null;
+  p.status = status;
+  await saveProspects(db);
+  return p;
 }

@@ -371,6 +371,111 @@ a:hover {
   border-color: #5b3a82;
   background: #221733;
 }
+
+/* ---------- portal view switcher ---------- */
+.view-switch {
+  display: flex;
+  gap: 8px;
+  padding-top: 22px;
+}
+.view-btn {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.view-btn:hover {
+  color: var(--text);
+}
+.view-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: #1d6b3c;
+}
+
+/* ---------- prospects ---------- */
+.why-now {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.why-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.signal-row {
+  display: flex;
+  gap: 8px;
+  font-size: 13.5px;
+  margin: 4px 0;
+}
+.signal-detail {
+  color: var(--text-dim);
+}
+.pitch {
+  font-size: 13.5px;
+  color: var(--amber);
+  background: #2a2412;
+  border: 1px solid #6b5518;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+/* ---------- profile form ---------- */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding-bottom: 80px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field.full {
+  grid-column: 1 / -1;
+}
+.field > span {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.field input,
+.field select,
+.field textarea {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--accent);
+}
+.stage-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 8px 0;
+}
+@media (max-width: 640px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .job-actions {
   display: flex;
   gap: 8px;

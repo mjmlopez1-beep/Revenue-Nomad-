@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runCrawl } from "@/lib/crawler";
+import { runProspectScan } from "@/lib/prospects/engine";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -7,7 +8,10 @@ export const maxDuration = 120;
 async function handleCrawl() {
   try {
     const run = await runCrawl();
-    return NextResponse.json({ run });
+    // The daily cron hits this endpoint, so refresh prospects too. Best-effort:
+    // a scan failure never fails the crawl.
+    const scan = await runProspectScan().catch(() => null);
+    return NextResponse.json({ run, scan });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "crawl failed" },

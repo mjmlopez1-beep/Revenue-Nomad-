@@ -67,6 +67,78 @@ export interface Database {
   lastCrawl: CrawlRun | null;
 }
 
+/** Roles offered on Revenue Nomad operator profiles. */
+export type OperatorRole =
+  | "Sales Leadership"
+  | "Marketing"
+  | "Revenue Operations"
+  | "Sales Enablement"
+  | "Customer Success"
+  | "AI GTM"
+  | "Partnerships"
+  | "Sellers";
+
+export interface WatchlistEntry {
+  company: string;
+  domain?: string; // e.g. "acme.com" — enables content-gap / careers checks
+}
+
+export interface OperatorProfile {
+  name: string;
+  headline: string;
+  role: OperatorRole;
+  industries: string[]; // e.g. ["B2B SaaS", "fintech"]
+  stages: string[]; // e.g. ["Seed", "Series A"]
+  keywords: string[]; // free-form ICP keywords, e.g. ["PLG", "outbound"]
+  watchlist: WatchlistEntry[]; // target accounts to monitor
+}
+
+export type SignalType =
+  | "funding" // fresh capital → building GTM now
+  | "leadership-gap" // hiring FT GTM leadership → pitch fractional/interim
+  | "team-without-leader" // hiring reps/ICs with no leadership posting
+  | "departure" // exec departure in the news
+  | "ai-native" // leadership talking about becoming AI native
+  | "content-gap" // missing or stale public marketing content
+  | "hiring-role"; // hiring in the operator's function
+
+export interface TimingSignal {
+  type: SignalType;
+  label: string; // short human-readable, e.g. "Raised Series A this month"
+  detail?: string;
+  evidenceUrl?: string;
+}
+
+export type ProspectStatus = "new" | "queued" | "contacted" | "dismissed";
+
+export interface Prospect {
+  id: string;
+  company: string;
+  domain?: string;
+  summary: string; // what we know about them, for the card
+  icpFit: number; // 0-100 similarity to the operator's ICP
+  matchedIcp: string[]; // which ICP attributes matched
+  timing: number; // 0-100 "why now" strength for the operator's role
+  signals: TimingSignal[];
+  overall: number; // blended priority
+  suggestedPitch: string;
+  status: ProspectStatus;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface ProspectScan {
+  at: string;
+  results: SourceResult[];
+  added: number;
+  updated: number;
+}
+
+export interface ProspectDb {
+  prospects: Prospect[];
+  lastScan: ProspectScan | null;
+}
+
 export interface RawJob {
   title: string;
   company: string;

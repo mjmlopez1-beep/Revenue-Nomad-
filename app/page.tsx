@@ -45,10 +45,18 @@ export default function Home() {
           </p>
         </div>
         <div className="feature">
+          <h3>🔮 Predictive prospecting</h3>
+          <p>
+            Set your ICP once and the engine flags companies to reach out to <em>before</em> they
+            post a role — fresh funding, a departed GTM leader, teams hiring without leadership, or
+            a stalled content engine — each with evidence and a suggested pitch.
+          </p>
+        </div>
+        <div className="feature">
           <h3>📋 Operator pipeline</h3>
           <p>
-            Save roles, mark them applied, or hide them. Filter by function, engagement, source, and
-            score to find your next engagement fast.
+            Save roles, queue outreach, track contacted accounts. Filter by function, engagement,
+            source, and score to find your next engagement fast.
           </p>
         </div>
       </section>
