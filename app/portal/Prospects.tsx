@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Prospect, ProspectScan, ProspectStatus } from "@/lib/types";
-import { ALLOWED_SIGNALS, SIGNAL_LABELS } from "@/lib/prospects/config";
+import { ALLOWED_SIGNALS, SIGNAL_CONFIG, SIGNAL_LABELS } from "@/lib/prospects/config";
 import { roleSignalDocs } from "@/lib/prospects/signalLibrary";
-import type { OperatorRole } from "@/lib/types";
+import type { OperatorRole, TimingSignal } from "@/lib/types";
 
 interface ApiResponse {
   prospects: Prospect[];
@@ -64,8 +64,36 @@ function signalAge(iso?: string): string | null {
   if (!iso) return null;
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (isNaN(days) || days < 0) return null;
-  if (days === 0) return "today";
-  return `${days}d ago`;
+  if (days === 0) return "detected today";
+  return `detected ${days}d ago`;
+}
+
+/**
+ * A signal's live contribution to the timing score: weight × decay, using the
+ * same math as the engine (embedded tuning first, type config as fallback).
+ */
+function signalStrength(s: TimingSignal, role: OperatorRole): { pct: number; halfLife: number | null } {
+  const cfg = SIGNAL_CONFIG[s.type];
+  const w = s.weight ?? cfg?.roleWeights?.[role] ?? cfg?.weight ?? 0.5;
+  const halfLife = s.halfLifeDays !== undefined ? s.halfLifeDays : (cfg?.halfLifeDays ?? null);
+  let decay = 1;
+  if (halfLife !== null && s.detectedOn) {
+    const days = Math.max(0, (Date.now() - new Date(s.detectedOn).getTime()) / 86400000);
+    decay = Math.pow(0.5, days / halfLife);
+  }
+  return { pct: Math.round(w * decay * 100), halfLife };
+}
+
+/** Single-hue magnitude meter: value label + thin track/fill bar. */
+function Meter({ value, label }: { value: number; label?: string }) {
+  return (
+    <div className="meter-wrap" title={label}>
+      <div className="meter">
+        <div className="meter-fill" style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
+      </div>
+      <span className="meter-value">{value}</span>
+    </div>
+  );
 }
 
 function CompanyLogo({ prospect }: { prospect: Prospect }) {
@@ -281,8 +309,7 @@ export default function Prospects() {
                     </div>
                     <div className="job-company">
                       {p.firstSeenAt === p.lastSeenAt && <span className="new-badge">New</span>}
-                      ICP fit {p.icpFit} · timing {p.timing}
-                      {p.matchedIcp.length > 0 && <> · matches {p.matchedIcp.join(", ")}</>}
+                      {p.matchedIcp.length > 0 ? <>Matches {p.matchedIcp.join(", ")}</> : "ICP candidate"}
                     </div>
                   </div>
                 </div>
@@ -294,31 +321,61 @@ export default function Prospects() {
                 </span>
               </div>
 
+              <div className="score-breakdown">
+                <div className="score-item">
+                  <span className="score-label">ICP fit</span>
+                  <Meter value={p.icpFit} label="Structured match against your profile ICP" />
+                </div>
+                <div className="score-item">
+                  <span className="score-label">Timing</span>
+                  <Meter value={p.timing} label="Noisy-OR of the signals below, decayed to today" />
+                </div>
+                <span className="score-formula">priority = fit<sup>1.5</sup> × timing</span>
+              </div>
+
               <div className="why-now">
-                <div className="why-label">Why now</div>
-                {p.signals.map((s, i) => (
-                  <div key={i} className="signal-row">
-                    <span className="sig-chip">
-                      <span
-                        className="sig-dot"
-                        style={{ background: DOT_COLORS[s.type] || "#6d7a70" }}
-                      />
-                      {SIGNAL_LABELS[s.type] || s.type}
-                    </span>
-                    <span>
-                      <strong>{s.label}</strong>
-                      {signalAge(s.detectedOn) && (
-                        <span className="signal-detail"> · {signalAge(s.detectedOn)}</span>
-                      )}
-                      {s.detail && <span className="signal-detail"> — {s.detail}</span>}{" "}
-                      {s.evidenceUrl && (
-                        <a href={s.evidenceUrl} target="_blank" rel="noopener noreferrer">
-                          View source
-                        </a>
-                      )}
-                    </span>
-                  </div>
-                ))}
+                <div className="why-head">
+                  <span className="why-label">Why now</span>
+                  <span className="why-col-label">Signal strength today</span>
+                </div>
+                {[...p.signals]
+                  .map((s) => ({ s, strength: signalStrength(s, operatorRole) }))
+                  .sort((a, b) => b.strength.pct - a.strength.pct)
+                  .map(({ s, strength }, i) => (
+                    <div key={i} className="signal-row">
+                      <span className="sig-chip">
+                        <span
+                          className="sig-dot"
+                          style={{ background: DOT_COLORS[s.type] || "#6d7a70" }}
+                        />
+                        {SIGNAL_LABELS[s.type] || s.type}
+                      </span>
+                      <span className="sig-body">
+                        <span className="sig-title">{s.label}</span>
+                        {s.detail && <span className="sig-detail">{s.detail}</span>}
+                        <span className="sig-meta">
+                          {signalAge(s.detectedOn) || "Standing condition"}
+                          {strength.halfLife !== null
+                            ? ` · ${strength.halfLife}-day half-life`
+                            : " · does not decay"}
+                          {s.evidenceUrl && (
+                            <>
+                              {" · "}
+                              <a href={s.evidenceUrl} target="_blank" rel="noopener noreferrer">
+                                View evidence
+                              </a>
+                            </>
+                          )}
+                        </span>
+                      </span>
+                      <span className="sig-strength">
+                        <span className="meter sig-meter">
+                          <span className="meter-fill" style={{ width: `${strength.pct}%` }} />
+                        </span>
+                        <span className="meter-value">{strength.pct}%</span>
+                      </span>
+                    </div>
+                  ))}
               </div>
 
               <div className="pitch">
