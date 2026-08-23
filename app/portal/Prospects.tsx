@@ -34,6 +34,10 @@ const DOT_COLORS: Record<string, string> = {
   "ai-native": "#5c6ac0",
   "actively-hiring": "#4fa06a",
   "early-inflection": "#6d9b4f",
+  "started-hiring": "#1e6b42",
+  "headcount-jump": "#2f7d4f",
+  "positioning-shift": "#8a6db0",
+  "newly-launched": "#3d7ea6",
 };
 
 function signalAge(iso?: string): string | null {
@@ -113,7 +117,7 @@ export default function Prospects() {
       const scan: ProspectScan = data.scan;
       const errors = scan.results.filter((r) => r.error);
       setScanMsg(
-        `Scanned ${scan.results.length - errors.length}/${scan.results.length} signal sources — ${scan.added} new, ${scan.updated} refreshed` +
+        `${scan.engineVersion ? `Engine ${scan.engineVersion} · ` : ""}Scanned ${scan.results.length - errors.length}/${scan.results.length} signal sources — ${scan.added} new, ${scan.updated} refreshed` +
           (errors.length
             ? ` — failed: ${errors.map((e) => `${e.source} (${e.error})`).join("; ")}`
             : "")
@@ -241,6 +245,7 @@ export default function Prospects() {
                       )}
                     </div>
                     <div className="job-company">
+                      {p.firstSeenAt === p.lastSeenAt && <span className="new-badge">New</span>}
                       ICP fit {p.icpFit} · timing {p.timing}
                       {p.matchedIcp.length > 0 && <> · matches {p.matchedIcp.join(", ")}</>}
                     </div>

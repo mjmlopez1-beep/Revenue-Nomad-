@@ -29,7 +29,17 @@ const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => strin
     `They're in build mode and hiring. Pitch fractional ${p.role} as the faster, lower-risk way to get senior GTM horsepower now.`,
   "early-inflection": (p) =>
     `They're at the founder-led-sales handoff point. Pitch fractional ${p.role} to build the first real GTM motion before they over-hire.`,
+  "started-hiring": (p) =>
+    `They just flipped to hiring mode. Reach out before the reqs go up — fractional ${p.role} gets them moving while they recruit.`,
+  "headcount-jump": (p) =>
+    `Headcount just jumped — growth is outrunning the GTM org. Pitch fractional ${p.role} to put structure under the growth.`,
+  "positioning-shift": (p) =>
+    `They just repositioned. New positioning needs new messaging and motion — pitch fractional ${p.role} to land it in-market.`,
+  "newly-launched": (p) =>
+    `They just launched publicly. First-mover window for a fractional ${p.role} pitch before they build in-house.`,
 };
+
+const ENGINE_VERSION = "v3-diff";
 
 function normCompany(name: string): string {
   return name
@@ -176,7 +186,7 @@ export async function runProspectScan(): Promise<ProspectScan> {
     )
     .sort((a, b) => b.overall - a.overall);
 
-  const scan: ProspectScan = { at: now, results, added, updated };
+  const scan: ProspectScan = { at: now, results, added, updated, engineVersion: ENGINE_VERSION };
   await saveProspects({ prospects, lastScan: scan });
   return scan;
 }

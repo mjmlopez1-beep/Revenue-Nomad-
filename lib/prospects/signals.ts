@@ -313,9 +313,9 @@ export async function enrichCompany(company: string, domain: string): Promise<Ti
  * live timing checks (content gap, careers-page GTM roles).
  */
 async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]> {
-  const { loadUniverse, matchUniverse } = await import("./universe");
-  const universe = await loadUniverse();
-  const candidates = matchUniverse(profile, universe, 40);
+  const { loadUniverse, loadUniverseEvents, matchUniverse } = await import("./universe");
+  const [universe, events] = await Promise.all([loadUniverse(), loadUniverseEvents()]);
+  const candidates = matchUniverse(profile, universe, 40, events);
 
   // Live enrichment is network-heavy — only the top candidates with domains.
   const toEnrich = candidates.filter((c) => c.company.domain).slice(0, 10);

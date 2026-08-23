@@ -106,7 +106,12 @@ export type SignalType =
   | "content-gap" // missing or stale public marketing content
   | "hiring-role" // hiring in the operator's function
   | "actively-hiring" // flagged as hiring in the company directory
-  | "early-inflection"; // young company at the stage where GTM gets built
+  | "early-inflection" // young company at the stage where GTM gets built
+  // Event signals from the daily universe diff (spec §2.1: signals are diffs)
+  | "started-hiring" // hiring flag flipped on
+  | "headcount-jump" // team size jumped materially
+  | "positioning-shift" // one-liner / description changed (pivot tell)
+  | "newly-launched"; // company just appeared in the directory
 
 export interface TimingSignal {
   type: SignalType;
@@ -140,6 +145,7 @@ export interface ProspectScan {
   results: SourceResult[];
   added: number;
   updated: number;
+  engineVersion?: string;
 }
 
 export interface ProspectDb {

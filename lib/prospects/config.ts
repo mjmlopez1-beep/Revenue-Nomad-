@@ -39,6 +39,16 @@ export const SIGNAL_CONFIG: Record<SignalType, SignalConfig> = {
   },
   "actively-hiring": { weight: 0.45, halfLifeDays: null },
   "early-inflection": { weight: 0.55, halfLifeDays: null },
+  // Event signals from the daily universe diff — these are what make the
+  // queue move day to day. Weighted above their standing counterparts.
+  "started-hiring": { weight: 0.65, halfLifeDays: 30 },
+  "headcount-jump": { weight: 0.6, halfLifeDays: 90 },
+  "positioning-shift": {
+    weight: 0.35,
+    roleWeights: { Marketing: 0.7, "AI GTM": 0.45 },
+    halfLifeDays: 120,
+  },
+  "newly-launched": { weight: 0.5, halfLifeDays: 60 },
 };
 
 /** Human-readable chip labels for the UI (no emoji — enterprise surface). */
@@ -52,6 +62,10 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   "ai-native": "AI native",
   "actively-hiring": "Hiring",
   "early-inflection": "Early stage",
+  "started-hiring": "Started hiring",
+  "headcount-jump": "Headcount jump",
+  "positioning-shift": "Repositioned",
+  "newly-launched": "Just launched",
 };
 
 /** Queue rules (spec §5.3). */

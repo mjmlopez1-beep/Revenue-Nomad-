@@ -116,6 +116,141 @@ export async function loadUniverse(): Promise<UniverseCompany[]> {
   return companies;
 }
 
+/* ---------- daily diff events (spec §2.1: signals are diffs, not states) ---------- */
+
+const CHANGES_URL = "https://yc-oss.github.io/api/changes/latest.json";
+const EVENTS_PATH = path.join(DATA_DIR, "universe-events.json");
+const EVENT_RETENTION_DAYS = 90;
+
+interface StoredEvent {
+  company: string;
+  signal: TimingSignal;
+}
+
+interface ChangeRecord {
+  name?: string;
+  url?: string;
+  changed_fields?: string[];
+  changes?: Record<string, { before?: unknown; after?: unknown }>;
+  team_size?: number | null;
+  one_liner?: string;
+}
+
+function parseGeneratedAt(v: unknown): string {
+  if (typeof v === "number") {
+    const ms = v < 1e12 ? v * 1000 : v;
+    const d = new Date(ms);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (typeof v === "string") {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+/**
+ * Pull the universe's daily change feed and fold it into a persistent event
+ * log. The feed only covers the latest day, so the log accumulates history
+ * across scans; events older than EVENT_RETENTION_DAYS are pruned (decay has
+ * flattened them by then anyway).
+ */
+export async function loadUniverseEvents(): Promise<Map<string, TimingSignal[]>> {
+  let log: StoredEvent[] = [];
+  try {
+    const parsed = JSON.parse(await fs.readFile(EVENTS_PATH, "utf8"));
+    if (Array.isArray(parsed)) log = parsed;
+  } catch {
+    /* no log yet */
+  }
+
+  try {
+    const res = await fetchWithTimeout(CHANGES_URL, {}, 20000);
+    if (res.ok) {
+      const data = (await res.json()) as {
+        generated_at?: unknown;
+        added?: ChangeRecord[];
+        updated?: ChangeRecord[];
+      };
+      const detectedOn = parseGeneratedAt(data.generated_at);
+      const day = detectedOn.slice(0, 10);
+      const seen = new Set(
+        log.map((e) => `${e.company.toLowerCase()}|${e.signal.type}|${(e.signal.detectedOn || "").slice(0, 10)}`)
+      );
+      const push = (company: string | undefined, signal: TimingSignal) => {
+        if (!company) return;
+        const k = `${company.toLowerCase()}|${signal.type}|${day}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        log.push({ company, signal });
+      };
+
+      for (const u of data.updated || []) {
+        const ch = u.changes || {};
+        if (ch.isHiring && ch.isHiring.after === true) {
+          push(u.name, {
+            type: "started-hiring",
+            label: "Flipped to actively hiring",
+            detail: "Hiring flag turned on in the company directory.",
+            evidenceUrl: u.url,
+            detectedOn,
+          });
+        }
+        const ts = ch.team_size;
+        if (ts && typeof ts.before === "number" && typeof ts.after === "number" && ts.after > ts.before) {
+          const growth = (ts.after - ts.before) / Math.max(1, ts.before);
+          if (growth >= 0.2 && ts.after - ts.before >= 3) {
+            push(u.name, {
+              type: "headcount-jump",
+              label: `Team grew ${ts.before} → ${ts.after}`,
+              detail: "Headcount jump — growth is outrunning the GTM org.",
+              evidenceUrl: u.url,
+              detectedOn,
+            });
+          }
+        }
+        const fields = u.changed_fields || [];
+        if (fields.includes("one_liner") || fields.includes("long_description")) {
+          push(u.name, {
+            type: "positioning-shift",
+            label: "Company description changed",
+            detail: "Positioning shift — repositioning needs messaging and GTM work.",
+            evidenceUrl: u.url,
+            detectedOn,
+          });
+        }
+      }
+      for (const a of data.added || []) {
+        push(a.name, {
+          type: "newly-launched",
+          label: "Just added to the directory",
+          detail: a.one_liner ? a.one_liner.slice(0, 120) : undefined,
+          evidenceUrl: a.url,
+          detectedOn,
+        });
+      }
+
+      const cutoff = Date.now() - EVENT_RETENTION_DAYS * 86400000;
+      log = log.filter((e) => {
+        const t = e.signal.detectedOn ? new Date(e.signal.detectedOn).getTime() : 0;
+        return t >= cutoff;
+      });
+      await fs.mkdir(DATA_DIR, { recursive: true });
+      await fs.writeFile(EVENTS_PATH, JSON.stringify(log), "utf8").catch(() => {});
+    }
+  } catch {
+    // Feed unavailable — serve whatever the log already holds.
+  }
+
+  const map = new Map<string, TimingSignal[]>();
+  for (const e of log) {
+    const k = e.company.toLowerCase();
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(e.signal);
+  }
+  return map;
+}
+
 const SIZE_BUCKETS: Record<string, [number, number]> = {
   "1_10": [1, 10],
   "11_50": [11, 50],
@@ -173,7 +308,8 @@ export interface UniverseCandidate {
 export function matchUniverse(
   profile: OperatorProfile,
   universe: UniverseCompany[],
-  limit = 40
+  limit = 40,
+  events?: Map<string, TimingSignal[]>
 ): UniverseCandidate[] {
   const inds = industryTokens(profile.industries);
   const wantsEarly = profile.stages.some((s) => EARLY_STAGES.has(s)) || profile.stages.length === 0;
@@ -245,7 +381,8 @@ export function matchUniverse(
 
     if (fit < 40) continue;
 
-    const baseSignals: TimingSignal[] = [];
+    // Diff-derived events for this company — the queue movers.
+    const baseSignals: TimingSignal[] = [...(events?.get(c.name.toLowerCase()) || [])];
     if (c.isHiring) {
       baseSignals.push({
         type: "actively-hiring",
