@@ -113,7 +113,8 @@ export type SignalType =
   | "headcount-jump" // team size jumped materially
   | "positioning-shift" // one-liner / description changed (pivot tell)
   | "newly-launched" // company just appeared in the directory
-  | "function-gap"; // building around a function nobody owns (role-specific)
+  | "function-gap" // building around a function nobody owns (role-specific)
+  | "leader-appointed"; // new GTM leader in seat — rebuild moment (R4/E3)
 
 export interface TimingSignal {
   type: SignalType;
@@ -121,6 +122,10 @@ export interface TimingSignal {
   detail?: string;
   evidenceUrl?: string;
   detectedOn?: string; // ISO date of the underlying observation; drives decay
+  /** Library signals carry their own tuning; absent = fall back to type config. */
+  id?: string;
+  weight?: number;
+  halfLifeDays?: number | null; // null = standing condition (no decay)
 }
 
 export type ProspectStatus = "new" | "queued" | "contacted" | "dismissed";

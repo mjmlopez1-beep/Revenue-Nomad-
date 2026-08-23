@@ -58,6 +58,13 @@ export const SIGNAL_CONFIG: Record<SignalType, SignalConfig> = {
     roleWeights: { "AI GTM": 0.85 },
     halfLifeDays: 60,
   },
+  // A new sales/marketing leader in seat rebuilds ops, enablement, and the
+  // CS interface in their first quarter (spec R4/E3).
+  "leader-appointed": {
+    weight: 0.5,
+    roleWeights: { "Revenue Operations": 0.75, "Sales Enablement": 0.7, "Customer Success": 0.55 },
+    halfLifeDays: 90,
+  },
 };
 
 /** Human-readable chip labels for the UI (no emoji — enterprise surface). */
@@ -76,6 +83,7 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   "positioning-shift": "Repositioned",
   "newly-launched": "Just launched",
   "function-gap": "Function gap",
+  "leader-appointed": "New leader",
 };
 
 /**
@@ -87,12 +95,12 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
 export const ALLOWED_SIGNALS: Record<OperatorRole, SignalType[]> = {
   "Sales Leadership": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "early-inflection", "started-hiring", "headcount-jump", "newly-launched", "function-gap"],
   Marketing: ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "content-gap", "actively-hiring", "early-inflection", "started-hiring", "headcount-jump", "positioning-shift", "newly-launched", "function-gap"],
-  "Revenue Operations": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
-  "Sales Enablement": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
-  "Customer Success": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
+  "Revenue Operations": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Sales Enablement": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Customer Success": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap", "leader-appointed", "early-inflection"],
   "AI GTM": ["departure", "funding", "hiring-role", "ai-native", "content-gap", "actively-hiring", "early-inflection", "started-hiring", "positioning-shift", "newly-launched", "function-gap"],
   Partnerships: ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
-  Sellers: ["leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "newly-launched"],
+  Sellers: ["leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "newly-launched", "function-gap", "departure"],
 };
 
 /**

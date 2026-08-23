@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Prospect, ProspectScan, ProspectStatus } from "@/lib/types";
-import { SIGNAL_LABELS } from "@/lib/prospects/config";
+import { ALLOWED_SIGNALS, SIGNAL_LABELS } from "@/lib/prospects/config";
+import { roleSignalDocs } from "@/lib/prospects/signalLibrary";
+import type { OperatorRole } from "@/lib/types";
 
 interface ApiResponse {
   prospects: Prospect[];
@@ -39,7 +41,24 @@ const DOT_COLORS: Record<string, string> = {
   "positioning-shift": "#8a6db0",
   "newly-launched": "#3d7ea6",
   "function-gap": "#c2564a",
+  "leader-appointed": "#3d7ea6",
 };
+
+function useOperatorRole(): OperatorRole {
+  const [role, setRole] = useState<OperatorRole>("Sales Leadership");
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("rn-profile");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p?.role) setRole(p.role);
+      }
+    } catch {
+      /* default */
+    }
+  }, []);
+  return role;
+}
 
 function signalAge(iso?: string): string | null {
   if (!iso) return null;
@@ -76,6 +95,11 @@ function CompanyLogo({ prospect }: { prospect: Prospect }) {
 }
 
 export default function Prospects() {
+  const operatorRole = useOperatorRole();
+  const signalDocs = useMemo(
+    () => roleSignalDocs(operatorRole, ALLOWED_SIGNALS[operatorRole] || []),
+    [operatorRole]
+  );
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [lastScan, setLastScan] = useState<ProspectScan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +197,16 @@ export default function Prospects() {
             Companies matching your ICP with timing signals suggesting they need you <em>now</em>.
             {lastScan && <> Last scan: {timeAgo(lastScan.at)}.</>}
           </div>
+          <details className="signal-docs">
+            <summary>
+              Scanning {signalDocs.length} signals for {operatorRole}
+            </summary>
+            <ul>
+              {signalDocs.map((d) => (
+                <li key={d.label}>{d.question}</li>
+              ))}
+            </ul>
+          </details>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {scanMsg && <span className="crawl-status">{scanMsg}</span>}

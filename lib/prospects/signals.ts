@@ -239,39 +239,15 @@ async function hiringSignals(profile: OperatorProfile): Promise<RawSignal[]> {
   return out;
 }
 
-/* ---------- role-aware careers-board classification ---------- */
+/* ---------- role-aware enrichment: careers board + website probe ---------- */
 
-interface BoardPosting {
-  title: string;
-  url: string;
-}
-
-/** Title regexes for the leadership seat of each role category. */
-const SEAT_RE: Record<string, RegExp> = {
-  "Sales Leadership": /\b((vp|vice president|head|director|chief)[^,]{0,25}(sales|revenue)|cro)\b/i,
-  Marketing: /\b((vp|vice president|head|director|chief)[^,]{0,25}(marketing|brand|demand|content)|cmo)\b/i,
-  "Revenue Operations": /\b(vp|vice president|head|director)[^,]{0,30}(revenue operations|revops|sales operations|gtm operations)\b/i,
-  "Sales Enablement": /\b(vp|vice president|head|director)[^,]{0,25}enablement\b/i,
-  "Customer Success": /\b((vp|vice president|head|director|chief)[^,]{0,30}(customer success|customer experience|growth)|cco)\b/i,
-  "AI GTM": /\b(vp|head|director)[^,]{0,20}\bai\b|ai (architect|lead)\b/i,
-  Partnerships: /\b(vp|vice president|head|director)[^,]{0,25}(partner|alliances|channel)\b/i,
-  Sellers: /\b(vp|vice president|head|director)[^,]{0,20}sales\b/i,
-};
-
-/** IC titles inside each role category's own function. */
-const OWN_IC_RE: Record<string, RegExp> = {
-  "Sales Leadership": /\b(account executive|sdr|bdr|sales development|sales rep)\b/i,
-  Marketing: /\b(marketing manager|demand gen|growth marketer|content (marketer|writer|manager)|seo|paid media|product marketing)\b/i,
-  "Revenue Operations": /\b(revenue operations|revops|sales operations|marketing operations|deal desk|sales analyst|gtm analyst)\b/i,
-  "Sales Enablement": /\b(enablement|sales trainer)\b/i,
-  "Customer Success": /\b(customer success|csm|onboarding|implementation|account manager)\b/i,
-  "AI GTM": /\b(machine learning|ml engineer|ai engineer|data scientist|llm)\b/i,
-  Partnerships: /\b(partner|channel|alliances|business development)\b/i,
-  Sellers: /\b(account executive|enterprise sales)\b/i,
-};
-
-const SALES_IC_RE = /\b(account executive|sdr|bdr|sales development|sales rep)\b/i;
-const MKT_IC_RE = /\b(marketing|demand gen|growth marketer|content|seo|paid media)\b/i;
+import {
+  evaluateRoleSignals,
+  type BoardPosting,
+  type CompanyContext,
+  type WebProbe,
+} from "./signalLibrary";
+import type { UniverseCompany } from "./universe";
 
 async function fetchBoard(company: string): Promise<BoardPosting[] | null> {
   const slug = company.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -285,166 +261,130 @@ async function fetchBoard(company: string): Promise<BoardPosting[] | null> {
   }
 }
 
-/**
- * Read a company's own careers board through the lens of ONE role category
- * (Match Engine spec §4): hiring the operator's seat, ICs without that seat,
- * and cross-function gaps like "scaling GTM hiring with no ops role" (R5) or
- * "AI in the pitch, no AI roles posted" (A1).
- */
-function classifyBoard(
-  role: OperatorProfile["role"],
-  companyText: string,
-  postings: BoardPosting[]
-): TimingSignal[] {
-  const now = new Date().toISOString();
-  const out: TimingSignal[] = [];
-  const seatRe = SEAT_RE[role];
-  const ownIcRe = OWN_IC_RE[role];
-  const seatReqs = postings.filter((p) => seatRe.test(p.title));
-  const ownIcReqs = postings.filter((p) => ownIcRe.test(p.title) && !seatRe.test(p.title));
-  const salesIcReqs = postings.filter((p) => SALES_IC_RE.test(p.title));
-  const mktReqs = postings.filter((p) => MKT_IC_RE.test(p.title));
+const TECH_TAGS: [string, RegExp][] = [
+  ["intercom", /intercom/i],
+  ["zendesk", /zendesk/i],
+  ["crisp", /crisp\.chat/i],
+  ["freshdesk", /freshdesk/i],
+  ["hubspot", /hubspot|hs-scripts/i],
+  ["marketo", /marketo/i],
+  ["segment", /segment\.com\/analytics|cdn\.segment/i],
+  ["drift", /drift\.com|driftt/i],
+  ["gong", /gong\.io/i],
+  ["outreach", /outreach\.io/i],
+  ["salesloft", /salesloft/i],
+  ["highspot", /highspot/i],
+];
 
-  if (seatReqs.length > 0) {
-    out.push({
-      type: "leadership-gap",
-      label: `Hiring your seat full-time: ${seatReqs[0].title}`,
-      detail: "The search runs 4–6 months — pitch fractional/interim coverage now.",
-      evidenceUrl: seatReqs[0].url,
-      detectedOn: now,
-    });
-  } else if (ownIcReqs.length >= 2) {
-    out.push({
-      type: "team-without-leader",
-      label: `Hiring ${ownIcReqs.length} ${role} ICs with no leadership posting`,
-      detail: `Open: ${ownIcReqs.slice(0, 3).map((p) => p.title).join("; ")}`,
-      evidenceUrl: ownIcReqs[0].url,
-      detectedOn: now,
-    });
-  }
+/** Cheap website observations: homepage, /pricing, and blog feed freshness. */
+async function probeWeb(domain: string): Promise<WebProbe> {
+  const probe: WebProbe = {
+    pricingFound: false,
+    pricingContactSalesOnly: false,
+    pricingFreeTrial: false,
+    pricingEnterpriseTier: false,
+    techTags: [],
+    hasIntegrationsPage: false,
+    hasApiDocs: false,
+    blogStaleDays: null,
+  };
 
-  // Cross-function gaps: building around the operator's function while
-  // nobody owns it. Only claimable when a real board exists.
-  if (postings.length > 0) {
-    if (role === "Revenue Operations" && salesIcReqs.length + mktReqs.length >= 3 && seatReqs.length === 0 && ownIcReqs.length === 0) {
-      out.push({
-        type: "function-gap",
-        label: "Scaling GTM hiring with no ops role posted",
-        detail: `${salesIcReqs.length + mktReqs.length} GTM reqs open, zero ops/analytics — nobody owns the connective tissue.`,
-        evidenceUrl: postings[0].url,
-        detectedOn: now,
-      });
-    }
-    if (role === "Customer Success" && salesIcReqs.length >= 2 && ownIcReqs.length === 0 && seatReqs.length === 0) {
-      out.push({
-        type: "function-gap",
-        label: "Hiring sellers with no post-sale function posted",
-        detail: "New logos landing with nobody owning renewals and expansion.",
-        evidenceUrl: salesIcReqs[0].url,
-        detectedOn: now,
-      });
-    }
-    if (role === "Marketing" && salesIcReqs.length >= 2 && mktReqs.length === 0) {
-      out.push({
-        type: "function-gap",
-        label: "Sales hired ahead of marketing",
-        detail: `${salesIcReqs.length} quota-carrier reqs, zero marketing — pipeline gap forming.`,
-        evidenceUrl: salesIcReqs[0].url,
-        detectedOn: now,
-      });
-    }
-    if (role === "Partnerships" && salesIcReqs.length >= 3 && seatReqs.length === 0 && ownIcReqs.length === 0) {
-      out.push({
-        type: "function-gap",
-        label: "Scaling direct sales with no partner function",
-        detail: "Direct-only motion at a size where a channel program compounds.",
-        evidenceUrl: salesIcReqs[0].url,
-        detectedOn: now,
-      });
-    }
-    if (role === "AI GTM" && /\bai\b|artificial intelligence|machine learning/i.test(companyText) && ownIcReqs.length === 0 && seatReqs.length === 0) {
-      out.push({
-        type: "function-gap",
-        label: "AI in the pitch, no AI roles posted",
-        detail: "They market AI but aren't hiring AI builders — the most reliable fractional-technical buyer.",
-        evidenceUrl: postings[0].url,
-        detectedOn: now,
-      });
-    }
-    if (role === "Sales Enablement" && salesIcReqs.length >= 3 && seatReqs.length === 0) {
-      out.push({
-        type: "hiring-role",
-        label: `Scaling the rep base: ${salesIcReqs.length} quota-carrier reqs open`,
-        detail: "New reps ramp faster with an enablement motion in place.",
-        evidenceUrl: salesIcReqs[0].url,
-        detectedOn: now,
-      });
-    }
-  }
-
-  return out;
-}
-
-/** Content-gap check — only meaningful for content-adjacent roles. */
-async function contentGapCheck(domain: string): Promise<TimingSignal[]> {
-  let freshest: number | null = null;
-  let feedFound = false;
-  for (const path of ["/feed", "/blog/rss.xml"]) {
-    try {
-      const res = await fetchWithTimeout(`https://${domain}${path}`, {}, 6000);
-      if (!res.ok) continue;
-      const xml = await res.text();
-      if (!/<(rss|feed)[\s>]/i.test(xml)) continue;
-      feedFound = true;
-      for (const item of rssItems(xml).slice(0, 5)) {
-        const t = new Date(item.pubDate).getTime();
-        if (!isNaN(t)) freshest = Math.max(freshest ?? 0, t);
+  const [homeRes, pricingRes, feed] = await Promise.allSettled([
+    fetchWithTimeout(`https://${domain}`, {}, 6000).then((r) => (r.ok ? r.text() : "")),
+    fetchWithTimeout(`https://${domain}/pricing`, {}, 6000).then((r) => (r.ok ? r.text() : "")),
+    (async () => {
+      for (const path of ["/feed", "/blog/rss.xml"]) {
+        try {
+          const res = await fetchWithTimeout(`https://${domain}${path}`, {}, 6000);
+          if (!res.ok) continue;
+          const xml = await res.text();
+          if (!/<(rss|feed)[\s>]/i.test(xml)) continue;
+          let freshest = 0;
+          for (const item of rssItems(xml).slice(0, 5)) {
+            const t = new Date(item.pubDate).getTime();
+            if (!isNaN(t)) freshest = Math.max(freshest, t);
+          }
+          return freshest > 0 ? Math.floor((Date.now() - freshest) / 86400000) : -1;
+        } catch {
+          /* keep trying */
+        }
       }
-      break;
-    } catch {
-      /* keep trying */
-    }
+      return null;
+    })(),
+  ]);
+
+  if (homeRes.status === "fulfilled" && homeRes.value) {
+    const html = homeRes.value;
+    probe.techTags = TECH_TAGS.filter(([, re]) => re.test(html)).map(([tag]) => tag);
+    probe.hasIntegrationsPage = /href="[^"]*integrations?/i.test(html);
+    probe.hasApiDocs = /href="[^"]*(\/docs|developers?\.|\/api\b)/i.test(html);
   }
-  const now = new Date().toISOString();
-  const staleDays = freshest ? Math.floor((Date.now() - freshest) / 86400000) : null;
-  if (!feedFound) {
-    return [{
-      type: "content-gap",
-      label: "No discoverable blog/RSS feed",
-      detail: "No public content engine found — opening for a content/marketing pitch.",
-      evidenceUrl: `https://${domain}`,
-      detectedOn: now,
-    }];
+  if (pricingRes.status === "fulfilled" && pricingRes.value) {
+    const html = pricingRes.value;
+    probe.pricingFound = true;
+    probe.pricingFreeTrial = /free trial|start (for )?free|try (it )?free|sign up free/i.test(html);
+    probe.pricingEnterpriseTier = /enterprise/i.test(html);
+    probe.pricingContactSalesOnly =
+      /contact sales|talk to sales|book a demo/i.test(html) && !probe.pricingFreeTrial;
   }
-  if (staleDays !== null && staleDays > 60) {
-    return [{
-      type: "content-gap",
-      label: `Blog silent for ${staleDays} days`,
-      detail: "Public content has gone quiet — the engine exists but nobody is running it.",
-      evidenceUrl: `https://${domain}`,
-      detectedOn: now,
-    }];
-  }
-  return [];
+  if (feed.status === "fulfilled") probe.blogStaleDays = feed.value;
+  return probe;
 }
 
-const CONTENT_ROLES = new Set(["Marketing", "AI GTM"]);
-
-/** Role-aware per-company enrichment for auto-discovered target accounts. */
+/** Role-aware per-company enrichment: evaluate the role's signal library. */
 export async function enrichCompany(
   profile: OperatorProfile,
-  company: string,
-  domain: string,
-  companyText: string
+  company: UniverseCompany
 ): Promise<TimingSignal[]> {
-  const [board, content] = await Promise.all([
-    fetchBoard(company),
-    CONTENT_ROLES.has(profile.role) || profile.roleSlug === "content_director"
-      ? contentGapCheck(domain)
-      : Promise.resolve([]),
+  const [board, web] = await Promise.all([
+    fetchBoard(company.name),
+    company.domain ? probeWeb(company.domain) : Promise.resolve(null),
   ]);
-  const out: TimingSignal[] = [...content];
-  if (board !== null) out.push(...classifyBoard(profile.role, companyText, board));
+  const ctx: CompanyContext = {
+    company,
+    text: `${company.oneLiner} ${company.industry} ${company.tags.join(" ")}`.toLowerCase(),
+    board,
+    web,
+  };
+  return evaluateRoleSignals(profile.role, ctx);
+}
+
+/** "Acme appoints Jane Doe as VP of Sales" → new-leader-in-seat (R4/E3). */
+async function appointmentNews(profile: OperatorProfile): Promise<RawSignal[]> {
+  const relevant: Record<string, string[]> = {
+    "Revenue Operations": ['"VP of Sales"', '"Chief Revenue Officer"', '"CMO"'],
+    "Sales Enablement": ['"VP of Sales"', '"Chief Revenue Officer"'],
+    "Customer Success": ['"Chief Revenue Officer"', '"Chief Customer Officer"'],
+  };
+  const titles = relevant[profile.role];
+  if (!titles) return [];
+  const queries = titles.map((t) => `${t} (appoints OR "joins as" OR names OR taps)`);
+  const out: RawSignal[] = [];
+  const settled = await Promise.allSettled(
+    queries.map((q) =>
+      fetchText(`https://news.google.com/rss/search?q=${encodeURIComponent(q + " when:90d")}&hl=en-US&gl=US&ceid=US:en`)
+    )
+  );
+  for (const res of settled) {
+    if (res.status !== "fulfilled") continue;
+    for (const item of rssItems(res.value)) {
+      const clean = stripHtml(item.title).replace(/\s+-\s+[^-]+$/, "");
+      const m = clean.match(/^(.{2,40}?)\s+(?:appoints|names|hires|taps|welcomes)\b/i);
+      const company = m ? m[1].trim() : null;
+      if (!company || company.split(" ").length > 4) continue;
+      out.push({
+        company,
+        context: `${clean} ${stripHtml(item.description)}`,
+        signal: {
+          type: "leader-appointed",
+          label: "New GTM leader just took the seat",
+          detail: clean.slice(0, 140),
+          evidenceUrl: item.link,
+          detectedOn: !isNaN(new Date(item.pubDate).getTime()) ? new Date(item.pubDate).toISOString() : undefined,
+        },
+      });
+    }
+  }
   return out;
 }
 
@@ -463,8 +403,7 @@ async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]
   const enriched = new Map<string, TimingSignal[]>();
   await Promise.allSettled(
     toEnrich.map(async (c) => {
-      const text = `${c.company.oneLiner} ${c.company.industry} ${c.company.tags.join(" ")}`;
-      enriched.set(c.company.name, await enrichCompany(profile, c.company.name, c.company.domain!, text));
+      enriched.set(c.company.name, await enrichCompany(profile, c.company));
     })
   );
 
@@ -494,6 +433,7 @@ export async function gatherSignals(profile: OperatorProfile): Promise<Gathered>
     ["funding-news", fundingNews(profile)],
     ["departure-news", departureNews(profile)],
     ["hiring-patterns", hiringSignals(profile)],
+    ["appointment-news", appointmentNews(profile)],
     ["icp-universe", universeCandidates(profile)],
   ];
   if (profile.role === "AI GTM") tasks.push(["ai-native-chatter", aiNativeChatter()]);

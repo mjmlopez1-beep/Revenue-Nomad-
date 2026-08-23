@@ -39,6 +39,8 @@ const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => strin
     `They just launched publicly. First-mover window for a fractional ${p.role} pitch before they build in-house.`,
   "function-gap": (p) =>
     `They're building around your function while nobody owns it. Pitch fractional ${p.role} to fill the gap before it costs them a quarter.`,
+  "leader-appointed": (p) =>
+    `A new GTM leader just took the seat — first-quarter rebuild mode. Pitch fractional ${p.role} as their fastest path to a system that works.`,
 };
 
 const ENGINE_VERSION = "v3-diff";
@@ -113,8 +115,16 @@ export async function runProspectScan(): Promise<ProspectScan> {
     const nowMs = Date.now();
     let survival = 1;
     for (const sig of sigs) {
-      const effective = signalWeight(sig.type, profile.role) * signalDecay(sig.type, sig.detectedOn, nowMs);
-      survival *= 1 - effective;
+      // Library signals carry their own tuning; others fall back to type config.
+      const w = sig.weight ?? signalWeight(sig.type, profile.role);
+      let decay: number;
+      if (sig.halfLifeDays === null) decay = 1; // standing condition
+      else if (typeof sig.halfLifeDays === "number") {
+        decay = sig.detectedOn
+          ? Math.pow(0.5, Math.max(0, (nowMs - new Date(sig.detectedOn).getTime()) / 86400000) / sig.halfLifeDays)
+          : 1;
+      } else decay = signalDecay(sig.type, sig.detectedOn, nowMs);
+      survival *= 1 - w * decay;
     }
     const timing = Math.round(100 * (1 - survival));
 
@@ -132,7 +142,9 @@ export async function runProspectScan(): Promise<ProspectScan> {
     if (overall < QUEUE.minComposite) continue;
 
     const primary = [...sigs].sort(
-      (a, b) => signalWeight(b.type, profile.role) - signalWeight(a.type, profile.role)
+      (a, b) =>
+        (b.weight ?? signalWeight(b.type, profile.role)) -
+        (a.weight ?? signalWeight(a.type, profile.role))
     )[0];
 
     scored.push({
