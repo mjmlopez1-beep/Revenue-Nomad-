@@ -16,8 +16,8 @@ function tag(xml: string, name: string): string {
 
 export async function fetchJobs(): Promise<RawJob[]> {
   const out: RawJob[] = [];
-  for (const feed of FEEDS) {
-    const xml = await fetchText(feed);
+  const feeds = await Promise.all(FEEDS.map((feed) => fetchText(feed)));
+  for (const xml of feeds) {
     const items = xml.match(/<item>[\s\S]*?<\/item>/gi) || [];
     for (const item of items) {
       const rawTitle = tag(item, "title");

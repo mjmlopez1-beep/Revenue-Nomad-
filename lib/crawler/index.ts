@@ -99,9 +99,14 @@ export async function runCrawl(): Promise<CrawlRun> {
 
   // Drop listings not seen in STALE_DAYS unless the operator saved/applied them.
   const cutoff = Date.now() - STALE_DAYS * 24 * 3600 * 1000;
-  const jobs = [...byId.values()].filter(
+  let jobs = [...byId.values()].filter(
     (j) => j.status === "saved" || j.status === "applied" || new Date(j.lastSeenAt).getTime() >= cutoff
   );
+
+  // Once real listings exist, retire the bundled sample listings for good.
+  if (jobs.some((j) => j.source !== "sample")) {
+    jobs = jobs.filter((j) => j.source !== "sample");
+  }
 
   const run: CrawlRun = { at: now, results, added, updated };
   const next: Database = { jobs, lastCrawl: run };

@@ -30,10 +30,15 @@ export async function fetchJobs(): Promise<RawJob[]> {
     .filter(Boolean)
     .concat(DEFAULT_BOARDS);
   const out: RawJob[] = [];
-  for (const board of boards) {
-    const data = await fetchJson<GhResponse>(
-      `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs?content=true`
-    );
+  const responses = await Promise.all(
+    boards.map(async (board) => ({
+      board,
+      data: await fetchJson<GhResponse>(
+        `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(board)}/jobs?content=true`
+      ),
+    }))
+  );
+  for (const { board, data } of responses) {
     for (const j of data.jobs || []) {
       out.push({
         title: j.title,

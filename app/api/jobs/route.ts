@@ -1,10 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loadDb } from "@/lib/store";
+import { runCrawl } from "@/lib/crawler";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// On serverless hosts each instance has its own /tmp database, so a fresh
+// instance starts from seed data even after a crawl ran elsewhere. Self-heal:
+// crawl inline when this instance has no live listings (or stale ones), but
+// never more than once per RETRY window so failing sources can't slow every
+// request.
+const STALE_MS = 6 * 3600 * 1000;
+const RETRY_MS = 10 * 60 * 1000;
+
+async function freshDb() {
+  let db = await loadDb();
+  const hasLive = db.jobs.some((j) => j.source !== "sample");
+  const lastAttempt = db.lastCrawl ? new Date(db.lastCrawl.at).getTime() : 0;
+  const stale = Date.now() - lastAttempt > STALE_MS;
+  if ((!hasLive || stale) && Date.now() - lastAttempt > RETRY_MS) {
+    try {
+      await runCrawl();
+      db = await loadDb();
+    } catch {
+      // keep serving whatever we have
+    }
+  }
+  return db;
+}
 
 export async function GET(req: NextRequest) {
-  const db = await loadDb();
+  const db = await freshDb();
   const params = req.nextUrl.searchParams;
   const q = (params.get("q") || "").toLowerCase();
   const fn = params.get("function");

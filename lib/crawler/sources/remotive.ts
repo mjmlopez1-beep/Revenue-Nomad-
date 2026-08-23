@@ -22,10 +22,14 @@ export const name = "remotive";
 
 export async function fetchJobs(): Promise<RawJob[]> {
   const out: RawJob[] = [];
-  for (const search of SEARCHES) {
-    const data = await fetchJson<RemotiveResponse>(
-      `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(search)}&limit=50`
-    );
+  const responses = await Promise.all(
+    SEARCHES.map((search) =>
+      fetchJson<RemotiveResponse>(
+        `https://remotive.com/api/remote-jobs?search=${encodeURIComponent(search)}&limit=50`
+      )
+    )
+  );
+  for (const data of responses) {
     for (const j of data.jobs || []) {
       out.push({
         title: j.title,
