@@ -49,6 +49,15 @@ export const SIGNAL_CONFIG: Record<SignalType, SignalConfig> = {
     halfLifeDays: 120,
   },
   "newly-launched": { weight: 0.5, halfLifeDays: 60 },
+  // Role-specific cross-function gap read off the company's own careers
+  // board — e.g. "scaling GTM hiring with no ops role posted" (RevOps R5),
+  // "AI in the pitch, no AI roles posted" (AI GTM A1, the spec's
+  // highest-precision Tier 1/2 signal).
+  "function-gap": {
+    weight: 0.7,
+    roleWeights: { "AI GTM": 0.85 },
+    halfLifeDays: 60,
+  },
 };
 
 /** Human-readable chip labels for the UI (no emoji — enterprise surface). */
@@ -66,6 +75,41 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   "headcount-jump": "Headcount jump",
   "positioning-shift": "Repositioned",
   "newly-launched": "Just launched",
+  "function-gap": "Function gap",
+};
+
+/**
+ * Which signal types are meaningful per role category. Anything not listed
+ * is dropped for that role — a Sales Leadership queue should never carry
+ * content-gap noise, and an AI GTM queue shouldn't fill with generic
+ * sales-team signals.
+ */
+export const ALLOWED_SIGNALS: Record<OperatorRole, SignalType[]> = {
+  "Sales Leadership": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "early-inflection", "started-hiring", "headcount-jump", "newly-launched", "function-gap"],
+  Marketing: ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "content-gap", "actively-hiring", "early-inflection", "started-hiring", "headcount-jump", "positioning-shift", "newly-launched", "function-gap"],
+  "Revenue Operations": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
+  "Sales Enablement": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
+  "Customer Success": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
+  "AI GTM": ["departure", "funding", "hiring-role", "ai-native", "content-gap", "actively-hiring", "early-inflection", "started-hiring", "positioning-shift", "newly-launched", "function-gap"],
+  Partnerships: ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
+  Sellers: ["leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "newly-launched"],
+};
+
+/**
+ * Team-size window where each role category is most buyable — a 12-person
+ * seed startup needs a fractional sales leader, not a RevOps function; a
+ * 60-person Series B is the reverse. Companies inside the window get a fit
+ * bonus, so candidate ORDERING differs by role, not just weights.
+ */
+export const TEAM_SWEETSPOT: Record<OperatorRole, [number, number]> = {
+  "Sales Leadership": [8, 80],
+  Marketing: [8, 80],
+  "Revenue Operations": [20, 150],
+  "Sales Enablement": [25, 200],
+  "Customer Success": [20, 150],
+  "AI GTM": [10, 120],
+  Partnerships: [25, 200],
+  Sellers: [10, 100],
 };
 
 /** Queue rules (spec §5.3). */

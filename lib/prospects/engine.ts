@@ -8,7 +8,7 @@ import type {
 } from "../types";
 import { loadProfile, loadProspects, saveProspects } from "../store";
 import { gatherSignals, type RawSignal } from "./signals";
-import { QUEUE, signalDecay, signalWeight } from "./config";
+import { ALLOWED_SIGNALS, QUEUE, signalDecay, signalWeight } from "./config";
 
 const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => string> = {
   funding: (p) =>
@@ -37,6 +37,8 @@ const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => strin
     `They just repositioned. New positioning needs new messaging and motion — pitch fractional ${p.role} to land it in-market.`,
   "newly-launched": (p) =>
     `They just launched publicly. First-mover window for a fractional ${p.role} pitch before they build in-house.`,
+  "function-gap": (p) =>
+    `They're building around your function while nobody owns it. Pitch fractional ${p.role} to fill the gap before it costs them a quarter.`,
 };
 
 const ENGINE_VERSION = "v3-diff";
@@ -92,13 +94,17 @@ export async function runProspectScan(): Promise<ProspectScan> {
   for (const [key, group] of groups) {
     // Dedupe identical signal types per company; keep the first of each.
     const seenTypes = new Set<string>();
+    const allowed = ALLOWED_SIGNALS[profile.role];
     const sigs: TimingSignal[] = [];
     for (const s of group) {
+      // Role gating: signals that don't inform this role category are noise.
+      if (!allowed.includes(s.signal.type)) continue;
       const k = `${s.signal.type}:${s.signal.label}`;
       if (seenTypes.has(k)) continue;
       seenTypes.add(k);
       sigs.push(s.signal);
     }
+    if (sigs.length === 0) continue;
 
     // Timing: noisy-OR with per-signal half-life decay (spec §5.1). Signals
     // compound but saturate — three medium signals beat one strong one, but
@@ -142,6 +148,7 @@ export async function runProspectScan(): Promise<ProspectScan> {
       overall,
       suggestedPitch: PITCHES[primary.type](profile, primary),
       status: "new",
+      role: profile.role,
       firstSeenAt: now,
       lastSeenAt: now,
     });
@@ -167,6 +174,7 @@ export async function runProspectScan(): Promise<ProspectScan> {
       existing.signals = p.signals;
       existing.overall = p.overall;
       existing.suggestedPitch = p.suggestedPitch;
+      existing.role = profile.role;
       updated++;
     } else if (added < QUEUE.maxNewPerScan) {
       byId.set(p.id, p);
@@ -175,14 +183,16 @@ export async function runProspectScan(): Promise<ProspectScan> {
   }
 
   // Prospects whose signals evaporated age out after 30 days unless the
-  // operator queued or contacted them.
+  // operator queued or contacted them — and a role switch flushes the queue
+  // entirely: matches generated for another role category are not this
+  // role's matches.
   const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
   const prospects = [...byId.values()]
     .filter(
       (p) =>
         p.status === "queued" ||
         p.status === "contacted" ||
-        new Date(p.lastSeenAt).getTime() >= cutoff
+        (p.role === profile.role && new Date(p.lastSeenAt).getTime() >= cutoff)
     )
     .sort((a, b) => b.overall - a.overall);
 

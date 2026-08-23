@@ -239,15 +239,154 @@ async function hiringSignals(profile: OperatorProfile): Promise<RawSignal[]> {
   return out;
 }
 
-/**
- * Per-company enrichment for auto-discovered target accounts: check for
- * missing/stale public marketing content (blog/RSS) — a content-gap signal —
- * and for open GTM roles on a guessed Greenhouse board.
- */
-export async function enrichCompany(company: string, domain: string): Promise<TimingSignal[]> {
-  const out: TimingSignal[] = [];
+/* ---------- role-aware careers-board classification ---------- */
 
-  // Content gap: look for an RSS/Atom feed and how fresh it is.
+interface BoardPosting {
+  title: string;
+  url: string;
+}
+
+/** Title regexes for the leadership seat of each role category. */
+const SEAT_RE: Record<string, RegExp> = {
+  "Sales Leadership": /\b((vp|vice president|head|director|chief)[^,]{0,25}(sales|revenue)|cro)\b/i,
+  Marketing: /\b((vp|vice president|head|director|chief)[^,]{0,25}(marketing|brand|demand|content)|cmo)\b/i,
+  "Revenue Operations": /\b(vp|vice president|head|director)[^,]{0,30}(revenue operations|revops|sales operations|gtm operations)\b/i,
+  "Sales Enablement": /\b(vp|vice president|head|director)[^,]{0,25}enablement\b/i,
+  "Customer Success": /\b((vp|vice president|head|director|chief)[^,]{0,30}(customer success|customer experience|growth)|cco)\b/i,
+  "AI GTM": /\b(vp|head|director)[^,]{0,20}\bai\b|ai (architect|lead)\b/i,
+  Partnerships: /\b(vp|vice president|head|director)[^,]{0,25}(partner|alliances|channel)\b/i,
+  Sellers: /\b(vp|vice president|head|director)[^,]{0,20}sales\b/i,
+};
+
+/** IC titles inside each role category's own function. */
+const OWN_IC_RE: Record<string, RegExp> = {
+  "Sales Leadership": /\b(account executive|sdr|bdr|sales development|sales rep)\b/i,
+  Marketing: /\b(marketing manager|demand gen|growth marketer|content (marketer|writer|manager)|seo|paid media|product marketing)\b/i,
+  "Revenue Operations": /\b(revenue operations|revops|sales operations|marketing operations|deal desk|sales analyst|gtm analyst)\b/i,
+  "Sales Enablement": /\b(enablement|sales trainer)\b/i,
+  "Customer Success": /\b(customer success|csm|onboarding|implementation|account manager)\b/i,
+  "AI GTM": /\b(machine learning|ml engineer|ai engineer|data scientist|llm)\b/i,
+  Partnerships: /\b(partner|channel|alliances|business development)\b/i,
+  Sellers: /\b(account executive|enterprise sales)\b/i,
+};
+
+const SALES_IC_RE = /\b(account executive|sdr|bdr|sales development|sales rep)\b/i;
+const MKT_IC_RE = /\b(marketing|demand gen|growth marketer|content|seo|paid media)\b/i;
+
+async function fetchBoard(company: string): Promise<BoardPosting[] | null> {
+  const slug = company.toLowerCase().replace(/[^a-z0-9]/g, "");
+  try {
+    const gh = await fetchJson<{ jobs: { title: string; absolute_url: string }[] }>(
+      `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`
+    );
+    return (gh.jobs || []).map((j) => ({ title: j.title, url: j.absolute_url }));
+  } catch {
+    return null; // no discoverable board — absence of postings proves nothing
+  }
+}
+
+/**
+ * Read a company's own careers board through the lens of ONE role category
+ * (Match Engine spec §4): hiring the operator's seat, ICs without that seat,
+ * and cross-function gaps like "scaling GTM hiring with no ops role" (R5) or
+ * "AI in the pitch, no AI roles posted" (A1).
+ */
+function classifyBoard(
+  role: OperatorProfile["role"],
+  companyText: string,
+  postings: BoardPosting[]
+): TimingSignal[] {
+  const now = new Date().toISOString();
+  const out: TimingSignal[] = [];
+  const seatRe = SEAT_RE[role];
+  const ownIcRe = OWN_IC_RE[role];
+  const seatReqs = postings.filter((p) => seatRe.test(p.title));
+  const ownIcReqs = postings.filter((p) => ownIcRe.test(p.title) && !seatRe.test(p.title));
+  const salesIcReqs = postings.filter((p) => SALES_IC_RE.test(p.title));
+  const mktReqs = postings.filter((p) => MKT_IC_RE.test(p.title));
+
+  if (seatReqs.length > 0) {
+    out.push({
+      type: "leadership-gap",
+      label: `Hiring your seat full-time: ${seatReqs[0].title}`,
+      detail: "The search runs 4–6 months — pitch fractional/interim coverage now.",
+      evidenceUrl: seatReqs[0].url,
+      detectedOn: now,
+    });
+  } else if (ownIcReqs.length >= 2) {
+    out.push({
+      type: "team-without-leader",
+      label: `Hiring ${ownIcReqs.length} ${role} ICs with no leadership posting`,
+      detail: `Open: ${ownIcReqs.slice(0, 3).map((p) => p.title).join("; ")}`,
+      evidenceUrl: ownIcReqs[0].url,
+      detectedOn: now,
+    });
+  }
+
+  // Cross-function gaps: building around the operator's function while
+  // nobody owns it. Only claimable when a real board exists.
+  if (postings.length > 0) {
+    if (role === "Revenue Operations" && salesIcReqs.length + mktReqs.length >= 3 && seatReqs.length === 0 && ownIcReqs.length === 0) {
+      out.push({
+        type: "function-gap",
+        label: "Scaling GTM hiring with no ops role posted",
+        detail: `${salesIcReqs.length + mktReqs.length} GTM reqs open, zero ops/analytics — nobody owns the connective tissue.`,
+        evidenceUrl: postings[0].url,
+        detectedOn: now,
+      });
+    }
+    if (role === "Customer Success" && salesIcReqs.length >= 2 && ownIcReqs.length === 0 && seatReqs.length === 0) {
+      out.push({
+        type: "function-gap",
+        label: "Hiring sellers with no post-sale function posted",
+        detail: "New logos landing with nobody owning renewals and expansion.",
+        evidenceUrl: salesIcReqs[0].url,
+        detectedOn: now,
+      });
+    }
+    if (role === "Marketing" && salesIcReqs.length >= 2 && mktReqs.length === 0) {
+      out.push({
+        type: "function-gap",
+        label: "Sales hired ahead of marketing",
+        detail: `${salesIcReqs.length} quota-carrier reqs, zero marketing — pipeline gap forming.`,
+        evidenceUrl: salesIcReqs[0].url,
+        detectedOn: now,
+      });
+    }
+    if (role === "Partnerships" && salesIcReqs.length >= 3 && seatReqs.length === 0 && ownIcReqs.length === 0) {
+      out.push({
+        type: "function-gap",
+        label: "Scaling direct sales with no partner function",
+        detail: "Direct-only motion at a size where a channel program compounds.",
+        evidenceUrl: salesIcReqs[0].url,
+        detectedOn: now,
+      });
+    }
+    if (role === "AI GTM" && /\bai\b|artificial intelligence|machine learning/i.test(companyText) && ownIcReqs.length === 0 && seatReqs.length === 0) {
+      out.push({
+        type: "function-gap",
+        label: "AI in the pitch, no AI roles posted",
+        detail: "They market AI but aren't hiring AI builders — the most reliable fractional-technical buyer.",
+        evidenceUrl: postings[0].url,
+        detectedOn: now,
+      });
+    }
+    if (role === "Sales Enablement" && salesIcReqs.length >= 3 && seatReqs.length === 0) {
+      out.push({
+        type: "hiring-role",
+        label: `Scaling the rep base: ${salesIcReqs.length} quota-carrier reqs open`,
+        detail: "New reps ramp faster with an enablement motion in place.",
+        evidenceUrl: salesIcReqs[0].url,
+        detectedOn: now,
+      });
+    }
+  }
+
+  return out;
+}
+
+/** Content-gap check — only meaningful for content-adjacent roles. */
+async function contentGapCheck(domain: string): Promise<TimingSignal[]> {
   let freshest: number | null = null;
   let feedFound = false;
   for (const path of ["/feed", "/blog/rss.xml"]) {
@@ -266,44 +405,46 @@ export async function enrichCompany(company: string, domain: string): Promise<Ti
       /* keep trying */
     }
   }
+  const now = new Date().toISOString();
   const staleDays = freshest ? Math.floor((Date.now() - freshest) / 86400000) : null;
   if (!feedFound) {
-    out.push({
+    return [{
       type: "content-gap",
       label: "No discoverable blog/RSS feed",
       detail: "No public content engine found — opening for a content/marketing pitch.",
       evidenceUrl: `https://${domain}`,
-      detectedOn: new Date().toISOString(),
-    });
-  } else if (staleDays !== null && staleDays > 60) {
-    out.push({
+      detectedOn: now,
+    }];
+  }
+  if (staleDays !== null && staleDays > 60) {
+    return [{
       type: "content-gap",
       label: `Blog silent for ${staleDays} days`,
       detail: "Public content has gone quiet — the engine exists but nobody is running it.",
       evidenceUrl: `https://${domain}`,
-      detectedOn: new Date().toISOString(),
-    });
+      detectedOn: now,
+    }];
   }
+  return [];
+}
 
-  // Careers: guessed Greenhouse board.
-  const slug = company.toLowerCase().replace(/[^a-z0-9]/g, "");
-  try {
-    const gh = await fetchJson<{ jobs: { title: string; absolute_url: string }[] }>(
-      `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`
-    );
-    const gtm = (gh.jobs || []).filter((j) => LEADERSHIP_TITLE.test(j.title) || IC_GTM_TITLE.test(j.title));
-    if (gtm.length > 0) {
-      out.push({
-        type: "hiring-role",
-        label: `${gtm.length} open GTM role(s) on their careers page`,
-        detail: gtm.slice(0, 3).map((j) => j.title).join("; "),
-        evidenceUrl: gtm[0].absolute_url,
-        detectedOn: new Date().toISOString(),
-      });
-    }
-  } catch {
-    /* board doesn't exist under that slug — fine */
-  }
+const CONTENT_ROLES = new Set(["Marketing", "AI GTM"]);
+
+/** Role-aware per-company enrichment for auto-discovered target accounts. */
+export async function enrichCompany(
+  profile: OperatorProfile,
+  company: string,
+  domain: string,
+  companyText: string
+): Promise<TimingSignal[]> {
+  const [board, content] = await Promise.all([
+    fetchBoard(company),
+    CONTENT_ROLES.has(profile.role) || profile.roleSlug === "content_director"
+      ? contentGapCheck(domain)
+      : Promise.resolve([]),
+  ]);
+  const out: TimingSignal[] = [...content];
+  if (board !== null) out.push(...classifyBoard(profile.role, companyText, board));
   return out;
 }
 
@@ -322,7 +463,8 @@ async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]
   const enriched = new Map<string, TimingSignal[]>();
   await Promise.allSettled(
     toEnrich.map(async (c) => {
-      enriched.set(c.company.name, await enrichCompany(c.company.name, c.company.domain!));
+      const text = `${c.company.oneLiner} ${c.company.industry} ${c.company.tags.join(" ")}`;
+      enriched.set(c.company.name, await enrichCompany(profile, c.company.name, c.company.domain!, text));
     })
   );
 

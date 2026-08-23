@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { categoryForSlug } from "./roles";
 import type {
   Database,
   Job,
@@ -100,12 +101,18 @@ const asStrings = (v: unknown, max: number): string[] =>
 
 /** Sanitize an untrusted profile payload into a valid OperatorProfile. */
 export function normalizeProfile(body: Record<string, unknown>): OperatorProfile {
+  // A specific role slug (DB_Roles) wins; its category derives from it.
+  const roleSlug = typeof body.roleSlug === "string" ? body.roleSlug : undefined;
+  const slugCategory = roleSlug ? categoryForSlug(roleSlug) : null;
   return {
     name: String(body.name ?? "").slice(0, 100),
     headline: String(body.headline ?? DEFAULT_PROFILE.headline).slice(0, 200),
-    role: OPERATOR_ROLES.includes(body.role as never)
-      ? (body.role as OperatorProfile["role"])
-      : DEFAULT_PROFILE.role,
+    roleSlug: slugCategory ? roleSlug : undefined,
+    role:
+      slugCategory ??
+      (OPERATOR_ROLES.includes(body.role as never)
+        ? (body.role as OperatorProfile["role"])
+        : DEFAULT_PROFILE.role),
     industries: asStrings(body.industries, 7),
     stages: asStrings(body.stages, 6),
     employeeSizes: asStrings(body.employeeSizes, 6),

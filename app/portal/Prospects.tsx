@@ -38,6 +38,7 @@ const DOT_COLORS: Record<string, string> = {
   "headcount-jump": "#2f7d4f",
   "positioning-shift": "#8a6db0",
   "newly-launched": "#3d7ea6",
+  "function-gap": "#c2564a",
 };
 
 function signalAge(iso?: string): string | null {

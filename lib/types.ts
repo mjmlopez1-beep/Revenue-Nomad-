@@ -87,7 +87,8 @@ export type OperatorRole =
 export interface OperatorProfile {
   name: string;
   headline: string;
-  role: OperatorRole;
+  role: OperatorRole; // category, derived from roleSlug
+  roleSlug?: string; // specific role, e.g. "vp_revops" (DB_Roles slugs)
   industries: string[]; // display names or slugs, e.g. ["B2B SaaS", "fintech"]
   stages: string[]; // pre_seed | seed | series_a | series_b | series_c_plus | growth
   employeeSizes: string[]; // 1_10 | 11_50 | 51_200 | 201_500 | 501_1000 | 1001_plus
@@ -111,7 +112,8 @@ export type SignalType =
   | "started-hiring" // hiring flag flipped on
   | "headcount-jump" // team size jumped materially
   | "positioning-shift" // one-liner / description changed (pivot tell)
-  | "newly-launched"; // company just appeared in the directory
+  | "newly-launched" // company just appeared in the directory
+  | "function-gap"; // building around a function nobody owns (role-specific)
 
 export interface TimingSignal {
   type: SignalType;
@@ -136,6 +138,8 @@ export interface Prospect {
   overall: number; // blended priority
   suggestedPitch: string;
   status: ProspectStatus;
+  /** Role category this prospect was generated for — a role switch rescans. */
+  role?: string;
   firstSeenAt: string;
   lastSeenAt: string;
 }

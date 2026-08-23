@@ -2,17 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { OperatorProfile, OperatorRole } from "@/lib/types";
-
-const ROLES: OperatorRole[] = [
-  "Sales Leadership",
-  "Marketing",
-  "Revenue Operations",
-  "Sales Enablement",
-  "Customer Success",
-  "AI GTM",
-  "Partnerships",
-  "Sellers",
-];
+import { categoryForSlug, ROLE_CATALOG } from "@/lib/roles";
 
 // Value/label pairs mirror the Revenue Nomad operator-entry enums.
 const STAGES: [string, string][] = [
@@ -157,15 +147,28 @@ export default function ProfileForm() {
           />
         </label>
         <label className="field">
-          <span>Role category</span>
+          <span>Role{profile.role ? ` — ${profile.role}` : ""}</span>
           <select
-            value={profile.role}
-            onChange={(e) => setProfile({ ...profile, role: e.target.value as OperatorRole })}
+            value={profile.roleSlug || ""}
+            onChange={(e) => {
+              const slug = e.target.value;
+              const category = categoryForSlug(slug);
+              setProfile({
+                ...profile,
+                roleSlug: slug || undefined,
+                role: (category || profile.role) as OperatorRole,
+              });
+            }}
           >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
+            <option value="">Select your role…</option>
+            {ROLE_CATALOG.map((group) => (
+              <optgroup key={group.category} label={group.category}>
+                {group.roles.map((r) => (
+                  <option key={r.slug} value={r.slug}>
+                    {r.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>

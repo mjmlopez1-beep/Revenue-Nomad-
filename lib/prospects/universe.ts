@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { OperatorProfile, TimingSignal } from "../types";
 import { fetchWithTimeout } from "../crawler/fetch";
+import { TEAM_SWEETSPOT } from "./config";
 
 /**
  * Universal company dataset: the open Y Combinator company directory
@@ -350,6 +351,14 @@ export function matchUniverse(
         matched.push(`${c.teamSize} people`);
         fit += 20;
       }
+    }
+
+    // Role-specific buyability window: the team size where companies actually
+    // buy THIS role. Orders candidates differently per role category.
+    const sweet = TEAM_SWEETSPOT[profile.role];
+    if (c.teamSize !== null && sweet && c.teamSize >= sweet[0] && c.teamSize <= sweet[1]) {
+      matched.push(`${profile.role} window`);
+      fit += 10;
     }
 
     // Stage: YC labels companies Early/Growth; refine with batch recency.
