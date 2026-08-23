@@ -49,6 +49,7 @@ export default function JobBoard() {
   const [fn, setFn] = useState("");
   const [engagement, setEngagement] = useState("");
   const [source, setSource] = useState("");
+  const [kind, setKind] = useState("");
   const [minScore, setMinScore] = useState(0);
   const [remoteOnly, setRemoteOnly] = useState(false);
 
@@ -123,19 +124,18 @@ export default function JobBoard() {
     if (fn) list = list.filter((j) => (j.functions as string[]).includes(fn));
     if (engagement) list = list.filter((j) => (j.engagement as string[]).includes(engagement));
     if (source) list = list.filter((j) => j.source === source);
+    if (kind) list = list.filter((j) => (j.kind || "listing") === kind);
     if (minScore) list = list.filter((j) => j.score >= minScore);
     if (remoteOnly) list = list.filter((j) => j.remote);
     return [...list].sort(
       (a, b) => b.score - a.score || new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime()
     );
-  }, [jobs, tab, q, fn, engagement, source, minScore, remoteOnly]);
+  }, [jobs, tab, q, fn, engagement, source, kind, minScore, remoteOnly]);
 
   const fractionalCount = jobs.filter(
     (j) => j.status !== "hidden" && (j.engagement as string[]).includes("Fractional")
   ).length;
-  const avgScore = visible.length
-    ? Math.round(visible.reduce((s, j) => s + j.score, 0) / visible.length)
-    : 0;
+  const leadCount = jobs.filter((j) => j.status !== "hidden" && j.kind === "discussion").length;
   const onlySample = jobs.length > 0 && jobs.every((j) => j.source === "sample");
 
   return (
@@ -183,8 +183,8 @@ export default function JobBoard() {
           <div className="value">{counts.saved}</div>
         </div>
         <div className="stat">
-          <div className="label">Avg. fit score</div>
-          <div className="value">{avgScore}</div>
+          <div className="label">Community leads</div>
+          <div className="value">{leadCount}</div>
         </div>
       </div>
 
@@ -210,6 +210,11 @@ export default function JobBoard() {
               {e}
             </option>
           ))}
+        </select>
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          <option value="">Listings + leads</option>
+          <option value="listing">Job listings</option>
+          <option value="discussion">Community leads</option>
         </select>
         <select value={source} onChange={(e) => setSource(e.target.value)}>
           <option value="">All sources</option>
@@ -282,6 +287,7 @@ export default function JobBoard() {
               </div>
               {job.description && <p className="job-desc">{job.description}</p>}
               <div className="job-meta">
+                {job.kind === "discussion" && <span className="pill lead">Community lead</span>}
                 {job.engagement.map((e) => (
                   <span
                     key={e}
@@ -290,6 +296,9 @@ export default function JobBoard() {
                     {e}
                   </span>
                 ))}
+                {job.commitment && <span className="pill salary">{job.commitment}</span>}
+                {job.rate && <span className="pill salary">{job.rate}</span>}
+                {job.term && <span className="pill salary">{job.term}</span>}
                 {job.functions.map((f) => (
                   <span key={f} className="pill">
                     {f}

@@ -6,12 +6,10 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 
 ## How it works
 
-1. **Crawl** — source adapters pull open roles from public job APIs/feeds:
-   - [Remotive](https://remotive.com) (JSON API, keyword searches: fractional, GTM, revenue operations, …)
-   - [RemoteOK](https://remoteok.com) (JSON API, filtered to sales/marketing/growth/revenue tags)
-   - [We Work Remotely](https://weworkremotely.com) (RSS: sales & marketing, management categories)
-   - Any [Greenhouse](https://greenhouse.io) company board via `RN_GREENHOUSE_BOARDS` (comma-separated board tokens)
-2. **Score** — every listing gets a 0–100 fractional-GTM fit score from engagement signals (fractional / interim / contract / part-time / advisory), GTM function match (sales, marketing, RevOps, growth, partnerships, GTM leadership), and seniority. Listings below the threshold never reach the board.
+1. **Crawl** — source adapters pull from job boards *and* the places people talk about fractional GTM work:
+   - **Job boards:** [Remotive](https://remotive.com), [RemoteOK](https://remoteok.com), [We Work Remotely](https://weworkremotely.com), [fractionaljobs.io](https://www.fractionaljobs.io), and any [Greenhouse](https://greenhouse.io) company board via `RN_GREENHOUSE_BOARDS`
+   - **Communities:** [Hacker News](https://hn.algolia.com) stories *and* comments (catches "Ask HN: Who is hiring?" threads and founder chatter) and Reddit search — surfaced as **community leads**, distinct from listings on the board
+2. **Score & filter for truly fractional** — every item needs BOTH a relevance score above threshold AND a genuine fractional signal: fractional/interim/advisory wording, ≤4 days per week, ≤32 hours per week, or hourly-rate pricing. Full-time tells (benefits language, 40-hour weeks, annual salaries) subtract points, and full-time roles are dropped entirely. Commitment ("2 days/wk"), rate ("$150/hr"), and contract term ("6-month") are extracted as structured fields on each card.
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 

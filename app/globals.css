@@ -366,6 +366,11 @@ a:hover {
 .pill.source {
   text-transform: lowercase;
 }
+.pill.lead {
+  color: #c084fc;
+  border-color: #5b3a82;
+  background: #221733;
+}
 .job-actions {
   display: flex;
   gap: 8px;

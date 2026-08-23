@@ -11,13 +11,20 @@
       "postedAt": "2026-08-18T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Series A analytics startup seeks a fractional Chief Revenue Officer 2 days/week to build the outbound motion, hire the first two AEs, and own the path from $1M to $3M ARR. Experience standing up HubSpot, outbound sequencing, and founder-led-sales handoff required.",
       "salary": "$8k–$12k/mo",
-      "functions": ["GTM Leadership", "Sales", "RevOps"],
-      "engagement": ["Fractional"],
+      "functions": [
+        "GTM Leadership",
+        "Sales",
+        "RevOps"
+      ],
+      "engagement": [
+        "Fractional"
+      ],
       "seniority": "C-level",
       "score": 95,
       "status": "new",
       "firstSeenAt": "2026-08-18T00:00:00.000Z",
-      "lastSeenAt": "2026-08-18T00:00:00.000Z"
+      "lastSeenAt": "2026-08-18T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000002",
@@ -30,13 +37,21 @@
       "postedAt": "2026-08-19T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Developer tools company needs a fractional VP Marketing (~15 hrs/week) to own demand generation: paid, SEO, and a PLG content engine. You will set the GTM narrative with the founders and stand up attribution before a full-time hire in Q1.",
       "salary": "$7k–$10k/mo",
-      "functions": ["GTM Leadership", "Marketing", "Growth"],
-      "engagement": ["Fractional", "Part-time"],
+      "functions": [
+        "GTM Leadership",
+        "Marketing",
+        "Growth"
+      ],
+      "engagement": [
+        "Fractional",
+        "Part-time"
+      ],
       "seniority": "VP",
       "score": 92,
       "status": "new",
       "firstSeenAt": "2026-08-19T00:00:00.000Z",
-      "lastSeenAt": "2026-08-19T00:00:00.000Z"
+      "lastSeenAt": "2026-08-19T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000003",
@@ -49,13 +64,20 @@
       "postedAt": "2026-08-20T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Health-tech scale-up seeks an interim Head of Revenue Operations for a 6-month engagement: Salesforce cleanup, pipeline reporting the board can trust, comp plan redesign, and a territory model ahead of the new fiscal year.",
       "salary": "$110–$140/hr",
-      "functions": ["RevOps", "Sales"],
-      "engagement": ["Interim", "Contract"],
+      "functions": [
+        "RevOps",
+        "Sales"
+      ],
+      "engagement": [
+        "Interim",
+        "Contract"
+      ],
       "seniority": "Head",
       "score": 84,
       "status": "new",
       "firstSeenAt": "2026-08-20T00:00:00.000Z",
-      "lastSeenAt": "2026-08-20T00:00:00.000Z"
+      "lastSeenAt": "2026-08-20T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000004",
@@ -67,12 +89,19 @@
       "source": "sample",
       "postedAt": "2026-08-21T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Seed-stage infra startup wants a hands-on go-to-market advisor (5–10 hrs/week) to pressure-test pricing, define the ICP, and coach the founding team on their first enterprise deals.",
-      "functions": ["GTM Leadership", "Growth"],
-      "engagement": ["Fractional", "Advisory"],
+      "functions": [
+        "GTM Leadership",
+        "Growth"
+      ],
+      "engagement": [
+        "Fractional",
+        "Advisory"
+      ],
       "score": 88,
       "status": "new",
       "firstSeenAt": "2026-08-21T00:00:00.000Z",
-      "lastSeenAt": "2026-08-21T00:00:00.000Z"
+      "lastSeenAt": "2026-08-21T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000005",
@@ -85,13 +114,20 @@
       "postedAt": "2026-08-17T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Fintech API company seeks a part-time Partnerships Lead (3 days/week) to build a channel program with accounting platforms and payment providers. Pipeline is warm; needs an operator to structure and close.",
       "salary": "$90–$120/hr",
-      "functions": ["Partnerships", "Sales"],
-      "engagement": ["Part-time", "Contract"],
+      "functions": [
+        "Partnerships",
+        "Sales"
+      ],
+      "engagement": [
+        "Part-time",
+        "Contract"
+      ],
       "seniority": "Lead",
       "score": 66,
       "status": "new",
       "firstSeenAt": "2026-08-17T00:00:00.000Z",
-      "lastSeenAt": "2026-08-17T00:00:00.000Z"
+      "lastSeenAt": "2026-08-17T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000006",
@@ -104,13 +140,19 @@
       "postedAt": "2026-08-15T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Two-sided logistics marketplace needs a fractional CMO to own brand and demand across both sides. 2 days/week, 9-month engagement with option to convert.",
       "salary": "€6k–€9k/mo",
-      "functions": ["GTM Leadership", "Marketing"],
-      "engagement": ["Fractional"],
+      "functions": [
+        "GTM Leadership",
+        "Marketing"
+      ],
+      "engagement": [
+        "Fractional"
+      ],
       "seniority": "C-level",
       "score": 90,
       "status": "new",
       "firstSeenAt": "2026-08-15T00:00:00.000Z",
-      "lastSeenAt": "2026-08-15T00:00:00.000Z"
+      "lastSeenAt": "2026-08-15T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000007",
@@ -122,12 +164,18 @@
       "source": "sample",
       "postedAt": "2026-08-16T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Ed-tech company with strong top-of-funnel needs a contract growth marketer to fix activation and lifecycle email. 3-month project, extension likely.",
-      "functions": ["Growth", "Marketing"],
-      "engagement": ["Contract"],
+      "functions": [
+        "Growth",
+        "Marketing"
+      ],
+      "engagement": [
+        "Contract"
+      ],
       "score": 55,
       "status": "new",
       "firstSeenAt": "2026-08-16T00:00:00.000Z",
-      "lastSeenAt": "2026-08-16T00:00:00.000Z"
+      "lastSeenAt": "2026-08-16T00:00:00.000Z",
+      "kind": "listing"
     },
     {
       "id": "seed000000000008",
@@ -140,13 +188,19 @@
       "postedAt": "2026-08-22T00:00:00.000Z",
       "description": "Sample listing — run your first crawl to replace with live roles. Industrial AI company between sales leaders needs an interim VP Sales to run the existing 6-rep team, keep the Q4 pipeline moving, and help scope the permanent hire.",
       "salary": "$14k–$18k/mo",
-      "functions": ["GTM Leadership", "Sales"],
-      "engagement": ["Interim"],
+      "functions": [
+        "GTM Leadership",
+        "Sales"
+      ],
+      "engagement": [
+        "Interim"
+      ],
       "seniority": "VP",
       "score": 87,
       "status": "new",
       "firstSeenAt": "2026-08-22T00:00:00.000Z",
-      "lastSeenAt": "2026-08-22T00:00:00.000Z"
+      "lastSeenAt": "2026-08-22T00:00:00.000Z",
+      "kind": "listing"
     }
   ],
   "lastCrawl": null

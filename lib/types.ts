@@ -17,8 +17,16 @@ export type Engagement =
   | "Advisory"
   | "Full-time";
 
+/**
+ * "listing" — a structured job post on a board or ATS.
+ * "discussion" — a community lead: someone talking about / asking for
+ * fractional GTM help (HN thread, Reddit post, forum chatter).
+ */
+export type JobKind = "listing" | "discussion";
+
 export interface Job {
   id: string;
+  kind: JobKind;
   title: string;
   company: string;
   location: string;
@@ -31,6 +39,9 @@ export interface Job {
   functions: JobFunction[];
   engagement: Engagement[];
   seniority?: string;
+  commitment?: string; // e.g. "2 days/wk", "15 hrs/wk"
+  rate?: string; // e.g. "$150/hr"
+  term?: string; // e.g. "6-month"
   score: number; // 0-100 relevance to "fractional GTM"
   status: JobStatus;
   firstSeenAt: string;
@@ -62,6 +73,7 @@ export interface RawJob {
   location?: string;
   url: string;
   source: string;
+  kind?: JobKind; // defaults to "listing"
   postedAt?: string;
   description?: string;
   salary?: string;

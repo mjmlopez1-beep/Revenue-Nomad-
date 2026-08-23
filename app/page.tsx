@@ -29,17 +29,19 @@ export default function Home() {
 
       <section className="features">
         <div className="feature">
-          <h3>🕸️ Multi-source crawler</h3>
+          <h3>🕸️ Boards + communities</h3>
           <p>
-            Pulls open roles from Remotive, RemoteOK, We Work Remotely, and any Greenhouse board
-            you point it at — deduped and refreshed on demand.
+            Pulls open roles from job boards (Remotive, RemoteOK, We Work Remotely, fractionaljobs.io,
+            Greenhouse) and community leads from Hacker News and Reddit — founders talking about
+            fractional GTM help before it ever hits a board.
           </p>
         </div>
         <div className="feature">
-          <h3>🎯 GTM relevance scoring</h3>
+          <h3>🎯 Truly fractional only</h3>
           <p>
-            Every listing is scored 0–100 for fractional-GTM fit and tagged by function, engagement
-            type, and seniority. Noise never reaches the board.
+            Every item must show a real fractional signal — fractional/interim wording, ≤4 days a
+            week, hourly pricing, or a contract term. Full-time roles are filtered out, and
+            commitment, rate, and term are extracted onto each card.
           </p>
         </div>
         <div className="feature">

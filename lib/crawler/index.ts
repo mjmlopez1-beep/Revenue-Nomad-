@@ -6,14 +6,22 @@ import * as remotive from "./sources/remotive";
 import * as remoteok from "./sources/remoteok";
 import * as weworkremotely from "./sources/weworkremotely";
 import * as greenhouse from "./sources/greenhouse";
+import * as hackernews from "./sources/hackernews";
+import * as reddit from "./sources/reddit";
+import * as fractionaljobs from "./sources/fractionaljobs";
 
-const SOURCES = [remotive, remoteok, weworkremotely, greenhouse];
+const SOURCES = [remotive, remoteok, weworkremotely, greenhouse, hackernews, reddit, fractionaljobs];
 
 const REMOTE_RE = /\b(remote|anywhere|worldwide|global)\b/i;
 const STALE_DAYS = 60;
 
 function jobId(raw: RawJob): string {
-  const key = `${raw.company}::${raw.title}`.toLowerCase().replace(/\s+/g, " ").trim();
+  // Discussions are keyed by URL (one lead per thread/comment); listings by
+  // company+title so the same role found on two boards dedupes.
+  const key =
+    raw.kind === "discussion"
+      ? raw.url
+      : `${raw.company}::${raw.title}`.toLowerCase().replace(/\s+/g, " ").trim();
   return createHash("sha1").update(key).digest("hex").slice(0, 16);
 }
 
@@ -47,11 +55,15 @@ export async function runCrawl(): Promise<CrawlRun> {
     let kept = 0;
     for (const raw of raws) {
       const tags = scoreJob(raw);
-      if (tags.score < MIN_SCORE) continue;
+      // The bar: relevant score AND a genuine fractional signal (fractional/
+      // interim/advisory wording, ≤4 days per week, ≤32 hrs/week, or hourly
+      // pricing). Full-time GTM roles never reach the board.
+      if (tags.score < MIN_SCORE || !tags.isFractional) continue;
       kept++;
       const location = raw.location || "Remote";
       matched.push({
         id: jobId(raw),
+        kind: raw.kind || "listing",
         title: raw.title,
         company: raw.company,
         location,
@@ -64,6 +76,9 @@ export async function runCrawl(): Promise<CrawlRun> {
         functions: tags.functions,
         engagement: tags.engagement,
         seniority: tags.seniority,
+        commitment: tags.commitment,
+        rate: tags.rate,
+        term: tags.term,
         score: tags.score,
         status: "new",
         firstSeenAt: now,
@@ -90,6 +105,10 @@ export async function runCrawl(): Promise<CrawlRun> {
       existing.functions = job.functions;
       existing.engagement = job.engagement;
       existing.seniority = job.seniority;
+      existing.kind = job.kind;
+      existing.commitment = job.commitment;
+      existing.rate = job.rate;
+      existing.term = job.term;
       updated++;
     } else {
       byId.set(job.id, job);
