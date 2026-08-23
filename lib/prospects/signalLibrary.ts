@@ -31,6 +31,10 @@ export interface WebProbe {
   /** True only when the homepage actually returned HTML — absence signals
    * (no content, no proof) are only claimable when we could really look. */
   homepageFetched: boolean;
+  /** ATS boards linked from the homepage — exact slugs, no guessing. */
+  atsSlugs: { greenhouse?: string; lever?: string; ashby?: string };
+  /** Stripped text of their /careers page, when one exists. */
+  careersText: string | null;
   /** Content footprint — content is more than a blog. */
   contentSurfaces: string[]; // e.g. ["blog","resources","case studies","webinars"]
   hasCaseStudies: boolean; // case studies / customers page linked

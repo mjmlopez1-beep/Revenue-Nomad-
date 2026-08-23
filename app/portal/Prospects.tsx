@@ -223,8 +223,10 @@ export default function Prospects() {
       if (!res.ok) throw new Error(data.error || "scan failed");
       const scan: ProspectScan = data.scan;
       const errors = scan.results.filter((r) => r.error);
+      const coverage = scan.results.find((r) => r.detail)?.detail;
       setScanMsg(
         `${scan.engineVersion ? `Engine ${scan.engineVersion} · ` : ""}Scanned ${scan.results.length - errors.length}/${scan.results.length} signal sources — ${scan.added} new, ${scan.updated} refreshed` +
+          (coverage ? ` · ${coverage}` : "") +
           (errors.length
             ? ` — failed: ${errors.map((e) => `${e.source} (${e.error})`).join("; ")}`
             : "")

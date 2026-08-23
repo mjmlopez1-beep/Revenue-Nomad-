@@ -53,6 +53,7 @@ export interface SourceResult {
   fetched: number;
   matched: number;
   error?: string;
+  detail?: string; // coverage diagnostics, e.g. "40 candidates · 12 boards read"
 }
 
 export interface CrawlRun {
