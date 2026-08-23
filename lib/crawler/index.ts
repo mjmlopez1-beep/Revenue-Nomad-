@@ -122,6 +122,22 @@ export async function runCrawl(): Promise<CrawlRun> {
     (j) => j.status === "saved" || j.status === "applied" || new Date(j.lastSeenAt).getTime() >= cutoff
   );
 
+  // Re-score everything already stored against the current bar, so jobs
+  // admitted under older, looser rules (e.g. full-time roles) are swept out
+  // on the next crawl instead of lingering until they age out.
+  jobs = jobs.filter((j) => {
+    if (j.status === "saved" || j.status === "applied" || j.source === "sample") return true;
+    const re = scoreJob({
+      title: j.title,
+      company: j.company,
+      url: j.url,
+      source: j.source,
+      kind: j.kind,
+      description: j.description,
+    });
+    return re.isFractional && re.score >= MIN_SCORE;
+  });
+
   // Once real listings exist, retire the bundled sample listings for good.
   if (jobs.some((j) => j.source !== "sample")) {
     jobs = jobs.filter((j) => j.source !== "sample");
