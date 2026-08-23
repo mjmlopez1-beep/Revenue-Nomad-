@@ -246,9 +246,9 @@ export async function enrichCompany(company: string, domain: string): Promise<Ti
   // Content gap: look for an RSS/Atom feed and how fresh it is.
   let freshest: number | null = null;
   let feedFound = false;
-  for (const path of ["/feed", "/rss.xml", "/blog/feed", "/blog/rss.xml"]) {
+  for (const path of ["/feed", "/blog/rss.xml"]) {
     try {
-      const res = await fetchWithTimeout(`https://${domain}${path}`, {}, 8000);
+      const res = await fetchWithTimeout(`https://${domain}${path}`, {}, 6000);
       if (!res.ok) continue;
       const xml = await res.text();
       if (!/<(rss|feed)[\s>]/i.test(xml)) continue;
@@ -311,7 +311,7 @@ async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]
   const candidates = matchUniverse(profile, universe, 40);
 
   // Live enrichment is network-heavy — only the top candidates with domains.
-  const toEnrich = candidates.filter((c) => c.company.domain).slice(0, 15);
+  const toEnrich = candidates.filter((c) => c.company.domain).slice(0, 10);
   const enriched = new Map<string, TimingSignal[]>();
   await Promise.allSettled(
     toEnrich.map(async (c) => {

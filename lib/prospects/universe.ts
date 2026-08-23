@@ -13,6 +13,8 @@ import { fetchWithTimeout } from "../crawler/fetch";
  */
 
 const UNIVERSE_URL = "https://yc-oss.github.io/api/companies/all.json";
+// Smaller fallback (same schema) if the full directory fetch fails/times out.
+const FALLBACK_URL = "https://yc-oss.github.io/api/companies/hiring.json";
 const CACHE_TTL_MS = 24 * 3600 * 1000;
 
 const DATA_DIR = process.env.RN_DATA_DIR ||
@@ -74,9 +76,22 @@ export async function loadUniverse(): Promise<UniverseCompany[]> {
     /* no cache yet */
   }
 
-  const res = await fetchWithTimeout(UNIVERSE_URL, {}, 30000);
-  if (!res.ok) throw new Error(`universe fetch failed: HTTP ${res.status}`);
-  const raw = (await res.json()) as YcRaw[];
+  let raw: YcRaw[];
+  try {
+    const res = await fetchWithTimeout(UNIVERSE_URL, {}, 45000);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    raw = (await res.json()) as YcRaw[];
+  } catch (err) {
+    // The full directory is ~6k records; fall back to the hiring subset
+    // rather than losing the universe entirely.
+    const res = await fetchWithTimeout(FALLBACK_URL, {}, 20000);
+    if (!res.ok) {
+      throw new Error(
+        `universe fetch failed (${err instanceof Error ? err.message : err}; fallback HTTP ${res.status})`
+      );
+    }
+    raw = (await res.json()) as YcRaw[];
+  }
   const companies: UniverseCompany[] = raw
     .filter((c) => c.name && (c.status || "").toLowerCase() === "active")
     .map((c) => ({
@@ -132,9 +147,13 @@ function industryTokens(industries: string[]): { label: string; tokens: string[]
   });
 }
 
+/** YC batches come as "W25"/"S09"/"F24"/"X25" (or spelled out, "Winter 2025"). */
 function batchYear(batch: string): number | null {
-  const m = batch.match(/(\d{4})/);
-  return m ? Number(m[1]) : null;
+  const full = batch.match(/(\d{4})/);
+  if (full) return Number(full[1]);
+  const short = batch.match(/^[A-Z]{1,2}(\d{2})$/i);
+  if (short) return 2000 + Number(short[1]);
+  return null;
 }
 
 export interface UniverseCandidate {
@@ -232,7 +251,7 @@ export function matchUniverse(
         evidenceUrl: c.url,
       });
     }
-    if (isEarly && year !== null && currentYear - year <= 2 && (c.teamSize ?? 0) >= 5) {
+    if (isEarly && year !== null && currentYear - year <= 3 && (c.teamSize ?? 0) >= 3) {
       baseSignals.push({
         type: "early-inflection",
         label: `${c.batch}: at the stage where GTM gets built`,
