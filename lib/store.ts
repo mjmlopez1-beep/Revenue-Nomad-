@@ -84,6 +84,38 @@ export async function loadProfile(): Promise<OperatorProfile> {
   return p ? { ...DEFAULT_PROFILE, ...p } : DEFAULT_PROFILE;
 }
 
+const OPERATOR_ROLES = [
+  "Sales Leadership",
+  "Marketing",
+  "Revenue Operations",
+  "Sales Enablement",
+  "Customer Success",
+  "AI GTM",
+  "Partnerships",
+  "Sellers",
+] as const;
+
+const asStrings = (v: unknown, max: number): string[] =>
+  Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean).slice(0, max) : [];
+
+/** Sanitize an untrusted profile payload into a valid OperatorProfile. */
+export function normalizeProfile(body: Record<string, unknown>): OperatorProfile {
+  return {
+    name: String(body.name ?? "").slice(0, 100),
+    headline: String(body.headline ?? DEFAULT_PROFILE.headline).slice(0, 200),
+    role: OPERATOR_ROLES.includes(body.role as never)
+      ? (body.role as OperatorProfile["role"])
+      : DEFAULT_PROFILE.role,
+    industries: asStrings(body.industries, 7),
+    stages: asStrings(body.stages, 6),
+    employeeSizes: asStrings(body.employeeSizes, 6),
+    revenueSizes: asStrings(body.revenueSizes, 6),
+    segmentFit: asStrings(body.segmentFit, 4),
+    salesMotions: asStrings(body.salesMotions, 6),
+    keywords: asStrings(body.keywords, 20),
+  };
+}
+
 export async function saveProfile(profile: OperatorProfile): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(PROFILE_PATH, JSON.stringify(profile, null, 2), "utf8");

@@ -60,6 +60,17 @@ export default function ProfileForm() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // The browser's copy is authoritative: serverless instances don't share
+    // storage, so the server may answer with defaults after a cold start.
+    try {
+      const raw = localStorage.getItem("rn-profile");
+      if (raw) {
+        setProfile(JSON.parse(raw));
+        return;
+      }
+    } catch {
+      /* fall through to server */
+    }
     fetch("/api/profile", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => setProfile(data.profile));
@@ -70,6 +81,11 @@ export default function ProfileForm() {
   const save = async () => {
     setSaving(true);
     setMsg(null);
+    try {
+      localStorage.setItem("rn-profile", JSON.stringify(profile));
+    } catch {
+      /* private mode — server copy still saved below */
+    }
     const res = await fetch("/api/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

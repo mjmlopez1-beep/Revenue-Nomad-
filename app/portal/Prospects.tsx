@@ -57,16 +57,38 @@ export default function Prospects() {
     setScanning(true);
     setScanMsg(null);
     try {
-      const res = await fetch("/api/prospects/scan", { method: "POST" });
+      // Send the locally saved profile with the scan: serverless instances
+      // don't share storage, so the scanning instance may never have seen it.
+      let profile: unknown;
+      try {
+        const raw = localStorage.getItem("rn-profile");
+        if (raw) profile = JSON.parse(raw);
+      } catch {
+        /* no local profile */
+      }
+      const res = await fetch("/api/prospects/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profile ? { profile } : {}),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "scan failed");
       const scan: ProspectScan = data.scan;
       const errors = scan.results.filter((r) => r.error);
       setScanMsg(
         `Scanned ${scan.results.length - errors.length}/${scan.results.length} signal sources — ${scan.added} new, ${scan.updated} refreshed` +
-          (errors.length ? ` (failed: ${errors.map((e) => e.source).join(", ")})` : "")
+          (errors.length
+            ? ` — failed: ${errors.map((e) => `${e.source} (${e.error})`).join("; ")}`
+            : "")
       );
-      await load();
+      // Use the prospects returned by the scanning instance directly — a
+      // re-fetch could land on an instance that never saw this scan.
+      if (Array.isArray(data.prospects)) {
+        setProspects(data.prospects);
+        setLastScan(scan);
+      } else {
+        await load();
+      }
     } catch (err) {
       setScanMsg(`Scan failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
