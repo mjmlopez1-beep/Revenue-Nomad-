@@ -28,6 +28,15 @@ export interface WebProbe {
   hasIntegrationsPage: boolean;
   hasApiDocs: boolean;
   blogStaleDays: number | null; // null = no feed found, -1 = fresh
+  /** True only when the homepage actually returned HTML — absence signals
+   * (no content, no proof) are only claimable when we could really look. */
+  homepageFetched: boolean;
+  /** Content footprint — content is more than a blog. */
+  contentSurfaces: string[]; // e.g. ["blog","resources","case studies","webinars"]
+  hasCaseStudies: boolean; // case studies / customers page linked
+  hasNewsletterCapture: boolean; // email capture / subscribe present
+  socialChannels: string[]; // linkedin / x / youtube linked from homepage
+  sitemapContentPages: number | null; // content URLs in sitemap; null = no sitemap
 }
 
 export interface CompanyContext {
@@ -108,6 +117,16 @@ const LIBRARY: Record<OperatorRole, SignalDef[]> = {
       },
     },
     {
+      id: "sl_hiring_composition", type: "function-gap", weight: 0.6, halfLifeDays: null,
+      question: "Are they scaling headcount with zero sales hiring (a revenue org that should exist by now)?",
+      detect: (c) => {
+        const total = (c.board || []).length;
+        const t = c.company.teamSize ?? 0;
+        return c.board !== null && total >= 4 && t >= 15 && t <= 80 && count(c.board, SALES_IC_RE).length === 0 && count(c.board, SALES_LEAD_RE).length === 0
+          ? { id: "sl_hiring_composition", label: `${total} open roles, none in sales`, detail: `Scaling at ${t} people with no revenue hires — the sales org a company this size needs doesn't exist yet.`, evidenceUrl: c.board[0].url, weight: 0.6, halfLifeDays: null } : null;
+      },
+    },
+    {
       id: "sl_upmarket_move", type: "function-gap", weight: 0.55, halfLifeDays: 90,
       question: "Did a self-serve product just add an enterprise/sales-led motion nobody has run before?",
       detect: (c) => c.web?.pricingFreeTrial && c.web?.pricingEnterpriseTier
@@ -148,10 +167,37 @@ const LIBRARY: Record<OperatorRole, SignalDef[]> = {
         ? { id: "mk_content_dormant", label: `Blog silent for ${c.web.blogStaleDays} days`, detail: "The engine exists but nobody is running it.", evidenceUrl: `https://${c.company.domain}`, weight: 0.75, halfLifeDays: 120 } : null,
     },
     {
-      id: "mk_no_content_engine", type: "content-gap", weight: 0.7, halfLifeDays: null,
-      question: "Do they have no public content engine at all?",
-      detect: (c) => c.web && c.web.blogStaleDays === null
-        ? { id: "mk_no_content_engine", label: "No discoverable blog/RSS feed", detail: "No public content engine — an organic channel nobody has built.", evidenceUrl: `https://${c.company.domain}`, weight: 0.7, halfLifeDays: null } : null,
+      id: "mk_no_content_footprint", type: "content-gap", weight: 0.7, halfLifeDays: null,
+      question: "Do they have no content footprint at all — no blog, resources, case studies, or webinars?",
+      detect: (c) => c.web?.homepageFetched && c.web.blogStaleDays === null && c.web.contentSurfaces.length === 0 && (c.web.sitemapContentPages ?? 0) === 0 && (c.company.teamSize ?? 0) >= 15
+        ? { id: "mk_no_content_footprint", label: "No content footprint at all", detail: "No blog, resources, case studies, or webinars anywhere on the site — the organic channel is unbuilt.", evidenceUrl: `https://${c.company.domain}`, weight: 0.7, halfLifeDays: null } : null,
+    },
+    {
+      id: "mk_thin_content", type: "content-gap", weight: 0.55, halfLifeDays: null,
+      question: "Is their content footprint thin for their size (a handful of pages at 20+ people)?",
+      detect: (c) => c.web && c.web.sitemapContentPages !== null && c.web.sitemapContentPages > 0 && c.web.sitemapContentPages < 10 && (c.company.teamSize ?? 0) >= 20
+        ? { id: "mk_thin_content", label: `Thin content footprint: ${c.web.sitemapContentPages} content pages`, detail: `${c.company.teamSize} people with under 10 content URLs in the sitemap — publishing never became a motion.`, evidenceUrl: `https://${c.company.domain}`, weight: 0.55, halfLifeDays: null } : null,
+    },
+    {
+      id: "mk_no_social_proof", type: "content-gap", weight: 0.5, halfLifeDays: null,
+      question: "Are they selling with no public customer proof (no case studies or customers page)?",
+      detect: (c) => c.web?.homepageFetched && !c.web.hasCaseStudies && (c.company.teamSize ?? 0) >= 25
+        ? { id: "mk_no_social_proof", label: "No public customer proof", detail: "No case studies or customers page — every deal starts from zero trust.", evidenceUrl: `https://${c.company.domain}`, weight: 0.5, halfLifeDays: null } : null,
+    },
+    {
+      id: "mk_no_capture", type: "content-gap", weight: 0.4, halfLifeDays: null,
+      question: "Are they publishing content with no email capture (audience leaking away)?",
+      detect: (c) => c.web && c.web.contentSurfaces.length > 0 && !c.web.hasNewsletterCapture
+        ? { id: "mk_no_capture", label: "Content published, no email capture", detail: `Surfaces live (${c.web.contentSurfaces.join(", ")}) but no newsletter/signup — the audience isn't being kept.`, evidenceUrl: `https://${c.company.domain}`, weight: 0.4, halfLifeDays: null } : null,
+    },
+    {
+      id: "mk_org_gap", type: "function-gap", weight: 0.7, halfLifeDays: null,
+      question: "At their size, should a marketing function exist that simply doesn't — roles you could fill?",
+      detect: (c) => {
+        const total = (c.board || []).length;
+        return c.board !== null && total >= 2 && (c.company.teamSize ?? 0) >= 25 && count(c.board, MKT_IC_RE).length === 0 && count(c.board, MKT_LEAD_RE).length === 0
+          ? { id: "mk_org_gap", label: `No marketing function at ${c.company.teamSize} people`, detail: `${total} open roles, none in marketing — the demand engine a company this size needs doesn't exist yet.`, evidenceUrl: c.board[0].url, weight: 0.7, halfLifeDays: null } : null;
+      },
     },
     {
       id: "mk_plg_no_marketing", type: "function-gap", weight: 0.6, halfLifeDays: 90,
@@ -202,6 +248,12 @@ const LIBRARY: Record<OperatorRole, SignalDef[]> = {
       },
     },
     {
+      id: "ro_size_no_ops", type: "function-gap", weight: 0.6, halfLifeDays: null,
+      question: "At their size, should an ops function exist that doesn't (roles you could fill)?",
+      detect: (c) => c.board !== null && c.board.length >= 2 && (c.company.teamSize ?? 0) >= 40 && count(c.board, OPS_RE).length === 0
+        ? { id: "ro_size_no_ops", label: `No ops function at ${c.company.teamSize} people`, detail: "Companies this size run on process — nobody here owns it or is hiring for it.", evidenceUrl: c.board[0].url, weight: 0.6, halfLifeDays: null } : null,
+    },
+    {
       id: "ro_analyst_wrong_hire", type: "function-gap", weight: 0.6, halfLifeDays: 60,
       question: "Are they hiring a generic analyst for what is actually a RevOps problem?",
       detect: (c) => {
@@ -246,6 +298,12 @@ const LIBRARY: Record<OperatorRole, SignalDef[]> = {
       },
     },
     {
+      id: "en_size_no_enablement", type: "function-gap", weight: 0.55, halfLifeDays: null,
+      question: "At their size and sales hiring pace, should enablement exist that doesn't?",
+      detect: (c) => c.board !== null && (c.company.teamSize ?? 0) >= 40 && count(c.board, SALES_IC_RE).length >= 1 && count(c.board, ENABLE_RE).length === 0
+        ? { id: "en_size_no_enablement", label: `No enablement function at ${c.company.teamSize} people`, detail: "A rep org this size without enablement re-learns every lesson per rep.", evidenceUrl: c.board[0].url, weight: 0.55, halfLifeDays: null } : null,
+    },
+    {
       id: "en_perpetual_backfill", type: "hiring-role", weight: 0.6, halfLifeDays: 90,
       question: "Are they re-posting the same seller role (a ramp/retention problem, not a hiring problem)?",
       detect: (c) => {
@@ -288,6 +346,12 @@ const LIBRARY: Record<OperatorRole, SignalDef[]> = {
       },
     },
     {
+      id: "cs_size_no_cs", type: "function-gap", weight: 0.55, halfLifeDays: null,
+      question: "At their size, should a CS function exist that doesn't (roles you could fill)?",
+      detect: (c) => c.board !== null && c.board.length >= 2 && (c.company.teamSize ?? 0) >= 30 && count(c.board, CS_RE).length === 0 && count(c.board, CS_LEAD_RE).length === 0
+        ? { id: "cs_size_no_cs", label: `No CS function at ${c.company.teamSize} people`, detail: "Revenue retention at this size needs an owner — none exists or is being hired.", evidenceUrl: c.board[0].url, weight: 0.55, halfLifeDays: null } : null,
+    },
+    {
       id: "cs_onboarding_language", type: "hiring-role", weight: 0.6, halfLifeDays: 60,
       question: "Is onboarding/implementation language showing up in their reqs (complexity rising)?",
       detect: (c) => {
@@ -296,7 +360,7 @@ const LIBRARY: Record<OperatorRole, SignalDef[]> = {
       },
     },
     {
-      id: "cs_first_renewals", type: "early-inflection", weight: 0.7, halfLifeDays: null,
+      id: "cs_first_renewals", type: "function-gap", weight: 0.7, halfLifeDays: null,
       question: "Is their first real renewal cohort about to land (12–24 months after launch)?",
       detect: (c) => {
         const age = ageYears(c.company);
@@ -453,8 +517,6 @@ const SHARED_DOCS: Record<string, string> = {
   "headcount-jump": "Did headcount jump 20%+ (growth outrunning the org)?",
   "positioning-shift": "Did they just reposition (new message needs new motion)?",
   "newly-launched": "Did they just launch publicly (first-mover window)?",
-  "actively-hiring": "Are they flagged as actively hiring in the directory?",
-  "early-inflection": "Are they at the founder-led-sales handoff stage?",
   "ai-native": "Is leadership publicly committing to AI-native GTM?",
 };
 

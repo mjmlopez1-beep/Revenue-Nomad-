@@ -390,24 +390,11 @@ export function matchUniverse(
 
     if (fit < 40) continue;
 
-    // Diff-derived events for this company — the queue movers.
+    // Diff-derived events for this company — the queue movers. Being early
+    // stage or generically "hiring" is ICP context, not a why-now: stage
+    // lives in the fit score, and hiring only matters when its COMPOSITION
+    // indicates the operator's role (library detectors read the board).
     const baseSignals: TimingSignal[] = [...(events?.get(c.name.toLowerCase()) || [])];
-    if (c.isHiring) {
-      baseSignals.push({
-        type: "actively-hiring",
-        label: "Actively hiring (YC directory)",
-        detail: c.oneLiner.slice(0, 120),
-        evidenceUrl: c.url,
-      });
-    }
-    if (isEarly && year !== null && currentYear - year <= 3 && (c.teamSize ?? 0) >= 3) {
-      baseSignals.push({
-        type: "early-inflection",
-        label: `${c.batch}: at the stage where GTM gets built`,
-        detail: `Team of ${c.teamSize ?? "?"} — past founder-led sales, before a full GTM org.`,
-        evidenceUrl: c.url,
-      });
-    }
 
     out.push({ company: c, fit: Math.min(100, fit), matched, baseSignals });
   }

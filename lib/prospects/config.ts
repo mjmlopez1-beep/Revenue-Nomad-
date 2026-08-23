@@ -93,14 +93,14 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
  * sales-team signals.
  */
 export const ALLOWED_SIGNALS: Record<OperatorRole, SignalType[]> = {
-  "Sales Leadership": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "early-inflection", "started-hiring", "headcount-jump", "newly-launched", "function-gap"],
-  Marketing: ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "content-gap", "actively-hiring", "early-inflection", "started-hiring", "headcount-jump", "positioning-shift", "newly-launched", "function-gap"],
-  "Revenue Operations": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
-  "Sales Enablement": ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
-  "Customer Success": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap", "leader-appointed", "early-inflection"],
-  "AI GTM": ["departure", "funding", "hiring-role", "ai-native", "content-gap", "actively-hiring", "early-inflection", "started-hiring", "positioning-shift", "newly-launched", "function-gap"],
-  Partnerships: ["departure", "leadership-gap", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "function-gap"],
-  Sellers: ["leadership-gap", "team-without-leader", "funding", "hiring-role", "actively-hiring", "started-hiring", "headcount-jump", "newly-launched", "function-gap", "departure"],
+  "Sales Leadership": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "newly-launched", "function-gap"],
+  Marketing: ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "content-gap", "started-hiring", "headcount-jump", "positioning-shift", "newly-launched", "function-gap"],
+  "Revenue Operations": ["departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Sales Enablement": ["departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Customer Success": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "AI GTM": ["departure", "funding", "hiring-role", "ai-native", "content-gap", "started-hiring", "positioning-shift", "newly-launched", "function-gap"],
+  Partnerships: ["departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap"],
+  Sellers: ["leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "newly-launched", "function-gap", "departure"],
 };
 
 /**

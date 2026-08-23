@@ -620,11 +620,77 @@ a:hover {
 }
 .sig-strength {
   display: flex;
-  align-items: center;
-  gap: 7px;
+  flex-direction: column;
+  gap: 4px;
   width: 130px;
   flex-shrink: 0;
   align-self: center;
+}
+.sig-strength-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.spark-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.spark-caption {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9aa59c;
+}
+.why-coverage {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-left: 10px;
+}
+.clear-list {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.clear-list summary {
+  color: var(--text-dim);
+  font-weight: 600;
+  cursor: pointer;
+}
+.clear-list ul {
+  margin: 6px 0 0;
+  padding-left: 22px;
+  color: var(--text-dim);
+}
+.clear-list li {
+  margin: 2px 0;
+}
+.draft-panel {
+  margin-top: 12px;
+  background: var(--card-nested);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.draft-subject {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin: 8px 0;
+}
+.draft-body {
+  font-family: inherit;
+  font-size: 13.5px;
+  white-space: pre-wrap;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0 0 8px;
 }
 .sig-meter {
   min-width: 0;

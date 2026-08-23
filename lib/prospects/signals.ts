@@ -276,7 +276,23 @@ const TECH_TAGS: [string, RegExp][] = [
   ["highspot", /highspot/i],
 ];
 
-/** Cheap website observations: homepage, /pricing, and blog feed freshness. */
+/** Content surfaces linked from the homepage — content is more than a blog. */
+const CONTENT_SURFACES: [string, RegExp][] = [
+  ["blog", /href="[^"]*\/blog\b/i],
+  ["resources", /href="[^"]*\/resources?\b/i],
+  ["guides", /href="[^"]*\/guides?\b/i],
+  ["case studies", /href="[^"]*\/(case-stud|customer-stor)/i],
+  ["customers", /href="[^"]*\/customers?\b/i],
+  ["webinars", /href="[^"]*\/(webinars?|events)\b/i],
+  ["library", /href="[^"]*\/(library|academy|learn)\b/i],
+];
+
+const CONTENT_URL_RE = /(blog|resources?|guides?|case-stud|customer-stor|customers|webinars?|library|academy|articles|posts|learn)\//i;
+
+/**
+ * Website observations: homepage, /pricing, sitemap content census, and blog
+ * feed freshness — the operator-grade content footprint read.
+ */
 async function probeWeb(domain: string): Promise<WebProbe> {
   const probe: WebProbe = {
     pricingFound: false,
@@ -287,11 +303,18 @@ async function probeWeb(domain: string): Promise<WebProbe> {
     hasIntegrationsPage: false,
     hasApiDocs: false,
     blogStaleDays: null,
+    homepageFetched: false,
+    contentSurfaces: [],
+    hasCaseStudies: false,
+    hasNewsletterCapture: false,
+    socialChannels: [],
+    sitemapContentPages: null,
   };
 
-  const [homeRes, pricingRes, feed] = await Promise.allSettled([
+  const [homeRes, pricingRes, sitemapRes, feed] = await Promise.allSettled([
     fetchWithTimeout(`https://${domain}`, {}, 6000).then((r) => (r.ok ? r.text() : "")),
     fetchWithTimeout(`https://${domain}/pricing`, {}, 6000).then((r) => (r.ok ? r.text() : "")),
+    fetchWithTimeout(`https://${domain}/sitemap.xml`, {}, 6000).then((r) => (r.ok ? r.text() : "")),
     (async () => {
       for (const path of ["/feed", "/blog/rss.xml"]) {
         try {
@@ -315,9 +338,17 @@ async function probeWeb(domain: string): Promise<WebProbe> {
 
   if (homeRes.status === "fulfilled" && homeRes.value) {
     const html = homeRes.value;
+    probe.homepageFetched = true;
     probe.techTags = TECH_TAGS.filter(([, re]) => re.test(html)).map(([tag]) => tag);
     probe.hasIntegrationsPage = /href="[^"]*integrations?/i.test(html);
     probe.hasApiDocs = /href="[^"]*(\/docs|developers?\.|\/api\b)/i.test(html);
+    probe.contentSurfaces = CONTENT_SURFACES.filter(([, re]) => re.test(html)).map(([name]) => name);
+    probe.hasCaseStudies =
+      probe.contentSurfaces.includes("case studies") || probe.contentSurfaces.includes("customers");
+    probe.hasNewsletterCapture = /type="email"|newsletter|subscribe/i.test(html);
+    if (/linkedin\.com\/(company|school)/i.test(html)) probe.socialChannels.push("linkedin");
+    if (/(twitter\.com|x\.com)\//i.test(html)) probe.socialChannels.push("x");
+    if (/youtube\.com\//i.test(html)) probe.socialChannels.push("youtube");
   }
   if (pricingRes.status === "fulfilled" && pricingRes.value) {
     const html = pricingRes.value;
@@ -326,6 +357,11 @@ async function probeWeb(domain: string): Promise<WebProbe> {
     probe.pricingEnterpriseTier = /enterprise/i.test(html);
     probe.pricingContactSalesOnly =
       /contact sales|talk to sales|book a demo/i.test(html) && !probe.pricingFreeTrial;
+  }
+  if (sitemapRes.status === "fulfilled" && sitemapRes.value && /<(urlset|sitemapindex)/i.test(sitemapRes.value)) {
+    const xml = sitemapRes.value.slice(0, 500_000);
+    const locs = xml.match(/<loc>([^<]+)<\/loc>/gi) || [];
+    probe.sitemapContentPages = locs.filter((l) => CONTENT_URL_RE.test(l)).length;
   }
   if (feed.status === "fulfilled") probe.blogStaleDays = feed.value;
   return probe;
@@ -399,7 +435,7 @@ async function universeCandidates(profile: OperatorProfile): Promise<RawSignal[]
   const candidates = matchUniverse(profile, universe, 40, events);
 
   // Live enrichment is network-heavy — only the top candidates with domains.
-  const toEnrich = candidates.filter((c) => c.company.domain).slice(0, 10);
+  const toEnrich = candidates.filter((c) => c.company.domain).slice(0, 15);
   const enriched = new Map<string, TimingSignal[]>();
   await Promise.allSettled(
     toEnrich.map(async (c) => {

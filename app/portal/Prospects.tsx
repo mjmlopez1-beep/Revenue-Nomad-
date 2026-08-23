@@ -96,6 +96,58 @@ function Meter({ value, label }: { value: number; label?: string }) {
   );
 }
 
+/** 90-day projection of a signal's strength under its half-life decay. */
+function DecaySpark({ pct, halfLife }: { pct: number; halfLife: number | null }) {
+  const weeks = 13;
+  const points = Array.from({ length: weeks + 1 }, (_, i) => {
+    const v = halfLife === null ? pct : pct * Math.pow(0.5, (i * 7) / halfLife);
+    const x = 2 + (i / weeks) * 86;
+    const y = 18 - (v / 100) * 15;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const y0 = 18 - (pct / 100) * 15;
+  return (
+    <span className="spark-wrap" title={halfLife === null ? "Standing condition — holds until the state changes" : `Projected decay over the next 90 days (${halfLife}-day half-life)`}>
+      <svg viewBox="0 0 90 20" width="90" height="20" aria-hidden="true">
+        <line x1="2" y1="18" x2="88" y2="18" stroke="#e6ebe3" strokeWidth="1" />
+        <polyline points={points} fill="none" stroke="var(--green)" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="2" cy={y0} r="2.2" fill="var(--green)" />
+      </svg>
+      <span className="spark-caption">next 90d</span>
+    </span>
+  );
+}
+
+/** Deterministic outreach draft composed from the strongest signals + profile. */
+function draftOutreach(p: Prospect, role: OperatorRole, topSignals: TimingSignal[]): { subject: string; body: string } {
+  let profile: { name?: string; headline?: string; industries?: string[] } = {};
+  try {
+    profile = JSON.parse(localStorage.getItem("rn-profile") || "{}");
+  } catch {
+    /* defaults below */
+  }
+  const name = profile.name || "[Your name]";
+  const headline = profile.headline || `Fractional ${role} operator`;
+  const industries = profile.industries?.length ? profile.industries.slice(0, 2).join(" and ") : "B2B";
+  const observations = topSignals
+    .slice(0, 2)
+    .map((s) => s.label.charAt(0).toLowerCase() + s.label.slice(1))
+    .join(", and that ");
+  return {
+    subject: `${p.company} × fractional ${role.toLowerCase()} — faster than the search`,
+    body: `Hi —
+
+I noticed that ${observations}. ${p.suggestedPitch}
+
+I'm ${name} — ${headline}. I work with ${industries} companies at exactly this stage, and this is the moment where a few focused days a week changes the trajectory.
+
+Open to a 20-minute call this week to pressure-test whether it's a fit?
+
+${name}
+[Link to your Revenue Nomad profile]`,
+  };
+}
+
 function CompanyLogo({ prospect }: { prospect: Prospect }) {
   const sources = useMemo(
     () =>
@@ -134,6 +186,8 @@ export default function Prospects() {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("new");
+  const [draftFor, setDraftFor] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/prospects", { cache: "no-store" });
@@ -292,7 +346,14 @@ export default function Prospects() {
         ) : visible.length === 0 ? (
           <div className="empty">Nothing here yet.</div>
         ) : (
-          visible.map((p) => (
+          visible.map((p) => {
+            const scored = [...p.signals]
+              .map((s) => ({ s, strength: signalStrength(s, operatorRole) }))
+              .sort((a, b) => b.strength.pct - a.strength.pct);
+            const firedIds = new Set(p.signals.map((s) => s.id ?? s.type));
+            const clear = signalDocs.filter((d) => !firedIds.has(d.label));
+            const draft = draftFor === p.id ? draftOutreach(p, operatorRole, scored.map((x) => x.s)) : null;
+            return (
             <article key={p.id} className="job-card">
               <div className="job-top">
                 <div className="company-head">
@@ -335,13 +396,15 @@ export default function Prospects() {
 
               <div className="why-now">
                 <div className="why-head">
-                  <span className="why-label">Why now</span>
+                  <span className="why-label">
+                    Why now
+                    <span className="why-coverage">
+                      {p.signals.length} of {signalDocs.length} signals fired
+                    </span>
+                  </span>
                   <span className="why-col-label">Signal strength today</span>
                 </div>
-                {[...p.signals]
-                  .map((s) => ({ s, strength: signalStrength(s, operatorRole) }))
-                  .sort((a, b) => b.strength.pct - a.strength.pct)
-                  .map(({ s, strength }, i) => (
+                {scored.map(({ s, strength }, i) => (
                     <div key={i} className="signal-row">
                       <span className="sig-chip">
                         <span
@@ -369,13 +432,26 @@ export default function Prospects() {
                         </span>
                       </span>
                       <span className="sig-strength">
-                        <span className="meter sig-meter">
-                          <span className="meter-fill" style={{ width: `${strength.pct}%` }} />
+                        <span className="sig-strength-row">
+                          <span className="meter sig-meter">
+                            <span className="meter-fill" style={{ width: `${strength.pct}%` }} />
+                          </span>
+                          <span className="meter-value">{strength.pct}%</span>
                         </span>
-                        <span className="meter-value">{strength.pct}%</span>
+                        <DecaySpark pct={strength.pct} halfLife={strength.halfLife} />
                       </span>
                     </div>
                   ))}
+                {clear.length > 0 && (
+                  <details className="clear-list">
+                    <summary>{clear.length} more signals checked — no trigger</summary>
+                    <ul>
+                      {clear.map((d) => (
+                        <li key={d.label}>{d.question}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
               </div>
 
               <div className="pitch">
@@ -384,8 +460,17 @@ export default function Prospects() {
               </div>
 
               <div className="job-actions">
+                <button
+                  className="action primary"
+                  onClick={() => {
+                    setCopied(false);
+                    setDraftFor(draftFor === p.id ? null : p.id);
+                  }}
+                >
+                  {draftFor === p.id ? "Hide draft" : "Draft outreach"}
+                </button>
                 {p.status !== "queued" && (
-                  <button className="action primary" onClick={() => setStatus(p.id, "queued")}>
+                  <button className="action" onClick={() => setStatus(p.id, "queued")}>
                     Queue outreach
                   </button>
                 )}
@@ -404,8 +489,33 @@ export default function Prospects() {
                   </button>
                 )}
               </div>
+
+              {draft && (
+                <div className="draft-panel">
+                  <div className="why-head">
+                    <span className="why-label">Outreach draft</span>
+                    <button
+                      className="action"
+                      onClick={() => {
+                        navigator.clipboard
+                          ?.writeText(`Subject: ${draft.subject}\n\n${draft.body}`)
+                          .then(() => setCopied(true))
+                          .catch(() => {});
+                      }}
+                    >
+                      {copied ? "Copied" : "Copy to clipboard"}
+                    </button>
+                  </div>
+                  <div className="draft-subject">Subject: {draft.subject}</div>
+                  <pre className="draft-body">{draft.body}</pre>
+                  <div className="sig-meta">
+                    Composed from the strongest live signals and your profile — edit before sending.
+                  </div>
+                </div>
+              )}
             </article>
-          ))
+            );
+          })
         )}
       </div>
     </>
