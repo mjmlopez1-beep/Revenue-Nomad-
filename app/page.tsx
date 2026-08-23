@@ -1,12 +1,11 @@
 import Link from "next/link";
+import Brand from "./Brand";
 
 export default function Home() {
   return (
     <div className="container">
       <nav className="nav">
-        <Link href="/" className="brand">
-          <span className="brand-mark">R</span> Revenue Nomad
-        </Link>
+        <Brand />
         <div className="nav-links">
           <Link href="/portal">Operator Portal</Link>
         </div>
