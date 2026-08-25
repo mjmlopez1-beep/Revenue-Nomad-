@@ -546,6 +546,8 @@ section.tight { padding: 56px 0; }
   flex-direction: column;
   gap: 18px;
 }
+.testimonial h3 { font-size: 1.15rem; }
+.testimonial h3 + p { color: var(--night-soft); margin-top: -6px; }
 .testimonial blockquote {
   font-family: var(--font-accent);
   font-style: italic;
