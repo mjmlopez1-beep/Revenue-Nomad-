@@ -42,6 +42,7 @@ const DOT_COLORS: Record<string, string> = {
   "newly-launched": "#3d7ea6",
   "function-gap": "#c2564a",
   "leader-appointed": "#3d7ea6",
+  restructuring: "#b98a1d",
 };
 
 function useOperatorRole(): OperatorRole {

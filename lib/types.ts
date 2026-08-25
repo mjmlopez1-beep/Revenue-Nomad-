@@ -115,7 +115,8 @@ export type SignalType =
   | "positioning-shift" // one-liner / description changed (pivot tell)
   | "newly-launched" // company just appeared in the directory
   | "function-gap" // building around a function nobody owns (role-specific)
-  | "leader-appointed"; // new GTM leader in seat — rebuild moment (R4/E3)
+  | "leader-appointed" // new GTM leader in seat — rebuild moment (R4/E3)
+  | "restructuring"; // layoff mention — outcomes needed on a constrained budget
 
 export interface TimingSignal {
   type: SignalType;

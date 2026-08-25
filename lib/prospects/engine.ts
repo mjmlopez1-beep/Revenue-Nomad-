@@ -41,6 +41,8 @@ const PITCHES: Record<SignalType, (p: OperatorProfile, s: TimingSignal) => strin
     `They're building around your function while nobody owns it. Pitch fractional ${p.role} to fill the gap before it costs them a quarter.`,
   "leader-appointed": (p) =>
     `A new GTM leader just took the seat — first-quarter rebuild mode. Pitch fractional ${p.role} as their fastest path to a system that works.`,
+  restructuring: (p) =>
+    `They just restructured — headcount is frozen but the targets aren't. Pitch fractional ${p.role} as senior output without the FTE.`,
 };
 
 const ENGINE_VERSION = "v3-diff";

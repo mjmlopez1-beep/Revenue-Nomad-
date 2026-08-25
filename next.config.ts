@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   output: process.env.DOCKER_BUILD ? "standalone" : undefined,
   // Ensure the seed database is bundled into serverless function output.
   outputFileTracingIncludes: {
-    "/**": ["./data/seed.json"],
+    "/**": ["./data/seed.json", "./data/universe-crunchbase.json"],
   },
 };
 

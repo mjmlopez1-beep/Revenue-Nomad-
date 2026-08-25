@@ -514,7 +514,8 @@ export function evaluateRoleSignals(role: OperatorRole, ctx: CompanyContext): Ti
  * in the portal so operators can see exactly what their role scans for.
  */
 const SHARED_DOCS: Record<string, string> = {
-  departure: "Did the leader in this seat just depart (news)?",
+  departure: "Did the leader in this seat depart — in the news, or visible on the roster with nobody in it now?",
+  restructuring: "Did they just have a layoff — outcomes still owed, but on a constrained budget?",
   funding: "Did they raise in the last 30 days (budget + urgency)?",
   "leader-appointed": "Did a new GTM leader just take the seat (rebuild moment)?",
   "started-hiring": "Did they flip to hiring mode this week (directory diff)?",

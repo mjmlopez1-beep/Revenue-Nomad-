@@ -65,6 +65,12 @@ export const SIGNAL_CONFIG: Record<SignalType, SignalConfig> = {
     roleWeights: { "Revenue Operations": 0.75, "Sales Enablement": 0.7, "Customer Success": 0.55 },
     halfLifeDays: 90,
   },
+  // A layoff mention: the FT hire is off the table but the outcomes aren't —
+  // exactly when fractional (senior output, no headcount) gets bought.
+  restructuring: {
+    weight: 0.55,
+    halfLifeDays: 90,
+  },
 };
 
 /** Human-readable chip labels for the UI (no emoji — enterprise surface). */
@@ -84,6 +90,7 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
   "newly-launched": "Just launched",
   "function-gap": "Function gap",
   "leader-appointed": "New leader",
+  restructuring: "Restructuring",
 };
 
 /**
@@ -93,11 +100,11 @@ export const SIGNAL_LABELS: Record<SignalType, string> = {
  * sales-team signals.
  */
 export const ALLOWED_SIGNALS: Record<OperatorRole, SignalType[]> = {
-  "Sales Leadership": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "newly-launched", "function-gap"],
-  Marketing: ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "content-gap", "started-hiring", "headcount-jump", "positioning-shift", "newly-launched", "function-gap"],
-  "Revenue Operations": ["departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
-  "Sales Enablement": ["departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
-  "Customer Success": ["departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Sales Leadership": ["restructuring", "departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "newly-launched", "function-gap"],
+  Marketing: ["restructuring", "departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "content-gap", "started-hiring", "headcount-jump", "positioning-shift", "newly-launched", "function-gap"],
+  "Revenue Operations": ["restructuring", "departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Sales Enablement": ["restructuring", "departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
+  "Customer Success": ["restructuring", "departure", "leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap", "leader-appointed"],
   "AI GTM": ["departure", "funding", "hiring-role", "ai-native", "content-gap", "started-hiring", "positioning-shift", "newly-launched", "function-gap"],
   Partnerships: ["departure", "leadership-gap", "funding", "hiring-role", "started-hiring", "headcount-jump", "function-gap"],
   Sellers: ["leadership-gap", "team-without-leader", "funding", "hiring-role", "started-hiring", "headcount-jump", "newly-launched", "function-gap", "departure"],

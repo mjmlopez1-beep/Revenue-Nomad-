@@ -36,7 +36,21 @@ export interface UniverseCompany {
   stage: string;
   status: string;
   isHiring: boolean;
-  url: string; // YC profile
+  url: string; // profile / evidence link
+  source: "yc" | "crunchbase";
+  /* Crunchbase-grade firmographics (spec Phase 2) — optional per record. */
+  employeeBuckets?: string[]; // RN buckets, straddles allowed
+  revenueBands?: string[]; // RN revenue buckets, straddles allowed
+  fundingStage?: string; // pre_seed | seed | series_a | series_b | series_c_plus | growth
+  lastFundingDate?: string;
+  lastFundingType?: string;
+  lastFundingAmount?: number;
+  growthCategory?: string; // Growing | Steady | Declining
+  leadershipHiredOn?: string; // last leadership hire date
+  layoffMentionOn?: string;
+  /* People-graph lite (spec Phase 3): GTM functions seen on the roster. */
+  rolesPresent?: string[]; // sl | mk | ops | cs | en | pt | ai
+  rolesDeparted?: string[]; // same keys, seen among past employees
 }
 
 interface YcRaw {
@@ -67,7 +81,80 @@ function toDomain(website?: string): string | undefined {
   }
 }
 
+/** Compact Crunchbase-shaped record as bundled in data/universe-crunchbase.json. */
+interface CbRaw {
+  n: string; d?: string; o?: string; i?: string;
+  eb?: string; ts?: number; rv?: string; st?: string; fy?: number;
+  fd?: string; ft?: string; fa?: number; h?: boolean; gc?: string;
+  lh?: string; ll?: string; li?: string; rp?: string; rd?: string;
+}
+
+const CB_PATH = path.join(process.cwd(), "data", "universe-crunchbase.json");
+
+async function loadCrunchbase(): Promise<UniverseCompany[]> {
+  try {
+    const raw = JSON.parse(await fs.readFile(CB_PATH, "utf8")) as CbRaw[];
+    return raw.map((c) => ({
+      name: c.n,
+      domain: c.d,
+      oneLiner: c.o || "",
+      industry: c.i || "",
+      tags: [],
+      teamSize: c.ts ?? null,
+      batch: c.fy ? String(c.fy) : "",
+      stage: "",
+      status: "Active",
+      isHiring: !!c.h,
+      url: c.li || (c.d ? `https://${c.d}` : ""),
+      source: "crunchbase" as const,
+      employeeBuckets: c.eb ? c.eb.split("|") : undefined,
+      revenueBands: c.rv ? c.rv.split("|") : undefined,
+      fundingStage: c.st,
+      lastFundingDate: c.fd,
+      lastFundingType: c.ft,
+      lastFundingAmount: c.fa,
+      growthCategory: c.gc,
+      leadershipHiredOn: c.lh,
+      layoffMentionOn: c.ll,
+      rolesPresent: c.rp ? c.rp.split(",") : [],
+      rolesDeparted: c.rd ? c.rd.split(",") : [],
+    }));
+  } catch {
+    return []; // dataset not bundled — YC-only universe
+  }
+}
+
 export async function loadUniverse(): Promise<UniverseCompany[]> {
+  const [yc, cb] = await Promise.all([loadYcUniverse().catch(() => [] as UniverseCompany[]), loadCrunchbase()]);
+  // Dedupe by domain (then name): YC wins the identity (logo, hiring flag),
+  // Crunchbase enriches it with firmographics and people-graph fields.
+  const byKey = new Map<string, UniverseCompany>();
+  for (const c of yc) byKey.set(c.domain || c.name.toLowerCase(), c);
+  for (const c of cb) {
+    const key = c.domain || c.name.toLowerCase();
+    const existing = byKey.get(key);
+    if (existing) {
+      Object.assign(existing, {
+        employeeBuckets: c.employeeBuckets,
+        revenueBands: c.revenueBands,
+        fundingStage: c.fundingStage,
+        lastFundingDate: c.lastFundingDate,
+        lastFundingType: c.lastFundingType,
+        lastFundingAmount: c.lastFundingAmount,
+        growthCategory: c.growthCategory,
+        leadershipHiredOn: c.leadershipHiredOn,
+        layoffMentionOn: c.layoffMentionOn,
+        rolesPresent: c.rolesPresent,
+        rolesDeparted: c.rolesDeparted,
+      });
+    } else {
+      byKey.set(key, c);
+    }
+  }
+  return [...byKey.values()];
+}
+
+async function loadYcUniverse(): Promise<UniverseCompany[]> {
   // Serve from cache when fresh.
   try {
     const stat = await fs.stat(CACHE_PATH);
@@ -110,6 +197,7 @@ export async function loadUniverse(): Promise<UniverseCompany[]> {
       status: c.status || "",
       isHiring: !!(c.isHiring ?? c.is_hiring),
       url: c.url || `https://www.ycombinator.com/companies/${c.slug || ""}`,
+      source: "yc" as const,
     }));
 
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -341,15 +429,32 @@ export function matchUniverse(
       }
     }
 
-    // Team size vs preferred employee buckets.
-    if (c.teamSize !== null && profile.employeeSizes.length > 0) {
-      const inBucket = profile.employeeSizes.some((b) => {
-        const range = SIZE_BUCKETS[b];
-        return range && c.teamSize! >= range[0] && c.teamSize! <= range[1];
-      });
-      if (inBucket) {
-        matched.push(`${c.teamSize} people`);
-        fit += 20;
+    // Team size vs preferred employee buckets — exact bands when the record
+    // carries them (Crunchbase), midpoint estimate otherwise.
+    if (profile.employeeSizes.length > 0) {
+      if (c.employeeBuckets?.length) {
+        if (c.employeeBuckets.some((b) => profile.employeeSizes.includes(b))) {
+          matched.push(`~${c.teamSize} people`);
+          fit += 20;
+        }
+      } else if (c.teamSize !== null) {
+        const inBucket = profile.employeeSizes.some((b) => {
+          const range = SIZE_BUCKETS[b];
+          return range && c.teamSize! >= range[0] && c.teamSize! <= range[1];
+        });
+        if (inBucket) {
+          matched.push(`${c.teamSize} people`);
+          fit += 20;
+        }
+      }
+    }
+
+    // Revenue band overlap (Crunchbase estimated revenue → RN buckets). Soft
+    // per spec §1.1: modeled data, never a hard gate.
+    if (c.revenueBands?.length && profile.revenueSizes.length > 0) {
+      if (c.revenueBands.some((b) => profile.revenueSizes.includes(b))) {
+        matched.push("revenue band");
+        fit += 15;
       }
     }
 
@@ -361,13 +466,33 @@ export function matchUniverse(
       fit += 10;
     }
 
-    // Stage: YC labels companies Early/Growth; refine with batch recency.
+    // Stage: real funding stage when the record has one (Crunchbase); the
+    // YC Early/Growth label + batch recency proxy otherwise.
     const year = batchYear(c.batch);
-    const isEarly = /early/i.test(c.stage) || (year !== null && currentYear - year <= 3);
-    const isLate = /growth/i.test(c.stage) || (year !== null && currentYear - year > 5);
-    if ((isEarly && wantsEarly) || (isLate && wantsLate)) {
-      matched.push(c.batch || c.stage);
-      fit += 15;
+    if (c.fundingStage) {
+      const order = ["pre_seed", "seed", "series_a", "series_b", "series_c_plus", "growth"];
+      const ci = order.indexOf(c.fundingStage);
+      const best = Math.min(
+        ...profile.stages.map((st) => {
+          const pi = order.indexOf(st);
+          return pi >= 0 && ci >= 0 ? Math.abs(pi - ci) : 99;
+        }),
+        99
+      );
+      if (best === 0) {
+        matched.push(c.fundingStage.replace(/_/g, " "));
+        fit += 15;
+      } else if (best === 1) {
+        matched.push(`near ${c.fundingStage.replace(/_/g, " ")}`);
+        fit += 8;
+      }
+    } else {
+      const isEarly = /early/i.test(c.stage) || (year !== null && currentYear - year <= 3);
+      const isLate = /growth/i.test(c.stage) || (year !== null && currentYear - year > 5);
+      if ((isEarly && wantsEarly) || (isLate && wantsLate)) {
+        matched.push(c.batch || c.stage);
+        fit += 15;
+      }
     }
 
     // Sales-motion keywords in the company description.
@@ -395,9 +520,110 @@ export function matchUniverse(
     // lives in the fit score, and hiring only matters when its COMPOSITION
     // indicates the operator's role (library detectors read the board).
     const baseSignals: TimingSignal[] = [...(events?.get(c.name.toLowerCase()) || [])];
+    baseSignals.push(...firmographicSignals(profile, c));
 
     out.push({ company: c, fit: Math.min(100, fit), matched, baseSignals });
   }
 
   return out.sort((a, b) => b.fit - a.fit).slice(0, limit);
+}
+
+/* ---------- dated + roster signals from firmographic records ---------- */
+
+const ROLE_KEY: Record<string, string> = {
+  "Sales Leadership": "sl",
+  Marketing: "mk",
+  "Revenue Operations": "ops",
+  "Customer Success": "cs",
+  "Sales Enablement": "en",
+  Partnerships: "pt",
+  "AI GTM": "ai",
+  Sellers: "sl",
+};
+
+const ROLE_FN_LABEL: Record<string, string> = {
+  sl: "sales leadership",
+  mk: "marketing leadership",
+  ops: "revenue operations",
+  cs: "customer success",
+  en: "sales enablement",
+  pt: "partnerships",
+  ai: "AI engineering",
+};
+
+/** Minimum headcount at which the role's function "should" exist. */
+const ROSTER_GAP_FLOOR: Record<string, number> = {
+  sl: 15, mk: 25, ops: 40, cs: 30, en: 40, pt: 50,
+};
+
+function daysAgo(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
+/**
+ * Timing signals carried by the firmographic record itself (Crunchbase-grade
+ * data): dated funding, leadership hires, layoff mentions, and people-graph
+ * lite reads — a departed function leader with no current one (spec S1), and
+ * size-based roster gaps.
+ */
+function firmographicSignals(profile: OperatorProfile, c: UniverseCompany): TimingSignal[] {
+  const out: TimingSignal[] = [];
+  const key = ROLE_KEY[profile.role];
+  const fn = ROLE_FN_LABEL[key];
+
+  if (c.lastFundingDate && daysAgo(c.lastFundingDate) >= 0 && daysAgo(c.lastFundingDate) <= 150) {
+    const amt = c.lastFundingAmount ? ` ($${Math.round(c.lastFundingAmount / 1e6)}M)` : "";
+    out.push({
+      type: "funding",
+      label: `Raised ${c.lastFundingType || "a round"}${amt}`,
+      detail: "Fresh capital in the deploy window — GTM build-out pressure is on.",
+      evidenceUrl: c.url,
+      detectedOn: c.lastFundingDate,
+    });
+  }
+  if (c.leadershipHiredOn && daysAgo(c.leadershipHiredOn) >= 0 && daysAgo(c.leadershipHiredOn) <= 120) {
+    out.push({
+      type: "leader-appointed",
+      label: "Leadership hire landed recently",
+      detail: "New leaders rebuild their function's systems in the first quarter.",
+      evidenceUrl: c.url,
+      detectedOn: c.leadershipHiredOn,
+    });
+  }
+  if (c.layoffMentionOn && daysAgo(c.layoffMentionOn) >= 0 && daysAgo(c.layoffMentionOn) <= 180) {
+    out.push({
+      type: "restructuring",
+      label: "Layoff mention on record",
+      detail: "Headcount is frozen but the outcomes aren't — senior output without the FTE is the pitch.",
+      evidenceUrl: c.url,
+      detectedOn: c.layoffMentionOn,
+    });
+  }
+
+  // People-graph lite (only meaningful when the record carries roster data).
+  if (c.rolesPresent && key && key !== "ai") {
+    const present = c.rolesPresent.includes(key);
+    const departed = (c.rolesDeparted || []).includes(key);
+    if (departed && !present) {
+      out.push({
+        type: "departure",
+        label: `Past ${fn} leader on record — seat now empty`,
+        detail: "Someone held this seat and left; nobody currently visible in it.",
+        evidenceUrl: c.url,
+        weight: 0.7,
+        halfLifeDays: null,
+      });
+    } else if (!present && (c.teamSize ?? 0) >= (ROSTER_GAP_FLOOR[key] ?? 999)) {
+      const growing = c.growthCategory === "Growing" ? " while headcount grows" : "";
+      out.push({
+        type: "function-gap",
+        label: `No ${fn} visible on the roster at ~${c.teamSize} people${growing}`,
+        detail: "The function a company this size needs has no visible owner.",
+        evidenceUrl: c.url,
+        weight: c.growthCategory === "Growing" ? 0.6 : 0.5,
+        halfLifeDays: null,
+      });
+    }
+  }
+  return out;
 }
