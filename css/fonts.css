@@ -1,0 +1,30 @@
+/* Self-hosted variable fonts (latin subsets, via Google Fonts) */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  font-style: normal;
+  font-weight: 400 800;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url('../assets/fonts/bricolage-grotesque-var.woff2') format('woff2');
+  }
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('../assets/fonts/newsreader-italic-var.woff2') format('woff2');
+  }
+@font-face {
+  font-family: 'Nunito';
+  font-style: italic;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('../assets/fonts/nunito-italic-var.woff2') format('woff2');
+  }
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('../assets/fonts/nunito-var.woff2') format('woff2');
+  }
