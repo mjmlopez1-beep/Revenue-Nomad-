@@ -555,6 +555,8 @@ async function universeCandidates(
 ): Promise<{ signals: RawSignal[]; detail: string }> {
   const { loadUniverse, loadUniverseEvents, matchUniverse } = await import("./universe");
   const [universe, events] = await Promise.all([loadUniverse(), loadUniverseEvents()]);
+  const cbCount = universe.filter((u) => u.source === "crunchbase").length;
+  const ycCount = universe.length - cbCount;
   const candidates = matchUniverse(profile, universe, 40, events);
 
   // Live enrichment is network-heavy — only the top candidates with domains.
@@ -589,7 +591,7 @@ async function universeCandidates(
   }
   return {
     signals: out,
-    detail: `${candidates.length} ICP candidates · ${toEnrich.length} enriched · ${boardsRead} careers boards read`,
+    detail: `universe ${universe.length.toLocaleString()} (${cbCount.toLocaleString()} Crunchbase + ${ycCount.toLocaleString()} YC) · ${candidates.length} ICP candidates · ${toEnrich.length} enriched · ${boardsRead} careers boards read`,
   };
 }
 

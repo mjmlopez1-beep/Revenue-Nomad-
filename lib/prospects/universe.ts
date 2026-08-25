@@ -93,7 +93,14 @@ const CB_PATH = path.join(process.cwd(), "data", "universe-crunchbase.json");
 
 async function loadCrunchbase(): Promise<UniverseCompany[]> {
   try {
-    const raw = JSON.parse(await fs.readFile(CB_PATH, "utf8")) as CbRaw[];
+    // Direct import bundles the dataset into the serverless build — no
+    // file-tracing dependence. Filesystem read is the dev/CLI fallback.
+    let raw: CbRaw[];
+    try {
+      raw = (await import("../../data/universe-crunchbase.json")).default as unknown as CbRaw[];
+    } catch {
+      raw = JSON.parse(await fs.readFile(CB_PATH, "utf8")) as CbRaw[];
+    }
     return raw.map((c) => ({
       name: c.n,
       domain: c.d,
