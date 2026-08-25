@@ -9,7 +9,7 @@ System v2** (March 2026).
 | Page | Purpose |
 | --- | --- |
 | `index.html` | Homepage — hero, proof bar, how it works, values, case types, attorneys, testimonials, FAQ |
-| `how-it-works.html` | Detailed four-step process and repayment/cap explanation |
+| `how-it-works.html` | Detailed four-step process and repayment explanation |
 | `attorneys.html` | Attorney partnership: underwriting approach, firm capital products |
 | `about.html` | Brand story, values, team overview |
 | `apply.html` | Funding application form |
@@ -46,7 +46,8 @@ python3 -m http.server 8000
 - **Testimonials:** the quotes are illustrative placeholder copy; swap in real,
   permissioned client quotes.
 - **Legal review:** have counsel review the footer disclosures and all claims
-  (2.0× cap, timelines, state availability) against your actual product terms.
+  (pricing language, timelines, state availability) against your actual
+  product terms.
 
 ## Brand quick reference
 
