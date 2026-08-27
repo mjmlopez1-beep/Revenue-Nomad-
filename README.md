@@ -40,8 +40,7 @@ python3 -m http.server 8000
 - **Form backend:** `apply.html`'s form is front-end only. Point the form's
   `action` at your backend or a service (Formspree, Netlify Forms, Basin) and
   remove the demo submit handler in `js/main.js`.
-- **Contact details:** the phone number `(888) 555-0142` and email addresses
-  are placeholders; replace with real ones.
+- **Contact details:** matt@merlincapital.us and (718) 809-6964 throughout.
 - **Service commitments:** the 24-hour decision and 24-48-hour funding
   commitments, the $1,500-$250,000 advance range, and the team background
   descriptions should be confirmed against what the firm will actually deliver.
