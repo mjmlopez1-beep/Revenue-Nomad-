@@ -1,0 +1,25 @@
+{
+  "name": "nomad-benchmark",
+  "version": "1.1.0",
+  "private": true,
+  "description": "The Nomad Benchmark — give-to-get market intelligence for fractional GTM operators",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "seed": "tsx scripts/seed.ts",
+    "tape-drop": "tsx scripts/tape-drop.ts"
+  },
+  "dependencies": {
+    "next": "^15.4.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
