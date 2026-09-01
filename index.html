@@ -237,9 +237,9 @@ function lineChart(series,goal,title,subtitle,labels,splitAt,forecast){
 function renderTrend(){
   const b=MONTHS.map((_,i)=>book(i));const aug=book(-1);
   const TL=['Aug 26',...MONTHS];
-  const gmv=[aug.gmv,...b.map(x=>x.gmv)],profit=[aug.profit,...b.map(x=>x.profit)],active=[aug.active,...b.map(x=>x.active)];
-  const fgmv=[aug.fgmv,...b.map(x=>x.fgmv)],fprofit=[aug.fprofit,...b.map(x=>x.fprofit)];
-  const gmvGoal=[aug.gmv,...GMV_PLAN],profitGoal=[aug.profit,...PLAN.margin.t],activeGoal=[aug.active,...ACTIVE_PLAN];
+  const profit=[aug.profit,...b.map(x=>x.profit)],active=[aug.active,...b.map(x=>x.active)];
+  const fprofit=[aug.fprofit,...b.map(x=>x.fprofit)];
+  const profitGoal=[aug.profit,...PLAN.margin.t],activeGoal=[aug.active,...ACTIVE_PLAN];
   const now=nowIdx();const split=Math.min(12,Math.max(-1,now+1));
   const cur=now<0?0:Math.min(11,now);const c=b[cur];
   const past=i=>i<=split; // index into the 13-month arrays
@@ -252,11 +252,8 @@ function renderTrend(){
     <div><small>Profit year to date</small><b>${k(yrProfit)}</b><span class="note">goal to date ${k(planToDate)}</span></div>
     <div><small>Booked ahead</small><b>${k(bookedFwd)}</b><span class="note">forecast ${k(forecastFwd)} of ${k(planProfit-planToDate)} to hit</span></div>
   </div>`;
-  h+=`<div class="card">${lineChart(gmv,gmvGoal,'GMV per month','billed to clients',TL,split,fgmv)}</div>`;
   h+=`<div class="card">${lineChart(profit,profitGoal,'RN profit per month','what we keep',TL,split,fprofit)}</div>`;
   h+=`<div class="card scroll"><table><tr><th>Month</th>${TL.map(m=>`<th>${m.slice(0,3)}</th>`).join('')}</tr>
-    <tr><td>GMV</td>${gmv.map((v,i)=>`<td>${past(i)?k(v):'–'}</td>`).join('')}</tr>
-    <tr><td>GMV goal</td>${gmvGoal.map((v,i)=>`<td>${i?k(v):'start'}</td>`).join('')}</tr>
     <tr><td>Profit</td>${profit.map((v,i)=>`<td>${past(i)?k(v):'–'}</td>`).join('')}</tr>
     <tr><td>Profit goal</td>${profitGoal.map((v,i)=>`<td>${i?k(v):'start'}</td>`).join('')}</tr>
     <tr><td>Profit forecast</td>${fprofit.map(v=>`<td>${k(v)}</td>`).join('')}</tr>
@@ -283,7 +280,7 @@ function renderPace(){const i=state.month;let html='';
         <div class="nums"><b>${fmt(a,p.money)}</b><br><span style="color:var(--muted)">plan ${fmt(p.t[i],p.money)}</span></div>
         <div class="sub">${p.kind==='flow'?`Year to date ${fmt(s.act,p.money)} of ${fmt(s.plan,p.money)} planned through ${MONTHS[i]}`:p.sub}</div>
         <div class="bar ${s.cls}"><i style="width:${Math.min(100,s.pct*100)}%"></i></div></div>`});
-    if(side==='Lagging'){const b=book(i);html+=`<div class="note">GMV ${k(b.gmv)} vs goal ${k(GMV_PLAN[i])}. Active placements ${b.active} vs goal ${ACTIVE_PLAN[i]}. All from Closed won deals only.</div>`}
+    if(side==='Lagging'){const b=book(i);html+=`<div class="note">Active placements ${b.active} vs goal ${ACTIVE_PLAN[i]}. All from Closed won deals only.</div>`}
     html+='</div>'});
   return html+`<div class="sec">Diagnosis</div>`+diagnose(i)}
 function diagnose(i){const s={};Object.keys(PLAN).forEach(x=>s[x]=status(x,i));const out=[];
@@ -309,6 +306,7 @@ function renderInputs(){const i=state.month;const inp=state.inputs[monthKey(i)]|
     <label>Qualified buyer calls (blank counts from deals, currently ${ac.calls??0})</label><input type="number" id="in-calls" value="${inp.calls??''}" placeholder="plan ${PLAN.calls.t[i]}">
     <label>Organic visitors (diagnostic)</label><input type="number" id="in-visitors" value="${inp.visitors??''}" placeholder="baseline 2,600">
     <label>Outbound touches (diagnostic)</label><input type="number" id="in-touches" value="${inp.touches??''}" placeholder="target 400 to 600">
+    <label>Actual net profit from Bill.com (billed minus paid out, all clients)</label><input type="number" id="in-netprofit" value="${inp.netprofit??''}" placeholder="north star $40,000/mo">
     <button class="btn" id="save-inputs">Save ${MONTHS[i]}</button></div>
   <div class="card"><div style="font:700 13px 'Red Hat Display'">Data</div>
     <p class="note">Saves land in this artifact automatically, so any device where you open it sees the same numbers. This browser also keeps a local backup.</p>
@@ -334,17 +332,17 @@ function renderDeals(){const list=[...state.deals].sort((a,b)=>(b.start||b.quali
   return html+'</div>'}
 
 // ----- PLAN -----
-function renderPlan(){let h=`<div class="card scroll"><table><tr><th>Month</th>${Object.keys(PLAN).map(x=>`<th>${PLAN[x].name.split(' ').slice(0,2).join(' ')}</th>`).join('')}<th>GMV</th><th>Active</th></tr>`;
-  MONTHS.forEach((m,i)=>{h+=`<tr><td>${m}</td>${Object.keys(PLAN).map(x=>`<td>${fmt(PLAN[x].t[i],PLAN[x].money)}</td>`).join('')}<td>${k(GMV_PLAN[i])}</td><td>${ACTIVE_PLAN[i]}</td></tr>`});
+function renderPlan(){let h=`<div class="card scroll"><table><tr><th>Month</th>${Object.keys(PLAN).map(x=>`<th>${PLAN[x].name.split(' ').slice(0,2).join(' ')}</th>`).join('')}<th>Active</th></tr>`;
+  MONTHS.forEach((m,i)=>{h+=`<tr><td>${m}</td>${Object.keys(PLAN).map(x=>`<td>${fmt(PLAN[x].t[i],PLAN[x].money)}</td>`).join('')}<td>${ACTIVE_PLAN[i]}</td></tr>`});
   h+=`</table></div><div class="card"><div style="font:700 13px 'Red Hat Display'">How the plan was built</div>
-  <p class="note">Plan starts from the real Aug 2026 book (CGI, ACLED, Grow Pro at 3 active and $7.3k profit) and layers on 15 planned closes, 1 per month with 2 in May, Jul and Aug. Each new placement is modelled at $9k billed, $2,250 kept, 8 months then churn. The Sep close is ApexRx or VinnyMac at $4k/$1k. Year plan is ~$983k GMV, ~$243k RN profit, 11 active in Aug 2027. The June dip is real, that is CGI and ACLED churning, and the plan carries it rather than hiding it.</p>
+  <p class="note">Plan starts from the real Aug 2026 book (CGI, ACLED, Grow Pro at 3 active and $7.3k profit) and layers on 15 planned closes, 1 per month with 2 in May, Jul and Aug. Each new placement is modelled at $9k billed, $2,250 kept, 8 months then churn. The Sep close is ApexRx or VinnyMac at $4k/$1k. Year plan is ~$243k RN profit, 11 active in Aug 2027, on the road to $40k/mo profit. The June dip is real, that is CGI and ACLED churning, and the plan carries it rather than hiding it.</p>
   <p class="note">Status thresholds. On pace is 90% or better of cumulative plan, Behind is 70% to 90%, Off track is under 70%. Stock metrics compare against the month target, flow metrics compare year to date.</p></div>`;
   return h}
 function esc(s){return String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
 function thisYM(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 
 function bind(){const q=id=>document.getElementById(id);
-  if(q('save-inputs'))q('save-inputs').onclick=()=>{const key=monthKey(state.month);state.inputs[key]={reviews:q('in-reviews').value,signups:q('in-signups').value,intros:q('in-intros').value,calls:q('in-calls').value,visitors:q('in-visitors').value,touches:q('in-touches').value};save('Saved '+key)};
+  if(q('save-inputs'))q('save-inputs').onclick=()=>{const key=monthKey(state.month);state.inputs[key]={reviews:q('in-reviews').value,signups:q('in-signups').value,intros:q('in-intros').value,calls:q('in-calls').value,visitors:q('in-visitors').value,touches:q('in-touches').value,netprofit:q('in-netprofit').value};save('Saved '+key)};
   if(q('add-deal'))q('add-deal').onclick=()=>{const name=q('d-name').value.trim();if(!name){toast('Company name needed');return}
     state.deals.push({id:Date.now().toString(36),name,stage:q('d-stage').value,qualified:q('d-qual').value,start:q('d-start').value,end:q('d-end').value,billing:q('d-bill').value,keep:q('d-keep').value,prob:q('d-prob').value,operator:q('d-op').value});save('Deal added');render()};
   document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{state.deals=state.deals.filter(d=>d.id!==b.dataset.del);save('Deal removed');render()});
