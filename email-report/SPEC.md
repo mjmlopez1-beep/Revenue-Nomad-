@@ -3,22 +3,28 @@
 Sent every morning to matt@revenuenomad.com. Subject: `Daily Revenue Scorecard — {Weekday}, {Mon} {D}`.
 Profit is the only revenue metric — **no GMV anywhere**.
 
-## Framing: period attainment, not month-by-month
+## Framing: new-business MRR vs the period goal, not total contract value
 
-The whole report is measured against the **Aug 1 – Dec 31, 2026 period goal**: the monthly
-profit goals Matt set in late August, totaled across those 5 months.
+New business is measured as **monthly recurring profit (MRR) added**, never as contract
+value summed over months. A signing moves the number by its monthly kept profit — ApexRx
+adds $1,000 MRR — and the period goal is the **December 31, 2026 exit MRR**.
 
-- Period profit goal: **$61,276** = Aug baseline $7,338 + Sep $8,338 + Oct $12,950 +
-  Nov $15,200 + Dec $17,450 (from PLAN.margin in the scorecard; Aug counts at its
-  rebased baseline). If Matt corrects this number, update it here.
-- **Attainment %** = committed profit booked for the period (Closed won deals only,
-  Aug–Dec months summed, future months included — signed contracts count) ÷ period goal.
-- **Calendar %** = days elapsed since Aug 1 ÷ 153.
-- The headline pairing is always attainment vs calendar: "90% attained with 22% of the
-  calendar consumed" reads as ahead; attainment below calendar reads as behind.
-- Also show attainment including probability-weighted open deals as a second, lighter figure.
-- Placements: contracts signed for the period vs the 7 planned (Aug 3 + one per month
-  Sep–Dec). Phases of one client (CGI CRO, PP ongoing) count at their start months.
+- **MRR goal (the $Y): $17,450/mo** — the December profit target in the scorecard plan
+  (PLAN.margin index 3). Derived, not confirmed by Matt; if he supplies his own
+  new-business MRR goal, replace it here.
+- **Attainment %** = December booked MRR ÷ goal, where December booked MRR is the sum of
+  monthly keep for every Closed won deal active in Dec 2026. Signed future phases count
+  (CGI's CRO expansion, PP's ongoing step-down); churn before December falls out naturally.
+- **Calendar %** = days elapsed since Aug 1 ÷ 153 (period Aug 1 – Dec 31; the goals were
+  set for August through end of year).
+- The headline pairing is always attainment vs calendar: "69% attained with 22% of the
+  calendar consumed" reads as ahead; attainment below calendar reads as behind. State the
+  multiple (attainment ÷ calendar).
+- Also show attainment including probability-weighted open deals as a lighter second figure,
+  and the remaining MRR gap in $/mo with what closes it (e.g. "Vinnie Mac + ~2 plan-sized
+  closes at $2,250").
+- Secondary: MRR added this month (sum of initial monthly keep of this month's signings)
+  and placements signed vs planned.
 
 ## The $40k/month north star
 
