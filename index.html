@@ -96,6 +96,7 @@ const MONTHS=['Sep 26','Oct 26','Nov 26','Dec 26','Jan 27','Feb 27','Mar 27','Ap
 const YM=['2026-09','2026-10','2026-11','2026-12','2027-01','2027-02','2027-03','2027-04','2027-05','2027-06','2027-07','2027-08'];
 const QUARTER=['Q3 Fix the funnel','Q3 Fix the funnel','Q3 Fix the funnel','Q4 Prove repeatable demand','Q4 Prove repeatable demand','Q4 Prove repeatable demand','Q1 Add capacity','Q1 Add capacity','Q1 Add capacity','Q2 Scale what worked','Q2 Scale what worked','Q2 Scale what worked'];
 // Plan rebased on the actual Aug 2026 book (CGI, ACLED, Grow Pro) plus planned closes. New placements modelled at $9k billed, $2,250 kept, 8 months, except the Sep close which is the ApexRx/VinnyMac deal at $4k/$1k.
+// ACTIVE_PLAN is the total active clients goal per month (each planned close is a new client; churn modeled in).
 const ACTIVE_PLAN=[4,5,6,7,8,9,10,11,11,9,10,11];
 const GMV_PLAN=[34650,53100,62100,71100,80100,89100,98100,107100,117200,81000,90000,99000];
 const PLAN={
@@ -186,10 +187,13 @@ function probOf(d){if(d.stage==='Closed won'||d.stage==='Ended')return 1;
   if(d.prob!==''&&d.prob!==null&&d.prob!==undefined&&!isNaN(p))return Math.min(100,Math.max(0,p))/100;
   return {'Intro request':.1,'Qualified call':.25,'Proposal':.5}[d.stage]||0}
 function activeIn(d,i){const s=toIdx(d.start),e=toIdx(d.end);if(s===null)return false;if(d.stage==='Closed lost')return false;return s<=i&&(e===null||e>=i)}
-function book(i){let gmv=0,profit=0,active=0,won=0,committed=0,fgmv=0,fprofit=0;
-  state.deals.forEach(d=>{const w=weight(d),fw=probOf(d);if(activeIn(d,i)){gmv+=(Number(d.billing)||0)*w;profit+=(Number(d.keep)||0)*w;fgmv+=(Number(d.billing)||0)*fw;fprofit+=(Number(d.keep)||0)*fw;active+=w;if(w===1)committed+=Number(d.keep)||0}
+// Active counts distinct clients, so multiple billing phases of one client
+// (like CGI's assessment then CRO) never count twice.
+function clientKey(d){return String(d.name||'').split('·')[0].trim().toLowerCase()}
+function book(i){let gmv=0,profit=0,won=0,committed=0,fgmv=0,fprofit=0;const clients=new Set();
+  state.deals.forEach(d=>{const w=weight(d),fw=probOf(d);if(activeIn(d,i)){gmv+=(Number(d.billing)||0)*w;profit+=(Number(d.keep)||0)*w;fgmv+=(Number(d.billing)||0)*fw;fprofit+=(Number(d.keep)||0)*fw;if(w===1){clients.add(clientKey(d));committed+=Number(d.keep)||0}}
     if(toIdx(d.start)===i&&w>0)won+=w});
-  return {gmv:Math.round(gmv),profit:Math.round(profit),active:+active.toFixed(1),won:+won.toFixed(1),committed:Math.round(committed),fgmv:Math.round(fgmv),fprofit:Math.round(fprofit)}}
+  return {gmv:Math.round(gmv),profit:Math.round(profit),active:clients.size,won:+won.toFixed(1),committed:Math.round(committed),fgmv:Math.round(fgmv),fprofit:Math.round(fprofit)}}
 function actuals(i){const inp=state.inputs[monthKey(i)]||{};const b=book(i);
   const callsFromDeals=state.deals.filter(d=>d.stage!=='Intro request'&&toIdx(d.qualified)===i).length;
   return {reviews:num(inp.reviews),signups:num(inp.signups),intros:num(inp.intros),
@@ -261,8 +265,8 @@ function renderTrend(){
     <tr><td>Gap</td>${profit.map((v,i)=>i&&past(i)?`<td style="color:${v-profitGoal[i]<0?'var(--red)':'var(--green)'}">${v-profitGoal[i]<0?'-':'+'}${k(Math.abs(v-profitGoal[i]))}</td>`:'<td>–</td>').join('')}</tr>
     <tr><td>New placements</td>${[book(-1).won,...b.map(x=>x.won)].map((v,i)=>`<td>${past(i)?v:'–'}</td>`).join('')}</tr>
     <tr><td>Placements goal</td>${[0,...PLAN.placed.t].map((v,i)=>`<td>${i?v:'–'}</td>`).join('')}</tr>
-    <tr><td>Active</td>${active.map((v,i)=>`<td>${past(i)?v:'–'}</td>`).join('')}</tr>
-    <tr><td>Active goal</td>${activeGoal.map((v,i)=>`<td>${i?v:'start'}</td>`).join('')}</tr>
+    <tr><td>Active clients</td>${active.map((v,i)=>`<td>${past(i)?v:'–'}</td>`).join('')}</tr>
+    <tr><td>Clients goal</td>${activeGoal.map((v,i)=>`<td>${i?v:'start'}</td>`).join('')}</tr>
   </table></div>
   <p class="note">Green is actual, from deals marked Closed won, through the current month. Gold dotted is the goal. The dashed forecast line is won deals plus open deals weighted by win probability (set per deal on the Deals tab; defaults are 10% intro, 25% qualified call, 50% proposal). Booked ahead counts signed contracts only; forecast ahead adds the weighted pipeline. Actuals still count nothing until a deal is marked won.</p>`;
   return h;
@@ -281,7 +285,7 @@ function renderPace(){const i=state.month;let html='';
         <div class="nums"><b>${fmt(a,p.money)}</b><br><span style="color:var(--muted)">plan ${fmt(p.t[i],p.money)}</span></div>
         <div class="sub">${p.kind==='flow'?`Year to date ${fmt(s.act,p.money)} of ${fmt(s.plan,p.money)} planned through ${MONTHS[i]}`:p.sub}</div>
         <div class="bar ${s.cls}"><i style="width:${Math.min(100,s.pct*100)}%"></i></div></div>`});
-    if(side==='Lagging'){const b=book(i);html+=`<div class="note">Active placements ${b.active} vs goal ${ACTIVE_PLAN[i]}. All from Closed won deals only.</div>`}
+    if(side==='Lagging'){const b=book(i);html+=`<div class="note">Active clients ${b.active} vs goal ${ACTIVE_PLAN[i]}. Distinct clients from Closed won deals only.</div>`}
     html+='</div>'});
   return html+`<div class="sec">Diagnosis</div>`+diagnose(i)}
 function diagnose(i){const s={};Object.keys(PLAN).forEach(x=>s[x]=status(x,i));const out=[];
@@ -333,7 +337,7 @@ function renderDeals(){const list=[...state.deals].sort((a,b)=>(b.start||b.quali
   return html+'</div>'}
 
 // ----- PLAN -----
-function renderPlan(){let h=`<div class="card scroll"><table><tr><th>Month</th>${Object.keys(PLAN).map(x=>`<th>${PLAN[x].name.split(' ').slice(0,2).join(' ')}</th>`).join('')}<th>Active</th></tr>`;
+function renderPlan(){let h=`<div class="card scroll"><table><tr><th>Month</th>${Object.keys(PLAN).map(x=>`<th>${PLAN[x].name.split(' ').slice(0,2).join(' ')}</th>`).join('')}<th>Clients</th></tr>`;
   MONTHS.forEach((m,i)=>{h+=`<tr><td>${m}</td>${Object.keys(PLAN).map(x=>`<td>${fmt(PLAN[x].t[i],PLAN[x].money)}</td>`).join('')}<td>${ACTIVE_PLAN[i]}</td></tr>`});
   h+=`</table></div><div class="card"><div style="font:700 13px 'Red Hat Display'">How the plan was built</div>
   <p class="note">Plan starts from the real Aug 2026 book (CGI, ACLED, Grow Pro at 3 active and $7.3k profit) and layers on 15 planned closes, 1 per month with 2 in May, Jul and Aug. Each new placement is modelled at $9k billed, $2,250 kept, 8 months then churn. The Sep close is ApexRx or VinnyMac at $4k/$1k. Year plan is ~$243k RN profit, 11 active in Aug 2027, on the road to $40k/mo profit. The June dip is real, that is CGI and ACLED churning, and the plan carries it rather than hiding it.</p>

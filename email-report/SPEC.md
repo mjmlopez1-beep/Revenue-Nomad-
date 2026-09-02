@@ -71,8 +71,11 @@ Sections in order:
 3. **Attainment vs calendar** — the hero: two full-width bars directly stacked,
    PERIOD GOAL ATTAINED (green fill, % + $ label) over CALENDAR CONSUMED (gold fill),
    so ahead/behind is visible at a glance; weighted-pipeline attainment as a muted third line.
-4. **KPI tiles** — one row × 3: Period profit booked ($ of $61.3k), Placements signed (n of 7),
-   This-month run rate ($ of $40k).
+4. **KPI tiles** — 2 rows × 2: MRR added Aug–Dec ($ of $13.5k) · this month's ladder step
+   (hit/open) · **Active clients (distinct clients with a Closed won deal active this month,
+   vs that month's ACTIVE_PLAN goal — phases of one client never count twice)** · current
+   month run rate ($ of $40k). When booked future months fall short of the climbing client
+   goal (e.g. 5 booked vs 7 by Dec), say so in the narrative.
 5. **Last 24 hours** — deal cards, 3px left border on `#1d2c24`, colored chip
    (CLOSED WON `#095d42`, NEEDS OPERATOR `#e9a63d` w/ dark text, IN PLAY `#5c6b62`,
    LOST `#d4644f`), body ends in a **bolded action**. Max 4; omit section on a quiet day.
