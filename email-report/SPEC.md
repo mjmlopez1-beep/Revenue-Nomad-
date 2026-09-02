@@ -5,26 +5,28 @@ Profit is the only revenue metric — **no GMV anywhere**.
 
 ## Framing: new-business MRR vs the period goal, not total contract value
 
-New business is measured as **monthly recurring profit (MRR) added**, never as contract
-value summed over months. A signing moves the number by its monthly kept profit — ApexRx
-adds $1,000 MRR — and the period goal is the **December 31, 2026 exit MRR**.
+New business is measured as **monthly recurring profit (MRR) added by signings**, never as
+contract value summed over months. A signing counts once, at its normalized monthly kept
+profit (project/build months don't inflate it): CGI = $4,500, Practice Promotions = $1,250,
+ApexRx = $1,000 — all confirmed by Matt (Sep 2, 2026).
 
-- **MRR goal (the $Y): $17,450/mo** — the December profit target in the scorecard plan
-  (PLAN.margin index 3). Derived, not confirmed by Matt; if he supplies his own
-  new-business MRR goal, replace it here.
-- **Attainment %** = December booked MRR ÷ goal, where December booked MRR is the sum of
-  monthly keep for every Closed won deal active in Dec 2026. Signed future phases count
-  (CGI's CRO expansion, PP's ongoing step-down); churn before December falls out naturally.
-- **Calendar %** = days elapsed since Aug 1 ÷ 153 (period Aug 1 – Dec 31; the goals were
-  set for August through end of year).
-- The headline pairing is always attainment vs calendar: "69% attained with 22% of the
-  calendar consumed" reads as ahead; attainment below calendar reads as behind. State the
-  multiple (attainment ÷ calendar).
-- Also show attainment including probability-weighted open deals as a lighter second figure,
-  and the remaining MRR gap in $/mo with what closes it (e.g. "Vinnie Mac + ~2 plan-sized
-  closes at $2,250").
-- Secondary: MRR added this month (sum of initial monthly keep of this month's signings)
-  and placements signed vs planned.
+- **Period goal (Aug 1 – Dec 31, 2026): $13,500 MRR added**, month by month:
+  Aug $5,750 (CGI + PP, both signed in Aug — attained) · Sep $1,000 (the ApexRx/VinnyMac
+  close — attained) · Oct $2,250 · Nov $2,250 · Dec $2,250 (the scorecard plan's one close
+  per month at $2,250 modeled keep).
+- Rest of fiscal year for reference (closes/month × $2,250): Jan–Apr 1 each, May 2, Jun 1,
+  Jul 2, Aug 2 → full-year adds $32,500 on 15 closes.
+- **Attainment %** = MRR added by period signings ÷ $13,500. Currently CGI $4,500 +
+  PP $1,250 + ApexRx $1,000 = $6,750 = 50%. ACLED and Grow Pro closed in July — existing
+  base, not period adds.
+- **Calendar %** = days elapsed since Aug 1 ÷ 153.
+- The headline pairing is always attainment vs calendar, with the multiple stated:
+  "50% attained with 22% of the calendar consumed — 2.3x ahead." Attainment below calendar
+  reads as behind.
+- Also show attainment including probability-weighted open deals as a lighter second figure
+  (VinnyMac at 65% ≈ +$650), and the remaining MRR gap in $/mo with what closes it
+  ("the three fall closes at $2,250; Vinnie Mac covers $1,000").
+- Secondary: MRR added this month vs that month's ladder goal.
 
 ## The $40k/month north star
 

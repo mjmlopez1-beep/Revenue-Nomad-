@@ -107,21 +107,22 @@ const PLAN={
   margin:{name:'RN profit',kind:'stock',side:'Lagging',sub:'Per month. What Revenue Nomad keeps.',t:[8338,12950,15200,17450,19700,21950,24200,26450,29050,20250,22500,24750],money:true}
 };
 const STAGES=['Intro request','Qualified call','Proposal','Closed won','Closed lost','Ended'];
-// Deal book as of Sep 1, 2026, reconciled against HubSpot and email.
-// CGI keep assumed at 25% of billing until Matt confirms Eric's split.
+// Deal book as of Sep 2, 2026, reconciled against HubSpot, email, and Matt's corrections:
+// CGI CRO keep is $4,500/mo and Practice Promotions normalizes to $1,250/mo after the
+// project months (both per Matt, Sep 2).
 // ApexRx won Sep 1 (Karry + Jeff Williams both signed). Practice Promotions won Aug 31
 // (Neil Trickett signed); billing/keep estimated from the $185/hr operator rate at
 // 30 hrs/mo build then 20 hrs/mo ongoing — confirm against the signed SOW.
 // Vinnie Mac still open: Sean work-testing Meg and Taylor, decision expected early Sep.
 const SEED=[
   {id:'cgi-1',name:'CGI Digital · Revenue Maturity Assessment',stage:'Closed won',qualified:'2026-07',start:'2026-08',end:'2026-09',billing:13750,keep:3438,prob:100,operator:'Eric Clark'},
-  {id:'cgi-2',name:'CGI Digital · Fractional CRO',stage:'Closed won',qualified:'2026-07',start:'2026-10',end:'2027-05',billing:23200,keep:5800,prob:100,operator:'Eric Clark'},
+  {id:'cgi-2',name:'CGI Digital · Fractional CRO',stage:'Closed won',qualified:'2026-07',start:'2026-10',end:'2027-05',billing:23200,keep:4500,prob:100,operator:'Eric Clark'},
   {id:'acled',name:'ACLED',stage:'Closed won',qualified:'2026-07',start:'2026-08',end:'2027-05',billing:13000,keep:3000,prob:100,operator:''},
   {id:'growpro',name:'Grow Pro',stage:'Closed won',qualified:'2026-07',start:'2026-08',end:'2027-04',billing:3900,keep:900,prob:100,operator:''},
   {id:'apexrx',name:'ApexRx · Fractional Sales Director',stage:'Closed won',qualified:'2026-08',start:'2026-09',end:'2027-04',billing:4000,keep:1000,prob:100,operator:'Jeff Williams'},
   {id:'vinnymac',name:'Vinnie Mac · Fractional Director of Sales',stage:'Proposal',qualified:'2026-08',start:'2026-10',end:'2027-05',billing:4000,keep:1000,prob:65,operator:'Meg or Taylor'},
   {id:'pp-1',name:'Practice Promotions · VP Sales build phase',stage:'Closed won',qualified:'2026-08',start:'2026-09',end:'2026-11',billing:7500,keep:1950,prob:100,operator:'Dave VanderJagt (TBC)'},
-  {id:'pp-2',name:'Practice Promotions · VP Sales ongoing',stage:'Closed won',qualified:'2026-08',start:'2026-12',end:'2027-04',billing:5000,keep:1300,prob:100,operator:'Dave VanderJagt (TBC)'}
+  {id:'pp-2',name:'Practice Promotions · VP Sales ongoing',stage:'Closed won',qualified:'2026-08',start:'2026-12',end:'2027-04',billing:5000,keep:1250,prob:100,operator:'Dave VanderJagt (TBC)'}
 ];
 
 // ---------- STATE ----------
