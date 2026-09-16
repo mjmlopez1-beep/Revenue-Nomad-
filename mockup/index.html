@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+</head>
+<body style="margin:0">
+<title>Revenue Nomad</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#F4F6F4; --surface:#FFFFFF; --surface2:#EDF1EE; --ink:#1B2A2F; --muted:#5B6B70;
+  --line:#DCE3DF; --line-strong:#C3CEC8;
+  --accent:#0E6E5C; --accent-ink:#FFFFFF; --accent-soft:#E0EEE9; --accent-soft-ink:#0B5748;
+  --amber:#9A5B0B; --amber-soft:#F4E8D4; --danger:#9A3B33; --danger-soft:#F3E2DF;
+  --good:#0E6E5C; --unknown:#748086;
+  --chip:#EDF1EE; --shadow:0 1px 2px rgba(27,42,47,.06),0 8px 24px rgba(27,42,47,.07);
+  --email-bg:#FBFBF9;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1719; --surface:#162124; --surface2:#1C292D; --ink:#E4ECEA; --muted:#8FA3A1;
+    --line:#243237; --line-strong:#33454B;
+    --accent:#3FBFA4; --accent-ink:#0B1F1B; --accent-soft:#173730; --accent-soft-ink:#7FD8C4;
+    --amber:#E0A458; --amber-soft:#3A2C15; --danger:#E08A80; --danger-soft:#402320;
+    --good:#3FBFA4; --unknown:#7C8B90;
+    --chip:#1C292D; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+    --email-bg:#131D20;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1719; --surface:#162124; --surface2:#1C292D; --ink:#E4ECEA; --muted:#8FA3A1;
+  --line:#243237; --line-strong:#33454B;
+  --accent:#3FBFA4; --accent-ink:#0B1F1B; --accent-soft:#173730; --accent-soft-ink:#7FD8C4;
+  --amber:#E0A458; --amber-soft:#3A2C15; --danger:#E08A80; --danger-soft:#402320;
+  --good:#3FBFA4; --unknown:#7C8B90;
+  --chip:#1C292D; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  --email-bg:#131D20;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);margin:0;font:15px/1.5 "Instrument Sans",-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+button{font:inherit;color:inherit;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;padding:8px 10px;width:100%}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.num{font-variant-numeric:tabular-nums}
+
+/* shell */
+.shell{max-width:1180px;margin:0 auto;padding:0 20px 64px}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:18px 0 14px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .glyph{width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.brand .glyph svg{width:20px;height:20px}
+.brand .word{font:700 20px/1.1 "Bricolage Grotesque","Instrument Sans",sans-serif;letter-spacing:-.01em}
+.brand .word small{display:block;font:500 11px/1.3 "Instrument Sans",sans-serif;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.roles{display:flex;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:3px;margin-left:auto}
+.roles button{border:0;background:transparent;border-radius:999px;padding:7px 16px;color:var(--muted);font-weight:600}
+.roles button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.mockchip{font-size:12px;color:var(--muted);border:1px dashed var(--line-strong);border-radius:999px;padding:4px 10px}
+
+nav.tabs{display:flex;gap:6px;padding:14px 0;flex-wrap:wrap}
+nav.tabs button{border:1px solid transparent;background:transparent;border-radius:8px;padding:7px 13px;color:var(--muted);font-weight:600}
+nav.tabs button.on{color:var(--accent-soft-ink);background:var(--accent-soft)}
+nav.tabs button:hover{border-color:var(--line)}
+
+h1.page{font:700 26px/1.2 "Bricolage Grotesque",sans-serif;letter-spacing:-.01em;margin:8px 0 4px;text-wrap:balance}
+p.sub{color:var(--muted);margin:0 0 20px;max-width:64ch}
+.grid{display:grid;gap:14px}
+
+/* cards, chips */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:var(--unknown);flex:none}
+.chip.open{background:var(--accent-soft);color:var(--accent-soft-ink)}.chip.open .dot{background:var(--good)}
+.chip.limited{background:var(--amber-soft);color:var(--amber)}.chip.limited .dot{background:var(--amber)}
+.chip.unavailable{background:var(--danger-soft);color:var(--danger)}.chip.unavailable .dot{background:var(--danger)}
+.chip.unknown .dot{background:var(--unknown)}
+.chip.stage{background:var(--surface2);color:var(--muted)}
+.chip.stage.on_slate,.chip.stage.selected{background:var(--accent-soft);color:var(--accent-soft-ink)}
+.chip.stage.not_selected{background:var(--danger-soft);color:var(--danger)}
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:999px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;padding:0 5px}
+.avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;color:var(--accent-ink);background:var(--accent);flex:none}
+.avatar.alt{background:var(--surface2);color:var(--muted);border:1px solid var(--line-strong)}
+
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:9px;padding:8px 15px;font-weight:600}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{border-color:transparent;color:var(--muted)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.sm{padding:5px 10px;font-size:13px;border-radius:7px}
+
+table.plain{width:100%;border-collapse:collapse;font-size:14px}
+table.plain th{text-align:left;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+table.plain td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.plain tr:last-child td{border-bottom:0}
+table.plain tr.click{cursor:pointer}
+table.plain tr.click:hover td{background:var(--surface2)}
+.scrollx{overflow-x:auto}
+
+/* board */
+.board{display:grid;grid-template-columns:repeat(6,minmax(196px,1fr));gap:10px;overflow-x:auto;padding-bottom:8px}
+.col{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px;min-width:196px;display:flex;flex-direction:column;gap:8px}
+.col h4{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.col h4 .num{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:0 7px;font-size:11px}
+.invite-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:7px}
+.invite-card .who{display:flex;gap:8px;align-items:center}
+.invite-card .who b{font-size:13.5px;line-height:1.25}
+.invite-card .who small{display:block;color:var(--muted);font-size:12px}
+.invite-card .meta{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.invite-card select{padding:4px 6px;font-size:12.5px;border-radius:7px}
+.tick{color:var(--good);font-weight:700;font-size:12px}
+.rankpill{font-size:11px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:1px 6px}
+
+/* operator */
+.group h3{font:700 15px/1.3 "Instrument Sans",sans-serif;margin:22px 0 8px;display:flex;gap:8px;align-items:baseline}
+.group h3 small{color:var(--muted);font-weight:500}
+.projrow{display:flex;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;flex-wrap:wrap}
+.projrow:hover{border-color:var(--accent)}
+.projrow .t{flex:1 1 240px}
+.projrow .t b{font-size:15.5px}
+.projrow .t small{display:block;color:var(--muted)}
+.projrow .facts{display:flex;gap:14px;color:var(--muted);font-size:13px;flex-wrap:wrap}
+.statusline{border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--accent-soft-ink);border-radius:0 9px 9px 0;padding:9px 13px;font-weight:600;font-size:14px}
+
+.facts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.fact{background:var(--surface2);border-radius:9px;padding:9px 12px}
+.fact small{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.fact span{font-weight:600}
+
+/* emails */
+.email{background:var(--email-bg);border:1px solid var(--line);border-radius:12px;max-width:560px;padding:0;overflow:hidden}
+.email .env{padding:10px 16px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.email .env b{color:var(--ink);font-size:14px}
+.email .bodytxt{padding:16px;display:flex;flex-direction:column;gap:12px;font-size:14.5px}
+.email .btnrow{display:flex;gap:8px;flex-wrap:wrap}
+.email .btnrow .btn{font-size:13.5px}
+.email .fine{color:var(--muted);font-size:12.5px}
+.emailtag{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:26px 0 8px}
+
+/* pulse confirmation */
+.pulse-wrap{max-width:480px;margin:30px auto;display:flex;flex-direction:column;gap:14px}
+.bigstatus{display:flex;gap:12px;align-items:center;padding:16px;border-radius:12px;background:var(--accent-soft);color:var(--accent-soft-ink);font-weight:700;font-size:17px}
+.bigstatus.amber{background:var(--amber-soft);color:var(--amber)}
+.bigstatus.red{background:var(--danger-soft);color:var(--danger)}
+
+/* stats + charts */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tile small{color:var(--muted);font-size:12px;font-weight:600}
+.tile .v{font:700 30px/1.15 "Bricolage Grotesque",sans-serif;letter-spacing:-.01em}
+.tile .v em{font:600 13px/1 "Instrument Sans",sans-serif;color:var(--muted);font-style:normal;margin-left:4px}
+.tile .goal{font-size:12px;color:var(--muted);margin-top:3px}
+.hbar{display:grid;grid-template-columns:130px 1fr 52px;gap:10px;align-items:center;font-size:13.5px;padding:5px 0}
+.hbar .lab{color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar .track{background:var(--surface2);border-radius:5px;height:18px;position:relative}
+.hbar .fill{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:5px 4px 4px 5px;min-width:3px}
+.hbar .val{color:var(--muted);text-align:right}
+.charthead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.charthead b{font-size:14.5px}
+.charthead small{color:var(--muted)}
+
+/* forms */
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:4px}
+fieldset{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0}
+legend{font-size:12.5px;font-weight:700;color:var(--muted);padding:0 6px;text-transform:uppercase;letter-spacing:.06em}
+.radio-row{display:flex;gap:8px;flex-wrap:wrap}
+.radio-row label{display:flex;gap:7px;align-items:center;border:1px solid var(--line-strong);border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:500}
+.radio-row label.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-soft-ink)}
+.radio-row input{width:auto}
+.count-pill{font-weight:700;color:var(--accent-soft-ink);background:var(--accent-soft);border-radius:999px;padding:3px 12px}
+
+/* toast + misc */
+#toasts{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:50;width:min(440px,calc(100vw - 32px))}
+.toast{background:var(--ink);color:var(--bg);border-radius:10px;padding:11px 15px;font-size:14px;box-shadow:var(--shadow);animation:pop .18s ease-out}
+:root[data-theme="dark"] .toast{background:var(--surface2);color:var(--ink);border:1px solid var(--line-strong)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .toast{background:var(--surface2);color:var(--ink);border:1px solid var(--line-strong)}}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+.qa{border-left:3px solid var(--line-strong);padding:6px 12px;margin:6px 0}
+.qa b{font-size:13px}
+.qa .ans{color:var(--muted);font-size:13.5px;margin-top:2px}
+.eventrow{display:flex;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.eventrow:last-child{border-bottom:0}
+.eventrow .t{color:var(--muted);flex:none;width:76px}
+.eventrow code{background:var(--surface2);border-radius:5px;padding:1px 6px;font-size:12px}
+.backlink{border:0;background:none;color:var(--muted);font-weight:600;padding:0;margin:14px 0 2px;display:inline-flex;gap:6px}
+.backlink:hover{color:var(--accent)}
+.headrow{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;justify-content:space-between;margin-bottom:14px}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:2px}
+.seg button{border:0;background:none;border-radius:7px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+@media (max-width:640px){
+  .shell{padding:0 16px 48px}
+  .roles{margin-left:0}
+  .hbar{grid-template-columns:96px 1fr 46px}
+}
+</style>
+
+<div class="shell">
+  <header class="top">
+    <div class="brand">
+      <span class="glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 8.5 13.2 13.2 8.5 15.5l2.3-4.7z" fill="currentColor"/></svg></span>
+      <span class="word">Revenue Nomad<small>Operator network</small></span>
+    </div>
+    <span class="mockchip">Phase one mockup · sample data</span>
+    <div class="roles" role="tablist" aria-label="Vantage point">
+      <button id="role-admin" onclick="setRole('admin')">Admin</button>
+      <button id="role-operator" onclick="setRole('operator')">Operator</button>
+      <button id="role-emails" onclick="setRole('emails')">Emails</button>
+    </div>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+  <main id="view"></main>
+</div>
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+/* ------------------------------ sample data ------------------------------ */
+const STAGES=["invited","interested","screened","on_slate","selected","not_selected"];
+const STAGE_LABEL={invited:"Invited",interested:"Interested",screened:"Screened",on_slate:"On slate",selected:"Selected",not_selected:"Not selected"};
+const AVAIL_LABEL={open:"Open",limited:"Limited",unavailable:"Unavailable",unknown:"Unknown"};
+const DECLINE_REASONS={rate:"Rate",hours:"Hours",timing:"Timing",fit:"Fit",other:"Other"};
+
+const operators=[
+ {id:"o1",name:"Jordan Avila",role:"Fractional VP of RevOps",tags:["RevOps","SaaS","HubSpot"],availability:"open",hours:60,confirmed:"Sep 2",initials:"JA"},
+ {id:"o2",name:"Priya Natarajan",role:"Fractional CRO",tags:["Sales playbook","SaaS"],availability:"open",hours:40,confirmed:"Sep 1",initials:"PN"},
+ {id:"o3",name:"Matt Kowalski",role:"VP of Sales",tags:["Sales playbook","SaaS","Outbound"],availability:"limited",hours:20,confirmed:"Sep 5",initials:"MK"},
+ {id:"o4",name:"Dana Whitfield",role:"Fractional CMO",tags:["Demand gen","Healthcare"],availability:"open",hours:50,confirmed:"Aug 30",initials:"DW"},
+ {id:"o5",name:"Luis Herrera",role:"RevOps Lead",tags:["RevOps","Salesforce","Fintech"],availability:"limited",hours:25,confirmed:"Sep 3",initials:"LH"},
+ {id:"o6",name:"Sasha Bell",role:"Interim Head of Growth",tags:["PLG","Fintech"],availability:"unknown",hours:null,confirmed:"Jul 14",initials:"SB"},
+ {id:"o7",name:"Emeka Obi",role:"Fractional VP of Sales",tags:["Enterprise","Healthcare"],availability:"open",hours:80,confirmed:"Sep 4",initials:"EO"},
+ {id:"o8",name:"Rachel Stone",role:"GTM Advisor",tags:["Advisory","Seed stage"],availability:"unavailable",hours:0,confirmed:"Aug 22",initials:"RS"},
+];
+
+const projects=[
+ {id:"p1",title:"Fractional VP of RevOps",client:"Meridian Health Systems",descriptor:"healthcare software company, Skaled client",
+  summary:"Own the revenue engine through a Series B push. Rebuild pipeline reporting, fix routing, and stand up forecasting the board will trust.",
+  scope:"Audit the current HubSpot to Salesforce migration, own weekly forecast calls, define stage exit criteria with the VP Sales, and hire the first RevOps analyst. Direct line to the CEO.",
+  rate:"$150/hr",hoursPer:"40–50",term:"6 months then month to month",location:"Remote, occasional on site in STL",start:"Oct 6",
+  vetting:["Walk us through a forecasting model you built that a board actually used.","What is your first 30 days in a HubSpot-to-Salesforce mid-migration mess?"],
+  revealStage:"on_slate",status:"open",created:"Aug 28",sentCount:14,daysOpen:19},
+ {id:"p2",title:"Fractional CMO",client:"Lumen Ledger",descriptor:"seed-stage fintech",
+  summary:"First marketing leader for a payments API with strong developer pull and zero brand. Build the demand engine from scratch.",
+  scope:"Positioning, first paid experiments, founder-led content program, and a hiring plan for the first two marketers.",
+  rate:"$6,000 fixed / mo",hoursPer:"25–30",term:"3 months then month to month",location:"Remote",start:"Oct 20",
+  vetting:["What did you do in your last zero-to-one marketing build, and what would you skip this time?"],
+  revealStage:"on_slate",status:"open",created:"Sep 9",sentCount:9,daysOpen:7},
+ {id:"p3",title:"Interim Sales Playbook Build",client:"Corvid Robotics",descriptor:"industrial robotics company",
+  summary:"Six-week sprint to codify the founder's sales motion into a playbook the first two AEs can run.",
+  scope:"Shadow founder calls, write the playbook, build the demo script and objection library, train the AEs.",
+  rate:"$9,500 fixed",hoursPer:"30",term:"6 weeks",location:"Remote",start:"Sep 1",
+  vetting:[],revealStage:"on_slate",status:"staffed",created:"Aug 4",sentCount:11,daysOpen:14},
+];
+
+/* one invite per operator per project */
+let invites=[
+ // p1 pipeline
+ {id:"i1",project:"p1",op:"o1",stage:"on_slate",interest:"interested",rank:1,vettingDone:true,questions:[{q:"Is the Salesforce instance greenfield or inherited?",a:"Inherited, two years old, lightly customized."}],note:"Strong on forecasting. Client will like the board experience.",changed:"Sep 12"},
+ {id:"i2",project:"p1",op:"o5",stage:"on_slate",interest:"interested",rank:2,vettingDone:true,questions:[],note:"Good fintech-to-healthcare story, confirm hours can flex to 50.",changed:"Sep 12"},
+ {id:"i3",project:"p1",op:"o2",stage:"screened",interest:"interested",rank:null,vettingDone:true,questions:[{q:"Who owns comp design, me or the VP Sales?",a:null}],note:"Call went well. Slightly senior for the seat.",changed:"Sep 11"},
+ {id:"i4",project:"p1",op:"o7",stage:"interested",interest:"interested",rank:null,vettingDone:false,questions:[],note:"",changed:"Sep 10"},
+ {id:"i5",project:"p1",op:"o3",stage:"invited",interest:"none",rank:null,vettingDone:false,questions:[],note:"",changed:"Sep 9"},
+ {id:"i6",project:"p1",op:"o4",stage:"invited",interest:"none",rank:null,vettingDone:false,questions:[],note:"",changed:"Sep 9"},
+ {id:"i7",project:"p1",op:"o8",stage:"not_selected",interest:"declined",declineReason:"timing",rank:null,vettingDone:false,questions:[],note:"",changed:"Sep 10"},
+ // p2 — Jordan is invited, no response yet (drives the operator demo)
+ {id:"i8",project:"p2",op:"o1",stage:"invited",interest:"none",rank:null,vettingDone:false,questions:[],note:"",changed:"Sep 14"},
+ {id:"i9",project:"p2",op:"o4",stage:"interested",interest:"interested",rank:null,vettingDone:true,questions:[],note:"",changed:"Sep 13"},
+ {id:"i10",project:"p2",op:"o6",stage:"invited",interest:"none",rank:null,vettingDone:false,questions:[],note:"",changed:"Sep 14"},
+ // p3 staffed history
+ {id:"i11",project:"p3",op:"o1",stage:"not_selected",interest:"interested",rank:2,vettingDone:true,questions:[],note:"",changed:"Aug 18"},
+ {id:"i12",project:"p3",op:"o2",stage:"selected",interest:"interested",rank:1,vettingDone:true,questions:[],note:"Client picked Priya after one call.",changed:"Aug 18"},
+ {id:"i13",project:"p3",op:"o3",stage:"not_selected",interest:"declined",declineReason:"rate",rank:null,vettingDone:false,questions:[],note:"",changed:"Aug 12"},
+];
+
+let events=[
+ {t:"Sep 14",type:"project_sent",detail:"Fractional CMO · filtered send · 9 operators"},
+ {t:"Sep 12",type:"stage_changed",detail:"Jordan Avila · screened → on_slate · Fractional VP of RevOps"},
+ {t:"Sep 11",type:"question_asked",detail:"Priya Natarajan on Fractional VP of RevOps"},
+ {t:"Sep 10",type:"invite_declined",detail:"Rachel Stone · reason timing"},
+ {t:"Sep 9",type:"project_sent",detail:"Fractional VP of RevOps · filtered send · 14 operators"},
+ {t:"Sep 1",type:"pulse_sent",detail:"September pulse · 286 operators"},
+];
+
+/* the signed-in operator for the Operator vantage */
+const ME="o1";
+const op=id=>operators.find(o=>o.id===id);
+const proj=id=>projects.find(p=>p.id===id);
+
+/* ------------------------------ app state ------------------------------ */
+let state={role:"admin",screen:"projects",param:null,boardMode:"board",pulse:null,audMode:"filtered",audRole:"",audAvail:"open+limited",includeUnknown:false};
+
+function setRole(r){state.role=r;state.screen=r==="admin"?"projects":r==="operator"?"myprojects":"gallery";state.param=null;render();}
+function go(screen,param=null){state.screen=screen;state.param=param;render();window.scrollTo({top:0});}
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.getElementById("toasts").appendChild(t);setTimeout(()=>t.remove(),3600);}
+function logEvent(type,detail){events.unshift({t:"Sep 16",type,detail});}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* ------------------------------ stage rules ------------------------------ */
+function setStage(inviteId,stage){
+  const inv=invites.find(i=>i.id===inviteId);if(!inv||stage===inv.stage)return;
+  if(stage==="invited"){toast("Invites can't be moved back into Invited.");render();return;}
+  const p=proj(inv.project);
+  inv.stage=stage;inv.changed="Sep 16";
+  logEvent("stage_changed",op(inv.op).name+" → "+STAGE_LABEL[stage]+" · "+p.title);
+  if(stage==="selected"){
+    p.status="staffed";
+    let closed=0;
+    invites.forEach(o=>{if(o.project===p.id&&o.id!==inv.id&&o.interest==="interested"&&o.stage!=="not_selected"){o.stage="not_selected";o.changed="Sep 16";closed++;}});
+    logEvent("project_staffed",p.title+" · "+op(inv.op).name+" selected");
+    toast("Project staffed. “You're selected” sent to "+op(inv.op).name+(closed?"; "+closed+" interested operator"+(closed>1?"s":"")+" moved to Not selected and emailed.":"."));
+  }else if(p.status==="staffed"&&!invites.some(o=>o.project===p.id&&o.stage==="selected")){
+    p.status="open";toast("Selection undone. Project reopened; re-stage the others manually.");
+  }
+  render();
+}
+
+/* ------------------------------ shell ------------------------------ */
+const TABS={
+  admin:[["projects","Projects"],["newproject","New project"],["reports","Reports"]],
+  operator:[["myprojects","Projects"],["availability","Availability"]],
+  emails:[["gallery","Templates"],["pulsedemo","One-tap demo"]],
+};
+function render(){
+  ["admin","operator","emails"].forEach(r=>document.getElementById("role-"+r).classList.toggle("on",state.role===r));
+  const activeTab={project:"projects",operatorproject:"myprojects"}[state.screen]||state.screen;
+  document.getElementById("tabs").innerHTML=TABS[state.role].map(([k,l])=>
+    `<button class="${activeTab===k?"on":""}" onclick="go('${k}')">${l}</button>`).join("");
+  document.getElementById("view").innerHTML=SCREENS[state.screen]();
+}
+
+/* ------------------------------ admin screens ------------------------------ */
+function projStats(p){
+  const list=invites.filter(i=>i.project===p.id);
+  return {sent:p.sentCount,interested:list.filter(i=>i.interest==="interested").length,
+    slate:list.filter(i=>["on_slate","selected"].includes(i.stage)).length,list};
+}
+function adminProjects(){
+  return `<h1 class="page">Projects</h1>
+  <p class="sub">Every open seat and where its pipeline stands. Click a project to work its board.</p>
+  <div class="card scrollx" style="padding:4px 8px"><table class="plain">
+   <thead><tr><th>Project</th><th>Status</th><th class="num">Sent</th><th class="num">Interested</th><th class="num">On slate</th><th class="num">Days open</th></tr></thead>
+   <tbody>${projects.map(p=>{const s=projStats(p);return `<tr class="click" onclick="go('project','${p.id}')">
+     <td><b>${p.title}</b><br><small style="color:var(--muted)">${p.descriptor}</small></td>
+     <td><span class="chip stage ${p.status==="staffed"?"selected":""}">${p.status==="staffed"?"Staffed":p.status==="open"?"Open":p.status}</span></td>
+     <td class="num">${s.sent}</td><td class="num">${s.interested}</td><td class="num">${s.slate}</td><td class="num">${p.daysOpen}</td></tr>`;}).join("")}
+   </tbody></table></div>
+  <p class="sub" style="margin-top:14px;font-size:13px">Filtered sends exclude operators whose availability is <b>unknown</b> (two missed pulses) until they confirm — the August filter defect is closed in this build.</p>`;
+}
+
+function boardCard(inv){
+  const o=op(inv.op);const unread=inv.questions.filter(q=>!q.a).length;
+  return `<div class="invite-card">
+    <div class="who"><span class="avatar">${o.initials}</span><span><b>${o.name}</b><small>${o.role}</small></span>${inv.rank?`<span class="rankpill" title="Slate rank">#${inv.rank}</span>`:""}</div>
+    <div class="meta">
+      <span class="chip ${o.availability}"><span class="dot"></span>${AVAIL_LABEL[o.availability]}${o.hours?` · ${o.hours}h`:""}</span>
+      ${inv.vettingDone?`<span class="tick">✓ vetting</span>`:""}
+      ${unread?`<span class="badge" title="Unanswered questions">${unread}</span>`:""}
+      ${inv.interest==="declined"?`<span class="chip unavailable">Declined · ${DECLINE_REASONS[inv.declineReason]||""}</span>`:""}
+    </div>
+    <select aria-label="Stage for ${o.name}" onchange="setStage('${inv.id}',this.value)">
+      ${STAGES.map(s=>`<option value="${s}" ${s===inv.stage?"selected":""} ${s==="invited"&&inv.stage!=="invited"?"disabled":""}>${STAGE_LABEL[s]}</option>`).join("")}
+    </select>
+  </div>`;
+}
+function adminProject(){
+  const p=proj(state.param);const s=projStats(p);
+  const cols=STAGES.map(st=>{
+    const cards=s.list.filter(i=>i.stage===st).sort((a,b)=>(a.rank||99)-(b.rank||99));
+    return `<div class="col"><h4>${STAGE_LABEL[st]} <span class="num">${cards.length}</span></h4>${cards.map(boardCard).join("")||`<div style="color:var(--muted);font-size:12.5px;padding:6px 2px">—</div>`}</div>`;
+  }).join("");
+  const openQs=s.list.flatMap(i=>i.questions.filter(q=>!q.a).map(q=>({i,q})));
+  return `<button class="backlink" onclick="go('projects')">← All projects</button>
+  <div class="headrow">
+    <div><h1 class="page">${p.title}</h1>
+      <p class="sub">${p.descriptor} · client <b>${p.client}</b> revealed to operators at <b>${STAGE_LABEL[p.revealStage]}</b> · ${p.rate} · ${p.hoursPer} hrs/mo · target start ${p.start}</p></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="chip stage ${p.status==="staffed"?"selected":""}" style="font-size:13px">${p.status==="staffed"?"Staffed":"Open"}</span>
+      <div class="seg"><button class="${state.boardMode==="board"?"on":""}" onclick="state.boardMode='board';render()">Board</button><button class="${state.boardMode==="list"?"on":""}" onclick="state.boardMode='list';render()">List</button></div>
+      <button class="btn sm" onclick="toast('Name search opens here; adding an operator creates an invite and sends email 8.3.')">+ Add operators</button>
+    </div>
+  </div>
+  ${state.boardMode==="board"?`<div class="board">${cols}</div>`:`
+   <div class="card scrollx" style="padding:4px 8px"><table class="plain">
+    <thead><tr><th>Operator</th><th>Stage</th><th>Availability</th><th>Vetting</th><th class="num">Questions</th><th>Last change</th></tr></thead>
+    <tbody>${s.list.map(i=>{const o=op(i.op);return `<tr><td><b>${o.name}</b><br><small style="color:var(--muted)">${o.role}</small></td>
+      <td><span class="chip stage ${i.stage}">${STAGE_LABEL[i.stage]}</span></td>
+      <td><span class="chip ${o.availability}"><span class="dot"></span>${AVAIL_LABEL[o.availability]}${o.hours?` · ${o.hours}h`:""}</span></td>
+      <td>${i.vettingDone?'<span class="tick">✓ answered</span>':'<span style="color:var(--muted)">—</span>'}</td>
+      <td class="num">${i.questions.length}</td><td>${i.changed}</td></tr>`;}).join("")}</tbody></table>
+   <div style="padding:10px;text-align:right"><button class="btn sm ghost" onclick="toast('Exports the list as CSV — events export keeps nested fields intact.')">Export CSV</button></div></div>`}
+  ${openQs.length?`<div class="card" style="margin-top:14px"><b style="font-size:14.5px">Unanswered questions</b>
+    ${openQs.map(({i,q})=>`<div class="qa"><b>${op(i.op).name}</b> asked: “${esc(q.q)}”
+      <div style="margin-top:6px;display:flex;gap:8px"><input placeholder="Answer posts here and emails the operator (8.6)" aria-label="Answer" id="ans-${i.id}">
+      <button class="btn sm primary" style="flex:none" onclick="answerQ('${i.id}')">Answer</button></div></div>`).join("")}</div>`:""}
+  <p class="sub" style="margin-top:14px;font-size:13px">Moving a card to <b>Selected</b> staffs the project, emails the selected operator (8.4), and moves every other interested operator to Not selected with email 8.5. Untouched invites get no email. Stage changes made here are live in other admin sessions within seconds.</p>`;
+}
+function answerQ(inviteId){
+  const inv=invites.find(i=>i.id===inviteId);const el=document.getElementById("ans-"+inviteId);
+  const q=inv.questions.find(q=>!q.a);if(!q||!el.value.trim())return;
+  q.a=el.value.trim();logEvent("question_answered",op(inv.op).name+" · "+proj(inv.project).title);
+  toast("Answer posted and emailed to "+op(inv.op).name+".");render();
+}
+
+/* --- new project --- */
+function audienceCount(){
+  if(state.audMode==="whole"){return operators.filter(o=>o.availability!=="unavailable"&&(state.includeUnknown||o.availability!=="unknown")).length;}
+  return operators.filter(o=>{
+    if(o.availability==="unavailable"||o.availability==="unknown")return false;
+    if(state.audAvail==="open"&&o.availability!=="open")return false;
+    if(state.audRole&&!(o.role.toLowerCase().includes(state.audRole)||o.tags.some(t=>t.toLowerCase().includes(state.audRole))))return false;
+    return true;}).length;
+}
+function adminNew(){
+  const n=audienceCount();
+  return `<h1 class="page">New project</h1>
+  <p class="sub">Create the seat, pick who sees it, preview the email, send. One invite per operator — resending updates the send date, never duplicates.</p>
+  <div class="grid" style="grid-template-columns:1fr;max-width:820px">
+  <div class="card"><fieldset style="border:0;padding:0"><legend style="padding:0;margin-bottom:10px">1 · The seat</legend>
+   <div class="formgrid">
+    <div class="field"><label for="np-title">Title (what operators see)</label><input id="np-title" value="Fractional VP of Partnerships"></div>
+    <div class="field"><label for="np-client">Client name (hidden until reveal)</label><input id="np-client" value="Beacon Freight"></div>
+    <div class="field"><label for="np-desc">Client descriptor (shown instead)</label><input id="np-desc" value="logistics software company"></div>
+    <div class="field"><label for="np-rate">Rate to operator</label><input id="np-rate" value="$140/hr"></div>
+    <div class="field"><label for="np-hours">Hours per month</label><input id="np-hours" value="30–40"></div>
+    <div class="field"><label for="np-term">Term</label><input id="np-term" value="6 months then month to month"></div>
+    <div class="field"><label for="np-loc">Location rule</label><input id="np-loc" value="Remote"></div>
+    <div class="field"><label for="np-start">Target start</label><input id="np-start" value="Nov 3"></div>
+    <div class="field"><label for="np-reveal">Client revealed at stage</label><select id="np-reveal"><option>On slate (default)</option><option>Screened</option><option>Selected</option></select></div>
+   </div>
+   <div class="field" style="margin-top:12px"><label for="np-sum">Summary (the pitch, 2–4 lines)</label><textarea id="np-sum" rows="2">Build the reseller and referral channel from zero for a logistics platform with strong direct sales and no partner motion.</textarea></div>
+   <div class="field" style="margin-top:10px"><label>Vetting questions (up to 5) · <button class="btn sm ghost" style="padding:2px 6px" onclick="toast('Reuse picker copies questions from any prior project.')">Reuse from project…</button></label>
+    <input style="margin-bottom:6px" value="Describe a partner channel you built past $1M sourced revenue.">
+    <input value="How do you decide a partner motion is not worth building?"></div>
+  </fieldset></div>
+
+  <div class="card"><fieldset style="border:0;padding:0"><legend style="padding:0;margin-bottom:10px">2 · Audience</legend>
+   <div class="radio-row" style="margin-bottom:12px">
+    <label class="${state.audMode==="filtered"?"on":""}"><input type="radio" name="aud" ${state.audMode==="filtered"?"checked":""} onchange="state.audMode='filtered';render()">Filtered</label>
+    <label class="${state.audMode==="whole"?"on":""}"><input type="radio" name="aud" ${state.audMode==="whole"?"checked":""} onchange="state.audMode='whole';render()">Whole pool</label>
+   </div>
+   ${state.audMode==="filtered"?`<div class="formgrid">
+     <div class="field"><label for="np-frole">Role / fit tag</label><select id="np-frole" onchange="state.audRole=this.value;render()">
+       <option value="" ${state.audRole===""?"selected":""}>Any role</option>
+       <option value="revops" ${state.audRole==="revops"?"selected":""}>RevOps</option>
+       <option value="sales" ${state.audRole==="sales"?"selected":""}>Sales leadership</option>
+       <option value="cmo" ${state.audRole==="cmo"?"selected":""}>Marketing / CMO</option></select></div>
+     <div class="field"><label for="np-favail">Availability</label><select id="np-favail" onchange="state.audAvail=this.value;render()">
+       <option value="open+limited" ${state.audAvail==="open+limited"?"selected":""}>Open or limited</option>
+       <option value="open" ${state.audAvail==="open"?"selected":""}>Open, 40+ hrs</option></select></div>
+    </div>
+    <p style="margin:10px 0 0;font-size:13px;color:var(--muted)">Unknown-availability operators (two missed pulses) are excluded from filtered sends until they confirm.</p>`
+   :`<label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-top:2px"><input type="checkbox" style="width:auto" ${state.includeUnknown?"checked":""} onchange="state.includeUnknown=this.checked;render()">Include operators with unknown availability</label>`}
+   <p style="margin:14px 0 0"><span class="count-pill num">${n} operator${n===1?"":"s"} will receive this</span></p>
+  </fieldset></div>
+
+  <div class="card"><fieldset style="border:0;padding:0"><legend style="padding:0;margin-bottom:10px">3 · Preview and send</legend>
+   ${emailShell("Project for you, Fractional VP of Partnerships, 30–40 hrs a month",`
+     <p>Jordan, a project that matches your profile.</p>
+     <p><b>Fractional VP of Partnerships</b> for a logistics software company. Build the reseller and referral channel from zero for a logistics platform with strong direct sales and no partner motion.</p>
+     <p>Rate $140/hr. 30–40 hrs a month. 6 months then month to month. Remote. Target start Nov 3.</p>
+     <div class="btnrow"><button class="btn primary" onclick="toast('Operators land on the project page from this link.')">See details and reply</button></div>
+     <p class="fine">You can flag interest, ask a question, or pass in about a minute. Interested operators answer 2 short questions so we can move fast.</p>`)}
+   <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap"><button class="btn primary" onclick="sendProject(${n})">Send to ${n} operator${n===1?"":"s"}</button><button class="btn" onclick="toast('Saved as draft.')">Save draft</button></div>
+  </fieldset></div></div>`;
+}
+function sendProject(n){logEvent("project_sent","Fractional VP of Partnerships · "+state.audMode+" send · "+n+" operators");toast("Sent. "+n+" invites created at stage Invited; email 8.3 delivered.");go("projects");}
+
+/* --- reports --- */
+function bars(rows,unit){
+  const max=Math.max(...rows.map(r=>r.v));
+  return rows.map(r=>`<div class="hbar"><span class="lab" title="${esc(r.l)}">${esc(r.l)}</span>
+    <span class="track"><span class="fill" style="width:${Math.round(r.v/max*100)}%"></span></span>
+    <span class="val num">${r.v}${unit}</span></div>`).join("");
+}
+function adminReports(){
+  return `<h1 class="page">Reports</h1>
+  <p class="sub">First reports, straight off the event log. Events are append-only and export with nested fields intact.</p>
+  <div class="tiles">
+    <div class="tile"><small>Reveal pulse response</small><div class="v num">46<em>%</em></div><div class="goal">60-day target · 40%</div></div>
+    <div class="tile"><small>Availability confirmed, open profiles</small><div class="v num">78<em>%</em></div><div class="goal">60-day target · 80% within 30 days</div></div>
+    <div class="tile"><small>Median send → first interested</small><div class="v num">11<em>hrs</em></div><div class="goal">across 2 open projects</div></div>
+    <div class="tile"><small>Median created → staffed</small><div class="v num">14<em>days</em></div><div class="goal">1 project staffed</div></div>
+  </div>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:14px">
+   <div class="card"><div class="charthead"><b>Pulse response rate by send</b><small>% of delivered</small></div>
+     ${bars([{l:"Jul (reveal)",v:46},{l:"Aug",v:41},{l:"Sep",v:52}],"%")}</div>
+   <div class="card"><div class="charthead"><b>Interest rate by project</b><small>interested ÷ sent</small></div>
+     ${bars([{l:"VP of RevOps",v:36},{l:"Fractional CMO",v:22},{l:"Playbook Build",v:27}],"%")}</div>
+   <div class="card"><div class="charthead"><b>Interest rate by role category</b><small>all sends</small></div>
+     ${bars([{l:"RevOps",v:38},{l:"Sales leadership",v:29},{l:"Marketing",v:21},{l:"Growth",v:18}],"%")}</div>
+   <div class="card"><div class="charthead"><b>Decline reasons</b><small>all projects</small></div>
+     ${bars([{l:"Timing",v:5},{l:"Hours",v:4},{l:"Rate",v:3},{l:"Fit",v:2},{l:"Other",v:1}]," ")}</div>
+  </div>
+  <div class="card" style="margin-top:14px"><div class="charthead"><b>Event log</b><small>append-only</small></div>
+   ${events.slice(0,8).map(e=>`<div class="eventrow"><span class="t">${e.t}</span><code>${e.type}</code><span>${esc(e.detail)}</span></div>`).join("")}</div>`;
+}
+
+/* ------------------------------ operator screens ------------------------------ */
+function statusLineFor(inv,p){
+  if(inv.stage==="interested")return"Being reviewed";
+  if(inv.stage==="screened")return"Being reviewed";
+  if(inv.stage==="on_slate")return"On the slate · 3 candidates on the slate";
+  if(inv.stage==="selected")return"Selected";
+  if(inv.stage==="not_selected")return inv.interest==="declined"?"You passed":"Staffed, not selected";
+  return"";
+}
+function opProjects(){
+  const mine=invites.filter(i=>i.op===ME);
+  const groups=[
+   ["Shared with you",mine.filter(i=>i.stage==="invited"),"new projects waiting on a reply"],
+   ["Interested",mine.filter(i=>i.stage!=="invited"&&i.interest==="interested"&&i.stage!=="not_selected"||i.stage==="selected"),"projects you raised your hand for"],
+   ["Declined or closed",mine.filter(i=>i.stage==="not_selected"),"passed on, or staffed elsewhere"],
+  ];
+  const me=op(ME);
+  return `<h1 class="page">Your projects, ${me.name.split(" ")[0]}</h1>
+  <p class="sub">Projects shared with you, grouped by where you stand. You'll get an email when anything you're interested in is staffed, either way.</p>
+  ${groups.map(([t,list,sub])=>`<div class="group"><h3>${t} <small>· ${sub}</small></h3>
+   ${list.length?list.map(i=>{const p=proj(i.project);return `<div class="projrow" onclick="go('operatorproject','${i.id}')" style="margin-bottom:8px">
+     <span class="avatar alt" aria-hidden="true">${p.title.split(" ").map(w=>w[0]).join("").slice(0,2)}</span>
+     <span class="t"><b>${p.title}</b><small>${p.descriptor}</small></span>
+     <span class="facts"><span>${p.rate}</span><span>${p.hoursPer} hrs/mo</span><span>starts ${p.start}</span></span>
+     <span class="chip stage ${i.stage}">${i.stage==="invited"?"Reply by "+p.start:statusLineFor(i,p)}</span>
+     <span style="color:var(--muted);font-size:12.5px">updated ${i.changed}</span>
+    </div>`;}).join(""):`<div style="color:var(--muted);font-size:14px;padding:6px 2px">Nothing here right now.</div>`}</div>`).join("")}`;
+}
+
+function opProject(){
+  const inv=invites.find(i=>i.id===state.param);const p=proj(inv.project);
+  const revealed=STAGES.indexOf(inv.stage)>=STAGES.indexOf(p.revealStage)&&inv.stage!=="not_selected";
+  const responded=inv.interest!=="none";
+  return `<button class="backlink" onclick="go('myprojects')">← Your projects</button>
+  <h1 class="page">${p.title}</h1>
+  <p class="sub">for a ${p.descriptor}${revealed?` — <b>${p.client}</b>`:""} ${revealed?"":"· client named when you reach the slate"}</p>
+  ${responded&&inv.interest==="interested"?`<div class="statusline" style="margin-bottom:14px">${statusLineFor(inv,p)}</div>`:""}
+  ${inv.interest==="declined"?`<div class="statusline" style="margin-bottom:14px;border-color:var(--danger);background:var(--danger-soft);color:var(--danger)">Thanks — you passed on this one (${DECLINE_REASONS[inv.declineReason]||""}). It won't be sent again.</div>`:""}
+  <div class="card" style="margin-bottom:12px">
+    <p style="margin:0 0 12px;font-size:15px">${p.summary}</p>
+    <div class="facts-grid">
+      <div class="fact"><small>Rate</small><span>${p.rate}</span></div>
+      <div class="fact"><small>Hours</small><span>${p.hoursPer} / month</span></div>
+      <div class="fact"><small>Term</small><span>${p.term}</span></div>
+      <div class="fact"><small>Location</small><span>${p.location}</span></div>
+      <div class="fact"><small>Target start</small><span>${p.start}</span></div>
+    </div>
+    <p style="margin:12px 0 0;color:var(--muted)">${p.scope}</p>
+  </div>
+  ${inv.interest==="none"?`
+   <div class="card" style="margin-bottom:12px"><b style="font-size:15px">Interested? Two quick questions.</b>
+    <p style="margin:4px 0 12px;color:var(--muted);font-size:13.5px">Answers can be saved now and submitted later. Flagging interest moves you into review.</p>
+    ${p.vetting.map((q,ix)=>`<div class="field" style="margin-bottom:10px"><label for="vet-${ix}">${ix+1}. ${esc(q)}</label><textarea id="vet-${ix}" rows="2" placeholder="Your answer"></textarea></div>`).join("")||"<p style='color:var(--muted)'>No vetting questions on this one — one tap and you're in.</p>"}
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn primary" onclick="opInterested('${inv.id}')">I'm interested</button>
+      <button class="btn" onclick="toast('Draft saved. Finish anytime from your Projects tab.')">Save draft</button>
+      <button class="btn danger" onclick="document.getElementById('declinebox').hidden=false">Not for me</button>
+    </div>
+    <div id="declinebox" hidden style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+      <b style="font-size:13.5px">What's the main reason?</b>
+      <div class="radio-row" style="margin-top:8px">${Object.entries(DECLINE_REASONS).map(([k,v])=>`<label><input type="radio" name="dr" value="${k}">${v}</label>`).join("")}</div>
+      <button class="btn sm danger" style="margin-top:10px" onclick="opDecline('${inv.id}')">Confirm pass</button>
+    </div>
+   </div>`:""}
+  <div class="card"><b style="font-size:15px">Ask a question</b>
+   <p style="margin:4px 0 10px;color:var(--muted);font-size:13.5px">Goes straight to the Revenue Nomad team; the answer comes back here and by email.</p>
+   ${inv.questions.map(q=>`<div class="qa"><b>You asked:</b> “${esc(q.q)}”<div class="ans">${q.a?esc(q.a):"Waiting on an answer…"}</div></div>`).join("")}
+   <div style="display:flex;gap:8px;margin-top:8px"><input id="askbox" placeholder="e.g. Is the on-site cadence flexible?" aria-label="Your question"><button class="btn sm" style="flex:none" onclick="opAsk('${inv.id}')">Send</button></div>
+  </div>`;
+}
+function opInterested(id){
+  const inv=invites.find(i=>i.id===id);inv.interest="interested";inv.stage="interested";inv.vettingDone=true;inv.changed="Sep 16";
+  logEvent("invite_interested",op(inv.op).name+" · "+proj(inv.project).title);
+  toast("You're in. Answers submitted — you'll see status changes here.");render();
+}
+function opDecline(id){
+  const r=document.querySelector('input[name="dr"]:checked');
+  if(!r){toast("Pick a reason so the matching gets smarter.");return;}
+  const inv=invites.find(i=>i.id===id);inv.interest="declined";inv.declineReason=r.value;inv.stage="not_selected";inv.changed="Sep 16";
+  logEvent("invite_declined",op(inv.op).name+" · reason "+r.value);
+  toast("Thanks for the quick answer — that keeps the matches sharp.");render();
+}
+function opAsk(id){
+  const el=document.getElementById("askbox");if(!el.value.trim())return;
+  const inv=invites.find(i=>i.id===id);inv.questions.push({q:el.value.trim(),a:null});
+  logEvent("question_asked",op(inv.op).name+" · "+proj(inv.project).title);
+  toast("Question sent to hello@revenuenomad.com. Your stage doesn't change.");render();
+}
+
+function opAvailability(){
+  const me=op(ME);
+  return `<h1 class="page">Availability</h1>
+  <p class="sub">This is what keeps you in filtered project sends. One tap on the monthly pulse email keeps it fresh — you can also edit it here anytime.</p>
+  <div class="card" style="max-width:560px">
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+      <span class="avatar" style="width:46px;height:46px;font-size:16px">${me.initials}</span>
+      <div><b style="font-size:16px">${me.name}</b><br><small style="color:var(--muted)">${me.role} · ${me.tags.join(" · ")}</small></div>
+    </div>
+    <div class="formgrid">
+      <div class="field"><label for="av-status">Status</label><select id="av-status"><option ${me.availability==="open"?"selected":""}>Open</option><option ${me.availability==="limited"?"selected":""}>Limited</option><option>Unavailable</option></select></div>
+      <div class="field"><label for="av-hours">Hours open per month</label><input id="av-hours" type="number" min="0" max="200" value="${me.hours??40}"></div>
+      <div class="field"><label for="av-from">Available from</label><input id="av-from" value="Now"></div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+      <button class="btn primary" onclick="toast('Saved — last confirmed just now.')">Save</button>
+      <small style="color:var(--muted)">Last confirmed ${me.confirmed} · miss two monthly pulses and you drop out of filtered sends until you confirm.</small>
+    </div>
+  </div>`;
+}
+
+/* ------------------------------ emails ------------------------------ */
+function emailShell(subject,body,tag){
+  return `${tag?`<div class="emailtag">${tag}</div>`:""}<div class="email">
+   <div class="env"><span>From <b style="font-size:12.5px;color:var(--ink)">Revenue Nomad</b> · hello@revenuenomad.com</span><b>${subject}</b></div>
+   <div class="bodytxt">${body}</div></div>`;
+}
+function pulseButtons(){
+  return `<div class="btnrow">
+    <button class="btn primary" onclick="pulseTap('open')">Open, 40+ hrs a month</button>
+    <button class="btn" onclick="pulseTap('limited')">Open, fewer hours</button>
+    <button class="btn" onclick="pulseTap('snooze')">Ask me in a month</button>
+    <button class="btn ghost" onclick="pulseTap('off')">Not taking work</button></div>`;
+}
+function emailGallery(){
+  return `<h1 class="page">The six emails</h1>
+  <p class="sub">Everything phase one sends. Plain and short, from hello@revenuenomad.com. The pulse buttons below are live — tap one to see the no-login confirmation page.</p>
+  ${emailShell("Your Revenue Nomad profile is live",`
+    <p>Jordan, your profile is live on Revenue Nomad.</p>
+    <div style="display:flex;gap:12px;align-items:center"><span class="avatar" style="width:52px;height:52px;font-size:18px">JA</span><button class="btn" onclick="toast('Opens the operator profile.')">View your profile</button></div>
+    <p>Companies come here to find fractional GTM leaders by fit, and we push projects to operators who match. One thing keeps you in those sends. Tell us your availability.</p>
+    ${pulseButtons()}<p class="fine">One tap, no login. You can change it anytime from your profile.</p>`,
+   "8.1 · Reveal pulse — first send, goes to all 290 migrated operators")}
+  ${emailShell("Still available this month?",`
+    <p>Jordan, quick check so we only send you projects you can take.</p>
+    ${pulseButtons()}<p class="fine">Last confirmed Sep 2. One tap, no login.</p>`,
+   "8.2 · Monthly pulse — the 1st at 9am ET, skips anyone confirmed in the last 14 days")}
+  ${emailShell("Project for you, Fractional VP of RevOps, 40–50 hrs a month",`
+    <p>Jordan, a project that matches your profile.</p>
+    <p><b>Fractional VP of RevOps</b> for a healthcare software company. Own the revenue engine through a Series B push.</p>
+    <p>Rate $150/hr. 40–50 hrs a month. 6 months then month to month. Remote, occasional on site in STL. Target start Oct 6.</p>
+    <div class="btnrow"><button class="btn primary" onclick="setRole('operator');go('operatorproject','i1')">See details and reply</button></div>
+    <p class="fine">You can flag interest, ask a question, or pass in about a minute. Interested operators answer 2 short questions so we can move fast.</p>`,
+   "8.3 · Project invite — client descriptor only until the reveal stage")}
+  ${emailShell("You're selected, Interim Sales Playbook Build",`
+    <p>Priya, Corvid Robotics chose you for Interim Sales Playbook Build. Matt will send the contract and kickoff details separately. Nice work.</p>`,
+   "8.4 · Staffed, selected — fires when admin moves the invite to Selected")}
+  ${emailShell("Interim Sales Playbook Build has been staffed",`
+    <p>Jordan, the industrial robotics company project is staffed and it went another direction. Thank you for the time on the questions. Your interest and answers stay on your profile and count toward the next match.</p>
+    <div class="btnrow"><button class="btn" onclick="setRole('operator')">See open projects</button></div>`,
+   "8.5 · Staffed, not selected — every interested operator hears back, always")}
+  ${emailShell("Answer on Fractional VP of RevOps",`
+    <p>Jordan, you asked “Is the Salesforce instance greenfield or inherited?”. Inherited, two years old, lightly customized.</p>
+    <div class="btnrow"><button class="btn" onclick="setRole('operator');go('operatorproject','i1')">Back to the project</button></div>`,
+   "8.6 · Question answered")}`;
+}
+
+function pulseTap(kind){state.pulse=kind;go("pulsedemo");}
+function pulseDemo(){
+  const k=state.pulse;
+  const cfg={
+    open:{cls:"",icon:"✓",head:"You're open — 40+ hrs a month",body:"Status set to Open, 40 hours, available now. You're in every filtered project send.",hours:40},
+    limited:{cls:"amber",icon:"✓",head:"You're open for fewer hours",body:"Status set to Limited. Tune the number below — 20 is prefilled.",hours:20},
+    snooze:{cls:"amber",icon:"⏸",head:"We'll ask again in a month",body:"Status set to Unavailable with a snooze until Oct 16. No project sends until then; the pulse comes back when the snooze ends.",hours:null},
+    off:{cls:"red",icon:"—",head:"Not taking work",body:"Status set to Unavailable. No pulses and no project sends until you edit your availability from your profile.",hours:null},
+  }[k]||null;
+  if(!cfg)return `<h1 class="page">One-tap confirmation</h1>
+    <p class="sub">Each pulse button is a signed link — operator id, action, 30-day expiry. Tapping updates the record with no login and lands here. Try a button:</p>
+    <div style="max-width:560px">${emailShell("Still available this month?",`<p>Jordan, quick check so we only send you projects you can take.</p>${pulseButtons()}<p class="fine">Last confirmed Sep 2. One tap, no login.</p>`)}</div>`;
+  return `<div class="pulse-wrap">
+    <div class="brand" style="justify-content:center"><span class="glyph"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M15.5 8.5 13.2 13.2 8.5 15.5l2.3-4.7z" fill="currentColor"/></svg></span></div>
+    <div class="bigstatus ${cfg.cls}"><span style="font-size:22px">${cfg.icon}</span> ${cfg.head}</div>
+    <div class="card"><p style="margin:0 0 12px">${cfg.body}</p>
+     ${cfg.hours!==null?`<div class="formgrid">
+       <div class="field"><label for="pd-hours">Hours open per month</label><input id="pd-hours" type="number" min="0" max="200" value="${cfg.hours}"></div>
+       <div class="field"><label for="pd-from">Available from</label><input id="pd-from" value="Now"></div></div>
+      <button class="btn primary" style="margin-top:12px" onclick="toast('Updated. Last confirmed just now.')">Update</button>`:""}
+     <p style="color:var(--muted);font-size:13px;margin:14px 0 0">Confirmed just now · no password, no session. ${k!=="off"?"Want a login for the full portal? <b>Set a password</b> — optional.":""}</p>
+    </div>
+    <button class="backlink" style="align-self:center" onclick="state.pulse=null;render()">← Try another tap</button>
+  </div>`;
+}
+
+const SCREENS={projects:adminProjects,project:adminProject,newproject:adminNew,reports:adminReports,
+  myprojects:opProjects,operatorproject:opProject,availability:opAvailability,
+  gallery:emailGallery,pulsedemo:pulseDemo};
+render();
+</script>
+
+</body>
+</html>
