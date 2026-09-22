@@ -1,0 +1,77 @@
+{
+ "stages": [
+  {
+   "id": "awareness",
+   "name": "Awareness",
+   "side": "before",
+   "buyer": "The buyer does not know they have a problem worth solving, or does not know this category exists. They are reading, listening and comparing themselves to peers.",
+   "what": "Positioning, brand, content and events that make the company findable and worth a second look.",
+   "skilled": "Operators strong here turn a vague product into a sharp story, pick the audience and the channel, and build the content engine that keeps showing up. They are usually marketers or founders who have done a category launch."
+  },
+  {
+   "id": "engage",
+   "name": "Engage",
+   "side": "before",
+   "buyer": "The buyer has felt the pain and is actively looking. They are responding to outreach, downloading, attending, and are willing to take a first call.",
+   "what": "Demand generation, ABM, outbound, AI prospecting, lead routing and the intelligence that decides who to go after.",
+   "skilled": "Operators strong here build pipeline from nothing. They know how to pick targets, run sequences and campaigns, and get a qualified first meeting on the calendar at a cost that works."
+  },
+  {
+   "id": "qualify",
+   "name": "Qualify",
+   "side": "before",
+   "buyer": "The buyer is in a real evaluation. They have a shortlist, a rough budget and a timeline, and they are deciding whether this is the right fit and the right time.",
+   "what": "Discovery, demos, sales motion design, pipeline inspection and forecasting, competitive positioning and the call intelligence that shows what is working.",
+   "skilled": "Operators strong here install the process that turns meetings into forecastable deals. Discovery frameworks, demo playbooks, stage definitions and the weekly inspection cadence that keeps a pipeline honest."
+  },
+  {
+   "id": "commit",
+   "name": "Commit",
+   "side": "before",
+   "buyer": "The buyer has chosen and is negotiating. Procurement, security, pricing, contract terms and the internal case to their own leadership.",
+   "what": "Deal execution, pricing and packaging, negotiation, mutual action plans, co-sell with partners and proposal automation.",
+   "skilled": "Operators strong here close. They structure deals, defend price, navigate buying committees and get signatures on the date that was forecast."
+  },
+  {
+   "id": "onboard",
+   "name": "Onboard",
+   "side": "after",
+   "buyer": "The buyer has signed and is nervous. They want to see value fast, know who to call, and prove to their own boss that this was the right decision.",
+   "what": "Onboarding and implementation design, success plans, time to value and the sales to CS handoff.",
+   "skilled": "Operators strong here design the first 90 days of a customer. Kickoffs, milestones, implementation playbooks and the handoff that stops customers falling through the gap after the sale."
+  },
+  {
+   "id": "adopt",
+   "name": "Adopt",
+   "side": "after",
+   "buyer": "The buyer is using the product and forming an opinion. Usage is rising or stalling, and the renewal is quietly being decided months before it comes up.",
+   "what": "Health scoring, adoption programs, QBRs and EBRs, voice of customer, churn analysis and renewal process.",
+   "skilled": "Operators strong here keep customers. They build the health model, run the business review cadence, spot risk early and turn a wobbly account into a renewal."
+  },
+  {
+   "id": "expand",
+   "name": "Expand",
+   "side": "after",
+   "buyer": "The buyer is happy and has more budget, more teams or more use cases. They will buy more if someone shows them why, and they will refer if asked.",
+   "what": "Expansion motion, upsell and cross-sell playbooks, account management, advocacy and customer marketing.",
+   "skilled": "Operators strong here grow accounts. They find the whitespace, build the expansion trigger framework, run strategic account plans and turn customers into references."
+  }
+ ],
+ "foundation": [
+  {
+   "id": "lead",
+   "name": "Lead & plan",
+   "what": "Strategy, positioning, org design, planning, board reporting and interim leadership. Work that sets direction for every stage."
+  },
+  {
+   "id": "team",
+   "name": "Build the team",
+   "what": "Hiring, onboarding, coaching, comp, methodology and manager enablement. Work that makes the people in every stage better."
+  },
+  {
+   "id": "systems",
+   "name": "Systems & data",
+   "what": "CRM, reporting, routing, tech stack, ops platforms and AI infrastructure. The plumbing every stage runs on."
+  }
+ ]
+}

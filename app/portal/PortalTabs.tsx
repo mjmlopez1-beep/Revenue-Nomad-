@@ -4,8 +4,9 @@ import { useState } from "react";
 import JobBoard from "./JobBoard";
 import Prospects from "./Prospects";
 import ProfileForm from "./ProfileForm";
+import SkillMap from "./SkillMap";
 
-type View = "board" | "prospects" | "profile";
+type View = "board" | "prospects" | "skills" | "profile";
 
 export default function PortalTabs() {
   const [view, setView] = useState<View>("board");
@@ -16,6 +17,7 @@ export default function PortalTabs() {
           [
             ["board", "Job Board"],
             ["prospects", "Prospects"],
+            ["skills", "Skills"],
             ["profile", "Profile"],
           ] as [View, string][]
         ).map(([key, label]) => (
@@ -30,6 +32,7 @@ export default function PortalTabs() {
       </div>
       {view === "board" && <JobBoard />}
       {view === "prospects" && <Prospects />}
+      {view === "skills" && <SkillMap />}
       {view === "profile" && <ProfileForm />}
     </>
   );

@@ -1,0 +1,884 @@
+[
+ {
+  "name": "Connor D.",
+  "title": "Fractional VP of Sales",
+  "loc": "Providence, RI",
+  "desc": "Deep in sales process and coaching",
+  "tags": [
+   {
+    "t": "Sales process design",
+    "c": "Sales Leadership",
+    "g": "Sales Motion Design",
+    "s": "expert",
+    "r": 11,
+    "e": [
+     "Interim VP Sales, $8M logistics SaaS",
+     "FareHarbor reorg"
+    ]
+   },
+   {
+    "t": "Sales playbook build",
+    "c": "Sales Leadership",
+    "g": "Sales Motion Design",
+    "s": "expert",
+    "r": 9,
+    "e": [
+     "Interim VP Sales, $8M logistics SaaS"
+    ]
+   },
+   {
+    "t": "Discovery framework",
+    "c": "Sales Leadership",
+    "g": "Deal Execution",
+    "s": "expert",
+    "r": 6,
+    "e": [
+     "FareHarbor reorg"
+    ]
+   },
+   {
+    "t": "Outbound motion",
+    "c": "Sales Leadership",
+    "g": "Sales Motion Design",
+    "s": "verified",
+    "r": 4,
+    "e": [
+     "NESA outbound build"
+    ]
+   },
+   {
+    "t": "Deal desk setup",
+    "c": "Sales Leadership",
+    "g": "Deal Execution",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "Proposal process",
+    "c": "Sales Leadership",
+    "g": "Deal Execution",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Mutual action plan",
+    "c": "Sales Leadership",
+    "g": "Deal Execution",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Pricing strategy",
+    "c": "Sales Leadership",
+    "g": "Commercial & Pricing",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Territory-based comp",
+    "c": "Sales Leadership",
+    "g": "Comp & Quota",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Manager coaching",
+    "c": "Sales Leadership",
+    "g": "Coaching & Development",
+    "s": "expert",
+    "r": 7,
+    "e": [
+     "Interim VP Sales, $8M logistics SaaS"
+    ]
+   },
+   {
+    "t": "Frontline coaching cadence",
+    "c": "Sales Leadership",
+    "g": "Coaching & Development",
+    "s": "verified",
+    "r": 4,
+    "e": []
+   },
+   {
+    "t": "Rep development",
+    "c": "Sales Leadership",
+    "g": "Coaching & Development",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "Skills assessment",
+    "c": "Sales Leadership",
+    "g": "Coaching & Development",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Sales career ladder",
+    "c": "Sales Leadership",
+    "g": "Coaching & Development",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Peer coaching structure",
+    "c": "Sales Leadership",
+    "g": "Coaching & Development",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Forecast methodology",
+    "c": "Sales Leadership",
+    "g": "Pipeline & Forecast",
+    "s": "verified",
+    "r": 3,
+    "e": [
+     "FareHarbor reorg"
+    ]
+   },
+   {
+    "t": "Pipeline inspection",
+    "c": "Sales Leadership",
+    "g": "Pipeline & Forecast",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Forecast accuracy",
+    "c": "Sales Leadership",
+    "g": "Pipeline & Forecast",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Weighted pipeline model",
+    "c": "Sales Leadership",
+    "g": "Pipeline & Forecast",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Rolling forecast",
+    "c": "Sales Leadership",
+    "g": "Pipeline & Forecast",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Sales hiring",
+    "c": "Sales Leadership",
+    "g": "Team Building & Org",
+    "s": "verified",
+    "r": 2,
+    "e": [
+     "NESA outbound build"
+    ]
+   },
+   {
+    "t": "Rep onboarding program",
+    "c": "Sales Leadership",
+    "g": "Team Building & Org",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Founder-led sales transition",
+    "c": "Sales Leadership",
+    "g": "GTM Strategy",
+    "s": "verified",
+    "r": 3,
+    "e": [
+     "Kara Water GTM"
+    ]
+   },
+   {
+    "t": "Zero-to-one sales build",
+    "c": "Sales Leadership",
+    "g": "GTM Strategy",
+    "s": "verified",
+    "r": 2,
+    "e": [
+     "Kara Water GTM"
+    ]
+   },
+   {
+    "t": "Board reporting",
+    "c": "Sales Leadership",
+    "g": "GTM Strategy",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "HubSpot admin",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "verified",
+    "r": 2,
+    "e": [
+     "Interim VP Sales, $8M logistics SaaS"
+    ]
+   },
+   {
+    "t": "Pipeline dashboard",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Salesforce admin",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Lead routing",
+    "c": "Revenue Operations",
+    "g": "Lead Management & Routing",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Call scorecards",
+    "c": "Sales Enablement",
+    "g": "Coaching Infrastructure",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Methodology rollout",
+    "c": "Sales Enablement",
+    "g": "Methodology",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "MEDDIC/MEDDPICC",
+    "c": "Sales Enablement",
+    "g": "Methodology",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Expansion motion design",
+    "c": "Customer Success & Growth",
+    "g": "Expansion Motion",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Demand gen program",
+    "c": "Marketing",
+    "g": "Demand Generation",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "ABM strategy",
+    "c": "Marketing",
+    "g": "Account-Based Marketing",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   }
+  ],
+  "core": {
+   "n": 14,
+   "v": [
+    4.6,
+    4.8,
+    4.4,
+    4.7
+   ]
+  }
+ },
+ {
+  "name": "Priya S.",
+  "title": "Fractional VP of RevOps",
+  "loc": "Austin, TX",
+  "desc": "Systems and reporting specialist",
+  "tags": [
+   {
+    "t": "Salesforce admin",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "expert",
+    "r": 8,
+    "e": [
+     "PE portfolio RevOps, 3 companies"
+    ]
+   },
+   {
+    "t": "Salesforce build",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "expert",
+    "r": 6,
+    "e": []
+   },
+   {
+    "t": "CRM migration",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "expert",
+    "r": 5,
+    "e": [
+     "HubSpot to Salesforce migration, $22M SaaS"
+    ]
+   },
+   {
+    "t": "HubSpot admin",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "verified",
+    "r": 4,
+    "e": []
+   },
+   {
+    "t": "Object model design",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "Stage definitions",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "CRM cleanup",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "CRM documentation",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Dashboard build",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "expert",
+    "r": 7,
+    "e": [
+     "PE portfolio RevOps, 3 companies"
+    ]
+   },
+   {
+    "t": "Forecast dashboard",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "verified",
+    "r": 4,
+    "e": []
+   },
+   {
+    "t": "Board reporting package",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "Metrics dictionary",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Looker build",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Tableau build",
+    "c": "Revenue Operations",
+    "g": "Reporting & Dashboards",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Lead routing",
+    "c": "Revenue Operations",
+    "g": "Lead Management & Routing",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "LeanData implementation",
+    "c": "Revenue Operations",
+    "g": "Lead Management & Routing",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Round robin setup",
+    "c": "Revenue Operations",
+    "g": "Lead Management & Routing",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Territory design",
+    "c": "Revenue Operations",
+    "g": "Territory & Capacity",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "Sales capacity model",
+    "c": "Revenue Operations",
+    "g": "Territory & Capacity",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Outreach implementation",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "verified",
+    "r": 3,
+    "e": []
+   },
+   {
+    "t": "Gong implementation",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Tech stack audit",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Tool consolidation",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Apollo admin",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Commission calculation",
+    "c": "Revenue Operations",
+    "g": "Compensation Ops",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Comp plan administration",
+    "c": "Revenue Operations",
+    "g": "Compensation Ops",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Clay workflow build",
+    "c": "AI GTM",
+    "g": "Workflow & Automation",
+    "s": "verified",
+    "r": 2,
+    "e": [
+     "Outbound automation, fintech seed"
+    ]
+   },
+   {
+    "t": "Enrichment automation",
+    "c": "AI GTM",
+    "g": "Workflow & Automation",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "AI lead scoring",
+    "c": "AI GTM",
+    "g": "Lead & Account Intelligence",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Sales-marketing alignment",
+    "c": "Sales Leadership",
+    "g": "GTM Strategy",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "PE portfolio RevOps",
+    "c": "Revenue Operations",
+    "g": "Alignment & Process",
+    "s": "verified",
+    "r": 3,
+    "e": [
+     "PE portfolio RevOps, 3 companies"
+    ]
+   },
+   {
+    "t": "Marketo admin",
+    "c": "Marketing",
+    "g": "Marketing Operations",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Attribution model",
+    "c": "Marketing",
+    "g": "Marketing Operations",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   }
+  ],
+  "core": {
+   "n": 9,
+   "v": [
+    4.1,
+    4.7,
+    4.9,
+    4.8
+   ]
+  }
+ },
+ {
+  "name": "Marcus L.",
+  "title": "Fractional GTM Lead",
+  "loc": "Denver, CO",
+  "desc": "Broad claims, little proof yet",
+  "tags": [
+   {
+    "t": "Outbound prospecting",
+    "c": "Sellers",
+    "g": "Prospecting & Pipeline Build",
+    "s": "verified",
+    "r": 2,
+    "e": []
+   },
+   {
+    "t": "Cold email",
+    "c": "Sellers",
+    "g": "Prospecting & Pipeline Build",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Discovery execution",
+    "c": "Sellers",
+    "g": "Discovery & Qualification",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Renewal playbook",
+    "c": "Customer Success & Growth",
+    "g": "Retention & Renewal",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Content calendar",
+    "c": "Marketing",
+    "g": "Organic & Content",
+    "s": "verified",
+    "r": 1,
+    "e": []
+   },
+   {
+    "t": "Onboarding process design",
+    "c": "Customer Success & Growth",
+    "g": "Onboarding & Implementation",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "CRM consolidation",
+    "c": "Revenue Operations",
+    "g": "CRM Architecture",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Lavender implementation",
+    "c": "AI GTM",
+    "g": "Outbound & Prospecting AI",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Go-to-market audit",
+    "c": "Sales Leadership",
+    "g": "GTM Strategy",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Economic buyer messaging",
+    "c": "Marketing",
+    "g": "Positioning & Messaging",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Hunting motion",
+    "c": "Sellers",
+    "g": "Motion Specialization",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "AdRoll setup",
+    "c": "Marketing",
+    "g": "Paid Channels",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "CS AI strategy",
+    "c": "Customer Success & Growth",
+    "g": "Post-Sale Strategy",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Sales AI adoption",
+    "c": "Sales Leadership",
+    "g": "Tech & Tools",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Opportunity qualification",
+    "c": "Sellers",
+    "g": "Pipeline Management",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Kixie setup",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Deal desk setup",
+    "c": "Sales Leadership",
+    "g": "Deal Execution",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Programmatic ABM",
+    "c": "Marketing",
+    "g": "Account-Based Marketing",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "CS copilot setup",
+    "c": "AI GTM",
+    "g": "Copilot & Assistant",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Rep performance AI",
+    "c": "AI GTM",
+    "g": "Sales Intelligence & Coaching",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Messaging audit",
+    "c": "Marketing",
+    "g": "Positioning & Messaging",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Discovery training",
+    "c": "Sales Enablement",
+    "g": "Sales Training",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Meta Ads implementation",
+    "c": "Marketing",
+    "g": "Paid Channels",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Pipeline health AI",
+    "c": "AI GTM",
+    "g": "Forecasting & Revenue AI",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Sales tech stack selection",
+    "c": "Sales Leadership",
+    "g": "Tech & Tools",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Webinar program",
+    "c": "Marketing",
+    "g": "Events & Field",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Marketing-CS handoff",
+    "c": "Revenue Operations",
+    "g": "Alignment & Process",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Sales tool governance",
+    "c": "Sales Leadership",
+    "g": "Tech & Tools",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Warmly setup",
+    "c": "AI GTM",
+    "g": "Outbound & Prospecting AI",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Zero-to-one sales build",
+    "c": "Sales Leadership",
+    "g": "GTM Strategy",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Tool consolidation",
+    "c": "Revenue Operations",
+    "g": "Tech Stack & Integrations",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   },
+   {
+    "t": "Market differentiation",
+    "c": "Sales Leadership",
+    "g": "Competitive & Win Rate",
+    "s": "claimed",
+    "r": 0,
+    "e": []
+   }
+  ],
+  "core": {
+   "n": 2,
+   "v": [
+    4.5,
+    3.5,
+    4.0,
+    4.0
+   ]
+  }
+ }
+]
