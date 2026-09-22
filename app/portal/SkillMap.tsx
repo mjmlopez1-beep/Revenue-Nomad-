@@ -4,7 +4,10 @@ import { useMemo, useState } from "react";
 import sampleOperators from "@/data/skills/sample-operators.json";
 import {
   AXES,
+  CORE_CRITERIA,
+  CORE_SCALE,
   FOUNDATION,
+  SCORE_FLOOR,
   STAGES,
   buildSkillMap,
   type Aggregate,
@@ -14,13 +17,16 @@ import {
 
 const OPERATORS = sampleOperators as SkillOperator[];
 
-// Radar radius as a fraction of the outer ring. Scores run 50–100, so a
-// claimed-only axis sits on a small inner ring well inside the lowest score.
+// Radar radius as a fraction of the outer ring. No score falls below the
+// claimed floor (45), so the scale runs 45–100: a claimed-only axis sits on
+// the inner ring and an axis with no tags at all stays at the centre.
 const INNER_RING = 0.2;
+const scoreRadius = (score: number) => INNER_RING + ((1 - INNER_RING) * (score - SCORE_FLOOR)) / (100 - SCORE_FLOOR);
 function radius(agg: Aggregate): number {
-  if (agg.score != null) return agg.score / 100;
-  return agg.claimedOnly ? INNER_RING : 0;
+  return agg.score == null ? 0 : scoreRadius(agg.score);
 }
+// Rings mark the tier thresholds: claimed 45, verified 50, expert 85, max 100.
+const RINGS = [SCORE_FLOOR, 50, 85, 100];
 
 function Radar({ axes }: { axes: Record<string, Aggregate> }) {
   const size = 320;
@@ -33,10 +39,13 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} className="skill-radar" role="img" aria-label="Capability radar">
-      {[1, 0.75, 0.5].map((r) => (
-        <polygon key={r} points={ring(r)} className="radar-ring" />
+      {RINGS.map((score) => (
+        <polygon
+          key={score}
+          points={ring(scoreRadius(score))}
+          className={`radar-ring ${score === SCORE_FLOOR ? "radar-inner" : ""}`}
+        />
       ))}
-      <polygon points={ring(INNER_RING)} className="radar-ring radar-inner" />
       {AXES.map((_, i) => {
         const [x, y] = pt(i, 1);
         return <line key={i} x1={c} y1={c} x2={x} y2={y} className="radar-spoke" />;
@@ -53,7 +62,7 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
           <text key={a} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="radar-label">
             <tspan x={x}>{a}</tspan>
             <tspan x={x} dy="1.2em" className="radar-value">
-              {agg.score ?? (agg.claimedOnly ? "claimed" : "—")}
+              {agg.score == null ? "—" : agg.claimedOnly ? `${agg.score} claimed` : agg.score}
             </tspan>
           </text>
         );
@@ -63,20 +72,20 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
 }
 
 function ScoreBadge({ agg }: { agg: Aggregate }) {
-  if (agg.score != null) return <span className="skill-score">{agg.score}</span>;
-  return <span className="skill-score muted">{agg.claimedOnly ? "claimed" : "—"}</span>;
+  if (agg.score == null) return <span className="skill-score muted">—</span>;
+  return <span className={`skill-score ${agg.claimedOnly ? "muted" : ""}`}>{agg.score}</span>;
 }
 
 function TagChip({ tag }: { tag: ScoredTag }) {
   const title = [
     `${tag.c} › ${tag.g}`,
-    tag.r ? `${tag.r} review${tag.r === 1 ? "" : "s"} · score ${tag.score}` : "No reviews yet",
+    tag.r ? `${tag.r} review${tag.r === 1 ? "" : "s"} · score ${tag.score}` : `Self-claimed, no reviews yet · score ${tag.score}`,
     ...tag.e.map((e) => `Evidence: ${e}`),
   ].join("\n");
   return (
     <span className={`tag-chip tier-${tag.tier}`} title={title}>
       {tag.t}
-      {tag.score != null && <b>{tag.score}</b>}
+      <b>{tag.score}</b>
     </span>
   );
 }
@@ -92,11 +101,12 @@ export default function SkillMap() {
   const counts = { expert: 0, verified: 0, claimed: 0 };
   for (const t of map.tags) counts[t.tier]++;
   const coreAvg = op.core.v.length ? op.core.v.reduce((a, b) => a + b, 0) / op.core.v.length : null;
+  const coreMax = CORE_SCALE[1];
 
   const selStage = sel?.kind === "stage" ? STAGES.find((s) => s.name === sel.name) : undefined;
   const selFoundation = sel?.kind === "foundation" ? FOUNDATION.find((f) => f.name === sel.name) : undefined;
   const selAgg = selStage ? map.stages[selStage.name] : selFoundation ? map.foundation[selFoundation.name] : null;
-  const selTags = selAgg ? [...selAgg.tags].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)) : [];
+  const selTags = selAgg ? [...selAgg.tags].sort((a, b) => b.score - a.score) : [];
 
   const tile = (kind: "stage" | "foundation", name: string, agg: Aggregate, side?: string) => (
     <button
@@ -148,10 +158,32 @@ export default function SkillMap() {
               <b>{map.fitPoints}</b>
               <span>fit pts / 18</span>
             </div>
-            <div>
-              <b>{coreAvg != null ? coreAvg.toFixed(1) : "—"}</b>
-              <span>{op.core.n} reviews</span>
-            </div>
+          </div>
+        </div>
+        <div className="core-panel">
+          <div className="core-head">
+            <span className="core-title">CORE</span>
+            <b>{coreAvg != null ? coreAvg.toFixed(1) : "—"}</b>
+            <span className="dim small">
+              / {coreMax} · {op.core.n} review{op.core.n === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="core-bars">
+            {CORE_CRITERIA.map((label, i) => {
+              const v = op.core.v[i];
+              return (
+                <div key={label} className="core-bar">
+                  <span className="core-label">{label}</span>
+                  <div className="meter">
+                    <div
+                      className="meter-fill"
+                      style={{ width: v == null ? 0 : `${(v / coreMax) * 100}%` }}
+                    />
+                  </div>
+                  <span className="core-value">{v == null ? "—" : v.toFixed(1)}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -159,7 +191,10 @@ export default function SkillMap() {
       <div className="skill-grid">
         <div className="card">
           <h3>Capability radar</h3>
-          <p className="dim small">Average of the three best verified tags on each axis. Inner ring = claimed only.</p>
+          <p className="dim small">
+            Average of the three best verified tags on each axis. Rings: 45 claimed (inner) · 50 verified · 85 expert ·
+            100.
+          </p>
           <Radar axes={map.axes} />
         </div>
 
@@ -233,7 +268,7 @@ export default function SkillMap() {
         <p className="dim small legend">
           <span className="tag-chip tier-expert">expert</span> 85–100 (5+ reviews)
           <span className="tag-chip tier-verified">verified</span> 50–80 (1–4 reviews)
-          <span className="tag-chip tier-claimed">claimed</span> no reviews
+          <span className="tag-chip tier-claimed">claimed</span> 45 (self-claimed, no reviews)
         </p>
       </div>
     </div>

@@ -1,6 +1,6 @@
 {
  "tag_score_by_review_count": {
-  "0": null,
+  "0": 45,
   "1": 50,
   "2": 60,
   "3": 70,
@@ -13,11 +13,11 @@
   "10+": 100
  },
  "tier": {
-  "claimed": "no reviews",
+  "claimed": "score 45 (self-claimed, no reviews)",
   "verified": "score 50 to 80",
   "expert": "score 85 to 100"
  },
- "aggregate": "average of the three highest scoring verified tags in the group, stage or axis; null if none verified; a group with only claimed tags sits on the inner ring",
+ "aggregate": "average of the three highest scoring verified tags in the group, stage or axis; 45 if the only tags are claimed; null if no tags",
  "radar_axes": [
   "Lead & plan",
   "Build the team",
@@ -40,5 +40,18 @@
   "Build the team",
   "Systems & data"
  ],
- "fit_tag_points": "top 8 verified tags, expert 3 points, verified 1.5, cap 18 (existing Reputation Index rule)"
+ "fit_tag_points": "top 8 verified tags, expert 3 points, verified 1.5, cap 18 (existing Reputation Index rule)",
+ "radar_floor": 45,
+ "core": {
+  "scale": [
+   1,
+   5
+  ],
+  "criteria": [
+   "C",
+   "O",
+   "R",
+   "E"
+  ]
+ }
 }

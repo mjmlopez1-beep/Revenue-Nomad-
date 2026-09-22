@@ -27,7 +27,7 @@ export interface SkillOperator {
 }
 
 export interface ScoredTag extends OperatorTag {
-  score: number | null;
+  score: number;
   tier: Tier;
   axis: string;
   stage: string; // a buyer-journey stage name, or "foundation"
@@ -35,14 +35,19 @@ export interface ScoredTag extends OperatorTag {
 
 /** Aggregate for a group, stage or axis. */
 export interface Aggregate {
-  /** Average of the top three verified tag scores; null when none verified. */
+  /** Average of the top three verified tag scores; the claimed score when
+   *  every tag is claimed; null when there are no tags at all. */
   score: number | null;
-  /** True when there are tags but every one is claimed (drawn on the inner ring). */
+  /** True when there are tags but every one is claimed (sits on the inner ring). */
   claimedOnly: boolean;
   tags: ScoredTag[];
 }
 
 export const AXES: string[] = scoring.radar_axes;
+/** Lowest score a tag can have: a self-claimed tag with no reviews. */
+export const SCORE_FLOOR: number = scoring.radar_floor;
+export const CORE_CRITERIA: string[] = scoring.core.criteria;
+export const CORE_SCALE: number[] = scoring.core.scale;
 export const STAGES = stagesDoc.stages;
 export const FOUNDATION = stagesDoc.foundation;
 
@@ -55,14 +60,14 @@ for (const cat of taxonomy) {
   }
 }
 
-export function tagScore(reviews: number): number | null {
-  const table = scoring.tag_score_by_review_count as Record<string, number | null>;
+export function tagScore(reviews: number): number {
+  const table = scoring.tag_score_by_review_count as Record<string, number>;
   if (reviews >= 10) return table["10+"];
-  return table[String(Math.max(0, Math.floor(reviews)))] ?? null;
+  return table[String(Math.max(0, Math.floor(reviews)))] ?? SCORE_FLOOR;
 }
 
-export function tierFor(score: number | null): Tier {
-  if (score == null) return "claimed";
+export function tierFor(score: number): Tier {
+  if (score <= SCORE_FLOOR) return "claimed";
   return score >= 85 ? "expert" : "verified";
 }
 
@@ -76,12 +81,14 @@ export function scoreTags(op: SkillOperator): ScoredTag[] {
 
 export function aggregate(tags: ScoredTag[]): Aggregate {
   const top = tags
+    .filter((t) => t.tier !== "claimed")
     .map((t) => t.score)
-    .filter((s): s is number => s != null)
     .sort((a, b) => b - a)
     .slice(0, 3);
-  const score = top.length ? Math.round(top.reduce((a, b) => a + b, 0) / top.length) : null;
-  return { score, claimedOnly: score == null && tags.length > 0, tags };
+  if (top.length) {
+    return { score: Math.round(top.reduce((a, b) => a + b, 0) / top.length), claimedOnly: false, tags };
+  }
+  return { score: tags.length ? SCORE_FLOOR : null, claimedOnly: tags.length > 0, tags };
 }
 
 export interface SkillMap {
@@ -113,7 +120,7 @@ export function buildSkillMap(op: SkillOperator): SkillMap {
   const groups = [...byGroup.entries()]
     .map(([key, list]) => {
       const [category, group] = key.split("::");
-      const sorted = [...list].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      const sorted = [...list].sort((a, b) => b.score - a.score);
       return { category, group, agg: aggregate(sorted) };
     })
     .sort((a, b) => (b.agg.score ?? 0) - (a.agg.score ?? 0) || b.agg.tags.length - a.agg.tags.length);
@@ -125,7 +132,7 @@ export function buildSkillMap(op: SkillOperator): SkillMap {
 export function fitTagPoints(tags: ScoredTag[]): number {
   const pts = tags
     .filter((t) => t.tier !== "claimed")
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .sort((a, b) => b.score - a.score)
     .slice(0, 8)
     .reduce((sum, t) => sum + (t.tier === "expert" ? 3 : 1.5), 0);
   return Math.min(18, pts);
