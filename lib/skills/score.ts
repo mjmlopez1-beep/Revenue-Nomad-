@@ -36,6 +36,38 @@ export interface SkillOperator {
   };
   /** True for illustrative operators, false for data taken from a live profile. */
   sample?: boolean;
+  reviews?: ReviewRecord[];
+  details?: ProfileDetails;
+}
+
+export interface EngagementRecord {
+  company: string;
+  role: string;
+  start: string; // YYYY-MM
+  end: string; // YYYY-MM
+  months: number;
+  revenueBand: string;
+  clientVerified: boolean;
+  /** Outcome as written on the engagement, and short result lines drawn from it. */
+  outcome?: string;
+  results?: string[];
+}
+
+/** Profile facts beyond skills: identity, fit, engagement history. */
+export interface ProfileDetails {
+  photo?: string;
+  timezone: string;
+  availability: { status: string; startDate: string; hoursPerMonth: number };
+  industries: string[];
+  snapshot: {
+    largestTeam: string;
+    largestQuota: string;
+    motions: string[];
+    salesCycle: string;
+    methodologies: string[];
+  };
+  bestFor: string[];
+  engagements: EngagementRecord[];
 }
 
 /** A client review as exported from the platform (CORE may be unpublished). */
@@ -48,6 +80,7 @@ export interface ReviewRecord {
   core: number[] | null;
   hireAgain: boolean;
   tags: string[];
+  quote?: string;
 }
 
 export interface ProfileDoc {
@@ -62,6 +95,7 @@ export interface ProfileDoc {
   tags: { name: string; reviews: number }[];
   /** Profile tag names missing from the taxonomy → the taxonomy tag whose group places them. */
   placementAlias: Record<string, string>;
+  details?: ProfileDetails;
 }
 
 export interface ScoredTag extends OperatorTag {
@@ -141,6 +175,8 @@ export function operatorFromProfile(doc: ProfileDoc): SkillOperator {
     },
     profile: doc.profile,
     sample: false,
+    reviews: doc.reviews,
+    details: doc.details,
   };
 }
 

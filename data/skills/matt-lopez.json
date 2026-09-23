@@ -29,7 +29,8 @@
     "New Hire Sales Onboarding",
     "SEO strategy",
     "Sales playbook build"
-   ]
+   ],
+   "quote": "I couldn't recommend working with Matt and his team more. I hope to work with him again on future growth projects. On a personal level, he's a really good and kind person that is helpful to have in your circle -- I feel lucky to have met him and to have worked together."
   },
   {
    "reviewer": "Eric Barbalace",
@@ -47,7 +48,8 @@
     "Sales Team Hiring & Ramp",
     "Sales-CS handoff process",
     "Segment prioritization"
-   ]
+   ],
+   "quote": "Matt was knowledgeable, responsive, and provided transformative insights and actions to help our growing sales org"
   }
  ],
  "tags": [
@@ -197,5 +199,87 @@
   "Enterprise Deal Closing": "Late-stage deal management",
   "Enterprise Pipeline Build": "Pipeline build",
   "Competitive Battlecards": "Battle cards"
+ },
+ "details": {
+  "photo": "/operators/matt-lopez.png",
+  "timezone": "America/New_York",
+  "availability": {
+   "status": "Available in 2+ weeks",
+   "startDate": "2026-09-27",
+   "hoursPerMonth": 40
+  },
+  "industries": [
+   "SaaS",
+   "Health Care",
+   "Marketplace",
+   "Professional Services",
+   "Pharma & Biotech",
+   "Property Management",
+   "Industrial Automation & IoT"
+  ],
+  "snapshot": {
+   "largestTeam": "15 people",
+   "largestQuota": "$20M",
+   "motions": [
+    "Inside Sales",
+    "Enterprise Sales",
+    "Channel"
+   ],
+   "salesCycle": "45 days",
+   "methodologies": [
+    "MEDDPICC",
+    "Challenger",
+    "Skaled"
+   ]
+  },
+  "bestFor": [
+   "CEOs still heavily involved in sales",
+   "Product-market fit, but no repeatable sales motion yet",
+   "Companies from $1M to $50M in revenue"
+  ],
+  "engagements": [
+   {
+    "company": "Ferry",
+    "role": "Fractional VP Sales",
+    "start": "2025-04",
+    "end": "2026-05",
+    "months": 13,
+    "revenueBand": "$1M–$5M",
+    "clientVerified": true,
+    "outcome": "Built and launched the company's first digital demand generation program, which delivered their first 20 inbound leads. Converted that pipeline into two closed deals, doubling the client base. Recruited and onboarded their first AE, who closed a deal within 60 days of starting.",
+    "results": [
+     "First 20 inbound leads from a new demand program",
+     "Client base doubled with two new closed deals",
+     "First AE hired and closing within 60 days"
+    ]
+   },
+   {
+    "company": "myHR Partner",
+    "role": "Fractional VP Sales",
+    "start": "2024-04",
+    "end": "2025-11",
+    "months": 19,
+    "revenueBand": "$5M–$20M",
+    "clientVerified": true
+   },
+   {
+    "company": "Trialbee",
+    "role": "Fractional VP Sales",
+    "start": "2022-05",
+    "end": "2022-11",
+    "months": 6,
+    "revenueBand": "$5M–$20M",
+    "clientVerified": false
+   },
+   {
+    "company": "BuildingLink",
+    "role": "Fractional CRO",
+    "start": "2021-04",
+    "end": "2022-02",
+    "months": 10,
+    "revenueBand": "$20M–$50M",
+    "clientVerified": false
+   }
+  ]
  }
 }

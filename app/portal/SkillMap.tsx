@@ -17,6 +17,7 @@ import {
   type SkillMap as SkillMapData,
   type SkillOperator,
 } from "@/lib/skills/score";
+import { EngageCard, FitBrief, Hero, ReputationCard, Reviews, TrackRecord } from "./ProfileSections";
 
 // Matt Lopez comes from his live profile; the rest are illustrative.
 const OPERATORS: SkillOperator[] = [
@@ -235,13 +236,8 @@ function Bowtie({
 const TIER_LABEL = { expert: "Expert", verified: "Verified", claimed: "Self-claimed" } as const;
 
 function TagRow({ tag }: { tag: ScoredTag }) {
-  const title = [
-    `${tag.c} › ${tag.g}`,
-    tag.r ? `${tag.r} client review${tag.r === 1 ? "" : "s"}` : "Self-claimed, no reviews yet",
-    ...tag.e.map((e) => `Confirmed by: ${e}`),
-  ].join("\n");
   return (
-    <div className="rn-tag-row" title={title}>
+    <div className="rn-tag-row" title={`${tag.c} › ${tag.g}`}>
       <div className="rn-tag-head">
         <div className="rn-tag-name">
           <span>{tag.t}</span>
@@ -252,6 +248,11 @@ function TagRow({ tag }: { tag: ScoredTag }) {
       <div className="rn-bar">
         <div className={`rn-bar-fill tier-${tag.tier}`} style={{ width: `${tag.score}%` }} />
       </div>
+      {tag.e.length > 0 && (
+        <p className="rn-evidence">
+          Confirmed by {tag.e.join(", ")} · {tag.r} client review{tag.r === 1 ? "" : "s"}
+        </p>
+      )}
     </div>
   );
 }
@@ -266,7 +267,10 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
 
   const stage = focus ? STAGES.find((s) => s.name === focus.name) : undefined;
   const focusAgg = stage ? map.stages[stage.name] : null;
-  const pool = (focusAgg ? focusAgg.tags : map.tags).slice().sort((a, b) => b.score - a.score || b.r - a.r);
+  const scope = (focusAgg ? focusAgg.tags : map.tags).slice().sort((a, b) => b.score - a.score || b.r - a.r);
+  // Evidence leads: verified tags get full rows, self-claimed ones a compact list.
+  const pool = scope.filter((t) => t.tier !== "claimed");
+  const claimed = scope.filter((t) => t.tier === "claimed");
   const rows = showAll ? pool : pool.slice(0, PREVIEW_ROWS);
 
   const pick = (name: string) => {
@@ -275,11 +279,14 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
   };
 
   return (
-    <section className="rn-card">
+    <section className="rn-card" id="expertise">
       <div className="rn-card-head">
-        <h2>Expertise</h2>
+        <div>
+          <p className="ep-eyebrow">Expertise</p>
+          <h2>Where the proof is</h2>
+        </div>
         <span className="rn-head-meta">
-          {verified} client-verified · {total} tags
+          {verified} client-verified of {total}
         </span>
       </div>
 
@@ -319,14 +326,27 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
         {rows.length ? (
           rows.map((t) => <TagRow key={`${t.g}-${t.t}`} tag={t} />)
         ) : (
-          <p className="rn-muted">No expertise tagged here yet.</p>
+          <p className="rn-muted">No client-verified expertise here yet.</p>
         )}
       </div>
 
       {pool.length > PREVIEW_ROWS && (
         <button className="rn-view-all" onClick={() => setShowAll(!showAll)}>
-          {showAll ? `Show top ${PREVIEW_ROWS}` : `View all ${pool.length} expertise tags`}
+          {showAll ? `Show top ${PREVIEW_ROWS}` : `View all ${pool.length} verified tags`}
         </button>
+      )}
+
+      {claimed.length > 0 && (
+        <details className="rn-claimed">
+          <summary>
+            Also claims {claimed.length} skill{claimed.length === 1 ? "" : "s"} <span>not yet verified by a client</span>
+          </summary>
+          <div className="rn-claimed-list">
+            {claimed.map((t) => (
+              <span key={`${t.g}-${t.t}`}>{t.t}</span>
+            ))}
+          </div>
+        </details>
       )}
     </section>
   );
@@ -337,26 +357,14 @@ function avg(xs: (number | null)[]): number | null {
   return n.length ? n.reduce((a, b) => a + b, 0) / n.length : null;
 }
 
-/** CLIENT REVIEWS sidebar card with the CORE breakdown added. */
-function ClientReviewsCard({ op }: { op: SkillOperator }) {
+/** CORE ratings, shown only once they are published. */
+function CoreCard({ op }: { op: SkillOperator }) {
   const coreMax = CORE_SCALE[1];
-  const published = op.core.v.some((v) => v != null);
-  const overall = op.core.overall ?? avg(op.core.v);
+  if (!op.core.v.some((v) => v != null)) return null;
   return (
-    <section className="rn-card rn-side">
-      <h3>Client Reviews</h3>
-      <div className="rn-stat-grid">
-        <div className="rn-stat">
-          <b>{op.core.n}</b>
-          <span>Verified reviews</span>
-        </div>
-        <div className="rn-stat">
-          <b>{overall != null ? overall.toFixed(1) : "—"}</b>
-          <span>Avg rating</span>
-        </div>
-      </div>
+    <section className="ep-card ep-side">
+      <p className="ep-eyebrow">CORE ratings</p>
       <div className="rn-core">
-        <p className="rn-eyebrow">CORE ratings</p>
         {CORE_CRITERIA.map((label, i) => {
           const v = op.core.v[i];
           return (
@@ -369,14 +377,19 @@ function ClientReviewsCard({ op }: { op: SkillOperator }) {
             </div>
           );
         })}
-        {!published && <p className="rn-note">Collected on every review but not yet published on the profile.</p>}
       </div>
-      {op.profile && op.profile.wouldHireAgain > 0 && (
-        <p className="rn-pill-note">{Math.round(op.profile.wouldHireAgain * 100)}% would hire again</p>
-      )}
+      <p className="ep-fine">Average across {op.core.n} reviews, each scored 1–5.</p>
     </section>
   );
 }
+
+const SECTIONS: [string, string][] = [
+  ["fit", "Fit"],
+  ["expertise", "Expertise"],
+  ["track-record", "Track record"],
+  ["reviews", "Reviews"],
+  ["about", "About"],
+];
 
 export default function SkillMap() {
   const [opIdx, setOpIdx] = useState(0);
@@ -384,69 +397,54 @@ export default function SkillMap() {
   const map = useMemo(() => buildSkillMap(op), [op]);
   const headline = map.tags
     .filter((t) => t.tier !== "claimed")
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
+    .sort((a, b) => b.score - a.score || b.r - a.r)
+    .slice(0, 5)
+    .map((t) => t.t);
+  const sections = SECTIONS.filter(([id]) => op.details || id === "expertise" || id === "about");
 
   return (
-    <div className="rn-preview">
-      <div className="op-switch">
-        <span className="rn-muted">Preview</span>
+    <div className="ep-page">
+      <div className="ep-proto">
+        <span>Prototype</span>
         {OPERATORS.map((o, i) => (
-          <button key={o.name} className={`chip ${i === opIdx ? "active" : ""}`} onClick={() => setOpIdx(i)}>
+          <button key={o.name} className={i === opIdx ? "active" : ""} onClick={() => setOpIdx(i)}>
             {o.name}
-            <small>{o.sample ? "sample" : "live"}</small>
+            <small>{o.sample ? "sample" : "live data"}</small>
           </button>
         ))}
       </div>
 
-      <div className="rn-profile" key={op.name}>
-        <section className="rn-card rn-hero">
-          <h1>{op.name}</h1>
-          <p className="rn-sub">
-            {op.title} · {op.desc}
-          </p>
-          <div className="rn-chips">
-            {headline.map((t) => (
-              <span key={t.t} className="rn-chip">
-                {t.t}
-              </span>
-            ))}
-          </div>
-        </section>
+      <div className="ep-profile" key={op.name}>
+        <Hero op={op} headline={headline} />
 
-        <div className="rn-grid">
-          <div className="rn-main">
-            <section className="rn-card">
-              <div className="rn-card-head">
-                <h2>Operator Overview</h2>
-              </div>
-              <p className="rn-bio">{op.bio ?? op.desc}</p>
-            </section>
+        <nav className="ep-subnav" aria-label="Profile sections">
+          {sections.map(([id, label]) => (
+            <a key={id} href={`#${id}`}>
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <div className="ep-grid">
+          <div className="ep-main">
+            <FitBrief op={op} />
             <ExpertiseSection op={op} map={map} />
-            <section className="rn-card rn-unchanged">
-              <span>Industries · Snapshot · Portfolio · Engagement History · Verified Reviews</span>
-              <em>Unchanged</em>
+            <TrackRecord op={op} />
+            <Reviews op={op} />
+            <section className="ep-card" id="about">
+              <header className="ep-card-head">
+                <div>
+                  <p className="ep-eyebrow">About</p>
+                  <h2>In {op.name.split(" ")[0]}’s words</h2>
+                </div>
+              </header>
+              <p className="ep-bio">{op.bio ?? op.desc}</p>
             </section>
           </div>
-          <aside className="rn-aside">
-            {op.profile && (
-              <section className="rn-card rn-rep">
-                <p>Reputation Index Score</p>
-                <b>{op.profile.reputationIndex}</b>
-                <span>{op.profile.reputationLabel}</span>
-                <div className="rn-rep-stats">
-                  <div>
-                    <strong>{op.core.n}</strong>
-                    <small>Reviews</small>
-                  </div>
-                  <div>
-                    <strong>{op.profile.engagements}</strong>
-                    <small>Engagements</small>
-                  </div>
-                </div>
-              </section>
-            )}
-            <ClientReviewsCard op={op} />
+          <aside className="ep-aside">
+            <EngageCard op={op} />
+            <ReputationCard op={op} />
+            <CoreCard op={op} />
           </aside>
         </div>
       </div>
