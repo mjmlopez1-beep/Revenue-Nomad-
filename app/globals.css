@@ -1068,39 +1068,32 @@ a:hover {
   cursor: pointer;
   outline: none;
 }
-.rn-bowtie .bt-shell {
-  fill: #f6f8f5;
+.rn-bowtie .bt-shape {
+  stroke: #ffffff;
+  stroke-width: 1.5;
+  transition: filter 0.15s;
 }
-.rn-bowtie .bt-outline {
-  fill: none;
-  stroke: #cfe5cb;
-  stroke-width: 1;
-}
-.rn-bowtie .bt-seg.empty .bt-shell {
-  fill: #ffffff;
-}
-.rn-bowtie .bt-seg.empty .bt-outline {
+.rn-bowtie .bt-seg.empty .bt-shape {
   stroke: #d4d4d4;
   stroke-dasharray: 4 3;
 }
-.rn-bowtie .bt-seg:hover .bt-shell,
-.rn-bowtie .bt-seg:focus-visible .bt-shell {
-  fill: #e8efe7;
+.rn-bowtie .bt-seg:hover .bt-shape,
+.rn-bowtie .bt-seg:focus-visible .bt-shape {
+  filter: brightness(0.93);
 }
-.rn-bowtie .bt-seg.active .bt-outline {
+.rn-bowtie .bt-seg.active .bt-shape {
   stroke: var(--rn-green-darkest);
   stroke-width: 3;
   stroke-dasharray: none;
 }
-/* Names sit over fills of any depth, so they carry a white halo. */
 .rn-bowtie .bt-name {
   font-size: 12.5px;
   font-weight: 700;
   fill: var(--rn-green-darkest);
-  stroke: #ffffff;
-  stroke-width: 3px;
-  stroke-linejoin: round;
-  paint-order: stroke;
+  pointer-events: none;
+}
+.rn-bowtie .bt-seg.dark .bt-name {
+  fill: #ffffff;
 }
 .rn-bowtie .bt-seg.empty .bt-name {
   fill: #9aa3a0;

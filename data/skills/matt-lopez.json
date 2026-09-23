@@ -4,7 +4,7 @@
  "loc": "America/New_York",
  "desc": "I fix the gap between \"we can sell it\" and \"the team can sell it.\"",
  "bio": "Ten years building B2B sales orgs, including as an early team member and partner at Skaled Consulting, where I oversaw our sales transformation engagements for companies in HR tech, healthcare, property tech, and many other industries. I am currently building the GTM strategy at Revenue Nomad. I work best with CEO's that are still heavily involved in Sales, have product-market fit but no repeatable sales motion behind it.",
- "source": "revenuenomad.com/operators/matt-lopez-vp-sales-89623cd5-5362-4859-86f0-3f2e03f6b6ba (saved Sep 22, 2026)",
+ "source": "revenuenomad.com/operators/matt-lopez-vp-sales-89623cd5-5362-4859-86f0-3f2e03f6b6ba (page saved Sep 22, 2026; tag scores from the live Expertise list, Sep 23, 2026)",
  "profile": {
   "reputationIndex": 71,
   "reputationLabel": "Proven",
@@ -50,10 +50,152 @@
    ]
   }
  ],
- "legacyTagMap": {
+ "tags": [
+  {
+   "name": "1:1 ABM",
+   "reviews": 1
+  },
+  {
+   "name": "CRM Cleanup",
+   "reviews": 1
+  },
+  {
+   "name": "Call Coaching & Feedback",
+   "reviews": 1
+  },
+  {
+   "name": "Customer Segmentation",
+   "reviews": 1
+  },
+  {
+   "name": "HubSpot Admin",
+   "reviews": 1
+  },
+  {
+   "name": "Inbound Selling",
+   "reviews": 1
+  },
+  {
+   "name": "New Hire Sales Onboarding",
+   "reviews": 1
+  },
+  {
+   "name": "SEO Strategy",
+   "reviews": 1
+  },
+  {
+   "name": "Sales Playbook",
+   "reviews": 1
+  },
+  {
+   "name": "Sales Process Design",
+   "reviews": 1
+  },
+  {
+   "name": "Sales Team Hiring & Ramp",
+   "reviews": 1
+  },
+  {
+   "name": "Sales Playbook Build",
+   "reviews": 1
+  },
+  {
+   "name": "Sales-CS Handoff Process",
+   "reviews": 1
+  },
+  {
+   "name": "Segment Prioritization",
+   "reviews": 1
+  },
+  {
+   "name": "Salesforce Implementation",
+   "reviews": 0
+  },
+  {
+   "name": "1:1 Coaching Guides",
+   "reviews": 0
+  },
+  {
+   "name": "Discovery Call Execution",
+   "reviews": 0
+  },
+  {
+   "name": "Founder-Led Sales Exit",
+   "reviews": 0
+  },
+  {
+   "name": "Live Call Coaching",
+   "reviews": 0
+  },
+  {
+   "name": "Multithreading Training",
+   "reviews": 0
+  },
+  {
+   "name": "Objection Handling Training",
+   "reviews": 0
+  },
+  {
+   "name": "Revenue Forecasting",
+   "reviews": 0
+  },
+  {
+   "name": "Sales Enablement",
+   "reviews": 0
+  },
+  {
+   "name": "Sales Training Program",
+   "reviews": 0
+  },
+  {
+   "name": "Value Selling Training",
+   "reviews": 0
+  },
+  {
+   "name": "Competitive Displacement Playbook",
+   "reviews": 0
+  },
+  {
+   "name": "Conversion Rate Optimization",
+   "reviews": 0
+  },
+  {
+   "name": "Enterprise Deal Closing",
+   "reviews": 0
+  },
+  {
+   "name": "Enterprise Pipeline Build",
+   "reviews": 0
+  },
+  {
+   "name": "Enterprise Motion",
+   "reviews": 0
+  },
+  {
+   "name": "Closing Training",
+   "reviews": 0
+  },
+  {
+   "name": "Competitive Battlecards",
+   "reviews": 0
+  },
+  {
+   "name": "Discovery Training",
+   "reviews": 0
+  }
+ ],
+ "placementAlias": {
   "Customer Segmentation": "Segment design",
   "Sales Team Hiring & Ramp": "Sales hiring",
   "Call Coaching & Feedback": "Live call coaching",
-  "New Hire Sales Onboarding": "New hire onboarding"
+  "New Hire Sales Onboarding": "New hire onboarding",
+  "Salesforce Implementation": "Salesforce build",
+  "Discovery Call Execution": "Discovery execution",
+  "Founder-Led Sales Exit": "Founder-led sales transition",
+  "Sales Enablement": "Enablement function build",
+  "Sales Training Program": "Discovery training",
+  "Enterprise Deal Closing": "Late-stage deal management",
+  "Enterprise Pipeline Build": "Pipeline build",
+  "Competitive Battlecards": "Battle cards"
  }
 }

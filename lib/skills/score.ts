@@ -58,8 +58,10 @@ export interface ProfileDoc {
   bio?: string;
   profile: NonNullable<SkillOperator["profile"]>;
   reviews: ReviewRecord[];
-  /** Old tag names still on the live profile → their name in the current taxonomy. */
-  legacyTagMap: Record<string, string>;
+  /** Every tag on the profile with the qualifying reviews that confirm it. */
+  tags: { name: string; reviews: number }[];
+  /** Profile tag names missing from the taxonomy → the taxonomy tag whose group places them. */
+  placementAlias: Record<string, string>;
 }
 
 export interface ScoredTag extends OperatorTag {
@@ -96,7 +98,7 @@ for (const cat of taxonomy) {
   }
 }
 
-// Tag name → first placement in the taxonomy, for review data that carries
+// Tag name → first placement in the taxonomy, for profile data that carries
 // tag names only. Case-insensitive, since the live site re-cases tag names.
 const byName = new Map<string, { c: string; g: string }>();
 for (const cat of taxonomy) {
@@ -108,25 +110,21 @@ for (const cat of taxonomy) {
   }
 }
 
+// Compare tag names loosely: the live site re-cases names and drops hyphens.
+const norm = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
 /**
- * Build a scoring operator from real review records: every review confirms
- * its tags, so a tag's review count is the number of reviews that list it.
+ * Build a scoring operator from a live profile: its tag list carries each
+ * tag's review count, and the reviews supply which clients confirmed it.
  */
-export function operatorFromReviews(doc: ProfileDoc): SkillOperator {
-  const tags = new Map<string, OperatorTag>();
-  for (const review of doc.reviews) {
-    for (const raw of review.tags) {
-      const name = doc.legacyTagMap[raw] ?? raw;
-      const place = byName.get(name.toLowerCase());
-      if (!place) continue;
-      const key = name.toLowerCase();
-      const tag = tags.get(key) ?? { t: name, ...place, s: "claimed" as Tier, r: 0, e: [] };
-      tag.r += 1;
-      if (!tag.e.includes(review.company)) tag.e.push(review.company);
-      tags.set(key, tag);
-    }
+export function operatorFromProfile(doc: ProfileDoc): SkillOperator {
+  const tags: OperatorTag[] = [];
+  for (const { name, reviews } of doc.tags) {
+    const place = byName.get((doc.placementAlias[name] ?? name).toLowerCase());
+    if (!place) continue;
+    const confirmedBy = doc.reviews.filter((r) => r.tags.some((t) => norm(t) === norm(name))).map((r) => r.company);
+    tags.push({ t: name, ...place, s: tierFor(tagScore(reviews)), r: reviews, e: confirmedBy });
   }
-  const list = [...tags.values()].map((t) => ({ ...t, s: tierFor(tagScore(t.r)) }));
   const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
   const cores = doc.reviews.map((r) => r.core).filter((c): c is number[] => c != null);
   return {
@@ -135,7 +133,7 @@ export function operatorFromReviews(doc: ProfileDoc): SkillOperator {
     loc: doc.loc,
     desc: doc.desc,
     bio: doc.bio,
-    tags: list,
+    tags,
     core: {
       n: doc.reviews.length,
       v: CORE_CRITERIA.map((_, i) => avg(cores.map((c) => c[i]))),

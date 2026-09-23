@@ -10,7 +10,7 @@ import {
   SCORE_FLOOR,
   STAGES,
   buildSkillMap,
-  operatorFromReviews,
+  operatorFromProfile,
   type Aggregate,
   type ProfileDoc,
   type ScoredTag,
@@ -18,9 +18,9 @@ import {
   type SkillOperator,
 } from "@/lib/skills/score";
 
-// Matt Lopez comes from his live profile's reviews; the rest are illustrative.
+// Matt Lopez comes from his live profile; the rest are illustrative.
 const OPERATORS: SkillOperator[] = [
-  operatorFromReviews(mattLopez as ProfileDoc),
+  operatorFromProfile(mattLopez as ProfileDoc),
   ...(sampleOperators as SkillOperator[]).map((o) => ({ ...o, sample: true })),
 ];
 
@@ -83,18 +83,18 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
 type Focus = { name: string } | null;
 
 // Revenue bowtie: the four pre-sale stages narrow into the knot (Commit) and
-// the three post-sale stages widen back out. No numbers: each stage fills
-// from the bottom up, and the fill is a deeper green, the higher its score.
-// The foundation axes live on the radar, so they are not repeated here.
-function fillLevel(agg: Aggregate): number {
-  if (agg.score == null) return 0;
-  return 0.12 + (0.88 * (agg.score - SCORE_FLOOR)) / (100 - SCORE_FLOOR);
-}
-function fillColor(agg: Aggregate): string {
-  if (agg.score == null) return "transparent";
-  if (agg.claimedOnly) return "#c9d1cc";
+// the three post-sale stages widen back out. No numbers: every stage is
+// filled solid, in a deeper green the higher its score. The foundation axes
+// live on the radar, so they are not repeated here.
+function stageShade(agg: Aggregate): { fill: string; dark: boolean } {
+  if (agg.score == null) return { fill: "#ffffff", dark: false };
+  if (agg.claimedOnly) return { fill: "#e3e7e4", dark: false };
   const t = (agg.score - SCORE_FLOOR) / (100 - SCORE_FLOOR);
-  return `rgba(9, 93, 66, ${(0.3 + 0.7 * t).toFixed(2)})`;
+  // Light mint at a first review (50) through to the deepest brand green at 100.
+  const from = [214, 236, 219];
+  const to = [6, 63, 47];
+  const mix = from.map((c, i) => Math.round(c + (to[i] - c) * Math.min(1, t * 1.1)));
+  return { fill: `rgb(${mix.join(", ")})`, dark: t > 0.4 };
 }
 
 type Pt = [number, number];
@@ -167,7 +167,6 @@ function Bowtie({
   vertical?: boolean;
 }) {
   const segs = vertical ? verticalSegments() : horizontalSegments();
-  const clipBase = vertical ? "btv" : "bth";
   const height = vertical ? BV.top + STAGES.length * BV.seg + 4 : BT.top + BT.h + 4;
   const width = vertical ? BV.w : BT.w;
 
@@ -209,39 +208,20 @@ function Bowtie({
       {segs.map((seg) => {
         const agg = map.stages[seg.name];
         const points = seg.pts.map((p) => p.join(",")).join(" ");
-        const ys = seg.pts.map((p) => p[1]);
-        const xs = seg.pts.map((p) => p[0]);
-        const top = Math.min(...ys);
-        const bottom = Math.max(...ys);
-        const level = fillLevel(agg);
+        const shade = stageShade(agg);
         const active = focus?.name === seg.name;
-        const clipId = `${clipBase}-${seg.id}`;
         return (
           <g
             key={seg.id}
-            className={`bt-seg ${active ? "active" : ""} ${agg.score == null ? "empty" : ""}`}
+            className={`bt-seg ${active ? "active" : ""} ${agg.score == null ? "empty" : ""} ${shade.dark ? "dark" : ""}`}
             role="button"
             tabIndex={0}
             aria-pressed={active}
-            aria-label={`${seg.name}: ${agg.score == null ? "no expertise tagged" : agg.claimedOnly ? "claimed only" : `score ${agg.score}`}`}
+            aria-label={`${seg.name}: ${agg.score == null ? "no expertise tagged" : agg.claimedOnly ? "self-claimed only" : `score ${agg.score}`}`}
             onClick={() => onPick(seg.name)}
             onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPick(seg.name)}
           >
-            <clipPath id={clipId}>
-              <polygon points={points} />
-            </clipPath>
-            <polygon points={points} className="bt-shell" />
-            {level > 0 && (
-              <rect
-                x={Math.min(...xs)}
-                y={bottom - (bottom - top) * level}
-                width={Math.max(...xs) - Math.min(...xs)}
-                height={(bottom - top) * level}
-                fill={fillColor(agg)}
-                clipPath={`url(#${clipId})`}
-              />
-            )}
-            <polygon points={points} className="bt-outline" />
+            <polygon points={points} fill={shade.fill} className="bt-shape" />
             <text x={seg.label[0]} y={seg.label[1]} textAnchor="middle" className="bt-name">
               {seg.name}
             </text>
@@ -252,7 +232,7 @@ function Bowtie({
   );
 }
 
-const TIER_LABEL = { expert: "Expert", verified: "Verified", claimed: "Claimed" } as const;
+const TIER_LABEL = { expert: "Expert", verified: "Verified", claimed: "Self-claimed" } as const;
 
 function TagRow({ tag }: { tag: ScoredTag }) {
   const title = [
@@ -327,8 +307,8 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
                 <strong>Revenue lifecycle</strong>
               </div>
               <p>
-                The fuller and deeper the green, the stronger the client-verified proof in that stage. Select a stage
-                to see the expertise behind it.
+                The deeper the green, the stronger the client-verified proof in that stage. Grey is self-claimed only.
+                Select a stage to see the expertise behind it.
               </p>
             </>
           )}
@@ -345,7 +325,7 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
 
       {pool.length > PREVIEW_ROWS && (
         <button className="rn-view-all" onClick={() => setShowAll(!showAll)}>
-          {showAll ? "Show fewer" : `View all ${pool.length} expertise tags`}
+          {showAll ? `Show top ${PREVIEW_ROWS}` : `View all ${pool.length} expertise tags`}
         </button>
       )}
     </section>
