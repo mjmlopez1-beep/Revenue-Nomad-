@@ -1,0 +1,42 @@
+{
+ "name": "Matt Lopez",
+ "title": "VP of Sales",
+ "loc": "America/New_York",
+ "desc": "I fix the gap between \"we can sell it\" and \"the team can sell it.\"",
+ "source": "revenuenomad.com/operators/matt-lopez-vp-sales-89623cd5-5362-4859-86f0-3f2e03f6b6ba (saved Sep 22, 2026)",
+ "profile": {
+  "reputationIndex": 71,
+  "reputationLabel": "Proven",
+  "engagements": 4,
+  "wouldHireAgain": 1,
+  "totalTags": 33
+ },
+ "reviews": [
+  {
+   "reviewer": "Trista Kempa",
+   "role": "COO",
+   "company": "Ferry",
+   "date": "2026-09-08",
+   "overall": 5,
+   "core": null,
+   "hireAgain": true,
+   "tags": ["1:1 ABM", "CRM cleanup", "Call Coaching & Feedback", "Inbound selling", "New Hire Sales Onboarding", "SEO strategy", "Sales playbook build"]
+  },
+  {
+   "reviewer": "Eric Barbalace",
+   "role": "Account Executive",
+   "company": "myHR Partner",
+   "date": "2026-09-21",
+   "overall": 5,
+   "core": null,
+   "hireAgain": true,
+   "tags": ["Customer Segmentation", "HubSpot admin", "Sales Playbook", "Sales Process Design", "Sales Team Hiring & Ramp", "Sales-CS handoff process", "Segment prioritization"]
+  }
+ ],
+ "legacyTagMap": {
+  "Customer Segmentation": "Segment design",
+  "Sales Team Hiring & Ramp": "Sales hiring",
+  "Call Coaching & Feedback": "Live call coaching",
+  "New Hire Sales Onboarding": "New hire onboarding"
+ }
+}

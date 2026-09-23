@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import sampleOperators from "@/data/skills/sample-operators.json";
+import mattLopez from "@/data/skills/matt-lopez.json";
 import {
   AXES,
   CORE_CRITERIA,
@@ -10,12 +11,19 @@ import {
   SCORE_FLOOR,
   STAGES,
   buildSkillMap,
+  operatorFromReviews,
   type Aggregate,
+  type ProfileDoc,
   type ScoredTag,
+  type SkillMap as SkillMapData,
   type SkillOperator,
 } from "@/lib/skills/score";
 
-const OPERATORS = sampleOperators as SkillOperator[];
+// Matt Lopez comes from his live profile's reviews; the rest are illustrative.
+const OPERATORS: SkillOperator[] = [
+  operatorFromReviews(mattLopez as ProfileDoc),
+  ...(sampleOperators as SkillOperator[]).map((o) => ({ ...o, sample: true })),
+];
 
 // Radar radius as a fraction of the outer ring. No score falls below the
 // claimed floor (45), so the scale runs 45–100: a claimed-only axis sits on
@@ -27,18 +35,20 @@ function radius(agg: Aggregate): number {
 }
 // Rings mark the tier thresholds: claimed 45, verified 50, expert 85, max 100.
 const RINGS = [SCORE_FLOOR, 50, 85, 100];
+const PREVIEW_ROWS = 7;
 
 function Radar({ axes }: { axes: Record<string, Aggregate> }) {
-  const size = 320;
+  // Wide viewBox so the axis labels stay inside the SVG's own box.
+  const size = 380;
   const c = size / 2;
-  const R = 110;
+  const R = 112;
   const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / AXES.length;
   const pt = (i: number, r: number) => [c + Math.cos(angle(i)) * R * r, c + Math.sin(angle(i)) * R * r];
   const ring = (r: number) => AXES.map((_, i) => pt(i, r).join(",")).join(" ");
   const shape = AXES.map((a, i) => pt(i, radius(axes[a])).join(",")).join(" ");
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="skill-radar" role="img" aria-label="Capability radar">
+    <svg viewBox={`0 0 ${size} ${size}`} className="rn-radar" role="img" aria-label="Capability radar">
       {RINGS.map((score) => (
         <polygon
           key={score}
@@ -56,12 +66,12 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
         return <circle key={a} cx={x} cy={y} r={3.5} className="radar-dot" />;
       })}
       {AXES.map((a, i) => {
-        const [x, y] = pt(i, 1.22);
+        const [x, y] = pt(i, 1.24);
         const agg = axes[a];
         return (
           <text key={a} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="radar-label">
             <tspan x={x}>{a}</tspan>
-            <tspan x={x} dy="1.2em" className="radar-value">
+            <tspan x={x} dy="1.25em" className={`radar-value ${agg.claimedOnly ? "claimed" : ""}`}>
               {agg.score == null ? "—" : agg.claimedOnly ? `${agg.score} claimed` : agg.score}
             </tspan>
           </text>
@@ -71,205 +81,234 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
   );
 }
 
-function ScoreBadge({ agg }: { agg: Aggregate }) {
-  if (agg.score == null) return <span className="skill-score muted">—</span>;
-  return <span className={`skill-score ${agg.claimedOnly ? "muted" : ""}`}>{agg.score}</span>;
-}
+const TIER_LABEL = { expert: "Expert", verified: "Verified", claimed: "Claimed" } as const;
 
-function TagChip({ tag }: { tag: ScoredTag }) {
+function TagRow({ tag }: { tag: ScoredTag }) {
   const title = [
     `${tag.c} › ${tag.g}`,
-    tag.r ? `${tag.r} review${tag.r === 1 ? "" : "s"} · score ${tag.score}` : `Self-claimed, no reviews yet · score ${tag.score}`,
-    ...tag.e.map((e) => `Evidence: ${e}`),
+    tag.r ? `${tag.r} client review${tag.r === 1 ? "" : "s"}` : "Self-claimed, no reviews yet",
+    ...tag.e.map((e) => `Confirmed by: ${e}`),
   ].join("\n");
   return (
-    <span className={`tag-chip tier-${tag.tier}`} title={title}>
-      {tag.t}
-      <b>{tag.score}</b>
-    </span>
+    <div className="rn-tag-row" title={title}>
+      <div className="rn-tag-head">
+        <div className="rn-tag-name">
+          <span>{tag.t}</span>
+          <span className={`rn-badge tier-${tag.tier}`}>{TIER_LABEL[tag.tier]}</span>
+        </div>
+        <span className="rn-tag-score">{tag.score}</span>
+      </div>
+      <div className="rn-bar">
+        <div className={`rn-bar-fill tier-${tag.tier}`} style={{ width: `${tag.score}%` }} />
+      </div>
+    </div>
   );
 }
 
-type Selection = { kind: "stage"; name: string } | { kind: "foundation"; name: string } | null;
+type Focus = { kind: "stage" | "foundation"; name: string } | null;
 
-export default function SkillMap() {
-  const [opIdx, setOpIdx] = useState(0);
-  const [sel, setSel] = useState<Selection>({ kind: "stage", name: STAGES[0].name });
-  const op = OPERATORS[opIdx];
-  const map = useMemo(() => buildSkillMap(op), [op]);
+/** Drop-in replacement for the profile page's EXPERTISE section. */
+function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData }) {
+  const [focus, setFocus] = useState<Focus>(null);
+  const [showAll, setShowAll] = useState(false);
 
-  const counts = { expert: 0, verified: 0, claimed: 0 };
-  for (const t of map.tags) counts[t.tier]++;
-  const coreAvg = op.core.v.length ? op.core.v.reduce((a, b) => a + b, 0) / op.core.v.length : null;
-  const coreMax = CORE_SCALE[1];
+  const verified = map.tags.filter((t) => t.tier !== "claimed").length;
+  const total = Math.max(op.profile?.totalTags ?? 0, map.tags.length);
 
-  const selStage = sel?.kind === "stage" ? STAGES.find((s) => s.name === sel.name) : undefined;
-  const selFoundation = sel?.kind === "foundation" ? FOUNDATION.find((f) => f.name === sel.name) : undefined;
-  const selAgg = selStage ? map.stages[selStage.name] : selFoundation ? map.foundation[selFoundation.name] : null;
-  const selTags = selAgg ? [...selAgg.tags].sort((a, b) => b.score - a.score) : [];
+  const stage = focus?.kind === "stage" ? STAGES.find((s) => s.name === focus.name) : undefined;
+  const found = focus?.kind === "foundation" ? FOUNDATION.find((f) => f.name === focus.name) : undefined;
+  const focusAgg = stage ? map.stages[stage.name] : found ? map.foundation[found.name] : null;
+  const pool = (focusAgg ? focusAgg.tags : map.tags).slice().sort((a, b) => b.score - a.score || b.r - a.r);
+  const rows = showAll ? pool : pool.slice(0, PREVIEW_ROWS);
 
-  const tile = (kind: "stage" | "foundation", name: string, agg: Aggregate, side?: string) => (
+  const tile = (kind: "stage" | "foundation", name: string, agg: Aggregate) => (
     <button
       key={name}
-      className={`stage-tile ${side ?? ""} ${sel?.name === name ? "active" : ""} ${agg.score == null ? "empty" : ""}`}
-      onClick={() => setSel({ kind, name })}
+      className={`rn-stage ${kind} ${focus?.name === name ? "active" : ""} ${agg.score == null ? "empty" : ""} ${agg.claimedOnly ? "claimed" : ""}`}
+      onClick={() => {
+        setFocus(focus?.name === name ? null : { kind, name });
+        setShowAll(false);
+      }}
+      aria-pressed={focus?.name === name}
     >
-      <span className="stage-name">{name}</span>
-      <ScoreBadge agg={agg} />
-      <span className="stage-count">
-        {agg.tags.length} tag{agg.tags.length === 1 ? "" : "s"}
-      </span>
+      <span className="rn-stage-name">{name}</span>
+      <span className="rn-stage-score">{agg.score ?? "—"}</span>
     </button>
   );
 
   return (
-    <div className="skill-map">
-      <div className="card skill-head">
-        <div className="op-switch">
-          {OPERATORS.map((o, i) => (
-            <button key={o.name} className={`chip ${i === opIdx ? "active" : ""}`} onClick={() => setOpIdx(i)}>
-              {o.name}
-            </button>
-          ))}
-          <span className="sample-note">Sample operators</span>
-        </div>
-        <div className="op-summary">
-          <div>
-            <h2>{op.name}</h2>
-            <p className="dim">
-              {op.title} · {op.loc}
-            </p>
-            <p>{op.desc}</p>
-          </div>
-          <div className="op-stats">
-            <div>
-              <b>{counts.expert}</b>
-              <span>expert</span>
-            </div>
-            <div>
-              <b>{counts.verified}</b>
-              <span>verified</span>
-            </div>
-            <div>
-              <b>{counts.claimed}</b>
-              <span>claimed</span>
-            </div>
-            <div>
-              <b>{map.fitPoints}</b>
-              <span>fit pts / 18</span>
-            </div>
-          </div>
-        </div>
-        <div className="core-panel">
-          <div className="core-head">
-            <span className="core-title">CORE</span>
-            <b>{coreAvg != null ? coreAvg.toFixed(1) : "—"}</b>
-            <span className="dim small">
-              / {coreMax} · {op.core.n} review{op.core.n === 1 ? "" : "s"}
-            </span>
-          </div>
-          <div className="core-bars">
-            {CORE_CRITERIA.map((label, i) => {
-              const v = op.core.v[i];
-              return (
-                <div key={label} className="core-bar">
-                  <span className="core-label">{label}</span>
-                  <div className="meter">
-                    <div
-                      className="meter-fill"
-                      style={{ width: v == null ? 0 : `${(v / coreMax) * 100}%` }}
-                    />
-                  </div>
-                  <span className="core-value">{v == null ? "—" : v.toFixed(1)}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+    <section className="rn-card">
+      <div className="rn-card-head">
+        <h2>Expertise</h2>
+        <span className="rn-head-meta">
+          {verified} client-verified · {total} tags
+        </span>
       </div>
 
-      <div className="skill-grid">
-        <div className="card">
-          <h3>Capability radar</h3>
-          <p className="dim small">
-            Average of the three best verified tags on each axis. Rings: 45 claimed (inner) · 50 verified · 85 expert ·
-            100.
-          </p>
+      <div className="rn-expertise-top">
+        <div className="rn-radar-wrap">
           <Radar axes={map.axes} />
         </div>
-
-        <div className="card">
-          <h3>Buyer journey</h3>
-          <p className="dim small">Where in the customer lifecycle this operator has proof.</p>
-          <div className="journey">
-            <div className="journey-side">
-              <span className="side-label">Before the sale</span>
-              <div className="stage-row">
-                {STAGES.filter((s) => s.side === "before").map((s) => tile("stage", s.name, map.stages[s.name], "before"))}
-              </div>
-            </div>
-            <div className="journey-side">
-              <span className="side-label">After the sale</span>
-              <div className="stage-row">
-                {STAGES.filter((s) => s.side === "after").map((s) => tile("stage", s.name, map.stages[s.name], "after"))}
-              </div>
-            </div>
-            <div className="journey-side">
-              <span className="side-label">Foundation</span>
-              <div className="stage-row">
-                {FOUNDATION.map((f) => tile("foundation", f.name, map.foundation[f.name], "foundation"))}
-              </div>
-            </div>
+        <div className="rn-journey">
+          <p className="rn-eyebrow">Before the sale</p>
+          <div className="rn-stage-row four">
+            {STAGES.filter((s) => s.side === "before").map((s) => tile("stage", s.name, map.stages[s.name]))}
           </div>
-
-          {selAgg && (
-            <div className="stage-detail">
-              <h4>
-                {sel?.name} <ScoreBadge agg={selAgg} />
-              </h4>
-              {selStage && (
-                <>
-                  <p>
-                    <b>Buyer:</b> {selStage.buyer}
-                  </p>
-                  <p>
-                    <b>The work:</b> {selStage.what}
-                  </p>
-                  <p className="dim">{selStage.skilled}</p>
-                </>
-              )}
-              {selFoundation && <p>{selFoundation.what}</p>}
-              <div className="tag-list">
-                {selTags.length ? selTags.map((t) => <TagChip key={`${t.g}-${t.t}`} tag={t} />) : <span className="dim">No tags here yet.</span>}
-              </div>
-            </div>
-          )}
+          <p className="rn-eyebrow">After the sale</p>
+          <div className="rn-stage-row">
+            {STAGES.filter((s) => s.side === "after").map((s) => tile("stage", s.name, map.stages[s.name]))}
+          </div>
+          <p className="rn-eyebrow">Foundation</p>
+          <div className="rn-stage-row">
+            {FOUNDATION.map((f) => tile("foundation", f.name, map.foundation[f.name]))}
+          </div>
         </div>
       </div>
 
-      <div className="card">
-        <h3>Skill groups</h3>
-        <div className="group-list">
-          {map.groups.map(({ category, group, agg }) => (
-            <div key={`${category}-${group}`} className="group-row">
-              <div className="group-name">
-                <span>{group}</span>
-                <span className="dim small">{category}</span>
-              </div>
-              <ScoreBadge agg={agg} />
-              <div className="tag-list">
-                {agg.tags.map((t) => (
-                  <TagChip key={t.t} tag={t} />
-                ))}
-              </div>
+      <div className="rn-focus">
+        {focusAgg ? (
+          <>
+            <div className="rn-focus-head">
+              <strong>{focus?.name}</strong>
+              <button className="rn-link" onClick={() => setFocus(null)}>
+                Show all expertise
+              </button>
             </div>
-          ))}
+            <p>{stage ? stage.skilled : found?.what}</p>
+          </>
+        ) : (
+          <p className="rn-muted">Select a stage to see the expertise behind it.</p>
+        )}
+      </div>
+
+      <div className="rn-tag-list">
+        {rows.length ? (
+          rows.map((t) => <TagRow key={`${t.g}-${t.t}`} tag={t} />)
+        ) : (
+          <p className="rn-muted">No expertise tagged here yet.</p>
+        )}
+      </div>
+
+      {pool.length > PREVIEW_ROWS && (
+        <button className="rn-view-all" onClick={() => setShowAll(!showAll)}>
+          {showAll ? "Show fewer" : `View all ${pool.length} expertise tags`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function avg(xs: (number | null)[]): number | null {
+  const n = xs.filter((x): x is number => x != null);
+  return n.length ? n.reduce((a, b) => a + b, 0) / n.length : null;
+}
+
+/** CLIENT REVIEWS sidebar card with the CORE breakdown added. */
+function ClientReviewsCard({ op }: { op: SkillOperator }) {
+  const coreMax = CORE_SCALE[1];
+  const published = op.core.v.some((v) => v != null);
+  const overall = op.core.overall ?? avg(op.core.v);
+  return (
+    <section className="rn-card rn-side">
+      <h3>Client Reviews</h3>
+      <div className="rn-stat-grid">
+        <div className="rn-stat">
+          <b>{op.core.n}</b>
+          <span>Verified reviews</span>
         </div>
-        <p className="dim small legend">
-          <span className="tag-chip tier-expert">expert</span> 85–100 (5+ reviews)
-          <span className="tag-chip tier-verified">verified</span> 50–80 (1–4 reviews)
-          <span className="tag-chip tier-claimed">claimed</span> 45 (self-claimed, no reviews)
-        </p>
+        <div className="rn-stat">
+          <b>{overall != null ? overall.toFixed(1) : "—"}</b>
+          <span>Avg rating</span>
+        </div>
+      </div>
+      <div className="rn-core">
+        <p className="rn-eyebrow">CORE ratings</p>
+        {CORE_CRITERIA.map((label, i) => {
+          const v = op.core.v[i];
+          return (
+            <div key={label} className="rn-core-row">
+              <span className="rn-core-label">{label}</span>
+              <div className="rn-bar small">
+                <div className="rn-bar-fill tier-verified" style={{ width: v == null ? 0 : `${(v / coreMax) * 100}%` }} />
+              </div>
+              <span className="rn-core-value">{v == null ? "—" : v.toFixed(1)}</span>
+            </div>
+          );
+        })}
+        {!published && <p className="rn-note">Collected on every review but not yet published on the profile.</p>}
+      </div>
+      {op.profile && op.profile.wouldHireAgain > 0 && (
+        <p className="rn-pill-note">{Math.round(op.profile.wouldHireAgain * 100)}% would hire again</p>
+      )}
+    </section>
+  );
+}
+
+export default function SkillMap() {
+  const [opIdx, setOpIdx] = useState(0);
+  const op = OPERATORS[opIdx];
+  const map = useMemo(() => buildSkillMap(op), [op]);
+  const headline = map.tags
+    .filter((t) => t.tier !== "claimed")
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+
+  return (
+    <div className="rn-preview">
+      <div className="op-switch">
+        <span className="rn-muted">Preview</span>
+        {OPERATORS.map((o, i) => (
+          <button key={o.name} className={`chip ${i === opIdx ? "active" : ""}`} onClick={() => setOpIdx(i)}>
+            {o.name}
+            <small>{o.sample ? "sample" : "live"}</small>
+          </button>
+        ))}
+      </div>
+
+      <div className="rn-profile" key={op.name}>
+        <section className="rn-card rn-hero">
+          <h1>{op.name}</h1>
+          <p className="rn-sub">
+            {op.title} · {op.desc}
+          </p>
+          <div className="rn-chips">
+            {headline.map((t) => (
+              <span key={t.t} className="rn-chip">
+                {t.t}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        <div className="rn-grid">
+          <div className="rn-main">
+            <ExpertiseSection op={op} map={map} />
+            <section className="rn-card rn-unchanged">
+              <span>Industries · Snapshot · Portfolio · Engagement History · Verified Reviews</span>
+              <em>Unchanged</em>
+            </section>
+          </div>
+          <aside className="rn-aside">
+            {op.profile && (
+              <section className="rn-card rn-rep">
+                <p>Reputation Index Score</p>
+                <b>{op.profile.reputationIndex}</b>
+                <span>{op.profile.reputationLabel}</span>
+                <div className="rn-rep-stats">
+                  <div>
+                    <strong>{op.core.n}</strong>
+                    <small>Reviews</small>
+                  </div>
+                  <div>
+                    <strong>{op.profile.engagements}</strong>
+                    <small>Engagements</small>
+                  </div>
+                </div>
+              </section>
+            )}
+            <ClientReviewsCard op={op} />
+          </aside>
+        </div>
       </div>
     </div>
   );

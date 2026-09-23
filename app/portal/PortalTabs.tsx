@@ -17,7 +17,7 @@ export default function PortalTabs() {
           [
             ["board", "Job Board"],
             ["prospects", "Prospects"],
-            ["skills", "Skills"],
+            ["skills", "Expertise"],
             ["profile", "Profile"],
           ] as [View, string][]
         ).map(([key, label]) => (
