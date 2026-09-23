@@ -1068,36 +1068,42 @@ a:hover {
   cursor: pointer;
   outline: none;
 }
-.rn-bowtie .bt-seg polygon,
-.rn-bowtie .bt-seg rect {
+.rn-bowtie .bt-shell {
+  fill: #f6f8f5;
+}
+.rn-bowtie .bt-outline {
+  fill: none;
   stroke: #cfe5cb;
   stroke-width: 1;
-  transition: filter 0.15s;
 }
-.rn-bowtie .bt-seg.empty polygon,
-.rn-bowtie .bt-seg.empty rect {
+.rn-bowtie .bt-seg.empty .bt-shell {
+  fill: #ffffff;
+}
+.rn-bowtie .bt-seg.empty .bt-outline {
   stroke: #d4d4d4;
   stroke-dasharray: 4 3;
 }
-.rn-bowtie .bt-seg:hover polygon,
-.rn-bowtie .bt-seg:hover rect,
-.rn-bowtie .bt-seg:focus-visible polygon,
-.rn-bowtie .bt-seg:focus-visible rect {
-  filter: brightness(0.94);
+.rn-bowtie .bt-seg:hover .bt-shell,
+.rn-bowtie .bt-seg:focus-visible .bt-shell {
+  fill: #e8efe7;
 }
-.rn-bowtie .bt-seg.active polygon,
-.rn-bowtie .bt-seg.active rect {
+.rn-bowtie .bt-seg.active .bt-outline {
   stroke: var(--rn-green-darkest);
   stroke-width: 3;
   stroke-dasharray: none;
 }
+/* Names sit over fills of any depth, so they carry a white halo. */
 .rn-bowtie .bt-name {
   font-size: 12.5px;
   font-weight: 700;
+  fill: var(--rn-green-darkest);
+  stroke: #ffffff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
 }
-.rn-bowtie .bt-score {
-  font-size: 17px;
-  font-weight: 800;
+.rn-bowtie .bt-seg.empty .bt-name {
+  fill: #9aa3a0;
 }
 .rn-expertise-mid {
   display: grid;
