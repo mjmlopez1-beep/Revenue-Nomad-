@@ -1011,12 +1011,6 @@ a:hover {
 .rn-eyebrow:first-child {
   margin-top: 0;
 }
-.rn-expertise-top {
-  display: grid;
-  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-  gap: 24px;
-  align-items: center;
-}
 .rn-radar {
   width: 100%;
   display: block;
@@ -1053,60 +1047,70 @@ a:hover {
 .rn-radar .radar-value.claimed {
   fill: var(--rn-muted);
 }
-.rn-stage-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+.rn-bowtie {
+  display: block;
+  width: 100%;
+  max-width: 680px;
+  margin: 4px auto 0;
 }
-.rn-stage-row.four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.rn-bowtie.vertical {
+  display: none;
+  max-width: 360px;
 }
-.rn-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  font: inherit;
-  text-align: left;
-  background: var(--rn-green-pale);
-  border: 1px solid #cfe5cb;
-  border-radius: 12px;
-  padding: 10px 12px;
+.rn-bowtie .bt-side {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: var(--rn-muted);
+}
+.rn-bowtie .bt-seg {
   cursor: pointer;
-  color: var(--rn-ink);
-  min-width: 0;
+  outline: none;
 }
-.rn-stage.foundation {
-  background: var(--rn-surface);
-  border-color: var(--rn-line);
+.rn-bowtie .bt-seg polygon,
+.rn-bowtie .bt-seg rect {
+  stroke: #cfe5cb;
+  stroke-width: 1;
+  transition: filter 0.15s;
 }
-.rn-stage.claimed,
-.rn-stage.empty {
-  background: #ffffff;
-  border-style: dashed;
-  border-color: #d4d4d4;
+.rn-bowtie .bt-seg.empty polygon,
+.rn-bowtie .bt-seg.empty rect {
+  stroke: #d4d4d4;
+  stroke-dasharray: 4 3;
 }
-.rn-stage.active {
-  outline: 2px solid var(--rn-green);
-  outline-offset: 1px;
+.rn-bowtie .bt-seg:hover polygon,
+.rn-bowtie .bt-seg:hover rect,
+.rn-bowtie .bt-seg:focus-visible polygon,
+.rn-bowtie .bt-seg:focus-visible rect {
+  filter: brightness(0.94);
 }
-.rn-stage-name {
+.rn-bowtie .bt-seg.active polygon,
+.rn-bowtie .bt-seg.active rect {
+  stroke: var(--rn-green-darkest);
+  stroke-width: 3;
+  stroke-dasharray: none;
+}
+.rn-bowtie .bt-name {
   font-size: 12.5px;
   font-weight: 700;
-  line-height: 1.25;
 }
-.rn-stage-score {
-  font-size: 18px;
+.rn-bowtie .bt-score {
+  font-size: 17px;
   font-weight: 800;
-  color: var(--rn-green-deep);
 }
-.rn-stage.claimed .rn-stage-score,
-.rn-stage.empty .rn-stage-score {
-  color: var(--rn-muted);
-  font-size: 13px;
+.rn-expertise-mid {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: center;
+  margin: 20px 0 24px;
+}
+.rn-bio {
+  font-size: 18px;
+  line-height: 1.8;
 }
 .rn-focus {
-  margin: 24px 0 18px;
   padding: 14px 16px;
   background: var(--rn-surface);
   border-radius: 14px;
@@ -1339,8 +1343,16 @@ a:hover {
   color: var(--rn-green-text);
 }
 /* The expertise card stacks radar over journey when its own column is narrow. */
+@container (max-width: 520px) {
+  .rn-bowtie {
+    display: none;
+  }
+  .rn-bowtie.vertical {
+    display: block;
+  }
+}
 @container (max-width: 720px) {
-  .rn-expertise-top {
+  .rn-expertise-mid {
     grid-template-columns: 1fr;
   }
   .rn-radar-wrap {
@@ -1348,12 +1360,6 @@ a:hover {
     width: 100%;
     margin: 0 auto;
     padding: 0 16px;
-  }
-}
-@container (max-width: 420px) {
-  .rn-stage-row,
-  .rn-stage-row.four {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 1100px) {
@@ -1377,5 +1383,8 @@ a:hover {
   }
   .rn-tag-name {
     font-size: 15px;
+  }
+  .rn-bio {
+    font-size: 16px;
   }
 }

@@ -81,6 +81,236 @@ function Radar({ axes }: { axes: Record<string, Aggregate> }) {
   );
 }
 
+type Focus = { kind: "stage" | "foundation"; name: string } | null;
+
+// Revenue bowtie: the four pre-sale stages narrow into the knot (Commit),
+// the three post-sale stages widen back out, and the foundation runs
+// underneath as the base every stage stands on.
+const BT = { w: 560, h: 190, knot: 64, top: 26, seg: 80, gap: 3, baseY: 236, baseH: 44 };
+const BT_BOUNDS = [0, 80, 160, 240, 320, 400, 480, 560]; // x edges of the 7 stages; Commit spans 240–320
+function btHeight(x: number): number {
+  const knotStart = 240;
+  const knotEnd = 320;
+  if (x <= knotStart) return BT.h - ((BT.h - BT.knot) * x) / knotStart;
+  if (x >= knotEnd) return BT.knot + ((BT.h - BT.knot) * (x - knotEnd)) / (BT.w - knotEnd);
+  return BT.knot;
+}
+function btFill(agg: Aggregate): { fill: string; ink: string } {
+  if (agg.score == null) return { fill: "#ffffff", ink: "#9aa3a0" };
+  if (agg.claimedOnly) return { fill: "#eef0ee", ink: "#6b7280" };
+  const t = Math.min(1, Math.max(0, (agg.score - SCORE_FLOOR) / (100 - SCORE_FLOOR)));
+  const alpha = 0.18 + 0.82 * t;
+  return { fill: `rgba(9, 93, 66, ${alpha.toFixed(2)})`, ink: alpha > 0.5 ? "#ffffff" : "#063f2f" };
+}
+
+function Bowtie({
+  map,
+  focus,
+  onPick,
+}: {
+  map: SkillMapData;
+  focus: Focus;
+  onPick: (f: NonNullable<Focus>) => void;
+}) {
+  const cy = BT.top + BT.h / 2;
+  const segs = STAGES.map((st, i) => {
+    const x0 = BT_BOUNDS[i] + (i ? BT.gap / 2 : 0);
+    const x1 = BT_BOUNDS[i + 1] - (i < STAGES.length - 1 ? BT.gap / 2 : 0);
+    const h0 = btHeight(BT_BOUNDS[i]);
+    const h1 = btHeight(BT_BOUNDS[i + 1]);
+    const points = [
+      [x0, cy - h0 / 2],
+      [x1, cy - h1 / 2],
+      [x1, cy + h1 / 2],
+      [x0, cy + h0 / 2],
+    ]
+      .map((p) => p.join(","))
+      .join(" ");
+    return { st, points, mid: (x0 + x1) / 2, agg: map.stages[st.name] };
+  });
+  const baseW = (BT.w - BT.gap * 2) / FOUNDATION.length;
+
+  return (
+    <svg viewBox={`0 0 ${BT.w} ${BT.baseY + BT.baseH + 2}`} className="rn-bowtie" role="group" aria-label="Revenue bowtie">
+      <text x={2} y={12} className="bt-side">
+        Before the sale
+      </text>
+      <text x={BT.w - 2} y={12} textAnchor="end" className="bt-side">
+        After the sale
+      </text>
+      <text x={280} y={cy - BT.knot / 2 - 8} textAnchor="middle" className="bt-side">
+        Signed
+      </text>
+      {segs.map(({ st, points, mid, agg }) => {
+        const { fill, ink } = btFill(agg);
+        const active = focus?.kind === "stage" && focus.name === st.name;
+        return (
+          <g
+            key={st.id}
+            className={`bt-seg ${active ? "active" : ""} ${agg.score == null ? "empty" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
+            aria-label={`${st.name}: ${agg.score ?? "no tags"}`}
+            onClick={() => onPick({ kind: "stage", name: st.name })}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPick({ kind: "stage", name: st.name })}
+          >
+            <polygon points={points} fill={fill} />
+            <text x={mid} y={cy - 4} textAnchor="middle" className="bt-name" fill={ink}>
+              {st.name}
+            </text>
+            <text x={mid} y={cy + 16} textAnchor="middle" className="bt-score" fill={ink}>
+              {agg.score ?? "—"}
+            </text>
+          </g>
+        );
+      })}
+      {FOUNDATION.map((f, i) => {
+        const agg = map.foundation[f.name];
+        const { fill, ink } = btFill(agg);
+        const x = i * (baseW + BT.gap);
+        const active = focus?.kind === "foundation" && focus.name === f.name;
+        return (
+          <g
+            key={f.id}
+            className={`bt-seg ${active ? "active" : ""} ${agg.score == null ? "empty" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
+            aria-label={`${f.name}: ${agg.score ?? "no tags"}`}
+            onClick={() => onPick({ kind: "foundation", name: f.name })}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPick({ kind: "foundation", name: f.name })}
+          >
+            <rect x={x} y={BT.baseY} width={baseW} height={BT.baseH} rx={10} fill={fill} />
+            <text x={x + 14} y={BT.baseY + BT.baseH / 2 + 5} className="bt-name" fill={ink}>
+              {f.name}
+            </text>
+            <text x={x + baseW - 14} y={BT.baseY + BT.baseH / 2 + 5} textAnchor="end" className="bt-score" fill={ink}>
+              {agg.score ?? "—"}
+            </text>
+          </g>
+        );
+      })}
+      <text x={2} y={BT.baseY - 8} className="bt-side">
+        Foundation
+      </text>
+    </svg>
+  );
+}
+
+// Narrow screens get the same bowtie turned on its side: stages run top to
+// bottom, narrowing into Commit and widening back out, foundation below.
+const BV = { w: 320, knot: 150, seg: 52, gap: 3, top: 22 };
+function bvWidth(i: number): number {
+  // width at stage boundary i (0..7); Commit spans boundaries 3–4
+  if (i <= 3) return BV.w - ((BV.w - BV.knot) * i) / 3;
+  return BV.knot + ((BV.w - BV.knot) * (i - 4)) / 3;
+}
+
+function BowtieVertical({
+  map,
+  focus,
+  onPick,
+}: {
+  map: SkillMapData;
+  focus: Focus;
+  onPick: (f: NonNullable<Focus>) => void;
+}) {
+  const cx = BV.w / 2;
+  const bodyEnd = BV.top + STAGES.length * BV.seg;
+  const baseY = bodyEnd + 30;
+  const baseH = 40;
+  return (
+    <svg
+      viewBox={`0 0 ${BV.w} ${baseY + FOUNDATION.length * (baseH + BV.gap)}`}
+      className="rn-bowtie vertical"
+      role="group"
+      aria-label="Revenue bowtie"
+    >
+      <text x={cx} y={12} textAnchor="middle" className="bt-side">
+        Before the sale
+      </text>
+      {STAGES.map((st, i) => {
+        const y0 = BV.top + i * BV.seg + (i ? BV.gap / 2 : 0);
+        const y1 = BV.top + (i + 1) * BV.seg - BV.gap / 2;
+        const w0 = bvWidth(i);
+        const w1 = bvWidth(i + 1);
+        const points = [
+          [cx - w0 / 2, y0],
+          [cx + w0 / 2, y0],
+          [cx + w1 / 2, y1],
+          [cx - w1 / 2, y1],
+        ]
+          .map((p) => p.join(","))
+          .join(" ");
+        const agg = map.stages[st.name];
+        const { fill, ink } = btFill(agg);
+        const active = focus?.kind === "stage" && focus.name === st.name;
+        const mid = (y0 + y1) / 2 + 5;
+        return (
+          <g
+            key={st.id}
+            className={`bt-seg ${active ? "active" : ""} ${agg.score == null ? "empty" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
+            aria-label={`${st.name}: ${agg.score ?? "no tags"}`}
+            onClick={() => onPick({ kind: "stage", name: st.name })}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPick({ kind: "stage", name: st.name })}
+          >
+            <polygon points={points} fill={fill} />
+            <text x={cx - 8} y={mid} textAnchor="end" className="bt-name" fill={ink}>
+              {st.name}
+            </text>
+            <text x={cx + 8} y={mid} className="bt-score" fill={ink}>
+              {agg.score ?? "—"}
+            </text>
+          </g>
+        );
+      })}
+      {/* The knot and the turn after it sit where the bowtie is narrowest. */}
+      <text x={cx - BV.knot / 2 - 8} y={BV.top + 3.5 * BV.seg + 4} textAnchor="end" className="bt-side">
+        Signed
+      </text>
+      <text x={2} y={BV.top + 4.5 * BV.seg - 2} className="bt-side">
+        <tspan>After</tspan>
+        <tspan x={2} dy="1.2em">
+          the sale
+        </tspan>
+      </text>
+      <text x={cx} y={bodyEnd + 18} textAnchor="middle" className="bt-side">
+        Foundation
+      </text>
+      {FOUNDATION.map((f, i) => {
+        const agg = map.foundation[f.name];
+        const { fill, ink } = btFill(agg);
+        const y = baseY + i * (baseH + BV.gap);
+        const active = focus?.kind === "foundation" && focus.name === f.name;
+        return (
+          <g
+            key={f.id}
+            className={`bt-seg ${active ? "active" : ""} ${agg.score == null ? "empty" : ""}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
+            aria-label={`${f.name}: ${agg.score ?? "no tags"}`}
+            onClick={() => onPick({ kind: "foundation", name: f.name })}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onPick({ kind: "foundation", name: f.name })}
+          >
+            <rect x={0} y={y} width={BV.w} height={baseH} rx={10} fill={fill} />
+            <text x={14} y={y + baseH / 2 + 5} className="bt-name" fill={ink}>
+              {f.name}
+            </text>
+            <text x={BV.w - 14} y={y + baseH / 2 + 5} textAnchor="end" className="bt-score" fill={ink}>
+              {agg.score ?? "—"}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 const TIER_LABEL = { expert: "Expert", verified: "Verified", claimed: "Claimed" } as const;
 
 function TagRow({ tag }: { tag: ScoredTag }) {
@@ -105,8 +335,6 @@ function TagRow({ tag }: { tag: ScoredTag }) {
   );
 }
 
-type Focus = { kind: "stage" | "foundation"; name: string } | null;
-
 /** Drop-in replacement for the profile page's EXPERTISE section. */
 function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData }) {
   const [focus, setFocus] = useState<Focus>(null);
@@ -121,20 +349,10 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
   const pool = (focusAgg ? focusAgg.tags : map.tags).slice().sort((a, b) => b.score - a.score || b.r - a.r);
   const rows = showAll ? pool : pool.slice(0, PREVIEW_ROWS);
 
-  const tile = (kind: "stage" | "foundation", name: string, agg: Aggregate) => (
-    <button
-      key={name}
-      className={`rn-stage ${kind} ${focus?.name === name ? "active" : ""} ${agg.score == null ? "empty" : ""} ${agg.claimedOnly ? "claimed" : ""}`}
-      onClick={() => {
-        setFocus(focus?.name === name ? null : { kind, name });
-        setShowAll(false);
-      }}
-      aria-pressed={focus?.name === name}
-    >
-      <span className="rn-stage-name">{name}</span>
-      <span className="rn-stage-score">{agg.score ?? "—"}</span>
-    </button>
-  );
+  const pick = (f: NonNullable<Focus>) => {
+    setFocus(focus?.name === f.name ? null : f);
+    setShowAll(false);
+  };
 
   return (
     <section className="rn-card">
@@ -145,40 +363,36 @@ function ExpertiseSection({ op, map }: { op: SkillOperator; map: SkillMapData })
         </span>
       </div>
 
-      <div className="rn-expertise-top">
+      <Bowtie map={map} focus={focus} onPick={pick} />
+      <BowtieVertical map={map} focus={focus} onPick={pick} />
+
+      <div className="rn-expertise-mid">
         <div className="rn-radar-wrap">
           <Radar axes={map.axes} />
         </div>
-        <div className="rn-journey">
-          <p className="rn-eyebrow">Before the sale</p>
-          <div className="rn-stage-row four">
-            {STAGES.filter((s) => s.side === "before").map((s) => tile("stage", s.name, map.stages[s.name]))}
-          </div>
-          <p className="rn-eyebrow">After the sale</p>
-          <div className="rn-stage-row">
-            {STAGES.filter((s) => s.side === "after").map((s) => tile("stage", s.name, map.stages[s.name]))}
-          </div>
-          <p className="rn-eyebrow">Foundation</p>
-          <div className="rn-stage-row">
-            {FOUNDATION.map((f) => tile("foundation", f.name, map.foundation[f.name]))}
-          </div>
+        <div className="rn-focus">
+          {focusAgg ? (
+            <>
+              <div className="rn-focus-head">
+                <strong>{focus?.name}</strong>
+                <button className="rn-link" onClick={() => setFocus(null)}>
+                  Show all expertise
+                </button>
+              </div>
+              <p>{stage ? stage.skilled : found?.what}</p>
+            </>
+          ) : (
+            <>
+              <div className="rn-focus-head">
+                <strong>Revenue lifecycle</strong>
+              </div>
+              <p>
+                Scores average the three strongest client-verified tags in each stage. Select a stage in the bowtie to
+                see the expertise behind it.
+              </p>
+            </>
+          )}
         </div>
-      </div>
-
-      <div className="rn-focus">
-        {focusAgg ? (
-          <>
-            <div className="rn-focus-head">
-              <strong>{focus?.name}</strong>
-              <button className="rn-link" onClick={() => setFocus(null)}>
-                Show all expertise
-              </button>
-            </div>
-            <p>{stage ? stage.skilled : found?.what}</p>
-          </>
-        ) : (
-          <p className="rn-muted">Select a stage to see the expertise behind it.</p>
-        )}
       </div>
 
       <div className="rn-tag-list">
@@ -282,6 +496,12 @@ export default function SkillMap() {
 
         <div className="rn-grid">
           <div className="rn-main">
+            <section className="rn-card">
+              <div className="rn-card-head">
+                <h2>Operator Overview</h2>
+              </div>
+              <p className="rn-bio">{op.bio ?? op.desc}</p>
+            </section>
             <ExpertiseSection op={op} map={map} />
             <section className="rn-card rn-unchanged">
               <span>Industries · Snapshot · Portfolio · Engagement History · Verified Reviews</span>

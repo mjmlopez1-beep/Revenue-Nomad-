@@ -22,6 +22,8 @@ export interface SkillOperator {
   title: string;
   loc: string;
   desc: string;
+  /** Operator Overview paragraph from the profile. */
+  bio?: string;
   tags: OperatorTag[];
   /** n reviews; v = CORE criterion averages (null when not published); overall = avg star rating. */
   core: { n: number; v: (number | null)[]; overall?: number };
@@ -53,6 +55,7 @@ export interface ProfileDoc {
   title: string;
   loc: string;
   desc: string;
+  bio?: string;
   profile: NonNullable<SkillOperator["profile"]>;
   reviews: ReviewRecord[];
   /** Old tag names still on the live profile → their name in the current taxonomy. */
@@ -131,6 +134,7 @@ export function operatorFromReviews(doc: ProfileDoc): SkillOperator {
     title: doc.title,
     loc: doc.loc,
     desc: doc.desc,
+    bio: doc.bio,
     tags: list,
     core: {
       n: doc.reviews.length,

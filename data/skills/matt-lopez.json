@@ -3,6 +3,7 @@
  "title": "VP of Sales",
  "loc": "America/New_York",
  "desc": "I fix the gap between \"we can sell it\" and \"the team can sell it.\"",
+ "bio": "Ten years building B2B sales orgs, including as an early team member and partner at Skaled Consulting, where I oversaw our sales transformation engagements for companies in HR tech, healthcare, property tech, and many other industries. I am currently building the GTM strategy at Revenue Nomad. I work best with CEO's that are still heavily involved in Sales, have product-market fit but no repeatable sales motion behind it.",
  "source": "revenuenomad.com/operators/matt-lopez-vp-sales-89623cd5-5362-4859-86f0-3f2e03f6b6ba (saved Sep 22, 2026)",
  "profile": {
   "reputationIndex": 71,
@@ -20,7 +21,15 @@
    "overall": 5,
    "core": null,
    "hireAgain": true,
-   "tags": ["1:1 ABM", "CRM cleanup", "Call Coaching & Feedback", "Inbound selling", "New Hire Sales Onboarding", "SEO strategy", "Sales playbook build"]
+   "tags": [
+    "1:1 ABM",
+    "CRM cleanup",
+    "Call Coaching & Feedback",
+    "Inbound selling",
+    "New Hire Sales Onboarding",
+    "SEO strategy",
+    "Sales playbook build"
+   ]
   },
   {
    "reviewer": "Eric Barbalace",
@@ -30,7 +39,15 @@
    "overall": 5,
    "core": null,
    "hireAgain": true,
-   "tags": ["Customer Segmentation", "HubSpot admin", "Sales Playbook", "Sales Process Design", "Sales Team Hiring & Ramp", "Sales-CS handoff process", "Segment prioritization"]
+   "tags": [
+    "Customer Segmentation",
+    "HubSpot admin",
+    "Sales Playbook",
+    "Sales Process Design",
+    "Sales Team Hiring & Ramp",
+    "Sales-CS handoff process",
+    "Segment prioritization"
+   ]
   }
  ],
  "legacyTagMap": {
