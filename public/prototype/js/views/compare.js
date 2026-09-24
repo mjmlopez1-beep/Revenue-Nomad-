@@ -34,10 +34,11 @@
   }
   // Tag tiers are claimed | verified | expert; every non-claimed tag is client-verified
   const verifiedTags = (op) => (op.tags || []).filter((t) => t.tier !== 'claimed').sort((a, b) => (b.score || 0) - (a.score || 0) || (b.r || 0) - (a.r || 0));
+  // The signed-in client's firmographics plus saved match preferences (same brief the profile page scores with)
   function brief(op) {
     const co = RN.personas.buyer.company;
-    const b = RN.store.state.browse || {};
-    return { revenueRange: co.revenueRange, employeeRange: co.employeeRange, industries: [co.industry], tags: (b.tags || []).slice(0, 5), roleCategory: ((b.filters || {}).roleCategories || [])[0] || op.catKey };
+    const base = RN.clientBrief ? RN.clientBrief() : { revenueRange: co.revenueRange, employeeRange: co.employeeRange, industries: co.industry ? [co.industry] : [] };
+    return Object.assign({}, base, { roleCategory: base.roleCategory || op.catKey });
   }
   const sortBy = (key, vals) => { const order = RN.fields[key].options.map((o) => o.v); return vals.slice().sort((a, b) => order.indexOf(a) - order.indexOf(b)); };
 
@@ -105,7 +106,7 @@
     const F = RN.fields;
     const coreTip = `<b>CORE client reviews</b><br>Clients rate ${F.coreDims.options.map((d) => esc(d.l)).join(', ')} from 1 to 5 after an engagement. Shown as the average across reviews.`;
     const R = [];
-    if (buyer) R.push({ sec: `Fit for ${esc(co.name)}`, l: 'Match signals', tip: `<b>Match signals</b><br>Scored against ${esc(co.name)}: company revenue, employee range, industry and the expertise you searched for.`, cell: fitCell, val: (op) => RN.model.fit(op, brief(op)).pct, dir: 'max' });
+    if (buyer) R.push({ sec: `Fit for ${esc(co.name)}`, l: 'Match signals', tip: `<b>Match signals</b><br>Scored against ${esc(co.name)}: company revenue, employee range, industry, plus the role, GTM motion and need in your saved match preferences.`, cell: fitCell, val: (op) => RN.model.fit(op, brief(op)).pct, dir: 'max' });
     else if (visitor) R.push({ sec: 'Fit for your company', l: 'Match signals', lock: true });
     R.push({ sec: 'Standing', l: 'Reputation Index', tip: RN.ui.risExplainer(), cell: risCell, val: (op) => op.ris.score, dir: 'max' });
     R.push({ l: 'CORE average', tip: coreTip, cell: coreCell, val: (op) => { const c = coreAvg(op); return c ? c.avg : null; }, dir: 'max' });

@@ -360,7 +360,8 @@
   .sb-job-top > .grow, .sb-pros-top > .grow { flex: 1 1 0; min-width: calc(100% - 56px); }
   .sb-pros-top > .grow { min-width: calc(100% - 136px); }
   .sb-job-top .sb-fit { margin-left: 54px; }
-  .sb-job-act .btn { padding: 0 12px; }
+  .sb-job-act { gap: 6px; }
+  .sb-job-act .btn { padding: 0 10px; gap: 6px; letter-spacing: .04em; }
   .sb-how { grid-template-columns: minmax(0, 1fr); }
   .sb-how > div + div { border-left: 0; border-top: 1px solid var(--line-2); }
   .sb-meters { grid-template-columns: minmax(0, 1fr); }

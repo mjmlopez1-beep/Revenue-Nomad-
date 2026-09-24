@@ -684,14 +684,14 @@
   RN.view('browse', {
     route: 'browse', nav: 'browse',
     title: () => 'Browse fractional GTM operators',
-    render: () => { landedCat = null; return page(null); },
+    render: () => { RN.model.applyEdits(); landedCat = null; return page(null); },
     mount, unmount,
   });
   RN.view('browse-cat', {
     route: 'browse.:cat', nav: 'browse',
     samples: { cat: 'revenue_operations', extra: RN.fields.roleCategory.options.map((o) => 'browse.' + o.v).filter((r) => r !== 'browse.revenue_operations') },
     title: (p) => { const k = catValid(p.cat); return k ? `Fractional ${RN.fields.catLabel(k)} for hire` : 'Browse fractional GTM operators'; },
-    render: (p) => { const k = catValid(p.cat); if (!k) { landedCat = null; return page(null); } return page(k); },
+    render: (p) => { RN.model.applyEdits(); const k = catValid(p.cat); if (!k) { landedCat = null; return page(null); } return page(k); },
     mount, unmount,
   });
 })();

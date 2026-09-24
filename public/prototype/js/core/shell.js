@@ -232,6 +232,6 @@
       shell.renderHeader(cur && cur.view);
       shell.renderTray(cur && cur.view);
     }
-    if (key === 'outbox') shell.renderDock();
+    if (key === 'outbox' || key === 'persona' || key === '*') shell.renderDock();
   });
 })();

@@ -328,9 +328,9 @@
   }
 
   function renderProfile(p) {
+    RN.model.applyEdits(); // Studio edits and reviews submitted on #review.<id> show immediately
     const op = RN.model.bySlug(p.slug);
     if (!op) return notFound(p.slug);
-    RN.model.applyEdits();
     visit('op:' + op.slug);
     const c = build(op);
     S.ctx = c;
@@ -1112,8 +1112,14 @@
         <button type="button" class="btn btn-block" data-act="persona" data-p="buyer">Log in as client</button></div></section>`;
     }
     const co = RN.personas.buyer.company;
-    const fit = RN.model.fit(op, { revenueRange: co.revenueRange, employeeRange: co.employeeRange, industries: [co.industry], roleCategory: op.catKey });
+    // Company firmographics plus the match preferences saved in the client workspace (#buyer.company)
+    const base = RN.clientBrief ? RN.clientBrief() : { revenueRange: co.revenueRange, employeeRange: co.employeeRange, industries: [co.industry] };
+    const fit = RN.model.fit(op, Object.assign({}, base, { roleCategory: base.roleCategory || op.catKey }));
     const ic = { match: icon('check'), partial: '<span class="pf-half"></span>', low: icon('minus') };
+    if (!fit.signals.length) {
+      return `<section class="pf-card pf-match"><div class="row between"><span class="eyebrow">Match signals</span>${v.preview ? '' : `<a class="pill pill-line" href="#buyer.company">${icon('edit')}Edit preferences</a>`}</div>
+        <p class="pf-match-own">${esc(op.first)} has not added company size, industry or GTM motion yet, so we can’t score the fit for ${esc(co.name)}. Ask about it when you request an intro.</p></section>`;
+    }
     return `<section class="pf-card pf-match">
       <div class="row between"><span class="eyebrow">Match signals</span>${v.preview ? '' : `<a class="pill pill-line" href="#buyer.company">${icon('edit')}Edit preferences</a>`}</div>
       <div class="pf-match-hd"><div class="pf-ring sm">${RN.chart.ring(fit.pct, { size: 64, stroke: 6, label: fit.pct + ' match' })}<b>${fit.pct}</b></div>

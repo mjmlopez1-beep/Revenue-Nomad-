@@ -104,7 +104,7 @@
   const DEFS = {
     'Outbound Motion Build': 'Designing and launching a repeatable outbound program: target accounts, sequences, messaging, roles and the metrics to run it.',
     'Account Expansion Selling': 'Selling more to existing customers through new seats, products or business units, using account plans and executive relationships.',
-    'Outbound Prospecting': 'Finding and contacting target buyers by email, phone and social to book first meetings.',
+    'Outbound Prospecting': 'Finding and contacting target prospects by email, phone and social to book first meetings.',
     'Pipeline Inspection': 'A weekly review of every open deal against stage criteria, so risks surface early and the forecast holds.',
     'RevOps Infrastructure Build': 'Standing up revenue operations: CRM, data model, reporting, routing and the processes that keep them clean.',
     'Demand Generation': 'Running the programs and channels that create qualified pipeline for sales, measured on cost and conversion.',
@@ -116,7 +116,7 @@
     'Channel Sales Build': 'Building a route to market through resellers or referral partners: selection, terms, enablement and co-selling.',
     'Mid-Market Segmentation': 'Choosing which mid-market accounts to target and fitting coverage, pricing and the sales motion to them.',
     'AI Sales Automation': 'Using AI tools to automate research, outreach, follow-up and CRM updates so reps spend more time selling.',
-    'Content Marketing Strategy': 'Deciding which topics, formats and channels build trust with buyers, and running the calendar that ships them.',
+    'Content Marketing Strategy': 'Deciding which topics, formats and channels build trust with prospects, and running the calendar that ships them.',
     'Pipeline architecture': 'Designing pipeline stages, entry and exit criteria and coverage targets so pipeline data reflects reality.',
     'AI Lead Scoring': 'Ranking leads by likelihood to buy with models built on firmographic, intent and engagement data.',
     'Deal velocity improvement': 'Shortening the time from first meeting to close by removing the stalls at specific stages.',
@@ -129,7 +129,7 @@
     'Marketing Operations': 'Running the systems behind marketing: automation platform, lead lifecycle, attribution and campaign reporting.',
     'Partner Program Build': 'Designing a partner program from scratch: tiers, benefits, recruitment, enablement and partner-sourced pipeline targets.',
     'Reseller Channel Build': 'Recruiting and managing resellers who sell the product to their own customers under agreed margins and terms.',
-    'SEO & Organic Growth': 'Growing unpaid search traffic through technical fixes, content and links that match what buyers search for.',
+    'SEO & Organic Growth': 'Growing unpaid search traffic through technical fixes, content and links that match what prospects search for.',
     'AI maturity audit': 'Assessing how a go-to-market team uses AI today and where automation would pay back first.',
     'AI Revenue Forecasting': 'Predicting bookings and flagging at-risk deals with models trained on pipeline and activity data.',
     'Brand positioning': 'Choosing the position the company owns against alternatives, and the proof that supports it.',
@@ -142,7 +142,7 @@
     'Forecast accuracy': 'Improving how closely the called forecast matches actual bookings, quarter after quarter.',
     'GTM AI Strategy': 'Deciding where AI fits across the go-to-market team, which tools to adopt and how to measure the payoff.',
     'GTM launch': 'Planning and running a product or market launch: positioning, sales readiness, channels and success metrics.',
-    'ICP definition': 'Describing the companies and buyers most likely to buy and succeed, based on closed-won and churn data.',
+    'ICP definition': 'Describing the companies and people most likely to buy and succeed, based on closed-won and churn data.',
     'KPI framework': 'Choosing the few revenue metrics each team owns, how they are defined and how often they are reviewed.',
     'Manager coaching': 'Training frontline sales managers to coach reps on deals and skills, beyond inspecting the numbers.',
     'MEDDIC / MEDDPICC Implementation': 'Rolling out the MEDDIC or MEDDPICC qualification method in the CRM, deal reviews and rep training.',
@@ -151,7 +151,7 @@
     'Objection Handling Framework': 'A documented set of common objections with tested responses, used in training and in live deals.',
     'Outbound motion': 'Running outbound as a system: who to target, the cadence, and the handoff to account executives.',
     'PLG → Sales Bridge': 'Adding sales on top of a self-serve product: which users to contact, when, and with what offer.',
-    'Product Marketing': 'Positioning, messaging, launches and sales tools that connect the product to what buyers care about.',
+    'Product Marketing': 'Positioning, messaging, launches and sales tools that connect the product to what customers care about.',
   };
   R.def = (name) => { const info = RN.model.tagInfo(name); return (info && info.d) || DEFS[name] || (info && DEFS[info.v]) || ''; };
   R.defSource = (name) => { const info = RN.model.tagInfo(name); return info && info.d ? 'library' : DEFS[name] ? 'research' : ''; };
@@ -1250,7 +1250,7 @@
         const mk = (RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t));
         return [
           { id: 'signs', h: 'Signs it is time', html: `<ul><li>The founder is on every late-stage call and pipeline stalls when they travel.</li><li>You have passed roughly $1M in annual revenue and want to double it.</li><li>Your first reps are struggling to close without the founder.</li><li>The board is asking who owns the number.</li></ul>` },
-          { id: 'capture', h: 'Step 1: capture what works', html: `<p>Record the founder's next ten sales calls. Map the questions they ask, the objections they hear and how they price. Look at the last 20 closed-won and closed-lost deals for patterns in company size, trigger and buyer title. That is your first ICP and discovery guide.</p>` },
+          { id: 'capture', h: 'Step 1: capture what works', html: `<p>Record the founder's next ten sales calls. Map the questions they ask, the objections they hear and how they price. Look at the last 20 closed-won and closed-lost deals for patterns in company size, trigger and the title of the person who signed. That is your first ICP and discovery guide.</p>` },
           { id: 'playbook', h: 'Step 2: build the playbook', html: `<p>Turn the notes into stages with exit criteria, a discovery guide, a pricing and discount policy, and a short list of case stories. Keep it to a few pages the team will actually use. Focus areas to look for: ${L('library', 'Sales Playbook')}, Sales Process Design, Discovery Framework.</p>` },
           { id: 'handover', h: 'Step 3: hand over deals in stages', html: tbl(['Months', 'Who leads', 'Founder\'s role'], [
             ['1 to 2', 'Founder', 'Runs calls; the rep or sales leader shadows and takes notes'],
