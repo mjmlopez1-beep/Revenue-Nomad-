@@ -8,6 +8,8 @@ next-env.d.ts
 # runtime job database (seed.json is checked in; jobs.json is generated)
 data/jobs.json
 data/jobs.json.tmp
+data/prospects.json*
+data/profile.json
 .DS_Store
 .scratch/
 test-results/
