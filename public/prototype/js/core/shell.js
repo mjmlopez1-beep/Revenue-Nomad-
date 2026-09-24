@@ -219,7 +219,12 @@
       </div>` : ''}
       <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}" aria-label="Prototype controls, viewing as ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}">${icon('sliders')}<i class="dock-live" aria-hidden="true"></i><span class="dock-tag">Prototype · ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
   };
-  RN.actions['dock'] = () => { dockOpen = !dockOpen; shell.renderDock(); };
+  // Keep keyboard focus: open moves it to the panel's close button, close returns it to the dock button
+  RN.actions['dock'] = () => {
+    dockOpen = !dockOpen; shell.renderDock();
+    const t = document.querySelector(dockOpen ? '.dock-panel .x-btn' : '.dock-btn');
+    if (t) t.focus();
+  };
   RN.actions['clock'] = (el) => {
     const d = +el.dataset.d;
     RN.store.set('clockOffsetDays', d === 0 ? 0 : (RN.store.state.clockOffsetDays || 0) + d);

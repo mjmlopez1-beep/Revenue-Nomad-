@@ -14,7 +14,7 @@
     const tim = byName('Tim Evans') || RN.model.ops[5];
     const jordan = RN.personas.buyer;
     const other = { name: 'Priya Anand', title: 'VP Operations', email: 'priya@clearpathfreight.com', company: { name: 'Clearpath Freight', industry: 'Freight & Trucking', revenueRange: '20m_50m', employeeRange: '201_500' } };
-    const parcel = { name: 'Marcus Lee', title: 'Founder', email: 'marcus@parcellabs.io', company: { name: 'Parcel Labs', industry: 'Saas', revenueRange: '1m_5m', employeeRange: '11_50' } };
+    const parcel = { name: 'Marcus Lee', title: 'Founder', email: 'marcus@parcelwise.example', company: { name: 'Parcelwise', industry: 'Saas', revenueRange: '1m_5m', employeeRange: '11_50' } };
 
     // The demo client's saved operators appear when you first view the system as Jordan (not as a visitor)
     s.shortlist = [];
@@ -48,7 +48,7 @@
     s.reviewRequests = [
       { id: 'rr-seed-1', opId: matt.id, reviewer: { name: 'Trista Kempa', email: 'trista@ferry.com', company: 'Ferry', title: 'COO' }, engagement: 'Ferry', status: 'completed', sentAt: iso(24), completedAt: iso(16) },
       { id: 'rr-seed-2', opId: matt.id, reviewer: { name: 'Eric Barbalace', email: 'eric@myhrpartner.com', company: 'myHR Partner', title: 'Account Executive' }, engagement: 'myHR Partner', status: 'completed', sentAt: iso(9), completedAt: iso(3) },
-      { id: 'rr-seed-3', opId: matt.id, reviewer: { name: 'Dana Whitfield', email: 'dana@trialbee.com', company: 'Trialbee', title: 'CEO' }, engagement: 'Trialbee', status: 'sent', sentAt: iso(2) },
+      { id: 'rr-seed-3', opId: matt.id, reviewer: { name: 'Trialbee sponsor', email: 'sponsor@trialbee.example', company: 'Trialbee', title: 'Engagement sponsor', placeholder: true }, engagement: 'Trialbee', status: 'sent', sentAt: iso(2) },
     ];
 
     s.proofLinks = [

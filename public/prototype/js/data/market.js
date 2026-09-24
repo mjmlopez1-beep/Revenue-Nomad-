@@ -168,7 +168,7 @@
     companies: [
       { name: 'Northwind Health', industry: 'Health Care', revenueRange: '20m_50m', employeeRange: '51_200', hq: 'Boston, MA' },
       { name: 'Clearpath Freight', industry: 'Freight & Trucking', revenueRange: '20m_50m', employeeRange: '201_500', hq: 'Columbus, OH' },
-      { name: 'Parcel Labs', industry: 'Saas', revenueRange: '1m_5m', employeeRange: '11_50', hq: 'Austin, TX' },
+      { name: 'Parcelwise', industry: 'Saas', revenueRange: '1m_5m', employeeRange: '11_50', hq: 'Austin, TX' },
       { name: 'Summit Dental Group', industry: 'Health Care', revenueRange: '5m_20m', employeeRange: '51_200', hq: 'Denver, CO' },
       { name: 'Orbit Analytics', industry: 'Data & Analytics', revenueRange: '5m_20m', employeeRange: '51_200', hq: 'New York, NY' },
       { name: 'Brightline Staffing', industry: 'Professional Services', revenueRange: '20m_50m', employeeRange: '201_500', hq: 'Charlotte, NC' },

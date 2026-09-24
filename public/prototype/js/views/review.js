@@ -37,7 +37,8 @@
     const isBuyer = rr.reviewer && buyer && rr.reviewer.email === buyer.email;
     const intro = rr.introId ? st().intros.find((i) => i.id === rr.introId) : null;
     const d = {
-      name: rr.reviewer.name || '', title: rr.reviewer.title || '', company: rr.reviewer.company || rr.engagement || '',
+      // A placeholder contact (demo data at a real company) leaves name and title for the reviewer to fill
+      name: rr.reviewer.placeholder ? '' : rr.reviewer.name || '', title: rr.reviewer.placeholder ? '' : rr.reviewer.title || '', company: rr.reviewer.company || rr.engagement || '',
       roleCategory: op.catKey, opTitle: op.role, opTitleOther: '',
       start: eng ? eng.start : intro && intro.hiredAt ? String(intro.hiredAt).slice(0, 7) : '',
       end: eng ? eng.end : '', ongoing: !eng && !!intro,
@@ -110,7 +111,7 @@
   /* ---------- Header + stepper ---------- */
   function header(rr, op, step) {
     const eng = engagementFor(rr, op);
-    const first = RN.fmt.first(rr.reviewer.name) || 'there';
+    const first = (!rr.reviewer.placeholder && RN.fmt.first(rr.reviewer.name)) || 'there';
     const co = rr.reviewer.company || rr.engagement || 'your company';
     return `<header class="rv-hd">
       <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${eng ? ` at ${esc(eng.company)} · ${esc(monthLabel(eng.start))} to ${esc(monthLabel(eng.end))}` : ''}</span></div></div>
@@ -489,7 +490,7 @@
   function done(rr, op) {
     const res = results[rr.id];
     const rv = st().reviews.find((r) => r.id === rr.reviewId) || null;
-    const first = RN.fmt.first(rr.reviewer.name);
+    const first = (rv && RN.fmt.first(rv.reviewer)) || (rr.reviewer.placeholder ? '' : RN.fmt.first(rr.reviewer.name));
     const similar = RN.model.similar(op, 3);
     const isBuyer = st().persona === 'buyer';
     const dims = DIMS();

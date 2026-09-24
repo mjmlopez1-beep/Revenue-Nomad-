@@ -14,10 +14,12 @@
   const ui = (RN.ui = {});
 
   /* ---------- Atoms ---------- */
-  ui.avatar = function (op, cls) {
-    if (!op) return `<span class="ava ${cls || ''}"></span>`;
-    if (op.photo) return `<img class="ava ${cls || ''}" src="${esc(op.photo)}" alt="${esc(op.name)}" loading="lazy">`;
-    return `<span class="ava ${cls || ''}" aria-label="${esc(op.name)}">${esc(op.initials || RN.fmt.initials(op.name))}</span>`;
+  /* o.decorative: the name is printed right beside the avatar, so screen readers skip the picture */
+  ui.avatar = function (op, cls, o) {
+    if (!op) return `<span class="ava ${cls || ''}" aria-hidden="true"></span>`;
+    const deco = o && o.decorative;
+    if (op.photo) return `<img class="ava ${cls || ''}" src="${esc(op.photo)}" alt="${deco ? '' : esc(op.name)}" loading="lazy">`;
+    return `<span class="ava ${cls || ''}" ${deco ? 'aria-hidden="true"' : `role="img" aria-label="${esc(op.name)}"`}>${esc(op.initials || RN.fmt.initials(op.name))}</span>`;
   };
 
   ui.avail = function (op, o) {
@@ -45,7 +47,7 @@
     const full = Math.round(n || 0);
     let s = '';
     for (let i = 0; i < 5; i++) s += `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="display:inline-block"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8L12 3Z" fill="${i < full ? 'var(--gold)' : 'var(--line)'}"/></svg>`;
-    return `<span class="row-nw" style="--gap:1px" aria-label="${n} out of 5">${s}</span>`;
+    return `<span class="row-nw" style="--gap:1px" role="img" aria-label="${esc(n)} out of 5 stars">${s}</span>`;
   };
 
   /* Reputation Index seal. op.ris = {score, label}; label comes from RN.fields.risLabel */
@@ -142,7 +144,7 @@
     return `<article class="opc" data-op="${esc(op.id)}">
       <button type="button" class="opc-save ${saved ? 'on' : ''}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}" aria-label="${saved ? 'Remove from shortlist' : 'Save to shortlist'}">${icon('bookmark')}</button>
       <div class="opc-top">
-        ${ui.avatar(op, 'ava-md')}
+        ${ui.avatar(op, 'ava-md', { decorative: true })}
         <div class="grow" style="padding-right:36px">
           <h3 class="opc-name"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a></h3>
           <div class="opc-role">Fractional ${esc(op.role)}</div>
@@ -233,10 +235,16 @@
 
   /* ---------- Tooltip popover ---------- */
   let tipEl = null;
+  let tipBtn = null;
   function showTip(btn) {
     hideTip();
     tipEl = document.createElement('div');
     tipEl.className = 'tip-pop';
+    tipEl.id = 'rn-tip';
+    tipEl.setAttribute('role', 'tooltip');
+    tipBtn = btn;
+    btn.setAttribute('aria-describedby', 'rn-tip');
+    btn.setAttribute('aria-expanded', 'true');
     tipEl.innerHTML = btn.getAttribute('data-tip');
     document.body.appendChild(tipEl);
     const r = btn.getBoundingClientRect();
@@ -248,7 +256,10 @@
     tipEl.style.left = left + 'px';
     tipEl.style.top = top + 'px';
   }
-  function hideTip() { if (tipEl) { tipEl.remove(); tipEl = null; } }
+  function hideTip() {
+    if (tipEl) { tipEl.remove(); tipEl = null; }
+    if (tipBtn) { tipBtn.removeAttribute('aria-describedby'); tipBtn.setAttribute('aria-expanded', 'false'); tipBtn = null; }
+  }
   ui.hideTip = hideTip;
 
   /* ---------- After render hook ---------- */
@@ -287,7 +298,7 @@
     if (fn) fn(f, ui.formData(f), e);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (tipEl) hideTip(); else if (document.querySelector('.menu-sheet') && RN.shell.closeMenu) RN.shell.closeMenu(); else ui.closeModal(); }
+    if (e.key === 'Escape') { if (tipEl) hideTip(); else if (document.querySelector('.menu-sheet') && RN.shell.closeMenu) RN.shell.closeMenu(); else if (modalStack.length) ui.closeModal(); else if (document.querySelector('.dock-panel')) RN.actions.dock(); }
     // Keep focus inside the top modal or menu sheet
     if (e.key === 'Tab') {
       const box = document.querySelector('.menu-sheet') || (modalStack.length ? modalStack[modalStack.length - 1].el : null);

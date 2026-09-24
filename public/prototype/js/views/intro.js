@@ -65,16 +65,24 @@
     }
     const signedIn = st.persona === 'buyer';
     const me = RN.personas.buyer;
-    const fit = signedIn ? RN.model.fit(op, { revenueRange: me.company.revenueRange, employeeRange: me.company.employeeRange, industries: [me.company.industry], roleCategory: op.catKey }) : null;
-    const defaults = Object.assign({ need: RN.fields.needCats && Object.keys(RN.fields.needCats).find((k) => (RN.fields.needCats[k] || []).includes(op.catKey)) || 'not_sure', engagementType: 'fractional', startBy: op.avail.key === 'available_now' ? 'available_now' : op.avail.key, hoursPerMonth: op.avail.hoursCode || '20' }, prefill);
-    // Visitors start blank (their own details); signed-in clients never see these fields
-    const who = Object.assign({ name: '', email: '', company: '', industry: '', revenueRange: '', employeeRange: '' }, prefill);
+    // Same brief as profile and compare scores: company firmographics plus saved match preferences
+    const brief = signedIn ? Object.assign({}, RN.clientBrief(), { roleCategory: op.catKey }) : null;
+    const fit = brief ? RN.model.fit(op, brief) : null;
+    // What the client already told us wins: saved preferences, then the need picked on Home or Browse, then the category
+    const NC = RN.fields.needCats || {};
+    const fits = (n) => n && (NC[n] || []).includes(op.catKey);
+    const said = [brief && brief.need, st.browse && st.browse.need].find(fits);
+    const defaults = Object.assign({ need: said || Object.keys(NC).find((k) => (NC[k] || []).includes(op.catKey)) || 'not_sure', engagementType: (brief && brief.engagementType) || 'fractional', startBy: op.avail.key === 'available_now' ? 'available_now' : op.avail.key, hoursPerMonth: op.avail.hoursCode || '20' }, prefill);
+    // Visitors start blank (their own details), with Browse filters as a head start; signed-in clients never see these fields
+    const bf = (st.browse && st.browse.filters) || {};
+    const first = (v) => [].concat(v || [])[0] || '';
+    const who = Object.assign({ name: '', email: '', company: '', industry: first(bf.industries), revenueRange: first(bf.revenueRange), employeeRange: first(bf.employeeRange) }, prefill);
     RN.ui.modal({
       width: 620,
       title: `Request an intro to ${esc(op.first)}`,
       sub: `${esc(op.name)} · Fractional ${esc(op.role)} · ${esc(op.avail.label)}`,
       body: `<form id="intro-form" data-submit="intro-send" data-op="${esc(op.id)}" class="stack" style="--gap:22px">
-        ${fit ? `<div class="note info">${icon('target')}<div><b>${esc(fit.label)} for ${esc(me.company.name)}</b> · ${fit.count} of ${fit.signals.length} signals. ${fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2).join('. ')}.</div></div>` : ''}
+        ${fit ? (() => { const hits = fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2); return `<div class="note info">${icon('target')}<div><b>${esc(fit.label)} for ${esc(me.company.name)}</b> · ${fit.count} of ${fit.signals.length} signals.${hits.length ? ' ' + hits.join('. ') + '.' : ''}</div></div>`; })() : ''}
         ${RN.w.field('need', defaults.need, { name: 'need', compact: true })}
         ${RN.w.field('engagementType', defaults.engagementType, { name: 'engagementType', compact: true, change: 'intro-type' })}
         <div class="grid g-2" style="--gap:18px">

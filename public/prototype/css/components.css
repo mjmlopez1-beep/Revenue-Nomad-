@@ -18,6 +18,8 @@
 .nav-actions .nav-burger { display: none; }
 .nav-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 11px; letter-spacing: 0; }
 .hdr.over .nav-count { background: var(--leaf); color: var(--forest-deep); }
+/* On a leaf or accent-filled button the badge flips to forest so it never disappears (dark mode) */
+.btn-leaf .nav-count, .btn:not(.btn-line):not(.btn-ghost) .nav-count, .hdr.over .btn-leaf .nav-count { background: var(--forest-deep); color: var(--leaf); }
 @media (max-width: 640px) { .nav-actions .hide-s { display: none; } }
 @media (max-width: 440px) {
   .hdr-in { gap: 10px; }
@@ -274,6 +276,11 @@
 .modal-hd .sub { color: var(--mute); font-size: var(--t-14); margin-top: 6px; }
 .modal-bd { padding: 0 var(--s-6) var(--s-6); }
 .modal-ft { position: sticky; bottom: 0; display: flex; gap: var(--s-3); justify-content: flex-end; align-items: center; padding: var(--s-4) var(--s-6); border-top: 1px solid var(--line-2); background: var(--card); }
+@media (max-width: 640px) {
+  .modal-ft { flex-wrap: wrap; }
+  .modal-ft > .grow:first-child { flex: 1 0 100%; order: -1; }
+  .modal-ft > .btn { flex: 1 1 0; }
+}
 .x-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--card); display: grid; place-items: center; color: var(--mute); flex: 0 0 auto; cursor: pointer; }
 .x-btn:hover { color: var(--ink); border-color: var(--line); }
 .x-btn svg { width: 18px; height: 18px; }

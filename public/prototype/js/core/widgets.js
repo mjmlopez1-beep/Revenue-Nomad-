@@ -125,7 +125,7 @@
       <div class="tagpick-sel" data-empty="${esc(opts.emptyText || (isTags ? 'No tags yet. Search or pick from suggestions below.' : 'None selected yet. Search below.'))}">${values.map((t) => tagChip(t, src)).join('')}</div>
       <div class="tagpick-search">${icon('search')}<input type="search" placeholder="Search ${RN.fmt.int((RN.fields[src].options || []).length)} ${esc(noun)}${isTags && !opts.noCustom ? ', or type your own' : ''}" data-input="w-tag-search" aria-label="Search ${esc(noun)}" autocomplete="off"></div>
       <div class="tagpick-list">${tagList(values, '', opts.cat, src, isTags && !opts.noCustom)}</div>
-      <div class="tagpick-foot"><span data-count>${values.length}${opts.max ? ' of ' + opts.max : ''} selected</span>${isTags ? '<span>Verified when a client review confirms it</span>' : ''}</div>
+      <div class="tagpick-foot"><span data-count aria-live="polite">${values.length}${opts.max ? ' of ' + opts.max : ''} selected</span>${isTags ? '<span>Verified when a client review confirms it</span>' : ''}</div>
       <input type="hidden" name="${esc(name)}" value="${esc(values.join('|'))}" data-multi="1" ${opts.change ? `data-change="${esc(opts.change)}"` : ''}>
     </div>`;
   };
