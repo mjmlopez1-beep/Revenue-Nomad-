@@ -63,9 +63,9 @@
         ['Full time VP of Sales, base + OTE + benefits + equity', '$27,000+', '90 to 120 days', 'Severance plus 4 to 6 months lost'],
         ['Agency or consultancy', '$15,000+', '4 to 6 weeks', 'Contract term'],
       ],
-      // Share of engagements by standard hours-per-month chip
+      // Share of engagements by the standard hoursPerMonth codes (19 = <20 hrs / month)
       hours: [
-        { h: 'h_under_20', v: 18 }, { h: 'h_20', v: 23 }, { h: 'h_40', v: 29 }, { h: 'h_60', v: 12 }, { h: 'h_80', v: 9 }, { h: 'h_100', v: 5 }, { h: 'h_160', v: 4 },
+        { h: '19', v: 18 }, { h: '20', v: 23 }, { h: '40', v: 29 }, { h: '60', v: 12 }, { h: '80', v: 9 }, { h: '100', v: 5 }, { h: '160', v: 4 },
       ],
       term: [
         { l: '1 to 3 mo', v: 14 }, { l: '3 to 6 mo', v: 38 }, { l: '6 to 12 mo', v: 33 }, { l: '12+ mo', v: 15 },

@@ -595,7 +595,7 @@
         <h3 class="pf-h3">Company size</h3>
         ${op.revenueRanges.length ? strip('revenueRange', op.revenueRanges, engRev, F.revenueRange.label) : ''}
         ${op.employeeRanges.length ? strip('employeeRange', op.employeeRanges, engEmp, F.employeeRange.label) : ''}
-        <p class="pf-note">${hasEngDots ? `<span class="pf-key on"></span>Where ${esc(op.first)} does their best work <span class="pf-key-dot"></span>A past engagement at that size` : `Company sizes ${esc(op.first)} works with, from the operator’s profile.`}</p>
+        <p class="pf-note">${hasEngDots ? `<span class="pf-key-i"><span class="pf-key on"></span>Where ${esc(op.first)} does their best work</span><span class="pf-key-i"><span class="pf-key-dot"></span>A past engagement at that size</span>` : `Company sizes ${esc(op.first)} works with, from the operator’s profile.`}</p>
       </div>` : '';
     const inds = op.industries.length ? `<div class="pf-fit-ind"><h3 class="pf-h3">${esc(F.industries.label)} <span class="pf-count">${op.industries.length}</span></h3>
       <div class="pf-chips">${op.industries.map((i) => `<span class="pf-chip">${esc(RN.w.label('industries', i))}</span>`).join('')}</div></div>` : '';
@@ -1199,7 +1199,13 @@
       S.scrollFn = () => {
         if (ticking) return;
         ticking = true;
-        requestAnimationFrame(() => { ticking = false; if (nav.isConnected) nav.classList.toggle('show-cta', cta.getBoundingClientRect().bottom < nav.getBoundingClientRect().bottom); });
+        requestAnimationFrame(() => {
+          ticking = false;
+          if (!nav.isConnected) return;
+          const r = nav.getBoundingClientRect();
+          const stuck = r.top <= (parseFloat(getComputedStyle(nav).top) || 0) + 1;
+          nav.classList.toggle('show-cta', stuck && cta.getBoundingClientRect().bottom < r.top);
+        });
       };
       S.scrollFn();
     }

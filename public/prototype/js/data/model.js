@@ -507,6 +507,13 @@
     return { op, rate, idx, pctile, opps, checklist: M.checklist(op), completeness: op.completeness };
   };
 
+  /* Taxonomy curation (Revenue Nomad Research, taxonomy v1): moves tags to the journey stage they change and
+     fills missing definitions, so the profile bowtie, the Framework grid and the Library agree. */
+  M.curate = function (stageMap, defOf) {
+    F.fitTags.options.forEach((o) => { if (stageMap[o.v]) o.stage = stageMap[o.v]; if (!o.d && defOf) o.d = defOf(o.v) || ''; });
+    M.ops.forEach((op) => op.tags.forEach((t) => { if (stageMap[t.t]) t.stage = stageMap[t.t]; }));
+  };
+
   /* Similar operators (after an intro, on profiles, in compare suggestions) */
   M.similar = function (op, n) {
     return M.ops.filter((x) => x.id !== op.id && x.catKey === op.catKey)
