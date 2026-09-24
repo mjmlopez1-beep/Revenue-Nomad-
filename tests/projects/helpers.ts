@@ -76,7 +76,7 @@ export async function followMail(page: Page, opts: { kind?: string; to?: string;
   await page.getByTestId("outbox-filter").fill(opts.to || "");
   const entry = mail(page, opts).first();
   await expect(entry).toBeVisible();
-  const a = link ? entry.getByRole("link", { name: link }) : entry.getByRole("link").first();
+  const a = link ? entry.getByRole("link", { name: link }).first() : entry.getByRole("link").first();
   await a.click();
   await expect(page.getByTestId("outbox")).toBeHidden();
 }

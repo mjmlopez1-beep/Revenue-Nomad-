@@ -3,6 +3,7 @@ import type { Project, State } from "../lib/types";
 import { OPERATORS, displayName } from "../lib/data";
 import { briefFromProject, fitScore, seatCategory } from "../lib/fit";
 import { MAX_SCREENING, opState, type BriefErrors } from "../lib/store";
+import { BUDGET_PRESETS, HOUR_PRESETS, TEMPLATES } from "../lib/templates";
 import { Avatar, FieldError, FitParts, FitScore } from "./common";
 
 export type BriefDraft = Project;
@@ -39,6 +40,53 @@ export function prefillFromText(text: string): Partial<Project> {
   return out;
 }
 
+/** The six skills most listed by operators in this seat's category, for one-click must-haves. */
+function suggestedMustHaves(title: string, chosen: string[]): string[] {
+  const cat = seatCategory(title || "");
+  const counts = new Map<string, number>();
+  for (const o of OPERATORS) if (o.cat === cat) for (const t of o.allTags || []) counts.set(t, (counts.get(t) || 0) + 1);
+  const lower = chosen.map((c) => c.toLowerCase());
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .map(([t]) => t)
+    .filter((t) => !lower.includes(t.toLowerCase()))
+    .slice(0, 6);
+}
+
+export function TemplatePicker({ onPick, active }: { onPick: (key: string) => void; active?: string }) {
+  return (
+    <section className="card templates" aria-labelledby="tpl-h" data-testid="templates">
+      <div className="card-head">
+        <h2 id="tpl-h">Start from a template</h2>
+        <span className="head-meta">One click fills the brief. Change anything after.</span>
+      </div>
+      <div className="tpl-grid" role="group" aria-label="Templates">
+        {TEMPLATES.map((t) => (
+          <button key={t.key} type="button" className="tpl" aria-pressed={active === t.brief.title} onClick={() => onPick(t.key)} data-testid={`tpl-${t.key}`}>
+            <b>{t.label}</b>
+            <span>{t.blurb}</span>
+            <small>
+              {t.brief.hoursPerMonthMin}-{t.brief.hoursPerMonthMax} hrs · ${t.brief.budgetMin}-${t.brief.budgetMax}/hr
+            </small>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Presets({ label, options, current, onPick, fmt }: { label: string; options: [number, number][]; current: [number | null | undefined, number | null | undefined]; onPick: (v: [number, number]) => void; fmt: (v: [number, number]) => string }) {
+  return (
+    <div className="presets" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.join("-")} type="button" className="preset" aria-pressed={current[0] === o[0] && current[1] === o[1]} onClick={() => onPick(o)}>
+          {fmt(o)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function BriefFields({
   draft,
   set,
@@ -60,7 +108,7 @@ export function BriefFields({
     <>
       <details className="card paste">
         <summary>
-          <b>Start from what you have</b> <span className="muted">Optional. Paste a job description, SOW or call notes to prefill the fields below</span>
+          <b>Or paste a job description</b> <span className="muted">Optional. Paste a JD, SOW or call notes to prefill the fields below</span>
         </summary>
         <textarea rows={4} value={paste} onChange={(e) => setPaste(e.target.value)} aria-label="Paste a job description" />
         <div className="row">
@@ -99,6 +147,7 @@ export function BriefFields({
               <span>to</span>
               <input type="number" min={1} value={draft.hoursPerMonthMax ?? ""} onChange={(e) => set({ hoursPerMonthMax: num(e.target.value) as number })} aria-label="Hours a month, maximum" data-testid="f-hmax" aria-invalid={!!errors.hours} />
             </div>
+            <Presets label="Common hours" options={HOUR_PRESETS} current={[draft.hoursPerMonthMin, draft.hoursPerMonthMax]} onPick={([a, b]) => set({ hoursPerMonthMin: a, hoursPerMonthMax: b })} fmt={([a, b]) => `${a}-${b}`} />
             <FieldError msg={errors.hours} />
           </fieldset>
           <label className="field">
@@ -117,6 +166,7 @@ export function BriefFields({
                 <span>to</span>
                 <input type="number" min={1} value={draft.budgetMax ?? ""} onChange={(e) => set({ budgetMax: num(e.target.value) })} aria-label="Budget maximum per hour" data-testid="f-bmax" aria-invalid={!!errors.budget} />
               </div>
+              <Presets label="Common budgets" options={BUDGET_PRESETS} current={[draft.budgetMin, draft.budgetMax]} onPick={([a, b]) => set({ budgetMin: a, budgetMax: b })} fmt={([a, b]) => `$${a}-${b}`} />
               <FieldError msg={errors.budget} />
             </fieldset>
           )}
@@ -138,8 +188,15 @@ export function BriefFields({
               </span>
             ))}
           </div>
+          <div className="chips" aria-label="Suggested must-haves">
+            {suggestedMustHaves(draft.title, draft.mustHaves).map((t) => (
+              <button key={t} type="button" className="chip chip-btn" onClick={() => set({ mustHaves: [...draft.mustHaves, t] })} data-testid="musthave-suggestion">
+                + {t}
+              </button>
+            ))}
+          </div>
           <div className="row">
-            <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Add a must-have" aria-label="Add a must-have" onKeyDown={(e) => {
+            <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="Or type your own" aria-label="Add a must-have" onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 if (tag.trim() && !draft.mustHaves.includes(tag.trim())) set({ mustHaves: [...draft.mustHaves, tag.trim()] });
@@ -218,7 +275,7 @@ export function useLiveMatch(s: State, draft: BriefDraft) {
 
 export function LiveMatch({ s, draft, rn }: { s: State; draft: BriefDraft; rn?: boolean }) {
   const m = useLiveMatch(s, draft);
-  const range = rn ? `at or under $${draft.operatorRate ?? "?"}` : `$${draft.budgetMin ?? "?"} to $${draft.budgetMax ?? "?"}`;
+  const range = rn ? `at or under $${draft.operatorRate ?? "?"}` : draft.budgetMin == null || draft.budgetMax == null ? null : `$${draft.budgetMin} to $${draft.budgetMax}`;
   return (
     <aside className="card live-match" aria-labelledby="lm-h" data-testid="live-match">
       <div className="eyebrow">
@@ -244,7 +301,7 @@ export function LiveMatch({ s, draft, rn }: { s: State; draft: BriefDraft; rn?: 
       </dl>
       <p className="note-box" data-testid="lm-norate">
         <b>{m.noRate}</b> of {OPERATORS.length} operators have no rate on their profile, so budget fit is a guess for most. The {OPERATORS.length - m.noRate} who list one have a median of ${m.median}/hr
-        {m.median != null && draft.budgetMax != null && !rn ? (m.median > draft.budgetMax ? ", above your range" : m.median < (draft.budgetMin ?? 0) ? ", below your range" : ", inside your range") : ""}. Budget range {range}.
+        {m.median != null && draft.budgetMax != null && !rn ? (m.median > draft.budgetMax ? ", above your range" : m.median < (draft.budgetMin ?? 0) ? ", below your range" : ", inside your range") : ""}.{range ? ` Budget range ${range}.` : " Pick a budget to compare."}
       </p>
       <h3 className="mini-h">Top matches right now</h3>
       <ol className="lm-top">

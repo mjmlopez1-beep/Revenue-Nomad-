@@ -2,7 +2,7 @@
 
 Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-handoff/QA_PLAN.md`, one Playwright test each in `tests/projects/`, run headless against the production build (`npm run test:e2e`, Chromium).
 
-**Result: 49 of 49 pass.** The suite ran clean twice in a row after the last change (42.8s and 44.2s, 4 workers).
+**Result: 49 of 49 QA scenarios pass, plus 7 usability tests (U-01 to U-07, see `USABILITY_AUDIT.md`), 56 in total.** The suite ran clean twice in a row after the last change (42.8s and 44.2s, 4 workers).
 
 ## Scenarios
 
@@ -57,6 +57,15 @@ Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-ha
 | X-05 | Pass | At 400px, B4, O3 and A1 have no horizontal scroll and every action button is on screen |
 | X-06 | Pass | Dark theme: sampled text is at least 4.5:1 against its background; the three tier colors differ |
 | X-07 | Pass | Post, respond and select done by keyboard only, with a visible focus ring checked on every Tab stop |
+
+## Changes after the usability audit
+
+`USABILITY_AUDIT.md` cut the buyer's core job from about 20 clicks and 290 keystrokes to 6 clicks and none. Changes that touch QA scenarios:
+
+- **B-10, B-13:** "Not a fit" is now a one-click **Pass** with Undo. The reason is optional and set afterwards in the Not a fit view.
+- **B-08:** sort is a single dropdown.
+- **O-09:** intros now offer the buyer's three times, and each is a one-tap booking link in the email. The booked call shows on the buyer's response row and Intro requests page.
+- New projects default to Revenue Nomad suggestions on.
 
 ## Bugs found and fixed
 

@@ -2031,6 +2031,155 @@ body:has(.rnp) {
   margin-top: 6px;
 }
 
+/* ---------- fast paths: templates, presets, bulk triage, calls ---------- */
+.rnp .tpl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+.rnp .tpl {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.rnp .tpl:hover {
+  border-color: var(--brand-2);
+}
+.rnp .tpl[aria-pressed="true"] {
+  border-color: var(--brand-2);
+  background: var(--tint);
+}
+.rnp .tpl b {
+  font-size: 15px;
+}
+.rnp .tpl span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.rnp .tpl small {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.rnp .presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rnp .preset {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.rnp .preset[aria-pressed="true"] {
+  border-color: var(--brand-2);
+  background: var(--tint);
+  color: var(--brand-text);
+}
+.rnp .post-sug {
+  justify-content: flex-end;
+}
+.rnp .quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rnp .sort-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-left: auto;
+}
+.rnp .sort-select select {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.rnp .bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.rnp .bulk-bar.on {
+  border-style: solid;
+  border-color: var(--brand-2);
+  background: var(--tint);
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 3;
+}
+.rnp .pick {
+  display: flex;
+  padding-top: 14px;
+  width: 20px;
+}
+.rnp .pick input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-2);
+}
+.rnp .resp-top {
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+}
+.rnp .resp.picked {
+  outline: 2px solid var(--brand-2);
+}
+.rnp .answer-peek {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font: 400 15px/1.45 var(--serif);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.rnp .answer-peek span {
+  font: 600 12.5px var(--sans);
+  color: var(--brand-text);
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.rnp .call {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  background: var(--gold-bg);
+  border: 1px solid var(--gold-line);
+}
+.rnp .call-booked {
+  background: var(--tint);
+  border-color: var(--tint-line);
+  color: var(--brand-text);
+}
+.rnp .reason-pick select {
+  width: auto;
+  padding: 5px 8px;
+  font-size: 12.5px;
+}
+
 /* ---------- neutralize the site's global classes (.btn, .field, .pill, ...) ---------- */
 .rnp .btn,
 .rnp .btn:hover {
@@ -2118,7 +2267,10 @@ body:has(.rnp) {
     font-size: 10.5px;
   }
   .rnp .resp-top {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+  .rnp .sort-select {
+    margin-left: 0;
   }
   .rnp .resp-top .avatar {
     display: none;

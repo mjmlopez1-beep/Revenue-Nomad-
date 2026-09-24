@@ -707,7 +707,7 @@ export function createBuyerDraft(buyerId: string): string {
       companyDescriptor: b.companyDescriptor,
       hideCompanyUntilIntro: true,
       visibility: "invites_plus_open",
-      wantsRnSuggestions: false,
+      wantsRnSuggestions: true,
       postedAt: null,
       staffedAt: null,
       closedAt: null,
@@ -833,34 +833,68 @@ function assertDecisionsOpen(p: Project) {
     );
 }
 
-export function requestIntro(pid: string, opId: string) {
+const SLOT_TIMES = ["10:00 am ET", "1:00 pm ET", "4:00 pm ET"];
+
+/** Three call slots on the next three weekdays, one per day, so the operator can book with one tap. */
+export function offerSlots(now: number): string[] {
+  const out: string[] = [];
+  let d = new Date(now);
+  while (out.length < 3) {
+    d = new Date(d.getTime() + DAY);
+    const wd = d.getUTCDay();
+    if (wd === 0 || wd === 6) continue;
+    out.push(`${dayLabel(d.getTime())}, ${SLOT_TIMES[out.length]}`);
+  }
+  return out;
+}
+
+/** Request intros with one or many responders. Each gets the buyer's three offered times as one-tap booking links. */
+export function requestIntro(pid: string, opIds: string | string[]) {
+  const ids = Array.isArray(opIds) ? opIds : [opIds];
   mutate("buyer", (s, c) => {
     const p = mustProject(s, pid);
     assertDecisionsOpen(p);
-    const r = responseOf(s, pid, opId);
-    if (!r || !r.submittedAt) throw new ActionError("There is no response from this operator yet.");
-    r.decision = "intro_requested";
-    r.decisionAt = c.now;
-    r.viewedAt = r.viewedAt || c.now;
     const b = buyerById(p.ownerBuyerId);
-    const existing = s.intros.find((i) => i.projectId === pid && i.operatorId === opId);
-    if (existing) {
-      existing.status = "approved";
-      existing.createdAt = c.now;
-      existing.withdrawnAt = null;
-    } else s.intros.push({ id: c.id("intro"), projectId: pid, operatorId: opId, buyerId: b?.id || null, createdAt: c.now, status: "approved" });
-    const op = operatorById(opId)!;
-    c.email({
-      kind: "intro",
-      to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
-      subject: `${b?.company || "The buyer"} wants to talk, ${p.title}`,
-      body: `${op.first}, ${b?.contactName}, ${b?.contactTitle} at ${b?.company}, requested an intro after reading your response. Book a time or reply from the project page.`,
-      links: [opLink(op.id, `/operator/projects/${p.id}`, "Book a time")],
-      projectId: p.id,
-      operatorId: op.id,
-    });
-    c.event("intro_requested", { projectId: pid, operatorId: opId, meta: { autoApproved: true } });
+    const slots = offerSlots(c.now);
+    for (const opId of ids) {
+      const r = responseOf(s, pid, opId);
+      if (!r || !r.submittedAt) throw new ActionError("There is no response from this operator yet.");
+      if (r.decision === "intro_requested") continue;
+      r.decision = "intro_requested";
+      r.decisionAt = c.now;
+      r.viewedAt = r.viewedAt || c.now;
+      const existing = s.intros.find((i) => i.projectId === pid && i.operatorId === opId);
+      if (existing) Object.assign(existing, { status: "approved", createdAt: c.now, withdrawnAt: null, slots, bookedSlot: null, bookedAt: null });
+      else s.intros.push({ id: c.id("intro"), projectId: pid, operatorId: opId, buyerId: b?.id || null, createdAt: c.now, status: "approved", slots, bookedSlot: null });
+      const op = operatorById(opId)!;
+      c.email({
+        kind: "intro",
+        to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
+        subject: `${b?.company || "The buyer"} wants to talk, ${p.title}`,
+        body: `${op.first}, ${b?.contactName}, ${b?.contactTitle} at ${b?.company}, requested an intro after reading your response. Tap a time to book a 30 minute call.`,
+        links: [
+          ...slots.map((sl, i) => opLink(op.id, `/operator/projects/${p.id}?book=${i}`, `Book ${sl}`)),
+          opLink(op.id, `/operator/projects/${p.id}`, "None work, reply instead"),
+        ],
+        projectId: p.id,
+        operatorId: op.id,
+      });
+      c.event("intro_requested", { projectId: pid, operatorId: opId, meta: { autoApproved: true, slots } });
+    }
   });
+}
+
+export function setNotAFitReason(pid: string, opId: string, reason: string) {
+  mutate("buyer", (s, c) => {
+    const r = responseOf(s, pid, opId);
+    if (!r || r.decision !== "not_a_fit") return;
+    r.notAFitReason = reason;
+    c.event("not_a_fit_reason", { projectId: pid, operatorId: opId, meta: { reason } });
+  });
+}
+
+export function introOf(s: State, pid: string, opId: string) {
+  return s.intros.find((i) => i.projectId === pid && i.operatorId === opId && i.status === "approved");
 }
 
 export function markNotAFit(pid: string, opIds: string[], reason: string) {
@@ -1162,13 +1196,19 @@ export function bookTime(pid: string, opId: string, slot: string) {
     (s, c) => {
       const p = mustProject(s, pid);
       const op = operatorById(opId)!;
+      const intro = introOf(s, pid, opId);
+      if (intro?.bookedSlot) throw new ActionError(`You already booked ${intro.bookedSlot}.`);
+      if (intro) {
+        intro.bookedSlot = slot;
+        intro.bookedAt = c.now;
+      }
       const to = projectContact(p);
       c.email({
         kind: "booking",
         to,
-        subject: `${displayName(op)} booked a time, ${p.title}`,
-        body: `${displayName(op)} booked ${slot} for a 30 minute intro call about ${p.title}.`,
-        links: [{ label: "Open the project", path: to.role === "admin" ? `/admin/projects/${pid}` : `/buyer/projects/${pid}`, as: `${to.role}:${to.id}` }],
+        subject: `Call booked with ${displayName(op)}, ${slot}`,
+        body: `${displayName(op)} booked ${slot} for a 30 minute intro call about ${p.title}. It is on your project page.`,
+        links: [{ label: "Open the project", path: to.role === "admin" ? `/admin/projects/${pid}` : `/buyer/projects/${pid}?view=intro`, as: `${to.role}:${to.id}` }],
         projectId: pid,
         operatorId: opId,
       });

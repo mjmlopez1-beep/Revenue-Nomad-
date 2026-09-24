@@ -143,11 +143,11 @@ test("O-09 intro requested reveals company and contact; Book a time and Reply wo
   await respond(page, "Tim Evans", NW, { rate: "200", hours: "25" });
   await openBuyerProject(page);
   await responseRow(page, "Tim Evans").getByTestId("request-intro").click();
-  await followMail(page, { kind: "intro", to: "Tim Evans" });
+  await followMail(page, { kind: "intro", to: "Tim Evans" }, "None work, reply instead");
   await expect(page.getByTestId("company-revealed")).toContainText("Northwind Health");
   await expect(page.getByTestId("buyer-contact")).toHaveText("Jordan Ellis");
   await page.getByTestId("book-slot").first().click();
-  await expect(page.getByTestId("intro-card")).toContainText("Booked");
+  await expect(page.getByTestId("booked")).toContainText("Call booked");
   await page.getByTestId("reply").click();
   await page.getByTestId("reply-text").fill("Thursday works, looking forward to it.");
   await page.getByTestId("reply-send").click();

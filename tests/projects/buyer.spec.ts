@@ -129,7 +129,7 @@ test("B-08 sort by rate puts operators with no rate last", async ({ page }) => {
   await postNorthwind(page, { invite: ["Tim Evans", "Matt Lopez"] });
   await simulate(page, ["Guillermo Mairena", "Tim Evans", "Matt Lopez", "Ron Ariana"]);
   await openBuyerProject(page, "all");
-  await page.getByTestId("sort-rate").click();
+  await page.getByTestId("sort").selectOption("rate");
   const rates = await page.getByTestId("resp-rate").allTextContents();
   expect(rates).toEqual(["$200/hr", "$300/hr", "No rate listed", "No rate listed"]);
 });
@@ -153,7 +153,6 @@ test("B-10 undo a not a fit returns the row to To review", async ({ page }) => {
   await simulate(page, ["Guillermo Mairena"]);
   await openBuyerProject(page);
   await responseRow(page, "Guillermo Mairena").getByTestId("not-a-fit").click();
-  await page.getByTestId("confirm-not-a-fit").click();
   await expect(responseRow(page, "Guillermo Mairena")).toHaveCount(0);
   await page.getByTestId("view-notfit").click();
   await responseRow(page, "Guillermo Mairena").getByTestId("undo").click();
@@ -209,7 +208,6 @@ test("B-13 undo after staffing is not allowed and explains why", async ({ page }
   await simulate(page, ["Tim Evans", "Guillermo Mairena"]);
   await openBuyerProject(page);
   await responseRow(page, "Guillermo Mairena").getByTestId("not-a-fit").click();
-  await page.getByTestId("confirm-not-a-fit").click();
   await responseRow(page, "Tim Evans").getByTestId("select").click();
   await page.getByTestId("confirm-select").click();
   await page.getByTestId("view-notfit").click();

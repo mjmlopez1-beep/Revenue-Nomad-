@@ -21,6 +21,8 @@ import {
   projectFit,
   questionsFor,
   answerQuestion,
+  introOf,
+  setNotAFitReason,
   requestIntro,
   responseFit,
   responseSourceLabel,
@@ -58,7 +60,8 @@ import {
   StatusPill,
   attempt,
 } from "../common";
-import { BriefFields, LiveMatch, type BriefDraft } from "../BriefForm";
+import { BriefFields, LiveMatch, TemplatePicker, type BriefDraft } from "../BriefForm";
+import { TEMPLATES } from "../../lib/templates";
 
 function visLabel(p: Project) {
   return p.visibility === "invite_only" ? "Invite only" : "Invites plus open to all";
@@ -152,6 +155,7 @@ function ProjectCard({ s, p }: { s: State; p: Project }) {
       </div>
     );
   const selected = p.selectedOperatorId ? operatorById(p.selectedOperatorId) : null;
+  const toReview = responsesFor(s, p.id).filter((r) => r.decision === "none").length;
   return (
     <Link to={`/buyer/projects/${p.id}`} className="card pcard pcard-live" data-testid="project-card" data-project={p.id}>
       <div className="pcard-head">
@@ -161,6 +165,11 @@ function ProjectCard({ s, p }: { s: State; p: Project }) {
             <span className="pill pill-tint">
               {plural(c.responses, "response")}, {plural(c.strong, "strong fit")}
             </span>
+            {toReview > 0 && !isEnded(p) && (
+              <span className="pill pill-strong" data-testid="card-to-review">
+                {toReview} to review
+              </span>
+            )}
           </div>
           <h2 className="pcard-title">{p.title}</h2>
           <p className="muted">
@@ -209,15 +218,30 @@ export function BuyerBrief({ id }: { id: string }) {
     if (Object.keys(errors).length) setErrors(validateBrief(next));
   };
   const save = () => updateDraft(id, stripDraft(draft));
-  const next = () => {
+  const valid = () => {
     const errs = validateBrief(draft);
     setErrors(errs);
     if (Object.keys(errs).length) {
       setFlash("Fix the highlighted fields to continue.");
-      return;
+      return false;
     }
+    return true;
+  };
+  const next = () => {
+    if (!valid()) return;
     save();
     navigate(`/buyer/projects/${id}/invite`);
+  };
+  // Fastest path: post straight from the brief, open to every matching operator.
+  const postNow = () => {
+    if (!valid()) return;
+    updateDraft(id, { ...stripDraft(draft), visibility: "invites_plus_open", wantsRnSuggestions: draft.wantsRnSuggestions });
+    if (attempt(() => postProject(id), (m) => setFlash(m))) navigate(`/buyer/projects/${id}?posted=1`);
+  };
+  const pickTemplate = (key: string) => {
+    const t = TEMPLATES.find((x) => x.key === key)!;
+    set({ ...t.brief, mustHaves: [...t.brief.mustHaves], screeningQuestions: [...t.brief.screeningQuestions] });
+    setErrors({});
   };
   return (
     <div className="page">
@@ -233,6 +257,7 @@ export function BuyerBrief({ id }: { id: string }) {
           }}
           noValidate
         >
+          {!p.title && <TemplatePicker onPick={pickTemplate} active={draft.title} />}
           <BriefFields draft={draft} set={set} errors={errors} />
           <section className="card form-card" aria-labelledby="conf-h">
             <h2 id="conf-h">Confidentiality</h2>
@@ -260,19 +285,29 @@ export function BuyerBrief({ id }: { id: string }) {
             <button type="button" className="btn" onClick={() => (save(), setFlash(null), navigate("/buyer/projects"))}>
               Save draft
             </button>
-            <button type="submit" className="btn primary" data-testid="continue">
-              Continue to invites and visibility <Arrow />
+            <button type="submit" className="btn" data-testid="continue">
+              Pick operators to invite first
+            </button>
+            <button type="button" className="btn primary" onClick={postNow} data-testid="post-now">
+              Post now, open to all <Arrow />
             </button>
           </div>
+          <label className="toggle post-sug">
+            <input type="checkbox" checked={draft.wantsRnSuggestions} onChange={(e) => set({ wantsRnSuggestions: e.target.checked })} data-testid="brief-suggestions" />
+            <span>
+              <b>Let Revenue Nomad add up to 3 operators we know fit</b>
+              <small>Sent as invites. Posting goes live at once and sends a role alert to every matching operator.</small>
+            </span>
+          </label>
         </form>
         <div className="stack">
           <LiveMatch s={s} draft={draft} />
           <section className="card">
             <h3 className="mini-h">What happens next</h3>
             <ol className="steps-list">
-              <li>You choose who is invited, and whether it is also open to all operators</li>
-              <li>It goes live the moment you post. Invited operators get a personal invite, others get a new role alert</li>
-              <li>Responses land in your project ranked by fit score, ready to request intros or pass</li>
+              <li>Post now and every matching operator gets a role alert. Or pick specific people to invite first</li>
+              <li>Responses land ranked by fit score. Pass on the weak ones and request intros in bulk</li>
+              <li>Each intro offers three of your times. The operator taps one and the call is booked</li>
             </ol>
           </section>
         </div>
@@ -326,7 +361,7 @@ export { stripDraft };
 function Steps({ at }: { at: number }) {
   return (
     <ol className="stepper" aria-label="Steps">
-      {["The seat", "Invite and visibility", "Post"].map((l, i) => (
+      {["The seat", "Invite, optional", "Post"].map((l, i) => (
         <li key={l} aria-current={at === i + 1 ? "step" : undefined} className={at > i + 1 ? "done" : ""}>
           <span>{i + 1}</span>
           {l}
@@ -492,6 +527,21 @@ export function BuyerInvite({ id }: { id: string }) {
                 {invited.size} invited
               </span>
             </div>
+            {(() => {
+              const top = stableSort(OPERATORS.map((o) => ({ id: o.id, f: projectFit(p, o).fit })), (x) => x.f)
+                .filter((x) => !invited.has(x.id))
+                .slice(0, 5);
+              return top.length ? (
+                <button
+                  type="button"
+                  className="btn btn-sm top5"
+                  data-testid="invite-top5"
+                  onClick={() => attempt(() => (top.forEach((x) => inviteOperator(id, x.id)), setOk(`Invited the ${top.length} best matches.`)), setErr)}
+                >
+                  Invite the top {top.length} matches
+                </button>
+              ) : null;
+            })()}
             <InvitePicker
               s={s}
               p={p}
@@ -567,13 +617,17 @@ export function BuyerInvite({ id }: { id: string }) {
 type Sort = "fit" | "rate" | "start" | "newest";
 type View = "review" | "intro" | "notfit" | "all";
 
-const NOT_A_FIT_REASONS = ["Rate is too high", "Not enough relevant experience", "Hours don't fit", "Start date doesn't work", "Weak fit", "Other"];
+const NOT_A_FIT_REASONS = ["Not the right fit", "Rate is too high", "Not enough relevant experience", "Hours don't fit", "Start date doesn't work", "Weak fit", "Other"];
 
 export function BuyerProject({ id }: { id: string }) {
   const { s, p, mine } = useBuyerProject(id);
   const { query } = useLocation();
   const [tab, setTab] = useState<"responses" | "questions" | "brief">((query.get("tab") as "questions") || "responses");
-  const [msg, setMsg] = useState<{ tone: "ok" | "error" | "warn"; text: string } | null>(query.get("posted") ? { tone: "ok", text: "Posted. Your project is live." } : null);
+  const [msg, setMsg] = useState<Msg>(
+    query.get("posted")
+      ? { tone: "ok", text: p?.visibility === "invite_only" ? "Posted and live. Your invites went out; responses land here ranked by fit." : "Posted and live. Matching operators got your role; responses land here ranked by fit." }
+      : null,
+  );
   useEffect(() => {
     const t = query.get("tab");
     if (t === "questions" || t === "brief" || t === "responses") setTab(t);
@@ -639,7 +693,12 @@ export function BuyerProject({ id }: { id: string }) {
       </Band>
       {msg && (
         <Notice tone={msg.tone} testId="project-msg">
-          {msg.text}
+          <span>{msg.text}</span>
+          {msg.undo && (
+            <button type="button" className="btn btn-sm" onClick={() => (msg.undo!(), setMsg({ tone: "ok", text: "Undone." }))} data-testid="msg-undo">
+              Undo
+            </button>
+          )}
         </Notice>
       )}
       {p.status === "staffed" && selected && (
@@ -695,10 +754,14 @@ export function BuyerProject({ id }: { id: string }) {
   );
 }
 
-function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: { tone: "ok" | "error" | "warn"; text: string } | null) => void }) {
+type Msg = { tone: "ok" | "error" | "warn"; text: string; undo?: () => void } | null;
+
+function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: Msg) => void }) {
+  const { query } = useLocation();
   const [sort, setSort] = useState<Sort>("fit");
-  const [view, setView] = useState<View>("review");
+  const [view, setView] = useState<View>((query.get("view") as View) || "review");
   const [tier, setTier] = useState<"all" | "strong" | "possible" | "weak">("all");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const rows = responsesFor(s, p.id).map((r) => ({ r, f: responseFit(p, r), op: operatorById(r.operatorId)! }));
   const counts = { strong: 0, possible: 0, weak: 0 };
   rows.forEach((x) => counts[x.f.tier]++);
@@ -719,8 +782,27 @@ function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: { tone:
     else d = (b.r.submittedAt || 0) - (a.r.submittedAt || 0);
     return d || b.f.fit - a.f.fit || (a.op.id < b.op.id ? -1 : 1);
   });
-  const weakOpen = rows.filter((x) => x.r.decision === "none" && x.f.tier === "weak").length;
+  const open = rows.filter((x) => x.r.decision === "none");
+  const weakOpen = open.filter((x) => x.f.tier === "weak").length;
+  const strongOpen = open.filter((x) => x.f.tier === "strong").map((x) => x.op.id);
   const ended = isEnded(p);
+  const pickable = sorted.filter((x) => x.r.decision === "none").map((x) => x.op.id);
+  const chosen = [...picked].filter((id) => pickable.includes(id));
+  const toggle = (id: string) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setPicked(next);
+  };
+  const bulk = (fn: () => void, text: string, undoIds?: string[]) =>
+    attempt(
+      () => {
+        fn();
+        setPicked(new Set());
+        setMsg({ tone: "ok", text, undo: undoIds ? () => undoIds.forEach((id) => attempt(() => undoDecision(p.id, id), () => undefined)) : undefined });
+      },
+      (m) => setMsg({ tone: "error", text: m }),
+    );
   return (
     <div className="split">
       <div className="stack">
@@ -739,26 +821,37 @@ function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: { tone:
             </button>
           ))}
         </div>
-        <div className="toolbar">
-          <div className="seg" role="group" aria-label="Sort">
-            <span className="muted">Sort</span>
-            {(
-              [
-                ["fit", "Fit"],
-                ["rate", "Rate"],
-                ["start", "Start"],
-                ["newest", "Newest"],
-              ] as const
-            ).map(([k, l]) => (
-              <button key={k} type="button" aria-pressed={sort === k} onClick={() => setSort(k)} data-testid={`sort-${k}`}>
-                {l}
-              </button>
-            ))}
+        {!ended && (strongOpen.length > 0 || weakOpen > 0) && (
+          <div className="quick-actions" role="group" aria-label="Quick actions">
+            <button
+              type="button"
+              className="btn primary btn-sm"
+              disabled={!strongOpen.length}
+              data-testid="intro-strong"
+              onClick={() => bulk(() => requestIntro(p.id, strongOpen), `Intro requested with ${plural(strongOpen.length, "strong fit")}. Each got three of your times to book with one tap.`, strongOpen)}
+            >
+              Request intros with all strong fits ({strongOpen.length})
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={!weakOpen}
+              data-testid="pass-weak"
+              onClick={() => {
+                const ids = open.filter((x) => x.f.tier === "weak").map((x) => x.op.id);
+                const n = passAllWeak(p.id);
+                setMsg({ tone: "ok", text: `Passed on ${plural(n, "weak fit")}. They hear once the seat is staffed, not now.`, undo: () => ids.forEach((id) => attempt(() => undoDecision(p.id, id), () => undefined)) });
+              }}
+            >
+              Pass on all weak fits ({weakOpen})
+            </button>
           </div>
+        )}
+        <div className="toolbar">
           <div className="seg" role="group" aria-label="View">
             {(
               [
-                ["review", "To review", rows.filter((x) => x.r.decision === "none").length],
+                ["review", "To review", open.length],
                 ["intro", "Intro requested", rows.filter((x) => x.r.decision === "intro_requested" || x.r.decision === "selected").length],
                 ["notfit", "Not a fit", rows.filter((x) => x.r.decision === "not_a_fit").length],
                 ["all", "All", rows.length],
@@ -769,25 +862,46 @@ function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: { tone:
               </button>
             ))}
           </div>
-          {!ended && (
-            <button
-              type="button"
-              className="btn btn-sm"
-              disabled={!weakOpen}
-              data-testid="pass-weak"
-              onClick={() => {
-                const n = passAllWeak(p.id);
-                setMsg({ tone: "ok", text: `Passed on ${plural(n, "weak fit")}. They hear once the seat is staffed, not now.` });
-              }}
-            >
-              Pass on all weak fits ({weakOpen})
-            </button>
-          )}
+          <label className="sort-select">
+            <span className="muted">Sort</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort responses" data-testid="sort">
+              <option value="fit">Best fit</option>
+              <option value="rate">Lowest rate</option>
+              <option value="start">Earliest start</option>
+              <option value="newest">Newest</option>
+            </select>
+          </label>
         </div>
-        {!sorted.length && <Empty>{rows.length ? "Nobody in this view." : "No responses yet. Invited operators usually respond within a few days."}</Empty>}
+        {!ended && pickable.length > 0 && (
+          <div className={`bulk-bar ${chosen.length ? "on" : ""}`} data-testid="bulk-bar">
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={chosen.length > 0 && chosen.length === pickable.length}
+                ref={(el) => {
+                  if (el) el.indeterminate = chosen.length > 0 && chosen.length < pickable.length;
+                }}
+                onChange={(e) => setPicked(new Set(e.target.checked ? pickable : []))}
+                data-testid="pick-all"
+              />
+              {chosen.length ? `${chosen.length} selected` : "Select all"}
+            </label>
+            {chosen.length > 0 && (
+              <>
+                <button type="button" className="btn primary btn-sm" data-testid="bulk-intro" onClick={() => bulk(() => requestIntro(p.id, chosen), `Intro requested with ${plural(chosen.length, "operator")}.`, chosen)}>
+                  Request intros ({chosen.length})
+                </button>
+                <button type="button" className="btn btn-sm" data-testid="bulk-pass" onClick={() => bulk(() => markNotAFit(p.id, chosen, "Not the right fit"), `Passed on ${plural(chosen.length, "operator")}. They hear once the seat is staffed.`, chosen)}>
+                  Pass ({chosen.length})
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {!sorted.length && <Empty>{rows.length ? "Nobody in this view." : "No responses yet. Matching operators got your role, and responses land here ranked by fit."}</Empty>}
         <ul className="resp-list">
-          {sorted.map(({ r, f, op }) => (
-            <ResponseRow key={r.id} s={s} p={p} r={r} f={f} setMsg={setMsg} />
+          {sorted.map(({ r, f }) => (
+            <ResponseRow key={r.id} s={s} p={p} r={r} f={f} setMsg={setMsg} picked={picked.has(r.operatorId)} onPick={() => toggle(r.operatorId)} />
           ))}
         </ul>
       </div>
@@ -798,28 +912,35 @@ function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: { tone:
             Out of 100. Skills and role 35, experience 30, budget 15, hours 20. Calculated from your brief and the operator's live profile, using the rate and hours in their response. Screening answers are not scored in this
             build. Nobody screens responses before you see them.
           </p>
-          <h3 className="mini-h">Marking someone not a fit</h3>
-          <p className="small">They are notified with a polite close when the seat is staffed, not the moment you pass, and your reason trains future matching.</p>
-          <h3 className="mini-h">Profile completeness</h3>
-          <p className="small">Most profiles are thin today, so a low score on a thin profile can mean missing data rather than a poor fit.</p>
+          <h3 className="mini-h">Passing on someone</h3>
+          <p className="small">They hear with one polite close email when the seat is staffed, not the moment you pass.</p>
+          <h3 className="mini-h">Intros</h3>
+          <p className="small">Each intro offers the operator three of your times. They tap one and the call shows here and in Intro requests.</p>
         </section>
       </aside>
     </div>
   );
 }
 
-function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response; f: ReturnType<typeof responseFit>; setMsg: (m: { tone: "ok" | "error" | "warn"; text: string } | null) => void }) {
+function ResponseRow({ s, p, r, f, setMsg, picked, onPick }: { s: State; p: Project; r: Response; f: ReturnType<typeof responseFit>; setMsg: (m: Msg) => void; picked: boolean; onPick: () => void }) {
   const op = operatorById(r.operatorId)!;
   const [open, setOpen] = useState(false);
-  const [nf, setNf] = useState(false);
-  const [reason, setReason] = useState(NOT_A_FIT_REASONS[0]);
   const now = nowOf(s);
-  const run = (fn: () => void, ok?: string) => attempt(() => (fn(), ok && setMsg({ tone: "ok", text: ok })), (m) => setMsg({ tone: "error", text: m }));
+  const run = (fn: () => void, ok?: string, undo?: () => void) => attempt(() => (fn(), ok && setMsg({ tone: "ok", text: ok, undo })), (m) => setMsg({ tone: "error", text: m }));
   const src = responseSourceLabel(s, r);
   const ended = isEnded(p);
+  const intro = introOf(s, p.id, op.id);
+  const firstAnswer = r.answers.find((a) => a && a.trim());
   return (
-    <li className={`resp card tier-edge-${f.tier}`} data-testid="response-row" data-op={displayName(op)} data-decision={r.decision}>
+    <li className={`resp card tier-edge-${f.tier} ${picked ? "picked" : ""}`} data-testid="response-row" data-op={displayName(op)} data-decision={r.decision}>
       <div className="resp-top">
+        {r.decision === "none" && !ended ? (
+          <label className="pick">
+            <input type="checkbox" checked={picked} onChange={onPick} aria-label={`Select ${displayName(op)}`} data-testid="pick" />
+          </label>
+        ) : (
+          <span className="pick" />
+        )}
         <FitScore fit={f} />
         <Avatar op={op} size={44} />
         <div className="resp-who">
@@ -844,6 +965,18 @@ function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response
       </div>
       <FitParts fit={f} noRate={r.rate == null} />
       <FitWhy fit={f} />
+      {!open && firstAnswer && (
+        <button
+          type="button"
+          className="answer-peek"
+          onClick={() => {
+            setOpen(true);
+            markViewed(p.id, op.id);
+          }}
+        >
+          “{firstAnswer.length > 160 ? firstAnswer.slice(0, 160) + "…" : firstAnswer}” <span>Read all answers</span>
+        </button>
+      )}
       {open && (
         <div className="resp-answers" data-testid="response-detail">
           {p.screeningQuestions.map((q, i) => (
@@ -862,6 +995,19 @@ function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response
           )}
         </div>
       )}
+      {r.decision === "intro_requested" && intro && (
+        <div className={`call ${intro.bookedSlot ? "call-booked" : ""}`} data-testid="call-status">
+          {intro.bookedSlot ? (
+            <>
+              <b>Call booked</b> {intro.bookedSlot} with {op.first}
+            </>
+          ) : (
+            <>
+              <b>Waiting for {op.first} to pick a time.</b> Offered {(intro.slots || []).join(" · ")}
+            </>
+          )}
+        </div>
+      )}
       <div className="resp-actions">
         <button
           type="button"
@@ -873,7 +1019,7 @@ function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response
           }}
           data-testid="view-response"
         >
-          {open ? "Hide response" : "View response"}
+          {open ? "Hide answers" : "Read answers"}
         </button>
         <Link to={`/operators/${op.slug}?from=${p.id}`} onClick={() => markViewed(p.id, op.id)} className="btn ghost btn-sm">
           View full profile
@@ -881,10 +1027,20 @@ function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response
         <span className="spacer" />
         {r.decision === "none" && !ended && (
           <>
-            <button type="button" className="btn btn-sm" onClick={() => setNf(!nf)} aria-expanded={nf} data-testid="not-a-fit">
-              Not a fit
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => run(() => markNotAFit(p.id, [op.id], "Not the right fit"), `Passed on ${op.first}. They hear once the seat is staffed.`, () => attempt(() => undoDecision(p.id, op.id), () => undefined))}
+              data-testid="not-a-fit"
+            >
+              Pass
             </button>
-            <button type="button" className="btn btn-sm" onClick={() => run(() => requestIntro(p.id, op.id), `Intro requested. ${op.first} can now see your company and contact.`)} data-testid="request-intro">
+            <button
+              type="button"
+              className="btn btn-sm btn-intro"
+              onClick={() => run(() => requestIntro(p.id, op.id), `Intro requested. ${op.first} got three of your times to book with one tap.`, () => attempt(() => undoDecision(p.id, op.id), () => undefined))}
+              data-testid="request-intro"
+            >
               Request intro
             </button>
           </>
@@ -899,7 +1055,14 @@ function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response
         )}
         {r.decision === "not_a_fit" && (
           <>
-            <span className="pill pill-muted">Not a fit{r.notAFitReason ? `, ${r.notAFitReason.toLowerCase()}` : ""}</span>
+            <label className="reason-pick">
+              <span className="sr-only">Reason, optional</span>
+              <select value={r.notAFitReason || "Not the right fit"} onChange={(e) => setNotAFitReason(p.id, op.id, e.target.value)} aria-label="Not a fit reason, optional" disabled={ended} data-testid="nf-reason">
+                {NOT_A_FIT_REASONS.map((x) => (
+                  <option key={x}>{x}</option>
+                ))}
+              </select>
+            </label>
             <button type="button" className="btn ghost btn-sm" onClick={() => run(() => undoDecision(p.id, op.id), "Moved back to To review.")} data-testid="undo">
               Undo
             </button>
@@ -912,21 +1075,6 @@ function ResponseRow({ s, p, r, f, setMsg }: { s: State; p: Project; r: Response
           </button>
         )}
       </div>
-      {nf && (
-        <div className="inline-form">
-          <label>
-            <span>Why not? Only you and Revenue Nomad see this</span>
-            <select value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Not a fit reason">
-              {NOT_A_FIT_REASONS.map((x) => (
-                <option key={x}>{x}</option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="btn btn-sm" onClick={() => (run(() => markNotAFit(p.id, [op.id], reason), `Marked not a fit. ${op.first} hears once the seat is staffed.`), setNf(false))} data-testid="confirm-not-a-fit">
-            Confirm not a fit
-          </button>
-        </div>
-      )}
     </li>
   );
 }
@@ -1120,7 +1268,7 @@ export function BuyerIntros() {
   });
   return (
     <div className="page">
-      <Band title="Intro requests" sub="Every intro you requested from a project. Intros from a project are approved automatically and logged for Revenue Nomad." />
+      <Band title="Intro requests" sub="Every intro you requested and whether the call is booked. Operators pick from three of your times with one tap." />
       {!rows.length && <Empty>No intro requests yet. Request one from a response on any project.</Empty>}
       <ul className="stack" data-testid="intro-list">
         {rows.map((i) => {
@@ -1135,7 +1283,15 @@ export function BuyerIntros() {
                   {op.role} · <Link to={`/buyer/projects/${p.id}`}>{p.title}</Link> · {shortDate(i.createdAt)}
                 </p>
               </div>
-              <span className={`pill ${i.status === "approved" ? "pill-tint" : "pill-muted"}`}>{i.status === "approved" ? "Approved automatically" : "Withdrawn"}</span>
+              {i.status !== "approved" ? (
+                <span className="pill pill-muted">Withdrawn</span>
+              ) : i.bookedSlot ? (
+                <span className="pill pill-strong" data-testid="intro-booked">
+                  Call booked {i.bookedSlot}
+                </span>
+              ) : (
+                <span className="pill pill-tint">Waiting for a time</span>
+              )}
             </li>
           );
         })}

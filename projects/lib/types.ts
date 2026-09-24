@@ -185,6 +185,11 @@ export interface IntroRequest {
   /** Auto-approved for the prototype (gap G14). */
   status: "approved" | "withdrawn";
   withdrawnAt?: number | null;
+  /** Times offered to the operator with the intro, from the buyer's default availability. */
+  slots?: string[];
+  /** The slot the operator booked with one tap. */
+  bookedSlot?: string | null;
+  bookedAt?: number | null;
 }
 
 export interface Shortlist {

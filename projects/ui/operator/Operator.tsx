@@ -7,6 +7,7 @@ import {
   allOpenRoles,
   askQuestion,
   bookTime,
+  introOf,
   companyRevealed,
   confirmAvailability,
   declineProject,
@@ -447,13 +448,20 @@ function RespondForm({ s, p, op }: { s: State; p: Project; op: Operator }) {
   );
 }
 
-const SLOTS = ["Tue, 10:00 am ET", "Wed, 1:30 pm ET", "Thu, 4:00 pm ET"];
-
 function StatusView({ s, p, op }: { s: State; p: Project; op: Operator }) {
   const r = responseOf(s, p.id, op.id)!;
   const status = operatorStatus(s, p, op.id);
   const { query } = useLocation();
-  const [booked, setBooked] = useState<string | null>(null);
+  const intro = introOf(s, p.id, op.id);
+  const booked = intro?.bookedSlot || null;
+  const bookIdx = query.get("book");
+  useEffect(() => {
+    // One-tap booking from the intro email: ?book=<slot index>.
+    if (bookIdx == null) return;
+    const slot = intro?.slots?.[Number(bookIdx)];
+    if (slot && !intro?.bookedSlot) attempt(() => bookTime(p.id, op.id, slot), () => undefined);
+    navigate(`/operator/projects/${p.id}`, { replace: true });
+  }, [bookIdx]); // eslint-disable-line react-hooks/exhaustive-deps
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState("");
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -526,19 +534,24 @@ function StatusView({ s, p, op }: { s: State; p: Project; op: Operator }) {
           </div>
           {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
           <div className="actions-row">
-            <div className="seg" role="group" aria-label="Book a time">
-              {SLOTS.map((sl) => (
-                <button
-                  key={sl}
-                  type="button"
-                  aria-pressed={booked === sl}
-                  onClick={() => attempt(() => (bookTime(p.id, op.id, sl), setBooked(sl), setMsg({ tone: "ok", text: `Booked ${sl}. ${buyer.contactName} got an email.` })), (m) => setMsg({ tone: "error", text: m }))}
-                  data-testid="book-slot"
-                >
-                  Book {sl}
-                </button>
-              ))}
-            </div>
+            {booked ? (
+              <p className="call call-booked" data-testid="booked">
+                <b>Call booked</b> {booked}. {buyer.contactName} has it.
+              </p>
+            ) : (
+              <div className="seg" role="group" aria-label="Book a time">
+                {(intro?.slots || []).map((sl) => (
+                  <button
+                    key={sl}
+                    type="button"
+                    onClick={() => attempt(() => (bookTime(p.id, op.id, sl), setMsg({ tone: "ok", text: `Booked ${sl}. ${buyer.contactName} got an email.` })), (m) => setMsg({ tone: "error", text: m }))}
+                    data-testid="book-slot"
+                  >
+                    Book {sl}
+                  </button>
+                ))}
+              </div>
+            )}
             <button type="button" className="btn" onClick={() => setReplying(!replying)} aria-expanded={replying} data-testid="reply">
               Reply
             </button>
