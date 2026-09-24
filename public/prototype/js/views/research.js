@@ -407,17 +407,17 @@
     const g = gridCells(ix);
     const js = journey();
     const nb = js.filter((s) => s.side === 'before').length;
-    const desktop = `<div class="rs-grid" role="table" aria-label="GTM Framework: areas by stage">
-      <div class="rs-gh rs-gh-corner" role="presentation"></div>
+    const desktop = `<div class="rs-grid" role="group" aria-label="GTM Framework: areas by stage. Each cell opens a panel.">
+      <div class="rs-gh rs-gh-corner" aria-hidden="true"></div>
       <div class="rs-gh rs-gh-side" style="grid-column: span ${nb}">Before the sale</div>
       <div class="rs-gh rs-gh-side is-after" style="grid-column: span ${js.length - nb}">After the sale</div>
       <div class="rs-gsp" aria-hidden="true"></div>
       <div class="rs-gh rs-gh-side is-all">Every stage</div>
-      <div class="rs-gh rs-gh-corner" role="columnheader"><span class="label">Area</span></div>
-      ${js.map((s) => `<button type="button" class="rs-gh rs-gh-stage" role="columnheader" data-act="rs-fw-open" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
+      <div class="rs-gh rs-gh-corner"><span class="label">Area</span></div>
+      ${js.map((s) => `<button type="button" class="rs-gh rs-gh-stage" data-act="rs-fw-open" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
       <div class="rs-gsp" aria-hidden="true"></div>
-      <button type="button" class="rs-gh rs-gh-stage is-all" role="columnheader" data-act="rs-fw-open" data-stage="Foundation">Foundation</button>
-      ${g.areas.map((a) => `<button type="button" class="rs-ga" role="rowheader" data-act="rs-fw-open" data-area="${esc(a.name)}"><span class="rs-ga-ic">${icon(a.icon)}</span><span><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span></span></button>
+      <button type="button" class="rs-gh rs-gh-stage is-all" data-act="rs-fw-open" data-stage="Foundation">Foundation</button>
+      ${g.areas.map((a) => `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}"><span class="rs-ga-ic">${icon(a.icon)}</span><span><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span></span></button>
         ${js.map((s) => cellBtn(g, a, s)).join('')}
         <div class="rs-gsp" aria-hidden="true"></div>
         ${cellBtn(g, a, FOUNDATION)}`).join('')}
@@ -1044,6 +1044,8 @@
   // Tables with 3+ columns stack into labelled rows on phones (data-l carries the column label)
   const tbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl ${head.length > 2 ? 'rs-tbl-stack' : ''}"><table class="tbl ${cls || ''}"><thead><tr>${head.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'r' : ''}" data-l="${esc(head[i] || '')}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const src = (t) => `<p class="rs-src">${icon('info')}<span>${t}</span></p>`;
+  // Every chart hands its cut to Browse (SPEC loop 10)
+  const chartGo = (label, o) => `<p class="rs-chart-go">${browseBtn(label, o, 'act')}</p>`;
   const L = (to, t) => `<a href="#${esc(to)}">${esc(t)}</a>`;
 
   const GROUPS = [
@@ -1067,7 +1069,8 @@
           { id: 'drivers', h: 'What sets the price', html: `<p>Four things move the number: how many hours a month you buy, the size of your company, the scope of the seat and how much proof the operator has. Hours matter most. Most engagements on the network run between 20 and 59 hours a month (${hoursRows().filter((r) => r.code === '20' || r.code === '40').reduce((a, r) => a + r.v, 0)}% of engagements in our survey).</p>
             <p>Company size shifts the hourly rate. Operators serving larger companies charge more because the work carries more risk: bigger teams, longer cycles and a board that expects a forecast.</p>
             ${chartSlot('g1-rev', (w) => bars(revRows, { fmt: (n) => '$' + n + '/hr', label: 'Median hourly rate for Sales Leadership by company revenue' }, w))}
-            ${src(`Median hourly rate for Sales Leadership by company revenue range. Rate Index, ${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'Q3 26')}. Illustrative.`)}` },
+            ${src(`Median hourly rate for Sales Leadership by company revenue range. Rate Index, ${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'Q3 26')}. Illustrative.`)}
+            ${chartGo('Browse Sales Leadership operators who work with $5M–$20M companies', { filters: { roleCategories: ['sales_leadership'], revenueRange: ['5m_20m'] }, src: 'guide_chart_rate_revenue' })}` },
           { id: 'monthly', h: 'What a month costs at each size', html: `<p>Multiply the hourly range by the hours you need. For a $5M–$20M company:</p>
             ${tbl(['Available time', 'Typical Engagement Range'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange('sales_leadership', h, '5m_20m'))]))}
             <p>Twenty hours buys a leader who sets the plan, runs the weekly pipeline review and coaches the team. Forty hours adds hands-on work: hiring, building the playbook and joining key deals. Sixty or more usually means the operator is also managing reps day to day.</p>` },
@@ -1137,6 +1140,7 @@
           { id: 'hours', h: 'Choose hours and term', html: `<p>Most engagements run 20 to 59 hours a month. Buy fewer hours than you think for the first 90 days: the operator spends the first weeks learning, and adding hours later is easy.</p>
             ${chartSlot('g3-hours', (w) => bars(hRows, { fmt: (n) => n + '%', label: 'Share of engagements by available time' }, w))}
             ${src('Share of fractional GTM engagements by hours a month, State of Fractional GTM 2027 survey. Illustrative.')}
+            ${chartGo(`Browse operators with ${RN.w.label('hoursPerMonth', '40')} or more available`, { filters: { hoursPerMonth: ['40'] }, src: 'guide_chart_hours' })}
             ${term.length ? `<p>For the initial term, ${term.map((t, i) => `${esc(F.term.options[i] ? F.term.options[i].l : t.l)} (${t.v}%)`).join(', ')}. Three to six months is long enough to ship a playbook and see it work.</p>` : ''}` },
           { id: 'plan', h: 'Write the 30/60/90-day plan', html: `<ol>
             <li><b>Days 1 to 30: learn and diagnose.</b> Sit in on calls, read the CRM, interview the team and five customers. Deliver a written diagnosis and a plan.</li>
@@ -1280,7 +1284,8 @@
           { id: 'index', h: 'Start from the Rate Index', html: `<p>The Rate Index reports the median and middle half of hourly rates for every role category, from rates operators list on their profiles.</p>
             ${chartSlot('g8-cats', (w) => bars(rows, { fmt: (n) => '$' + n, label: 'Median hourly rate by role category' }, w))}
             ${tbl(['Role category', '25th pct', 'Median', '75th pct'], cats.map((o) => { const b = RIX().byCat[o.v]; return [esc(o.l), hr(b.p25), `<b>${hr(b.p50)}</b>`, hr(b.p75)]; }))}
-            ${src(`Rate Index, latest quarter. See the full index and estimator on ${L('rates', 'Rates')}. Illustrative.`)}` },
+            ${src(`Rate Index, latest quarter. See the full index and estimator on ${L('rates', 'Rates')}. Illustrative.`)}
+            ${chartGo('Browse operators by role category and rate', { filters: {}, src: 'guide_chart_rate_cat' })}` },
           { id: 'revenue', h: 'Adjust for the clients you serve', html: `<p>Rates rise with client size. Against a $5M–$20M company as the baseline:</p>
             ${tbl(['Company revenue', 'Rate vs baseline'], F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => { const m = RIX().byRevenue[o.v]; return [esc(o.l), `${m >= 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`]; }))}` },
           { id: 'model', h: 'Hourly, retainer or project', html: `<p>Most operators list an hourly rate and bill a monthly retainer for a block of hours. At the Sales Leadership median, 20 hours a month is ${usd(RIX().byCat.sales_leadership.p50 * 20)}, 40 hours is ${usd(RIX().byCat.sales_leadership.p50 * 40)}. Scoped projects (${esc(F.engagementTypes.options.find((o) => o.v === 'project').d.toLowerCase().replace(/\.$/, ''))}) are priced per project, from the hours you expect to spend.</p>` },
@@ -1306,6 +1311,7 @@
         return [
           { id: 'sources', h: 'Where clients find operators', html: `${chartSlot('g9-src', (w) => bars(s, { fmt: (n) => n + '%', label: 'Where companies found their fractional operator' }, w))}
             ${src('State of Fractional GTM 2027 survey of companies that hired a fractional leader. Illustrative.')}
+            <p class="rs-chart-go"><a class="act" href="#${RN.store.state.persona === 'operator' ? 'studio.visibility' : 'join'}">${RN.store.state.persona === 'operator' ? 'See where your own profile views come from' : 'Join the network to see where your views come from'}${icon('arrow')}</a></p>
             <p>A referral gets you the first call. What the prospect checks after that call decides the deal.</p>` },
           { id: 'check', h: 'What prospects check before they call you back', html: `<p>Stage and deal-size fit, how you communicate in a part-time seat and verified references from prior clients were the top three factors companies wish they had weighed. A résumé shows none of them. A profile with client-verified focus areas, CORE reviews and Engagement History shows all three.</p>` },
           { id: 'proof-link', h: 'Send proof, not a résumé', html: `<p>From Studio you can create a <b>proof link</b>: a private version of your profile prepared for one prospect, with the sections you choose. The prospect sees a notice that you can see what they read. You see which sections they opened, for how long, and whether they forwarded it inside their team.</p>
@@ -1337,6 +1343,7 @@
             <p>"Vetted" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a client confirmed: verified focus areas and verified engagements.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
             ${src(`Live count across ${ops.length} operator profiles in this prototype.`)}
+            ${chartGo('Browse operators at Trusted and above (Reputation Index 70+)', { filters: { risMin: '70' }, src: 'guide_chart_tiers' })}
             <p>Most profiles sit at Vetted because the index only moves with client evidence. That is by design: a score that starts high means nothing.</p>` },
           { id: 'not', h: 'What it is not', html: `<ul><li>It is not for sale. No plan, fee or sponsorship changes it.</li><li>It is not a popularity score. Profile views and searches do not count.</li><li>It does not punish operators for engagements that were never reviewed.</li></ul>
             <p>Operators can see how their own score breaks down in Studio, and the ${L('levels', 'Levels page')} explains what each tier unlocks.</p>` },

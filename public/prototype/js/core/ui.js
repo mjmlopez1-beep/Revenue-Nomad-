@@ -50,7 +50,7 @@
   ui.ris = function (op, o) {
     const r = op.ris || { score: 0, label: 'New' };
     const tipHtml = ui.risExplainer(o && o.viewer === 'operator');
-    return `<span class="ris"><span class="ris-seal">${ui.hexSeal(r.label)}<b>${esc(r.score)}</b></span><span class="ris-txt"><b>${esc(r.label)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
+    return `<span class="ris"><span class="ris-seal t-${esc(r.tier || RN.fields.risTierFor(r.score).v)}">${ui.hexSeal(r.label)}<b>${esc(r.score)}</b></span><span class="ris-txt"><b>${esc(r.label)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
   };
   ui.hexSeal = function (label) {
     // Mint for Verified to Trusted, gold for Elite and Apex (explorer badge), grey while Indexing

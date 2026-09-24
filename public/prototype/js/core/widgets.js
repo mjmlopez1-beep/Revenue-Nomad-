@@ -33,7 +33,7 @@
     const label = opts.label || d.label;
     const help = opts.help !== undefined ? opts.help : d.help;
     const max = opts.max || d.max;
-    const countNote = (d.type === 'multi' || d.type === 'tags') && max ? `<span class="opt">Up to ${max}</span>` : d.optional && !opts.required ? '<span class="opt">Optional</span>' : '';
+    const countNote = (d.type === 'multi' || d.type === 'tags' || d.type === 'tagsearch') && max ? `<span class="opt">Up to ${max}</span>` : d.optional && !opts.required ? '<span class="opt">Optional</span>' : '';
     return `<div class="field" data-field="${esc(key)}">
       ${opts.hideLabel ? '' : `<label for="${esc(id)}">${esc(label)} ${countNote}</label>`}
       ${w.control(key, value, Object.assign({}, opts, { id }))}

@@ -241,6 +241,8 @@
   // Scope: Country -> postal code -> city picklist, timezone derived (not free text)
   F.country = { label: 'Country', type: 'select', placeholder: 'Select a country', options: opts(['United States', 'Canada', 'United Kingdom', 'Ireland', 'Australia', 'Germany', 'Netherlands', 'Singapore', 'Kenya', 'India']) };
   F.postalCode = { label: 'Postal code', type: 'text', placeholder: 'e.g. 06470', help: 'We derive your city and time zone from it, so clients can filter by region.' };
+  F.city = { label: 'City', type: 'text', placeholder: 'City', help: 'Used when we cannot derive your city from the postal code.' };
+  F.methodologyOther = { label: 'Other methodology', type: 'text', placeholder: 'e.g. Miller Heiman', help: 'We review new methodologies and add common ones to the list.' };
   F.usHours = { label: 'Willing to work US time zone hours?', type: 'single', options: opts([['yes', 'Yes'], ['no', 'No']]) };
 
   /* ---------- Fit tags (library assembled in model.js from live tags + taxonomy groups) ---------- */

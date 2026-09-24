@@ -371,6 +371,9 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-prose .rs-chart { margin: 1.2em 0 .4em; }
 .rs-src { display: flex; gap: 8px; align-items: flex-start; font-size: var(--t-12) !important; color: var(--mute); line-height: 1.45; }
 .rs-src svg { width: 14px; height: 14px; flex: 0 0 auto; margin-top: 2px; }
+.rs-prose .rs-chart-go { margin-top: .5em; }
+.rs-chart-go .act { font-size: var(--t-14); text-align: left; }
+.rs-chart-go .act svg { flex: 0 0 auto; }
 .rs-tbl { margin: 1.2em 0; border: 1px solid var(--line-2); border-radius: var(--r-input); background: var(--card); }
 .rs-tbl .tbl { font-size: var(--t-14); }
 .rs-tbl .tbl td { padding: 11px 12px; }
