@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
       { source: "/operator/projects", destination: "/dashboard/projects", permanent: false },
       { source: "/operator/:path*", destination: "/dashboard/:path*", permanent: false },
       { source: "/operator", destination: "/dashboard", permanent: false },
+      // The Operator Portal's Job Board, Prospects and Profile now live in the dashboard.
+      { source: "/portal", has: [{ type: "query", key: "view", value: "projects" }, { type: "query", key: "project", value: "(?<project>.+)" }], destination: "/dashboard/projects/:project", permanent: false },
+      { source: "/portal", has: [{ type: "query", key: "view", value: "projects" }], destination: "/dashboard/projects", permanent: false },
+      { source: "/portal", has: [{ type: "query", key: "view", value: "(prospects|profile)" }], destination: "/dashboard/prospects", permanent: false },
+      { source: "/portal", destination: "/dashboard/jobs", permanent: false },
     ];
   },
   async rewrites() {

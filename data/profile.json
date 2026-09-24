@@ -1,0 +1,46 @@
+{
+  "name": "Anne Zavorskas",
+  "headline": "Chief Marketing Officer",
+  "role": "Marketing",
+  "industries": [
+    "Saas",
+    "E Commerce",
+    "Professional Services",
+    "Food & Beverage Cpg",
+    "Home Services",
+    "Consumer Goods & Cpg (non Food)",
+    "E Commerce & D2c"
+  ],
+  "stages": [
+    "seed",
+    "series_a",
+    "series_b"
+  ],
+  "employeeSizes": [
+    "11_50",
+    "51_200"
+  ],
+  "revenueSizes": [
+    "1m_5m",
+    "5m_20m"
+  ],
+  "segmentFit": [
+    "smb",
+    "mid_market"
+  ],
+  "salesMotions": [],
+  "keywords": [
+    "Competitive positioning",
+    "Funnel analysis",
+    "Go-to-market audit",
+    "ICP definition",
+    "KPI framework",
+    "Marketing Team Hiring",
+    "Marketing function build",
+    "CRM hygiene",
+    "CRM implementation",
+    "Cold call scripts",
+    "Content Marketing Strategy",
+    "Conversion rate optimization"
+  ]
+}

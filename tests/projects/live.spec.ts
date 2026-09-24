@@ -12,7 +12,7 @@ test("L-01 overview shows the invite, the Projects badge and the live nav", asyn
   await asOperator(page, "Tim Evans");
   await goto(page, "/dashboard");
   const nav = page.getByRole("navigation", { name: "Dashboard" });
-  for (const l of ["Overview", "Projects", "Intro Requests", "Reviews", "My Profile", "Browse Talent"]) await expect(nav.getByRole("link", { name: new RegExp(`^${l}`) })).toBeVisible();
+  for (const l of ["Overview", "Projects", "Jobs", "Prospects", "Intros", "My Profile"]) await expect(nav.getByRole("link", { name: new RegExp(`^${l}`) })).toBeVisible();
   await expect(page.getByTestId("projects-badge")).toHaveText("1");
   await expect(page.getByRole("heading", { name: "Welcome back, Tim." })).toBeVisible();
   const invite = page.getByTestId("overview-invite").and(page.locator(`[data-project="${NW}"]`));
@@ -126,10 +126,13 @@ test("L-07 one tap confirms availability; old /operator and portal links land in
   await expect(page.getByTestId("availability-card").getByTestId("confirmed")).toHaveText("Availability confirmed Sep 24");
   await page.goto(`/operator/projects/${NW}`);
   await expect(page).toHaveURL(new RegExp(`/dashboard/projects/${NW}$`));
+  // The Operator Portal now lives in the dashboard.
   await page.goto("/portal");
-  await expect(page.getByTestId("projects-strip")).toContainText("1 Revenue Nomad project invite waiting on you");
-  await page.getByTestId("projects-strip").getByRole("button", { name: "Open Projects" }).click();
-  await expect(page).toHaveURL(/\/dashboard\/projects$/);
+  await expect(page).toHaveURL(/\/dashboard\/jobs$/);
+  await page.goto("/portal?view=prospects");
+  await expect(page).toHaveURL(/\/dashboard\/prospects/);
+  await page.goto(`/portal?view=projects&project=${NW}`);
+  await expect(page).toHaveURL(new RegExp(`/dashboard/projects/${NW}`));
 });
 
 test("L-08 simulated responders show in the operator's count on Client viewed", async ({ page }) => {

@@ -586,7 +586,7 @@ export function BuyerInvite({ id }: { id: string }) {
                   {shortDate(p.startTarget)}.
                 </p>
                 <span className="btn primary btn-sm">View and respond</span>
-                <small>Added to their project portal automatically</small>
+                <small>Added to their dashboard automatically</small>
               </div>
             </div>
             <div className="preview">
@@ -600,7 +600,7 @@ export function BuyerInvite({ id }: { id: string }) {
                   A new role that may fit your profile. {hoursRange(p.hoursPerMonthMin, p.hoursPerMonthMax)} hrs a month, {p.term}, {p.location.split(",")[0].toLowerCase()}.
                 </p>
                 <span className="btn btn-sm">See the role</span>
-                <small>Not added to their portal until they respond. Only operators whose alert settings match {cat} get it, one alert a day at most.</small>
+                <small>Not added to their dashboard until they respond. Only operators whose alert settings match {cat} get it, one alert a day at most.</small>
               </div>
             </div>
             <p className="muted">

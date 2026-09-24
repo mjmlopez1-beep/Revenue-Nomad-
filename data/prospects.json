@@ -1,0 +1,1481 @@
+{
+  "prospects": [
+    {
+      "id": "a717b3e7a839e45d",
+      "company": "Zephyr Sciences Group",
+      "domain": "zephyrsciences.io",
+      "summary": "Zephyr Sciences Group — Zephyr Sciences provides an AI-powered workflow platform that helps professional services firms forecast demand more accurately. (Community and Lifestyle, Software; Pet, Travel, Social Network, SaaS; 2000) Zephyr Sciences Group — Zephyr Sciences provides an AI-powered workflow platform that helps professional services firms forecast demand more accurately. (Community and Li",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Saas",
+        "Professional Services",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near series c plus"
+      ],
+      "timing": 77,
+      "signals": [
+        {
+          "type": "restructuring",
+          "label": "Layoff mention on record",
+          "detail": "Headcount is frozen but the outcomes aren't — senior output without the FTE is the pitch.",
+          "evidenceUrl": "https://www.linkedin.com/company/zephyrsciences",
+          "detectedOn": "2026-08-24"
+        },
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/zephyrsciences",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 77,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "d6744f6ec5ab23e9",
+      "company": "Solsticeix AI",
+      "domain": "solsticeix.com",
+      "summary": "Solsticeix AI — Solsticeix develops a personalized learning engine for the Industrial Automation market, focused on retail chains. (Manufacturing, Professional Services; Industrial Automation, Advanced Materials, Quality Assurance; 2016) Solsticeix AI — Solsticeix develops a personalized learning engine for the Industrial Automation market, focused on retail chains. (Manufacturing, Professional Se",
+      "icpFit": 98,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~75 people",
+        "Sales Leadership window",
+        "near series c plus"
+      ],
+      "timing": 78,
+      "signals": [
+        {
+          "type": "funding",
+          "label": "Raised Venture - Series Unknown ($78M)",
+          "detail": "Fresh capital in the deploy window — GTM build-out pressure is on.",
+          "evidenceUrl": "https://www.linkedin.com/company/solsticeix",
+          "detectedOn": "2026-05-02"
+        },
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/solsticeix",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 76,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "a8160b0f672d0962",
+      "company": "Fathom Marine",
+      "domain": "fathommarine.tech",
+      "summary": "Fathom Marine — Fathom Marine provides a carbon accounting platform that helps regional banks increase asset utilization. (Education, Apps; Tutoring, Corporate Training, EdTech, Language Learning; 1996)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Corporate Learning & Training",
+        "seed"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/fathommarine",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "81d34c324fe6f55a",
+      "company": "Helixva",
+      "domain": "helixva.io",
+      "summary": "Helixva — Helixva is a growth-stage company offering a self-serve onboarding product to public sector agencies. (Education, Apps; Tutoring, EdTech, Corporate Training, Higher Education, Android; 2008)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~75 people",
+        "Sales Leadership window",
+        "2008"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/helixva",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "90df03510cd31cfd",
+      "company": "Foundryly",
+      "domain": "foundryly.io",
+      "summary": "Foundryly — Foundryly provides a security posture management tool that helps professional services firms increase asset utilization. (Education, Community and Lifestyle; Corporate Training, E-Learning, Social Network; 2008) Foundryly — Foundryly provides a security posture management tool that helps professional services firms increase asset utilization. (Education, Community and Lifestyle; Corpor",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Corporate Learning & Training",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near pre seed"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "funding",
+          "label": "Raised Debt Financing ($76M)",
+          "detail": "Fresh capital in the deploy window — GTM build-out pressure is on.",
+          "evidenceUrl": "https://www.linkedin.com/company/foundryly",
+          "detectedOn": "2026-04-30"
+        },
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/foundryly",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "Fresh capital means GTM build-out pressure. Pitch a fractional Sales Leadership engagement to deploy the raise into pipeline before the FT hires land.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "d68cec45a88228bb",
+      "company": "Axiom Capital",
+      "domain": "axiomcapital.tech",
+      "summary": "Axiom Capital — Axiom Capital develops an AI-powered workflow platform for the E-Learning market, focused on logistics providers. (Education, Hardware; E-Learning, Higher Education, Tutoring; 2012)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Higher Education",
+        "~30 people",
+        "Sales Leadership window",
+        "2012"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/axiomcapital",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "a14b35b75392a8a6",
+      "company": "Juniper Partners",
+      "domain": "juniperpartners.com",
+      "summary": "Juniper Partners — Juniper Partners operates a E-Learning platform enabling enterprise IT teams to automate repetitive workflows. (Education, Commerce and Shopping; E-Learning, Higher Education, EdTech, Language Learning; 2015)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~30 people",
+        "revenue band",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/juniperpartners",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "e235c4d88ebf6681",
+      "company": "Canopy Health",
+      "domain": "canopyhealth.com",
+      "summary": "Canopy Health — Canopy Health is a growth-stage E-Learning company building a personalized learning engine for transportation networks. (Education, Media and Entertainment; E-Learning, Higher Education; 2017)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Higher Education",
+        "~175 people",
+        "revenue band",
+        "seed"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/canopyhealth",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "ab9538f721242691",
+      "company": "Quantify Payments",
+      "domain": "quantifypayments.co",
+      "summary": "Quantify Payments — Quantify Payments is a bootstrapped company offering a self-serve onboarding product to regional banks. (Education; Language Learning, EdTech, Tutoring, Higher Education, Language Learning; 2012)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~30 people",
+        "Sales Leadership window",
+        "2012"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/quantifypayments",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 70,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "90c4e25e52629a74",
+      "company": "Alloy Grid Security",
+      "domain": "alloygrid.com",
+      "summary": "Alloy Grid Security — Alloy Grid is a growth-stage company offering an end-to-end payments stack to mid-market operators. (Software, Professional Services; SaaS, Developer Tools, Enterprise Software; 2016)",
+      "icpFit": 98,
+      "matchedIcp": [
+        "Saas",
+        "Professional Services",
+        "~30 people",
+        "Sales Leadership window",
+        "near series c plus"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/alloygrid",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 68,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "d123610d74537e39",
+      "company": "Wren Agritech",
+      "domain": "wrenagritech.com",
+      "summary": "Wren Agritech — Wren Agritech is a early-stage company offering a modular robotics system to field service organizations. (Manufacturing, Internet Services; Industrial Engineering, Quality Assurance; 2014) Wren Agritech — Wren Agritech is a early-stage company offering a modular robotics system to field service organizations. (Manufacturing, Internet Services; Industrial Engineering, Quality Assur",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Industrial Manufacturing",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 75,
+      "signals": [
+        {
+          "type": "restructuring",
+          "label": "Layoff mention on record",
+          "detail": "Headcount is frozen but the outcomes aren't — senior output without the FTE is the pitch.",
+          "evidenceUrl": "https://www.linkedin.com/company/wrenagritech",
+          "detectedOn": "2026-04-19"
+        },
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/wrenagritech",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 64,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "00687ae3d6bd82ad",
+      "company": "Circuitva",
+      "domain": "circuitva.io",
+      "summary": "Circuitva — Circuitva provides a clinical decision support tool that helps independent healthcare practices improve regulatory compliance. (Manufacturing, Professional Services; Industrial Engineering, Supply Chain Management, Advanced Materials; 2004)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/circuitva",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "f876dd05d0a3c37d",
+      "company": "Vertexio",
+      "domain": "vertexio.com",
+      "summary": "Vertexio — Vertexio is a early-stage Advanced Materials company building a revenue intelligence engine for professional services firms. (Manufacturing, Education; Advanced Materials, Industrial Automation, Supply Chain Management, Quality Assurance; 2016)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~30 people",
+        "revenue band",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/vertexio",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "20bf0c7021845a89",
+      "company": "Vellum AI",
+      "domain": "vellumai.io",
+      "summary": "Vellum AI — Vellum AI develops a customer data platform for the Staffing Agency market, focused on e-commerce brands. (Professional Services, Manufacturing; Staffing Agency, Accounting, Industrial Engineering; 2009)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near series c plus"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/vellumai",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "cac6762fb7ca7d6d",
+      "company": "Fathom Technologies",
+      "domain": "fathomtechnologies.io",
+      "summary": "Fathom Technologies — Fathom Technologies operates a Developer Tools platform enabling biotech research teams to improve regulatory compliance. (Software, Professional Services; Developer Tools, SaaS, API Management, Open Source; 2009)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Saas",
+        "Professional Services",
+        "~75 people",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/fathomtechnologies",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "8b983b2d17228138",
+      "company": "Rook Dynamics Dynamics",
+      "domain": "rookdynamics.io",
+      "summary": "Rook Dynamics Dynamics — Rook Dynamics develops an end-to-end payments stack for the Quality Assurance market, focused on professional services firms. (Manufacturing, Apps; Quality Assurance, Industrial Automation, Industrial Engineering, Advanced Materials; 2010)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near pre seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/rookdynamics",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "754377d0b3a28b61",
+      "company": "Upshift Cloud Payments",
+      "domain": "upshiftcloud.tech",
+      "summary": "Upshift Cloud Payments — Upshift Cloud operates a Quality Assurance platform enabling logistics providers to shorten the sales cycle. (Manufacturing, Professional Services; Quality Assurance, Advanced Materials, Industrial Engineering; 2017)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~30 people",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/upshiftcloud",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "c8885524ffb26ce6",
+      "company": "Warden Partners",
+      "domain": "wardenpartners.ai",
+      "summary": "Warden Partners — Warden Partners operates a Human Resources platform enabling enterprise IT teams to surface risk earlier. (Professional Services, Community and Lifestyle; Human Resources, Accounting, Staffing Agency, Consulting; 2011)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Professional Services",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 70,
+      "signals": [
+        {
+          "type": "departure",
+          "label": "Past sales leadership leader on record — seat now empty",
+          "detail": "Someone held this seat and left; nobody currently visible in it.",
+          "evidenceUrl": "https://www.linkedin.com/company/wardenpartners",
+          "weight": 0.7,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "The seat just opened. Pitch immediate interim Sales Leadership coverage — continuity now, search later.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "8cd8ce9fb78a21aa",
+      "company": "Quantify Energy",
+      "domain": "quantifyenergy.co",
+      "summary": "Quantify Energy — Quantify Energy is a bootstrapped Lead Generation company building a cloud-native data infrastructure suite for independent healthcare practices. (Sales and Marketing, Education; Lead Generation, Marketing Automation, Advertising, EdTech; 2010)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "~30 people",
+        "Sales Leadership window",
+        "2010"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://quantifyenergy.co",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "1022a683868fc1fa",
+      "company": "Graniteos",
+      "domain": "graniteos.com",
+      "summary": "Graniteos — Graniteos develops a next-generation battery management system for the Developer Tools market, focused on education institutions. (Software, Artificial Intelligence; Developer Tools, SaaS; 2003)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Saas",
+        "Education",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near pre seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/graniteos",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "4905b9f0e3d15aad",
+      "company": "Granite Marine Holdings",
+      "domain": "granitemarine.com",
+      "summary": "Granite Marine Holdings — Granite Marine provides a cloud-native data infrastructure suite that helps life sciences companies expand into new markets. (Education, Hardware; Tutoring, EdTech, Corporate Training, Semiconductor; 2011)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "~75 people",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/granitemarine",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "2cc8c60c616b3f67",
+      "company": "Everest Interactive",
+      "domain": "everestinteractive.tech",
+      "summary": "Everest Interactive — Everest Interactive operates a Tutoring platform enabling insurance carriers to expand into new markets. (Education, Commerce and Shopping; Tutoring, Higher Education, Subscription Service; 2011)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Higher Education",
+        "~30 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near pre seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/everestinteractive",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "7df34586b799fb82",
+      "company": "Basalt Payments",
+      "domain": "basaltpayments.com",
+      "summary": "Basalt Payments — Basalt Payments is a growth-stage company offering a carbon accounting platform to utility operators. (Education, Internet Services; Corporate Training, EdTech, Higher Education, Hosting; 2006)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/basaltpayments",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "cea87c77c452c35a",
+      "company": "Halcyonva",
+      "domain": "halcyonva.com",
+      "summary": "Halcyonva — Halcyonva develops a next-generation battery management system for the E-Learning market, focused on enterprise IT teams. (Education, Professional Services; E-Learning, Higher Education, Staffing Agency; 2009)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Higher Education",
+        "~75 people",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/halcyonva",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "b9741df69bdacf3c",
+      "company": "Ember Property",
+      "domain": "emberproperty.com",
+      "summary": "Ember Property — Ember Property provides a document automation suite that helps insurance carriers meet reporting requirements. (Education, Media and Entertainment; Corporate Training, E-Learning, Tutoring, Video Streaming; 2011)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Corporate Learning & Training",
+        "~75 people",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/emberproperty",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 60,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "a337bbeb1f622be4",
+      "company": "Vista Studios Software",
+      "domain": "vistastudios.tech",
+      "summary": "Vista Studios Software — Vista Studios provides a modular robotics system that helps professional services firms increase customer retention. (Hardware, Biotechnology; Semiconductor, Consumer Electronics, Wearables, Embedded Systems; 2022)",
+      "icpFit": 98,
+      "matchedIcp": [
+        "Professional Services",
+        "Hardware / Iot",
+        "~30 people",
+        "Sales Leadership window",
+        "near pre seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/vistastudios",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 58,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "4911b2e6226d9b83",
+      "company": "Jetstream Payments",
+      "domain": "jetstreampayments.co",
+      "summary": "Jetstream Payments — Jetstream Payments is a publicly traded company offering a revenue intelligence engine to biotech research teams. (Professional Services, Hardware; Recruiting, Legal Tech; 2004)",
+      "icpFit": 95,
+      "matchedIcp": [
+        "Professional Services",
+        "Hardware / Iot",
+        "~175 people",
+        "seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~175 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/jetstreampayments",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 56,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "5e91661d86b8ab3a",
+      "company": "Marrow Bio",
+      "domain": "marrowbio.co",
+      "summary": "Marrow Bio — Marrow Bio develops an automated compliance engine for the 3D Printing market, focused on e-commerce brands. (Hardware, Biotechnology; 3D Printing, Embedded Systems, Semiconductor, Robotics; 2004)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Hardware / Iot",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "2004"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/marrowbio",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 51,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "8a2f0907423ee459",
+      "company": "Thicket Security",
+      "domain": "thicketsecurity.com",
+      "summary": "Thicket Security — Thicket Security provides a revenue intelligence engine that helps life sciences companies consolidate fragmented systems. (Professional Services, Data and Analytics; Outsourcing, Human Resources, Analytics; 2009)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Professional Services",
+        "~30 people",
+        "revenue band",
+        "Sales Leadership window",
+        "2009"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/thicketsecurity",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 51,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "c4298ae37e2ebcbc",
+      "company": "Asterify",
+      "domain": "asterify.com",
+      "summary": "Asterify — Asterify is a growth-stage CleanTech company building a supply chain visibility platform for professional services firms. (Sustainability, Health Care; CleanTech, Water Purification, Health Diagnostics; 2013)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Professional Services",
+        "~30 people",
+        "revenue band",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 60,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people while headcount grows",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/asterify",
+          "weight": 0.6,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 51,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "2561605dfe0dfede",
+      "company": "Orbit Dynamics",
+      "domain": "orbitdynamics.ai",
+      "summary": "Orbit Dynamics — Orbit Dynamics is a bootstrapped API Management company building a clinical decision support tool for retail chains. (Software, Manufacturing; API Management, Database, Open Source, SaaS, Industrial Automation; 2017)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Saas",
+        "Industrial Manufacturing",
+        "~30 people",
+        "Sales Leadership window",
+        "2017"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/orbitdynamics",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "3e82cdd74bc502f7",
+      "company": "Cobalt Works",
+      "domain": "cobaltworks.tech",
+      "summary": "Cobalt Works — Cobalt Works is a bootstrapped company offering a self-serve onboarding product to education institutions. (Manufacturing, Professional Services; Quality Assurance, Industrial Engineering; 2012)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "2012"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/cobaltworks",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "5447a419ee896f48",
+      "company": "Sprig Capital",
+      "domain": "sprigcapital.co",
+      "summary": "Sprig Capital — Sprig Capital operates a Quality Assurance platform enabling insurance carriers to accelerate time to revenue. (Manufacturing, Professional Services; Quality Assurance, Supply Chain Management, Industrial Engineering; 2011)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~175 people",
+        "revenue band",
+        "2011"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~175 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/sprigcapital",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "4986fe0c1a48485b",
+      "company": "Alloy Space Dynamics",
+      "domain": "alloyspace.ai",
+      "summary": "Alloy Space Dynamics — Alloy Space develops a marketplace for specialized talent for the SaaS market, focused on enterprise IT teams. (Software, Professional Services; SaaS, Developer Tools, API Management, Cloud Computing; 2013)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Saas",
+        "Professional Services",
+        "~30 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near series c plus"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://alloyspace.ai",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "c7299c563f76db84",
+      "company": "Slate Industries",
+      "domain": "slateindustries.com",
+      "summary": "Slate Industries — Slate Industries provides a genomic analysis pipeline that helps professional services firms forecast demand more accurately. (Professional Services, Manufacturing; Legal Tech, Human Resources, Outsourcing, Accounting, Industrial Automation; 2019)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Professional Services",
+        "Industrial Manufacturing",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "near series c plus"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/slateindustries",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "64e169f7ae0bdcaf",
+      "company": "Relayio",
+      "domain": "relayio.tech",
+      "summary": "Relayio — Relayio is a bootstrapped company offering a marketplace for specialized talent to education institutions. (Education, Professional Services; Language Learning, EdTech, Higher Education, E-Learning, Staffing Agency; 2013)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~30 people",
+        "Sales Leadership window",
+        "2013"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/relayio",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "a59b0b0fa7592fb5",
+      "company": "Basalt Ventures Foods",
+      "domain": "basaltventures.com",
+      "summary": "Basalt Ventures Foods — Basalt Ventures operates a Higher Education platform enabling education institutions to forecast demand more accurately. (Education, Transportation; Higher Education, E-Learning; 2011)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Higher Education",
+        "~30 people",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/basaltventures",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "38e532dab87e83c5",
+      "company": "Ridgeline Materials",
+      "domain": "ridgelinematerials.com",
+      "summary": "Ridgeline Materials — Ridgeline Materials is a early-stage company offering a revenue intelligence engine to retail chains. (Education, Science and Engineering; Higher Education, EdTech; 2009)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~30 people",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~30 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/ridgelinematerials",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "4dbfd607c6e36f3e",
+      "company": "Keystone Property",
+      "domain": "keystoneproperty.ai",
+      "summary": "Keystone Property — Keystone Property operates a E-Learning platform enabling professional services firms to surface risk earlier. (Education, Sustainability; E-Learning, Language Learning, Higher Education; 2012)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Higher Education",
+        "~175 people",
+        "revenue band",
+        "series b"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~175 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/keystoneproperty",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "6760abee81ec7086",
+      "company": "Basalt Security",
+      "domain": "basaltsecurity.com",
+      "summary": "Basalt Security — Basalt Security provides a low-code integration framework that helps manufacturing plants improve data quality. (Education, Internet Services; Tutoring, EdTech; 2013)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "series a"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/basaltsecurity",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "1a6528d61193bbac",
+      "company": "Juniperify",
+      "domain": "juniperify.tech",
+      "summary": "Juniperify — Juniperify operates a Higher Education platform enabling retail chains to meet reporting requirements. (Education, Biotechnology; Higher Education, EdTech, E-Learning, Language Learning, Drug Discovery; 2012)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Higher Education",
+        "~75 people",
+        "Sales Leadership window",
+        "2012"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/juniperify",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "05d53b946394564a",
+      "company": "Flux Property",
+      "domain": "fluxproperty.tech",
+      "summary": "Flux Property — Flux Property is a growth-stage company offering a revenue intelligence engine to biotech research teams. (Education, Energy; Corporate Training, EdTech, Language Learning; 2011)",
+      "icpFit": 100,
+      "matchedIcp": [
+        "Education",
+        "Edtech",
+        "Corporate Learning & Training",
+        "~175 people",
+        "revenue band",
+        "near series c plus"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~175 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/fluxproperty",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 50,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.526Z",
+      "lastSeenAt": "2026-09-24T19:37:13.809Z"
+    },
+    {
+      "id": "a06f574da3b86535",
+      "company": "Quarry Payments",
+      "domain": "quarrypayments.com",
+      "summary": "Quarry Payments — Quarry Payments is a early-stage company offering a next-generation battery management system to e-commerce brands. (Professional Services, Commerce and Shopping; Recruiting, Human Resources, Accounting, Subscription Service; 2021)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Professional Services",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/quarrypayments",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 43,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "86135a1a09834601",
+      "company": "Flux Medical",
+      "domain": "fluxmedical.com",
+      "summary": "Flux Medical — Flux Medical operates a iOS platform enabling logistics providers to expand into new markets. (Apps, Professional Services; iOS, Consumer Applications; 2016)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Professional Services",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "seed"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/fluxmedical",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 43,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    },
+    {
+      "id": "7ef51d8e10fd7621",
+      "company": "Marrow Therapeutics",
+      "domain": "marrowtherapeutics.com",
+      "summary": "Marrow Therapeutics — Marrow Therapeutics is a early-stage company offering a supply chain visibility platform to professional services firms. (Data and Analytics, Artificial Intelligence; Big Data, Business Intelligence, Analytics; 2001)",
+      "icpFit": 90,
+      "matchedIcp": [
+        "Professional Services",
+        "~75 people",
+        "revenue band",
+        "Sales Leadership window",
+        "2001"
+      ],
+      "timing": 50,
+      "signals": [
+        {
+          "type": "function-gap",
+          "label": "No sales leadership visible on the roster at ~75 people",
+          "detail": "The function a company this size needs has no visible owner.",
+          "evidenceUrl": "https://www.linkedin.com/company/marrowtherapeutics",
+          "weight": 0.5,
+          "halfLifeDays": null
+        }
+      ],
+      "overall": 43,
+      "suggestedPitch": "They're building around your function while nobody owns it. Pitch fractional Sales Leadership to fill the gap before it costs them a quarter.",
+      "status": "new",
+      "role": "Sales Leadership",
+      "firstSeenAt": "2026-09-24T19:37:12.663Z",
+      "lastSeenAt": "2026-09-24T19:37:13.529Z"
+    }
+  ],
+  "lastScan": {
+    "at": "2026-09-24T19:37:13.809Z",
+    "results": [
+      {
+        "source": "funding-news",
+        "fetched": 0,
+        "matched": 0
+      },
+      {
+        "source": "departure-news",
+        "fetched": 0,
+        "matched": 0
+      },
+      {
+        "source": "hiring-patterns",
+        "fetched": 0,
+        "matched": 0
+      },
+      {
+        "source": "appointment-news",
+        "fetched": 0,
+        "matched": 0
+      },
+      {
+        "source": "icp-universe",
+        "fetched": 23,
+        "matched": 23,
+        "detail": "universe 7,345 (7,345 Crunchbase + 0 YC) · 40 ICP candidates · 15 enriched · 0 careers boards read"
+      }
+    ],
+    "added": 0,
+    "updated": 21,
+    "engineVersion": "v3-diff"
+  }
+}

@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import type { Operator, Project, State } from "../../lib/types";
-import { CATEGORIES, OPERATORS, buyerById, completeness, displayName, operatorById, photoUrl } from "../../lib/data";
+import { CATEGORIES, buyerById, completeness, displayName, operatorById, photoUrl } from "../../lib/data";
 import {
   DECLINE_REASONS,
   alertOf,
@@ -33,6 +33,7 @@ import {
   saveDraftResponse,
   setAlertPrefs,
   submitResponse,
+  takeHome,
   takeHomeLine,
   updateResponse,
   useSession,
@@ -46,6 +47,7 @@ import { FIT_PARTS, seatCategory, type FitResult } from "../../lib/fit";
 import { ago, hoursRange, isoDay, rateLabel, shortDate } from "../../lib/format";
 import { Link, navigate, useLocation } from "../../lib/router";
 import { attempt } from "../common";
+import { useFitLifts, useNextMoves } from "./Work";
 
 const DAY = 86400000;
 
@@ -79,7 +81,7 @@ export function Ring({ value, size = 56, label, testId }: { value: number; size?
   );
 }
 
-function Arrow() {
+export function Arrow() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
       <path d="M2 7h10M8 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" />
@@ -129,10 +131,10 @@ export function LiveShell({ children }: { children: ReactNode }) {
   const nav: { to: string; label: string; badge?: number; match: (p: string) => boolean }[] = [
     { to: "/dashboard", label: "Overview", match: (p) => p === "/dashboard" },
     { to: "/dashboard/projects", label: "Projects", badge: invites, match: (p) => p.startsWith("/dashboard/projects") },
-    { to: "/dashboard/intros", label: "Intro Requests", match: (p) => p.startsWith("/dashboard/intros") },
-    { to: `/operators/${op?.slug}?section=reviews`, label: "Reviews", match: () => false },
+    { to: "/dashboard/jobs", label: "Jobs", match: (p) => p.startsWith("/dashboard/jobs") },
+    { to: "/dashboard/prospects", label: "Prospects", match: (p) => p.startsWith("/dashboard/prospects") },
+    { to: "/dashboard/intros", label: "Intros", match: (p) => p.startsWith("/dashboard/intros") },
     { to: `/operators/${op?.slug}`, label: "My Profile", match: (p) => !!op && p === `/operators/${op.slug}` },
-    { to: "/operators", label: "Browse Talent", match: (p) => p === "/operators" },
   ];
   if (!op) return null;
   return (
@@ -172,8 +174,8 @@ export function LiveShell({ children }: { children: ReactNode }) {
               <Link to={`/operators/${op.slug}`} role="menuitem" onClick={() => setMenu(false)}>
                 My profile
               </Link>
-              <Link to="/portal" role="menuitem" onClick={() => setMenu(false)}>
-                Job board
+              <Link to="/operators" role="menuitem" onClick={() => setMenu(false)}>
+                Browse operators
               </Link>
             </div>
           )}
@@ -200,176 +202,136 @@ export function LiveOverview() {
   const { s, op } = useMe();
   const portal = operatorPortal(s, op.id);
   const comp = completeness(op);
-  const invites = portal.invited;
+  const moves = useNextMoves(s, op);
+  const { lifts, strongNow, total } = useFitLifts(s, op);
+  const st = opState(s, op.id);
   const myIntros = s.intros.filter((i) => i.operatorId === op.id && i.status === "approved");
-  const sameRole = OPERATORS.filter((o) => o.cat === op.cat);
-  const avgTags = Math.round(sameRole.reduce((a, o) => a + (o.allTags || []).length, 0) / Math.max(1, sameRole.length));
-  const reviews = op.profile?.reviews || [];
+  const sent = portal.responded.length;
+  const applied = Object.values(st.jobs || {}).filter((m) => m.status === "applied").length;
+  const reached = Object.values(st.prospects || {}).filter((m) => m.status !== "dismissed");
+  const replies = reached.filter((m) => m.status === "replied" || m.status === "meeting").length;
+  const invites = new Map(portal.invited.map((it) => [`inv-${it.project.id}`, it]));
   return (
     <div className="lv-stack">
-      <section className="lv-welcome">
-        <div className="lv-welcome-l">
-          <Ring value={comp.pct} size={64} />
-          <div>
-            <h1>
-              Welcome back, <span className="lv-green">{op.first}.</span>
-            </h1>
-            <p>
-              {comp.pct === 100 ? "Your profile is complete." : `Your profile is ${comp.pct}% complete.`}{" "}
-              {invites.length ? (
-                <>
-                  You have{" "}
-                  <strong>
-                    {invites.length} project invite{invites.length === 1 ? "" : "s"}
-                  </strong>{" "}
-                  waiting on a response.
-                </>
-              ) : (
-                "No project invites waiting right now."
-              )}
-            </p>
-          </div>
+      <section className="lv-hello">
+        <div>
+          <h1>
+            Welcome back, <span className="lv-green">{op.first}.</span>
+          </h1>
+          <p data-testid="hello-sub">
+            {moves.length ? `${moves.length} thing${moves.length === 1 ? " needs" : "s need"} you.` : "You're all caught up."} {strongNow} of the {total} roles open right now are a strong fit for you.
+          </p>
         </div>
-        <Link to={`/operators/${op.slug}`} className="lv-btn lv-btn-pri">
-          Request Review <Arrow />
-        </Link>
-      </section>
-
-      <section className="lv-card">
-        <div className="lv-card-head">
-          <div>
-            <h2>Project invites</h2>
-            <p>Clients and Revenue Nomad picked you for these engagements. Responding takes about two minutes.</p>
-          </div>
-          <Link to="/dashboard/projects" className="lv-link">
-            View all projects
+        {comp.pct < 100 && (
+          <Link to={`/operators/${op.slug}`} className="lv-hello-prof">
+            <Ring value={comp.pct} size={44} />
+            <span>
+              <b>Finish your profile</b>
+              <small>Complete profiles get invited first</small>
+            </span>
           </Link>
-        </div>
-        {!invites.length && <div className="lv-empty">No invites waiting. They land here the moment a client or Revenue Nomad picks you.</div>}
-        <div className="lv-list">
-          {invites.slice(0, 3).map((it) => (
-            <div key={it.project.id} className="lv-invite" data-testid="overview-invite" data-project={it.project.id}>
-              <div className="lv-invite-l">
-                <div className="lv-chips">
-                  <span className="lv-chip lv-chip-inv">{sourceLabel(it.source)}</span>
-                  {dueChip(s, it.project) && <span className="lv-chip lv-chip-due">{dueChip(s, it.project)}</span>}
-                </div>
-                <b className="lv-invite-t">{it.project.title}</b>
-                <span className="lv-muted">{metaLine(s, it.project, op.id)}</span>
-              </div>
-              <div className="lv-invite-r">
-                <Ring value={it.fit.fit} label="Your fit" />
-                <Link to={`/dashboard/projects/${it.project.id}`} className="lv-btn lv-btn-pri">
-                  Respond <Arrow />
-                </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-        <Link to="/dashboard/projects?tab=open" className="lv-dashed">
-          <span>
-            <b>
-              {portal.openRoles.length} open role{portal.openRoles.length === 1 ? "" : "s"} match your profile
-            </b>
-            <small>You were not invited to these, but any operator can respond.</small>
-          </span>
-          <span className="lv-link">Browse open roles</span>
-        </Link>
+        )}
       </section>
 
-      <section className="lv-stats">
-        <div className="lv-stat">
-          <span>Engagements</span>
-          <b>{op.eng}</b>
-        </div>
-        <div className="lv-stat">
-          <span>Client reviews</span>
-          <b>{op.rev}</b>
-        </div>
-        <div className="lv-stat">
-          <span>Intro requests</span>
-          <b data-testid="overview-intros">{myIntros.length}</b>
-        </div>
-        <Link to="/dashboard/projects?tab=invited" className="lv-stat lv-stat-dark">
-          <span>Project invites</span>
-          <b data-testid="overview-invites">{invites.length}</b>
-        </Link>
-      </section>
-
-      <section className="lv-two">
-        <div className="lv-rank">
-          <span>Your rank among operators</span>
-          <div className="lv-rank-grid">
-            <div>
-              <b>{sameRole.length}</b>
-              <small>Operators in your role</small>
-            </div>
-            <div>
-              <b>{avgTags}</b>
-              <small>Avg tags per operator</small>
-            </div>
-            <div>
-              <b>{(op.allTags || []).length}</b>
-              <small>Your fit tags</small>
-            </div>
-          </div>
-        </div>
-        <div className="lv-card">
-          <h2>How it works</h2>
-          <ol className="lv-how">
-            <li>
-              <small>Step 1</small>
-              <b>Complete profile</b>
-            </li>
-            <li>
-              <small>Step 2</small>
-              <b>Get invited to projects</b>
-            </li>
-            <li>
-              <small>Step 3</small>
-              <b>Respond and get selected</b>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section className="lv-two">
-        <div className="lv-card">
-          <div className="lv-card-head">
-            <h2>Recent intro requests</h2>
-            <Link to="/dashboard/intros" className="lv-link">
-              View all
+      <section className="lv-card" data-testid="next-moves">
+        <div className="lv-card-head">
+          <h2>Next up</h2>
+          {portal.openRoles.length > 0 && (
+            <Link to="/dashboard/projects?tab=open" className="lv-link">
+              {portal.openRoles.length} open role{portal.openRoles.length === 1 ? "" : "s"} match you
             </Link>
-          </div>
-          {!myIntros.length && <div className="lv-empty">No intro requests yet.</div>}
-          {myIntros.slice(0, 3).map((i) => {
-            const p = projectById(s, i.projectId)!;
+          )}
+        </div>
+        {!moves.length && <div className="lv-empty">Nothing is waiting on you. New invites and follow-ups show up here the moment they're due.</div>}
+        <div className="lv-list">
+          {moves.map((m) => {
+            const it = invites.get(m.key);
+            if (it)
+              return (
+                <div key={m.key} className="lv-invite" data-testid="overview-invite" data-project={it.project.id}>
+                  <div className="lv-invite-l">
+                    <div className="lv-chips">
+                      <span className="lv-chip lv-chip-inv">{sourceLabel(it.source)}</span>
+                      {dueChip(s, it.project) && <span className="lv-chip lv-chip-due">{dueChip(s, it.project)}</span>}
+                    </div>
+                    <b className="lv-invite-t">{it.project.title}</b>
+                    <span className="lv-muted">{metaLine(s, it.project, op.id)}</span>
+                  </div>
+                  <div className="lv-invite-r">
+                    <Ring value={it.fit.fit} label="Your fit" />
+                    <Link to={`/dashboard/projects/${it.project.id}`} className="lv-btn lv-btn-pri">
+                      Respond <Arrow />
+                    </Link>
+                  </div>
+                </div>
+              );
             return (
-              <Link key={i.id} to={`/dashboard/projects/${p.id}`} className="lv-row">
-                <b>{p.title}</b>
-                <small>
-                  {projectCompanyLine(s, p, op.id)} · {i.bookedSlot ? `Call booked ${i.bookedSlot}` : `Requested ${shortDate(i.createdAt)}`}
-                </small>
-              </Link>
+              <div key={m.key} className="lv-move" data-testid="next-move">
+                <span>{m.text}</span>
+                {m.to ? (
+                  <Link to={m.to} className="lv-btn lv-btn-sm">
+                    {m.cta}
+                  </Link>
+                ) : (
+                  <button type="button" className="lv-btn lv-btn-sm" onClick={m.onClick}>
+                    {m.cta}
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
-        <div className="lv-card">
+      </section>
+
+      <section className="lv-two">
+        <div className="lv-card" data-testid="raise-fit">
           <div className="lv-card-head">
-            <h2>Recent reviews</h2>
-            <Link to={`/operators/${op.slug}`} className="lv-link">
-              View all
+            <div>
+              <h2>Raise your fit</h2>
+              <p>Re-scored against every role open today. Each change is worth the roles shown.</p>
+            </div>
+          </div>
+          {!lifts.length && <div className="lv-empty">Your profile already scores as well as it can on today's roles.</div>}
+          <div className="lv-list">
+            {lifts.map((l) => (
+              <div key={l.key} className="lv-lift" data-testid="fit-lift">
+                <span className="lv-lift-gain">+{l.gain}</span>
+                <span className="grow">
+                  <b>{l.text}</b>
+                  <small>{l.sub}</small>
+                </span>
+                <Link to={l.to} className="lv-link">
+                  {l.cta}
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="lv-card" data-testid="your-pipeline">
+          <div className="lv-card-head">
+            <div>
+              <h2>Your pipeline</h2>
+              <p>Everything you mark trains your matches and reminders.</p>
+            </div>
+          </div>
+          <div className="lv-pipe">
+            <Link to="/dashboard/projects?tab=responded">
+              <b data-testid="overview-invites">{sent}</b>
+              <span>Project responses</span>
+            </Link>
+            <Link to="/dashboard/intros">
+              <b data-testid="overview-intros">{myIntros.length}</b>
+              <span>Client intros</span>
+            </Link>
+            <Link to="/dashboard/jobs">
+              <b>{applied}</b>
+              <span>Jobs applied</span>
+            </Link>
+            <Link to="/dashboard/prospects">
+              <b>{reached.length}</b>
+              <span>{reached.length ? `Prospects reached · ${replies} repl${replies === 1 ? "y" : "ies"}` : "Prospects reached"}</span>
             </Link>
           </div>
-          {!reviews.length && <div className="lv-empty">No reviews yet. A review from a past client lifts your fit scores.</div>}
-          {reviews.slice(0, 2).map((r, i) => (
-            <div key={i} className="lv-row">
-              <b>
-                {r.reviewer}, {r.company}
-              </b>
-              <small>“{r.quote.length > 140 ? r.quote.slice(0, 140) + "…" : r.quote}”</small>
-            </div>
-          ))}
         </div>
       </section>
     </div>
@@ -729,6 +691,9 @@ function RespondCard({ s, p, op, editing }: { s: State; p: Project; op: Operator
   const [saved, setSaved] = useState<string | null>(null);
   const blocked = editing ? null : respondBlockedMessage(p);
   const hrsNum = Number(hours);
+  const range = takeHome(p);
+  const rateNum = Number(rate.replace(/[$,/hr ]/g, ""));
+  const overRange = !!range && rate.trim() !== "" && rateNum > range[1];
   const overHours = hours !== "" && hrsNum > (op.hrs || 0);
   const engagements = op.profile?.details?.engagements || [];
   const input = () => ({
@@ -815,7 +780,18 @@ function RespondCard({ s, p, op, editing }: { s: State; p: Project; op: Operator
               {fe("canStart")}
             </label>
           </div>
-          <p className="lv-fine">Rate is your take-home. Prefilled from your profile.{p.origin === "revenue_nomad" && takeHomeLine(p) ? ` This seat pays ${takeHomeLine(p)}.` : ""}</p>
+          {overRange ? (
+            <div className="lv-rangewarn" data-testid="rate-warn">
+              <span>
+                ${rateNum} is above this client&apos;s range of {takeHomeLine(p)} take-home, so you&apos;ll show as over budget.
+              </span>
+              <button type="button" className="lv-btn lv-btn-sm" onClick={() => setRate(String(range![1]))} data-testid="rate-use-max">
+                Use ${range![1]}
+              </button>
+            </div>
+          ) : (
+            <p className="lv-fine">Rate is your take-home. Prefilled from your profile.{takeHomeLine(p) ? ` This client's range is ${takeHomeLine(p)}.` : ""}</p>
+          )}
           {overHours && (
             <Msg tone="warn" testId="hours-warning">
               {hrsNum} hrs a month is more than the {op.hrs} on your profile. That&apos;s fine, the fit score will use {hrsNum}.

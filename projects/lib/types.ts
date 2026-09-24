@@ -56,6 +56,20 @@ export interface OperatorState {
   availability: "open" | "from" | "unavailable" | null;
   availableFrom?: string | null;
   hoursPerMonth?: number | null;
+  /** The operator's own marks on crawled jobs and on prospects. Never shared. */
+  jobs?: Record<string, WorkMark>;
+  prospects?: Record<string, WorkMark>;
+  jobsSeenAt?: number;
+}
+
+export type WorkStatus = "saved" | "applied" | "dismissed" | "sent" | "replied" | "meeting";
+export interface WorkMark {
+  status: WorkStatus;
+  at: number;
+  followUpAt?: number | null;
+  /** Signal type a prospect was contacted on, so replies can be traced back to it. */
+  signal?: string;
+  title?: string;
 }
 
 export interface Buyer {

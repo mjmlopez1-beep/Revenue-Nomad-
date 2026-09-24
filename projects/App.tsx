@@ -6,6 +6,7 @@ import { projectById, setSession, signInAs, useSession, useStore } from "./lib/s
 import { ProtoBar, ROLE_HOME, SiteHeader } from "./ui/Shell";
 import { BuyerBrief, BuyerDashboard, BuyerIntros, BuyerInvite, BuyerProject, BuyerSelect } from "./ui/buyer/Buyer";
 import { LiveAvailability, LiveIntros, LiveOverview, LiveProject, LiveProjects, LiveShell } from "./ui/live/Live";
+import { LiveJobs, LiveProspects } from "./ui/live/Work";
 import { AdminIntros, AdminOperators, AdminProject, AdminReports } from "./ui/admin/Admin";
 import { AdminAudit, AdminClients, AdminEngagements, AdminProjectsList, AdminPulse, AdminReviews, AdminShell, AdminShortlist, AdminToday, AdminWizard } from "./ui/admin/Console";
 import { ClientShortlist, OperatorDirectory, OperatorProfile } from "./ui/Pages";
@@ -24,6 +25,8 @@ const ROUTES: RouteDef[] = [
   ["/dashboard", "operator", () => <LiveOverview />],
   ["/dashboard/projects", "operator", () => <LiveProjects />],
   ["/dashboard/projects/:id", "operator", (p) => <LiveProject key={p.id} id={p.id} />],
+  ["/dashboard/jobs", "operator", () => <LiveJobs />],
+  ["/dashboard/prospects", "operator", () => <LiveProspects />],
   ["/dashboard/intros", "operator", () => <LiveIntros />],
   ["/dashboard/availability", "operator", () => <LiveAvailability />],
   ["/admin/today", "admin", () => <AdminToday />],

@@ -21,6 +21,8 @@ import type {
   Role,
   Session,
   State,
+  WorkMark,
+  WorkStatus,
 } from "./types";
 import {
   ADMIN,
@@ -1310,6 +1312,64 @@ export function confirmAvailability(opId: string, availability: "open" | "from" 
       if (extra.hours) st.hoursPerMonth = extra.hours;
       s.opState[opId] = st;
       c.event("availability_confirmed", { operatorId: opId, meta: { availability, from: extra.from || null } });
+    },
+    opId,
+  );
+}
+
+// ---------------------------------------------------------------- jobs and prospects (per operator)
+
+export const FOLLOW_UP_DAYS = 5;
+
+function markWork(kind: "jobs" | "prospects", opId: string, id: string, status: WorkStatus | null, extra: Partial<WorkMark> = {}) {
+  mutate(
+    "operator",
+    (s, c) => {
+      const st = { ...opState(s, opId) };
+      const marks = { ...(st[kind] || {}) };
+      if (status === null) delete marks[id];
+      else {
+        const prev = marks[id];
+        const followUp = status === "applied" || status === "sent" ? c.now + FOLLOW_UP_DAYS * DAY : status === "replied" ? c.now + 2 * DAY : null;
+        marks[id] = { ...prev, ...extra, status, at: c.now, followUpAt: followUp };
+      }
+      st[kind] = marks;
+      s.opState[opId] = st;
+      c.event(status ? `${kind === "jobs" ? "job" : "prospect"}_${status}` : `${kind === "jobs" ? "job" : "prospect"}_cleared`, { operatorId: opId, meta: { id, ...(extra.signal ? { signal: extra.signal } : {}) } });
+    },
+    opId,
+  );
+}
+
+export function markJob(opId: string, jobId: string, status: Extract<WorkStatus, "saved" | "applied" | "dismissed"> | null, title?: string) {
+  markWork("jobs", opId, jobId, status, title ? { title } : {});
+}
+
+export function markProspect(opId: string, prospectId: string, status: Extract<WorkStatus, "sent" | "replied" | "meeting" | "dismissed"> | null, extra: { signal?: string; title?: string } = {}) {
+  markWork("prospects", opId, prospectId, status, extra);
+}
+
+/** "I followed up": push the reminder out a week without changing the status. */
+export function followedUp(opId: string, kind: "jobs" | "prospects", id: string) {
+  mutate(
+    "operator",
+    (s, c) => {
+      const st = { ...opState(s, opId) };
+      const m = st[kind]?.[id];
+      if (!m) return;
+      st[kind] = { ...st[kind], [id]: { ...m, followUpAt: c.now + 7 * DAY } };
+      s.opState[opId] = st;
+      c.event("followed_up", { operatorId: opId, meta: { id, kind } });
+    },
+    opId,
+  );
+}
+
+export function seeJobs(opId: string) {
+  mutate(
+    "operator",
+    (s, c) => {
+      s.opState[opId] = { ...opState(s, opId), jobsSeenAt: c.now };
     },
     opId,
   );

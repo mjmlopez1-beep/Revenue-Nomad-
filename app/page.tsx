@@ -1,62 +1,70 @@
 import Link from "next/link";
 import Brand from "./Brand";
+import { loadDb } from "@/lib/store";
+import operators from "../projects/seed/operators.json";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const db = await loadDb().catch(() => ({ jobs: [] as { status?: string }[] }));
+  const roles = db.jobs.length;
+  const vetted = (operators as unknown[]).length;
   return (
     <div className="container">
       <nav className="nav">
         <Brand />
         <div className="nav-links">
-          <Link href="/portal">Operator Portal</Link>
+          <Link href="/buyer/projects">Find an operator</Link>
+          <Link href="/dashboard">Operator sign in</Link>
         </div>
       </nav>
 
       <section className="hero">
         <h1>
-          Every open <em>fractional GTM</em> role. One board.
+          Senior <em>go-to-market</em> operators, a few days a week.
         </h1>
-        <p>
-          Revenue Nomad crawls the web for open fractional, interim, and contract go-to-market
-          roles — CROs, CMOs, RevOps leads, growth operators — scores them for relevance, and
-          aggregates them into a single operator portal. Stop tab-hopping job boards; start
-          picking engagements.
-        </p>
-        <Link href="/portal" className="btn">
-          Open the portal →
+        <p>Revenue Nomad matches companies with vetted fractional sales, marketing and RevOps leaders, and gives operators one place to find their next engagement.</p>
+      </section>
+
+      <section className="doors">
+        <Link href="/buyer/projects" className="door">
+          <span className="door-k">For companies</span>
+          <b>Hire a fractional operator</b>
+          <ul>
+            <li>Pick a role template and post in three clicks</li>
+            <li>Responses arrive ranked by fit</li>
+            <li>Book intro calls in one tap</li>
+          </ul>
+          <span className="btn">Post a project →</span>
+        </Link>
+        <Link href="/dashboard" className="door">
+          <span className="door-k">For operators</span>
+          <b>Find your next engagement</b>
+          <ul>
+            <li>Invites from clients, respond in two minutes</li>
+            <li>Every fractional GTM role on the web, scored for you</li>
+            <li>Companies likely to need you, before they post</li>
+          </ul>
+          <span className="btn btn-ghost">Open your dashboard →</span>
         </Link>
       </section>
 
-      <section className="features">
-        <div className="feature">
-          <h3>Boards + communities</h3>
-          <p>
-            Pulls open roles from job boards (Remotive, RemoteOK, We Work Remotely, fractionaljobs.io,
-            Greenhouse) and community leads from Hacker News and Reddit — founders talking about
-            fractional GTM help before it ever hits a board.
-          </p>
+      <section className="proof" aria-label="Revenue Nomad in numbers">
+        <div>
+          <b>{vetted}</b>
+          <span>vetted operators</span>
         </div>
-        <div className="feature">
-          <h3>Truly fractional only</h3>
-          <p>
-            Every item must show a real fractional signal — fractional/interim wording, ≤4 days a
-            week, hourly pricing, or a contract term. Full-time roles are filtered out, and
-            commitment, rate, and term are extracted onto each card.
-          </p>
+        <div>
+          <b>{roles}</b>
+          <span>fractional GTM roles tracked</span>
         </div>
-        <div className="feature">
-          <h3>Predictive prospecting</h3>
-          <p>
-            Set your ICP once and the engine flags companies to reach out to <em>before</em> they
-            post a role — fresh funding, a departed GTM leader, teams hiring without leadership, or
-            a stalled content engine — each with evidence and a suggested pitch.
-          </p>
+        <div>
+          <b>2 min</b>
+          <span>to respond to an invite</span>
         </div>
-        <div className="feature">
-          <h3>Operator pipeline</h3>
-          <p>
-            Save roles, queue outreach, track contacted accounts. Filter by function, engagement,
-            source, and score to find your next engagement fast.
-          </p>
+        <div>
+          <b>Daily</b>
+          <span>crawl of job boards and communities</span>
         </div>
       </section>
     </div>
