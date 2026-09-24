@@ -15,12 +15,12 @@
 .hdr.over .nav a::after { background: var(--leaf); }
 .nav a:hover::after, .nav a.on::after { transform: scaleX(1); }
 .nav-actions { display: flex; align-items: center; gap: var(--s-3); }
-.nav-burger { display: none; }
+.nav-actions .nav-burger { display: none; }
 .nav-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 11px; letter-spacing: 0; }
 .hdr.over .nav-count { background: var(--leaf); color: var(--forest-deep); }
 @media (max-width: 1080px) {
   .nav { display: none; }
-  .nav-burger { display: inline-flex; }
+  .nav-actions .nav-burger { display: inline-flex; }
   .nav-actions { margin-left: auto; }
   .nav-actions .hide-m { display: none; }
 }
@@ -320,6 +320,7 @@
 .ftr h4 { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--leaf); margin-bottom: var(--s-4); }
 .ftr a { display: block; padding: 5px 0; color: var(--night-mute); font-size: var(--t-14); }
 .ftr a:hover { color: #fff; }
+.ftr a.logo { display: inline-flex; padding: 0; color: #fff; }
 .ftr-base { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-4); margin-top: var(--s-12); padding-top: var(--s-6); border-top: 1px solid var(--night-line); font-size: var(--t-13); color: var(--night-mute); }
 @media (max-width: 900px) { .ftr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ftr-grid > :first-child { grid-column: 1 / -1; } }
 
@@ -329,6 +330,7 @@
 .tray-l { font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; white-space: nowrap; }
 
 /* ---------- Prototype dock ---------- */
+body.has-modal .dock, body.has-modal .tray { display: none; }
 .dock { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 250; font-family: var(--f-text); }
 .dock-btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 12px; border-radius: 12px; border: 1px solid var(--night-line); background: var(--night-2); color: #fff; font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; box-shadow: var(--shadow-3); cursor: pointer; }
 .dock-btn .dot { background: var(--leaf); }

@@ -10,6 +10,8 @@
   RN.data.market = {
     illustrative: true,
     asOf: '2026-09-24',
+    // Live network size for marketing copy. The prototype loads a 100-profile sample of the live export.
+    network: { operators: '350+', sample: 100, disciplines: 8 },
 
     /* ---------- State of Fractional GTM 2027 ---------- */
     report: {

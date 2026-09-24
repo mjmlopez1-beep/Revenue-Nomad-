@@ -162,7 +162,7 @@
         <div class="stack" style="--gap:8px"><span class="label">Theme</span>
           <div class="seg">${['system', 'light', 'dark'].map((t) => `<button type="button" class="${st.theme === t ? 'on' : ''}" data-act="theme" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <div class="dock-row"><button class="btn btn-line btn-sm" data-act="outbox">${icon('mail')}Outbox (${mail})</button><button class="btn btn-ghost btn-sm" data-act="reset-demo" style="color:#FFB4A8">Reset demo data</button></div>
-        <p class="dock-note">Operator data is the live network export. Analytics, market figures and company names in Studio and Insights are illustrative.</p>
+        <p class="dock-note">Operators are a 100-profile sample of the live network (350+). Analytics, market figures and company names in Studio and Insights are illustrative.</p>
       </div>` : ''}
       <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}"><i class="dot"></i>Prototype<span class="hide-m" style="font-weight:600;letter-spacing:.02em;text-transform:none;color:var(--night-mute)">· ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
   };

@@ -159,6 +159,7 @@
     el.addEventListener('mousedown', (e) => { if (e.target === el) ui.closeModal(); });
     document.body.appendChild(el);
     document.body.style.overflow = 'hidden';
+    document.body.classList.add('has-modal');
     modalStack.push({ id, el, onClose: o.onClose });
     const first = el.querySelector('[autofocus], input, select, textarea, button:not(.x-btn)');
     setTimeout(() => first && first.focus(), 30);
@@ -170,7 +171,7 @@
     const top = modalStack.pop();
     if (!top) return;
     top.el.remove();
-    if (!modalStack.length) document.body.style.overflow = '';
+    if (!modalStack.length) { document.body.style.overflow = ''; document.body.classList.remove('has-modal'); }
     if (top.onClose) top.onClose();
   };
   ui.modalEl = () => (modalStack.length ? modalStack[modalStack.length - 1].el : null);
@@ -223,8 +224,9 @@
       else console.warn('No action registered:', el.dataset.act);
       return;
     }
-    const a = e.target.closest('a[data-track-view]');
-    if (a) RN.store.state._viewSource = 'card';
+    // Profile-view attribution: links to profiles may carry data-view-source (home, search, compare...)
+    const a = e.target.closest('a[href^="#op."]');
+    if (a) RN.store.state._viewSource = a.dataset.viewSource || (a.closest('[data-view-source]') && a.closest('[data-view-source]').dataset.viewSource) || 'card';
   });
   document.addEventListener('mouseover', (e) => { const t = e.target.closest('[data-tip]'); if (t && window.matchMedia('(hover: hover)').matches) showTip(t); });
   document.addEventListener('mouseout', (e) => { const t = e.target.closest('[data-tip]'); if (t && window.matchMedia('(hover: hover)').matches) hideTip(); });
