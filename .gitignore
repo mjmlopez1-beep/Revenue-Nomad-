@@ -9,3 +9,5 @@ next-env.d.ts
 data/jobs.json
 data/jobs.json.tmp
 .DS_Store
+
+public/prototype/dist/

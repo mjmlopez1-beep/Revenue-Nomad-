@@ -1,0 +1,8 @@
+/* Field standards page */
+[data-view="standards"] .std-group { margin-top: var(--s-6); }
+[data-view="standards"] .std-tbl td:first-child { width: 220px; }
+[data-view="standards"] .std-tbl td:nth-child(2) { width: 110px; color: var(--mute); }
+[data-view="standards"] .std-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-view="standards"] .std-opt { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--card-2); font-size: var(--t-13); }
+[data-view="standards"] .std-opt .mono { color: var(--mute-2); font-size: 11px; }
+@media (max-width: 640px) { [data-view="standards"] .std-tbl td:first-child { width: auto; } }

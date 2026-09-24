@@ -4,6 +4,10 @@ Every open **fractional GTM** role. One board.
 
 Revenue Nomad crawls the web for open fractional, interim, and contract go-to-market roles — fractional CROs, CMOs, RevOps leads, growth operators — scores each listing for relevance, and aggregates everything into a job board inside the **Operator Portal**.
 
+## Master prototype
+
+`public/prototype/` holds the Revenue Nomad master prototype: the homepage, browse, operator profiles, projects, research hub, operator Studio, client workspace and admin console merged into one clickable system on one field registry and one design system. Open `public/prototype/index.html` directly, or run `npm run dev` and visit `/prototype/index.html`. See `public/prototype/README.md`.
+
 ## How it works
 
 1. **Crawl** — source adapters pull from job boards *and* the places people talk about fractional GTM work:

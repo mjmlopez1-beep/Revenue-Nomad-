@@ -1,0 +1,105 @@
+/* Base: reset, type scale, layout primitives. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--nav-h) + 12px); }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--f-text);
+  font-size: var(--t-15);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern";
+  overflow-x: clip;
+}
+img, svg, video { display: block; max-width: 100%; }
+/* Icons from RN.icon default to text size; components set exact sizes */
+svg.i { width: 1.15em; height: 1.15em; flex: 0 0 auto; }
+img { height: auto; }
+a { color: inherit; text-decoration: none; }
+p a, .prose a, a.link { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+::selection { background: var(--leaf); color: var(--forest-deep); }
+hr { border: 0; border-top: 1px solid var(--line); margin: var(--s-6) 0; }
+
+/* Headings: Red Hat Display, tight tracking, balanced wraps */
+h1, h2, h3, h4, h5 { font-family: var(--f-display); margin: 0; letter-spacing: -0.02em; line-height: 1.08; text-wrap: balance; font-weight: 700; }
+.h-hero { font-size: clamp(40px, 7vw, var(--t-80)); line-height: .98; letter-spacing: -0.035em; }
+.h1 { font-size: clamp(34px, 5vw, var(--t-56)); letter-spacing: -0.03em; }
+.h2 { font-size: clamp(28px, 3.6vw, var(--t-40)); letter-spacing: -0.03em; line-height: 1.05; }
+.h3 { font-size: var(--t-24); letter-spacing: -0.02em; line-height: 1.15; }
+.h4 { font-size: var(--t-18); letter-spacing: -0.01em; line-height: 1.25; }
+.h5 { font-size: var(--t-15); letter-spacing: 0; line-height: 1.3; }
+p { margin: 0; text-wrap: pretty; }
+
+/* Editorial serif accents */
+.serif { font-family: var(--f-serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+.serif-up { font-family: var(--f-serif); font-style: normal; font-weight: 400; letter-spacing: -0.015em; }
+h1 .serif, h2 .serif, .h-hero .serif { font-size: 1.04em; color: var(--accent); }
+
+/* Eyebrows and labels (Display, uppercase, tracked) */
+.eyebrow { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.label { font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.kicker { font-family: var(--f-serif); font-style: italic; font-size: var(--t-20); color: var(--mute); display: flex; align-items: center; gap: var(--s-4); }
+.kicker::before { content: ""; width: 48px; height: 1px; background: currentColor; opacity: .6; }
+
+/* Body sizes */
+.lede { font-size: var(--t-18); line-height: 1.5; color: var(--mute); max-width: 62ch; }
+.body { font-size: var(--t-15); color: var(--ink-2); max-width: 68ch; }
+.small { font-size: var(--t-13); }
+.tiny { font-size: var(--t-12); }
+.muted { color: var(--mute); }
+.faint { color: var(--mute-2); }
+.accent { color: var(--accent); }
+.num { font-family: var(--f-display); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.tnum { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--f-mono); font-size: .92em; }
+.nowrap { white-space: nowrap; }
+.clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.prose { max-width: 68ch; font-size: var(--t-16); line-height: 1.65; color: var(--ink-2); }
+.prose > * + * { margin-top: 1em; }
+.prose h2 { font-size: var(--t-24); margin-top: 1.8em; color: var(--ink); }
+.prose h3 { font-size: var(--t-18); margin-top: 1.4em; color: var(--ink); }
+.prose ul, .prose ol { padding-left: 1.2em; }
+.prose li + li { margin-top: .35em; }
+.prose blockquote { margin: 1.4em 0; padding-left: var(--s-5); border-left: 2px solid var(--accent); font-family: var(--f-serif); font-size: var(--t-20); line-height: 1.35; color: var(--ink); }
+
+/* Layout primitives */
+.wrap { width: 100%; max-width: calc(var(--wrap) + var(--gutter) * 2); margin: 0 auto; padding-inline: var(--gutter); }
+.wrap-narrow { width: 100%; max-width: calc(var(--wrap-narrow) + var(--gutter) * 2); margin: 0 auto; padding-inline: var(--gutter); }
+.section { padding-block: var(--s-20); }
+.section-sm { padding-block: var(--s-12); }
+.stack { display: flex; flex-direction: column; gap: var(--gap, var(--s-4)); }
+.row { display: flex; align-items: center; gap: var(--gap, var(--s-3)); flex-wrap: wrap; }
+.row-nw { display: flex; align-items: center; gap: var(--gap, var(--s-3)); }
+.between { justify-content: space-between; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.grid { display: grid; gap: var(--gap, var(--s-6)); }
+.g-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g-auto { grid-template-columns: repeat(auto-fill, minmax(var(--min, 280px), 1fr)); }
+@media (max-width: 980px) { .g-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .g-2, .g-3, .g-4 { grid-template-columns: minmax(0, 1fr); } .section { padding-block: var(--s-12); } }
+
+/* Night band: dark surface in both themes */
+.night { background: var(--night); color: var(--night-ink); }
+.night .muted, .night .lede { color: var(--night-mute); }
+.night .eyebrow, .night .accent { color: var(--leaf); }
+.night h1 .serif, .night h2 .serif, .night .h-hero .serif { color: var(--leaf); }
+.night .label { color: var(--night-mute); }
+
+.divider { height: 1px; background: var(--line); border: 0; margin: 0; }
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}
