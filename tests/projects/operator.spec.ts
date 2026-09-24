@@ -94,6 +94,7 @@ test("O-05 hours above the profile are accepted with a warning and scored", asyn
   await expect(page.getByTestId("hours-warning")).toBeVisible();
   await openBuyerProject(page);
   const row = responseRow(page, "Tanya Helin");
+  await row.getByTestId("view-response").click();
   await expect(row.getByTestId("part-3")).toHaveText("20/20");
 });
 

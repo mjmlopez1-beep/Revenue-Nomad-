@@ -256,13 +256,14 @@ test("B-16 profile from a response, including one with no photo", async ({ page 
   await postNorthwind(page, { invite: ["Tim Evans"] });
   await simulate(page, ["Tim Evans", "Ron Ariana"]);
   await openBuyerProject(page);
-  await responseRow(page, "Ron Ariana").getByRole("link", { name: "View full profile" }).click();
+  // The name opens the profile; "View full profile" also sits under Answers and score.
+  await responseRow(page, "Ron Ariana").getByRole("link", { name: "Ron Ariana" }).click();
   await expect(page.getByTestId("profile-name")).toHaveText("Ron Ariana");
   await expect(page.getByTestId("avatar-initials").first()).toBeVisible();
   const broken = await page.evaluate(() => [...document.images].filter((i) => i.complete && i.naturalWidth === 0).map((i) => i.src));
   expect(broken).toEqual([]);
   await goto(page, `/buyer/projects/${NW}`);
-  await responseRow(page, "Tim Evans").getByRole("link", { name: "View full profile" }).click();
+  await responseRow(page, "Tim Evans").getByRole("link", { name: "Tim Evans" }).click();
   await expect(page.getByTestId("profile-name")).toHaveText("Tim Evans");
   const img = page.locator(".band-profile img.avatar");
   await expect(img).toBeVisible();

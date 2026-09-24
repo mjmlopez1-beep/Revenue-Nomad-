@@ -116,9 +116,9 @@ export function OpLink({ op, children }: { op: Operator; children?: ReactNode })
   return <Link to={`/operators/${op.slug}`}>{children ?? displayName(op)}</Link>;
 }
 
-export function Band({ eyebrow, title, sub, children, right }: { eyebrow?: ReactNode; title: ReactNode; sub?: ReactNode; children?: ReactNode; right?: ReactNode }) {
+export function Band({ eyebrow, title, sub, children, right, slim }: { eyebrow?: ReactNode; title: ReactNode; sub?: ReactNode; children?: ReactNode; right?: ReactNode; slim?: boolean }) {
   return (
-    <section className="band">
+    <section className={`band ${slim ? "band-slim" : ""}`}>
       <div className="band-l">
         {eyebrow && <div className="band-eyebrow">{eyebrow}</div>}
         <h1>{title}</h1>

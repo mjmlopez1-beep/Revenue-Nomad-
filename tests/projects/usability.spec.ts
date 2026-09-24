@@ -92,3 +92,39 @@ test("U-07 invite the top 5 matches in one click", async ({ page }) => {
   await page.getByTestId("invite-top5").click();
   await expect(page.getByTestId("invited-count")).toHaveText("5 invited");
 });
+
+test("U-08 compare two or three responses side by side and request the intro there", async ({ page }) => {
+  await postNorthwind(page, { invite: ["Tim Evans", "Matt Lopez"] });
+  await simulate(page, ["Tim Evans", "Matt Lopez", "Ron Ariana"]);
+  await openBuyerProject(page);
+  await responseRow(page, "Tim Evans").getByTestId("pick").check();
+  await expect(page.getByTestId("compare")).toHaveCount(0);
+  await responseRow(page, "Matt Lopez").getByTestId("pick").check();
+  await page.getByTestId("compare").click();
+  const panel = page.getByTestId("compare-panel");
+  await expect(panel).toContainText("Tim Evans");
+  await expect(panel).toContainText("Matt Lopez");
+  await expect(panel).toContainText("Walk us through the last sales process you built from scratch.");
+  await panel.getByTestId("compare-intro").first().click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByTestId("project-msg")).toContainText("Intro requested");
+  const s = await state(page);
+  expect(s.intros.filter((i) => i.projectId === NW)).toHaveLength(1);
+});
+
+test("U-09 operators you liked before sit on your bench, one click invites them to the next project", async ({ page }) => {
+  await postNorthwind(page, { invite: ["Tim Evans"] });
+  await simulate(page, ["Tim Evans"]);
+  await openBuyerProject(page);
+  await responseRow(page, "Tim Evans").getByTestId("request-intro").click();
+  await goto(page, "/buyer/projects");
+  await expect(page.locator(".band-sub")).toContainText("1 operator on your bench");
+  await page.getByTestId("new-project").click();
+  await expect(page).toHaveURL(/\/edit$/);
+  const id = new URL(page.url()).pathname.split("/")[3];
+  await goto(page, `/buyer/projects/${id}/invite`);
+  await expect(page.getByTestId("invite-row").first()).toHaveAttribute("data-op", "Tim Evans");
+  await expect(page.getByTestId("invite-row").first().getByTestId("bench-chip")).toBeVisible();
+  await page.getByTestId("invite-bench").click();
+  await expect(page.getByTestId("invited-count")).toHaveText("1 invited");
+});
