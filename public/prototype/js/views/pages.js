@@ -371,7 +371,7 @@
 
     ${featured ? `<section class="section pg-feature-sec">
       <div class="wrap pg-feature">
-        <div class="pg-arch pg-arch-sage"><img src="assets/brand/quote-1.webp" alt="Trista Kempa, COO of Ferry"></div>
+        <div class="pg-arch pg-arch-sage"><div class="arch-logo">${RN.ui.logo('ferryWordmark', { h: 46, name: 'Ferry' })}</div></div>
         <figure class="pg-feature-q">
           <span class="pg-qmark" aria-hidden="true">“</span>
           <blockquote>${esc(reviewText(featured.r))}</blockquote>

@@ -114,6 +114,12 @@
 .note.info { background: var(--tint); border-color: var(--tint-line); }
 .note svg { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
 
+/* Client logo set inside an arch (used where no confirmed client photo exists) */
+.arch-logo { position: absolute; left: 0; right: 0; bottom: 30%; z-index: 1; display: flex; justify-content: center; }
+.arch-logo img { position: static !important; height: 46px !important; width: auto !important; max-width: 70% !important; transform: none !important; }
+:root[data-theme="dark"] .arch-logo img { filter: invert(1) hue-rotate(180deg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .arch-logo img { filter: invert(1) hue-rotate(180deg); } }
+
 /* ---------- Avatars ---------- */
 .ava { --sz: 44px; width: var(--sz); height: var(--sz); border-radius: 50%; object-fit: cover; background: var(--leaf); color: var(--forest-deep); display: inline-grid; place-items: center; font-family: var(--f-display); font-weight: 800; font-size: calc(var(--sz) * .36); flex: 0 0 auto; overflow: hidden; }
 .ava-xs { --sz: 24px; } .ava-sm { --sz: 32px; } .ava-md { --sz: 56px; } .ava-lg { --sz: 88px; } .ava-xl { --sz: 128px; }

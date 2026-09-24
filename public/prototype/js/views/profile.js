@@ -101,6 +101,7 @@
   function cleanup(all) {
     clearInterval(S.timer); S.timer = null;
     S.railFit = null;
+    S.scrollFn = null;
     S.obs.forEach((o) => { try { o.disconnect(); } catch (e) { /* ignore */ } });
     S.obs = [];
     if (all && S.unsub) { S.unsub(); S.unsub = null; }
@@ -1193,9 +1194,16 @@
     // Sticky sub-nav: show the mini CTA once the hero buttons scroll away; highlight the section in view
     const nav = root.querySelector('.pf-subnav');
     const cta = root.querySelector('[data-pf-cta]');
+    if (nav && cta) {
+      let ticking = false;
+      S.scrollFn = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => { ticking = false; if (nav.isConnected) nav.classList.toggle('show-cta', cta.getBoundingClientRect().bottom < nav.getBoundingClientRect().bottom); });
+      };
+      S.scrollFn();
+    }
     if (nav && cta && 'IntersectionObserver' in window) {
-      const o1 = new IntersectionObserver((ents) => ents.forEach((en) => nav.classList.toggle('show-cta', !en.isIntersecting && en.boundingClientRect.top < 0)), { threshold: 0 });
-      o1.observe(cta); S.obs.push(o1);
       const links = RN.$$('[data-nav]', nav);
       const o2 = new IntersectionObserver((ents) => {
         ents.forEach((en) => {
@@ -1239,6 +1247,7 @@
     rail.style.top = Math.min(top, window.innerHeight - rail.offsetHeight - 12) + 'px';
   }
   window.addEventListener('resize', () => { if (S.railFit) S.railFit(); }, { passive: true });
+  window.addEventListener('scroll', () => { if (S.scrollFn) S.scrollFn(); }, { passive: true });
   function wireCommon(root) {
     // Keyboard support for SVG buttons (bowtie segments)
     if (!root.dataset.pfKeys) {

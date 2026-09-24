@@ -110,7 +110,7 @@
           </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>Operators with open profiles</dt><dd class="num" data-count="${n}">${n}</dd></div>
+          <div><dt>Vetted operators on the network</dt><dd class="num">${esc(RN.data.market.network.operators)}</dd></div>
           <div><dt>GTM disciplines</dt><dd class="num" data-count="${cats.length}">${cats.length}</dd></div>
           <div><dt>Login to browse</dt><dd class="num">None</dd></div>
         </dl>
@@ -348,7 +348,7 @@
       <div class="wrap">
         ${head('Results, in their words', 'The people who hired through Revenue Nomad <span class="serif">tell it better than we do.</span>')}
         <div class="hm-q-feature">
-          <div class="hm-arch"><img src="assets/brand/quote-1.webp" alt="Trista Kempa, COO of Ferry"></div>
+          <div class="hm-arch"><div class="arch-logo">${RN.ui.logo('ferryWordmark', { h: 46, name: 'Ferry' })}</div></div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>
             <blockquote class="hm-q-text">I couldn’t recommend working with Matt and his team more. <em>I hope to work with him again</em> on future growth projects.</blockquote>
