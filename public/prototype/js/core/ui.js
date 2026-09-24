@@ -115,7 +115,7 @@
       ${ui.ftags(tags, opts.compact ? 2 : 3)}
       <div class="opc-meta">
         <span>${ui.avail(op)}</span>
-        ${op.rate ? `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>` : ''}
+        ${op.rate ? (RN.store.state.persona === 'visitor' ? `<button type="button" class="act muted" data-act="login" style="position:relative;z-index:2;font-size:inherit">${icon('lock')}Log in to see rate</button>` : `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>`) : ''}
         ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
       </div>
       ${opts.meta || ''}

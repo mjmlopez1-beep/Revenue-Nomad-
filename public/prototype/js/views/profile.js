@@ -1137,7 +1137,7 @@
     const gold = tier.v === 'elite' || tier.v === 'apex';
     return `<section class="pf-card pf-ris">
       <span class="eyebrow">Reputation Index</span>
-      <div class="pf-ris-hd"><span class="pf-ris-seal">${RN.ui.hexSeal(tier.l)}<b>${esc(op.ris.score)}</b></span><div><b class="pf-ris-tier ${gold ? 'gold' : ''}">${esc(tier.l)}</b><span>Reputation Index ${esc(op.ris.score)} of 100</span></div></div>
+      <div class="pf-ris-hd"><span class="pf-ris-seal t-${esc(tier.v)}">${RN.ui.hexSeal(tier.l)}<b>${esc(op.ris.score)}</b></span><div><b class="pf-ris-tier ${gold ? 'gold' : ''}">${esc(tier.l)}</b><span>Reputation Index ${esc(op.ris.score)} of 100</span></div></div>
       <p class="pf-ris-d">${esc(tier.d)}</p>
       <ol class="pf-ladder" aria-label="Reputation Index tiers">${ladder.map((t) => `<li class="${t.v === tier.v ? 'on' : ''}" title="${esc(t.l)}: ${esc(t.d)}"><span class="pf-ladder-seal">${RN.ui.hexSeal(t.l)}</span><b>${esc(t.l)}</b><span>${t.v === 'indexing' ? '<50' : `${t.min}–${t.max}`}</span></li>`).join('')}</ol>
       <details class="pf-ris-how"><summary>${icon('chev-right')}How score is calculated</summary><div class="pf-ris-exp">${RN.ui.risExplainer()}</div><a class="act" href="#levels">See every tier and what it unlocks${icon('arrow')}</a></details>
