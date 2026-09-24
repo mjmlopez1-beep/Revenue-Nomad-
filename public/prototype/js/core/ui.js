@@ -68,7 +68,8 @@
   };
 
   ui.tip = function (html, label) {
-    return `<button type="button" class="tip" data-tip="${esc(html)}" aria-label="${esc(label || 'More info')}">i</button>`;
+    const text = String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return `<button type="button" class="tip" data-tip="${esc(html)}" aria-label="${esc((label || 'More info') + ': ' + text.slice(0, 220))}">i</button>`;
   };
 
   ui.catDot = function (cat) {
@@ -160,7 +161,7 @@
     document.body.appendChild(el);
     document.body.style.overflow = 'hidden';
     document.body.classList.add('has-modal');
-    modalStack.push({ id, el, onClose: o.onClose });
+    modalStack.push({ id, el, onClose: o.onClose, opener: document.activeElement });
     const first = el.querySelector('[autofocus], input, select, textarea, button:not(.x-btn)');
     setTimeout(() => first && first.focus(), 30);
     if (o.mount) o.mount(el);
@@ -171,6 +172,7 @@
     const top = modalStack.pop();
     if (!top) return;
     top.el.remove();
+    if (top.opener && document.contains(top.opener) && top.opener.focus) { try { top.opener.focus(); } catch (e) { /* ignore */ } }
     if (!modalStack.length) { document.body.style.overflow = ''; document.body.classList.remove('has-modal'); }
     if (top.onClose) top.onClose();
   };
@@ -243,7 +245,18 @@
     if (fn) fn(f, ui.formData(f), e);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { if (tipEl) hideTip(); else ui.closeModal(); }
+    if (e.key === 'Escape') { if (tipEl) hideTip(); else if (document.querySelector('.menu-sheet') && RN.shell.closeMenu) RN.shell.closeMenu(); else ui.closeModal(); }
+    // Keep focus inside the top modal or menu sheet
+    if (e.key === 'Tab') {
+      const box = document.querySelector('.menu-sheet') || (modalStack.length ? modalStack[modalStack.length - 1].el : null);
+      if (!box) return;
+      const f = RN.$$('a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])', box).filter((x) => x.offsetParent !== null);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      else if (!box.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    }
   });
 
   /* Collect form values. Multi-value fields (chip sets, checkboxes with same name) become arrays. */
@@ -261,6 +274,7 @@
 
   /* ---------- Core actions shared by every surface ---------- */
   RN.actions['modal-close'] = () => ui.closeModal();
+  RN.actions['skip'] = () => { const m = document.getElementById('main'); if (m) { m.setAttribute('tabindex', '-1'); m.focus(); } };
   RN.actions['go'] = (el) => { ui.closeModal(); RN.go(el.dataset.to); };
   RN.actions['shortlist-toggle'] = (el) => {
     const id = el.dataset.id;

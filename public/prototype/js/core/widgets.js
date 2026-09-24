@@ -172,6 +172,7 @@
   RN.actions['w-tag-remove'] = (el) => {
     const box = el.closest('[data-tagpick]');
     syncPicker(box, pickerVals(box).filter((t) => t !== el.dataset.t));
+    const s = box.querySelector('input[type=search]'); if (s) s.focus(); // keep focus in the picker
   };
   RN.inputs['w-tag-search'] = (el) => {
     const box = el.closest('[data-tagpick]');

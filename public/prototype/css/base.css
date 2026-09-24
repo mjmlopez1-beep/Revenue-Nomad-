@@ -23,7 +23,9 @@ p a, .prose a, a.link { color: var(--accent); text-decoration: underline; text-d
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 [hidden] { display: none !important; }
-:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
+.skip-link { position: absolute; left: 16px; top: -60px; z-index: 400; padding: 10px 16px; border-radius: 10px; background: var(--night); color: #fff; font-family: var(--f-display); font-weight: 700; }
+.skip-link:focus { top: calc(env(safe-area-inset-top, 0px) + 12px); }
 ::selection { background: var(--leaf); color: var(--forest-deep); }
 hr { border: 0; border-top: 1px solid var(--line); margin: var(--s-6) 0; }
 

@@ -279,7 +279,7 @@
 .adm-cand-box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line); display: grid; place-items: center; color: transparent; flex: 0 0 auto; }
 .adm-cand-box svg { width: 14px; height: 14px; }
 .adm-cand input:checked + .adm-cand-box { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.adm-cand input:focus-visible + .adm-cand-box { outline: 3px solid var(--focus); outline-offset: 2px; }
+.adm-cand input:focus-visible + .adm-cand-box { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .adm-cand .grow { display: flex; flex-direction: column; min-width: 0; }
 .adm-cand b { font-family: var(--f-display); font-size: var(--t-14); }
 

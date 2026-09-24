@@ -59,7 +59,7 @@
 .rv-star svg { width: 36px; height: 36px; transition: transform .15s var(--ease); }
 .rv-star path { fill: var(--sunk); stroke: var(--line); stroke-width: 1.2; stroke-linejoin: round; transition: fill .15s ease, stroke .15s ease; }
 .rv-star:hover svg { transform: scale(1.08); }
-.rv-star:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 0; }
+.rv-star:has(input:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: 0; }
 /* Selected: green up to the chosen star */
 .rv-stars[data-v="1"] .rv-star:nth-of-type(-n+1) path,
 .rv-stars[data-v="2"] .rv-star:nth-of-type(-n+2) path,

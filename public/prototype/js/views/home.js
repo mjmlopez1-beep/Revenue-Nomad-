@@ -264,7 +264,7 @@
     const hrs = 40;
     const ft = (RN.data.market.report.fracVsFull || [])[1];
     return `<dl class="hm-typ">
-      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', String(hrs)))}</dt><dd class="num">${esc(RN.fmt.usd(r.p25 * hrs))} - ${esc(RN.fmt.usd(r.p75 * hrs))}<small>/mo</small></dd></div>
+      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', String(hrs)))}</dt><dd class="num">${(() => { const m = RN.model.monthlyRange(cat, null, String(hrs)); return esc(RN.fmt.usd(m.lo)) + ' - ' + esc(RN.fmt.usd(m.hi)); })()}<small>/mo</small></dd></div>
       ${ft ? `<div><dt>Full-time VP of Sales, fully loaded</dt><dd class="num">${esc(ft[1])}<small>/mo</small></dd></div>` : ''}
     </dl>`;
   }

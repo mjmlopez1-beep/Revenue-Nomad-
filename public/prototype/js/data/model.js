@@ -234,19 +234,27 @@
     'founder-led': ['founder-led sales exit', 'founder-led sales transition'], founder: ['founder-led sales exit', 'founder-led sales transition'], outbound: ['outbound motion build', 'outbound prospecting'],
     healthcare: ['health care'], 'health care': ['health care'], saas: ['saas'], fintech: ['fintech'], manufacturing: ['industrial manufacturing', 'precision & contract manufacturing'],
   };
-  M.expand = function (q) {
+  const STOP = new Set(['fractional', 'the', 'for', 'and', 'with', 'leader', 'leaders', 'expert', 'experts', 'consultant', 'consultants', 'head', 'who', 'can', 'need', 'help', 'our', 'your', 'from', 'into', 'that', 'this', 'company', 'companies', 'operator', 'operators', 'part', 'time', 'interim']);
+  const synFor = (phrase) => Object.keys(SYN).filter((k) => new RegExp('(^|[^a-z])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(phrase));
+  /* Query -> groups of alternatives. An operator must match most groups (not just any single word). */
+  M.parseQuery = function (q) {
     const ql = String(q || '').toLowerCase().trim();
     if (!ql) return [];
-    const terms = new Set([ql]);
-    // Synonym keys match whole words only ("blockchain" must not match "ai")
-    Object.keys(SYN).forEach((k) => { if (new RegExp('(^|[^a-z])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(ql)) SYN[k].forEach((s) => terms.add(s)); });
-    ql.split(/[\s,]+/).filter((w) => w.length > 2 && !['fractional', 'the', 'for', 'and', 'with'].includes(w)).forEach((w) => terms.add(w));
-    return [...terms];
+    const groups = [];
+    const used = new Set();
+    // multi-word synonym keys first ("vp sales", "customer success", "health care")
+    synFor(ql).filter((k) => k.includes(' ') || k.includes('-')).forEach((k) => { groups.push([k].concat(SYN[k])); k.split(/[\s-]+/).forEach((w) => used.add(w)); });
+    ql.split(/[^a-z0-9&+/.-]+/).filter((w) => w.length > 2 && !STOP.has(w) && !used.has(w)).forEach((w) => {
+      groups.push([w].concat(SYN[w] || []));
+    });
+    return groups;
   };
+  // Back-compat: flat list of all alternatives
+  M.expand = (q) => [...new Set(M.parseQuery(q).flat())];
   M.search = function (o) {
     o = o || {};
     const f = o.filters || {};
-    const terms = M.expand(o.q);
+    const groups = M.parseQuery(o.q);
     const tags = (o.tags || []).map((t) => t.toLowerCase());
     const out = [];
     for (const op of M.ops) {
@@ -265,22 +273,29 @@
       if (f.risMin && op.ris.score < +f.risMin) continue;
       const opTags = op.tags.map((t) => t.t.toLowerCase());
       if (tags.length && !tags.every((t) => opTags.includes(t))) continue;
-      // Text relevance
+      // Text relevance: each query group is matched by any of its alternatives; most groups must match
       let score = 0;
       const why = [];
       const matchedTags = [];
-      if (terms.length) {
-        const hay = { name: op.name.toLowerCase(), role: (op.role + ' ' + op.cat).toLowerCase(), head: (op.headline + ' ' + op.bio).toLowerCase(), ind: op.industries.map((x) => x.toLowerCase()) };
-        for (const t of terms) {
-          if (hay.name.includes(t)) { score += 40; }
-          if (hay.role.includes(t)) { score += 18; if (!why.includes('role')) why.push('role'); }
-          const tagHit = op.tags.filter((x) => x.t.toLowerCase().includes(t) || t.includes(x.t.toLowerCase()));
-          tagHit.forEach((x) => { score += x.tier === 'claimed' ? 8 : 16; if (!matchedTags.includes(x.t)) matchedTags.push(x.t); });
-          const indHit = op.industries.filter((x) => x.toLowerCase().includes(t));
-          if (indHit.length) { score += 10; if (!why.includes('ind:' + indHit[0])) why.push('ind:' + indHit[0]); }
-          if (hay.head.includes(t)) score += 5;
+      if (groups.length) {
+        const hay = { name: op.name.toLowerCase(), role: (op.role + ' ' + op.cat).toLowerCase(), head: (op.headline + ' ' + op.bio).toLowerCase() };
+        // short words (cro, cmo, sdr, matt) match whole words only
+        const inc = (h, t) => (t.length <= 4 ? new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(h) : h.includes(t));
+        let hit = 0;
+        for (const alts of groups) {
+          let g = 0;
+          for (const t of alts) {
+            if (inc(hay.name, t)) g = Math.max(g, 40);
+            if (inc(hay.role, t)) { g = Math.max(g, 18); if (!why.includes('role')) why.push('role'); }
+            op.tags.forEach((x) => { const tl = x.t.toLowerCase(); if (inc(tl, t) || (t.length > 5 && t.includes(tl))) { g = Math.max(g, x.tier === 'claimed' ? 10 : 18); if (!matchedTags.includes(x.t)) matchedTags.push(x.t); } });
+            const indHit = op.industries.filter((x) => inc(x.toLowerCase(), t));
+            if (indHit.length) { g = Math.max(g, 12); if (!why.includes('ind:' + indHit[0])) why.push('ind:' + indHit[0]); }
+            if (inc(hay.head, t)) g = Math.max(g, 6);
+          }
+          if (g) { hit += 1; score += g; }
         }
-        if (score === 0) continue;
+        const need = groups.length <= 2 ? groups.length : Math.ceil(groups.length * 0.67);
+        if (hit < need) continue;
       }
       // Quality: verified proof, Reputation Index, completeness (search ranking boost)
       const verified = op.tags.filter((t) => t.tier !== 'claimed').length;
@@ -498,7 +513,8 @@
       .sort((a, b) => b.ratio - a.ratio);
     const catSupply = {};
     M.ops.forEach((op) => { catSupply[op.catKey] = (catSupply[op.catKey] || 0) + 1; });
-    const zero = Q.filter((q) => q.zero).map((q) => ({ q: q.q, vol: q.vol, cat: q.cat, industry: q.industry }));
+    // Only searches that truly return no operators today count as unmet demand
+    const zero = Q.filter((q) => q.zero && M.search({ q: q.q }).length === 0).map((q) => ({ q: q.q, vol: q.vol, cat: q.cat, industry: q.industry }));
     ((RN.store && RN.store.state.events) || []).filter((e) => e.type === 'search' && e.results === 0 && e.q).forEach((e) => zero.unshift({ q: e.q, vol: 1, cat: '', live: true, ts: e.ts }));
     return { tags, catSupply, zero, queries: Q };
   };
@@ -517,6 +533,21 @@
       return Object.assign({}, t, { have: !!mine, tier: mine ? mine.tier : null, action });
     });
     return { op, rate, idx, pctile, opps, checklist: M.checklist(op), completeness: op.completeness };
+  };
+
+  /* Rate Index maths, shared by Home, Rates, Blueprints, Browse category pages and Studio.
+     hoursCode '19' (<20) counts as 15 hours. Monthly range rounds to $500 in the L58 format. */
+  M.rateFor = function (cat, rev) {
+    const RI = RN.data.market.rateIndex;
+    const b = RI.byCat[cat] || RI.byCat.sales_leadership;
+    const m = (rev && RI.byRevenue[rev]) || 1;
+    return { p25: b.p25 * m, p50: b.p50 * m, p75: b.p75 * m, n: b.n, m };
+  };
+  M.hoursNum = (code) => (String(code) === '19' ? 15 : +code || 0);
+  M.monthlyRange = function (cat, rev, hoursCode) {
+    const r = M.rateFor(cat, rev), h = M.hoursNum(hoursCode);
+    const r500 = (n) => Math.round(n / 500) * 500;
+    return { lo: r500(r.p25 * h), mid: r500(r.p50 * h), hi: r500(r.p75 * h), h, r, label: `${RN.fmt.usd(r500(r.p25 * h))} - ${RN.fmt.usd(r500(r.p75 * h))}/mo` };
   };
 
   /* Taxonomy curation (Revenue Nomad Research, taxonomy v1): moves tags to the journey stage they change and

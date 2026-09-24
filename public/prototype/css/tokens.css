@@ -45,7 +45,8 @@
   --btn: #095D42;
   --btn-hi: #0B7352;
   --btn-ink: #FFFFFF;
-  --focus: rgba(9, 93, 66, .35);
+  --focus: rgba(9, 93, 66, .28);          /* soft halo around focused inputs and current steps */
+  --focus-ring: #0B7352;                  /* keyboard focus outline, 3:1+ on paper and cards */
 
   /* Night band: always dark, both themes (hero, report cover, profile hero) */
   --night: #0E1411;
@@ -65,7 +66,7 @@
   --bad-bg: #F7E3DD;
   --info: #22518F;
   --info-bg: #E5EDF8;
-  --gold: #A87A12;            /* stars, tier seals */
+  --gold: #7E5A0B;            /* stars, tier seals, "Illustrative" labels (4.5:1 on --gold-bg) */
   --gold-bg: #FAF1D8;
 
   /* Role category hues (tiles, small markers only; never large fills) */
@@ -145,7 +146,8 @@
     --btn: #C2E7B0;
     --btn-hi: #D5F0C7;
     --btn-ink: #0B3D2C;
-    --focus: rgba(194, 231, 176, .4);
+    --focus: rgba(194, 231, 176, .35);
+    --focus-ring: #C2E7B0;
     --night: #0A0F0C;
     --night-2: #111814;
     --night-3: #17201B;
@@ -190,7 +192,8 @@
   --btn: #C2E7B0;
   --btn-hi: #D5F0C7;
   --btn-ink: #0B3D2C;
-  --focus: rgba(194, 231, 176, .4);
+  --focus: rgba(194, 231, 176, .35);
+  --focus-ring: #C2E7B0;
   --night: #0A0F0C;
   --night-2: #111814;
   --night-3: #17201B;

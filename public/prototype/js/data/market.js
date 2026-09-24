@@ -59,7 +59,7 @@
         { range: '50m_plus', v: 300 },
       ],
       fracVsFull: [
-        ['Fractional VP of Sales, 40 hrs a month', '$10,000', '2 to 3 weeks', '30 days notice'],
+        ['Fractional VP of Sales, 40 hrs a month', '$11,000', '2 to 3 weeks', '30 days notice'],
         ['Full time VP of Sales, base + OTE + benefits + equity', '$27,000+', '90 to 120 days', 'Severance plus 4 to 6 months lost'],
         ['Agency or consultancy', '$15,000+', '4 to 6 weeks', 'Contract term'],
       ],
@@ -118,7 +118,7 @@
       byRevenue: { pre_revenue: 0.72, under_1m: 0.79, '1m_5m': 0.92, '5m_20m': 1.0, '20m_50m': 1.1, '50m_plus': 1.24 },
       // quarterly all-category median
       trend: [
-        { l: 'Q4 25', v: 221 }, { l: 'Q1 26', v: 226 }, { l: 'Q2 26', v: 231 }, { l: 'Q3 26', v: 240 },
+        { l: 'Q3 25', v: 220 }, { l: 'Q4 25', v: 224 }, { l: 'Q1 26', v: 228 }, { l: 'Q2 26', v: 233 }, { l: 'Q3 26', v: 240 },
       ],
     },
 
@@ -146,9 +146,9 @@
       { q: 'enterprise deal closing', cat: 'sellers', tags: ['Enterprise Deal Closing', 'Account Expansion Selling'], vol: 60 },
       { q: 'expansion revenue playbook', cat: 'customer_success_growth', tags: ['Expansion Motion Design', 'Account Expansion Selling'], vol: 55 },
       { q: 'commission plan design', cat: 'revenue_operations', tags: ['Comp Plan Administration', 'Commission Calculation'], vol: 50 },
-      { q: 'fractional sales leader property management', cat: 'sales_leadership', tags: ['Sales Process Design'], vol: 20, industry: 'Property Management', zero: true },
+      { q: 'fractional sales leader for dental groups', cat: 'sales_leadership', tags: ['Sales Process Design'], vol: 20, industry: 'Health Care', zero: true },
       { q: 'fractional RevOps NetSuite', cat: 'revenue_operations', tags: ['RevOps Infrastructure Build'], vol: 18, zero: true },
-      { q: 'AI GTM engineer healthcare', cat: 'ai_gtm', tags: ['AI Sales Automation'], vol: 16, industry: 'Health Care', zero: true },
+      { q: 'partner program for cybersecurity resellers', cat: 'partnerships', tags: ['Channel Sales Build'], vol: 16, industry: 'Cybersecurity', zero: true },
     ],
 
     /* ---------- AI answer engines (AEO) prompts we track ---------- */

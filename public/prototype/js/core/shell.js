@@ -94,6 +94,9 @@
     const p = RN.store.state.persona;
     const sheet = document.createElement('div');
     sheet.className = 'menu-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-label', 'Menu');
     sheet.innerHTML = `<div class="row between" style="margin-bottom:24px"><span class="logo"><img src="assets/brand/mark.png" alt=""><span><b>REVENUE</b><span>NOMAD</span></span></span>
       <button class="x-btn" data-act="menu-close" aria-label="Close menu" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.3)">${icon('x')}</button></div>
       ${NAV.map((n) => `<a href="#${n.to}" data-act="menu-go" data-to="${n.to}">${esc(n.label)}${icon('arrow')}</a>`).join('')}
@@ -103,8 +106,11 @@
       <a class="btn btn-leaf btn-lg" style="margin-top:28px" href="#talk" data-act="menu-go" data-to="talk">Talk to us${icon('arrow')}</a>`;
     document.body.appendChild(sheet);
     document.body.style.overflow = 'hidden';
+    const first = sheet.querySelector('a, button');
+    if (first) setTimeout(() => first.focus(), 20);
   };
-  function closeMenu() { const s = document.querySelector('.menu-sheet'); if (s) s.remove(); document.body.style.overflow = ''; }
+  function closeMenu() { const s = document.querySelector('.menu-sheet'); if (s) s.remove(); document.body.style.overflow = ''; const b = document.querySelector('.nav-burger'); if (b) b.focus(); }
+  shell.closeMenu = closeMenu;
   RN.actions['menu-close'] = closeMenu;
   RN.actions['menu-go'] = (el) => { closeMenu(); RN.go(el.dataset.to); };
   RN.actions['menu-login'] = () => { closeMenu(); RN.actions.login(); };
@@ -130,7 +136,7 @@
         <div><h4>Insights</h4><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
         <div><h4>Company</h4><a href="#about">About us</a><a href="#results">Client stories</a><a href="#talk">Contact</a><a href="#standards">Field standards</a></div>
       </div>
-      <div class="ftr-base"><span>© 2026 Revenue Nomad. Data may be cited with attribution.</span><span>Every profile is open. No login required to browse.</span></div>
+      <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
   };
 
@@ -196,8 +202,8 @@
   };
 
   const JOURNEYS = [
-    { key: 'buyer', label: 'Buyer: search, compare, request an intro', persona: 'buyer', to: 'browse' },
-    { key: 'project', label: 'Buyer: post a project, get ranked responses', persona: 'buyer', to: 'project.new' },
+    { key: 'buyer', label: 'Client: search, compare, request an intro', persona: 'buyer', to: 'browse' },
+    { key: 'project', label: 'Client: post a project, get ranked responses', persona: 'buyer', to: 'project.new' },
     { key: 'studio', label: 'Operator: who viewed me and why', persona: 'operator', to: 'studio' },
     { key: 'proof', label: 'Operator: win a direct deal with a proof link', persona: 'operator', to: 'studio.credibility' },
     { key: 'join', label: 'Operator: join the network (standard intake)', persona: 'visitor', to: 'join' },
