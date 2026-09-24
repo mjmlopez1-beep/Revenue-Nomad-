@@ -7,8 +7,8 @@ import { ProtoBar, ROLE_HOME, SiteHeader } from "./ui/Shell";
 import { BuyerBrief, BuyerDashboard, BuyerIntros, BuyerInvite, BuyerProject, BuyerSelect } from "./ui/buyer/Buyer";
 import { LiveAvailability, LiveIntros, LiveOverview, LiveProject, LiveProjects, LiveShell } from "./ui/live/Live";
 import { LiveJobs, LiveProspects } from "./ui/live/Work";
-import { AdminIntros, AdminOperators, AdminProject, AdminReports } from "./ui/admin/Admin";
-import { AdminAudit, AdminClients, AdminEngagements, AdminProjectsList, AdminPulse, AdminReviews, AdminShell, AdminShortlist, AdminToday, AdminWizard } from "./ui/admin/Console";
+import { AdminProject } from "./ui/admin/Admin";
+import { AdminAnalytics, AdminAudit, AdminClients, AdminEngagements, AdminIntrosList, AdminOperatorsList, AdminProjectsList, AdminPulse, AdminReviews, AdminShell, AdminShortlist, AdminToday, AdminWizard } from "./ui/admin/Console";
 import { ClientShortlist, OperatorDirectory, OperatorProfile } from "./ui/Pages";
 import type { Role } from "./lib/types";
 import { Empty } from "./ui/common";
@@ -31,14 +31,14 @@ const ROUTES: RouteDef[] = [
   ["/dashboard/availability", "operator", () => <LiveAvailability />],
   ["/admin/today", "admin", () => <AdminToday />],
   ["/admin/projects", "admin", () => <AdminProjectsList />],
-  ["/admin/operators", "admin", () => <AdminOperators />],
+  ["/admin/operators", "admin", () => <AdminOperatorsList />],
   ["/admin/clients", "admin", () => <AdminClients />],
   ["/admin/reviews", "admin", () => <AdminReviews />],
   ["/admin/engagements", "admin", () => <AdminEngagements />],
   ["/admin/pulse", "admin", () => <AdminPulse />],
-  ["/admin/reports", "admin", () => <AdminReports />],
+  ["/admin/reports", "admin", () => <AdminAnalytics />],
   ["/admin/audit", "admin", () => <AdminAudit />],
-  ["/admin/intros", "admin", () => <AdminIntros />],
+  ["/admin/intros", "admin", () => <AdminIntrosList />],
   ["/admin/projects/:id/setup", "admin", (p) => <AdminWizard key={p.id} id={p.id} />],
   ["/admin/projects/:id/shortlist", "admin", (p) => <AdminShortlist key={p.id} id={p.id} />],
   ["/admin/projects/:id", "admin", (p) => <AdminProjectRoute key={p.id} id={p.id} />],

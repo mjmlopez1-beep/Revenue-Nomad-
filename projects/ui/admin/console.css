@@ -1092,11 +1092,21 @@
   font-size: 16px;
 }
 .rnp .adm-board {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(176px, 1fr));
+  display: flex;
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 6px;
+}
+.rnp .adm-board > .adm-col-stage {
+  flex: 1 1 180px;
+  min-width: 180px;
+}
+.rnp .adm-board > .adm-col-stage.slim {
+  flex: 0 0 132px;
+  min-width: 132px;
+}
+.rnp .adm-col-stage.slim .adm-col-hint {
+  font-size: 11.5px;
 }
 .rnp .adm-col-stage {
   background: var(--ad-line-2);
@@ -1356,4 +1366,120 @@
 .rnp .adm-table .adm-mini {
   min-width: 250px;
   margin-top: 0;
+}
+
+/* ---------- simplified pass: week health, confirm, analytics, operators ---------- */
+.rnp .adm-tot small {
+  font-size: 12px;
+}
+.rnp .adm-up {
+  color: var(--ad-green);
+}
+.rnp .adm-down {
+  color: var(--ad-c-amber-i);
+}
+.rnp .adm-confirm {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--ad-c-amber);
+  color: var(--ad-c-amber-i);
+  font-size: 13px;
+}
+.rnp .adm-funnel {
+  display: grid;
+  gap: 12px;
+}
+.rnp .adm-funnel li {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 48px 44px;
+  gap: 12px;
+  align-items: center;
+}
+.rnp .adm-funnel-l {
+  font-size: 13px;
+  color: var(--ad-ink-2);
+}
+.rnp .adm-funnel-bar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--ad-line-2);
+  overflow: hidden;
+}
+.rnp .adm-funnel-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ad-green);
+}
+.rnp .adm-funnel b {
+  text-align: right;
+}
+.rnp .adm-funnel small {
+  font-size: 12px;
+  color: var(--ad-muted);
+  text-align: right;
+}
+.rnp .adm-bars {
+  display: grid;
+  gap: 6px;
+}
+.rnp .adm-bars li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  font-size: 13.5px;
+}
+.rnp .adm-opfilters {
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(150px, 1fr));
+}
+.rnp .adm-ml {
+  margin-left: 6px;
+}
+/* The buyer-project view inside the console: a light header instead of the dark banner. */
+.rnp .adm-main .band {
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  border: 1px solid var(--ad-line);
+  box-shadow: var(--ad-shadow);
+  border-radius: 14px;
+  padding: 20px 24px;
+}
+.rnp .adm-main .band::before,
+.rnp .adm-main .band::after {
+  display: none;
+}
+.rnp .adm-main .band h1 {
+  color: var(--ad-ink);
+  font: 600 28px/1.15 var(--ad-serif);
+}
+.rnp .adm-main .band-sub {
+  color: var(--ad-muted);
+}
+.rnp .adm-main .band-tag {
+  background: var(--ad-c-gray);
+  color: var(--ad-c-gray-i);
+  border-color: transparent;
+}
+.rnp .adm-main .band a {
+  color: var(--ad-green);
+}
+.rnp .adm-main .btn.band-ghost,
+.rnp .adm-main .btn.band-btn {
+  background: var(--ad-card);
+  color: var(--ad-ink);
+  border: 1px solid var(--ad-line);
+  box-shadow: none;
+}
+@media (max-width: 860px) {
+  .rnp .adm-opfilters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rnp .adm-funnel li {
+    grid-template-columns: 96px minmax(0, 1fr) 36px 36px;
+  }
 }

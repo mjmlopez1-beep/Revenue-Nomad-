@@ -243,6 +243,7 @@ export interface OutboxEntry {
   at: number;
   kind:
     | "invite"
+    | "profile"
     | "alert"
     | "digest"
     | "question"

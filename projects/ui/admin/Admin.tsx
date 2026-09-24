@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Project, State } from "../../lib/types";
-import { OPERATORS, buyerById, displayName, matchesQuery, operatorById, stableSort } from "../../lib/data";
+import { OPERATORS, buyerById, displayName, operatorById, stableSort } from "../../lib/data";
 import {
   MAX_SUGGESTIONS,
   addSuggestion,
@@ -15,21 +15,19 @@ import {
   projectCounts,
   projectFit,
   projectFlags,
-  reports,
   responseFit,
   responseOf,
   responseSourceLabel,
   responsesFor,
-  sendPulse,
   setAdminNote,
   setProjectStatus,
   simulateResponse,
   suggestionsUsed,
   useStore,
 } from "../../lib/store";
-import { ago, daysBetween, durationLabel, hoursRange, plural, rateLabel, shortDate, timeLabel } from "../../lib/format";
-import { Link, navigate, useLocation } from "../../lib/router";
-import { Arrow, Availability, Avatar, Back, Band, CheckHours, Completeness, Empty, FitScore, Notice, Stat, StatusPill, attempt } from "../common";
+import { ago, daysBetween, hoursRange, plural, rateLabel, shortDate, timeLabel } from "../../lib/format";
+import { Link, useLocation } from "../../lib/router";
+import { Arrow, Back, Band, CheckHours, Empty, FitScore, Notice, Stat, StatusPill, attempt } from "../common";
 import { QuestionsInbox } from "../buyer/Buyer";
 
 // ---------------------------------------------------------------- buyer project, admin view (A1)
@@ -335,200 +333,5 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
 }
 
 // ---------------------------------------------------------------- A3
-
-export function AdminReports() {
-  const s = useStore();
-  const r = reports(s);
-  const pct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
-  return (
-    <div className="page">
-      <Band title="Reports" sub="Computed from the event log, every state change with actor and time." />
-      <section className="card" data-testid="reports">
-        <h2>By project</h2>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Project</th>
-                <th className="num">Reached</th>
-                <th className="num">Responded</th>
-                <th className="num">Response rate</th>
-                <th>Time to first response</th>
-                <th className="num">Intros</th>
-                <th className="num">Intro rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.rows.map((x) => (
-                <tr key={x.project.id} data-testid="report-row" data-project={x.project.id}>
-                  <td data-label="Project">{x.project.title}</td>
-                  <td data-label="Reached" className="num" data-testid="rep-reached">
-                    {x.reached}
-                  </td>
-                  <td data-label="Responded" className="num" data-testid="rep-responders">
-                    {x.responders}
-                  </td>
-                  <td data-label="Response rate" className="num" data-testid="rep-rate">
-                    {pct(x.responseRate)}
-                  </td>
-                  <td data-label="Time to first response" data-testid="rep-first">
-                    {x.timeToFirst == null ? "—" : durationLabel(x.timeToFirst)}
-                  </td>
-                  <td data-label="Intros" className="num" data-testid="rep-intros">
-                    {x.intros}
-                  </td>
-                  <td data-label="Intro rate" className="num" data-testid="rep-intro-rate">
-                    {pct(x.introRate)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!r.rows.length && <Empty>No posted projects yet.</Empty>}
-      </section>
-      <div className="split even">
-        <section className="card" data-testid="rep-declines">
-          <h2>Decline reasons</h2>
-          {!Object.keys(r.declineReasons).length && <p className="muted">No passes yet.</p>}
-          <ul className="bars">
-            {Object.entries(r.declineReasons)
-              .sort((a, b) => b[1] - a[1])
-              .map(([k, v]) => (
-                <li key={k} data-testid="decline-reason" data-reason={k}>
-                  <span>{k}</span>
-                  <b>{v}</b>
-                </li>
-              ))}
-          </ul>
-        </section>
-        <section className="card" data-testid="rep-alerts">
-          <h2>Alerts sent by role</h2>
-          {!Object.keys(r.alertsByRole).length && <p className="muted">No alerts yet.</p>}
-          <ul className="bars">
-            {Object.entries(r.alertsByRole).map(([k, v]) => (
-              <li key={k} data-testid="alerts-role" data-role={k}>
-                <span>{k}</span>
-                <b>{v}</b>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- operators directory (A-09, A-10, A-12)
-
-export function AdminOperators() {
-  const s = useStore();
-  const { query } = useLocation();
-  const [q, setQ] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const page = Math.max(1, Number(query.get("page")) || 1);
-  const size = 10;
-  const sorted = stableSort(OPERATORS, (o) => o.reputation || 0);
-  const list = q.trim() ? sorted.filter((o) => matchesQuery(o, q)) : sorted;
-  const pages = Math.max(1, Math.ceil(list.length / size));
-  const cur = Math.min(page, pages);
-  const shown = list.slice((cur - 1) * size, cur * size);
-  const go = (n: number) => navigate(`/admin/operators?page=${n}`);
-  return (
-    <div className="page">
-      <Band title="Operators" sub="All 100 seeded profiles, sorted by reputation then id so the order never shifts between pages." />
-      {msg && <Notice tone="ok">{msg}</Notice>}
-      <div className="toolbar">
-        <label className="search grow">
-          <span className="sr-only">Search operators</span>
-          <input value={q} onChange={(e) => (setQ(e.target.value), cur !== 1 && go(1))} placeholder="Search by name, role, skill or industry" data-testid="ops-search" />
-        </label>
-        <button type="button" className="btn btn-sm" onClick={() => (sendPulse(shown.map((o) => o.id)), setMsg(`Availability pulse sent to ${plural(shown.length, "operator")} on this page.`))}>
-          Send availability pulse to this page
-        </button>
-      </div>
-      <p className="muted" data-testid="ops-count">
-        {list.length} operator{list.length === 1 ? "" : "s"} · page {cur} of {pages}
-      </p>
-      <ul className="stack" data-testid="ops-list">
-        {shown.map((o) => (
-          <li key={o.id} className="card row-card op-dir" data-testid="op-dir-row" data-id={o.id}>
-            <Avatar op={o} size={40} />
-            <div className="grow">
-              <Link to={`/operators/${o.slug}`}>
-                <b>{displayName(o)}</b>
-              </Link>
-              <p className="muted small">
-                {o.role} · {o.cat} · {rateLabel(o.rate)} · {o.hrs} hrs a month · Reputation {o.reputation}
-              </p>
-              <p className="small">
-                <Availability s={s} op={o} />
-              </p>
-            </div>
-            <div className="op-flags">
-              <Completeness op={o} />
-              <CheckHours op={o} />
-            </div>
-            <button type="button" className="btn btn-sm" onClick={() => (sendPulse([o.id]), setMsg(`Availability pulse sent to ${displayName(o)}.`))} data-testid="send-pulse" aria-label={`Send availability pulse to ${displayName(o)}`}>
-              Send pulse
-            </button>
-          </li>
-        ))}
-      </ul>
-      {!list.length && <Empty>No operators match "{q}".</Empty>}
-      <nav className="pager" aria-label="Pages">
-        <button type="button" className="btn btn-sm" disabled={cur <= 1} onClick={() => go(cur - 1)} data-testid="page-prev">
-          Previous
-        </button>
-        <span>
-          Page {cur} of {pages}
-        </span>
-        <button type="button" className="btn btn-sm" disabled={cur >= pages} onClick={() => go(cur + 1)} data-testid="page-next">
-          Next
-        </button>
-      </nav>
-    </div>
-  );
-}
-
-export function AdminIntros() {
-  const s = useStore();
-  return (
-    <div className="page">
-      <Band title="Intro requests" sub="Intros requested from projects are approved automatically (gap G14) and logged here for Revenue Nomad." />
-      {!s.intros.length && <Empty>No intro requests yet.</Empty>}
-      <div className="table-wrap">
-        <table className="table" data-testid="admin-intros">
-          <thead>
-            <tr>
-              <th>Operator</th>
-              <th>Project</th>
-              <th>Buyer</th>
-              <th>Requested</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {s.intros.map((i) => {
-              const op = operatorById(i.operatorId)!;
-              const p = projectById(s, i.projectId)!;
-              return (
-                <tr key={i.id}>
-                  <td data-label="Operator">{displayName(op)}</td>
-                  <td data-label="Project">
-                    <Link to={`/admin/projects/${p.id}`}>{p.title}</Link>
-                  </td>
-                  <td data-label="Buyer">{buyerById(i.buyerId || undefined)?.company || "—"}</td>
-                  <td data-label="Requested">{shortDate(i.createdAt)}</td>
-                  <td data-label="Status">{i.status === "approved" ? "Approved automatically" : "Withdrawn"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 export { ago, hoursRange, Arrow };

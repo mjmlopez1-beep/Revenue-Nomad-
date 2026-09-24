@@ -2,14 +2,15 @@
 
 Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-handoff/QA_PLAN.md`, one Playwright test each in `tests/projects/`, run headless against the production build (`npm run test:e2e`, Chromium).
 
-**Result: 67 of 67 pass.** That covers:
+**Result: 76 of 76 pass.** That covers:
 
 - the 49 QA scenarios;
-- 3 admin console tests (A-13 to A-15);
-- 7 usability tests (U-01 to U-07, see `USABILITY_AUDIT.md`);
-- 8 operator dashboard tests (L-01 to L-08).
+- 5 admin console tests (A-13 to A-17);
+- 9 usability tests (U-01 to U-09, see `USABILITY_AUDIT.md`);
+- 8 operator dashboard tests (L-01 to L-08);
+- 5 jobs, prospects and overview tests (W-01 to W-05).
 
-The full suite runs in about 1.1 minutes on 4 workers.
+The full suite runs in about 1.5 minutes on 4 workers.
 
 ## Scenarios
 
@@ -99,6 +100,20 @@ Decisions and gaps:
 - Catalog is shown disabled.
 - Snooze lasts for the browser session.
 - The client page no longer shows the bill rate when the admin turns it off.
+
+## Simplification pass (platform audit)
+
+The platform audit (published as "Revenue Nomad Platform Audit") ranked the changes that cut the most clicks and add the most value. This pass built them.
+
+- **Operators have one home.** Job Board and Prospects moved from the Operator Portal into the dashboard as Jobs and Prospects; `/portal` redirects there. Every mark (save, applied, dismiss, sent, replied, meeting) belongs to the operator who made it. The old portal stored them once for everyone.
+- **Jobs** are scored with the same fit model as projects, against the operator's own profile, and shown as compact rows. "I applied" sets a follow-up five days out that surfaces on the overview. The operator-facing Run crawl button is gone; the scheduled crawl keeps the board fresh.
+- **Prospects** show one line on why now, who to reach (the role, with a LinkedIn search, never an invented name) and a draft email. "Copy and mark sent" moves the company into In conversation with a follow-up. Replies are tracked, and signals that got replies rank first. The engine internals (formula, decay lines, signals that didn't fire) are removed.
+- **Overview** leads with Next up (invites, intros to book, due follow-ups, stale availability). "Raise your fit" re-scores today's open roles and jobs with one profile change at a time and shows how many roles each change moves. "Your rank" and "How it works" are removed.
+- **The response form warns** when the operator's rate is above the client's take-home range, and "Use $190" fixes it in one tap.
+- **Buyers** get compact response rows with trust signals, "Answers and score" for detail, a side-by-side Compare for two or three picks, and a bench of operators they liked on earlier projects, invitable in one click.
+- **Admin Today** shows this week against last week in place of the static totals. Profile nudges now ask first, send a real profile email and skip anyone nudged in the last 30 days.
+- **Analytics** adds a funnel, where responses, intros and hires come from, median first response, median time to fill, and placed spread. **Operators** is a filterable table. **Intro requests** lists unbooked intros first. Empty end stages on the pipeline stay narrow.
+- **Home page** has a door for companies and one for operators, with live counts.
 
 ## Changes after the usability audit
 

@@ -30,6 +30,7 @@ import {
   OPERATORS,
   SEED_PROJECTS,
   buyerById,
+  completeness,
   defaultOperatorId,
   defaultOperatorState,
   displayName,
@@ -1732,6 +1733,33 @@ export function sendPulse(opIds: string[]) {
         operatorId: op.id,
       });
       c.event("pulse_sent", { operatorId: opId });
+    }
+  });
+}
+
+export const PROFILE_NUDGE_COOLDOWN_DAYS = 30;
+
+/** Operators a profile nudge would reach now: incomplete, and not nudged in the last 30 days. */
+export function profileNudgeTargets(s: State, below = 60): Operator[] {
+  const now = nowOf(s);
+  const recent = new Set(s.events.filter((e) => e.type === "profile_nudged" && now - e.at < PROFILE_NUDGE_COOLDOWN_DAYS * DAY).map((e) => e.operatorId));
+  return OPERATORS.filter((o) => completeness(o).pct < below && !recent.has(o.id));
+}
+
+export function nudgeProfiles(opIds: string[]) {
+  mutate("admin", (s, c) => {
+    for (const opId of opIds) {
+      const op = operatorById(opId)!;
+      const missing = completeness(op).missing;
+      c.email({
+        kind: "profile",
+        to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
+        subject: "Two minutes to get invited to more projects",
+        body: `${op.first}, clients and Revenue Nomad invite operators with complete profiles first. Yours is missing ${missing.slice(0, 3).join(", ").toLowerCase() || "a few details"}.`,
+        links: [opLink(op.id, `/operators/${op.slug}`, "Finish my profile")],
+        operatorId: op.id,
+      });
+      c.event("profile_nudged", { operatorId: opId, meta: { missing } });
     }
   });
 }

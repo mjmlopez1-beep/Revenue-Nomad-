@@ -162,6 +162,7 @@ export function ProtoBar() {
 
 const KIND_LABEL: Record<OutboxEntry["kind"], string> = {
   invite: "Invite",
+  profile: "Profile nudge",
   alert: "Role alert",
   digest: "Alert digest",
   question: "Question",

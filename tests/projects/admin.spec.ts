@@ -375,3 +375,43 @@ test("A-15 pipeline: nudge an invited operator, drag a responder to Shortlisted"
   expect(s.outbox.filter((m) => m.kind === "invite" && m.to.name === "Matt Lopez")).toHaveLength(2);
   expect(s.events.filter((e) => e.type === "operator_nudged")).toHaveLength(1);
 });
+
+test("A-16 Today shows this week against last, and profile nudges ask first and skip recent ones", async ({ page }) => {
+  await postNorthwind(page, { invite: ["Tim Evans"] });
+  await respond(page, "Tim Evans", NW, { rate: "200", hours: "25" });
+  await page.getByTestId("role-admin").click();
+  await expect(page.getByTestId("week-posted")).toContainText("1");
+  await expect(page.getByTestId("week-posted")).toContainText("+1 vs last week");
+  await expect(page.getByTestId("week-responses")).toContainText("1");
+  await page.getByTestId("nudge-profiles").click();
+  const confirm = page.getByTestId("nudge-confirm");
+  await expect(confirm).toContainText("under 60% complete");
+  const n = Number((await page.getByTestId("nudge-send").innerText()).match(/\d+/)![0]);
+  expect(n).toBeGreaterThan(0);
+  await page.getByTestId("nudge-send").click();
+  await expect(page.getByTestId("nudge-profiles")).toHaveCount(0);
+  let s = await state(page);
+  expect(s.outbox.filter((m) => m.kind === "profile")).toHaveLength(n);
+  // A week later nobody is nudged twice.
+  await page.getByTestId("clock-7d").click();
+  await expect(page.getByTestId("nudge-profiles")).toHaveCount(0);
+  s = await state(page);
+  expect(s.events.filter((e) => e.type === "profile_nudged")).toHaveLength(n);
+});
+
+test("A-17 analytics: funnel, sources that produce intros, and the per-project table", async ({ page }) => {
+  await postNorthwind(page, { invite: ["Tim Evans"] });
+  await respond(page, "Tim Evans", NW, { rate: "200", hours: "25" });
+  await simulate(page, ["Matt Lopez"]);
+  await openBuyerProject(page);
+  await responseRow(page, "Tim Evans").getByTestId("request-intro").click();
+  await asRole(page, "admin");
+  await goto(page, "/admin/reports");
+  const funnel = page.getByTestId("funnel-chart");
+  await expect(funnel).toContainText("Reached");
+  await expect(funnel.locator("li").filter({ hasText: "Responded" })).toContainText("2");
+  await expect(funnel.locator("li").filter({ hasText: "Intro requested" })).toContainText("1");
+  await expect(page.locator('[data-testid="source-row"][data-source="invite"]')).toContainText("Buyer invite");
+  await expect(page.locator('[data-testid="source-row"][data-source="invite"] td').nth(2)).toHaveText("1");
+  await expect(page.getByTestId("report-row").and(page.locator(`[data-project="${NW}"]`)).getByTestId("rep-intros")).toHaveText("1");
+});

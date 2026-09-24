@@ -18,6 +18,9 @@ import {
   moveStage,
   noResponses72,
   nowOf,
+  nudgeProfiles,
+  profileNudgeTargets,
+  PROFILE_NUDGE_COOLDOWN_DAYS,
   nudgeOperator,
   opState,
   ownerName,
@@ -28,6 +31,7 @@ import {
   projectFlags,
   publishRnProject,
   questionsFor,
+  reports,
   responseFit,
   responseOf,
   responsesFor,
@@ -41,7 +45,7 @@ import {
   type BriefErrors,
 } from "../../lib/store";
 import { briefFromProject, fitScore, seatCategory, type FitResult } from "../../lib/fit";
-import { ago, dayLabel, daysBetween, hoursRange, money, plural, shortDate, timeLabel } from "../../lib/format";
+import { ago, dayLabel, daysBetween, durationLabel, hoursRange, money, plural, shortDate, timeLabel } from "../../lib/format";
 import { Link, navigate, useLocation } from "../../lib/router";
 import { attempt } from "../common";
 import { InvitePicker, QuestionsInbox } from "../buyer/Buyer";
@@ -285,6 +289,8 @@ export function AdminToday() {
   const oldest = pending.length ? Math.max(...pending.map((i) => daysBetween(i.createdAt, now))) : 0;
   const lowRep = OPERATORS.filter((o) => (o.reputation || 0) < 50);
   const thin = OPERATORS.filter((o) => completeness(o).pct < 60);
+  const nudgeable = profileNudgeTargets(s);
+  const [confirmNudge, setConfirmNudge] = useState(false);
   const unconfirmed = OPERATORS.filter((o) => !opState(s, o.id).lastConfirmedAt);
   const hour = new Date(now).getUTCHours();
   return (
@@ -301,30 +307,7 @@ export function AdminToday() {
         </button>
       </div>
       {msg && <div className="adm-toast-inline">{msg}</div>}
-      <section className="card adm-totals">
-        <div className="adm-card-h">
-          <h2>Marketplace</h2>
-          <span className="muted">Totals from the prototype data. Growth over time needs the history endpoint.</span>
-        </div>
-        <div className="adm-tot">
-          <div>
-            <span>Operators</span>
-            <b className="num">{OPERATORS.length}</b>
-          </div>
-          <div>
-            <span>Clients</span>
-            <b className="num">{clientList(s).length}</b>
-          </div>
-          <div>
-            <span>Intros requested</span>
-            <b className="num">{s.intros.length}</b>
-          </div>
-          <div>
-            <span>Reviews on profiles</span>
-            <b className="num">{OPERATORS.reduce((a, o) => a + (o.profile?.reviews?.length || 0), 0)}</b>
-          </div>
-        </div>
-      </section>
+      <WeekHealth s={s} />
       <div className="adm-kpis" data-testid="today-kpis">
         <Link to="/admin/projects" className="card adm-kpi">
           <span>Open projects</span>
@@ -389,10 +372,32 @@ export function AdminToday() {
             <div className="adm-hyg">
               <span>Incomplete profiles</span>
               <b className="num">{thin.length}</b>
-              <button type="button" className="adm-btn adm-btn-sm" onClick={() => (sendPulse(thin.map((o) => o.id)), setMsg(`Profile nudge sent to ${plural(thin.length, "operator")}.`))}>
-                Nudge all
-              </button>
+              {nudgeable.length > 0 && !confirmNudge && (
+                <button type="button" className="adm-btn adm-btn-sm" onClick={() => setConfirmNudge(true)} data-testid="nudge-profiles">
+                  Nudge…
+                </button>
+              )}
             </div>
+            {confirmNudge && (
+              <div className="adm-confirm" data-testid="nudge-confirm">
+                <p>
+                  Email {plural(nudgeable.length, "operator")} under 60% complete with a one-tap link to finish their profile? Anyone nudged in the last {PROFILE_NUDGE_COOLDOWN_DAYS} days is skipped.
+                </p>
+                <div className="adm-row">
+                  <button
+                    type="button"
+                    className="adm-btn adm-btn-sm pri"
+                    onClick={() => (nudgeProfiles(nudgeable.map((o) => o.id)), setConfirmNudge(false), setMsg(`Profile nudge sent to ${plural(nudgeable.length, "operator")}.`))}
+                    data-testid="nudge-send"
+                  >
+                    Send {nudgeable.length} nudges
+                  </button>
+                  <button type="button" className="adm-btn adm-btn-sm ghost" onClick={() => setConfirmNudge(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="adm-hyg">
               <span>Availability not confirmed</span>
               <b className="num">{unconfirmed.length}</b>
@@ -425,6 +430,66 @@ export function AdminToday() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** This week against the week before, from the event log. */
+function weekWindow(s: State) {
+  const now = nowOf(s);
+  const inWin = (at: number, back: number) => at > now - (back + 7) * DAY && at <= now - back * DAY;
+  const count = (type: string, back: number) => s.events.filter((e) => e.type === type && inWin(e.at, back)).length;
+  const firstResponse = (back: number) => {
+    const ms: number[] = [];
+    for (const p of s.projects) {
+      if (!p.postedAt || !inWin(p.postedAt, back)) continue;
+      const first = s.events.filter((e) => e.projectId === p.id && e.type === "response_submitted").map((e) => e.at);
+      if (first.length) ms.push(Math.min(...first) - p.postedAt);
+    }
+    ms.sort((a, b) => a - b);
+    return ms.length ? ms[Math.floor(ms.length / 2)] : null;
+  };
+  return [0, 7].map((back) => ({
+    posted: count("project_posted", back),
+    responses: count("response_submitted", back),
+    intros: count("intro_requested", back),
+    placed: s.projects.filter((p) => p.staffedAt && inWin(p.staffedAt, back)).length,
+    first: firstResponse(back),
+  }));
+}
+
+function WeekHealth({ s }: { s: State }) {
+  const [cur, prev] = weekWindow(s);
+  const delta = (a: number, b: number) => (a === b ? "Same as last week" : `${a > b ? "+" : "−"}${Math.abs(a - b)} vs last week`);
+  const tiles: { k: string; label: string; v: ReactNode; d: string; up?: boolean }[] = [
+    { k: "posted", label: "Projects posted", v: cur.posted, d: delta(cur.posted, prev.posted), up: cur.posted >= prev.posted },
+    { k: "responses", label: "Responses", v: cur.responses, d: delta(cur.responses, prev.responses), up: cur.responses >= prev.responses },
+    { k: "intros", label: "Intros requested", v: cur.intros, d: delta(cur.intros, prev.intros), up: cur.intros >= prev.intros },
+    {
+      k: "first",
+      label: "Median first response",
+      v: cur.first == null ? "—" : durationLabel(cur.first),
+      d: cur.first == null || prev.first == null ? "Needs a response this week and last" : cur.first <= prev.first ? `Faster than last week (${durationLabel(prev.first)})` : `Slower than last week (${durationLabel(prev.first)})`,
+      up: cur.first != null && (prev.first == null || cur.first <= prev.first),
+    },
+  ];
+  return (
+    <section className="card adm-totals" data-testid="week-health">
+      <div className="adm-card-h">
+        <h2>This week</h2>
+        <Link to="/admin/reports" className="small">
+          Analytics
+        </Link>
+      </div>
+      <div className="adm-tot">
+        {tiles.map((t) => (
+          <div key={t.k} data-testid={`week-${t.k}`}>
+            <span>{t.label}</span>
+            <b className="num">{t.v}</b>
+            <small className={t.up ? "adm-up" : "adm-down"}>{t.d}</small>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -665,7 +730,7 @@ export function AdminProjectsList() {
       </section>
       {groups.placed.length > 0 && (
         <section className="card adm-table-wrap">
-          <div className="adm-card-h adm-pad">
+          <div className="adm-card-h">
             <h2>Recently placed</h2>
           </div>
           <table className="adm-table">
@@ -1483,10 +1548,12 @@ export function AdminPipeline({ id }: { id: string }) {
                 })
                 .sort((a, b) => b.f.fit - a.f.fit || (a.op.id < b.op.id ? -1 : 1));
               const valid = !!dragging && pipelineOf(s, id, dragging)?.stage !== st.key;
+              // End stages stay narrow until someone lands there, so the live stages get the room.
+              const slim = !col.length && (st.key === "selected" || st.key === "not_selected") && !dragging;
               return (
                 <section
                   key={st.key}
-                  className={`adm-col-stage ${valid ? "valid" : ""} ${over === st.key && valid ? "over" : ""}`}
+                  className={`adm-col-stage ${valid ? "valid" : ""} ${over === st.key && valid ? "over" : ""} ${slim ? "slim" : ""}`}
                   aria-label={st.label}
                   data-testid={`col-${st.key}`}
                   onDragOver={(ev: DragEvent) => {
@@ -2142,3 +2209,461 @@ export function AdminAudit() {
 }
 
 export { ActionError, normalizeCategory };
+
+// ---------------------------------------------------------------- analytics
+
+const SOURCE_LABEL: Record<string, string> = { invite: "Buyer invite", rn_suggested: "Revenue Nomad suggestion", admin: "Revenue Nomad invite", alert: "Role alert", browse: "Found it browsing" };
+
+function median(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const a = [...xs].sort((x, y) => x - y);
+  return a[Math.floor(a.length / 2)];
+}
+
+export function AdminAnalytics() {
+  const s = useStore();
+  const r = reports(s);
+  const pct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
+  const posted = s.projects.filter((p) => p.status !== "draft");
+  const reached = r.rows.reduce((a, x) => a + x.reached, 0);
+  // Anyone who responded opened the role, even through a simulated response.
+  const viewed = new Set([...s.events.filter((e) => e.type === "project_viewed" || e.type === "response_submitted").map((e) => `${e.projectId}:${e.operatorId}`)]).size;
+  const responders = r.rows.reduce((a, x) => a + x.responders, 0);
+  const intros = r.rows.reduce((a, x) => a + x.intros, 0);
+  const hires = posted.filter((p) => p.status === "staffed").length;
+  const firsts = r.rows.map((x) => x.timeToFirst).filter((x): x is number => x != null);
+  const fills = posted.filter((p) => p.staffedAt && p.postedAt).map((p) => p.staffedAt! - p.postedAt!);
+  const spread = posted
+    .filter((p) => p.status === "staffed" && p.origin === "revenue_nomad" && p.billRate && p.operatorRate)
+    .reduce((a, p) => a + (p.billRate! - p.operatorRate!) * Math.round((p.hoursPerMonthMin + p.hoursPerMonthMax) / 2), 0);
+  const funnel: [string, number][] = [
+    ["Reached", reached],
+    ["Opened the role", viewed],
+    ["Responded", responders],
+    ["Intro requested", intros],
+    ["Hired", hires],
+  ];
+  const top = Math.max(1, reached);
+  // Where responses, intros and hires come from.
+  const bySource = new Map<string, { responses: number; intros: number; hires: number }>();
+  for (const resp of s.responses.filter((x) => x.submittedAt && !x.draft && x.interest === "interested")) {
+    const k = resp.viaSource || "browse";
+    const v = bySource.get(k) || { responses: 0, intros: 0, hires: 0 };
+    v.responses++;
+    if (s.intros.some((i) => i.projectId === resp.projectId && i.operatorId === resp.operatorId)) v.intros++;
+    if (projectById(s, resp.projectId)?.selectedOperatorId === resp.operatorId) v.hires++;
+    bySource.set(k, v);
+  }
+  for (const e of s.pipeline) {
+    const p = projectById(s, e.projectId);
+    if (!p || p.selectedOperatorId !== e.operatorId || s.responses.some((x) => x.projectId === p.id && x.operatorId === e.operatorId)) continue;
+    const v = bySource.get("admin") || { responses: 0, intros: 0, hires: 0 };
+    v.hires++;
+    bySource.set("admin", v);
+  }
+  const signups = s.outbox.filter((m) => m.kind === "signup").length;
+  return (
+    <div className="adm-page">
+      <div className="adm-pagehead">
+        <div>
+          <h1 className="serif">Analytics</h1>
+          <p>Every number comes from the event log, so it matches what people actually did.</p>
+        </div>
+      </div>
+      <div className="adm-kpis adm-kpis-6" data-testid="analytics-kpis">
+        <div className="card adm-kpi">
+          <span>Response rate</span>
+          <b className="num">{pct(reached ? responders / reached : null)}</b>
+          <small>
+            {responders} of {reached} reached
+          </small>
+        </div>
+        <div className="card adm-kpi">
+          <span>Intro rate</span>
+          <b className="num">{pct(responders ? intros / responders : null)}</b>
+          <small>{plural(intros, "intro")}</small>
+        </div>
+        <div className="card adm-kpi">
+          <span>Hires</span>
+          <b className="num" data-testid="an-hires">
+            {hires}
+          </b>
+          <small>{plural(posted.length, "posted project")}</small>
+        </div>
+        <div className="card adm-kpi">
+          <span>Median first response</span>
+          <b className="num">{median(firsts) == null ? "—" : durationLabel(median(firsts)!)}</b>
+          <small>After posting</small>
+        </div>
+        <div className="card adm-kpi">
+          <span>Median time to fill</span>
+          <b className="num">{median(fills) == null ? "—" : durationLabel(median(fills)!)}</b>
+          <small>Posted to hired</small>
+        </div>
+        <div className="card adm-kpi">
+          <span>Placed spread</span>
+          <b className="num" data-testid="an-spread">
+            {money(spread)}
+          </b>
+          <small>A month, Revenue Nomad projects</small>
+        </div>
+      </div>
+      <div className="adm-split">
+        <section className="card adm-pad" data-testid="funnel-chart">
+          <div className="adm-card-h">
+            <h2>Funnel</h2>
+            <span className="muted">All posted projects</span>
+          </div>
+          <ol className="adm-funnel">
+            {funnel.map(([label, n], i) => (
+              <li key={label}>
+                <span className="adm-funnel-l">{label}</span>
+                <span className="adm-funnel-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.max(n ? 2 : 0, (n / top) * 100)}%` }} />
+                </span>
+                <b className="num">{n}</b>
+                <small className="num">{i === 0 ? "" : funnel[i - 1][1] ? `${Math.round((n / funnel[i - 1][1]) * 100)}%` : "—"}</small>
+              </li>
+            ))}
+          </ol>
+        </section>
+        <section className="card adm-table-wrap" data-testid="by-source">
+          <div className="adm-card-h">
+            <h2>Where hires come from</h2>
+          </div>
+          <table className="adm-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th className="num">Responses</th>
+                <th className="num">Intros</th>
+                <th className="num">Hires</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...bySource.entries()]
+                .sort((a, b) => b[1].hires - a[1].hires || b[1].intros - a[1].intros || b[1].responses - a[1].responses)
+                .map(([k, v]) => (
+                  <tr key={k} data-testid="source-row" data-source={k}>
+                    <td data-label="Source">{SOURCE_LABEL[k] || k}</td>
+                    <td data-label="Responses" className="num">
+                      {v.responses}
+                    </td>
+                    <td data-label="Intros" className="num">
+                      {v.intros}
+                    </td>
+                    <td data-label="Hires" className="num">
+                      {v.hires}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          {!bySource.size && <div className="adm-empty">No responses yet.</div>}
+          {signups > 0 && <div className="adm-foot">{plural(signups, "off-platform sign-up invite")} sent.</div>}
+        </section>
+      </div>
+      <section className="card adm-table-wrap" data-testid="reports">
+        <div className="adm-card-h">
+          <h2>By project</h2>
+        </div>
+        <table className="adm-table">
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th className="num">Reached</th>
+              <th className="num">Responded</th>
+              <th className="num">Response rate</th>
+              <th>First response</th>
+              <th className="num">Intros</th>
+              <th className="num">Intro rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {r.rows.map((x) => (
+              <tr key={x.project.id} data-testid="report-row" data-project={x.project.id}>
+                <td data-label="Project">
+                  <Link to={`/admin/projects/${x.project.id}`} className="rowlink">
+                    {x.project.title}
+                  </Link>
+                  <small className="block muted">{ownerName(x.project)}</small>
+                </td>
+                <td data-label="Reached" className="num" data-testid="rep-reached">
+                  {x.reached}
+                </td>
+                <td data-label="Responded" className="num" data-testid="rep-responders">
+                  {x.responders}
+                </td>
+                <td data-label="Response rate" className="num" data-testid="rep-rate">
+                  {pct(x.responseRate)}
+                </td>
+                <td data-label="First response" data-testid="rep-first">
+                  {x.timeToFirst == null ? "—" : durationLabel(x.timeToFirst)}
+                </td>
+                <td data-label="Intros" className="num" data-testid="rep-intros">
+                  {x.intros}
+                </td>
+                <td data-label="Intro rate" className="num" data-testid="rep-intro-rate">
+                  {pct(x.introRate)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!r.rows.length && <div className="adm-empty">No posted projects yet.</div>}
+      </section>
+      <div className="adm-grid2">
+        <section className="card adm-pad" data-testid="rep-declines">
+          <div className="adm-card-h">
+            <h2>Why operators pass</h2>
+          </div>
+          {!Object.keys(r.declineReasons).length && <p className="muted">No passes yet.</p>}
+          <ul className="adm-bars">
+            {Object.entries(r.declineReasons)
+              .sort((a, b) => b[1] - a[1])
+              .map(([k, v]) => (
+                <li key={k} data-testid="decline-reason" data-reason={k}>
+                  <span>{k}</span>
+                  <b className="num">{v}</b>
+                </li>
+              ))}
+          </ul>
+        </section>
+        <section className="card adm-pad" data-testid="rep-alerts">
+          <div className="adm-card-h">
+            <h2>Role alerts sent</h2>
+          </div>
+          {!Object.keys(r.alertsByRole).length && <p className="muted">No alerts yet.</p>}
+          <ul className="adm-bars">
+            {Object.entries(r.alertsByRole).map(([k, v]) => (
+              <li key={k} data-testid="alerts-role" data-role={k}>
+                <span>{k}</span>
+                <b className="num">{v}</b>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- operators (A-09, A-10, A-12)
+
+export function AdminOperatorsList() {
+  const s = useStore();
+  const { query } = useLocation();
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("any");
+  const [avail, setAvail] = useState<"any" | "confirmed" | "unconfirmed" | "off">("any");
+  const [rep, setRep] = useState(0);
+  const [msg, setMsg] = useState<string | null>(null);
+  const page = Math.max(1, Number(query.get("page")) || 1);
+  const size = 10;
+  const sorted = stableSort(OPERATORS, (o) => o.reputation || 0);
+  const list = sorted.filter((o) => {
+    if (q.trim() && !matchesQuery(o, q)) return false;
+    if (cat !== "any" && o.cat !== cat) return false;
+    if ((o.reputation || 0) < rep) return false;
+    const st = opState(s, o.id);
+    if (avail === "confirmed" && !st.lastConfirmedAt) return false;
+    if (avail === "unconfirmed" && st.lastConfirmedAt) return false;
+    if (avail === "off" && st.availability !== "unavailable") return false;
+    return true;
+  });
+  const pages = Math.max(1, Math.ceil(list.length / size));
+  const cur = Math.min(page, pages);
+  const shown = list.slice((cur - 1) * size, cur * size);
+  const go = (n: number) => navigate(`/admin/operators?page=${n}`);
+  const reset = () => cur !== 1 && go(1);
+  return (
+    <div className="adm-page">
+      <div className="adm-pagehead">
+        <div>
+          <h1 className="serif">Operators</h1>
+          <p>Sorted by Reputation Index, then id, so pages never shift.</p>
+        </div>
+        <button type="button" className="adm-btn" onClick={() => (sendPulse(shown.map((o) => o.id)), setMsg(`Availability pulse sent to ${plural(shown.length, "operator")} on this page.`))}>
+          Pulse this page
+        </button>
+      </div>
+      {msg && <div className="adm-alert ok">{msg}</div>}
+      <div className="adm-filters adm-opfilters">
+        <label className="fld">
+          <span>Search</span>
+          <input type="search" value={q} onChange={(e) => (setQ(e.target.value), reset())} placeholder="Name, role, skill or industry" data-testid="ops-search" />
+        </label>
+        <label className="fld">
+          <span>Role category</span>
+          <select value={cat} onChange={(e) => (setCat(e.target.value), reset())} data-testid="ops-cat">
+            <option value="any">Any</option>
+            {CATEGORIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <label className="fld">
+          <span>Availability</span>
+          <select value={avail} onChange={(e) => (setAvail(e.target.value as typeof avail), reset())} data-testid="ops-avail">
+            <option value="any">Any</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="unconfirmed">Not confirmed</option>
+            <option value="off">Not available</option>
+          </select>
+        </label>
+        <label className="fld">
+          <span>Reputation Index</span>
+          <select value={rep} onChange={(e) => (setRep(Number(e.target.value)), reset())}>
+            {[0, 50, 60, 70].map((r) => (
+              <option key={r} value={r}>
+                {r ? `${r}+` : "Any"}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <p className="muted small" data-testid="ops-count">
+        {list.length} operator{list.length === 1 ? "" : "s"} · page {cur} of {pages}
+      </p>
+      <section className="card adm-table-wrap">
+        <table className="adm-table" data-testid="ops-list">
+          <thead>
+            <tr>
+              <th>Operator</th>
+              <th>Rate</th>
+              <th className="num">Hrs/mo</th>
+              <th className="num">Reputation</th>
+              <th>Availability</th>
+              <th>Profile</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((o) => {
+              const st = opState(s, o.id);
+              const c = completeness(o);
+              return (
+                <tr key={o.id} data-testid="op-dir-row" data-id={o.id}>
+                  <td data-label="Operator">
+                    <Link to={`/operators/${o.slug}`} className="rowlink">
+                      {displayName(o)}
+                    </Link>
+                    <small className="block muted">
+                      {o.role} · {o.cat}
+                    </small>
+                  </td>
+                  <td data-label="Rate" className="num">
+                    {o.rate != null ? `$${o.rate}` : <span className="muted">None</span>}
+                  </td>
+                  <td data-label="Hrs/mo" className="num">
+                    {o.hrs}
+                    {(o.hrs || 0) >= 120 && (
+                      <span className="chip c-amber adm-ml" data-testid="check-hours" title={`${o.hrs} hrs a month is full time. The number may be mis-entered.`}>
+                        Check hours
+                      </span>
+                    )}
+                  </td>
+                  <td data-label="Reputation" className="num">
+                    {o.reputation}
+                  </td>
+                  <td data-label="Availability">
+                    {st.availability === "unavailable" ? (
+                      <Chip tone="red">Not available</Chip>
+                    ) : st.lastConfirmedAt ? (
+                      <Chip tone="green">Confirmed {shortDate(st.lastConfirmedAt)}</Chip>
+                    ) : (
+                      <Chip tone="gray">{o.avail}, not confirmed</Chip>
+                    )}
+                  </td>
+                  <td data-label="Profile">
+                    <Chip tone={c.pct < 60 ? "amber" : "green"}>{c.pct}%</Chip>
+                  </td>
+                  <td>
+                    <button type="button" className="adm-btn adm-btn-sm" onClick={() => (sendPulse([o.id]), setMsg(`Availability pulse sent to ${displayName(o)}.`))} data-testid="send-pulse" aria-label={`Send availability pulse to ${displayName(o)}`}>
+                      Pulse
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {!list.length && <div className="adm-empty">No operators match. Loosen a filter.</div>}
+      </section>
+      <nav className="adm-row adm-end" aria-label="Pages">
+        <button type="button" className="adm-btn adm-btn-sm" disabled={cur <= 1} onClick={() => go(cur - 1)} data-testid="page-prev">
+          Previous
+        </button>
+        <span className="muted small">
+          Page {cur} of {pages}
+        </span>
+        <button type="button" className="adm-btn adm-btn-sm" disabled={cur >= pages} onClick={() => go(cur + 1)} data-testid="page-next">
+          Next
+        </button>
+      </nav>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- intro requests
+
+export function AdminIntrosList() {
+  const s = useStore();
+  const now = nowOf(s);
+  const rows = [...s.intros].sort((a, b) => Number(!!a.bookedSlot) - Number(!!b.bookedSlot) || a.createdAt - b.createdAt);
+  return (
+    <div className="adm-page">
+      <div className="adm-pagehead">
+        <div>
+          <h1 className="serif">Intro requests</h1>
+          <p>Intros are approved automatically. Unbooked ones are listed first, oldest first.</p>
+        </div>
+      </div>
+      {!rows.length && <div className="adm-empty">No intro requests yet.</div>}
+      {rows.length > 0 && (
+        <section className="card adm-table-wrap">
+          <table className="adm-table" data-testid="admin-intros">
+            <thead>
+              <tr>
+                <th>Operator</th>
+                <th>Project</th>
+                <th>Requested</th>
+                <th>Call</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((i) => {
+                const op = operatorById(i.operatorId)!;
+                const p = projectById(s, i.projectId)!;
+                const waiting = daysBetween(i.createdAt, now);
+                return (
+                  <tr key={i.id}>
+                    <td data-label="Operator">
+                      <Link to={`/operators/${op.slug}`} className="rowlink">
+                        {displayName(op)}
+                      </Link>
+                    </td>
+                    <td data-label="Project">
+                      <Link to={`/admin/projects/${p.id}`}>{p.title}</Link>
+                      <small className="block muted">{ownerName(p)}</small>
+                    </td>
+                    <td data-label="Requested">{shortDate(i.createdAt)}</td>
+                    <td data-label="Call">
+                      {i.status !== "approved" ? (
+                        <Chip tone="gray">Withdrawn</Chip>
+                      ) : i.bookedSlot ? (
+                        <Chip tone="green">Booked {i.bookedSlot}</Chip>
+                      ) : (
+                        <Chip tone={waiting >= 2 ? "amber" : "blue"}>{waiting ? `Not booked, ${plural(waiting, "day")}` : "Not booked yet"}</Chip>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
+    </div>
+  );
+}

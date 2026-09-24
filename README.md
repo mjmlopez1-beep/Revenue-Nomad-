@@ -2,7 +2,7 @@
 
 Every open **fractional GTM** role. One board.
 
-Revenue Nomad crawls the web for open fractional, interim, and contract go-to-market roles — fractional CROs, CMOs, RevOps leads, growth operators — scores each listing for relevance, and aggregates everything into a job board inside the **Operator Portal**.
+Revenue Nomad crawls the web for open fractional, interim, and contract go-to-market roles — fractional CROs, CMOs, RevOps leads, growth operators — scores each listing for relevance, and aggregates everything into the **Jobs** tab of the operator dashboard.
 
 ## How it works
 
@@ -12,7 +12,7 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 1b. **Predict** — the operator's ICP is deduced from their Revenue Nomad profile (role, industries, stages, employee/revenue size, segment, sales motions) and cross-referenced against a universal company dataset (the open YC company directory) — target accounts are discovered automatically, then enriched with timing signals: actively hiring, early-stage GTM inflection, content gaps, careers-page GTM roles, funding news, and leader departures. No manual account list needed.
 2. **Score & filter for truly fractional** — every item needs BOTH a relevance score above threshold AND a genuine fractional signal: fractional/interim/advisory wording, ≤4 days per week, ≤32 hours per week, or hourly-rate pricing. Full-time tells (benefits language, 40-hour weeks, annual salaries) subtract points, and full-time roles are dropped entirely. Commitment ("2 days/wk"), rate ("$150/hr"), and contract term ("6-month") are extracted as structured fields on each card.
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
-4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
+4. **Operate** — `/dashboard/jobs` scores every role against the operator's own profile, with save, "I applied" (plus a follow-up reminder) and dismiss kept per operator. `/dashboard/prospects` lists companies likely to need them, who to reach, and a draft email, and tracks replies. The old `/portal` URLs redirect there.
 
 ## Projects (prototype)
 
@@ -21,7 +21,7 @@ Buyers post fractional engagements, invite operators and review responses ranked
 - Buyers use `/buyer/projects`. **Operators use the dashboard** at `/dashboard`, built in the live revenuenomad.com layout: Overview, Projects, Intros and Availability. The Operator Portal's Projects button and every operator email link land there. Old `/operator/...` links redirect. **Admins use the console** at `/admin/today`, which has a sidebar (Work, Network, Setup, Insights) and these screens: Today, Projects, a 4-step New project wizard, a drag-and-drop Pipeline, and Send shortlist. Deep links also work for `/buyer/projects/:id`, `/admin/projects/:id`, `/dashboard/projects/:id` and `/operators/:slug`.
 - The prototype bar at the top switches role, opens the **Outbox** (every email and alert; links sign in as the recipient), moves the simulated **Clock**, switches theme, and resets the demo data.
 - Code lives in `projects/`. The data layer is `projects/lib/store.ts` (localStorage behind repository functions), the fit score is `projects/lib/fit.ts`, and the seed is `projects/seed/`. Specs are in `docs/projects-handoff/`.
-- `npm run test:e2e` builds, then runs the Playwright suite headless (52 QA and admin console scenarios, 7 usability tests, 8 operator dashboard tests). Results are in `QA_REPORT.md`.
+- `npm run test:e2e` builds, then runs the Playwright suite headless (54 QA and admin console scenarios, 9 usability tests, 8 operator dashboard tests, 5 jobs and prospects tests). Results are in `QA_REPORT.md`.
 - `npm run build:artifact` writes a standalone hash-routed copy to `dist-artifact/` for publishing as a claude.ai artifact.
 
 ## Launch / Deploy
