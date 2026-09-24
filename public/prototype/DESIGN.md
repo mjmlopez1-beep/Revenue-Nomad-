@@ -87,6 +87,8 @@ Stored values are slugs (`available_2_plus_weeks`, `50m_plus`). Display with `RN
 
 `RN.model.ops` (approved, visible operators), `RN.model.byId(id)`, `RN.model.bySlug(slug)`, `RN.model.search({q, tags, filters, sort})`, `RN.model.fit(op, brief)`, `RN.model.analytics(opId, {days})`, `RN.model.market()`.
 
+Role details: `op.roleFields` (registry keys, from intake and edits) first, then legacy `op.roleDetails` (live snake_case keys).
+
 Operator shape: `{id, slug, name, first, initials, role, cat, catKey, headline, bio, photo, location, timezone, rate, avail:{key,label,startDate,hours}, industries[], revenueRanges[], employeeRanges[], crm, methodologies[], motions[], tags:[{t,c,g,tier,axis,stage}], reviews[], ris:{score,label}, engagements[], clients[], completeness, level, isMatt, raw}`
 
 ## Design system

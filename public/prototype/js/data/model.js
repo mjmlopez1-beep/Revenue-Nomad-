@@ -44,6 +44,14 @@
   const LOGO_KEY = { ferry: 'ferry', 'myhr partner': 'myhr', trialbee: 'trialbee', buildinglink: 'buildinglink' };
   const ENG_TYPES = ['fractional', 'advisory', 'interim', 'project'];
 
+  /* Registry keys any role-detail step can store (RN.fields.roleFields plus the all-role GTM fields) */
+  M.registryRoleFields = function (rd) {
+    const keys = new Set([].concat(...Object.values(F.roleFields || {}), ['crm', 'salesMotions', 'methodologies', 'techStack', 'methodologyOther']));
+    const out = {};
+    Object.keys(rd || {}).forEach((k) => { if (keys.has(k) && rd[k] !== '' && rd[k] != null) out[k] = rd[k]; });
+    return out;
+  };
+
   /* ---------- Normalize one live record ---------- */
   function norm(raw) {
     const p = raw.profile || {};
@@ -89,6 +97,9 @@
       methodologies: [...new Set(methods)],
       motions: [].concat((d.snapshot && d.snapshot.motions) || [], rd.motion_focus || [], rd.gtm_motion_experience || []).filter((m, i, a) => m && a.indexOf(m) === i),
       roleDetails: rd,
+      // Role details keyed by the field registry (intake answers, Studio and Admin edits). Views read these first,
+      // then fall back to parsing the live export's legacy snake_case keys in roleDetails.
+      roleFields: M.registryRoleFields(rd),
       tags,
       reviews: p.reviews || [],
       core: p.core || null,
@@ -153,7 +164,8 @@
     Object.keys(edits).forEach((id) => {
       const op = byId.get(id); if (!op) return;
       const e = edits[id];
-      ['headline', 'bio', 'rate', 'industries', 'revenueRanges', 'employeeRanges', 'crm', 'methodologies', 'motions', 'engagementTypes', 'location', 'newClientCapacity', 'roleFields', 'role'].forEach((k) => { if (e[k] !== undefined) op[k] = e[k]; });
+      ['headline', 'bio', 'rate', 'industries', 'revenueRanges', 'employeeRanges', 'crm', 'methodologies', 'motions', 'engagementTypes', 'location', 'newClientCapacity', 'role'].forEach((k) => { if (e[k] !== undefined) op[k] = e[k]; });
+      if (e.roleFields) op.roleFields = Object.assign({}, op.roleFields, e.roleFields);
       if (e.catKey && e.catKey !== op.catKey) { op.catKey = e.catKey; op.cat = F.catLabel(e.catKey); }
       if (e.availConfirmedAt) op.avail = Object.assign({}, op.avail, { confirmedAt: e.availConfirmedAt });
       if (e.removeTags) op.tags = op.tags.filter((t) => t.tier !== 'claimed' || !e.removeTags.some((x) => x.toLowerCase() === t.t.toLowerCase()));
