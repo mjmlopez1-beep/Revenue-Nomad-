@@ -454,22 +454,16 @@
     const n = RN.now();
     return Math.max(0, (n.getFullYear() * 12 + n.getMonth()) - (y * 12 + (m - 1)));
   }
+  // Values come from the one shared formula (RN.model.risFactors); this tab only adds its action buttons
   function factorRows(op) {
-    const G = RN.model.risGain;
-    const tags = op.tags || [];
-    const verified = tags.filter((t) => t.tier !== 'claimed').length;
-    const claimed = tags.length - verified;
-    const nRev = op.reviews.length;
-    const avg = op.core && op.core.overall ? op.core.overall : nRev ? op.reviews.reduce((a, r) => a + (r.overall || r.coreAvg || 0), 0) / nRev : 0;
-    const lastEnd = (op.engagements || []).reduce((m, e) => { const end = e.end || null; if (!end) return 0; const k = monthsSince(end); return m == null ? k : Math.min(m, k); }, null);
-    const val = {
-      volume: { p: Math.min(1, nRev / 5), txt: `${nRev} client ${nRev === 1 ? 'review' : 'reviews'}`, pts: Math.max(0, 5 - nRev) * G('review'), act: nRev < 5 ? `<button type="button" class="act" data-act="sb-rr-open">Request a review${icon('arrow')}</button>` : '' },
-      verification: { p: tags.length ? verified / tags.length : 0, txt: `${verified} of ${tags.length} fit tags verified`, pts: Math.min(8, claimed) * G('verifiedTag'), act: claimed ? `<button type="button" class="act" data-act="sb-rr-open" data-verify="1">Ask a client to verify tags${icon('arrow')}</button>` : '' },
-      ratings: { p: avg / 5, txt: nRev ? `${avg.toFixed(1)} average across ${nRev} ${nRev === 1 ? 'review' : 'reviews'}` : 'No ratings yet', pts: nRev && avg >= 4.5 ? 0 : 2, act: '' },
-      complete: { p: op.completeness / 100, txt: `Profile ${op.completeness}% complete`, pts: op.completeness < 100 ? G('complete') : 0, act: op.completeness < 100 ? `<a class="act" href="#studio.profile">Finish your profile${icon('arrow')}</a>` : '' },
-      recency: { p: lastEnd == null ? 0 : RN.clamp(1 - lastEnd / 24, 0, 1), txt: lastEnd == null ? 'No engagement logged' : lastEnd === 0 ? 'Engagement active this month' : `Last engagement ended ${lastEnd} ${lastEnd === 1 ? 'month' : 'months'} ago`, pts: lastEnd == null || lastEnd > 0 ? G('engagement') : 0, act: lastEnd == null || lastEnd > 0 ? `<button type="button" class="act" data-act="sb-rr-open">Confirm a recent engagement${icon('arrow')}</button>` : '' },
+    const ACT = {
+      volume: (r) => (r.p < 1 ? `<button type="button" class="act" data-act="sb-rr-open">Request a review${icon('arrow')}</button>` : ''),
+      verification: (r) => (r.pts ? `<button type="button" class="act" data-act="sb-rr-open" data-verify="1">Ask a client to verify tags${icon('arrow')}</button>` : ''),
+      ratings: () => '',
+      complete: (r) => (r.pts ? `<a class="act" href="#studio.profile">Finish your profile${icon('arrow')}</a>` : ''),
+      recency: (r) => (r.pts ? `<button type="button" class="act" data-act="sb-rr-open">Confirm a recent engagement${icon('arrow')}</button>` : ''),
     };
-    return RN.fields.risFactors.options.map((f) => Object.assign({ f }, val[f.v]));
+    return RN.model.risFactors(op).rows.map((r) => Object.assign({}, r, { act: (ACT[r.k] || (() => ''))(r) }));
   }
 
   function renderCredibility(op) {

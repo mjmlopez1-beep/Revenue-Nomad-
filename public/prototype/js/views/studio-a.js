@@ -123,26 +123,8 @@
     const n = RN.now();
     return Math.max(0, (n.getFullYear() * 12 + n.getMonth()) - (y * 12 + ((mo || 1) - 1)));
   }
-  function risBreakdown(op) {
-    const G = RN.model.risGain;
-    const tags = op.tags || [];
-    const verified = tags.filter((x) => x.tier !== 'claimed').length;
-    const claimed = tags.length - verified;
-    const nRev = (op.reviews || []).length;
-    const avg = op.core && op.core.overall ? op.core.overall : nRev ? op.reviews.reduce((s, r) => s + (r.overall || r.coreAvg || 0), 0) / nRev : 0;
-    const lastEnd = (op.engagements || []).reduce((m, e) => { if (!e.end) return 0; const k = monthsSince(e.end); return m == null ? k : Math.min(m, k); }, null);
-    const val = {
-      volume: { p: Math.min(1, nRev / 5), txt: `${plural(nRev, 'client review')}`, pts: Math.max(0, 5 - nRev) * G('review'), action: { l: 'Request a review', to: 'studio.credibility' } },
-      verification: { p: tags.length ? verified / tags.length : 0, txt: `${verified} of ${tags.length} fit tags verified`, pts: Math.min(8, claimed) * G('verifiedTag'), action: { l: 'Ask a client to verify tags', to: 'studio.credibility' } },
-      ratings: { p: avg / 5, txt: nRev ? `${avg.toFixed(1)} average across ${plural(nRev, 'review')}` : 'No ratings yet', pts: nRev && avg >= 4.5 ? 0 : 2, action: { l: 'Request a review', to: 'studio.credibility' } },
-      complete: { p: (op.completeness || 0) / 100, txt: `Profile ${op.completeness}% complete`, pts: op.completeness < 100 ? G('complete') : 0, action: { l: 'Finish your profile', to: 'studio.profile' } },
-      recency: { p: lastEnd == null ? 0 : RN.clamp(1 - lastEnd / 24, 0, 1), txt: lastEnd == null ? 'No engagement logged' : lastEnd === 0 ? 'Engagement active this month' : `Last engagement ended ${plural(lastEnd, 'month')} ago`, pts: lastEnd == null || lastEnd > 0 ? G('engagement') : 0, action: { l: 'Get a recent engagement confirmed', to: 'studio.credibility' } },
-    };
-    const rows = RN.fields.risFactors.options.map((f) => Object.assign({ k: f.v, l: f.l, d: f.d, w: f.w }, val[f.v]));
-    const tier = RN.fields.risTierFor(op.ris.score);
-    const next = RN.fields.risTier.options.filter((x) => x.min > op.ris.score).sort((x, y) => x.min - y.min)[0];
-    return { rows, score: op.ris.score, tier, next, toNext: next ? next.min - op.ris.score : 0, avail: rows.reduce((s, r) => s + r.pts, 0), weakest: rows.slice().sort((x, y) => y.pts - x.pts)[0] };
-  }
+  // One formula for every surface: RN.model.risFactors (shared with Credibility and Levels)
+  function risBreakdown(op) { return RN.model.risFactors(op); }
   SA.risBreakdown = risBreakdown;
 
   /* ---------- Checklist -> Studio tab mapping (next best action) ---------- */
