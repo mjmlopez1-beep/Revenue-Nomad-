@@ -1,0 +1,18 @@
+[
+ {
+  "id": "buyer-northwind",
+  "company": "Northwind Health",
+  "companyDescriptor": "Series B vertical SaaS company, healthcare",
+  "contactName": "Jordan Ellis",
+  "contactTitle": "CRO",
+  "email": "jordan@northwind.example"
+ },
+ {
+  "id": "buyer-kitebase",
+  "company": "Kitebase",
+  "companyDescriptor": "Series A developer tools company",
+  "contactName": "Priya Anand",
+  "contactTitle": "CEO",
+  "email": "priya@kitebase.example"
+ }
+]

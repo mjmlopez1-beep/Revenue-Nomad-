@@ -14,6 +14,16 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
+## Projects (prototype)
+
+Buyers post fractional engagements, invite operators and review responses ranked by fit. Operators respond from invites or role alerts. Revenue Nomad admins watch every project and run their own client projects with bill rate, operator rate and a pipeline. All three roles share one store, so an action in one role shows up in the other two.
+
+- Open `/buyer/projects`, `/operator/projects` or `/admin/projects`. Deep links work: `/buyer/projects/:id`, `/operator/projects/:id`, `/admin/projects/:id`, `/operators/:slug`.
+- The prototype bar at the top switches role, opens the **Outbox** (every email and alert; links sign in as the recipient), moves the simulated **Clock**, switches theme, and resets the demo data.
+- Code lives in `projects/`. The data layer is `projects/lib/store.ts` (localStorage behind repository functions), the fit score is `projects/lib/fit.ts`, and the seed is `projects/seed/`. Specs are in `docs/projects-handoff/`.
+- `npm run test:e2e` builds, then runs the 49 Playwright scenarios headless. Results are in `QA_REPORT.md`.
+- `npm run build:artifact` writes a standalone hash-routed copy to `dist-artifact/` for publishing as a claude.ai artifact.
+
 ## Launch / Deploy
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmjmlopez1-beep%2FRevenue-Nomad-)

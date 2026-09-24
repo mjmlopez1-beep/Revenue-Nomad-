@@ -2,13 +2,15 @@
   "name": "revenue-nomad",
   "version": "0.1.0",
   "private": true,
-  "description": "Revenue Nomad — fractional GTM job aggregator and operator portal",
+  "description": "Revenue Nomad \u2014 fractional GTM job aggregator and operator portal",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "crawl": "tsx scripts/crawl.ts"
+    "crawl": "tsx scripts/crawl.ts",
+    "test:e2e": "next build && playwright test",
+    "build:artifact": "node scripts/build-projects-artifact.mjs"
   },
   "dependencies": {
     "next": "^15.4.6",
@@ -16,9 +18,11 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/node": "^22.10.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "esbuild": "^0.28.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

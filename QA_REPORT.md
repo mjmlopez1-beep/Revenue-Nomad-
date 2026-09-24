@@ -1,0 +1,111 @@
+# Revenue Nomad Projects — QA report
+
+Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-handoff/QA_PLAN.md`, one Playwright test each in `tests/projects/`, run headless against the production build (`npm run test:e2e`, Chromium).
+
+**Result: 49 of 49 pass.** The suite ran clean twice in a row after the last change (42.8s and 44.2s, 4 workers).
+
+## Scenarios
+
+| ID | Result | Test |
+|---|---|---|
+| B-01 | Pass | Live match shows 12 of 100 at 70+, 8 rated inside $175–$250, 81 with no rate |
+| B-02 | Pass | Hours 40–50 lowers the 70+ count and the hours-open count; every top match's hours part is checked against the formula |
+| B-03 | Pass | Missing title, budget min above max, and 6 screening questions each block with a message on the field; the project stays a draft |
+| B-04 | Pass | "hubspot" filters across all 100; "zzz" shows an empty state |
+| B-05 | Pass | Invite only: live, 3 invite emails, 0 alerts, project in all three portals |
+| B-06 | Pass | Invites plus open: exactly one alert per non-invited Sales Leadership operator (62); invited operators get none |
+| B-07 | Pass | Admin A1 row flags "Wants 3 RN suggestions" |
+| B-08 | Pass | Sort by rate: $200, $300, then both "No rate listed" |
+| B-09 | Pass | Only the two under-70 responders move to Not a fit; outbox unchanged |
+| B-10 | Pass | Undo returns the row to To review |
+| B-11 | Pass | Tim shows Intro requested and sees Northwind Health; Matt, who also responded, does not; intro email sent; Intro requests page lists it |
+| B-12 | Pass | Staffed; one selected email to Tim, one close email each to Matt and Guillermo, nothing to the invited non-responder; Anne's respond form is blocked |
+| B-13 | Pass | Undo after staffing shows "This project is staffed. Decisions are final…" and the decision stays |
+| B-14 | Pass | Paused project leaves Open roles; alerted operator sees a blocked, disabled form |
+| B-15 | Pass | Buyer answer shows on the operator's project page and in the outbox |
+| B-16 | Pass | Profile opens from a response; Ron Ariana (no photo) shows initials; no broken images |
+| O-01 | Pass | Invite link signs in as Tim with no password and lands on the project page |
+| O-02 | Pass | Guillermo's alert opens the project with "Not in your projects until you respond"; it enters his portal only after responding |
+| O-03 | Pass | Draft kept with its values, shows "Draft saved" under Invited, buyer sees 0 responses |
+| O-04 | Pass | B4 shows Tim at 90 with $200/hr, 25 hrs, Oct 1, and both answers |
+| O-05 | Pass | Tanya Helin (15 hrs on profile) offers 25: warning shown, accepted, hours part 20/20 |
+| O-06 | Pass | Question reaches the buyer's Questions tab and the outbox |
+| O-07 | Pass | Pass is blocked until a reason is picked; then the project moves to Closed and the buyer has no row |
+| O-08 | Pass | Buyer opening the response changes the operator status to Buyer viewed |
+| O-09 | Pass | Company and contact revealed; Book a time and Reply each send an outbox message to Jordan |
+| O-10 | Pass | One selected email and one close email, with the rule 5 wording |
+| O-11 | Pass | No-rate operator must enter a rate; the response keeps 190; the profile still shows "No rate listed" |
+| O-12 | Pass | Pulse link confirms availability: "Confirmed Sep 24" and "Not confirmed" is gone |
+| O-13 | Pass | Old invite link is blocked when paused, then again when staffed, each with its own message |
+| O-14 | Pass | Two tabs: one response row, the second tab shows the submitted status after reload |
+| A-01 | Pass | KPIs and the A2 funnel equal store counts (3 invites, 62 alerts) |
+| A-02 | Pass | Three suggestions become `rn_suggested` invites, the fourth is refused, B4 labels the row "Suggested by Revenue Nomad" |
+| A-03 | Pass | A2 has no intro, not-a-fit, select, undo or bulk-pass controls |
+| A-04 | Pass | Nudge goes to Jordan in the outbox and logs a `nudge_sent` event |
+| A-05 | Pass | Flag appears after the third simulated day, not after two; the buyer sees the widen-visibility nudge |
+| A-06 | Pass | Spread $40/hr, margin 20%, $1,800 a month at 45 hrs; the operator page and email show $160/hr, never $200 or the client name |
+| A-07 | Pass | Moving Jose to Selected staffs Harbor; selected and close emails follow rule 5; Matt is marked not_selected |
+| A-08 | Pass | Shortlist email and client page list only Jose, with no operator rate and no admin note |
+| A-09 | Pass | 10 pages of 10 give 100 unique operators; page 3 is identical after a reload |
+| A-10 | Pass | All 100 operators are found by "role + first tag" |
+| A-11 | Pass | Reached 64, responded 2, response rate, time to first response, intro count and rate, decline reasons and alerts by role all match the event log |
+| A-12 | Pass | All six 160-hour operators show "Check hours" (directory and A2); Matt Lopez (40) does not |
+| X-01 | Pass | Post → respond → intro → select, checked on buyer, operator and admin screens at each step |
+| X-02 | Pass | Re-invite keeps one invite row with a later sentAt, and one portal entry |
+| X-03 | Pass | Inviting someone who already responded from an alert sends no invite email; the response is kept and its source shows Invited |
+| X-04 | Pass | Reset restores seed state: outbox empty, clock back to Sep 24, both projects drafts |
+| X-05 | Pass | At 400px, B4, O3 and A1 have no horizontal scroll and every action button is on screen |
+| X-06 | Pass | Dark theme: sampled text is at least 4.5:1 against its background; the three tier colors differ |
+| X-07 | Pass | Post, respond and select done by keyboard only, with a visible focus ring checked on every Tab stop |
+
+## Bugs found and fixed
+
+1. **Site CSS leaked into the prototype.** The site's existing `globals.css` styles `.btn`, `.field`, `.pill`, `.stat`, `.notice`, `.tabs` and `.avatar`, which made buttons and labels uppercase with gradient fills. Fixed with scoped overrides under `.rnp` in `projects/styles.css`.
+2. **No focus ring on the date input** (found by X-07). Chrome puts focus on the inner date segments, so `:focus-visible` never matched the input. Fields now get a ring on `:focus`.
+3. **Dark-mode primary buttons failed contrast** (found by X-06). The profile prototype's dark tokens `--btn #2b8a60` and `--btn-hover #33a070` give white text 4.3:1 and 3.3:1. I darkened them to `#1f7a52` and `#186a47` (5.3:1 and higher). **This is the one change to the profile prototype's tokens.**
+4. **Fit-score bars overlapped in narrow sidebars.** The four-column grid collided at 340px. It now wraps to two columns.
+5. **Response form spacing.** The Interested / Not for me toggle sat on top of the rate field. The card now uses the form layout.
+
+Test-harness mistakes fixed along the way, not product bugs: a JSON import in B-06, X-05 using an operator who had already responded, and X-06 measuring colors mid-transition and ignoring translucent backgrounds.
+
+## Known gaps (KNOWN_GAPS.md)
+
+| ID | Status in the prototype |
+|---|---|
+| G1 | Every operator list sorts by score then id. Checked by A-09 |
+| G2 | Admin pages at 10; the buyer invite list pages at 10 ("Show 10 more") |
+| G3 | Missing rate scores budget 8/15 and shows "No rate listed". The live match shows the no-rate count and the median of listed rates. Nobody is filtered out |
+| G4 | `lastConfirmedAt` seeds as null; "Not confirmed" shows beside availability until a pulse or availability update. Fit uses hours only |
+| G5 | Hours shown as entered; 120+ shows "Check hours" on admin views and response rows |
+| G6 | Initials avatar wherever a photo is missing or fails to load |
+| G7 | "Profile N% complete" chip beside scores (photo, rate, more than 6 skills, engagement, review, time zone, verified skill) |
+| G8 | Profile shows "Time zone Not provided"; time zone is not used in matching |
+| G9 | Names displayed in title case, stored raw |
+| G10 | One category enum; "Customer Success Growth" maps to "Customer Success & Growth" |
+| G11 | Can't be reproduced on seed data. A-10 confirms every operator is findable |
+| G12 | Every outbox link is a magic link (`?as=role:id`) that signs in with no password |
+| G13 | Buyer role only opens its own projects; any other project shows "This project is not in your account" |
+| G14 | **Decision: intro requests from a project are auto-approved** and logged on admin Intro requests, plus the buyer's Intro requests page |
+| G15 | Alerts only go to operators whose alert settings match the seat category and who are not unavailable. After one alert a day, further alerts roll into a digest entry. Implemented, but no QA scenario covers the digest, so it has no test |
+| G16 | Not a fit stays silent until staffed or closed (B-09, B-12) |
+| G17 | Operators never see budget. Revenue Nomad projects show only the rate to operator (A-06) |
+| G18 | Selection confirmation screen (B6) states the fee as a placeholder |
+| G19 | Path routes in the Next.js site; the artifact uses hash routes. Profile links carry the slug |
+| G20 | Flag on A1 after 72 simulated hours; the buyer sees buttons to open to all or turn on suggestions |
+| C1 | One shared store (`projects/lib/store.ts`) behind repository functions |
+| C2 | Responses come only from operator actions or the admin "Simulate a response" tool, marked "Simulated" everywhere |
+| C3 | Every number is computed from the store or the event log |
+| C4 | Copy says answers are not scored; `answersScore()` is the hook and returns 0 |
+| C5 | B6 confirmation plus a staffed state |
+| C6 | Questions tab on the buyer project page; admin answers questions on Revenue Nomad projects |
+| C7 | Pause, close to new responses, nudge buyer and send shortlist all work |
+| C8 | Decline reasons show on admin A2 and in Reports |
+| C9 | `projects/lib/fit.ts` ports the corrected reference; all 200 seeded sample scores reproduce exactly |
+
+## Left open
+
+- **Data is per browser.** As the brief asked, state lives in localStorage. In the Next.js site and in the artifact, each viewer gets their own copy, and switching roles happens in one browser. A shared backend or the artifact database would let several people play different roles at once.
+- **Simulated time.** Every action moves the clock forward one minute so events stay ordered, and the Clock control adds whole days. So "time to first response" reads in minutes unless the clock is advanced.
+- **Operator Profile Explorer.** It is linked, not ported. B5 is a native profile page with the prototype's hero band and design. "Open full profile explorer" opens the original explorer: hosted at `/rnp/explorer.html` in the site, and its existing artifact from the published prototype.
+- **Fonts in test screenshots.** The sandbox blocks Google Fonts, so screenshots here use fallback fonts. Real browsers load Newsreader and IBM Plex Sans.
+- **Design fidelity.** Tokens, type, hero band, chips, buttons and tier colors follow the profile prototype, and the screens follow the canvas layouts and copy. The canvas's hard-coded demo numbers are replaced with live counts (C3), so screens are not pixel-identical to the canvas.

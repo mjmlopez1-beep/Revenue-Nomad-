@@ -1,0 +1,102 @@
+"use client";
+
+import { useEffect, type ReactNode } from "react";
+import { match, navigate, useLocation } from "./lib/router";
+import { setSession, signInAs, useSession } from "./lib/store";
+import { ProtoBar, ROLE_HOME, SiteHeader } from "./ui/Shell";
+import { BuyerBrief, BuyerDashboard, BuyerIntros, BuyerInvite, BuyerProject, BuyerSelect } from "./ui/buyer/Buyer";
+import { OperatorAvailability, OperatorPortal, OperatorProject, OperatorRoles } from "./ui/operator/Operator";
+import { AdminIntros, AdminOperators, AdminProject, AdminProjects, AdminReports, AdminRnSetup } from "./ui/admin/Admin";
+import { ClientShortlist, OperatorDirectory, OperatorProfile } from "./ui/Pages";
+import type { Role } from "./lib/types";
+import { Empty } from "./ui/common";
+
+type RouteDef = [pattern: string, role: Role | null, render: (p: Record<string, string>) => ReactNode];
+
+const ROUTES: RouteDef[] = [
+  ["/buyer/projects", "buyer", () => <BuyerDashboard />],
+  ["/buyer/intros", "buyer", () => <BuyerIntros />],
+  ["/buyer/projects/:id/edit", "buyer", (p) => <BuyerBrief key={p.id} id={p.id} />],
+  ["/buyer/projects/:id/invite", "buyer", (p) => <BuyerInvite id={p.id} />],
+  ["/buyer/projects/:id/select/:op", "buyer", (p) => <BuyerSelect id={p.id} opId={p.op} />],
+  ["/buyer/projects/:id", "buyer", (p) => <BuyerProject key={p.id} id={p.id} />],
+  ["/operator/projects", "operator", () => <OperatorPortal />],
+  ["/operator/roles", "operator", () => <OperatorRoles />],
+  ["/operator/availability", "operator", () => <OperatorAvailability />],
+  ["/operator/projects/:id", "operator", (p) => <OperatorProject key={p.id} id={p.id} />],
+  ["/admin/projects", "admin", () => <AdminProjects />],
+  ["/admin/operators", "admin", () => <AdminOperators />],
+  ["/admin/reports", "admin", () => <AdminReports />],
+  ["/admin/intros", "admin", () => <AdminIntros />],
+  ["/admin/projects/:id/setup", "admin", (p) => <AdminRnSetup key={p.id} id={p.id} />],
+  ["/admin/projects/:id", "admin", (p) => <AdminProject key={p.id} id={p.id} />],
+  ["/operators", null, () => <OperatorDirectory />],
+  ["/operators/:slug", null, (p) => <OperatorProfile slug={p.slug} />],
+  ["/client/projects/:id", null, (p) => <ClientShortlist id={p.id} />],
+];
+
+export default function ProjectsApp() {
+  const loc = useLocation();
+  const sess = useSession();
+
+  // Magic links carry ?as=role:id. Sign in, then drop the parameter (gap G12).
+  useEffect(() => {
+    const as = loc.query.get("as");
+    if (as) {
+      signInAs(as);
+      const q = new URLSearchParams(loc.query);
+      q.delete("as");
+      const rest = q.toString();
+      navigate(loc.path + (rest ? `?${rest}` : ""), { replace: true });
+    }
+  }, [loc]);
+
+  let found: ReactNode = null;
+  let routeRole: Role | null = null;
+  for (const [pattern, role, render] of ROUTES) {
+    const m = match(pattern, loc.path);
+    if (m) {
+      found = render(m);
+      routeRole = role;
+      break;
+    }
+  }
+
+  // Deep link into another role's area: switch role so the header and data line up.
+  useEffect(() => {
+    if (routeRole && routeRole !== sess.role && !loc.query.get("as")) setSession({ role: routeRole });
+  }, [routeRole, sess.role, loc.query]);
+
+  useEffect(() => {
+    if (loc.path === "/" || loc.path === "/projects" || loc.path === "/buyer" || loc.path === "/operator" || loc.path === "/admin") {
+      const r = (loc.path.slice(1) as Role) || sess.role;
+      navigate(ROLE_HOME[(["buyer", "operator", "admin"] as Role[]).includes(r) ? r : sess.role], { replace: true });
+    }
+  }, [loc.path, sess.role]);
+
+  return (
+    <div className="rnp" data-role={sess.role}>
+      <a
+        href="#main"
+        className="skip"
+        onClick={(e) => {
+          e.preventDefault();
+          document.getElementById("main")?.focus();
+        }}
+      >
+        Skip to content
+      </a>
+      <div className="wrap">
+        <ProtoBar />
+        <SiteHeader />
+        <main id="main" tabIndex={-1}>
+          {found ?? (
+            <div className="page">
+              <Empty>Page not found.</Empty>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}

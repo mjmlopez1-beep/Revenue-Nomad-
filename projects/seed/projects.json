@@ -1,0 +1,62 @@
+[
+ {
+  "id": "proj-northwind-vps",
+  "origin": "buyer",
+  "ownerBuyerId": "buyer-northwind",
+  "status": "draft",
+  "title": "Fractional VP of Sales",
+  "successIn90Days": "A repeatable sales process, the first two AEs hired and ramping, and a weekly forecast the CEO trusts.",
+  "hoursPerMonthMin": 20,
+  "hoursPerMonthMax": 30,
+  "term": "6 months",
+  "startTarget": "2026-10-15",
+  "location": "Remote, quarterly on site in Austin",
+  "budgetMin": 175,
+  "budgetMax": 250,
+  "mustHaves": [
+   "Sales Playbook",
+   "B2B SaaS",
+   "Sales Team Hiring & Ramp"
+  ],
+  "screeningQuestions": [
+   "Walk us through the last sales process you built from scratch.",
+   "How have you hired and ramped a first AE?"
+  ],
+  "companyDescriptor": "Series B vertical SaaS company, healthcare",
+  "hideCompanyUntilIntro": true,
+  "visibility": "invites_plus_open",
+  "wantsRnSuggestions": true,
+  "fitBrief": "northwind_vp_sales"
+ },
+ {
+  "id": "proj-harbor-revops",
+  "origin": "revenue_nomad",
+  "ownerAdminId": "admin-matt",
+  "status": "draft",
+  "title": "Fractional VP of Revenue Operations",
+  "clientName": "Harbor Logistics",
+  "companyDescriptor": "Revenue Nomad client, 3PL",
+  "successIn90Days": "Replace the spreadsheet forecast, rebuild territories, and hand off a RevOps hire plan.",
+  "hoursPerMonthMin": 40,
+  "hoursPerMonthMax": 50,
+  "term": "6 months",
+  "startTarget": "2026-10-20",
+  "location": "Remote",
+  "billRate": 200,
+  "operatorRate": 160,
+  "mustHaves": [
+   "Salesforce",
+   "Logistics",
+   "Territory design"
+  ],
+  "screeningQuestions": [
+   "Describe a territory redesign you led.",
+   "How do you run a weekly forecast call?",
+   "Which CRM migrations have you owned?"
+  ],
+  "hideCompanyUntilIntro": true,
+  "visibility": "invite_only",
+  "wantsRnSuggestions": false,
+  "fitBrief": "harbor_revops"
+ }
+]
