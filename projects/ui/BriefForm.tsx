@@ -139,6 +139,10 @@ export function BriefFields({
           <textarea rows={3} value={draft.successIn90Days} onChange={(e) => set({ successIn90Days: e.target.value })} aria-invalid={!!errors.successIn90Days} data-testid="f-success" />
           <FieldError msg={errors.successIn90Days} />
         </label>
+        <label className="field">
+          <span>GTM problem or scope, optional</span>
+          <textarea rows={2} value={draft.scope || ""} onChange={(e) => set({ scope: e.target.value })} placeholder="What is going on today, in plain words. Operators see this first." data-testid="f-scope" />
+        </label>
         <div className="grid-fields">
           <fieldset className="field">
             <legend>Hours a month</legend>

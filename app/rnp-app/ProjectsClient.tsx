@@ -2,10 +2,11 @@
 
 import dynamic from "next/dynamic";
 import "../../projects/styles.css";
+import "../../projects/ui/live/live.css";
 import { configureRouter } from "../../projects/lib/router";
 import { configureAssets } from "../../projects/lib/data";
 
-configureRouter("path", { handles: (p) => !p.startsWith("/portal"), operatorInPortal: true });
+configureRouter("path", { handles: (p) => !p.startsWith("/portal")});
 configureAssets("/rnp/", "local");
 
 // The prototype keeps all state in localStorage, so it renders on the client only.

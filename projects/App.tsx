@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { match, navigate, useLocation } from "./lib/router";
+import { match, navigate, operatorAlias, useLocation } from "./lib/router";
 import { setSession, signInAs, useSession } from "./lib/store";
 import { ProtoBar, ROLE_HOME, SiteHeader } from "./ui/Shell";
 import { BuyerBrief, BuyerDashboard, BuyerIntros, BuyerInvite, BuyerProject, BuyerSelect } from "./ui/buyer/Buyer";
-import { OperatorAvailability, OperatorPortal, OperatorProject, OperatorRoles } from "./ui/operator/Operator";
+import { LiveAvailability, LiveIntros, LiveOverview, LiveProject, LiveProjects, LiveShell } from "./ui/live/Live";
 import { AdminIntros, AdminOperators, AdminProject, AdminProjects, AdminReports, AdminRnSetup } from "./ui/admin/Admin";
 import { ClientShortlist, OperatorDirectory, OperatorProfile } from "./ui/Pages";
 import type { Role } from "./lib/types";
@@ -20,10 +20,11 @@ const ROUTES: RouteDef[] = [
   ["/buyer/projects/:id/invite", "buyer", (p) => <BuyerInvite id={p.id} />],
   ["/buyer/projects/:id/select/:op", "buyer", (p) => <BuyerSelect id={p.id} opId={p.op} />],
   ["/buyer/projects/:id", "buyer", (p) => <BuyerProject key={p.id} id={p.id} />],
-  ["/operator/projects", "operator", () => <OperatorPortal />],
-  ["/operator/roles", "operator", () => <OperatorRoles />],
-  ["/operator/availability", "operator", () => <OperatorAvailability />],
-  ["/operator/projects/:id", "operator", (p) => <OperatorProject key={p.id} id={p.id} />],
+  ["/dashboard", "operator", () => <LiveOverview />],
+  ["/dashboard/projects", "operator", () => <LiveProjects />],
+  ["/dashboard/projects/:id", "operator", (p) => <LiveProject key={p.id} id={p.id} />],
+  ["/dashboard/intros", "operator", () => <LiveIntros />],
+  ["/dashboard/availability", "operator", () => <LiveAvailability />],
   ["/admin/projects", "admin", () => <AdminProjects />],
   ["/admin/operators", "admin", () => <AdminOperators />],
   ["/admin/reports", "admin", () => <AdminReports />],
@@ -67,12 +68,25 @@ export default function ProjectsApp() {
     if (routeRole && routeRole !== sess.role && !loc.query.get("as")) setSession({ role: routeRole });
   }, [routeRole, sess.role, loc.query]);
 
+  // Old prototype operator links (/operator/...) now live in the operator dashboard.
+  useEffect(() => {
+    if (loc.path === "/operator" || loc.path.startsWith("/operator/")) navigate(operatorAlias(loc.raw), { replace: true });
+  }, [loc.path, loc.raw]);
+
   useEffect(() => {
     if (loc.path === "/" || loc.path === "/projects" || loc.path === "/buyer" || loc.path === "/operator" || loc.path === "/admin") {
       const r = (loc.path.slice(1) as Role) || sess.role;
       navigate(ROLE_HOME[(["buyer", "operator", "admin"] as Role[]).includes(r) ? r : sess.role], { replace: true });
     }
   }, [loc.path, sess.role]);
+
+  const body = found ?? (
+    <div className="page">
+      <Empty>Page not found.</Empty>
+    </div>
+  );
+  // Operators see the live revenuenomad.com dashboard layout, including on profile pages.
+  const live = loc.path.startsWith("/dashboard") || (sess.role === "operator" && loc.path.startsWith("/operators"));
 
   return (
     <div className="rnp" data-role={sess.role}>
@@ -88,14 +102,16 @@ export default function ProjectsApp() {
       </a>
       <div className="wrap">
         <ProtoBar />
-        <SiteHeader />
-        <main id="main" tabIndex={-1}>
-          {found ?? (
-            <div className="page">
-              <Empty>Page not found.</Empty>
-            </div>
-          )}
-        </main>
+        {live ? (
+          <LiveShell>{body}</LiveShell>
+        ) : (
+          <>
+            <SiteHeader />
+            <main id="main" tabIndex={-1}>
+              {body}
+            </main>
+          </>
+        )}
       </div>
     </div>
   );

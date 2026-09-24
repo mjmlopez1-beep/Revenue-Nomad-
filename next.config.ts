@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 // Every Projects prototype URL renders the same client app, which routes on the path itself.
-const PROJECT_AREAS = ["buyer", "admin", "operators", "client", "projects"];
+const PROJECT_AREAS = ["buyer", "admin", "operators", "client", "projects", "dashboard"];
 
 const nextConfig: NextConfig = {
   // DOCKER_BUILD=1 produces the self-contained .next/standalone server used
@@ -11,18 +11,20 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/**": ["./data/seed.json", "./data/universe-crunchbase.json"],
   },
-  // Operators work inside the Operator Portal; old /operator links (emails, bookmarks) land there.
+  // The operator flow lives in the dashboard; old /operator links (emails, bookmarks) land there.
   async redirects() {
     return [
-      { source: "/operator/projects/:id", destination: "/portal?view=projects&project=:id", permanent: false },
-      { source: "/operator/projects", destination: "/portal?view=projects", permanent: false },
-      { source: "/operator/roles", destination: "/portal?view=projects&tab=roles", permanent: false },
-      { source: "/operator/availability", destination: "/portal?view=projects&tab=availability", permanent: false },
-      { source: "/operator", destination: "/portal?view=projects", permanent: false },
+      { source: "/operator/roles", destination: "/dashboard/projects?tab=open", permanent: false },
+      { source: "/operator/projects", destination: "/dashboard/projects", permanent: false },
+      { source: "/operator/:path*", destination: "/dashboard/:path*", permanent: false },
+      { source: "/operator", destination: "/dashboard", permanent: false },
     ];
   },
   async rewrites() {
-    return PROJECT_AREAS.map((area) => ({ source: `/${area}/:path*`, destination: "/rnp-app" }));
+    return [
+      { source: "/dashboard", destination: "/rnp-app" },
+      ...PROJECT_AREAS.map((area) => ({ source: `/${area}/:path*`, destination: "/rnp-app" })),
+    ];
   },
 };
 

@@ -105,6 +105,10 @@ export interface Project {
   adminNote?: string;
   lastNudgedAt?: number | null;
   fitBrief?: string;
+  /** GTM problem / scope in the client's words, shown to operators (live layout L2, L3). */
+  scope?: string;
+  /** Soft respond-by date shown on invites ("Closes Sep 28"). Set when the project is posted. */
+  respondBy?: number | null;
   /** Operators picked on B3 / A3 before posting. Invites go out when the project is posted. */
   draftInvites?: string[];
 }
@@ -138,6 +142,10 @@ export interface Response {
   operatorId: string;
   interest: "interested" | "declined";
   declineReason?: string | null;
+  /** Optional free text with a pass (L3 "Anything else"). Only Revenue Nomad sees it. */
+  declineNote?: string | null;
+  /** Engagements from the operator's profile attached as proof (L3 "Attach proof"). */
+  proof?: string[];
   rate: number | null;
   hoursPerMonth: number | null;
   canStart: string | null;

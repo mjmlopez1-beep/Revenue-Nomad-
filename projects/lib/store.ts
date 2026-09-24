@@ -172,6 +172,19 @@ export function signInAs(as: string) {
 
 // ---------------------------------------------------------------- seed
 
+/** GTM problem / scope for the seeded projects (the handoff seed predates this field). */
+const SEED_SCOPE: Record<string, string> = {
+  "proj-northwind-vps":
+    "Sales has been founder-led to $12M ARR. The next stage needs a repeatable process, the first two AEs hired and ramping, and a weekly forecast the CEO trusts.",
+  "proj-harbor-revops":
+    "Forecasting lives in a spreadsheet and territories have not been redrawn in three years. Salesforce needs cleaning up before the team grows, then a plan for a full-time RevOps hire.",
+};
+
+/** Default respond-by window after posting. It is a soft deadline shown to operators, not enforced. */
+export const RESPOND_WINDOW_DAYS = 10;
+/** Standard Revenue Nomad margin (admin A3). Used to show operators a take-home range on buyer projects. */
+export const STANDARD_MARGIN = 25;
+
 export function seedState(): State {
   const opState: Record<string, OperatorState> = {};
   for (const o of OPERATORS) opState[o.id] = defaultOperatorState(o);
@@ -187,6 +200,8 @@ export function seedState(): State {
     adminNote: "",
     draftInvites: [],
     revealClientOnShortlist: (raw as { origin?: string }).origin === "revenue_nomad" ? false : undefined,
+    scope: (raw as { scope?: string }).scope ?? SEED_SCOPE[(raw as { id: string }).id] ?? "",
+    respondBy: null,
   }));
   return {
     version: VERSION,
@@ -369,6 +384,20 @@ export function projectCompanyLine(s: State, p: Project, opId: string): string {
   return companyRevealed(s, p, opId) ? ownerName(p) : p.companyDescriptor;
 }
 /** What an operator is paid on this project. Budget is never shown to operators (gap G17). */
+/** What an operator takes home per hour. RN projects pay the fixed operator rate; buyer projects
+ *  show the budget less the standard margin, so the budget itself is never shown (gap G17). */
+export function takeHome(p: Project): [number, number] | null {
+  if (p.origin === "revenue_nomad") return p.operatorRate != null ? [p.operatorRate, p.operatorRate] : null;
+  if (p.budgetMin == null || p.budgetMax == null) return null;
+  const k = 1 - STANDARD_MARGIN / 100;
+  return [Math.round((p.budgetMin * k) / 5) * 5, Math.round((p.budgetMax * k) / 5) * 5];
+}
+export function takeHomeLine(p: Project): string | null {
+  const t = takeHome(p);
+  if (!t) return null;
+  return t[0] === t[1] ? `$${t[0]}/hr` : `$${t[0]} to $${t[1]}/hr`;
+}
+
 export function operatorRateLine(p: Project): string | null {
   return p.origin === "revenue_nomad" && p.operatorRate != null ? `$${p.operatorRate}/hr` : null;
 }
@@ -559,7 +588,7 @@ function sendInviteEmail(s: State, c: Ctx, p: Project, op: Operator, source: Inv
     ]
       .filter(Boolean)
       .join("\n"),
-    links: [opLink(op.id, `/operator/projects/${p.id}`, "View and respond")],
+    links: [opLink(op.id, `/dashboard/projects/${p.id}`, "View and respond")],
     projectId: p.id,
     operatorId: op.id,
   });
@@ -607,7 +636,7 @@ function sendAlerts(s: State, c: Ctx, p: Project) {
           `Role ${p.title} · Company ${p.companyDescriptor} · Hours ${hoursRange(p.hoursPerMonthMin, p.hoursPerMonthMax)} a month · Start ${shortDate(p.startTarget)}`,
           "Respond and it moves into your Projects. Change which roles you hear about in Alert settings.",
         ].join("\n"),
-        links: [opLink(op.id, `/operator/projects/${p.id}`, "See the role"), opLink(op.id, `/operator/availability`, "Alert settings")],
+        links: [opLink(op.id, `/dashboard/projects/${p.id}`, "See the role"), opLink(op.id, `/dashboard/availability`, "Alert settings")],
         projectId: p.id,
         operatorId: op.id,
       });
@@ -616,7 +645,7 @@ function sendAlerts(s: State, c: Ctx, p: Project) {
       if (!digest) {
         digest = c.email({ kind: "digest", to, subject: "", body: "", links: [], operatorId: op.id });
       }
-      digest.links.push(opLink(op.id, `/operator/projects/${p.id}`, p.title));
+      digest.links.push(opLink(op.id, `/dashboard/projects/${p.id}`, p.title));
       digest.subject = `Today's digest, ${digest.links.length} more new role${digest.links.length === 1 ? "" : "s"} for you`;
       digest.body = `${op.first}, you already had one role alert today, so the rest are rolled into this digest.\n` + digest.links.map((l) => `· ${l.label}`).join("\n");
     }
@@ -643,7 +672,7 @@ function closeProject(s: State, c: Ctx, p: Project, status: "staffed" | "closed_
         to,
         subject: `You were selected, ${p.title}`,
         body: `${op.first}, ${company} selected you for their ${p.title} engagement. Revenue Nomad will send the agreement next. Congratulations.`,
-        links: [opLink(op.id, `/operator/projects/${p.id}`, "See next steps")],
+        links: [opLink(op.id, `/dashboard/projects/${p.id}`, "See next steps")],
         projectId: p.id,
         operatorId: op.id,
       });
@@ -659,7 +688,7 @@ function closeProject(s: State, c: Ctx, p: Project, status: "staffed" | "closed_
           status === "staffed"
             ? `${op.first}, thank you for responding to the ${p.title} engagement. The seat has been filled by another operator. We will keep matching you with new roles.`
             : `${op.first}, thank you for responding to the ${p.title} engagement. The company closed the project without filling it. We will keep matching you with new roles.`,
-        links: [opLink(op.id, `/operator/projects`, "See your projects")],
+        links: [opLink(op.id, `/dashboard/projects`, "See your projects")],
         projectId: p.id,
         operatorId: op.id,
       });
@@ -804,6 +833,7 @@ export function postProject(pid: string) {
     // Self-serve: posting sets live immediately. No Revenue Nomad review (section 1).
     p.status = "live";
     p.postedAt = c.now;
+    p.respondBy = c.now + RESPOND_WINDOW_DAYS * DAY;
     p.updatedAt = c.now;
     c.event("project_posted", { projectId: p.id, meta: { visibility: p.visibility, wantsRnSuggestions: p.wantsRnSuggestions, origin: p.origin } });
     for (const opId of p.draftInvites || []) createInvite(s, c, p, opId, "buyer");
@@ -873,8 +903,8 @@ export function requestIntro(pid: string, opIds: string | string[]) {
         subject: `${b?.company || "The buyer"} wants to talk, ${p.title}`,
         body: `${op.first}, ${b?.contactName}, ${b?.contactTitle} at ${b?.company}, requested an intro after reading your response. Tap a time to book a 30 minute call.`,
         links: [
-          ...slots.map((sl, i) => opLink(op.id, `/operator/projects/${p.id}?book=${i}`, `Book ${sl}`)),
-          opLink(op.id, `/operator/projects/${p.id}`, "None work, reply instead"),
+          ...slots.map((sl, i) => opLink(op.id, `/dashboard/projects/${p.id}?book=${i}`, `Book ${sl}`)),
+          opLink(op.id, `/dashboard/projects/${p.id}`, "None work, reply instead"),
         ],
         projectId: p.id,
         operatorId: op.id,
@@ -1009,7 +1039,7 @@ export function answerQuestion(qid: string, text: string, role: Role) {
       to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
       subject: `Your question was answered, ${p.title}`,
       body: `You asked: "${q.text}"\nAnswer: ${q.answer}`,
-      links: [opLink(op.id, `/operator/projects/${p.id}`, "Open the project")],
+      links: [opLink(op.id, `/dashboard/projects/${p.id}`, "Open the project")],
       projectId: p.id,
       operatorId: op.id,
     });
@@ -1025,6 +1055,37 @@ export interface ResponseInput {
   canStart: string | null;
   answers: string[];
   note: string;
+  proof?: string[];
+}
+
+function validateInput(p: Project, input: ResponseInput) {
+  if (input.rate == null || !(input.rate > 0)) throw new ActionError("Add your hourly rate for this project.", "rate");
+  if (input.hoursPerMonth == null || !(input.hoursPerMonth > 0)) throw new ActionError("Add the hours a month you can give this project.", "hours");
+  if (!input.canStart) throw new ActionError("Add the date you can start.", "canStart");
+  const missing = p.screeningQuestions.findIndex((_q, i) => !(input.answers[i] || "").trim());
+  if (missing >= 0) throw new ActionError(`Answer question ${missing + 1} before you submit.`, `answer-${missing}`);
+}
+
+/** Operators can edit a submitted response until the client opens it (live layout L4). */
+export function canEditResponse(s: State, pid: string, opId: string): boolean {
+  const p = projectById(s, pid);
+  const r = responseOf(s, pid, opId);
+  return !!(p && r && r.submittedAt && !r.draft && r.interest === "interested" && !r.withdrawn && !r.viewedAt && r.decision === "none" && p.status === "live");
+}
+
+export function updateResponse(pid: string, opId: string, input: ResponseInput) {
+  mutate(
+    "operator",
+    (s, c) => {
+      const p = mustProject(s, pid);
+      if (!canEditResponse(s, pid, opId)) throw new ActionError("The client has already opened your response, so it can't be edited now. Send a note with Ask a question instead.");
+      validateInput(p, input);
+      const r = responseOf(s, pid, opId)!;
+      Object.assign(r, input, { updatedAt: c.now });
+      c.event("response_edited", { projectId: pid, operatorId: opId, meta: { fit: responseFit(p, r).fit } });
+    },
+    opId,
+  );
 }
 
 export function viewProjectAsOperator(pid: string, opId: string) {
@@ -1097,11 +1158,7 @@ export function submitResponse(pid: string, opId: string, input: ResponseInput):
       const msg = respondBlockedMessage(p);
       if (msg) throw new ActionError(msg);
       const op = operatorById(opId)!;
-      if (input.rate == null || !(input.rate > 0)) throw new ActionError("Add your hourly rate for this project.", "rate");
-      if (input.hoursPerMonth == null || !(input.hoursPerMonth > 0)) throw new ActionError("Add the hours a month you can give this project.", "hours");
-      if (!input.canStart) throw new ActionError("Add the date you can start.", "canStart");
-      const missing = p.screeningQuestions.findIndex((_q, i) => !(input.answers[i] || "").trim());
-      if (missing >= 0) throw new ActionError(`Answer question ${missing + 1} before you submit.`, `answer-${missing}`);
+      validateInput(p, input);
       const r = upsertResponse(s, c, pid, opId);
       Object.assign(r, input, { interest: "interested", draft: false, submittedAt: c.now, updatedAt: c.now, viaSource: viaSourceFor(s, pid, opId) });
       const fit = responseFit(p, r);
@@ -1113,16 +1170,16 @@ export function submitResponse(pid: string, opId: string, input: ResponseInput):
         } else s.pipeline.push({ projectId: pid, operatorId: opId, stage: "responded", note: "", updatedAt: c.now });
       }
       c.event("response_submitted", { projectId: pid, operatorId: opId, meta: { fit: fit.fit, source: r.viaSource } });
-      const warning = input.hoursPerMonth > (op.hrs || 0) ? `You offered ${input.hoursPerMonth} hrs a month, more than the ${op.hrs} on your profile. The fit score uses ${input.hoursPerMonth}.` : null;
+      const warning = (input.hoursPerMonth ?? 0) > (op.hrs || 0) ? `You offered ${input.hoursPerMonth} hrs a month, more than the ${op.hrs} on your profile. The fit score uses ${input.hoursPerMonth}.` : null;
       return { warning };
     },
     opId,
   );
 }
 
-export const DECLINE_REASONS = ["Rate is too low", "Not enough hours", "Timing doesn't work", "Not my expertise", "Already committed elsewhere", "Other"];
+export const DECLINE_REASONS = ["Rate", "Hours", "Timing", "Not my expertise", "Industry", "Other"];
 
-export function declineProject(pid: string, opId: string, reason: string) {
+export function declineProject(pid: string, opId: string, reason: string, note = "") {
   mutate(
     "operator",
     (s, c) => {
@@ -1131,8 +1188,8 @@ export function declineProject(pid: string, opId: string, reason: string) {
       const existing = responseOf(s, pid, opId);
       if (existing && existing.submittedAt && !existing.draft) throw new ActionError("You already responded to this project.");
       const r = upsertResponse(s, c, pid, opId);
-      Object.assign(r, { interest: "declined", declineReason: reason, draft: false, submittedAt: c.now, updatedAt: c.now });
-      c.event("response_declined", { projectId: p.id, operatorId: opId, meta: { reason } });
+      Object.assign(r, { interest: "declined", declineReason: reason, declineNote: note.trim() || null, draft: false, submittedAt: c.now, updatedAt: c.now });
+      c.event("response_declined", { projectId: p.id, operatorId: opId, meta: { reason, note: note.trim() || null } });
     },
     opId,
   );
@@ -1360,6 +1417,7 @@ export function publishRnProject(pid: string) {
     if (first) throw new ActionError(errs[first], first);
     p.status = "live";
     p.postedAt = c.now;
+    p.respondBy = c.now + RESPOND_WINDOW_DAYS * DAY;
     p.updatedAt = c.now;
     c.event("project_posted", { projectId: p.id, meta: { visibility: p.visibility, origin: p.origin } });
     for (const opId of p.draftInvites || []) createInvite(s, c, p, opId, "admin");
@@ -1448,9 +1506,9 @@ export function sendPulse(opIds: string[]) {
         subject: "Are you open to new fractional work?",
         body: `${op.first}, one tap keeps your profile current. Buyers see when you last confirmed.`,
         links: [
-          opLink(op.id, `/operator/availability?pulse=open`, "Yes, I'm open now"),
-          opLink(op.id, `/operator/availability?pulse=from`, "Open from a later date"),
-          opLink(op.id, `/operator/availability?pulse=unavailable`, "Not available right now"),
+          opLink(op.id, `/dashboard/availability?pulse=open`, "Yes, I'm open now"),
+          opLink(op.id, `/dashboard/availability?pulse=from`, "Open from a later date"),
+          opLink(op.id, `/dashboard/availability?pulse=unavailable`, "Not available right now"),
         ],
         operatorId: op.id,
       });

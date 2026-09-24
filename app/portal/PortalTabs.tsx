@@ -4,14 +4,12 @@ import { useEffect } from "react";
 import JobBoard from "./JobBoard";
 import Prospects from "./Prospects";
 import ProfileForm from "./ProfileForm";
-import OperatorProjects, { projectsBadge } from "./projects/OperatorProjects";
 import { navigate, useLocation } from "../../projects/lib/router";
-import { getSession, operatorPortal, setSession, signInAs, useSession, useStore } from "../../projects/lib/store";
+import { operatorPortal, signInAs, useSession, useStore } from "../../projects/lib/store";
 
-type View = "board" | "projects" | "prospects" | "profile";
+type View = "board" | "prospects" | "profile";
 const VIEWS: [View, string][] = [
   ["board", "Job Board"],
-  ["projects", "Projects"],
   ["prospects", "Prospects"],
   ["profile", "Profile"],
 ];
@@ -22,20 +20,23 @@ export default function PortalTabs() {
   const sess = useSession();
   const view = (VIEWS.some(([k]) => k === query.get("view")) ? query.get("view") : "board") as View;
 
-  // Magic links from emails carry ?as=operator:<id>: sign in, then drop it from the URL.
+  // Old links into the portal's Projects view now open the operator dashboard.
   useEffect(() => {
     const as = query.get("as");
-    if (as) {
-      signInAs(as);
+    if (as) signInAs(as);
+    if (query.get("view") === "projects") {
+      const project = query.get("project");
+      navigate(project ? `/dashboard/projects/${project}` : "/dashboard/projects", { replace: true });
+    } else if (as) {
       const q = new URLSearchParams(query);
       q.delete("as");
-      navigate(`${path}?${q.toString()}`, { replace: true });
+      navigate(`${path}${q.toString() ? `?${q}` : ""}`, { replace: true });
     }
-    if (getSession().role !== "operator") setSession({ role: "operator" });
   }, [query, path]);
 
-  const waiting = projectsBadge(s, sess.operatorId);
-  const openRoles = operatorPortal(s, sess.operatorId).openRoles.length;
+  const portal = operatorPortal(s, sess.operatorId);
+  const waiting = portal.invited.length;
+  const openRoles = portal.openRoles.length;
 
   return (
     <>
@@ -50,16 +51,15 @@ export default function PortalTabs() {
             data-testid={`portal-tab-${key}`}
           >
             {label}
-            {key === "projects" && waiting > 0 && (
-              <span className="opp-badge" data-testid="projects-badge">
-                {waiting}
-              </span>
-            )}
           </button>
         ))}
+        <button className="view-btn" onClick={() => navigate("/dashboard/projects")} data-testid="portal-tab-projects">
+          Projects
+          {waiting > 0 && <span className="portal-badge">{waiting}</span>}
+        </button>
       </div>
       {view === "board" && (waiting > 0 || openRoles > 0) && (
-        <div className="pitch opp-strip" data-testid="projects-strip">
+        <div className="pitch portal-strip" data-testid="projects-strip">
           <span>
             {waiting > 0 ? (
               <>
@@ -78,13 +78,12 @@ export default function PortalTabs() {
             )}
             . Respond in about two minutes.
           </span>
-          <button type="button" className="action primary" onClick={() => navigate("/portal?view=projects")}>
+          <button type="button" className="action primary" onClick={() => navigate("/dashboard/projects")}>
             Open Projects
           </button>
         </div>
       )}
       {view === "board" && <JobBoard />}
-      {view === "projects" && <OperatorProjects />}
       {view === "prospects" && <Prospects />}
       {view === "profile" && <ProfileForm />}
     </>

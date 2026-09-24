@@ -24,9 +24,9 @@ test.beforeEach(async ({ page }) => {
 test("O-01 invite link signs Tim in with no password and opens the project", async ({ page }) => {
   await postNorthwind(page, { invite: ["Tim Evans"] });
   await followMail(page, { kind: "invite", to: "Tim Evans" }, "View and respond");
-  await expect(page).toHaveURL(new RegExp(`/portal\\?view=projects&project=${NW}$`));
+  await expect(page).toHaveURL(new RegExp(`/dashboard/projects/${NW}$`));
   await expect(page.getByTestId("signed-in-as")).toContainText("Tim Evans");
-  await expect(page.getByTestId("portal-tab-projects")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("navigation", { name: "Dashboard" }).getByRole("link", { name: /Projects/ })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("role-operator")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("respond-form")).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
@@ -53,10 +53,10 @@ test("O-03 a saved draft is kept, hidden from the buyer, and stays in Invited", 
   await page.getByTestId("r-rate").fill("210");
   await page.getByTestId("r-answer-0").fill("Half-written answer");
   await page.getByTestId("save-draft").click();
-  await expect(page.getByText("Draft saved. The buyer never sees a draft.")).toBeVisible();
+  await expect(page.getByText("Draft saved. The client never sees a draft.")).toBeVisible();
   await goto(page, "/operator/projects");
   const item = page.getByTestId("sec-invited").locator(`[data-project="${NW}"]`);
-  await expect(item.getByTestId("op-status")).toHaveText("Draft saved");
+  await expect(item.getByTestId("op-status")).toContainText("draft saved");
   await goto(page, `/operator/projects/${NW}`);
   await expect(page.getByTestId("draft-note")).toBeVisible();
   await expect(page.getByTestId("r-rate")).toHaveValue("210");
@@ -119,11 +119,11 @@ test("O-07 not for me needs a reason, then closes without a buyer row", async ({
   await page.getByTestId("mode-pass").click();
   await page.getByTestId("pass-project").click();
   await expect(page.getByText("Pick a reason so we can send better matches.").first()).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`project=${NW}$`));
-  await page.getByLabel("Rate is too low").check();
+  await expect(page).toHaveURL(new RegExp(`/dashboard/projects/${NW}$`));
+  await page.getByRole("button", { name: "Rate", exact: true }).click();
   await page.getByTestId("pass-project").click();
-  await expect(page).toHaveURL(/\/portal\?view=projects$/);
-  await expect(page.getByTestId("sec-closed").locator(`[data-project="${NW}"]`)).toContainText("You passed: Rate is too low");
+  await expect(page).toHaveURL(/\/dashboard\/projects$/);
+  await expect(page.getByTestId("sec-closed").locator(`[data-project="${NW}"]`)).toContainText("You passed: Rate");
   await openBuyerProject(page, "all");
   await expect(page.getByTestId("tab-responses")).toHaveText("Responses (0)");
 });
@@ -136,7 +136,7 @@ test("O-08 buyer opening the response shows Buyer viewed to the operator", async
   await responseRow(page, "Tim Evans").getByTestId("view-response").click();
   await asOperator(page, "Tim Evans");
   await goto(page, `/operator/projects/${NW}`);
-  await expect(page.getByTestId("status-now")).toHaveText("Buyer viewed");
+  await expect(page.getByTestId("status-now")).toHaveText("Client viewed");
 });
 
 test("O-09 intro requested reveals company and contact; Book a time and Reply work", async ({ page }) => {
@@ -152,7 +152,7 @@ test("O-09 intro requested reveals company and contact; Book a time and Reply wo
   await page.getByTestId("reply").click();
   await page.getByTestId("reply-text").fill("Thursday works, looking forward to it.");
   await page.getByTestId("reply-send").click();
-  await expect(page.getByTestId("intro-card")).toContainText("Reply sent to Jordan Ellis");
+  await expect(page.getByText("Reply sent to Jordan Ellis.")).toBeVisible();
   const s = await state(page);
   expect(s.outbox.filter((m) => m.kind === "booking" && m.to.name === "Jordan Ellis")).toHaveLength(1);
   expect(s.outbox.filter((m) => m.kind === "reply" && m.to.name === "Jordan Ellis" && m.body.includes("Thursday works"))).toHaveLength(1);
@@ -174,7 +174,7 @@ test("O-10 selected and not selected emails follow rule 5", async ({ page }) => 
   await closeOutbox(page);
   await asOperator(page, "Matt Lopez");
   await goto(page, `/operator/projects/${NW}`);
-  await expect(page.getByTestId("status-now")).toHaveText("Closed");
+  await expect(page.getByTestId("status-now")).toHaveText("Not selected");
   await asOperator(page, "Tim Evans");
   await goto(page, `/operator/projects/${NW}`);
   await expect(page.getByTestId("status-now")).toHaveText("Selected");
@@ -208,7 +208,7 @@ test("O-12 confirming availability from a pulse link", async ({ page }) => {
   await expect(page.getByTestId("availability-page").getByTestId("confirmed")).toHaveText("Confirmed Sep 24");
   await expect(page.getByTestId("availability-page").getByTestId("not-confirmed")).toHaveCount(0);
   await goto(page, "/operator/projects");
-  await expect(page.getByTestId("availability-card").getByTestId("confirmed")).toHaveText("Confirmed Sep 24");
+  await expect(page.getByTestId("availability-card").getByTestId("confirmed")).toHaveText("Availability confirmed Sep 24");
 });
 
 test("O-13 responding from an old link to a paused or staffed project is blocked", async ({ page }) => {

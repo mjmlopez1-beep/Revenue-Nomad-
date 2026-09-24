@@ -15,7 +15,7 @@ function applyTheme(t: string) {
 
 export const ROLE_HOME: Record<Role, string> = {
   buyer: "/buyer/projects",
-  operator: "/operator/projects",
+  operator: "/dashboard",
   admin: "/admin/projects",
 };
 

@@ -42,17 +42,17 @@ export async function asOperator(page: Page, name: string) {
   const picker = page.getByTestId("operator-picker");
   await picker.fill(name);
   await expect(page.getByTestId("signed-in-as")).toContainText(name);
+  // Operators land on Overview; most scenarios start from the Projects list.
+  await goto(page, "/dashboard/projects");
 }
 
-/** Operator screens live in the Operator Portal (/portal); mirror the app's own mapping. */
+/** Operator screens live in the operator dashboard; mirror the app's alias for old /operator paths. */
 export function portalPath(to: string): string {
   const [path, q = ""] = to.split("?");
-  const extra = q ? `&${q}` : "";
-  const m = path.match(/^\/operator\/projects\/([^/]+)$/);
-  if (m) return `/portal?view=projects&project=${m[1]}${extra}`;
-  if (path === "/operator/projects" || path === "/operator") return `/portal?view=projects${extra}`;
-  if (path === "/operator/roles") return `/portal?view=projects&tab=roles${extra}`;
-  if (path === "/operator/availability") return `/portal?view=projects&tab=availability${extra}`;
+  const qs = q ? `?${q}` : "";
+  if (path === "/operator/roles") return `/dashboard/projects?tab=open${q ? `&${q}` : ""}`;
+  if (path === "/operator" || path === "/operator/projects") return `/dashboard/projects${qs}`;
+  if (path.startsWith("/operator/")) return `/dashboard/${path.slice("/operator/".length)}${qs}`;
   return to;
 }
 

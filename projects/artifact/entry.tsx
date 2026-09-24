@@ -4,8 +4,10 @@ import { createRoot } from "react-dom/client";
 import { configureRouter } from "../lib/router";
 import { configureAssets } from "../lib/data";
 import ProjectsApp from "../App";
+import { configureLiveAssets } from "../ui/live/Live";
 
 configureRouter("hash");
 configureAssets("./", "artifact");
+configureLiveAssets("./");
 
 createRoot(document.getElementById("root")!).render(<ProjectsApp />);

@@ -229,7 +229,7 @@ test("A-11 reports match the event log", async ({ page }) => {
   await asOperator(page, "Guillermo Mairena");
   await goto(page, `/operator/projects/${NW}`);
   await page.getByTestId("mode-pass").click();
-  await page.getByLabel("Timing doesn't work").check();
+  await page.getByRole("button", { name: "Timing", exact: true }).click();
   await page.getByTestId("pass-project").click();
   await openBuyerProject(page);
   await responseRow(page, "Tim Evans").getByTestId("request-intro").click();
@@ -251,7 +251,7 @@ test("A-11 reports match the event log", async ({ page }) => {
   await expect(row.getByTestId("rep-intro-rate")).toHaveText(`${Math.round((intros / responders) * 100)}%`);
   const mins = Math.round((first - posted) / 60000);
   await expect(row.getByTestId("rep-first")).toHaveText(`${mins} min`);
-  await expect(page.locator('[data-testid="decline-reason"][data-reason="Timing doesn\'t work"]')).toContainText("1");
+  await expect(page.locator('[data-testid="decline-reason"][data-reason="Timing"]')).toContainText("1");
   await expect(page.locator('[data-testid="alerts-role"][data-role="Sales Leadership"]')).toContainText(String(s.alerts.length));
 });
 

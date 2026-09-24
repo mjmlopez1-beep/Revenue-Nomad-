@@ -4,9 +4,7 @@ import Link from "next/link";
 import Brand from "../Brand";
 import PortalTabs from "./PortalTabs";
 import { ProtoBar } from "../../projects/ui/Shell";
-import { SignedInChip } from "./projects/OperatorProjects";
 import "../../projects/styles.css";
-import "./projects/projects.css";
 
 export default function PortalClient() {
   return (
@@ -21,7 +19,7 @@ export default function PortalClient() {
           <Brand />
           <div className="nav-links">
             <Link href="/portal">Operator Portal</Link>
-            <SignedInChip />
+            <Link href="/dashboard">Dashboard</Link>
           </div>
         </nav>
         <main id="main">

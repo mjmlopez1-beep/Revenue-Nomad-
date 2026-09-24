@@ -320,6 +320,7 @@ function stripDraft(d: BriefDraft): Partial<Project> {
   const {
     title,
     successIn90Days,
+    scope,
     hoursPerMonthMin,
     hoursPerMonthMax,
     term,
@@ -339,6 +340,7 @@ function stripDraft(d: BriefDraft): Partial<Project> {
   return {
     title,
     successIn90Days,
+    scope,
     hoursPerMonthMin: Number(hoursPerMonthMin),
     hoursPerMonthMax: Number(hoursPerMonthMax),
     term,
@@ -957,6 +959,11 @@ function ResponseRow({ s, p, r, f, setMsg, picked, onPick }: { s: State; p: Proj
           <p className="resp-meta">
             <span data-testid="resp-rate">{rateLabel(r.rate)}</span> · {r.hoursPerMonth} hrs · Start {shortDate(r.canStart)} · {ago(r.submittedAt, now)}
           </p>
+          {!!r.proof?.length && (
+            <p className="resp-meta" data-testid="resp-proof">
+              Case studies attached: {r.proof.join(", ")}
+            </p>
+          )}
         </div>
         <div className="resp-flags">
           <Completeness op={op} />

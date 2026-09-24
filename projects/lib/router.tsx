@@ -9,30 +9,25 @@ let mode: Mode = "path";
 const listeners = new Set<() => void>();
 /** Which paths this page renders itself. Anything else is a full page load (path mode only). */
 let handles: (path: string) => boolean = () => true;
-/** In the Next.js site the operator flow lives in the Operator Portal, not the prototype shell. */
-let operatorInPortal = false;
 
-export function configureRouter(m: Mode, opts: { handles?: (path: string) => boolean; operatorInPortal?: boolean } = {}) {
+export function configureRouter(m: Mode, opts: { handles?: (path: string) => boolean } = {}) {
   mode = m;
   if (opts.handles) handles = opts.handles;
-  operatorInPortal = !!opts.operatorInPortal;
   if (typeof window !== "undefined") (window as unknown as { __rnpNavigate?: typeof navigate }).__rnpNavigate = navigate;
 }
 
-/** Map prototype operator paths onto the Operator Portal: /operator/projects/:id -> /portal?view=projects&project=:id. */
-export function portalPath(to: string): string {
+/** Old prototype operator paths now live in the operator dashboard: /operator/projects/:id -> /dashboard/projects/:id. */
+export function operatorAlias(to: string): string {
   const [path, q = ""] = to.split("?");
-  const extra = q ? `&${q}` : "";
-  const m = path.match(/^\/operator\/projects\/([^/]+)$/);
-  if (m) return `/portal?view=projects&project=${m[1]}${extra}`;
-  if (path === "/operator/projects" || path === "/operator") return `/portal?view=projects${extra}`;
-  if (path === "/operator/roles") return `/portal?view=projects&tab=roles${extra}`;
-  if (path === "/operator/availability") return `/portal?view=projects&tab=availability${extra}`;
+  const qs = q ? `?${q}` : "";
+  if (path === "/operator/roles") return `/dashboard/projects?tab=open${q ? `&${q}` : ""}`;
+  if (path === "/operator" || path === "/operator/projects") return `/dashboard/projects${qs}`;
+  if (path.startsWith("/operator/")) return `/dashboard/${path.slice("/operator/".length)}${qs}`;
   return to;
 }
 
 function resolve(to: string): string {
-  return mode === "path" && operatorInPortal ? portalPath(to) : to;
+  return operatorAlias(to);
 }
 
 function rawLocation(): string {

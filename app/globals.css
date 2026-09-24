@@ -869,3 +869,29 @@ a:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- link into the operator dashboard's Projects ---------- */
+.view-switch {
+  flex-wrap: wrap;
+}
+.portal-badge {
+  display: inline-block;
+  margin-left: 8px;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.portal-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}

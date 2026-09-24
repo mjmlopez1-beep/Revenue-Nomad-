@@ -35,11 +35,11 @@ await build({
   logLevel: "warning",
 });
 
-const css = readFileSync("projects/styles.css", "utf8");
+const css = readFileSync("projects/styles.css", "utf8") + "\n" + readFileSync("projects/ui/live/live.css", "utf8");
 const html = `<title>Revenue Nomad Projects</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Red+Hat+Display:wght@400;500;600;700&display=swap">
 <style>
 ${css}
 body { margin: 0; background: var(--canvas); color: var(--ink); }
@@ -51,4 +51,5 @@ body { margin: 0; background: var(--canvas); color: var(--ink); }
 `;
 writeFileSync(`${out}/index.html`, html);
 cpSync("public/rnp/photos", `${out}/photos`, { recursive: true });
+cpSync("public/rnp/rn-logo.png", `${out}/rn-logo.png`);
 console.log(`Built ${out}/ (app.js ${(readFileSync(`${out}/app.js`).length / 1024).toFixed(0)} KB)`);
