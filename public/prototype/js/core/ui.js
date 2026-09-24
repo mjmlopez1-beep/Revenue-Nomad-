@@ -72,6 +72,38 @@
     return `<button type="button" class="tip" data-tip="${esc(html)}" aria-label="${esc((label || 'More info') + ': ' + text.slice(0, 220))}">i</button>`;
   };
 
+  /* One "illustrative data" label for the whole system */
+  ui.illus = function (text, title) {
+    return `<span class="illus" title="${esc(title || 'Figures are illustrative: invented to show shape and value, not to be cited.')}">${icon('info')}${esc(text || 'Illustrative')}</span>`;
+  };
+
+  /* One status pill per record type, one colour map (project, intro, review, application) */
+  const STATUS = {
+    project: { draft: '', posted: 'pill-info', in_progress: 'pill-accent', staffed: 'pill-good', closed: '' },
+    intro: { pending: 'pill-warn', interested: 'pill-info', rn_qualified: 'pill-info', introduced: 'pill-good', hired: 'pill-accent', declined: 'pill-bad' },
+    review: { sent: 'pill-info', completed: 'pill-good' },
+    application: { in_review: 'pill-warn', approved: 'pill-info', live: 'pill-good', changes_requested: 'pill-warn', rejected: 'pill-bad' },
+  };
+  const STATUS_FIELD = { project: 'projectStatus', intro: 'introStatus', review: 'reviewStatus' };
+  ui.statusPill = function (kind, status, label) {
+    const f = STATUS_FIELD[kind];
+    const l = label || (f && RN.fields[f] ? RN.w.label(f, status) : String(status || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()));
+    return `<span class="pill ${(STATUS[kind] || {})[status] || ''}">${esc(l)}</span>`;
+  };
+
+  /* Lifecycle track. steps: [{l, date?, state: 'done'|'cur'|'todo'|'stop'}] */
+  ui.track = function (steps, label) {
+    return `<ol class="track" aria-label="${esc(label || 'Progress')}">${steps.map((s) => `<li class="${esc(s.state || 'todo')}"${s.state === 'cur' ? ' aria-current="step"' : ''}><i aria-hidden="true"></i><b>${esc(s.l)}</b>${s.date ? `<span>${esc(s.date)}</span>` : ''}</li>`).join('')}</ol>`;
+  };
+  /* Track for an intro record, following RN.intro.steps */
+  ui.introTrack = function (rec) {
+    const order = ['pending', 'interested', 'rn_qualified', 'introduced', 'hired'];
+    const at = order.indexOf(rec.status);
+    const when = (st) => { const t = (rec.thread || []).find((x) => RN.w.label('introStatus', st) === x.text); return t ? RN.fmt.dateShort(t.ts) : st === 'pending' ? RN.fmt.dateShort(rec.createdAt) : ''; };
+    if (rec.status === 'declined') return ui.track([{ l: 'Pending', state: 'done', date: RN.fmt.dateShort(rec.createdAt) }, { l: 'Declined', state: 'stop' }], 'Intro progress');
+    return ui.track(order.map((st, i) => ({ l: RN.w.label('introStatus', st), state: i < at ? 'done' : i === at ? 'cur' : 'todo', date: i <= at ? when(st) : '' })), 'Intro progress');
+  };
+
   ui.catDot = function (cat) {
     const k = (RN.fields && RN.fields.catColor && RN.fields.catColor(cat)) || 'var(--accent)';
     return `<i class="dot" style="background:${k}"></i>`;

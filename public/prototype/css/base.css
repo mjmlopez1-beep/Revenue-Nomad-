@@ -32,8 +32,10 @@ hr { border: 0; border-top: 1px solid var(--line); margin: var(--s-6) 0; }
 /* Headings: Red Hat Display, tight tracking, balanced wraps */
 h1, h2, h3, h4, h5 { font-family: var(--f-display); margin: 0; letter-spacing: -0.02em; line-height: 1.08; text-wrap: balance; font-weight: 700; }
 .h-hero { font-size: clamp(40px, 7vw, var(--t-80)); line-height: .98; letter-spacing: -0.035em; }
-.h1 { font-size: clamp(34px, 5vw, var(--t-56)); letter-spacing: -0.03em; }
-.h2 { font-size: clamp(28px, 3.6vw, var(--t-40)); letter-spacing: -0.03em; line-height: 1.05; }
+.h1 { font-size: clamp(32px, 4.4vw, 48px); letter-spacing: -0.03em; }   /* page title (every page except Home and the report cover) */
+.h2 { font-size: clamp(26px, 3vw, 36px); letter-spacing: -0.03em; line-height: 1.06; }  /* section title */
+/* Type ladder: .h-hero (Home, report cover) > .h1 page > .h2 section > .h3 card/flow > .h4 > .h5.
+   Newsreader: operator names, quotes, big editorial numbers, and at most ONE italic accent per public page (none in Studio, Workspace, Admin). */
 .h3 { font-size: var(--t-24); letter-spacing: -0.02em; line-height: 1.15; }
 .h4 { font-size: var(--t-18); letter-spacing: -0.01em; line-height: 1.25; }
 .h5 { font-size: var(--t-15); letter-spacing: 0; line-height: 1.3; }

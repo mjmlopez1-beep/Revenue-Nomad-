@@ -42,7 +42,7 @@ Scope view CSS under the view: `[data-view="studio"] .x {}` or a view prefix cla
 | `RN.mail(to, subject, body, kind)` | Put an email in the Outbox (dock). Every system email must go here. |
 | `RN.model` | Operators and analytics (see below). |
 | `RN.fields` / `RN.w` | Field registry and widgets (see Standard fields). |
-| `RN.ui` | Components: `avatar avail ftag ftags stars ris tip catDot empty delta logo opCard gate modal drawer closeModal toast formData`. |
+| `RN.ui` | Components: `avatar avail ftag ftags stars ris tip catDot empty delta logo opCard gate modal drawer closeModal toast formData illus statusPill track introTrack`. Use `illus()` for every illustrative label, `statusPill(kind, status)` for project/intro/review/application status, `track()` for any lifecycle. |
 | `RN.chart` | SVG charts: `spark bars columns line radar bell ring funnel`. |
 | `RN.personas`, `RN.me()`, `RN.myOp()` | Prototype personas: visitor, buyer (Jordan Ellis, COO, Northwind Health), operator (Matt Lopez), admin. |
 

@@ -176,7 +176,7 @@
         <div class="dock-row"><button class="btn btn-line btn-sm" data-act="outbox">${icon('mail')}Outbox (${mail})</button><button class="btn btn-ghost btn-sm" data-act="reset-demo" style="color:#FFB4A8">Reset demo data</button></div>
         <p class="dock-note">Operators are a 100-profile sample of the live network (350+). Analytics, market figures and company names in Studio and Insights are illustrative.</p>
       </div>` : ''}
-      <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}"><i class="dot"></i>Prototype<span class="hide-m" style="font-weight:600;letter-spacing:.02em;text-transform:none;color:var(--night-mute)">· ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
+      <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}" aria-label="Prototype controls, viewing as ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}">${icon('sliders')}<i class="dock-live" aria-hidden="true"></i><span class="dock-tag">Prototype · ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
   };
   RN.actions['dock'] = () => { dockOpen = !dockOpen; shell.renderDock(); };
   RN.actions['clock'] = (el) => {
