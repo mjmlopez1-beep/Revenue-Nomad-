@@ -24,8 +24,9 @@ test.beforeEach(async ({ page }) => {
 test("O-01 invite link signs Tim in with no password and opens the project", async ({ page }) => {
   await postNorthwind(page, { invite: ["Tim Evans"] });
   await followMail(page, { kind: "invite", to: "Tim Evans" }, "View and respond");
-  await expect(page).toHaveURL(new RegExp(`/operator/projects/${NW}$`));
+  await expect(page).toHaveURL(new RegExp(`/portal\\?view=projects&project=${NW}$`));
   await expect(page.getByTestId("signed-in-as")).toContainText("Tim Evans");
+  await expect(page.getByTestId("portal-tab-projects")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("role-operator")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("respond-form")).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
@@ -118,10 +119,10 @@ test("O-07 not for me needs a reason, then closes without a buyer row", async ({
   await page.getByTestId("mode-pass").click();
   await page.getByTestId("pass-project").click();
   await expect(page.getByText("Pick a reason so we can send better matches.").first()).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/operator/projects/${NW}$`));
+  await expect(page).toHaveURL(new RegExp(`project=${NW}$`));
   await page.getByLabel("Rate is too low").check();
   await page.getByTestId("pass-project").click();
-  await expect(page).toHaveURL(/\/operator\/projects$/);
+  await expect(page).toHaveURL(/\/portal\?view=projects$/);
   await expect(page.getByTestId("sec-closed").locator(`[data-project="${NW}"]`)).toContainText("You passed: Rate is too low");
   await openBuyerProject(page, "all");
   await expect(page.getByTestId("tab-responses")).toHaveText("Responses (0)");

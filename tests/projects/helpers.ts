@@ -44,12 +44,32 @@ export async function asOperator(page: Page, name: string) {
   await expect(page.getByTestId("signed-in-as")).toContainText(name);
 }
 
+/** Operator screens live in the Operator Portal (/portal); mirror the app's own mapping. */
+export function portalPath(to: string): string {
+  const [path, q = ""] = to.split("?");
+  const extra = q ? `&${q}` : "";
+  const m = path.match(/^\/operator\/projects\/([^/]+)$/);
+  if (m) return `/portal?view=projects&project=${m[1]}${extra}`;
+  if (path === "/operator/projects" || path === "/operator") return `/portal?view=projects${extra}`;
+  if (path === "/operator/roles") return `/portal?view=projects&tab=roles${extra}`;
+  if (path === "/operator/availability") return `/portal?view=projects&tab=availability${extra}`;
+  return to;
+}
+
 export async function goto(page: Page, path: string) {
-  // In-app navigation keeps localStorage and mirrors a normal click through.
+  const target = portalPath(path);
+  const onPortal = new URL(page.url()).pathname === "/portal";
+  const toPortal = target.startsWith("/portal");
+  if (onPortal !== toPortal) {
+    // The portal and the Projects pages are separate Next.js pages: a real page load.
+    await page.goto(target);
+    return;
+  }
+  // Same page: in-app navigation keeps state and mirrors a normal click through.
   await page.evaluate((p) => {
     window.history.pushState(window.history.state, "", p);
     window.dispatchEvent(new PopStateEvent("popstate"));
-  }, path);
+  }, target);
   await page.waitForTimeout(50);
 }
 

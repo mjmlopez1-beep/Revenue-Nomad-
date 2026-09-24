@@ -2,7 +2,7 @@
 
 Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-handoff/QA_PLAN.md`, one Playwright test each in `tests/projects/`, run headless against the production build (`npm run test:e2e`, Chromium).
 
-**Result: 49 of 49 QA scenarios pass, plus 7 usability tests (U-01 to U-07, see `USABILITY_AUDIT.md`), 56 in total.** The suite ran clean twice in a row after the last change (42.8s and 44.2s, 4 workers).
+**Result: 49 of 49 QA scenarios pass, plus 7 usability tests (U-01 to U-07, see `USABILITY_AUDIT.md`) and 3 portal tests (P-01 to P-03), 59 in total.** The suite ran clean twice in a row after the last change (42.8s and 44.2s, 4 workers).
 
 ## Scenarios
 
@@ -57,6 +57,16 @@ Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-ha
 | X-05 | Pass | At 400px, B4, O3 and A1 have no horizontal scroll and every action button is on screen |
 | X-06 | Pass | Dark theme: sampled text is at least 4.5:1 against its background; the three tier colors differ |
 | X-07 | Pass | Post, respond and select done by keyboard only, with a visible focus ring checked on every Tab stop |
+
+## Operator flow moved into the Operator Portal
+
+Operators now work inside the existing Operator Portal (`/portal`), in a **Projects** tab next to Job Board, Prospects and Profile, styled with the portal's own components. The O-scenarios and every cross-role test that touches an operator now run against the portal. Every email link and old `/operator/...` URL redirects there.
+
+- **P-01:** Pass. Invites show as a badge on the Projects tab and a strip on the Job Board.
+- **P-02:** Pass. One tap on "Still available" confirms availability.
+- **P-03:** Pass. Old `/operator` links land in the portal.
+
+Bug found and fixed along the way: the portal's field styles removed the focus ring. X-07 caught it on the date field's calendar button, which only matches `:focus-within`.
 
 ## Changes after the usability audit
 

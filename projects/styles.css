@@ -97,8 +97,8 @@
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
-html:has(.rnp),
-body:has(.rnp) {
+html:has(.rnp:not(.rnp-strip)),
+body:has(.rnp:not(.rnp-strip)) {
   background: var(--canvas);
 }
 
@@ -110,6 +110,14 @@ body:has(.rnp) {
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
   overflow-x: clip;
+}
+.rnp.rnp-strip {
+  min-height: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.rnp.rnp-strip .wrap {
+  padding-block: 0;
 }
 .rnp *,
 .rnp *::before,

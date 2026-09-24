@@ -5,7 +5,7 @@ import "../../projects/styles.css";
 import { configureRouter } from "../../projects/lib/router";
 import { configureAssets } from "../../projects/lib/data";
 
-configureRouter("path");
+configureRouter("path", { handles: (p) => !p.startsWith("/portal"), operatorInPortal: true });
 configureAssets("/rnp/", "local");
 
 // The prototype keeps all state in localStorage, so it renders on the client only.

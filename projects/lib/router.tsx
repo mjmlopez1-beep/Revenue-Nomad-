@@ -7,9 +7,32 @@ import { signInAs } from "./store";
 type Mode = "path" | "hash";
 let mode: Mode = "path";
 const listeners = new Set<() => void>();
+/** Which paths this page renders itself. Anything else is a full page load (path mode only). */
+let handles: (path: string) => boolean = () => true;
+/** In the Next.js site the operator flow lives in the Operator Portal, not the prototype shell. */
+let operatorInPortal = false;
 
-export function configureRouter(m: Mode) {
+export function configureRouter(m: Mode, opts: { handles?: (path: string) => boolean; operatorInPortal?: boolean } = {}) {
   mode = m;
+  if (opts.handles) handles = opts.handles;
+  operatorInPortal = !!opts.operatorInPortal;
+  if (typeof window !== "undefined") (window as unknown as { __rnpNavigate?: typeof navigate }).__rnpNavigate = navigate;
+}
+
+/** Map prototype operator paths onto the Operator Portal: /operator/projects/:id -> /portal?view=projects&project=:id. */
+export function portalPath(to: string): string {
+  const [path, q = ""] = to.split("?");
+  const extra = q ? `&${q}` : "";
+  const m = path.match(/^\/operator\/projects\/([^/]+)$/);
+  if (m) return `/portal?view=projects&project=${m[1]}${extra}`;
+  if (path === "/operator/projects" || path === "/operator") return `/portal?view=projects${extra}`;
+  if (path === "/operator/roles") return `/portal?view=projects&tab=roles${extra}`;
+  if (path === "/operator/availability") return `/portal?view=projects&tab=availability${extra}`;
+  return to;
+}
+
+function resolve(to: string): string {
+  return mode === "path" && operatorInPortal ? portalPath(to) : to;
 }
 
 function rawLocation(): string {
@@ -43,10 +66,17 @@ if (typeof window !== "undefined") {
 }
 
 export function href(to: string): string {
-  return mode === "hash" ? "#" + to : to;
+  return mode === "hash" ? "#" + to : resolve(to);
 }
 
 export function navigate(to: string, opts: { replace?: boolean } = {}) {
+  to = resolve(to);
+  if (mode === "path" && !handles(to.split("?")[0])) {
+    // Another Next.js page renders this path.
+    if (opts.replace) window.location.replace(to);
+    else window.location.assign(to);
+    return;
+  }
   if (mode === "hash") {
     if (opts.replace) window.history.replaceState(window.history.state, "", "#" + to);
     else window.location.hash = to;
