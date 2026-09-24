@@ -565,7 +565,7 @@
 
   /* Similar operators (after an intro, on profiles, in compare suggestions) */
   M.similar = function (op, n) {
-    return M.ops.filter((x) => x.id !== op.id && x.catKey === op.catKey)
+    return M.ops.filter((x) => x.id !== op.id && !x.hidden && x.catKey === op.catKey)
       .map((x) => ({ x, s: x.tags.filter((t) => op.tags.some((y) => y.t === t.t)).length * 3 + x.industries.filter((i) => op.industries.includes(i)).length + x.ris.score / 20 }))
       .sort((a, b) => b.s - a.s).slice(0, n || 3).map((r) => r.x);
   };

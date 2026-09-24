@@ -15,6 +15,11 @@
     return `<span class="pill ${map[status] || ''}">${esc(RN.w.label('introStatus', status))}</span>`;
   };
   intro.steps = ['pending', 'interested', 'rn_qualified', 'introduced', 'hired'];
+  /* The signed-in client's open intro with an operator (matched on the client's email) */
+  intro.mine = function (opId) {
+    const email = (RN.personas.buyer.email || '').toLowerCase();
+    return RN.store.state.intros.find((i) => i.opId === opId && i.status !== 'declined' && !i.withdrawn && (i.buyer && (i.buyer.email || '').toLowerCase()) === email) || null;
+  };
 
   intro.summary = function (i, forOperator) {
     const f = i.fields || {};
@@ -42,7 +47,8 @@
       RN.ui.toast('Intro requests come from client accounts.', { icon: 'info', action: { label: 'View as client', act: 'persona', attrs: 'data-p="buyer"' } });
       return;
     }
-    const existing = st.intros.find((i) => i.opId === opId && i.status !== 'declined' && st.persona === 'buyer');
+    // Only this client's own open request counts (other companies may have asked the same operator)
+    const existing = st.persona === 'buyer' ? intro.mine(opId) : null;
     if (existing) {
       RN.ui.toast(`You already asked to meet ${esc(op.first)}. Status: ${esc(RN.w.label('introStatus', existing.status))}.`, { icon: 'info', action: { label: 'Open workspace', act: 'go', attrs: 'data-to="buyer.intros"' } });
       return;

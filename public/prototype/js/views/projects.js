@@ -1216,7 +1216,7 @@
     const f = PJ.fields(p);
     const client = PJ.clientOf(p);
     const st = S();
-    const existing = st.intros.find((i) => i.opId === id && i.status !== 'declined');
+    const existing = RN.intro.mine(id);
     let introId = existing && existing.id;
     if (!existing) {
       const need = Object.keys(RN.fields.needCats).find((k) => (RN.fields.needCats[k] || []).includes(f.roleCategory)) || 'not_sure';

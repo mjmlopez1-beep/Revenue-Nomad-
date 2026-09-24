@@ -196,7 +196,7 @@
     document.body.appendChild(el);
     document.body.style.overflow = 'hidden';
     document.body.classList.add('has-modal');
-    modalStack.push({ id, el, onClose: o.onClose, opener: document.activeElement });
+    modalStack.push({ id, el, onClose: o.onClose, opener: document.activeElement, t: Date.now() });
     const first = el.querySelector('[autofocus], input, select, textarea, button:not(.x-btn)');
     setTimeout(() => first && first.focus(), 30);
     if (o.mount) o.mount(el);
@@ -212,6 +212,11 @@
     if (top.onClose) top.onClose();
   };
   ui.modalEl = () => (modalStack.length ? modalStack[modalStack.length - 1].el : null);
+  /* Close modals opened before a navigation (browser Back); keep ones an action opened alongside the route change */
+  ui.closeStale = function (ms) {
+    const cutoff = Date.now() - (ms || 300);
+    while (modalStack.length && modalStack[modalStack.length - 1].t < cutoff) ui.closeModal();
+  };
   ui.drawer = (o) => ui.modal(Object.assign({ drawer: true }, o));
 
   ui.toast = function (msg, o) {

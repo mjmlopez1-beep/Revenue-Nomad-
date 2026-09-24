@@ -192,7 +192,15 @@
       foot: `<button class="btn btn-line" data-act="modal-close">Keep data</button><button class="btn btn-danger" data-act="reset-confirm">Reset</button>`,
     });
   };
-  RN.actions['reset-confirm'] = () => { RN.ui.closeModal(); RN.store.reset(); RN.seed && RN.seed(); RN.store.state.seeded = true; RN.store.save(); dockOpen = false; shell.applyTheme(); shell.renderHeader(); shell.renderDock(); RN.go('home'); RN.ui.toast('Demo data reset'); };
+  // Reset clears the stored state, then reloads so the in-memory model (reviews, edits, approvals) starts clean too
+  RN.actions['reset-confirm'] = () => {
+    RN.ui.closeModal();
+    RN.store.reset();
+    try { window.localStorage.removeItem('rn-master-prototype-v1'); } catch (e) { /* ignore */ }
+    try { window.sessionStorage.clear(); } catch (e) { /* ignore */ }
+    location.hash = '#home';
+    location.reload();
+  };
   RN.actions['outbox'] = () => {
     const mails = RN.store.state.outbox;
     RN.ui.drawer({

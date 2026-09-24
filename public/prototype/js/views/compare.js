@@ -160,7 +160,7 @@
   function colHead(op) {
     const st = RN.store.state;
     const saved = st.shortlist.includes(op.id);
-    const asked = st.persona === 'buyer' && st.intros.some((i) => i.opId === op.id && i.status !== 'declined');
+    const asked = st.persona === 'buyer' && !!RN.intro.mine(op.id);
     return `<th scope="col" class="cmp-col"><div class="cmp-hd">
       <div class="cmp-hd-id">${RN.ui.avatar(op, 'ava-md')}<div class="grow"><a class="cmp-name" href="#op.${esc(op.slug)}" title="${esc(op.name)}">${esc(op.name)}</a><span class="cmp-role">Fractional ${esc(op.role)}</span></div></div>
       <button type="button" class="btn btn-sm cmp-intro ${asked ? 'btn-line' : ''}" data-act="intro-open" data-id="${esc(op.id)}">${asked ? icon('check') + 'Intro requested' : 'Request intro'}</button>

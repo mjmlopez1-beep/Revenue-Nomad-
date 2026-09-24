@@ -96,5 +96,10 @@
   /* Re-render the current screen in place (after a state change) without jumping to top. */
   RN.rerender = function () { RN.render({ keepScroll: true }); };
 
-  window.addEventListener('hashchange', () => RN.render());
+  // Browser Back/Forward: close any open modal, drawer or menu before showing the new screen
+  window.addEventListener('hashchange', () => {
+    if (RN.ui) { RN.ui.closeStale(300); RN.ui.hideTip && RN.ui.hideTip(); }
+    if (RN.shell && RN.shell.closeMenu && document.querySelector('.menu-sheet')) RN.shell.closeMenu();
+    RN.render();
+  });
 })();
