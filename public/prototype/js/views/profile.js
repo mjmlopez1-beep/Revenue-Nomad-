@@ -919,7 +919,7 @@
     const meta = [e.revenueRange && `${RN.w.label('revenueRange', e.revenueRange)} revenue`, e.employeeRange && `${RN.w.label('employeeRange', e.employeeRange)} employees`].filter(Boolean);
     return `<article class="pf-eng ${e.verified ? 'ver' : ''} ${open ? 'open' : ''}" data-eng="${esc(e.key)}">
       <span class="pf-tl-dot" aria-hidden="true"></span>
-      <button type="button" class="pf-eng-hd" ${hasDetail ? `data-act="pf-eng" data-k="${esc(e.key)}" aria-expanded="${open}"` : 'tabindex="-1"'}>
+      <${hasDetail ? 'button type="button"' : 'div'} class="pf-eng-hd ${hasDetail ? '' : 'static'}" ${hasDetail ? `data-act="pf-eng" data-k="${esc(e.key)}" aria-expanded="${open}"` : ''}>
         <span class="pf-eng-logo">${e.logo ? logoHtml(e.logo, e.company, 24) : `<b>${esc(e.company[0] || '?')}</b>`}</span>
         <span class="pf-eng-main">
           <b class="pf-eng-role">${esc(e.role || 'Engagement')}</b>
@@ -928,7 +928,7 @@
         </span>
         <span class="pf-eng-when"><b>${esc(mon(e.start))} – ${esc(mon(e.end))}</b><span>${esc(plural(e.months || 0, 'mo', 'mo'))}${r ? ` · ${RN.ui.stars(r.overall || 5)}` : ''}</span></span>
         ${hasDetail ? `<span class="pf-eng-chev">${icon('chev-down')}</span>` : ''}
-      </button>
+      </${hasDetail ? 'button' : 'div'}>
       ${hasDetail ? `<div class="pf-eng-bd" ${open ? '' : 'hidden'}>
         ${e.outcome ? `<div class="pf-outcome"><span class="pf-lab">Outcome</span><p>${esc(e.outcome)}</p></div>` : ''}
         ${e.context ? `<div class="pf-eng-ctx"><span class="pf-lab">What ${esc(c.first)} did</span><p>${esc(e.context)}</p></div>` : ''}

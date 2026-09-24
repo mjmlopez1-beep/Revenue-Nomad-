@@ -479,9 +479,9 @@
 .pf-tl-dot { position: absolute; left: -28px; top: 29px; width: 12px; height: 12px; border-radius: 50%; background: var(--paper); border: 2px solid var(--line); }
 .pf-eng.ver .pf-tl-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 4px var(--tint); }
 .pf-eng-hd { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto 20px; gap: 16px; align-items: center; width: 100%; padding: 16px 18px; background: none; border: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; border-radius: 14px; }
-.pf-eng-hd[tabindex="-1"] { cursor: default; grid-template-columns: 72px minmax(0, 1fr) auto; }
+.pf-eng-hd.static { cursor: default; grid-template-columns: 72px minmax(0, 1fr) auto; }
 .pf-eng-hd:hover .pf-eng-role { color: var(--accent); }
-.pf-eng-hd[tabindex="-1"]:hover .pf-eng-role { color: inherit; }
+.pf-eng-hd.static:hover .pf-eng-role { color: inherit; }
 .pf-eng-logo { width: 72px; height: 46px; border-radius: 10px; background: var(--night-ink); border: 1px solid var(--line-2); display: grid; place-items: center; overflow: hidden; padding: 6px 8px; }
 .pf-eng-logo img { max-width: 100%; max-height: 26px !important; height: auto !important; width: auto; }
 .pf-eng-logo b { font-family: var(--f-display); font-size: 20px; color: var(--forest); }
@@ -723,7 +723,7 @@
 }
 @container pfsec (max-width: 600px) {
   .pf-eng-hd { grid-template-columns: 52px minmax(0, 1fr) 20px; gap: 6px 12px; align-items: start; padding: 14px; }
-  .pf-eng-hd[tabindex="-1"] { grid-template-columns: 52px minmax(0, 1fr); }
+  .pf-eng-hd.static { grid-template-columns: 52px minmax(0, 1fr); }
   .pf-eng-logo { width: 52px; height: 40px; padding: 5px; }
   .pf-eng-when { grid-column: 2; grid-row: 2; flex-direction: row; flex-wrap: wrap; align-items: center; text-align: left; gap: 4px 10px; }
   .pf-eng-chev { grid-column: 3; grid-row: 1; margin-top: 4px; }

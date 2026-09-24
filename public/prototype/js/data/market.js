@@ -22,10 +22,10 @@
       lede: 'What companies pay, how they scope the work, which roles they hire first, and what separates the operators who get rehired. Built from a survey of operators and hiring companies plus anonymized data from 350+ profiles on the Revenue Nomad network.',
       summary: [
         { v: '$240', l: 'Median hourly rate for a fractional GTM leader, up 9% year over year' },
-        { v: '41%', l: 'Of engagements scoped at 20 to 39 hours a month, the most common shape' },
+        { v: '41%', l: 'Of engagements scoped under 40 hours a month. 40 hours is the single most common shape' },
         { v: '6.4 mo', l: 'Median engagement length, with 48% extended past the original term' },
         { v: '2.4x', l: 'Rehire rate for operators with three or more verified client reviews vs none' },
-        { v: '31%', l: 'Of first-time buyers hired a fractional leader as their first sales leadership hire' },
+        { v: '31%', l: 'Of first-time clients hired a fractional leader as their first sales leadership hire' },
         { v: '67 days', l: 'Median time from start to the first measurable pipeline change' },
       ],
       triggers: [
@@ -51,11 +51,12 @@
       ],
       // Median hourly rate by the client's standard revenue range
       rateByRevenue: [
+        // Consistent with the Rate Index: all-category median $240 x rateIndex.byRevenue multipliers, rounded to $5
         { range: 'under_1m', v: 190 },
-        { range: '1m_5m', v: 225 },
-        { range: '5m_20m', v: 250 },
-        { range: '20m_50m', v: 280 },
-        { range: '50m_plus', v: 310 },
+        { range: '1m_5m', v: 220 },
+        { range: '5m_20m', v: 240 },
+        { range: '20m_50m', v: 265 },
+        { range: '50m_plus', v: 300 },
       ],
       fracVsFull: [
         ['Fractional VP of Sales, 40 hrs a month', '$10,000', '2 to 3 weeks', '30 days notice'],
