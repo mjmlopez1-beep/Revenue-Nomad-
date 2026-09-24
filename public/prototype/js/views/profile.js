@@ -516,9 +516,10 @@
       <div class="pf-ring">${RN.chart.ring(op.ris.score, { size: 88, stroke: 8, label: 'Reputation Index ' + op.ris.score })}<b class="serif-up">${esc(op.ris.score)}</b></div>
       <div class="pf-rep-r">
         <div class="pf-proof-hd"><span>Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated')}</span><span class="pf-tierchip ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${RN.ui.hexSeal(tier.l)}${esc(tier.l)}</span></div>
-        <div class="pf-bell">${RN.chart.bell({ w: 236, h: 66, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
+        <div class="pf-bell">${RN.chart.bell({ w: 260, h: 70, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
         <div class="pf-bell-foot"><span>Median ${PEER.mean} <span class="faint">· illustrative peers</span></span><b>${ordinal(pctile)} percentile</b></div>
       </div>
+      <div class="pf-rep-x"><b class="${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${esc(tier.l)} · ${esc(op.ris.score)} of 100</b><p>${esc(tier.d)}</p><span>One score for every client, built from review volume, verified focus areas, ratings, profile completeness and engagement recency.</span></div>
     </article>`;
     // How long clients stay
     const median = medianMonths();
@@ -1083,6 +1084,7 @@
         ${op.timezone ? `<div><dt>Time zone</dt><dd>${esc(tzLabel(op.timezone))}</dd></div>` : ''}
         ${rate}
       </dl>
+      <div class="pf-engage-act">
       ${v.owner ? `<a class="btn btn-block" href="#studio.profile">${icon('edit')}Update availability and rate</a>
           <p class="pf-fine">Clients see this card with a Request intro button. Your rate is hidden from logged-out visitors.</p>`
       : intro ? `<div class="pf-intro-st"><span>Your intro request</span>${RN.intro ? RN.intro.statusPill(intro.status) : ''}</div><a class="btn btn-block btn-line" href="#buyer.intros">Track in workspace${icon('arrow')}</a>`
@@ -1093,6 +1095,7 @@
       </div>
       <a class="pf-talklink" href="#talk">Not sure ${esc(op.first)} is the one? <b>Talk to our team</b></a>
       <p class="pf-fine">Scheduling, messaging and contracting run through Revenue Nomad. Intro requests have a 72-hour response window.</p>`}
+      </div>
     </section>`;
   }
   function matchCard(c) {

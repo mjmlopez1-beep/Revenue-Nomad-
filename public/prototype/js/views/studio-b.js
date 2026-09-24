@@ -88,16 +88,24 @@
      INBOX: intro requests (blind until introduced) + project invites
      ====================================================================== */
   const WINDOW_H = 72;
-  const INTRO_PASS = [
-    { v: 'capacity', l: 'At capacity', client: (f) => `${f} is at capacity right now.` },
-    { v: 'expertise', l: 'Not my expertise', client: (f) => `${f} doesn’t think this is the best use of their expertise.` },
-    { v: 'timing', l: 'Timing', client: (f) => `The timing doesn’t work for ${f}.` },
-    { v: 'rate', l: 'Rate', client: (f) => `${f}’s rate and this scope are unlikely to line up.` },
-  ];
-  // Project pass reasons (Projects prototype, "Not for me" form). Only Revenue Nomad sees them.
-  const PROJECT_PASS = ['Rate', 'Hours', 'Timing', 'Not my expertise', 'Industry', 'Other'];
-  const FEE = 0.25; // projects carry a 25% platform fee; operators see take-home
-  const takeHome = (n) => Math.round(n * (1 - FEE));
+  // Pass reasons come from the shared RN.fields.passReason. For intros the client gets a short, polite
+  // sentence per reason (keyed on the stored slug); for projects only Revenue Nomad sees the reason.
+  const PASS_CLIENT = {
+    capacity: (f) => `${f} is at capacity right now.`,
+    expertise: (f) => `${f} doesn’t think this is the best use of their expertise.`,
+    timing: (f) => `The timing doesn’t work for ${f}.`,
+    rate: (f) => `${f}’s rate and this scope are unlikely to line up.`,
+    hours: (f) => `${f} can’t give this the hours it needs right now.`,
+    industry: (f) => `${f} doesn’t have enough experience in your industry to do it justice.`,
+    other: (f) => `${f} can’t take this one.`,
+  };
+  const passControl = (value) => (RN.fields.passReason
+    ? RN.w.control('passReason', value || '', { name: 'reason' })
+    : `<div class="chipset">${Object.keys(PASS_CLIENT).map((k) => `<button type="button" class="chip" aria-pressed="${value === k}" data-act="w-chip" data-name="reason" data-v="${k}">${esc(k)}</button>`).join('')}<input type="hidden" name="reason" value="${esc(value || '')}"></div>`);
+  const passLabel = (v) => (RN.fields.passReason ? RN.w.label('passReason', v) : v);
+  // Projects carry a 25% platform fee. RN.projects (projects.js) owns the money math; fallbacks keep Studio working alone.
+  const PJ = () => RN.projects || null;
+  const takeHome = (n) => (PJ() && PJ().payFor ? PJ().payFor(n) : Math.floor(n * 0.75));
 
   function introGroup(i) {
     if (i.status === 'pending') return 'reply';
@@ -107,6 +115,10 @@
   function hoursLeft(i) { return (new Date(i.createdAt).getTime() + WINDOW_H * 36e5 - RN.now().getTime()) / 36e5; }
 
   function projStage(p, op) {
+    if (PJ() && PJ().stage) {
+      const k = (PJ().stage(p, op.id) || { k: 'invited' }).k;
+      return { under_review: 'review', declined: 'passed' }[k] || k;
+    }
     const r = (p.responses || []).find((x) => x.opId === op.id);
     const done = ['staffed', 'closed'].includes(p.status);
     if (p.selected === op.id) return 'selected';
@@ -126,12 +138,15 @@
     closed: { l: 'Closed', pill: '', g: 'closed' },
   };
   const liveProject = (p) => p.status !== 'draft';
+  const inviteTs = (p, op) => ((p.inviteMeta || {})[op.id] || {}).ts || p.postedAt || p.createdAt;
+  const pFields = (p) => (PJ() && PJ().fields ? PJ().fields(p) : p.fields || {});
+  const pBrief = (p) => (PJ() && PJ().brief ? PJ().brief(p) : p.fields || {});
 
   function inboxItems(op) {
     const intros = st().intros.filter((i) => i.opId === op.id).map((i) => ({ kind: 'intro', ts: i.createdAt, rec: i, group: introGroup(i) }));
     const projects = st().projects.filter((p) => (p.invited || []).includes(op.id) && liveProject(p)).map((p) => {
       const stage = projStage(p, op);
-      return { kind: 'project', ts: (p.invitedAt && p.invitedAt[op.id]) || p.postedAt || p.createdAt, rec: p, stage, group: STAGE[stage].g };
+      return { kind: 'project', ts: inviteTs(p, op), rec: p, stage, group: (STAGE[stage] || STAGE.invited).g };
     });
     return intros.concat(projects).sort((a, b) => new Date(b.ts) - new Date(a.ts));
   }
@@ -236,10 +251,7 @@
   function passPanel(i, op) {
     return `<form class="sb-pass" data-submit="sb-intro-pass-send" data-id="${esc(i.id)}">
       <div class="field"><span class="field-label">Why are you passing?</span>
-        <div class="chipset" role="group" aria-label="Reason">
-          ${INTRO_PASS.map((r) => `<button type="button" class="chip" aria-pressed="false" data-act="w-chip" data-name="reason" data-v="${r.v}">${esc(r.l)}</button>`).join('')}
-          <input type="hidden" name="reason" value="">
-        </div>
+        ${passControl('')}
         <p class="help">The client gets a short, polite note and two operators with the same fit.</p>
       </div>
       <div class="field"><label for="sb-pn-${esc(i.id)}">Note to the client <span class="opt">Optional</span></label>
@@ -262,25 +274,25 @@
   RN.actions['sb-intro-pass'] = (el) => { S.passOpen[el.dataset.id] = !S.passOpen[el.dataset.id]; RN.rerender(); };
   RN.submits['sb-intro-pass-send'] = (form, data) => {
     const op = RN.myOp();
-    const r = INTRO_PASS.find((x) => x.v === data.reason);
-    if (!r) { RN.ui.toast('Pick a reason so we can send the client better matches.', { icon: 'info' }); return; }
-    const msg = r.client(op.first) + (data.note ? ' ' + data.note.trim() : '');
+    if (!data.reason) { RN.ui.toast('Pick a reason so we can send the client better matches.', { icon: 'info' }); return; }
+    const msg = (PASS_CLIENT[data.reason] || PASS_CLIENT.other)(op.first) + (data.note ? ' ' + data.note.trim() : '');
     RN.intro.setStatus(form.dataset.id, 'declined', msg);
-    RN.store.update((s) => { const x = s.intros.find((y) => y.id === form.dataset.id); if (x) x.declineReason = r.l; }, 'intros');
+    RN.store.update((s) => { const x = s.intros.find((y) => y.id === form.dataset.id); if (x) { x.declineReason = passLabel(data.reason); x.passReason = data.reason; } }, 'intros');
     delete S.passOpen[form.dataset.id];
-    RN.ui.toast(`Passed. The client gets two operators with the same fit.`, r.v === 'capacity' ? { action: { label: 'Update availability', act: 'go', attrs: 'data-to="studio.profile"' }, ms: 5000 } : {});
+    RN.ui.toast(`Passed. The client gets two operators with the same fit.`, data.reason === 'capacity' ? { action: { label: 'Update availability', act: 'go', attrs: 'data-to="studio.profile"' }, ms: 5000 } : {});
     RN.shell.renderHeader();
     RN.rerender();
   };
 
   /* ---------- Project invites ---------- */
   function projectFirm(p) {
+    if (PJ() && PJ().blind) return PJ().blind(p);
     const f = p.fields || {};
     const ind = (f.industries || [])[0];
     return `A ${ind ? RN.w.label('industries', ind) : 'client'} company${f.revenueRange ? ' · ' + RN.w.label('companyRevenue', f.revenueRange) + ' revenue' : ''}${f.employeeRange ? ' · ' + RN.w.label('companyEmployees', f.employeeRange) + ' employees' : ''}`;
   }
   function projectFacts(p) {
-    const f = p.fields || {};
+    const f = pFields(p);
     const rows = [
       f.roleCategory && [RN.fields.roleCategory.label, RN.w.label('roleCategory', f.roleCategory)],
       f.engagementType && [RN.fields.engagementType.label, RN.w.label('engagementType', f.engagementType)],
@@ -292,7 +304,7 @@
     return `<dl class="sb-facts">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
   }
   function payBlock(p) {
-    const f = p.fields || {};
+    const f = pFields(p);
     const tip = RN.ui.tip('Projects carry a 25% Revenue Nomad fee. The client’s budget is all-in; your take-home is what lands with you. You name your own rate in your response.', 'How take-home is calculated');
     if (f.engagementType === 'project' && f.projectBudget) {
       return `<div class="sb-pay"><div><span class="label">Client budget, all-in</span><b>${esc(RN.fmt.usd(f.projectBudget))}</b></div><div class="sb-pay-you"><span class="label">Your take-home ${tip}</span><b>${esc(RN.fmt.usd(takeHome(f.projectBudget)))}</b></div></div>`;
@@ -304,10 +316,11 @@
   }
 
   function projectCard(p, op, stage) {
-    const f = p.fields || {};
+    const f = pFields(p);
     const r = (p.responses || []).find((x) => x.opId === op.id);
-    const fit = RN.model.fit(op, f);
-    const meta = STAGE[stage];
+    const fit = RN.model.fit(op, pBrief(p));
+    const meta = STAGE[stage] || STAGE.invited;
+    const src = ((p.inviteMeta || {})[op.id] || {}).source;
     const open = S.respOpen[p.id];
     const live = ['posted', 'in_progress'].includes(p.status);
     const lost = stage === 'not_selected' || stage === 'passed' || stage === 'closed';
@@ -315,8 +328,8 @@
     const tags = (f.tags || []).map((t) => { const mine = op.tags.find((x) => x.t.toLowerCase() === t.toLowerCase()); return RN.ui.ftag(mine ? mine : { t, tier: 'claimed' }); }).join('');
     return `<article class="card sb-item ${stage === 'invited' ? 'is-new' : ''}" id="sb-p-${esc(p.id)}">
       <div class="sb-item-top">
-        <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('briefcase')}Project invite</span><span class="pill ${meta.pill}">${esc(meta.l)}</span></div>
-        <span class="tiny muted">Invited ${esc(RN.fmt.ago(p.postedAt || p.createdAt))}</span>
+        <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('briefcase')}Project invite</span><span class="pill ${meta.pill}">${esc(meta.l)}</span>${src === 'rn' ? `<span class="pill pill-gold">${icon('seal')}Suggested by Revenue Nomad</span>` : ''}</div>
+        <span class="tiny muted">${src === 'rn' ? 'Suggested' : 'Invited'} ${esc(RN.fmt.ago(inviteTs(p, op)))}</span>
       </div>
       <h3 class="sb-item-h">${esc(p.title)}</h3>
       <p class="sb-who">${icon('eye-off')}<span>${segs(projectFirm(p))}</span>${RN.ui.tip('The company name is shared when the client requests an intro.', 'Why the company is hidden')}</p>
@@ -328,7 +341,7 @@
       ${stage !== 'invited' && stage !== 'passed' && stage !== 'closed' ? stepper(['Invited', 'Responded', 'Under review', stage === 'not_selected' ? 'Not selected' : 'Selected'], idx, { lost: stage === 'not_selected', label: 'Project progress' }) : ''}
       ${r && !open ? `<div class="sb-sent">
           <span class="label">What you sent</span>
-          <p>${r.status === 'declined' ? `You passed${r.reason ? ': ' + esc(r.reason) : ''}. The client never sees a response from you.` : `<b>Interested</b>${r.rate ? ` · $${esc(r.rate)}/hr take-home` : ''} · ${esc(RN.fmt.dateShort(r.ts))}`}</p>
+          <p>${r.status === 'declined' ? `You passed${r.reason ? ': ' + esc(passLabel(r.reason)) : ''}. Only Revenue Nomad sees your reason.` : `<b>Interested</b>${r.rate ? ` · $${esc(r.rate)}/hr take-home` : ''}${r.rate && PJ() && PJ().allIn ? ` · the client sees $${esc(PJ().allIn(r.rate))}/hr all-in` : ''} · ${esc(RN.fmt.dateShort(r.ts))}`}</p>
           ${r.note ? `<blockquote class="sb-quote">${esc(r.note)}</blockquote>` : ''}
         </div>` : ''}
       ${stage === 'responded' ? `<p class="sb-next">${icon('info')}<span>Your response is with the client. Most clients review responses within three business days.</span></p>` : ''}
@@ -344,8 +357,9 @@
   }
 
   function respondForm(p, op, r) {
-    const f = p.fields || {};
-    const cap = f.rateMax ? takeHome(f.rateMax) : null;
+    const f = pFields(p);
+    const cap = f.engagementType !== 'project' && f.rateMax ? takeHome(f.rateMax) : null;
+    const over = (v) => (cap ? (PJ() && PJ().overBudget ? PJ().overBudget(v, f.rateMax) > 0 : +v > cap) : false);
     const declined = r && r.status === 'declined';
     const rate = r && r.rate ? r.rate : op.rate || '';
     return `<form class="sb-respond" data-submit="sb-proj-send" data-id="${esc(p.id)}">
@@ -356,16 +370,13 @@
       <input type="hidden" name="mode" value="${declined ? 'declined' : 'interested'}">
       <div class="stack" style="--gap:16px" data-mode-pane="interested" ${declined ? 'hidden' : ''}>
         <div data-input="sb-rate-chk" data-cap="${cap || ''}">${RN.w.field('rate', rate, { name: 'rate', id: 'sb-rate-' + p.id, label: 'Your hourly rate for this project', help: cap ? `What you want per hour, take-home. This project pays up to $${cap}/hr after the 25% fee.` : 'What you want per hour, take-home.' })}</div>
-        ${cap ? `<p class="sb-warn" data-rate-warn ${+rate > cap ? '' : 'hidden'}>${icon('info')}<span><span data-rate-txt>$${esc(rate)} is more than this project pays ($${cap}/hr)</span>, so the client sees you as over budget. <button type="button" class="act" data-act="sb-rate-use" data-v="${cap}" data-for="sb-rate-${esc(p.id)}">Use $${cap}</button></span></p>` : ''}
+        ${cap ? `<p class="sb-warn" data-rate-warn ${over(rate) ? '' : 'hidden'}>${icon('info')}<span><span data-rate-txt>$${esc(rate)} is more than this project pays ($${cap}/hr)</span>, so the client sees you as over budget. <button type="button" class="act" data-act="sb-rate-use" data-v="${cap}" data-for="sb-rate-${esc(p.id)}">Use $${cap}</button></span></p>` : ''}
         <div class="field"><label for="sb-rn-${esc(p.id)}">Note to the client <span class="opt">Optional</span></label>
           <textarea class="textarea" id="sb-rn-${esc(p.id)}" name="note" maxlength="600" style="min-height:90px" placeholder="Where you have done this before, and what your first 30 days would cover.">${esc(r && !declined ? r.note || '' : '')}</textarea></div>
       </div>
       <div class="stack" style="--gap:14px" data-mode-pane="declined" ${declined ? '' : 'hidden'}>
         <div class="field"><span class="field-label">What made it a pass?</span>
-          <div class="chipset" role="group" aria-label="Reason">
-            ${PROJECT_PASS.map((x) => `<button type="button" class="chip" aria-pressed="${!!(declined && r.reason === x)}" data-act="w-chip" data-name="reason" data-v="${esc(x)}">${esc(x)}</button>`).join('')}
-            <input type="hidden" name="reason" value="${esc(declined ? r.reason || '' : '')}">
-          </div>
+          ${passControl(declined ? r.reason : '')}
           <p class="help">Only Revenue Nomad sees this. It tunes which projects we send you.</p>
         </div>
         <div class="field"><label for="sb-rd-${esc(p.id)}">Anything else <span class="opt">Optional</span></label>
@@ -396,7 +407,9 @@
     const warn = form && form.querySelector('[data-rate-warn]');
     if (!cap || !warn) return;
     const v = +ev.target.value;
-    warn.hidden = !(v > cap);
+    const p = st().projects.find((x) => x.id === form.dataset.id);
+    const max = p ? pFields(p).rateMax : null;
+    warn.hidden = !(PJ() && PJ().overBudget && max ? PJ().overBudget(v, max) > 0 : v > cap);
     warn.querySelector('[data-rate-txt]').textContent = `$${v} is more than this project pays ($${cap}/hr)`;
   };
   RN.submits['sb-proj-send'] = (form, data) => {
@@ -407,18 +420,20 @@
     const declined = data.mode === 'declined';
     if (declined && !data.reason) { RN.ui.toast('Pick a reason so we can send better matches.', { icon: 'info' }); return; }
     if (!declined && !(+data.rate > 0)) { RN.ui.toast('Add your hourly rate for this project.', { icon: 'info' }); return; }
-    const resp = declined
-      ? { opId: op.id, status: 'declined', reason: data.reason, note: (data.passNote || '').trim(), rate: null, ts: RN.now().toISOString() }
-      : { opId: op.id, status: 'interested', note: (data.note || '').trim(), rate: +data.rate, ts: RN.now().toISOString() };
     const had = (p.responses || []).some((x) => x.opId === op.id);
-    RN.store.update((s) => {
-      const pr = s.projects.find((x) => x.id === id);
-      pr.responses = (pr.responses || []).filter((x) => x.opId !== op.id).concat(resp);
-    }, 'projects');
-    const client = p.buyer || p.client || RN.personas.buyer;
-    if (!declined) {
-      RN.mail(client.email || RN.personas.buyer.email, `${op.name} ${had ? 'updated a response' : 'responded'}: ${p.title}`, `${op.name}, Fractional ${op.role}, is interested in your ${p.title} project.\nRate: $${resp.rate}/hr\n${resp.note ? '\n“' + resp.note + '”\n' : ''}\nCompare responses and request an intro from your project page.`, 'project');
+    const note = (declined ? data.passNote : data.note || '').trim();
+    if (PJ() && PJ().respond) {
+      // One shared write path: records the response and emails the client once (projects.js)
+      PJ().respond(id, op.id, { status: declined ? 'declined' : 'interested', note, rate: declined ? null : +data.rate, hours: op.avail.hoursCode });
+    } else {
+      RN.store.update((s) => {
+        const pr = s.projects.find((x) => x.id === id);
+        pr.responses = (pr.responses || []).filter((x) => x.opId !== op.id).concat({ opId: op.id, status: declined ? 'declined' : 'interested', note, rate: declined ? null : +data.rate, ts: RN.now().toISOString() });
+      }, 'projects');
+      if (!had && !declined) RN.mail(RN.personas.buyer.email, `${op.name} responded to ${p.title}`, `${op.name} is interested. Rate: $${+data.rate}/hr.`, 'response');
     }
+    // The pass reason is private to Revenue Nomad; RN.projects.respond does not store it yet
+    RN.store.update((s) => { const pr = s.projects.find((x) => x.id === id); const x = pr && (pr.responses || []).find((y) => y.opId === op.id); if (x) { if (declined) x.reason = data.reason; else delete x.reason; } }, 'projects');
     delete S.respOpen[id];
     RN.ui.toast(declined ? 'Passed. Only Revenue Nomad sees your reason.' : had ? 'Response updated. The client sees the new version.' : 'Response sent. The client can request an intro from here.');
     RN.shell.renderHeader();
@@ -575,7 +590,7 @@
     return `<section class="card" id="sb-c-proof" aria-labelledby="sb-proof-h">
       <div class="card-hd"><div><h3 id="sb-proof-h">Proof links</h3><p class="sub">A private page for one prospect with the proof you choose. You see who read what; they see a notice that you can.</p></div>
         ${unlocked ? `<button type="button" class="btn btn-sm" data-act="sb-proof-new">${icon('link')}Create proof link</button>` : `<span class="pill">${icon('lock')}Unlocks at Proven</span>`}</div>
-      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.', cta: unlocked ? '<button type="button" class="btn btn-sm" data-act="sb-proof-new">Create proof link</button>' : '' })}
+      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock at Proven (60). Your first client reviews are the fastest way there.', cta: unlocked ? '<button type="button" class="btn btn-sm" data-act="sb-proof-new">Create proof link</button>' : '<button type="button" class="btn btn-sm" data-act="sb-rr-open">Request a review</button>' })}
     </section>`;
   }
   function proofCard(l) {
@@ -1132,6 +1147,7 @@
         <ol>${SL_SIGNALS.map(([, q]) => `<li>${esc(q)}</li>`).join('')}</ol></details>
       <div class="sb-filters"><div class="seg" role="group" aria-label="List">${[['review', 'To review'], ['queued', 'Queued'], ['contacted', 'Contacted'], ['dismissed', 'Dismissed']].map(([k, l]) => `<button type="button" aria-pressed="${S.prosStatus === k}" data-act="sb-pros-status" data-s="${k}">${l} <span class="sb-n">${counts[k] || 0}</span></button>`).join('')}</div></div>
       ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => prospectCard(x, op, stOf(x))).join('')}</div>${held && S.prosStatus === 'review' ? `<p class="sb-held">${icon('filter')}<span>${held} more ${held === 1 ? 'company scored' : 'companies scored'} under ${QUEUE_MIN} on your profile and ${held === 1 ? 'is' : 'are'} held back. Their industry or size is outside your ranges. <a class="link" href="#studio.profile">Edit your company fit</a></span></p>` : ''}`
+        : S.prosStatus === 'review' && !pros.length && held ? RN.ui.empty({ icon: 'filter', title: `No companies clear ${QUEUE_MIN} on your profile yet`, body: 'Prospects are matched on your industries, revenue range and employee range. Add them and the queue fills in.', cta: '<a class="btn btn-sm" href="#studio.profile">Add company fit</a>' })
         : RN.ui.empty({ icon: 'target', title: S.prosStatus === 'review' ? 'You have reviewed every prospect' : `Nothing ${S.prosStatus} yet`, body: S.prosStatus === 'review' ? 'New companies appear as signals fire. Sharper profile fields give sharper matches.' : 'Queue a prospect to plan outreach, or mark it contacted once you reach out.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sb-pros-status" data-s="review">Back to To review</button>` })}`;
   }
   function prospectCard(x, op, status) {
@@ -1423,5 +1439,5 @@
   RN.studio.tab('profile', { label: 'Edit profile', icon: 'edit', group: 'Grow', order: 8, render: (op) => renderProfile(op) });
 
   // Hand-off helpers other surfaces can reuse
-  RN.studioB = { openReviewRequest, openProofModal, inboxBadge, projStage, takeHome };
+  RN.studioB = { openReviewRequest, openProofModal, inboxBadge, projStage };
 })();

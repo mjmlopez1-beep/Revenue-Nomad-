@@ -414,7 +414,8 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-rel { padding-top: var(--s-10); border-top: 1px solid var(--line); scroll-margin-top: calc(var(--nav-h) + 16px); }
 .rs-rel .kicker { font-size: var(--t-16); }
 .rs-rel-ops { margin-top: var(--s-5); --gap: 16px; }
-.rs-bp { display: flex; align-items: center; gap: 16px; margin-top: var(--s-5); color: var(--ink); max-width: 760px; }
+.rs-glinks { margin-top: var(--s-5); --gap: 16px; }
+.rs-bp { display: flex; align-items: center; gap: 16px; color: var(--ink); }
 .rs-bp-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--tint); color: var(--accent); flex: 0 0 auto; }
 .rs-bp-ic svg { width: 20px; height: 20px; }
 .rs-bp .grow { display: flex; flex-direction: column; gap: 3px; }

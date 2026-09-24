@@ -720,11 +720,29 @@
     </div>`;
   }
 
+  /* Browse hand-off for the estimate: role, company revenue and a rate ceiling at the p75.
+     Counts use the same rule Browse applies (a rate ceiling keeps only operators who publish a rate),
+     and relax step by step so the button never lands on an empty page. */
+  function browseCount(f) {
+    let res = RN.model.search({ filters: f });
+    if (f.rateMax) res = res.filter((x) => x.op.rate);
+    return res.length;
+  }
+  function estHandoff(r) {
+    const cat = catLabel(est.cat);
+    const steps = [
+      { f: { roleCategories: [est.cat], revenueRange: [est.rev], rateMax: Math.min(F.rateMax.max, Math.ceil(r.p75 / 5) * 5) }, l: (n) => `See ${RN.fmt.plural(n, 'operator')} in this range` },
+      { f: { roleCategories: [est.cat], revenueRange: [est.rev] }, l: (n) => `See ${n} ${cat} ${n === 1 ? 'operator' : 'operators'}` },
+      { f: { roleCategories: [est.cat] }, l: () => `Browse ${cat}` },
+    ];
+    for (const s of steps) { const n = browseCount(s.f); if (n) return { f: s.f, label: s.l(n), n }; }
+    return { f: steps[2].f, label: steps[2].l(0), n: 0 };
+  }
   function estOut() {
     const g = ins.range(est.cat, est.rev, est.hours);
     const r = g.r;
     const low = sampleNote(r.n);
-    const f = { roleCategories: [est.cat], revenueRange: [est.rev], hoursPerMonth: [est.hours], rateMax: Math.min(F.rateMax.max, Math.ceil(r.p75 / 5) * 5) };
+    const hand = estHandoff(r);
     return `<span class="label">Typical Engagement Range</span>
       <div class="ins-est-big num">${esc(ins.fmtRange(g.lo, g.hi))}</div>
       <p class="ins-est-mid">Median <b>${usd(r500(g.mid))}/mo</b> · ${esc(String(est.hours) === '19' ? 'about 15 hrs' : g.h + ' hrs')} a month at ${hr(r.p50)}/hr</p>
@@ -735,7 +753,7 @@
       <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${usd(r500(g.mid * 3))} to ${usd(r500(g.mid * 6))}</b> for the first term.</p>
       <p class="ins-est-basis small">Based on ${RN.fmt.int(r.n)} ${esc(catLabel(est.cat))} rates, adjusted for ${esc(revLabel(est.rev))} companies (×${r.m.toFixed(2)}).${low ? ` <span class="ins-low">${icon('info')}${esc(low)}</span>` : ''}</p>
       <div class="row ins-est-cta">
-        <button type="button" class="btn btn-leaf" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(f)}">See operators in this range${icon('arrow')}</button>
+        <button type="button" class="btn btn-leaf" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(hand.f)}">${esc(hand.label)}${icon('arrow')}</button>
         <button type="button" class="btn btn-line" data-act="ins-jump" data-to="ins-calc">Compare with full time</button>
       </div>`;
   }

@@ -346,3 +346,4 @@
 
 .adm-lbl-l { display: none; }
 @media (max-width: 720px) { .adm-lbl-s { display: none; } .adm-lbl-l { display: inline; } }
+.adm-picks + p { margin-top: var(--s-4); }

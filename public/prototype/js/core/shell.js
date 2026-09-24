@@ -17,6 +17,12 @@
     admin: { key: 'admin', name: 'Matt Lopez', sub: 'Revenue Nomad team', first: 'Matt', email: 'matt@revenuenomad.com' },
   };
   RN.me = () => RN.personas[RN.store.state.persona];
+  /* The signed-in client's match brief for RN.model.fit: company firmographics + saved match preferences */
+  RN.clientBrief = function () {
+    const c = RN.personas.buyer.company;
+    const p = (RN.store.state.seen && RN.store.state.seen.companyPrefs) || {};
+    return { revenueRange: c.revenueRange, employeeRange: c.employeeRange, industries: c.industry ? [c.industry] : [], roleCategory: p.roleCategory, salesMotions: p.salesMotions || [], engagementType: p.engagementType, need: p.need };
+  };
   RN.myOp = () => (RN.store.state.persona === 'operator' ? RN.model.byId(RN.personas.operator.opId) : null);
 
   RN.actions['persona'] = (el) => {

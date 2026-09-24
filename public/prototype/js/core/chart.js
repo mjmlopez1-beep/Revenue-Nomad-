@@ -66,11 +66,13 @@
 
   /* Line/area chart over time. series: [{name, values:number[], color?, dashed?}], labels: string[] */
   C.line = function (series, labels, o) {
+    const explicitTicks = !!(o && o.ticks);
     o = Object.assign({ w: 640, h: 220, fmt: (n) => RN.fmt.compact(n), ticks: 4, area: true }, o || {});
     const left = 40, right = 12, top = 14, bottom = 28;
     const pw = o.w - left - right, ph = o.h - top - bottom;
     const all = series.flatMap((s) => s.values);
     const max = niceMax(Math.max(...all, 1));
+    if (!explicitTicks) { const nice = [4, 5, 3, 2].find((t) => Number.isInteger(max / t) || (max / t) % 0.5 === 0); if (nice) o.ticks = nice; }
     const n = Math.max(...series.map((s) => s.values.length));
     const x = (i) => left + (i * pw) / Math.max(1, n - 1);
     const y = (v) => top + ph - (v / max) * ph;
@@ -80,7 +82,7 @@
       const yy = y(val);
       grid += `<line class="grid-l" x1="${left}" x2="${o.w - right}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}"/><text x="${left - 8}" y="${(yy + 4).toFixed(1)}" text-anchor="end">${esc(o.fmt(val))}</text>`;
     }
-    const step = Math.ceil(labels.length / 6);
+    const step = Math.ceil(labels.length / Math.max(2, Math.min(6, Math.floor(o.w / 95))));
     const xl = labels.map((l, i) => (i % step === 0 || i === labels.length - 1 ? `<text x="${x(i).toFixed(1)}" y="${o.h - 8}" text-anchor="middle">${esc(l)}</text>` : '')).join('');
     const paths = series.map((s, si) => {
       const col = s.color || (si === 0 ? 'var(--viz-1)' : 'var(--viz-muted)');
@@ -154,7 +156,7 @@
   C.funnel = function (steps, o) {
     o = Object.assign({ w: 640, rowH: 46 }, o || {});
     const max = Math.max(...steps.map((s) => s.value), 1);
-    const labelW = 170, valW = 120, track = o.w - labelW - valW;
+    const labelW = Math.min(170, Math.round(o.w * 0.3)), valW = Math.min(120, Math.round(o.w * 0.22)), track = o.w - labelW - valW;
     const h = steps.length * o.rowH;
     const body = steps.map((s, i) => {
       const y = i * o.rowH;

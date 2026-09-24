@@ -52,6 +52,12 @@
   const journey = () => RN.data.framework.stages;
   const allStages = () => journey().concat([FOUNDATION]);
   const stageBy = (name) => allStages().find((s) => s.name === name || s.id === name);
+  // "Win deals at Qualify", but "Lead & plan across every stage" for Foundation
+  const cellText = (area, stage) => (stage === 'Foundation' ? `${area} across every stage` : `${area} at ${stage}`);
+  const cellHtml = (area, stage) => `${esc(area)} <span class="serif">${stage === 'Foundation' ? 'across' : 'at'}</span> ${stage === 'Foundation' ? 'every stage' : esc(stage)}`;
+  // The title a client would hire for in each role category (from RN.fields.rolesByCat)
+  const ROLE_PICK = { sales_leadership: 1, sales_enablement: 1 };
+  const roleFor = (cat) => { const r = F.rolesByCat[cat] || []; return r[ROLE_PICK[cat] || 0] || F.catLabel(cat) + ' leader'; };
 
   /* Curation pass (Revenue Nomad Research, taxonomy v1, Sep 2026).
      The live mapping places tags by role category, which leaves Onboard and Expand empty and files brand work under
@@ -322,6 +328,14 @@
     while (RN.ui.modalEl()) RN.ui.closeModal();
   }
 
+  // Engagement Blueprints live in projects.js; link to the matching one when it is loaded, else to the library
+  function blueprintFor(cat, prefId) {
+    const bps = (RN.data.blueprints || (RN.projects && RN.projects.blueprints) || []);
+    const list = Array.isArray(bps) ? bps : Object.values(bps);
+    const hit = (prefId && list.find((b) => b.id === prefId)) || (cat ? list.find((b) => (b.fields && b.fields.roleCategory === cat) || b.roleCategory === cat || b.cat === cat) : null);
+    return hit ? { to: 'blueprint.' + (hit.id || hit.slug || hit.key), title: hit.title || hit.name || 'Engagement Blueprint', sub: hit.blurb || hit.summary || hit.problem || '' } : null;
+  }
+
   /* =====================================================================
      #framework
      ===================================================================== */
@@ -440,7 +454,7 @@
     out.push({ v: String(afterOps.size), l: `${afterOps.size === 1 ? 'operator has' : 'operators have'} verified proof after the sale, while ${afterClaim.size} claim onboarding, adoption or expansion work. That is the thinnest proof on the map.`, act: 'data-act="rs-fw-open" data-stage="Adopt"', cta: 'Open Adopt' });
     let best = null;
     areas.forEach((a) => journey().forEach((s) => { const x = agg(ix, a.name, s.name); if (!best || x.any > best.any) best = x; }));
-    if (best) out.push({ v: String(best.any), l: `operators claim ${best.area} work at ${best.stage}, the most crowded cell. Clients should ask for verified proof here before they hire.`, act: `data-act="rs-fw-open" data-area="${esc(best.area)}" data-stage="${esc(best.stage)}"`, cta: 'Open the cell' });
+    if (best) out.push({ v: String(best.any), l: `operators claim ${cellText(best.area + ' work', best.stage)}, the most crowded cell. Clients should ask for verified proof here before they hire.`, act: `data-act="rs-fw-open" data-area="${esc(best.area)}" data-stage="${esc(best.stage)}"`, cta: 'Open the cell' });
     return out;
   }
 
@@ -451,7 +465,7 @@
     const ar = area ? R.areas().find((x) => x.name === area) : null;
     const tops = topOps(area || null, stage || null, 3);
     const topTag = a.tags.find((t) => t.any > 0) || a.tags[0];
-    const title = area && stage ? `${esc(area)} <span class="serif">at</span> ${esc(stage)}` : esc(area || stage);
+    const title = area && stage ? cellHtml(area, stage) : esc(area || stage);
     const sub = `${plural(a.ver, 'operator')} with client-verified proof · ${a.any} claim work here`;
     const libFilter = { area: area || '', stage: stage || '' };
 
@@ -482,18 +496,18 @@
         <p class="rs-pn-skilled serif-up">${esc(st.skilled)}</p></div>` : ''}
       ${ar ? `<div class="rs-pn-block"><span class="label">The area</span><p class="rs-pn-what">${esc(ar.def)}</p></div>` : ''}
       ${breakdown}
-      <div class="rs-pn-block"><div class="row between"><span class="label">Focus areas here (${a.tags.length})</span>${a.tags.length > 10 ? `<button type="button" class="act" data-act="rs-lib-open" data-area="${esc(libFilter.area)}" data-stage="${esc(libFilter.stage)}">See all${icon('arrow')}</button>` : ''}</div>
-        ${a.tags.length ? `<ul class="rs-pn-tags">${tagRows}</ul>` : `<p class="small muted">No focus areas are mapped to this cell yet. It is open ground in the taxonomy.</p>`}</div>
+      <div class="rs-pn-block"><div class="row between"><span class="label">Focus areas here (${a.tags.length})</span>${a.tags.length ? `<button type="button" class="act" data-act="rs-lib-open" data-area="${esc(libFilter.area)}" data-stage="${esc(libFilter.stage)}">${a.tags.length > 10 ? 'See all' : 'Open in library'}${icon('arrow')}</button>` : ''}</div>
+        ${a.tags.length ? `<ul class="rs-pn-tags">${tagRows}</ul>` : `<p class="small muted">No focus areas are mapped to this cell yet. It is open ground in the taxonomy.</p>`}
+        ${topTag && topTag.any ? `<p class="tiny muted">“Find operators strong here” opens Browse filtered to ${esc(topTag.t)}, the most proven focus area in this ${area && stage ? 'cell' : area ? 'area' : 'stage'}.</p>` : ''}</div>
       <div class="rs-pn-block"><span class="label">Operators strong here</span>
         ${tops.length ? `<div class="stack" style="--gap:12px">${tops.map((x) => RN.ui.opCard(x.op, { compact: true, why: whyLine(x) })).join('')}</div>`
           : RN.ui.empty({ icon: 'users', title: 'No operators here yet', body: 'Nobody on the network lists work in this cell. Tell us what you need and we will source it.', cta: '<a class="btn btn-line btn-sm" href="#talk">Talk to us</a>' })}
       </div>
     </div>`;
     const foot = topTag && topTag.any
-      ? `<button type="button" class="btn btn-line" data-act="rs-lib-open" data-area="${esc(libFilter.area)}" data-stage="${esc(libFilter.stage)}">Focus areas</button>
-         ${browseBtn('Find operators strong here', { tags: [topTag.t], src: 'framework_cell' })}`
-      : `<a class="btn" href="#talk">Talk to us${icon('arrow')}</a>`;
-    RN.ui.drawer({ title, sub: esc(sub) + (topTag && topTag.any ? `<br><span class="tiny">“Find operators” opens Browse filtered to ${esc(topTag.t)}, the most proven focus area here.</span>` : ''), body, foot });
+      ? browseBtn('Find operators strong here', { tags: [topTag.t], src: 'framework_cell' }, 'btn btn-block')
+      : `<a class="btn btn-block" href="#talk">Talk to us${icon('arrow')}</a>`;
+    RN.ui.drawer({ title, sub: esc(sub), body, foot });
   }
   R.openPanel = openPanel;
   RN.actions['rs-fw-open'] = (el) => {
@@ -583,18 +597,19 @@
     const ri = RIX().byCat[cat];
     const range = monthRange(cat, '40', '5m_20m');
     const catL = F.catLabel(cat);
+    const bp = blueprintFor(cat);
     return `<div class="rs-dr">
       <span class="eyebrow">Your result</span>
-      <h3 class="rs-dr-t">Your biggest leak: <span class="serif">${esc(r.top.area)}</span> at ${esc(r.top.stage)}.</h3>
+      <h3 class="rs-dr-t">Your biggest leak: <span class="serif">${esc(r.top.area)}</span> ${r.top.stage === 'Foundation' ? 'across every stage' : 'at ' + esc(r.top.stage)}.</h3>
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
-      ${r.second ? `<p class="small rs-dr-also">Also worth a look: ${esc(r.second.area)} at ${esc(r.second.stage)}.</p>` : ''}
+      ${r.second ? `<p class="small rs-dr-also">Also worth a look: ${esc(cellText(r.second.area, r.second.stage))}.</p>` : ''}
       <div class="rs-dr-grid">
-        <div class="rs-dr-box"><span class="label">Who to hire</span><b>A fractional ${esc(catL)} leader</b><span class="small">${ri ? `Median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)}.` : ''}</span></div>
-        <div class="rs-dr-box"><span class="label">How to scope it</span><b>Start from an Engagement Blueprint</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as a project.</span></div>
+        <div class="rs-dr-box"><span class="label">Who to hire</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)}.` : '.'}</span></div>
+        <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as a project.</span></div>
       </div>
       <div class="row rs-dr-acts">
         ${browseBtn(`See ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-leaf')}
-        <a class="btn btn-line" href="#blueprints">Blueprints</a>
+        <a class="btn btn-line" href="#${esc(bp ? bp.to : 'blueprints')}">${bp ? 'See the Blueprint' : 'Blueprints'}</a>
         <button type="button" class="btn btn-line" data-act="rs-fw-open" data-area="${esc(r.top.area)}" data-stage="${esc(r.top.stage)}">Open this cell</button>
         <button type="button" class="act rs-dr-reset" data-act="rs-dg-reset">${icon('refresh')}Start over</button>
       </div>
@@ -609,7 +624,7 @@
     if (list.length < 3) list = list.concat(topOps(r.top.area, null, 6, cat).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
     if (list.length < 3) list = list.concat(RN.model.search({ filters: { roleCategories: [cat] }, sort: 'ris' }).map((x) => ({ op: x.op, hits: [], v: [] })).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
     return `<div class="rs-dops">
-      <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">Matched to your result</span><h3 class="h3" style="margin-top:8px">Three operators strong in ${esc(r.top.area)} at ${esc(r.top.stage)}</h3></div>
+      <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">Matched to your result</span><h3 class="h3" style="margin-top:8px">Operators strong in ${esc(cellText(r.top.area, r.top.stage))}</h3></div>
       ${browseBtn('See more', { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-line btn-sm')}</div>
       <div class="grid g-3" style="margin-top:20px">${list.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.hits.length ? whyLine(x) : `Fractional ${x.op.role}` })).join('')}</div>
     </div>`;
@@ -1039,7 +1054,7 @@
 
   const GUIDES = [
     {
-      slug: 'fractional-vp-of-sales-cost', group: 'clients', updated: '2026-09-18', mins: 6, cat: 'sales_leadership', opsQ: 'VP of Sales',
+      slug: 'fractional-vp-of-sales-cost', bp: 'vp-sales', group: 'clients', updated: '2026-09-18', mins: 6, cat: 'sales_leadership', opsQ: 'VP of Sales',
       q: 'How much does a fractional VP of Sales cost?',
       answer: () => { const b = RIX().byCat.sales_leadership; return [`A fractional VP of Sales costs a median of ${hr(b.p50)} an hour on the Revenue Nomad Rate Index, and the middle half of operators charge between ${hr(b.p25)} and ${hr(b.p75)}.`, `At 40 hours a month, the most common engagement size, that is a typical range of ${monthRange('sales_leadership', '40', '5m_20m')} for a company with $5M–$20M in revenue.`]; },
       stats: () => { const b = RIX().byCat.sales_leadership; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Sales Leadership' }, { v: monthRange('sales_leadership', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: plural(b.n, 'rate'), l: 'In the index for this role' }]; },
@@ -1075,7 +1090,7 @@
       cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
     },
     {
-      slug: 'fractional-vs-full-time-vp-of-sales', group: 'clients', updated: '2026-09-12', mins: 7, cat: 'sales_leadership', opsQ: 'sales team hiring',
+      slug: 'fractional-vs-full-time-vp-of-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-12', mins: 7, cat: 'sales_leadership', opsQ: 'sales team hiring',
       q: 'Fractional vs full-time VP of Sales: which should your first sales leader be?',
       answer: () => [`Hire fractional first when you still need someone to build the sales motion, and hire full-time once there is a proven process and a team to run every day.`, `In our survey, ${sumStat(/first sales leadership hire/i, '31%')} of first-time clients made a fractional leader their first sales leadership hire, and ${(REP().outcomes || []).find((o) => /full time/i.test(o.l)) ? REP().outcomes.find((o) => /full time/i.test(o.l)).v : '22%'} of fractional engagements later converted to a full-time role.`],
       stats: () => [{ v: sumStat(/first sales leadership hire/i, '31%'), l: 'Chose fractional for their first sales leader' }, { v: (REP().outcomes || [])[1] ? REP().outcomes[1].v : '22%', l: 'Of engagements converted to full time' }, { v: sumStat(/pipeline change/i, '67 days'), l: 'Median time to a measurable pipeline change' }],
@@ -1107,7 +1122,7 @@
       cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
     },
     {
-      slug: 'how-to-scope-a-fractional-sales-engagement', group: 'clients', updated: '2026-09-05', mins: 6, cat: 'sales_leadership', opsQ: 'sales playbook',
+      slug: 'how-to-scope-a-fractional-sales-engagement', bp: 'vp-sales', group: 'clients', updated: '2026-09-05', mins: 6, cat: 'sales_leadership', opsQ: 'sales playbook',
       q: 'How do you scope a fractional sales engagement?',
       answer: () => ['Scope a fractional sales engagement around one measurable outcome, a fixed number of hours a month and an initial term, usually three to six months.', 'Before day one, write down the 90-day deliverables, who the operator reports to and how progress is reviewed.'],
       stats: () => { const hrsTop = hoursRows().slice().sort((a, b) => b.v - a.v)[0]; const term = REP().term || []; const tTop = term.slice().sort((a, b) => b.v - a.v)[0]; return [{ v: RN.w.label('hoursPerMonth', hrsTop.code), l: `Most common size (${hrsTop.v}% of engagements)` }, { v: tTop ? tTop.l : '3 to 6 mo', l: `Most common initial term (${tTop ? tTop.v : 38}%)` }, { v: sumStat(/Median engagement length/i, '6.4 mo'), l: 'Median engagement length' }]; },
@@ -1144,7 +1159,7 @@
       cta: { label: 'Post a project', to: 'project.new' },
     },
     {
-      slug: 'fractional-revops-first-90-days', group: 'clients', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
+      slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'clients', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
       answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
       stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
@@ -1174,7 +1189,7 @@
       cta: { label: 'Browse Revenue Operations', filters: { roleCategories: ['revenue_operations'] } },
     },
     {
-      slug: 'fractional-cmo-vs-marketing-agency', group: 'clients', updated: '2026-08-22', mins: 5, cat: 'marketing', opsQ: 'CMO',
+      slug: 'fractional-cmo-vs-marketing-agency', bp: 'cmo', group: 'clients', updated: '2026-08-22', mins: 5, cat: 'marketing', opsQ: 'CMO',
       q: 'Fractional CMO vs marketing agency: which one do you need?',
       answer: () => ['A fractional CMO owns your marketing strategy, budget and team, and decides what to do; an agency executes defined work such as ads, content or design.', 'If nobody at the company owns marketing yet, start with a fractional CMO who sets the plan, then hire agencies for the execution they choose.'],
       stats: () => { const b = RIX().byCat.marketing; const ag = (REP().fracVsFull || []).find((r) => /agency/i.test(r[0])); return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Marketing' }, { v: monthRange('marketing', '40', '5m_20m').replace('/mo', ''), l: 'Fractional CMO at 40 hrs a month' }, { v: ag ? ag[1] : '$15,000+', l: 'Typical agency retainer a month' }]; },
@@ -1227,7 +1242,7 @@
       cta: { label: 'Browse Reputation Index 70+', filters: { risMin: '70' } },
     },
     {
-      slug: 'transition-out-of-founder-led-sales', group: 'clients', updated: '2026-09-09', mins: 7, cat: 'sales_leadership', opsQ: 'founder-led',
+      slug: 'transition-out-of-founder-led-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-09', mins: 7, cat: 'sales_leadership', opsQ: 'founder-led',
       q: 'How do you transition out of founder-led sales?',
       answer: () => ['Write down how the founder actually wins deals, turn it into a repeatable process, then hand deals over in stages while the founder stays in the room for the largest ones.', `Most companies bring in a fractional sales leader to run this: founders stepping out of sales was the second most common reason clients gave for hiring one, at ${trig(/Founder/i) || 24}%.`],
       stats: () => [{ v: (trig(/Founder/i) || 24) + '%', l: 'Hired fractional to move sales off the founder' }, { v: '6 months', l: 'Typical handover, from shadowing to full ownership' }, { v: String(((RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t)) || { demand: 155 }).demand), l: 'Client searches a month for Founder-Led Sales Exit' }],
@@ -1395,7 +1410,7 @@
     const st = g.stats ? g.stats() : [];
     return `<a class="card card-link rs-gfeat" href="#guide.${esc(g.slug)}">
       <div class="rs-gfeat-main">
-        <span class="label">${esc(KIND[g.slug] || 'Guide')} · Most read</span>
+        <span class="label">${esc(KIND[g.slug] || 'Guide')} · Start here</span>
         <h3 class="h2">${esc(g.q)}</h3>
         <p class="rs-gfeat-a">${a.map(esc).join(' ')}</p>
         <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span><span class="act">Read the guide${icon('arrow')}</span></span>
@@ -1450,12 +1465,6 @@
     </div>`;
   }
 
-  function blueprintFor(cat) {
-    const bps = (RN.data.blueprints || (RN.projects && RN.projects.blueprints) || []);
-    const list = Array.isArray(bps) ? bps : Object.values(bps);
-    const hit = cat ? list.find((b) => (b.fields && b.fields.roleCategory === cat) || b.roleCategory === cat || b.cat === cat) : null;
-    return hit ? { to: 'blueprint.' + (hit.id || hit.slug || hit.key), title: hit.title || hit.name || 'Engagement Blueprint', sub: hit.summary || hit.problem || hit.desc || '' } : null;
-  }
 
   function renderGuide(slug) {
     chartFns = {};
@@ -1475,7 +1484,7 @@
     let rel = [];
     if (g.opsQ) rel = RN.model.search({ q: g.opsQ, filters: g.cat ? { roleCategories: [g.cat] } : {} }).slice(0, 3);
     if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: g.cat ? { roleCategories: [g.cat] } : {}, sort: 'ris' }).filter((x) => !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
-    const bp = blueprintFor(g.cat);
+    const bp = blueprintFor(g.cat, g.bp);
 
     // CTA
     const c = g.cta || {};
@@ -1535,14 +1544,25 @@
     </div>
     <div class="wrap rs-guide-after">
         <section id="rs-s-operators" class="rs-rel" aria-labelledby="rs-rel-t">
-          <div class="row between" style="align-items:flex-end"><div><span class="kicker">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators with proof` : 'Operators with the most client evidence'}</h2></div>
+          <div class="row between" style="align-items:flex-end"><div><span class="kicker">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most client evidence'}</h2></div>
           ${browseBtn('Browse all', { filters: g.cat ? { roleCategories: [g.cat] } : {}, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
           <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}</div>
+          <div class="grid g-2 rs-glinks">
           <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
             <span class="rs-bp-ic">${icon('doc')}</span>
             <span class="grow"><span class="label">Engagement Blueprint</span><b>${esc(bp ? bp.title : `Scope this work${g.cat ? ` with a ${F.catLabel(g.cat)} Blueprint` : ' with a Blueprint'}`)}</b><span class="small muted">${esc(bp && bp.sub ? bp.sub : 'Typical hours, term, a 30/60/90-day plan and a rate range from the Rate Index, ready to post as a project.')}</span></span>
             ${icon('arrow')}
           </a>
+          ${g.cat && RIX().byCat[g.cat] ? `<a class="rs-bp card card-link" href="#rates">
+            <span class="rs-bp-ic">${icon('chart')}</span>
+            <span class="grow"><span class="label">Rate Index</span><b>${esc(F.catLabel(g.cat))}: median ${esc(RN.fmt.rate(RIX().byCat[g.cat].p50))}</b><span class="small muted">Middle half ${hr(RIX().byCat[g.cat].p25)} to ${hr(RIX().byCat[g.cat].p75)} an hour. Estimate a month for your company size.</span></span>
+            ${icon('arrow')}
+          </a>` : `<a class="rs-bp card card-link" href="#framework">
+            <span class="rs-bp-ic">${icon('grid')}</span>
+            <span class="grow"><span class="label">GTM Framework</span><b>Where operators have client-verified proof</b><span class="small muted">Six areas across seven stages of the customer journey, counted from live profiles.</span></span>
+            ${icon('arrow')}
+          </a>`}
+          </div>
         </section>
         <nav class="rs-next" aria-label="More guides">
           <span class="label">Keep reading</span>

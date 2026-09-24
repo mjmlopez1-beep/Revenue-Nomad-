@@ -447,7 +447,7 @@
     const op = e.opId ? RN.model.byId(e.opId) : null;
     const who = op ? op.name : 'an operator';
     switch (e.type) {
-      case 'search': return { ic: 'search', t: e.q ? `Searched “${e.q}”` : 'Searched with filters only', sub: `${e.results != null ? RN.fmt.plural(+e.results, 'result') : 'Results not logged'}${filterList(e.filters, e.tags).length ? ' · ' + filterList(e.filters, e.tags).map((f) => f.vl).slice(0, 3).join(', ') : ''}` };
+      case 'search': return { ic: 'search', t: e.q && String(e.q).trim() ? `Searched “${String(e.q).replace(/\s+/g, ' ').trim()}”` : 'Searched with filters only', sub: `${e.results != null ? RN.fmt.plural(+e.results, 'result') : 'Results not logged'}${filterList(e.filters, e.tags).length ? ' · ' + filterList(e.filters, e.tags).map((f) => f.vl).slice(0, 3).join(', ') : ''}` };
       case 'profile_view': return { ic: 'eye', t: `Viewed ${who}`, sub: e.source ? 'From ' + e.source : '' };
       case 'shortlist_add': return { ic: 'bookmark', t: `Shortlisted ${who}` };
       case 'shortlist_remove': return { ic: 'bookmark', t: `Removed ${who} from a shortlist` };
@@ -537,7 +537,7 @@
     const groups = new Map();
     (st().events || []).filter((e) => e.type === 'search' && +e.results === 0 && e.results !== '' && e.results != null && ms(e.ts) >= since && (e.persona === 'buyer' || e.persona === 'visitor')).forEach((e) => {
       const key = 'e:' + normQ(e.q) + '|' + JSON.stringify(e.filters || {}) + '|' + arr(e.tags).join(',');
-      const g = groups.get(key) || { key, q: (e.q || '').trim(), n: 0, filters: e.filters || {}, tags: arr(e.tags), cat: ((e.filters || {}).roleCategories || [])[0] || '', ts: e.ts, signedIn: e.persona === 'buyer', base: false };
+      const g = groups.get(key) || { key, q: String(e.q || '').replace(/\s+/g, ' ').trim(), n: 0, filters: e.filters || {}, tags: arr(e.tags), cat: ((e.filters || {}).roleCategories || [])[0] || '', ts: e.ts, signedIn: e.persona === 'buyer', base: false };
       g.n++;
       if (ms(e.ts) >= ms(g.ts)) { g.ts = e.ts; g.signedIn = e.persona === 'buyer'; }
       groups.set(key, g);
@@ -893,7 +893,9 @@
     if (ui.dirCat) ops = ops.filter((o) => o.catKey === ui.dirCat);
     if (q) ops = ops.filter((o) => [o.name, o.role, o.cat, o.location, o.headline, o.tags.map((t) => t.t).join(' ')].join(' ').toLowerCase().includes(q));
     const by = { ris: (a, b) => b.ris.score - a.ris.score || a.name.localeCompare(b.name), complete: (a, b) => a.completeness - b.completeness || a.name.localeCompare(b.name), name: (a, b) => a.name.localeCompare(b.name), recent: (a, b) => (b.admin ? 1 : 0) - (a.admin ? 1 : 0) || b.ris.score - a.ris.score }[ui.dirSort];
-    return ops.sort(by);
+    ops.sort(by);
+    if (q) ops.sort((a, b) => (a.name.toLowerCase().includes(q) ? 0 : 1) - (b.name.toLowerCase().includes(q) ? 0 : 1));
+    return ops;
   }
   function dirTable() {
     const rows = dirRows();
@@ -985,6 +987,7 @@
   const AUD = { team: 'Team alerts', operators: 'Operators', clients: 'Clients' };
   function audience(m) {
     if (m.to === TEAM) return 'team';
+    if (/^\d+ operators\b/.test(String(m.to))) return 'operators';
     if (RN.model.ops.some((o) => o.name === m.to) || apps().some((a) => { const p = prof(a); return p.email === m.to || p.name === m.to; })) return 'operators';
     return 'clients';
   }
@@ -1343,7 +1346,7 @@
   /* ---------- Demand: recruit for unmet searches, nudge operators to verify ---------- */
   function recruitNote(c) {
     const what = c.kind === 'cat' ? `fractional ${catLabel(c.cat)} leaders` : c.kind === 'tag' ? `operators with client-verified experience in ${c.tags[0]}` : c.q ? `“${c.q}”` : 'operators that match their filters';
-    const vol = c.n ? `${int(c.n)} times in the last ${ui.days} days` : 'more often than we can serve';
+    const vol = c.n ? `${c.n === 1 ? 'once' : int(c.n) + ' times'} in the last ${ui.days} days` : 'more often than we can serve';
     const fl = c.kind === 'search' ? filterList(c.filters, []).map((f) => f.vl) : [];
     const line = c.kind === 'cat'
       ? `Client demand for ${catLabel(c.cat)} is growing faster than the network. We are adding a small number of experienced operators this quarter.`
@@ -1389,7 +1392,7 @@
       if (!o) return;
       const has = tagName && o.tags.find((x) => x.t.toLowerCase() === tagName.toLowerCase());
       RN.mail(o.name, c.q ? `Clients searched for “${c.q}” and found no match` : `Clients are searching for ${tagName || catLabel(c.cat)}`,
-        `Hi ${o.first},\n\n${c.q ? `Clients searched for “${c.q}” ${c.n ? int(c.n) + ' times recently ' : ''}and no operator matched.` : `Client demand for ${tagName || catLabel(c.cat)} is ahead of supply.`} ${has ? `You list ${tagName} as a fit tag. Ask a past client to verify it from Studio > Credibility: verified tags rank first in search.` : `If this is work you do, add ${tagName ? '“' + tagName + '”' : 'it'} as a fit tag in Studio > Profile so these clients can find you.`}`, 'admin');
+        `Hi ${o.first},\n\n${c.q ? `Clients searched for “${c.q}” ${c.n > 1 ? int(c.n) + ' times recently ' : ''}and no operator matched.` : `Client demand for ${tagName || catLabel(c.cat)} is ahead of supply.`} ${has ? `You list ${tagName} as a fit tag. Ask a past client to verify it from Studio > Credibility: verified tags rank first in search.` : `If this is work you do, add ${tagName ? '“' + tagName + '”' : 'it'} as a fit tag in Studio > Profile so these clients can find you.`}`, 'admin');
     });
     RN.store.update((s) => { s.seen = s.seen || {}; s.seen.admRecruit = Object.assign({}, s.seen.admRecruit, { [k]: { ts: RN.now().toISOString(), nudged: ids.length, note: d.note } }); }, 'seen');
     RN.ui.closeModal();
@@ -1412,7 +1415,11 @@
     const tl = tag.toLowerCase();
     const g = RN.model.market().tags.find((x) => x.t.toLowerCase() === tl) || { demand: 0, verified: 0 };
     const claimers = liveOps().filter((o) => o.tags.some((t) => t.t.toLowerCase() === tl && t.tier === 'claimed'));
-    claimers.forEach((o) => RN.mail(o.name, `Clients are searching for “${tag}”`, `Hi ${o.first},\n\nClients searched for ${tag} about ${int(g.demand)} times last month, and only ${RN.fmt.plural(g.verified, 'operator is', 'operators are')} client-verified in it. You list it as a fit tag.\n\nAsk a past client to confirm it from Studio > Credibility. Verified tags rank first in search and add to your Reputation Index.`, 'admin'));
+    if (!claimers.length) return;
+    const body = `Hi {first name},\n\nClients searched for ${tag} about ${int(g.demand)} times last month, and only ${RN.fmt.plural(g.verified, 'operator is', 'operators are')} client-verified in it. You list it as a fit tag.\n\nAsk a past client to confirm it from Studio > Credibility. Verified tags rank first in search and add to your Reputation Index.`;
+    // One outbox entry per batch; each operator receives it personalized.
+    if (claimers.length <= 3) claimers.forEach((o) => RN.mail(o.name, `Clients are searching for “${tag}”`, body.replace('{first name}', o.first), 'admin'));
+    else RN.mail(`${claimers.length} operators who claim “${tag}”`, `Clients are searching for “${tag}”`, `${body}\n\nSent individually to ${claimers.slice(0, 6).map((o) => o.name).join(', ')}${claimers.length > 6 ? ` and ${claimers.length - 6} more` : ''}.`, 'admin');
     RN.store.update((s) => { s.seen = s.seen || {}; s.seen.admTagNudged = Object.assign({}, s.seen.admTagNudged, { [tag]: { ts: RN.now().toISOString(), n: claimers.length } }); }, 'seen');
     toast(`Emailed ${RN.fmt.plural(claimers.length, 'operator')} who claim “${esc(tag)}”.`, { icon: 'mail' });
     RN.rerender();

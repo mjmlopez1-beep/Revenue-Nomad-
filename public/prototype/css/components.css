@@ -296,7 +296,7 @@
 .side { position: sticky; top: calc(var(--nav-h) + 24px); align-self: start; display: flex; flex-direction: column; gap: 2px; }
 .side-id { display: flex; gap: var(--s-3); align-items: center; padding: 0 var(--s-3) var(--s-5); margin-bottom: var(--s-3); border-bottom: 1px solid var(--line); }
 .side-id b { font-family: var(--f-display); font-size: var(--t-15); display: block; line-height: 1.2; }
-.side-id span { font-size: var(--t-12); color: var(--mute); }
+.side-id div span { font-size: var(--t-12); color: var(--mute); }
 .side a { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 var(--s-3); border-radius: 10px; font-family: var(--f-display); font-size: var(--t-14); font-weight: 600; color: var(--ink-2); }
 .side a svg { width: 18px; height: 18px; color: var(--mute); }
 .side a:hover { background: var(--card); }

@@ -167,10 +167,11 @@
       const good = (rv.coreAvg || 5) >= 4;
       (rv.tags || []).forEach((t) => {
         let tag = op.tags.find((x) => x.t.toLowerCase() === t.toLowerCase());
-        if (!tag) { const info = M.tagInfo(t) || {}; tag = { t, c: info.c || op.catKey, g: info.g || '', axis: info.axis || '', stage: info.stage || '', r: 0 }; op.tags.push(tag); }
+        if (!tag) { const info = M.tagInfo(t) || {}; tag = { t, c: info.c || op.catKey, g: info.g || '', axis: info.axis || '', stage: info.stage || '', r: 0, tier: 'claimed', score: 0 }; op.tags.push(tag); }
         if (good) { tag.r += 1; tag.tier = M.tagTier(tag.r); tag.score = M.tagScore(tag.r); }
       });
-      op.ris.score = Math.min(99, op.ris.score + M.risGain('review'));
+      // A 5.0 review adds the full gain, 4.0 half, 3.0 or lower nothing
+      op.ris.score = Math.min(99, op.ris.score + Math.round(M.risGain('review') * RN.clamp(((rv.coreAvg || rv.overall || 5) - 3) / 2, 0, 1)));
       const t = F.risTierFor(op.ris.score); op.ris.label = t.l; op.ris.tier = t.v;
       op.completeness = completeness(op);
     });
@@ -178,6 +179,31 @@
 
   /* Estimated Reputation Index points per action (factor weights from RN.fields.risFactors). Illustrative. */
   M.risGain = (action) => ({ review: 4, verifiedTag: 1, engagement: 2, complete: 3, recent: 2 }[action] || 1);
+
+  /* The one Reputation Index factor breakdown (Studio overview, Credibility, Levels all read this).
+     Returns {rows:[{k,l,d,w,p,txt,pts,action:{l,to}}], score, tier, next, toNext, avail, weakest} */
+  const monthsSince = (ym) => { if (!ym) return null; const d = new Date(ym.length <= 7 ? ym + '-01' : ym); const n = RN.now(); return Math.max(0, (n.getFullYear() - d.getFullYear()) * 12 + n.getMonth() - d.getMonth()); };
+  M.risFactors = function (op) {
+    const G = M.risGain;
+    const tags = op.tags || [];
+    const verified = tags.filter((x) => x.tier !== 'claimed').length;
+    const claimed = tags.length - verified;
+    const nRev = (op.reviews || []).length;
+    const avg = op.core && op.core.overall ? op.core.overall : nRev ? op.reviews.reduce((s, r) => s + (r.overall || r.coreAvg || 0), 0) / nRev : 0;
+    const lastEnd = (op.engagements || []).reduce((m, e) => { if (!e.end) return 0; const k = monthsSince(e.end); return m == null ? k : Math.min(m, k); }, null);
+    const pl = (n, w) => `${n} ${n === 1 ? w : w + 's'}`;
+    const val = {
+      volume: { p: Math.min(1, nRev / 5), txt: pl(nRev, 'client review'), pts: Math.max(0, 5 - nRev) * G('review'), action: { l: 'Request a review', to: 'studio.credibility' } },
+      verification: { p: tags.length ? verified / tags.length : 0, txt: `${verified} of ${tags.length} fit tags verified`, pts: Math.min(8, claimed) * G('verifiedTag'), action: { l: 'Ask a client to verify tags', to: 'studio.credibility' } },
+      ratings: { p: avg / 5, txt: nRev ? `${avg.toFixed(1)} average across ${pl(nRev, 'review')}` : 'No ratings yet', pts: nRev && avg >= 4.5 ? 0 : 2, action: { l: 'Request a review', to: 'studio.credibility' } },
+      complete: { p: (op.completeness || 0) / 100, txt: `Profile ${op.completeness}% complete`, pts: op.completeness < 100 ? G('complete') : 0, action: { l: 'Finish your profile', to: 'studio.profile' } },
+      recency: { p: lastEnd == null ? 0 : RN.clamp(1 - lastEnd / 24, 0, 1), txt: lastEnd == null ? 'No engagement logged' : lastEnd === 0 ? 'Engagement active this month' : `Last engagement ended ${pl(lastEnd, 'month')} ago`, pts: lastEnd == null || lastEnd > 0 ? G('engagement') : 0, action: { l: 'Get a recent engagement confirmed', to: 'studio.credibility' } },
+    };
+    const rows = F.risFactors.options.map((f) => Object.assign({ k: f.v, l: f.l, d: f.d, w: f.w, f }, val[f.v]));
+    const tier = F.risTierFor(op.ris.score);
+    const next = F.risTier.options.filter((x) => x.min > op.ris.score).sort((x, y) => x.min - y.min)[0];
+    return { rows, score: op.ris.score, tier, next, toNext: next ? next.min - op.ris.score : 0, avail: rows.reduce((s, r) => s + r.pts, 0), weakest: rows.slice().sort((x, y) => y.pts - x.pts)[0] };
+  };
 
   /* ---------- Search ----------
      Rules (Product Feedback): roles OR, every other filter AND; fit tags up to 5 AND; industry up to 3 OR.
@@ -267,12 +293,12 @@
     const first = op.first;
     const sig = [];
     const rev = brief.revenueRange;
-    if (rev) {
+    if (rev && (op.revenueRanges.length || op.engagements.some((e) => e.revenueBand))) {
       const engaged = op.engagements.some((e) => e.revenueBand === rev);
       sig.push({ k: 'revenue', l: 'Company revenue', state: engaged ? 'match' : op.revenueRanges.includes(rev) ? 'partial' : 'low', text: engaged ? `Has worked with ${RN.w.label('revenueRange', rev)} companies` : op.revenueRanges.includes(rev) ? `Targets ${RN.w.label('revenueRange', rev)} companies` : `No experience listed at ${RN.w.label('revenueRange', rev)}` });
     }
     const emp = brief.employeeRange;
-    if (emp) sig.push({ k: 'employees', l: 'Company size', state: op.employeeRanges.includes(emp) ? 'match' : 'low', text: op.employeeRanges.includes(emp) ? `Works with ${RN.w.label('employeeRange', emp)} employee companies` : `No experience listed at ${RN.w.label('employeeRange', emp)} employees` });
+    if (emp && op.employeeRanges.length) sig.push({ k: 'employees', l: 'Company size', state: op.employeeRanges.includes(emp) ? 'match' : 'low', text: op.employeeRanges.includes(emp) ? `Works with ${RN.w.label('employeeRange', emp)} employee companies` : `No experience listed at ${RN.w.label('employeeRange', emp)} employees` });
     const motions = [].concat(brief.salesMotions || brief.motion || []).filter(Boolean);
     // Only score GTM motion when the operator has listed one (no live operator has yet)
     if (motions.length && op.motions.length) {
@@ -280,7 +306,7 @@
       sig.push({ k: 'motion', l: 'GTM motion', state: hit.length ? 'match' : 'low', text: hit.length ? `Runs ${hit.join(' and ')}` : `Hasn't listed ${motions.join(' or ')}` });
     }
     const inds = [].concat(brief.industries || brief.industry || []).filter(Boolean);
-    if (inds.length) {
+    if (inds.length && op.industries.length) {
       const hit = inds.filter((i) => op.industries.includes(i));
       sig.push({ k: 'industry', l: 'Industry', state: hit.length ? 'match' : 'low', text: hit.length ? `Has worked in ${RN.w.labels('industries', hit)}` : `No ${RN.w.labels('industries', inds, ' or ')} experience listed` });
     }
@@ -341,15 +367,17 @@
     const cur = base.series.slice(days), prev = base.series.slice(0, days);
     const sum = (arr, k) => arr.reduce((a, x) => a + x[k], 0);
     const rand = base.rand;
-    const ev = ((RN.store && RN.store.state.events) || []).filter((e) => e.opId === opId && new Date(e.ts) >= new Date(RN.now().getTime() - days * DAY));
+    // Live events from clients and visitors only (operator self-views and team activity are excluded)
+    const ev = ((RN.store && RN.store.state.events) || []).filter((e) => e.opId === opId && (e.persona === 'buyer' || e.persona === 'visitor') && new Date(e.ts) >= new Date(RN.now().getTime() - days * DAY));
     const live = (t) => ev.filter((e) => e.type === t).length;
     const impressions = sum(cur, 'imp') + live('impression');
     const views = sum(cur, 'views') + live('profile_view');
     const shortlists = Math.round(views * 0.09) + live('shortlist_add');
     const compares = Math.round(views * 0.12) + live('compare_add') + live('compare_view');
-    const intros = ((RN.store && RN.store.state.intros) || []).filter((i) => i.opId === opId).length + (op.isMatt ? 2 : Math.round(views * 0.015));
+    const since = (d0, d1) => ((RN.store && RN.store.state.intros) || []).filter((i) => i.opId === opId && new Date(i.createdAt) >= new Date(RN.now().getTime() - d0 * DAY) && new Date(i.createdAt) < new Date(RN.now().getTime() - d1 * DAY)).length;
+    const intros = since(days, -1) + Math.round(views * 0.015);
     const proofViews = ((RN.store && RN.store.state.proofLinks) || []).filter((p) => p.opId === opId).reduce((a, p) => a + p.views.length, 0);
-    const prevT = { impressions: sum(prev, 'imp'), views: sum(prev, 'views'), shortlists: Math.round(sum(prev, 'views') * 0.085), compares: Math.round(sum(prev, 'views') * 0.11) };
+    const prevT = { impressions: sum(prev, 'imp'), views: sum(prev, 'views'), shortlists: Math.round(sum(prev, 'views') * 0.085), compares: Math.round(sum(prev, 'views') * 0.11), intros: since(days * 2, days) + Math.round(sum(prev, 'views') * 0.015) };
 
     // Why you appeared: queries in your category or tags, weighted
     const Q = RN.data.market.queries;
@@ -431,7 +459,7 @@
       totals: { impressions, views, shortlists, compares, intros, proofViews, appearances: Math.round(impressions * 0.31) },
       prev: prevT,
       series: { labels, impressions: cur.map((d) => d.imp), views: cur.map((d) => d.views) },
-      queries: qs.slice(0, 10), filters,
+      queries: qs.slice(0, 10).concat(qs.slice(10).filter((q) => q.live)), filters,
       viewers, otherViewers: other,
       mix: { industry: mix('industry', 'industries'), revenue: mix('revenueRange', 'revenueRange'), employees: mix('employeeRange', 'employeeRange') },
       lost, sources,

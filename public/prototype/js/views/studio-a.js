@@ -217,14 +217,19 @@
       });
     });
     // Reviews
+    // Reviews: a review submitted this session carries the score, so it replaces its "completed" request line
+    const sessionReviews = st.reviews.filter((r) => r.opId === op.id);
     st.reviewRequests.filter((r) => r.opId === op.id).forEach((r) => {
-      if (r.status === 'completed' && r.completedAt) items.push({ ts: r.completedAt, ic: 'star', text: `${esc(r.reviewer.name)} completed your review`, meta: [r.reviewer.title, r.reviewer.company].filter(Boolean).join(', '), to: 'studio.credibility' });
+      const rv = sessionReviews.find((x) => x.requestId === r.id || x.id === r.reviewId);
+      if (r.status === 'completed' && r.completedAt && !rv) items.push({ ts: r.completedAt, ic: 'star', text: `${esc(r.reviewer.name)} completed your review`, meta: [r.reviewer.title, r.reviewer.company].filter(Boolean).join(', '), to: 'studio.credibility' });
       if (r.sentAt) items.push({ ts: r.sentAt, ic: 'send', text: `Review request sent to ${esc(r.reviewer.name)}`, meta: r.reviewer.company || '', to: 'studio.credibility', quiet: true });
     });
-    st.reviews.filter((r) => r.opId === op.id).forEach((r) => {
+    sessionReviews.forEach((r) => {
       const score = r.coreAvg || r.overall;
       const name = (r.reviewer && (r.reviewer.name || r.reviewer)) || r.name || 'A client';
-      items.push({ ts: r.ts || r.submittedAt || r.date || RN.now().toISOString(), ic: 'star', live: true, text: `New review from ${esc(name)}${score ? `: ${(+score).toFixed(2)} / 5` : ''}`, meta: (r.tags || []).length ? `Verified ${plural(r.tags.length, 'fit tag')}` : '', to: 'studio.credibility' });
+      const req = st.reviewRequests.find((x) => x.id === r.requestId);
+      const good = (score || 5) >= 4;
+      items.push({ ts: (req && req.completedAt) || r.ts || r.submittedAt || r.date || RN.now().toISOString(), ic: 'star', live: true, text: `New review from ${esc(name)}${score ? `: ${(+score).toFixed(2)} / 5` : ''}`, meta: [r.company, (r.tags || []).length ? (good ? `Verified ${plural(r.tags.length, 'fit tag')}` : `${plural(r.tags.length, 'fit tag')} reviewed`) : ''].filter(Boolean).join(' · '), to: 'studio.credibility' });
     });
     // Illustrative daily roll-ups (never company names)
     const a = A(op, 7);

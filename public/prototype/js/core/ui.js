@@ -29,8 +29,8 @@
 
   ui.ftag = function (tag, o) {
     const t = typeof tag === 'string' ? { t: tag, tier: 'claimed' } : tag;
-    const verified = t.tier === 'verified';
-    return `<span class="ftag ${verified ? '' : 'claimed'}" title="${verified ? 'Verified by a client review' : 'Claimed by the operator'}">${verified ? icon('check-circle') : ''}${esc(t.t)}</span>`;
+    const verified = !!t.tier && t.tier !== 'claimed';
+    return `<span class="ftag ${verified ? '' : 'claimed'}" title="${t.tier === 'expert' ? 'Expert: verified by 5 or more client reviews' : verified ? 'Verified by a client review' : 'Claimed by the operator'}">${verified ? icon('check-circle') : ''}${esc(t.t)}</span>`;
   };
   ui.ftags = function (tags, max, o) {
     tags = tags || [];
