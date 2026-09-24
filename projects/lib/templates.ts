@@ -28,10 +28,10 @@ export const TEMPLATES: Template[] = [
   },
   {
     key: "cro",
-    label: "CRO",
+    label: "Chief Revenue Officer",
     blurb: "Own the number across sales, CS and marketing",
     brief: {
-      title: "Fractional CRO",
+      title: "Fractional Chief Revenue Officer",
       successIn90Days: "One revenue plan across sales, marketing and CS, a forecast within 10%, and a board-ready GTM narrative.",
       hoursPerMonthMin: 30,
       hoursPerMonthMax: 40,
@@ -43,11 +43,27 @@ export const TEMPLATES: Template[] = [
     },
   },
   {
+    key: "cmo",
+    label: "Chief Marketing Officer",
+    blurb: "Positioning, brand and a marketing plan",
+    brief: {
+      title: "Fractional Chief Marketing Officer",
+      successIn90Days: "Sharp positioning and messaging, a 12-month marketing plan with a budget, and the first marketing hire scoped.",
+      hoursPerMonthMin: 30,
+      hoursPerMonthMax: 40,
+      term: "6 months",
+      budgetMin: 200,
+      budgetMax: 300,
+      mustHaves: ["Positioning & messaging", "B2B SaaS", "Marketing leadership"],
+      screeningQuestions: ["Walk us through a repositioning you led and what changed.", "How do you decide the first marketing hire?"],
+    },
+  },
+  {
     key: "revops",
-    label: "RevOps lead",
+    label: "VP of Revenue Operations",
     blurb: "Clean CRM, forecast and reporting",
     brief: {
-      title: "Fractional Head of Revenue Operations",
+      title: "Fractional VP of Revenue Operations",
       successIn90Days: "A clean CRM, one pipeline definition, dashboards leadership uses weekly, and a forecast process that runs itself.",
       hoursPerMonthMin: 20,
       hoursPerMonthMax: 30,
@@ -60,10 +76,10 @@ export const TEMPLATES: Template[] = [
   },
   {
     key: "demand-gen",
-    label: "Head of Demand Gen",
-    blurb: "Pipeline from marketing, fast",
+    label: "VP of Marketing",
+    blurb: "Demand gen and pipeline from marketing",
     brief: {
-      title: "Fractional Head of Demand Generation",
+      title: "Fractional VP of Marketing",
       successIn90Days: "Two channels producing qualified pipeline every week, clean attribution, and a quarterly plan with a budget.",
       hoursPerMonthMin: 20,
       hoursPerMonthMax: 30,
@@ -76,10 +92,10 @@ export const TEMPLATES: Template[] = [
   },
   {
     key: "cs",
-    label: "Customer Success lead",
+    label: "VP of Customer Success",
     blurb: "Retention and expansion motion",
     brief: {
-      title: "Fractional Head of Customer Success",
+      title: "Fractional VP of Customer Success",
       successIn90Days: "An onboarding playbook, health scores on every account, and an expansion motion with a named owner.",
       hoursPerMonthMin: 20,
       hoursPerMonthMax: 30,
@@ -92,10 +108,10 @@ export const TEMPLATES: Template[] = [
   },
   {
     key: "enablement",
-    label: "Sales Enablement",
+    label: "Director of Enablement",
     blurb: "Onboarding, training and call coaching",
     brief: {
-      title: "Fractional Sales Enablement Lead",
+      title: "Fractional Director of Enablement",
       successIn90Days: "A 30 day AE onboarding program, a call coaching rhythm, and ramp time cut by a third.",
       hoursPerMonthMin: 10,
       hoursPerMonthMax: 20,
@@ -104,6 +120,22 @@ export const TEMPLATES: Template[] = [
       budgetMax: 200,
       mustHaves: ["New Hire Sales Onboarding", "Call Coaching & Feedback", "Sales Training Program"],
       screeningQuestions: ["Describe an onboarding program you built and its ramp results."],
+    },
+  },
+  {
+    key: "ai-architect",
+    label: "GTM AI Architect",
+    blurb: "AI agents and automation across the funnel",
+    brief: {
+      title: "Fractional GTM AI Architect",
+      successIn90Days: "Two AI workflows live in the sales and marketing motion, measured time saved, and a roadmap the team can run.",
+      hoursPerMonthMin: 20,
+      hoursPerMonthMax: 30,
+      term: "3 months",
+      budgetMin: 175,
+      budgetMax: 250,
+      mustHaves: ["AI GTM", "Workflow automation", "CRM integration"],
+      screeningQuestions: ["Which AI workflow have you put into production for a GTM team?", "How do you measure whether an AI workflow is working?"],
     },
   },
 ];

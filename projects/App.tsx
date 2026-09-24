@@ -7,6 +7,9 @@ import { ProtoBar, ROLE_HOME, SiteHeader } from "./ui/Shell";
 import { BuyerBrief, BuyerDashboard, BuyerIntros, BuyerInvite, BuyerProject, BuyerSelect } from "./ui/buyer/Buyer";
 import { LiveAvailability, LiveIntros, LiveOverview, LiveProject, LiveProjects, LiveShell } from "./ui/live/Live";
 import { LiveJobs, LiveProspects } from "./ui/live/Work";
+import { BuyerCompany } from "./ui/buyer/Company";
+import { AdminOperatorDetail } from "./ui/admin/People";
+import { LiveInsights } from "./ui/live/Insights";
 import { AdminProject } from "./ui/admin/Admin";
 import { AdminAnalytics, AdminAudit, AdminClients, AdminEngagements, AdminIntrosList, AdminOperatorsList, AdminProjectsList, AdminPulse, AdminReviews, AdminShell, AdminShortlist, AdminToday, AdminWizard } from "./ui/admin/Console";
 import { ClientShortlist, OperatorDirectory, OperatorProfile } from "./ui/Pages";
@@ -18,6 +21,7 @@ type RouteDef = [pattern: string, role: Role | null, render: (p: Record<string, 
 const ROUTES: RouteDef[] = [
   ["/buyer/projects", "buyer", () => <BuyerDashboard />],
   ["/buyer/intros", "buyer", () => <BuyerIntros />],
+  ["/buyer/company", "buyer", () => <BuyerCompany />],
   ["/buyer/projects/:id/edit", "buyer", (p) => <BuyerBrief key={p.id} id={p.id} />],
   ["/buyer/projects/:id/invite", "buyer", (p) => <BuyerInvite id={p.id} />],
   ["/buyer/projects/:id/select/:op", "buyer", (p) => <BuyerSelect id={p.id} opId={p.op} />],
@@ -27,11 +31,13 @@ const ROUTES: RouteDef[] = [
   ["/dashboard/projects/:id", "operator", (p) => <LiveProject key={p.id} id={p.id} />],
   ["/dashboard/jobs", "operator", () => <LiveJobs />],
   ["/dashboard/prospects", "operator", () => <LiveProspects />],
+  ["/dashboard/insights", "operator", () => <LiveInsights />],
   ["/dashboard/intros", "operator", () => <LiveIntros />],
   ["/dashboard/availability", "operator", () => <LiveAvailability />],
   ["/admin/today", "admin", () => <AdminToday />],
   ["/admin/projects", "admin", () => <AdminProjectsList />],
   ["/admin/operators", "admin", () => <AdminOperatorsList />],
+  ["/admin/operators/:id", "admin", (p) => <AdminOperatorDetail key={p.id} id={p.id} />],
   ["/admin/clients", "admin", () => <AdminClients />],
   ["/admin/reviews", "admin", () => <AdminReviews />],
   ["/admin/engagements", "admin", () => <AdminEngagements />],

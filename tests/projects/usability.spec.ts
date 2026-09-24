@@ -59,11 +59,12 @@ test("U-05 bulk select, bulk pass, and intros with all strong fits", async ({ pa
   await expect(responseRow(page, "Guillermo Mairena")).toHaveCount(0);
   await expect(responseRow(page, "Ron Ariana")).toHaveCount(0);
   await page.getByTestId("intro-strong").click();
-  await expect(page.getByTestId("project-msg")).toContainText("Intro requested with 2 strong fits");
+  // Simulated responses use profile rates: Tim's $200 pay is $265 all-in, over budget, so one strong fit remains.
+  await expect(page.getByTestId("project-msg")).toContainText("Intro requested with 1 strong fit");
   const s = await state(page);
   const decided = Object.fromEntries(s.responses.map((r) => [r.operatorId, r.decision]));
-  expect(Object.values(decided).sort()).toEqual(["intro_requested", "intro_requested", "none", "not_a_fit", "not_a_fit"]);
-  expect(s.outbox.filter((m) => m.kind === "intro")).toHaveLength(2);
+  expect(Object.values(decided).sort()).toEqual(["intro_requested", "none", "none", "not_a_fit", "not_a_fit"]);
+  expect(s.outbox.filter((m) => m.kind === "intro")).toHaveLength(1);
 });
 
 test("U-06 one tap from the intro email books the call, and the buyer sees it", async ({ page }) => {

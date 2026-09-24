@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
 import type { Project, State } from "../lib/types";
-import { OPERATORS, displayName } from "../lib/data";
-import { briefFromProject, fitScore, seatCategory } from "../lib/fit";
-import { MAX_SCREENING, opState, type BriefErrors } from "../lib/store";
+import { CATEGORIES, OPERATORS, displayName } from "../lib/data";
+import { ROLE_CATALOG } from "../../lib/roles";
+import { briefFromProject, clientRate, fitScore, seatCategory, seatOf } from "../lib/fit";
+import { MAX_SCREENING, buyerProfileOf, opState, useSession, type BriefErrors } from "../lib/store";
+import { ACV_BANDS, MOTIONS, STAGES, companyFit, label, profileCompleteness } from "../lib/company";
+import { Link } from "../lib/router";
+import { CompanyFitChip } from "./buyer/Company";
 import { BUDGET_PRESETS, HOUR_PRESETS, TEMPLATES } from "../lib/templates";
 import { Avatar, FieldError, FitParts, FitScore } from "./common";
 
@@ -20,26 +24,6 @@ function num(v: string): number | null {
   return isNaN(n) ? NaN : n;
 }
 
-/** Best-effort prefill from a pasted job description, SOW or call notes. */
-export function prefillFromText(text: string): Partial<Project> {
-  const out: Partial<Project> = {};
-  const title = text.match(/(fractional|interim)\s+[a-z &/]+?(?=[\n.,(]|$)/i);
-  if (title) out.title = title[0].trim().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bOf\b/g, "of");
-  const hrs = text.match(/(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})\s*(?:hrs|hours)/i);
-  if (hrs) {
-    out.hoursPerMonthMin = Number(hrs[1]);
-    out.hoursPerMonthMax = Number(hrs[2]);
-  }
-  const budget = text.match(/\$(\d{2,4})\s*(?:-|–|to)\s*\$?(\d{2,4})/);
-  if (budget) {
-    out.budgetMin = Number(budget[1]);
-    out.budgetMax = Number(budget[2]);
-  }
-  const term = text.match(/(\d{1,2})[- ]month/i);
-  if (term) out.term = `${term[1]} months`;
-  return out;
-}
-
 /** The six skills most listed by operators in this seat's category, for one-click must-haves. */
 function suggestedMustHaves(title: string, chosen: string[]): string[] {
   const cat = seatCategory(title || "");
@@ -53,6 +37,16 @@ function suggestedMustHaves(title: string, chosen: string[]): string[] {
     .slice(0, 6);
 }
 
+/** Standard titles for a function, as on revenuenomad.com's role catalog. */
+function standardTitles(cat: string): string[] {
+  const key = cat === "Customer Success & Growth" ? "Customer Success" : cat;
+  return ROLE_CATALOG.find((g) => g.category === key)?.roles.map((r) => r.label) || [];
+}
+
+export function catSlug(cat: string): string {
+  return cat.toLowerCase().replace(/&/g, "").replace(/[^a-z]+/g, "-").replace(/-+$/, "");
+}
+
 export function TemplatePicker({ onPick, active }: { onPick: (key: string) => void; active?: string }) {
   return (
     <section className="card templates" aria-labelledby="tpl-h" data-testid="templates">
@@ -62,7 +56,8 @@ export function TemplatePicker({ onPick, active }: { onPick: (key: string) => vo
       </div>
       <div className="tpl-grid" role="group" aria-label="Templates">
         {TEMPLATES.map((t) => (
-          <button key={t.key} type="button" className="tpl" aria-pressed={active === t.brief.title} onClick={() => onPick(t.key)} data-testid={`tpl-${t.key}`}>
+          <button key={t.key} type="button" className={`tpl tpl-${catSlug(seatCategory(t.brief.title))}`} aria-pressed={active === t.brief.title} onClick={() => onPick(t.key)} data-testid={`tpl-${t.key}`}>
+            <em>{seatCategory(t.brief.title).replace(" & Growth", "")}</em>
             <b>{t.label}</b>
             <span>{t.blurb}</span>
             <small>
@@ -99,41 +94,45 @@ export function BriefFields({
   showBudget?: boolean;
 }) {
   const [tag, setTag] = useState("");
-  const [paste, setPaste] = useState("");
-  const [prefilled, setPrefilled] = useState<string | null>(null);
-  const cat = seatCategory(draft.title || "");
+  const cat = seatOf(draft);
   const suggestions = (SUGGESTED_QUESTIONS[cat] || SUGGESTED_QUESTIONS["Sales Leadership"]).filter((q) => !draft.screeningQuestions.includes(q));
   const qs = draft.screeningQuestions;
   return (
     <>
-      <details className="card paste">
-        <summary>
-          <b>Or paste a job description</b> <span className="muted">Optional. Paste a JD, SOW or call notes to prefill the fields below</span>
-        </summary>
-        <textarea rows={4} value={paste} onChange={(e) => setPaste(e.target.value)} aria-label="Paste a job description" />
-        <div className="row">
-          <button
-            type="button"
-            className="btn"
-            onClick={() => {
-              const p = prefillFromText(paste);
-              set(p);
-              setPrefilled(Object.keys(p).length ? `Prefilled ${Object.keys(p).length} field${Object.keys(p).length === 1 ? "" : "s"}. Check them below.` : "Nothing to prefill from that text.");
-            }}
-          >
-            Prefill
-          </button>
-          {prefilled && <span className="muted" role="status">{prefilled}</span>}
-        </div>
-      </details>
 
       <section className="card form-card" aria-labelledby="seat-h">
         <h2 id="seat-h">The seat</h2>
+        <fieldset className="field">
+          <legend>Function</legend>
+          <div className="chips fn-chips" role="group" aria-label="Function" data-testid="f-function">
+            {CATEGORIES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`chip chip-btn fn-chip tpl-${catSlug(c)}`}
+                aria-pressed={draft.category === c}
+                onClick={() => set({ category: draft.category === c ? null : c })}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          <small className="muted">{draft.category ? `Matching on ${draft.category} operators.` : draft.title.trim() ? `Reading the title as ${seatCategory(draft.title)}. Pick one to be sure.` : "Pick the function first. Matching and alerts use it."}</small>
+        </fieldset>
         <label className="field">
-          <span>Role</span>
+          <span>Role title</span>
           <input value={draft.title} onChange={(e) => set({ title: e.target.value })} placeholder="Fractional VP of Sales" aria-invalid={!!errors.title} aria-describedby="err-title" data-testid="f-title" />
           <FieldError msg={errors.title} id="err-title" />
         </label>
+        {(draft.category || draft.title.trim()) && standardTitles(seatOf(draft)).length > 0 && (
+          <div className="chips title-chips" role="group" aria-label="Standard titles" data-testid="f-titles">
+            {standardTitles(seatOf(draft)).map((t) => (
+              <button key={t} type="button" className="chip chip-btn" aria-pressed={draft.title === `Fractional ${t}`} onClick={() => set({ title: `Fractional ${t}`, category: draft.category || seatOf({ title: t }) })}>
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
         <label className="field">
           <span>What does success look like in 90 days</span>
           <textarea rows={3} value={draft.successIn90Days} onChange={(e) => set({ successIn90Days: e.target.value })} aria-invalid={!!errors.successIn90Days} data-testid="f-success" />
@@ -279,6 +278,24 @@ export function useLiveMatch(s: State, draft: BriefDraft) {
 
 export function LiveMatch({ s, draft, rn }: { s: State; draft: BriefDraft; rn?: boolean }) {
   const m = useLiveMatch(s, draft);
+  const sess = useSession();
+  const bp = sess.role === "buyer" ? buyerProfileOf(s, sess.buyerId) : null;
+  // With no role there's nothing to match on yet; scoring a guess would read as a real result.
+  if (!draft.title.trim())
+    return (
+      <aside className="card live-match" aria-labelledby="lm-h" data-testid="live-match">
+        <div className="eyebrow">
+          <span className="live-dot" aria-hidden="true" />
+          Live match
+        </div>
+        <h2 id="lm-h" className="lm-big lm-wait">
+          Pick a template or add a role title
+        </h2>
+        <p className="muted" data-testid="lm-empty">
+          Then this scores all {OPERATORS.length} live profiles against your brief as you type: who fits, who is available, and who is inside your budget.
+        </p>
+      </aside>
+    );
   const range = rn ? `at or under $${draft.operatorRate ?? "?"}` : draft.budgetMin == null || draft.budgetMax == null ? null : `$${draft.budgetMin} to $${draft.budgetMax}`;
   return (
     <aside className="card live-match" aria-labelledby="lm-h" data-testid="live-match">
@@ -304,24 +321,47 @@ export function LiveMatch({ s, draft, rn }: { s: State; draft: BriefDraft; rn?: 
         </div>
       </dl>
       <p className="note-box" data-testid="lm-norate">
-        <b>{m.noRate}</b> of {OPERATORS.length} operators have no rate on their profile, so budget fit is a guess for most. The {OPERATORS.length - m.noRate} who list one have a median of ${m.median}/hr
-        {m.median != null && draft.budgetMax != null && !rn ? (m.median > draft.budgetMax ? ", above your range" : m.median < (draft.budgetMin ?? 0) ? ", below your range" : ", inside your range") : ""}.{range ? ` Budget range ${range}.` : " Pick a budget to compare."}
+        <b>{m.noRate}</b> of {OPERATORS.length} operators have no rate on their profile, so budget fit is a guess for most. The {OPERATORS.length - m.noRate} who list one have a median of ${rn ? m.median : clientRate(m.median)}/hr{rn ? "" : " all-in"}
+        {m.median != null && draft.budgetMax != null && !rn ? (clientRate(m.median)! > draft.budgetMax ? ", above your range" : clientRate(m.median)! < (draft.budgetMin ?? 0) ? ", below your range" : ", inside your range") : ""}.{range ? ` Budget range ${range}.` : " Pick a budget to compare."}
       </p>
       <h3 className="mini-h">Top matches right now</h3>
+      {!rn && (
+        <p className="small lm-company" data-testid="lm-company">
+          {bp && profileCompleteness(bp) > 0 ? (
+            <>
+              Company fit uses your profile: {[label(STAGES, bp.stage), ...bp.motions.map((x) => label(MOTIONS, x)), label(ACV_BANDS, bp.acv)].filter(Boolean).join(" · ")}.{" "}
+              <Link to="/buyer/company">Edit</Link>
+            </>
+          ) : (
+            <>
+              <Link to="/buyer/company">Add your company profile</Link> to also match on stage, GTM motion, deal size and sales cycle.
+            </>
+          )}
+        </p>
+      )}
       <ol className="lm-top">
-        {m.scored.slice(0, 5).map(({ o, f }) => (
-          <li key={o.id} data-testid="lm-top">
-            <div className="lm-who">
-              <Avatar op={o} size={28} />
-              <span>
-                <b>{displayName(o)}</b>
-                <small>{o.role}</small>
-              </span>
-              <FitScore fit={f} size="sm" />
-            </div>
-            <FitParts fit={f} noRate={o.rate == null} />
-          </li>
-        ))}
+        {m.scored.slice(0, 5).map(({ o, f }) => {
+          const cf = !rn && bp ? companyFit(o, bp) : null;
+          return (
+            <li key={o.id} data-testid="lm-top">
+              <div className="lm-who">
+                <Avatar op={o} size={32} />
+                <span>
+                  <b>{displayName(o)}</b>
+                  <small>{o.role}</small>
+                </span>
+                <FitScore fit={f} size="sm" />
+              </div>
+              {cf && cf.level !== "unknown" && (
+                <div className="lm-cf">
+                  <CompanyFitChip fit={cf} testId="lm-company-fit" />
+                  <small>{[...cf.matched.slice(0, 2), ...cf.missed.slice(0, cf.matched.length ? 0 : 1)].join(" · ")}</small>
+                </div>
+              )}
+              <FitParts fit={f} noRate={o.rate == null} />
+            </li>
+          );
+        })}
       </ol>
     </aside>
   );

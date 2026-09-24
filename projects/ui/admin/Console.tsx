@@ -49,6 +49,7 @@ import { ago, dayLabel, daysBetween, durationLabel, hoursRange, money, plural, s
 import { Link, navigate, useLocation } from "../../lib/router";
 import { attempt } from "../common";
 import { InvitePicker, QuestionsInbox } from "../buyer/Buyer";
+import { MarketplaceAdoption, MarketplaceDiscovery } from "./People";
 
 const DAY = 86400000;
 
@@ -2222,6 +2223,7 @@ function median(xs: number[]): number | null {
 
 export function AdminAnalytics() {
   const s = useStore();
+  const [tab, setTab] = useState<"projects" | "discovery" | "adoption">("projects");
   const r = reports(s);
   const pct = (x: number | null) => (x == null ? "—" : `${Math.round(x * 100)}%`);
   const posted = s.projects.filter((p) => p.status !== "draft");
@@ -2270,6 +2272,23 @@ export function AdminAnalytics() {
           <p>Every number comes from the event log, so it matches what people actually did.</p>
         </div>
       </div>
+      <div className="adm-tabs" role="tablist" aria-label="Analytics">
+        {(
+          [
+            ["projects", "Projects"],
+            ["discovery", "Search and discovery"],
+            ["adoption", "Usage and adoption"],
+          ] as const
+        ).map(([k, l]) => (
+          <button key={k} type="button" role="tab" className={tab === k ? "on" : ""} aria-selected={tab === k} onClick={() => setTab(k)} data-testid={`an-tab-${k}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {tab === "discovery" && <MarketplaceDiscovery />}
+      {tab === "adoption" && <MarketplaceAdoption />}
+      {tab === "projects" && (
+        <>
       <div className="adm-kpis adm-kpis-6" data-testid="analytics-kpis">
         <div className="card adm-kpi">
           <span>Response rate</span>
@@ -2444,6 +2463,8 @@ export function AdminAnalytics() {
           </ul>
         </section>
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2545,7 +2566,7 @@ export function AdminOperatorsList() {
               return (
                 <tr key={o.id} data-testid="op-dir-row" data-id={o.id}>
                   <td data-label="Operator">
-                    <Link to={`/operators/${o.slug}`} className="rowlink">
+                    <Link to={`/admin/operators/${o.id}`} className="rowlink" data-testid="op-detail-link">
                       {displayName(o)}
                     </Link>
                     <small className="block muted">

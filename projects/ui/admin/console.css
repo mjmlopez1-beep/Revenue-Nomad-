@@ -1483,3 +1483,17 @@
     grid-template-columns: 96px minmax(0, 1fr) 36px 36px;
   }
 }
+.rnp .adm-sechead {
+  justify-content: space-between;
+  gap: 12px;
+}
+.rnp .adm-sechead h2 {
+  font-size: 18px;
+}
+.rnp .adm .lv-mult {
+  background: var(--ad-bg);
+  border-color: var(--ad-line);
+}
+.rnp .adm .lv-terms li {
+  border-color: var(--ad-line-2);
+}

@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { OPERATORS, displayName, explorerUrl, matchesQuery, operatorBySlug, stableSort } from "../lib/data";
-import { clientAskQuestion, clientRequestCall, markViewed, nowOf, projectById, responseFit, responseOf, useSession, useStore } from "../lib/store";
+import { clientAskQuestion, clientRequestCall, markViewed, trackSignals, useSearchImpressions, nowOf, projectById, responseFit, responseOf, useSession, useStore } from "../lib/store";
 import { rateLabel, shortDate } from "../lib/format";
+import { allInLabel } from "../lib/fit";
 import { Link, useLocation } from "../lib/router";
-import { attempt, Availability, Avatar, Back, CheckHours, Completeness, Empty, FitParts, FitScore, FitWhy, Notice } from "./common";
+import { CompanyFitChip, useBuyerFit } from "./buyer/Company";
+import { attempt, Availability, Avatar, Back, CheckHours, Completeness, Empty, FitScore, FitWhy, Notice } from "./common";
 
 // ---------------------------------------------------------------- B5 operator profile
 
@@ -18,6 +20,13 @@ export function OperatorProfile({ slug }: { slug: string }) {
   useMemo(() => {
     if (p && op && sess.role === "buyer") markViewed(p.id, op.id);
   }, [p?.id, op?.id, sess.role]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Anyone but the operator themselves opening the profile counts as a profile view.
+  const term = query.get("q") || "";
+  const buyerFit = useBuyerFit();
+  useEffect(() => {
+    if (!op || (sess.role === "operator" && sess.operatorId === op.id)) return;
+    trackSignals([{ type: "profile_viewed", operatorId: op.id, term, source: from ? "response" : term ? "search" : "direct", projectId: from || undefined }], sess.role, sess.role === "buyer" ? sess.buyerId : undefined);
+  }, [op?.id, sess.role, term, from]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!op)
     return (
       <div className="page">
@@ -52,7 +61,7 @@ export function OperatorProfile({ slug }: { slug: string }) {
             <ul className="band-meta">
               <li>{op.loc || "Location not provided"}</li>
               <li>Time zone {op.timezone || "Not provided"}</li>
-              <li>{rateLabel(op.rate)}</li>
+              <li>{sess.role === "operator" ? `${rateLabel(op.rate)} to you` : allInLabel(op.rate)}</li>
               <li>{op.hrs} hrs a month</li>
             </ul>
             <div className="hero-skills">
@@ -72,21 +81,33 @@ export function OperatorProfile({ slug }: { slug: string }) {
       <div className="split">
         <div className="stack">
           {fit && p && r && (
-            <section className="card">
+            <section className="card resp-card" data-testid="their-response">
               <h2>Their response</h2>
-              <FitParts fit={fit} noRate={r.rate == null} />
-              <FitWhy fit={fit} />
-              <p className="small muted">
-                {rateLabel(r.rate)} · {r.hoursPerMonth} hrs a month · Can start {shortDate(r.canStart)}
-              </p>
-              {p.screeningQuestions.map((q, i) => (
-                <div key={i}>
-                  <b>
-                    {i + 1}. {q}
-                  </b>
-                  <p>{r.answers[i]}</p>
+              <dl className="resp-facts">
+                <div>
+                  <dt>Rate, all-in</dt>
+                  <dd title="Includes Revenue Nomad's fee">{allInLabel(r.rate).replace(" all-in", "")}</dd>
                 </div>
-              ))}
+                <div>
+                  <dt>Hours a month</dt>
+                  <dd>{r.hoursPerMonth}</dd>
+                </div>
+                <div>
+                  <dt>Can start</dt>
+                  <dd>{shortDate(r.canStart)}</dd>
+                </div>
+              </dl>
+              <FitWhy fit={fit} />
+              <ol className="resp-qa">
+                {p.screeningQuestions.map((q, i) => (
+                  <li key={i}>
+                    <b>{q}</b>
+                    <p>{r.answers[i] || <span className="muted">No answer</span>}</p>
+                  </li>
+                ))}
+              </ol>
+              {!!r.proof?.length && <p className="small muted">Case studies attached: {r.proof.join(", ")}</p>}
+              {r.note && <p className="resp-note">“{r.note}”</p>}
             </section>
           )}
           <section className="card">
@@ -138,10 +159,31 @@ export function OperatorProfile({ slug }: { slug: string }) {
         <aside className="stack">
           <section className="card">
             <h3 className="mini-h">Profile</h3>
-            <div className="row">
-              <Completeness op={op} />
-              <CheckHours op={op} />
-            </div>
+            {sess.role === "buyer" ? (
+              (() => {
+                const cf = buyerFit(op);
+                return cf && cf.level !== "unknown" ? (
+                  <div className="cf-detail" data-testid="profile-company-fit">
+                    <CompanyFitChip fit={cf} />
+                    <ul>
+                      {cf.matched.map((m) => (
+                        <li key={m} className="ok">
+                          {m}
+                        </li>
+                      ))}
+                      {cf.missed.map((m) => (
+                        <li key={m}>{m}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null;
+              })()
+            ) : (
+              <div className="row">
+                <Completeness op={op} />
+                <CheckHours op={op} />
+              </div>
+            )}
             <dl className="facts">
               <div>
                 <dt>Reputation index</dt>
@@ -178,12 +220,15 @@ export function OperatorProfile({ slug }: { slug: string }) {
 }
 
 export function OperatorDirectory() {
+  const sess = useSession();
+  const buyerFit = useBuyerFit();
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(24);
   const list = stableSort(
     OPERATORS.filter((o) => !q.trim() || matchesQuery(o, q)),
     (o) => o.reputation || 0,
   );
+  useSearchImpressions(q, list.slice(0, limit).map((o) => o.id), "directory");
   return (
     <div className="page">
       <section className="band">
@@ -200,11 +245,12 @@ export function OperatorDirectory() {
       <ul className="dir-grid">
         {list.slice(0, limit).map((o) => (
           <li key={o.id}>
-            <Link to={`/operators/${o.slug}`} className="card dir-card">
+            <Link to={`/operators/${o.slug}${q.trim() ? `?q=${encodeURIComponent(q.trim().toLowerCase())}` : ""}`} className="card dir-card">
               <Avatar op={o} size={48} />
               <b>{displayName(o)}</b>
               <small>{o.role}</small>
-              <small className="muted">{rateLabel(o.rate)}</small>
+              <small className="muted">{sess.role === "operator" ? rateLabel(o.rate) : allInLabel(o.rate)}</small>
+              <CompanyFitChip fit={buyerFit(o)} />
             </Link>
           </li>
         ))}

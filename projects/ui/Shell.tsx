@@ -277,6 +277,7 @@ export function SiteHeader() {
           { to: "/operators", label: "Find operator" },
           { to: "/buyer/projects", label: "Projects" },
           { to: "/buyer/intros", label: "Intro requests" },
+          { to: "/buyer/company", label: "Company profile" },
         ]
       : sess.role === "operator"
         ? [

@@ -86,6 +86,8 @@ export type Visibility = "invite_only" | "invites_plus_open";
 
 export interface Project {
   id: string;
+  /** Function picked from the eight role categories; drives matching when set. */
+  category?: string | null;
   origin: "buyer" | "revenue_nomad";
   ownerBuyerId?: string;
   ownerAdminId?: string;
@@ -303,4 +305,6 @@ export interface State {
   outbox: OutboxEntry[];
   events: AppEvent[];
   seq: number;
+  /** Buyer company profiles on the standard picklists. Missing for a buyer until they save one. */
+  buyerProfiles?: Record<string, import("./company").BuyerProfile>;
 }

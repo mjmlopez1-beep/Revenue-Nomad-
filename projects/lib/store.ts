@@ -5,7 +5,7 @@
 // Writes always re-read localStorage first and listen for `storage` events, so two tabs
 // never fork the data (QA O-14).
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import type {
   AppEvent,
   Invite,
@@ -38,7 +38,8 @@ import {
   operatorById,
   operatorEmail,
 } from "./data";
-import { briefFromProject, fitScore, seatCategory, tierOf, type FitResult } from "./fit";
+import { briefFromProject, fitScore, seatOf, tierOf, type FitResult } from "./fit";
+import { defaultBuyerProfile, type BuyerProfile } from "./company";
 import { dayLabel, hoursRange, isoDay, shortDate } from "./format";
 
 const VERSION = 3;
@@ -292,6 +293,75 @@ function mutate<T>(role: Role | "system" | "client", fn: (s: State, c: Ctx) => T
   return out;
 }
 
+// ---------------------------------------------------------------- visibility signals
+
+export type SignalType = "profile_viewed" | "search_impression" | "compared";
+export interface SignalHit {
+  type: SignalType;
+  operatorId: string;
+  term?: string;
+  source?: string;
+  projectId?: string;
+}
+
+/**
+ * Profile views, search appearances and compares. Recorded as events like everything
+ * else, but without moving the simulated clock, and at most once per operator, term
+ * and viewer a day so a re-render or a retyped search doesn't inflate them.
+ */
+export function trackSignals(hits: SignalHit[], role: Role | "client", actorId?: string) {
+  if (!hits.length) return;
+  const s = fresh();
+  const now = CLOCK_BASE + s.clockOffsetMs;
+  const actor = actorFor(role, actorId);
+  const day = Math.floor(now / DAY);
+  const seen = new Set(
+    s.events
+      .filter((e) => (e.type === "profile_viewed" || e.type === "search_impression" || e.type === "compared") && Math.floor(e.at / DAY) === day && e.actorId === actor.actorId)
+      .map((e) => `${e.type}|${e.operatorId}|${String(e.meta?.term || "")}|${e.projectId || ""}`),
+  );
+  let added = 0;
+  for (const h of hits) {
+    const term = (h.term || "").trim().toLowerCase().slice(0, 60);
+    const k = `${h.type}|${h.operatorId}|${term}|${h.projectId || ""}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    s.events.push({ id: `ev-${s.seq++}`, at: now, type: h.type, ...actor, operatorId: h.operatorId, projectId: h.projectId, meta: { ...(term ? { term } : {}), ...(h.source ? { source: h.source } : {}) } });
+    added++;
+  }
+  if (added) save(s);
+}
+
+/** Records who showed up for a search once the buyer stops typing. Operators searching don't count. */
+export function useSearchImpressions(q: string, operatorIds: string[], source: string) {
+  const sess = useSession();
+  const key = operatorIds.join(",");
+  useEffect(() => {
+    const term = q.trim().toLowerCase();
+    if (term.length < 2 || sess.role === "operator" || !operatorIds.length) return;
+    const t = setTimeout(() => trackSignals(operatorIds.map((id) => ({ type: "search_impression" as const, operatorId: id, term, source })), sess.role, sess.role === "buyer" ? sess.buyerId : undefined), 700);
+    return () => clearTimeout(t);
+  }, [q, key, sess.role]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** The buyer's company profile: what they saved, else a starting point from their account. */
+export function buyerProfileOf(s: State, buyerId: string | undefined): BuyerProfile | null {
+  if (!buyerId) return null;
+  return s.buyerProfiles?.[buyerId] || defaultBuyerProfile(buyerId);
+}
+
+export function saveBuyerProfile(buyerId: string, patch: Partial<BuyerProfile>) {
+  mutate(
+    "buyer",
+    (s, c) => {
+      const cur = s.buyerProfiles?.[buyerId] || defaultBuyerProfile(buyerId);
+      s.buyerProfiles = { ...(s.buyerProfiles || {}), [buyerId]: { ...cur, ...patch } };
+      c.event("buyer_profile_updated", { meta: { fields: Object.keys(patch) } });
+    },
+    buyerId,
+  );
+}
+
 export function nowOf(s: State): number {
   return CLOCK_BASE + s.clockOffsetMs;
 }
@@ -439,7 +509,7 @@ export function inPortal(s: State, pid: string, opId: string): boolean {
 
 export function alertMatches(s: State, p: Project, opId: string): boolean {
   const st = opState(s, opId);
-  const cat = seatCategory(p.title);
+  const cat = seatOf(p);
   return st.alertPrefs.map(normalizeCategory).includes(cat) && st.availability !== "unavailable";
 }
 
@@ -616,7 +686,7 @@ function createInvite(s: State, c: Ctx, p: Project, opId: string, source: Invite
 }
 
 function sendAlerts(s: State, c: Ctx, p: Project) {
-  const cat = seatCategory(p.title);
+  const cat = seatOf(p);
   const day = isoDay(c.now);
   for (const op of OPERATORS) {
     if (inviteOf(s, p.id, op.id) || alertOf(s, p.id, op.id)) continue;

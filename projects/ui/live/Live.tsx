@@ -48,6 +48,7 @@ import { ago, hoursRange, isoDay, rateLabel, shortDate } from "../../lib/format"
 import { Link, navigate, useLocation } from "../../lib/router";
 import { attempt } from "../common";
 import { useFitLifts, useNextMoves } from "./Work";
+import { useInsightHeadline } from "./Insights";
 
 const DAY = 86400000;
 
@@ -134,6 +135,7 @@ export function LiveShell({ children }: { children: ReactNode }) {
     { to: "/dashboard/jobs", label: "Jobs", match: (p) => p.startsWith("/dashboard/jobs") },
     { to: "/dashboard/prospects", label: "Prospects", match: (p) => p.startsWith("/dashboard/prospects") },
     { to: "/dashboard/intros", label: "Intros", match: (p) => p.startsWith("/dashboard/intros") },
+    { to: "/dashboard/insights", label: "Insights", match: (p) => p.startsWith("/dashboard/insights") },
     { to: `/operators/${op?.slug}`, label: "My Profile", match: (p) => !!op && p === `/operators/${op.slug}` },
   ];
   if (!op) return null;
@@ -203,6 +205,7 @@ export function LiveOverview() {
   const portal = operatorPortal(s, op.id);
   const comp = completeness(op);
   const moves = useNextMoves(s, op);
+  const headline = useInsightHeadline(op);
   const { lifts, strongNow, total } = useFitLifts(s, op);
   const st = opState(s, op.id);
   const myIntros = s.intros.filter((i) => i.operatorId === op.id && i.status === "approved");
@@ -221,6 +224,10 @@ export function LiveOverview() {
           <p data-testid="hello-sub">
             {moves.length ? `${moves.length} thing${moves.length === 1 ? " needs" : "s need"} you.` : "You're all caught up."} {strongNow} of the {total} roles open right now are a strong fit for you.
           </p>
+          <Link to="/dashboard/insights" className="lv-hello-stat" data-testid="hello-views">
+            <b>{headline.views}</b> profile view{headline.views === 1 ? "" : "s"} this week
+            <span className={headline.change.up === null ? "" : headline.change.up ? "lv-ok-t" : "lv-warn-t"}> {headline.change.text}</span>
+          </Link>
         </div>
         {comp.pct < 100 && (
           <Link to={`/operators/${op.slug}`} className="lv-hello-prof">
@@ -569,7 +576,7 @@ export function LiveProject({ id }: { id: string }) {
         <div className="lv-cols">
           <div className="lv-col-l">
             <EngagementCard p={p} />
-            <WhyCard fit={fit} noRate={(submitted ? r!.rate : op.rate) == null} op={op} p={p} />
+            <WhyCard fit={fit} noRate={(submitted ? r!.rate : op.rate) == null} pay={submitted ? r!.rate : op.rate} op={op} p={p} />
           </div>
           <div className="lv-col-r">
             <RespondCard s={s} p={p} op={op} editing={editing} />
@@ -586,7 +593,7 @@ function EngagementCard({ p }: { p: Project }) {
   const facts: [string, string, string?][] = [
     ["Role needed", seatRole(p)],
     ["Hours per month", hoursRange(p.hoursPerMonthMin, p.hoursPerMonthMax).replace("-", " to ")],
-    ["Operator take-home", th || "Set by you", "rate-to-you"],
+    ["Pays you", th || "Set by you", "rate-to-you"],
     ["Term", p.term],
     ["Start", longDate(p.startTarget)],
     ["Location", p.location],
@@ -617,7 +624,7 @@ function EngagementCard({ p }: { p: Project }) {
           <span key={m}>{m}</span>
         ))}
       </div>
-      {p.origin === "buyer" && <p className="lv-fine">Take-home is what you are paid per hour, after Revenue Nomad&apos;s fee. You set your own rate in your response.</p>}
+      {p.origin === "buyer" && <p className="lv-fine">&quot;Pays you&quot; is what lands with you per hour. Revenue Nomad&apos;s fee is already taken out. You name your own rate in your response.</p>}
     </section>
   );
 }
@@ -627,18 +634,20 @@ function seatRole(p: Project): string {
 }
 
 /** Fit reasons as operators may read them: never the client's budget (gap G17). */
-export function operatorSafe(line: string, p: Project): string {
+export function operatorSafe(line: string, p: Project, pay?: number | null): string {
   return line
+    // Reasons quote client dollars for buyers; operators see their own pay.
+    .replace(/\$\d+\/hr (?=is (over|inside))/, pay != null ? `$${pay}/hr ` : "$&")
     .replace(/is over the \$\d+ budget/, p.origin === "revenue_nomad" ? `is above the ${takeHomeLine(p) || "set"} pay rate` : "is above the client's range")
     .replace(/is inside budget/, p.origin === "revenue_nomad" ? "fits the pay rate" : "is inside the client's range");
 }
 
-function WhyCard({ fit, noRate, op, p }: { fit: FitResult; noRate: boolean; op: Operator; p: Project }) {
+function WhyCard({ fit, noRate, op, p, pay }: { fit: FitResult; noRate: boolean; op: Operator; p: Project; pay: number | null }) {
   const plusN = fit.plus ? fit.plus.split(". ").length : 0;
   const lines = [fit.plus, fit.minus]
     .filter(Boolean)
     .flatMap((x) => x.split(". "))
-    .map((l) => operatorSafe(l, p));
+    .map((l) => operatorSafe(l, p, pay));
   const inds = (op.allIndustries || []).map((i) => i.toLowerCase());
   const wantsHealth = /health/i.test(`${p.companyDescriptor} ${p.mustHaves.join(" ")}`);
   return (
@@ -765,7 +774,7 @@ function RespondCard({ s, p, op, editing }: { s: State; p: Project; op: Operator
         >
           <div className="lv-grid3">
             <label className="lv-field">
-              <span>Your rate{op.rate == null ? " (required)" : ""}</span>
+              <span>Your hourly rate{op.rate == null ? " (required)" : ""}</span>
               <input inputMode="numeric" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="$185/hr" aria-invalid={err?.field === "rate"} data-testid="r-rate" />
               {fe("rate")}
             </label>
@@ -783,14 +792,14 @@ function RespondCard({ s, p, op, editing }: { s: State; p: Project; op: Operator
           {overRange ? (
             <div className="lv-rangewarn" data-testid="rate-warn">
               <span>
-                ${rateNum} is above this client&apos;s range of {takeHomeLine(p)} take-home, so you&apos;ll show as over budget.
+                ${rateNum} is more than this role pays ({takeHomeLine(p)}), so the client will see you as over budget.
               </span>
               <button type="button" className="lv-btn lv-btn-sm" onClick={() => setRate(String(range![1]))} data-testid="rate-use-max">
                 Use ${range![1]}
               </button>
             </div>
           ) : (
-            <p className="lv-fine">Rate is your take-home. Prefilled from your profile.{takeHomeLine(p) ? ` This client's range is ${takeHomeLine(p)}.` : ""}</p>
+            <p className="lv-fine">What you want to be paid per hour, from your profile.{takeHomeLine(p) ? ` This role pays ${takeHomeLine(p)}.` : ""}</p>
           )}
           {overHours && (
             <Msg tone="warn" testId="hours-warning">

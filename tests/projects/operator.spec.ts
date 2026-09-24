@@ -68,12 +68,13 @@ test("O-03 a saved draft is kept, hidden from the buyer, and stays in Invited", 
 
 test("O-04 a full response shows on B4 with the right score", async ({ page }) => {
   await postNorthwind(page, { invite: ["Tim Evans"] });
-  await respond(page, "Tim Evans", NW, { rate: "200", hours: "25", start: "2026-10-01", answers: ["I built one at Acme.", "Hired two AEs in Q1."] });
+  await respond(page, "Tim Evans", NW, { rate: "150", hours: "25", start: "2026-10-01", answers: ["I built one at Acme.", "Hired two AEs in Q1."] });
   await expect(page.getByTestId("status-now")).toHaveText("Responded");
   await openBuyerProject(page);
   const row = responseRow(page, "Tim Evans");
   await expect(row.getByTestId("fit-score").first()).toContainText("90");
-  await expect(row).toContainText("$200/hr · 25 hrs · Start Oct 1");
+  // Tim asked for $150 pay; the buyer sees $200 all-in, inside the $175 to $250 budget.
+  await expect(row).toContainText("$200/hr all-in · 25 hrs · Start Oct 1");
   await row.getByTestId("view-response").click();
   await expect(row.getByTestId("response-detail")).toContainText("I built one at Acme.");
   await expect(row.getByTestId("response-detail")).toContainText("Hired two AEs in Q1.");

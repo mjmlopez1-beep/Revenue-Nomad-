@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Project, State } from "../../lib/types";
+import { clientRate } from "../../lib/fit";
 import { OPERATORS, buyerById, displayName, operatorById, stableSort } from "../../lib/data";
 import {
   MAX_SUGGESTIONS,
@@ -20,6 +21,7 @@ import {
   responseSourceLabel,
   responsesFor,
   setAdminNote,
+  selectOperator,
   setProjectStatus,
   simulateResponse,
   suggestionsUsed,
@@ -132,6 +134,7 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
   const [showNudge, setShowNudge] = useState(false);
   const [note, setNote] = useState(p.adminNote || "");
   const [simOp, setSimOp] = useState("");
+  const [hire, setHire] = useState<string | null>(null);
   const run = (fn: () => void, ok: string) => attempt(() => (fn(), setMsg({ tone: "ok", text: ok })), (m) => setMsg({ tone: "error", text: m }));
   const now = nowOf(s);
   const rows = responsesFor(s, p.id)
@@ -158,7 +161,7 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
           </>
         }
         title={p.title}
-        sub={`${b.company} · ${b.contactName}, ${b.contactTitle} · Budget $${p.budgetMin}-$${p.budgetMax}/hr · Read only, the buyer runs this project`}
+        sub={`${b.company} · ${b.contactName}, ${b.contactTitle} · Budget $${p.budgetMin}-$${p.budgetMax}/hr · The buyer runs this project`}
       >
         <div className="band-actions">
           <button type="button" className="btn band-ghost" onClick={() => setShowNudge(!showNudge)} data-testid="nudge-open">
@@ -203,7 +206,7 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
           <section className="card" data-testid="admin-responses">
             <div className="card-head">
               <h2>Responses and buyer actions</h2>
-              <span className="head-meta">Sorted by fit · read only</span>
+              <span className="head-meta">Sorted by fit · the buyer decides</span>
             </div>
             {!rows.length && <p className="muted">No responses yet.</p>}
             <div className="table-wrap">
@@ -215,6 +218,7 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
                     <th>Rate</th>
                     <th>Source</th>
                     <th>Buyer action</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -227,18 +231,36 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
                         <Link to={`/operators/${op.slug}`}>{displayName(op)}</Link> <CheckHours op={op} />
                         {r.simulated && <span className="chip chip-warn">Simulated</span>}
                       </td>
-                      <td data-label="Rate">{rateLabel(r.rate)}</td>
+                      <td data-label="Rate">{r.rate == null ? rateLabel(r.rate) : `$${r.rate} pay · $${clientRate(r.rate)} all-in`}</td>
                       <td data-label="Source">{responseSourceLabel(s, r)}</td>
                       <td data-label="Buyer action" data-testid="buyer-action">
                         {ACTION_LABEL[r.decision]}
                         {r.notAFitReason ? `, ${r.notAFitReason}` : ""}
+                      </td>
+                      <td>
+                        {!isEnded(p) &&
+                          (hire === op.id ? (
+                            <span className="row hire-confirm" data-testid="hire-confirm">
+                              <span className="small">Record that {b.company} hired {op.first}? The project closes and everyone else gets one close email.</span>
+                              <button type="button" className="btn primary btn-sm" onClick={() => (setHire(null), run(() => selectOperator(p.id, op.id, "admin"), `Recorded: ${b.company} hired ${displayName(op)}. Project closed.`))} data-testid="hire-yes">
+                                Record hire
+                              </button>
+                              <button type="button" className="btn ghost btn-sm" onClick={() => setHire(null)}>
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button type="button" className="btn btn-sm" onClick={() => setHire(op.id)} data-testid="admin-mark-hired" title="For hires the buyer made but didn't record">
+                              Mark hired
+                            </button>
+                          ))}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="small muted">Revenue Nomad never screens or approves a buyer's responses. The buyer makes every decision here.</p>
+            <p className="small muted">Revenue Nomad never screens or approves a buyer's responses. Use Mark hired only to record a hire the buyer made and didn't mark themselves; it's logged as done by an admin.</p>
           </section>
           {declines.length > 0 && (
             <section className="card" data-testid="decline-reasons">

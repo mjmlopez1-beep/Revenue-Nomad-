@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Operator, Project, Response, State } from "../../lib/types";
-import { OPERATORS, buyerById, completeness, displayName, matchesQuery, operatorById, stableSort } from "../../lib/data";
+import { CATEGORIES, OPERATORS, buyerById, displayName, matchesQuery, operatorById, stableSort } from "../../lib/data";
 import {
   ActionError,
   alertMatches,
@@ -32,26 +32,26 @@ import {
   selectOperator,
   setProjectStatus,
   setWantsSuggestions,
+  trackSignals,
   undoDecision,
   uninviteOperator,
   updateDraft,
+  useSearchImpressions,
   useSession,
   useStore,
   validateBrief,
   widenVisibility,
   type BriefErrors,
 } from "../../lib/store";
-import { ago, daysBetween, hoursRange, plural, rateLabel, shortDate } from "../../lib/format";
+import { ago, daysBetween, hoursRange, plural, shortDate } from "../../lib/format";
 import { Link, navigate, useLocation } from "../../lib/router";
-import { seatCategory } from "../../lib/fit";
+import { allInLabel, seatOf } from "../../lib/fit";
 import {
   Arrow,
   Avatar,
   Back,
   Band,
   Check,
-  CheckHours,
-  Completeness,
   Empty,
   FieldError,
   FitParts,
@@ -59,10 +59,14 @@ import {
   FitWhy,
   Gap,
   Notice,
+  SeatFlags,
   Stat,
   StatusPill,
   attempt,
+  seatFlags,
 } from "../common";
+import { CompanyFitChip, useBuyerFit } from "./Company";
+import { INDUSTRIES, MOTIONS } from "../../lib/company";
 import { BriefFields, LiveMatch, TemplatePicker, type BriefDraft } from "../BriefForm";
 import { TEMPLATES } from "../../lib/templates";
 
@@ -249,7 +253,7 @@ export function BuyerBrief({ id }: { id: string }) {
   };
   const pickTemplate = (key: string) => {
     const t = TEMPLATES.find((x) => x.key === key)!;
-    set({ ...t.brief, mustHaves: [...t.brief.mustHaves], screeningQuestions: [...t.brief.screeningQuestions] });
+    set({ ...t.brief, category: seatOf(t.brief), mustHaves: [...t.brief.mustHaves], screeningQuestions: [...t.brief.screeningQuestions] });
     setErrors({});
   };
   return (
@@ -328,6 +332,7 @@ export function BuyerBrief({ id }: { id: string }) {
 function stripDraft(d: BriefDraft): Partial<Project> {
   const {
     title,
+    category,
     successIn90Days,
     scope,
     hoursPerMonthMin,
@@ -348,6 +353,7 @@ function stripDraft(d: BriefDraft): Partial<Project> {
   } = d;
   return {
     title,
+    category: category ?? null,
     successIn90Days,
     scope,
     hoursPerMonthMin: Number(hoursPerMonthMin),
@@ -384,6 +390,47 @@ function Steps({ at }: { at: number }) {
 
 // ---------------------------------------------------------------- B3
 
+interface InviteFilters {
+  cat: string;
+  avail: string;
+  industry: string;
+  motion: string;
+  rate: string;
+  hours: number;
+  rep: number;
+}
+const NO_FILTERS: InviteFilters = { cat: "", avail: "", industry: "", motion: "", rate: "", hours: 0, rep: 0 };
+
+const MOTION_TAGS: Record<string, RegExp> = {
+  plg: /\bplg\b|product.led/i,
+  plg_to_sales: /plg\s*(→|->|to)\s*sales|founder-led sales exit/i,
+  inside_sales: /inside|inbound|outbound|\bsdr\b/i,
+  enterprise_sales: /enterprise/i,
+  channel: /channel|reseller/i,
+};
+
+function passesFilters(s: State, o: Operator, f: InviteFilters, budgetMax?: number | null): boolean {
+  if (f.cat && o.cat !== f.cat) return false;
+  if (f.avail) {
+    const st = opState(s, o.id);
+    if (st.availability === "unavailable") return false;
+    if (f.avail === "now" && !(st.availability === "open" || (!st.availability && /now/i.test(o.avail)))) return false;
+    if (f.avail === "2w" && /2\+ weeks/i.test(o.avail) && st.availability !== "open") return false;
+    if (f.avail === "confirmed" && !st.lastConfirmedAt) return false;
+  }
+  if (f.industry && !(o.allIndustries || []).includes(f.industry)) return false;
+  if (f.motion && !MOTION_TAGS[f.motion].test((o.allTags || []).join(" | "))) return false;
+  if (f.rate === "listed" && o.rate == null) return false;
+  if (f.rate && f.rate !== "listed") {
+    if (o.rate == null) return false;
+    const cap = f.rate === "budget" ? budgetMax ?? Infinity : Number(f.rate);
+    if (o.rate > cap) return false;
+  }
+  if (f.hours && (o.hrs || 0) < f.hours) return false;
+  if (f.rep && (o.reputation || 0) < f.rep) return false;
+  return true;
+}
+
 /** Operators this buyer already liked on earlier projects: intros requested or hired. */
 export function benchOf(s: State, p: Project): string[] {
   const mine = new Set(s.projects.filter((x) => x.origin === "buyer" && x.ownerBuyerId === p.ownerBuyerId && x.id !== p.id).map((x) => x.id));
@@ -410,17 +457,78 @@ export function InvitePicker({
   const [q, setQ] = useState("");
   const [limit, setLimit] = useState(pageSize);
   const bench = useMemo(() => new Set(p.origin === "buyer" ? benchOf(s, p) : []), [s, p]);
+  const buyerFit = useBuyerFit();
   const scored = useMemo(() => stableSort(OPERATORS.map((o) => ({ id: o.id, o, f: projectFit(p, o) })), (x) => x.f.fit + (bench.has(x.id) ? 1000 : 0)), [p, bench]);
-  const list = q.trim() ? scored.filter((x) => matchesQuery(x.o, q)) : scored;
+  const [fl, setFl] = useState<InviteFilters>(NO_FILTERS);
+  const active = Object.entries(fl).filter(([k, v]) => v !== NO_FILTERS[k as keyof InviteFilters]).length;
+  const list = scored.filter((x) => (!q.trim() || matchesQuery(x.o, q)) && passesFilters(s, x.o, fl, p.origin === "revenue_nomad" ? p.operatorRate : p.budgetMax));
   const shown = list.slice(0, limit);
+  useSearchImpressions(q, shown.map((x) => x.o.id), "invite");
   return (
     <div className="picker">
       <label className="search">
         <span className="sr-only">Search operators</span>
         <input value={q} onChange={(e) => (setQ(e.target.value), setLimit(pageSize))} placeholder={`Search ${OPERATORS.length} operators by name, role, skill or industry`} data-testid="invite-search" />
       </label>
+      <div className="pick-filters" role="group" aria-label="Filters" data-testid="invite-filters">
+        <select value={fl.cat} onChange={(e) => (setFl({ ...fl, cat: e.target.value }), setLimit(pageSize))} aria-label="Role category" data-testid="flt-cat">
+          <option value="">Any role category</option>
+          {CATEGORIES.map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </select>
+        <select value={fl.avail} onChange={(e) => (setFl({ ...fl, avail: e.target.value }), setLimit(pageSize))} aria-label="Availability" data-testid="flt-avail">
+          <option value="">Any availability</option>
+          <option value="now">Available now</option>
+          <option value="2w">Within 2 weeks</option>
+          <option value="confirmed">Confirmed recently</option>
+        </select>
+        <select value={fl.industry} onChange={(e) => (setFl({ ...fl, industry: e.target.value }), setLimit(pageSize))} aria-label="Industry" data-testid="flt-industry">
+          <option value="">Any industry</option>
+          {INDUSTRIES.slice(0, 30).map((i) => (
+            <option key={i}>{i}</option>
+          ))}
+        </select>
+        <select value={fl.motion} onChange={(e) => (setFl({ ...fl, motion: e.target.value }), setLimit(pageSize))} aria-label="GTM motion" data-testid="flt-motion">
+          <option value="">Any GTM motion</option>
+          {MOTIONS.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <select value={fl.rate} onChange={(e) => (setFl({ ...fl, rate: e.target.value }), setLimit(pageSize))} aria-label="Hourly rate" data-testid="flt-rate">
+          <option value="">Any rate</option>
+          {p.budgetMax ? <option value="budget">Inside my budget</option> : null}
+          <option value="150">Up to $150/hr</option>
+          <option value="200">Up to $200/hr</option>
+          <option value="250">Up to $250/hr</option>
+          <option value="listed">Rate listed</option>
+        </select>
+        <select value={fl.hours} onChange={(e) => (setFl({ ...fl, hours: Number(e.target.value) }), setLimit(pageSize))} aria-label="Hours a month" data-testid="flt-hours">
+          <option value={0}>Any hours</option>
+          {[20, 40, 60, 80].map((h) => (
+            <option key={h} value={h}>
+              {h}+ hrs a month
+            </option>
+          ))}
+        </select>
+        <select value={fl.rep} onChange={(e) => (setFl({ ...fl, rep: Number(e.target.value) }), setLimit(pageSize))} aria-label="Reputation Index" data-testid="flt-rep">
+          <option value={0}>Any Reputation Index</option>
+          {[50, 60, 70].map((r) => (
+            <option key={r} value={r}>
+              Reputation {r}+
+            </option>
+          ))}
+        </select>
+        {active > 0 && (
+          <button type="button" className="btn ghost btn-sm" onClick={() => setFl(NO_FILTERS)} data-testid="flt-clear">
+            Clear {active}
+          </button>
+        )}
+      </div>
       <p className="muted" data-testid="invite-matchline">
-        {q.trim() ? `${list.length} of ${OPERATORS.length} match "${q.trim()}"` : `All ${OPERATORS.length} live profiles from revenuenomad.com, best fit first`}
+        {q.trim() || active ? `${list.length} of ${OPERATORS.length} match${q.trim() ? ` "${q.trim()}"` : ""}${active ? ` with ${active} filter${active === 1 ? "" : "s"}` : ""}` : `All ${OPERATORS.length} live profiles from revenuenomad.com, best fit first`}
       </p>
       {!list.length && (
         <Empty>
@@ -435,9 +543,9 @@ export function InvitePicker({
               <FitScore fit={f} size="sm" />
               <Avatar op={o} size={36} />
               <div className="op-who">
-                <Link to={`/operators/${o.slug}`}>{displayName(o)}</Link>
+                <Link to={`/operators/${o.slug}${q.trim() ? `?q=${encodeURIComponent(q.trim().toLowerCase())}` : ""}`}>{displayName(o)}</Link>
                 <small>
-                  {o.role} · {rateLabel(o.rate)} · {o.hrs} hrs a month
+                  {o.role} · {allInLabel(o.rate)} · {o.hrs} hrs a month
                 </small>
               </div>
               <div className="op-flags">
@@ -446,8 +554,8 @@ export function InvitePicker({
                     Your bench
                   </span>
                 )}
-                <Completeness op={o} />
-                <CheckHours op={o} />
+                <CompanyFitChip fit={buyerFit(o)} />
+                <SeatFlags flags={seatFlags(o, p)} />
               </div>
               {on ? (
                 <span className="row">
@@ -490,7 +598,7 @@ export function BuyerInvite({ id }: { id: string }) {
   const isDraft = p.status === "draft";
   const invited = new Set(isDraft ? p.draftInvites || [] : s.invites.filter((i) => i.projectId === id).map((i) => i.operatorId));
   const alertReach = OPERATORS.filter((o) => !invited.has(o.id) && alertMatches(s, p, o.id)).length;
-  const cat = seatCategory(p.title);
+  const cat = seatOf(p);
   const post = () => {
     if (attempt(() => postProject(id), (m) => setErr(m))) navigate(`/buyer/projects/${id}?posted=1`);
   };
@@ -975,7 +1083,7 @@ function Responses({ s, p, setMsg }: { s: State; p: Project; setMsg: (m: Msg) =>
 }
 
 /** What a buyer weighs besides fit: reviews, recent availability, engagements. */
-function Trust({ s, op }: { s: State; op: Operator }) {
+function Trust({ s, op, p, r }: { s: State; op: Operator; p: Project; r: Response }) {
   const st = opState(s, op.id);
   const reviews = op.profile?.reviews || [];
   const avg = reviews.length ? reviews.reduce((a, r) => a + (r.overall || 0), 0) / reviews.length : 0;
@@ -984,18 +1092,14 @@ function Trust({ s, op }: { s: State; op: Operator }) {
     op.eng ? plural(op.eng, "past engagement") : null,
     st.lastConfirmedAt ? `Available, confirmed ${shortDate(st.lastConfirmedAt)}` : null,
   ].filter(Boolean) as string[];
-  const c = completeness(op);
+  const cf = useBuyerFit()(op);
   return (
     <p className="resp-trust" data-testid="resp-trust">
       {items.map((x) => (
         <span key={x}>{x}</span>
       ))}
-      {c.pct < 60 && (
-        <span className="chip chip-thin" title={`Missing ${c.missing.join(", ")}`} data-testid="completeness">
-          Thin profile, {c.pct}%
-        </span>
-      )}
-      <CheckHours op={op} />
+      <CompanyFitChip fit={cf} />
+      <SeatFlags flags={seatFlags(op, p, r)} />
     </p>
   );
 }
@@ -1035,9 +1139,9 @@ function ResponseRow({ s, p, r, f, setMsg, picked, onPick }: { s: State; p: Proj
             {r.simulated && <span className="chip chip-warn">Simulated</span>}
           </div>
           <p className="resp-meta">
-            <span data-testid="resp-rate">{rateLabel(r.rate)}</span> · {r.hoursPerMonth} hrs · Start {shortDate(r.canStart)} · {ago(r.submittedAt, now)} · <span className="muted">{op.role}</span>
+            <span data-testid="resp-rate" title="Includes Revenue Nomad's fee">{allInLabel(r.rate)}</span> · {r.hoursPerMonth} hrs · Start {shortDate(r.canStart)} · {ago(r.submittedAt, now)} · <span className="muted">{op.role}</span>
           </p>
-          <Trust s={s} op={op} />
+          <Trust s={s} op={op} p={p} r={r} />
           {!!r.proof?.length && (
             <p className="resp-meta" data-testid="resp-proof">
               Case studies attached: {r.proof.join(", ")}
@@ -1160,20 +1264,25 @@ function Compare({ s, p, ids, onClose, act }: { s: State; p: Project; ids: strin
     const r = responseOf(s, p.id, id)!;
     return { op, r, f: responseFit(p, r) };
   });
+  const sess = useSession();
   useEffect(() => {
     ids.forEach((id) => markViewed(p.id, id));
+    trackSignals(ids.map((id) => ({ type: "compared" as const, operatorId: id, projectId: p.id, source: "compare" })), sess.role, sess.buyerId);
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const bestFit = Math.max(...cols.map((c) => c.f.fit));
+  const fitFor = useBuyerFit();
   const rates = cols.map((c) => c.r.rate).filter((x): x is number => x != null);
   const low = rates.length ? Math.min(...rates) : null;
   const rowsFacts: [string, (c: (typeof cols)[number]) => ReactNode, (c: (typeof cols)[number]) => boolean][] = [
     ["Fit", (c) => <FitScore fit={c.f} size="sm" />, (c) => c.f.fit === bestFit],
-    ["Rate", (c) => rateLabel(c.r.rate), (c) => low != null && c.r.rate === low],
+    ["Rate, all-in", (c) => allInLabel(c.r.rate).replace(" all-in", ""), (c) => low != null && c.r.rate === low],
     ["Hours a month", (c) => c.r.hoursPerMonth, () => false],
     ["Can start", (c) => shortDate(c.r.canStart), () => false],
+    ["Company fit", (c) => (fitFor(c.op) && fitFor(c.op)!.level !== "unknown" ? <CompanyFitChip fit={fitFor(c.op)} /> : "—"), () => false],
+    ["Flags", (c) => (seatFlags(c.op, p, c.r).map((x) => x.text).join(" · ") || "None"), () => false],
     ["Reviews", (c) => (c.op.profile?.reviews || []).length || c.op.rev || "None yet", () => false],
     ["Engagements", (c) => c.op.eng || "None listed", () => false],
     ["Strength", (c) => c.f.plus.split(". ")[0], () => false],
@@ -1376,8 +1485,8 @@ export function BuyerSelect({ id, opId }: { id: string; opId: string }) {
         </div>
         <dl className="facts">
           <div>
-            <dt>Their rate</dt>
-            <dd>{rateLabel(r.rate)}</dd>
+            <dt>Rate, all-in</dt>
+            <dd>{allInLabel(r.rate).replace(" all-in", "")}</dd>
           </div>
           <div>
             <dt>Hours a month</dt>
@@ -1389,7 +1498,7 @@ export function BuyerSelect({ id, opId }: { id: string; opId: string }) {
           </div>
           <div>
             <dt>Revenue Nomad fee</dt>
-            <dd>Placeholder, set in the agreement</dd>
+            <dd>Included in the all-in rate</dd>
           </div>
         </dl>
         <h3 className="mini-h">What happens when you confirm</h3>

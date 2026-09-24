@@ -2,13 +2,14 @@
 
 Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-handoff/QA_PLAN.md`, one Playwright test each in `tests/projects/`, run headless against the production build (`npm run test:e2e`, Chromium).
 
-**Result: 76 of 76 pass.** That covers:
+**Result: 82 of 82 pass.** That covers:
 
 - the 49 QA scenarios;
 - 5 admin console tests (A-13 to A-17);
 - 9 usability tests (U-01 to U-09, see `USABILITY_AUDIT.md`);
 - 8 operator dashboard tests (L-01 to L-08);
-- 5 jobs, prospects and overview tests (W-01 to W-05).
+- 5 jobs, prospects and overview tests (W-01 to W-05);
+- 4 tests for the review comments (C-01 to C-04) and 2 more admin tests (A-18, A-19).
 
 The full suite runs in about 1.5 minutes on 4 workers.
 
@@ -100,6 +101,16 @@ Decisions and gaps:
 - Catalog is shown disabled.
 - Snooze lasts for the browser session.
 - The client page no longer shows the bill rate when the admin turns it off.
+
+## Review comments on the published prototype
+
+- **One rate rule.** Operators always enter and see what they are paid. Buyers always see the all-in rate: pay plus Revenue Nomad's standard 25%, rounded to $5 (Tim's $130 shows as $175 all-in). Budget matching compares pay with the budget less the fee, so both sides agree. This moved some seeded numbers, and the tests were updated to match: B-01 now shows 10 profiles at 70+ and 1 listed rate inside the budget, and Tim's $200 profile rate is $265 all-in, over a $250 budget.
+- **Operator Insights** (`/dashboard/insights`): profile views, search appearances and compares week over week, with 7, 30, 60 and 90 day ranges and the top five searches behind profile views. Searches, profile opens and compares are recorded as events without moving the clock. Weeks before Sep 24 use deterministic sample history, and the page says so.
+- **Buyer company profile** (`/buyer/company`): industry, size, revenue, stage, ACV, sales cycle, GTM motion, segment and CRM on the standard picklists. It drives a company fit chip on responses, the invite list, compare, the directory, profiles and the Live match. Missing operator data never counts against them.
+- **Seat form**: a Function picklist for the eight role categories drives matching and alerts, with standard title chips. Templates use the platform's standard titles, including Chief Marketing Officer and GTM AI Architect, and are colored by function. The paste-a-job-description box is removed. Live match waits for a role instead of scoring a guess.
+- **Buyer signals**: profile completeness is gone from buyer screens. Hours, rate and location flags replace it. The invite list gets role category, availability, industry, GTM motion, rate, hours and reputation filters.
+- **Admin**: Mark hired records a hire a buyer made but didn't mark (logged as an admin action). Each operator has a detail page with visibility, searches, a projects funnel, dashboard usage and an activity log. Analytics adds Search and discovery (platform search terms, most viewed operators, where searches and views happen) and Usage and adoption (active users, feature usage).
+- **Also**: initials avatars are colored by function when there is no photo, the rate wording on the response form is plain, and the "Their response" card is cleaner.
 
 ## Simplification pass (platform audit)
 

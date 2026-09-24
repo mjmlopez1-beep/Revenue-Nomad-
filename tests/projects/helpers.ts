@@ -9,10 +9,11 @@ export interface Snapshot {
   alerts: { projectId: string; operatorId: string }[];
   responses: { projectId: string; operatorId: string; draft: boolean; submittedAt: number | null; interest: string; decision: string; rate: number | null }[];
   outbox: { kind: string; to: { name: string; id: string; email?: string }; subject: string; body: string; operatorId?: string }[];
-  events: { type: string; at: number; projectId?: string; operatorId?: string; meta?: Record<string, unknown> }[];
+  events: { type: string; at: number; actorRole?: string; projectId?: string; operatorId?: string; meta?: Record<string, unknown> }[];
   intros: { projectId: string; operatorId: string; status: string }[];
   pipeline: { projectId: string; operatorId: string; stage: string }[];
   shortlists: unknown[];
+  buyerProfiles?: Record<string, { stage: string; industries: string[] }>;
   questions: unknown[];
 }
 

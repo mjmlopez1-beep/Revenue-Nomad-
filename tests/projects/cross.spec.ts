@@ -32,7 +32,7 @@ test("X-01 full happy path from post to staffed, every screen agrees", async ({ 
   // Operator responds from the invite email
   await followMail(page, { kind: "invite", to: "Tim Evans" });
   await expect(page.getByTestId("op-source")).toHaveText("Invited by client");
-  await respond(page, "Tim Evans", NW, { rate: "200", hours: "25" });
+  await respond(page, "Tim Evans", NW, { rate: "150", hours: "25" });
   // Buyer sees it
   await openBuyerProject(page);
   await expect(responseRow(page, "Tim Evans")).toBeVisible();

@@ -92,7 +92,7 @@ test("A-03 admin view of a buyer project is read only", async ({ page }) => {
   await expect(page.getByTestId("admin-response-row")).toHaveCount(1);
   await expect(page.getByTestId("buyer-action")).toHaveText("To review");
   for (const id of ["request-intro", "not-a-fit", "select", "undo", "pass-weak"]) await expect(page.getByTestId(id)).toHaveCount(0);
-  await expect(page.getByText("Read only, the buyer runs this project")).toBeVisible();
+  await expect(page.getByText("The buyer runs this project")).toBeVisible();
 });
 
 test("A-04 nudge buyer sends an outbox entry and logs an event", async ({ page }) => {
@@ -414,4 +414,41 @@ test("A-17 analytics: funnel, sources that produce intros, and the per-project t
   await expect(page.locator('[data-testid="source-row"][data-source="invite"]')).toContainText("Buyer invite");
   await expect(page.locator('[data-testid="source-row"][data-source="invite"] td').nth(2)).toHaveText("1");
   await expect(page.getByTestId("report-row").and(page.locator(`[data-project="${NW}"]`)).getByTestId("rep-intros")).toHaveText("1");
+});
+
+test("A-18 admin records a hire the buyer didn't mark, and drills into an operator", async ({ page }) => {
+  await postNorthwind(page, { invite: ["Tim Evans"] });
+  await simulate(page, ["Tim Evans"]);
+  await page.getByTestId("admin-response-row").getByTestId("admin-mark-hired").click();
+  await expect(page.getByTestId("hire-confirm")).toContainText("Record that Northwind Health hired Tim?");
+  await page.getByTestId("hire-yes").click();
+  await expect(page.getByTestId("admin-msg")).toContainText("Recorded: Northwind Health hired Tim Evans");
+  const s = await state(page);
+  expect(s.projects.find((p) => p.id === NW)!.status).toBe("staffed");
+  expect(s.events.find((e) => e.type === "selected")!.actorRole).toBe("admin");
+  await goto(page, "/admin/operators");
+  await page.getByTestId("ops-search").fill("Tim Evans");
+  await page.locator(`[data-testid="op-dir-row"][data-id="${opByName("Tim Evans").id}"]`).getByTestId("op-detail-link").click();
+  await expect(page.getByTestId("operator-detail")).toContainText("Tim Evans");
+  await expect(page.getByTestId("adm-kpi-views")).toContainText("vs previous 30 days");
+  await expect(page.getByTestId("op-funnel")).toContainText("Hired");
+  await expect(page.getByTestId("op-activity")).toContainText("Hired, Fractional VP of Sales");
+});
+
+test("A-19 analytics covers search and discovery, and usage and adoption", async ({ page }) => {
+  await asRole(page, "buyer");
+  await goto(page, "/operators");
+  await page.getByPlaceholder("Search by name, role, skill or industry").fill("hubspot");
+  await page.waitForTimeout(1000);
+  await page.locator(".dir-card").first().click();
+  await asRole(page, "admin");
+  await goto(page, "/admin/reports");
+  await page.getByTestId("an-tab-discovery").click();
+  await expect(page.getByTestId("market-terms").getByTestId("term-row").first()).toBeVisible();
+  await expect(page.getByTestId("most-viewed")).toContainText("Views");
+  await expect(page.getByTestId("discovery-sources")).toContainText("Browse talent search");
+  await expect(page.locator('[data-testid="view-source"][data-source="search"]')).toContainText("1");
+  await page.getByTestId("an-tab-adoption").click();
+  await expect(page.getByTestId("active-buyers")).toHaveText("1");
+  await expect(page.locator('[data-testid="feature-row"][data-feature="Search operators"] td').nth(2)).toHaveText("1");
 });

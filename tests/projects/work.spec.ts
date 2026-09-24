@@ -87,7 +87,7 @@ test("W-04 a rate above the client's take-home range warns, one tap fixes it", a
   await asOperator(page, "Anne Zavorskas");
   await goto(page, `/dashboard/projects/${NW}`);
   await expect(page.getByTestId("r-rate")).toHaveValue("235");
-  await expect(page.getByTestId("rate-warn")).toContainText("$235 is above this client's range of $130 to $190/hr");
+  await expect(page.getByTestId("rate-warn")).toContainText("$235 is more than this role pays ($130 to $190/hr)");
   await page.getByTestId("rate-use-max").click();
   await expect(page.getByTestId("r-rate")).toHaveValue("190");
   await expect(page.getByTestId("rate-warn")).toHaveCount(0);

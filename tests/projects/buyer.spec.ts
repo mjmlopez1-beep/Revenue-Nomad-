@@ -24,8 +24,9 @@ test.beforeEach(async ({ page }) => {
 
 test("B-01 live match panel on the Northwind draft", async ({ page }) => {
   await goto(page, `/buyer/projects/${NW}/edit`);
-  await expect(page.getByTestId("lm-70")).toHaveText("12");
-  await expect(page.getByTestId("lm-rate")).toHaveText("8");
+  // Budgets are client dollars, operator rates are pay: only pay of $130 to $190 fits $175 to $250 all-in.
+  await expect(page.getByTestId("lm-70")).toHaveText("10");
+  await expect(page.getByTestId("lm-rate")).toHaveText("1");
   await expect(page.getByTestId("lm-norate")).toContainText("81 of 100 operators have no rate");
   await expect(page.getByTestId("live-match")).toContainText("of 100 live profiles score 70+");
 });
@@ -131,7 +132,7 @@ test("B-08 sort by rate puts operators with no rate last", async ({ page }) => {
   await openBuyerProject(page, "all");
   await page.getByTestId("sort").selectOption("rate");
   const rates = await page.getByTestId("resp-rate").allTextContents();
-  expect(rates).toEqual(["$200/hr", "$300/hr", "No rate listed", "No rate listed"]);
+  expect(rates).toEqual(["$265/hr all-in", "$400/hr all-in", "No rate listed", "No rate listed"]);
 });
 
 test("B-09 pass on all weak fits moves only under-70 responders, no email", async ({ page }) => {
