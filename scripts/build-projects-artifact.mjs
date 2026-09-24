@@ -35,11 +35,11 @@ await build({
   logLevel: "warning",
 });
 
-const css = readFileSync("projects/styles.css", "utf8") + "\n" + readFileSync("projects/ui/live/live.css", "utf8");
+const css = readFileSync("projects/styles.css", "utf8") + "\n" + readFileSync("projects/ui/live/live.css", "utf8") + "\n" + readFileSync("projects/ui/admin/console.css", "utf8");
 const html = `<title>Revenue Nomad Projects</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Red+Hat+Display:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Red+Hat+Display:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&display=swap">
 <style>
 ${css}
 body { margin: 0; background: var(--canvas); color: var(--ink); }

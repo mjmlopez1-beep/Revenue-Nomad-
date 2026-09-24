@@ -16,7 +16,7 @@ function applyTheme(t: string) {
 export const ROLE_HOME: Record<Role, string> = {
   buyer: "/buyer/projects",
   operator: "/dashboard",
-  admin: "/admin/projects",
+  admin: "/admin/today",
 };
 
 export function ProtoBar() {
@@ -175,6 +175,10 @@ const KIND_LABEL: Record<OutboxEntry["kind"], string> = {
   booking: "Booking",
   reply: "Reply",
   suggestions: "Suggestion",
+  signup: "Sign-up invite",
+  message: "Message",
+  checkin: "Check in",
+  client: "From client",
 };
 
 function OutboxPanel({ entries, onClose }: { entries: OutboxEntry[]; onClose: () => void }) {

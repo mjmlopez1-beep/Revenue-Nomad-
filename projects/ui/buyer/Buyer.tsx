@@ -30,7 +30,6 @@ import {
   selectOperator,
   setProjectStatus,
   setWantsSuggestions,
-  suggestionsUsed,
   undoDecision,
   uninviteOperator,
   updateDraft,
@@ -42,7 +41,7 @@ import {
 } from "../../lib/store";
 import { ago, daysBetween, hoursRange, plural, rateLabel, shortDate } from "../../lib/format";
 import { Link, navigate, useLocation } from "../../lib/router";
-import { seatCategory, tierOf } from "../../lib/fit";
+import { seatCategory } from "../../lib/fit";
 import {
   Arrow,
   Avatar,

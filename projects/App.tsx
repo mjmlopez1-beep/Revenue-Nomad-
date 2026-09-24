@@ -2,11 +2,12 @@
 
 import { useEffect, type ReactNode } from "react";
 import { match, navigate, operatorAlias, useLocation } from "./lib/router";
-import { setSession, signInAs, useSession } from "./lib/store";
+import { projectById, setSession, signInAs, useSession, useStore } from "./lib/store";
 import { ProtoBar, ROLE_HOME, SiteHeader } from "./ui/Shell";
 import { BuyerBrief, BuyerDashboard, BuyerIntros, BuyerInvite, BuyerProject, BuyerSelect } from "./ui/buyer/Buyer";
 import { LiveAvailability, LiveIntros, LiveOverview, LiveProject, LiveProjects, LiveShell } from "./ui/live/Live";
-import { AdminIntros, AdminOperators, AdminProject, AdminProjects, AdminReports, AdminRnSetup } from "./ui/admin/Admin";
+import { AdminIntros, AdminOperators, AdminProject, AdminReports } from "./ui/admin/Admin";
+import { AdminAudit, AdminClients, AdminEngagements, AdminProjectsList, AdminPulse, AdminReviews, AdminShell, AdminShortlist, AdminToday, AdminWizard } from "./ui/admin/Console";
 import { ClientShortlist, OperatorDirectory, OperatorProfile } from "./ui/Pages";
 import type { Role } from "./lib/types";
 import { Empty } from "./ui/common";
@@ -25,16 +26,57 @@ const ROUTES: RouteDef[] = [
   ["/dashboard/projects/:id", "operator", (p) => <LiveProject key={p.id} id={p.id} />],
   ["/dashboard/intros", "operator", () => <LiveIntros />],
   ["/dashboard/availability", "operator", () => <LiveAvailability />],
-  ["/admin/projects", "admin", () => <AdminProjects />],
+  ["/admin/today", "admin", () => <AdminToday />],
+  ["/admin/projects", "admin", () => <AdminProjectsList />],
   ["/admin/operators", "admin", () => <AdminOperators />],
+  ["/admin/clients", "admin", () => <AdminClients />],
+  ["/admin/reviews", "admin", () => <AdminReviews />],
+  ["/admin/engagements", "admin", () => <AdminEngagements />],
+  ["/admin/pulse", "admin", () => <AdminPulse />],
   ["/admin/reports", "admin", () => <AdminReports />],
+  ["/admin/audit", "admin", () => <AdminAudit />],
   ["/admin/intros", "admin", () => <AdminIntros />],
-  ["/admin/projects/:id/setup", "admin", (p) => <AdminRnSetup key={p.id} id={p.id} />],
-  ["/admin/projects/:id", "admin", (p) => <AdminProject key={p.id} id={p.id} />],
+  ["/admin/projects/:id/setup", "admin", (p) => <AdminWizard key={p.id} id={p.id} />],
+  ["/admin/projects/:id/shortlist", "admin", (p) => <AdminShortlist key={p.id} id={p.id} />],
+  ["/admin/projects/:id", "admin", (p) => <AdminProjectRoute key={p.id} id={p.id} />],
   ["/operators", null, () => <OperatorDirectory />],
   ["/operators/:slug", null, (p) => <OperatorProfile slug={p.slug} />],
   ["/client/projects/:id", null, (p) => <ClientShortlist id={p.id} />],
 ];
+
+// Revenue Nomad projects use the console wizard and pipeline; buyer projects keep the buyer view.
+function AdminProjectRoute({ id }: { id: string }) {
+  const s = useStore();
+  const p = projectById(s, id);
+  return p?.origin === "revenue_nomad" ? <AdminWizard id={id} /> : <AdminProject id={id} />;
+}
+
+const ADMIN_CRUMBS: [string, string][] = [
+  ["/admin/today", "Today"],
+  ["/admin/projects", "Projects"],
+  ["/admin/intros", "Intro requests"],
+  ["/admin/operators", "Operators"],
+  ["/admin/clients", "Clients"],
+  ["/admin/reviews", "Reviews"],
+  ["/admin/engagements", "Engagements"],
+  ["/admin/pulse", "Availability pulse"],
+  ["/admin/reports", "Analytics"],
+  ["/admin/audit", "Audit log"],
+];
+
+function AdminCrumb({ path }: { path: string }) {
+  const s = useStore();
+  const top = ADMIN_CRUMBS.find(([p]) => path === p || path.startsWith(p + "/"));
+  const pid = match("/admin/projects/:id", path) || match("/admin/projects/:id/:sub", path);
+  const proj = pid ? projectById(s, pid.id) : null;
+  const sub = pid && "sub" in pid ? { setup: proj?.status === "draft" ? "New project" : "Setup", shortlist: "Send shortlist" }[pid.sub] : null;
+  return (
+    <>
+      Admin / {proj ? <>{top?.[1]} / </> : <b>{top?.[1] || "Admin"}</b>}
+      {proj && (sub ? <>{proj.title || "Untitled"} / <b>{sub}</b></> : <b>{proj.title || "Untitled"}</b>)}
+    </>
+  );
+}
 
 export default function ProjectsApp() {
   const loc = useLocation();
@@ -87,6 +129,7 @@ export default function ProjectsApp() {
   );
   // Operators see the live revenuenomad.com dashboard layout, including on profile pages.
   const live = loc.path.startsWith("/dashboard") || (sess.role === "operator" && loc.path.startsWith("/operators"));
+  const admin = loc.path.startsWith("/admin");
 
   return (
     <div className="rnp" data-role={sess.role}>
@@ -104,6 +147,8 @@ export default function ProjectsApp() {
         <ProtoBar />
         {live ? (
           <LiveShell>{body}</LiveShell>
+        ) : admin ? (
+          <AdminShell crumb={<AdminCrumb path={loc.path} />}>{body}</AdminShell>
         ) : (
           <>
             <SiteHeader />

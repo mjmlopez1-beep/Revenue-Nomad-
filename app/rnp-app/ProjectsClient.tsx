@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import "../../projects/styles.css";
 import "../../projects/ui/live/live.css";
+import "../../projects/ui/admin/console.css";
 import { configureRouter } from "../../projects/lib/router";
 import { configureAssets } from "../../projects/lib/data";
 

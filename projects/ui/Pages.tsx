@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { OPERATORS, displayName, explorerUrl, matchesQuery, operatorBySlug, stableSort } from "../lib/data";
-import { markViewed, nowOf, projectById, responseFit, responseOf, useSession, useStore } from "../lib/store";
+import { clientAskQuestion, clientRequestCall, markViewed, nowOf, projectById, responseFit, responseOf, useSession, useStore } from "../lib/store";
 import { rateLabel, shortDate } from "../lib/format";
 import { Link, useLocation } from "../lib/router";
-import { Availability, Avatar, Back, CheckHours, Completeness, Empty, FitParts, FitScore, FitWhy, Notice } from "./common";
+import { attempt, Availability, Avatar, Back, CheckHours, Completeness, Empty, FitParts, FitScore, FitWhy, Notice } from "./common";
 
 // ---------------------------------------------------------------- B5 operator profile
 
@@ -223,9 +223,14 @@ export function OperatorDirectory() {
 export function ClientShortlist({ id }: { id: string }) {
   const s = useStore();
   const p = projectById(s, id);
+  const [asking, setAsking] = useState(false);
+  const [q, setQ] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const lists = s.shortlists.filter((x) => x.projectId === id);
   const last = lists[lists.length - 1];
   if (!p || p.origin !== "revenue_nomad") return <Empty>No shortlist here.</Empty>;
+  const showRate = last ? last.showRate !== false : false;
+  const called = new Set(s.events.filter((e) => e.projectId === id && e.type === "client_requested_call").map((e) => e.operatorId));
   return (
     <div className="page narrow" data-testid="client-shortlist">
       <section className="band">
@@ -235,24 +240,95 @@ export function ClientShortlist({ id }: { id: string }) {
           </div>
           <h1>{p.title}</h1>
           <p className="band-sub">
-            {p.clientName} · Bill rate ${p.billRate}/hr · Sent {last ? shortDate(last.sentAt) : "not yet"}
+            Prepared for {p.clientName} by Matt Lopez{showRate ? ` · $${p.billRate}/hr` : ""} · Sent {last ? shortDate(last.sentAt) : "not yet"}
           </p>
         </div>
       </section>
       {!last && <Notice>Revenue Nomad has not sent a shortlist yet.</Notice>}
+      {last?.note && (
+        <section className="card" data-testid="shortlist-note">
+          <p>{last.note}</p>
+          <p className="muted small">Matt Lopez, Revenue Nomad</p>
+        </section>
+      )}
+      {msg && (
+        <div className={`notice ${msg.ok ? "notice-ok" : "notice-error"}`} role={msg.ok ? "status" : "alert"} data-testid="client-msg">
+          {msg.text}
+        </div>
+      )}
       <ul className="stack">
-        {last?.operators.map((o) => (
-          <li key={o.operatorId} className="card row-card" data-testid="shortlist-op">
-            <div className="grow">
-              <b>{o.name}</b>
-              <p className="muted small">{o.role}</p>
-            </div>
-            <span className="pill pill-tint">Fit {o.fit}</span>
-            <span className="pill">${o.billRate}/hr</span>
-          </li>
-        ))}
+        {last?.operators.map((o) => {
+          const op = OPERATORS.find((x) => x.id === o.operatorId);
+          return (
+            <li key={o.operatorId} className="card" data-testid="shortlist-op">
+              <div className="row-card">
+                {op && <Avatar op={op} size={44} />}
+                <div className="grow">
+                  <b>{o.name}</b>
+                  <p className="muted small">
+                    {o.role}
+                    {o.hours ? ` · ${o.hours} hrs/mo available` : ""}
+                  </p>
+                </div>
+                <span className="pill pill-tint">Fit {o.fit}</span>
+                {showRate && o.billRate != null && <span className="pill">${o.billRate}/hr</span>}
+              </div>
+              {o.why && <p className="small" data-testid="shortlist-why">{o.why}</p>}
+              <div className="chips" style={{ marginTop: 10 }}>
+                {op && (
+                  <Link to={`/operators/${op.slug}`} className="btn btn-sm">
+                    View profile
+                  </Link>
+                )}
+                {called.has(o.operatorId) ? (
+                  <span className="pill pill-tint">Call requested</span>
+                ) : (
+                  <button type="button" className="btn btn-sm primary" onClick={() => attempt(() => (clientRequestCall(id, o.operatorId), setMsg({ ok: true, text: `Revenue Nomad will set up your call with ${o.name}.` })), (m) => setMsg({ ok: false, text: m }))} data-testid="client-call">
+                    Request intro call
+                  </button>
+                )}
+                <button type="button" className="btn btn-sm" onClick={() => setAsking(true)}>
+                  Ask a question
+                </button>
+              </div>
+            </li>
+          );
+        })}
       </ul>
-      <p className="small muted">You see the operators Revenue Nomad shortlisted and the bill rate. Clock {shortDate(nowOf(s))}.</p>
+      {last && (
+        <section className="card">
+          {asking ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (attempt(() => clientAskQuestion(id, q), (m) => setMsg({ ok: false, text: m }))) {
+                  setQ("");
+                  setAsking(false);
+                  setMsg({ ok: true, text: "Question sent. Matt will reply by email." });
+                }
+              }}
+            >
+              <label className="field">
+                <span>Your question for Revenue Nomad</span>
+                <textarea rows={3} value={q} onChange={(e) => setQ(e.target.value)} data-testid="client-question" />
+              </label>
+              <div className="chips" style={{ marginTop: 10 }}>
+                <button type="submit" className="btn btn-sm primary" data-testid="client-ask">
+                  Send question
+                </button>
+                <button type="button" className="btn btn-sm ghost" onClick={() => setAsking(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button type="button" className="btn btn-sm" onClick={() => setAsking(true)}>
+              Ask Revenue Nomad a question
+            </button>
+          )}
+        </section>
+      )}
+      <p className="small muted">You see only the operators Revenue Nomad chose to send. Clock {shortDate(nowOf(s))}.</p>
     </div>
   );
 }

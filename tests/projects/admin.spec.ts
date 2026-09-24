@@ -25,13 +25,28 @@ test.beforeEach(async ({ page }) => {
   await reset(page);
 });
 
+/** Wizard step 2, search mode: tick each operator by name. */
+async function pickInWizard(page: Page, names: string[]) {
+  await page.getByTestId("mode-search").click();
+  for (const n of names) {
+    await page.getByTestId("cand-search").fill(n);
+    await page.getByRole("checkbox", { name: `Pick ${n}` }).check();
+  }
+  await expect(page.getByTestId("pick-count")).toContainText(`${names.length} operator`);
+}
+
 async function publishHarbor(page: Page, invite: string[]) {
   await asRole(page, "admin");
   await goto(page, `/admin/projects/${HARBOR}/setup`);
-  for (const n of invite) await inviteByName(page, n);
+  await page.getByTestId("wiz-next").click();
+  await pickInWizard(page, invite);
+  await page.getByTestId("wiz-step-4").click();
   await page.getByTestId("rn-publish").click();
+  await page.getByTestId("open-pipeline").click();
   await expect(page.getByTestId("pipeline")).toBeVisible();
 }
+
+const card = (page: Page, name: string) => page.getByTestId("pipeline-card").and(page.locator(`[data-op="${name}"]`));
 
 test("A-01 KPIs and funnel equal counts in the store", async ({ page }) => {
   await postNorthwind(page, { invite: ["Tim Evans", "Matt Lopez", "Anne Zavorskas"], visibility: "open" });
@@ -100,12 +115,12 @@ test("A-05 three days with no responses flags the project", async ({ page }) => 
   await postNorthwind(page, { invite: ["Tim Evans"], visibility: "invite_only", suggestions: false });
   await asRole(page, "admin");
   const row = page.getByTestId("admin-row").and(page.locator(`[data-project="${NW}"]`));
-  await expect(row.getByText("No responses in 72 hrs")).toHaveCount(0);
+  await expect(row.getByTestId("flag").filter({ hasText: "No responses in 72 hrs" })).toHaveCount(0);
   await page.getByTestId("clock-1d").click();
   await page.getByTestId("clock-1d").click();
-  await expect(row.getByText("No responses in 72 hrs")).toHaveCount(0);
+  await expect(row.getByTestId("flag").filter({ hasText: "No responses in 72 hrs" })).toHaveCount(0);
   await page.getByTestId("clock-1d").click();
-  await expect(row.getByText("No responses in 72 hrs")).toBeVisible();
+  await expect(row.getByTestId("flag").filter({ hasText: "No responses in 72 hrs" })).toBeVisible();
   await expect(page.getByTestId("clock")).toHaveText("Sun, Sep 27");
   await openBuyerProject(page);
   await expect(page.getByTestId("nudge-widen")).toBeVisible();
@@ -118,8 +133,12 @@ test("A-06 Harbor economics, and operators only see $160", async ({ page }) => {
   await expect(page.getByTestId("rn-margin").locator(".stat-v")).toHaveText("20%");
   await expect(page.getByTestId("rn-month")).toContainText("Per month at 45 hrs");
   await expect(page.getByTestId("rn-month").locator(".stat-v")).toHaveText("$1,800");
-  await inviteByName(page, "Matt Lopez");
+  await page.getByTestId("wiz-next").click();
+  await pickInWizard(page, ["Matt Lopez"]);
+  await page.getByTestId("wiz-step-4").click();
+  await expect(page.getByTestId("review-launch")).toContainText("$200 bill · $160 to operator · 20%");
   await page.getByTestId("rn-publish").click();
+  await page.getByTestId("open-pipeline").click();
   await expect(page.getByTestId("rn-econ")).toContainText("$200 bill · $160 to operator · 20%");
   await followMail(page, { kind: "invite", to: "Matt Lopez" });
   await expect(page.getByTestId("rate-to-you")).toHaveText("$160/hr");
@@ -138,11 +157,13 @@ test("A-07 moving a Harbor operator to Selected staffs the project (rule 5)", as
   await respond(page, "Matt Lopez", HARBOR, { rate: "160", hours: "40" });
   await asRole(page, "admin");
   await goto(page, `/admin/projects/${HARBOR}`);
-  const jose = page.getByTestId("pipeline-card").and(page.locator('[data-op="Jose Robledo"]'));
   await expect(page.getByTestId("col-responded").getByTestId("pipeline-card")).toHaveCount(2);
-  await jose.getByTestId("move-next").click();
+  await card(page, "Jose Robledo").getByTestId("move-next").click();
   await expect(page.getByTestId("col-shortlisted").getByTestId("pipeline-card")).toHaveCount(1);
-  await page.getByTestId("pipeline-card").and(page.locator('[data-op="Jose Robledo"]')).getByTestId("move-any").selectOption("selected");
+  await card(page, "Jose Robledo").getByTestId("move-any").selectOption("selected");
+  // Selecting closes the project, so it asks first.
+  await expect(page.getByRole("dialog", { name: "Select Jose Robledo" })).toContainText("notifies the 1 other");
+  await page.getByTestId("confirm-select-op").click();
   await expect(page.getByTestId("staffed-banner")).toContainText("Jose Robledo");
   const s = await state(page);
   expect(s.projects.find((p) => p.id === HARBOR)!.status).toBe("staffed");
@@ -151,18 +172,27 @@ test("A-07 moving a Harbor operator to Selected staffs the project (rule 5)", as
   expect(s.pipeline.find((e) => e.operatorId === opByName("Matt Lopez").id)!.stage).toBe("not_selected");
 });
 
-test("A-08 the shortlist to the client has only shortlisted operators, no operator rate or notes", async ({ page }) => {
+test("A-08 the shortlist to the client has only the picked operators, no operator rate or notes", async ({ page }) => {
   await publishHarbor(page, ["Jose Robledo", "Matt Lopez"]);
   await respond(page, "Jose Robledo", HARBOR, { rate: "160", hours: "45" });
   await respond(page, "Matt Lopez", HARBOR, { rate: "160", hours: "40" });
   await asRole(page, "admin");
   await goto(page, `/admin/projects/${HARBOR}`);
-  const jose = page.getByTestId("pipeline-card").and(page.locator('[data-op="Jose Robledo"]'));
-  await jose.getByPlaceholder("Admin note").fill("Internal: pushed hard on comp");
-  await jose.getByPlaceholder("Admin note").blur();
-  await jose.getByTestId("move-next").click();
+  await card(page, "Jose Robledo").getByRole("button", { name: "Open Jose Robledo" }).click();
+  const drawer = page.getByTestId("op-drawer");
+  await drawer.getByPlaceholder("Private to admins").fill("Internal: pushed hard on comp");
+  await drawer.getByPlaceholder("Private to admins").blur();
+  await drawer.getByRole("button", { name: "Close" }).click();
   await page.getByTestId("send-shortlist").click();
+  // Both responded; only the one ticked goes out.
+  await expect(page.getByTestId("sl-cand")).toHaveCount(2);
+  await page.getByRole("checkbox", { name: "Include Jose Robledo" }).check();
+  await page.getByRole("textbox", { name: "Why we picked Jose Robledo" }).fill("Ran a 3PL Salesforce migration last year.");
+  await page.getByTestId("sl-note").fill("Two strong fits, Jose first.");
+  await expect(page.getByTestId("sl-preview")).toContainText("Ran a 3PL Salesforce migration");
+  await page.getByTestId("sl-send").click();
   await expect(page.getByTestId("admin-msg")).toContainText("Shortlist sent");
+  await expect(page.getByTestId("col-with_client").getByTestId("pipeline-card")).toHaveCount(1);
   await openOutbox(page);
   const entry = mail(page, { kind: "shortlist" });
   await expect(entry).toHaveCount(1);
@@ -174,9 +204,17 @@ test("A-08 the shortlist to the client has only shortlisted operators, no operat
   await entry.getByRole("link", { name: "Review the shortlist" }).click();
   await expect(page.getByTestId("shortlist-op")).toHaveCount(1);
   await expect(page.getByTestId("shortlist-op")).toContainText("Jose Robledo");
+  await expect(page.getByTestId("shortlist-why")).toHaveText("Ran a 3PL Salesforce migration last year.");
+  await expect(page.getByTestId("shortlist-note")).toContainText("Two strong fits");
   const client = await page.getByTestId("client-shortlist").innerText();
   expect(client).not.toContain("160");
   expect(client).not.toContain("pushed hard");
+  // The client asks for a call; it lands on the admin's Today queue.
+  await page.getByTestId("client-call").click();
+  await expect(page.getByTestId("client-msg")).toContainText("set up your call with Jose Robledo");
+  await asRole(page, "admin");
+  await goto(page, "/admin/today");
+  await expect(page.getByTestId("needs-you")).toContainText("Harbor Logistics wants a call with Jose Robledo");
 });
 
 test("A-09 paging through operators at 10 per page is complete and stable", async ({ page }) => {
@@ -267,4 +305,73 @@ test("A-12 operators with 120+ hours show Check hours", async ({ page }) => {
   await postNorthwind(page, { invite: ["Tim Evans"] });
   await simulate(page, ["Tim Evans"]);
   await expect(page.getByTestId("admin-response-row").getByTestId("check-hours")).toBeVisible();
+});
+
+test("A-13 admins land on Today; the queue lists deal work and snooze hides an item", async ({ page }) => {
+  await publishHarbor(page, ["Jose Robledo"]);
+  await respond(page, "Jose Robledo", HARBOR, { rate: "160", hours: "45" });
+  await page.getByTestId("role-admin").click();
+  await expect(page).toHaveURL(/\/admin\/today$/);
+  const item = page.getByTestId("need-item").filter({ hasText: "Jose Robledo answered the screening questions" });
+  await expect(item).toHaveCount(1);
+  await expect(page.getByTestId("needs-count")).toHaveText("1");
+  await item.getByRole("link", { name: "Review" }).click();
+  await expect(page.getByTestId("op-drawer")).toContainText("Screening answers");
+  await goto(page, "/admin/today");
+  await page.getByRole("button", { name: /^Snooze: Jose Robledo/ }).click();
+  await expect(page.getByTestId("need-item")).toHaveCount(0);
+  await expect(page.getByTestId("needs-you")).toContainText("1 item snoozed for this session.");
+});
+
+test("A-14 wizard: assistant match, platform audience and off-platform invites all go out", async ({ page }) => {
+  await asRole(page, "admin");
+  await page.getByTestId("new-rn-project").click();
+  await expect(page).toHaveURL(/\/setup$/);
+  await page.getByTestId("f-title").fill("Fractional RevOps Lead");
+  await page.getByTestId("rn-client").selectOption("Harbor Logistics");
+  await page.locator("textarea").first().fill("Own the forecast and clean up Salesforce before the team grows.");
+  await page.getByTestId("rn-bill").fill("200");
+  await expect(page.getByTestId("rn-oprate")).toHaveText("$150/hr");
+  await page.getByTestId("wiz-next").click();
+  await page.getByTestId("ai-query").fill("RevOps lead for a 3PL moving from HubSpot to Salesforce");
+  await page.getByTestId("find-matches").click();
+  await expect(page.getByTestId("ai-count")).toContainText("operators scored 60 or more");
+  const first = page.getByTestId("cand-row").first();
+  const name = (await first.getAttribute("data-op"))!;
+  await first.getByRole("checkbox").check();
+  await page.getByTestId("wiz-next").click();
+  await page.getByTestId("aud-on").check();
+  const seg = Number((await page.getByTestId("aud-count").innerText()).match(/\d+/)![0]);
+  expect(seg).toBeGreaterThan(0);
+  await page.getByTestId("off-on").check();
+  await page.getByTestId("off-emails").fill("dana@acme.com, not-an-email, lee@beta.io");
+  await expect(page.getByText("2 valid emails")).toBeVisible();
+  await page.getByTestId("wiz-next").click();
+  await expect(page.getByTestId("review-launch")).toContainText(name);
+  await page.getByTestId("rn-publish").click();
+  await expect(page.getByTestId("launched")).toBeVisible();
+  const s = await state(page);
+  const p = s.projects.find((x) => x.title === "Fractional RevOps Lead")!;
+  expect(p.status).toBe("live");
+  expect(s.invites.filter((i) => i.projectId === p.id).map((i) => i.operatorId)).toEqual([SEED.find((o) => o.name === name)!.id]);
+  expect(s.alerts.filter((a) => a.projectId === p.id).length).toBeGreaterThan(0);
+  expect(s.outbox.filter((m) => m.kind === "signup").map((m) => m.to.email).sort()).toEqual(["dana@acme.com", "lee@beta.io"]);
+});
+
+test("A-15 pipeline: nudge an invited operator, drag a responder to Shortlisted", async ({ page }) => {
+  await publishHarbor(page, ["Jose Robledo", "Matt Lopez"]);
+  await respond(page, "Jose Robledo", HARBOR, { rate: "160", hours: "45" });
+  await asRole(page, "admin");
+  await goto(page, `/admin/projects/${HARBOR}`);
+  await expect(card(page, "Matt Lopez").getByTestId("move-next")).toHaveCount(0);
+  await card(page, "Matt Lopez").getByTestId("nudge-op").click();
+  await expect(page.getByTestId("admin-msg")).toHaveText("Nudged Matt Lopez.");
+  await expect(card(page, "Matt Lopez")).toContainText("Nudged");
+  await card(page, "Jose Robledo").dragTo(page.getByTestId("col-shortlisted"));
+  await expect(page.getByTestId("col-shortlisted").getByTestId("pipeline-card")).toHaveCount(1);
+  await expect(page.getByTestId("pipe-stats")).toContainText("1 engaged");
+  const s = await state(page);
+  expect(s.pipeline.find((e) => e.projectId === HARBOR && e.operatorId === opByName("Jose Robledo").id)!.stage).toBe("shortlisted");
+  expect(s.outbox.filter((m) => m.kind === "invite" && m.to.name === "Matt Lopez")).toHaveLength(2);
+  expect(s.events.filter((e) => e.type === "operator_nudged")).toHaveLength(1);
 });

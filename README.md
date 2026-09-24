@@ -18,10 +18,10 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 
 Buyers post fractional engagements, invite operators and review responses ranked by fit. Operators respond from invites or role alerts. Revenue Nomad admins watch every project and run their own client projects with bill rate, operator rate and a pipeline. All three roles share one store, so an action in one role shows up in the other two.
 
-- Buyers use `/buyer/projects` and admins `/admin/projects`. **Operators work inside the Operator Portal**: `/portal` has a **Projects** tab next to Job Board, Prospects and Profile, with a badge for invites waiting. Old `/operator/...` links and every operator email link land there (`/portal?view=projects&project=:id`). Deep links also work for `/buyer/projects/:id`, `/admin/projects/:id` and `/operators/:slug`.
+- Buyers use `/buyer/projects`. **Operators use the dashboard** at `/dashboard`, built in the live revenuenomad.com layout: Overview, Projects, Intros and Availability. The Operator Portal's Projects button and every operator email link land there. Old `/operator/...` links redirect. **Admins use the console** at `/admin/today`, which has a sidebar (Work, Network, Setup, Insights) and these screens: Today, Projects, a 4-step New project wizard, a drag-and-drop Pipeline, and Send shortlist. Deep links also work for `/buyer/projects/:id`, `/admin/projects/:id`, `/dashboard/projects/:id` and `/operators/:slug`.
 - The prototype bar at the top switches role, opens the **Outbox** (every email and alert; links sign in as the recipient), moves the simulated **Clock**, switches theme, and resets the demo data.
 - Code lives in `projects/`. The data layer is `projects/lib/store.ts` (localStorage behind repository functions), the fit score is `projects/lib/fit.ts`, and the seed is `projects/seed/`. Specs are in `docs/projects-handoff/`.
-- `npm run test:e2e` builds, then runs the Playwright suite headless (49 QA scenarios, 7 usability tests, 3 portal tests). Results are in `QA_REPORT.md`.
+- `npm run test:e2e` builds, then runs the Playwright suite headless (52 QA and admin console scenarios, 7 usability tests, 8 operator dashboard tests). Results are in `QA_REPORT.md`.
 - `npm run build:artifact` writes a standalone hash-routed copy to `dist-artifact/` for publishing as a claude.ai artifact.
 
 ## Launch / Deploy

@@ -63,8 +63,10 @@ test("X-01 full happy path from post to staffed, every screen agrees", async ({ 
   await asOperator(page, "Matt Lopez");
   await expect(page.getByTestId("sec-closed").locator(`[data-project="${NW}"]`)).toBeVisible();
   await asRole(page, "admin");
+  // Staffed projects move to the Placed tab.
+  await page.getByTestId("adm-tab-placed").click();
   row = page.getByTestId("admin-row").and(page.locator(`[data-project="${NW}"]`));
-  await expect(row).toContainText("Staffed");
+  await expect(row).toContainText("Placed");
   await expect(page.getByTestId("kpi-staffed").locator(".stat-v")).toHaveText("1");
 });
 

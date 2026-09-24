@@ -111,6 +111,12 @@ export interface Project {
   respondBy?: number | null;
   /** Operators picked on B3 / A3 before posting. Invites go out when the project is posted. */
   draftInvites?: string[];
+  /** Where a Revenue Nomad project came from (admin A3). */
+  source?: "direct" | "intro" | "referral";
+  /** Platform audience for a Revenue Nomad project: matching operators get a role alert (admin A3). */
+  audience?: { on: boolean; category: string; availability: "any" | "soon"; minReputation: number } | null;
+  /** People not on Revenue Nomad yet, invited to sign up and apply (admin A3). */
+  offPlatformEmails?: string[];
 }
 
 export type InviteSource = "buyer" | "rn_suggested" | "admin";
@@ -204,7 +210,11 @@ export interface Shortlist {
   id: string;
   projectId: string;
   sentAt: number;
-  operators: { operatorId: string; name: string; role: string; fit: number; billRate: number | null }[];
+  operators: { operatorId: string; name: string; role: string; fit: number; billRate: number | null; hours?: number; why?: string }[];
+  /** Cover note from Revenue Nomad to the client (admin A5). */
+  note?: string;
+  /** Whether the client rate shows on each profile. Operator pay is never shown. */
+  showRate?: boolean;
 }
 
 export interface OutboxLink {
@@ -231,7 +241,11 @@ export interface OutboxEntry {
     | "shortlist"
     | "booking"
     | "reply"
-    | "suggestions";
+    | "suggestions"
+    | "signup"
+    | "message"
+    | "checkin"
+    | "client";
   to: { role: Role | "client"; id: string; name: string; email: string };
   subject: string;
   body: string;

@@ -2,7 +2,14 @@
 
 Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-handoff/QA_PLAN.md`, one Playwright test each in `tests/projects/`, run headless against the production build (`npm run test:e2e`, Chromium).
 
-**Result: 49 of 49 QA scenarios pass, plus 7 usability tests (U-01 to U-07, see `USABILITY_AUDIT.md`) and 3 portal tests (P-01 to P-03), 59 in total.** The suite ran clean twice in a row after the last change (42.8s and 44.2s, 4 workers).
+**Result: 67 of 67 pass.** That covers:
+
+- the 49 QA scenarios;
+- 3 admin console tests (A-13 to A-15);
+- 7 usability tests (U-01 to U-07, see `USABILITY_AUDIT.md`);
+- 8 operator dashboard tests (L-01 to L-08).
+
+The full suite runs in about 1.1 minutes on 4 workers.
 
 ## Scenarios
 
@@ -44,8 +51,8 @@ Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-ha
 | A-04 | Pass | Nudge goes to Jordan in the outbox and logs a `nudge_sent` event |
 | A-05 | Pass | Flag appears after the third simulated day, not after two; the buyer sees the widen-visibility nudge |
 | A-06 | Pass | Spread $40/hr, margin 20%, $1,800 a month at 45 hrs; the operator page and email show $160/hr, never $200 or the client name |
-| A-07 | Pass | Moving Jose to Selected staffs Harbor; selected and close emails follow rule 5; Matt is marked not_selected |
-| A-08 | Pass | Shortlist email and client page list only Jose, with no operator rate and no admin note |
+| A-07 | Pass | Moving Jose to Selected asks for confirmation, then staffs Harbor; selected and close emails follow rule 5; Matt is marked not_selected |
+| A-08 | Pass | Both responders are candidates on Send shortlist; only Jose is ticked. The email and client page list only him, with the admin's one-line "why" and cover note, no operator rate and no admin note. The client's "Request intro call" lands on the admin's Today queue |
 | A-09 | Pass | 10 pages of 10 give 100 unique operators; page 3 is identical after a reload |
 | A-10 | Pass | All 100 operators are found by "role + first tag" |
 | A-11 | Pass | Reached 64, responded 2, response rate, time to first response, intro count and rate, decline reasons and alerts by role all match the event log |
@@ -54,19 +61,44 @@ Branch `claude/revenue-nomad-prototype-xv61e4`. Scenarios from `docs/projects-ha
 | X-02 | Pass | Re-invite keeps one invite row with a later sentAt, and one portal entry |
 | X-03 | Pass | Inviting someone who already responded from an alert sends no invite email; the response is kept and its source shows Invited |
 | X-04 | Pass | Reset restores seed state: outbox empty, clock back to Sep 24, both projects drafts |
-| X-05 | Pass | At 400px, B4, O3 and A1 have no horizontal scroll and every action button is on screen |
+| X-05 | Pass | At 400px, B4, O3 and the admin Projects list have no horizontal scroll and every action button is on screen |
 | X-06 | Pass | Dark theme: sampled text is at least 4.5:1 against its background; the three tier colors differ |
 | X-07 | Pass | Post, respond and select done by keyboard only, with a visible focus ring checked on every Tab stop |
+| A-13 | Pass | Admin lands on Today; a submitted response appears in Needs you, Review opens the operator drawer, Snooze hides it for the session |
+| A-14 | Pass | Wizard end to end: new client project, assistant match, one pick, platform audience and two valid off-platform emails (one invalid ignored). The store has the invite, the alerts and two sign-up emails |
+| A-15 | Pass | Invited cards offer Nudge, not Move; the nudge re-sends the invite and logs `operator_nudged`; dragging a responder onto Shortlisted moves them |
 
-## Operator flow moved into the Operator Portal
+## Operator dashboard (canvas L1 to L4)
 
-Operators now work inside the existing Operator Portal (`/portal`), in a **Projects** tab next to Job Board, Prospects and Profile, styled with the portal's own components. The O-scenarios and every cross-role test that touches an operator now run against the portal. Every email link and old `/operator/...` URL redirects there.
+Operators work in `/dashboard`, built in the live revenuenomad.com layout: Red Hat Display, pill navigation, 28px cards and fit rings. The Operator Portal keeps only a Projects button with a badge that links there. Every operator email link and every old `/operator/...` or `/portal?view=projects` URL lands in the dashboard. L-01 to L-08 cover:
 
-- **P-01:** Pass. Invites show as a badge on the Projects tab and a strip on the Job Board.
-- **P-02:** Pass. One tap on "Still available" confirms availability.
-- **P-03:** Pass. Old `/operator` links land in the portal.
+- the overview and badge;
+- tabs, search and take-home pay;
+- case-study attachments;
+- editing a response until the client opens it;
+- stage panels;
+- pass with a reason;
+- one-tap availability and legacy links;
+- counts on Client viewed.
 
-Bug found and fixed along the way: the portal's field styles removed the focus ring. X-07 caught it on the date field's calendar button, which only matches `:focus-within`.
+Operators see a take-home rate: the buyer's budget less the standard 25%, or the operator rate on Revenue Nomad projects. The "why you scored" text never mentions the buyer's budget (L-03 checks this).
+
+## Admin console (canvas A1 to A5)
+
+Admins get their own shell: a white sidebar with Work (Today, Projects, Intro requests), Network (Operators, Clients, Reviews, Engagements), Setup (Catalog) and Insights (Availability pulse, Analytics, Audit log), plus global search.
+
+- **Today (A1)** is the admin home. **Needs you** shows only deal work, oldest first: answered screening questions, shortlists ready to send, operator questions, client call requests, buyers who asked for suggestions, quiet projects and unbooked intros. Profile hygiene stays in a separate card.
+- **Projects (A2)** has Open, Drafts, Placed and Closed tabs, six KPIs, a mini pipeline on each row, bill and pay with margin, next step, flags, CSV export and a Recently placed table. Staffed projects move to Placed (X-01 was updated for this).
+- **New project (A3)** has four steps: Brief with live economics, Find candidates, Audience, and Review and launch. Candidates come from an assistant match on free text or from search and filters. The audience can be direct invites, an on-platform segment, off-platform emails (each gets a sign-up link), or any mix.
+- **Pipeline (A4)** has six stages. Cards can be dragged or moved with buttons, and each shows its fit, how far the listed rate is above the pay rate, and the last activity. Invited cards offer Nudge. Moving someone to Selected asks for confirmation. A drawer shows screening answers, the admin note and Message.
+- **Send shortlist (A5)** lists everyone who responded or was shortlisted. The admin ticks who goes, adds a one-line "why" per operator and a cover note, and chooses whether to show the bill rate. A live preview shows what the client sees. The client page has Request intro call and Ask a question buttons, and both feed the admin's Today queue.
+
+Decisions and gaps:
+
+- The canvas's marketplace growth chart is replaced with real totals, because there is no history to chart.
+- Catalog is shown disabled.
+- Snooze lasts for the browser session.
+- The client page no longer shows the bill rate when the admin turns it off.
 
 ## Changes after the usability audit
 
@@ -126,5 +158,5 @@ Test-harness mistakes fixed along the way, not product bugs: a JSON import in B-
 - **Data is per browser.** As the brief asked, state lives in localStorage. In the Next.js site and in the artifact, each viewer gets their own copy, and switching roles happens in one browser. A shared backend or the artifact database would let several people play different roles at once.
 - **Simulated time.** Every action moves the clock forward one minute so events stay ordered, and the Clock control adds whole days. So "time to first response" reads in minutes unless the clock is advanced.
 - **Operator Profile Explorer.** It is linked, not ported. B5 is a native profile page with the prototype's hero band and design. "Open full profile explorer" opens the original explorer: hosted at `/rnp/explorer.html` in the site, and its existing artifact from the published prototype.
-- **Fonts in test screenshots.** The sandbox blocks Google Fonts, so screenshots here use fallback fonts. Real browsers load Newsreader and IBM Plex Sans.
+- **Fonts in test screenshots.** The sandbox blocks Google Fonts, so screenshots here use fallback fonts. Real browsers load Newsreader, IBM Plex Sans, Red Hat Display and Source Serif 4.
 - **Design fidelity.** Tokens, type, hero band, chips, buttons and tier colors follow the profile prototype, and the screens follow the canvas layouts and copy. The canvas's hard-coded demo numbers are replaced with live counts (C3), so screens are not pixel-identical to the canvas.

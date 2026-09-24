@@ -4,11 +4,11 @@ export const NW = "proj-northwind-vps";
 export const HARBOR = "proj-harbor-revops";
 
 export interface Snapshot {
-  projects: { id: string; status: string; visibility: string; postedAt: number | null; staffedAt: number | null }[];
+  projects: { id: string; title: string; status: string; visibility: string; postedAt: number | null; staffedAt: number | null }[];
   invites: { projectId: string; operatorId: string; source: string; sentAt: number; silent?: boolean }[];
   alerts: { projectId: string; operatorId: string }[];
   responses: { projectId: string; operatorId: string; draft: boolean; submittedAt: number | null; interest: string; decision: string; rate: number | null }[];
-  outbox: { kind: string; to: { name: string; id: string }; subject: string; body: string; operatorId?: string }[];
+  outbox: { kind: string; to: { name: string; id: string; email?: string }; subject: string; body: string; operatorId?: string }[];
   events: { type: string; at: number; projectId?: string; operatorId?: string; meta?: Record<string, unknown> }[];
   intros: { projectId: string; operatorId: string; status: string }[];
   pipeline: { projectId: string; operatorId: string; stage: string }[];
@@ -35,6 +35,11 @@ export const opByName = (n: string) => SEED.find((o) => o.name === n)!;
 export async function asRole(page: Page, role: "buyer" | "operator" | "admin") {
   await page.getByTestId(`role-${role}`).click();
   await expect(page.getByTestId(`role-${role}`)).toHaveAttribute("aria-pressed", "true");
+  // Admins land on Today; most admin scenarios start from the Projects list.
+  if (role === "admin") {
+    await expect(page.getByTestId("needs-you")).toBeVisible();
+    await goto(page, "/admin/projects");
+  }
 }
 
 export async function asOperator(page: Page, name: string) {

@@ -562,10 +562,6 @@ function opLink(opId: string, path: string, label: string): OutboxLink {
   return { label, path, as: `operator:${opId}` };
 }
 
-function engagementLine(p: Project) {
-  return `${hoursRange(p.hoursPerMonthMin, p.hoursPerMonthMax)} hrs a month, ${p.term}, ${p.location.split(",")[0].toLowerCase()}, start ${shortDate(p.startTarget)}`;
-}
-
 function sendInviteEmail(s: State, c: Ctx, p: Project, op: Operator, source: InviteSource, reminder = false) {
   const fit = projectFit(p, op);
   const who =
@@ -1189,6 +1185,11 @@ export function declineProject(pid: string, opId: string, reason: string, note =
       if (existing && existing.submittedAt && !existing.draft) throw new ActionError("You already responded to this project.");
       const r = upsertResponse(s, c, pid, opId);
       Object.assign(r, { interest: "declined", declineReason: reason, declineNote: note.trim() || null, draft: false, submittedAt: c.now, updatedAt: c.now });
+      const pe = pipelineOf(s, pid, opId);
+      if (pe) {
+        pe.stage = "not_selected";
+        pe.updatedAt = c.now;
+      }
       c.event("response_declined", { projectId: p.id, operatorId: opId, meta: { reason, note: note.trim() || null } });
     },
     opId,
@@ -1422,7 +1423,108 @@ export function publishRnProject(pid: string) {
     c.event("project_posted", { projectId: p.id, meta: { visibility: p.visibility, origin: p.origin } });
     for (const opId of p.draftInvites || []) createInvite(s, c, p, opId, "admin");
     p.draftInvites = [];
-    if (p.visibility === "invites_plus_open") sendAlerts(s, c, p);
+    if (p.audience?.on) {
+      p.visibility = "invites_plus_open";
+      sendAudienceAlerts(s, c, p);
+    } else if (p.visibility === "invites_plus_open") sendAlerts(s, c, p);
+    for (const email of p.offPlatformEmails || []) {
+      c.email({
+        kind: "signup",
+        to: { role: "operator", id: email, name: email, email },
+        subject: `New role: ${p.title}`,
+        body: `A ${p.companyDescriptor} needs a ${p.title} for ${hoursRange(p.hoursPerMonthMin, p.hoursPerMonthMax)} hours a month. Pay is $${p.operatorRate}/hr.\nSign up, build a profile and apply to this role in one flow.`,
+        links: [{ label: "Sign up and apply", path: `/operators` }],
+        projectId: p.id,
+      });
+      c.event("signup_invite_sent", { projectId: p.id, meta: { email } });
+    }
+  });
+}
+
+/** Segment for a platform audience post: category, availability and a Reputation Index floor. */
+export function audienceSegment(s: State, p: Project): Operator[] {
+  const a = p.audience;
+  if (!a) return [];
+  return OPERATORS.filter((o) => {
+    if (inviteOf(s, p.id, o.id) || (p.draftInvites || []).includes(o.id)) return false;
+    if (a.category !== "Any" && normalizeCategory(o.cat) !== a.category) return false;
+    const st = opState(s, o.id);
+    if (st.availability === "unavailable") return false;
+    if (a.availability === "soon" && !/now|2 weeks/i.test(o.avail)) return false;
+    return (o.reputation || 0) >= a.minReputation;
+  });
+}
+
+function sendAudienceAlerts(s: State, c: Ctx, p: Project) {
+  for (const op of audienceSegment(s, p)) {
+    if (alertOf(s, p.id, op.id)) continue;
+    s.alerts.push({ id: c.id("al"), projectId: p.id, operatorId: op.id, sentAt: c.now, digest: false });
+    c.email({
+      kind: "alert",
+      to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
+      subject: `New role: ${p.title}`,
+      body: `${op.first}, a ${p.companyDescriptor} needs a ${p.title} for ${hoursRange(p.hoursPerMonthMin, p.hoursPerMonthMax)} hours a month. Pay is $${p.operatorRate}/hr.`,
+      links: [opLink(op.id, `/dashboard/projects/${p.id}`, "I am interested"), opLink(op.id, `/dashboard/projects/${p.id}`, "Not for me")],
+      projectId: p.id,
+      operatorId: op.id,
+    });
+    c.event("alert_sent", { projectId: p.id, operatorId: op.id, meta: { category: normalizeCategory(op.cat), audience: true } });
+  }
+}
+
+/** Remind an invited operator who has not responded (admin A4 Nudge). */
+export function nudgeOperator(pid: string, opId: string) {
+  mutate("admin", (s, c) => {
+    const p = mustProject(s, pid);
+    const op = operatorById(opId)!;
+    c.email({
+      kind: "invite",
+      to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
+      subject: `Reminder: ${p.title}`,
+      body: `${op.first}, Revenue Nomad invited you to the ${p.title} seat. Pay is ${takeHomeLine(p) || "set by you"}. Responding takes about two minutes.`,
+      links: [opLink(op.id, `/dashboard/projects/${p.id}`, "View and respond")],
+      projectId: p.id,
+      operatorId: op.id,
+    });
+    c.event("operator_nudged", { projectId: pid, operatorId: opId });
+  });
+}
+
+/** A direct message from Revenue Nomad to an operator about a project (admin A4 Message). */
+export function messageOperator(pid: string, opId: string, text: string) {
+  mutate("admin", (s, c) => {
+    if (!text.trim()) throw new ActionError("Write a message first.", "message");
+    const p = mustProject(s, pid);
+    const op = operatorById(opId)!;
+    c.email({
+      kind: "message",
+      to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
+      subject: `Message from Revenue Nomad, ${p.title}`,
+      body: text.trim(),
+      links: [opLink(op.id, `/dashboard/projects/${p.id}`, "Open the project")],
+      projectId: p.id,
+      operatorId: op.id,
+    });
+    c.event("operator_messaged", { projectId: pid, operatorId: opId });
+  });
+}
+
+/** Check in on a placed operator (admin A2 Recently placed). */
+export function checkIn(pid: string) {
+  mutate("admin", (s, c) => {
+    const p = mustProject(s, pid);
+    const op = p.selectedOperatorId ? operatorById(p.selectedOperatorId) : null;
+    if (!op) throw new ActionError("Nobody was selected on this project.");
+    c.email({
+      kind: "checkin",
+      to: { role: "operator", id: op.id, name: displayName(op), email: operatorEmail(op) },
+      subject: `How is ${p.title} going?`,
+      body: `${op.first}, a quick check in from Revenue Nomad on your ${p.title} engagement. Reply with anything we can help with.`,
+      links: [opLink(op.id, `/dashboard/projects/${p.id}`, "Open the project")],
+      projectId: p.id,
+      operatorId: op.id,
+    });
+    c.event("checked_in", { projectId: pid, operatorId: op.id });
   });
 }
 
@@ -1468,31 +1570,88 @@ export function setPipelineNote(pid: string, opId: string, note: string) {
   });
 }
 
-export function sendShortlist(pid: string) {
+export interface ShortlistOptions {
+  operatorIds?: string[];
+  why?: Record<string, string>;
+  note?: string;
+  showRate?: boolean;
+}
+
+/** Send the client a shortlist. Default: everyone in Shortlisted. Never operator pay, listed rates or admin notes. */
+export function sendShortlist(pid: string, opts: ShortlistOptions = {}) {
   mutate("admin", (s, c) => {
     const p = mustProject(s, pid);
-    const picks = s.pipeline.filter((e) => e.projectId === pid && e.stage === "shortlisted");
-    if (!picks.length) throw new ActionError("Move at least one operator to Shortlisted first.");
-    const ops = picks.map((e) => {
-      const op = operatorById(e.operatorId)!;
-      const r = responseOf(s, pid, e.operatorId);
-      return { operatorId: op.id, name: displayName(op), role: op.role, fit: r ? responseFit(p, r).fit : projectFit(p, op).fit, billRate: p.billRate ?? null };
+    const ids = opts.operatorIds ?? s.pipeline.filter((e) => e.projectId === pid && e.stage === "shortlisted").map((e) => e.operatorId);
+    if (!ids.length) throw new ActionError(opts.operatorIds ? "Pick at least one operator to send." : "Move at least one operator to Shortlisted first.");
+    const showRate = opts.showRate ?? true;
+    const ops = ids.map((id) => {
+      const op = operatorById(id)!;
+      const r = responseOf(s, pid, id);
+      return {
+        operatorId: op.id,
+        name: displayName(op),
+        role: op.role,
+        fit: r && r.submittedAt ? responseFit(p, r).fit : projectFit(p, op).fit,
+        billRate: showRate ? p.billRate ?? null : null,
+        hours: r?.hoursPerMonth ?? op.hrs,
+        why: (opts.why?.[id] || "").trim(),
+      };
     });
-    s.shortlists.push({ id: c.id("sl"), projectId: pid, sentAt: c.now, operators: ops });
-    for (const e of picks) {
+    s.shortlists.push({ id: c.id("sl"), projectId: pid, sentAt: c.now, operators: ops, note: (opts.note || "").trim(), showRate });
+    for (const id of ids) {
+      let e = pipelineOf(s, pid, id);
+      if (!e) {
+        e = { projectId: pid, operatorId: id, stage: "with_client", note: "", updatedAt: c.now };
+        s.pipeline.push(e);
+      }
       e.stage = "with_client";
       e.updatedAt = c.now;
     }
-    // Only name, role, fit and the bill rate go to the client. Never operator rate or admin notes.
     c.email({
       kind: "shortlist",
       to: { role: "client", id: pid, name: p.clientName || "Client", email: `hiring@${(p.clientName || "client").toLowerCase().replace(/[^a-z]+/g, "")}.example` },
       subject: `Your shortlist, ${p.title}`,
-      body: `${ops.length} operator${ops.length === 1 ? "" : "s"} for your ${p.title} seat at $${p.billRate}/hr:\n` + ops.map((o) => `· ${o.name}, ${o.role}, fit ${o.fit}`).join("\n"),
+      body:
+        (opts.note?.trim() ? opts.note.trim() + "\n\n" : "") +
+        `${ops.length} operator${ops.length === 1 ? "" : "s"} for your ${p.title} seat${showRate ? ` at $${p.billRate}/hr` : ""}:\n` +
+        ops.map((o) => `· ${o.name}, ${o.role}, fit ${o.fit}${o.why ? `. ${o.why}` : ""}`).join("\n"),
       links: [{ label: "Review the shortlist", path: `/client/projects/${pid}`, as: "client" }],
       projectId: pid,
     });
-    c.event("shortlist_sent", { projectId: pid, meta: { operators: ops.map((o) => o.operatorId) } });
+    c.event("shortlist_sent", { projectId: pid, meta: { operators: ids, showRate } });
+  });
+}
+
+/** Client actions from the shortlist page go to Revenue Nomad, which runs the intro. */
+export function clientRequestCall(pid: string, opId: string) {
+  mutate("client", (s, c) => {
+    const p = mustProject(s, pid);
+    const op = operatorById(opId)!;
+    c.email({
+      kind: "client",
+      to: { role: "admin", id: ADMIN.id, name: ADMIN.name, email: ADMIN.email },
+      subject: `${p.clientName} wants a call with ${displayName(op)}`,
+      body: `${p.clientName} asked for an intro call with ${displayName(op)} for ${p.title}.`,
+      links: [{ label: "Open the pipeline", path: `/admin/projects/${pid}`, as: `admin:${ADMIN.id}` }],
+      projectId: pid,
+      operatorId: opId,
+    });
+    c.event("client_requested_call", { projectId: pid, operatorId: opId });
+  });
+}
+export function clientAskQuestion(pid: string, text: string) {
+  mutate("client", (s, c) => {
+    if (!text.trim()) throw new ActionError("Write your question first.", "question");
+    const p = mustProject(s, pid);
+    c.email({
+      kind: "client",
+      to: { role: "admin", id: ADMIN.id, name: ADMIN.name, email: ADMIN.email },
+      subject: `Question from ${p.clientName}, ${p.title}`,
+      body: text.trim(),
+      links: [{ label: "Open the pipeline", path: `/admin/projects/${pid}`, as: `admin:${ADMIN.id}` }],
+      projectId: pid,
+    });
+    c.event("client_question", { projectId: pid });
   });
 }
 

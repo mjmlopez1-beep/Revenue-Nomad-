@@ -1,175 +1,43 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Project, RnStage, State } from "../../lib/types";
+import { useMemo, useState } from "react";
+import type { Project, State } from "../../lib/types";
 import { OPERATORS, buyerById, displayName, matchesQuery, operatorById, stableSort } from "../../lib/data";
 import {
   MAX_SUGGESTIONS,
-  STAGES,
   addSuggestion,
   alertsFor,
-  createRnDraft,
   declinesFor,
   inviteOf,
-  inviteOperator,
   invitesFor,
   isEnded,
-  moveStage,
   nowOf,
   nudgeBuyer,
-  pipelineOf,
   projectById,
   projectCounts,
   projectFit,
   projectFlags,
-  publishRnProject,
   reports,
   responseFit,
   responseOf,
   responseSourceLabel,
   responsesFor,
   sendPulse,
-  sendShortlist,
   setAdminNote,
-  setPipelineNote,
   setProjectStatus,
   simulateResponse,
   suggestionsUsed,
-  uninviteOperator,
-  updateDraft,
   useStore,
-  validateBrief,
-  ownerName,
-  type BriefErrors,
 } from "../../lib/store";
-import { ago, daysBetween, durationLabel, hoursRange, money, plural, rateLabel, shortDate, timeLabel } from "../../lib/format";
+import { ago, daysBetween, durationLabel, hoursRange, plural, rateLabel, shortDate, timeLabel } from "../../lib/format";
 import { Link, navigate, useLocation } from "../../lib/router";
-import { Arrow, Availability, Avatar, Back, Band, CheckHours, Completeness, Empty, FieldError, FitScore, Notice, Stat, StatusPill, attempt } from "../common";
-import { BriefFields, LiveMatch, type BriefDraft } from "../BriefForm";
-import { InvitePicker, QuestionsInbox, stripDraft } from "../buyer/Buyer";
+import { Arrow, Availability, Avatar, Back, Band, CheckHours, Completeness, Empty, FitScore, Notice, Stat, StatusPill, attempt } from "../common";
+import { QuestionsInbox } from "../buyer/Buyer";
 
-// ---------------------------------------------------------------- A1
-
-export function AdminProjects() {
-  const s = useStore();
-  const [tab, setTab] = useState<"all" | "buyer" | "revenue_nomad" | "attention">("all");
-  const posted = s.projects.filter((p) => p.status !== "draft");
-  const k = {
-    live: s.projects.filter((p) => p.status === "live").length,
-    invites: s.invites.length,
-    alerts: s.alerts.length,
-    responses: s.responses.filter((r) => r.submittedAt && !r.draft && r.interest === "interested" && !r.withdrawn).length,
-    intros: s.intros.filter((i) => i.status === "approved").length,
-    staffed: s.projects.filter((p) => p.status === "staffed").length,
-  };
-  const reached = new Set([...s.invites.map((i) => i.projectId + i.operatorId), ...s.alerts.map((a) => a.projectId + a.operatorId)]).size;
-  const rate = reached ? Math.round((k.responses / reached) * 100) : 0;
-  const rows = [...s.projects].sort((a, b) => (b.postedAt || b.updatedAt) - (a.postedAt || a.updatedAt));
-  const shown = rows.filter((p) => (tab === "all" ? true : tab === "attention" ? projectFlags(s, p).length > 0 : p.origin === tab));
-  const now = nowOf(s);
-  return (
-    <div className="page">
-      <Band
-        title="Projects"
-        sub="Every project on the platform, buyer posted and Revenue Nomad originated."
-        right={
-          <button type="button" className="btn band-btn" onClick={() => navigate(`/admin/projects/${createRnDraft()}/setup`)} data-testid="new-rn-project">
-            + New Revenue Nomad project
-          </button>
-        }
-      />
-      <div className="kpis" data-testid="kpis">
-        <Stat label="Live projects" value={k.live} sub={`${posted.length} posted in total`} testId="kpi-live" />
-        <Stat label="Invites sent" value={k.invites} testId="kpi-invites" />
-        <Stat label="Alerts sent" value={k.alerts} testId="kpi-alerts" />
-        <Stat label="Responses" value={k.responses} sub={`${rate}% of ${reached} reached`} testId="kpi-responses" />
-        <Stat label="Intros requested" value={k.intros} testId="kpi-intros" />
-        <Stat label="Staffed" value={k.staffed} testId="kpi-staffed" />
-      </div>
-      <div className="seg" role="group" aria-label="Filter">
-        {(
-          [
-            ["all", "All"],
-            ["buyer", "Buyer posted"],
-            ["revenue_nomad", "Revenue Nomad"],
-            ["attention", "Needs attention"],
-          ] as const
-        ).map(([key, l]) => (
-          <button key={key} type="button" aria-pressed={tab === key} onClick={() => setTab(key)}>
-            {l} ({rows.filter((p) => (key === "all" ? true : key === "attention" ? projectFlags(s, p).length > 0 : p.origin === key)).length})
-          </button>
-        ))}
-      </div>
-      <div className="table-wrap">
-        <table className="table" data-testid="admin-projects">
-          <thead>
-            <tr>
-              <th>Project</th>
-              <th>Origin</th>
-              <th>Visibility</th>
-              <th className="num">Invited</th>
-              <th className="num">Responses</th>
-              <th className="num">Strong</th>
-              <th className="num">Intros</th>
-              <th>Status</th>
-              <th>Flag</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((p) => {
-              const c = projectCounts(s, p);
-              const flags = projectFlags(s, p);
-              const href = p.origin === "revenue_nomad" && p.status === "draft" ? `/admin/projects/${p.id}/setup` : `/admin/projects/${p.id}`;
-              return (
-                <tr key={p.id} data-testid="admin-row" data-project={p.id}>
-                  <td data-label="Project">
-                    <Link to={href}>
-                      <b>{p.title || "Untitled"}</b>
-                    </Link>
-                    <small className="muted block">
-                      {ownerName(p)} · {p.postedAt ? `day ${daysBetween(p.postedAt, now) + 1}` : "not posted"}
-                    </small>
-                  </td>
-                  <td data-label="Origin">{p.origin === "buyer" ? "Buyer" : "Revenue Nomad"}</td>
-                  <td data-label="Visibility">{p.visibility === "invite_only" ? "Invite only" : "Invites + open"}</td>
-                  <td data-label="Invited" className="num" data-testid="row-invited">
-                    {c.invited}
-                  </td>
-                  <td data-label="Responses" className="num" data-testid="row-responses">
-                    {c.responses}
-                  </td>
-                  <td data-label="Strong" className="num">
-                    {c.strong}
-                  </td>
-                  <td data-label="Intros" className="num">
-                    {c.intros}
-                  </td>
-                  <td data-label="Status">
-                    <StatusPill status={p.status} />
-                  </td>
-                  <td data-label="Flag">
-                    {flags.map((f) => (
-                      <span key={f} className="flag" data-testid="flag">
-                        {f}
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {!shown.length && <Empty>Nothing needs attention.</Empty>}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- A2 / A4 dispatcher
+// ---------------------------------------------------------------- buyer project, admin view (A1)
 
 export function AdminProject({ id }: { id: string }) {
   const s = useStore();
   const p = projectById(s, id);
   if (!p) return <Empty>That project does not exist.</Empty>;
-  if (p.origin === "revenue_nomad") return p.status === "draft" ? <AdminRnSetup id={id} /> : <AdminPipeline s={s} p={p} />;
   return <AdminBuyerProject s={s} p={p} />;
 }
 
@@ -467,276 +335,6 @@ function AdminBuyerProject({ s, p }: { s: State; p: Project }) {
 }
 
 // ---------------------------------------------------------------- A3
-
-export function AdminRnSetup({ id }: { id: string }) {
-  const s = useStore();
-  const p = projectById(s, id);
-  const [draft, setDraft] = useState<BriefDraft | null>(p ? { ...p } : null);
-  const [errors, setErrors] = useState<BriefErrors>({});
-  const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (p && !draft) setDraft({ ...p });
-  }, [p, draft]);
-  if (!p || p.origin !== "revenue_nomad") return <Empty>That is not a Revenue Nomad project.</Empty>;
-  if (p.status !== "draft") return <AdminPipeline s={s} p={p} />;
-  if (!draft) return null;
-  const set = (patch: Partial<Project>) => {
-    const next = { ...draft, ...patch };
-    setDraft(next);
-    if (Object.keys(errors).length) setErrors(validateBrief(next));
-  };
-  const bill = draft.billRate ?? 0;
-  const opr = draft.operatorRate ?? 0;
-  const spread = bill - opr;
-  const margin = bill ? Math.round((spread / bill) * 100) : 0;
-  const midHours = Math.round(((Number(draft.hoursPerMonthMin) || 0) + (Number(draft.hoursPerMonthMax) || 0)) / 2);
-  const invited = new Set(p.draftInvites || []);
-  const publish = () => {
-    const errs = validateBrief(draft);
-    setErrors(errs);
-    if (Object.keys(errs).length) {
-      setErr("Fix the highlighted fields to publish.");
-      return;
-    }
-    updateDraft(id, stripDraft(draft), "admin");
-    if (attempt(() => publishRnProject(id), setErr)) navigate(`/admin/projects/${id}`);
-  };
-  return (
-    <div className="page">
-      <Link to="/admin/projects" className="back">
-        <Back /> Projects
-      </Link>
-      <h1 className="page-h">New Revenue Nomad project</h1>
-      <p className="muted">For seats you source for your own clients. Same invites and fit scores as buyers get, plus client economics and your own pipeline.</p>
-      {err && <Notice tone="error">{err}</Notice>}
-      <div className="split">
-        <div className="stack">
-          <section className="card form-card">
-            <h2>Client</h2>
-            <label className="field">
-              <span>Client, admins only</span>
-              <input value={draft.clientName || ""} onChange={(e) => set({ clientName: e.target.value })} aria-invalid={!!errors.clientName} data-testid="rn-client" />
-              <FieldError msg={errors.clientName} />
-            </label>
-            <label className="field">
-              <span>What operators see</span>
-              <input value={draft.companyDescriptor} onChange={(e) => set({ companyDescriptor: e.target.value })} />
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={!!draft.revealClientOnShortlist} onChange={(e) => set({ revealClientOnShortlist: e.target.checked })} />
-              Reveal client name to operators once shortlisted
-            </label>
-          </section>
-          <BriefFields draft={draft} set={set} errors={errors} showBudget={false} />
-          <section className="card form-card" data-testid="economics">
-            <h2>Economics</h2>
-            <div className="grid-fields">
-              <label className="field">
-                <span>Bill rate to client, $ per hour</span>
-                <input type="number" value={draft.billRate ?? ""} onChange={(e) => set({ billRate: e.target.value === "" ? null : Number(e.target.value) })} aria-invalid={!!errors.billRate} data-testid="rn-bill" />
-                <FieldError msg={errors.billRate} />
-              </label>
-              <label className="field">
-                <span>Rate to operator, $ per hour</span>
-                <input type="number" value={draft.operatorRate ?? ""} onChange={(e) => set({ operatorRate: e.target.value === "" ? null : Number(e.target.value) })} aria-invalid={!!errors.operatorRate} data-testid="rn-oprate" />
-                <FieldError msg={errors.operatorRate} />
-              </label>
-            </div>
-            <div className="stats">
-              <Stat label="Spread" value={`$${spread}/hr`} testId="rn-spread" />
-              <Stat label="Margin" value={`${margin}%`} testId="rn-margin" />
-              <Stat label={`Per month at ${midHours} hrs`} value={money(spread * midHours)} testId="rn-month" />
-            </div>
-            <p className="small muted">Operators only ever see the rate to operator. The client only sees the bill rate.</p>
-          </section>
-          <section className="card">
-            <h2>Visibility</h2>
-            <div className="choice-grid" role="group" aria-label="Visibility">
-              <button type="button" className="choice" aria-pressed={draft.visibility === "invite_only"} onClick={() => set({ visibility: "invite_only" })}>
-                <b>Invite only</b>
-                <span>Only operators you invite can see and respond.</span>
-              </button>
-              <button type="button" className="choice" aria-pressed={draft.visibility === "invites_plus_open"} onClick={() => set({ visibility: "invites_plus_open" })}>
-                <b>Invites plus open to all</b>
-                <span>Every other matching operator gets a new role alert.</span>
-              </button>
-            </div>
-          </section>
-          <section className="card">
-            <div className="card-head">
-              <h2>Invite operators</h2>
-              <span className="head-meta" data-testid="invited-count">
-                {invited.size} invited
-              </span>
-            </div>
-            <p className="small muted">Search the full pool, any availability.</p>
-            <InvitePicker s={s} p={{ ...p, ...draft }} invited={invited} onInvite={(op) => inviteOperator(id, op, "admin")} onUninvite={(op) => uninviteOperator(id, op, "admin")} />
-          </section>
-          <div className="actions-row">
-            <span className="muted">Owner Matt Lopez</span>
-            <button type="button" className="btn" onClick={() => (updateDraft(id, stripDraft(draft), "admin"), setErr(null), navigate("/admin/projects"))}>
-              Save as draft
-            </button>
-            <button type="button" className="btn primary" onClick={publish} data-testid="rn-publish">
-              Publish and send {plural(invited.size, "invite")}
-            </button>
-          </div>
-        </div>
-        <div className="stack">
-          <LiveMatch s={s} draft={draft} rn />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- A4
-
-function AdminPipeline({ s, p }: { s: State; p: Project }) {
-  const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
-  const [inviting, setInviting] = useState(false);
-  const run = (fn: () => void, ok: string) => attempt(() => (fn(), setMsg({ tone: "ok", text: ok })), (m) => setMsg({ tone: "error", text: m }));
-  const entries = s.pipeline.filter((e) => e.projectId === p.id);
-  const now = nowOf(s);
-  const spread = (p.billRate ?? 0) - (p.operatorRate ?? 0);
-  const margin = p.billRate ? Math.round((spread / p.billRate) * 100) : 0;
-  const invited = new Set(invitesFor(s, p.id).map((i) => i.operatorId));
-  const lastShortlist = [...s.shortlists].reverse().find((x) => x.projectId === p.id);
-  return (
-    <div className="page">
-      <Link to="/admin/projects" className="back">
-        <Back /> Projects
-      </Link>
-      <Band
-        eyebrow={
-          <>
-            <span className="band-tag">Revenue Nomad</span> <span className="band-tag">{p.visibility === "invite_only" ? "Invite only" : "Invites + open"}</span>
-            <span className="band-tag" data-testid="rn-econ">
-              ${p.billRate} bill · ${p.operatorRate} to operator · {margin}%
-            </span>
-            <StatusPill status={p.status} />
-          </>
-        }
-        title={p.title}
-        sub={`${p.clientName} · Operators see ${p.companyDescriptor} · Day ${p.postedAt ? daysBetween(p.postedAt, now) + 1 : 0} · Owner Matt Lopez`}
-      >
-        {!isEnded(p) && (
-          <div className="band-actions">
-            <button type="button" className="btn band-ghost" onClick={() => setInviting(!inviting)} aria-expanded={inviting}>
-              Invite more
-            </button>
-            <button type="button" className="btn band-btn" onClick={() => run(() => sendShortlist(p.id), "Shortlist sent to the client.")} data-testid="send-shortlist">
-              Send shortlist to client
-            </button>
-          </div>
-        )}
-      </Band>
-      {msg && <Notice tone={msg.tone} testId="admin-msg">{msg.text}</Notice>}
-      {p.status === "staffed" && p.selectedOperatorId && (
-        <Notice tone="ok" testId="staffed-banner">
-          Staffed with {displayName(operatorById(p.selectedOperatorId)!)} on {shortDate(p.staffedAt)}. Everyone else who responded got one close email.
-        </Notice>
-      )}
-      {lastShortlist && (
-        <Notice>
-          Last shortlist sent {shortDate(lastShortlist.sentAt)} with {plural(lastShortlist.operators.length, "operator")}. <Link to={`/client/projects/${p.id}`}>See what the client sees</Link>
-        </Notice>
-      )}
-      {inviting && (
-        <section className="card">
-          <InvitePicker s={s} p={p} invited={invited} resend onInvite={(op) => run(() => inviteOperator(p.id, op, "admin"), `Invite sent to ${displayName(operatorById(op)!)}.`)} />
-        </section>
-      )}
-      <div className="board" data-testid="pipeline">
-        {STAGES.map((st) => {
-          const col = entries
-            .filter((e) => e.stage === st.key)
-            .map((e) => {
-              const op = operatorById(e.operatorId)!;
-              const r = responseOf(s, p.id, op.id);
-              const f = r && r.submittedAt && r.interest === "interested" ? responseFit(p, r) : projectFit(p, op);
-              return { e, op, r, f };
-            })
-            .sort((a, b) => b.f.fit - a.f.fit || (a.op.id < b.op.id ? -1 : 1));
-          return (
-            <section key={st.key} className="col" aria-label={st.label} data-testid={`col-${st.key}`}>
-              <h3>
-                {st.label} <span>{col.length}</span>
-              </h3>
-              {col.map(({ e, op, r, f }) => (
-                <PipelineCard key={op.id} p={p} e={e} op={op} r={r} f={f} onMove={(to) => run(() => moveStage(p.id, op.id, to), `${displayName(op)} moved to ${STAGES.find((x) => x.key === to)!.label}.`)} />
-              ))}
-            </section>
-          );
-        })}
-      </div>
-      <p className="small muted">Moving someone to Selected closes the project, notifies everyone who responded, and starts the agreement. The client only ever sees who you send in the shortlist.</p>
-      <div className="split">
-        <QuestionsInbox s={s} p={p} role="admin" />
-        <ActivityLog s={s} p={p} />
-      </div>
-    </div>
-  );
-}
-
-function PipelineCard({
-  p,
-  e,
-  op,
-  r,
-  f,
-  onMove,
-}: {
-  p: Project;
-  e: { stage: RnStage; note: string };
-  op: NonNullable<ReturnType<typeof operatorById>>;
-  r: ReturnType<typeof responseOf>;
-  f: ReturnType<typeof projectFit>;
-  onMove: (to: RnStage) => void;
-}) {
-  const idx = STAGES.findIndex((x) => x.key === e.stage);
-  const next = STAGES[idx + 1];
-  const [note, setNote] = useState(e.note);
-  const ended = isEnded(p);
-  return (
-    <article className="kcard" data-testid="pipeline-card" data-op={displayName(op)}>
-      <div className="row">
-        <Avatar op={op} size={28} />
-        <b className="grow">{displayName(op)}</b>
-        <FitScore fit={f} size="sm" />
-      </div>
-      <small className="muted">
-        {op.role} · {r?.submittedAt ? `${rateLabel(r.rate)} · ${r.hoursPerMonth} hrs` : "No response yet"}
-      </small>
-      <CheckHours op={op} />
-      {!ended && (
-        <>
-          <label className="sr-only" htmlFor={`note-${op.id}`}>
-            Note on {displayName(op)}
-          </label>
-          <input id={`note-${op.id}`} className="knote" value={note} placeholder="Admin note" onChange={(ev) => setNote(ev.target.value)} onBlur={() => note !== e.note && setPipelineNote(p.id, op.id, note)} />
-          <div className="row">
-            {next && next.key !== "not_selected" && (
-              <button type="button" className="btn btn-sm" onClick={() => onMove(next.key)} data-testid="move-next" aria-label={`Move ${displayName(op)} to ${next.label}`}>
-                Move to {next.label}
-              </button>
-            )}
-            <select aria-label={`Move ${displayName(op)} to stage`} value="" onChange={(ev) => ev.target.value && onMove(ev.target.value as RnStage)} data-testid="move-any">
-              <option value="">Move to…</option>
-              {STAGES.filter((x) => x.key !== e.stage).map((x) => (
-                <option key={x.key} value={x.key}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </>
-      )}
-    </article>
-  );
-}
-
-// ---------------------------------------------------------------- A5 reports
 
 export function AdminReports() {
   const s = useStore();
