@@ -182,13 +182,13 @@
       title: esc(o.title || 'Log in to see rates'),
       sub: esc(o.sub || 'Hourly rates and match signals are shown to signed-in clients. Browsing stays open to everyone.'),
       body: `<div class="stack" style="--gap:12px">
-        <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.title)}, ${esc(p.company.name)}</span></b><span>Prototype client account. You stay on this page.</span></button>
+        <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>Prototype client account. You stay on this page.</span></button>
         <button type="button" class="act" data-act="br-login-all" style="align-self:flex-start">${icon('user')}Log in as an operator or the team</button>
       </div>`,
     });
   };
   RN.actions['br-login'] = () => BR.loginPrompt();
-  RN.actions['br-login-all'] = () => { RN.ui.closeModal(); RN.actions.login(); };
+  RN.actions['br-login-all'] = (el) => { RN.ui.closeModal(); RN.actions.login(el); };
 
   /* ---------- Page ---------- */
   function catValid(c) { if (!c) return null; const k = RN.fields.catKey(String(c).replace(/-/g, '_')); return CAT[k] ? k : null; }

@@ -154,7 +154,7 @@
   function side(cur) {
     const p = me();
     return `<nav class="side" aria-label="Workspace">
-      <div class="side-id">${RN.ui.avatar({ name: p.name, initials: RN.fmt.initials(p.name) }, 'ava-md')}<div><b>${esc(p.name)}</b><span>${esc(p.title)}, ${esc(p.company.name)}</span></div></div>
+      <div class="side-id">${RN.ui.avatar({ name: p.name, initials: RN.fmt.initials(p.name) }, 'ava-md')}<div><b>${esc(p.name)}</b><span>${esc([p.title, p.company.name].filter(Boolean).join(", "))}</span></div></div>
       <span class="label side-label">Workspace</span>
       ${TABS.map((t) => { const n = t.count ? t.count() : 0; return `<a href="#buyer${t.key === 'overview' ? '' : '.' + t.key}" class="${cur === t.key ? 'on' : ''}" ${cur === t.key ? 'aria-current="page"' : ''}>${icon(t.icon)}${esc(t.label)}${n ? `<span class="nav-count">${n}</span>` : ''}</a>`; }).join('')}
       <div class="side-sep"></div>

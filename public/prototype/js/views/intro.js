@@ -35,8 +35,18 @@
     return { who, scope, need: f.need ? RN.w.label('need', f.need) : '' };
   };
 
+  /* A fictional client used by "Fill sample details" (distinct from the demo client, so the request is new) */
+  const SAMPLE = { name: 'Sam Rivera', email: 'sam@harborlinesoftware.com', company: 'Harborline Software', industry: 'SMB Software', revenueRange: '5m_20m', employeeRange: '51_200' };
+  const openFor = (opId, email) => RN.store.state.intros.find((i) => i.opId === opId && i.status !== 'declined' && !i.withdrawn && i.buyer && (i.buyer.email || '').toLowerCase() === String(email || '').toLowerCase()) || null;
+
   /* ---------- Open the sheet ---------- */
   RN.actions['intro-open'] = (el) => intro.open(el.dataset.id);
+  RN.actions['intro-sample'] = (el) => {
+    const form = document.getElementById('intro-form');
+    const keep = form ? RN.ui.formData(form) : {};
+    RN.ui.closeModal();
+    intro.open(el.dataset.id, Object.assign({}, keep, SAMPLE));
+  };
   /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, name, email, company, industry, revenueRange, employeeRange} */
   intro.open = function (opId, prefill) {
     prefill = prefill || {};
@@ -57,7 +67,8 @@
     const me = RN.personas.buyer;
     const fit = signedIn ? RN.model.fit(op, { revenueRange: me.company.revenueRange, employeeRange: me.company.employeeRange, industries: [me.company.industry], roleCategory: op.catKey }) : null;
     const defaults = Object.assign({ need: RN.fields.needCats && Object.keys(RN.fields.needCats).find((k) => (RN.fields.needCats[k] || []).includes(op.catKey)) || 'not_sure', engagementType: 'fractional', startBy: op.avail.key === 'available_now' ? 'available_now' : op.avail.key, hoursPerMonth: op.avail.hoursCode || '20' }, prefill);
-    const who = Object.assign({ name: me.name, email: me.email, company: me.company.name, industry: me.company.industry, revenueRange: me.company.revenueRange, employeeRange: me.company.employeeRange }, prefill);
+    // Visitors start blank (their own details); signed-in clients never see these fields
+    const who = Object.assign({ name: '', email: '', company: '', industry: '', revenueRange: '', employeeRange: '' }, prefill);
     RN.ui.modal({
       width: 620,
       title: `Request an intro to ${esc(op.first)}`,
@@ -75,12 +86,13 @@
           <textarea class="textarea" id="intro-note" name="note" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days." style="min-height:90px">${esc(defaults.note || '')}</textarea></div>
         ${signedIn ? '' : `<fieldset class="card-flat stack" style="--gap:16px;border:1px solid var(--line-2)">
           <legend class="label" style="padding:0 6px">About you</legend>
-          <p class="small muted">Asked once. Operators see your company’s industry and size, not your name, until you are introduced. Sample client details are filled in for the prototype.</p>
+          <div class="row between" style="--gap:12px;align-items:flex-start"><p class="small muted grow" style="max-width:44ch">Asked once. Operators see your company’s industry and size, not your name, until you are introduced.</p>
+            <button type="button" class="act" data-act="intro-sample" data-id="${esc(op.id)}">${icon('edit')}Fill sample details</button></div>
           <div class="grid g-2" style="--gap:14px">
             ${RN.w.field('fullName', who.name, { name: 'name', compact: true })}
             ${RN.w.field('email', who.email, { name: 'email', compact: true })}
           </div>
-          <div class="field"><label for="intro-co">Company</label><input class="input" id="intro-co" name="company" value="${esc(who.company)}"></div>
+          <div class="field"><label for="intro-co">Company</label><input class="input" id="intro-co" name="company" autocomplete="organization" placeholder="Company name" value="${esc(who.company)}"></div>
           ${RN.w.field('industry', who.industry, { name: 'industry', compact: true })}
           ${RN.w.field('companyRevenue', who.revenueRange, { name: 'revenueRange', compact: true })}
           ${RN.w.field('companyEmployees', who.employeeRange, { name: 'employeeRange', compact: true })}
@@ -103,7 +115,10 @@
     const me = RN.personas.buyer;
     const signedIn = st.persona === 'buyer';
     const company = signedIn ? me.company : { name: data.company || 'Your company', industry: data.industry, revenueRange: data.revenueRange, employeeRange: data.employeeRange };
-    if (!signedIn && (!data.email || !data.revenueRange || !data.employeeRange)) { RN.ui.toast('Add your work email, revenue range and employee range so we can match you.', { icon: 'info' }); return; }
+    if (!signedIn && (!data.name || !data.email || !data.company || !data.revenueRange || !data.employeeRange)) { RN.ui.toast('Add your name, work email, company, revenue range and employee range so we can match you.', { icon: 'info' }); return; }
+    // One open request per client and operator, checked on the email actually submitted
+    const dup = openFor(op.id, signedIn ? me.email : data.email);
+    if (dup) { RN.ui.toast(`${esc(signedIn ? 'You' : data.email)} already asked to meet ${esc(op.first)}. Status: ${esc(RN.w.label('introStatus', dup.status))}.`, { icon: 'info' }); return; }
     const rec = {
       id: RN.uid('intro'), opId: op.id, status: 'pending', createdAt: RN.now().toISOString(),
       buyer: { name: signedIn ? me.name : data.name, title: signedIn ? me.title : '', email: signedIn ? me.email : data.email, company },
@@ -112,7 +127,9 @@
       note: data.note || '',
       thread: [],
     };
-    RN.store.update((s) => { s.intros.unshift(rec); if (!signedIn) s.persona = 'buyer'; }, 'intros');
+    RN.store.update((s) => { s.intros.unshift(rec); }, 'intros');
+    // A visitor who asks for an intro becomes their own client (not the demo client) and is signed in
+    if (!signedIn) { RN.shell.setClient({ name: data.name, email: data.email, title: '', company }); RN.store.set('persona', 'buyer'); }
     RN.track('intro_request', { opId: op.id, buyer: { name: company.name, industry: company.industry, revenueRange: company.revenueRange, employeeRange: company.employeeRange } });
     const sum = intro.summary(rec, true);
     RN.mail(op.name, `New intro request: ${sum.need || 'Fractional ' + op.role}`, `${sum.who}\n${sum.scope}\n\nReply within 72 hours from your Studio. You will see the company and contact once you are introduced.`, 'intro');
@@ -129,7 +146,7 @@
           <li><b>You are introduced by email</b> <span class="muted">and book the first call directly.</span></li>
         </ol>
         ${!signedIn ? `<p class="note info" style="margin-top:18px">${icon('check-circle')}<span>We created a client workspace for ${esc(company.name)}. Your shortlist, compares and requests are saved there.</span></p>` : ''}`,
-      foot: `<a class="btn btn-line" href="#op.${esc(op.slug)}" data-act="modal-close">Back to profile</a><button class="btn" data-act="go" data-to="buyer.intros">Track in workspace</button>`,
+      foot: `<button class="btn btn-line" data-act="modal-close">Done</button><button class="btn" data-act="go" data-to="buyer.intros">Track in workspace</button>`,
     });
     if (RN.currentRoute() && RN.currentRoute().view.name !== 'profile') RN.rerender();
   };

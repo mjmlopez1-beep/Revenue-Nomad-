@@ -196,25 +196,36 @@
   F.avgSalesCycleDays = { label: 'Average sales cycle', type: 'number', unit: 'days', min: 1, max: 720, optional: true };
   // Marketing
   F.largestBudget = { label: 'Largest annual budget managed', type: 'money', step: 50000 };
-  F.channelsRun = { label: 'Channels personally run', type: 'multi', max: 5, options: opts(['Paid Search', 'Paid Social', 'SEO', 'Content', 'ABM', 'Events', 'PR', 'Partnerships', 'Email & Lifecycle', 'Product Marketing']) };
+  // Scope picklist (cap 3)
+  F.channelsRun = { label: 'Channels personally run', type: 'multi', max: 3, options: opts(['Paid Search', 'Paid Social', 'SEO', 'Content', 'ABM', 'Events', 'Lifecycle Email', 'PR', 'Community', 'Webinars']) };
   F.b2bShare = { label: 'B2B share of work', type: 'number', unit: '% B2B', min: 0, max: 100 };
+  F.typicalTeamSize = { label: 'Typical team size', type: 'number', unit: 'people', min: 0, max: 500 };
   // RevOps / Enablement / Partnerships
   F.builtFromZero = { label: 'Built the function from zero', type: 'single', options: opts([['yes', 'Yes'], ['no', 'No']]) };
-  F.largestRepCount = { label: 'Largest rep population enabled', type: 'number', unit: 'reps', min: 1 };
-  F.enablementFocus = { label: 'Primary enablement focus', type: 'multi', max: 2, options: opts(['Program builder', 'Onboarding specialist', 'Skills coach', 'Content creator', 'Trainer', 'Functional leader']) };
-  F.audienceSpecialty = { label: 'Audience specialty', type: 'multi', options: opts(['AE', 'SDR / BDR', 'Sales Manager / Frontline manager', 'Account Manager', 'Channel', 'Solutions']) };
+  F.largestRepCount = { label: 'Largest rep population enabled', type: 'number', unit: 'reps', min: 1, max: 5000 };
+  // Scope picklists: focus cap 3, audience 1–4
+  F.enablementFocus = { label: 'Primary enablement focus', type: 'multi', max: 3, options: opts(['Function leader', 'Program builder', 'Onboarding specialist', 'Trainer', 'Skills coaching', 'Content creator', 'E-Learning specialist']) };
+  F.audienceSpecialty = { label: 'Audience specialty', type: 'multi', max: 4, options: opts(['SDR / BDR', 'AE', 'Account Manager', 'Customer Success Manager', 'Sales Manager / Frontline manager', 'Sales Leadership (VP/Director coaching)', 'Solutions / Sales Engineering', 'Channel / Partner reps']) };
   // Customer Success & Growth
-  F.bestNrr = { label: 'Best NRR achieved', type: 'number', unit: '%', min: 50, max: 250 };
+  F.bestNrr = { label: 'Best NRR achieved', type: 'number', unit: '%', min: 0, max: 250 };
   F.largestArrBook = { label: 'Largest ARR book managed', type: 'money', step: 100000 };
+  F.bestGrr = { label: 'Best GRR achieved', type: 'number', unit: '%', min: 0, max: 110, optional: true };
+  F.largestCsTeam = { label: 'Largest CS team managed', type: 'number', unit: 'CSMs', min: 0, max: 300 };
+  F.largestAccountArr = { label: 'Largest single account', type: 'money', step: 50000, optional: true, help: 'ARR of the largest account you owned.' };
+  F.ownershipModel = {
+    label: 'Ownership model', type: 'multi', max: 2,
+    options: opts([['Renewals owned', 'Renewals owned', 'Carry renewal quota'], ['Expansion owned', 'Expansion owned', 'Carry expansion / upsell quota'], ['Adoption / health only', 'Adoption / health only', 'No quota'], ['Implementation / onboarding lead', 'Implementation / onboarding lead']]),
+  };
   F.csMotion = {
     label: 'CS motion specialty', type: 'multi', max: 2,
     options: opts([['High-touch', 'High-touch', 'Named CSMs, low ratios'], ['Low-touch / scaled', 'Low-touch / scaled', '1:many, pooled'], ['Tech-touch / digital CS', 'Tech-touch / digital CS', 'Automation, in-app'], ['PLG / self-serve customer base', 'PLG / self-serve customer base']]),
   };
   // AI GTM
-  F.aiSpecialization = { label: 'Primary AI specialization', type: 'single', options: opts(['Outbound / prospecting AI', 'RevOps automation', 'AI GTM builder', 'Lead and account intelligence', 'Forecasting and revenue AI', 'Copilots and assistants']) };
+  F.aiSpecialization = { label: 'Primary AI specialization', type: 'single', options: opts(['Outbound / prospecting AI', 'Inbound routing & scoring AI', 'AI SDR / autonomous agents', 'RevOps automation & data pipelines', 'CS automation', 'Forecasting / scoring models', 'Voice / phone agents', 'Content & enablement automation', 'Generalist AI GTM builder']) };
   // Partnerships
-  F.partnershipMotion = { label: 'Primary partnership motion', type: 'single', options: opts(['Tech / ISV partnerships', 'Channel / Reseller', 'SI / Consulting partnerships', 'Agency partnerships', 'Strategic / Co-sell (cloud marketplaces)', 'Affiliate / Influencer', 'Marketplace / Platform']) };
-  F.partnerRevenue = { label: 'Largest partner-attributed revenue', type: 'money', step: 100000 };
+  F.partnershipMotion = { label: 'Primary partnership motion', type: 'single', options: opts(['Tech / ISV partnerships', 'Channel / Reseller', 'SI / Consulting partnerships', 'Agency partnerships', 'Strategic / Co-sell (cloud marketplaces)', 'Affiliate / Influencer', 'Marketplace / Platform', 'Generalist (built across multiple motions)']) };
+  F.partnerRevenue = { label: 'Largest partner-attributed revenue', type: 'money', step: 100000, help: 'Annualized.' };
+  F.partnerEcosystem = { label: 'Largest partner ecosystem managed', type: 'number', unit: 'partners', min: 0, max: 2000 };
   // Sellers
   F.individualQuota = { label: 'Average individual quota', type: 'money', step: 50000 };
   F.avgDealSize = { label: 'Average deal size', type: 'money', step: 1000 };
@@ -223,12 +234,12 @@
   // Which role-detail fields each category collects (intake step 3, profile "Operating range", compare rows)
   F.roleFields = {
     sales_leadership: ['largestTeamManaged', 'largestTeamQuota', 'salesCycle', 'salesMotions', 'methodologies'],
-    marketing: ['largestBudget', 'channelsRun', 'b2bShare', 'salesMotions'],
+    marketing: ['largestBudget', 'typicalTeamSize', 'channelsRun', 'b2bShare', 'salesMotions'],
     revenue_operations: ['crm', 'stackComplexity', 'builtFromZero', 'salesMotions'],
     sales_enablement: ['largestRepCount', 'enablementFocus', 'audienceSpecialty', 'methodologies', 'builtFromZero'],
-    customer_success_growth: ['bestNrr', 'largestArrBook', 'csMotion'],
+    customer_success_growth: ['bestNrr', 'bestGrr', 'largestArrBook', 'largestCsTeam', 'largestAccountArr', 'csMotion', 'ownershipModel'],
     ai_gtm: ['aiSpecialization', 'codeCapability', 'automationScale'],
-    partnerships: ['partnershipMotion', 'partnerRevenue', 'builtFromZero'],
+    partnerships: ['partnershipMotion', 'partnerRevenue', 'partnerEcosystem', 'builtFromZero'],
     sellers: ['individualQuota', 'avgDealSize', 'salesCycle', 'methodologies', 'commissionOnly'],
   };
 

@@ -200,11 +200,12 @@
 
   /* ---------- Role details: map live intake answers onto the standard role fields ---------- */
   const MAPS = {
-    channelsRun: { content: 'Content', paid_social: 'Paid Social', paid_search: 'Paid Search', seo: 'SEO', abm: 'ABM', events: 'Events', pr: 'PR', partnerships: 'Partnerships', email: 'Email & Lifecycle', lifecycle_email: 'Email & Lifecycle', product_marketing: 'Product Marketing' },
-    enablementFocus: { program_builder: 'Program builder', onboarding_specialist: 'Onboarding specialist', skills_coaching: 'Skills coach', skills_coach: 'Skills coach', content_creator: 'Content creator', trainer: 'Trainer', functional_leader: 'Functional leader', function_leader: 'Functional leader' },
-    audienceSpecialty: { ae: 'AE', sdr_bdr: 'SDR / BDR', sales_manager: 'Sales Manager / Frontline manager', account_manager: 'Account Manager', channel: 'Channel', solutions: 'Solutions' },
+    channelsRun: { content: 'Content', paid_social: 'Paid Social', paid_search: 'Paid Search', seo: 'SEO', abm: 'ABM', events: 'Events', pr: 'PR', community: 'Community', webinars: 'Webinars', email: 'Lifecycle Email', lifecycle_email: 'Lifecycle Email', 'email & lifecycle': 'Lifecycle Email' },
+    enablementFocus: { program_builder: 'Program builder', onboarding_specialist: 'Onboarding specialist', skills_coaching: 'Skills coaching', skills_coach: 'Skills coaching', content_creator: 'Content creator', trainer: 'Trainer', functional_leader: 'Function leader', function_leader: 'Function leader', e_learning: 'E-Learning specialist' },
+    audienceSpecialty: { ae: 'AE', sdr_bdr: 'SDR / BDR', sales_manager: 'Sales Manager / Frontline manager', account_manager: 'Account Manager', csm: 'Customer Success Manager', sales_leadership: 'Sales Leadership (VP/Director coaching)', channel: 'Channel / Partner reps', solutions: 'Solutions / Sales Engineering' },
     csMotion: { high_touch: 'High-touch', low_touch: 'Low-touch / scaled', tech_touch: 'Tech-touch / digital CS', plg: 'PLG / self-serve customer base' },
-    aiSpecialization: { outbound: 'Outbound / prospecting AI', ai_gtm_builder: 'AI GTM builder', revops_automation: 'RevOps automation', lead_intelligence: 'Lead and account intelligence', forecasting: 'Forecasting and revenue AI', copilots: 'Copilots and assistants' },
+    ownershipModel: { renewals: 'Renewals owned', renewals_owned: 'Renewals owned', expansion: 'Expansion owned', expansion_owned: 'Expansion owned', adoption: 'Adoption / health only', adoption_health: 'Adoption / health only', implementation: 'Implementation / onboarding lead', onboarding: 'Implementation / onboarding lead' },
+    aiSpecialization: { outbound: 'Outbound / prospecting AI', inbound: 'Inbound routing & scoring AI', ai_sdr: 'AI SDR / autonomous agents', revops_automation: 'RevOps automation & data pipelines', cs_automation: 'CS automation', forecasting: 'Forecasting / scoring models', voice: 'Voice / phone agents', content_automation: 'Content & enablement automation', ai_gtm_builder: 'Generalist AI GTM builder', generalist: 'Generalist AI GTM builder' },
     salesCycle: { lt_5_days: '<5 days', '5_30_days': '5 - 30 days', '30_90_days': '30 - 90 days', '3_6_months': '3 - 6 months', '6_12_months': '6 - 12 months', '12_plus_months': '12+ months' },
   };
   const list = (v) => (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : v == null ? [] : [v]).map((s) => String(s).trim()).filter(Boolean);
@@ -221,8 +222,26 @@
     if (!m) return null;
     return { lo: +m[1], hi: m[2] ? +m[2] : null, plus: !!m[3] };
   }
-  /* Returns {kind, value, unit, note} for a standard role field, or null when the operator has not answered it. */
+  const UNITS = { largestTeamQuota: 'annual quota', largestBudget: 'annual budget', largestArrBook: 'ARR book', partnerRevenue: 'partner-attributed', individualQuota: 'annual quota', avgDealSize: 'ACV', largestAccountArr: 'account ARR', bestNrr: 'net revenue retention', bestGrr: 'gross revenue retention', largestRepCount: 'reps enabled', largestCsTeam: 'CSMs', typicalTeamSize: 'people', partnerEcosystem: 'partners', largestTeamManaged: 'people' };
+  const filled = (v) => v != null && v !== '' && !(Array.isArray(v) && !v.length);
+  /* Answers stored under registry keys (intake, Studio, Admin), rendered by the field's type */
+  function fromRegistry(key, v) {
+    const d = F[key];
+    if (!d) return null;
+    if (key === 'builtFromZero' || key === 'commissionOnly') return v === 'yes' ? { kind: 'flag', value: key === 'builtFromZero' ? 'Built the function from zero' : 'Open to commission-only' } : null;
+    if (key === 'b2bShare') return { kind: 'split', value: Math.max(0, Math.min(100, +v || 0)) };
+    if (d.type === 'money') return +v > 0 ? { kind: 'big', value: usdShort(v), unit: UNITS[key] || '' } : null;
+    if (d.type === 'number') return +v > 0 ? { kind: 'big', value: RN.fmt.int(+v) + (d.unit === '%' ? '%' : ''), unit: UNITS[key] || d.unit || '' } : null;
+    if (key === 'largestTeamManaged' || key === 'largestTeamQuota') return { kind: 'big', value: RN.w.label(key, v).replace(' people', ''), unit: UNITS[key] };
+    const vals = [].concat(v).filter(Boolean);
+    if ((d.options || []).some((o) => o.level) && vals.length === 1) return { kind: 'scale', value: vals[0] };
+    return { kind: 'chips', value: key === 'aiSpecialization' || key === 'partnershipMotion' ? vals.slice(0, 1) : vals, gold: key === 'aiSpecialization' || key === 'partnershipMotion' };
+  }
+  /* Returns {kind, value, unit, note} for a standard role field, or null when the operator has not answered it.
+     Registry answers (op.roleFields) win; otherwise the live export's legacy keys are parsed. */
   function roleVal(op, key) {
+    const rf = op.roleFields || {};
+    if (filled(rf[key])) { const r = fromRegistry(key, rf[key]); if (r) return r; }
     const rd = op.roleDetails || {};
     const num = (...ks) => { for (const k of ks) { const v = rd[k]; if (typeof v === 'number' && v > 0) return v; if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v) && +v > 0) return +v; } return null; };
     const multi = (...ks) => { for (const k of ks) { const vals = list(rd[k]).map((x) => optMatch(key, x)).filter(Boolean); if (vals.length) return [...new Set(vals)]; } return null; };
@@ -284,6 +303,12 @@
       case 'bestNrr': { const n = num('nrr_achieved_pct', 'best_nrr_percent'); return n ? { kind: 'big', value: n + '%', unit: 'net revenue retention' } : null; }
       case 'largestArrBook': { const n = num('arr_book_managed_usd', 'largest_arr_book_managed'); return n ? { kind: 'big', value: usdShort(n), unit: 'ARR book' } : null; }
       case 'csMotion': { const v = multi('motion_specialty', 'cs_motion_specialty'); return v ? { kind: 'chips', value: v } : null; }
+      case 'bestGrr': { const n = num('grr_achieved_pct', 'best_grr_percent'); return n ? { kind: 'big', value: n + '%', unit: UNITS[key] } : null; }
+      case 'largestCsTeam': { const n = num('cs_team_size', 'largest_cs_team_size'); return n ? { kind: 'big', value: RN.fmt.int(n), unit: UNITS[key] } : null; }
+      case 'largestAccountArr': { const n = num('largest_account_arr_usd', 'largest_single_account_arr'); return n ? { kind: 'big', value: usdShort(n), unit: UNITS[key] } : null; }
+      case 'ownershipModel': { const v = multi('ownership_model'); return v ? { kind: 'chips', value: v } : null; }
+      case 'typicalTeamSize': { const n = num('team_size', 'typical_team_size'); return n ? { kind: 'big', value: RN.fmt.int(n), unit: UNITS[key] } : null; }
+      case 'partnerEcosystem': { const n = num('largest_partner_ecosystem_managed'); return n ? { kind: 'big', value: RN.fmt.int(n), unit: UNITS[key] } : null; }
       case 'aiSpecialization': { const v = multi('specialization', 'primary_ai_specialization'); return v ? { kind: 'chips', value: v.slice(0, 1), gold: true } : null; }
       case 'partnershipMotion': { const v = multi('primary_partnership_motion'); return v ? { kind: 'chips', value: v.slice(0, 1), gold: true } : null; }
       case 'partnerRevenue': { const n = num('largest_partner_attributed_revenue'); return n ? { kind: 'big', value: usdShort(n), unit: 'partner-attributed' } : null; }
@@ -306,6 +331,21 @@
     const labels = rv.value.map((x) => (rv.raw ? x : RN.w.label(key, x)));
     return `<div class="pf-rv"><span class="pf-rv-l">${esc(d.label)}</span><div class="pf-chips">${labels.map((l) => `<span class="pf-chip ${rv.gold ? 'gold' : ''}">${esc(l)}</span>`).join('')}</div>${rv.note ? `<span class="pf-rv-note">${esc(rv.note)}</span>` : ''}</div>`;
   }
+
+  /* Shared with compare and admin: one reading of role details everywhere */
+  RN.roleDetail = {
+    value: roleVal,
+    html: roleValHtml,
+    text: (op, key) => {
+      const rv = roleVal(op, key);
+      if (!rv) return '';
+      if (rv.kind === 'big') return rv.value + (rv.unit ? ' ' + rv.unit : '');
+      if (rv.kind === 'split') return `${rv.value}% B2B`;
+      if (rv.kind === 'scale') return RN.w.label(key, rv.value);
+      if (rv.kind === 'flag') return 'Yes';
+      return rv.value.map((x) => (rv.raw ? x : RN.w.label(key, x))).join(', ');
+    },
+  };
 
   /* ================================================================================================
      Profile view
@@ -378,7 +418,7 @@
     const tier = F.risTierFor(op.ris.score);
     const start = nextStart(op);
     const availTxt = op.avail.key === 'available_now' ? 'Available now' : `Available ${RN.fmt.dateShort(start)}`;
-    const hrs = op.avail.hours ? ` · ${op.avail.hoursCode === '19' ? '<20' : op.avail.hours} hrs/mo` : '';
+    const hrs = op.avail.hoursCode ? ` · ${RN.w.label('hoursPerMonth', op.avail.hoursCode)}` : '';
     const dot = op.avail.key === 'available_now' ? 'dot-now' : op.avail.key === 'available_2_weeks' ? 'dot-soon' : 'dot-later';
     const heroTags = c.verified.length ? c.verified.slice(0, 3) : c.tags.slice(0, 3);
     const moreVerified = c.verified.length - 3;

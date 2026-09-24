@@ -106,6 +106,8 @@
       ris: { score, label: F.risTierFor(score).l, tier: F.risTierFor(score).v },
       wouldHireAgain: pp.wouldHireAgain != null ? pp.wouldHireAgain : null,
       engagements,
+      // Blueprints this operator offers as a packaged engagement ("Ways to work with me"); set in Studio
+      offers: raw.isMatt ? ['vp-sales', 'cro'] : [],
       clients: engagements.map((e) => ({ name: e.company, logo: e.logo, verified: e.clientVerified })),
       video: raw.isMatt ? 'assets/intro-matt.mp4' : null,
       isMatt: !!raw.isMatt,
@@ -172,13 +174,27 @@
       if (e.availKey) op.avail = Object.assign({}, op.avail, { key: e.availKey, label: F.availability.options.find((o) => o.v === e.availKey).l });
       if (e.hoursCode) op.avail = Object.assign({}, op.avail, { hoursCode: e.hoursCode, hours: +e.hoursCode });
       if (e.startDate) op.avail = Object.assign({}, op.avail, { startDate: e.startDate });
+      // Studio: engagement history, "ways to work with me" offers, photo and intro video
+      if (e.engagements) e.engagements.forEach((x) => { if (!op.engagements.some((g) => g.id === x.id)) op.engagements.push(Object.assign({ logo: null, mine: true }, x)); });
+      if (e.offers) op.offers = e.offers.slice();
+      if (e.photo !== undefined) op.photo = e.photo;
+      if (e.video !== undefined) op.video = e.video;
       if (e.addTags) e.addTags.forEach((t) => { if (!op.tags.some((x) => x.t.toLowerCase() === t.toLowerCase())) { const info = M.tagInfo(t) || {}; op.tags.push({ t, c: info.c || op.catKey, g: info.g || '', axis: info.axis || '', stage: info.stage || '', r: 0, tier: 'claimed', score: 0 }); } });
+      op.clients = op.engagements.map((x) => ({ name: x.company, logo: x.logo, verified: !!x.clientVerified }));
       op.completeness = completeness(op);
     });
     // Reviews submitted in-session verify tags and lift the score
     ((RN.store && RN.store.state.reviews) || []).forEach((rv) => {
       const op = byId.get(rv.opId); if (!op || op.reviews.some((r) => r.id === rv.id)) return;
       op.reviews = [rv].concat(op.reviews);
+      // The engagement the client confirmed joins Engagement History (or verifies the matching entry)
+      if (rv.company) {
+        const g = rv.engagement || {};
+        const hit = op.engagements.find((x) => String(x.company).toLowerCase() === String(rv.company).toLowerCase());
+        if (hit) Object.assign(hit, { clientVerified: true });
+        else op.engagements.push({ id: 'eng-' + rv.id, company: rv.company, role: g.title || 'Fractional ' + op.role, start: g.start || '', end: g.ongoing ? '' : g.end || '', engagementType: g.engagementType, revenueRange: g.revenueRange, employeeRange: g.employeeRange, clientVerified: true, logo: null, fromReview: true });
+        op.clients = op.engagements.map((x) => ({ name: x.company, logo: x.logo, verified: !!x.clientVerified }));
+      }
       const good = (rv.coreAvg || 5) >= 4;
       (rv.tags || []).forEach((t) => {
         let tag = op.tags.find((x) => x.t.toLowerCase() === t.toLowerCase());

@@ -471,7 +471,7 @@
     const list = (st().events || []).filter((e) => e.type !== 'impression' && e.persona !== 'admin').slice(0, 7);
     return `${cardHead('Live activity', 'What people did in this session, newest first. Impressions are left out.')}
       ${list.length ? `<ol class="adm-feed">${list.map((e) => { const d = describeEvent(e); return `<li><span class="adm-feed-ic">${icon(d.ic)}</span><div class="grow"><b>${esc(d.t)}</b><span class="tiny muted">${esc(actor(e))}${d.sub ? ' · ' + esc(d.sub) : ''}</span></div><span class="tiny muted nowrap">${esc(RN.fmt.ago(e.ts))}</span></li>`; }).join('')}</ol>`
-      : RN.ui.empty({ icon: 'bolt', title: 'No activity yet this session', body: 'Search, open profiles or request an intro as a client and each action appears here and in Demand.', cta: '<button type="button" class="btn btn-sm" data-act="persona" data-p="buyer" data-to="browse">Browse as Jordan (client)</button>' })}`;
+      : RN.ui.empty({ icon: 'bolt', title: 'No activity yet this session', body: 'Search, open profiles or request an intro as a client and each action appears here and in Demand.', cta: `<button type="button" class="btn btn-sm" data-act="persona" data-p="buyer" data-to="browse">Browse as ${esc(RN.personas.buyer.first)} (client)</button>` })}`;
   }
   function recentReviews() {
     const list = [];

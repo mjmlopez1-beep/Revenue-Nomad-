@@ -17,6 +17,30 @@
     admin: { key: 'admin', name: 'Matt Lopez', sub: 'Revenue Nomad team', first: 'Matt', email: 'matt@revenuenomad.com' },
   };
   RN.me = () => RN.personas[RN.store.state.persona];
+
+  /* The client identity. Jordan Ellis is the demo client (seeded intros, projects, shortlist); a visitor who
+     requests an intro becomes their own client, saved in seen.client. setClient(null) restores the demo. */
+  const DEMO_CLIENT = JSON.parse(JSON.stringify(RN.personas.buyer));
+  function applyClient(who) {
+    const b = RN.personas.buyer, src = who || DEMO_CLIENT;
+    b.name = src.name; b.first = String(src.name || 'Client').split(' ')[0]; b.email = src.email; b.title = src.title || '';
+    b.company = Object.assign({}, DEMO_CLIENT.company, who ? { website: '', hq: '' } : {}, src.company);
+    b.sub = [b.title, b.company.name].filter(Boolean).join(', ') || 'Client';
+    b.demo = !who;
+  }
+  shell.applyClient = () => applyClient((RN.store.state.seen || {}).client || null);
+  shell.setClient = function (who) {
+    RN.store.update((s) => { s.seen = Object.assign({}, s.seen, { client: who || null }); delete s.seen.company; delete s.seen.companyPrefs; }, 'client');
+    applyClient(who || null);
+  };
+  /* The demo client's saved operators appear the first time you view the system as Jordan, not for visitors */
+  function enterDemoClient() {
+    const st = RN.store.state;
+    if (!RN.personas.buyer.demo || !(st.seen && st.seen.demoShortlist)) return;
+    RN.store.update((s) => { s.shortlist = s.shortlist.concat(s.seen.demoShortlist.filter((id) => !s.shortlist.includes(id))); s.seen = Object.assign({}, s.seen); delete s.seen.demoShortlist; }, 'shortlist');
+  }
+  const PERSONA_HOME = { visitor: 'home', buyer: 'buyer', operator: 'studio', admin: 'admin' };
+  function allowed(view, p) { return !view || !view.requires || view.requires === p || (view.requires === 'any-user' && p !== 'visitor'); }
   /* The signed-in client's match brief for RN.model.fit: company firmographics + saved match preferences */
   RN.clientBrief = function () {
     const c = RN.personas.buyer.company;
@@ -25,16 +49,32 @@
   };
   RN.myOp = () => (RN.store.state.persona === 'operator' ? RN.model.byId(RN.personas.operator.opId) : null);
 
+  /* Switch persona. data-to navigates; data-stay keeps the current page (contextual log in, dock),
+     moving to the persona's home only when the current page is gated for them. */
   RN.actions['persona'] = (el) => {
     const p = el.dataset.p;
+    if (el.closest('.dock')) dockOpen = false;   // read before the re-render detaches the button
     RN.store.set('persona', p);
+    if (p === 'buyer') enterDemoClient();
     RN.ui.closeModal();
     shell.renderHeader(); shell.renderDock();
-    const to = el.dataset.to;
+    const cur = RN.currentRoute();
+    const to = el.dataset.stay ? (allowed(cur && cur.view, p) ? '' : PERSONA_HOME[p]) : el.dataset.to;
     if (to) RN.go(to); else RN.rerender();
     RN.ui.toast(p === 'visitor' ? 'Signed out' : `Signed in as ${esc(RN.personas[p].name)} (${esc(RN.personas[p].sub)})`);
   };
-  RN.actions['login'] = () => {
+  RN.actions['client-demo'] = () => {
+    shell.setClient(null);
+    RN.store.set('persona', 'buyer');
+    enterDemoClient();
+    dockOpen = false;
+    shell.renderHeader(); shell.renderDock();
+    RN.go('buyer');
+    RN.ui.toast(`Viewing as the demo client, ${esc(RN.personas.buyer.name)}`);
+  };
+  // Log in from inside a page (a gate, "Log in to see rate") keeps you on that page; from the header it opens your home
+  RN.actions['login'] = (el) => {
+    const stay = !!(el && el.closest && el.closest('main, .modal'));
     RN.ui.modal({
       title: 'Log in to Revenue Nomad',
       sub: 'Prototype sign-in. Pick who you are to see that side of the system.',
@@ -43,7 +83,7 @@
           const p = RN.personas[k];
           const d = { buyer: 'Hiring a fractional leader. Shortlist, compare, request intros, post projects.', operator: 'Fractional operator. Studio shows who viewed you, why, and how to stand out.', admin: 'Revenue Nomad team. Approve profiles and read marketplace demand.' }[k];
           const to = { buyer: 'buyer', operator: 'studio', admin: 'admin' }[k];
-          return `<button type="button" class="optcard" data-act="persona" data-p="${k}" data-to="${to}"><b>${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>${esc(d)}</span></button>`;
+          return `<button type="button" class="optcard" data-act="persona" data-p="${k}" ${stay ? 'data-stay="1"' : `data-to="${to}"`}><b>${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>${esc(d)}</span></button>`;
         }).join('')}
       </div>`,
     });
@@ -73,7 +113,7 @@
     } else if (p === 'buyer') {
       const n = st.shortlist.length;
       right = `<a class="btn btn-line btn-sm hide-m" href="#buyer.shortlist">${icon('bookmark')}Shortlist${n ? `<span class="nav-count">${n}</span>` : ''}</a>
-        <a class="row-nw" href="#buyer" style="--gap:8px" title="Workspace">${RN.ui.avatar({ name: 'Jordan Ellis', initials: 'JE' }, 'ava-sm')}<span class="hide-m" style="font-family:var(--f-display);font-weight:700;font-size:13px">Workspace</span></a>`;
+        <a class="row-nw" href="#buyer" style="--gap:8px" title="Workspace">${RN.ui.avatar({ name: RN.personas.buyer.name, initials: RN.fmt.initials(RN.personas.buyer.name) }, 'ava-sm')}<span class="hide-m" style="font-family:var(--f-display);font-weight:700;font-size:13px">Workspace</span></a>`;
     } else if (p === 'operator') {
       const me = RN.myOp();
       const unread = RN.studioB && me ? RN.studioB.inboxBadge(me) : st.intros.filter((i) => i.opId === RN.personas.operator.opId && i.status === 'pending').length + st.projects.filter((pr) => ['posted', 'in_progress'].includes(pr.status) && (pr.invited || []).includes(RN.personas.operator.opId) && !(pr.responses || []).some((r) => r.opId === RN.personas.operator.opId)).length;
@@ -166,7 +206,8 @@
     el.innerHTML = `${dockOpen ? `<div class="dock-panel" role="dialog" aria-label="Prototype controls">
         <div class="row between"><span class="eyebrow" style="color:var(--leaf)">Prototype controls</span><button class="x-btn" data-act="dock" aria-label="Close" style="width:32px;height:32px;background:transparent;color:#fff;border-color:rgba(255,255,255,.25)">${icon('x')}</button></div>
         <div class="stack" style="--gap:8px"><span class="label">View the system as</span>
-          <div class="dock-persona">${['visitor', 'buyer', 'operator', 'admin'].map((k) => `<button type="button" class="${p === k ? 'on' : ''}" data-act="persona" data-p="${k}" data-to="${{ visitor: 'home', buyer: 'buyer', operator: 'studio', admin: 'admin' }[k]}"><b>${esc(k === 'visitor' ? 'Visitor' : RN.personas[k].name)}</b><span>${esc(k === 'visitor' ? 'Logged out' : RN.personas[k].sub)}</span></button>`).join('')}</div></div>
+          <div class="dock-persona">${['visitor', 'buyer', 'operator', 'admin'].map((k) => `<button type="button" class="${p === k ? 'on' : ''}" data-act="persona" data-p="${k}" data-stay="1" aria-pressed="${p === k}"><b>${esc(k === 'visitor' ? 'Visitor' : RN.personas[k].name)}</b><span>${esc(k === 'visitor' ? 'Logged out' : RN.personas[k].sub)}</span></button>`).join('')}</div>
+          ${RN.personas.buyer.demo ? '' : `<button type="button" class="act" style="color:var(--leaf);justify-content:flex-start;padding:4px 0" data-act="client-demo">${icon('refresh')}<span>Switch client to the demo client (${esc(DEMO_CLIENT.name)})</span></button>`}</div>
         <div class="stack" style="--gap:8px"><span class="label">Walk a journey</span>
           <div class="stack" style="--gap:2px">${JOURNEYS.map((j) => `<button type="button" class="act" style="color:#fff;justify-content:flex-start;padding:6px 0" data-act="journey" data-j="${j.key}">${icon('arrow')}<span>${esc(j.label)}</span></button>`).join('')}</div></div>
         <div class="stack" style="--gap:8px"><span class="label">Clock · ${esc(RN.fmt.date(RN.now()))}</span>
@@ -201,11 +242,13 @@
     location.hash = '#home';
     location.reload();
   };
+  // In-app links inside emails (#review.x, #proof.x) open the screen; the drawer closes on navigation
+  const linkify = (t) => esc(t).replace(/(\S*?)#([a-z]+(?:\.[\w-]+)+)/g, (m, pre, path) => `<a href="#${path}">${pre ? 'revenuenomad.com/' : ''}#${path}</a>`);
   RN.actions['outbox'] = () => {
     const mails = RN.store.state.outbox;
     RN.ui.drawer({
       title: 'Outbox', sub: 'Emails the platform sends as you move through the flows.',
-      body: mails.length ? `<div class="stack" style="--gap:12px">${mails.map((m) => `<article class="card-flat"><div class="row between small muted"><span>To ${esc(m.to)}</span><span>${esc(RN.fmt.ago(m.ts))}</span></div><h3 class="h5" style="margin-top:6px">${esc(m.subject)}</h3><p class="small muted" style="margin-top:6px;white-space:pre-line">${esc(m.body)}</p></article>`).join('')}</div>` : RN.ui.empty({ icon: 'mail', title: 'No emails yet', body: 'Request an intro, post a project or send a review request and the emails appear here.' }),
+      body: mails.length ? `<div class="stack" style="--gap:12px">${mails.map((m) => `<article class="card-flat"><div class="row between small muted"><span>To ${esc(m.to)}</span><span>${esc(RN.fmt.ago(m.ts))}</span></div><h3 class="h5" style="margin-top:6px">${esc(m.subject)}</h3><p class="small muted" style="margin-top:6px;white-space:pre-line">${linkify(m.body)}</p></article>`).join('')}</div>` : RN.ui.empty({ icon: 'mail', title: 'No emails yet', body: 'Request an intro, post a project or send a review request and the emails appear here.' }),
     });
   };
 
@@ -220,7 +263,9 @@
   ];
   RN.actions['journey'] = (el) => {
     const j = JOURNEYS.find((x) => x.key === el.dataset.j);
+    if (j.persona === 'buyer' && !RN.personas.buyer.demo) shell.setClient(null);
     RN.store.set('persona', j.persona);
+    if (j.persona === 'buyer') enterDemoClient();
     dockOpen = false;
     shell.renderHeader(); shell.renderDock();
     RN.go(j.to);
@@ -246,6 +291,7 @@
       shell.renderHeader(cur && cur.view);
       shell.renderTray(cur && cur.view);
     }
-    if (key === 'outbox' || key === 'persona' || key === '*') shell.renderDock();
+    if (key === 'outbox' || key === 'persona' || key === 'client' || key === '*') shell.renderDock();
+    if (key === 'client') shell.renderHeader();
   });
 })();

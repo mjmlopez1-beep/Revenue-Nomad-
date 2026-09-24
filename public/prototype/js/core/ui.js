@@ -23,7 +23,9 @@
   ui.avail = function (op, o) {
     const a = op.avail || {};
     const cls = a.key === 'available_now' ? 'dot-now' : a.key === 'available_2_weeks' ? 'dot-soon' : 'dot-later';
-    const hrs = a.hours ? ` · ${a.hours} hrs/mo` : '';
+    // Registry label for the stored chip code ("40 hrs / month"), never a raw number
+    const code = a.hoursCode || (a.hours ? RN.fields.hoursCode(a.hours) : '');
+    const hrs = code ? ` · ${RN.w.label('hoursPerMonth', code)}` : '';
     return `<span class="row-nw" style="--gap:8px"><i class="dot ${cls}"></i><span>${esc(a.label || 'Availability not set')}${o && o.hours === false ? '' : esc(hrs)}</span></span>`;
   };
 
