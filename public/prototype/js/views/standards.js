@@ -35,7 +35,7 @@
 
   // Open items from the Product Feedback sheet and where this prototype shows them solved
   const SCOPE = [
-    ['E397 (Sep 23)', 'Bar scales with bold label and grey help text: stack complexity, code capability, automation scale, tool proficiency', '#join.operator', 'Operator intake, role details step'],
+    ['E397 (Sep 23)', 'Bar scales with bold label and grey help text: stack complexity (RevOps), code capability and automation scale (AI GTM). Per-tool proficiency stays on hold, shown on the profile tech stack.', '#join.operator', 'Operator intake, role details step'],
     ['E479 (Sep 23)', 'Inline search inside the tag picker when adding more tags', '#browse', 'Browse and homepage focus area picker'],
     ['E486 (Sep 23)', 'Operators see two review states only: Sent and Completed', '#studio.credibility', 'Studio, Credibility'],
     ['E418 (Sep 23)', 'Client-facing Reputation Index explainer: "How score is calculated" with the five factors', '#levels', 'Profile rail, cards and Levels'],
@@ -53,7 +53,7 @@
     ['AP-27', 'Demand intelligence', '#admin.demand', 'Admin demand, Studio positioning'],
     ['AP-05 / AP-21', 'Normalized search terms, zero-result searches, client funnel', '#admin.demand', 'Admin demand'],
     ['AP-25', 'Client firmographics use the operator intake picklists exactly', '#buyer.company', 'Client company profile and intro sheet'],
-    ['L310 (Hold)', 'Leave a Review button', '#op.matt-lopez', 'Review requests via Studio and the review page'],
+    ['L310 (Hold)', 'Leave a Review: clients who hired an operator get "Leave a CORE review" in their workspace; operators request reviews from Studio', '#buyer.intros', 'Client workspace intros, Studio Credibility'],
     ['L1-L60 intake items', 'Revenue and employee ranges up to 3, industries up to 10, new client capacity 1–10, location from postal code', '#join.operator', 'Operator intake'],
   ];
 

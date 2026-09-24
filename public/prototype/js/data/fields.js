@@ -269,10 +269,10 @@
   // What each tier unlocks (proposal). Tiers move only on client evidence; nothing on the ladder is paid.
   F.risUnlocks = {
     indexing: ['Your profile is reviewed by the team within 2 business days', 'Studio setup checklist while you wait'],
-    vetted: ['Listed and searchable in Browse', 'Studio insights: who viewed you, why you appeared, positioning, search and AI visibility', 'Fractional roles and predictive prospects in Opportunities'],
-    proven: ['Proof links with section-level read tracking for your direct deals', 'Embeddable verified badge with a dated verification page'],
-    trusted: ['Featured on role category pages', 'Eligible for the curated shortlists the team sends to clients'],
-    elite: ['Considered for homepage curation', 'Invited to State of Fractional GTM research panels'],
+    vetted: ['Listed and searchable in Browse', 'Studio insights: who viewed you, why you appeared, positioning, search and AI visibility', 'Proof links for your direct deals (5 a month)', 'Fractional roles and predictive prospects in Opportunities'],
+    proven: ['Unlimited proof links', 'Embeddable verified badge with a dated verification page'],
+    trusted: ['Priority placement on role category pages', 'Eligible for the curated shortlists the team sends to clients'],
+    elite: ['First in line for homepage features', 'Invited to State of Fractional GTM research panels'],
     apex: ['Invited to the State of Fractional GTM advisory panel', 'First look at new Studio tools'],
   };
   F.risTierFor = (score) => (score == null ? F.risTier.options[5] : F.risTier.options.find((t) => score >= t.min) || F.risTier.options[5]);

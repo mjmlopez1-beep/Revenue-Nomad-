@@ -324,6 +324,12 @@
     brief = brief || {};
     const first = op.first;
     const sig = [];
+    // Role: the discipline the client is hiring for comes first, so another discipline never reads as a strong match
+    if (brief.roleCategory) {
+      const same = op.catKey === brief.roleCategory;
+      const adj = !same && op.tags.some((t) => t.tier !== 'claimed' && t.c === brief.roleCategory);
+      sig.push({ k: 'role', l: 'Role', state: same ? 'match' : adj ? 'partial' : 'low', text: same ? `Works in ${F.catLabel(op.catKey)}` : adj ? `Client-verified ${F.catLabel(brief.roleCategory)} work, but works in ${F.catLabel(op.catKey)}` : `You need ${F.catLabel(brief.roleCategory)}; ${op.first} works in ${F.catLabel(op.catKey)}` });
+    }
     const rev = brief.revenueRange;
     if (rev && (op.revenueRanges.length || op.engagements.some((e) => e.revenueBand))) {
       const engaged = op.engagements.some((e) => e.revenueBand === rev);
