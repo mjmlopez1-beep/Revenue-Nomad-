@@ -24,6 +24,9 @@
   const initials = (s) => RN.fmt.initials(String(s || '').replace(/[^\w\s]/g, ' ')) || '?';
   const edits = (op) => st().edits[op.id] || {};
   const pageUrl = () => location.href.split('#')[0];
+  // Escape, and keep numeric ranges like "51–200" or "$5M–$20M" from breaking at the dash
+  const nb = (str) => esc(str).replace(/(\$?[\d.,]+[KM]?–\$?[\d.,]+[KM]?\+?)/g, '<span class="nowrap">$1</span>');
+  const segs = (str) => String(str || '').split(' · ').map((x) => `<span class="nowrap">${esc(x)}</span>`).join(' · ');
   const fitCls = (pct) => (pct >= 75 ? 'strong' : pct >= 50 ? 'good' : 'part');
 
   function copyText(text) {
@@ -197,8 +200,8 @@
         <span class="tiny muted">Received ${esc(RN.fmt.ago(i.createdAt))}</span>
       </div>
       <h3 class="sb-item-h">${esc(sum.need || 'Fractional ' + op.role)}</h3>
-      <p class="sb-who">${icon(revealed ? 'building' : 'eye-off')}<span>${esc(sum.who)}</span>${revealed ? '' : RN.ui.tip('Company and contact names stay hidden until Revenue Nomad introduces you. You see the scope, size and industry now (blind intro, L369).', 'Why the company is hidden')}</p>
-      ${sum.scope ? `<p class="sb-scope">${icon('briefcase')}<span>${esc(sum.scope)}</span></p>` : ''}
+      <p class="sb-who">${icon(revealed ? 'building' : 'eye-off')}<span>${segs(sum.who)}</span>${revealed ? '' : RN.ui.tip('Company and contact names stay hidden until Revenue Nomad introduces you. You see the scope, size and industry now (blind intro, L369).', 'Why the company is hidden')}</p>
+      ${sum.scope ? `<p class="sb-scope">${icon('briefcase')}<span>${segs(sum.scope)}</span></p>` : ''}
       ${i.note ? `<blockquote class="sb-quote">${esc(i.note)}</blockquote>` : ''}
       <div class="sb-fitrow">${fitPill(fit, { you: true })}${fitSignals(fit)}</div>
       ${clock}
@@ -316,7 +319,7 @@
         <span class="tiny muted">Invited ${esc(RN.fmt.ago(p.postedAt || p.createdAt))}</span>
       </div>
       <h3 class="sb-item-h">${esc(p.title)}</h3>
-      <p class="sb-who">${icon('eye-off')}<span>${esc(projectFirm(p))}</span>${RN.ui.tip('The company name is shared when the client requests an intro.', 'Why the company is hidden')}</p>
+      <p class="sb-who">${icon('eye-off')}<span>${segs(projectFirm(p))}</span>${RN.ui.tip('The company name is shared when the client requests an intro.', 'Why the company is hidden')}</p>
       ${p.brief ? `<p class="sb-brief">${esc(p.brief)}</p>` : ''}
       ${projectFacts(p)}
       ${payBlock(p)}
@@ -456,7 +459,7 @@
       verification: { p: tags.length ? verified / tags.length : 0, txt: `${verified} of ${tags.length} fit tags verified`, pts: Math.min(8, claimed) * G('verifiedTag'), act: claimed ? `<button type="button" class="act" data-act="sb-rr-open" data-verify="1">Ask a client to verify tags${icon('arrow')}</button>` : '' },
       ratings: { p: avg / 5, txt: nRev ? `${avg.toFixed(1)} average across ${nRev} ${nRev === 1 ? 'review' : 'reviews'}` : 'No ratings yet', pts: nRev && avg >= 4.5 ? 0 : 2, act: '' },
       complete: { p: op.completeness / 100, txt: `Profile ${op.completeness}% complete`, pts: op.completeness < 100 ? G('complete') : 0, act: op.completeness < 100 ? `<a class="act" href="#studio.profile">Finish your profile${icon('arrow')}</a>` : '' },
-      recency: { p: lastEnd == null ? 0 : RN.clamp(1 - lastEnd / 24, 0, 1), txt: lastEnd == null ? 'No engagement logged' : lastEnd === 0 ? 'Engagement active this month' : `Last engagement ended ${lastEnd} ${lastEnd === 1 ? 'month' : 'months'} ago`, pts: lastEnd == null || lastEnd > 0 ? G('engagement') : 0, act: lastEnd == null || lastEnd > 0 ? `<button type="button" class="act" data-act="sb-rr-open">Get a recent engagement confirmed${icon('arrow')}</button>` : '' },
+      recency: { p: lastEnd == null ? 0 : RN.clamp(1 - lastEnd / 24, 0, 1), txt: lastEnd == null ? 'No engagement logged' : lastEnd === 0 ? 'Engagement active this month' : `Last engagement ended ${lastEnd} ${lastEnd === 1 ? 'month' : 'months'} ago`, pts: lastEnd == null || lastEnd > 0 ? G('engagement') : 0, act: lastEnd == null || lastEnd > 0 ? `<button type="button" class="act" data-act="sb-rr-open">Confirm a recent engagement${icon('arrow')}</button>` : '' },
     };
     return RN.fields.risFactors.options.map((f) => Object.assign({ f }, val[f.v]));
   }
@@ -545,13 +548,14 @@
     </section>`;
   }
 
+  const vtag = (t) => `<li><span class="ftag">${icon('check-circle')}${esc(t.t)}</span><span class="sb-vt-m"><span class="meter" aria-hidden="true"><i style="width:${t.score}%"></i></span><span class="tiny muted tnum">${t.r} ${t.r === 1 ? 'review' : 'reviews'} · ${t.tier === 'expert' ? 'Expert' : 'Verified'}</span></span></li>`;
   function tagsSection(op) {
     const verified = op.tags.filter((t) => t.tier !== 'claimed').sort((a, b) => b.r - a.r || a.t.localeCompare(b.t));
     const claimed = op.tags.filter((t) => t.tier === 'claimed');
     const key = RN.ui.tip('<b>How tags verify</b><br>A tag turns Verified the first time a client review confirms it (score 50). Each later review rated 4.0 or higher adds to it: 60, 70, 80, then +3 each. Five or more reviews make it Expert.', 'How tags verify');
     return `<section class="card" id="sb-c-tags" aria-labelledby="sb-tags-h">
       <div class="card-hd"><div><h3 id="sb-tags-h" class="row-nw" style="--gap:6px">Verified fit tags ${key}</h3><p class="sub">${verified.length} of ${op.tags.length} verified by client reviews. Verified tags rank first on your card and in search.</p></div></div>
-      ${verified.length ? `<ul class="sb-vtags">${verified.map((t) => `<li><span class="ftag">${icon('check-circle')}${esc(t.t)}</span><span class="sb-vt-m"><span class="meter" aria-hidden="true"><i style="width:${t.score}%"></i></span><span class="tiny muted tnum">${t.r} ${t.r === 1 ? 'review' : 'reviews'} · ${t.tier === 'expert' ? 'Expert' : 'Verified'}</span></span></li>`).join('')}</ul>` : RN.ui.empty({ icon: 'seal', title: 'No verified tags yet', body: 'Your first client review verifies the tags that client confirms.' })}
+      ${verified.length ? `<ul class="sb-vtags">${verified.slice(0, 9).map(vtag).join('')}</ul>${verified.length > 9 ? `<details class="sb-more-tags"><summary>${icon('chev-down')}Show ${verified.length - 9} more verified tags</summary><ul class="sb-vtags">${verified.slice(9).map(vtag).join('')}</ul></details>` : ''}` : RN.ui.empty({ icon: 'seal', title: 'No verified tags yet', body: 'Your first client review verifies the tags that client confirms.' })}
       ${claimed.length ? `<div class="sb-claimed">
         <div class="row between"><span class="label">Claimed, waiting for a client (${claimed.length})</span><button type="button" class="act" data-act="sb-rr-open" data-verify="1">Ask a client to verify${icon('arrow')}</button></div>
         <div class="opc-tags">${claimed.map((t) => RN.ui.ftag(t)).join('')}</div></div>` : ''}
@@ -653,7 +657,7 @@
     const op = RN.myOp();
     const engs = op.engagements || [];
     const e0 = engs[0];
-    const claimed = op.tags.filter((t) => t.tier === 'claimed').map((t) => t.t);
+    const claimed = op.tags.filter((t) => t.tier === 'claimed').sort((a, b) => (b.c === op.catKey) - (a.c === op.catKey)).map((t) => t.t);
     const pre = o.verify ? claimed.slice(0, 6) : claimed.slice(0, 4);
     const ongoing0 = e0 && !e0.end;
     const body = `<form id="sb-rr-form" class="sb-rr" data-submit="sb-rr-send" data-step="1" novalidate>
@@ -736,11 +740,11 @@
     modal.scrollTop = 0;
   }
   function rrEmail(op, d, id) {
-    const dates = `${d.start ? ym(d.start) : 'Start date'} to ${d.ongoing ? 'now' : d.end ? ym(d.end) : 'end date'}`;
+    const dates = d.start ? `${ym(d.start)} to ${d.ongoing || !d.end ? 'now' : ym(d.end)}` : d.ongoing ? 'ongoing' : '';
     const tags = d.tags || [];
     return {
       subject: `Working with ${op.name}`,
-      body: `Hi ${RN.fmt.first(d.rname) || 'there'},\n\n${op.name} asked you to review your work together at ${d.company}. It takes about 4 minutes. Your review is published on ${op.first}’s Revenue Nomad profile under your name and title.\n\nYou’ll be asked to confirm:\n· The engagement: ${RN.w.label('engagementType', d.engagementType) || 'Fractional'}, ${dates}\n· ${d.outcomes.length} ${d.outcomes.length === 1 ? 'outcome' : 'outcomes'} ${op.first} delivered, each rated ${RN.w.labels('outcomeRating', RN.fields.outcomeRating.options.map((x) => x.v), ', ')}\n· ${tags.length} focus ${tags.length === 1 ? 'area' : 'areas'} to verify${tags.length ? ': ' + tags.join(', ') : ''}\n· Four CORE questions: ${RN.fields.coreDims.options.map((x) => x.l).join(', ')}\n\nStart the review: ${pageUrl()}#review.${id || '…'}\n\nThank you,\nRevenue Nomad, on behalf of ${op.name}`,
+      body: `Hi ${RN.fmt.first(d.rname) || 'there'},\n\n${op.name} asked you to review your work together at ${d.company}. It takes about 4 minutes. Your review is published on ${op.first}’s Revenue Nomad profile under your name and title.\n\nYou’ll be asked to confirm:\n· The engagement: ${RN.w.label('engagementType', d.engagementType) || 'Fractional'}${dates ? ', ' + dates : ''}\n· ${d.outcomes.length} ${d.outcomes.length === 1 ? 'outcome' : 'outcomes'} ${op.first} delivered, each rated ${RN.w.labels('outcomeRating', RN.fields.outcomeRating.options.map((x) => x.v), ', ')}\n· ${tags.length} focus ${tags.length === 1 ? 'area' : 'areas'} to verify${tags.length ? ': ' + tags.join(', ') : ''}\n· Four CORE questions: ${RN.fields.coreDims.options.map((x) => x.l).join(', ')}\n\nStart the review: ${pageUrl()}#review.${id || '…'}\n\nThank you,\nRevenue Nomad, on behalf of ${op.name}`,
     };
   }
   function rrPreview(d) {
@@ -936,10 +940,10 @@
   // Illustrative companies for a VP of Sales ICP. Signals use the engine's weights and half-lives.
   const PROS = [
     { id: 'p01', co: 'Cadence Clinical', one: 'Care coordination software for outpatient clinics.', ind: 'Health Care', emp: '51_200', n: 85, rev: '5m_20m', stage: 'Series A',
-      sig: [{ q: 'sl_seat_req', t: 'leadership-gap', l: 'Hiring your seat full-time: VP of Sales', d: 'The search runs 4 to 6 months. Fractional cover keeps the pipeline moving now.', days: 9, half: 45, w: 0.8 }, { q: 'funding', t: 'funding', l: 'Raised a Series A ($14M)', d: 'Fresh budget and a board plan that assumes a sales team.', days: 40, half: 120, w: 0.6 }],
+      sig: [{ q: 'sl_seat_req', t: 'leadership-gap', l: 'Hiring your seat full-time: VP of Sales', d: 'The search runs 4 to 6 months. Fractional cover keeps the pipeline moving now.', days: 9, half: 45, w: 0.8 }, { q: 'funding', t: 'funding', l: 'Raised a Series A ($14M)', d: 'Fresh budget and a board plan that assumes a sales team.', days: 40, half: 120, w: 0.6 }, { q: 'headcount-jump', t: 'headcount-jump', l: 'Team grew from 62 to 85', d: 'Growth is outrunning the sales org.', days: 20, half: 90, w: 0.6 }],
       subj: 'Covering the VP of Sales seat at Cadence Clinical while you hire', hook: 'Congratulations on the Series A. I saw you are hiring a VP of Sales. Those searches usually take four to six months, and this year’s number does not wait for them.' },
     { id: 'p02', co: 'Ridgeline Property Software', one: 'Leasing and maintenance software for mid-size property managers.', ind: 'Property Management', emp: '51_200', n: 70, rev: '5m_20m', stage: 'Series A',
-      sig: [{ q: 'departure', t: 'departure', l: 'Past sales leader on the roster, seat now empty', d: 'Nobody has owned the number since the last leader left.', days: null, half: null, w: 0.7 }, { q: 'sl_reps_no_leader', t: 'team-without-leader', l: 'Hiring 3 reps with no sales leadership posted', d: 'Open: Account Executive (2), SDR.', days: 12, half: 60, w: 0.75 }],
+      sig: [{ q: 'departure', t: 'departure', l: 'Past sales leader on the roster, seat now empty', d: 'Nobody has owned the number since the last leader left.', days: null, half: null, w: 0.7 }, { q: 'sl_reps_no_leader', t: 'team-without-leader', l: 'Hiring 3 reps with no sales leadership posted', d: 'Open: Account Executive (2), SDR.', days: 12, half: 60, w: 0.75 }, { q: 'funding', t: 'funding', l: 'Raised a Series A ($9M)', d: 'New budget with a plan that assumes a sales team.', days: 50, half: 120, w: 0.6 }],
       subj: 'Your open AE roles at Ridgeline', hook: 'I saw you have three sales roles open and nobody posted to lead them. New reps without a leader and a playbook usually take two quarters to find their feet.' },
     { id: 'p03', co: 'Northpeak Payroll', one: 'Payroll and benefits for companies with 20 to 200 people.', ind: 'Saas', emp: '11_50', n: 38, rev: '1m_5m', stage: 'Seed',
       sig: [{ q: 'sl_founder_ceiling', t: 'function-gap', l: 'Founder-led sales at the ceiling', d: '38 people with no sales org or sales postings. The founder is still selling.', days: null, half: null, w: 0.65 }, { q: 'started-hiring', t: 'started-hiring', l: 'Switched to hiring mode', d: 'The hiring flag turned on in the company directory this week.', days: 4, half: 30, w: 0.65 }],
@@ -972,6 +976,7 @@
       sig: [{ q: 'funding', t: 'funding', l: 'Raised a Series C ($60M)', d: 'Growth capital with an aggressive sales plan.', days: 95, half: 120, w: 0.6 }],
       subj: 'Turning the Series C into pipeline at Keel', hook: 'Congratulations on the Series C. Rounds like that usually come with a sales plan that assumes a bigger team than you have today.' },
   ];
+  const QUEUE_MIN = 40; // the engine's bar to enter the queue
   const sigDays = (s) => (s.days == null ? null : s.days + (st().clockOffsetDays || 0));
   const sigStrength = (s, extra) => { const d = sigDays(s); return s.w * (d == null || !s.half ? 1 : Math.pow(0.5, (d + (extra || 0)) / s.half)); };
   function scoreProspect(p, op) {
@@ -987,7 +992,7 @@
   function renderOpps(op) {
     const tab = (st().seen && st().seen.sbOpp) || 'jobs';
     const jobs = jobList(op);
-    const pros = PROS.map((p) => Object.assign({ p }, scoreProspect(p, op)));
+    const pros = PROS.map((p) => Object.assign({ p }, scoreProspect(p, op))).filter((x) => x.priority >= QUEUE_MIN);
     const psMap = seenMap('prospects');
     const nToReview = pros.filter((x) => !psMap[x.p.id]).length;
     return `<div class="sb sb-opps">
@@ -999,7 +1004,7 @@
         </div>
       </div>
       ${icpStrip(op, tab)}
-      ${tab === 'jobs' ? renderJobs(op, jobs) : renderProspects(op, pros)}
+      ${tab === 'jobs' ? renderJobs(op, jobs) : renderProspects(op, pros, PROS.length - pros.length)}
     </div>`;
   }
   RN.actions['sb-opp-tab'] = (el) => { RN.store.update((s) => { s.seen = s.seen || {}; s.seen.sbOpp = el.dataset.t; }, 'seen'); RN.rerender(); };
@@ -1078,7 +1083,7 @@
       </div>
       <p class="sb-job-sum">${esc(j.sum)}</p>
       <div class="sb-pills">${pills}</div>
-      ${why ? `<p class="sb-why">${icon('target')}<span>${esc(why)}</span></p>` : ''}
+      ${why ? `<p class="sb-why">${icon('target')}<span>${nb(why)}</span></p>` : ''}
       <div class="sb-job-act">
         <button type="button" class="btn btn-sm ${status === 'saved' || status === 'applied' ? '' : 'btn-line'}" data-act="sb-job-set" data-id="${j.id}" data-s="saved" aria-pressed="${status === 'saved' || status === 'applied'}">${icon('bookmark')}${status === 'saved' || status === 'applied' ? 'Saved' : 'Save'}</button>
         <button type="button" class="btn btn-line btn-sm" data-act="sb-job-set" data-id="${j.id}" data-s="applied" aria-pressed="${status === 'applied'}">${icon('check')}${status === 'applied' ? 'Applied' : 'Mark applied'}</button>
@@ -1095,7 +1100,7 @@
     else if (s === 'applied' && cur === 'applied') next = 'saved';
     else if (s === 'hidden' && cur === 'hidden') next = null;
     RN.store.update((st2) => { st2.seen = st2.seen || {}; st2.seen.jobs = Object.assign({}, st2.seen.jobs); if (next) st2.seen.jobs[id] = next; else delete st2.seen.jobs[id]; }, 'seen');
-    const msg = { saved: 'Saved to your list', applied: 'Marked applied. We will remind you to follow up in 5 days.', hidden: 'Hidden from your board' }[next] || (s === 'hidden' ? 'Restored to your board' : 'Removed from saved');
+    const msg = { saved: 'Saved', applied: 'Marked applied', hidden: 'Hidden' }[next] || (s === 'hidden' ? 'Restored to your board' : 'Removed from saved');
     RN.ui.toast(`${esc(msg)}${j ? ': ' + esc(j.title) : ''}`, next === 'hidden' ? { action: { label: 'Undo', act: 'sb-job-set', attrs: `data-id="${id}" data-s="hidden"` } } : {});
     RN.rerender();
   };
@@ -1105,7 +1110,7 @@
   RN.inputs['sb-job-cat'] = (el) => { S.jobCat = el.value; RN.rerender(); };
   RN.inputs['sb-job-eng'] = (el) => { S.jobEng = el.value; RN.rerender(); };
 
-  function renderProspects(op, pros) {
+  function renderProspects(op, pros, held) {
     const ps = seenMap('prospects');
     const stOf = (x) => ps[x.p.id] || 'review';
     const counts = { review: 0, queued: 0, contacted: 0, dismissed: 0 };
@@ -1126,7 +1131,7 @@
       <details class="sb-scan"><summary>${icon('radar')}Scanning ${SL_SIGNALS.length} signals for ${esc(RN.fields.catLabel('sales_leadership'))}${icon('chev-down')}</summary>
         <ol>${SL_SIGNALS.map(([, q]) => `<li>${esc(q)}</li>`).join('')}</ol></details>
       <div class="sb-filters"><div class="seg" role="group" aria-label="List">${[['review', 'To review'], ['queued', 'Queued'], ['contacted', 'Contacted'], ['dismissed', 'Dismissed']].map(([k, l]) => `<button type="button" aria-pressed="${S.prosStatus === k}" data-act="sb-pros-status" data-s="${k}">${l} <span class="sb-n">${counts[k] || 0}</span></button>`).join('')}</div></div>
-      ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => prospectCard(x, op, stOf(x))).join('')}</div>`
+      ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => prospectCard(x, op, stOf(x))).join('')}</div>${held && S.prosStatus === 'review' ? `<p class="sb-held">${icon('filter')}<span>${held} more ${held === 1 ? 'company scored' : 'companies scored'} under ${QUEUE_MIN} on your profile and ${held === 1 ? 'is' : 'are'} held back. Their industry or size is outside your ranges. <a class="link" href="#studio.profile">Edit your company fit</a></span></p>` : ''}`
         : RN.ui.empty({ icon: 'target', title: S.prosStatus === 'review' ? 'You have reviewed every prospect' : `Nothing ${S.prosStatus} yet`, body: S.prosStatus === 'review' ? 'New companies appear as signals fire. Sharper profile fields give sharper matches.' : 'Queue a prospect to plan outreach, or mark it contacted once you reach out.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sb-pros-status" data-s="review">Back to To review</button>` })}`;
   }
   function prospectCard(x, op, status) {
@@ -1201,7 +1206,8 @@
     const proof = engs.length
       ? `Most recently I led sales as a fractional ${engs[0].role.replace(/^Fractional\s+/i, '')} at ${engs[0].company} for ${engs[0].months} months${engs[1] ? `, and at ${engs[1].company} for ${engs[1].months} months before that` : ''}.`
       : '';
-    const reviews = op.reviews.length >= 2 ? ` ${op.reviews.length} of my clients have reviewed that work on Revenue Nomad.` : '';
+    const nWord = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'][op.reviews.length] || String(op.reviews.length);
+    const reviews = op.reviews.length >= 2 ? ` ${nWord} of my clients have reviewed that work on Revenue Nomad.` : '';
     const ind = op.industries.includes(p.ind) ? RN.w.label('industries', p.ind) : RN.w.label('industries', op.industries[0] || 'Saas');
     const hrs = op.avail && op.avail.hoursCode ? RN.w.label('hoursPerMonth', op.avail.hoursCode).replace(' / month', ' a month') : 'a few days a month';
     const linkLine = link ? `Proof of my work, prepared for ${p.co}: ${proofUrl(link.id)}` : `My profile, with verified client reviews: revenuenomad.com/operators/${op.slug}`;
@@ -1224,7 +1230,7 @@
         <div class="field"><label for="sb-out-body">Email</label><textarea class="textarea sb-out" id="sb-out-body" style="min-height:320px">${esc(m.body)}</textarea></div>
         ${m.hasLink ? '' : `<div class="note info">${icon('link')}<div><b>Add a proof link.</b> A private page with your reviews and engagements for ${esc(p.co)}. You see which sections they read. <button type="button" class="act" data-act="sb-out-proof" data-co="${esc(p.co)}">Create one for this email</button></div></div>`}
       </div>`,
-      foot: `<button type="button" class="btn btn-line" data-act="sb-out-copy" data-id="${p.id}" data-mark="1">Copy and mark contacted</button><button type="button" class="btn" data-act="sb-out-copy" data-id="${p.id}">${icon('copy')}Copy email</button>`,
+      foot: `<button type="button" class="btn btn-line sb-ft-btn" data-act="sb-out-copy" data-id="${p.id}" data-mark="1">Copy and mark contacted</button><button type="button" class="btn sb-ft-btn" data-act="sb-out-copy" data-id="${p.id}">${icon('copy')}Copy email</button>`,
     });
   };
   RN.actions['sb-out-proof'] = (el) => openProofModal({ company: el.dataset.co, from: 'outreach' });

@@ -18,6 +18,13 @@
 .nav-actions .nav-burger { display: none; }
 .nav-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 11px; letter-spacing: 0; }
 .hdr.over .nav-count { background: var(--leaf); color: var(--forest-deep); }
+@media (max-width: 440px) {
+  .hdr-in { gap: 10px; }
+  .logo { font-size: 16px; gap: 8px; }
+  .nav-actions { gap: 6px; }
+  .nav-actions .btn-sm { padding: 0 10px; }
+  .nav-actions .navlink { display: none !important; }
+}
 @media (max-width: 1080px) {
   .nav { display: none; }
   .nav-actions .nav-burger { display: inline-flex; }

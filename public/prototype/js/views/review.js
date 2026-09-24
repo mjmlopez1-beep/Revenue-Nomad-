@@ -116,7 +116,7 @@
       <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${eng ? ` at ${esc(eng.company)} · ${esc(monthLabel(eng.start))} to ${esc(monthLabel(eng.end))}` : ''}</span></div></div>
       <span class="eyebrow">CORE client review</span>
       <h1 class="h1">How was working with <span class="serif">${esc(op.first)}</span>?</h1>
-      <p class="lede">${esc(first)}, ${esc(op.first)} asked for your review of the ${esc(co)} engagement. Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
+      <p class="lede">${rr.source === 'client' ? `${esc(first)}, your review of ${esc(op.first)}’s work at ${esc(co)} helps the next company hire well.` : `${esc(first)}, ${esc(op.first)} asked for your review of the ${esc(co)} engagement.`} Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
     </header>
     <ol class="rv-steps" aria-label="Review progress">${STEPS.map((s) => {
       const cls = s.n < step ? 'done' : s.n === step ? 'cur' : '';
@@ -170,7 +170,7 @@
         <div class="field" data-rv-f="title"><label for="rv-rtitle">Your title</label><input class="input" id="rv-rtitle" name="title" value="${esc(d.title)}" autocomplete="organization-title" maxlength="80"></div>
         <div class="field" data-rv-f="company"><label for="rv-co">Company</label><input class="input" id="rv-co" name="company" value="${esc(d.company)}" autocomplete="organization" maxlength="80"></div>
       </div>`)}
-    ${sec('The engagement', `What ${esc(op.first)} did for ${co}. We prefilled what ${esc(op.first)} listed. Correct anything that is off.`, `
+    ${sec('The engagement', `What ${esc(op.first)} did for ${co}. ${rr.source === 'client' ? 'We prefilled what we know from your intro request.' : `We prefilled what ${esc(op.first)} listed.`} Correct anything that is off.`, `
       <div class="stack" style="--gap:24px">
         <div data-rv-f="roleCategory">${RN.w.field('roleCategory', d.roleCategory, { name: 'roleCategory', label: 'Functional role delivered', help: '' })}</div>
         <div class="field" data-rv-f="opTitle"><label for="rv-title">${esc(op.first)}’s title at the time</label>${titleControl(d.roleCategory, d.opTitle, d.opTitleOther)}</div>
@@ -258,7 +258,8 @@
     const n = (d.tags || []).length + (d.addTags || []).length;
     const verb = avg >= 4 ? 'verified' : 'recorded';
     return n ? `${icon('seal')}<span><b>${n} focus area${n === 1 ? '' : 's'}</b> will be ${verb} on ${esc(op.first)}’s profile${avg >= 4 ? ', with your company as the source' : '. They verify on reviews averaging 4.0 or higher'}.</span>`
-      : `${icon('info')}<span>None picked yet. Each one you confirm turns a claimed focus area into a verified one.</span>`;
+      : avg >= 4 ? `${icon('info')}<span>None picked yet. Each one you confirm turns a claimed focus area into a verified one.</span>`
+      : `${icon('info')}<span>None picked yet. Focus areas you confirm are recorded on the review. They verify on reviews averaging 4.0 or higher.</span>`;
   }
   function previewHtml(rr, op, d) {
     const avg = coreAvg(d);
@@ -468,6 +469,8 @@
     }, 'reviews');
     delete drafts[rr.id];
     RN.model.applyEdits();
+    // Workaround (core model): a tag first added by a review under 4.0 gets no tier/score. Keep it "claimed".
+    op.tags.forEach((t) => { if (!t.tier) { t.tier = RN.model.tagTier(t.r || 0); t.score = RN.model.tagScore(t.r || 0); } });
     const good = avg >= 4;
     const newlyVerified = good ? tags.filter((t) => !before.verified.has(t.toLowerCase())) : [];
     results[rr.id] = { before, after: { score: op.ris.score, label: op.ris.label }, newlyVerified, tags, avg, core, good };

@@ -212,7 +212,7 @@
     st.proofLinks.filter((p) => p.opId === op.id).forEach((p) => {
       (p.views || []).forEach((v) => {
         const secs = (v.sections || []).map((x) => SECTION[x] || x);
-        const dur = v.seconds ? `${Math.floor(v.seconds / 60)} min ${v.seconds % 60} s` : '';
+        const dur = v.seconds ? `${Math.floor(v.seconds / 60)}\u00a0min ${v.seconds % 60}\u00a0s` : '';
         items.push({ ts: v.ts, ic: 'link', text: `${esc(p.prospect.company)} opened your proof link${v.forwarded ? ' and forwarded it' : ''}`, meta: [secs.length ? 'Read ' + secs.join(', ') : '', dur].filter(Boolean).join(' · '), to: 'studio.credibility' });
       });
     });
@@ -651,7 +651,29 @@
     </section>`;
   }
 
+  /* The model returns the top 10 terms, so a term searched once in this session can fall off; add those back as live rows */
+  function termsWithLive(op, a, d) {
+    const rows = a.queries.slice();
+    const liveQ = {};
+    liveEvents(op, d).filter((e) => e.type === 'impression' && e.q).forEach((e) => {
+      const k = e.q.trim().toLowerCase();
+      liveQ[k] = liveQ[k] || { q: e.q.trim(), n: 0, clicks: 0, tags: [], live: true };
+      liveQ[k].n += 1;
+    });
+    Object.keys(liveQ).forEach((k) => {
+      const hit = rows.find((r) => r.q.toLowerCase() === k);
+      if (hit) hit.live = true;
+      else {
+        const opTags = op.tags.map((x) => x.t.toLowerCase());
+        const STOP = ['sales', 'fractional', 'leader', 'leadership', 'operator', 'consultant', 'expert', 'with', 'for', 'and'];
+        liveQ[k].tags = op.tags.filter((x) => k.split(/\s+/).some((w) => w.length > 3 && !STOP.includes(w) && x.t.toLowerCase().includes(w))).map((x) => x.t).filter((x, i, arr) => arr.indexOf(x) === i && opTags.includes(x.toLowerCase())).slice(0, 2);
+        rows.unshift(liveQ[k]);
+      }
+    });
+    return rows;
+  }
   function termsCard(op, a, d) {
+    a = Object.assign({}, a, { queries: termsWithLive(op, a, d) });
     const total = a.queries.reduce((s, q) => s + q.n, 0) || 1;
     const words = ((op.headline || '') + ' ' + op.tags.map((x) => x.t).join(' ')).toLowerCase();
     const mq = (q) => RN.data.market.queries.find((x) => x.q.toLowerCase() === q.toLowerCase());
@@ -979,7 +1001,8 @@
       const strength = 0.05 + (op.ris.score - 50) / 150 + op.completeness / 800 + Math.min(0.08, op.reviews.length * 0.03);
       const bias = [1, 1.15, 0.8, 0.95, 0.75];
       const rows = prompts.map((p, i) => {
-        const rel = (p.cat === op.catKey ? 1 : 0.1) * (p.industry ? (op.industries.includes(p.industry) ? 1.3 : 0.4) : 1);
+        const adjacent = op.tags.some((x) => x.c === p.cat && x.tier !== 'claimed');
+        const rel = (p.cat === op.catKey ? 1 : adjacent ? 0.3 : 0) * (p.industry ? (op.industries.includes(p.industry) ? 1.3 : 0.4) : 1);
         const cells = engines.map((e, j) => {
           const gen = RN.rng(`aeo|${op.id}|${i}|${j}`); gen(); const r = gen();
           const pm = RN.clamp(strength * rel * bias[j], 0, 0.9);
@@ -1130,15 +1153,20 @@
       </li>`).join('')}</ul>`;
   }
 
+  /* Guides from the research registry (RN.research.guides) in the operator's category, with placeholders if it is not loaded */
+  function guideLinks(op) {
+    const list = ((RN.research && RN.research.guides) || []).filter((g) => g && g.slug && g.q && g.cat === op.catKey).slice(0, 2);
+    if (list.length) return list.map((g, i) => ({ to: 'guide.' + g.slug, ic: 'book', t: g.q, m: i ? 'Guide, featured operators module' : 'Guide, cites the Rate Index' }));
+    const role = op.role.toLowerCase().replace(/\s+/g, '-');
+    return [{ to: `guide.fractional-${role}-cost`, ic: 'book', t: `How much does a fractional ${op.role} cost?`, m: 'Guide, cites the Rate Index' }];
+  }
   function topicsCard(op) {
     const rand = RN.rng('topics-' + op.id);
     const cat = RN.fields.catLabel(op.catKey);
     const verified = op.tags.filter((x) => x.tier !== 'claimed');
-    const role = op.role.toLowerCase().replace(/\s+/g, '-');
     const pages = [
       { to: `browse.${op.catKey}`, ic: 'grid', t: `Fractional ${cat} operators`, m: 'Category page, ranked by match and Reputation Index' },
-      { to: `guide.how-much-does-a-fractional-${role}-cost`, ic: 'book', t: `How much does a fractional ${op.role} cost?`, m: 'Guide, cites the Rate Index' },
-      { to: 'guide.first-sales-leader-fractional-or-full-time', ic: 'book', t: 'Should my first sales leader be fractional or full time?', m: 'Guide, featured operators module' },
+      ...guideLinks(op),
       verified[0] && { to: 'library', ic: 'layers', t: `Fit Tag Library: ${verified[0].t}`, m: 'Listed as client-verified' },
       { to: 'framework', ic: 'radar', t: 'GTM Framework: Build the team, Win deals', m: 'Operators strong in these areas' },
       { to: 'rates', ic: 'chart', t: `Rate Index: ${cat}`, m: 'Your rate is part of the benchmark' },
@@ -1183,7 +1211,7 @@
     const tag = el.dataset.t;
     if (!tag) return;
     if (op.tags.some((x) => x.t.toLowerCase() === tag.toLowerCase())) { RN.ui.toast(`${esc(tag)} is already on your profile`, { icon: 'info' }); return; }
-    if (op.tags.length >= RN.fields.fitTags.max) { RN.ui.toast(`You have ${RN.fields.fitTags.max} fit tags, the maximum. Remove one in your profile to add another.`, { icon: 'info', action: { label: 'Edit profile', act: 'go', attrs: 'data-to="studio.profile"' } }); return; }
+    if (op.tags.filter((x) => x.tier === 'claimed').length >= RN.fields.fitTags.max) { RN.ui.toast(`You have ${RN.fields.fitTags.max} self-claimed fit tags, the limit. Get some verified or remove one to add another.`, { icon: 'info', action: { label: 'Edit profile', act: 'go', attrs: 'data-to="studio.profile"' } }); return; }
     RN.store.update((s) => { const e = (s.edits[op.id] = s.edits[op.id] || {}); e.addTags = (e.addTags || []).concat(tag); }, 'edits');
     RN.model.applyEdits();
     RN.track('studio_action', { opId: op.id, action: 'tag_add', tag });

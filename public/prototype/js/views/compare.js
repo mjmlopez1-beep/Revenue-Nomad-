@@ -2,7 +2,8 @@
    Rows use the registry labels (RN.fields) so compare reads exactly like intake, profile and filters.
    Missing data shows "N/A" (Scope L272/L281). The best value in a row is tinted, never shouted.
    Rate and match signals are login-gated. Loops: compare_view per operator (Studio "Compared, not
-   chosen"), intro-open per column (shared intro flow), shortlist-toggle, profile links tagged source=compare. */
+   chosen"), intro-open per column (shared intro flow), shortlist-toggle; profile links inherit
+   data-view-source="compare" so core ui.js records profile_view source=compare. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -147,7 +148,7 @@
     const op = s.op;
     return `<div class="cmp-sug">
       ${RN.ui.avatar(op, 'ava-sm')}
-      <div class="grow"><a class="cmp-sug-n" href="#op.${esc(op.slug)}" data-cmp-view="${esc(op.id)}">${esc(op.name)}</a>
+      <div class="grow"><a class="cmp-sug-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a>
         <span class="cmp-sub">Fractional ${esc(op.role)} · ${esc(op.ris.score)} ${esc(op.ris.label)}</span>
         <span class="cmp-sug-why">${esc(s.why)}</span></div>
       <button type="button" class="btn btn-line btn-sm cmp-sug-add" data-act="compare-toggle" data-id="${esc(op.id)}" aria-label="Add ${esc(op.name)} to compare">${icon('plus')}Add</button>
@@ -160,7 +161,7 @@
     const saved = st.shortlist.includes(op.id);
     const asked = st.persona === 'buyer' && st.intros.some((i) => i.opId === op.id && i.status !== 'declined');
     return `<th scope="col" class="cmp-col"><div class="cmp-hd">
-      <div class="cmp-hd-id">${RN.ui.avatar(op, 'ava-md')}<div class="grow"><a class="cmp-name" href="#op.${esc(op.slug)}" data-cmp-view="${esc(op.id)}" title="${esc(op.name)}">${esc(op.name)}</a><span class="cmp-role">Fractional ${esc(op.role)}</span></div></div>
+      <div class="cmp-hd-id">${RN.ui.avatar(op, 'ava-md')}<div class="grow"><a class="cmp-name" href="#op.${esc(op.slug)}" title="${esc(op.name)}">${esc(op.name)}</a><span class="cmp-role">Fractional ${esc(op.role)}</span></div></div>
       <button type="button" class="btn btn-sm cmp-intro ${asked ? 'btn-line' : ''}" data-act="intro-open" data-id="${esc(op.id)}">${asked ? icon('check') + 'Intro requested' : 'Request intro'}</button>
       <div class="cmp-hd-acts">
         <button type="button" class="act ${saved ? '' : 'muted'}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}">${icon('bookmark')}${saved ? 'Saved' : 'Save'}</button>
@@ -220,14 +221,14 @@
     if (!ops.length) {
       const sugg = suggestions([], 3);
       const card = (op) => (RN.browse && RN.browse.card ? RN.browse.card(op) : RN.ui.opCard(op));
-      return `<div class="cmp-page">${head}
+      return `<div class="cmp-page" data-view-source="compare">${head}
         <section class="wrap cmp-body">
           ${RN.ui.empty({ icon: 'compare', title: 'Nothing to compare yet', body: 'Add up to four operators from Browse or any profile. Compare lines them up on the same fields, so the differences are easy to see.', cta: '<a class="btn" href="#browse">Browse operators</a>' })}
           ${sugg.length ? `<div class="cmp-start"><h2 class="h4">${st.shortlist.length ? 'Start with your shortlist' : 'Start with these operators'}</h2><p class="small muted">Use Compare on any card to add it.</p>
             <div class="grid g-3 cmp-start-grid">${sugg.map((s) => card(s.op)).join('')}</div></div>` : ''}
         </section></div>`;
     }
-    return `<div class="cmp-page">${head}
+    return `<div class="cmp-page" data-view-source="compare">${head}
       <section class="wrap cmp-body">
         ${ops.length > 1 ? `<p class="cmp-swipe">${icon('arrow')}Swipe sideways to see all ${ops.length} operators</p>` : ''}
         ${table(ops)}
@@ -261,8 +262,6 @@
     if (RN.browse && RN.browse.loginPrompt) RN.browse.loginPrompt(fit ? { title: 'Log in to see match signals', sub: 'Every operator is scored against your company once you sign in as a client. Browsing and compare stay open to everyone.' } : { title: 'Log in to see rates', sub: 'Hourly rates are shown to signed-in clients. Browsing and compare stay open to everyone.' });
     else RN.actions.login();
   };
-  // Profile opened from compare carries source=compare into profile_view
-  document.addEventListener('click', (e) => { const a = e.target.closest && e.target.closest('a[data-cmp-view]'); if (a) RN.store.state._viewSource = 'compare'; });
 
   RN.view('compare', {
     route: 'compare', nav: 'browse',

@@ -877,7 +877,7 @@
         <div class="pg-honest-l">
           <span class="eyebrow">The honest part</span>
           <h2 class="h2 pg-h2">Supply is crowded. <span class="serif">Proof is how you stand out.</span></h2>
-          <p class="pg-p">${topShare}% of the profiles on the network lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of client hiring intent sits there. Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
+          <p class="pg-p">${topShare}% of the profiles on the network lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of client hiring intent sits there (illustrative survey data). Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
           <p class="pg-p">Categories where client intent runs ahead of supply are where a verified record pays off fastest.</p>
           <a class="act" href="#library">See demand vs verified supply by focus area${icon('arrow')}</a>
         </div>

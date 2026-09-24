@@ -249,11 +249,15 @@
   RN.actions['rs-copy'] = (el) => {
     const src = document.getElementById(el.dataset.src);
     const text = src ? src.textContent : '';
-    const done = () => RN.ui.toast('Structured data copied', { icon: 'copy' });
+    let settled = false;
+    const done = () => { if (settled) return; settled = true; RN.ui.toast('Structured data copied', { icon: 'copy' }); };
+    const fallback = () => { if (settled) return; settled = true; fallbackCopy(text, () => RN.ui.toast('Structured data copied', { icon: 'copy' })); };
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
-      else fallbackCopy(text, done);
-    } catch (e) { fallbackCopy(text, done); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+        setTimeout(fallback, 700); // some browsers never settle without a permission prompt
+      } else fallback();
+    } catch (e) { fallback(); }
   };
   function fallbackCopy(text, done) {
     const ta = document.createElement('textarea');
@@ -354,7 +358,7 @@
 
   function legend() {
     return `<div class="rs-legend" aria-label="Legend">
-      <span><i class="rs-sw rs-sw-v"></i>Client-verified proof (darker is more operators)</span>
+      <span><i class="rs-sw rs-sw-v"></i>Client-verified proof (stronger color, more operators)</span>
       <span><i class="rs-sw rs-sw-c"></i>Self-claimed only</span>
       <span><i class="rs-sw rs-sw-o"></i>Focus areas mapped, no operators yet</span>
     </div>`;
@@ -677,7 +681,7 @@
     <section class="wrap rs-sec rs-find" aria-labelledby="rs-find-t">
       <h2 class="sr-only" id="rs-find-t">What the map shows today</h2>
       <div class="rs-finds">
-        <div class="rs-finds-hd"><span class="kicker">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles. A focus area counts as verified once a client review rated 4.0 or higher confirms it.</p></div>
+        <div class="rs-finds-hd"><span class="kicker">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? ` (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)` : ''}. A focus area counts as verified once a client review rated 4.0 or higher confirms it.</p></div>
         ${finds.map((f) => `<div class="rs-fnd"><span class="rs-fnd-v num">${esc(f.v)}</span><p>${esc(f.l)}</p><button type="button" class="act" ${f.act}>${esc(f.cta)}${icon('arrow')}</button></div>`).join('')}
       </div>
     </section>
@@ -982,7 +986,7 @@
     <section class="wrap rs-sec-sm" id="rs-lib-browser" aria-labelledby="rs-lib-t">
       <h2 class="sr-only" id="rs-lib-t">Browse the library</h2>
       <div class="rs-lib-bar">
-        <div class="input-wrap rs-lib-search">${icon('search')}<input class="input" type="search" value="${esc(lib.q)}" placeholder="Search ${libN} focus areas, for example forecasting or HubSpot" aria-label="Search focus areas" data-input="rs-lib-q" autocomplete="off"></div>
+        <div class="input-wrap rs-lib-search">${icon('search')}<input class="input" type="search" value="${esc(lib.q)}" placeholder="Search ${libN} focus areas" aria-label="Search focus areas" data-input="rs-lib-q" autocomplete="off"></div>
         <div class="rs-lib-cats" data-deselect><span class="label">${esc(F.roleCategory.label)}</span>${RN.w.control('roleCategory', lib.cat, { name: 'rsLibCat', id: 'rs-lib-cat', change: 'rs-lib-cat' })}</div>
         <div class="rs-lib-meta">
           <span class="small" id="rs-lib-count" aria-live="polite">${esc(r.count)}</span>
@@ -1022,7 +1026,8 @@
   const trig = (re) => { const x = (REP().triggers || []).find((t) => re.test(t.l)); return x ? x.v : 0; };
   const yoy = () => { const x = (REP().summary || []).find((s) => /year over year/i.test(s.l)); const m = x && x.l.match(/up (\d+%)/i); return m ? '+' + m[1] : '+9%'; };
   const latestMedian = () => { const t = RIX().trend || []; return t.length ? t[t.length - 1].v : 240; };
-  const tbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl"><table class="tbl ${cls || ''}"><thead><tr>${head.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'r' : ''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  // Tables with 3+ columns stack into labelled rows on phones (data-l carries the column label)
+  const tbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl ${head.length > 2 ? 'rs-tbl-stack' : ''}"><table class="tbl ${cls || ''}"><thead><tr>${head.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'r' : ''}" data-l="${esc(head[i] || '')}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const src = (t) => `<p class="rs-src">${icon('info')}<span>${t}</span></p>`;
   const L = (to, t) => `<a href="#${esc(to)}">${esc(t)}</a>`;
 

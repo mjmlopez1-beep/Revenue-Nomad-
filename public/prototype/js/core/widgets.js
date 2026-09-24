@@ -71,11 +71,13 @@
           <input type="hidden" name="${esc(name)}" value="${esc(vals.join('|'))}" ${multi ? 'data-multi="1"' : ''} ${opts.change ? `data-change="${esc(opts.change)}"` : ''}>
         </div>`;
       }
-      case 'select':
+      case 'select': {
+        const list = key === 'role' && opts.cat && RN.fields.rolesByCat[opts.cat] ? d.options.filter((o) => RN.fields.rolesByCat[opts.cat].includes(o.v)) : d.options;
         return `<select class="select" id="${esc(id)}" name="${esc(name)}" ${req} ${opts.change ? `data-change="${esc(opts.change)}"` : ''}>
           <option value="">${esc(ph || 'Select')}</option>
-          ${d.options.map((o) => `<option value="${esc(o.v)}" ${o.v === value ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}
+          ${list.map((o) => `<option value="${esc(o.v)}" ${o.v === value ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}
         </select>`;
+      }
       case 'tags':
       case 'tagsearch':
         return w.tagPicker(name, value || [], Object.assign({ id, max: opts.max || d.max, source: key }, opts));

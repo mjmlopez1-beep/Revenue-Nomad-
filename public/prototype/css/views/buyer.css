@@ -1,6 +1,8 @@
 /* Client workspace (#buyer, #buyer.<tab>). Scoped under .bw (the workspace shell) or bw- prefixed classes. */
 
 .bw .bw-main { min-width: 0; }
+/* core .side-id span {color: mute; font-size: 12px} also hits an initials avatar (a span): restore it */
+.bw .side-id span.ava { color: var(--forest-deep); font-size: calc(var(--sz) * .36); }
 .bw-head { margin-bottom: var(--s-6); flex-wrap: wrap; }
 .bw-head > div:first-child { flex: 1 1 380px; min-width: 0; }
 .bw-head .sub { max-width: 64ch; }
@@ -36,10 +38,7 @@
 .bw-post .h3 { color: var(--night-ink); }
 .bw-post .small { color: var(--night-mute); }
 .bw-post .serif { color: var(--leaf); }
-.bw-post .eyebrow { color: var(--leaf); }
 .bw-post .row { margin-top: 4px; gap: 6px; }
-.bw-post .btn-ghost { color: var(--leaf); }
-.bw-post .btn-ghost:hover { background: rgba(255, 255, 255, .08); }
 .bw-prefs-mini .card-hd { margin-bottom: var(--s-3); }
 .bw-prefs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .bw-prefs-chips .pill { font-family: var(--f-text); font-weight: 600; }
@@ -209,7 +208,8 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
   .bw-tl li { padding: 0 1px; }
   .bw-sim { margin-left: 0; }
   .bw-proj { flex-direction: column; align-items: stretch; padding: 18px; }
-  .bw-proj-side { justify-content: space-between; }
+  .bw-proj-side { justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+  .bw-proj-side .btn { flex: 1 1 100%; }
   .bw-co-save { position: static; }
   .bw-co-save .btn { width: 100%; }
   .bw-mini.is-static { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 10px; }

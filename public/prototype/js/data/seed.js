@@ -34,11 +34,11 @@
 
     s.projects = [
       { id: 'proj-seed-1', status: 'posted', title: 'Fractional VP of Sales', template: 'first_sales_leader', createdAt: iso(6), postedAt: iso(5),
-        fields: { roleCategory: 'sales_leadership', engagementType: 'fractional', hoursPerMonth: '40', term: '6_12', startBy: 'available_2_weeks', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], salesMotions: ['Inside Sales'], tags: ['Sales Team Hiring & Ramp', 'Sales Process Design', 'HubSpot admin'], rateMax: 325 },
+        fields: { roleCategory: 'sales_leadership', role: 'VP of Sales', engagementType: 'fractional', hoursPerMonth: '40', term: '6_12', startBy: 'available_2_weeks', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], salesMotions: ['Inside Sales'], tags: ['Sales Team Hiring & Ramp', 'Sales Process Design', 'HubSpot admin'], rateMax: 400 },
         brief: 'Own the sales number while we hire a full-time leader. In 90 days: two reps hired and ramping, a written sales process, and a forecast the board trusts.',
         invited: [matt.id, anne.id, tim.id], responses: [{ opId: matt.id, status: 'interested', note: 'I have done this exact build at myHR Partner (51–200, HR tech). Happy to share the 90-day plan I used.', rate: 300, ts: iso(4) }, { opId: tim.id, status: 'interested', note: 'Built the first sales team at two healthcare SaaS companies. Available from the 1st.', rate: 250, ts: iso(3) }] },
       { id: 'proj-seed-2', status: 'draft', title: 'HubSpot cleanup and pipeline reporting', template: 'crm_cleanup', createdAt: iso(1),
-        fields: { roleCategory: 'revenue_operations', engagementType: 'project', term: '1_3', startBy: 'available_now', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], tags: ['HubSpot admin', 'CRM cleanup', 'Dashboard build'], projectBudget: 18000 },
+        fields: { roleCategory: 'revenue_operations', role: 'VP of Revenue Operations', engagementType: 'project', term: '1_3', startBy: 'available_now', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], tags: ['HubSpot admin', 'CRM cleanup', 'Dashboard build'], projectBudget: 18000 },
         brief: 'Deduplicate contacts, rebuild pipeline stages and give leadership one dashboard.', invited: [], responses: [] },
     ];
 

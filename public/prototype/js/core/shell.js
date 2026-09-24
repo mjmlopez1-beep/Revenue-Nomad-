@@ -70,7 +70,7 @@
         <a class="row-nw" href="#buyer" style="--gap:8px" title="Workspace">${RN.ui.avatar({ name: 'Jordan Ellis', initials: 'JE' }, 'ava-sm')}<span class="hide-m" style="font-family:var(--f-display);font-weight:700;font-size:13px">Workspace</span></a>`;
     } else if (p === 'operator') {
       const me = RN.myOp();
-      const unread = st.intros.filter((i) => i.opId === RN.personas.operator.opId && i.status === 'sent').length + st.projects.filter((pr) => (pr.invited || []).includes(RN.personas.operator.opId) && !(pr.responses || []).some((r) => r.opId === RN.personas.operator.opId)).length;
+      const unread = st.intros.filter((i) => i.opId === RN.personas.operator.opId && i.status === 'sent').length + st.projects.filter((pr) => ['posted', 'in_progress'].includes(pr.status) && (pr.invited || []).includes(RN.personas.operator.opId) && !(pr.responses || []).some((r) => r.opId === RN.personas.operator.opId)).length;
       right = `<a class="btn btn-leaf btn-sm" href="#studio">${icon('chart')}Studio${unread ? `<span class="nav-count">${unread}</span>` : ''}</a>
         <a href="#op.${esc(me ? me.slug : '')}" title="My public profile">${RN.ui.avatar(me, 'ava-sm')}</a>`;
     } else if (p === 'admin') {

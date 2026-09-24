@@ -316,5 +316,9 @@
     sales_motion: ['sales_leadership', 'sellers'], pipeline: ['marketing', 'sellers', 'ai_gtm'], team: ['sales_leadership', 'sales_enablement'],
     systems: ['revenue_operations'], ai: ['ai_gtm'], retention: ['customer_success_growth'], partners: ['partnerships'], not_sure: [],
   };
+  // Why an operator passes on an intro or project, and why a client says "Not a fit" (Projects prototype)
+  F.passReason = { label: 'Reason', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Not my expertise'], ['industry', 'Industry'], ['capacity', 'At capacity'], ['other', 'Other']]) };
+  // All-in hourly budget for projects (includes the platform fee), wider than the browse filter
+  F.budgetRate = { label: 'Budget per hour (all-in)', type: 'money', unit: '/ hr', min: 50, step: 5 };
   F.projectStatus = { label: 'Status', type: 'single', options: opts([['draft', 'Draft'], ['posted', 'Posted'], ['in_progress', 'In progress'], ['staffed', 'Staffed'], ['closed', 'Closed']]) };
 })();

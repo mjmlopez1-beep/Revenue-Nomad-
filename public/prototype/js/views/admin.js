@@ -414,7 +414,7 @@
           <div class="adm-sd" role="list">
             <div class="adm-sd-legend legend"><span><i style="background:var(--viz-2)"></i>Supply: share of live operators</span><span><i style="background:var(--viz-1)"></i>Demand: share of client hiring intent</span></div>
             ${rows.map((x) => `<div class="adm-sd-row" role="listitem">
-              <div class="adm-sd-name">${RN.ui.catDot(x.cat)}<b>${esc(x.l)}</b><span class="tiny muted">${RN.fmt.plural(x.n, 'operator')}</span></div>
+              <div class="adm-sd-name"><span class="adm-sd-l">${RN.ui.catDot(x.cat)}<b>${esc(x.l)}</b></span><span class="tiny muted">${RN.fmt.plural(x.n, 'operator')}</span></div>
               <div class="adm-sd-bars">
                 <div class="adm-sd-bar"><span>Supply</span><span class="adm-sd-track"><i class="s" style="width:${((x.supply / maxShare) * 100).toFixed(1)}%"></i></span><b>${pct(x.supply)}</b></div>
                 <div class="adm-sd-bar"><span>Demand</span><span class="adm-sd-track"><i class="d" style="width:${((x.demand / maxShare) * 100).toFixed(1)}%"></i></span><b>${pct(x.demand)}</b></div>
@@ -597,18 +597,18 @@
 
       <section class="card adm-sec">
         ${cardHead('Searches that found no one', `The exact query and filters, ${win}. This is demand we cannot serve yet: recruit for it, or ask close operators to add the focus area.`, `<span class="pill pill-bad">${RN.fmt.plural(zero.length, 'term')}</span>`)}
-        ${zero.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl adm-zero">
+        ${zero.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl adm-zero adm-stacktbl">
           <thead><tr><th>Query</th><th>Filters applied</th><th class="r">Searches</th><th>Last searched</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
           <tbody>${zero.map((z) => {
             ctx[z.key] = { kind: 'search', q: z.q, n: z.n, filters: z.filters, tags: z.tags, cat: z.cat, title: z.q ? `“${z.q}”` : 'a filter-only search' };
             const rec = recruit[z.key];
             return `<tr>
-              <td><span class="adm-q">${z.q ? '“' + esc(z.q) + '”' : '<span class="muted">No keywords</span>'}</span>${z.base ? '' : `<span class="pill pill-accent adm-live">Live</span>`}</td>
-              <td>${filterChips(z.filters, z.base ? [] : z.tags)}</td>
-              <td class="r tnum">${int(z.n)}</td>
-              <td class="small">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? 'Signed-in client' : 'Visitor, not signed in'}</span>`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>
-              <td>${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : '<span class="pill pill-bad">No match</span>'}</td>
-              <td class="r"><button type="button" class="btn btn-sm ${rec ? 'btn-line' : ''}" data-act="adm-recruit" data-k="${esc(z.key)}">${rec ? 'Edit note' : 'Recruit for this'}</button></td>
+              <td class="adm-w"><span class="adm-q">${z.q ? '“' + esc(z.q) + '”' : '<span class="muted">No keywords</span>'}</span>${z.base ? '' : `<span class="pill pill-accent adm-live">Live</span>`}</td>
+              <td class="adm-w">${filterChips(z.filters, z.base ? [] : z.tags)}</td>
+              <td class="r tnum" data-l="Searches">${int(z.n)}</td>
+              <td class="small" data-l="Last searched">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? 'Signed-in client' : 'Visitor, not signed in'}</span>`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>
+              <td data-l="Status">${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : '<span class="pill pill-bad">No match</span>'}</td>
+              <td class="r adm-act-cell"><button type="button" class="btn btn-sm ${rec ? 'btn-line' : ''}" data-act="adm-recruit" data-k="${esc(z.key)}">${rec ? 'Edit note' : 'Recruit for this'}</button></td>
             </tr>`;
           }).join('')}</tbody></table></div>
           <p class="tiny muted adm-foot">Rows marked Live come from searches in this session. The rest are illustrative 30-day volumes scaled to the date range.</p>`
@@ -641,8 +641,8 @@
 
       <section class="card adm-sec">
         ${cardHead('Unmet demand by focus area', 'Monthly searches per client-verified operator. High numbers mean clients look for this and few operators can prove it.', illus())}
-        <div class="tbl-wrap"><table class="tbl adm-tbl adm-gaps">
-          <thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r">Claim it</th><th class="r">Verified</th><th>Per verified operator</th><th><span class="sr-only">Action</span></th></tr></thead>
+        <div class="tbl-wrap"><table class="tbl adm-tbl adm-gaps adm-stacktbl">
+          <thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r">On profiles</th><th class="r">Verified</th><th>Per verified operator</th><th><span class="sr-only">Action</span></th></tr></thead>
           <tbody>${gaps.map((g) => {
             const tl = g.t.toLowerCase();
             const claimers = liveOps().filter((o) => o.tags.some((t) => t.t.toLowerCase() === tl && t.tier === 'claimed'));
@@ -651,13 +651,13 @@
             const nd = nudged[g.t];
             const mx = gaps[0].ratio || 1;
             return `<tr>
-              <td><b class="adm-term">${esc(g.t)}</b><span class="tiny muted adm-block adm-cat">${g.c ? RN.ui.catDot(g.c) : ''}${esc(g.c ? catLabel(g.c) : 'No role category')}</span></td>
-              <td class="r tnum">${int(g.demand)}</td>
-              <td class="r tnum">${int(g.supply)}</td>
-              <td class="r tnum">${int(g.verified)}</td>
-              <td><div class="adm-ratio"><span class="meter"><i style="width:${Math.max(3, (g.ratio / mx) * 100).toFixed(1)}%"></i></span><b class="tnum">${int(g.ratio)}</b></div></td>
-              <td class="r">${nd ? `<span class="pill pill-good">${icon('check')}${nd.n} nudged</span>`
-                : claimers.length ? `<button type="button" class="btn btn-sm btn-line" data-act="adm-nudge-tag" data-t="${esc(g.t)}" title="Email the ${claimers.length} operators who claim it">Nudge ${claimers.length}</button>`
+              <td class="adm-w"><b class="adm-term">${esc(g.t)}</b><span class="tiny muted adm-block adm-cat">${g.c ? RN.ui.catDot(g.c) : ''}${esc(g.c ? catLabel(g.c) : 'No role category')}</span></td>
+              <td class="r tnum" data-l="Searches / mo">${int(g.demand)}</td>
+              <td class="r tnum" data-l="On profiles">${int(g.supply)}</td>
+              <td class="r tnum" data-l="Verified">${int(g.verified)}</td>
+              <td class="adm-w" data-l="Per verified operator"><div class="adm-ratio"><span class="meter"><i style="width:${Math.max(3, (g.ratio / mx) * 100).toFixed(1)}%"></i></span><b class="tnum">${int(g.ratio)}</b></div></td>
+              <td class="r adm-act-cell">${nd ? `<span class="pill pill-good">${icon('check')}${nd.n} nudged</span>`
+                : claimers.length ? `<button type="button" class="btn btn-sm btn-line" data-act="adm-nudge-tag" data-t="${esc(g.t)}" title="Email the ${claimers.length} operators who claim it but have no client review confirming it">Ask ${claimers.length} to verify</button>`
                 : `<button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(key)}">Recruit</button>`}</td>
             </tr>`;
           }).join('')}</tbody></table></div>
@@ -806,7 +806,7 @@
       ${c ? `<span class="adm-clock"><i style="width:${(c.frac * 100).toFixed(0)}%"></i></span>` : ''}
       <div class="row between adm-icard-meta">${clockPill(i)}${nudged ? `<span class="tiny muted">Nudged ${esc(RN.fmt.ago(nudged))}</span>` : ''}</div>
       <div class="row adm-icard-act" style="--gap:8px">
-        ${nx ? `<button type="button" class="btn btn-sm" data-act="${nx.act}" data-id="${esc(i.id)}"${nx.to ? ` data-to="${nx.to}"` : ''} title="${esc(nx.label)}">${esc(nx.short)}</button>` : ''}
+        ${nx ? `<button type="button" class="btn btn-sm" data-act="${nx.act}" data-id="${esc(i.id)}"${nx.to ? ` data-to="${nx.to}"` : ''} title="${esc(nx.label)}"><span class="adm-lbl-s">${esc(nx.short)}</span><span class="adm-lbl-l">${esc(nx.label)}</span></button>` : ''}
         <button type="button" class="act" data-act="adm-intro-open" data-id="${esc(i.id)}">Details</button>
       </div>
     </article>`;
@@ -900,19 +900,19 @@
     const shown = rows.slice(0, ui.dirLimit);
     if (!rows.length) return RN.ui.empty({ icon: 'search', title: 'No operators match', body: 'Try a different name, role or focus area, or clear the role category.', cta: '<button type="button" class="btn btn-sm btn-line" data-act="adm-dir-reset">Clear search and filters</button>' });
     return `<p class="small muted adm-dir-count">${RN.fmt.plural(rows.length, 'operator')}${rows.length > shown.length ? `, showing ${shown.length}` : ''}</p>
-      <div class="tbl-wrap"><table class="tbl adm-tbl adm-dir">
+      <div class="tbl-wrap"><table class="tbl adm-tbl adm-dir adm-stacktbl">
       <thead><tr><th>Operator</th><th class="r">Reputation</th><th>Profile strength</th><th class="r adm-hide-m">Verified tags</th><th class="adm-hide-m">Availability · rate</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>${shown.map((o) => {
         const v = o.tags.filter((t) => t.tier !== 'claimed').length;
         const ed = editedBy(o);
         return `<tr class="${o.hidden ? 'is-hidden' : ''}">
-          <td><div class="adm-op">${RN.ui.avatar(o, 'ava-sm')}<div class="grow"><a class="adm-op-n" href="#op.${esc(o.slug)}">${esc(o.name)}</a><span class="tiny muted">${esc(o.role)} · ${esc(o.cat)}</span>
+          <td class="adm-w"><div class="adm-op">${RN.ui.avatar(o, 'ava-sm')}<div class="grow"><a class="adm-op-n" href="#op.${esc(o.slug)}">${esc(o.name)}</a><span class="tiny muted">${esc(o.role)} · ${esc(o.cat)}</span>
             <span class="adm-op-pills">${o.hidden ? `<span class="pill pill-bad">${icon('eye-off')}Hidden from search</span>` : ''}${o.admin ? '<span class="pill pill-accent">New</span>' : ''}${ed ? `<span class="pill pill-info" title="${esc(ed.fields.join(', '))}">Edited by team ${esc(RN.fmt.dateShort(ed.ts))}</span>` : ''}</span></div></div></td>
-          <td class="r"><span class="adm-ris"><b class="num">${esc(o.ris.score)}</b>${tierPill(o)}</span></td>
-          <td><div class="adm-ratio adm-cmp"><span class="meter"><i style="width:${o.completeness}%"></i></span><b class="tnum">${o.completeness}%</b></div></td>
+          <td class="r" data-l="Reputation"><span class="adm-ris"><b class="num">${esc(o.ris.score)}</b>${tierPill(o)}</span></td>
+          <td data-l="Profile strength"><div class="adm-ratio adm-cmp"><span class="meter"><i style="width:${o.completeness}%"></i></span><b class="tnum">${o.completeness}%</b></div></td>
           <td class="r tnum adm-hide-m">${v}<span class="muted"> / ${o.tags.length}</span></td>
           <td class="small adm-hide-m adm-av">${RN.ui.avail(o, { hours: false })}<span class="tiny muted adm-block">${o.rate ? esc(RN.fmt.rate(o.rate)) : 'No rate listed'}</span></td>
-          <td class="r"><div class="adm-rowact">
+          <td class="r adm-act-cell"><div class="adm-rowact">
             <a class="act" href="#op.${esc(o.slug)}">View</a>
             <button type="button" class="act" data-act="adm-edit" data-id="${esc(o.id)}">Edit</button>
             <button type="button" class="act ${o.hidden ? '' : 'muted'}" data-act="adm-hide" data-id="${esc(o.id)}">${o.hidden ? 'Unhide' : 'Hide'}</button>
@@ -1002,15 +1002,15 @@
     return `${head('Platform <span class="serif">emails</span>', 'The activation drip every approved operator gets, the alerts the team receives, and everything the platform has sent in this session.')}
       <section class="card adm-sec">
         ${cardHead('30-day activation drip, A0 to A5', 'Replaces the single profile-approved email. Each email is framed as raising the Reputation Index and skips itself when the operator has already done the step.')}
-        <div class="tbl-wrap"><table class="tbl adm-tbl adm-drip">
+        <div class="tbl-wrap"><table class="tbl adm-tbl adm-drip adm-stacktbl">
           <thead><tr><th>Email</th><th>Day</th><th>Purpose</th><th class="adm-hide-m">Skips when</th><th class="adm-hide-m">Score lift</th><th><span class="sr-only">Preview</span></th></tr></thead>
           <tbody>${DRIP.map((d) => `<tr>
-            <td><span class="adm-code">${d.k}</span><b class="adm-drip-s">${esc(d.subj)}</b></td>
-            <td class="tnum nowrap">Day ${d.day}</td>
-            <td class="small">${esc(d.purpose)}</td>
+            <td class="adm-w"><span class="adm-code">${d.k}</span><b class="adm-drip-s">${esc(d.subj)}</b></td>
+            <td class="tnum nowrap adm-drip-day">Day ${d.day}</td>
+            <td class="small adm-w">${esc(d.purpose)}</td>
             <td class="small muted adm-hide-m">${esc(d.skipL)}</td>
             <td class="small adm-hide-m nowrap">${d.gain ? `+${RN.model.risGain(d.gain)} pts ${esc(d.per)}` : '<span class="muted">N/A</span>'}</td>
-            <td class="r"><button type="button" class="act" data-act="adm-drip-preview" data-k="${d.k}">Preview</button></td>
+            <td class="r adm-drip-pv"><button type="button" class="act" data-act="adm-drip-preview" data-k="${d.k}">Preview</button></td>
           </tr>`).join('')}</tbody></table></div>
         <p class="tiny muted adm-foot">Targets from the activation brief: 2+ reviews, 3 to 5 engagements with a work sample each, an intro video and verified fit tags.</p>
       </section>

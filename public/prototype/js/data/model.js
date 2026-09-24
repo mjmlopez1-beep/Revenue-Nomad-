@@ -87,7 +87,7 @@
       employeeRanges: empSlugs(std.empRange),
       crm: std.crm || '',
       methodologies: [...new Set(methods)],
-      motions: (d.snapshot && d.snapshot.motions) || [],
+      motions: [].concat((d.snapshot && d.snapshot.motions) || [], rd.motion_focus || [], rd.gtm_motion_experience || []).filter((m, i, a) => m && a.indexOf(m) === i),
       roleDetails: rd,
       tags,
       reviews: p.reviews || [],
@@ -274,7 +274,8 @@
     const emp = brief.employeeRange;
     if (emp) sig.push({ k: 'employees', l: 'Company size', state: op.employeeRanges.includes(emp) ? 'match' : 'low', text: op.employeeRanges.includes(emp) ? `Works with ${RN.w.label('employeeRange', emp)} employee companies` : `No experience listed at ${RN.w.label('employeeRange', emp)} employees` });
     const motions = [].concat(brief.salesMotions || brief.motion || []).filter(Boolean);
-    if (motions.length) {
+    // Only score GTM motion when the operator has listed one (no live operator has yet)
+    if (motions.length && op.motions.length) {
       const hit = motions.filter((m) => op.motions.includes(m));
       sig.push({ k: 'motion', l: 'GTM motion', state: hit.length ? 'match' : 'low', text: hit.length ? `Runs ${hit.join(' and ')}` : `Hasn't listed ${motions.join(' or ')}` });
     }

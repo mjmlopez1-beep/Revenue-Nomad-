@@ -231,7 +231,7 @@
           <div class="bw-next-a">${s.a}</div></li>`).join('')}</ol>` : RN.ui.empty({ icon: 'check-circle', title: 'You are all caught up', body: 'New replies from operators and project responses show up here.' })}
       </section>
       <aside class="stack bw-ov-side" style="--gap:16px">
-        <section class="panel-night bw-post">
+        <section class="panel-night night bw-post">
           <span class="eyebrow">Engagement Blueprints</span>
           <h3 class="h3">Post a project in <span class="serif">three steps</span></h3>
           <p class="small">Start from a scoped Blueprint with a 30/60/90-day plan and typical rates. Ranked matches appear as you type.</p>

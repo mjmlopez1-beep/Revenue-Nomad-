@@ -68,7 +68,9 @@
   function run(c, sort) {
     RN.model.applyEdits && RN.model.applyEdits();
     sort = sort || st().sort;
-    const res = RN.model.search({ q: c.q, tags: c.tags, filters: c.filters, sort });
+    let res = RN.model.search({ q: c.q, tags: c.tags, filters: c.filters, sort });
+    // A budget filter only keeps operators who publish a rate (Studio tells operators: no rate, no budget searches)
+    if (c.filters.rateMax) res = res.filter((r) => r.op.rate);
     if (sort === 'available') {
       const t = (r) => { const d = r.op.avail.startDate ? new Date(r.op.avail.startDate).getTime() : 0; return Math.max(d, RN.now().getTime() - 864e5); };
       res.sort((a, b) => (AVAIL_RANK[a.op.avail.key] || 0) - (AVAIL_RANK[b.op.avail.key] || 0) || t(a) - t(b) || b.score - a.score);
@@ -157,9 +159,12 @@
     opts = opts || {};
     const visitor = RN.store.state.persona === 'visitor';
     let html = RN.ui.opCard(visitor ? Object.assign({}, op, { rate: null }) : op, { why: opts.why || '' });
-    const sorted = (op.tags || []).slice().sort((a, b) => (a.tier === 'verified' ? -1 : 1) - (b.tier === 'verified' ? -1 : 1));
-    const three = RN.ui.ftags(sorted, 3), four = RN.ui.ftags(sorted, 4);
-    if (three !== four && html.includes(three)) html = html.replace(three, () => four);
+    // Replace the card's 3 tags with 4, verified first. Expert tags (5+ reviews) are client-verified too,
+    // but RN.ui.ftag only styles tier === 'verified', so normalize them here.
+    const vFirst = (a, b) => (a.tier === 'verified' ? -1 : 1) - (b.tier === 'verified' ? -1 : 1);
+    const three = RN.ui.ftags((op.tags || []).slice().sort(vFirst), 3);
+    const four = RN.ui.ftags((op.tags || []).map((t) => (t.tier === 'claimed' ? t : Object.assign({}, t, { tier: 'verified' }))).sort(vFirst), 4);
+    if (html.includes(three)) html = html.replace(three, () => four);
     if (visitor && op.rate) {
       const lock = `<button type="button" class="br-lock" data-act="br-login" aria-label="Log in to see ${esc(op.first)}’s hourly rate">${icon('lock')}Log in to see rate</button>`;
       const a = `<span>${RN.ui.avail(op)}</span>`;
@@ -207,7 +212,7 @@
           <p id="br-count" class="br-count" aria-live="polite">${countHtml(res, c)}</p>
           ${sortHtml()}
         </div>
-        <div id="br-results">${resultsHtml(res, c)}</div>
+        <div id="br-results" data-view-source="search">${resultsHtml(res, c)}</div>
       </section>
       ${cat ? catPlan(cat) : ''}
       ${rolesNav(cat)}
@@ -410,12 +415,12 @@
         <span class="br-zero-ic">${icon('search')}</span>
         <div class="stack" style="--gap:6px">
           <h2 class="h3">No exact matches</h2>
-          <p class="muted">${multi ? 'No operator matches every filter you picked.' : 'No operator matches this yet.'} ${alt.n ? `The closest matches drop <b>${esc(x.label)}</b>.` : ''}</p>
+          <p class="muted">${multi ? 'No operator matches every filter you picked.' : c.q && !c.tags.length && !Object.keys(c.filters).length ? `No operator profile mentions <b>${esc(c.q)}</b> yet.` : 'No operator matches this filter yet.'} ${alt.n ? (multi ? `The closest matches drop <b>${esc(x.label)}</b>.` : 'Here are the closest matches.') : ''}</p>
         </div>
       </div>
       ${alt.n ? `<div class="br-zero-alt">
-        <div class="row between br-zero-bar"><span class="label">Closest matches · ${esc(RN.fmt.plural(alt.n, 'operator'))} without ${esc(x.label)}</span>
-          <button type="button" class="btn btn-line btn-sm" data-act="br-relax" data-k="${esc(x.k)}" data-v="${esc(x.v || '')}">${x.k.startsWith('*') ? 'Clear filters' : 'Remove this filter'}</button></div>
+        <div class="row between br-zero-bar"><span class="label">${x.k === '*all' || (x.k === 'q' && !multi) ? 'Top operators on the network' : `Closest matches · ${esc(RN.fmt.plural(alt.n, 'operator'))} without ${esc(x.label)}`}</span>
+          <button type="button" class="btn btn-line btn-sm" data-act="br-relax" data-k="${esc(x.k)}" data-v="${esc(x.v || '')}">${x.k === 'q' ? 'Clear search' : x.k.startsWith('*') ? 'Clear filters' : 'Remove this filter'}</button></div>
         <div class="grid g-3 br-grid">${alt.res.slice(0, 6).map((r) => BR.card(r.op, { why: whyFor(r, without(c, x)) })).join('')}</div>
       </div>` : ''}
       <p class="br-tell br-tell-zero">${icon('message')}<span>Looking for someone specific? <button type="button" class="act" data-act="br-tell" data-zero="1">Tell us what you need</button> and our team will find them. Searches with no match go straight to our recruiting list.</span></p>
@@ -443,7 +448,17 @@
   }
 
   /* ---------- Analytics: one search event per changed query/filter set, impressions for the first 12 ---------- */
-  let trackTimer = null, lastKey = null;
+  let trackTimer = null, lastKey = null, mountedAt = 0;
+  /* The home hero (and any surface that searches, then routes here) already logged this search.
+     Skip ours when the most recent search event has the same criteria and arrived within 5 seconds
+     (real time since this page mounted; RN.now() is a simulated clock). Impressions are still logged. */
+  function justLogged(c) {
+    const ev = (RN.store.state.events || []).slice(0, 5).find((e) => e.type === 'search');
+    if (!ev || ev.source === 'tell_us') return false;
+    const same = critKey({ q: String(ev.q || '').trim(), tags: ev.tags || [], filters: cleanFilters(ev.filters || {}) }) === critKey(c);
+    const fresh = Date.now() - mountedAt < 5000 && Math.abs(RN.now().getTime() - new Date(ev.ts).getTime()) < 5000;
+    return same && fresh;
+  }
   function scheduleTrack(now) {
     const c = crit();
     const key = critKey(c);
@@ -455,7 +470,7 @@
       lastKey = key;
       const res = run(c, 'best');
       const sorted = run(c);
-      if (hasCrit(c)) RN.track('search', { q: c.q, tags: c.tags, filters: clone(c.filters), results: res.length, source });
+      if (hasCrit(c) && !justLogged(c)) RN.track('search', { q: c.q, tags: c.tags, filters: clone(c.filters), results: res.length, source });
       sorted.slice(0, 12).forEach((r, i) => RN.track('impression', { opId: r.op.id, q: c.q, tags: c.tags, filters: clone(c.filters), position: i + 1, source }));
     }, now ? 0 : 900);
   }
@@ -600,10 +615,17 @@
   RN.inputs['br-sort-sel'] = (el) => { RN.store.update((s) => { s.browse.sort = el.value; }, 'browse'); limit = PAGE; refresh({ noTrack: true }); };
   RN.actions['br-more'] = () => { limit += PAGE; refresh({ noTrack: true }); };
   RN.actions['br-tell'] = (el) => {
-    // Logged as a search so Admin sees the unmet need next to zero-result searches (results is 0 from the zero state)
+    // The unmet need reaches Admin as a search event (results 0 from the zero state). If this exact search was
+    // already logged, mark it (meta.tellUs) instead of logging it twice, so Admin's zero-result list does not double count.
     const c = crit();
+    const key = critKey(c);
     const n = el.dataset.zero === '1' ? 0 : run(c).length;
-    RN.track('search', { q: c.q, tags: c.tags, filters: clone(c.filters), results: n, source: 'tell_us' });
+    clearTimeout(trackTimer);
+    const prev = (RN.store.state.events || []).slice(0, 15).find((e) => e.type === 'search');
+    const same = prev && critKey({ q: String(prev.q || '').trim(), tags: prev.tags || [], filters: cleanFilters(prev.filters || {}) }) === key;
+    if (same && lastKey === key) RN.store.update(() => { prev.meta = Object.assign({}, prev.meta, { tellUs: true }); }, 'events');
+    else RN.track('search', { q: c.q, tags: c.tags, filters: clone(c.filters), results: n, source: 'tell_us', meta: { tellUs: true } });
+    lastKey = key;
     RN.go('talk');
   };
 
@@ -631,12 +653,6 @@
     setTagsOpen(false);
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tagsOpen) { e.stopPropagation(); RN.actions['br-tags-close'](); } }, true);
-  // Profile opened from a result: source=search when the client searched or filtered, card otherwise.
-  // Runs after the shared card handler (registered earlier), so it refines that value.
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest && e.target.closest('.br-page a[data-track-view]');
-    if (a) RN.store.state._viewSource = hasCrit(crit()) ? 'search' : 'card';
-  });
   let rz = null;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(drawCharts, 150); });
   function drawCharts() {
@@ -652,6 +668,7 @@
   };
 
   function mount() {
+    if (!mountedAt) mountedAt = Date.now();
     lastY = window.scrollY;
     const qi = document.getElementById('br-q');
     if (qi && window.matchMedia('(max-width: 640px)').matches) qi.placeholder = 'Search operators';
@@ -660,7 +677,7 @@
   }
   function unmount() {
     clearTimeout(trackTimer);
-    lastKey = null; landedCat = null; tagsOpen = false; compact = false; limit = PAGE;
+    lastKey = null; mountedAt = 0; landedCat = null; tagsOpen = false; compact = false; limit = PAGE;
   }
 
   /* ---------- Views ---------- */

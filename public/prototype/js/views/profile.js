@@ -100,6 +100,7 @@
   function visit(key) { if (S.key !== key) { cleanup(true); S = fresh(); S.key = key; } }
   function cleanup(all) {
     clearInterval(S.timer); S.timer = null;
+    S.railFit = null;
     S.obs.forEach((o) => { try { o.disconnect(); } catch (e) { /* ignore */ } });
     S.obs = [];
     if (all && S.unsub) { S.unsub(); S.unsub = null; }
@@ -162,6 +163,11 @@
         samples: samples.filter((s) => s.at && lc(s.at) === lc(e.company)),
       });
     }).sort((a, b) => String(b.end || '9999').localeCompare(String(a.end || '9999')) || String(b.start || '').localeCompare(String(a.start || '')));
+  }
+  // The signed-in client's open intro request to this operator (shared RN.intro record)
+  function myIntro(op) {
+    const st = RN.store.state;
+    return st.persona === 'buyer' ? st.intros.find((i) => i.opId === op.id && i.status !== 'declined' && i.buyer && i.buyer.email === RN.personas.buyer.email) || null : null;
   }
   function sortTags(tags) {
     const rank = (t) => (t.tier === 'expert' ? 2 : t.tier === 'verified' ? 1 : 0);
@@ -475,7 +481,7 @@
     </div>`;
   }
   function tileValue(k, rv) {
-    if (rv.kind === 'big') return `<b class="pf-tile-v">${esc(rv.value)}${rv.unit ? `<small>${esc(rv.unit)}</small>` : ''}</b>`;
+    if (rv.kind === 'big') return `<b class="pf-tile-v">${esc(rv.value)}${rv.unit && /^(people|reps enabled)$/.test(rv.unit) ? `<small>${esc(rv.unit.replace(' enabled', ''))}</small>` : ''}</b>`;
     if (rv.kind === 'scale') { const o = F[k].options.find((x) => x.v === rv.value); return `<b class="pf-tile-v sm">${esc(o.l)}<small>${o.level} of 4</small></b>`; }
     if (rv.kind === 'split') return `<b class="pf-tile-v">${rv.value}%<small>B2B</small></b>`;
     if (rv.kind === 'flag') return `<b class="pf-tile-v sm">Yes</b>`;
@@ -492,8 +498,10 @@
       </div>`;
     }
     const act = v.preview ? 'pf-preview-cta' : 'intro-open';
+    const intro = myIntro(op);
     return `<div class="pf-cta" data-pf-cta>
-      <button type="button" class="pf-cta-main" data-act="${act}" data-id="${esc(op.id)}">Request intro${icon('arrow')}</button>
+      ${intro ? `<a class="pf-cta-main" href="#buyer.intros">View your intro request · ${esc(RN.w.label('introStatus', intro.status))}${icon('arrow')}</a>`
+        : `<button type="button" class="pf-cta-main" data-act="${act}" data-id="${esc(op.id)}">Request intro${icon('arrow')}</button>`}
       <button type="button" class="pf-cta-2 ${inCompare ? 'on' : ''}" data-act="${v.preview ? 'pf-preview-cta' : 'compare-toggle'}" data-id="${esc(op.id)}" aria-pressed="${inCompare}">${icon(inCompare ? 'check' : 'compare')}${inCompare ? 'Added to compare' : 'Add to compare'}</button>
       <button type="button" class="pf-cta-2" data-act="pf-share">${icon('share')}Share</button>
     </div>`;
@@ -600,7 +608,7 @@
       </div>` : '';
     if (!left && !inds && !range) return '';
     const facts = c.engs.length ? `<dl class="pf-facts">
-        <div><dt>Roles held</dt><dd>${esc([...new Set(c.engs.map((e) => e.role).filter(Boolean))].slice(0, 3).join(' · '))}</dd></div>
+        <div class="pf-facts-stack"><dt>Roles held</dt><dd class="pf-chips">${[...new Set(c.engs.map((e) => e.role).filter(Boolean))].slice(0, 4).map((r) => `<span class="pf-chip sm">${esc(r)}</span>`).join('')}</dd></div>
         <div><dt>Engagement length</dt><dd>${esc((() => { const m = c.engs.map((e) => e.months || 0).filter(Boolean); return m.length ? (Math.min(...m) === Math.max(...m) ? plural(m[0], 'month') : `${Math.min(...m)} – ${Math.max(...m)} months`) : '—'; })())}</dd></div>
         <div><dt>Client-verified</dt><dd>${Math.round((c.engs.filter((e) => e.verified).length / c.engs.length) * 100)}%</dd></div>
       </dl>` : '';
@@ -682,7 +690,7 @@
   }
   function radar(c) {
     const op = c.op;
-    const size = 260;
+    const size = 420; // larger viewBox so the polygon fills more of the plot (radar keeps a fixed 54-unit label margin)
     const vals = c.axes.map((a) => (c.axAgg[a] ? c.axAgg[a].pct / 100 : 0));
     const peers = RN.model.ops.filter((o) => o.catKey === op.catKey && o.id !== op.id);
     const typical = c.axes.map((a) => {
@@ -741,22 +749,29 @@
     const f = S.focus;
     let tags = c.tags;
     if (f) tags = tags.filter((t) => (f.kind === 'stage' ? t.stage === f.key : t.axis === f.key));
-    const shown = S.tagsAll ? tags : tags.slice(0, 7);
+    const ver = tags.filter((t) => t.tier !== 'claimed');
+    const cl = tags.filter((t) => t.tier === 'claimed');
+    const LIMIT = 7;
+    const showVer = S.tagsAll ? ver : ver.slice(0, LIMIT);
+    const showCl = S.tagsAll ? cl : cl.slice(0, Math.max(0, LIMIT - showVer.length));
     const row = (t) => {
       const by = confirmers(op, t);
-      const claimed = t.tier === 'claimed';
-      return `<li class="pf-tag ${claimed ? 'claimed' : ''}">
+      return `<li class="pf-tag">
         <div class="pf-tag-top"><button type="button" class="pf-tagname" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>
-          <span class="pf-badge ${t.tier}">${t.tier === 'expert' ? 'Expert' : t.tier === 'verified' ? 'Verified' : 'Self-claimed'}</span>
-          <b class="pf-tag-score">${claimed ? '' : t.score}</b></div>
-        <div class="pf-bar"><i style="width:${claimed ? 0 : t.score}%"></i></div>
-        <p class="pf-tag-ev">${claimed ? `Not yet verified by a client · ${esc(CONTRIB[t.c] || '')}` : `Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a client'} · ${esc(plural(t.r || by.length || 1, 'client review'))} · ${esc(CONTRIB[t.c] || '')}`}</p>
+          <span class="pf-badge ${t.tier}">${t.tier === 'expert' ? 'Expert' : 'Verified'}</span>
+          <b class="pf-tag-score">${t.score}</b></div>
+        <div class="pf-bar"><i style="width:${t.score}%"></i></div>
+        <p class="pf-tag-ev">Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a client'} · ${esc(plural(t.r || by.length || 1, 'client review'))} · ${esc(CONTRIB[t.c] || '')}</p>
       </li>`;
     };
-    return `<div class="pf-taglist-hd"><h3 class="pf-h3">${f ? `Focus areas in ${esc(f.key)}` : c.verified.length ? 'Top verified focus areas' : 'Focus areas'}</h3>
+    const title = f ? `Focus areas in ${esc(f.key)}` : ver.length ? 'Top verified focus areas' : 'Focus areas';
+    return `<div class="pf-taglist-hd"><h3 class="pf-h3">${title}</h3>
         ${f ? `<button type="button" class="act" data-act="pf-focus-clear">Show all expertise</button>` : ''}</div>
-      ${shown.length ? `<ul class="pf-tags">${shown.map(row).join('')}</ul>` : `<p class="pf-focus-empty">No focus areas here yet.</p>`}
-      ${tags.length > 7 ? `<button type="button" class="pf-showall" data-act="pf-tags-all">${S.tagsAll ? 'Show top 7' : `Show all ${tags.length} focus areas`}${icon(S.tagsAll ? 'chev-up' : 'chev-down')}</button>` : ''}`;
+      ${showVer.length ? `<ul class="pf-tags">${showVer.map(row).join('')}</ul>` : ''}
+      ${showCl.length ? `<div class="pf-claimed">${ver.length ? `<p class="pf-claimed-hd"><b>Also claims ${plural(cl.length, 'focus area')}</b> not yet verified by a client</p>` : `<p class="pf-claimed-hd">Self-claimed by ${esc(op.first)}. Each one turns verified when a client confirms it in a review.</p>`}
+        <div class="pf-chips">${showCl.map((t) => `<button type="button" class="pf-chip dashed" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>`).join('')}</div></div>` : ''}
+      ${!tags.length ? `<p class="pf-focus-empty">No focus areas here yet.</p>` : ''}
+      ${tags.length > LIMIT ? `<button type="button" class="pf-showall" data-act="pf-tags-all">${S.tagsAll ? 'Show top 7' : `Show all ${tags.length} focus areas`}${icon(S.tagsAll ? 'chev-up' : 'chev-down')}</button>` : ''}`;
   }
 
   /* ---------- Tech stack (Matt) ---------- */
@@ -1053,7 +1068,7 @@
     const start = nextStart(op);
     const saved = st.shortlist.includes(op.id);
     const inCompare = st.compare.includes(op.id);
-    const intro = st.persona === 'buyer' ? st.intros.find((i) => i.opId === op.id && i.status !== 'declined' && i.buyer && i.buyer.email === RN.personas.buyer.email) : null;
+    const intro = myIntro(op);
     const dot = op.avail.key === 'available_now' ? 'dot-now' : op.avail.key === 'available_2_weeks' ? 'dot-soon' : 'dot-later';
     const pre = v.preview;
     const rate = !op.rate ? '' : v.rate
@@ -1200,7 +1215,21 @@
     }
     applyStackFilter(root);
     startCoreRotation(root);
+    S.railFit = () => fitRail(root);
+    fitRail(root);
+    setTimeout(() => fitRail(root), 400);
   }
+  /* Sticky rail: sticks under the sub-nav when it fits; when it is taller than the screen it scrolls
+     with the page until its last card is in view, then sticks (no inner scrollbar, nothing clipped). */
+  function fitRail(root) {
+    const rail = root && root.querySelector('.pf-rail');
+    if (!rail || !rail.isConnected) return;
+    if (getComputedStyle(rail).display === 'contents') { rail.style.top = ''; return; }
+    const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 76;
+    const top = navH + 57;
+    rail.style.top = Math.min(top, window.innerHeight - rail.offsetHeight - 12) + 'px';
+  }
+  window.addEventListener('resize', () => { if (S.railFit) S.railFit(); }, { passive: true });
   function wireCommon(root) {
     // Keyboard support for SVG buttons (bowtie segments)
     if (!root.dataset.pfKeys) {
@@ -1354,7 +1383,7 @@
       if (html) shown.push(k);
       return html;
     }).filter(Boolean);
-    const ctas = `<button type="button" class="btn ${called ? 'btn-line' : 'btn-leaf'}" data-act="pf-proof-call" data-id="${esc(rec.id)}" ${called ? 'aria-disabled="true"' : ''}>${icon(called ? 'check' : 'calendar')}${called ? 'Call requested' : `Book a call with ${esc(op.first)}`}</button>
+    const ctas = (light) => `<button type="button" class="btn ${called ? 'btn-line' : light ? '' : 'btn-leaf'}" data-act="pf-proof-call" data-id="${esc(rec.id)}" ${called ? 'aria-disabled="true"' : ''}>${icon(called ? 'check' : 'calendar')}${called ? 'Call requested' : `Book a call with ${esc(op.first)}`}</button>
       <button type="button" class="btn btn-line" data-act="pf-proof-ref" data-id="${esc(rec.id)}">${icon(refd ? 'check' : 'users')}${refd ? 'Reference requested' : 'Request a reference'}</button>`;
     return `<div class="pf pf-proofpage">
       <div class="wrap pf-pl-top">
@@ -1374,7 +1403,7 @@
               <p class="pf-role">Fractional ${esc(op.role)}</p>
               ${op.headline ? `<p class="pf-headline hl-m">${esc(smart(op.headline))}</p>` : ''}
             </div>
-            <div class="pf-pl-cta">${ctas}</div>
+            <div class="pf-pl-cta">${ctas(false)}</div>
           </div>
           <div class="pf-pl-stats">
             <span><b class="serif-up">${esc(op.ris.score)}</b>Reputation Index</span>
@@ -1388,7 +1417,7 @@
       <div class="wrap pf-pl-body">${secs.join('')}
         <section class="pf-pl-end">
           <div><span class="eyebrow">Next step</span><h2 class="pf-h2">Talk to ${esc(op.first)} this week</h2><p class="pf-sec-sub">A 30-minute call to walk through your goals. ${esc(op.first)} replies by email with times.</p></div>
-          <div class="pf-pl-cta">${ctas}</div>
+          <div class="pf-pl-cta">${ctas(true)}</div>
         </section>
         <p class="pf-pl-foot">${icon('shield')}Shared through Revenue Nomad. Reviews and engagements marked verified were confirmed by the client. <a class="link" href="#op.${esc(op.slug)}">View ${esc(op.first)}’s public profile</a></p>
       </div>

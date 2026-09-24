@@ -451,8 +451,7 @@
           </div>
         </aside>
       </div>
-      ${foot(s, `<button type="button" class="btn" data-act="join-submit" ${bad ? 'aria-describedby="jn-submit-note"' : ''}>${icon('send')}Submit profile</button>`)}
-      ${bad ? `<p class="small muted jn-submit-note" id="jn-submit-note">Some answers are missing. Submit takes you to the first one.</p>` : ''}`;
+      ${foot(s, `${bad ? `<span class="small muted jn-submit-note" id="jn-submit-note">${icon('info')}Some answers are missing. Submit takes you to the first one.</span>` : ''}<button type="button" class="btn" data-act="join-submit" ${bad ? 'aria-describedby="jn-submit-note"' : ''}>${icon('send')}Submit profile</button>`)}`;
   }
 
   /* ---------- Operator intake view ---------- */
@@ -699,7 +698,7 @@
     sales_enablement: ['I cut new rep ramp time with onboarding and coaching that sticks.', 'I help sales teams ramp new reps faster and keep experienced reps sharp. I have built onboarding for teams of up to 120 reps and rolled out MEDDPICC at two companies. Clients bring me in when they are hiring a sales class and ramp time costs them a quarter.'],
     customer_success_growth: ['I cut churn and turn customer success into an expansion engine.', 'I help B2B software companies keep the customers they win and grow them. I have run high-touch and digital CS teams, taken net revenue retention from 98% to 118%, and built renewal and expansion playbooks. Clients bring me in when churn shows up in the board deck.'],
     ai_gtm: ['I build AI prospecting workflows that book meetings without adding headcount.', 'I help lean GTM teams automate prospecting, enrichment and routing with Clay, n8n and LLMs. I have shipped workflows that process tens of thousands of records a month. Clients bring me in when outbound needs to scale and more SDRs is not the answer.'],
-    partnerships: ['I launch partner programs that source revenue, not just logos.', 'I help B2B software companies build partner programs that source and influence real pipeline. I have launched technology and channel partnerships that grew to $12M in attributed revenue. Clients bring me in when partners are signed but not selling.'],
+    partnerships: ['I launch partner programs that source and close revenue every quarter.', 'I help B2B software companies build partner programs that source and influence real pipeline. I have launched technology and channel partnerships that grew to $12M in attributed revenue. Clients bring me in when partners are signed but not selling.'],
     sellers: ['I close mid-market and enterprise deals for teams between sales hires.', 'I carry a quota for companies that need deals closed while they hire. I sell to mid-market and enterprise clients with 30 to 180 day cycles and average deals around $75K. Clients bring me in to cover an open AE seat or to prove a new segment.'],
   };
   function sampleData(cur) {

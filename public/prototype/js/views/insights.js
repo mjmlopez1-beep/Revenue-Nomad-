@@ -208,7 +208,8 @@
     const cur = di[3], prevY = di[2];
     const mk = RN.model.market();
     const ops = RN.model.ops.filter((o) => !o.hidden);
-    const pending = (st.pending || []).length;
+    const weekAgo = RN.now().getTime() - 7 * 864e5;
+    const newApps = (st.pending || []).filter((a) => !a.submittedAt || new Date(a.submittedAt).getTime() >= weekAgo).length;
     const topDemand = mk.tags.slice().sort((a, b) => b.demand - a.demand).slice(0, 6);
     const topQ = mk.queries.filter((q) => !q.zero).slice().sort((a, b) => b.vol - a.vol).slice(0, 6);
     const maxDemand = Math.max(...topDemand.map((t) => t.demand), 1);
@@ -305,7 +306,7 @@
       <div class="stats-row ins-kpis" style="--cols:4">
         <div class="stat"><span class="stat-l">Demand index, ${esc(cur.l)}</span><span class="stat-v">${RN.fmt.int(cur.v)}</span><span class="row-nw" style="--gap:8px">${RN.ui.delta(cur.v, prevY.v)}<span class="tiny muted">vs ${esc(prevY.l)}. 2023 = 100</span></span></div>
         <div class="stat"><span class="stat-l">Rate Index median</span><span class="stat-v">${hr(last.v)}<small class="ins-unit">/hr</small></span><span class="row-nw" style="--gap:8px">${RN.ui.delta(last.v, prev.v)}<span class="tiny muted">vs ${esc(prev.l)}</span></span></div>
-        <div class="stat"><span class="stat-l">Operators on the network</span><span class="stat-v">${RN.fmt.int(ops.length)}</span><span class="tiny muted">${pending ? `${RN.fmt.plural(pending, 'application')} in review` : 'No applications waiting'}</span></div>
+        <div class="stat"><span class="stat-l">New operator applications</span><span class="stat-v">${RN.fmt.int(newApps)}</span><span class="tiny muted">This week · ${RN.fmt.int(ops.length)} operators live on the network</span></div>
         <div class="stat"><span class="stat-l">Searches with no match</span><span class="stat-v">${RN.fmt.int(mk.zero.length)}</span><span class="tiny muted">Clients searched and nobody fit</span></div>
       </div>
       <div class="grid g-2 ins-pulse-grid">
@@ -520,7 +521,7 @@
         controls: `<div class="ins-ctl"><span class="label">${esc(F.companyRevenue.label)}</span><div data-deselect>${RN.w.control('companyRevenue', rep.rev || '', { name: 'ins-rep-rev', id: 'ins-rep-rev', change: 'ins-rep-rev' })}</div><p class="tiny muted" data-ins-adj>${esc(ch2Adj())}</p></div>`,
         chart: 'rateCat',
         body: pos && pos.rate ? `<p class="note info ins-you-note">${icon('user')}<span>Your rate of <b>${hr(pos.rate)}/hr</b> sits at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}. <a href="#studio.positioning">See your positioning in Studio</a></span></p>`
-          : co ? `<p class="note info ins-you-note">${icon('building')}<span>Filtered to ${esc(co.name)}’s revenue range. Tap it again to see all company sizes.</span></p>` : '' })}
+          : co ? `<p class="note info ins-you-note" data-ins-co-note ${rep.rev === co.revenueRange ? '' : 'hidden'}>${icon('building')}<span>Filtered to ${esc(co.name)}’s revenue range. Tap it again to see all company sizes.</span></p>` : '' })}
       ${figure({ title: 'Median hourly rate by company revenue range', sub: 'Same role mix. Larger companies pay more and scope more hours', chart: 'rateRev',
         take: `Companies at ${esc(revLabel(hi.range))} pay ${stagePremium}% more per hour than companies ${esc(revLabel(lo.range).replace(/^Under/, 'under'))} for the same role. <em>Stage, not title, sets the rate.</em>` })}
       ${figure({ title: 'Fractional vs full time, all-in monthly cost', sub: 'Illustrative comparison for a VP of Sales',
@@ -626,6 +627,7 @@
     const adj = RN.$('[data-ins-adj]'); if (adj) adj.textContent = ch2Adj();
     const t = RN.$('[data-ins-ch2-rev]'); if (t) t.textContent = ch2RevText();
     const go = RN.$('[data-ins-ch2-go]'); if (go) go.outerHTML = ch2Link();
+    const note = RN.$('[data-ins-co-note]'); const co = personaCo(); if (note) note.hidden = !(co && rep.rev === co.revenueRange);
   };
   RN.inputs['ins-rep-cat'] = (el) => {
     rep.cat = el.value;
