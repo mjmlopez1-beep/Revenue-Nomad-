@@ -60,10 +60,12 @@ Scope view CSS under the view: `[data-view="studio"] .x {}` or a view prefix cla
 
 Shapes (keep them; other surfaces read them):
 
-- intro: `{id, opId, buyer:{name,title,email,company:{...firmographics}}, need, fields:{roleCategory,hoursPerMonth,startBy,...}, status:'sent'|'accepted'|'declined'|'scheduled', createdAt, thread:[{from,text,ts}]}`
+- intro: `{id, opId, buyer:{name,title,email,company:{...firmographics}}, need, fields:{roleCategory,hoursPerMonth,startBy,...}, status: RN.fields.introStatus slug (pending | interested | rn_qualified | introduced | hired | declined), createdAt, thread:[{from,text,ts}], declineReason?, passReason?}`
 - project: `{id, status:'draft'|'posted'|'in_progress'|'staffed'|'closed', title, template, fields:{...standard keys}, brief, invited:[opId], responses:[{opId,status:'interested'|'declined',note,rate,ts}], createdAt, postedAt}`
 - event: `{id, type, ts, persona, opId?, q?, filters?, source?, buyer?:{name,industry,revenueRange,employeeRange}, meta?}`
-  Types: `search, impression, profile_view, shortlist_add, shortlist_remove, compare_add, compare_view, intro_request, project_post, project_invite {projectId, source}, project_select, proof_view, review_request, review_submit, signup_submit, studio_action {action: tag_add|headline_apply|digest_send}`
+  Types: `search, impression, profile_view, shortlist_add, shortlist_remove, compare_add, compare_view, intro_request, project_post, project_invite {projectId, source}, project_select, proof_view, review_request, review_submit, signup_submit, studio_action {action: tag_add|headline_apply|digest_send}, contact_submit {kind: talk|call}, research_cta, research_share, rate_estimate, newsletter_signup`
+- Intro sheet with prefill: `RN.intro.open(opId, {need, startBy, hoursPerMonth, engagementType, note, name, email, company, industry, revenueRange, employeeRange})`.
+- Tier unlock copy: `RN.fields.risUnlocks[tier]` (one source for Studio, For operators and Levels).
 - Reputation Index factor breakdown: always `RN.model.risFactors(op)` (one formula for Studio, Credibility and Levels).
 - Projects post through `#project.new` or `#project.new.<blueprintId|draftId>`; shared helpers live on `RN.projects` (respond, stage, allIn, payFor, get, blueprints).
 - reviewRequest: `{id, opId, reviewer:{name,email,company,title}, status:'sent'|'completed', sentAt, completedAt}` (operators only ever see Sent and Completed)

@@ -115,7 +115,7 @@
       { k: 'headline', l: 'Headline in your own words', done: !!op.headline, w: 8, gain: 'Your headline is the first line clients read in search' },
       { k: 'bio', l: 'About section of 400+ characters', done: (op.bio || '').length >= 400, w: 6, gain: 'Long-form bios feed Google and AI answer engines' },
       { k: 'rate', l: 'Hourly rate', done: !!op.rate, w: 6, gain: 'Clients filter by budget. No rate means you drop out of those searches' },
-      { k: 'avail', l: 'Availability confirmed in the last 30 days', done: !!op.avail.startDate && (RN.now() - new Date(op.avail.startDate)) / 864e5 < 30, w: 6, gain: 'Fresh availability ranks higher' },
+      { k: 'avail', l: 'Availability confirmed in the last 30 days', done: !!(op.avail.confirmedAt || op.avail.startDate) && Math.abs(RN.now() - new Date(op.avail.confirmedAt || op.avail.startDate)) / 864e5 < 30, w: 6, gain: 'Fresh availability ranks higher' },
       { k: 'ranges', l: 'Revenue and employee ranges', done: op.revenueRanges.length > 0 && op.employeeRanges.length > 0, w: 6, gain: 'Needed for Match Signals on every client visit' },
       { k: 'industries', l: '3+ industries', done: op.industries.length >= 3, w: 4, gain: 'Industry is the second most used filter' },
       { k: 'role', l: 'Role details for your category', done: Object.keys(op.roleDetails || {}).length >= 3, w: 8, gain: 'Shown in the Operating range section of your profile' },
@@ -153,7 +153,10 @@
     Object.keys(edits).forEach((id) => {
       const op = byId.get(id); if (!op) return;
       const e = edits[id];
-      ['headline', 'bio', 'rate', 'industries', 'revenueRanges', 'employeeRanges', 'crm', 'methodologies', 'motions', 'engagementTypes', 'location'].forEach((k) => { if (e[k] !== undefined) op[k] = e[k]; });
+      ['headline', 'bio', 'rate', 'industries', 'revenueRanges', 'employeeRanges', 'crm', 'methodologies', 'motions', 'engagementTypes', 'location', 'newClientCapacity', 'roleFields', 'role'].forEach((k) => { if (e[k] !== undefined) op[k] = e[k]; });
+      if (e.catKey && e.catKey !== op.catKey) { op.catKey = e.catKey; op.cat = F.catLabel(e.catKey); }
+      if (e.availConfirmedAt) op.avail = Object.assign({}, op.avail, { confirmedAt: e.availConfirmedAt });
+      if (e.removeTags) op.tags = op.tags.filter((t) => t.tier !== 'claimed' || !e.removeTags.some((x) => x.toLowerCase() === t.t.toLowerCase()));
       if (e.availKey) op.avail = Object.assign({}, op.avail, { key: e.availKey, label: F.availability.options.find((o) => o.v === e.availKey).l });
       if (e.hoursCode) op.avail = Object.assign({}, op.avail, { hoursCode: e.hoursCode, hours: +e.hoursCode });
       if (e.startDate) op.avail = Object.assign({}, op.avail, { startDate: e.startDate });
@@ -223,7 +226,8 @@
     const ql = String(q || '').toLowerCase().trim();
     if (!ql) return [];
     const terms = new Set([ql]);
-    Object.keys(SYN).forEach((k) => { if (ql.includes(k)) SYN[k].forEach((s) => terms.add(s)); });
+    // Synonym keys match whole words only ("blockchain" must not match "ai")
+    Object.keys(SYN).forEach((k) => { if (new RegExp('(^|[^a-z])' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z])').test(ql)) SYN[k].forEach((s) => terms.add(s)); });
     ql.split(/[\s,]+/).filter((w) => w.length > 2 && !['fractional', 'the', 'for', 'and', 'with'].includes(w)).forEach((w) => terms.add(w));
     return [...terms];
   };
@@ -244,7 +248,8 @@
       if (f.engagementTypes && f.engagementTypes.length && !f.engagementTypes.some((e) => op.engagementTypes.includes(e))) continue;
       if (f.salesMotions && f.salesMotions.length && !f.salesMotions.some((m) => op.motions.includes(m))) continue;
       if (f.hoursPerMonth && f.hoursPerMonth.length && !(op.avail.hoursCode && f.hoursPerMonth.some((h) => +op.avail.hoursCode >= +h))) continue;
-      if (f.rateMax && op.rate && op.rate > +f.rateMax) continue;
+      // A rate filter drops operators with no rate (Studio tells operators this)
+      if (f.rateMax && (!op.rate || op.rate > +f.rateMax)) continue;
       if (f.risMin && op.ris.score < +f.risMin) continue;
       const opTags = op.tags.map((t) => t.t.toLowerCase());
       if (tags.length && !tags.every((t) => opTags.includes(t))) continue;

@@ -1352,7 +1352,8 @@
     update(pid, (q) => {
       let x = respOf(q, opId);
       if (!x) { x = { opId }; q.responses.push(x); }
-      Object.assign(x, { status: r.status === 'declined' ? 'declined' : 'interested', note: r.note || '', rate: r.rate ? +r.rate : op.rate || null, hours: r.hours || op.avail.hoursCode || '', ts: RN.now().toISOString() });
+      const declined = r.status === 'declined';
+      Object.assign(x, { status: declined ? 'declined' : 'interested', note: r.note || '', reason: declined ? r.reason || null : null, rate: declined ? null : r.rate ? +r.rate : op.rate || null, hours: declined ? '' : r.hours || op.avail.hoursCode || '', ts: RN.now().toISOString() });
       if (r.simulated) x.simulated = true;
       if (!q.invited.includes(opId)) q.inviteMeta[opId] = q.inviteMeta[opId] || { source: 'alert', ts: x.ts };
     });

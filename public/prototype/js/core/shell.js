@@ -76,8 +76,8 @@
         <a class="row-nw" href="#buyer" style="--gap:8px" title="Workspace">${RN.ui.avatar({ name: 'Jordan Ellis', initials: 'JE' }, 'ava-sm')}<span class="hide-m" style="font-family:var(--f-display);font-weight:700;font-size:13px">Workspace</span></a>`;
     } else if (p === 'operator') {
       const me = RN.myOp();
-      const unread = st.intros.filter((i) => i.opId === RN.personas.operator.opId && i.status === 'sent').length + st.projects.filter((pr) => ['posted', 'in_progress'].includes(pr.status) && (pr.invited || []).includes(RN.personas.operator.opId) && !(pr.responses || []).some((r) => r.opId === RN.personas.operator.opId)).length;
-      right = `<a class="btn btn-leaf btn-sm" href="#studio">${icon('chart')}Studio${unread ? `<span class="nav-count">${unread}</span>` : ''}</a>
+      const unread = RN.studioB && me ? RN.studioB.inboxBadge(me) : st.intros.filter((i) => i.opId === RN.personas.operator.opId && i.status === 'pending').length + st.projects.filter((pr) => ['posted', 'in_progress'].includes(pr.status) && (pr.invited || []).includes(RN.personas.operator.opId) && !(pr.responses || []).some((r) => r.opId === RN.personas.operator.opId)).length;
+      right = `<a class="btn btn-leaf btn-sm" href="#studio" aria-label="Studio">${icon('chart')}<span class="hide-s">Studio</span>${unread ? `<span class="nav-count">${unread}</span>` : ''}</a>
         <a href="#op.${esc(me ? me.slug : '')}" title="My public profile">${RN.ui.avatar(me, 'ava-sm')}</a>`;
     } else if (p === 'admin') {
       right = `<a class="btn btn-sm" href="#admin">${icon('settings')}Admin</a>`;
@@ -186,7 +186,7 @@
       foot: `<button class="btn btn-line" data-act="modal-close">Keep data</button><button class="btn btn-danger" data-act="reset-confirm">Reset</button>`,
     });
   };
-  RN.actions['reset-confirm'] = () => { RN.ui.closeModal(); RN.store.reset(); RN.seed && RN.seed(); dockOpen = false; shell.applyTheme(); shell.renderHeader(); shell.renderDock(); RN.go('home'); RN.ui.toast('Demo data reset'); };
+  RN.actions['reset-confirm'] = () => { RN.ui.closeModal(); RN.store.reset(); RN.seed && RN.seed(); RN.store.state.seeded = true; RN.store.save(); dockOpen = false; shell.applyTheme(); shell.renderHeader(); shell.renderDock(); RN.go('home'); RN.ui.toast('Demo data reset'); };
   RN.actions['outbox'] = () => {
     const mails = RN.store.state.outbox;
     RN.ui.drawer({

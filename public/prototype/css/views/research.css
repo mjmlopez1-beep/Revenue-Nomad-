@@ -195,7 +195,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-dq-opts { display: flex; flex-direction: column; gap: 10px; margin-top: var(--s-2); }
 .rs-dq-opt { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 56px; padding: 12px 16px; border: 1px solid var(--night-line); border-radius: 14px; background: var(--night-2); color: var(--night-ink); text-align: left; font: inherit; font-size: var(--t-15); cursor: pointer; transition: border-color var(--dur) ease, background var(--dur) ease; }
 .rs-dq-opt:hover { border-color: var(--leaf); }
-.rs-dq-opt[aria-checked="true"] { border-color: var(--leaf); background: rgba(194, 231, 176, .1); }
+.rs-dq-opt[aria-checked="true"] { border-color: var(--leaf); background: color-mix(in srgb, var(--leaf) 10%, transparent); }
 .rs-dq-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--night-mute); flex: 0 0 auto; display: grid; place-items: center; }
 .rs-dq-opt[aria-checked="true"] .rs-dq-radio { border-color: var(--leaf); }
 .rs-dq-opt[aria-checked="true"] .rs-dq-radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--leaf); }
@@ -264,7 +264,6 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
   .rs-lib-meta .seg { width: 100%; }
   .rs-lib-meta .seg button { flex: 1 1 0; padding: 0 6px; font-size: var(--t-12); white-space: nowrap; }
   .rs-lib-cats .chipset { -webkit-mask-image: linear-gradient(to right, var(--ink) 86%, transparent); mask-image: linear-gradient(to right, var(--ink) 86%, transparent); padding-right: 24px; }
-  .rs-tag-vops { display: none; }
   .rs-lib-meta > .row { width: 100%; }
 }
 .rs-lib-results { margin-top: var(--s-6); display: flex; flex-direction: column; gap: var(--s-10); }
@@ -306,7 +305,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
   .rs-tag { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .rs-tag-acts { flex-direction: row; flex-wrap: wrap; align-items: center; }
 }
-@media (max-width: 640px) { .rs-tags.card { padding: 0 var(--s-4); } }
+@media (max-width: 640px) { .rs-tags.card { padding: 0 var(--s-4); } .rs-tag-vops { display: none; } }
 
 /* ---------- Guides index ---------- */
 .rs-gfeat { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--s-10); padding: var(--s-8); color: var(--ink); }
@@ -397,6 +396,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
   .rs-tbl-stack .tbl td:not(:first-child)::before { content: attr(data-l); color: var(--mute); flex: 0 0 auto; max-width: 48%; }
   .rs-tbl-stack .tbl.rs-tbl-l td:not(:first-child) { display: block; min-width: 0; }
   .rs-tbl-stack .tbl.rs-tbl-l td:not(:first-child)::before { content: attr(data-l) ": "; }
+  .rs-tbl-stack .tbl.rs-tbl-l td.r:not(:first-child) { text-align: left; }
 }
 .rs-dl { display: flex; flex-direction: column; margin: 1.2em 0; border-top: 1px solid var(--line-2); }
 .rs-dl > div { padding: 12px 0; border-bottom: 1px solid var(--line-2); }

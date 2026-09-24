@@ -444,14 +444,7 @@
      CREDIBILITY: Reputation Index, tiers, reviews, verified tags, proof links, badge
      ====================================================================== */
   // What each tier unlocks. Nothing on the ladder is paid: tiers move only with client evidence.
-  const UNLOCKS = {
-    indexing: ['Your profile is being reviewed by the team', 'Studio setup checklist while you wait'],
-    vetted: ['Listed and searchable in Browse', 'Studio insights: who viewed you and why you appeared', 'Fractional roles and prospects in Opportunities'],
-    proven: ['Proof links with section-level read tracking', 'Embeddable verified badge with a dated verification page'],
-    trusted: ['Featured on role category pages', 'Eligible to be quoted and featured in Insights'],
-    elite: ['Considered for homepage curation', 'Invited to State of Fractional GTM research panels'],
-    apex: ['Invited to the State of Fractional GTM advisory panel', 'First look at new Studio tools'],
-  };
+  const UNLOCKS = RN.fields.risUnlocks; // one source, shared with For operators and Levels
   const tierRank = (v) => ['indexing', 'vetted', 'proven', 'trusted', 'elite', 'apex'].indexOf(v);
   const badgeUnlocked = (op) => tierRank(RN.fields.risTierFor(op.ris.score).v) >= tierRank('proven');
 

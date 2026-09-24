@@ -58,6 +58,8 @@ const full = args.includes('--full');
       console.log(`${bad ? 'FAIL' : 'ok  '} ${persona.padEnd(8)} #${r.padEnd(28)} view=${info.view} text=${info.len}${info.overflow ? ' OVERFLOW-X' : ''}${info.broke ? ' RENDER-ERROR' : ''}`);
       errors.forEach((e) => console.log('       ' + e));
       if (shots) {
+        await page.evaluate(async () => { document.querySelectorAll('img[loading="lazy"]').forEach((i) => { i.loading = 'eager'; }); try { await document.fonts.ready; } catch (e) { /* ignore */ } });
+        await page.waitForTimeout(250);
         const fs = require('fs'); fs.mkdirSync(shots, { recursive: true });
         await page.screenshot({ path: path.join(shots, `${persona}_${r.replace(/[^\w.-]/g, '_')}_${width}.png`), fullPage: full });
       }

@@ -32,7 +32,9 @@
 
   /* ---------- Open the sheet ---------- */
   RN.actions['intro-open'] = (el) => intro.open(el.dataset.id);
-  intro.open = function (opId) {
+  /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, name, email, company, industry, revenueRange, employeeRange} */
+  intro.open = function (opId, prefill) {
+    prefill = prefill || {};
     const op = RN.model.byId(opId);
     if (!op) return;
     const st = RN.store.state;
@@ -48,7 +50,8 @@
     const signedIn = st.persona === 'buyer';
     const me = RN.personas.buyer;
     const fit = signedIn ? RN.model.fit(op, { revenueRange: me.company.revenueRange, employeeRange: me.company.employeeRange, industries: [me.company.industry], roleCategory: op.catKey }) : null;
-    const defaults = { need: RN.fields.needCats && Object.keys(RN.fields.needCats).find((k) => (RN.fields.needCats[k] || []).includes(op.catKey)) || 'not_sure', engagementType: 'fractional', startBy: op.avail.key === 'available_now' ? 'available_now' : op.avail.key, hoursPerMonth: op.avail.hoursCode || '20' };
+    const defaults = Object.assign({ need: RN.fields.needCats && Object.keys(RN.fields.needCats).find((k) => (RN.fields.needCats[k] || []).includes(op.catKey)) || 'not_sure', engagementType: 'fractional', startBy: op.avail.key === 'available_now' ? 'available_now' : op.avail.key, hoursPerMonth: op.avail.hoursCode || '20' }, prefill);
+    const who = Object.assign({ name: me.name, email: me.email, company: me.company.name, industry: me.company.industry, revenueRange: me.company.revenueRange, employeeRange: me.company.employeeRange }, prefill);
     RN.ui.modal({
       width: 620,
       title: `Request an intro to ${esc(op.first)}`,
@@ -63,18 +66,18 @@
           ${RN.w.field('startBy', defaults.startBy, { name: 'startBy', compact: true })}
         </div>
         <div class="field"><label for="intro-note">Anything ${esc(op.first)} should know? <span class="opt">Optional</span></label>
-          <textarea class="textarea" id="intro-note" name="note" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days." style="min-height:90px"></textarea></div>
+          <textarea class="textarea" id="intro-note" name="note" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days." style="min-height:90px">${esc(defaults.note || '')}</textarea></div>
         ${signedIn ? '' : `<fieldset class="card-flat stack" style="--gap:16px;border:1px solid var(--line-2)">
           <legend class="label" style="padding:0 6px">About you</legend>
           <p class="small muted">Asked once. Operators see your company’s industry and size, not your name, until you are introduced. Sample client details are filled in for the prototype.</p>
           <div class="grid g-2" style="--gap:14px">
-            ${RN.w.field('fullName', me.name, { name: 'name', compact: true })}
-            ${RN.w.field('email', me.email, { name: 'email', compact: true })}
+            ${RN.w.field('fullName', who.name, { name: 'name', compact: true })}
+            ${RN.w.field('email', who.email, { name: 'email', compact: true })}
           </div>
-          <div class="field"><label for="intro-co">Company</label><input class="input" id="intro-co" name="company" value="${esc(me.company.name)}"></div>
-          ${RN.w.field('industry', me.company.industry, { name: 'industry', compact: true })}
-          ${RN.w.field('companyRevenue', me.company.revenueRange, { name: 'revenueRange', compact: true })}
-          ${RN.w.field('companyEmployees', me.company.employeeRange, { name: 'employeeRange', compact: true })}
+          <div class="field"><label for="intro-co">Company</label><input class="input" id="intro-co" name="company" value="${esc(who.company)}"></div>
+          ${RN.w.field('industry', who.industry, { name: 'industry', compact: true })}
+          ${RN.w.field('companyRevenue', who.revenueRange, { name: 'revenueRange', compact: true })}
+          ${RN.w.field('companyEmployees', who.employeeRange, { name: 'employeeRange', compact: true })}
         </fieldset>`}
       </form>`,
       foot: `<span class="small muted grow">Operators reply within 72 hours.</span><button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="intro-form">Send request</button>`,

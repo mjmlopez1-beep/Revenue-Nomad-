@@ -5,10 +5,12 @@
   const RN = window.RN;
   const esc = (s) => RN.esc(s);
   const C = (RN.chart = {});
+  // Object.assign that ignores undefined values, so callers can pass {fmt: undefined}
+  const opt = (base, o) => { const out = Object.assign({}, base); Object.keys(o || {}).forEach((k) => { if (o[k] !== undefined) out[k] = o[k]; }); return out; };
 
   /* Sparkline with area fill and an emphasized endpoint. values: number[] */
   C.spark = function (values, o) {
-    o = Object.assign({ w: 120, h: 36, stroke: 'var(--viz-1)', fill: true, dot: true }, o || {});
+    o = opt({ w: 120, h: 36, stroke: 'var(--viz-1)', fill: true, dot: true }, o);
     const v = values && values.length ? values : [0, 0];
     const max = Math.max(...v), min = Math.min(...v, 0);
     const span = max - min || 1;
@@ -28,7 +30,7 @@
 
   /* Horizontal bars. rows: [{label, value, note?, hi?}] */
   C.bars = function (rows, o) {
-    o = Object.assign({ w: 640, labelW: 210, rowH: 34, barH: 18, fmt: (n) => RN.fmt.int(n), max: null }, o || {});
+    o = opt({ w: 640, labelW: 210, rowH: 34, barH: 18, fmt: (n) => RN.fmt.int(n), max: null }, o);
     const max = o.max || Math.max(...rows.map((r) => r.value), 1);
     const valW = 64;
     const track = o.w - o.labelW - valW;
@@ -47,7 +49,7 @@
 
   /* Vertical columns. rows: [{label, value, hi?}] */
   C.columns = function (rows, o) {
-    o = Object.assign({ w: 640, h: 220, fmt: (n) => RN.fmt.int(n), max: null }, o || {});
+    o = opt({ w: 640, h: 220, fmt: (n) => RN.fmt.int(n), max: null }, o);
     const max = o.max || Math.max(...rows.map((r) => r.value), 1);
     const top = 22, bottom = 30, plotH = o.h - top - bottom;
     const slot = o.w / rows.length;
@@ -67,7 +69,7 @@
   /* Line/area chart over time. series: [{name, values:number[], color?, dashed?}], labels: string[] */
   C.line = function (series, labels, o) {
     const explicitTicks = !!(o && o.ticks);
-    o = Object.assign({ w: 640, h: 220, fmt: (n) => RN.fmt.compact(n), ticks: 4, area: true }, o || {});
+    o = opt({ w: 640, h: 220, fmt: (n) => RN.fmt.compact(n), ticks: 4, area: true }, o);
     const left = 40, right = 12, top = 14, bottom = 28;
     const pw = o.w - left - right, ph = o.h - top - bottom;
     const all = series.flatMap((s) => s.values);
@@ -97,7 +99,7 @@
 
   /* Radar over N axes. values 0..1. compare: optional second polygon (e.g. market median) */
   C.radar = function (axes, values, o) {
-    o = Object.assign({ size: 300, compare: null, labels: true }, o || {});
+    o = opt({ size: 300, compare: null, labels: true }, o);
     const s = o.size, cx = s / 2, cy = s / 2, r = s / 2 - 54;
     const ang = (i) => -Math.PI / 2 + (i * 2 * Math.PI) / axes.length;
     const pt = (i, v) => [cx + Math.cos(ang(i)) * r * v, cy + Math.sin(ang(i)) * r * v];
@@ -119,7 +121,7 @@
 
   /* Distribution curve with a marker (e.g. Reputation Index percentile). */
   C.bell = function (o) {
-    o = Object.assign({ w: 220, h: 84, mean: 60, sd: 12, value: 71, min: 0, max: 100, ticks: [0, 25, 50, 75, 100] }, o || {});
+    o = opt({ w: 220, h: 84, mean: 60, sd: 12, value: 71, min: 0, max: 100, ticks: [0, 25, 50, 75, 100] }, o);
     const left = 4, right = 4, top = 8, bottom = 18;
     const pw = o.w - left - right, ph = o.h - top - bottom;
     const x = (v) => left + ((v - o.min) / (o.max - o.min)) * pw;
@@ -143,7 +145,7 @@
 
   /* Ring gauge 0..100 */
   C.ring = function (value, o) {
-    o = Object.assign({ size: 88, stroke: 8, max: 100, color: 'var(--viz-1)' }, o || {});
+    o = opt({ size: 88, stroke: 8, max: 100, color: 'var(--viz-1)' }, o);
     const r = (o.size - o.stroke) / 2, c = 2 * Math.PI * r;
     const pct = RN.clamp(value / o.max, 0, 1);
     return `<svg width="${o.size}" height="${o.size}" viewBox="0 0 ${o.size} ${o.size}" role="img" aria-label="${esc(o.label || value)}">
@@ -154,9 +156,9 @@
 
   /* Funnel: steps [{label, value}] as stepped horizontal bars with conversion rates. */
   C.funnel = function (steps, o) {
-    o = Object.assign({ w: 640, rowH: 46 }, o || {});
+    o = opt({ w: 640, rowH: 46 }, o);
     const max = Math.max(...steps.map((s) => s.value), 1);
-    const labelW = Math.min(170, Math.round(o.w * 0.3)), valW = Math.min(120, Math.round(o.w * 0.22)), track = o.w - labelW - valW;
+    const labelW = o.labelW || Math.min(170, Math.round(o.w * 0.3)), valW = o.valW || Math.min(120, Math.round(o.w * 0.22)), track = o.w - labelW - valW;
     const h = steps.length * o.rowH;
     const body = steps.map((s, i) => {
       const y = i * o.rowH;

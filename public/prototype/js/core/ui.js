@@ -100,7 +100,7 @@
     const st = RN.store.state;
     const saved = st.shortlist.includes(op.id);
     const inCompare = st.compare.includes(op.id);
-    const tags = (op.tags || []).slice().sort((a, b) => (a.tier === 'verified' ? -1 : 1) - (b.tier === 'verified' ? -1 : 1));
+    const tags = (op.tags || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0) || (a.tier === 'claimed') - (b.tier === 'claimed'));
     return `<article class="opc" data-op="${esc(op.id)}">
       <button type="button" class="opc-save ${saved ? 'on' : ''}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}" aria-label="${saved ? 'Remove from shortlist' : 'Save to shortlist'}">${icon('bookmark')}</button>
       <div class="opc-top">

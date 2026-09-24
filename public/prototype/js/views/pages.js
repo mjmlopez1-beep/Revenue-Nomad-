@@ -104,14 +104,8 @@
   };
 
   /* ---------- Reputation Index ladder (shared by For operators and Levels) ---------- */
-  PG.unlocks = {
-    indexing: 'Your draft profile and the Studio checklist while our team reviews your application.',
-    vetted: 'A live, searchable profile and the full Studio: who viewed you, why you appeared, positioning, search and AI visibility, proof links and the fractional job feed.',
-    proven: 'An embeddable verified badge for your site and proposals. Verified fit tags rank first on cards and in search.',
-    trusted: 'Predictive prospect signals, and a place in the curated shortlists we send to clients.',
-    elite: 'Featured on role pages and guides, and an invitation to help shape the State of Fractional GTM research.',
-    apex: 'Vouch for new operators and sit on the Operator Council.',
-  };
+  // One source for tier unlocks (RN.fields.risUnlocks), shared with Studio Credibility
+  PG.unlocks = Object.fromEntries(Object.entries(RN.fields.risUnlocks).map(([k, v]) => [k, v.join('. ') + '.']));
   function tierCounts() {
     const c = {};
     RN.model.ops.forEach((o) => { c[o.ris.tier] = (c[o.ris.tier] || 0) + 1; });
