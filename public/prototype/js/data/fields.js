@@ -340,6 +340,8 @@
     systems: ['revenue_operations'], ai: ['ai_gtm'], retention: ['customer_success_growth'], partners: ['partnerships'], not_sure: [],
   };
   // Why an operator passes on an intro or project, and why a client says "Not a fit" (Projects prototype)
+  // Work sample types (Studio Portfolio, profile filter chips)
+  F.sampleType = { label: 'Type', type: 'single', options: opts(['Playbook', 'Framework', 'Program', 'Process map', 'Template', 'Build', 'System']) };
   F.passReason = { label: 'Reason', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Not my expertise'], ['industry', 'Industry'], ['capacity', 'At capacity'], ['other', 'Other']]) };
   // Client side: why an operator was not the right fit (intro closed by the client)
   F.notFitReason = { label: 'Why not a fit?', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Expertise'], ['closer', 'Went with a closer match'], ['other', 'Other']]) };

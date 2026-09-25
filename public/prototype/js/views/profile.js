@@ -142,9 +142,9 @@
       const review = (op.reviews || []).find((r) => lc(r.company) === lc(e.company)) || null;
       return Object.assign({}, e, {
         key: 'e' + i,
-        revenueRange: x.revenueRange || e.revenueRange || bandSlug(e.revenueBand),
-        employeeRange: x.employeeRange || e.employeeRange || '',
-        industry: x.industry || e.industry || '',
+        revenueRange: e.revenueRange || x.revenueRange || bandSlug(e.revenueBand),
+        employeeRange: e.employeeRange || x.employeeRange || '',
+        industry: e.industry || x.industry || '',
         outcome: e.outcome || x.outcome || '',
         context: e.context || x.context || '',
         review, verified: !!(e.clientVerified || review),

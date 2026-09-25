@@ -71,7 +71,15 @@
     const avail = (d.availability || {});
     const hours = avail.hoursPerMonth || std.hours || null;
     const score = Math.max(50, pp.reputationIndex || 50);
-    const engagements = (d.engagements || []).map((e) => Object.assign({}, e, { logo: LOGO_KEY[String(e.company).toLowerCase()] || null }));
+    // Stable ids (company + start, -2, -3 on a clash) so Studio edits and review requests can point at one engagement
+    const usedEng = new Set();
+    const engagements = (d.engagements || []).map((e) => {
+      const base = e.id || 'eng-' + RN.slug(e.company || 'client') + '-' + (e.start || 'na');
+      let id = base, n = 2;
+      while (usedEng.has(id)) id = base + '-' + n++;
+      usedEng.add(id);
+      return Object.assign({}, e, { id, logo: LOGO_KEY[String(e.company).toLowerCase()] || null });
+    });
     const offered = ['fractional'].concat(ENG_TYPES.slice(1).filter(() => rand() > 0.55));
     const op = {
       id: raw.id,
@@ -175,7 +183,13 @@
       if (e.hoursCode) op.avail = Object.assign({}, op.avail, { hoursCode: e.hoursCode, hours: +e.hoursCode });
       if (e.startDate) op.avail = Object.assign({}, op.avail, { startDate: e.startDate });
       // Studio: engagement history, "ways to work with me" offers, photo and intro video
-      if (e.engagements) e.engagements.forEach((x) => { if (!op.engagements.some((g) => g.id === x.id)) op.engagements.push(Object.assign({ logo: null, mine: true }, x)); });
+      // Engagement History edits: update by id, add new ones, and drop Studio-added entries the operator removed
+      // (client-verified and review-created entries always stay)
+      if (e.engagements) {
+        const keep = new Set(e.engagements.map((x) => x.id));
+        e.engagements.forEach((x) => { const hit = op.engagements.find((g) => g.id === x.id); if (hit) Object.assign(hit, x); else op.engagements.push(Object.assign({ logo: null, mine: true }, x)); });
+        op.engagements = op.engagements.filter((g) => !g.mine || g.fromReview || g.clientVerified || keep.has(g.id));
+      }
       if (e.offers) op.offers = e.offers.slice();
       if (e.photo !== undefined) op.photo = e.photo;
       if (e.video !== undefined) op.video = e.video;
