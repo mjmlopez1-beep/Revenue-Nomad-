@@ -250,7 +250,7 @@
     const emerging = emergingNow();
     const n = liveOps().length;
     // One short, client-facing trust line. How featuring works for operators lives on #operators.
-    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and client reviews. Placement is never paid.</span></p>`;
+    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and client reviews.</span></p>`;
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
         ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles in this prototype`, 'href="#browse" data-act="hm-all"'))}
