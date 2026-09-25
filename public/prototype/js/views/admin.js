@@ -215,7 +215,7 @@
   }
 
   /* =====================================================================================
-     Operator applications: pending -> Approve profile -> Generate score -> live at Vetted 50
+     Operator applications: pending -> Approve profile -> Generate score -> live at Emerging 50
      ===================================================================================== */
   const apps = () => st().pending || [];
   const appById = (id) => apps().find((a) => a.id === id);
@@ -286,7 +286,7 @@
       standard: std, roleDetails: reg,
       profile: {
         name: p.name, title: p.role, desc: p.headline, bio: p.bio, tags, reviews: [], core: null,
-        profile: { reputationIndex: 50, reputationLabel: 'Vetted', engagements: 0, wouldHireAgain: null, totalTags: tags.length },
+        profile: { reputationIndex: 50, reputationLabel: 'Emerging', engagements: 0, wouldHireAgain: null, totalTags: tags.length },
         details: {
           timezone: p.timezone, industries: p.industries, engagements: [], standard: std,
           availability: { status: RN.w.label('availability', p.availability) || 'Available now', startDate: p.startDate || RN.now().toISOString().slice(0, 10), hoursPerMonth: hours },
@@ -431,7 +431,7 @@
     const zero = zeroRows(7);
     const oldest = q.slice().sort((a, b) => ms(a.submittedAt) - ms(b.submittedAt))[0];
     const needs = [
-      q.length && { ic: 'seal', t: `${RN.fmt.plural(q.length, 'operator application')} to review`, sub: `Oldest submitted ${RN.fmt.ago(oldest.submittedAt)}. Approve the profile, then generate the score to put it live at Vetted 50.`, to: 'admin.approvals', cta: 'Review' },
+      q.length && { ic: 'seal', t: `${RN.fmt.plural(q.length, 'operator application')} to review`, sub: `Oldest submitted ${RN.fmt.ago(oldest.submittedAt)}. Approve the profile, then generate the score to put it live at Emerging 50.`, to: 'admin.approvals', cta: 'Review' },
       team.filter((i) => i.status !== 'pending').length && { ic: 'handshake', t: `${RN.fmt.plural(team.filter((i) => i.status !== 'pending').length, 'intro')} waiting on the team`, sub: 'Operators said yes. Qualify the fit, then introduce both sides by email.', to: 'admin.intros', cta: 'Open pipeline' },
       late.length && { ic: 'clock', late: true, t: `${RN.fmt.plural(late.length, 'intro request')} past the 72-hour reply window`, sub: 'Nudge the operator, or decline for them and suggest two operators with the same fit.', to: 'admin.intros', cta: 'Nudge' },
       pf.length && { ic: 'briefcase', late: true, t: `${RN.fmt.plural(pf.length, 'project')} with no interested operator after 72 hours`, sub: 'Add up to three suggested operators to each one.', to: 'admin.projects', cta: 'Suggest' },
@@ -836,7 +836,7 @@
     return `${head('Operator approvals', `${q.length ? RN.fmt.plural(q.length, 'application') + ' waiting' : 'No applications waiting'}. We review every application within 2 business days.`)}
       <ol class="adm-flow" aria-label="How approval works">
         <li><span class="adm-flow-n">1</span><div><b>Approve profile</b><span>Identity, work history and fit tags checked by the team.</span></div></li>
-        <li><span class="adm-flow-n">2</span><div><b>Generate score</b><span>Reputation Index set to 50. The profile goes live in Browse at Vetted.</span></div></li>
+        <li><span class="adm-flow-n">2</span><div><b>Generate score</b><span>Reputation Index set to 50. The profile goes live in Browse at Emerging.</span></div></li>
         <li><span class="adm-flow-n">3</span><div><b>Activation emails</b><span>A0 welcome sends now; A1 to A5 follow over 30 days.</span></div></li>
       </ol>
       ${answersSec()}
@@ -911,7 +911,7 @@
         </div>
         <div class="adm-step ${status === 'approved' ? 'is-next' : 'is-wait'}">
           <span class="n">Step 2</span>
-          <b>Generate score</b><span class="tiny muted">Sets the Reputation Index to 50 and puts ${esc(p.first)} live in Browse at Vetted.</span>
+          <b>Generate score</b><span class="tiny muted">Sets the Reputation Index to 50 and puts ${esc(p.first)} live in Browse at Emerging.</span>
           ${status === 'approved' ? `<button type="button" class="btn btn-sm" data-act="adm-score" data-id="${esc(a.id)}">${icon('bolt')}Generate score</button>` : '<span class="tiny muted adm-wait">Available after step 1</span>'}
         </div>
       </div>
@@ -1038,7 +1038,7 @@
   const appLive = (id) => { const a = appById(id); return !!a && statusOf(a) === 'live'; };
   const inDir = (o) => !o.admin || appLive(o.admin.appId);
   const editedBy = (o) => { const e = (st().edits || {})[o.id]; return e && e._log && e._log.length ? e._log[e._log.length - 1] : null; };
-  const tierPill = (op) => { const l = op.ris.label; return `<span class="pill ${l === 'Apex' || l === 'Elite' ? 'pill-gold' : l === 'Trusted' || l === 'Proven' ? 'pill-good' : l === 'Vetted' ? 'pill-accent' : ''}">${esc(l)}</span>`; };
+  const tierPill = (op) => { const l = op.ris.label; return `<span class="pill ${l === 'Apex' || l === 'Elite' ? 'pill-gold' : l === 'Trusted' || l === 'Proven' ? 'pill-good' : l === 'Emerging' ? 'pill-accent' : ''}">${esc(l)}</span>`; };
   function dirRows() {
     const q = ui.dirQ.trim().toLowerCase();
     let ops = RN.model.ops.filter(inDir);
@@ -1101,8 +1101,8 @@
      EMAILS: activation drip A0-A5 (L478), team alerts (AP-03, AP-04), outbox
      ===================================================================================== */
   const DRIP = [
-    { k: 'A0', day: 0, subj: 'You are live on Revenue Nomad at Vetted 50', purpose: 'Welcome. What the Reputation Index measures and the one action worth the most points next.', skipL: 'Always sends, the moment the score is generated.', skip: null, gain: null },
-    { k: 'A1', day: 3, subj: 'Two client reviews move you past Vetted', purpose: 'Ask two past clients for a CORE review. Each review verifies the fit tags the client confirms.', skipL: 'Skips if the operator has 2 or more reviews.', skip: (op) => op.reviews.length >= 2, gain: 'review', per: 'per review' },
+    { k: 'A0', day: 0, subj: 'You are live on Revenue Nomad at Emerging 50', purpose: 'Welcome. What the Reputation Index measures and the one action worth the most points next.', skipL: 'Always sends, the moment the score is generated.', skip: null, gain: null },
+    { k: 'A1', day: 3, subj: 'Two client reviews move you past Emerging', purpose: 'Ask two past clients for a CORE review. Each review verifies the fit tags the client confirms.', skipL: 'Skips if the operator has 2 or more reviews.', skip: (op) => op.reviews.length >= 2, gain: 'review', per: 'per review' },
     { k: 'A2', day: 8, subj: 'Add your engagements, each with a work sample', purpose: 'Engagement History proves stage and deal-size fit, the top hiring factor for clients.', skipL: 'Skips if 3 or more engagements are logged.', skip: (op) => op.engagements.length >= 3, gain: 'engagement', per: 'per engagement' },
     { k: 'A3', day: 14, subj: 'Record a 60-second intro video', purpose: 'A short video in the operator’s own words helps them stand out and completes the profile factor.', skipL: 'Skips if the profile has a video.', skip: (op) => !!op.video, gain: 'complete', per: 'profile factor' },
     { k: 'A4', day: 24, subj: 'Share your profile where clients already look', purpose: 'Share the profile on LinkedIn or a blog post, and send a tracked proof link to a prospect.', skipL: 'Skips if the operator has created a proof link.', skip: (op) => (st().proofLinks || []).some((x) => x.opId === op.id), gain: 'recent', per: 'engagement recency' },
@@ -1112,11 +1112,11 @@
     const f = op.first;
     const miss = RN.model.checklist(op).filter((x) => !x.done).sort((a, b) => b.w - a.w)[0];
     switch (k) {
-      case 'A0': return `Hi ${f},\n\nYour profile is live at Vetted 50. Clients can find you in Browse, on your role page and in Google.\n\nThe Reputation Index blends five signals: review volume, fit tag verification, strong ratings, a complete profile and engagement recency. The step worth the most right now: ${miss ? miss.l.toLowerCase() : 'a client review'}. ${miss ? miss.gain + '.' : ''}\n\nOpen Studio to see who views you and why.`;
+      case 'A0': return `Hi ${f},\n\nYour profile is live at Emerging 50. Clients can find you in Browse, on your role page and in Google.\n\nThe Reputation Index blends five signals: review volume, fit tag verification, strong ratings, a complete profile and engagement recency. The step worth the most right now: ${miss ? miss.l.toLowerCase() : 'a client review'}. ${miss ? miss.gain + '.' : ''}\n\nOpen Studio to see who views you and why.`;
       case 'A1': return `Hi ${f},\n\nClient reviews are the biggest part of the Reputation Index. Each one adds about ${RN.model.risGain('review')} points and verifies the fit tags your client confirms.\n\nAsk two past clients from Studio > Credibility. It takes them about four minutes.`;
       case 'A2': return `Hi ${f},\n\nClients hire on stage and deal-size fit. Add three engagements to your Engagement History, each with a work sample, and clients can see the companies and outcomes behind your tags.\n\nEach verified engagement adds about ${RN.model.risGain('engagement')} points.`;
       case 'A3': return `Hi ${f},\n\nA 60-second video in your own words helps you stand out in a crowded category, and it completes your profile.\n\nRecord it from Studio > Profile.`;
-      case 'A4': return `Hi ${f},\n\nMost of your deals start outside a marketplace. Share your profile on LinkedIn, or send a tracked proof link to a prospect, and see which sections they read.\n\nEvery approved profile can send proof links: ${op.ris.score >= 60 ? 'yours are unlimited' : '5 a month at Vetted, unlimited from Proven'}. Create one from Studio > Credibility.`;
+      case 'A4': return `Hi ${f},\n\nMost of your deals start outside a marketplace. Share your profile on LinkedIn, or send a tracked proof link to a prospect, and see which sections they read.\n\nEvery approved profile can send proof links: ${op.ris.score >= 60 ? 'yours are unlimited' : '5 a month at Emerging, unlimited from Proven'}. Create one from Studio > Credibility.`;
       case 'A5': {
         const an = RN.model.analytics(op.id, { days: 30 });
         const q = an && an.queries[0];
@@ -1228,7 +1228,7 @@
     RN.store.update((s) => { if (s.seen && s.seen.hidden) s.seen.hidden = s.seen.hidden.filter((x) => x !== op.id); }, 'seen');
     op.hidden = false;
     RN.mail(op.name, DRIP[0].subj, dripBody('A0', op), 'drip');
-    toast(`${esc(op.name)} is live in Browse at Vetted 50.`, { action: { label: 'View profile', act: 'go', attrs: `data-to="op.${esc(op.slug)}"` }, ms: 5200 });
+    toast(`${esc(op.name)} is live in Browse at Emerging 50.`, { action: { label: 'View profile', act: 'go', attrs: `data-to="op.${esc(op.slug)}"` }, ms: 5200 });
     RN.rerender();
   };
   RN.actions['adm-reopen'] = (el) => { setApp(el.dataset.id, { status: 'in_review', decidedAt: null }); toast('Application moved back to review.'); RN.rerender(); };
@@ -1237,7 +1237,7 @@
     if (!a) return;
     const op = buildOp(a);
     RN.ui.modal({
-      width: 520, title: `${esc(prof(a).first)}’s card in Browse`, sub: 'How clients will see the profile at Vetted 50 once it is live.',
+      width: 520, title: `${esc(prof(a).first)}’s card in Browse`, sub: 'How clients will see the profile at Emerging 50 once it is live.',
       body: `<div class="adm-preview" inert>${RN.ui.opCard(op, { why: op.tags[0] ? `Matches “${op.tags[0].t}”` : '' })}</div>`,
       foot: `<button type="button" class="btn btn-line" data-act="modal-close">Close</button>${statusOf(a) === 'approved' ? `<button type="button" class="btn" data-act="adm-score" data-id="${esc(a.id)}">Generate score</button>` : `<button type="button" class="btn" data-act="adm-approve" data-id="${esc(a.id)}">Approve profile</button>`}`,
     });
@@ -1592,7 +1592,7 @@
       ? `Client demand for ${catLabel(c.cat)} is growing faster than the network. We are adding a small number of experienced operators this quarter.`
       : c.kind === 'tag' ? `Companies on Revenue Nomad searched for ${c.tags[0]} ${vol}, and few operators can show a client review that confirms it.`
       : `Companies on Revenue Nomad searched for ${what} ${vol}${fl.length ? ` (${fl.join(', ')})` : ''} and found no operator who fits.`;
-    return `Subject: Clients are looking for ${c.kind === 'search' ? 'your kind of work' : what}\n\nHi {first name},\n\n${line} If this is work you have done, we would like you on the network.\n\nApplying takes about 10 minutes at revenuenomad.com/join. We review every profile within 2 business days, and approved profiles go live at Vetted 50 with a Studio that shows who viewed you and why.\n\nMatt Lopez\nRevenue Nomad`;
+    return `Subject: Clients are looking for ${c.kind === 'search' ? 'your kind of work' : what}\n\nHi {first name},\n\n${line} If this is work you have done, we would like you on the network.\n\nApplying takes about 10 minutes at revenuenomad.com/join. We review every profile within 2 business days, and approved profiles go live at Emerging 50 with a Studio that shows who viewed you and why.\n\nMatt Lopez\nRevenue Nomad`;
   }
   function closeOps(c) {
     const tags = (c.tags || []).map((x) => x.toLowerCase());
@@ -1715,7 +1715,7 @@
       const p = prof(x);
       if (alreadyAlerted(p.name)) return;
       const rk = roleKeys(p.roleCategory);
-      RN.mail(TEAM, `New operator application: ${p.name}, Fractional ${p.role}`, `${p.name} applied as Fractional ${p.role} (${catLabel(p.roleCategory)}).\nEmail: ${p.email || 'Not given'}\n${[p.location || p.country, p.rate ? RN.fmt.rate(p.rate) : 'No rate', RN.w.label('availability', p.availability)].filter(Boolean).join(' · ')}\n${RN.fmt.plural(p.fitTags.length, 'fit tag')}, ${RN.fmt.plural(p.industries.length, 'industry', 'industries')}, ${rk.filter((k) => appRoleText(x, k)).length} of ${rk.length} role details, photo ${p.photo ? 'added' : 'missing'}, video ${p.video ? 'added' : 'missing'}.\n\nReview within 2 business days in Admin > Approvals: Approve profile, then Generate score to publish at Vetted 50.\nReference: ${x.id}`, 'alert');
+      RN.mail(TEAM, `New operator application: ${p.name}, Fractional ${p.role}`, `${p.name} applied as Fractional ${p.role} (${catLabel(p.roleCategory)}).\nEmail: ${p.email || 'Not given'}\n${[p.location || p.country, p.rate ? RN.fmt.rate(p.rate) : 'No rate', RN.w.label('availability', p.availability)].filter(Boolean).join(' · ')}\n${RN.fmt.plural(p.fitTags.length, 'fit tag')}, ${RN.fmt.plural(p.industries.length, 'industry', 'industries')}, ${rk.filter((k) => appRoleText(x, k)).length} of ${rk.length} role details, photo ${p.photo ? 'added' : 'missing'}, video ${p.video ? 'added' : 'missing'}.\n\nReview within 2 business days in Admin > Approvals: Approve profile, then Generate score to publish at Emerging 50.\nReference: ${x.id}`, 'alert');
     }
   }
   function checkAlerts() {

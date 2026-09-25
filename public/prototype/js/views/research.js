@@ -1336,7 +1336,7 @@
           <li>Can I speak with the client from that engagement?</li></ol>` },
       ],
       faq: () => [
-        { q: 'What is a good Reputation Index score?', a: 'Every approved profile starts at 50 (Vetted). Scores of 70 and above (Trusted) mean repeat engagements and consistently strong client reviews.' },
+        { q: 'What is a good Reputation Index score?', a: 'Every approved profile starts at 50 (Emerging). Scores of 70 and above (Trusted) mean repeat engagements and consistently strong client reviews.' },
         { q: 'Can an operator pay to raise their score or verify a focus area?', a: 'No. Only client reviews, verified engagements and a complete profile move the score, and only reviews rated 4.0 or higher verify a focus area.' },
         { q: 'Should I ask for references if a profile has verified reviews?', a: 'Yes, for the engagement most like yours. Verified reviews tell you the work happened; a call tells you how it would go at your company.' },
       ],
@@ -1428,7 +1428,7 @@
     {
       slug: 'what-is-the-reputation-index', group: 'methods', updated: '2026-09-01', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is the Revenue Nomad Reputation Index?',
-      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much client evidence stands behind an operator\'s profile.', 'Every approved profile starts at 50 (Vetted), and the score rises only with client reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
+      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much client evidence stands behind an operator\'s profile.', 'Every approved profile starts at 50 (Emerging), and the score rises only with client reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
       stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from client evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
       sections: () => {
         const ops = RN.model.ops.filter((o) => !o.hidden);
@@ -1438,11 +1438,11 @@
           { id: 'factors', h: 'The five factors', html: `<dl class="rs-dl rs-dl-w">${F.risFactors.options.map((o) => `<div><dt>${esc(o.l)}<span class="tnum">${Math.round((o.w || 0) * 100)}%</span></dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>
             <p>Weights are published so operators know exactly what moves the score and clients know what it measures.</p>` },
           { id: 'tiers', h: 'The tiers', html: `${tbl(['Tier', 'Score', 'What it means'], F.risTier.options.map((t) => [`<b>${esc(t.l)}</b>`, `${t.min}–${t.max}`, esc(t.d)]), 'rs-tbl-l')}
-            <p>"Vetted" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a client confirmed: verified focus areas and verified engagements.</p>` },
+            <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a client confirmed: verified focus areas and verified engagements.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
             ${src(`Live count across ${ops.length} operator profiles in this prototype.`)}
             ${chartGo('Browse operators, highest Reputation Index first', { filters: {}, sort: 'ris', src: 'guide_chart_tiers' })}
-            <p>Most profiles sit at Vetted because the index only moves with client evidence. That is by design: a score that starts high means nothing.</p>` },
+            <p>Most profiles sit at Emerging because the index only moves with client evidence. That is by design: a score that starts high means nothing.</p>` },
           { id: 'not', h: 'What it is not', html: `<ul><li>It is not for sale. No plan, fee or sponsorship changes it.</li><li>It is not a popularity score. Profile views and searches do not count.</li><li>It does not punish operators for engagements that were never reviewed.</li></ul>
             <p>Operators can see how their own score breaks down in Studio, and the ${L('levels', 'Levels page')} explains what each tier unlocks.</p>` },
         ];
@@ -1555,7 +1555,7 @@
     { t: 'Client-verified', d: () => 'A focus area confirmed by at least one client review rated 4.0 or higher. One review verifies it at a score of 50.', to: 'library' },
     { t: 'Expert', d: () => 'A focus area confirmed by five or more client reviews rated 4.0 or higher, scored 85 to 100.', to: 'library' },
     { t: 'Reputation Index', d: () => 'A 0 to 100 score of the client evidence behind a profile, from five published factors. Every approved profile starts at 50.', to: 'guide.what-is-the-reputation-index' },
-    { t: 'Vetted', d: () => F.risTier.options.find((t) => t.v === 'vetted').d, to: 'levels' },
+    { t: 'Emerging', d: () => F.risTier.options.find((t) => t.v === 'emerging').d, to: 'levels' },
     { t: 'CORE', d: () => 'Revenue Nomad\'s client review: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5, plus "Would you hire this operator again?"', to: 'guide.what-is-core' },
     { t: 'Engagement History', d: () => 'The client engagements on an operator\'s profile, with dates, scope and company size, marked verified when the client confirmed them.' },
     { t: 'Engagement Blueprint', d: () => 'A scoped project template: role category, typical hours and term, a 30/60/90-day plan, the focus areas it needs and a typical rate range. Post one as a project in three steps.', to: 'blueprints' },

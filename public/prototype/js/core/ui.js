@@ -55,16 +55,16 @@
     const r = op.ris || { score: 0, label: 'New' };
     const tipHtml = ui.risExplainer(o && o.viewer === 'operator');
     const tierV = r.tier || RN.fields.risTierFor(r.score).v;
-    // At the floor (Vetted 50) the seal stays quiet: the label carries it, the score is shown small
-    if (tierV === 'vetted' && !(o && o.full)) return `<span class="ris ris-quiet"><span class="pill pill-line">${icon('shield')}Vetted</span><span class="ris-txt"><span class="row-nw" style="--gap:4px">Reputation Index ${esc(r.score)} ${ui.tip(tipHtml)}</span></span></span>`;
+    // At the floor (Emerging 50) the seal stays quiet: the label carries it, the score is shown small
+    if (tierV === 'emerging' && !(o && o.full)) return `<span class="ris ris-quiet"><span class="pill pill-line">${icon('shield')}Emerging</span><span class="ris-txt"><span class="row-nw" style="--gap:4px">Reputation Index ${esc(r.score)} ${ui.tip(tipHtml)}</span></span></span>`;
     return `<span class="ris"><span class="ris-seal t-${esc(tierV)}">${ui.hexSeal(r.label)}<b>${esc(r.score)}</b></span><span class="ris-txt"><b>${esc(r.label)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
   };
   ui.hexSeal = function (label) {
     // Mint for Verified to Trusted, gold for Elite and Apex (explorer badge), grey while Indexing
     const gold = label === 'Elite' || label === 'Apex';
     const mint = label === 'Proven' || label === 'Trusted';
-    const fill = gold ? 'var(--gold-bg)' : mint ? 'var(--leaf)' : label === 'Vetted' ? 'var(--tint)' : 'var(--sunk)';
-    const stroke = gold ? 'var(--gold)' : mint ? 'var(--forest)' : label === 'Vetted' ? 'var(--tint-line)' : 'var(--line)';
+    const fill = gold ? 'var(--gold-bg)' : mint ? 'var(--leaf)' : label === 'Emerging' ? 'var(--tint)' : 'var(--sunk)';
+    const stroke = gold ? 'var(--gold)' : mint ? 'var(--forest)' : label === 'Emerging' ? 'var(--tint-line)' : 'var(--line)';
     return `<svg viewBox="0 0 34 34" aria-hidden="true"><path d="M17 1.8 30.2 9.4v15.2L17 32.2 3.8 24.6V9.4L17 1.8Z" fill="${fill}" stroke="${stroke}" stroke-width="1.4"/></svg>`;
   };
   /* One explainer for operators and clients (scope: reuse the operator "i" tooltip, drop "your",

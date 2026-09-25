@@ -228,7 +228,7 @@
   const fakeOp = (d) => ({
     name: d.fullName || 'Your name', initials: RN.fmt.initials(d.fullName || 'Y N'), photo: d.photo || '',
     avail: { key: d.availability, label: d.availability ? RN.w.label('availability', d.availability) : 'Availability not set', hours: hoursShort(d.hoursPerMonth) },
-    ris: { score: 50, label: 'Vetted' },
+    ris: { score: 50, label: 'Emerging' },
   });
   function previewCard(d) {
     const op = fakeOp(d);
@@ -492,7 +492,7 @@
             <ol>
               <li>A person on the team checks your LinkedIn and work history within 2 business days.</li>
               <li>If something needs a change, we email you what to fix. Your profile stays hidden until it is approved.</li>
-              <li>Once approved, it goes live at Reputation Index 50, tier Vetted, and Studio starts tracking who views it.</li>
+              <li>Once approved, it goes live at Reputation Index 50, tier Emerging, and Studio starts tracking who views it.</li>
             </ol>
           </div>
         </aside>
@@ -868,7 +868,7 @@
     RN.track('signup_submit', { meta: { appId: id, roleCategory: cat, role: d.role, tags: (d.fitTags || []).length, roleDetails: Object.keys(roleDetails).length, completeness: [d.photo, d.video].filter(Boolean).length } });
     // One team alert only: Admin sends "New operator application" when the pending record lands (admin.js sendAlert).
     RN.mail(profile.email, 'We received your profile',
-      `Hi ${profile.first},\nThanks for applying to Revenue Nomad as a Fractional ${profile.role}. A person on the team reviews every application within 2 business days, so expect an update by ${dayName(reviewBy)}.\n\nWhat happens next:\n1. We check your LinkedIn and work history. If something needs a change, we email you what to fix.\n2. Once approved, your profile goes live in the directory at Reputation Index 50, tier Vetted. It stays hidden until then.\n3. Request reviews from 3 past clients to reach Proven.\n\nStudio shows who viewed you from the day you go live.\nReference: ${id}`, 'signup');
+      `Hi ${profile.first},\nThanks for applying to Revenue Nomad as a Fractional ${profile.role}. A person on the team reviews every application within 2 business days, so expect an update by ${dayName(reviewBy)}.\n\nWhat happens next:\n1. We check your LinkedIn and work history. If something needs a change, we email you what to fix.\n2. Once approved, your profile goes live in the directory at Reputation Index 50, tier Emerging. It stays hidden until then.\n3. Request reviews from 3 past clients to reach Proven.\n\nStudio shows who viewed you from the day you go live.\nReference: ${id}`, 'signup');
     if (videoURL) { URL.revokeObjectURL(videoURL); videoURL = null; }
     lastMounted = null;
     RN.go('join.done');
@@ -933,9 +933,9 @@
   function ladder() {
     const tiers = RN.fields.risTier.options.filter((t) => t.v !== 'indexing').slice().reverse();
     return `<div class="jn-ladder" role="list" aria-label="Reputation Index tiers">
-      ${tiers.map((t) => `<div role="listitem" class="jn-rung ${t.v === 'vetted' ? 'here' : t.v === 'proven' ? 'next' : ''}">
+      ${tiers.map((t) => `<div role="listitem" class="jn-rung ${t.v === 'emerging' ? 'here' : t.v === 'proven' ? 'next' : ''}">
         <span class="jn-rung-bar"></span><b>${esc(t.l)}</b><span>${t.min}${t.max === 100 ? '+' : '–' + t.max}</span>
-        ${t.v === 'vetted' ? '<em>You start here</em>' : t.v === 'proven' ? '<em>3 reviews</em>' : ''}
+        ${t.v === 'emerging' ? '<em>You start here</em>' : t.v === 'proven' ? '<em>3 reviews</em>' : ''}
       </div>`).join('')}
     </div>`;
   }
@@ -954,7 +954,7 @@
       return `<section class="night jn-done-hero"><div class="wrap">
           <span class="eyebrow">Operator applications</span>
           <h1 class="h1">What happens after <span class="serif">you apply</span></h1>
-          <p class="lede">The team reviews every application within 2 business days. Approved profiles go live in the directory at Reputation Index 50, tier Vetted.</p>
+          <p class="lede">The team reviews every application within 2 business days. Approved profiles go live in the directory at Reputation Index 50, tier Emerging.</p>
           <div class="row jn-done-actions"><button type="button" class="btn btn-leaf btn-lg" data-act="join-start">${hasDraft() ? 'Continue application' : 'Start application'}${icon('arrow')}</button><a class="btn btn-line btn-lg" href="#operators">Why operators join</a></div>
         </div></section>
         <section class="wrap jn-done-body"><div class="jn-done-grid">
@@ -1034,7 +1034,7 @@
     const items = [
       { st: app ? 'done' : '', ic: 'send', when: app ? `Done · ${RN.fmt.dateShort(sub)}` : 'Day 0', t: app ? 'Profile submitted' : 'You submit your profile', d: 'Your answers are saved with the same fields clients filter by, so nothing needs re-entering.' },
       { st: reviewed ? 'done' : app ? 'now' : '', ic: 'shield', when: app ? (reviewed ? 'Done' : `By ${dayName(reviewBy)}`) : 'Within 2 business days', t: 'A person on the team reviews it', d: 'We check your LinkedIn and work history against your answers, and may ask for a short call. If something needs a change, we email you what to fix. Your profile stays hidden until it is approved.' },
-      { st: live ? 'done' : '', ic: 'eye', when: 'Same day as approval', t: 'Your profile goes live', d: 'You appear in Browse, search and your role category page at Reputation Index 50, tier Vetted.' },
+      { st: live ? 'done' : '', ic: 'eye', when: 'Same day as approval', t: 'Your profile goes live', d: 'You appear in Browse, search and your role category page at Reputation Index 50, tier Emerging.' },
       { st: '', ic: 'star', when: 'First weeks', t: 'Request 3 client reviews to reach Proven', d: `Each completed review adds about ${gain} points and verifies the fit tags the client confirms. Three reviews take a new profile from 50 to about ${reached}, tier Proven.` },
       { st: '', ic: 'chart', when: 'From the day you go live', t: 'Studio shows who viewed you', d: 'See the company size and industry of every visitor, the searches you appeared in, and when you were compared and not chosen.' },
     ];

@@ -210,7 +210,7 @@
   .br-apply { max-width: none; }
 }
 
-/* Workaround (core bug, reported): in dark mode .ris-seal b is --forest-deep on the dark Vetted/Indexing/Elite
+/* Workaround (core bug, reported): in dark mode .ris-seal b is --forest-deep on the dark Emerging/Indexing/Elite
    seal fills, so the score disappears. Light text on dark fills; the mint (Proven/Trusted) seal keeps dark text. */
 :root[data-theme="dark"] .br-page .ris-seal b { color: var(--ink); }
 :root[data-theme="dark"] .br-page .ris-seal:has(path[fill="var(--leaf)"]) b { color: var(--forest-deep); }

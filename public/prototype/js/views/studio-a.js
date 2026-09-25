@@ -292,7 +292,7 @@
       } else if (e.type === 'impression') {
         const k = (e.q || '') + '|' + (e.source || '') + '|' + (e.surface || '') + '|' + e.ts.slice(0, 16);
         if (searchSeen[k]) return; searchSeen[k] = 1;
-        const where = e.surface === 'homepage_vetted' ? 'You appeared in the homepage Vetted row'
+        const where = e.surface === 'homepage_emerging' ? 'You appeared in the homepage Emerging row'
           : e.surface === 'homepage_carousel' || e.source === 'home' ? 'You were featured on the homepage'
           : e.source === 'talk' ? `You were suggested to a client${e.q ? ' who needs to ' + e.q.toLowerCase() : ''}`
           : e.surface === 'related_operators' ? 'You were suggested as a similar operator'

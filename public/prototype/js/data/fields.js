@@ -265,9 +265,9 @@
   /* ---------- Reputation Index (RIS) ----------
      Three ladders conflicted (sheet L247, explorer REP_TIERS, live stored labels; comment H390).
      Decision: the explorer ladder, derived from the score everywhere (operator view == client view),
-     consistent with the floor of 50 (L381). The entry tier is "Vetted", not "Verified": 78 of 100 live
-     profiles sit at 50 with no client evidence, so "Verified" is kept for client-confirmed proof only
-     (verified fit tags, verified engagements). */
+     consistent with the floor of 50 (L381). The entry tier is named "Emerging" (founder decision, Sep 25, 2026),
+     not "Verified": 78 of 100 live profiles sit at 50 with no client evidence, so "Verified" is reserved for
+     client-confirmed proof only (verified fit tags, verified engagements). */
   F.risTier = {
     label: 'Reputation Index tier', type: 'single',
     options: [
@@ -275,14 +275,14 @@
       { v: 'elite', l: 'Elite', min: 80, max: 89, d: 'A deep record of reviewed outcomes across multiple clients.' },
       { v: 'trusted', l: 'Trusted', min: 70, max: 79, d: 'Repeat engagements and consistently strong client reviews.' },
       { v: 'proven', l: 'Proven', min: 60, max: 69, d: 'Verified engagements, client reviews and published proof of work.' },
-      { v: 'vetted', l: 'Vetted', min: 50, max: 59, d: 'Identity and work history checked by the Revenue Nomad team. Every approved profile starts at 50.' },
+      { v: 'emerging', l: 'Emerging', min: 50, max: 59, d: 'Identity and work history checked by the Revenue Nomad team. Every approved profile starts at 50.' },
       { v: 'indexing', l: 'Indexing', min: 0, max: 49, d: 'New to the network. Shown until the profile is approved and scored.' },
     ],
   };
   // What each tier unlocks (proposal). Tiers move only on client evidence; nothing on the ladder is paid.
   F.risUnlocks = {
     indexing: ['Your profile is reviewed by the team within 2 business days', 'Studio setup checklist while you wait'],
-    vetted: ['Listed and searchable in Browse', 'Studio insights: who viewed you, why you appeared, positioning, search and AI visibility', 'Proof links for your direct deals (5 a month)', 'Fractional roles and predictive prospects in Opportunities'],
+    emerging: ['Listed and searchable in Browse', 'Studio insights: who viewed you, why you appeared, positioning, search and AI visibility', 'Proof links for your direct deals (5 a month)', 'Fractional roles and predictive prospects in Opportunities'],
     proven: ['Unlimited proof links', 'Embeddable verified badge with a dated verification page'],
     trusted: ['Priority placement on role category pages', 'Eligible for the curated shortlists the team sends to clients'],
     elite: ['First in line for homepage features', 'Invited to State of Fractional GTM research panels'],

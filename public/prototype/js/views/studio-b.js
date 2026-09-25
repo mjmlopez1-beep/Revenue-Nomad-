@@ -542,21 +542,21 @@
      ====================================================================== */
   // What each tier unlocks. Nothing on the ladder is paid: tiers move only with client evidence.
   const UNLOCKS = RN.fields.risUnlocks; // one source, shared with For operators and Levels
-  const tierRank = (v) => ['indexing', 'vetted', 'proven', 'trusted', 'elite', 'apex'].indexOf(v);
+  const tierRank = (v) => ['indexing', 'emerging', 'proven', 'trusted', 'elite', 'apex'].indexOf(v);
   const tierOf = (op) => RN.fields.risTierFor(op.ris.score).v;
-  // RN.fields.risUnlocks: proof links from Vetted (5 a month), unlimited links and the badge from Proven
+  // RN.fields.risUnlocks: proof links from Emerging (5 a month), unlimited links and the badge from Proven
   const badgeUnlocked = (op) => tierRank(tierOf(op)) >= tierRank('proven');
   const PROOF_MONTHLY = 5;
   function proofQuota(op) {
     const n = RN.now();
     const used = st().proofLinks.filter((l) => { const d = new Date(l.createdAt); return l.opId === op.id && d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth(); }).length;
-    const unlocked = tierRank(tierOf(op)) >= tierRank('vetted');
+    const unlocked = tierRank(tierOf(op)) >= tierRank('emerging');
     const unlimited = tierRank(tierOf(op)) >= tierRank('proven');
     const left = unlimited ? Infinity : Math.max(0, PROOF_MONTHLY - used);
     return { unlocked, unlimited, used, left, canCreate: unlocked && left > 0 };
   }
   const nextMonth = () => { const n = RN.now(); return RN.fmt.dateShort(new Date(n.getFullYear(), n.getMonth() + 1, 1)); };
-  const quotaText = (q) => (!q.unlocked ? 'Proof links unlock when your profile is approved at Vetted.'
+  const quotaText = (q) => (!q.unlocked ? 'Proof links unlock when your profile is approved at Emerging.'
     : q.unlimited ? 'Unlimited proof links at your tier.'
     : q.left ? `${q.left} of ${PROOF_MONTHLY} proof links left this month · Unlimited at Proven`
     : `All ${PROOF_MONTHLY} proof links used this month. More on ${nextMonth()}, or unlimited at Proven.`);
@@ -705,12 +705,12 @@
     const q = proofQuota(op);
     const leads = st().intros.filter((i) => i.opId === op.id && isProofLead(i)).length;
     const action = q.canCreate ? `<button type="button" class="btn btn-sm" data-act="sb-proof-new">${icon('link')}Create proof link</button>`
-      : `<span class="pill">${icon('lock')}${q.unlocked ? 'Monthly limit reached' : 'Unlocks at Vetted'}</span>`;
+      : `<span class="pill">${icon('lock')}${q.unlocked ? 'Monthly limit reached' : 'Unlocks at Emerging'}</span>`;
     return `<section class="card" id="sb-c-proof" aria-labelledby="sb-proof-h">
       <div class="card-hd"><div><h3 id="sb-proof-h">Proof links</h3><p class="sub">A private page for one prospect with the proof you choose. You see who read what; they see a notice that you can.</p>
         <p class="sb-quota ${q.unlimited ? '' : q.left ? 'is-count' : 'is-out'}"><span class="sb-quota-t">${icon(q.unlimited ? 'check-circle' : 'link')}${esc(quotaText(q))}</span>${leads ? `<a class="act" href="#studio.inbox">${leads} ${leads === 1 ? 'request' : 'requests'} in your Inbox</a>` : ''}</p></div>
         ${action}</div>
-      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: q.unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock when your profile is approved at Vetted (5 a month). Unlimited from Proven.', cta: q.canCreate ? '<button type="button" class="btn btn-line btn-sm" data-act="sb-proof-new">Create your first proof link</button>' : '' })}
+      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: q.unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock when your profile is approved at Emerging (5 a month). Unlimited from Proven.', cta: q.canCreate ? '<button type="button" class="btn btn-line btn-sm" data-act="sb-proof-new">Create your first proof link</button>' : '' })}
     </section>`;
   }
   function proofCard(l) {
@@ -1003,7 +1003,7 @@
 
   /* ---------- Proof link: create, copy, open ---------- */
   /* RN.studioB.openProofModal(opts) opens it anywhere in Studio. opts: { company, contact, from: 'outreach' }.
-     Vetted operators get 5 links a month; Proven and above are unlimited (RN.fields.risUnlocks). */
+     Emerging operators get 5 links a month; Proven and above are unlimited (RN.fields.risUnlocks). */
   function openProofModal(o) {
     o = o || {};
     const op = RN.myOp();

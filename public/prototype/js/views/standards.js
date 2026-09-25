@@ -16,7 +16,7 @@
     Object.values(F.roleFields || {}).forEach((keys) => keys.forEach((k) => { if (!SHARED_KEYS.includes(k) && !out.includes(k)) out.push(k); }));
     return out;
   };
-  const vettedCount = () => { const ops = (RN.model && RN.model.ops) || []; return `${ops.filter((o) => o.ris && o.ris.tier === 'vetted').length} of ${ops.length} profiles`; };
+  const emergingCount = () => { const ops = (RN.model && RN.model.ops) || []; return `${ops.filter((o) => o.ris && o.ris.tier === 'emerging').length} of ${ops.length} profiles`; };
   const risMinText = () => (F.risMin.options || []).map((o) => o.l).join(', ');
 
   const GROUPS = () => [
@@ -48,9 +48,9 @@
   }
 
   const DECISIONS = () => [
-    ['Three Reputation Index ladders and different labels for operators and clients (sheet L247, explorer, live data, comment H390)', 'One ladder derived from the score everywhere: Indexing below 50 (before approval), Vetted 50–59, Proven 60–69, Trusted 70–79, Elite 80–89, Apex 90–100. What each tier unlocks is proposed (RN.fields.risUnlocks).'],
-    ['L483 (live, Sep 4): show Indexing until a real score exists, because a default 50 "makes the data look fake"', `Not carried yet. The prototype shows new operators at Vetted 50 from approval (${vettedCount()}). Confirm which one ships: Vetted 50 at approval, or Indexing with no number until the first client review.`],
-    ['"Verified" shown at score 50 on 78 of 100 live profiles with no client evidence', 'Entry tier is "Vetted". "Verified" is reserved for client-confirmed proof: verified fit tags and verified engagements.'],
+    ['Three Reputation Index ladders and different labels for operators and clients (sheet L247, explorer, live data, comment H390)', 'One ladder derived from the score everywhere: Indexing below 50 (before approval), Emerging 50–59, Proven 60–69, Trusted 70–79, Elite 80–89, Apex 90–100. What each tier unlocks is proposed (RN.fields.risUnlocks).'],
+    ['L483 (live, Sep 4): show Indexing until a real score exists, because a default 50 "makes the data look fake"', `Not carried yet. The prototype shows new operators at Emerging 50 from approval (${emergingCount()}). Confirm which one ships: Emerging 50 at approval, or Indexing with no number until the first client review.`],
+    ['"Verified" shown at score 50 on 78 of 100 live profiles with no client evidence', 'Confirmed by the founder (Sep 25, 2026): the entry tier is named "Emerging". "Verified" is reserved for client-confirmed proof: verified fit tags and verified engagements.'],
     ['Intro start timeline ASAP / 2 Weeks / 1+ Month vs availability chips', 'The client\'s start timeline uses the availability values, so requests match availability with no translation.'],
     ['Review form Project / Retainer and LinkedIn company size bands', 'Review form uses the four engagement types and the standard employee ranges.'],
     ['Hours stored as raw numbers (legacy 5, 10, 15, 30)', 'Stored as chip codes: 19 (<20), 20, 40, 60, 80, 100, 160 hrs / month.'],

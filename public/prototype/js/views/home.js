@@ -88,8 +88,8 @@
   const pool = () => liveOps().filter((o) => o.photo && !isFounder(o));
   // Featured: Proven and above only (the tier ladder's unlock), up to three
   function featured() { return pool().filter((o) => o.ris.score >= PROVEN).sort(curate).slice(0, 3); }
-  // A separate, labelled row: Vetted operators who can start now
-  function vettedNow() {
+  // A separate, labelled row: Emerging operators who can start now
+  function emergingNow() {
     const feat = featured();
     return pool().filter((o) => o.ris.score < PROVEN && !feat.includes(o) && o.avail && o.avail.key === 'available_now').sort(curate).slice(0, 3);
   }
@@ -245,7 +245,7 @@
   /* ---------- Featured operators ---------- */
   function featuredSec() {
     const feat = featured();
-    const vet = vettedNow();
+    const emerging = emergingNow();
     const n = liveOps().length;
     const how = `<aside class="hm-feat-how ${feat.length >= 3 ? 'wide' : ''}" aria-label="How featuring works">
         ${icon('seal')}
@@ -258,8 +258,8 @@
         ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles in this prototype`, 'href="#browse" data-act="hm-all"'))}
         <div class="hm-row-hd"><h3 class="label">Featured · Proven and above</h3></div>
         <div class="hm-ops hm-ops-feat">${feat.map((op) => RN.ui.opCard(op)).join('')}${how}</div>
-        ${vet.length ? `<div class="hm-row-hd"><h3 class="label">Vetted · available now</h3><span class="small muted">Approved by our team. Client reviews still to come.</span></div>
-        <div class="hm-ops">${vet.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
+        ${emerging.length ? `<div class="hm-row-hd"><h3 class="label">Emerging · available now</h3><span class="small muted">Approved by our team. Client reviews still to come.</span></div>
+        <div class="hm-ops">${emerging.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
       </div>
     </section>`;
   }
@@ -811,7 +811,7 @@
       if (!S.impressed) {
         S.impressed = true;
         featured().forEach((op, i) => RN.track('impression', { opId: op.id, position: i + 1, source: 'home', surface: 'homepage_carousel' }));
-        vettedNow().forEach((op, i) => RN.track('impression', { opId: op.id, position: i + 1, source: 'home', surface: 'homepage_vetted' }));
+        emergingNow().forEach((op, i) => RN.track('impression', { opId: op.id, position: i + 1, source: 'home', surface: 'homepage_emerging' }));
       }
     },
     unmount: () => { teardown(); S.played = false; S.impressed = false; },

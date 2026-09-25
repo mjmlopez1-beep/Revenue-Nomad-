@@ -341,7 +341,7 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
 .pg-seal { position: relative; display: grid; place-items: center; flex: 0 0 auto; width: 48px; height: 48px; font-family: var(--f-display); font-weight: 800; font-size: var(--t-14); color: var(--forest-deep); }
 .pg-seal svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .pg-seal b { position: relative; }
-.pg-rung-indexing .pg-seal, .pg-rung-vetted .pg-seal { color: var(--ink); }
+.pg-rung-indexing .pg-seal, .pg-rung-emerging .pg-seal { color: var(--ink); }
 .pg-rung-elite .pg-seal, .pg-rung-apex .pg-seal { color: var(--gold); }
 .pg-rung-name { font-family: var(--f-display); font-size: var(--t-15); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .pg-rung-elite .pg-rung-name, .pg-rung-apex .pg-rung-name { color: var(--gold); }

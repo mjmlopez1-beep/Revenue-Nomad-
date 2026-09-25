@@ -253,7 +253,7 @@
 /* Preview card (review + done) */
 .jn-prev.opc:hover { transform: none; box-shadow: none; border-color: var(--line-2); }
 .jn-prev .opc-head { font-size: var(--t-16); }
-/* Work around: .ris-seal text is --forest-deep, which disappears on the Vetted --tint fill in dark mode */
+/* Work around: .ris-seal text is --forest-deep, which disappears on the Emerging --tint fill in dark mode */
 .jn-prev .ris-seal b { color: var(--ink); }
 .jn-prev .opc-head.muted { color: var(--mute-2); }
 

@@ -293,7 +293,7 @@
     const cred = studioRoute(/cred/i, 'studio');
     const operators = [
       { t: 'Apply', d: 'One intake with the same fields clients filter on: role, company fit, role details, availability, rate and fit tags.', l: act('join.operator', 'Apply to join') },
-      { t: 'Vetted at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Vetted, a Reputation Index of 50.', l: act('levels', 'See the levels') },
+      { t: 'Emerging at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50.', l: act('levels', 'See the levels') },
       { t: 'Studio insights from day one', d: 'See the searches you appeared in, the kinds of companies that viewed you, and where your rate sits against the Rate Index.', l: asLink('operator', studioRoute(/visib/i), { mine: `Open Studio${icon('arrow')}`, other: `See Studio as Matt${icon('arrow')}` }, 'act') },
       { t: 'Verified proof raises your Reputation Index', d: 'Ask past clients for a CORE review from Studio. Each review rated 4.0 or higher verifies the fit tags it confirms and lifts your score.', l: asLink('operator', cred, { mine: `Open review requests${icon('arrow')}`, other: `See review requests as Matt${icon('arrow')}` }, 'act') },
       { t: 'Direct deals with proof links', d: 'Send a prospect a private proof link with your reviews and engagement history, then see which sections they read. Proposed: no fee on deals you bring yourself.', l: asLink('operator', cred, { mine: `Create a proof link${icon('arrow')}`, other: `See proof links as Matt${icon('arrow')}` }, 'act') },
@@ -884,7 +884,7 @@
     const faq = [
       ['Does it cost anything to join?', 'No. Everything on this page is free. If we ever charge operators, it will be for tools such as more proof links or a custom domain. Rank, labels and badges will never be for sale.'],
       ['Do you take a fee on my deals?', 'Proposed: no fee on deals you bring yourself, including deals you win with a proof link. On engagements that start from a Revenue Nomad project, the proposed platform fee is 25%: the client sees an all-in rate and you see your take-home. The founder is confirming both, and we will say so plainly before anything changes.'],
-      ['How long does approval take?', 'We review applications within 2 business days. Approved profiles go live at Vetted, a Reputation Index of 50, and Studio opens the same day.'],
+      ['How long does approval take?', 'We review applications within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50, and Studio opens the same day.'],
       ['I have no reviews yet. Will clients find me?', 'Yes. Search ranks on fit first: role, focus areas, company size and industry. A complete profile ranks higher, and Studio shows which searches you appear in so you can close the gaps.'],
       ['Can I see which companies viewed me?', 'You see the type of company: industry, revenue range and employee range. Never the name. Clients browse more when they know that, which means more views for you.'],
       ['Who sees my rate?', 'Signed-in clients see it on your card and profile. It also feeds the Rate Index, anonymized, so every operator can price with real data.'],
@@ -992,7 +992,7 @@
 
   function levelsView() {
     const counts = tierCounts();
-    const vetted = counts.vetted || 0;
+    const emerging = counts.emerging || 0;
     const total = RN.model.ops.length;
     const factors = RN.fields.risFactors.options;
     const maxW = Math.max(...factors.map((f) => f.w || 0), 0.01);
@@ -1004,8 +1004,8 @@
       ['lock', 'No pay-to-win', 'Nothing you can buy moves a score, a label or a place in search. The inputs are client evidence and a complete profile.'],
       ['send', 'Reviews auto-publish', 'There is no moderation queue and no hand-picking. Every review counts the day it lands, good or bad.'],
       ['users', 'One label for clients and operators', 'The label comes from the score, and the score is the same on cards, profiles, compare and in Studio.'],
-      ['seal', 'Vetted and Verified mean different things', 'Vetted means our team checked identity and work history. Verified is kept for what a client confirmed: focus areas and engagements.'],
-      ['layers', 'A floor of 50', 'Every approved profile starts at 50, so a new operator with no reviews yet still shows as Vetted.'],
+      ['seal', 'Emerging and Verified mean different things', 'Emerging means our team checked identity and work history. Verified is kept for what a client confirmed: focus areas and engagements.'],
+      ['layers', 'A floor of 50', 'Every approved profile starts at 50, so a new operator with no reviews yet still shows as Emerging.'],
     ];
     // Only offer minimums that at least one profile in this prototype meets
     const risOpts = RN.fields.risMin.options.map((o) => ({ o, n: RN.model.ops.filter((op) => op.ris.score >= +o.v).length })).filter((x) => x.n > 0);
@@ -1019,7 +1019,7 @@
 
     <section class="section pg-ladder-sec">
       <div class="wrap">
-        ${shead('The ladder', 'Six tiers, one for every score.', `${RN.fmt.int(vetted)} of ${RN.fmt.int(total)} profiles in this prototype sit at Vetted today. That is expected on a network that started collecting client reviews this year, and it is why every review moves a profile. What each tier unlocks is proposed and not final.`)}
+        ${shead('The ladder', 'Six tiers, one for every score.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. That is expected on a network that started collecting client reviews this year, and it is why every review moves a profile. What each tier unlocks is proposed and not final.`)}
         ${ladder({ desc: true, counts: true, me: true })}
       </div>
     </section>
