@@ -248,7 +248,7 @@
           <span class="eyebrow">A note from our founder</span>
           <blockquote class="pg-founder-q">I still take fractional engagements myself, and my profile sits on this platform with the same scoring as everyone else.</blockquote>
           <p class="pg-p">I have been the fractional CRO walking into a team that did not ask for me. I have built the playbook, sold the first deals to prove it worked, then hired and managed the people who took it over. That is a different job from being a great closer, and it is the job most growing companies actually need done.</p>
-          <p class="pg-p">When you reach out, you get me or someone on our team who has sat in your seat. We will tell you honestly if fractional is the wrong answer for you right now.</p>
+          <p class="pg-p">When you reach out, you get someone who has sat in your seat before. We will tell you honestly if fractional is the wrong answer for you right now.</p>
           <div class="pg-sign"><b>Matt Lopez</b><span>Founder and CEO</span>${matt ? `<span class="pg-sign-ris">${RN.ui.ris(matt)}</span>` : ''}</div>
           ${eng.length ? `<div class="pg-track-wrap"><span class="label">Engagements include</span><ol class="pg-track">${eng.map((e) => `<li><span class="pg-track-y">${esc(yr(e))}</span><b>${esc(e.company)}</b><span>${esc(e.role)}</span></li>`).join('')}</ol></div>` : ''}
           <div class="row pg-founder-cta">${matt ? `<a class="act" href="#op.${esc(matt.slug)}">See Matt’s profile, same rules as everyone${icon('arrow')}</a>` : ''}<button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call with the team</button></div>
@@ -270,7 +270,7 @@
           <dl class="pg-dl">
             <div><dt>Who runs it</dt><dd>Founder led by Matt Lopez, with a small team that has done this work.</dd></div>
             <div><dt>The network</dt><dd>350+ operators on the live network across ${cats} go-to-market disciplines, each reviewed by our team. This prototype loads ${RN.fmt.int(ops.length)} of them from the live export.</dd></div>
-            <div><dt>Since</dt><dd>The open platform took ten months to build and launched in August 2026.</dd></div>
+            <div><dt>Since</dt><dd>Revenue Nomad launched in September 2023. The open platform launched in August 2026.</dd></div>
             <div><dt>Who we serve</dt><dd>B2B companies from their first sales hire to established teams going through a transformation.</dd></div>
             <div><dt>Research</dt><dd>The State of Fractional GTM ${esc(R.year)} surveys operators and hiring companies. The figures in this prototype are illustrative. ${illus()}</dd></div>
             <div><dt>Reach a person</dt><dd><div class="stack" style="--gap:10px"><span><a class="link" href="mailto:${EMAIL}">${EMAIL}</a>, or <a class="link" href="#talk">Talk to us</a> and expect a reply within one business day.</span>${PG.phone()}</div></dd></div>
