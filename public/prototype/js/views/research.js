@@ -1084,7 +1084,7 @@
     <section class="wrap rs-sec-sm" id="rs-lib-browser" aria-labelledby="rs-lib-t">
       <h2 class="sr-only" id="rs-lib-t">Browse the library</h2>
       <div class="rs-lib-bar">
-        <div class="input-wrap rs-lib-search">${icon('search')}<input class="input" type="search" value="${esc(lib.q)}" placeholder="Search ${libN} focus areas" aria-label="Search focus areas" data-input="rs-lib-q" autocomplete="off"></div>
+        <div class="input-wrap rs-lib-search">${icon('search')}<input class="input" type="search" value="${esc(lib.q)}" placeholder="Search ${RN.fmt.int(libN)} focus areas" aria-label="Search focus areas" data-input="rs-lib-q" autocomplete="off"></div>
         <div class="rs-lib-cats" data-deselect><span class="label">${esc(F.roleCategory.label)}</span>${RN.w.control('roleCategory', lib.cat, { name: 'rsLibCat', id: 'rs-lib-cat', change: 'rs-lib-cat' })}</div>
         <div class="rs-lib-meta">
           <span class="row rs-lib-count-row" style="--gap:10px"><span class="small" id="rs-lib-count" aria-live="polite">${esc(r.count)}</span>${illus('Search counts illustrative')}</span>

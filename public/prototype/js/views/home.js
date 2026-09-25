@@ -289,7 +289,7 @@
           <span class="eyebrow">The GTM Framework</span>
           <h2 class="h2 hm-h2">One shared map of go-to-market work.</h2>
           <p class="lede">Every focus area on Revenue Nomad maps to an area of go-to-market work and the stage of the client journey it moves. Operators are scored against it. Companies use it to find the gap.</p>
-          <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Journey stages</dd></div><div><dt class="num">${lib.length}</dt><dd>Focus areas</dd></div></dl>
+          <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Journey stages</dd></div><div><dt class="num">${RN.fmt.int(lib.length)}</dt><dd>Focus areas</dd></div></dl>
           ${more('Explore the framework', 'href="#framework"')}
         </div>
         <div>
