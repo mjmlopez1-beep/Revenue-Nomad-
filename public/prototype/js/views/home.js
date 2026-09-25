@@ -15,8 +15,8 @@
    - The activity strip reads intros, projects, review requests, reviews and pending applications
      from the store. Seeded records and hand-written samples are illustrative (one RN.ui.illus()
      on the strip); records created in this prototype session are marked "Your session".
-   - The Fractional GTM brief (monthly newsletter) stores seen['hm-brief'], tracks
-     'newsletter_signup' {source:'home', meta:{list:'brief'}} and mails a confirmation to the Outbox.
+   - The Fractional GTM Pulse (the one weekly newsletter, shared with Insights) stores seen['ins-pulse'], tracks
+     'newsletter_signup' {source:'home', meta:{list:'pulse'}} and mails a confirmation to the Outbox.
    Type: .h-hero for the H1, .h2 for section heads, .h1 for the closing band. One Newsreader italic
    accent on the page (the hero line). */
 (function () {
@@ -29,7 +29,7 @@
   const PH = 'Search a role, focus area or industry';
   const TYPE_WORDS = ['VP of Sales', 'RevOps', 'Demand Generation', 'Outbound Motion Build', 'Partnerships', 'HubSpot'];
   const PROVEN = 60; // Reputation Index floor for a featured spot (RN.fields.risUnlocks)
-  const BRIEF_KEY = 'hm-brief';
+  const BRIEF_KEY = 'ins-pulse'; // same list and key as the Insights sign-up
 
   // Icons for the problem picklist (RN.fields.need) and the GTM Framework areas (same map as research.js)
   const NEED_IC = { sales_motion: 'target', pipeline: 'trend-up', team: 'users', systems: 'layers', ai: 'ai', retention: 'refresh', partners: 'handshake', not_sure: 'message' };
@@ -393,14 +393,14 @@
     </section>`;
   }
 
-  /* ---------- The Fractional GTM brief (monthly newsletter) ---------- */
-  const nextIssue = () => { const n = RN.now(); return new Date(n.getFullYear(), n.getMonth() + 1, 1); };
+  /* ---------- The Fractional GTM Pulse (weekly newsletter, same list as Insights) ---------- */
+  const nextIssue = () => { const n = RN.now(); return new Date(n.getFullYear(), n.getMonth(), n.getDate() + (((8 - n.getDay()) % 7) || 7)); };
   const briefSub = () => (RN.store.state.seen || {})[BRIEF_KEY] || null;
   function briefInner() {
     const sub = briefSub();
     if (sub) {
       return `<div class="hm-brief-done" tabindex="-1" data-hm-brief-done>
-        <p>${icon('check-circle')}<span>Subscribed as <b>${esc(sub.email)}</b>. The next brief lands ${esc(RN.fmt.date(nextIssue()))}.</span></p>
+        <p>${icon('check-circle')}<span>Subscribed as <b>${esc(sub.email)}</b>. The next Pulse lands ${esc(RN.fmt.date(nextIssue()))}.</span></p>
         <button type="button" class="act" data-act="hm-brief-unsub">Unsubscribe</button>
       </div>`;
     }
@@ -411,15 +411,15 @@
         ${input}
         <button type="submit" class="btn">Subscribe</button>
       </form>
-      <p class="tiny muted">One email a month. Unsubscribe in one click.</p>`;
+      <p class="tiny muted">One email every Monday. Unsubscribe in one click.</p>`;
   }
   function briefSec() {
     return `<section class="hm-brief section-sm" aria-labelledby="hm-brief-t">
       <div class="wrap hm-brief-in">
         <div class="hm-brief-txt">
-          <span class="eyebrow">Monthly newsletter</span>
-          <h2 class="h2" id="hm-brief-t">The Fractional GTM brief</h2>
-          <p>Rates, demand and new research on fractional go-to-market leadership. Once a month, free.</p>
+          <span class="eyebrow">Weekly newsletter</span>
+          <h2 class="h2" id="hm-brief-t">The Fractional GTM Pulse</h2>
+          <p>Every Monday: the Rate Index by role category, the Demand Index and the focus areas clients searched for. Free.</p>
         </div>
         <div class="hm-brief-slot" data-hm-brief>${briefInner()}</div>
       </div>
@@ -697,28 +697,27 @@
     };
     setTimeout(seek, 50);
   };
-  // The Fractional GTM brief: one email field, one button
+  // The Fractional GTM Pulse: one email field, one button
   RN.submits['hm-brief'] = (form, data) => {
     const email = String(data.email || '').trim();
     const inp = form.querySelector('input[name=email]');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       if (inp) { inp.setAttribute('aria-invalid', 'true'); inp.focus(); }
-      RN.ui.toast('Enter a work email to get the brief.', { icon: 'info' });
+      RN.ui.toast('Enter a work email to get the Pulse.', { icon: 'info' });
       return;
     }
     RN.store.update((s) => { s.seen = s.seen || {}; s.seen[BRIEF_KEY] = { email, ts: RN.now().toISOString(), source: 'home' }; }, 'seen');
-    RN.track('newsletter_signup', { source: 'home', meta: { list: 'brief' } });
+    RN.track('newsletter_signup', { source: 'home', meta: { list: 'pulse' } });
     const first = RN.fmt.date(nextIssue());
-    RN.mail(email, 'You are subscribed to The Fractional GTM brief',
-      `Thanks for subscribing to The Fractional GTM brief.\n\nOnce a month you get:\n- The Rate Index: median rates by role category\n- Demand: the Demand Index and what clients searched for\n- New research from Revenue Nomad, including the State of Fractional GTM\n\nFirst issue: ${first}.\nUnsubscribe from any issue in one click.`, 'newsletter');
-    RN.ui.toast(`Subscribed. The first brief lands ${esc(RN.fmt.dateShort(nextIssue()))}.`, { icon: 'mail', action: { label: 'Open outbox', act: 'outbox' } });
+    RN.mail(email, 'You are subscribed to the Fractional GTM Pulse', `Every Monday: the Rate Index by role category, the demand index, and the focus areas clients searched for that week.\n\nFirst issue: ${first}.\nUnsubscribe from any issue in one click.`, 'newsletter');
+    RN.ui.toast(`Subscribed. The next Pulse lands ${esc(RN.fmt.dateShort(nextIssue()))}.`, { icon: 'mail', action: { label: 'Open outbox', act: 'outbox' } });
     refreshBrief(true);
   };
   RN.actions['hm-brief-unsub'] = () => {
     const sub = briefSub();
     RN.store.update((s) => { if (s.seen) delete s.seen[BRIEF_KEY]; }, 'seen');
-    if (sub) RN.mail(sub.email, 'You are unsubscribed from The Fractional GTM brief', 'You will not get the monthly brief anymore. Rates and research stay open at Revenue Nomad Insights.', 'newsletter');
-    RN.ui.toast('Unsubscribed. No more monthly brief.');
+    if (sub) RN.mail(sub.email, 'You are unsubscribed from the Fractional GTM Pulse', 'You will not get the Monday email anymore. Rates and research stay open at Revenue Nomad Insights.', 'newsletter');
+    RN.ui.toast('Unsubscribed. No more Monday emails.');
     refreshBrief(false);
   };
 

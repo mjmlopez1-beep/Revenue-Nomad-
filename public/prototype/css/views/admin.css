@@ -18,6 +18,7 @@
 .adm-card-r { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .adm-foot { margin-top: var(--s-4); line-height: 1.5; }
 .adm-block { display: block; margin-top: 2px; }
+.adm-block svg { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
 .adm-stats-note { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: calc(var(--s-3) - var(--s-6)); line-height: 1.45; }
 .adm-code { display: inline-grid; place-items: center; min-width: 30px; height: 22px; padding: 0 6px; margin-right: 8px; border-radius: 6px; background: var(--tint); color: var(--accent); font-family: var(--f-mono); font-size: 12px; font-weight: 500; vertical-align: 1px; }
 .adm-bad { color: var(--bad); }

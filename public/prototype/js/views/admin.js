@@ -130,25 +130,35 @@
   // AP-05: one normalized search term per search, so "HubSpot Admin " and "hubspot admin" count once.
   const normQ = (q) => String(q || '').toLowerCase().replace(/[“”"'’]/g, '').replace(/[^a-z0-9&+/\s-]/g, ' ').replace(/\s+/g, ' ').trim();
 
+  // Browse's on/off "Client-verified proof" filter (filters.verifiedProof = true): shown as its label, never the raw key
+  const PROOF_L = 'Client-verified proof';
+  const hasProof = (op) => (RN.browse && RN.browse.hasProof ? RN.browse.hasProof(op) : (op.reviews || []).length > 0 || op.tags.some((t) => t.tier !== 'claimed'));
+  // RN.model.search plus the proof filter Browse applies after it, so counts match what a client sees
+  const liveSearch = (o) => { const r = RN.model.search(o); return o && o.filters && o.filters.verifiedProof ? r.filter((x) => hasProof(x.op)) : r; };
   function fmtVal(k, v) {
+    if (k === 'verifiedProof') return PROOF_L;
     if (k === 'rateMax') return '$' + v + '/hr';
     if (k === 'tags') return String(v);
     if (RN.fields[k]) return RN.w.label(k, v);
     return String(v);
   }
   function fieldName(k) {
+    if (k === 'verifiedProof') return PROOF_L;
     if (k === 'tags') return RN.fields.fitTags.clientLabel;
     return RN.fields[k] ? RN.fields[k].label : k;
   }
   function filterList(filters, tags) {
     const out = [];
-    Object.keys(filters || {}).forEach((k) => arr(filters[k]).forEach((v) => out.push({ k, v, l: fieldName(k), vl: fmtVal(k, v) })));
+    Object.keys(filters || {}).forEach((k) => {
+      if (k === 'verifiedProof') { if (filters[k] && filters[k] !== 'false') out.push({ k, v: '1', l: PROOF_L, vl: PROOF_L, flag: true }); return; }
+      arr(filters[k]).forEach((v) => out.push({ k, v, l: fieldName(k), vl: fmtVal(k, v) }));
+    });
     arr(tags).forEach((v) => out.push({ k: 'tags', v, l: fieldName('tags'), vl: v }));
     return out;
   }
   const filterChips = (filters, tags) => {
     const l = filterList(filters, tags);
-    return l.length ? `<span class="adm-fchips">${l.map((f) => `<span class="adm-fchip"><span>${esc(f.l)}</span>${esc(f.vl)}</span>`).join('')}</span>` : '<span class="tiny muted">No filters</span>';
+    return l.length ? `<span class="adm-fchips">${l.map((f) => `<span class="adm-fchip">${f.flag ? '' : `<span>${esc(f.l)}</span>`}${esc(f.vl)}</span>`).join('')}</span>` : '<span class="tiny muted">No filters</span>';
   };
 
   /* Supply share (live operators) vs client demand share (hiring intent, State of Fractional GTM) */
@@ -513,6 +523,7 @@
       case 'review_request': return { ic: 'star', t: `${who} asked a client for a review` };
       case 'review_submit': return { ic: 'star', t: `Submitted a review for ${who}` };
       case 'signup_submit': return { ic: 'user', t: 'Sent an operator application' };
+      case 'saved_search': return { ic: 'bookmark', t: e.q && String(e.q).trim() ? `Saved the search “${String(e.q).replace(/\s+/g, ' ').trim()}”` : 'Saved a filter-only search', sub: `${e.results != null ? RN.fmt.plural(+e.results, 'result') : ''}${filterList(e.filters, e.tags).length ? (e.results != null ? ' · ' : '') + filterList(e.filters, e.tags).map((f) => f.vl).slice(0, 3).join(', ') : ''}` };
       default: return { ic: 'bolt', t: String(e.type).replace(/_/g, ' ') };
     }
   }
@@ -565,6 +576,7 @@
       x.s++; x.live++; x.variants.add(e.q.trim());
       if (e.results != null && e.results !== '') x.lastResults = +e.results;
     });
+    liveEv('saved_search', days).filter((e) => e.q && e.q.trim()).forEach((e) => { const x = m.get(normQ(e.q)); if (x) x.saved = (x.saved || 0) + 1; });
     liveEv('impression', days).filter((e) => e.q).forEach((e) => { const x = m.get(normQ(e.q)); if (x) x.imp++; });
     liveEv('profile_view', days).filter((e) => e.q).forEach((e) => { const x = m.get(normQ(e.q)); if (x) x.views++; });
     const rows = [...m.values()].sort((a, b) => b.s - a.s).slice(0, 25);
@@ -595,7 +607,12 @@
       groups.set(key, g);
     });
     const live = [...groups.values()].sort((a, b) => ms(b.ts) - ms(a.ts));
-    live.forEach((g) => { g.now = RN.model.search({ q: g.q, tags: g.tags, filters: g.filters }).length; });
+    // Searches a client saved to run again are the strongest unmet demand: flag them on the row
+    const saved = liveEv('saved_search', days);
+    live.forEach((g) => {
+      g.now = liveSearch({ q: g.q, tags: g.tags, filters: g.filters }).length;
+      g.saved = saved.filter((e) => 'e:' + normQ(e.q) + '|' + JSON.stringify(e.filters || {}) + '|' + arr(e.tags).join(',') === g.key).length;
+    });
     return live.concat(base);
   }
 
@@ -608,7 +625,7 @@
     liveEv('search', days).forEach((e) => {
       filterList(e.filters, e.tags).forEach((x) => { const key = x.k + '|' + x.v; const r = m.get(key) || { k: x.k, v: x.v, n: 0 }; r.n++; m.set(key, r); });
     });
-    return [...m.values()].sort((a, b) => b.n - a.n).slice(0, 8).map((x) => ({ label: `${fieldName(x.k)}: ${fmtVal(x.k, x.v)}`, short: x.k === 'risMin' ? 'Reputation Index ' + fmtVal(x.k, x.v) : fmtVal(x.k, x.v), value: x.n }));
+    return [...m.values()].sort((a, b) => b.n - a.n).slice(0, 8).map((x) => ({ label: x.k === 'verifiedProof' ? PROOF_L : `${fieldName(x.k)}: ${fmtVal(x.k, x.v)}`, short: x.k === 'risMin' ? 'Reputation Index ' + fmtVal(x.k, x.v) : fmtVal(x.k, x.v), value: x.n }));
   }
 
   const FIRMO = {
@@ -678,6 +695,7 @@
     const recruit = seen().admRecruit || {};
     const nudged = seen().admTagNudged || {};
     const zeroN = zero.reduce((a, z) => a + z.n, 0);
+    const savedN = liveEv('saved_search', days).length;
     const win = `last ${days} days`;
     const seg = `<div class="seg" role="group" aria-label="Date range">${[7, 30, 90].map((d) => `<button type="button" class="${days === d ? 'on' : ''}" aria-pressed="${days === d}" data-act="adm-days" data-d="${d}">${d} days</button>`).join('')}</div>`;
     const shownTerms = ui.termsAll ? terms : terms.slice(0, 10);
@@ -685,7 +703,7 @@
     return `${head('Demand intelligence', 'What clients search for, what they cannot find, and where supply falls short. Every cut uses the same fields as operator profiles.', seg)}
 
       <div class="stats-row adm-stats" style="--cols:4">
-        <div class="stat"><span class="stat-v">${int(f.cur.s)}</span><span class="stat-l">Client searches, ${win} ${RN.ui.delta(f.cur.s, f.prev.s)}</span></div>
+        <div class="stat"><span class="stat-v">${int(f.cur.s)}</span><span class="stat-l">Client searches, ${win} ${RN.ui.delta(f.cur.s, f.prev.s)}${savedN ? `<span class="adm-block accent">${RN.fmt.plural(savedN, 'saved search', 'saved searches')} this session</span>` : ''}</span></div>
         <div class="stat"><span class="stat-v">${pct(zeroN / Math.max(1, f.cur.s), 1)}</span><span class="stat-l">Zero-result rate · ${int(zeroN)} searches</span></div>
         <div class="stat"><span class="stat-v">${pct(f.cur.v / Math.max(1, f.cur.i), 1)}</span><span class="stat-l">View rate (views per impression)</span></div>
         <div class="stat"><span class="stat-v">${pct(f.cur.r / Math.max(1, f.cur.v), 1)}</span><span class="stat-l">Intro rate (intros per view)</span></div>
@@ -703,7 +721,7 @@
               <td class="adm-w"><span class="adm-q">${z.q ? '“' + esc(z.q) + '”' : '<span class="muted">No keywords</span>'}</span>${z.base ? '' : `<span class="pill pill-accent adm-live">Live</span>`}</td>
               <td class="adm-w">${filterChips(z.filters, z.base ? [] : z.tags)}</td>
               <td class="r tnum" data-l="Searches">${int(z.n)}</td>
-              <td class="small" data-l="Last searched">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? 'Signed-in client' : 'Visitor, not signed in'}</span>`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>
+              <td class="small" data-l="Last searched">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? 'Signed-in client' : 'Visitor, not signed in'}</span>${z.saved ? `<span class="tiny accent adm-block">${icon('bookmark')}Saved by the client to run again</span>` : ''}`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>
               <td data-l="Status">${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : !z.base && z.now ? `<span class="pill pill-info">${RN.fmt.plural(z.now, 'match', 'matches')} now</span>` : '<span class="pill pill-bad">No match</span>'}</td>
               <td class="r adm-act-cell"><button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(z.key)}" aria-label="${esc((rec ? 'Edit recruiting note for ' : 'Recruit for ') + (z.q ? '“' + z.q + '”' : 'this filter-only search'))}">${rec ? 'Edit note' : 'Recruit'}</button></td>
             </tr>`;
@@ -719,12 +737,12 @@
       </section>
 
       <section class="card adm-sec">
-        ${cardHead('Top search terms', `Normalized to one term per search (AP-05), so spelling and case variants count once. Results is what Browse returns for the term today.`, illus())}
+        ${cardHead('Top search terms', `Normalized to one term per search (AP-05), so spelling and case variants count once. Results is what Browse returns for the term today. Terms clients saved to run again are marked.`, illus())}
         <div class="tbl-wrap"><table class="tbl adm-tbl adm-terms">
           <thead><tr><th>#</th><th>Search term</th><th class="r">Searches</th><th class="r">Results</th><th class="r adm-hide-m">Impressions</th><th class="r adm-hide-m">Views</th><th class="r">View rate</th><th class="r adm-hide-m">Intros</th><th class="r">Intro rate</th></tr></thead>
           <tbody>${shownTerms.map((x, i) => `<tr>
             <td class="tnum muted">${i + 1}</td>
-            <td><span class="adm-term">${esc(x.q)}</span>${x.live ? `<span class="pill pill-accent adm-live">${x.live} live</span>` : ''}${x.variants.size > 1 ? `<span class="tiny muted adm-block">${x.variants.size} spellings merged</span>` : ''}</td>
+            <td><span class="adm-term">${esc(x.q)}</span>${x.live ? `<span class="pill pill-accent adm-live">${x.live} live</span>` : ''}${x.saved ? `<span class="tiny accent adm-block">${RN.fmt.plural(x.saved, 'client saved it', 'clients saved it')}</span>` : ''}${x.variants.size > 1 ? `<span class="tiny muted adm-block">${x.variants.size} spellings merged</span>` : ''}</td>
             <td class="r tnum">${int(x.s)}</td>
             <td class="r tnum${x.supply ? '' : ' adm-bad'}">${int(x.supply)}${x.verified != null ? `<span class="tiny muted adm-block">${int(x.verified)} verified</span>` : ''}</td>
             <td class="r tnum adm-hide-m">${int(x.imp)}</td>

@@ -479,10 +479,17 @@
     const b = document.getElementById('br-save-slot'); if (b) b.innerHTML = saveBtn(c);
   }
 
+  // A rate filter hides operators who don't publish a rate; say how many, with a one-click way back
+  function unlistedNote(c) {
+    if (!c.filters.rateMax) return '';
+    const f = Object.assign({}, c.filters); delete f.rateMax;
+    const n = RN.model.search({ q: c.q, tags: c.tags, filters: f }).filter((r) => !r.op.rate && (!c.filters.verifiedProof || hasProof(r.op))).length;
+    return n ? ` <span class="br-count-note">· ${RN.fmt.int(n)} more don’t list a rate. <button type="button" class="act" data-act="br-chip-x" data-k="rateMax">Clear the rate filter</button></span>` : '';
+  }
   function countHtml(res, c) {
     const n = res.length;
-    if (!n) return '<b class="num">0</b> operators match';
-    return `<b class="num">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'}${hasCrit(c) ? ' match' : ''}`;
+    if (!n) return '<b class="num">0</b> operators match' + unlistedNote(c);
+    return `<b class="num">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'}${hasCrit(c) ? ' match' : ''}${unlistedNote(c)}`;
   }
   function sortHtml() {
     const s = st().sort;
