@@ -1115,7 +1115,33 @@
   /* =====================================================================
      Register views
      ===================================================================== */
-  RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView });
+  /* Founder portrait depth: the green arch and the headshot drift at different speeds as the section scrolls past.
+     Off for reduced motion; the resting frame (no offset) is the normal layout. */
+  let aboutOff = null;
+  function aboutMount() {
+    if (aboutOff) aboutOff();   // a re-render mounts again without unmounting
+    const arch = document.querySelector('.pg-founder .pg-arch');
+    if (!arch) return;
+    try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) { return; }
+    arch.classList.add('pg-depth');
+    let raf = 0;
+    const tick = () => {
+      raf = 0;
+      const r = arch.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      // -1 when the portrait sits at the bottom of the viewport, +1 at the top
+      const p = Math.max(-1, Math.min(1, (vh / 2 - (r.top + r.height / 2)) / (vh / 2 + r.height / 2)));
+      arch.style.setProperty('--depth-bg', (p * 30).toFixed(1) + 'px');
+      arch.style.setProperty('--depth-img', (p * -12).toFixed(1) + 'px');
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(tick); };
+    window.addEventListener('scroll', on, { passive: true });
+    window.addEventListener('resize', on);
+    tick();
+    aboutOff = () => { window.removeEventListener('scroll', on); window.removeEventListener('resize', on); if (raf) cancelAnimationFrame(raf); aboutOff = null; };
+  }
+  function aboutUnmount() { if (aboutOff) aboutOff(); }
+  RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView, mount: aboutMount, unmount: aboutUnmount });
   RN.view('how', { route: 'how', nav: '', title: () => 'How it works', render: howView });
   RN.view('results', { route: 'results', nav: '', title: () => 'Results', render: resultsView });
   RN.view('talk', { route: 'talk', nav: '', chrome: 'over', footer: false, title: () => 'Talk to us', render: () => talkView(), mount: talkMount, unmount: talkUnmount });

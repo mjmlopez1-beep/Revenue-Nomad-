@@ -49,6 +49,10 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
 .pg-arch-sage::before { background: var(--tint); border: 1px solid var(--tint-line); }
 .pg-arch img { position: absolute; left: 50%; bottom: 0; width: 100%; transform: translateX(-50%); border-radius: 0 0 var(--r-card) var(--r-card); }
 .pg-arch-sage img { width: 92%; }
+/* Depth on scroll (About founder portrait): both layers extend below the frame, which clips them at its bottom edge */
+.pg-arch.pg-depth { clip-path: inset(-40% 0 0 0 round 0 0 var(--r-card) var(--r-card)); }
+.pg-arch.pg-depth::before { bottom: -40px; transform: translateY(var(--depth-bg, 0px)); will-change: transform; }
+.pg-arch.pg-depth img { bottom: -24px; transform: translateX(-50%) translateY(var(--depth-img, 0px)); will-change: transform; }
 
 /* ---------- About ---------- */
 .pg-story-in { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: var(--s-16); }
