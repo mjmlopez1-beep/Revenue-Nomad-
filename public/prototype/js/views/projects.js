@@ -1399,10 +1399,11 @@
     toast(existing ? `You already asked to meet ${esc(op.first)}. Linked that request to this project.` : `Intro requested. ${esc(op.first)} has 72 hours to confirm.`, { action: { label: 'Track intro', act: 'go', attrs: 'data-to="buyer.intros"' } });
   };
 
-  /* Not a fit: one close email, sent now. Reasons use the one registry list, RN.fields.passReason, which is also
-     what operators pick when they pass, so client and operator reasons can be joined for match tuning. */
-  const reasonLabel = (v) => W().label('passReason', v);
-  const isReason = (v) => !!(RN.fields.passReason && RN.fields.passReason.options.some((o) => o.v === v));
+  /* Not a fit: one close email, sent now. Reasons use the client-side registry list, RN.fields.notFitReason (same list as
+     the workspace intros). Its slugs match the operator pass reasons (rate, hours, timing, expertise), so the two join
+     for match tuning. */
+  const reasonLabel = (v) => W().label('notFitReason', v);
+  const isReason = (v) => !!(RN.fields.notFitReason && RN.fields.notFitReason.options.some((o) => o.v === v));
   RN.actions['pj-notfit'] = (el) => {
     const pid = pidOf(el), id = el.dataset.id;
     const op = RN.model.byId(id);
@@ -1410,7 +1411,7 @@
       title: `Not a fit: ${esc(op.name)}`,
       sub: `${esc(op.first)} gets one short close email now. The reason stays with Revenue Nomad and tunes future matches.`,
       body: `<form id="pj-nf" data-submit="pj-notfit-go" data-pid="${esc(pid)}" data-id="${esc(id)}" class="stack" style="--gap:18px" novalidate>
-        ${W().field('passReason', '', { name: 'reason', id: 'pj-nf-reason', label: 'What did not fit?', help: 'Only Revenue Nomad sees this. It is the same list operators use when they pass.' })}
+        ${W().field('notFitReason', '', { name: 'reason', id: 'pj-nf-reason', label: 'What did not fit?', help: 'Only Revenue Nomad sees this. It tunes your future matches.' })}
         <div class="field"><label for="pj-nf-note">Note for our team <span class="opt">Optional</span></label><textarea class="textarea" id="pj-nf-note" name="note" maxlength="400" style="min-height:80px" placeholder="Anything that helps us match better next time."></textarea></div>
       </form>`,
       foot: '<button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="pj-nf">Send close email</button>',

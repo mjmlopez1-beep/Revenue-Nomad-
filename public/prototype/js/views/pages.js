@@ -531,7 +531,7 @@
     const cats = [].concat(f.roleCategories || [], ctx.cat || []).filter(Boolean);
     const label = [ctx.q, ...(ctx.tags || [])].filter(Boolean).join(', ') || cats.map((c) => RN.fields.catLabel(c)).join(', ');
     T.search = { q: ctx.q || '', label: label || 'your filters' };
-    T.note = label ? `Looking for: ${label}` : '';
+    T.note = label || '';
     // A signed-in client's company size comes from their company profile, not from a Browse filter
     if (persona() !== 'buyer' && first(f.revenueRange)) T.ans.companyRevenue = first(f.revenueRange);
     if (persona() !== 'buyer' && first(f.employeeRange)) T.ans.companyEmployees = first(f.employeeRange);
@@ -609,7 +609,7 @@
     const b = brief();
     const cats = needCats(b.need);
     const unsure = !cats.length;
-    const lines = recap({ text: true }).concat(T.note ? [`Note: ${T.note}`] : T.search ? [`Search: ${T.search.label}`] : []);
+    const lines = recap({ text: true }).concat(T.note ? [`Looking for: ${T.note}`] : T.search ? [`Search: ${T.search.label}`] : []);
     return `<section class="pg-talk pg-talk-done night">
       <div class="pg-talk-in">
         <div class="pg-talk-top"><button type="button" class="pg-back" data-act="pg-talk-reset">${icon('refresh')}Start a new request</button><span class="step-count">Sent</span></div>
@@ -715,7 +715,7 @@
     RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { startBy: T.ans.startBy, need: T.ans.need, searched: T.search ? T.search.q : undefined } });
     s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk' }));
     RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: 'talk' });
-    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note ? [`Note: ${T.note}`] : []);
+    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note && !(T.search && T.note === T.search.label) ? [`What they are looking for: ${T.note}`] : []);
     const names = s.top.map((r) => r.op.name);
     RN.mail(TEAM, `Talk to us: ${needLabel}`, `${T.name} <${T.email}>${T.company ? ', ' + T.company : ''}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
     RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team will reply within one business day.\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book a call from the confirmation page.`, 'talk');
@@ -731,7 +731,6 @@
     if (!RN.intro || typeof RN.intro.open !== 'function') { RN.go('op.' + op.slug); return; }
     const pre = { need: T.ans.need, startBy: T.ans.startBy };
     if (T.note) pre.note = T.note;
-    else if (T.search && T.search.q) pre.note = `I searched for “${T.search.label}” on Revenue Nomad.`;
     if (persona() !== 'buyer') Object.assign(pre, { name: T.name, email: T.email, company: T.company, revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees });
     Object.keys(pre).forEach((k) => { if (pre[k] == null || pre[k] === '') delete pre[k]; });
     RN.intro.open(op.id, pre);

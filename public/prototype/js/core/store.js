@@ -21,6 +21,7 @@
       reviewRequests: [],          // operator -> past client
       reviews: [],                 // reviews submitted during this session
       proofLinks: [],              // tracked private share links for direct deals
+      answers: [],                 // operator answers to guide questions (in_review | approved | declined)
       outbox: [],                  // emails the system would send
       signup: null,                // operator intake draft
       pending: [],                 // submitted operator profiles awaiting review

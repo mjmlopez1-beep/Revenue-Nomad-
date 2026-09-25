@@ -33,7 +33,7 @@
   const TABS = [
     { key: 'overview', label: 'Overview', icon: 'home', group: 'Marketplace' },
     { key: 'demand', label: 'Demand', icon: 'target', group: 'Marketplace' },
-    { key: 'approvals', label: 'Approvals', icon: 'seal', group: 'Work queue', badge: () => queue().length },
+    { key: 'approvals', label: 'Approvals', icon: 'seal', group: 'Work queue', badge: () => queue().length + pendingAnswers().length },
     { key: 'intros', label: 'Intros', icon: 'handshake', group: 'Work queue', badge: () => introsForTeam().length },
     { key: 'projects', label: 'Projects', icon: 'briefcase', group: 'Work queue', badge: () => liveProjects().filter((p) => projInfo(p).flag).length },
     { key: 'directory', label: 'Directory', icon: 'users', group: 'Network' },
@@ -804,6 +804,32 @@
   /* =====================================================================================
      APPROVALS
      ===================================================================================== */
+  /* Operator answers to guide questions (research.js stores them in state.answers). Approved answers carry a byline. */
+  function pendingAnswers() { return (RN.store.state.answers || []).filter((a) => a.status === 'in_review' && RN.model.byId(a.opId)); }
+  function answersSec() {
+    const list = pendingAnswers();
+    if (!list.length) return '';
+    const guides = (RN.research && RN.research.guides) || [];
+    return `<section class="card adm-sec">${cardHead('Guide answers to review', 'Approved answers appear on the guide with the operator’s byline and a link to their profile. They earn placement, never Reputation Index points.')}
+      <ul class="adm-decided">${list.map((a) => {
+        const op = RN.model.byId(a.opId);
+        const g = guides.find((x) => x.id === a.guideId);
+        return `<li>${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><b>${esc(op.name)}</b><span class="tiny muted">${esc(g ? g.title : a.guideId)}${a.engagement ? ' · Proof: ' + esc(a.engagement.company) : ''}</span><p class="small" style="margin-top:6px">${esc(a.text)}</p></div>
+          <button type="button" class="btn btn-sm" data-act="adm-ans" data-id="${esc(a.id)}" data-ok="1">Approve</button><button type="button" class="btn btn-sm btn-line" data-act="adm-ans" data-id="${esc(a.id)}" data-ok="0">Decline</button></li>`;
+      }).join('')}</ul></section>`;
+  }
+  RN.actions['adm-ans'] = (el) => {
+    const ok = el.dataset.ok === '1';
+    const a = (RN.store.state.answers || []).find((x) => x.id === el.dataset.id);
+    if (!a) return;
+    const op = RN.model.byId(a.opId);
+    const g = ((RN.research && RN.research.guides) || []).find((x) => x.id === a.guideId);
+    RN.store.update((s) => { const x = s.answers.find((y) => y.id === a.id); x.status = ok ? 'approved' : 'declined'; x.decidedAt = RN.now().toISOString(); }, 'answers');
+    if (op) RN.mail(op.name, ok ? 'Your guide answer is live' : 'About your guide answer', ok ? `Your answer to "${g ? g.title : 'the guide'}" is live with your byline.${g ? `\n\nSee it: #guide.${g.id}` : ''}` : `Thanks for answering "${g ? g.title : 'the guide'}". We did not publish this one. Answers need a concrete example from your own engagements.`, 'admin');
+    RN.ui.toast(ok ? `Approved. ${esc(op ? op.first : 'The')} answer is live on the guide.` : 'Declined. The operator was emailed.');
+    RN.rerender();
+  };
+
   function approvals() {
     const q = queue().slice().sort((a, b) => ms(a.submittedAt) - ms(b.submittedAt));
     const decided = apps().filter((a) => ['live', 'rejected'].includes(statusOf(a))).sort((a, b) => ms(b.liveAt || b.decidedAt || 0) - ms(a.liveAt || a.decidedAt || 0));
@@ -813,6 +839,7 @@
         <li><span class="adm-flow-n">2</span><div><b>Generate score</b><span>Reputation Index set to 50. The profile goes live in Browse at Vetted.</span></div></li>
         <li><span class="adm-flow-n">3</span><div><b>Activation emails</b><span>A0 welcome sends now; A1 to A5 follow over 30 days.</span></div></li>
       </ol>
+      ${answersSec()}
       ${q.length ? q.map(appCard).join('') : RN.ui.empty({ icon: 'seal', title: 'No applications waiting', body: 'New operator applications from the intake flow land here, with an automatic check of rate, duplicates and tags.', cta: '<a class="btn btn-sm btn-line" href="#join.operator">See the operator intake</a>' })}
       ${decided.length ? `<section class="card adm-sec">${cardHead('Recently decided', 'Approved profiles are live in Browse. Rejected applicants were emailed the reason.')}
         <ul class="adm-decided">${decided.map((a) => {

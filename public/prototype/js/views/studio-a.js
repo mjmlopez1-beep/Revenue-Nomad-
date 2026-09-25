@@ -272,7 +272,7 @@
 
   /* ---------- Recent activity (notification center) ---------- */
   const SECTION = { reviews: 'client reviews', core: 'CORE ratings', engagements: 'engagement history', samples: 'portfolio', rate: 'rate', about: 'about', expertise: 'expertise', fit: 'fit' };
-  const SRC = { card: 'from a search result', search: 'from search', compare: 'from a comparison', proof: 'from your proof link', home: 'from the homepage', direct: 'from a direct link' };
+  const SRC = { badge: 'from your verified badge', card: 'from a search result', search: 'from search', compare: 'from a comparison', proof: 'from your proof link', home: 'from the homepage', direct: 'from a direct link' };
   function activity(op) {
     const st = RN.store.state;
     const items = [];
@@ -1399,6 +1399,7 @@
   /* Topic pages, by the same rules those pages use. Only pages that place you get a number; the next tier's
      unlock is shown as a step, never as a placement you already have. */
   function guideRel(g) {
+    if (RN.research && RN.research.relatedOps) { const r = RN.research.relatedOps(g); if (Array.isArray(r)) return r.map((x) => (x && x.op ? x.op.id : x && x.id ? x.id : x)); }
     let rel = g.opsQ ? RN.model.search({ q: g.opsQ, filters: g.cat ? { roleCategories: [g.cat] } : {} }).slice(0, 3) : [];
     if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: g.cat ? { roleCategories: [g.cat] } : {}, sort: 'ris' }).filter((x) => !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
     return rel.map((x) => x.op.id);

@@ -204,6 +204,11 @@
       </div>`,
     });
   };
+  // Remember the search that led to a profile, so Studio can count views per search term
+  document.addEventListener('click', (e) => {
+    const a = e.target && e.target.closest && e.target.closest('main[data-view^="browse"] a[data-track-view]');
+    if (a && st().q) RN.store.state._viewQ = st().q;
+  }, true);
   RN.actions['br-login'] = () => BR.loginPrompt();
   RN.actions['br-login-all'] = (el) => { RN.ui.closeModal(); RN.actions.login(el); };
 

@@ -292,7 +292,7 @@
     label: 'How score is calculated', type: 'single',
     options: [
       { v: 'volume', l: 'Review volume', d: 'How many clients have reviewed the operator.', w: 0.3 },
-      { v: 'verification', l: 'Fit tag verification', d: 'Share of fit tags confirmed by a client review.', w: 0.2 },
+      { v: 'verification', l: 'Focus area verification', d: 'Share of focus areas confirmed by a client review.', w: 0.2 },
       { v: 'ratings', l: 'Strong ratings', d: 'Average CORE rating across reviews.', w: 0.25 },
       { v: 'complete', l: 'Complete profile', d: 'Photo, video, rate, role details, engagement history and work samples.', w: 0.15 },
       { v: 'recency', l: 'Engagement recency', d: 'How recently the operator finished a verified engagement.', w: 0.1 },
@@ -322,7 +322,8 @@
   F.startBy = { label: 'When do you need them to start?', type: 'single', options: opts([['available_now', 'As soon as possible'], ['available_2_weeks', 'In 2 weeks'], ['available_2_plus_weeks', 'In 2+ weeks']]) };
   F.projectBudget = { label: 'Project budget', type: 'money', step: 1000, help: 'Total budget for a scoped project.' };
   // Client-side filter chips for Reputation Index (Part C)
-  F.risMin = { label: 'Reputation Index', type: 'single', options: opts([['70', '70+'], ['80', '80+'], ['90', '90+']]) };
+  // Tier floors that return results in today's network (Elite and Apex are added when profiles reach them)
+  F.risMin = { label: 'Reputation Index', type: 'single', options: opts([['60', '60+ · Proven'], ['70', '70+ · Trusted']]) };
   // Review request (Part A L124-L134): outcomes claimed, each rated by the client
   F.outcomeRating = { label: 'Outcome', type: 'single', options: opts([['exceeded', 'Exceeded'], ['met', 'Met'], ['partially_met', 'Partially met'], ['not_achieved', 'Not achieved']]) };
   F.need = {
@@ -341,7 +342,7 @@
   // Why an operator passes on an intro or project, and why a client says "Not a fit" (Projects prototype)
   F.passReason = { label: 'Reason', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Not my expertise'], ['industry', 'Industry'], ['capacity', 'At capacity'], ['other', 'Other']]) };
   // Client side: why an operator was not the right fit (intro closed by the client)
-  F.notFitReason = { label: 'Why not a fit?', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Expertise'], ['closer', 'Chose someone closer to our needs'], ['other', 'Other']]) };
+  F.notFitReason = { label: 'Why not a fit?', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Expertise'], ['closer', 'Went with a closer match'], ['other', 'Other']]) };
   // All-in hourly budget for projects (includes the platform fee), wider than the browse filter
   F.budgetRate = { label: 'Budget per hour (all-in)', type: 'money', unit: '/ hr', min: 50, step: 5 };
   F.projectStatus = { label: 'Status', type: 'single', options: opts([['draft', 'Draft'], ['posted', 'Posted'], ['in_progress', 'In progress'], ['staffed', 'Staffed'], ['closed', 'Closed']]) };

@@ -148,6 +148,7 @@
         <div class="grow" style="padding-right:36px">
           <h3 class="opc-name"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a></h3>
           <div class="opc-role">Fractional ${esc(op.role)}</div>
+          ${op.isMatt ? '<span class="pill opc-founder" title="Matt founded Revenue Nomad. His profile follows the same rules as every operator.">Revenue Nomad founder</span>' : ''}
         </div>
       </div>
       ${op.headline && !opts.compact ? `<p class="opc-head clamp-2 serif-up" style="font-size:16px">${esc(op.headline)}</p>` : ''}

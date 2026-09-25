@@ -141,6 +141,7 @@
 .opc-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--t-13); color: var(--mute); align-items: center; }
 .opc-meta span { display: inline-flex; align-items: center; gap: 6px; }
 .opc-meta svg { width: 14px; height: 14px; }
+.opc-founder { margin-top: 6px; font-size: 11px; }
 .opc-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: auto; padding-top: var(--s-4); border-top: 1px solid var(--line-2); }
 .opc-foot .btn, .opc-foot .act, .opc .ris, .opc-save { position: relative; z-index: 2; }
 .opc-save { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--card); display: grid; place-items: center; color: var(--mute); cursor: pointer; }

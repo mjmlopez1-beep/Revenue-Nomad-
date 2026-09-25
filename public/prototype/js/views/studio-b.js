@@ -193,7 +193,7 @@
     ? RN.w.control('passReason', value || '', { name: 'reason' })
     : `<div class="chipset">${Object.keys(PASS_CLIENT).map((k) => `<button type="button" class="chip" aria-pressed="${value === k}" data-act="w-chip" data-name="reason" data-v="${k}">${esc(k)}</button>`).join('')}<input type="hidden" name="reason" value="${esc(value || '')}"></div>`);
   const passLabel = (v) => (RN.fields.passReason ? RN.w.label('passReason', v) : v);
-  // Projects carry a 25% platform fee. RN.projects (projects.js) owns the money math; fallbacks keep Studio working alone.
+  // Projects carry a proposed 25% platform fee (not confirmed yet; copy says "Proposed"). RN.projects (projects.js) owns the money math; fallbacks keep Studio working alone.
   const PJ = () => RN.projects || null;
   const takeHome = (n) => (PJ() && PJ().payFor ? PJ().payFor(n) : Math.floor(n * 0.75));
 
@@ -402,7 +402,7 @@
   }
   function payBlock(p) {
     const f = pFields(p);
-    const tip = RN.ui.tip('Projects carry a 25% Revenue Nomad fee. The client’s budget is all-in; your take-home is what lands with you. You name your own rate in your response.', 'How take-home is calculated');
+    const tip = RN.ui.tip('Proposed: projects carry a 25% Revenue Nomad fee (a proposal the founder is confirming). The client’s budget is all-in; your take-home is what lands with you. You name your own rate in your response.', 'How take-home is calculated');
     if (f.engagementType === 'project' && f.projectBudget) {
       return `<div class="sb-pay"><div><span class="label">Client budget, all-in</span><b>${esc(RN.fmt.usd(f.projectBudget))}</b></div><div class="sb-pay-you"><span class="label">Your take-home ${tip}</span><b>${esc(RN.fmt.usd(takeHome(f.projectBudget)))}</b></div></div>`;
     }
@@ -466,7 +466,7 @@
       </div>
       <input type="hidden" name="mode" value="${declined ? 'declined' : 'interested'}">
       <div class="stack" style="--gap:16px" data-mode-pane="interested" ${declined ? 'hidden' : ''}>
-        <div data-input="sb-rate-chk" data-cap="${cap || ''}">${RN.w.field('rate', rate, { name: 'rate', id: 'sb-rate-' + p.id, label: 'Your hourly rate for this project', help: cap ? `What you want per hour, take-home. This project pays up to $${cap}/hr after the 25% fee.` : 'What you want per hour, take-home.' })}</div>
+        <div data-input="sb-rate-chk" data-cap="${cap || ''}">${RN.w.field('rate', rate, { name: 'rate', id: 'sb-rate-' + p.id, label: 'Your hourly rate for this project', help: cap ? `What you want per hour, take-home. This project pays up to $${cap}/hr after the proposed 25% fee.` : 'What you want per hour, take-home.' })}</div>
         ${cap ? `<p class="sb-warn" data-rate-warn ${over(rate) ? '' : 'hidden'}>${icon('info')}<span><span data-rate-txt>$${esc(rate)} is more than this project pays ($${cap}/hr)</span>, so the client sees you as over budget. <button type="button" class="act" data-act="sb-rate-use" data-v="${cap}" data-for="sb-rate-${esc(p.id)}">Use $${cap}</button></span></p>` : ''}
         <div class="field"><label for="sb-rn-${esc(p.id)}">Note to the client <span class="opt">Optional</span></label>
           <textarea class="textarea" id="sb-rn-${esc(p.id)}" name="note" maxlength="600" style="min-height:90px" placeholder="Where you have done this before, and what your first 30 days would cover.">${esc(r && !declined ? r.note || '' : '')}</textarea></div>
@@ -589,7 +589,7 @@
     const gap = next ? next.min - op.ris.score : 0;
     const reviewsToNext = next ? Math.ceil(gap / RN.model.risGain('review')) : 0;
     return `<div class="sb sb-cred">
-      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. No fee on deals you source with a proof link (a proposal the founder is confirming).')}
+      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. Proposed: no fee on deals you bring yourself, including deals you win with a proof link.')}
       <nav class="sb-jump" aria-label="On this page">
         ${[['sb-c-ri', 'Reputation Index'], ['sb-c-rev', 'Reviews'], ['sb-c-tags', 'Verified tags'], ['sb-c-proof', 'Proof links'], ['sb-c-badge', 'Badge']].map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}
       </nav>
@@ -793,7 +793,7 @@
 
   /* ---------- Request a review: 3 steps (Engagement → Reviewer and focus areas → Preview) ----------
      RN.studioB.openReviewRequest(opts) opens it anywhere in Studio.
-     opts: { engId, company, verify, reviewer: {name, email, title, company} }. With no engId it defaults to the most
+     opts: { engId, company, verify, tags: [focus areas to preselect], reviewer: {name, email, title, company} }. With no engId it defaults to the most
      recent engagement that has no review and no open request. The client confirms the engagement, answers the four
      CORE questions and confirms focus areas (outcomes were dropped, scope L496). */
   const RR_STEPS = ['Engagement', 'Reviewer and focus areas', 'Preview'];
@@ -823,7 +823,7 @@
     const newCo = !pick && o.company ? o.company : '';
     const rv = o.reviewer || {};
     const claimed = op.tags.filter((t) => t.tier === 'claimed').sort((a, b) => (b.c === op.catKey) - (a.c === op.catKey)).map((t) => t.t);
-    const pre = o.verify ? claimed.slice(0, 6) : claimed.slice(0, 4);
+    const pre = (o.tags && o.tags.length ? o.tags : o.verify ? claimed.slice(0, 6) : claimed.slice(0, 4)).slice(0, 10);
     const body = `<form id="sb-rr-form" class="sb-rr" data-submit="sb-rr-send" data-step="1" novalidate>
       <div class="sb-rr-prog">${flowProgress(RR_STEPS, 0)}</div>
       <section data-step-pane="1" class="stack" style="--gap:18px">
@@ -884,6 +884,8 @@
   function rrValidate(form, step) {
     const d = rrData(form);
     if (step === 1 && !d.company) return 'Add the client company.';
+    if (step === 1 && !d.engId && !d.start) return 'Add the start month. It goes into your Engagement History.';
+    if (step === 1 && !d.engId && !d.ongoing && d.end && d.end < d.start) return 'The end month is before the start.';
     if (step === 2) {
       if (!(d.rname || '').trim()) return 'Add the reviewer’s name. It appears on the published review.';
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((d.remail || '').trim())) return 'Add the reviewer’s work email.';
@@ -899,7 +901,11 @@
     modal.querySelector('[data-act="sb-rr-next"]').hidden = step === 3;
     modal.querySelector('[data-rr-send]').hidden = step !== 3;
     if (step === 3) form.querySelector('[data-rr-preview]').innerHTML = rrPreview(rrData(form));
-    if (step === 2) { const n = form.querySelector('#sb-rr-name'); if (n && !n.value) setTimeout(() => n.focus(), 30); }
+    if (step === 2) {
+      const rco = form.querySelector('[name="rcompany"]');
+      if (rco && !rco.value.trim()) rco.value = rrData(form).company;
+      const n = form.querySelector('#sb-rr-name'); if (n && !n.value) setTimeout(() => n.focus(), 30);
+    }
     modal.querySelector('.modal-bd').scrollTop = 0;
   }
   function rrEmail(op, d, id) {
@@ -968,6 +974,8 @@
     const d = rrData(form);
     const id = 'rr-' + RN.slug(d.rname).slice(0, 16) + '-' + Math.random().toString(36).slice(2, 6);
     // "Another engagement" joins Engagement History as self-reported, so the request has an engagement to verify
+    const same = !d.engId && (op.engagements || []).find((x) => lc(x.company) === lc(d.company));
+    if (same) d.engId = same.id;
     if (!d.engId) {
       const g = { id: 'eng-' + RN.slug(d.company).slice(0, 18) + '-' + Math.random().toString(36).slice(2, 6), company: d.company, role: op.role, start: d.start || '', end: d.ongoing ? '' : d.end || '', engagementType: d.engagementType || 'fractional', revenueRange: '', employeeRange: '', industry: '' };
       g.months = monthsBetween(g.start, g.end);
@@ -1912,7 +1920,7 @@
   RN.studio.tab('profile', { label: 'Edit profile', icon: 'edit', group: 'Grow', order: 8, render: (op) => renderProfile(op), mount: () => focusSection() });
 
   /* Hand-off helpers other surfaces can reuse (Studio A's next best action, profile edit shortcuts):
-     openReviewRequest({engId, company, verify, reviewer}) and openProofModal({company, contact}) open their flows as modals;
+     openReviewRequest({engId, company, verify, tags, reviewer}) and openProofModal({company, contact}) open their flows as modals;
      editSection('engagements' | 'samples' | 'media' | 'offers' | 'about' | ...) opens Edit profile at that section
      (or use data-act="sb-edit" data-sec="..." in markup); engStatus(op, engagement) gives none | sent | verified. */
   RN.studioB = { openReviewRequest, openProofModal, editSection, engStatus: (op, g) => engStatus(op, g).k, proofQuota, inboxBadge, projStage };

@@ -191,7 +191,8 @@
       if (rv.company) {
         const g = rv.engagement || {};
         const hit = op.engagements.find((x) => String(x.company).toLowerCase() === String(rv.company).toLowerCase());
-        if (hit) Object.assign(hit, { clientVerified: true });
+        // The client's confirmed company ranges fill gaps in the matched entry (never overwrite what the operator set)
+        if (hit) Object.assign(hit, { clientVerified: true }, !hit.revenueRange && g.revenueRange ? { revenueRange: g.revenueRange } : null, !hit.employeeRange && g.employeeRange ? { employeeRange: g.employeeRange } : null);
         else op.engagements.push({ id: 'eng-' + rv.id, company: rv.company, role: g.title || 'Fractional ' + op.role, start: g.start || '', end: g.ongoing ? '' : g.end || '', engagementType: g.engagementType, revenueRange: g.revenueRange, employeeRange: g.employeeRange, clientVerified: true, logo: null, fromReview: true });
         op.clients = op.engagements.map((x) => ({ name: x.company, logo: x.logo, verified: !!x.clientVerified }));
       }
@@ -347,12 +348,17 @@
       sig.push({ k: 'role', l: 'Role', state: same ? 'match' : adj ? 'partial' : 'low', text: same ? `Works in ${F.catLabel(op.catKey)}` : adj ? `Client-verified ${F.catLabel(brief.roleCategory)} work, but works in ${F.catLabel(op.catKey)}` : `You need ${F.catLabel(brief.roleCategory)}; ${op.first} works in ${F.catLabel(op.catKey)}` });
     }
     const rev = brief.revenueRange;
-    if (rev && (op.revenueRanges.length || op.engagements.some((e) => e.revenueBand))) {
-      const engaged = op.engagements.some((e) => e.revenueBand === rev);
+    if (rev && (op.revenueRanges.length || op.engagements.some((e) => e.revenueBand || e.revenueRange))) {
+      // Engagement history (live export revenueBand, or registry revenueRange from Studio and client reviews)
+      const engaged = op.engagements.some((e) => e.revenueBand === rev || e.revenueRange === rev);
       sig.push({ k: 'revenue', l: 'Company revenue', state: engaged ? 'match' : op.revenueRanges.includes(rev) ? 'partial' : 'low', text: engaged ? `Has worked with ${RN.w.label('revenueRange', rev)} companies` : op.revenueRanges.includes(rev) ? `Targets ${RN.w.label('revenueRange', rev)} companies` : `No experience listed at ${RN.w.label('revenueRange', rev)}` });
     }
     const emp = brief.employeeRange;
-    if (emp && op.employeeRanges.length) sig.push({ k: 'employees', l: 'Company size', state: op.employeeRanges.includes(emp) ? 'match' : 'low', text: op.employeeRanges.includes(emp) ? `Works with ${RN.w.label('employeeRange', emp)} employee companies` : `No experience listed at ${RN.w.label('employeeRange', emp)} employees` });
+    if (emp && (op.employeeRanges.length || op.engagements.some((e) => e.employeeRange))) {
+      const engagedEmp = op.engagements.some((e) => e.employeeRange === emp);
+      const targets = op.employeeRanges.includes(emp);
+      sig.push({ k: 'employees', l: 'Employee range', state: engagedEmp || targets ? 'match' : 'low', text: engagedEmp ? `Has worked with ${RN.w.label('employeeRange', emp)} employee companies` : targets ? `Works with ${RN.w.label('employeeRange', emp)} employee companies` : `No experience listed at ${RN.w.label('employeeRange', emp)} employees` });
+    }
     const motions = [].concat(brief.salesMotions || brief.motion || []).filter(Boolean);
     // Only score GTM motion when the operator has listed one (no live operator has yet)
     if (motions.length && op.motions.length) {
@@ -658,7 +664,7 @@
     const catSupply = {};
     M.ops.forEach((op) => { catSupply[op.catKey] = (catSupply[op.catKey] || 0) + 1; });
     // Only searches that truly return no operators today count as unmet demand
-    const zero = Q.filter((q) => q.zero && M.search({ q: q.q }).length === 0).map((q) => ({ q: q.q, vol: q.vol, cat: q.cat, industry: q.industry }));
+    const zero = Q.filter((q) => M.search({ q: q.q }).length === 0).map((q) => ({ q: q.q, vol: q.vol, cat: q.cat, industry: q.industry }));
     ((RN.store && RN.store.state.events) || []).filter((e) => e.type === 'search' && e.results === 0 && e.q).forEach((e) => zero.unshift({ q: e.q, vol: 1, cat: '', live: true, ts: e.ts }));
     return { tags, catSupply, zero, queries: Q };
   };
