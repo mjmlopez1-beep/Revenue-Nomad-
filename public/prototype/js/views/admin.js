@@ -401,11 +401,11 @@
   const flagList = (flags) => `<ul class="adm-flags">${flags.map(([k, txt]) => `<li class="adm-flag ${k}">${icon(FLAG_ICON[k])}<span>${esc(txt)}</span></li>`).join('')}</ul>`;
 
   /* =====================================================================================
-     Intros: Pending -> Interested -> RN Qualified -> Introduced -> Hired (or Declined)
+     Intros: Pending -> Interested -> Intro Approved -> Introduced -> Hired (or Declined)
      ===================================================================================== */
   const intros = () => st().intros || [];
   const lastTs = (i) => { const th = i.thread || []; return th.length ? th[th.length - 1].ts : i.createdAt; };
-  // Operators have 72 hours to reply; once interested, the team qualifies within one business day.
+  // Operators have 72 hours to reply; once interested, the team approves the intro within one business day.
   // Countdowns never read above their window: records stamped later than the prototype clock (after the
   // dock moves time back) show the full window, not "240h left".
   function clock(i) {
@@ -947,7 +947,7 @@
      ===================================================================================== */
   const NEXT = {
     pending: (op) => ({ label: `Nudge ${op.first}`, short: 'Nudge', act: 'adm-intro-nudge', icon: 'send' }),
-    interested: () => ({ label: 'Mark RN Qualified', short: 'Qualify', act: 'adm-intro-next', to: 'rn_qualified', icon: 'check' }),
+    interested: () => ({ label: 'Approve intro', short: 'Approve', act: 'adm-intro-next', to: 'rn_qualified', icon: 'check' }),
     rn_qualified: () => ({ label: 'Introduce', short: 'Introduce', act: 'adm-introduce', icon: 'handshake' }),
     introduced: () => ({ label: 'Mark hired', short: 'Mark hired', act: 'adm-intro-hire', icon: 'briefcase' }),
     // A hire recorded without terms (older data, or marked elsewhere): the team can record them
@@ -963,7 +963,7 @@
       return '';
     }
     if (c.who === 'op') return c.late ? `<span class="pill pill-bad">${icon('clock')}Overdue ${dur(-c.left)}</span>` : `<span class="pill ${c.left < 12 * HOUR ? 'pill-warn' : ''}">${icon('clock')}${dur(c.left)} left to reply</span>`;
-    return c.late ? `<span class="pill pill-bad" title="The team qualifies within one business day">${icon('clock')}Overdue ${dur(-c.left)}</span>` : `<span class="pill pill-warn">${icon('clock')}Qualify in ${dur(c.left)}</span>`;
+    return c.late ? `<span class="pill pill-bad" title="The team approves within one business day">${icon('clock')}Overdue ${dur(-c.left)}</span>` : `<span class="pill pill-warn">${icon('clock')}Qualify in ${dur(c.left)}</span>`;
   }
   function introCard(i) {
     const op = RN.model.byId(i.opId);
@@ -1006,10 +1006,10 @@
         const list = all.filter((i) => i.status === s).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
         return `<section class="adm-col" role="listitem" aria-label="${esc(RN.w.label('introStatus', s))}">
           <header class="adm-col-hd">${RN.ui.statusPill('intro', s)}<span class="tnum muted">${list.length}</span></header>
-          ${list.length ? list.map(introCard).join('') : `<p class="tiny muted adm-col-empty">${esc({ pending: 'No requests waiting on an operator.', interested: 'Nothing to qualify.', rn_qualified: 'Nothing to introduce.', introduced: 'No open introductions.', hired: 'No hires yet.' }[s])}</p>`}
+          ${list.length ? list.map(introCard).join('') : `<p class="tiny muted adm-col-empty">${esc({ pending: 'No requests waiting on an operator.', interested: 'Nothing to approve.', rn_qualified: 'Nothing to introduce.', introduced: 'No open introductions.', hired: 'No hires yet.' }[s])}</p>`}
         </section>`;
       }).join('')}</div>` : RN.ui.empty({ icon: 'handshake', title: 'No intro requests yet', body: 'Clients request intros from profiles, compare and their shortlist.', cta: '<a class="btn btn-sm btn-line" href="#browse">Open Browse</a>' })}
-      <p class="tiny muted">The operator has 72 hours to reply. After “Interested”, the team qualifies within one business day, then introduces both sides by email, which reveals names.</p>
+      <p class="tiny muted">The operator has 72 hours to reply. After “Interested”, the team approves the intro within one business day, then introduces both sides by email, which reveals names.</p>
       ${declined.length ? `<section class="card adm-sec">${cardHead('Declined', 'The client was emailed two operators with the same fit.')}
         <ul class="adm-decided">${declined.map((i) => { const op = RN.model.byId(i.opId); const th = (i.thread || []).slice(-1)[0]; return `<li>${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><b>${esc(op ? op.name : 'Operator')}</b><span class="tiny muted">${esc(((i.buyer || {}).company || {}).name || 'Client')}${th && th.text && th.text !== 'Declined' ? ' · ' + esc(th.text) : ''}</span></div><span class="tiny muted nowrap">${esc(RN.fmt.ago(lastTs(i)))}</span><button type="button" class="act" data-act="adm-intro-open" data-id="${esc(i.id)}">Details</button></li>`; }).join('')}</ul></section>` : ''}`;
   }
@@ -1378,7 +1378,7 @@
     const to = el.dataset.to;
     if (el.closest('.scrim')) RN.ui.closeModal();
     RN.intro.setStatus(i.id, to, to === 'rn_qualified' ? 'Fit confirmed by the Revenue Nomad team' : to === 'hired' ? `${i.buyer.company.name} hired ${op.first}` : undefined);
-    toast(to === 'rn_qualified' ? `Marked RN Qualified. Introduce ${esc(op.first)} and ${esc(RN.fmt.first(i.buyer.name))} next.` : to === 'hired' ? `Marked hired. We emailed ${esc(op.first)} about the CORE review at the end of the engagement.` : 'Status updated.');
+    toast(to === 'rn_qualified' ? `Intro approved. Introduce ${esc(op.first)} and ${esc(RN.fmt.first(i.buyer.name))} next.` : to === 'hired' ? `Marked hired. We emailed ${esc(op.first)} about the CORE review at the end of the engagement.` : 'Status updated.');
     RN.rerender();
   };
   RN.actions['adm-intro-nudge'] = (el) => {

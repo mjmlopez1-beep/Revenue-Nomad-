@@ -87,7 +87,7 @@
     ['L48', 'Demand signal feed, Reputation Index breakdown card, recent activity timeline', [['#studio', 'Studio overview']]],
     ['L44', 'Reviewer name captured when a review is requested', [['#studio.credibility', 'Request a review form']]],
     ['L369', 'Intro requests are blind to operators until introduced', [['#studio.inbox', 'Studio inbox']]],
-    ['L471 (Hold)', 'Intro lifecycle: Pending, Interested, RN Qualified, Introduced, Hired', [['#admin.intros', 'Admin and client workspace']]],
+    ['L471 (Hold)', 'Intro lifecycle: Pending, Interested, Intro Approved, Introduced, Hired', [['#admin.intros', 'Admin and client workspace']]],
     ['L383 (Deferred)', 'Weekly "you appeared in N searches" email', [['#studio', 'Studio digest preview and Outbox']]],
     ['AP-23', 'Performance and Insights for operators', [['#studio.visibility', 'Who viewed you']]],
     ['AP-27', 'Demand intelligence', [['#admin.demand', 'Admin demand, Studio positioning']]],

@@ -34,7 +34,7 @@ RN.data.reviewerPhotos = { 'Eric Barbalace': 'assets/brand/reviewer-eric-barbala
         fields: { need: 'pipeline', engagementType: 'advisory', hoursPerMonth: '20', startBy: 'available_2_weeks', roleCategory: anne.catKey }, note: '', thread: [] },
       { id: 'intro-seed-4', opId: matt.id, status: 'introduced', createdAt: iso(19), buyer: other, need: 'systems',
         fields: { need: 'systems', engagementType: 'project', projectBudget: 24000, startBy: 'available_now', roleCategory: 'sales_leadership' }, note: '',
-        thread: [{ from: 'Matt Lopez', text: 'Interested', ts: iso(18) }, { from: 'Revenue Nomad', text: 'RN Qualified', ts: iso(17) }, { from: 'Revenue Nomad', text: 'Introduced', ts: iso(16) }] },
+        thread: [{ from: 'Matt Lopez', text: 'Interested', ts: iso(18) }, { from: 'Revenue Nomad', text: 'Intro Approved', ts: iso(17) }, { from: 'Revenue Nomad', text: 'Introduced', ts: iso(16) }] },
     ];
 
     s.projects = [
@@ -145,7 +145,7 @@ RN.data.reviewerPhotos = { 'Eric Barbalace': 'assets/brand/reviewer-eric-barbala
     const hc = { email: b.email, company: b.company.name, name: b.name };
     const co = b.company;
     const firm = { revenueRange: co.revenueRange || '', employeeRange: co.employeeRange || '', industries: co.industry ? [co.industry] : [] };
-    const thread = (op, t) => [{ from: op.name, text: 'Interested', ts: t[0] }, { from: 'Revenue Nomad', text: 'RN Qualified', ts: t[1] }, { from: 'Revenue Nomad', text: 'Introduced', ts: t[2] }].concat(t[3] ? [{ from: b.name, text: 'Hired', ts: t[3] }] : []);
+    const thread = (op, t) => [{ from: op.name, text: 'Interested', ts: t[0] }, { from: 'Revenue Nomad', text: 'Intro Approved', ts: t[1] }, { from: 'Revenue Nomad', text: 'Introduced', ts: t[2] }].concat(t[3] ? [{ from: b.name, text: 'Hired', ts: t[3] }] : []);
     const bp = (id) => (RN.projects && RN.projects.blueprint && RN.projects.blueprint(id)) || { tags: [] };
 
     // Hires. Sales leadership: started 158 days ago on a six-month term. Marketing: ended 28 days ago, early.

@@ -2,7 +2,7 @@
    - Clients who are signed in get everything prefilled; they pick 3 things and send.
    - Visitors give work email and company basics once (progressive profiling, same picklists as operator intake).
    - Operators receive the request blind (scope and value, no company or person name) until introduced (L369).
-   Lifecycle (L471): Pending -> Interested -> RN Qualified -> Introduced -> Hired, or Declined. 72-hour response window.
+   Lifecycle (L471): Pending -> Interested -> Intro Approved -> Introduced -> Hired, or Declined. 72-hour response window.
    Also home to RN.hire (D15): the one "Confirm the terms" flow every hire goes through (workspace, engagements, Admin). */
 (function () {
   'use strict';
