@@ -115,6 +115,14 @@
 .pf-tile-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pf-tile-chips > span { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: var(--r-pill); background: rgba(255, 255, 255, .08); border: 1px solid var(--night-line); font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--night-ink); line-height: 1.2; }
 .pf-tile-chips > span.more { background: transparent; border-style: dashed; color: var(--night-mute); }
+/* Compact At a glance (founder review): about 30% shorter so the hero has no tall void beside it */
+.pf-tiles { padding: 14px 16px; }
+.pf-tiles-grid { gap: 8px; margin-top: 10px; }
+.pf-tile { min-height: 0; gap: 7px; padding: 10px 12px; }
+.pf-tile-l { font-size: var(--t-12); }
+.pf-tile-v { font-size: 30px; }
+.pf-tile-chips { gap: 5px; }
+.pf-tile-chips > span { min-height: 22px; padding: 1px 8px; font-size: var(--t-12); }
 
 /* Hero CTAs: one primary action (.btn-leaf on the night band), secondary .btn-line */
 .pf-cta { display: flex; flex-direction: column; gap: 10px; }
