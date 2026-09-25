@@ -213,7 +213,7 @@
     rate: 'Add your hourly rate', avail: 'Confirm availability', ranges: 'Add company ranges',
     industries: 'Add industries', role: 'Add role details', tags: 'Add fit tags',
     verified: 'Ask a client to verify tags', reviews: 'Request a review',
-    engagements: 'Ask a client to confirm one', video: 'Record an intro video', samples: 'Add a work sample',
+    engagements: 'Add an engagement', video: 'Record an intro video', samples: 'Add a work sample',
   };
   // Edit profile section for each profile item (first id that exists wins; Studio B owns these sections)
   const PROFILE_SEC = {
@@ -225,12 +225,19 @@
   function doAction(k, o) {
     o = o || {};
     const B = RN.studioB || {};
-    if ((k === 'reviews' || k === 'verified' || k === 'engagements') && B.openReviewRequest) { B.openReviewRequest({ verify: k === 'verified' || !!o.verify, tags: o.tags }); return; }
-    if (k === 'proof' && B.openProofModal) { B.openProofModal(o.company ? { company: o.company } : undefined); return; }
+    if ((k === 'reviews' || k === 'verified' || k === 'confirm-eng') && B.openReviewRequest) { B.openReviewRequest({ verify: k === 'verified' || !!o.verify, tags: o.tags }); return; }
+    if (k === 'proof' && B.openProofModal) {
+      const q = B.proofQuota ? B.proofQuota(RN.myOp()) : { canCreate: true };
+      if (!q.canCreate) { RN.go('studio.credibility'); RN.ui.toast(q.unlocked ? 'You have used this month’s proof links. Unlimited links unlock at Proven.' : 'Proof links unlock when your profile is approved.', { icon: 'info' }); return; }
+      B.openProofModal(o.company ? { company: o.company } : undefined); return;
+    }
     if (k === 'headline-ideas') { goTo('studio.positioning', ['sa-headlines']); return; }
     if (k === 'badge') { goTo('studio.credibility', ['sb-badge', 'sb-c-badge']); return; }
+    // Studio B's editSection opens the Edit profile section and focuses its first field
+    const SEC = { headline: 'about', bio: 'about', rate: 'avail', avail: 'avail', ranges: 'fit', industries: 'fit', role: 'role', tags: 'tags', photo: 'photo', video: 'video', engagements: 'engagements-new', samples: 'samples' };
+    if (SEC[k] && B.editSection) { B.editSection(SEC[k]); return; }
     if (PROFILE_SEC[k] || k === 'profile') { goTo('studio.profile', PROFILE_SEC[k] || o.sec || [], true); return; }
-    RN.go(k === 'reviews' || k === 'verified' || k === 'proof' ? 'studio.credibility' : 'studio.profile');
+    RN.go(k === 'reviews' || k === 'verified' || k === 'confirm-eng' || k === 'proof' ? 'studio.credibility' : 'studio.profile');
   }
   /* Go to a Studio tab, then scroll to the first section that exists and focus its first field */
   function goTo(route, ids, focus) {
@@ -590,7 +597,7 @@
       <div class="sa-ris-top">
         <span class="sa-ris-seal">${RN.ui.hexSeal(b.tier.l)}<b>${esc(b.score)}</b></span>
         <div class="grow">
-          <div class="sa-ris-tier"><b>${esc(b.tier.l)}</b>${r ? risePill(r) : ''}<span class="small muted">${b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
+          <div class="sa-ris-tier"><b>${esc(b.tier.l)}</b><span class="small muted">${b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
           <div class="sa-ladder" aria-label="Tier ladder">${tiers.map((x) => `<i class="${x.v === b.tier.v ? 'on' : b.score > x.max ? 'past' : ''}" title="${esc(x.l)} ${x.min} to ${x.max}"><span>${esc(x.l)}</span></i>`).join('')}</div>
         </div>
       </div>
@@ -757,7 +764,7 @@
     const list = a.sources.slice().sort((x, y) => y.n - x.n);
     const max = Math.max(...list.map((z) => z.n)) || 1;
     const ACT = {
-      'Your proof links and badge': `<button type="button" class="act" data-act="sa-do" data-k="badge">Copy your badge code${icon('arrow')}</button>`,
+      'Your proof links and badge': op.ris.score >= 60 ? `<button type="button" class="act" data-act="sa-do" data-k="badge">Copy your badge code${icon('arrow')}</button>` : `<button type="button" class="act" data-act="sa-do" data-k="proof">Send a proof link${icon('arrow')}</button>`,
       'Google search': `<a class="act" href="#studio.seo">See your Google queries${icon('arrow')}</a>`,
       'AI answers (ChatGPT, Perplexity)': `<a class="act" href="#studio.seo">See AI visibility${icon('arrow')}</a>`,
     };
@@ -1226,7 +1233,7 @@
       headline: { l: 'Put a searched term in your headline', k: 'headline-ideas', todo: !headHits },
       about: { l: 'Name the stage and the problem in About', k: 'bio', todo: (op.bio || '').length < 400 },
       fresh: { l: 'Confirm your availability', k: 'avail', todo: !fresh },
-      engagement: { l: 'Get an engagement confirmed by a client', k: 'engagements', todo: !ev.verifiedEng },
+      engagement: { l: 'Get an engagement confirmed by a client', k: 'confirm-eng', todo: !ev.verifiedEng },
       proof: { l: 'Send a proof link to a prospect', k: 'proof', todo: true },
     };
   }
@@ -1374,7 +1381,7 @@
     const top = a.queries[0];
     const acts = aeoActions(op);
     const items = [
-      { l: 'A client-verified engagement with an outcome number', ok: evidenceOf(op).verifiedEng, k: 'engagements', cta: 'Ask a client to confirm', why: 'Pages with specific, verified outcomes are the ones AI answers quote.' },
+      { l: 'A client-verified engagement with an outcome number', ok: evidenceOf(op).verifiedEng, k: 'confirm-eng', cta: 'Ask a client to confirm', why: 'Pages with specific, verified outcomes are the ones AI answers quote.' },
       { l: '3 or more client reviews with quotes', ok: op.reviews.length >= 3, k: 'reviews', cta: 'Request a review', why: `You have ${op.reviews.length}. Review text is indexed on your profile.` },
       { l: 'Headline uses the words clients search', ok: !acts.headline.todo, k: 'headline-ideas', cta: 'See headline ideas', why: top ? `Your top term is ${quote(top.q)}.` : '' },
       { l: 'About section names the stage and the problem', ok: !acts.about.todo, k: 'bio', cta: 'Edit About', why: 'Long-form text feeds Google and AI answer engines.' },

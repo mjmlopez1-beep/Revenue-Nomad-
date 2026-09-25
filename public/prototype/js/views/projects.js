@@ -200,6 +200,8 @@
   BP.forEach((b) => { b.title = 'Fractional ' + b.role; });
   PJ.blueprints = BP;
   PJ.blueprint = (id) => BP.find((b) => b.id === id) || null;
+  /* The Blueprints that solve a `need` (RN.fields.need slug), best first: for "Start from the problem you have" and the diagnostic */
+  PJ.forNeed = (need, cat) => BP.filter((b) => b.need === need).sort((a, b) => (b.cat === cat) - (a.cat === cat));
 
   /* Rate Index figures for a Blueprint, at the signed-in client's revenue band when there is one.
      Operator rates come from RN.model.rateFor / monthlyRange; all-in adds the 25% fee (rate / 0.75). */

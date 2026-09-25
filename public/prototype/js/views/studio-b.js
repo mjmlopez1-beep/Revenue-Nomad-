@@ -292,7 +292,8 @@
     const link = proof ? proofOf(i) : null;
     // A proof-link lead is the operator's own prospect, so who they are is not hidden
     const b = i.buyer || {};
-    const proofWho = proof ? [b.name, b.title, (b.company && b.company.name) || (link && link.prospect.company)].filter(Boolean).join(' · ') : '';
+    const proofCo = (b.company && b.company.name) || (link && link.prospect.company) || '';
+    const proofWho = proof ? [b.name, b.title, proofCo].filter(Boolean).join(' · ') : '';
     let clock = '';
     if (pending) {
       const pct = RN.clamp(1 - left / WINDOW_H, 0, 1);
@@ -310,7 +311,7 @@
       </div>
       <h3 class="sb-item-h">${esc(sum.need || 'Fractional ' + op.role)}</h3>
       ${proof
-        ? `<p class="sb-who">${icon('link')}<span>${segs(proofWho || sum.who)}${link ? ` · <span class="nowrap">from the link you made for ${esc(link.prospect.company)}</span>` : ''}</span></p>`
+        ? `<p class="sb-who">${icon('link')}<span>${segs(proofWho || sum.who)}${link && lc(link.prospect.company) !== lc(proofCo) ? ` · <span class="nowrap">via the link you made for ${esc(link.prospect.company)}</span>` : ''}</span></p>`
         : `<p class="sb-who">${icon(revealed ? 'building' : 'eye-off')}<span>${segs(sum.who)}</span>${revealed ? '' : RN.ui.tip('Company and contact names stay hidden until Revenue Nomad introduces you. You see the scope, size and industry now (blind intro, L369).', 'Why the company is hidden')}</p>`}
       ${sum.scope ? `<p class="sb-scope">${icon('briefcase')}<span>${segs(sum.scope)}</span></p>` : ''}
       ${i.note ? `<blockquote class="sb-quote">${esc(i.note)}</blockquote>` : ''}
@@ -324,7 +325,7 @@
       ${pending ? (passOpen ? passPanel(i, op) : `<div class="sb-actions">
           <button type="button" class="btn btn-sm" data-act="sb-intro-yes" data-id="${esc(i.id)}">${icon('check')}I’m interested</button>
           <button type="button" class="btn btn-line btn-sm" data-act="sb-intro-pass" data-id="${esc(i.id)}">Pass</button>
-          <span class="tiny muted sb-actions-note">Interested shares your reply with Revenue Nomad, who confirm fit before the introduction.</span>
+          <span class="tiny muted sb-actions-note">${proof ? 'Interested tells Revenue Nomad to introduce you by email so you can book the call.' : 'Interested shares your reply with Revenue Nomad, who confirm fit before the introduction.'}</span>
         </div>`) : ''}
     </article>`;
   }
@@ -554,9 +555,11 @@
     const left = unlimited ? Infinity : Math.max(0, PROOF_MONTHLY - used);
     return { unlocked, unlimited, used, left, canCreate: unlocked && left > 0 };
   }
+  const nextMonth = () => { const n = RN.now(); return RN.fmt.dateShort(new Date(n.getFullYear(), n.getMonth() + 1, 1)); };
   const quotaText = (q) => (!q.unlocked ? 'Proof links unlock when your profile is approved at Vetted.'
     : q.unlimited ? 'Unlimited proof links at your tier.'
-    : `${q.left} of ${PROOF_MONTHLY} proof links left this month · Unlimited at Proven`);
+    : q.left ? `${q.left} of ${PROOF_MONTHLY} proof links left this month · Unlimited at Proven`
+    : `All ${PROOF_MONTHLY} proof links used this month. More on ${nextMonth()}, or unlimited at Proven.`);
 
   function monthsSince(ymStr) {
     if (!ymStr) return null;
@@ -702,7 +705,7 @@
     const q = proofQuota(op);
     const leads = st().intros.filter((i) => i.opId === op.id && isProofLead(i)).length;
     const action = q.canCreate ? `<button type="button" class="btn btn-sm" data-act="sb-proof-new">${icon('link')}Create proof link</button>`
-      : `<span class="pill">${icon('lock')}${q.unlocked ? `${PROOF_MONTHLY} of ${PROOF_MONTHLY} used this month` : 'Unlocks at Vetted'}</span>`;
+      : `<span class="pill">${icon('lock')}${q.unlocked ? 'Monthly limit reached' : 'Unlocks at Vetted'}</span>`;
     return `<section class="card" id="sb-c-proof" aria-labelledby="sb-proof-h">
       <div class="card-hd"><div><h3 id="sb-proof-h">Proof links</h3><p class="sub">A private page for one prospect with the proof you choose. You see who read what; they see a notice that you can.</p>
         <p class="sb-quota ${q.unlimited ? '' : q.left ? 'is-count' : 'is-out'}"><span class="sb-quota-t">${icon(q.unlimited ? 'check-circle' : 'link')}${esc(quotaText(q))}</span>${leads ? `<a class="act" href="#studio.inbox">${leads} ${leads === 1 ? 'request' : 'requests'} in your Inbox</a>` : ''}</p></div>
@@ -999,7 +1002,7 @@
     if (!op) return;
     const q = proofQuota(op);
     if (!q.canCreate) {
-      RN.ui.toast(q.unlocked ? `You have used your ${PROOF_MONTHLY} proof links for this month. Links are unlimited at Proven.` : 'Proof links unlock when your profile is approved at Vetted.', { icon: 'lock', action: { label: 'Request a review', act: 'sb-rr-open' }, ms: 5000 });
+      RN.ui.toast(esc(quotaText(q)), { icon: 'lock', action: q.unlocked ? { label: 'Request a review', act: 'sb-rr-open' } : null, ms: 5000 });
       return;
     }
     RN.ui.modal({

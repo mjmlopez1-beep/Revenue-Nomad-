@@ -457,7 +457,7 @@
     { key: 'contact', q: 'Last one. Where should we reply?' },
   ];
   const TKEY = 'rn-pg-talk-v2';
-  const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, name: '', email: '', company: '', err: '', focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, usedSearch: null });
+  const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, name: '', email: '', company: '', err: '', focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, note: '', usedSearch: null });
   let T = (function () { try { const s = JSON.parse(window.sessionStorage.getItem(TKEY) || 'null'); if (s && s.ans) return Object.assign(fresh(), s); } catch (e) { /* ignore */ } return fresh(); })();
   function save() { try { window.sessionStorage.setItem(TKEY, JSON.stringify(T)); } catch (e) { /* in memory only */ } }
   let advTimer = null;
@@ -517,7 +517,7 @@
     const st = RN.store.state;
     const pre = st.seen && st.seen.talkPrefill;
     const tell = (st.events || []).slice(0, 25).find((e) => e.type === 'search' && e.meta && e.meta.tellUs);
-    if (pre && (pre.q || (pre.tags || []).length || Object.keys(pre.filters || {}).length)) return { pre: true, id: tell ? tell.id : 'pre', q: pre.q || '', tags: pre.tags || [], filters: pre.filters || {} };
+    if (pre && (pre.q || pre.cat || (pre.tags || []).length || Object.keys(pre.filters || {}).length)) return { pre: true, id: tell ? tell.id : 'pre', q: pre.q || '', tags: pre.tags || [], filters: pre.filters || {}, cat: pre.cat || '' };
     if (!tell || !(RN.now() - new Date(tell.ts) < 30 * 60 * 1000)) return null;
     return { id: tell.id, q: tell.q || '', tags: tell.tags || [], filters: tell.filters || {} };
   }
@@ -528,26 +528,27 @@
     if (ctx.pre) { try { delete RN.store.state.seen.talkPrefill; RN.store.save(); } catch (e) { /* read once either way */ } }
     const f = ctx.filters || {};
     const first = (v) => [].concat(v || [])[0] || '';
-    const label = [ctx.q, ...(ctx.tags || [])].filter(Boolean).join(', ');
+    const cats = [].concat(f.roleCategories || [], ctx.cat || []).filter(Boolean);
+    const label = [ctx.q, ...(ctx.tags || [])].filter(Boolean).join(', ') || cats.map((c) => RN.fields.catLabel(c)).join(', ');
     T.search = { q: ctx.q || '', label: label || 'your filters' };
-    if (first(f.revenueRange)) T.ans.companyRevenue = first(f.revenueRange);
-    if (first(f.employeeRange)) T.ans.companyEmployees = first(f.employeeRange);
+    T.note = label ? `Looking for: ${label}` : '';
+    // A signed-in client's company size comes from their company profile, not from a Browse filter
+    if (persona() !== 'buyer' && first(f.revenueRange)) T.ans.companyRevenue = first(f.revenueRange);
+    if (persona() !== 'buyer' && first(f.employeeRange)) T.ans.companyEmployees = first(f.employeeRange);
     if (first(f.availability)) T.ans.startBy = first(f.availability);
     // Preselect the need only when the searched role categories point to exactly one
-    const cats = [].concat(f.roleCategories || []);
     const needs = cats.length ? Object.keys(RN.fields.needCats).filter((n) => cats.some((c) => (RN.fields.needCats[n] || []).includes(c))) : [];
     if (needs.length === 1) T.ans.need = needs[0];
     save();
   }
 
   function talkView(params) {
-    if (params && params.need) {
-      const ok = RN.fields.need.options.some((o) => o.v === params.need);
-      if (ok && T.ctx !== params.need) { T = Object.assign(fresh(params.need), { usedSearch: T.usedSearch }); save(); }
-    } else {
-      const ctx = searchContext();
-      if (ctx && (ctx.pre || !(T.usedSearch || []).includes(ctx.id))) applySearch(ctx);
-    }
+    const need = params && params.need && RN.fields.need.options.some((o) => o.v === params.need) ? params.need : '';
+    const ctx = searchContext();
+    if (ctx && (ctx.pre || !(T.usedSearch || []).includes(ctx.id))) {
+      applySearch(ctx);
+      if (need) { T.ans.need = need; T.ctx = need; T.step = 1; save(); }
+    } else if (need && T.ctx !== need) { T = Object.assign(fresh(need), { usedSearch: T.usedSearch }); save(); }
     prefillPersona();
     return T.done ? talkDone() : talkStep();
   }
@@ -577,6 +578,7 @@
             ${RN.w.field('email', T.email, { name: 'email', id: 'pg-email' })}
           </div>
           <div class="field"><label for="pg-co">Company <span class="opt">Optional</span></label><input class="input" id="pg-co" name="company" value="${esc(T.company)}" placeholder="Company name" autocomplete="organization"></div>
+          <div class="field"><label for="pg-note">What are you looking for? <span class="opt">Optional</span></label><textarea class="textarea input" id="pg-note" name="note" maxlength="500" rows="2" placeholder="The problem, the timeline, what good looks like in 90 days.">${esc(T.note || '')}</textarea></div>
           ${T.err ? `<p class="pg-err" role="alert">${icon('info')}${esc(T.err)}</p>` : ''}
           <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Send to a person${icon('arrow')}</button><span class="small">A person replies within one business day. No sales sequence.</span></div>
         </form>`;
@@ -607,7 +609,7 @@
     const b = brief();
     const cats = needCats(b.need);
     const unsure = !cats.length;
-    const lines = recap({ text: true }).concat(T.search ? [`Search: ${T.search.label}`] : []);
+    const lines = recap({ text: true }).concat(T.note ? [`Note: ${T.note}`] : T.search ? [`Search: ${T.search.label}`] : []);
     return `<section class="pg-talk pg-talk-done night">
       <div class="pg-talk-in">
         <div class="pg-talk-top"><button type="button" class="pg-back" data-act="pg-talk-reset">${icon('refresh')}Start a new request</button><span class="step-count">Sent</span></div>
@@ -694,6 +696,7 @@
     T.name = String(data.name || '').trim();
     T.email = String(data.email || '').trim();
     T.company = String(data.company || '').trim();
+    T.note = String(data.note || '').trim();
     if (!T.name || !EMAIL_RE.test(T.email)) {
       T.err = 'Add your name and a valid work email so we can reply.';
       T.focus = !T.name ? 'pg-name' : 'pg-email';
@@ -712,7 +715,7 @@
     RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { startBy: T.ans.startBy, need: T.ans.need, searched: T.search ? T.search.q : undefined } });
     s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk' }));
     RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: 'talk' });
-    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : []);
+    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note ? [`Note: ${T.note}`] : []);
     const names = s.top.map((r) => r.op.name);
     RN.mail(TEAM, `Talk to us: ${needLabel}`, `${T.name} <${T.email}>${T.company ? ', ' + T.company : ''}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
     RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team will reply within one business day.\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book a call from the confirmation page.`, 'talk');
@@ -727,7 +730,8 @@
     if (!op) return;
     if (!RN.intro || typeof RN.intro.open !== 'function') { RN.go('op.' + op.slug); return; }
     const pre = { need: T.ans.need, startBy: T.ans.startBy };
-    if (T.search && T.search.q) pre.note = `I searched for “${T.search.label}” on Revenue Nomad.`;
+    if (T.note) pre.note = T.note;
+    else if (T.search && T.search.q) pre.note = `I searched for “${T.search.label}” on Revenue Nomad.`;
     if (persona() !== 'buyer') Object.assign(pre, { name: T.name, email: T.email, company: T.company, revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees });
     Object.keys(pre).forEach((k) => { if (pre[k] == null || pre[k] === '') delete pre[k]; });
     RN.intro.open(op.id, pre);

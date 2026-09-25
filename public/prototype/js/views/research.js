@@ -9,6 +9,7 @@
      RN.research.guides        guide registry. Each entry: { id, title, cat, group, href, slug, q, ... }
                                id = slug, route #guide.<id>; title = the question; cat = roleCategory slug or null
      RN.research.guidesFor(cat, n)  up to n guides for a role category (cost guide first), for Browse category pages
+     RN.research.relatedOps(guide|id) the operators a guide's "From the network" module shows (staff excluded)
    Market figures come from RN.data.market and are illustrative; every surface says so.
    Fee copy: the 25% platform fee and the no-fee rule for operator-sourced deals are proposals, labelled "Proposed". */
 (function () {
@@ -1129,7 +1130,7 @@
   const proposed = () => '<span class="pill pill-line rs-prop">Proposed</span>';
   const allInNote = () => `<p class="rs-src">${icon('info')}<span>Operator rates come from the Rate Index. The all-in column is what a client would pay through a Revenue Nomad intro under the proposed ${FEE_PCT()} platform fee (operator rate ÷ ${(1 - FEE()).toFixed(2)}). The fee is a proposal the founder is confirming. Illustrative.</span></p>`;
   // Monthly table for a role category: operator rates and the proposed all-in, at a $5M–$20M company
-  const monthTable = (cat, hrs) => tbl(['Available time', 'Typical range, operator rates', 'All-in, proposed fee'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m')), esc(monthAllIn(cat, h, '5m_20m'))])) + allInNote();
+  const monthTable = (cat, hrs) => tbl(['Available time', 'Operator rates', 'All-in, proposed fee'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m')), esc(monthAllIn(cat, h, '5m_20m'))])) + allInNote();
   const HOURS = { h_under_20: '19', h_20: '20', h_40: '40', h_60: '60', h_80: '80', h_100: '100', h_160: '160' };
   const hoursRows = () => REP().hours.map((r) => ({ code: HOURS[r.h] || r.h, v: r.v }));
   const sumStat = (re, dflt) => { const x = (REP().summary || []).find((s) => re.test(s.l)); return x ? x.v : dflt; };
@@ -1708,6 +1709,16 @@
     RN.rerender();
   };
 
+  /* The guide's "From the network" module: search results for the guide's topic in its role category, then the
+     highest Reputation Index. Staff profiles stay out (editorial module). Returns RN.model.search rows {op, why}. */
+  function relatedOps(g) {
+    const f = g.cat ? { roleCategories: [g.cat] } : {};
+    let rel = g.opsQ ? RN.model.search({ q: g.opsQ, filters: f }).filter((x) => !isStaff(x.op)).slice(0, 3) : [];
+    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: f, sort: 'ris' }).filter((x) => !isStaff(x.op) && !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    return rel;
+  }
+  R.relatedOps = (g) => relatedOps(typeof g === 'string' ? guideBy(g) || {} : g);
+
   function renderGuide(slug) {
     chartFns = {};
     const g = guideBy(slug);
@@ -1722,10 +1733,7 @@
     const updated = RN.fmt.date(g.updated + 'T12:00:00');
     const persona = RN.store.state.persona;
 
-    // Related operators
-    let rel = [];
-    if (g.opsQ) rel = RN.model.search({ q: g.opsQ, filters: g.cat ? { roleCategories: [g.cat] } : {} }).filter((x) => !isStaff(x.op)).slice(0, 3);
-    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: g.cat ? { roleCategories: [g.cat] } : {}, sort: 'ris' }).filter((x) => !isStaff(x.op) && !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    const rel = relatedOps(g);
     const bp = blueprintFor(g.cat, g.bp);
 
     // CTA
