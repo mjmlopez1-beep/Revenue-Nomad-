@@ -1651,7 +1651,7 @@
   };
 
   /* ---------- The page ---------- */
-  const PROF_NAV = [['sb-f-about', 'About'], ['sb-f-media', 'Photo and video'], ['sb-f-avail', 'Availability'], ['sb-f-fit', 'Company fit'], ['sb-f-sell', 'How you sell'], ['sb-f-role', 'Role details'], ['sb-f-eng', 'Engagements'], ['sb-f-samples', 'Work samples'], ['sb-f-offers', 'Ways to work with me'], ['sb-f-tags', 'Fit tags']];
+  const PROF_NAV = [['sb-f-about', 'About'], ['sb-f-media', 'Photo and video'], ['sb-f-avail', 'Availability'], ['sb-f-fit', 'Company fit'], ['sb-f-sell', 'How you sell'], ['sb-f-role', 'Role details'], ['sb-f-eng', 'Engagements'], ['sb-f-samples', 'Samples'], ['sb-f-offers', 'Ways to work'], ['sb-f-tags', 'Fit tags']];
   function renderProfile(op) {
     applyExtras(op);
     S.dirty = false;
@@ -1775,7 +1775,7 @@
     RN.ui.modal({
       width: 460,
       title: 'Save your changes?',
-      sub: 'You have unsaved changes on your profile.',
+      body: '<p class="small muted">You have unsaved changes on your profile. Discard drops everything you changed since your last save.</p>',
       foot: `<button type="button" class="btn btn-line" data-act="sb-leave" data-save="">Discard changes</button><button type="button" class="btn" data-act="sb-leave" data-save="1">Save and continue</button>`,
     });
     S.leaveTo = go;
