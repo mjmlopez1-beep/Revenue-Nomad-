@@ -70,6 +70,8 @@
       ['80', '80 hrs / month'], ['100', '100 hrs / month'], ['160', '160 hrs / month'],
     ]),
   };
+  // Client filter: the same stored chip codes, read as a floor ("at least"); <20 is left out because it is no floor
+  F.minHours = { label: 'Minimum available time', type: 'single', unit: 'hrs / month', options: opts([['20', '20+ hrs / month'], ['40', '40+ hrs / month'], ['60', '60+ hrs / month'], ['80', '80+ hrs / month'], ['100', '100+ hrs / month'], ['160', '160 hrs / month']]) };
   F.hoursCode = (n) => { n = +n || 0; return n < 20 ? '19' : n < 40 ? '20' : n < 60 ? '40' : n < 80 ? '60' : n < 100 ? '80' : n < 160 ? '100' : '160'; };
   F.newClientCapacity = { label: 'New client capacity', type: 'number', min: 1, max: 10, unit: 'clients', help: 'Maximum 10 clients.' };
   // L192 order; "turnaround" removed, "fractional" and "project" added (row 23)

@@ -219,10 +219,28 @@
   }
   const UNITS = { largestTeamQuota: 'annual quota', largestBudget: 'annual budget', largestArrBook: 'ARR book', partnerRevenue: 'partner-attributed', individualQuota: 'annual quota', avgDealSize: 'ACV', largestAccountArr: 'account ARR', bestNrr: 'net revenue retention', bestGrr: 'gross revenue retention', largestRepCount: 'reps enabled', largestCsTeam: 'CSMs', typicalTeamSize: 'people', partnerEcosystem: 'partners', largestTeamManaged: 'people' };
   const filled = (v) => v != null && v !== '' && !(Array.isArray(v) && !v.length);
+  /* Sales cycle: the picked ranges read as one span in the big-figure style ("30–90 days", "1–6 months") */
+  const CYCLE_DAYS = { '<5 days': [0, 5], '5 - 30 days': [5, 30], '30 - 90 days': [30, 90], '3 - 6 months': [90, 180], '6 - 12 months': [180, 365], '12+ months': [365, null] };
+  function cycleSpan(vals) {
+    const spans = [].concat(vals || []).map((v) => CYCLE_DAYS[v]).filter(Boolean);
+    if (!spans.length) return null;
+    const lo = Math.min(...spans.map((x) => x[0]));
+    const hi = spans.some((x) => x[1] == null) ? null : Math.max(...spans.map((x) => x[1]));
+    const mo = (d) => Math.max(1, Math.round(d / 30));
+    if (hi == null) return { value: (lo >= 30 ? mo(lo) : lo) + '+', unit: lo >= 30 ? 'months' : 'days' };
+    if (hi <= 90) return { value: lo === 0 ? '<' + hi : `${lo}–${hi}`, unit: 'days' };
+    return { value: lo < 30 ? `<1–${mo(hi)}` : `${mo(lo)}–${mo(hi)}`, unit: 'months' };
+  }
+  function cycleVal(vals, days) {
+    const span = cycleSpan(vals);
+    if (days) return { kind: 'big', value: RN.fmt.int(days), unit: 'days', label: 'Average sales cycle', note: span ? `Typical range ${span.value} ${span.unit}` : '' };
+    return span ? { kind: 'big', value: span.value, unit: span.unit, label: 'Sales cycle range' } : null;
+  }
   /* Answers stored under registry keys (intake, Studio, Admin), rendered by the field's type */
   function fromRegistry(key, v) {
     const d = F[key];
     if (!d) return null;
+    if (key === 'salesCycle') return cycleVal(v, null);
     if (key === 'builtFromZero' || key === 'commissionOnly') return v === 'yes' ? { kind: 'flag', value: key === 'builtFromZero' ? 'Built the function from zero' : 'Open to commission-only' } : null;
     if (key === 'b2bShare') return isNaN(parseInt(v, 10)) ? null : { kind: 'split', value: Math.max(0, Math.min(100, parseInt(v, 10))) };
     if (d.type === 'money') return +v > 0 ? { kind: 'big', value: usdShort(v), unit: UNITS[key] || '' } : null;
@@ -236,7 +254,7 @@
      Registry answers (op.roleFields) win; otherwise the live export's legacy keys are parsed. */
   function roleVal(op, key) {
     const rf = op.roleFields || {};
-    if (filled(rf[key])) { const r = fromRegistry(key, rf[key]); if (r) return r; }
+    if (filled(rf[key])) { const r = key === 'salesCycle' ? cycleVal(rf.salesCycle, +rf.avgSalesCycleDays || +(op.roleDetails || {}).avg_sales_cycle_days || null) : fromRegistry(key, rf[key]); if (r) return r; }
     const rd = op.roleDetails || {};
     const num = (...ks) => { for (const k of ks) { const v = rd[k]; if (typeof v === 'number' && v > 0) return v; if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v) && +v > 0) return +v; } return null; };
     const multi = (...ks) => { for (const k of ks) { const vals = list(rd[k]).map((x) => optMatch(key, x)).filter(Boolean); if (vals.length) return [...new Set(vals)]; } return null; };
@@ -259,9 +277,7 @@
         const vals = multi('sales_cycle_range', 'sales_cycle_experience');
         const days = num('avg_sales_cycle_days');
         if (!vals && !days) return null;
-        let v = vals;
-        if (!v && days) v = [days < 5 ? '<5 days' : days <= 30 ? '5 - 30 days' : days <= 90 ? '30 - 90 days' : days <= 180 ? '3 - 6 months' : days <= 365 ? '6 - 12 months' : '12+ months'];
-        return { kind: 'chips', value: v, note: days ? `${days}-day average cycle` : '' };
+        return cycleVal(vals, days);
       }
       case 'salesMotions': { const v = (op.motions && op.motions.length ? op.motions : list(rd.gtm_motion_experience || rd.motion_focus)).map((x) => optMatch(key, x)).filter(Boolean); return v.length ? { kind: 'chips', value: v } : null; }
       case 'methodologies': {
@@ -315,7 +331,7 @@
   }
   function roleValHtml(key, rv, compact) {
     const d = F[key];
-    if (rv.kind === 'big') return `<div class="pf-rv pf-rv-big"><span class="pf-rv-l">${esc(d.label)}</span><span class="pf-rv-n"><b>${esc(rv.value)}</b>${rv.unit ? `<small>${esc(rv.unit)}</small>` : ''}</span></div>`;
+    if (rv.kind === 'big') return `<div class="pf-rv pf-rv-big"><span class="pf-rv-l">${esc(rv.label || d.label)}</span><span class="pf-rv-n"><b>${esc(rv.value)}</b>${rv.unit ? `<small>${esc(rv.unit)}</small>` : ''}</span>${rv.note ? `<span class="pf-rv-note">${esc(rv.note)}</span>` : ''}</div>`;
     if (rv.kind === 'split') return `<div class="pf-rv"><span class="pf-rv-l">${esc(d.label)}</span><div class="pf-split" role="img" aria-label="${rv.value}% B2B, ${100 - rv.value}% B2C"><i style="width:${rv.value}%"></i></div><span class="pf-split-l"><b>B2B ${rv.value}%</b><span>B2C ${100 - rv.value}%</span></span></div>`;
     if (rv.kind === 'scale') {
       const o = d.options.find((x) => x.v === rv.value);

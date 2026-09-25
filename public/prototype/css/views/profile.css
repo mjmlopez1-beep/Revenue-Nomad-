@@ -271,7 +271,7 @@
 .pf-rv-n { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; }
 .pf-rv-n b { font-family: var(--f-serif); font-weight: 500; font-size: var(--t-40); line-height: 1; color: var(--accent); letter-spacing: -0.02em; }
 .pf-rv-n small { font-size: var(--t-13); color: var(--mute); }
-.pf-rv-note { display: block; margin-top: 8px; font-family: var(--f-serif); font-style: italic; font-size: var(--t-14); color: var(--mute); }
+.pf-rv-note { display: block; margin-top: 6px; font-family: var(--f-text); font-style: normal; font-size: var(--t-13); color: var(--mute); }
 .pf-scale { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; max-width: 280px; }
 .pf-scale i { height: 8px; border-radius: 3px; background: var(--sunk); }
 .pf-scale i.on { background: var(--viz-2); }

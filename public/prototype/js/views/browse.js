@@ -141,7 +141,7 @@
       default: return RN.fields[k] ? RN.w.label(k, v) : String(v);
     }
   }
-  const typeName = (k) => ({ q: 'Search', tags: 'Focus area', revenueRange: REV_LABEL(), rateMax: 'Hourly rate', hoursPerMonth: 'Available time', verifiedProof: 'Proof' }[k] || (RN.fields[k] ? RN.fields[k].label : k));
+  const typeName = (k) => ({ q: 'Search', tags: 'Focus area', revenueRange: REV_LABEL(), rateMax: 'Hourly rate', hoursPerMonth: 'Minimum available time', verifiedProof: 'Proof' }[k] || (RN.fields[k] ? RN.fields[k].label : k));
   const chipAria = (k, v) => (k === 'verifiedProof' ? `Remove filter: ${PROOF}` : `Remove ${typeName(k)}: ${chipText(k, v)}`);
   function groupLabel(k, v) {
     if (k === 'q') return `“${v}”`;
@@ -647,7 +647,7 @@
       </div>
       ${RN.w.field('roleCategories', f.roleCategories || [], { name: 'roleCategories' })}
       ${availField(f.availability || [])}
-      <div data-deselect>${RN.w.field('hoursPerMonth', (f.hoursPerMonth || [])[0] || '', { name: 'hoursPerMonth', help: 'Shows operators with at least this much time each month.' })}</div>
+      <div data-deselect>${RN.w.field('minHours', (f.hoursPerMonth || [])[0] || '', { name: 'hoursPerMonth', help: 'Operators with at least this much time a month for a new client.' })}</div>
       ${RN.w.field('revenueRange', f.revenueRange || [], { name: 'revenueRange', label: REV_LABEL(), help: 'Operators who work with companies in any selected range.' })}
       ${RN.w.field('employeeRange', f.employeeRange || [], { name: 'employeeRange', help: 'Operators who work with companies of any selected size.' })}
       ${RN.w.field('industries', f.industries || [], { name: 'industries', max: 3, help: 'Pick up to 3. Operators in any selected industry are shown.' })}
