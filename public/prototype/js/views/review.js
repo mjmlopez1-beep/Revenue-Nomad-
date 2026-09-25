@@ -1,9 +1,13 @@
-/* Client CORE review (#review.<requestId>). Reviewers arrive from an email link, so no login is needed.
-   Three short steps: 1 The engagement, 2 CORE ratings, 3 Focus areas and outcomes. Progress is saved per request.
-   Submit pushes to RN.store.state.reviews (the profile shape: reviewer, role, company, date, overall, core, hireAgain,
-   tags, quote, plus outcomes and engagement details), marks the request Completed, verifies confirmed focus areas
-   through RN.model.applyEdits (4.0+ CORE average) and emails the operator and the reviewer.
-   Draft storage: RN.store.state.seen.reviewDrafts[requestId]. */
+/* Client CORE review (#review.<requestId>, #review.<requestId>.<step>). Reviewers arrive from an email link,
+   so no login is needed. Three short steps: 1 The engagement, 2 CORE ratings, 3 Focus areas. The step is in the
+   hash, so browser Back moves one step back, and answers save as you type.
+   The form prefills from the review request: the reviewer, rr.details (engagement type, dates, company revenue
+   and employee range when the request carries them), the focus areas the operator asked to verify (rr.tags)
+   and the tools (rr.tech). Placeholder reviewers (rr.reviewer.placeholder) fill in their own name and title.
+   Submit pushes to RN.store.state.reviews (the profile shape: reviewer, role, company, date, overall, core,
+   hireAgain, tags, quote, plus engagement details), marks the request Completed, verifies confirmed focus areas
+   through RN.model.applyEdits (4.0+ CORE average) and emails the operator and the reviewer. No outcomes (L496).
+   Draft storage: RN.store.state.seen.reviewDrafts[requestId] = {step, max, d}. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -16,43 +20,76 @@
   const STEPS = [
     { n: 1, l: 'The engagement' },
     { n: 2, l: 'CORE ratings' },
-    { n: 3, l: 'Focus areas and outcomes' },
+    { n: 3, l: 'Focus areas' },
   ];
+  const lc = (x) => String(x == null ? '' : x).toLowerCase().trim();
+  const ym = (v) => (v ? String(v).slice(0, 7) : '');
   const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8L12 3Z"/></svg>';
 
-  const drafts = {};   // requestId -> {step, d}
+  const drafts = {};   // requestId -> {step, max, d}
   const results = {};  // requestId -> what the submission changed (for the thank-you state)
+  const moreOpen = {}; // requestId -> the reviewer opened the operator's other focus areas
 
   /* ---------- Draft ---------- */
+  // What the operator entered in the Studio request (studio-b stores it as rr.details)
+  const reqDetails = (rr) => rr.details || rr.engagementDetails || {};
   function engagementFor(rr, op) {
-    const co = String((rr.reviewer && rr.reviewer.company) || rr.engagement || '').toLowerCase();
-    return (op.engagements || []).find((e) => String(e.company).toLowerCase() === co) || null;
+    const det = reqDetails(rr);
+    const names = [det.company, rr.engagement, rr.reviewer && rr.reviewer.company].map(lc).filter(Boolean);
+    return (op.engagements || []).find((e) => names.includes(lc(e.company))) || null;
+  }
+  const opTag = (op, t) => (op.tags || []).find((x) => lc(x.t) === lc(t)) || null;
+  function askedTags(rr) {
+    const seen = new Set();
+    return (rr.tags || []).map((t) => String(t).trim()).filter((t) => t && !seen.has(lc(t)) && seen.add(lc(t)));
   }
   function getDraft(rr, op) {
     if (drafts[rr.id]) return drafts[rr.id];
     const saved = (st().seen.reviewDrafts || {})[rr.id];
-    if (saved) return (drafts[rr.id] = JSON.parse(JSON.stringify(saved)));
+    if (saved) { const dr = JSON.parse(JSON.stringify(saved)); dr.max = Math.max(dr.max || 1, dr.step || 1); return (drafts[rr.id] = dr); }
+    const det = reqDetails(rr);
     const eng = engagementFor(rr, op);
     const buyer = RN.personas.buyer;
-    const isBuyer = rr.reviewer && buyer && rr.reviewer.email === buyer.email;
+    const isBuyer = !!(rr.reviewer && buyer && lc(rr.reviewer.email) === lc(buyer.email));
     const intro = rr.introId ? st().intros.find((i) => i.id === rr.introId) : null;
+    const introF = (intro && intro.fields) || {};
+    const introCo = (intro && intro.buyer && intro.buyer.company) || {};
+    const pick = (k) => det[k] || (eng && eng[k]) || introCo[k] || (isBuyer ? buyer.company[k] : '') || '';
+    const asked = askedTags(rr);
     const d = {
       // A placeholder contact (demo data at a real company) leaves name and title for the reviewer to fill
-      name: rr.reviewer.placeholder ? '' : rr.reviewer.name || '', title: rr.reviewer.placeholder ? '' : rr.reviewer.title || '', company: rr.reviewer.company || rr.engagement || '',
-      roleCategory: op.catKey, opTitle: op.role, opTitleOther: '',
-      start: eng ? eng.start : intro && intro.hiredAt ? String(intro.hiredAt).slice(0, 7) : '',
-      end: eng ? eng.end : '', ongoing: !eng && !!intro,
-      engagementType: intro && intro.fields && intro.fields.engagementType ? intro.fields.engagementType : eng && /interim/i.test(eng.role) ? 'interim' : 'fractional',
-      monthlySpend: '', investment: intro && intro.fields && intro.fields.projectBudget ? intro.fields.projectBudget : '',
-      employeeRange: isBuyer ? buyer.company.employeeRange : '', revenueRange: isBuyer ? buyer.company.revenueRange : '',
-      overall: '', hireAgain: '', tags: [], addTags: [], techStack: [],
-      o1: '', o1r: '', o2: '', o2r: '', o3: '', o3r: '',
+      name: rr.reviewer.placeholder ? '' : rr.reviewer.name || '', title: rr.reviewer.placeholder ? '' : rr.reviewer.title || '',
+      company: rr.reviewer.company || det.company || rr.engagement || '',
+      roleCategory: det.roleCategory || op.catKey, opTitle: det.role || op.role, opTitleOther: '',
+      start: ym(det.start) || (eng ? ym(eng.start) : '') || (intro && intro.hiredAt ? ym(intro.hiredAt) : ''),
+      end: det.ongoing ? '' : ym(det.end) || (eng ? ym(eng.end) : ''),
+      ongoing: det.ongoing != null ? !!det.ongoing : eng ? !eng.end : !!intro,
+      engagementType: det.engagementType || introF.engagementType || (eng && eng.engagementType) || (eng && /interim/i.test(eng.role) ? 'interim' : 'fractional'),
+      monthlySpend: '', investment: introF.projectBudget || '',
+      employeeRange: pick('employeeRange'), revenueRange: pick('revenueRange'),
+      overall: '', hireAgain: '',
+      // The focus areas the operator asked this client to verify start selected; ones not on the profile yet go to "add"
+      tags: asked.filter((t) => opTag(op, t)).map((t) => opTag(op, t).t), addTags: asked.filter((t) => !opTag(op, t)),
+      techStack: (rr.tech || []).slice(),
     };
     DIMS().forEach((x) => { d['core_' + x.v] = ''; d['note_' + x.v] = ''; });
-    return (drafts[rr.id] = { step: 1, d });
+    return (drafts[rr.id] = { step: 1, max: 1, d });
   }
   function persist(rr, dr) {
-    RN.store.update((s) => { s.seen = Object.assign({}, s.seen); s.seen.reviewDrafts = Object.assign({}, s.seen.reviewDrafts, { [rr.id]: dr }); }, 'seen');
+    clearTimeout(saveTimers[rr.id]);
+    RN.store.update((s) => { s.seen = Object.assign({}, s.seen); s.seen.reviewDrafts = Object.assign({}, s.seen.reviewDrafts, { [rr.id]: JSON.parse(JSON.stringify(dr)) }); }, 'seen');
+  }
+  // Answers typed in the current step save as you type (debounced), so a reload or browser Back keeps them
+  const saveTimers = {};
+  function sync(form) {
+    const rr = findRR(form.dataset.id);
+    const op = rr && RN.model.byId(rr.opId);
+    if (!op || rr.status === 'completed') return;
+    const dr = getDraft(rr, op);
+    if (String(dr.step) !== form.dataset.step) return;
+    merge(dr, form);
+    clearTimeout(saveTimers[rr.id]);
+    saveTimers[rr.id] = setTimeout(() => { if (findRR(rr.id).status !== 'completed') persist(rr, dr); }, 400);
   }
   // Merge a step's form values into the draft (checkbox arrays become booleans).
   function merge(dr, form) {
@@ -66,32 +103,46 @@
   const monthLabel = (ym) => { if (!ym) return ''; const [y, m] = String(ym).split('-'); return new Date(+y, (+m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
 
   /* ---------- View ---------- */
+  // #review.<id> resumes where the reviewer left off; #review.<id>.<n> is step n (never past the furthest step reached)
+  function renderReview(p) {
+    const rr = findRR(p.id);
+    const op = rr && RN.model.byId(rr.opId);
+    if (!rr || !op) return expired();
+    if (rr.status === 'completed') return done(rr, op);
+    const dr = getDraft(rr, op);
+    const want = +p.step;
+    if (want) dr.step = RN.clamp(Math.round(want), 1, Math.min(3, dr.max || 1));
+    return form(rr, op);
+  }
+  function titleFor(p) { const rr = findRR(p.id); const op = rr && RN.model.byId(rr.opId); return op ? `Review ${op.name}` : 'Client review'; }
+  function mountReview(root, p) {
+    // Keep the step in the URL so browser Back moves one step back (and a reload stays on this step)
+    const rr = findRR(p.id);
+    const dr = rr && drafts[rr.id];
+    if (rr && dr && rr.status !== 'completed' && String(p.step || '') !== String(dr.step)) history.replaceState(null, '', `#review.${rr.id}.${dr.step}`);
+    // Enter in a single-line field never submits a step early. In the focus-area search it adds the top match.
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || ['checkbox', 'radio'].includes(e.target.type)) return;
+      if (!e.target.closest('.rv-form')) return;
+      e.preventDefault();
+      if (e.target.closest('.tagpick-search')) {
+        const box = e.target.closest('.tagpick');
+        const first = box.querySelector('.tagpick-group [data-act="w-tag-add"]') || box.querySelector('.tagpick-list [data-act="w-tag-add"]');
+        if (first) first.click();
+      }
+    });
+    const f = root.querySelector('.rv-form');
+    if (f) { updateLive(f); }
+  }
   RN.view('review', {
     route: 'review.:id', chrome: 'solid', footer: false, nav: '',
     samples: { id: 'rr-seed-3' },
-    title: (p) => { const rr = findRR(p.id); const op = rr && RN.model.byId(rr.opId); return op ? `Review ${op.name}` : 'Client review'; },
-    render: (p) => {
-      const rr = findRR(p.id);
-      const op = rr && RN.model.byId(rr.opId);
-      if (!rr || !op) return expired();
-      if (rr.status === 'completed') return done(rr, op);
-      return form(rr, op);
-    },
-    mount: (root, p) => {
-      // Enter in a single-line field never submits a step early. In the focus-area search it adds the top match.
-      root.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || ['checkbox', 'radio'].includes(e.target.type)) return;
-        if (!e.target.closest('.rv-form')) return;
-        e.preventDefault();
-        if (e.target.closest('.tagpick-search')) {
-          const box = e.target.closest('.tagpick');
-          const first = box.querySelector('.tagpick-group [data-act="w-tag-add"]') || box.querySelector('.tagpick-list [data-act="w-tag-add"]');
-          if (first) first.click();
-        }
-      });
-      const f = root.querySelector('.rv-form');
-      if (f) { updateLive(f); }
-    },
+    title: titleFor, render: renderReview, mount: mountReview,
+  });
+  RN.view('review-step', {
+    route: 'review.:id.:step', chrome: 'solid', footer: false, nav: '',
+    samples: { id: 'rr-seed-3', step: '1' },
+    title: titleFor, render: renderReview, mount: mountReview,
   });
 
   /* ---------- Expired / unknown link ---------- */
@@ -108,24 +159,26 @@
     </div>`;
   }
 
-  /* ---------- Header + stepper ---------- */
+  /* ---------- Header + progress ---------- */
   function header(rr, op, step) {
+    const det = reqDetails(rr);
     const eng = engagementFor(rr, op);
-    const first = (!rr.reviewer.placeholder && RN.fmt.first(rr.reviewer.name)) || 'there';
-    const co = rr.reviewer.company || rr.engagement || 'your company';
+    const coName = det.company || (eng && eng.company) || rr.engagement || '';
+    const start = ym(det.start) || (eng && ym(eng.start));
+    const end = det.ongoing ? '' : ym(det.end) || (eng && ym(eng.end));
+    const first = !rr.reviewer.placeholder && RN.fmt.first(rr.reviewer.name);
+    const co = rr.reviewer.company || coName || 'your company';
+    const ask = rr.source === 'client' ? `${first ? 'your' : 'Your'} review of ${esc(op.first)}’s work at ${esc(co)} helps the next company hire well.` : `${esc(op.first)} asked for your review of the ${esc(co)} engagement.`;
     return `<header class="rv-hd">
-      <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${eng ? ` at ${esc(eng.company)} · ${esc(monthLabel(eng.start))} to ${esc(monthLabel(eng.end))}` : ''}</span></div></div>
+      <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${coName ? ` at ${esc(coName)}` : ''}${start ? ` · ${esc(monthLabel(start))} to ${end ? esc(monthLabel(end)) : 'now'}` : ''}</span></div></div>
       <span class="eyebrow">CORE client review</span>
-      <h1 class="h1">How was working with <span class="serif">${esc(op.first)}</span>?</h1>
-      <p class="lede">${rr.source === 'client' ? `${esc(first)}, your review of ${esc(op.first)}’s work at ${esc(co)} helps the next company hire well.` : `${esc(first)}, ${esc(op.first)} asked for your review of the ${esc(co)} engagement.`} Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
+      <h1 class="h1">How was working with ${esc(op.first)}?</h1>
+      <p class="lede">${first ? `${esc(first)}, ` : ''}${ask} Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
     </header>
-    <ol class="rv-steps" aria-label="Review progress">${STEPS.map((s) => {
-      const cls = s.n < step ? 'done' : s.n === step ? 'cur' : '';
-      return `<li class="${cls}" ${s.n === step ? 'aria-current="step"' : ''}>
-        <button type="button" data-act="rv-goto" data-id="${esc(rr.id)}" data-step="${s.n}" ${s.n < step ? '' : 'disabled'}>
-          <i>${s.n < step ? icon('check') : s.n}</i><span><small>Step ${s.n} of 3</small>${esc(s.l)}</span>
-        </button></li>`;
-    }).join('')}</ol>`;
+    <div class="rv-prog">
+      <div class="rv-prog-hd"><span class="step-count">Step ${step} of ${STEPS.length} · ${esc(STEPS[step - 1].l)}</span>${step < STEPS.length ? `<span class="small muted">Next: ${esc(STEPS[step].l)}</span>` : ''}</div>
+      <div class="stepper" aria-hidden="true">${STEPS.map((s) => `<i class="${s.n <= step ? 'on' : ''}"></i>`).join('')}</div>
+    </div>`;
   }
 
   /* ---------- The form (one step at a time) ---------- */
@@ -138,7 +191,7 @@
       <form class="card rv-form" data-submit="rv-next" data-id="${esc(rr.id)}" data-step="${step}" data-change="rv-live" data-input="rv-typing" novalidate>
         ${body}
         <div class="rv-foot">
-          ${step > 1 ? `<button type="button" class="btn btn-line" data-act="rv-back" data-id="${esc(rr.id)}">${icon('arrow-left')}Back</button>` : `<span class="small muted rv-save-note">${icon('check-circle')}Progress saves at each step</span>`}
+          ${step > 1 ? `<button type="button" class="btn btn-line" data-act="rv-back" data-id="${esc(rr.id)}">${icon('arrow-left')}Back</button>` : `<span class="small muted rv-save-note">${icon('check-circle')}Your answers save as you type</span>`}
           <button type="submit" class="btn ${step === 3 ? 'btn-lg' : ''}">${step === 3 ? 'Submit review' : 'Continue'}${step === 3 ? '' : icon('arrow')}</button>
         </div>
       </form>
@@ -223,38 +276,48 @@
     return `<span class="label">CORE average</span><b class="num">${n ? fmt1(avg) : '–'}</b><span class="small muted">${n === 4 ? (avg >= 4 ? 'At 4.0 or higher, each focus area you confirm next becomes verified.' : 'Focus areas you confirm are recorded. They verify on reviews averaging 4.0 or higher.') : `${4 - n} of 4 still to rate`}</span>`;
   }
 
+  function tagChip(t, d, hidden) {
+    return `<button type="button" class="chip${hidden ? ' rv-tag-rest' : ''}" aria-pressed="${(d.tags || []).some((x) => lc(x) === lc(t.t))}" data-act="w-chip" data-name="tags" data-v="${esc(t.t)}" data-multi="1" ${hidden ? 'hidden' : ''}>${icon('check')}${esc(t.t)}</button>`;
+  }
   function step3(rr, op, d) {
-    const tags = op.tags.slice().sort((a, b) => a.t.localeCompare(b.t));
-    const outs = [1, 2, 3];
-    const shown = (n) => n === 1 || d['o' + n] || d['o' + n + 'r'];
-    const avg = coreAvg(d);
-    return `${sec('Focus areas', `Which of these did you see ${esc(op.first)} deliver at ${esc(d.company || 'your company')}? Pick only what you saw first-hand.`, `
+    const all = op.tags.slice().sort((a, b) => a.t.localeCompare(b.t));
+    const askedSet = new Set(askedTags(rr).map(lc));
+    const asked = all.filter((t) => askedSet.has(lc(t.t)));
+    const rest = all.filter((t) => !askedSet.has(lc(t.t)));
+    const picked = new Set((d.tags || []).map(lc));
+    // With a request, show what the operator asked about first and keep the rest one click away
+    const fold = asked.length > 0 && rest.length > 0 && !moreOpen[rr.id] && !rest.some((t) => picked.has(lc(t.t)));
+    const co = esc(d.company || 'your company');
+    const sub = asked.length
+      ? `${esc(op.first)} asked you to confirm ${asked.length === 1 ? 'this one' : `these ${asked.length}`}. Untick anything you did not see first-hand at ${co}.`
+      : `Which of these did you see ${esc(op.first)} deliver at ${co}? Pick only what you saw first-hand.`;
+    return `${sec('Focus areas', sub, `
       <div class="chipset rv-tags" role="group" aria-label="${esc(op.first)}’s focus areas" data-rv-f="tags">
-        ${tags.map((t) => `<button type="button" class="chip" aria-pressed="${(d.tags || []).includes(t.t)}" data-act="w-chip" data-name="tags" data-v="${esc(t.t)}" data-multi="1">${icon('check')}${esc(t.t)}</button>`).join('')}
+        ${asked.length ? `<span class="label rv-tags-l">${esc(op.first)} asked you to confirm</span>${asked.map((t) => tagChip(t, d)).join('')}` : ''}
+        ${asked.length && rest.length ? `<span class="label rv-tags-l rv-tag-rest" ${fold ? 'hidden' : ''}>${esc(op.first)}’s other focus areas</span>` : ''}
+        ${rest.map((t) => tagChip(t, d, fold)).join('')}
         <input type="hidden" name="tags" value="${esc((d.tags || []).join('|'))}" data-multi="1">
+        ${fold ? `<button type="button" class="act rv-tags-more" data-act="rv-tags-more" data-id="${esc(rr.id)}" aria-expanded="false">${icon('plus')}Show ${RN.fmt.plural(rest.length, 'more focus area')}</button>` : ''}
       </div>
-      <p class="rv-tagnote small" data-rv-tagnote>${tagNote(d, op, avg)}</p>
+      <p class="rv-tagnote small" data-rv-tagnote>${tagNote(d, op, coreAvg(d))}</p>
       <details class="rv-more" ${(d.addTags || []).length ? 'open' : ''}>
         <summary>${icon('plus')}Add a focus area ${esc(op.first)} delivered that is not listed${icon('chev-down')}</summary>
         <div class="rv-more-b">${RN.w.tagPicker('addTags', d.addTags || [], { client: true, max: 5, cat: op.catKey, emptyText: 'None added. Search the library below.' })}</div>
       </details>`)}
-    ${sec('Outcomes', `One to three results ${esc(op.first)} was responsible for, and how each landed.`, `
-      <div class="stack rv-outs" style="--gap:14px" data-rv-f="outcomes">${outs.map((n) => `<div class="rv-out" data-out="${n}" ${shown(n) ? '' : 'hidden'}>
-        <div class="rv-out-hd">
-          <span class="rv-out-n" aria-hidden="true">${n}</span>
-          <label class="sr-only" for="rv-o${n}">Outcome ${n}</label>
-          <input class="input" id="rv-o${n}" name="o${n}" maxlength="140" value="${esc(d['o' + n] || '')}" placeholder="${esc(['e.g. Hired and ramped two AEs in 90 days', 'e.g. Rebuilt the forecast the board now uses', 'e.g. Cut sales cycle from 90 to 60 days'][n - 1])}">
-          ${n > 1 ? `<button type="button" class="x-btn rv-out-x" data-act="rv-out-remove" data-n="${n}" aria-label="Remove outcome ${n}">${icon('x')}</button>` : ''}
-        </div>
-        <div class="rv-out-r"><span class="label">Result</span>${RN.w.control('outcomeRating', d['o' + n + 'r'], { name: 'o' + n + 'r', id: 'rv-o' + n + 'r' })}</div>
-      </div>`).join('')}</div>
-      <button type="button" class="act rv-out-add" data-act="rv-out-add" ${outs.every(shown) ? 'hidden' : ''}>${icon('plus')}Add another outcome</button>`)}
     <details class="rv-more rv-stack" ${(d.techStack || []).length ? 'open' : ''}>
       <summary>${icon('layers')}Tools ${esc(op.first)} used <span class="opt">Optional</span>${icon('chev-down')}</summary>
       <div class="rv-more-b">${RN.w.field('techStack', d.techStack || [], { name: 'techStack', label: 'Tech stack', help: 'Leave empty if you are not sure.' })}</div>
     </details>
     <section class="rv-preview" aria-label="Preview" data-rv-preview>${previewHtml(rr, op, d)}</section>`;
   }
+  RN.actions['rv-tags-more'] = (el) => {
+    moreOpen[el.dataset.id] = true;
+    const box = el.closest('.rv-tags');
+    RN.$$('.rv-tag-rest', box).forEach((x) => { x.hidden = false; });
+    const next = box.querySelector('.chip.rv-tag-rest');
+    el.remove();
+    if (next) next.focus();
+  };
   function tagNote(d, op, avg) {
     const n = (d.tags || []).length + (d.addTags || []).length;
     const verb = avg >= 4 ? 'verified' : 'recorded';
@@ -320,13 +383,14 @@
       form.querySelector('[data-rv-spend="project"]').hidden = !project;
     }
     if (t && t.closest && t.closest('[data-rv-f]')) clearErr(t.closest('[data-rv-f]'));
+    sync(form);
     updateLive(form);
   };
   RN.inputs['rv-typing'] = (form, ev) => {
     const t = ev && ev.target;
     if (t && t.name === 'overall') { const c = form.querySelector('[data-rv-count]'); if (c) c.textContent = `${RN.fmt.int(t.value.length)} / 1,200`; }
     if (t && t.closest && t.closest('[data-rv-f]')) clearErr(t.closest('[data-rv-f]'));
-    if (form.dataset.step === '3' && t && /^o\d$/.test(t.name)) clearErr(form.querySelector('[data-rv-f="outcomes"]'));
+    sync(form);
   };
   RN.inputs['rv-star'] = (el) => {
     const fs = el.closest('.rv-stars');
@@ -336,24 +400,6 @@
     clearErr(fs);
     const form = el.closest('form');
     if (form) updateLive(form);
-  };
-
-  RN.actions['rv-out-add'] = (el) => {
-    const form = el.closest('form');
-    const next = RN.$$('.rv-out', form).find((r) => r.hidden);
-    if (next) { next.hidden = false; next.querySelector('input.input').focus(); }
-    el.hidden = !RN.$$('.rv-out', form).some((r) => r.hidden);
-  };
-  RN.actions['rv-out-remove'] = (el) => {
-    const row = el.closest('.rv-out');
-    const form = el.closest('form');
-    row.querySelector('input.input').value = '';
-    const hid = row.querySelector('input[type=hidden]');
-    hid.value = '';
-    RN.$$('[data-act="w-chip"]', row).forEach((b) => b.setAttribute('aria-pressed', 'false'));
-    row.hidden = true;
-    form.querySelector('.rv-out-add').hidden = false;
-    updateLive(form);
   };
 
   /* ---------- Validation ---------- */
@@ -394,11 +440,6 @@
       if (!(d.overall || '').trim()) e.push({ f: 'overall', m: 'Describe the overall experience in a sentence or two.' });
       if (!d.hireAgain) e.push({ f: 'hireAgain', m: `Tell us if you would hire ${op.first} again.` });
     }
-    if (step === 3) {
-      const outs = [1, 2, 3].map((n) => ({ t: (d['o' + n] || '').trim(), r: d['o' + n + 'r'] }));
-      if (outs.some((o) => (o.t && !o.r) || (!o.t && o.r))) e.push({ f: 'outcomes', m: 'Each outcome needs a short description and a result.' });
-      else if (!outs.some((o) => o.t && o.r)) e.push({ f: 'outcomes', m: 'Add at least one outcome and how it landed.' });
-    }
     return e;
   }
 
@@ -408,29 +449,20 @@
     const op = rr && RN.model.byId(rr.opId);
     return rr && op ? { rr, op, dr: getDraft(rr, op) } : null;
   }
+  const goStep = (rr, n) => RN.go(`review.${rr.id}.${n}`);
   RN.actions['rv-back'] = (el) => {
     const c = ctx(el); if (!c) return;
     merge(c.dr, el.closest('form'));
     c.dr.step = Math.max(1, c.dr.step - 1);
     persist(c.rr, c.dr);
-    RN.render();
-  };
-  RN.actions['rv-goto'] = (el) => {
-    const c = ctx(el); if (!c) return;
-    const to = +el.dataset.step;
-    if (to >= c.dr.step) return;
-    const f = RN.$('.rv-form');
-    if (f) merge(c.dr, f);
-    c.dr.step = to;
-    persist(c.rr, c.dr);
-    RN.render();
+    goStep(c.rr, c.dr.step);
   };
   RN.submits['rv-next'] = (form) => {
     const c = ctx(form); if (!c) return;
     merge(c.dr, form);
     const errs = validate(c.dr.step, c.dr.d, c.op);
-    if (errs.length) { showErrs(form, errs); return; }
-    if (c.dr.step < 3) { c.dr.step += 1; persist(c.rr, c.dr); RN.render(); return; }
+    if (errs.length) { persist(c.rr, c.dr); showErrs(form, errs); return; }
+    if (c.dr.step < 3) { c.dr.step += 1; c.dr.max = Math.max(c.dr.max || 1, c.dr.step); persist(c.rr, c.dr); goStep(c.rr, c.dr.step); return; }
     submit(c.rr, c.op, c.dr.d);
   };
 
@@ -441,7 +473,6 @@
     const avg = coreAvg(d);
     const seenT = new Set();
     const tags = [].concat(d.tags || [], d.addTags || []).map((t) => String(t).trim()).filter((t) => { const k = t.toLowerCase(); if (!t || seenT.has(k)) return false; seenT.add(k); return true; });
-    const outcomes = [1, 2, 3].map((n) => ({ text: (d['o' + n] || '').trim(), rating: d['o' + n + 'r'] })).filter((o) => o.text && o.rating);
     const before = { score: op.ris.score, label: op.ris.label, verified: new Set(op.tags.filter((t) => t.tier !== 'claimed').map((t) => t.t.toLowerCase())), reviews: op.reviews.length };
     const nowIso = RN.now().toISOString();
     const review = {
@@ -451,7 +482,7 @@
       overall: Math.round(avg * 10) / 10, coreAvg: Math.round(avg * 100) / 100, core,
       notes: dims.map((x) => (d['note_' + x.v] || '').trim()),
       quote: d.overall.trim(), hireAgain: d.hireAgain === 'yes',
-      tags, outcomes,
+      tags,
       techStack: d.techStack || [],
       engagement: {
         roleCategory: d.roleCategory, title: d.opTitle === '__other' ? (d.opTitleOther || '').trim() : d.opTitle,
@@ -483,7 +514,8 @@
       `It is live on your profile now. Reputation Index: ${before.score} to ${op.ris.score}.`, 'review');
     RN.mail(rr.reviewer.email, `Thank you for reviewing ${op.first}`,
       `Your review of ${op.name} is live on ${op.first}’s profile. ${good && tags.length ? `It verified ${tags.length} focus area${tags.length === 1 ? '' : 's'} and adds` : 'It adds'} to ${op.first}’s CORE score, which helps the next company hire with confidence.\n\nHiring again? Every profile on Revenue Nomad is open, with verified reviews like yours.`, 'review');
-    RN.render();
+    // The thank-you page lives at the request's plain link
+    RN.go(`review.${rr.id}`, { replace: true });
   }
 
   /* ---------- Thank-you / already completed ---------- */
@@ -492,7 +524,8 @@
     const rv = st().reviews.find((r) => r.id === rr.reviewId) || null;
     const first = (rv && RN.fmt.first(rv.reviewer)) || (rr.reviewer.placeholder ? '' : RN.fmt.first(rr.reviewer.name));
     const similar = RN.model.similar(op, 3);
-    const isBuyer = st().persona === 'buyer';
+    // "Back to your workspace" only when the signed-in client wrote this review
+    const isBuyer = st().persona === 'buyer' && lc(rr.reviewer && rr.reviewer.email) === lc(RN.personas.buyer.email);
     const dims = DIMS();
     if (!res) {
       return `<div class="rv wrap-narrow rv-done">

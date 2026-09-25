@@ -48,7 +48,10 @@
     s.reviewRequests = [
       { id: 'rr-seed-1', opId: matt.id, reviewer: { name: 'Trista Kempa', email: 'trista@ferry.com', company: 'Ferry', title: 'COO' }, engagement: 'Ferry', status: 'completed', sentAt: iso(24), completedAt: iso(16) },
       { id: 'rr-seed-2', opId: matt.id, reviewer: { name: 'Eric Barbalace', email: 'eric@myhrpartner.com', company: 'myHR Partner', title: 'Account Executive' }, engagement: 'myHR Partner', status: 'completed', sentAt: iso(9), completedAt: iso(3) },
-      { id: 'rr-seed-3', opId: matt.id, reviewer: { name: 'Trialbee sponsor', email: 'sponsor@trialbee.example', company: 'Trialbee', title: 'Engagement sponsor', placeholder: true }, engagement: 'Trialbee', status: 'sent', sentAt: iso(2) },
+      { id: 'rr-seed-3', opId: matt.id, reviewer: { name: 'Trialbee sponsor', email: 'sponsor@trialbee.example', company: 'Trialbee', title: 'Engagement sponsor', placeholder: true }, engagement: 'Trialbee', status: 'sent', sentAt: iso(2),
+        // What Matt entered when requesting the review (from his Trialbee engagement), and the claimed focus areas to verify
+        details: { company: 'Trialbee', engagementType: 'fractional', start: '2022-01', end: '2023-01', revenueRange: '5m_20m', employeeRange: '51_200' },
+        tags: ['Founder-Led Sales Exit', 'Discovery Call Execution', 'Revenue forecasting'] },
     ];
 
     s.proofLinks = [

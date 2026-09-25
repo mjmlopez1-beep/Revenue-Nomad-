@@ -108,8 +108,8 @@
       ['1_10', '1–10'], ['11_50', '11–50'], ['51_200', '51–200'], ['201_500', '201–500'], ['501_1000', '501–1,000'], ['1001_plus', '1,000+'],
     ]),
   };
-  F.companyRevenue = Object.assign({}, F.revenueRange, { type: 'single', max: null, label: 'Revenue range', help: 'Your company’s annual revenue.' });
-  F.companyEmployees = Object.assign({}, F.employeeRange, { type: 'single', max: null, label: 'Employee range', help: 'Your company’s headcount.' });
+  F.companyRevenue = Object.assign({}, F.revenueRange, { type: 'single', max: null, label: 'Company revenue', help: 'Your company’s annual revenue.' });
+  F.companyEmployees = Object.assign({}, F.employeeRange, { type: 'single', max: null, label: 'Company employees', help: 'Your company’s headcount.' });
 
   // Stored values are the live strings; labels fix casing (L352: IoT, B2C...). The live masterlist has 97; this export uses 56.
   const IND = [
@@ -340,6 +340,8 @@
   };
   // Why an operator passes on an intro or project, and why a client says "Not a fit" (Projects prototype)
   F.passReason = { label: 'Reason', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Not my expertise'], ['industry', 'Industry'], ['capacity', 'At capacity'], ['other', 'Other']]) };
+  // Client side: why an operator was not the right fit (intro closed by the client)
+  F.notFitReason = { label: 'Why not a fit?', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Expertise'], ['closer', 'Chose someone closer to our needs'], ['other', 'Other']]) };
   // All-in hourly budget for projects (includes the platform fee), wider than the browse filter
   F.budgetRate = { label: 'Budget per hour (all-in)', type: 'money', unit: '/ hr', min: 50, step: 5 };
   F.projectStatus = { label: 'Status', type: 'single', options: opts([['draft', 'Draft'], ['posted', 'Posted'], ['in_progress', 'In progress'], ['staffed', 'Staffed'], ['closed', 'Closed']]) };

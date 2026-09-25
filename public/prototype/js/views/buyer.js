@@ -1,14 +1,20 @@
 /* Client workspace (#buyer, #buyer.<tab>): the signed-in client's home base.
-   Tabs: Overview (next steps across intros and projects), Shortlist (compare, request intros, private notes),
-   Intros (status timeline per request over RN.intro.steps), Projects (compact list, links into projects.js),
-   Company (company profile + match preferences on the standard fields, so match signals compare like with like).
+   The client is RN.personas.buyer: the demo client (Jordan Ellis) or a visitor who requested an intro and became
+   their own client (RN.shell.setClient). Records are matched on that client's email, so each client sees only theirs.
+   Tabs: Overview (next steps, shortlist, saved searches, recently viewed), Shortlist (compare, request intros,
+   private notes), Intros (lifecycle per request via RN.ui.introTrack), Projects (RN.projects.card, the same card as
+   #projects), Company (company profile + match preferences on the standard fields).
 
    Store keys written here (additive, other surfaces may read them):
      seen.notes          {opId: 'private note'}
      seen.company        {name, website, hq, industry, revenueRange, employeeRange}  (mirrored into RN.personas.buyer.company)
      seen.companyPrefs   {roleCategory, salesMotions[], engagementType, need, savedAt}
-     intro.withdrawn / intro.closedBy / intro.closeReason on client-closed intros (status stays 'declined')
-   Helpers exposed for other surfaces: RN.bw.brief() (match brief for RN.model.fit), RN.bw.applyCompany(). */
+     seen.savedSearches  read and deleted here (created on Browse): [{id, name, q, tags, filters, createdAt}]
+     intro.withdrawn / intro.closedBy / intro.closeReason (RN.fields.notFitReason slug) / intro.closeNote
+       on client-closed intros (status stays 'declined')
+   Helpers exposed for other surfaces: RN.bw.brief() (match brief for RN.model.fit), RN.bw.applyCompany(),
+   RN.bw.reviewableIntro(opId) (the client's introduced or hired intro with this operator and no review yet,
+   for a "Leave a review" button: data-act="bw-review-start" data-id="<introId>", or data-op="<opId>"). */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -23,7 +29,11 @@
   /* ---------- Company + preferences (shared with profile / compare match signals) ---------- */
   BW.applyCompany = function () {
     const c = seen().company;
-    if (c && RN.personas && RN.personas.buyer) Object.assign(RN.personas.buyer.company, c);
+    const b = RN.personas && RN.personas.buyer;
+    if (!b) return;
+    if (c) Object.assign(b.company, c);
+    // Keep the one-line identity in step with the company name (header, dock, sign-in toast)
+    b.sub = [b.title, b.company.name].filter(Boolean).join(', ') || 'Client';
   };
   // The store loads after view scripts run; apply saved company details once boot finishes.
   setTimeout(() => { try { BW.applyCompany(); } catch (e) { /* ignore */ } }, 0);
@@ -61,11 +71,17 @@
     return (hits[0] || f.signals.find((s) => s.state === 'partial') || { text: 'Fractional ' + op.role }).text;
   }
 
-  /* ---------- Records that belong to this client ---------- */
-  const myIntros = () => st().intros.filter((i) => i.buyer && i.buyer.email === me().email);
+  /* ---------- Records that belong to this client (matched on the client's email) ---------- */
+  const lc = (x) => String(x == null ? '' : x).toLowerCase().trim();
+  const isMe = (email) => !!email && lc(email) === lc(me().email);
+  const myIntros = () => st().intros.filter((i) => i.buyer && isMe(i.buyer.email));
   const isOpen = (i) => !['declined', 'hired'].includes(i.status);
-  const myProjects = () => st().projects.filter((p) => !p.owner || p.owner === me().email || (p.buyer && p.buyer.email === me().email));
-  const myReviewRequests = () => st().reviewRequests.filter((r) => r.reviewer && r.reviewer.email === me().email);
+  // Projects carry their client (p.client). Seeded projects without one belong to the demo client.
+  const myProjects = () => st().projects.filter((p) => {
+    const email = (p.client && p.client.email) || p.owner || (p.buyer && p.buyer.email);
+    return email ? isMe(email) : !!me().demo;
+  });
+  const myReviewRequests = () => st().reviewRequests.filter((r) => r.reviewer && isMe(r.reviewer.email));
   const shortOps = () => st().shortlist.map(RN.model.byId).filter(Boolean);
   const introFor = (opId) => myIntros().find((i) => i.opId === opId && i.status !== 'declined');
   const statusLabel = (s) => RN.w.label('introStatus', s);
@@ -73,8 +89,10 @@
   function recentlyViewed(n) {
     const out = [];
     const seenIds = new Set();
+    const co = lc(me().company.name);
     st().events.forEach((e) => {
       if (e.type !== 'profile_view' || e.persona !== 'buyer' || !e.opId || seenIds.has(e.opId)) return;
+      if (e.buyer && e.buyer.name && lc(e.buyer.name) !== co) return;   // another client's views
       const op = RN.model.byId(e.opId);
       if (!op) return;
       seenIds.add(e.opId);
@@ -97,13 +115,13 @@
     return t ? t.ts : null;
   }
   const lastTs = (i) => { const t = (i.thread || [])[i.thread.length - 1]; return t ? t.ts : i.createdAt; };
-  function hoursLeft(i) { return Math.round(72 - (RN.now() - new Date(i.createdAt)) / 36e5); }
-  function closedPill(i) {
-    if (i.withdrawn) return '<span class="pill">Withdrawn</span>';
-    if (i.closedBy === 'client') return '<span class="pill pill-bad">Not a fit</span>';
-    return RN.intro.statusPill(i.status);
-  }
-  const hasMyReview = (opId) => st().reviews.some((r) => r.opId === opId && (r.reviewerEmail === me().email || r.reviewer === me().name));
+  // Clamped to the 72-hour window (the dock clock can move back past a request's timestamp)
+  function hoursLeft(i) { return Math.min(72, Math.max(0, Math.round(72 - (RN.now() - new Date(i.createdAt)) / 36e5))); }
+  const introPill = (i) => (i.withdrawn ? RN.ui.statusPill('intro', 'withdrawn', 'Withdrawn')
+    : i.closedBy === 'client' ? RN.ui.statusPill('intro', 'declined', 'Not a fit')
+    : RN.ui.statusPill('intro', i.status));
+  const hasMyReview = (opId) => st().reviews.some((r) => r.opId === opId && (isMe(r.reviewerEmail) || (!r.reviewerEmail && r.reviewer === me().name)));
+  BW.reviewableIntro = (opId) => myIntros().find((i) => i.opId === opId && ['introduced', 'hired'].includes(i.status) && !hasMyReview(opId)) || null;
 
   /* ---------- Next steps (Overview) ---------- */
   function nextSteps() {
@@ -114,8 +132,8 @@
       const op = RN.model.byId(i.opId);
       if (!op) return;
       const go = `<a class="btn btn-line btn-sm" href="#buyer.intros">View intro</a>`;
-      if (i.status === 'interested') out.push({ icon: 'handshake', tone: 'good', t: `${op.name} is interested`, b: 'Our team will introduce you within a day.', ts: lastTs(i), a: go });
-      else if (i.status === 'rn_qualified') out.push({ icon: 'shield', tone: 'good', t: `Our team confirmed the fit with ${op.first}`, b: 'Your intro email goes out within a day.', ts: lastTs(i), a: go });
+      if (i.status === 'interested') out.push({ icon: 'handshake', tone: 'good', t: `${op.name} is interested`, b: 'Our team will introduce you within one business day.', ts: lastTs(i), a: go });
+      else if (i.status === 'rn_qualified') out.push({ icon: 'shield', tone: 'good', t: `Our team confirmed the fit with ${op.first}`, b: 'Your intro email goes out within one business day.', ts: lastTs(i), a: go });
       else if (i.status === 'introduced') out.push({ icon: 'mail', tone: 'good', t: `You are connected with ${op.first}`, b: `Reply to the intro email to book the first call. Tell us when you decide.`, ts: lastTs(i), a: `<button class="btn btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">We hired ${esc(op.first)}</button>` });
       else if (i.status === 'hired' && !hasMyReview(op.id) && !myReviewRequests().some((r) => r.opId === op.id && r.status === 'sent')) out.push({ icon: 'star', tone: 'accent', t: `How is it going with ${op.first}?`, b: `A short CORE review verifies ${op.first}’s focus areas and helps the next company hire well.`, ts: lastTs(i), a: `<button class="btn btn-line btn-sm" data-act="bw-review-start" data-id="${esc(i.id)}">Leave a review</button>` });
       else if (i.status === 'pending') {
@@ -127,7 +145,7 @@
       const op = RN.model.byId(r.opId);
       if (!op) return;
       const mine = r.source === 'client';
-      out.push({ icon: 'star', tone: 'accent', t: mine ? `Finish your review of ${op.first}` : `${op.first} asked for your review`, b: mine ? 'Your answers are saved at each step. Pick up where you left off.' : 'Four quick CORE ratings and the outcomes you saw. About four minutes.', ts: r.sentAt, a: `<a class="btn btn-line btn-sm" href="#review.${esc(r.id)}">${mine ? 'Continue review' : 'Leave a review'}</a>` });
+      out.push({ icon: 'star', tone: 'accent', t: mine ? `Finish your review of ${op.first}` : `${op.first} asked for your review`, b: mine ? 'Your answers are saved as you type. Pick up where you left off.' : 'Four quick CORE ratings and the focus areas you saw. About four minutes.', ts: r.sentAt, a: `<a class="btn btn-line btn-sm" href="#review.${esc(r.id)}">${mine ? 'Continue review' : 'Leave a review'}</a>` });
     });
     myProjects().forEach((p) => {
       const interested = (p.responses || []).filter((r) => r.status === 'interested');
@@ -188,9 +206,12 @@
     RN.$$('details[data-thread]', root).forEach((d) => d.addEventListener('toggle', () => { if (d.open) openThreads.add(d.dataset.thread); else openThreads.delete(d.dataset.thread); }));
   }
 
+  // One header on every tab: the surface eyebrow (company · Client workspace), a title, a line of context.
+  // (Candidate for a shared RN.ui.appHead; see the hand-off notes.)
   function head(o) {
+    const eyebrow = `${esc(me().company.name || 'Your company')} · Client workspace`;
     return `<header class="app-head bw-head">
-      <div>${o.eyebrow ? `<span class="eyebrow">${o.eyebrow}</span>` : ''}<h1>${o.title}</h1>${o.sub ? `<p class="sub">${o.sub}</p>` : ''}</div>
+      <div><span class="eyebrow">${eyebrow}</span><h1>${o.title}</h1>${o.sub ? `<p class="sub">${o.sub}</p>` : ''}</div>
       ${o.actions ? `<div class="row bw-head-act">${o.actions}</div>` : ''}
     </header>`;
   }
@@ -211,10 +232,9 @@
     const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     const prefs = BW.prefs();
     return `${head({
-      eyebrow: `${esc(p.company.name)} · Client workspace`,
-      title: `${greet}, <span class="serif">${esc(p.first)}</span>`,
+      title: `${greet}, ${esc(p.first)}`,
       sub: 'Everything you are hiring for, in one place.',
-      actions: `<a class="btn btn-line" href="#browse">${icon('search')}Browse talent</a><a class="btn" href="#project.new">${icon('plus')}Post a project</a>`,
+      actions: `<a class="btn btn-line" href="#browse">${icon('search')}Browse talent</a>`,
     })}
     <div class="stats-row bw-stats" style="--cols:4">
       <a class="stat" href="#buyer.shortlist"><span class="stat-v">${ops.length}</span><span class="stat-l">Shortlisted</span></a>
@@ -233,7 +253,7 @@
       <aside class="stack bw-ov-side" style="--gap:16px">
         <section class="panel-night night bw-post">
           <span class="eyebrow">Engagement Blueprints</span>
-          <h3 class="h3">Post a project in <span class="serif">three steps</span></h3>
+          <h3 class="h3">Post a project in three steps</h3>
           <p class="small">Start from a scoped Blueprint with a 30/60/90-day plan and typical rates. Ranked matches appear as you type.</p>
           <div class="row"><a class="btn btn-leaf btn-sm" href="#project.new">Post a project</a><a class="btn btn-ghost btn-sm" href="#blueprints">See Blueprints</a></div>
         </section>
@@ -250,12 +270,85 @@
         : RN.ui.empty({ icon: 'bookmark', title: 'No one saved yet', body: 'Save operators from Browse or any profile. They land here for side-by-side compare and intro requests.', cta: '<a class="btn btn-sm" href="#browse">Browse talent</a>' })}
     </section>
 
+    ${savedSearchesSection()}
+
     <section class="bw-sec">
       ${secHead('Recently viewed')}
       ${viewed.length ? `<div class="bw-mini-list">${viewed.map((v) => miniRow(v.op, `Viewed ${RN.fmt.ago(v.ts)}`)).join('')}</div>`
         : `<div class="bw-quiet">${icon('eye')}<span>Profiles you open show up here so you can get back to them.</span><a class="act" href="#browse">Browse talent${icon('arrow')}</a></div>`}
     </section>`;
   }
+
+  /* ---------- Saved searches (created on Browse, kept in seen.savedSearches) ---------- */
+  // Searches saved by this client (a record with an owner email belongs to that client only)
+  const savedSearches = () => (Array.isArray(seen().savedSearches) ? seen().savedSearches : []).filter((x) => x && (!x.owner || isMe(x.owner)));
+  function critText(k, v) {
+    switch (k) {
+      case 'roleCategories': case 'roleCategory': return RN.fields.catLabel(v);
+      case 'hoursPerMonth': return v === '19' ? 'Any available time' : 'At least ' + RN.w.label('hoursPerMonth', v);
+      case 'revenueRange': return RN.w.label('revenueRange', v) + ' revenue';
+      case 'employeeRange': return RN.w.label('employeeRange', v) + ' employees';
+      case 'rateMax': return +v >= RN.fields.rateMax.max ? '' : 'Up to $' + Math.round(+v) + ' / hr';
+      case 'risMin': return 'Reputation Index ' + RN.w.label('risMin', v);
+      default: return RN.fields[k] ? RN.w.label(k, v) : String(v);
+    }
+  }
+  function critLine(ss) {
+    const out = [];
+    if (ss.q) out.push(`“${ss.q}”`);
+    (ss.tags || []).forEach((t) => out.push(t));
+    const f = ss.filters || {};
+    Object.keys(f).forEach((k) => [].concat(f[k]).forEach((v) => { if (v !== '' && v != null) out.push(critText(k, v)); }));
+    const parts = out.filter(Boolean);
+    return parts.length > 5 ? parts.slice(0, 5).join(' · ') + ` · ${parts.length - 5} more` : parts.join(' · ');
+  }
+  function savedSearchesSection() {
+    const list = savedSearches().slice().sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    return `<section class="bw-sec" aria-labelledby="bw-ss-t">
+      <div class="bw-sec-hd"><h2 class="h4" id="bw-ss-t" tabindex="-1">Saved searches${list.length ? ` <span class="muted">${list.length}</span>` : ''}</h2>${list.length ? `<a class="act" href="#browse">New search${icon('arrow')}</a>` : ''}</div>
+      ${list.length ? `<ul class="bw-ss">${list.map((ss) => {
+        const line = critLine(ss);
+        const name = ss.name || line || 'Saved search';
+        return `<li class="bw-ss-i">
+          <span class="bw-ss-ic" aria-hidden="true">${icon('search')}</span>
+          <div class="grow"><b>${esc(name)}</b><span class="tiny muted">${esc([line !== name ? line : '', ss.createdAt ? 'Saved ' + RN.fmt.ago(ss.createdAt) : ''].filter(Boolean).join(' · ') || 'All operators')}</span></div>
+          <div class="bw-ss-a">
+            <button type="button" class="btn btn-line btn-sm" data-act="bw-ss-run" data-id="${esc(ss.id)}" aria-label="Run saved search: ${esc(name)}">Run search</button>
+            <button type="button" class="x-btn" data-act="bw-ss-del" data-id="${esc(ss.id)}" aria-label="Delete saved search: ${esc(name)}" title="Delete">${icon('x')}</button>
+          </div>
+        </li>`;
+      }).join('')}</ul>`
+        : `<div class="bw-quiet">${icon('search')}<span>No saved searches yet. Save a search on Browse and run it again here in one click.</span><a class="act" href="#browse">Go to Browse${icon('arrow')}</a></div>`}
+    </section>`;
+  }
+  RN.actions['bw-ss-run'] = (el) => {
+    const ss = savedSearches().find((x) => x.id === el.dataset.id);
+    if (!ss) return;
+    RN.store.update((s) => {
+      s.browse = { q: ss.q || '', tags: (ss.tags || []).slice(), filters: JSON.parse(JSON.stringify(ss.filters || {})), sort: 'best', view: (s.browse && s.browse.view) || 'grid' };
+    }, 'browse');
+    RN.go('browse');
+  };
+  let lastDeleted = null;
+  RN.actions['bw-ss-del'] = (el) => {
+    const list = savedSearches();
+    const at = list.findIndex((x) => x.id === el.dataset.id);
+    if (at < 0) return;
+    lastDeleted = { item: list[at], at };
+    RN.store.update((s) => { s.seen = Object.assign({}, s.seen, { savedSearches: (s.seen.savedSearches || []).filter((x) => x.id !== el.dataset.id) }); }, 'seen');
+    RN.rerender();
+    const hd = document.getElementById('bw-ss-t');
+    if (hd) hd.focus({ preventScroll: true });
+    RN.ui.toast(`Saved search deleted`, { icon: 'check', action: { label: 'Undo', act: 'bw-ss-undo' } });
+  };
+  RN.actions['bw-ss-undo'] = () => {
+    if (!lastDeleted) return;
+    const { item, at } = lastDeleted;
+    lastDeleted = null;
+    RN.store.update((s) => { const l = (s.seen.savedSearches || []).filter((x) => x.id !== item.id); l.splice(Math.min(at, l.length), 0, item); s.seen = Object.assign({}, s.seen, { savedSearches: l }); }, 'seen');
+    if (RN.currentRoute() && RN.currentRoute().view.name.startsWith('buyer')) RN.rerender();
+    RN.ui.toast('Saved search restored');
+  };
 
   function prefChips(prefs) {
     const c = me().company;
@@ -311,7 +404,7 @@
             <span class="tiny faint" data-saved>${notes[op.id] ? 'Saved. Only you see this.' : 'Only you see this.'}</span></div>
           <div class="bw-sl-row">
             <label class="bw-check"><input type="checkbox" value="${esc(op.id)}" data-change="bw-sel" ${on ? 'checked' : ''}><span>Select to compare</span></label>
-            ${i ? `<a class="bw-sl-intro" href="#buyer.intros">${RN.intro.statusPill(i.status)}<span>View intro</span></a>` : `<button type="button" class="btn btn-sm" data-act="intro-open" data-id="${esc(op.id)}">Request intro</button>`}
+            ${i ? `<a class="bw-sl-intro" href="#buyer.intros">${introPill(i)}<span>View intro</span></a>` : `<button type="button" class="btn btn-sm" data-act="intro-open" data-id="${esc(op.id)}">Request intro</button>`}
           </div>
         </div>`;
         return `<div class="bw-sl ${on ? 'is-sel' : ''}" data-op="${esc(op.id)}">${RN.ui.opCard(op, { why: matchLine(op), meta })}</div>`;
@@ -382,22 +475,20 @@
       : RN.ui.empty({ icon: 'handshake', title: 'No intro requests yet', body: 'Request an intro from any profile, your shortlist or a compare. Operators reply within 72 hours.', cta: '<a class="btn btn-sm" href="#buyer.shortlist">Go to shortlist</a>' })}`;
   }
 
+  // The shared lifecycle track. A request the client closed shows how far it got, then Withdrawn or Not a fit.
+  function lifecycle(i) {
+    if (i.status !== 'declined' || !(i.withdrawn || i.closedBy === 'client')) return RN.ui.introTrack(i);
+    const r = reachedIndex(i);
+    const steps = RN.intro.steps.slice(0, r + 1).map((s) => { const d = stepDate(i, s); return { l: statusLabel(s), state: 'done', date: d ? RN.fmt.dateShort(d) : '' }; });
+    steps.push({ l: i.withdrawn ? 'Withdrawn' : 'Not a fit', state: 'stop', date: RN.fmt.dateShort(lastTs(i)) });
+    return RN.ui.track(steps, 'Intro progress');
+  }
+
   function introCard(i) {
     const op = RN.model.byId(i.opId);
     if (!op) return '';
     const sum = RN.intro.summary(i, false);
-    const steps = RN.intro.steps;
-    const r = reachedIndex(i);
     const closed = i.status === 'declined';
-    const endLabel = i.withdrawn ? 'Withdrawn' : i.closedBy === 'client' ? 'Not a fit' : 'Declined';
-    const tl = steps.map((s, k) => {
-      const done = k <= r;
-      const cur = !closed && k === r && i.status !== 'hired';
-      const x = closed && k === r + 1;
-      const d = done ? stepDate(i, s) : x ? lastTs(i) : null;
-      const cls = [done ? 'done' : '', cur ? 'cur' : '', x ? 'x' : ''].join(' ').trim();
-      return `<li class="${cls}" ${cur ? 'aria-current="step"' : ''}><i aria-hidden="true">${done && !cur ? icon('check') : x ? icon('x') : ''}</i><b>${esc(x ? endLabel : statusLabel(s))}</b><span>${d ? esc(RN.fmt.dateShort(d)) : '&nbsp;'}</span></li>`;
-    }).join('');
 
     let next = '';
     let actions = '';
@@ -409,10 +500,10 @@
       next = h > 0 ? `${f1} has <b>${h} hours</b> left to reply. ${f1} sees your scope and company size, not your name. If ${f1} passes, we suggest two operators with the same fit.` : `${f1} has not replied in 72 hours. Our team is following up and will suggest two operators with the same fit today.`;
       actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'interested') {
-      next = `<b>${esc(op.name)} is interested.</b> Our team will introduce you within a day.`;
+      next = `<b>${esc(op.name)} is interested.</b> Our team will introduce you within one business day.`;
       actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'rn_qualified') {
-      next = `<b>Our team confirmed the fit.</b> Your intro email to ${esc(op.first)} goes out within a day.`;
+      next = `<b>Our team confirmed the fit.</b> Your intro email to ${esc(op.first)} goes out within one business day.`;
       actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'introduced') {
       next = `<b>You are connected by email.</b> Book the first call with ${esc(op.first)}, then tell us how it went.`;
@@ -433,13 +524,13 @@
     return `<article class="card bw-intro ${closed ? 'is-closed' : ''}" id="intro-${esc(i.id)}">
       <div class="bw-intro-hd">
         <a class="bw-intro-who" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${RN.ui.avatar(op, 'ava-md')}<span><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)} · ${esc(op.avail.label)}</span></span></a>
-        <div class="bw-intro-st">${closed ? closedPill(i) : RN.intro.statusPill(i.status)}<span class="tiny faint">Requested ${esc(RN.fmt.date(i.createdAt))}</span></div>
+        <div class="bw-intro-st">${introPill(i)}<span class="tiny faint">Requested ${esc(RN.fmt.date(i.createdAt))}</span></div>
       </div>
       <div class="bw-intro-scope">
         ${sum.need ? `<span><span class="label">Need</span>${esc(sum.need)}</span>` : ''}
         ${sum.scope ? `<span><span class="label">Scope</span>${esc(sum.scope)}</span>` : ''}
       </div>
-      <ol class="bw-tl ${closed ? 'is-closed' : ''}" aria-label="Request status">${tl}</ol>
+      <div class="bw-track">${lifecycle(i)}</div>
       ${next ? `<p class="bw-intro-next">${next}</p>` : ''}
       ${actions ? `<div class="row bw-intro-act">${actions}</div>` : ''}
       <details class="bw-thread" data-thread="${esc(i.id)}" ${openThreads.has(i.id) ? 'open' : ''}>
@@ -460,7 +551,7 @@
       ${RN.ui.avatar(op, 'ava-sm')}
       <a class="grow" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}"><b class="serif-up">${esc(op.name)}</b><span class="tiny muted">Fractional ${esc(op.role)} · ${esc(op.avail.label)}</span></a>
       ${f.signals.length ? `<span class="bw-fit">${esc(f.pct)}%<i>match</i></span>` : ''}
-      <button type="button" class="btn btn-sm" data-act="intro-open" data-id="${esc(op.id)}">Request intro</button>
+      <button type="button" class="btn btn-line btn-sm" data-act="intro-open" data-id="${esc(op.id)}">Request intro</button>
     </div>`;
   }
 
@@ -514,13 +605,16 @@
     const i = findIntro(el.dataset.id);
     const op = i && RN.model.byId(i.opId);
     if (!op) return;
+    // One reason list for every client "Not a fit" (intros and projects), from the registry when it is there
+    const reasons = RN.fields.notFitReason ? RN.w.field('notFitReason', '', { name: 'reason', compact: true, label: 'What didn’t fit?', help: 'Only our team sees this.' }) : '';
     RN.ui.modal({
       width: 520,
       title: `Not moving forward with ${esc(op.first)}?`,
       sub: 'We close the request and suggest two operators with a similar fit.',
-      body: `<form id="bw-notfit-form" data-submit="bw-notfit" data-id="${esc(i.id)}" class="stack" style="--gap:10px">
-        <div class="field"><label for="bw-notfit-r">What didn’t fit? <span class="opt">Optional, only our team sees this</span></label>
-        <textarea class="textarea" id="bw-notfit-r" name="reason" maxlength="400" style="min-height:96px" placeholder="Rate, timing, experience, chemistry on the first call"></textarea></div>
+      body: `<form id="bw-notfit-form" data-submit="bw-notfit" data-id="${esc(i.id)}" class="stack" style="--gap:16px">
+        ${reasons}
+        <div class="field"><label for="bw-notfit-r">${reasons ? 'Anything to add?' : 'What didn’t fit?'} <span class="opt">Optional, only our team sees this</span></label>
+        <textarea class="textarea" id="bw-notfit-r" name="note" maxlength="400" style="min-height:96px" placeholder="${reasons ? 'What would a better match look like?' : 'Rate, timing, experience, chemistry on the first call'}"></textarea></div>
       </form>`,
       foot: `<button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="bw-notfit-form">Close request</button>`,
     });
@@ -530,10 +624,12 @@
     const op = i && RN.model.byId(i.opId);
     RN.ui.closeModal();
     if (!op) return;
-    const reason = (d.reason || '').trim();
+    const code = RN.fields.notFitReason ? String([].concat(d.reason || [])[0] || '') : '';
+    const note = (d.note || '').trim();
+    const reason = [code && RN.w.label('notFitReason', code), note].filter(Boolean).join('. ');
     RN.store.update((s) => {
       const r = s.intros.find((x) => x.id === i.id);
-      r.status = 'declined'; r.closedBy = 'client'; r.closeReason = reason;
+      r.status = 'declined'; r.closedBy = 'client'; r.closeReason = code; r.closeNote = note;
       r.thread.push({ from: me().name, text: 'Not a fit' + (reason ? ': ' + reason : ''), ts: RN.now().toISOString() });
     }, 'intros');
     RN.mail(op.name, `Update from ${me().company.name}`, `${me().name} decided not to move forward after your intro. Thank you for making time.\n\nClients who pass after a first call most often cite timing. Your profile and availability stay live.`, 'intro');
@@ -558,13 +654,22 @@
   };
 
   // Hired intro -> CORE review. Reuses an open review request for this operator or creates one for the client.
+  // Works from anywhere: data-id="<introId>", or data-op="<opId>" (the client's introduced or hired intro).
   RN.actions['bw-review-start'] = (el) => {
     RN.ui.closeModal();
-    const i = findIntro(el.dataset.id);
-    if (!i) return;
-    let rr = st().reviewRequests.find((r) => r.opId === i.opId && r.reviewer && r.reviewer.email === me().email && r.status === 'sent');
+    const i = el.dataset.id ? findIntro(el.dataset.id) : BW.reviewableIntro(el.dataset.op);
+    const op = i && RN.model.byId(i.opId);
+    if (!op) { RN.ui.toast('Reviews open once you are introduced to the operator.', { icon: 'info' }); return; }
+    let rr = myReviewRequests().find((r) => r.opId === i.opId && r.status === 'sent');
     if (!rr) {
-      rr = { id: RN.uid('rr'), opId: i.opId, reviewer: { name: me().name, email: me().email, company: me().company.name, title: me().title }, engagement: me().company.name, status: 'sent', sentAt: RN.now().toISOString(), source: 'client', introId: i.id };
+      const c = me().company;
+      const f = i.fields || {};
+      rr = {
+        id: RN.uid('rr'), opId: i.opId, reviewer: { name: me().name, email: me().email, company: c.name, title: me().title || '' }, engagement: c.name,
+        // What we already know from the intro, so the review form opens prefilled
+        details: { company: c.name, engagementType: f.engagementType || '', start: i.hiredAt ? String(i.hiredAt).slice(0, 7) : '', end: '', ongoing: true, roleCategory: f.roleCategory || op.catKey, role: op.role, revenueRange: c.revenueRange || '', employeeRange: c.employeeRange || '' },
+        status: 'sent', sentAt: RN.now().toISOString(), source: 'client', introId: i.id,
+      };
       RN.store.update((s) => { s.reviewRequests.unshift(rr); }, 'reviewRequests');
       RN.track('review_request', { opId: i.opId, source: 'client' });
     }
@@ -572,38 +677,41 @@
   };
 
   /* ================= Projects ================= */
+  // One project card everywhere: projects.js owns it (RN.projects.card). The local card is only a fallback.
+  const projectCard = (p) => (RN.projects && typeof RN.projects.card === 'function' ? RN.projects.card(p, { from: 'workspace' }) : localProjectCard(p));
+  function localProjectCard(p) {
+    const f = p.fields || {};
+    const resp = (p.responses || []).filter((r) => r.status === 'interested');
+    const bits = [
+      f.roleCategory && RN.fields.catLabel(f.roleCategory),
+      f.engagementType && RN.w.label('engagementType', f.engagementType),
+      f.engagementType === 'project' && f.projectBudget ? RN.fmt.usd(f.projectBudget) + ' budget' : f.hoursPerMonth && RN.w.label('hoursPerMonth', f.hoursPerMonth),
+      f.term && RN.w.label('term', f.term),
+    ].filter(Boolean);
+    const when = p.status === 'draft' ? `Draft saved ${RN.fmt.ago(p.createdAt)}` : `Posted ${RN.fmt.date(p.postedAt || p.createdAt)}`;
+    return `<article class="card bw-proj">
+      <div class="bw-proj-main">
+        <div class="row" style="--gap:10px">${RN.ui.statusPill('project', p.status)}<span class="tiny faint">${esc(when)}</span></div>
+        <h3 class="h4"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></h3>
+        <p class="small muted">${esc(bits.join(' · '))}</p>
+      </div>
+      <div class="bw-proj-side">
+        ${p.status === 'draft' ? '' : `<div class="bw-proj-stats"><span><b class="num">${(p.invited || []).length}</b>Invited</span><span><b class="num">${resp.length}</b>Interested</span></div>`}
+        <a class="btn btn-sm ${p.status === 'draft' || resp.length ? '' : 'btn-line'}" href="#project.${esc(p.id)}">${p.status === 'draft' ? 'Finish and post' : resp.length ? 'Review responses' : 'Open project'}</a>
+      </div>
+    </article>`;
+  }
   function projects() {
-    const list = myProjects().slice().sort((a, b) => new Date(b.postedAt || b.createdAt) - new Date(a.postedAt || a.createdAt));
-    const tone = { draft: '', posted: 'pill-info', in_progress: 'pill-warn', staffed: 'pill-good', closed: '' };
+    const list = myProjects().slice().sort((a, b) => new Date(b.updatedAt || b.postedAt || b.createdAt) - new Date(a.updatedAt || a.postedAt || a.createdAt));
+    // A draft's "Finish and post" is the primary action; the header button steps back when there is one
+    const hasDraft = list.some((p) => p.status === 'draft');
     return `${head({
       title: 'Projects',
       sub: 'Post a scoped project from a Blueprint. Matches are ranked on the same fields as operator profiles, and responses land here.',
-      actions: `<a class="btn btn-line" href="#projects">All projects</a><a class="btn" href="#project.new">${icon('plus')}Post a project</a>`,
+      actions: list.length ? `<a class="btn ${hasDraft ? 'btn-line' : ''}" href="#project.new">${icon('plus')}Post a project</a>` : '',
     })}
-    ${list.length ? `<div class="stack bw-projs" style="--gap:12px">${list.map((p) => {
-      const f = p.fields || {};
-      const resp = (p.responses || []).filter((r) => r.status === 'interested');
-      const bits = [
-        f.roleCategory && RN.fields.catLabel(f.roleCategory),
-        f.engagementType && RN.w.label('engagementType', f.engagementType),
-        f.engagementType === 'project' && f.projectBudget ? RN.fmt.usd(f.projectBudget) + ' budget' : f.hoursPerMonth && RN.w.label('hoursPerMonth', f.hoursPerMonth),
-        f.term && RN.w.label('term', f.term),
-      ].filter(Boolean);
-      const when = p.status === 'draft' ? `Draft saved ${RN.fmt.ago(p.createdAt)}` : `Posted ${RN.fmt.date(p.postedAt || p.createdAt)}`;
-      const respOps = resp.map((r) => RN.model.byId(r.opId)).filter(Boolean);
-      return `<article class="card bw-proj">
-        <div class="bw-proj-main">
-          <div class="row" style="--gap:10px"><span class="pill ${tone[p.status] || ''}">${esc(RN.w.label('projectStatus', p.status))}</span><span class="tiny faint">${esc(when)}</span></div>
-          <h3 class="h4"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></h3>
-          <p class="small muted">${esc(bits.join(' · '))}</p>
-          ${p.brief ? `<p class="small bw-proj-brief clamp-2">${esc(p.brief)}</p>` : ''}
-        </div>
-        <div class="bw-proj-side">
-          ${p.status === 'draft' ? '' : `<div class="bw-proj-stats"><span><b class="num">${(p.invited || []).length}</b>Invited</span><span><b class="num">${resp.length}</b>Interested</span>${respOps.length ? `<span class="ava-stack">${respOps.slice(0, 4).map((o) => RN.ui.avatar(o, 'ava-sm')).join('')}</span>` : ''}</div>`}
-          <a class="btn btn-sm ${p.status === 'draft' || resp.length ? '' : 'btn-line'}" href="#project.${esc(p.id)}">${p.status === 'draft' ? 'Finish and post' : resp.length ? 'Review responses' : 'Open project'}</a>
-        </div>
-      </article>`;
-    }).join('')}</div>` : RN.ui.empty({ icon: 'briefcase', title: 'No projects yet', body: 'Start from a Blueprint: a scoped project with a 30/60/90-day plan, typical hours and rates. Posting takes three steps.', cta: '<a class="btn btn-sm" href="#project.new">Post a project</a>' })}
+    ${list.length ? `<div class="stack bw-projs" style="--gap:14px">${list.map(projectCard).join('')}</div>`
+      : RN.ui.empty({ icon: 'briefcase', title: 'No projects yet', body: 'Start from a Blueprint: a scoped project with a 30/60/90-day plan, typical hours and rates. Posting takes three steps.', cta: '<a class="btn btn-sm" href="#project.new">Post a project</a>' })}
     <div class="bw-quiet">${icon('layers')}<span>Not sure how to scope it? Blueprints show the outcome plan, hours and typical rate for common fractional projects.</span><a class="act" href="#blueprints">Browse Blueprints${icon('arrow')}</a></div>`;
   }
 
@@ -613,7 +721,6 @@
     const p = BW.prefs() || {};
     const filled = [c.name, c.website, c.hq, c.industry, c.revenueRange, c.employeeRange, p.roleCategory, (p.salesMotions || []).length, p.engagementType, p.need].filter(Boolean).length;
     return `${head({
-      eyebrow: esc(c.name),
       title: 'Company profile',
       sub: 'Tell us about your company once. Every operator profile you open is scored against it.',
     })}
@@ -658,7 +765,7 @@
     const top = rows.slice().sort((a, b) => b.fit.pct - a.fit.pct || b.op.ris.score - a.op.ris.score).slice(0, 4);
     const checks = [
       { l: 'Company revenue', on: !!brief.revenueRange },
-      { l: 'Company size', on: !!brief.employeeRange },
+      { l: 'Employee range', on: !!brief.employeeRange },
       { l: 'GTM motion', on: brief.salesMotions.length > 0 },
       { l: 'Industry', on: brief.industries.length > 0 },
       { l: 'Expertise', on: !!(brief.roleCategory || brief.need) },
@@ -703,8 +810,9 @@
     const company = { name, website: (d.website || '').trim(), hq: (d.hq || '').trim(), industry: d.industry || '', revenueRange: d.revenueRange || '', employeeRange: d.employeeRange || '' };
     const prefs = { roleCategory: d.roleCategory || '', salesMotions: d.salesMotions || [], engagementType: d.engagementType || '', need: d.need || '', savedAt: RN.now().toISOString() };
     RN.store.update((s) => { s.seen = Object.assign({}, s.seen, { company, companyPrefs: prefs }); }, 'seen');
-    Object.assign(RN.personas.buyer.company, company);
-    RN.ui.toast('Preferences saved');
+    BW.applyCompany();
+    RN.shell.renderHeader();
+    RN.ui.toast('Company profile and preferences saved');
     RN.rerender();
   };
 })();

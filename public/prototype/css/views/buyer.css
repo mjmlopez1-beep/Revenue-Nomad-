@@ -9,7 +9,6 @@
 .bw-head .eyebrow { display: block; margin-bottom: 10px; }
 .bw-head-act { gap: 10px; flex: 0 0 auto; }
 .bw .card-hd .act { white-space: nowrap; }
-.bw[data-bw-tab="overview"] .bw-head h1 { font-size: clamp(32px, 4vw, 46px); letter-spacing: -0.035em; }
 
 /* ---------- Overview ---------- */
 .bw-stats { margin-bottom: var(--s-8); }
@@ -37,7 +36,6 @@
 .bw-post { padding: var(--s-6); display: flex; flex-direction: column; gap: 12px; }
 .bw-post .h3 { color: var(--night-ink); }
 .bw-post .small { color: var(--night-mute); }
-.bw-post .serif { color: var(--leaf); }
 .bw-post .row { margin-top: 4px; gap: 6px; }
 .bw-prefs-mini .card-hd { margin-bottom: var(--s-3); }
 .bw-prefs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -59,6 +57,18 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
 .bw-mini .grow:hover b { color: var(--accent); }
 .bw-fit { display: inline-flex; flex-direction: column; align-items: center; font-family: var(--f-display); font-weight: 800; font-size: var(--t-15); color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
 .bw-fit i { font-style: normal; font-family: var(--f-text); font-weight: 500; font-size: 11px; color: var(--mute); margin-top: 3px; }
+
+/* Saved searches */
+.bw-ss { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-card); overflow: hidden; }
+.bw-ss-i { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 16px; border-top: 1px solid var(--line-2); }
+.bw-ss-i:first-child { border-top: 0; }
+.bw-ss-ic { width: 34px; height: 34px; flex: 0 0 auto; border-radius: 10px; display: grid; place-items: center; background: var(--tint); color: var(--accent); }
+.bw-ss-ic svg { width: 16px; height: 16px; }
+.bw-ss-i .grow { min-width: 0; }
+.bw-ss-i b { display: block; font-family: var(--f-display); font-size: var(--t-15); font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.bw-ss-i .tiny { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+.bw-ss-a { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.bw-ss-a .x-btn { width: 34px; height: 34px; }
 
 .bw-quiet { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; margin-top: var(--s-6); padding: 16px 18px; border: 1px dashed var(--line); border-radius: var(--r-card); color: var(--mute); font-size: var(--t-14); }
 .bw-quiet > svg { width: 18px; height: 18px; color: var(--accent); }
@@ -101,26 +111,7 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
 .bw-intro-scope > span { display: inline-flex; align-items: baseline; gap: 10px; }
 .bw-intro-scope .label { font-size: 11px; }
 
-.bw-tl { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.bw-tl li { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 0 4px; }
-.bw-tl li::before { content: ""; position: absolute; top: 12px; left: -50%; right: 50%; height: 2px; background: var(--line); }
-.bw-tl li:first-child::before { display: none; }
-.bw-tl li.done::before { background: var(--accent); }
-.bw-tl li.x::before { background: var(--line); }
-.bw-tl i { position: relative; z-index: 1; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--card); border: 2px solid var(--line); color: var(--mute-2); }
-.bw-tl i svg { width: 14px; height: 14px; stroke-width: 2.4; }
-.bw-tl li.done i { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.bw-tl li.cur i { background: var(--card); border-color: var(--accent); box-shadow: 0 0 0 4px var(--focus); }
-.bw-tl li.cur i::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
-.bw-tl li.x i { background: var(--bad-bg); border-color: var(--bad); color: var(--bad); }
-.bw-tl b { font-family: var(--f-display); font-size: 12.5px; font-weight: 700; color: var(--mute-2); line-height: 1.2; }
-.bw-tl li.done b { color: var(--ink); }
-.bw-tl li.cur b { color: var(--accent); }
-.bw-tl li.x b { color: var(--bad); }
-.bw-tl span { font-size: 11.5px; color: var(--mute); font-variant-numeric: tabular-nums; }
-.bw-tl.is-closed li.done i { background: var(--mute-2); border-color: var(--mute-2); color: var(--card); }
-.bw-tl.is-closed li.done::before { background: var(--mute-2); }
-
+.bw-track { padding: 4px 2px 0; }
 .bw-intro-next { font-size: var(--t-14); line-height: 1.5; color: var(--ink-2); padding: 12px 16px; background: var(--tint); border: 1px solid var(--tint-line); border-radius: 12px; }
 .bw-intro.is-closed .bw-intro-next { background: var(--card); border-color: var(--line-2); }
 .bw-intro-act { gap: 10px; }
@@ -141,7 +132,7 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
 .bw-thread-l { list-style: none; margin: 10px 0 0 7px; padding: 0 0 0 16px; border-left: 2px solid var(--line-2); display: flex; flex-direction: column; gap: 12px; }
 .bw-thread-l b { font-family: var(--f-display); font-size: var(--t-13); }
 .bw-thread-l p { font-size: var(--t-14); color: var(--ink-2); margin-top: 2px; }
-.bw-thread-l blockquote { margin: 6px 0 0; font-family: var(--f-serif); font-style: italic; font-size: var(--t-16); line-height: 1.45; color: var(--ink-2); }
+.bw-thread-l blockquote { margin: 8px 0 0; padding-left: 14px; border-left: 2px solid var(--accent); font-family: var(--f-serif); font-size: var(--t-16); line-height: 1.45; color: var(--ink-2); }
 .bw-msg { display: flex; gap: 8px; margin-top: 14px; }
 .bw-msg .input { min-height: 40px; height: 40px; padding: 8px 12px; font-size: var(--t-14); }
 .bw-msg .btn { flex: 0 0 auto; height: 40px; }
@@ -203,9 +194,10 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
   .bw-next-a { grid-column: 2; align-self: start; }
   .bw-intro-st { align-items: flex-start; flex-direction: row; align-items: center; gap: 10px; }
   .bw-intro-who b { font-size: 21px; }
-  .bw-tl b { font-size: 11px; }
-  .bw-tl span { font-size: 10.5px; }
-  .bw-tl li { padding: 0 1px; }
+  .bw-ss-i { flex-wrap: wrap; padding: 12px 12px 12px 14px; }
+  .bw-ss-i .grow { flex: 1 1 calc(100% - 50px); }
+  .bw-ss-a { width: 100%; padding-left: 46px; }
+  .bw-ss-a .btn { flex: 1 1 auto; }
   .bw-sim { margin-left: 0; }
   .bw-proj { flex-direction: column; align-items: stretch; padding: 18px; }
   .bw-proj-side { justify-content: space-between; flex-wrap: wrap; gap: 14px; }
