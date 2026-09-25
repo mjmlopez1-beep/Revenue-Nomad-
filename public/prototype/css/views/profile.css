@@ -645,9 +645,9 @@
 .pf-ris-tier { display: block; font-family: var(--f-display); font-size: var(--t-24); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
 .pf-ris-tier.gold { color: var(--gold); }
 .pf-ris-d { font-size: var(--t-14); color: var(--ink-2); margin-top: 12px; line-height: 1.5; }
-.pf-ladder { list-style: none; margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--line-2); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; }
+.pf-ladder { list-style: none; margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--line-2); display: grid; grid-template-columns: repeat(6, minmax(max-content, 1fr)); gap: 2px; }
 .pf-ladder li { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: var(--t-11); color: var(--mute); text-align: center; font-variant-numeric: tabular-nums; min-width: 0; }
-.pf-ladder li b { font-family: var(--f-display); font-size: var(--t-11); font-weight: 600; color: var(--mute); max-width: 100%; overflow-wrap: anywhere; }
+.pf-ladder li b { font-family: var(--f-display); font-size: var(--t-11); font-weight: 600; color: var(--mute); max-width: 100%; overflow-wrap: normal; }
 .pf-ladder li .pf-ladder-seal { opacity: .55; }
 .pf-ladder li.on { color: var(--ink-2); }
 .pf-ladder li.on b { color: var(--ink); font-weight: 800; }

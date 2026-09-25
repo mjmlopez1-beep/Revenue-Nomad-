@@ -293,7 +293,7 @@
     const cred = studioRoute(/cred/i, 'studio');
     const operators = [
       { t: 'Apply', d: 'One intake with the same fields clients filter on: role, company fit, role details, availability, rate and fit tags.', l: act('join.operator', 'Apply to join') },
-      { t: 'Emerging at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50.', l: act('levels', 'See the levels') },
+      { t: 'Approved and live at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50.', l: act('levels', 'See the levels') },
       { t: 'Studio insights from day one', d: 'See the searches you appeared in, the kinds of companies that viewed you, and where your rate sits against the Rate Index.', l: asLink('operator', studioRoute(/visib/i), { mine: `Open Studio${icon('arrow')}`, other: `See Studio as Matt${icon('arrow')}` }, 'act') },
       { t: 'Verified proof raises your Reputation Index', d: 'Ask past clients for a CORE review from Studio. Each review rated 4.0 or higher verifies the fit tags it confirms and lifts your score.', l: asLink('operator', cred, { mine: `Open review requests${icon('arrow')}`, other: `See review requests as Matt${icon('arrow')}` }, 'act') },
       { t: 'Direct deals with proof links', d: 'Send a prospect a private proof link with your reviews and engagement history, then see which sections they read. Proposed: no fee on deals you bring yourself.', l: asLink('operator', cred, { mine: `Create a proof link${icon('arrow')}`, other: `See proof links as Matt${icon('arrow')}` }, 'act') },
@@ -1004,7 +1004,7 @@
       ['lock', 'No pay-to-win', 'Nothing you can buy moves a score, a label or a place in search. The inputs are client evidence and a complete profile.'],
       ['send', 'Reviews auto-publish', 'There is no moderation queue and no hand-picking. Every review counts the day it lands, good or bad.'],
       ['users', 'One label for clients and operators', 'The label comes from the score, and the score is the same on cards, profiles, compare and in Studio.'],
-      ['seal', 'Emerging and Verified mean different things', 'Emerging means our team checked identity and work history. Verified is kept for what a client confirmed: focus areas and engagements.'],
+      ['seal', 'Team-checked is not client-verified','Emerging means our team checked identity and work history. Verified is kept for what a client confirmed: focus areas and engagements.'],
       ['layers', 'A floor of 50', 'Every approved profile starts at 50, so a new operator with no reviews yet still shows as Emerging.'],
     ];
     // Only offer minimums that at least one profile in this prototype meets

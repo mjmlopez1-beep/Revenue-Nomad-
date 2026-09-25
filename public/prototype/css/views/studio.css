@@ -137,7 +137,7 @@
 .sa-ris-seal b { position: relative; }
 .sa-ris-tier { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .sa-ris-tier b { font-family: var(--f-display); font-size: var(--t-20); letter-spacing: -0.01em; }
-.sa-ladder { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin-top: 10px; }
+.sa-ladder { display: grid; grid-template-columns: repeat(5, minmax(max-content, 1fr)); gap: 4px; margin-top: 10px; }
 .sa-ladder i { display: flex; flex-direction: column; gap: 6px; font-style: normal; min-width: 0; }
 .sa-ladder i::before { content: ""; height: 6px; border-radius: 3px; background: var(--sunk); }
 .sa-ladder i.past::before { background: var(--viz-3); }

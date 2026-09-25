@@ -267,7 +267,7 @@
      Decision: the explorer ladder, derived from the score everywhere (operator view == client view),
      consistent with the floor of 50 (L381). The entry tier is named "Emerging" (founder decision, Sep 25, 2026),
      not "Verified": 78 of 100 live profiles sit at 50 with no client evidence, so "Verified" is reserved for
-     client-confirmed proof only (verified fit tags, verified engagements). */
+     client-confirmed proof (verified fit tags, verified engagements). */
   F.risTier = {
     label: 'Reputation Index tier', type: 'single',
     options: [
