@@ -92,6 +92,8 @@
     const root = document.getElementById('app');
     let html = '';
     const persona = RN.store.state.persona;
+    // Housekeeping before any screen reads engagements: staffed engagements with 10 quiet days close on their own
+    try { if (RN.projects && RN.projects.autoClose) RN.projects.autoClose(); } catch (e) { console.error(e); }
     try {
       if (view.requires && view.requires !== persona && !(view.requires === 'any-user' && persona !== 'visitor')) {
         html = RN.ui.gate(view.requires, view);

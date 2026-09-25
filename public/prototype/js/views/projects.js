@@ -262,6 +262,18 @@
   /* ---------- Normalizing and reading projects ---------- */
   const arr = (v) => (Array.isArray(v) ? v : v ? String(v).split('|').filter(Boolean) : []);
   PJ.get = (id) => (S().projects || []).find((p) => p.id === id) || null;
+  /* Staffed engagements usually hire one person (founder review, Sep 25, 2026). The engagement page suggests closing
+     after a hire; with no activity for 10 days after staffing it closes on its own, unless the client chose to hire another. */
+  const AUTO_CLOSE_DAYS = 10;
+  PJ.lastActivity = (p) => Math.max(...[p.staffedAt, p.updatedAt].concat((p.responses || []).map((r) => r.respondedAt || r.ts || r.at)).filter(Boolean).map((t) => +new Date(t)));
+  PJ.autoCloseAt = (p) => (p.status === 'staffed' ? PJ.lastActivity(p) + AUTO_CLOSE_DAYS * 864e5 : null);
+  PJ.autoClose = function () {
+    const now = +RN.now();
+    const due = (S().projects || []).filter((p) => { const at = PJ.autoCloseAt(p); return at && at <= now; });
+    if (!due.length) return 0;
+    RN.store.update((s) => { s.projects.forEach((q) => { if (due.some((d) => d.id === q.id)) { const at = PJ.autoCloseAt(q); q.status = 'closed'; q.closedAt = new Date(at).toISOString(); q.closedReason = 'auto'; } }); }, 'projects');
+    return due.length;
+  };
   PJ.fields = function (p) {
     const f = (p && p.fields) || {};
     return {
@@ -1201,12 +1213,16 @@
         <div class="row pj-head-acts">
           ${draft ? `<button type="button" class="btn" data-act="pj-finish" data-id="${esc(q.id)}">Finish and post${icon('arrow')}</button><button type="button" class="act muted" data-act="pj-delete" data-id="${esc(q.id)}">Delete draft</button>`
             : done ? `<button type="button" class="btn btn-line" data-act="pj-duplicate" data-id="${esc(q.id)}">${icon('copy')}Post a similar engagement</button>`
-            : `<button type="button" class="btn" data-act="pj-tab" data-t="matches">${icon('plus')}Invite operators</button><button type="button" class="btn btn-line" data-act="pj-edit" data-id="${esc(q.id)}">${icon('edit')}Edit brief</button><button type="button" class="act muted" data-act="pj-close" data-id="${esc(q.id)}">Close without hiring</button>`}
+            : `<button type="button" class="btn" data-act="pj-tab" data-t="matches">${icon('plus')}Invite operators</button><button type="button" class="btn btn-line" data-act="pj-edit" data-id="${esc(q.id)}">${icon('edit')}Edit brief</button><button type="button" class="act muted" data-act="pj-close" data-id="${esc(q.id)}">${q.selectedOpId ? 'Close engagement' : 'Close without hiring'}</button>`}
         </div>
       </header>
       ${fl ? `<div class="note info pj-flash" role="status">${icon('check-circle')}<span>${esc(fl.text)}</span></div>` : ''}
       ${q.status === 'staffed' && sel ? `<div class="note info pj-flash">${icon('handshake')}<span><b>Staffed with ${esc(sel.name)}</b> on ${esc(RN.fmt.date(q.staffedAt))}. Everyone else who responded got one close email and now shows as Not selected.${hireOf(q.id, sel.id) ? ' <a href="#buyer.team">See the terms in your Team tab</a>' : ''}</span></div>` : ''}
-      ${q.status === 'closed' ? `<div class="note pj-flash">${icon('info')}<span>Closed without a hire on ${esc(RN.fmt.date(q.closedAt || RN.now()))}. Everyone who responded got one close email.</span></div>` : ''}
+      ${q.status === 'staffed' ? `<div class="pj-staffed-next">
+        <div><b>Done hiring for this engagement?</b><p class="small muted">Most engagements hire one person. With no new activity, it closes on its own on ${esc(RN.fmt.date(new Date(PJ.lastActivity(q) + AUTO_CLOSE_DAYS * 864e5)))}.</p></div>
+        <div class="row" style="--gap:10px"><button type="button" class="btn" data-act="pj-close-staffed" data-id="${esc(q.id)}">${icon('check')}Close engagement</button><button type="button" class="btn btn-line" data-act="pj-multi" data-id="${esc(q.id)}">${icon('plus')}Hire another person</button></div>
+      </div>` : ''}
+      ${q.status === 'closed' ? `<div class="note pj-flash">${icon('info')}<span>${q.selectedOpId && sel ? `Closed after hiring ${esc(sel.name)}${q.closedReason === 'auto' ? `, automatically after ${AUTO_CLOSE_DAYS} days with no new activity,` : ''} on ${esc(RN.fmt.date(q.closedAt || RN.now()))}.` : `Closed without a hire on ${esc(RN.fmt.date(q.closedAt || RN.now()))}. Everyone who responded got one close email.`}</span></div>` : ''}
       ${isQuiet(q) ? `<div class="note pj-flash">${icon('clock')}<span>No responses in 72 hours. Invite a few more of the ranked matches below${q.suggest === false ? ', or turn on Revenue Nomad suggestions' : ''}.</span></div>` : ''}
       ${draft ? '' : `<div class="stats-row pj-stats" style="--cols:4">${stat(`${clientInvites(q)}<span class="pj-of">/${MAX_INVITES}</span>`, 'Invited', (q.suggested || []).length ? `+${q.suggested.length} suggested` : '')}${stat(interested.length, 'Responses', resp.length - interested.length ? `${resp.length - interested.length} declined` : '')}${stat(c.strong, 'Strong matches', `${c.good} good`)}${stat(intros, 'Intros requested')}</div>`}
       ${draft || done ? '' : suggestNote(q)}
@@ -1604,10 +1620,24 @@
     toast(`Selected ${esc(op.first)}. ${res.toClose.length ? `${RN.fmt.plural(res.toClose.length, 'close email')} sent.` : ''}`);
   };
 
+  RN.actions['pj-close-staffed'] = (el) => {
+    const p = PJ.get(el.dataset.id);
+    if (!p) return;
+    update(p.id, (q) => { q.status = 'closed'; q.closedAt = RN.now().toISOString(); q.closedReason = 'client'; });
+    RN.rerender();
+    toast('Engagement closed. Your hire and their terms stay in your Team tab.', { icon: 'check' });
+  };
+  RN.actions['pj-multi'] = (el) => {
+    const p = PJ.get(el.dataset.id);
+    if (!p) return;
+    update(p.id, (q) => { q.multiHire = true; q.status = 'in_progress'; q.updatedAt = RN.now().toISOString(); });
+    RN.rerender();
+    toast('Reopened for another hire. It takes responses again until you close it.', { icon: 'info' });
+  };
   RN.actions['pj-close'] = (el) => {
     const p = PJ.get(el.dataset.id);
     const n = (p.responses || []).filter((r) => r.status === 'interested' && !r.closeSent).length;
-    RN.ui.modal({ title: 'Close without hiring?', sub: `${n ? `${RN.fmt.plural(n, 'responder')} each get${n === 1 ? 's' : ''} one close email.` : 'Nobody is waiting on a decision.'} The engagement stops taking responses.`, foot: `<button class="btn btn-line" data-act="modal-close">Keep it open</button><button class="btn btn-danger" data-act="pj-close-go" data-id="${esc(p.id)}">Close engagement</button>` });
+    RN.ui.modal({ title: p.selectedOpId ? 'Close this engagement?' : 'Close without hiring?', sub: `${n ? `${RN.fmt.plural(n, 'responder')} each get${n === 1 ? 's' : ''} one close email.` : 'Nobody is waiting on a decision.'} The engagement stops taking responses.`, foot: `<button class="btn btn-line" data-act="modal-close">Keep it open</button><button class="btn btn-danger" data-act="pj-close-go" data-id="${esc(p.id)}">Close engagement</button>` });
   };
   RN.actions['pj-close-go'] = (el) => {
     const p = PJ.get(el.dataset.id);
