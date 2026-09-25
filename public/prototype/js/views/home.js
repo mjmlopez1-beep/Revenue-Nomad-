@@ -13,8 +13,13 @@
    - Hero search and trending clicks log RN.track('search', {q, tags, filters, results, source}).
    - Operator cards log one 'impression' each per visit (source 'home') and mark the next
      profile_view source as 'home' (RN.store.state._viewSource).
-   - Featured = Proven (60+) and above only, ranked by the same rules for every operator. No founder
-     callouts and no exclusions (founder decision, Sep 25, 2026): op.isMatt is demo data only.
+   - Top operators = a carousel of every operator at Trusted (70+) and above, ranked by the same rules for
+     every operator (curate(); with a photo first within an equal score). No founder callouts and no exclusions
+     (founder decision, Sep 25, 2026): op.isMatt is demo data only. The carousel auto-advances every 5s, pauses
+     on hover, focus, a hidden tab and its pause button, and never auto-advances for reduced motion.
+   - How it works: a path that draws itself as the section scrolls into view (stepsPath). At rest (no scroll yet,
+     reduced motion, a still capture) the path is fully drawn and every step is shown; .is-live is added only
+     after the visitor starts scrolling while the section is still below the fold.
    - The activity strip reads intros, engagements (state.projects), review requests, reviews and pending applications
      from the store. Seeded records and hand-written samples are illustrative (one RN.ui.illus()
      on the strip); records created in this prototype session are marked "Your session".
@@ -32,7 +37,9 @@
   const S = { q: '', tags: [], played: false, impressed: false, paused: false, timers: [], offs: [], raf: 0 };
   const PH = 'Describe what you need, or search a role or focus area';
   const TYPE_WORDS = ['VP of Sales', 'RevOps', 'Demand Generation', 'Outbound Motion Build', 'Partnerships', 'HubSpot'];
-  const PROVEN = 60; // Reputation Index floor for a featured spot (RN.fields.risUnlocks)
+  const PROVEN = 60; // Reputation Index floor above the Emerging row (RN.fields.risUnlocks)
+  const TRUSTED = 70; // Reputation Index floor for the Top operators carousel
+  const CAR_MS = 5000; // carousel auto-advance interval
   const BRIEF_KEY = 'ins-pulse'; // same list and key as the Insights sign-up
 
   // Icons for the problem picklist (RN.fields.need) and the GTM Framework areas (same map as research.js)
@@ -87,8 +94,12 @@
   // Every operator is ranked by the same rules (no founder exclusion, founder decision Sep 25, 2026).
   const curate = (a, b) => b.ris.score - a.ris.score || (b.video ? 1 : 0) - (a.video ? 1 : 0) || b.reviews.length - a.reviews.length || b.engagements.length - a.engagements.length || b.completeness - a.completeness;
   const pool = () => liveOps().filter((o) => o.photo);
-  // Featured: Proven and above only (the tier ladder's unlock), up to three
-  function featured() { return pool().filter((o) => o.ris.score >= PROVEN).sort(curate).slice(0, 3); }
+  // Top operators carousel: Trusted and above. Operators without a photo are included; within an equal
+  // Reputation Index the ones with a photo come first, then the curation order.
+  function featured() {
+    return liveOps().filter((o) => o.ris.score >= TRUSTED)
+      .sort((a, b) => b.ris.score - a.ris.score || (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || curate(a, b));
+  }
   // A separate, labelled row: Emerging operators who can start now
   function emergingNow() {
     const feat = featured();
@@ -244,6 +255,142 @@
     </section>`;
   }
 
+  /* ---------- Top operators carousel ----------
+     Native horizontal scroll with snap points (swipe and trackpad work for free); the buttons and the timer
+     scroll it. Controls come before the slides in reading order (WAI-ARIA APG carousel), the pause button first. */
+  const PAUSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6.5" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2"/></svg>';
+  const carPlayBtn = (paused) => `${paused ? icon('play') : PAUSE_SVG}<span class="sr-only">${paused ? 'Start' : 'Pause'} automatic slide show</span>`;
+  function carousel(ops, trust) {
+    const n = ops.length;
+    const pad = (x) => String(x).padStart(2, '0');
+    return `<div class="hm-car" data-hm-car role="region" aria-roledescription="carousel" aria-labelledby="hm-car-t" style="--car-ms:${CAR_MS}ms">
+      <div class="hm-row-hd hm-car-hd">
+        <h3 class="label" id="hm-car-t">Top operators · Trusted and above</h3>${trust}
+        <div class="hm-car-ctl">
+          <button type="button" class="hm-car-btn hm-car-play" data-car="toggle">${carPlayBtn(true)}</button>
+          <button type="button" class="hm-car-btn" data-car="prev" aria-controls="hm-car-view">${icon('chev-left')}<span class="sr-only">Previous operator</span></button>
+          <button type="button" class="hm-car-btn" data-car="next" aria-controls="hm-car-view">${icon('chev-right')}<span class="sr-only">Next operator</span></button>
+        </div>
+      </div>
+      <div class="hm-car-view" id="hm-car-view" data-hm-car-view tabindex="0" aria-live="polite" aria-label="Top operators, use the arrow keys to move">
+        <ul class="hm-car-track">${ops.map((op, i) => `<li class="hm-car-slide" role="group" aria-roledescription="slide" aria-label="${i + 1} of ${n}: ${esc(op.name)}">${RN.ui.opCard(op)}</li>`).join('')}</ul>
+      </div>
+      <div class="hm-car-foot">
+        <div class="hm-car-dots" role="group" aria-label="Choose a slide">${ops.map((op, i) => `<button type="button" class="hm-car-dot" data-car="go" data-i="${i}" aria-label="Show ${esc(op.name)}, ${i + 1} of ${n}" ${i ? '' : 'aria-current="true"'}><i><b></b></i></button>`).join('')}</div>
+        <span class="hm-car-count tnum" aria-hidden="true"><b data-hm-car-count>${pad(1)}</b> / ${pad(n)}</span>
+      </div>
+    </div>`;
+  }
+
+  function carouselRun(root) {
+    const car = root.querySelector('[data-hm-car]');
+    if (!car) return;
+    const view = car.querySelector('[data-hm-car-view]');
+    const slides = [...car.querySelectorAll('.hm-car-slide')];
+    const dots = [...car.querySelectorAll('.hm-car-dot')];
+    const countEl = car.querySelector('[data-hm-car-count]');
+    const play = car.querySelector('[data-car="toggle"]');
+    if (!view || !slides.length) return;
+    // user: paused by the visitor (or by reduced motion). hover/focus/hidden: temporary holds.
+    const C = { i: 0, per: 1, max: 0, timer: 0, left: CAR_MS, t0: 0, lock: -1, lockT: 0, user: S.carUser != null ? S.carUser : calm(), hover: false, focus: false, hidden: document.hidden };
+    const step = () => (slides[1] ? slides[1].offsetLeft - slides[0].offsetLeft : view.clientWidth) || 1;
+    const measure = () => {
+      const w = slides[0].getBoundingClientRect().width || 1;
+      const gap = step() - w;
+      C.per = Math.max(1, Math.min(slides.length, Math.round((view.clientWidth - 2 * (parseFloat(getComputedStyle(view).paddingLeft) || 0) + gap) / (w + gap))));
+      C.max = Math.max(0, slides.length - C.per);
+      dots.forEach((d, k) => { d.hidden = k > C.max; });
+      car.classList.toggle('is-static', C.max === 0);
+    };
+    const seen = S.carSeen || (S.carSeen = new Set());
+    const impress = () => slides.slice(C.i, C.i + C.per).forEach((s, k) => {
+      const id = s.querySelector('.opc') && s.querySelector('.opc').dataset.op;
+      if (id && !seen.has(id)) { seen.add(id); RN.track('impression', { opId: id, position: C.i + k + 1, source: 'home', surface: 'homepage_carousel' }); }
+    });
+    // Reflect the current position in the dots and counter; restart the progress fill when asked
+    const sync = (restart) => {
+      dots.forEach((d, k) => { if (k === C.i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); });
+      const pad = (x) => String(x).padStart(2, '0');
+      if (countEl) countEl.textContent = C.per > 1 ? `${pad(C.i + 1)}–${pad(C.i + C.per)}` : pad(C.i + 1);
+      if (restart) { const f = dots[C.i] && dots[C.i].querySelector('b'); if (f) { f.style.animation = 'none'; void f.offsetWidth; f.style.animation = ''; } }
+      impress();
+    };
+    const playing = () => !C.user && !C.hover && !C.focus && !C.hidden && C.max > 0;
+    const arm = () => { C.t0 = performance.now(); C.timer = setTimeout(() => { C.timer = 0; go(C.i + 1, true); }, C.left); };
+    const hold = () => { if (C.timer) { clearTimeout(C.timer); C.timer = 0; C.left = Math.max(250, C.left - (performance.now() - C.t0)); } };
+    const update = () => {
+      const p = playing();
+      if (p && !C.timer) arm(); else if (!p) hold();
+      car.classList.toggle('is-auto', !C.user && C.max > 0);
+      car.classList.toggle('is-playing', p);
+      // Announce slide changes only when the visitor drives them (APG: live region off while rotating)
+      view.setAttribute('aria-live', !C.user ? 'off' : 'polite');
+    };
+    const go = (i, auto) => {
+      if (i > C.max) i = 0;
+      if (i < 0) i = C.max;
+      C.i = i;
+      C.lock = i; clearTimeout(C.lockT); C.lockT = setTimeout(() => { C.lock = -1; }, 900);
+      view.scrollTo({ left: slides[i].offsetLeft - slides[0].offsetLeft, behavior: calm() ? 'auto' : 'smooth' });
+      if (C.timer) { clearTimeout(C.timer); C.timer = 0; }
+      C.left = CAR_MS;
+      sync(true);
+      update();
+      if (!auto) C.lastUser = Date.now();
+    };
+    const setUser = (paused) => {
+      C.user = paused; S.carUser = paused;
+      if (play) play.innerHTML = carPlayBtn(paused);
+      // An explicit Start wins over the hover and focus holds of the click that made it
+      if (!paused) { C.focus = false; C.hover = false; C.left = CAR_MS; sync(true); }
+      update();
+    };
+    // Swipes and trackpad scrolls move the position too
+    let sr = 0;
+    on(view, 'scroll', () => {
+      if (sr) return;
+      sr = requestAnimationFrame(() => {
+        sr = 0;
+        const i = Math.max(0, Math.min(C.max, Math.round(view.scrollLeft / step())));
+        if (C.lock >= 0) { if (i === C.lock) { C.lock = -1; clearTimeout(C.lockT); } return; }
+        if (i !== C.i) { C.i = i; if (C.timer) { clearTimeout(C.timer); C.timer = 0; } C.left = CAR_MS; sync(true); update(); }
+      });
+    }, { passive: true });
+    on(car, 'click', (e) => {
+      const b = e.target.closest('[data-car]');
+      if (!b || !car.contains(b)) return;
+      const a = b.dataset.car;
+      if (a === 'toggle') setUser(!C.user);
+      else if (a === 'prev') go(C.i - 1);
+      else if (a === 'next') go(C.i + 1);
+      else if (a === 'go') go(+b.dataset.i);
+    });
+    on(car, 'keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (!(e.target === view || (e.target.closest && e.target.closest('.hm-car-ctl, .hm-car-dots')))) return;
+      e.preventDefault();
+      go(C.i + (e.key === 'ArrowRight' ? 1 : -1));
+      if (e.target.classList && e.target.classList.contains('hm-car-dot') && dots[C.i]) dots[C.i].focus();
+    });
+    on(car, 'mouseenter', () => { C.hover = true; update(); });
+    on(car, 'mouseleave', () => { C.hover = false; update(); });
+    // Keyboard focus holds the rotation (APG); a mouse click on a control does not (hover already holds it)
+    const kbd = (el) => { try { return el.matches(':focus-visible'); } catch (e) { return true; } };
+    on(car, 'focusin', (e) => { C.focus = kbd(e.target); update(); });
+    on(car, 'focusout', (e) => { if (!car.contains(e.relatedTarget)) { C.focus = false; update(); } });
+    on(document, 'visibilitychange', () => { C.hidden = document.hidden; update(); });
+    let rz = 0;
+    on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(() => { measure(); if (C.i > C.max) C.i = C.max; view.scrollTo({ left: slides[C.i].offsetLeft - slides[0].offsetLeft }); sync(false); update(); }, 150); });
+    S.offs.push(() => { clearTimeout(C.timer); clearTimeout(C.lockT); clearTimeout(rz); if (sr) cancelAnimationFrame(sr); C.timer = 0; });
+    measure();
+    view.scrollLeft = 0;
+    if (play) play.innerHTML = carPlayBtn(C.user);
+    sync(false);
+    update();
+    // Test and debugging hook: the live state of the carousel on this page
+    car._hmCar = C;
+  }
+
   /* ---------- Featured operators ---------- */
   function featuredSec() {
     const feat = featured();
@@ -254,8 +401,7 @@
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
         ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles in this prototype`, 'href="#browse" data-act="hm-all"'))}
-        ${feat.length ? `<div class="hm-row-hd"><h3 class="label">Featured · Proven and above</h3>${trust}</div>
-        <div class="hm-ops hm-ops-feat">${feat.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
+        ${feat.length ? carousel(feat, trust) : ''}
         ${emerging.length ? `<div class="hm-row-hd"><h3 class="label">Emerging · available now</h3><span class="small muted">Approved by our team. Client reviews still to come.</span></div>
         <div class="hm-ops">${emerging.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
       </div>
@@ -481,16 +627,106 @@
   /* ---------- How it works ---------- */
   function howSec() {
     const steps = [
-      ['Search the network', 'Search by role, focus area or the problem you have. Every profile is open, and anything a client confirmed is marked Verified. No login needed.'],
-      ['Request an intro or post an engagement', 'Ask to meet one operator, or post an engagement and get ranked matches. Operators reply within 72 hours.'],
-      ['Start on clear terms', 'Agree scope, hours and rate up front: fractional, interim, advisory or a fixed-scope project.'],
+      ['search', 'Search the network', 'Search by role, focus area or the problem you have. Every profile is open, and anything a client confirmed is marked Verified. No login needed.'],
+      ['message', 'Request an intro or post an engagement', 'Ask to meet one operator, or post an engagement and get ranked matches. Operators reply within 72 hours.'],
+      ['handshake', 'Start on clear terms', 'Agree scope, hours and rate up front: fractional, interim, advisory or a fixed-scope project.'],
     ];
-    return `<section class="hm-sec section hm-band">
+    // The SVG path is drawn by stepsPath() from the measured node positions; without it the steps still read top to bottom
+    return `<section class="hm-sec section hm-band hm-how">
       <div class="wrap">
         ${head('How it works', 'Three steps. No retained search, no mystery bench.', more('Every step, in detail', 'href="#how"'))}
-        <ol class="hm-ruled hm-steps">${steps.map((s, i) => `<li><span class="hm-step-n">${String(i + 1).padStart(2, '0')}</span><h3 class="h3">${esc(s[0])}</h3><p>${esc(s[1])}</p></li>`).join('')}</ol>
+        <div class="hm-path" data-hm-path data-no-rv>
+          <svg class="hm-path-svg" aria-hidden="true" focusable="false"><path class="hm-path-track" d=""/><path class="hm-path-glow" d=""/><path class="hm-path-line" d=""/><circle class="hm-path-tip" r="7" cx="-20" cy="-20"/></svg>
+          <ol class="hm-psteps">${steps.map((s, i) => `<li class="hm-pstep ${i % 2 ? 'hm-pstep-r' : 'hm-pstep-l'}">
+            <span class="hm-pnode" aria-hidden="true">${icon(s[0])}<b class="hm-pnode-n">${i + 1}</b></span>
+            <div class="hm-pcard"><span class="hm-pcard-k">Step ${i + 1}</span><h3 class="hm-pcard-t">${esc(s[1])}</h3><p>${esc(s[2])}</p></div>
+          </li>`).join('')}</ol>
+        </div>
       </div>
     </section>`;
+  }
+
+  /* The path under How it works: measured from the node positions, drawn with stroke-dashoffset as the section
+     scrolls through the lower part of the viewport. Steps light up as the line reaches them. Everything is drawn
+     and lit until .is-live is added, which only happens after the visitor scrolls while the path is below the fold. */
+  function stepsPath(root, quiet) {
+    const box = root.querySelector('[data-hm-path]');
+    if (!box) return;
+    const svg = box.querySelector('.hm-path-svg');
+    const paths = [...svg.querySelectorAll('path')];
+    const line = svg.querySelector('.hm-path-line'), glow = svg.querySelector('.hm-path-glow'), tip = svg.querySelector('.hm-path-tip');
+    const steps = [...box.querySelectorAll('.hm-pstep')];
+    const SAMPLES = 240;
+    let len = 0, table = [], keys = [], nodes = [], live = false, raf = 0;
+    function layout() {
+      const r = box.getBoundingClientRect();
+      const W = Math.round(box.clientWidth), H = Math.round(box.clientHeight);
+      if (!W || !H) return;
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.setAttribute('width', W); svg.setAttribute('height', H);
+      nodes = steps.map((s) => { const b = s.querySelector('.hm-pnode').getBoundingClientRect(); return { x: b.left + b.width / 2 - r.left, y: b.top + b.height / 2 - r.top }; });
+      // A winding road: down from each node, a rounded switchback through the gap between two cards, then down
+      // into the next node. The nodes zig-zag and the cards sit on the outer side, so the line never runs behind
+      // a card. On a phone every node shares one x, so it is a straight line down the left.
+      const cards = steps.map((s) => { const b = s.querySelector('.hm-pcard').getBoundingClientRect(); return { top: b.top - r.top, bottom: b.bottom - r.top }; });
+      const f = (n) => n.toFixed(1);
+      let d = `M ${f(nodes[0].x)} 0 L ${f(nodes[0].x)} ${f(nodes[0].y)}`;
+      for (let k = 1; k < nodes.length; k++) {
+        const a = nodes[k - 1], b = nodes[k], dx = b.x - a.x;
+        const g = Math.max(a.y + 8, Math.min(b.y - 8, (cards[k - 1].bottom + cards[k].top) / 2));
+        const rad = Math.min(52, Math.abs(dx) / 2, g - a.y, b.y - g);
+        if (Math.abs(dx) < 1 || rad < 2) { d += ` L ${f(b.x)} ${f(b.y)}`; continue; }
+        const sx = Math.sign(dx);
+        d += ` L ${f(a.x)} ${f(g - rad)} Q ${f(a.x)} ${f(g)} ${f(a.x + sx * rad)} ${f(g)} L ${f(b.x - sx * rad)} ${f(g)} Q ${f(b.x)} ${f(g)} ${f(b.x)} ${f(g + rad)} L ${f(b.x)} ${f(b.y)}`;
+      }
+      d += ` L ${f(nodes[nodes.length - 1].x)} ${H}`;
+      paths.forEach((p) => p.setAttribute('d', d));
+      len = line.getTotalLength();
+      table = [];
+      for (let k = 0; k <= SAMPLES; k++) table.push(line.getPointAtLength((len * k) / SAMPLES));
+      // Path length at each node, so scroll maps to length piecewise (the flat switchbacks draw smoothly too)
+      keys = [{ y: 0, l: 0 }].concat(nodes.map((n) => {
+        let best = 0, bd = Infinity;
+        table.forEach((pt, k) => { const dd = Math.hypot(pt.x - n.x, pt.y - n.y); if (dd < bd) { bd = dd; best = k; } });
+        return { y: n.y, l: (len * best) / SAMPLES };
+      }), [{ y: H, l: len }]);
+      if (live) { [line, glow].forEach((p) => { p.style.strokeDasharray = `${len} ${len}`; }); draw(); }
+    }
+    // Path length for a height inside the box, interpolated between the nodes
+    const lenAt = (y) => {
+      if (!keys.length || y <= 0) return 0;
+      for (let k = 1; k < keys.length; k++) if (y <= keys[k].y) { const a = keys[k - 1], b = keys[k]; return a.l + (b.l - a.l) * ((y - a.y) / Math.max(1, b.y - a.y)); }
+      return len;
+    };
+    function draw() {
+      raf = 0;
+      if (!live || !len || !document.body.contains(box)) return;
+      const r = box.getBoundingClientRect();
+      const y = window.innerHeight * 0.78 - r.top; // the drawing edge sits a little above the bottom of the screen
+      const L = Math.min(len, lenAt(y));
+      [line, glow].forEach((p) => { p.style.strokeDashoffset = (len - L).toFixed(1); });
+      const pt = L > 0 && L < len ? line.getPointAtLength(L) : null;
+      tip.style.opacity = pt ? '1' : '0';
+      if (pt) { tip.setAttribute('cx', pt.x.toFixed(1)); tip.setAttribute('cy', pt.y.toFixed(1)); }
+      steps.forEach((s, i) => s.classList.toggle('is-on', y >= nodes[i].y - 6));
+    }
+    const req = () => { if (!raf) raf = requestAnimationFrame(draw); };
+    layout();
+    let rz = 0;
+    on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(layout, 150); });
+    // Web fonts can change card heights after mount
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (document.body.contains(box)) layout(); });
+    S.offs.push(() => { clearTimeout(rz); if (raf) cancelAnimationFrame(raf); raf = 0; });
+    if (quiet) return;
+    const arm = () => {
+      if (live || !document.body.contains(box)) return;
+      if (box.getBoundingClientRect().top <= window.innerHeight) return; // already on screen: leave it drawn
+      live = true;
+      box.classList.add('is-live');
+      layout();
+      on(window, 'scroll', req, { passive: true });
+    };
+    ['scroll', 'wheel', 'touchmove', 'keydown'].forEach((t) => on(window, t, arm, { passive: true }));
   }
 
   /* ---------- Talk to us ---------- */
@@ -591,6 +827,7 @@
       root.querySelectorAll('section.hm-sec, section.hm-brief, section.hm-talk').forEach((sec) => {
         const box = sec.querySelector(':scope > .wrap') || sec;
         [...box.children].forEach((c) => {
+          if (c.matches('[data-no-rv]')) return; // has its own scroll motion (the How it works path)
           const items = [...c.children].filter((x) => x.nodeType === 1);
           const d = getComputedStyle(c).display;
           if (items.length >= 3 && /grid|flex/.test(d) && !c.matches('dl.hm-rep-stats, dl.hm-fw-stats')) items.forEach((x, i) => targets.push([x, (i % 6) * 90]));
@@ -757,6 +994,8 @@
       let rz = 0;
       on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(() => { const m = document.querySelector('main[data-view="home"]'); if (m) fillCharts(m); }, 150); });
       const quiet = calm();
+      carouselRun(root);
+      stepsPath(root, quiet);
       if (!quiet) {
         if (first) root.querySelectorAll('.hm-stats [data-count]').forEach(countUp);
         startTyping(root.querySelector('#hm-q'));
@@ -771,10 +1010,10 @@
       });
       if (!S.impressed) {
         S.impressed = true;
-        featured().forEach((op, i) => RN.track('impression', { opId: op.id, position: i + 1, source: 'home', surface: 'homepage_carousel' }));
+        // Carousel impressions are logged by carouselRun as each slide comes into view
         emergingNow().forEach((op, i) => RN.track('impression', { opId: op.id, position: i + 1, source: 'home', surface: 'homepage_emerging' }));
       }
     },
-    unmount: () => { teardown(); S.played = false; S.impressed = false; },
+    unmount: () => { teardown(); S.played = false; S.impressed = false; S.carSeen = null; },
   });
 })();

@@ -494,6 +494,7 @@
               ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
               ${op.timezone ? `<span>${icon('clock')}${esc(tzLabel(op.timezone))}</span>` : ''}
               <span>${icon('briefcase')}${esc(catLabel(op.catKey))}</span>
+              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, clients and reviews are invented.') : ''}
             </div>
             ${clientsBlock(c, logos)}
           </div>

@@ -92,7 +92,7 @@
       headline: hasHeadline ? p.desc : '',
       bio: p.bio || '',
       photo: raw.photo || '',
-      location: (RN.data.opLocations && RN.data.opLocations[raw.id]) || '',
+      location: (RN.data.opLocations && RN.data.opLocations[raw.id]) || raw.location || '',
       timezone: d.timezone && d.timezone !== 'Not provided' ? d.timezone : '',
       rate: raw.rate || null,
       avail: { key: AVAIL[avail.status] || 'available_now', label: avail.status || 'Available now', startDate: avail.startDate || null, hours: hours, hoursCode: hours ? F.hoursCode(hours) : null },
@@ -119,6 +119,8 @@
       clients: engagements.map((e) => ({ name: e.company, logo: e.logo, verified: e.clientVerified })),
       video: raw.isMatt ? 'assets/intro-matt.mp4' : null,
       isMatt: !!raw.isMatt,
+      // Fictional profiles added for the prototype (ops_sample.js): the profile shows a quiet note, cards do not
+      sample: !!(raw.sample || p.sample),
       native,
       raw,
     };
@@ -855,7 +857,8 @@
     || String(b.r.date || b.r.ts || '').localeCompare(String(a.r.date || a.r.ts || ''));
   M.topReviews = function () {
     const out = [];
-    M.ops.forEach((op) => { if (!op.hidden) (op.reviews || []).forEach((r) => out.push({ op, r })); });
+    // Sample profiles (ops_sample.js) are fictional, so their reviews never lead an editorial module
+    M.ops.forEach((op) => { if (!op.hidden && !op.sample) (op.reviews || []).forEach((r) => out.push({ op, r })); });
     return out.sort(M.reviewRank);
   };
   // Logo key for the reviewing company, from the operator's matching engagement ('' when there is none: callers show the name)
