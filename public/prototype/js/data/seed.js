@@ -36,14 +36,18 @@
 
     s.projects = [
       { id: 'proj-seed-1', status: 'posted', title: 'Fractional VP of Sales', template: 'vp-sales', createdAt: iso(6), postedAt: iso(5),
-        fields: { roleCategory: 'sales_leadership', role: 'VP of Sales', engagementType: 'fractional', hoursPerMonth: '40', term: '6_12', startBy: 'available_2_weeks', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], salesMotions: ['Inside Sales'], tags: ['Sales Team Hiring & Ramp', 'Sales Process Design', 'HubSpot admin'], rateMax: 400 },
+        fields: { roleCategory: 'sales_leadership', role: 'VP of Sales', engagementType: 'fractional', hoursPerMonth: '40', term: '6_12', startBy: 'available_2_weeks', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], salesMotions: ['Inside Sales'], tags: ['Sales Team Hiring & Ramp', 'Sales Process Design', 'HubSpot admin'], rateMax: 300 },
         brief: 'Own the sales number while we hire a full-time leader. In 90 days: two reps hired and ramping, a written sales process, and a forecast the board trusts.',
-        // Only the founder's own response is seeded; other real operators are invited but have not answered
+        // Only the demo operator's (Matt's) response is seeded; other real operators are invited but have not answered
         invited: [matt.id, anne.id, tim.id], responses: [{ opId: matt.id, status: 'interested', note: 'I have done this build at myHR Partner. Happy to walk you through the 90-day plan I used.', rate: 300, ts: iso(4) }] },
       { id: 'proj-seed-2', status: 'draft', title: 'HubSpot cleanup and pipeline reporting', template: 'vp-revops', createdAt: iso(1),
         fields: { roleCategory: 'revenue_operations', role: 'VP of Revenue Operations', engagementType: 'project', term: '1_3', startBy: 'available_now', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], tags: ['HubSpot admin', 'CRM cleanup', 'Dashboard build'], projectBudget: 18000 },
         brief: 'Deduplicate contacts, rebuild pipeline stages and give leadership one dashboard.', invited: [], responses: [] },
     ];
+
+    // No seeded hires: real operators never get invented hires. Hires are made in the demo (workspace Team tab, an
+    // engagement's Select, or Admin marking an intro hired) and land in s.hires through RN.hire.
+    s.hires = [];
 
     s.reviewRequests = [
       { id: 'rr-seed-1', opId: matt.id, reviewer: { name: 'Trista Kempa', email: 'trista@ferry.com', company: 'Ferry', title: 'COO' }, engagement: 'Ferry', status: 'completed', sentAt: iso(24), completedAt: iso(16) },

@@ -2,8 +2,10 @@
    The client is RN.personas.buyer: the demo client (Jordan Ellis) or a visitor who requested an intro and became
    their own client (RN.shell.setClient). Records are matched on that client's email, so each client sees only theirs.
    Tabs: Overview (next steps, shortlist, saved searches, recently viewed), Shortlist (compare, request intros,
-   private notes), Intros (lifecycle per request via RN.ui.introTrack), Projects (RN.projects.card, the same card as
-   #projects), Company (company profile + match preferences on the standard fields).
+   private notes), Intros (lifecycle per request via RN.ui.introTrack), Engagements (#buyer.engagements, old link
+   #buyer.projects; RN.projects.card, the same card as #engagements), Team (#buyer.team: the client's hires and the
+   terms agreed, from RN.hire in intro.js), Company (company profile + match preferences on the standard fields).
+   Pricing (D1): companies pay no fees. Every figure here is the operator's rate itself, never a fee or a split.
 
    Store keys written here (additive, other surfaces may read them):
      seen.notes          {opId: 'private note'}
@@ -14,7 +16,8 @@
        on client-closed intros (status stays 'declined')
    Helpers exposed for other surfaces: RN.bw.brief() (match brief for RN.model.fit), RN.bw.applyCompany(),
    RN.bw.reviewableIntro(opId) (the client's introduced or hired intro with this operator and no review yet,
-   for a "Leave a review" button: data-act="bw-review-start" data-id="<introId>", or data-op="<opId>"). */
+   for a "Leave a review" button: data-act="bw-review-start" data-id="<introId>", data-op="<opId>", or
+   data-hire="<hireId>" for a hire from the Team tab). */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -76,12 +79,17 @@
   const isMe = (email) => !!email && lc(email) === lc(me().email);
   const myIntros = () => st().intros.filter((i) => i.buyer && isMe(i.buyer.email));
   const isOpen = (i) => !['declined', 'hired'].includes(i.status);
-  // Projects carry their client (p.client). Seeded projects without one belong to the demo client.
+  // Engagements (stored as projects) carry their client (p.client). Seeded ones without one belong to the demo client.
   const myProjects = () => st().projects.filter((p) => {
     const email = (p.client && p.client.email) || p.owner || (p.buyer && p.buyer.email);
     return email ? isMe(email) : !!me().demo;
   });
   const myReviewRequests = () => st().reviewRequests.filter((r) => r.reviewer && isMe(r.reviewer.email));
+  // Hires and their terms (RN.hire, intro.js), matched on the client's email
+  const myHires = () => (RN.hire ? RN.hire.list({ email: me().email }) : []);
+  const activeHires = () => myHires().filter((h) => h.status === 'active');
+  const monthlySpend = () => activeHires().reduce((a, h) => a + RN.hire.monthly(h), 0);
+  const hireForIntro = (i) => (RN.hire ? RN.hire.forSource('intro', i.id, i.opId) : null);
   const shortOps = () => st().shortlist.map(RN.model.byId).filter(Boolean);
   const introFor = (opId) => myIntros().find((i) => i.opId === opId && i.status !== 'declined');
   const statusLabel = (s) => RN.w.label('introStatus', s);
@@ -134,8 +142,8 @@
       const go = `<a class="btn btn-line btn-sm" href="#buyer.intros">View intro</a>`;
       if (i.status === 'interested') out.push({ icon: 'handshake', tone: 'good', t: `${op.name} is interested`, b: 'Our team will introduce you within one business day.', ts: lastTs(i), a: go });
       else if (i.status === 'rn_qualified') out.push({ icon: 'shield', tone: 'good', t: `Our team confirmed the fit with ${op.first}`, b: 'Your intro email goes out within one business day.', ts: lastTs(i), a: go });
-      else if (i.status === 'introduced') out.push({ icon: 'mail', tone: 'good', t: `You are connected with ${op.first}`, b: `Reply to the intro email to book the first call. Tell us when you decide.`, ts: lastTs(i), a: `<button class="btn btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">We hired ${esc(op.first)}</button>` });
-      else if (i.status === 'hired' && !hasMyReview(op.id) && !myReviewRequests().some((r) => r.opId === op.id && r.status === 'sent')) out.push({ icon: 'star', tone: 'accent', t: `How is it going with ${op.first}?`, b: `A short CORE review verifies ${op.first}’s focus areas and helps the next company hire well.`, ts: lastTs(i), a: `<button class="btn btn-line btn-sm" data-act="bw-review-start" data-id="${esc(i.id)}">Leave a review</button>` });
+      else if (i.status === 'introduced') out.push({ icon: 'mail', tone: 'good', t: `You are connected with ${op.first}`, b: `Reply to the intro email to book the first call. When you hire ${op.first}, record the terms here.`, ts: lastTs(i), a: `<button class="btn btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">Mark as hired</button>` });
+      else if (i.status === 'hired' && !hireForIntro(i)) out.push({ icon: 'handshake', tone: 'accent', t: `Confirm the terms with ${op.first}`, b: 'Record the rate, available time, start date and term. They show in your Team tab.', ts: lastTs(i), a: `<button class="btn btn-line btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">Confirm terms</button>` });
       else if (i.status === 'pending') {
         const h = hoursLeft(i);
         out.push({ icon: 'hourglass', tone: 'warn', t: `Waiting on ${op.first}`, b: h > 0 ? `${op.first} has ${h} hours left to reply. If ${op.first} passes, we suggest two operators with the same fit.` : `${op.first} has not replied in 72 hours. Our team is following up today.`, ts: i.createdAt, a: go });
@@ -147,12 +155,21 @@
       const mine = r.source === 'client';
       out.push({ icon: 'star', tone: 'accent', t: mine ? `Finish your review of ${op.first}` : `${op.first} asked for your review`, b: mine ? 'Your answers are saved as you type. Pick up where you left off.' : 'Four quick CORE ratings and the focus areas you saw. About four minutes.', ts: r.sentAt, a: `<a class="btn btn-line btn-sm" href="#review.${esc(r.id)}">${mine ? 'Continue review' : 'Leave a review'}</a>` });
     });
+    // Hires: a term that is ending, and a review once the engagement ends or has run 30 days
+    myHires().forEach((h) => {
+      const op = RN.model.byId(h.opId);
+      if (!op) return;
+      const t = h.terms || {};
+      const days = t.endDate ? Math.round((new Date(t.endDate + 'T12:00:00') - RN.now()) / DAY) : null;
+      if (h.status === 'active' && days != null && days <= 21) out.push({ icon: 'calendar', tone: days < 0 ? 'warn' : '', t: days < 0 ? `Your term with ${op.first} ended ${RN.hire.date(t.endDate)}` : `Your term with ${op.first} ends ${RN.hire.date(t.endDate)}`, b: `Extend it on the same rate and available time, or end the engagement.`, ts: h.createdAt, a: `<button class="btn btn-line btn-sm" data-act="hire-extend" data-id="${esc(h.id)}">Extend</button>` });
+      if (RN.hire.reviewable(h) && !hasMyReview(op.id) && !myReviewRequests().some((r) => r.opId === op.id && r.status === 'sent')) out.push({ icon: 'star', tone: 'accent', t: `How is it going with ${op.first}?`, b: `A short CORE review verifies ${op.first}’s focus areas and helps the next company hire well.`, ts: h.endedAt || h.createdAt, a: `<button class="btn btn-line btn-sm" data-act="bw-review-start" data-hire="${esc(h.id)}">Leave a review</button>` });
+    });
     myProjects().forEach((p) => {
       const interested = (p.responses || []).filter((r) => r.status === 'interested');
-      const title = p.title || 'Untitled project';
-      if (p.status === 'draft') out.push({ icon: 'edit', tone: '', t: `Finish and post “${title}”`, b: 'Post it to get ranked matches and responses. It takes about a minute.', ts: p.createdAt, a: `<a class="btn btn-line btn-sm" href="#project.${esc(p.id)}">Finish draft</a>` });
-      else if (p.status === 'posted' && interested.length) out.push({ icon: 'users', tone: 'good', t: `${RN.fmt.plural(interested.length, 'operator')} responded to “${title}”`, b: `${RN.fmt.int(interested.length)} ${interested.length === 1 ? 'is' : 'are'} interested. Compare their notes and rates, then request intros.`, ts: interested[interested.length - 1].ts || p.postedAt, a: `<a class="btn btn-line btn-sm" href="#project.${esc(p.id)}">Review responses</a>` });
-      else if (p.status === 'posted') out.push({ icon: 'megaphone', tone: '', t: `“${title}” is live`, b: 'Invited operators have 72 hours to respond. Matching operators got a role alert.', ts: p.postedAt, a: `<a class="btn btn-line btn-sm" href="#project.${esc(p.id)}">Open project</a>` });
+      const title = p.title || 'Untitled engagement';
+      if (p.status === 'draft') out.push({ icon: 'edit', tone: '', t: `Finish and post “${title}”`, b: 'Post it to get ranked matches and responses. It takes about a minute.', ts: p.createdAt, a: `<a class="btn btn-line btn-sm" href="#engagement.${esc(p.id)}">Finish draft</a>` });
+      else if (p.status === 'posted' && interested.length) out.push({ icon: 'users', tone: 'good', t: `${RN.fmt.plural(interested.length, 'operator')} responded to “${title}”`, b: `${RN.fmt.int(interested.length)} ${interested.length === 1 ? 'is' : 'are'} interested. Compare their notes and rates, then request an intro or hire.`, ts: interested[interested.length - 1].ts || p.postedAt, a: `<a class="btn btn-line btn-sm" href="#engagement.${esc(p.id)}">Review responses</a>` });
+      else if (p.status === 'posted') out.push({ icon: 'megaphone', tone: '', t: `“${title}” is live`, b: 'Invited operators have 72 hours to respond. Matching operators got a role alert.', ts: p.postedAt, a: `<a class="btn btn-line btn-sm" href="#engagement.${esc(p.id)}">Open engagement</a>` });
     });
     if (!BW.prefs()) out.push({ icon: 'target', tone: 'accent', t: 'Set your match preferences', b: `Tell us the role you are hiring for and how you sell. Every profile you open then shows match signals for ${me().company.name}.`, a: `<a class="btn btn-line btn-sm" href="#buyer.company">Set preferences</a>` });
     const n = st().shortlist.length;
@@ -166,9 +183,12 @@
     { key: 'overview', label: 'Overview', icon: 'home' },
     { key: 'shortlist', label: 'Shortlist', icon: 'bookmark', count: () => st().shortlist.length },
     { key: 'intros', label: 'Intros', icon: 'handshake', count: () => myIntros().length },
-    { key: 'projects', label: 'Projects', icon: 'briefcase' },
+    { key: 'engagements', label: 'Engagements', icon: 'briefcase' },
+    { key: 'team', label: 'Team', icon: 'users', count: () => activeHires().length },
     { key: 'company', label: 'Company', icon: 'building' },
   ];
+  const TAB_ALIAS = { projects: 'engagements', hires: 'team' };   // old links keep working (D12)
+  const tabKey = (k) => TAB_ALIAS[k] || k;
   function side(cur) {
     const p = me();
     return `<nav class="side" aria-label="Workspace">
@@ -177,13 +197,14 @@
       ${TABS.map((t) => { const n = t.count ? t.count() : 0; return `<a href="#buyer${t.key === 'overview' ? '' : '.' + t.key}" class="${cur === t.key ? 'on' : ''}" ${cur === t.key ? 'aria-current="page"' : ''}>${icon(t.icon)}${esc(t.label)}${n ? `<span class="nav-count">${n}</span>` : ''}</a>`; }).join('')}
       <div class="side-sep"></div>
       <a href="#browse">${icon('search')}Browse talent</a>
-      <a href="#project.new">${icon('plus')}Post a project</a>
+      <a href="#engagement.new">${icon('plus')}Post an engagement</a>
     </nav>`;
   }
   function page(cur) {
     BW.applyCompany();
+    cur = tabKey(cur);
     const t = TABS.find((x) => x.key === cur) ? cur : 'overview';
-    const body = { overview, shortlist, intros, projects, company }[t]();
+    const body = { overview, shortlist, intros, engagements, team, company }[t]();
     return `<div class="wrap shell bw" data-bw-tab="${esc(t)}">${side(t)}<div class="bw-main">${body}</div></div>`;
   }
 
@@ -195,8 +216,8 @@
   });
   RN.view('buyer-tab', {
     route: 'buyer.:tab', nav: '', requires: 'buyer', footer: false,
-    samples: { tab: 'shortlist', extra: ['buyer.intros', 'buyer.company', 'buyer.projects'] },
-    title: (p) => { const t = TABS.find((x) => x.key === p.tab); return (t ? t.label : 'Overview') + ' · Workspace'; },
+    samples: { tab: 'shortlist', extra: ['buyer.intros', 'buyer.company', 'buyer.engagements', 'buyer.team', 'buyer.projects'] },
+    title: (p) => { const t = TABS.find((x) => x.key === tabKey(p.tab)); return (t ? t.label : 'Overview') + ' · Workspace'; },
     render: (p) => page(p.tab),
     mount: (root) => mount(root),
   });
@@ -236,26 +257,28 @@
       sub: 'Everything you are hiring for, in one place.',
       actions: `<a class="btn btn-line" href="#browse">${icon('search')}Browse talent</a>`,
     })}
-    <div class="stats-row bw-stats" style="--cols:4">
+    <div class="stats-row bw-stats" style="--cols:3">
       <a class="stat" href="#buyer.shortlist"><span class="stat-v">${ops.length}</span><span class="stat-l">Shortlisted</span></a>
       <a class="stat" href="#buyer.intros"><span class="stat-v">${intros.filter(isOpen).length}</span><span class="stat-l">Intros in progress</span></a>
-      <a class="stat" href="#buyer.projects"><span class="stat-v">${live.length}</span><span class="stat-l">Live projects</span></a>
-      <a class="stat" href="#buyer.projects"><span class="stat-v">${responses}</span><span class="stat-l">Operator responses</span></a>
+      <a class="stat" href="#buyer.engagements"><span class="stat-v">${live.length}</span><span class="stat-l">Live engagements</span></a>
+      <a class="stat" href="#buyer.engagements"><span class="stat-v">${responses}</span><span class="stat-l">Operator responses</span></a>
+      <a class="stat" href="#buyer.team"><span class="stat-v">${activeHires().length}</span><span class="stat-l">Active hires</span></a>
+      <a class="stat" href="#buyer.team"><span class="stat-v">${esc(RN.fmt.usd(monthlySpend()))}</span><span class="stat-l">Monthly spend on fractional talent</span></a>
     </div>
     <div class="bw-ov">
       <section class="card bw-next-card" aria-labelledby="bw-next-t">
-        <div class="card-hd"><div><h3 id="bw-next-t">Next steps</h3><p class="sub">Across your intros, reviews and projects.</p></div></div>
+        <div class="card-hd"><div><h3 id="bw-next-t">Next steps</h3><p class="sub">Across your intros, engagements, hires and reviews.</p></div></div>
         ${steps.length ? `<ol class="bw-next">${steps.map((s) => `<li class="bw-next-i">
           <span class="bw-next-ic ${s.tone ? 'is-' + s.tone : ''}">${icon(s.icon)}</span>
           <div class="grow"><b>${esc(s.t)}</b><p>${esc(s.b)}</p>${s.ts ? `<span class="tiny faint">${esc(RN.fmt.ago(s.ts))}</span>` : ''}</div>
-          <div class="bw-next-a">${s.a}</div></li>`).join('')}</ol>` : RN.ui.empty({ icon: 'check-circle', title: 'You are all caught up', body: 'New replies from operators and project responses show up here.' })}
+          <div class="bw-next-a">${s.a}</div></li>`).join('')}</ol>` : RN.ui.empty({ icon: 'check-circle', title: 'You are all caught up', body: 'New replies from operators and responses to your engagements show up here.' })}
       </section>
       <aside class="stack bw-ov-side" style="--gap:16px">
         <section class="panel-night night bw-post">
           <span class="eyebrow">Engagement Blueprints</span>
-          <h3 class="h3">Post a project in three steps</h3>
-          <p class="small">Start from a scoped Blueprint with a 30/60/90-day plan and typical rates. Ranked matches appear as you type.</p>
-          <div class="row"><a class="btn btn-leaf btn-sm" href="#project.new">Post a project</a><a class="btn btn-ghost btn-sm" href="#blueprints">See Blueprints</a></div>
+          <h3 class="h3">Post an engagement in three steps</h3>
+          <p class="small">Start from a scoped Blueprint with a 30/60/90-day plan and typical rates. Ranked matches appear as you type. No fees for companies.</p>
+          <div class="row"><a class="btn btn-leaf btn-sm" href="#engagement.new">Post an engagement</a><a class="btn btn-ghost btn-sm" href="#blueprints">See Blueprints</a></div>
         </section>
         <section class="card bw-prefs-mini">
           <div class="card-hd"><div><h3>Match preferences</h3><p class="sub">${prefs ? 'Every profile you open is scored against these.' : 'Not set yet. Profiles score on company basics only.'}</p></div><a class="act" href="#buyer.company">${prefs ? 'Edit' : 'Set up'}</a></div>
@@ -506,12 +529,19 @@
       next = `<b>Our team confirmed the fit.</b> Your intro email to ${esc(op.first)} goes out within one business day.`;
       actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'introduced') {
-      next = `<b>You are connected by email.</b> Book the first call with ${esc(op.first)}, then tell us how it went.`;
-      actions = `<button type="button" class="btn btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">${icon('handshake')}We hired ${esc(op.first)}</button><button type="button" class="btn btn-line btn-sm" data-act="bw-notfit" data-id="${esc(i.id)}">Not a fit</button>`;
+      next = `<b>You are connected by email.</b> Book the first call with ${esc(op.first)}. When you hire, record the terms here and they move to your Team tab.`;
+      actions = `<button type="button" class="btn btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">${icon('handshake')}Mark as hired</button><button type="button" class="btn btn-line btn-sm" data-act="bw-notfit" data-id="${esc(i.id)}">Not a fit</button>`;
     } else if (i.status === 'hired') {
       const reviewed = hasMyReview(op.id);
-      next = reviewed ? `<b>${esc(op.first)} is working with ${esc(me().company.name)}.</b> Your review is live on ${esc(op.first)}’s profile.` : `<b>${esc(op.first)} is working with ${esc(me().company.name)}.</b> When you are ready, a short CORE review verifies ${esc(op.first)}’s focus areas.`;
-      actions = reviewed ? `<a class="btn btn-line btn-sm" href="#op.${esc(op.slug)}">See the review on ${esc(op.first)}’s profile</a>` : `<button type="button" class="btn btn-sm" data-act="bw-review-start" data-id="${esc(i.id)}">${icon('star')}Leave a CORE review</button>`;
+      const h = hireForIntro(i);
+      const terms = h ? ` ${esc(RN.fmt.rate(h.terms.rate))}${h.terms.startDate ? (RN.hire.notStarted(h) ? ', starts ' : ', started ') + esc(RN.hire.date(h.terms.startDate)) : ''}.` : '';
+      next = !h ? `<b>You hired ${esc(op.first)}.</b> Confirm the terms you agreed so they show in your Team tab.`
+        : h.cancelled ? `<b>You cancelled the engagement with ${esc(op.first)} before it started.</b> The terms stay in your Team tab.`
+        : reviewed ? `<b>${esc(op.first)} is working with ${esc(me().company.name)}.</b>${terms} Your review is live on ${esc(op.first)}’s profile.`
+        : `<b>${esc(op.first)} is working with ${esc(me().company.name)}.</b>${terms} When you are ready, a short CORE review verifies ${esc(op.first)}’s focus areas.`;
+      actions = !h ? `<button type="button" class="btn btn-sm" data-act="bw-hired" data-id="${esc(i.id)}">${icon('handshake')}Confirm the terms</button>`
+        : h.cancelled ? `<a class="btn btn-line btn-sm" href="#buyer.team">${icon('users')}See terms in Team</a>`
+        : `<a class="btn btn-line btn-sm" href="#buyer.team">${icon('users')}See terms in Team</a>${reviewed ? `<a class="btn btn-line btn-sm" href="#op.${esc(op.slug)}">See the review on ${esc(op.first)}’s profile</a>` : `<button type="button" class="btn btn-sm" data-act="bw-review-start" data-id="${esc(i.id)}">${icon('star')}Leave a CORE review</button>`}`;
     } else if (closed) {
       const alts = RN.model.similar(op, 12).filter((o) => !myIntros().some((x) => x.opId === o.id && x.status !== 'declined'))
         .map((o) => ({ o, pct: fitFor(o).pct })).sort((a, b) => b.pct - a.pct || b.o.ris.score - a.o.ris.score).slice(0, 2).map((x) => x.o);
@@ -591,21 +621,21 @@
     RN.rerender();
   };
 
+  // "Mark as hired" on an introduced intro opens the shared "Confirm the terms" modal (RN.hire, intro.js).
+  // Saving records the hire, moves the intro to Hired and emails both sides.
   RN.actions['bw-hired'] = (el) => {
     const i = findIntro(el.dataset.id);
     const op = i && RN.model.byId(i.opId);
     if (!op) return;
-    RN.intro.setStatus(i.id, 'hired');
-    RN.store.update((s) => { const r = s.intros.find((x) => x.id === i.id); r.hiredAt = RN.now().toISOString(); }, 'intros');
-    RN.ui.toast(`Marked ${esc(op.first)} as hired. Congratulations.`, { icon: 'handshake', action: { label: 'Leave a review', act: 'bw-review-start', attrs: `data-id="${esc(i.id)}"` } });
-    RN.rerender();
+    const f = i.fields || {};
+    RN.hire.open({ opId: op.id, source: 'intro', sourceId: i.id, prefill: { engagementType: f.engagementType, hoursPerMonth: f.hoursPerMonth, projectBudget: f.projectBudget, startBy: f.startBy, client: { email: i.buyer.email, company: (i.buyer.company || {}).name, name: i.buyer.name } } });
   };
 
   RN.actions['bw-notfit'] = (el) => {
     const i = findIntro(el.dataset.id);
     const op = i && RN.model.byId(i.opId);
     if (!op) return;
-    // One reason list for every client "Not a fit" (intros and projects), from the registry when it is there
+    // One reason list for every client "Not a fit" (intros and engagements), from the registry when it is there
     const reasons = RN.fields.notFitReason ? RN.w.field('notFitReason', '', { name: 'reason', compact: true, label: 'What didn’t fit?', help: 'Only our team sees this.' }) : '';
     RN.ui.modal({
       width: 520,
@@ -657,27 +687,31 @@
   // Works from anywhere: data-id="<introId>", or data-op="<opId>" (the client's introduced or hired intro).
   RN.actions['bw-review-start'] = (el) => {
     RN.ui.closeModal();
-    const i = el.dataset.id ? findIntro(el.dataset.id) : BW.reviewableIntro(el.dataset.op);
-    const op = i && RN.model.byId(i.opId);
+    const h = el.dataset.hire && RN.hire ? RN.hire.get(el.dataset.hire) : null;
+    const i = h ? (h.source === 'intro' ? findIntro(h.sourceId) : null) : el.dataset.id ? findIntro(el.dataset.id) : BW.reviewableIntro(el.dataset.op);
+    const opId = h ? h.opId : i && i.opId;
+    const op = opId && RN.model.byId(opId);
     if (!op) { RN.ui.toast('Reviews open once you are introduced to the operator.', { icon: 'info' }); return; }
-    let rr = myReviewRequests().find((r) => r.opId === i.opId && r.status === 'sent');
+    let rr = myReviewRequests().find((r) => r.opId === opId && r.status === 'sent');
     if (!rr) {
       const c = me().company;
-      const f = i.fields || {};
+      const f = (i && i.fields) || {};
+      const t = (h && h.terms) || {};
+      const ended = h && h.status === 'ended';
       rr = {
-        id: RN.uid('rr'), opId: i.opId, reviewer: { name: me().name, email: me().email, company: c.name, title: me().title || '' }, engagement: c.name,
-        // What we already know from the intro, so the review form opens prefilled
-        details: { company: c.name, engagementType: f.engagementType || '', start: i.hiredAt ? String(i.hiredAt).slice(0, 7) : '', end: '', ongoing: true, roleCategory: f.roleCategory || op.catKey, role: op.role, revenueRange: c.revenueRange || '', employeeRange: c.employeeRange || '' },
-        status: 'sent', sentAt: RN.now().toISOString(), source: 'client', introId: i.id,
+        id: RN.uid('rr'), opId, reviewer: { name: me().name, email: me().email, company: c.name, title: me().title || '' }, engagement: c.name,
+        // What we already know from the hire terms or the intro, so the review form opens prefilled
+        details: { company: c.name, engagementType: t.engagementType || f.engagementType || '', start: t.startDate ? String(t.startDate).slice(0, 7) : i && i.hiredAt ? String(i.hiredAt).slice(0, 7) : '', end: ended ? [String(t.startDate || '').slice(0, 7), String(h.endedAt || t.endDate || '').slice(0, 7)].sort().pop() : '', ongoing: !ended, roleCategory: f.roleCategory || op.catKey, role: op.role, revenueRange: c.revenueRange || '', employeeRange: c.employeeRange || '', projectBudget: t.projectBudget || f.projectBudget || '', monthlySpend: h && t.engagementType !== 'project' ? RN.hire.monthly(h) || '' : '' },
+        status: 'sent', sentAt: RN.now().toISOString(), source: 'client', introId: i ? i.id : undefined, hireId: h ? h.id : undefined,
       };
       RN.store.update((s) => { s.reviewRequests.unshift(rr); }, 'reviewRequests');
-      RN.track('review_request', { opId: i.opId, source: 'client' });
+      RN.track('review_request', { opId, source: 'client' });
     }
     RN.go('review.' + rr.id);
   };
 
-  /* ================= Projects ================= */
-  // One project card everywhere: projects.js owns it (RN.projects.card). The local card is only a fallback.
+  /* ================= Engagements ================= */
+  // One engagement card everywhere: projects.js owns it (RN.projects.card). The local card is only a fallback.
   const projectCard = (p) => (RN.projects && typeof RN.projects.card === 'function' ? RN.projects.card(p, { from: 'workspace' }) : localProjectCard(p));
   function localProjectCard(p) {
     const f = p.fields || {};
@@ -692,28 +726,158 @@
     return `<article class="card bw-proj">
       <div class="bw-proj-main">
         <div class="row" style="--gap:10px">${RN.ui.statusPill('project', p.status)}<span class="tiny faint">${esc(when)}</span></div>
-        <h3 class="h4"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></h3>
+        <h3 class="h4"><a href="#engagement.${esc(p.id)}">${esc(p.title || 'Untitled engagement')}</a></h3>
         <p class="small muted">${esc(bits.join(' · '))}</p>
       </div>
       <div class="bw-proj-side">
         ${p.status === 'draft' ? '' : `<div class="bw-proj-stats"><span><b class="num">${(p.invited || []).length}</b>Invited</span><span><b class="num">${resp.length}</b>Interested</span></div>`}
-        <a class="btn btn-sm ${p.status === 'draft' || resp.length ? '' : 'btn-line'}" href="#project.${esc(p.id)}">${p.status === 'draft' ? 'Finish and post' : resp.length ? 'Review responses' : 'Open project'}</a>
+        <a class="btn btn-sm ${p.status === 'draft' || resp.length ? '' : 'btn-line'}" href="#engagement.${esc(p.id)}">${p.status === 'draft' ? 'Finish and post' : resp.length ? 'Review responses' : 'Open engagement'}</a>
       </div>
     </article>`;
   }
-  function projects() {
+  function engagements() {
     const list = myProjects().slice().sort((a, b) => new Date(b.updatedAt || b.postedAt || b.createdAt) - new Date(a.updatedAt || a.postedAt || a.createdAt));
     // A draft's "Finish and post" is the primary action; the header button steps back when there is one
     const hasDraft = list.some((p) => p.status === 'draft');
     return `${head({
-      title: 'Projects',
-      sub: 'Post a scoped project from a Blueprint. Matches are ranked on the same fields as operator profiles, and responses land here.',
-      actions: list.length ? `<a class="btn ${hasDraft ? 'btn-line' : ''}" href="#project.new">${icon('plus')}Post a project</a>` : '',
+      title: 'Engagements',
+      sub: 'Post a scoped engagement from a Blueprint. Matches are ranked on the same fields as operator profiles, and responses land here. No fees for companies.',
+      actions: list.length ? `<a class="btn ${hasDraft ? 'btn-line' : ''}" href="#engagement.new">${icon('plus')}Post an engagement</a>` : '',
     })}
     ${list.length ? `<div class="stack bw-projs" style="--gap:14px">${list.map(projectCard).join('')}</div>`
-      : RN.ui.empty({ icon: 'briefcase', title: 'No projects yet', body: 'Start from a Blueprint: a scoped project with a 30/60/90-day plan, typical hours and rates. Posting takes three steps.', cta: '<a class="btn btn-sm" href="#project.new">Post a project</a>' })}
-    <div class="bw-quiet">${icon('layers')}<span>Not sure how to scope it? Blueprints show the outcome plan, hours and typical rate for common fractional projects.</span><a class="act" href="#blueprints">Browse Blueprints${icon('arrow')}</a></div>`;
+      : RN.ui.empty({ icon: 'briefcase', title: 'No engagements yet', body: 'Start from a Blueprint: a scoped engagement with a 30/60/90-day plan, typical hours and rates. Posting takes three steps.', cta: '<a class="btn btn-sm" href="#engagement.new">Post an engagement</a>' })}
+    <div class="bw-quiet">${icon('layers')}<span>Not sure how to scope it? Blueprints show the outcome plan, hours and typical rate for common fractional engagements.</span><a class="act" href="#blueprints">Browse Blueprints${icon('arrow')}</a></div>`;
   }
+
+  /* ================= Team: hires and their terms (D15) ================= */
+  // Who the client can hire right now: introduced intros, hired intros with no terms yet, and interested responders
+  function hireCandidates() {
+    const out = [];
+    myIntros().forEach((i) => {
+      const op = RN.model.byId(i.opId);
+      if (!op || hireForIntro(i)) return;
+      if (i.status === 'introduced') out.push({ op, why: `Introduced ${RN.fmt.dateShort(lastTs(i))}. Book the first call, then record the terms.`, attrs: `data-act="bw-hired" data-id="${esc(i.id)}"`, label: 'Mark as hired' });
+      else if (i.status === 'hired') out.push({ op, why: 'Marked hired. The terms are not recorded yet.', attrs: `data-act="bw-hired" data-id="${esc(i.id)}"`, label: 'Confirm terms' });
+    });
+    myProjects().filter((p) => ['posted', 'in_progress'].includes(p.status)).forEach((p) => {
+      (p.responses || []).filter((r) => r.status === 'interested' && !['not_a_fit', 'not_selected', 'selected'].includes(r.decision)).forEach((r) => {
+        const op = RN.model.byId(r.opId);
+        if (!op || out.some((x) => x.op.id === op.id) || activeHires().some((h) => h.opId === op.id)) return;
+        out.push({ op, why: `Interested in “${p.title || 'your engagement'}”${r.rate ? ' at ' + RN.fmt.rate(r.rate) : ''}`, attrs: `data-act="bw-hire-resp" data-pid="${esc(p.id)}" data-id="${esc(op.id)}"`, label: `Hire ${op.first}` });
+      });
+    });
+    return out;
+  }
+  // With no hires yet, the first candidate's button is the page's one primary action
+  function candidatesSection(list, title, lead) {
+    if (!list.length) return '';
+    return `<section class="bw-sec" aria-labelledby="bw-cand-t">
+      ${secHead(`<span id="bw-cand-t">${esc(title)}</span> <span class="muted">${list.length}</span>`)}
+      <div class="bw-mini-list">${list.map((c, k) => `<div class="bw-mini is-static">
+        ${RN.ui.avatar(c.op, 'ava-sm')}
+        <a class="grow" href="#op.${esc(c.op.slug)}" data-track-view="${esc(c.op.id)}"><b class="serif-up">${esc(c.op.name)}</b><span class="tiny muted">${esc(c.why)}</span></a>
+        <span></span>
+        <button type="button" class="btn btn-sm${lead && !k ? '' : ' btn-line'}" ${c.attrs}>${esc(c.label)}</button>
+      </div>`).join('')}</div>
+    </section>`;
+  }
+  const hireDays = (h) => (h.terms && h.terms.startDate ? Math.floor((RN.now() - new Date(h.terms.startDate + 'T12:00:00')) / DAY) : 0);
+  function hireCard(h) {
+    const op = RN.model.byId(h.opId);
+    if (!op) return '';
+    const ended = h.status === 'ended';
+    const t = h.terms || {};
+    const reviewed = hasMyReview(op.id);
+    const reviewOpen = RN.hire.reviewable(h);
+    const pendingReview = myReviewRequests().find((r) => r.opId === op.id && r.status === 'sent');
+    const from = h.source === 'engagement' && RN.projects && RN.projects.get && RN.projects.get(h.sourceId)
+      ? `From <a href="#engagement.${esc(h.sourceId)}">${esc(RN.projects.get(h.sourceId).title)}</a>` : 'From an intro request';
+    const m = RN.hire.monthly(h);
+    let review = '';
+    if (reviewed) review = `<a class="btn btn-line btn-sm" href="#op.${esc(op.slug)}">See your review</a>`;
+    else if (reviewOpen) review = `<button type="button" class="btn btn-sm" data-act="bw-review-start" data-hire="${esc(h.id)}">${icon('star')}${pendingReview ? 'Continue your review' : 'Leave a review'}</button>`;
+    const acts = ended
+      ? review
+      : `<button type="button" class="btn btn-line btn-sm" data-act="bw-checkin" data-id="${esc(h.id)}">${icon('message')}Request a check-in</button>
+         <button type="button" class="btn btn-line btn-sm" data-act="hire-extend" data-id="${esc(h.id)}">${icon('calendar')}Extend</button>
+         ${review}
+         <button type="button" class="act muted bw-hire-end" data-act="hire-end" data-id="${esc(h.id)}">${RN.hire.notStarted(h) ? 'Cancel engagement' : 'End engagement'}</button>`;
+    return `<article class="card bw-hire${ended ? ' is-ended' : ''}" id="hire-${esc(h.id)}">
+      <div class="bw-intro-hd">
+        <a class="bw-intro-who" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${RN.ui.avatar(op, 'ava-md')}<span><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)} · ${esc(RN.fields.catLabel(op.catKey))}</span></span></a>
+        <div class="bw-intro-st">${RN.hire.statusPill(h)}<span class="tiny faint">${from} · hired ${esc(RN.fmt.dateShort(h.createdAt))}</span></div>
+      </div>
+      <div class="bw-hire-body">
+        <dl class="bw-terms">${RN.hire.facts(h).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+        <div class="bw-hire-cost">
+          <span class="label">${h.cancelled ? 'Monthly cost, had it started' : ended ? 'Monthly cost while active' : 'Estimated monthly cost'}</span>
+          <b class="num">${m ? esc(RN.fmt.usd(m)) : 'Not set'}</b>
+          <span class="tiny muted">${esc(RN.hire.monthlyNote(h))}. No fees.</span>
+        </div>
+      </div>
+      ${t.notes ? `<blockquote class="bw-hire-notes"><span class="label">Also agreed</span>${esc(t.notes)}</blockquote>` : ''}
+      ${!ended && !reviewed && !reviewOpen ? `<p class="tiny muted">Reviews open when the engagement ends, or ${Math.max(1, 30 - hireDays(h))} days from now.</p>` : ''}
+      <div class="row bw-intro-act">${acts}</div>
+    </article>`;
+  }
+  function team() {
+    const list = myHires().slice().sort((a, b) => (a.status === 'ended') - (b.status === 'ended') || new Date(b.createdAt) - new Date(a.createdAt));
+    const active = list.filter((h) => h.status === 'active');
+    const cands = hireCandidates();
+    const next = active.filter((h) => h.terms && h.terms.endDate).sort((a, b) => (a.terms.endDate < b.terms.endDate ? -1 : 1))[0];
+    return `${head({
+      title: 'Team',
+      sub: 'Operators you hired and the terms you agreed: rate, available time, start date and term. You pay each operator’s rate and no fees.',
+      actions: list.length ? `<a class="btn btn-line" href="#browse">${icon('search')}Find more talent</a>` : '',
+    })}
+    ${list.length ? `<div class="stats-row bw-stats" style="--cols:3">
+        <div class="stat"><span class="stat-v">${active.length}</span><span class="stat-l">Active hires</span></div>
+        <div class="stat"><span class="stat-v">${esc(RN.fmt.usd(monthlySpend()))}</span><span class="stat-l">Monthly spend on fractional talent</span></div>
+        <div class="stat"><span class="stat-v bw-stat-date">${next ? esc(RN.hire.date(next.terms.endDate)) : 'None set'}</span><span class="stat-l">${next ? `Next term end · ${esc(RN.model.byId(next.opId) ? RN.model.byId(next.opId).first : '')}` : 'Next term end'}</span></div>
+      </div>
+      <div class="stack bw-hires" style="--gap:18px">${list.map(hireCard).join('')}</div>
+      ${candidatesSection(cands, 'Ready to hire')}`
+      : `${RN.ui.empty({ icon: 'users', title: 'No hires yet', body: 'When you hire an operator, the terms you agreed show here: rate, available time, start date, term and end date, with the monthly cost. Mark an introduced operator as hired, or hire someone who responded to your engagement.', cta: cands.length ? '' : '<a class="btn btn-sm" href="#buyer.intros">Go to your intros</a>' })}
+      ${candidatesSection(cands, 'Ready to hire', true)}`}`;
+  }
+  // Hire an interested responder straight from the Team tab: the same terms modal the engagement page opens
+  RN.actions['bw-hire-resp'] = (el) => {
+    const P = RN.projects;
+    const p = P && P.get ? P.get(el.dataset.pid) : null;
+    const op = RN.model.byId(el.dataset.id);
+    if (!p || !op) return;
+    const f = P.fields ? P.fields(p) : p.fields || {};
+    const r = (p.responses || []).find((x) => x.opId === op.id) || {};
+    const project = f.engagementType === 'project';
+    const c = P.clientOf ? P.clientOf(p) : { email: me().email, company: me().company, name: me().name };
+    RN.hire.open({ opId: op.id, source: 'engagement', sourceId: p.id, prefill: { engagementType: f.engagementType, rate: r.rate || op.rate, hoursPerMonth: project ? '' : f.hoursPerMonth || r.hours || '', projectBudget: project ? f.projectBudget : null, startBy: f.startBy, term: f.term, client: { email: c.email, company: (c.company || {}).name, name: c.name } } });
+  };
+  // Request a check-in: an email to the operator through Revenue Nomad (no mailto)
+  RN.actions['bw-checkin'] = (el) => {
+    const h = RN.hire.get(el.dataset.id);
+    const op = h && RN.model.byId(h.opId);
+    if (!op) return;
+    RN.ui.modal({
+      width: 520,
+      title: `Request a check-in with ${esc(op.first)}`,
+      sub: `We email ${esc(op.first)} your note. ${esc(op.first)} replies to you directly.`,
+      body: `<form id="bw-checkin-form" data-submit="bw-checkin" data-id="${esc(h.id)}" class="stack" style="--gap:14px">
+        <div class="field"><label for="bw-ci-note">Your note</label>
+          <textarea class="textarea" id="bw-ci-note" name="note" maxlength="500" style="min-height:110px">Can we find 30 minutes this week to review progress against the plan and agree the next month’s priorities?</textarea></div></form>`,
+      foot: `<button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="bw-checkin-form">${icon('send')}Send request</button>`,
+    });
+  };
+  RN.submits['bw-checkin'] = (form, d) => {
+    const h = RN.hire.get(form.dataset.id);
+    const op = h && RN.model.byId(h.opId);
+    const note = String(d.note || '').trim();
+    if (!op) return;
+    if (!note) { RN.ui.toast('Write a short note first.', { icon: 'info' }); return; }
+    RN.ui.closeModal();
+    RN.mail(op.name, `Check-in request from ${me().name}, ${me().company.name}`, `${note}\n\nReply to ${me().name} at ${me().email}.`, 'hire');
+    RN.store.update((s) => { const x = (s.hires || []).find((y) => y.id === h.id); if (x) x.checkins = (x.checkins || []).concat({ ts: RN.now().toISOString(), note }); }, 'hires');
+    RN.ui.toast(`Check-in request sent to ${esc(op.first)}.`, { icon: 'mail' });
+  };
 
   /* ================= Company + match preferences ================= */
   function company() {

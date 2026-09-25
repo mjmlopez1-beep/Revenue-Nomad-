@@ -18,7 +18,7 @@
   };
   RN.me = () => RN.personas[RN.store.state.persona];
 
-  /* The client identity. Jordan Ellis is the demo client (seeded intros, projects, shortlist); a visitor who
+  /* The client identity. Jordan Ellis is the demo client (seeded intros, engagements, shortlist); a visitor who
      requests an intro becomes their own client, saved in seen.client. setClient(null) restores the demo. */
   const DEMO_CLIENT = JSON.parse(JSON.stringify(RN.personas.buyer));
   function applyClient(who) {
@@ -81,7 +81,7 @@
       body: `<div class="stack" style="--gap:10px">
         ${['buyer', 'operator', 'admin'].map((k) => {
           const p = RN.personas[k];
-          const d = { buyer: 'Hiring a fractional leader. Shortlist, compare, request intros, post projects.', operator: 'Fractional operator. Studio shows who viewed you, why, and how to stand out.', admin: 'Revenue Nomad team. Approve profiles and read marketplace demand.' }[k];
+          const d = { buyer: 'Hiring a fractional leader. Shortlist, compare, request intros, post engagements.', operator: 'Fractional operator. Studio shows who viewed you, why, and how to stand out.', admin: 'Revenue Nomad team. Approve profiles and read marketplace demand.' }[k];
           const to = { buyer: 'buyer', operator: 'studio', admin: 'admin' }[k];
           return `<button type="button" class="optcard" data-act="persona" data-p="${k}" ${stay ? 'data-stay="1"' : `data-to="${to}"`}><b>${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>${esc(d)}</span></button>`;
         }).join('')}
@@ -92,7 +92,7 @@
   /* ---------- Header ---------- */
   const NAV = [
     { key: 'browse', label: 'Browse Talent', to: 'browse' },
-    { key: 'projects', label: 'Post a Project', to: 'projects' },
+    { key: 'projects', label: 'Post an Engagement', to: 'engagements' },   // view nav key stays 'projects' (D12)
     { key: 'insights', label: 'Insights', to: 'insights' },
     { key: 'operators', label: 'For Operators', to: 'operators' },
     { key: 'about', label: 'About', to: 'about' },
@@ -171,10 +171,10 @@
           <p class="serif-up" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch">The home of fractional go-to-market leadership.</p>
           <p class="small" style="color:var(--night-mute);max-width:40ch">Open profiles, verified proof of work, and the market data behind every engagement.</p>
         </div>
-        <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#projects">Post a project</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>
+        <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#engagements">Post an engagement</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>
         <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
         <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
-        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#results">Client stories</a><a href="#talk">Contact</a><a href="#standards">Field standards</a></div>
+        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#results">Client stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
@@ -234,7 +234,7 @@
   RN.actions['theme'] = (el) => { RN.store.set('theme', el.dataset.t); shell.applyTheme(); shell.renderDock(); };
   RN.actions['reset-demo'] = () => {
     RN.ui.modal({
-      title: 'Reset demo data?', sub: 'Clears shortlists, intro requests, projects, reviews, analytics events and the outbox for this browser.',
+      title: 'Reset demo data?', sub: 'Clears shortlists, intro requests, engagements, hires, reviews, analytics events and the outbox for this browser.',
       foot: `<button class="btn btn-line" data-act="modal-close">Keep data</button><button class="btn btn-danger" data-act="reset-confirm">Reset</button>`,
     });
   };
@@ -253,13 +253,14 @@
     const mails = RN.store.state.outbox;
     RN.ui.drawer({
       title: 'Outbox', sub: 'Emails the platform sends as you move through the flows.',
-      body: mails.length ? `<div class="stack" style="--gap:12px">${mails.map((m) => `<article class="card-flat"><div class="row between small muted"><span>To ${esc(m.to)}</span><span>${esc(RN.fmt.ago(m.ts))}</span></div><h3 class="h5" style="margin-top:6px">${esc(m.subject)}</h3><p class="small muted" style="margin-top:6px;white-space:pre-line">${linkify(m.body)}</p></article>`).join('')}</div>` : RN.ui.empty({ icon: 'mail', title: 'No emails yet', body: 'Request an intro, post a project or send a review request and the emails appear here.' }),
+      body: mails.length ? `<div class="stack" style="--gap:12px">${mails.map((m) => `<article class="card-flat"><div class="row between small muted"><span>To ${esc(m.to)}</span><span>${esc(RN.fmt.ago(m.ts))}</span></div><h3 class="h5" style="margin-top:6px">${esc(m.subject)}</h3><p class="small muted" style="margin-top:6px;white-space:pre-line">${linkify(m.body)}</p></article>`).join('')}</div>` : RN.ui.empty({ icon: 'mail', title: 'No emails yet', body: 'Request an intro, post an engagement or send a review request and the emails appear here.' }),
     });
   };
 
   const JOURNEYS = [
     { key: 'buyer', label: 'Client: search, compare, request an intro', persona: 'buyer', to: 'browse' },
-    { key: 'project', label: 'Client: post a project, get ranked responses', persona: 'buyer', to: 'project.new' },
+    { key: 'project', label: 'Client: post an engagement, get ranked responses', persona: 'buyer', to: 'engagement.new' },
+    { key: 'hire', label: 'Client: hire an operator and track the terms', persona: 'buyer', to: 'buyer.team' },
     { key: 'studio', label: 'Operator: who viewed me and why', persona: 'operator', to: 'studio' },
     { key: 'proof', label: 'Operator: win a direct deal with a proof link', persona: 'operator', to: 'studio.credibility' },
     { key: 'join', label: 'Operator: join the network (standard intake)', persona: 'visitor', to: 'join' },
@@ -294,7 +295,7 @@
   };
 
   RN.store.on((key) => {
-    if (key === 'shortlist' || key === 'compare' || key === 'persona' || key === 'intros' || key === 'projects' || key === '*') {
+    if (key === 'shortlist' || key === 'compare' || key === 'persona' || key === 'intros' || key === 'projects' || key === 'hires' || key === '*') {
       const cur = RN.currentRoute();
       shell.renderHeader(cur && cur.view);
       shell.renderTray(cur && cur.view);

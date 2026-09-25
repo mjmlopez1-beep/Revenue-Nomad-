@@ -13,12 +13,30 @@
        mount: (root, params) => {},        // optional: wire charts, focus, observers
        unmount: () => {},                  // optional
      });
+
+   Route aliases: a renamed route keeps its old links working. RN.canonical(path) swaps the first token through
+   ALIASES and keeps the rest, so #projects -> #engagements, #project.new.vp-sales.2 -> #engagement.new.vp-sales.2
+   and #project.<id> -> #engagement.<id> (founder decision D12, Sep 25, 2026: a client posts an engagement).
+   RN.go() goes straight to the canonical route; an old link opened any other way is rewritten in place
+   (history.replaceState), so Back never lands on the old address.
 */
 (function () {
   'use strict';
   const RN = window.RN;
   const order = [];
   let current = null;
+
+  const ALIASES = { projects: 'engagements', project: 'engagement' };
+  const EXACT = { project: 'engagements', engagement: 'engagements' }; // a bare token with no id opens the list
+  RN.routeAliases = ALIASES;
+  RN.canonical = function (path) {
+    const s = String(path == null ? '' : path).replace(/^#/, '');
+    if (Object.prototype.hasOwnProperty.call(EXACT, s)) return EXACT[s];
+    const parts = s.split('.');
+    if (!Object.prototype.hasOwnProperty.call(ALIASES, parts[0])) return s;
+    parts[0] = ALIASES[parts[0]];
+    return parts.join('.');
+  };
 
   RN.view = function (name, def) {
     def.name = name;
@@ -49,16 +67,20 @@
   }
 
   RN.currentRoute = () => current;
-  RN.path = () => decodeURIComponent((location.hash || '').replace(/^#/, '')) || 'home';
+  RN.path = () => RN.canonical(decodeURIComponent((location.hash || '').replace(/^#/, ''))) || 'home';
 
   RN.go = function (path, opts) {
-    const target = '#' + String(path).replace(/^#/, '');
+    const target = '#' + RN.canonical(path);
     if (location.hash === target) { RN.render(opts); return; }
     if (opts && opts.replace) { history.replaceState(null, '', target); RN.render(opts); }
     else location.hash = target;
   };
 
   RN.render = function (opts) {
+    // An old link (alias) is rewritten to its canonical route in place, keeping history state
+    const raw = (location.hash || '').replace(/^#/, '');
+    const canon = RN.canonical(raw);
+    if (raw && canon !== raw) { try { history.replaceState(history.state, '', '#' + canon); } catch (e) { /* file:// in some browsers: the match below still uses the canonical path */ } }
     const path = RN.path();
     let m = match(path);
     if (!m) m = { view: RN.views.notfound || RN.views.home, params: { path } };

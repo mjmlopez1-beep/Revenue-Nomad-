@@ -50,22 +50,166 @@
     return `<span class="row-nw" style="--gap:1px" role="img" aria-label="${esc(n)} out of 5 stars">${s}</span>`;
   };
 
-  /* Reputation Index seal. op.ris = {score, label}; label comes from RN.fields.risLabel */
-  ui.ris = function (op, o) {
-    const r = op.ris || { score: 0, label: 'New' };
-    const tipHtml = ui.risExplainer(o && o.viewer === 'operator');
-    const tierV = r.tier || RN.fields.risTierFor(r.score).v;
-    // At the floor (Emerging 50) the seal stays quiet: the label carries it, the score is shown small
-    if (tierV === 'emerging' && !(o && o.full)) return `<span class="ris ris-quiet"><span class="pill pill-line">${icon('shield')}Emerging</span><span class="ris-txt"><span class="row-nw" style="--gap:4px">Reputation Index ${esc(r.score)} ${ui.tip(tipHtml)}</span></span></span>`;
-    return `<span class="ris"><span class="ris-seal t-${esc(tierV)}">${ui.hexSeal(r.label)}<b>${esc(r.score)}</b></span><span class="ris-txt"><b>${esc(r.label)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
+  /* ---------- Reputation Index tier badges (D11, founder decision Sep 25, 2026) ----------
+     One component for every tier mark. Never hand-draw a tier hexagon: call these helpers.
+     Rarity reads from material, not colour alone, so the order survives grayscale and colour-blind viewing:
+     Indexing dashed outline, Emerging single line, Proven solid forest, Trusted forest with an inner ring,
+     Elite bevelled brushed gold, Apex black stone set in a gold rim. Tiers come from RN.fields.risTier
+     (Apex first). Colours are --tb-* tokens (css/tokens.css), so light, dark and the night band switch by token.
+       RN.ui.tierBadge(v, {size = 40, score, label, className})  one inline SVG
+       RN.ui.tierPill(v, score)                                   20px badge + tier + score, for running text
+       RN.ui.tierLadder(v, {score, showNext, orientation, compact, showRanges, only, notes})  the six tiers */
+  const TIER_RANK = { indexing: 0, emerging: 1, proven: 2, trusted: 3, elite: 4, apex: 5 };
+  const tierOpts = () => RN.fields.risTier.options;
+  const tierOpt = (v) => tierOpts().find((t) => t.v === v) || tierOpts().find((t) => t.v === 'indexing');
+  ui.tierRank = (v) => (v in TIER_RANK ? TIER_RANK[v] : 0);
+  let tbSeq = 0;
+  const HEX_R = 48;
+  const f2 = (n) => +(+n).toFixed(2);
+  function hexPts(r) { const p = []; for (let i = 0; i < 6; i++) { const a = (-90 + 60 * i) * Math.PI / 180; p.push([50 + r * Math.cos(a), 50 + r * Math.sin(a)]); } return p; }
+  function hexD(r) { return 'M' + hexPts(r).map((q) => q[0].toFixed(2) + ' ' + q[1].toFixed(2)).join('L') + 'Z'; }
+  // Bevelled rim: six facets lit from the upper left
+  function bevel(rOut, rIn) {
+    const o = hexPts(rOut), n = hexPts(rIn);
+    const tone = { 5: 1, 4: 2, 0: 3, 3: 4, 1: 5, 2: 6 };
+    let s = '';
+    for (let i = 0; i < 6; i++) {
+      const j = (i + 1) % 6;
+      s += `<path d="M${f2(o[i][0])} ${f2(o[i][1])}L${f2(o[j][0])} ${f2(o[j][1])}L${f2(n[j][0])} ${f2(n[j][1])}L${f2(n[i][0])} ${f2(n[i][1])}Z" style="fill:var(--tb-au-${tone[i]})"/>`;
+    }
+    return s;
+  }
+  function spark(cx, cy, r, fill) {
+    const k = r * 0.28;
+    return `<path d="M${f2(cx)} ${f2(cy - r)}Q${f2(cx + k)} ${f2(cy - k)} ${f2(cx + r)} ${f2(cy)}Q${f2(cx + k)} ${f2(cy + k)} ${f2(cx)} ${f2(cy + r)}Q${f2(cx - k)} ${f2(cy + k)} ${f2(cx - r)} ${f2(cy)}Q${f2(cx - k)} ${f2(cy - k)} ${f2(cx)} ${f2(cy - r)}Z" style="fill:${fill}"/>`;
+  }
+  ui.tierBadge = function (v, o) {
+    o = o || {};
+    const t = tierOpt(v);
+    v = t.v;
+    const size = +o.size || 40;
+    const id = 'tb' + (++tbSeq);
+    const u = 100 / size; // viewBox units per CSS px
+    const px = (p) => f2(p * u);
+    const score = o.score == null || o.score === '' ? null : o.score;
+    const txt = score == null ? '' : String(score);
+    const num = score != null && size >= 32;
+    const fs = txt.length > 2 ? 28 : 34; // 13.6px at 40, 24.5px at 72
+    const tsz = size < 32 ? 'sm' : size < 56 ? 'md' : 'lg';
+    const text = (fill, weight) => (num ? `<text x="50" y="51.5" text-anchor="middle" dominant-baseline="central" style="font-size:${fs}px;font-weight:${weight};fill:${fill}">${esc(txt)}</text>` : '');
+    const line = Math.max(1.25, size * 0.03); // outline weight in px
+    const R = HEX_R;
+    let body = '', defs = '';
+    if (v === 'indexing') {
+      // Not scored yet: a dashed outline, nearly empty
+      const sw = px(line), r = R - sw / 2;
+      const n = size < 32 ? 2 : 3, per = r / n, dash = per * 0.55, gap = per - dash;
+      body = `<path d="${hexD(r)}" style="fill:var(--tb-idx-fill);stroke:var(--tb-idx-line);stroke-width:${sw};stroke-dasharray:${f2(dash)} ${f2(gap)};stroke-dashoffset:${f2(dash / 2)};stroke-linejoin:round"/>` + text('var(--tb-idx-ink)', 700);
+    } else if (v === 'emerging') {
+      // One solid line on a pale leaf fill
+      const sw = px(line), r = R - sw / 2;
+      body = `<path d="${hexD(r)}" style="fill:var(--tb-emg-fill);stroke:var(--tb-emg-line);stroke-width:${sw};stroke-linejoin:round"/>` + text('var(--tb-emg-ink)', 800);
+    } else if (v === 'proven') {
+      // The first filled tier: solid forest
+      const sw = px(1), r = R - sw / 2;
+      body = `<path d="${hexD(r)}" style="fill:var(--tb-prv-fill);stroke:var(--tb-prv-edge);stroke-width:${sw};stroke-linejoin:round"/>` + text('var(--tb-prv-ink)', 800);
+    } else if (v === 'trusted') {
+      // Deeper lit forest plus an inner leaf ring
+      const inset = px(Math.max(2.5, size * 0.085)), ring = px(Math.max(1.1, size * 0.024));
+      defs = `<linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--tb-tru-1)"/><stop offset="1" style="stop-color:var(--tb-tru-2)"/></linearGradient>`;
+      body = `<path d="${hexD(R)}" fill="url(#${id}g)"/>`
+        + `<path d="${hexD(R - inset)}" style="fill:none;stroke:var(--tb-tru-ring);stroke-width:${ring};stroke-linejoin:round"/>` + text('var(--tb-tru-ink)', 800);
+    } else if (v === 'elite') {
+      // Brushed gold with a bevelled rim
+      const bw = px(Math.max(2.4, size * 0.1)), ri = R - bw;
+      defs = `<linearGradient id="${id}f" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" style="stop-color:var(--tb-eli-face-1)"/><stop offset=".5" style="stop-color:var(--tb-eli-face-2)"/><stop offset="1" style="stop-color:var(--tb-eli-face-3)"/></linearGradient>`
+        + `<clipPath id="${id}c"><path d="${hexD(ri)}"/></clipPath><clipPath id="${id}o"><path d="${hexD(R)}"/></clipPath>`;
+      let brush = '';
+      if (size >= 40) { // hairline brushing, only where it can resolve
+        const step = px(1.6);
+        for (let y = 4; y < 96; y += step) { const odd = Math.round(y / step) % 2; brush += `<line x1="0" x2="100" y1="${f2(y)}" y2="${f2(y)}" style="stroke:${odd ? '#fff' : '#6B4C08'};stroke-opacity:${odd ? 0.22 : 0.07};stroke-width:${px(0.6)}"/>`; }
+      }
+      body = bevel(R, ri)
+        + `<path d="${hexD(ri)}" fill="url(#${id}f)"/>`
+        + (brush ? `<g clip-path="url(#${id}c)">${brush}</g>` : '')
+        + `<path d="${hexD(R - px(0.5))}" style="fill:none;stroke:var(--tb-au-edge);stroke-width:${px(1)};stroke-linejoin:round;stroke-opacity:.9"/>`
+        + (size >= 32 ? `<g clip-path="url(#${id}o)"><path class="tb-sheen" d="M-30 110L0 -10L22 -10L-8 110Z" style="fill:#fff;fill-opacity:.35"/></g>` : '')
+        + text('var(--tb-eli-ink)', 900);
+    } else {
+      // Apex: black stone set in a bevelled gold rim, warm inner glow, gold numerals
+      const bw = px(Math.max(2.6, size * 0.095)), ri = R - bw;
+      defs = `<radialGradient id="${id}s" cx=".5" cy=".4" r=".62"><stop offset="0" style="stop-color:var(--tb-apx-1)"/><stop offset="1" style="stop-color:var(--tb-apx-2)"/></radialGradient>`
+        + `<radialGradient id="${id}w" cx=".5" cy=".55" r=".5"><stop offset="0" style="stop-color:var(--tb-apx-glow);stop-opacity:.34"/><stop offset=".55" style="stop-color:var(--tb-apx-glow);stop-opacity:.08"/><stop offset="1" style="stop-color:var(--tb-apx-glow);stop-opacity:0"/></radialGradient>`
+        + `<clipPath id="${id}o"><path d="${hexD(R)}"/></clipPath>`;
+      body = bevel(R, ri)
+        + `<path d="${hexD(ri)}" fill="url(#${id}s)"/><path d="${hexD(ri)}" fill="url(#${id}w)"/>`
+        + (size >= 32 ? `<path d="${hexD(ri - px(1.6))}" style="fill:none;stroke:var(--tb-au-3);stroke-opacity:.45;stroke-width:${px(0.75)};stroke-linejoin:round"/>` : '')
+        + `<path d="${hexD(R - px(0.5))}" style="fill:none;stroke:var(--tb-au-edge);stroke-width:${px(1)};stroke-linejoin:round"/>`
+        + (size >= 56 ? spark(50, ri > 40 ? 22.5 : 24, 4.2, 'var(--tb-apx-ink)') : '')
+        + (size >= 32 ? `<g clip-path="url(#${id}o)"><path class="tb-sheen" d="M-30 110L0 -10L16 -10L-14 110Z" style="fill:#fff;fill-opacity:.16"/></g>` : '')
+        + text('var(--tb-apx-ink)', 900);
+    }
+    const label = o.label === true ? (score != null ? `${t.l}, Reputation Index ${score}` : `${t.l} tier`) : o.label;
+    const a11y = label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true" focusable="false"';
+    return `<svg class="tb t-${v} tb-${tsz}${o.className ? ' ' + esc(o.className) : ''}" width="${size}" height="${size}" viewBox="0 0 100 100" ${a11y}>${defs ? `<defs>${defs}</defs>` : ''}${body}</svg>`;
   };
-  ui.hexSeal = function (label) {
-    // Mint for Verified to Trusted, gold for Elite and Apex (explorer badge), grey while Indexing
-    const gold = label === 'Elite' || label === 'Apex';
-    const mint = label === 'Proven' || label === 'Trusted';
-    const fill = gold ? 'var(--gold-bg)' : mint ? 'var(--leaf)' : label === 'Emerging' ? 'var(--tint)' : 'var(--sunk)';
-    const stroke = gold ? 'var(--gold)' : mint ? 'var(--forest)' : label === 'Emerging' ? 'var(--tint-line)' : 'var(--line)';
-    return `<svg viewBox="0 0 34 34" aria-hidden="true"><path d="M17 1.8 30.2 9.4v15.2L17 32.2 3.8 24.6V9.4L17 1.8Z" fill="${fill}" stroke="${stroke}" stroke-width="1.4"/></svg>`;
+  /* Inline pill for running text: 20px badge, tier name, score beside it */
+  ui.tierPill = function (v, score) {
+    const t = tierOpt(v);
+    const has = score != null && score !== '';
+    return `<span class="tb-pill t-${t.v}" title="${has ? `Reputation Index ${esc(score)}, ${esc(t.l)} tier` : `${esc(t.l)} tier`}">${ui.tierBadge(t.v, { size: 20 })}<span>${esc(t.l)}</span>${has ? `<span class="tb-pill-n">${esc(score)}</span>` : ''}</span>`;
+  };
+  /* The tier ladder. Column (default): Apex on top, the current row raised, rails solid up to the current tier
+     and dashed above it. o.score shows inside the current badge; o.showNext (operator-facing, Studio) adds
+     "N points to <next tier>" on the row above. o.orientation 'row' runs lowest to highest, left to right
+     (a column again on phones); o.compact keeps badges and names only; o.showRanges false hides the ranges;
+     o.only limits the tiers; o.notes {tier: text} replaces a row's description. */
+  ui.tierLadder = function (v, o) {
+    o = o || {};
+    const cur = tierOpt(v).v, at = ui.tierRank(cur);
+    const row = o.orientation === 'row', compact = !!o.compact;
+    const score = o.score == null || o.score === '' ? null : o.score;
+    let list = tierOpts().filter((t) => !o.only || o.only.includes(t.v));
+    if (row) list = list.slice().reverse();
+    const next = tierOpts().find((t) => ui.tierRank(t.v) === at + 1);
+    const showNext = o.showNext && next && score != null;
+    const ranges = o.showRanges !== false;
+    const range = (t) => (t.v === 'indexing' ? 'Under 50' : `${t.min} to ${t.max}`);
+    const first = (d) => String(d || '').split(/(?<=\.)\s/)[0]; // the ladder shows the first sentence; the title has it all
+    const items = list.map((t, i) => {
+      const on = t.v === cur, above = ui.tierRank(t.v) > at;
+      // The rail after this row joins it to the next one; dashed when the higher of the two is not reached yet
+      const nxt = list[i + 1], prv = list[i - 1];
+      const todo = (x) => x && Math.max(ui.tierRank(t.v), ui.tierRank(x.v)) > at;
+      const railTodo = todo(nxt), railInTodo = todo(prv); // a row ladder draws each rail in two halves, one per item
+      const note = o.notes && o.notes[t.v];
+      const desc = compact ? '' : `<small>${esc(note || (on ? 'Current tier' : first(t.d)))}</small>${showNext && t.v === next.v ? `<small class="tb-l-next">${esc(next.min - score)} points to ${esc(next.l)}</small>` : ''}`;
+      const seal = compact
+        ? ui.tierBadge(t.v, { size: on ? 28 : 22 })
+        : ui.tierBadge(t.v, on ? { size: 40, score, label: score != null ? `Reputation Index ${score}` : '' } : { size: 32 });
+      const tip = ` title="${esc(t.l)}, ${esc(range(t))}: ${esc(t.d)}"`;
+      return `<li class="t-${t.v}${on ? ' on' : ''}${above ? ' above' : ''}${railTodo ? ' rail-todo' : ''}${row && railInTodo ? ' rail-in-todo' : ''}"${on ? ' aria-current="true"' : ''}${tip}>`
+        + `<span class="tb-l-seal">${seal}</span><span class="tb-l-name">${esc(t.l)}${desc}</span>`
+        + (ranges && !compact ? `<span class="tb-l-range">${range(t)}</span>` : '')
+        + '</li>';
+    }).join('');
+    return `<ol class="tb-ladder${row ? ' tb-row' : ''}${compact ? ' tb-compact' : ''}" aria-label="${esc(o.label || 'Reputation Index tiers')}">${items}</ol>`;
+  };
+
+  /* Reputation Index on cards and rails. op.ris = {score, label, tier} */
+  ui.ris = function (op, o) {
+    const r = op.ris || { score: 0 };
+    const tipHtml = ui.risExplainer(o && o.viewer === 'operator');
+    const t = tierOpt(r.tier || RN.fields.risTierFor(r.score).v);
+    // At the floor (Emerging) the mark stays quiet: an inline pill, no big seal
+    if (t.v === 'emerging' && !(o && o.full)) return `<span class="ris ris-quiet">${ui.tierPill('emerging', r.score)}<span class="ris-txt"><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
+    return `<span class="ris t-${t.v}">${ui.tierBadge(t.v, { size: 40, score: r.score, label: `${t.l}, Reputation Index ${r.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
+  };
+  /* Legacy entry point: a tier label ("Elite") to its badge. Never draws a hexagon itself. */
+  ui.hexSeal = function (label, o) {
+    o = o || {};
+    const t = tierOpts().find((x) => x.l === label) || tierOpt('indexing');
+    return ui.tierBadge(t.v, { size: o.size || 20, score: o.score, label: o.label });
   };
   /* One explainer for operators and clients (scope: reuse the operator "i" tooltip, drop "your",
      rename "improve your score" to "how score is calculated"). */
@@ -84,9 +228,10 @@
     return `<span class="illus" title="${esc(title || 'Figures are illustrative: invented to show shape and value, not to be cited.')}">${icon('info')}${esc(text || 'Illustrative')}</span>`;
   };
 
-  /* One status pill per record type, one colour map (project, intro, review, application) */
+  /* One status pill per record type, one colour map (engagement ("project" key), intro, review, application, hire) */
   const STATUS = {
     project: { draft: '', posted: 'pill-info', in_progress: 'pill-accent', staffed: 'pill-good', closed: '' },
+    hire: { active: 'pill-good', ended: '' },
     intro: { pending: 'pill-warn', interested: 'pill-info', rn_qualified: 'pill-info', introduced: 'pill-good', hired: 'pill-accent', declined: 'pill-bad' },
     review: { sent: 'pill-info', completed: 'pill-good' },
     application: { in_review: 'pill-warn', approved: 'pill-info', live: 'pill-good', changes_requested: 'pill-warn', rejected: 'pill-bad' },
@@ -141,14 +286,13 @@
     const saved = st.shortlist.includes(op.id);
     const inCompare = st.compare.includes(op.id);
     const tags = (op.tags || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0) || (a.tier === 'claimed') - (b.tier === 'claimed'));
-    return `<article class="opc" data-op="${esc(op.id)}">
+    return `<article class="opc tb-host" data-op="${esc(op.id)}">
       <button type="button" class="opc-save ${saved ? 'on' : ''}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}" aria-label="${saved ? 'Remove from shortlist' : 'Save to shortlist'}">${icon('bookmark')}</button>
       <div class="opc-top">
         ${ui.avatar(op, 'ava-md', { decorative: true })}
         <div class="grow" style="padding-right:36px">
           <h3 class="opc-name"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a></h3>
           <div class="opc-role">Fractional ${esc(op.role)}</div>
-          ${op.isMatt ? '<span class="pill opc-founder" title="Matt founded Revenue Nomad. His profile follows the same rules as every operator.">Revenue Nomad founder</span>' : ''}
         </div>
       </div>
       ${op.headline && !opts.compact ? `<p class="opc-head clamp-2 serif-up" style="font-size:16px">${esc(op.headline)}</p>` : ''}

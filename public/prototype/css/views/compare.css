@@ -38,9 +38,17 @@
 .cmp-v { font-family: var(--f-display); font-size: var(--t-20); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .cmp-v-sm { font-size: var(--t-16); }
 .cmp-txt { font-weight: 600; }
-.cmp-allin { font-weight: 700; color: var(--ink-2); }
 .cmp-sub { display: block; margin-top: 4px; font-size: var(--t-12); color: var(--mute); line-height: 1.4; }
 .cmp-na { font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; letter-spacing: .04em; color: var(--mute-2); }
+/* Asked of another role only: sentence case in the text face at medium weight, so it never reads like "Not added"
+   (asked, left blank), which is set in the display face, bold and tracked. No serif: one serif accent per page. */
+.cmp-na-ask { font-family: var(--f-text); font-style: normal; font-weight: 500; font-size: var(--t-13); letter-spacing: 0; color: var(--mute-2); }
+.cmp-unit { font-size: var(--t-13); font-weight: 600; color: var(--ink-2); }
+/* The onboarding question a comparable-scope value answers */
+.cmp-src { display: block; margin-top: 4px; font-size: var(--t-11); line-height: 1.35; color: var(--mute); }
+/* Mixed role categories: one short note above the table */
+.cmp-mixnote { display: flex; align-items: flex-start; gap: 10px; max-width: 72ch; margin-bottom: var(--s-4); padding: 12px 14px; border: 1px solid var(--tint-line); border-radius: var(--r-input); background: var(--tint); font-size: var(--t-14); line-height: 1.5; color: var(--ink-2); }
+.cmp-mixnote > svg { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
 .cmp-core { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cmp-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .cmp-tags .ftag { font-size: var(--t-12); min-height: 26px; padding: 3px 10px; }
@@ -136,12 +144,4 @@
   .cmp-lockbox .act { margin-left: 0; }
   .cmp-swipe { display: flex; align-items: center; gap: 8px; margin-bottom: var(--s-3); font-size: var(--t-13); color: var(--mute); }
   .cmp-swipe svg { width: 14px; height: 14px; color: var(--accent); }
-}
-
-/* Workaround (core bug, reported): dark-mode seal score contrast. See browse.css. */
-:root[data-theme="dark"] .cmp-page .ris-seal b { color: var(--ink); }
-:root[data-theme="dark"] .cmp-page .ris-seal:has(path[fill="var(--leaf)"]) b { color: var(--forest-deep); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .cmp-page .ris-seal b { color: var(--ink); }
-  :root:not([data-theme="light"]) .cmp-page .ris-seal:has(path[fill="var(--leaf)"]) b { color: var(--forest-deep); }
 }

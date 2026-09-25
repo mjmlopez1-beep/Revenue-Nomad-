@@ -27,6 +27,7 @@
 /* ---------- Newsletter ---------- */
 .ins-news { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 460px); gap: var(--s-8); align-items: center; padding: var(--s-10); position: relative; }
 .ins-news-h { margin-top: var(--s-3); color: var(--night-ink); }
+.ins-news-p { margin-top: var(--s-3); color: var(--night-mute); font-size: var(--t-16); line-height: 1.5; max-width: 52ch; }
 .ins-news-form { display: flex; gap: 10px; }
 .ins-news-form .input { flex: 1 1 auto; min-width: 0; }
 .ins-news-form .btn { flex: 0 0 auto; }
@@ -193,7 +194,6 @@
 .ins-fig { margin: 0 0 var(--s-6); padding: var(--s-6); }
 .ins-fig-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); margin-bottom: var(--s-5); }
 .ins-fig-foot { margin-top: var(--s-3); }
-.ins-allin { display: block; margin-top: 2px; font-family: var(--f-text); font-size: var(--t-12); font-weight: 400; color: var(--mute); letter-spacing: 0; }
 .ins-fig-hd .sub { font-size: var(--t-14); color: var(--mute); margin-top: 4px; }
 .ins-chart { width: 100%; min-height: 40px; }
 .ins-ctl { display: flex; flex-direction: column; gap: 10px; margin-bottom: var(--s-5); padding-bottom: var(--s-5); border-bottom: 1px solid var(--line-2); }
@@ -304,8 +304,9 @@
 .ins-est-big { font-family: var(--f-display); font-weight: 800; font-size: clamp(30px, 3.4vw, 46px); letter-spacing: -.035em; line-height: 1.05; font-variant-numeric: proportional-nums; }
 .ins-est-mid { color: var(--night-mute); font-size: var(--t-15); }
 .ins-est-mid b { color: var(--night-ink); font-family: var(--f-display); }
-.ins-est-allin { color: var(--night-mute); font-size: var(--t-14); line-height: 1.5; margin-top: calc(-1 * var(--s-2)); }
-.ins-est-allin b { color: var(--night-ink); font-family: var(--f-display); }
+/* "No fees for companies": the rate is the price (D1) */
+.ins-est-nofee { display: flex; gap: 8px; align-items: flex-start; color: var(--night-mute); font-size: var(--t-14); line-height: 1.5; margin-top: calc(-1 * var(--s-2)); }
+.ins-est-nofee svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 3px; color: var(--leaf); }
 .ins-est-scale { margin-top: var(--s-2); }
 .ins-est-scale .ins-rtrack { margin: 34px 12px 32px; }
 .ins-est-sizes { padding-top: var(--s-4); border-top: 1px solid var(--night-line); }
@@ -383,6 +384,10 @@
 .ins-calc-uses b { color: var(--ink); }
 .ins-calc-uses .act { font-size: var(--t-13); }
 .ins-calc-out { min-width: 0; }
+/* Two short inputs side by side: labels may wrap differently, so the inputs line up on their bottom edge */
+.ins-calc-pair { align-items: end; }
+.ins-calc-help { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ins-calc-help .act { font-size: inherit; min-height: 0; padding: 0; }
 .ins-calc-sum { display: flex; flex-direction: column; gap: var(--s-5); margin-top: var(--s-4); }
 .ins-calc-sum .body b { color: var(--ink); font-family: var(--f-display); }
 .ins-calc-break { margin: 0; display: flex; flex-direction: column; }

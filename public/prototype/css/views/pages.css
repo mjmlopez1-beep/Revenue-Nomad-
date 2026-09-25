@@ -338,11 +338,7 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
 .pg-rung:hover { background: var(--sunk); }
 .pg-rung-id { display: flex; align-items: center; gap: var(--s-3); }
 .pg-rung-id > span:last-child { display: flex; flex-direction: column; gap: 2px; }
-.pg-seal { position: relative; display: grid; place-items: center; flex: 0 0 auto; width: 48px; height: 48px; font-family: var(--f-display); font-weight: 800; font-size: var(--t-14); color: var(--forest-deep); }
-.pg-seal svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.pg-seal b { position: relative; }
-.pg-rung-indexing .pg-seal, .pg-rung-emerging .pg-seal { color: var(--ink); }
-.pg-rung-elite .pg-seal, .pg-rung-apex .pg-seal { color: var(--gold); }
+.pg-seal { display: grid; place-items: center; flex: 0 0 auto; width: 48px; height: 48px; }
 .pg-rung-name { font-family: var(--f-display); font-size: var(--t-15); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .pg-rung-elite .pg-rung-name, .pg-rung-apex .pg-rung-name { color: var(--gold); }
 .pg-rung-range { font-size: var(--t-12); color: var(--mute); font-weight: 600; }
@@ -356,8 +352,10 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
 .pg-rung-meta { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); }
 .pg-rung-n { font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--accent); }
 .pg-rung-me { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 3px; border-radius: 99px; background: var(--tint); font-size: var(--t-12); font-weight: 700; color: var(--accent); }
-.pg-principles { margin-top: var(--s-10); --gap: var(--s-6); }
+.pg-principles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-6); margin-top: var(--s-10); }
 .pg-principles > div { display: flex; flex-direction: column; gap: var(--s-2); padding-top: var(--s-5); border-top: 1px solid var(--ink); }
+/* How featuring works (moved from Home): the live count of profiles that qualify today */
+.pg-pr-n { margin-top: auto; padding-top: var(--s-2); font-family: var(--f-display); font-weight: 700; color: var(--accent); }
 .pg-pr-i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--tint); color: var(--accent); flex: 0 0 auto; }
 .pg-pr-i svg { width: 18px; height: 18px; }
 
@@ -424,6 +422,7 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
   .pg-princ { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pg-principles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-value.is-wide { grid-row: auto; grid-column: 1 / -1; }
   .pg-ladder-wrap.has-d.has-n { --cols: minmax(0, 190px) minmax(0, 1fr) minmax(0, 1.2fr); }

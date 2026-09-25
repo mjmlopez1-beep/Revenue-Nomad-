@@ -2,7 +2,9 @@
 
    Intake rules (Product Feedback Part A/B, SPEC section 4 "Join"):
    - The intake is the source of truth for every standard field (L207). Every structured answer renders
-     through RN.w.field with RN.fields keys, so stored values match Browse filters, projects and Studio.
+     through RN.w.field with RN.fields keys, so stored values match Browse filters, engagements and Studio.
+   Pricing (D1, operator-facing): clients pay the operator's listed rate and no fees; Revenue Nomad charges the
+   operator a percentage of billed earnings each month (proposed: 25%). The rate step says so and shows take-home.
      Caps (industries, ranges, methodologies, fit tags, capacity) are read from the registry, never typed here.
    - Order: role category and title (L62) -> identity and location (LinkedIn first so the name fills in;
      Country -> Postal code -> derived city and time zone, L18/L63/L64; "Willing to work US time zone
@@ -322,7 +324,8 @@
     const rate = +d.rate || 0;
     const where = !rate ? '' : rate < idx.p25 ? 'below the middle half' : rate > idx.p75 ? 'above the middle half' : 'inside the middle half';
     const hrs = +d.hoursPerMonth || 0;
-    const monthly = rate && hrs ? Math.round((rate * (hrs === 19 ? 15 : hrs)) / 100) * 100 : 0;
+    const billed = rate && hrs ? Math.round((rate * (hrs === 19 ? 15 : hrs)) / 100) * 100 : 0;
+    const take = (n) => RN.model.takeHome(n) || 0;
     return `<div class="jn-rate">
       <div class="jn-rate-hd"><span class="label">Rate Index · ${esc(cat)}</span>${RN.ui.illus()}</div>
       <div class="jn-rbar" role="img" aria-label="Middle half of rates ${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}, median ${RN.fmt.usd(idx.p50)}">
@@ -330,7 +333,8 @@
         <i class="med" style="left:${pct(idx.p50)}"></i>
         ${rate ? `<i class="you" style="left:${pct(rate)}"></i>` : ''}
       </div>
-      <p class="small">Middle half <b>${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}/hr</b>, median <b>${RN.fmt.usd(idx.p50)}/hr</b>.${rate ? ` Your ${esc(RN.fmt.rate(rate))} sits ${where}.` : ''}${monthly ? ` At ${esc(RN.w.label('hoursPerMonth', d.hoursPerMonth))} that is about ${RN.fmt.usd(monthly)}/mo take-home (clients pay ${esc(RN.fmt.rate(Math.round(rate / 0.75)))} all-in).` : ''}</p>
+      <p class="small">Middle half <b>${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}/hr</b>, median <b>${RN.fmt.usd(idx.p50)}/hr</b>.${rate ? ` Your ${esc(RN.fmt.rate(rate))} sits ${where}.` : ''}${billed ? ` At ${esc(RN.w.label('hoursPerMonth', d.hoursPerMonth))} a client pays you about ${RN.fmt.usd(billed)} a month, and you take home about ${RN.fmt.usd(Math.round(take(billed) / 100) * 100)}.` : ''}</p>
+      <p class="tiny muted jn-rate-fee">Clients pay your listed rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()})${rate ? `, so your take-home at ${esc(RN.fmt.rate(rate))} is ${esc(RN.fmt.rate(take(rate)))}` : ''}.</p>
     </div>`;
   }
   function demandStrip(d) {
@@ -431,7 +435,7 @@
       ${f('hoursPerMonth')}
       <div class="jn-eng">${f('engagementTypes', { help: '' })}
         <dl class="jn-legend">${F.engagementTypes.options.map((o) => `<div><dt>${esc(o.l)}</dt><dd>${esc(o.d || '')}</dd></div>`).join('')}</dl></div>
-      <div class="jn-group">${f('rate', { help: 'Shown to signed-in clients and used in the Rate Index. Whole dollars.' })}<div data-jn-rate>${rateHint(d)}</div></div>`;
+      <div class="jn-group">${f('rate', { help: 'The rate clients pay. Shown to signed-in clients and used in the Rate Index. Whole dollars.' })}<div data-jn-rate>${rateHint(d)}</div></div>`;
     if (n === 6) {
       const n6 = (d.fitTags || []).length;
       return `<div class="note info jn-tagnote">${icon('seal')}<div><b>How fit tags work.</b> Add up to ${maxOf('fitTags')} self-claimed tags. Clients see them as focus areas. A tag turns <b>Verified</b> when a client review rated 4.0 or higher confirms it, and verified tags rank first.</div></div>
@@ -868,7 +872,7 @@
     RN.track('signup_submit', { meta: { appId: id, roleCategory: cat, role: d.role, tags: (d.fitTags || []).length, roleDetails: Object.keys(roleDetails).length, completeness: [d.photo, d.video].filter(Boolean).length } });
     // One team alert only: Admin sends "New operator application" when the pending record lands (admin.js sendAlert).
     RN.mail(profile.email, 'We received your profile',
-      `Hi ${profile.first},\nThanks for applying to Revenue Nomad as a Fractional ${profile.role}. A person on the team reviews every application within 2 business days, so expect an update by ${dayName(reviewBy)}.\n\nWhat happens next:\n1. We check your LinkedIn and work history. If something needs a change, we email you what to fix.\n2. Once approved, your profile goes live in the directory at Reputation Index 50, tier Emerging. It stays hidden until then.\n3. Request reviews from 3 past clients to reach Proven.\n\nStudio shows who viewed you from the day you go live.\nReference: ${id}`, 'signup');
+      `Hi ${profile.first},\nThanks for applying to Revenue Nomad as a Fractional ${profile.role}. A person on the team reviews every application within 2 business days, so expect an update by ${dayName(reviewBy)}.\n\nWhat happens next:\n1. We check your LinkedIn and work history. If something needs a change, we email you what to fix.\n2. Once approved, your profile goes live in the directory at Reputation Index 50, tier Emerging. It stays hidden until then.\n3. Request reviews from 3 past clients to reach Proven.\n\nHow pricing works: ${RN.model.feeLine()}\n\nStudio shows who viewed you from the day you go live.\nReference: ${id}`, 'signup');
     if (videoURL) { URL.revokeObjectURL(videoURL); videoURL = null; }
     lastMounted = null;
     RN.go('join.done');
@@ -884,7 +888,7 @@
     return `<section class="wrap jn-hero">
         <span class="eyebrow">Join Revenue Nomad</span>
         <h1 class="h1">Are you hiring, or <span class="serif">are you the hire?</span></h1>
-        <p class="lede">Companies never need an account to browse or post a project. Fractional operators apply once and get a profile clients can trust.</p>
+        <p class="lede">Companies never need an account to browse or post an engagement, and pay no fees. Fractional operators apply once and get a profile clients can trust.</p>
       </section>
       <section class="wrap jn-paths" aria-label="Choose how you use Revenue Nomad">
         <article class="jn-path">
@@ -893,7 +897,7 @@
           <p class="jn-path-lede">No account needed. Open profiles with client reviews, rates and availability.</p>
           <div class="jn-links">
             <a class="jn-link" href="#browse">${icon('search')}<span><b>Browse talent</b><small>Filter by role, company size, industry and focus areas</small></span>${icon('arrow')}</a>
-            <a class="jn-link" href="#project.new">${icon('briefcase')}<span><b>Post a project</b><small>Start from a scoped Blueprint and get ranked matches</small></span>${icon('arrow')}</a>
+            <a class="jn-link" href="#engagement.new">${icon('briefcase')}<span><b>Post an engagement</b><small>Start from a scoped Blueprint and get ranked matches</small></span>${icon('arrow')}</a>
             <a class="jn-link" href="#talk">${icon('message')}<span><b>Talk to us</b><small>Tell us what you need and we suggest operators</small></span>${icon('arrow')}</a>
           </div>
           <p class="jn-hire-note">${icon('clock')}<span>Log in to see rates and Match Signals for your company. Operators answer intro requests within 72 hours.</span></p>
@@ -909,6 +913,7 @@
             <li>${icon('link')}<span><b>Proof links</b>Send a prospect a tracked version of your profile and see which sections they read.</span></li>
           </ul>
           <p class="jn-honest">${icon('shield')}<span>The network is curated. The team checks the work history on every application within 2 business days before a profile goes live.</span></p>
+          <p class="jn-honest">${icon('clock')}<span>Free to apply.</span></p>
           ${app && app.status === 'in_review'
             ? `<div class="jn-path-status"><span>Your application is in review</span><a class="btn btn-leaf btn-lg jn-path-cta" href="#join.done">See status${icon('arrow')}</a><button type="button" class="act" data-act="join-start">Start a new application</button></div>`
             : cont
@@ -921,7 +926,7 @@
         <div><b class="num">${esc(RN.data.market.network.operators)}</b><span>operators on the live network (${RN.fmt.int(RN.model.ops.length)} in this prototype)</span></div>
         <div><b class="num">${RN.fields.roleCategory.options.length}</b><span>role categories, from Sales Leadership to AI GTM</span></div>
         <div><b class="num">2</b><span>business days to review an application</span></div>
-        <div><b class="num">$0</b><span>for companies to browse, shortlist and request intros</span></div>
+        <div><b class="num">$0</b><span>in fees for companies to browse, post, request intros and hire</span></div>
       </div></section>
       <p class="wrap jn-login small muted">${persona === 'operator' ? `Signed in as ${esc(RN.personas.operator.name)}. Your profile is live. <a class="link" href="#studio">Open Studio</a>` : persona === 'buyer' ? `Signed in as ${esc(RN.personas.buyer.name)}. <a class="link" href="#buyer">Open your workspace</a>` : `Already on Revenue Nomad? <button type="button" class="act" data-act="login">Log in</button>`}</p>`;
   }
@@ -931,13 +936,7 @@
     return (RN.store.state.pending || []).filter((p) => p.source === 'intake').sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0] || null;
   }
   function ladder() {
-    const tiers = RN.fields.risTier.options.filter((t) => t.v !== 'indexing').slice().reverse();
-    return `<div class="jn-ladder" role="list" aria-label="Reputation Index tiers">
-      ${tiers.map((t) => `<div role="listitem" class="jn-rung ${t.v === 'emerging' ? 'here' : t.v === 'proven' ? 'next' : ''}">
-        <span class="jn-rung-bar"></span><b>${esc(t.l)}</b><span>${t.min}${t.max === 100 ? '+' : '–' + t.max}</span>
-        ${t.v === 'emerging' ? '<em>You start here</em>' : t.v === 'proven' ? '<em>3 reviews</em>' : ''}
-      </div>`).join('')}
-    </div>`;
+    return RN.ui.tierLadder('emerging', { orientation: 'row', only: ['emerging', 'proven', 'trusted', 'elite', 'apex'], notes: { emerging: 'You start here', proven: 'About 3 reviews' } });
   }
   function ladderBlock() {
     return `<div class="jn-ladder-wrap">

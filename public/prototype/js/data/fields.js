@@ -81,7 +81,7 @@
       ['advisory', 'Advisory', 'A few hours a month of senior guidance to the founder or team.'],
       ['interim', 'Interim', 'Covers a leadership seat full time while you hire.'],
       ['fractional', 'Fractional', 'Owns the function part time on an ongoing basis.'],
-      ['project', 'Project', 'A scoped build with a defined outcome and end date.'],
+      ['project', 'Project', 'A defined scope with fixed deliverables, a fixed price and an end date.'],
     ]),
   };
   F.engagementType = Object.assign({}, F.engagementTypes, { type: 'single', label: 'Engagement type' });
@@ -257,6 +257,14 @@
   F.city = { label: 'City', type: 'text', placeholder: 'City', help: 'Used when we cannot derive your city from the postal code.' };
   F.methodologyOther = { label: 'Other methodology', type: 'text', placeholder: 'e.g. Miller Heiman', help: 'We review new methodologies and add common ones to the list.' };
   F.usHours = { label: 'Willing to work US time zone hours?', type: 'single', options: opts([['yes', 'Yes'], ['no', 'No']]) };
+  // Browse location filters (D9). Options for locations are filled at startup from the operators' places
+  // (RN.model.place: countries first, then US states; v is the country name or the US state's full name).
+  // The browse key usHours reuses F.usHours: 'yes' means based in the US or answered yes.
+  F.locations = { label: 'Location', type: 'tagsearch', max: 5, help: 'Country, or US state', options: [] };
+  F.timeZones = {
+    label: 'Time zone', type: 'multi',
+    options: opts([['eastern', 'Eastern (ET)'], ['central', 'Central (CT)'], ['mountain', 'Mountain (MT)'], ['pacific', 'Pacific (PT)'], ['alaska_hawaii', 'Alaska and Hawaii'], ['uk_europe', 'UK and Europe'], ['other', 'Other']]),
+  };
 
   /* ---------- Fit tags (library assembled in model.js from live tags + taxonomy groups) ---------- */
   // Operators call them fit tags; clients see "Focus areas" (L131). Browse filter: up to 5, AND (Part A).
@@ -316,13 +324,14 @@
   // Operators only see two states (comment E486)
   F.reviewStatus = { label: 'Review status', type: 'single', options: opts([['sent', 'Sent'], ['completed', 'Completed']]) };
 
-  /* ---------- Intro requests and projects ---------- */
+  /* ---------- Intro requests and engagements (internal keys keep the name "project") ---------- */
   // Intro lifecycle proposed in the sheet (L471, on hold): Pending, Interested, RN Qualified, Introduced, Hired
   F.introStatus = { label: 'Status', type: 'single', options: opts([['pending', 'Pending'], ['interested', 'Interested'], ['rn_qualified', 'RN Qualified'], ['introduced', 'Introduced'], ['hired', 'Hired'], ['declined', 'Declined']]) };
   // Resolves the "ASAP / 2 Weeks / 1+ Month" vs availability conflict: the client's start timeline uses the
   // operator availability slugs, so an intro request matches availability with no translation.
   F.startBy = { label: 'When do you need them to start?', type: 'single', options: opts([['available_now', 'As soon as possible'], ['available_2_weeks', 'In 2 weeks'], ['available_2_plus_weeks', 'In 2+ weeks']]) };
-  F.projectBudget = { label: 'Project budget', type: 'money', step: 1000, help: 'Total budget for a scoped project.' };
+  // Budget for an engagement of type Project (fixed scope and price)
+  F.projectBudget = { label: 'Project budget', type: 'money', step: 1000, help: 'Total budget when the engagement type is Project: a fixed scope and price.' };
   // Client-side filter chips for Reputation Index (Part C)
   // Tier floors that return results in today's network (Elite and Apex are added when profiles reach them)
   F.risMin = { label: 'Reputation Index', type: 'single', options: opts([['60', '60+ · Proven'], ['70', '70+ · Trusted']]) };
@@ -341,13 +350,14 @@
     sales_motion: ['sales_leadership', 'sellers'], pipeline: ['marketing', 'sellers', 'ai_gtm'], team: ['sales_leadership', 'sales_enablement'],
     systems: ['revenue_operations'], ai: ['ai_gtm'], retention: ['customer_success_growth'], partners: ['partnerships'], not_sure: [],
   };
-  // Why an operator passes on an intro or project, and why a client says "Not a fit" (Projects prototype)
+  // Why an operator passes on an intro or engagement, and why a client says "Not a fit" (Engagements prototype)
   // Work sample types (Studio Portfolio, profile filter chips)
   F.sampleType = { label: 'Type', type: 'single', options: opts(['Playbook', 'Framework', 'Program', 'Process map', 'Template', 'Build', 'System']) };
   F.passReason = { label: 'Reason', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Not my expertise'], ['industry', 'Industry'], ['capacity', 'At capacity'], ['other', 'Other']]) };
   // Client side: why an operator was not the right fit (intro closed by the client)
   F.notFitReason = { label: 'Why not a fit?', type: 'single', options: opts([['rate', 'Rate'], ['hours', 'Hours'], ['timing', 'Timing'], ['expertise', 'Expertise'], ['closer', 'Went with a closer match'], ['other', 'Other']]) };
-  // All-in hourly budget for projects (includes the platform fee), wider than the browse filter
-  F.budgetRate = { label: 'Budget per hour (all-in)', type: 'money', unit: '/ hr', min: 50, step: 5 };
+  // A client's hourly budget for an engagement. It compares directly with operators' listed rates (companies pay
+  // no fees), and allows a wider range than the browse filter.
+  F.budgetRate = { label: 'Budget per hour', type: 'money', unit: '/ hr', min: 50, step: 5 };
   F.projectStatus = { label: 'Status', type: 'single', options: opts([['draft', 'Draft'], ['posted', 'Posted'], ['in_progress', 'In progress'], ['staffed', 'Staffed'], ['closed', 'Closed']]) };
 })();

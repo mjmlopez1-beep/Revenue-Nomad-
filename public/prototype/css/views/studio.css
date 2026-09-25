@@ -132,18 +132,10 @@
 .sa-tl li.is-new .sa-tl-when { color: var(--accent); font-weight: 700; }
 
 .sa-ris-top { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-.sa-ris-seal { position: relative; width: 64px; height: 64px; display: grid; place-items: center; flex: 0 0 auto; font-family: var(--f-display); font-size: 22px; font-weight: 800; color: var(--forest-deep); }
-.sa-ris-seal svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.sa-ris-seal b { position: relative; }
+.sa-ris-seal { width: 64px; height: 64px; display: grid; place-items: center; flex: 0 0 auto; }
 .sa-ris-tier { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .sa-ris-tier b { font-family: var(--f-display); font-size: var(--t-20); letter-spacing: -0.01em; }
-.sa-ladder { display: grid; grid-template-columns: repeat(5, minmax(max-content, 1fr)); gap: 4px; margin-top: 10px; }
-.sa-ladder i { display: flex; flex-direction: column; gap: 6px; font-style: normal; min-width: 0; }
-.sa-ladder i::before { content: ""; height: 6px; border-radius: 3px; background: var(--sunk); }
-.sa-ladder i.past::before { background: var(--viz-3); }
-.sa-ladder i.on::before { background: var(--accent); }
-.sa-ladder span { font-size: 11px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sa-ladder i.on span { color: var(--ink); font-weight: 700; }
+.sa-ladder { margin: 8px -4px 0; }
 .sa-factors { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 14px; }
 .sa-factors .sa-mrow-n a { font-weight: 600; }
 
@@ -233,6 +225,7 @@
 .sa-rate-big { display: flex; align-items: baseline; gap: 4px; }
 .sa-rate-big .num { font-size: 48px; font-weight: 800; letter-spacing: -0.035em; line-height: 1; }
 .sa-rate-g > div > p.small { margin-top: 8px; color: var(--ink-2); }
+.sa-rate-fee { margin-top: 6px; max-width: 52ch; line-height: 1.5; }
 .sa-range { position: relative; margin: 48px 6px 4px; }
 .sa-range-track { position: relative; height: 12px; border-radius: 99px; background: var(--viz-grid); }
 .sa-range-band { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: var(--viz-3); }

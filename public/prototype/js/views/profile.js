@@ -12,8 +12,9 @@
   const reduced = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------- Operator Profile Explorer content that is not in the live export ----------
-     Matt's engagement sizes, industries and outcome come from the explorer's demo record (the founder's own
-     profile). Work samples, tool proficiency and CORE notes marked "sample" are illustrative. */
+     Matt's engagement sizes, industries and outcome come from the explorer's demo record. Work samples,
+     tool proficiency and CORE notes marked "sample" are illustrative. op.isMatt only selects this demo data;
+     it never drives a label or an exclusion (founder decision, Sep 25, 2026: no founder callouts). */
   const MATT_ENG = {
     Ferry: { revenueRange: '1m_5m', employeeRange: '11_50', industry: 'Saas', outcome: "Built and launched the company's first digital demand generation program, which delivered their first 20 inbound leads. Converted that pipeline into two closed deals, doubling the client base. Recruited and onboarded their first AE, who closed a deal within 60 days of starting." },
     'myHR Partner': { revenueRange: '5m_20m', employeeRange: '51_200', industry: 'Professional Services', context: 'Worked with the sales team on new business and expansion: playbook, segmentation, pipeline reviews and the handoff to customer success.' },
@@ -48,7 +49,7 @@
   const TZ = { 'America/New_York': 'Eastern Time (ET)', 'America/Detroit': 'Eastern Time (ET)', 'America/Chicago': 'Central Time (CT)', 'America/Denver': 'Mountain Time (MT)', 'America/Phoenix': 'Mountain Time (MT)', 'America/Los_Angeles': 'Pacific Time (PT)', 'Africa/Nairobi': 'East Africa Time (EAT)', 'Asia/Singapore': 'Singapore Time (SGT)', 'Europe/London': 'UK Time (GMT/BST)', 'Europe/Dublin': 'Irish Time (GMT/IST)', 'Asia/Kolkata': 'India Standard Time (IST)', 'Australia/Sydney': 'Australian Eastern Time (AEST)' };
 
   // CORE notes submitted with each review (explorer REVIEW_DETAIL). Trista's scores and notes are real.
-  // Eric's scores are from the explorer record (founder to confirm the source); he left no notes, so none are shown.
+  // Eric's scores are from the explorer record (source to confirm); he left no notes, so none are shown.
   const REVIEW_DETAIL = {
     'Trista Kempa': { core: [5, 5, 5, 5], title: 'VP of Sales', notes: [
       'Matt was consistently and proactively communicative as a partner and consultant.',
@@ -86,6 +87,7 @@
     S.scrollFn = null;
     S.obs.forEach((o) => { try { o.disconnect(); } catch (e) { /* ignore */ } });
     S.obs = [];
+    if (all) stopJump();
     if (all && S.unsub) { S.unsub(); S.unsub = null; }
   }
   const DUR = {};
@@ -103,7 +105,6 @@
   const mdy = (d) => (RN.fmt.mdy ? RN.fmt.mdy(d) : `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`);
   // Client-facing name of the operator's revenue range field (the registry label is the operator's "Revenue range")
   const revLabel = () => F.revenueRange.clientLabel || 'Company revenue';
-  const allIn = (rate) => (RN.projects && RN.projects.allIn ? RN.projects.allIn(rate) : Math.round(rate / 0.75));
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
   const jumpBtn = (to, html, cls) => `<button type="button" class="${cls || 'act'}" data-act="pf-jump" data-to="${esc(to)}">${html}</button>`;
   const catLabel = (c) => F.catLabel(c);
@@ -329,9 +330,15 @@
       default: return null;
     }
   }
+  /* Unit beside a big figure: short, because the label already names the measure ("Largest annual quota managed"
+     reads "$20M", "Best NRR achieved" reads "115%"). RN.roleDetail.text keeps the full unit for tables and lists. */
+  const UNIT_SHORT = { largestTeamQuota: '', largestBudget: '', largestArrBook: '', partnerRevenue: '', individualQuota: '', bestNrr: '', bestGrr: '', largestAccountArr: 'ARR', largestRepCount: 'reps' };
   function roleValHtml(key, rv, compact) {
     const d = F[key];
-    if (rv.kind === 'big') return `<div class="pf-rv pf-rv-big"><span class="pf-rv-l">${esc(rv.label || d.label)}</span><span class="pf-rv-n"><b>${esc(rv.value)}</b>${rv.unit ? `<small>${esc(rv.unit)}</small>` : ''}</span>${rv.note ? `<span class="pf-rv-note">${esc(rv.note)}</span>` : ''}</div>`;
+    if (rv.kind === 'big') {
+      const unit = key in UNIT_SHORT ? UNIT_SHORT[key] : rv.unit;
+      return `<div class="pf-rv pf-rv-big"><span class="pf-rv-l">${esc(rv.label || d.label)}</span><span class="pf-rv-n"><b>${esc(rv.value)}</b>${unit ? `<small>${esc(unit)}</small>` : ''}</span>${rv.note ? `<span class="pf-rv-note">${esc(rv.note)}</span>` : ''}</div>`;
+    }
     if (rv.kind === 'split') return `<div class="pf-rv"><span class="pf-rv-l">${esc(d.label)}</span><div class="pf-split" role="img" aria-label="${rv.value}% B2B, ${100 - rv.value}% B2C"><i style="width:${rv.value}%"></i></div><span class="pf-split-l"><b>B2B ${rv.value}%</b><span>B2C ${100 - rv.value}%</span></span></div>`;
     if (rv.kind === 'scale') {
       const o = d.options.find((x) => x.v === rv.value);
@@ -446,9 +453,6 @@
   const availDot = (op) => (op.avail.key === 'available_now' ? 'dot-now' : op.avail.key === 'available_2_weeks' ? 'dot-soon' : 'dot-later');
   // Registry order, not pick order, so chips read low to high
   const ordered = (key, vals) => F[key].options.map((o) => o.v).filter((v) => (vals || []).includes(v));
-  function founderLine(op) {
-    return op.isMatt ? `<p class="pf-founder">${icon('info')}<span>${esc(op.first)} founded Revenue Nomad. His profile follows the same rules as every operator.</span></p>` : '';
-  }
   function hero(c) {
     const op = c.op, v = c.v;
     const tier = F.risTierFor(op.ris.score);
@@ -471,17 +475,16 @@
           <div class="pf-id">
             <div class="pf-id-top">
               <div class="pf-photo">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}
-                ${op.ris.score >= 50 ? `<span class="pf-photo-seal" title="${esc(tier.l)} · Reputation Index ${esc(op.ris.score)}">${RN.ui.hexSeal(tier.l)}</span>` : ''}</div>
+                ${op.ris.score >= 50 ? `<span class="pf-photo-seal" title="${esc(tier.l)} · Reputation Index ${esc(op.ris.score)}">${RN.ui.hexSeal(tier.l, { size: 40, score: op.ris.score })}</span>` : ''}</div>
               <div class="pf-id-main">
                 <div class="pf-pills">
-                  <button type="button" class="pf-pill pf-pill-tier ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}" data-tip="${esc(tierTip)}"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l)}</span>${esc(tier.l)}</button>
+                  <button type="button" class="pf-pill pf-pill-tier ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}" data-tip="${esc(tierTip)}"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)}</button>
                   <span class="pf-pill"><i class="dot ${availDot(op)}"></i>${esc(availTxt + hrs)}</span>
                 </div>
                 <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
                 <p class="pf-role">Fractional ${esc(op.role)}</p>
               </div>
             </div>
-            ${founderLine(op)}
             ${headline ? `<p class="pf-headline hl-${hlCls}" title="${esc(smart(headline))}">${esc(smart(headline))}</p>` : ''}
             <div class="pf-herotags">
               ${heroTags.map((t) => `<button type="button" class="pf-gtag ${t.tier === 'claimed' ? 'claimed' : ''}" data-tip="${esc(tagTip(op, t))}">${t.tier !== 'claimed' ? icon('check-circle') : ''}${esc(t.t)}</button>`).join('')}
@@ -601,7 +604,7 @@
     const rep = `<article class="pf-proof pf-proof-rep">
       <div class="pf-ring">${RN.chart.ring(op.ris.score, { size: 88, stroke: 8, label: 'Reputation Index ' + op.ris.score })}<b class="serif-up">${esc(op.ris.score)}</b></div>
       <div class="pf-rep-r">
-        <div class="pf-proof-hd"><span>Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated')}</span><span class="pf-tierchip ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${RN.ui.hexSeal(tier.l)}${esc(tier.l)}</span></div>
+        <div class="pf-proof-hd"><span>Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated')}</span><span class="pf-tierchip ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${RN.ui.hexSeal(tier.l, { size: 20 })}${esc(tier.l)}</span></div>
         <div class="pf-bell">${RN.chart.bell({ w: 230, h: 64, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
         <div class="pf-bell-foot"><span>Median ${PEER.mean} ${RN.ui.illus('Illustrative peers')}</span><b>${ordinal(pctile)} percentile</b></div>
       </div>
@@ -702,7 +705,7 @@
         </div>
       </article>`).join('');
     return sec(c, 'offers', 'Ways to work', `Ways to work with ${esc(op.first)}`, `<div class="pf-offers">${cards}</div>
-      <p class="pf-note">${RN.ui.illus()} Typical months use the Rate Index for ${esc(catLabel(op.catKey))} at ${esc(RN.w.label('hoursPerMonth', hrs))} for a ${esc(RN.w.label('revenueRange', rev))} company. They are operator rates; engagements through Revenue Nomad are billed all-in, including the 25% fee.</p>`,
+      <p class="pf-note">${RN.ui.illus()} Typical months use the Rate Index for ${esc(catLabel(op.catKey))} at ${esc(RN.w.label('hoursPerMonth', hrs))} for a ${esc(RN.w.label('revenueRange', rev))} company.</p>`,
     { sub: `Packaged engagements ${esc(op.first)} runs, each built on a Revenue Nomad <a class="link" href="#blueprints">Engagement Blueprint</a>.`, edit: 'studio.profile', editLabel: 'Edit offers' });
   }
 
@@ -739,9 +742,13 @@
     const vals = keys.map((k) => ({ k, rv: roleVal(op, k) })).filter((x) => x.rv);
     const bigs = vals.filter((x) => x.rv.kind === 'big');
     const rest = vals.filter((x) => x.rv.kind !== 'big');
+    // Big figures in rows of two: the labels in a row share one height (CSS subgrid), so the numbers share a baseline.
+    // A row with a long figure ("$10M–$25M") sets both numbers one step smaller, so the row still reads as one line.
+    const rows = [];
+    for (let i = 0; i < bigs.length; i += 2) rows.push(bigs.slice(i, i + 2));
     const range = vals.length ? `<div class="pf-range">
         <h3 class="h5 pf-h3">Operating range</h3>
-        ${bigs.length ? `<div class="pf-range-bigs">${bigs.map((x) => roleValHtml(x.k, x.rv)).join('')}</div>` : ''}
+        ${rows.length ? `<div class="pf-range-bigs">${rows.map((r) => `<div class="pf-range-row${r.some((x) => String(x.rv.value).length > 6) ? ' is-long' : ''}">${r.map((x) => roleValHtml(x.k, x.rv)).join('')}</div>`).join('')}</div>` : ''}
         ${rest.map((x) => roleValHtml(x.k, x.rv)).join('')}
       </div>` : '';
     if (!left && !inds && !range) return '';
@@ -1205,8 +1212,7 @@
     const types = ordered('engagementTypes', op.engagementTypes);
     const cap = +op.newClientCapacity || 0;
     const rate = !op.rate ? '' : v.rate
-      ? `<div><dt>${esc(F.rate.label)}</dt><dd class="num">${esc(RN.fmt.usd(op.rate))} <span class="muted pf-dd-u">/ hr</span></dd></div>
-        <div><dt>All-in through Revenue Nomad</dt><dd class="num">${esc(RN.fmt.usd(allIn(op.rate)))} <span class="muted pf-dd-u">/ hr</span></dd></div>`
+      ? `<div><dt>${esc(F.rate.label)}</dt><dd class="num">${esc(RN.fmt.usd(op.rate))} <span class="muted pf-dd-u">/ hr</span></dd></div>`
       : `<div><dt>${esc(F.rate.label)}</dt><dd><button type="button" class="pf-lockpill" data-act="login">${icon('lock')}Log in to see rate</button></dd></div>`;
     return `<section class="pf-card pf-engage" aria-label="Engage ${esc(op.first)}">
       <span class="eyebrow">Engage ${esc(op.first)}</span>
@@ -1231,7 +1237,7 @@
         <button type="button" class="btn btn-line btn-sm ${saved ? 'is-on' : ''}" data-act="${v.preview ? 'pf-preview-cta' : 'shortlist-toggle'}" data-id="${esc(op.id)}" aria-pressed="${saved}">${icon('bookmark')}${saved ? 'Saved' : 'Save'}</button>
       </div>
       <a class="pf-talklink" href="#talk">Not sure ${esc(op.first)} is the one? <b>Talk to our team</b></a>
-      <p class="pf-fine">Scheduling, messaging and contracting run through Revenue Nomad. ${v.rate ? 'All-in rates include the 25% Revenue Nomad fee, shown before anything is signed. ' : ''}Intro requests have a 72-hour response window.</p>`}
+      <p class="pf-fine">${v.rate && op.rate ? 'No fees for companies. You pay the rate shown, nothing more. ' : ''}Scheduling, messaging and contracting run through Revenue Nomad. Intro requests have a 72-hour response window.</p>`}
       </div>
     </section>`;
   }
@@ -1269,13 +1275,12 @@
   function risCard(c) {
     const op = c.op;
     const tier = F.risTierFor(op.ris.score);
-    const ladder = F.risTier.options.slice().reverse();
     const gold = tier.v === 'elite' || tier.v === 'apex';
     return `<section class="pf-card pf-ris">
       <span class="eyebrow">Reputation Index</span>
-      <div class="pf-ris-hd"><span class="pf-ris-seal t-${esc(tier.v)}">${RN.ui.hexSeal(tier.l)}<b>${esc(op.ris.score)}</b></span><div><b class="pf-ris-tier ${gold ? 'gold' : ''}">${esc(tier.l)}</b><span>Reputation Index ${esc(op.ris.score)} of 100</span></div></div>
+      <div class="pf-ris-hd tb-host"><span class="pf-ris-seal">${RN.ui.hexSeal(tier.l, { size: 60, score: op.ris.score })}</span><div><b class="pf-ris-tier ${gold ? 'gold' : ''}">${esc(tier.l)}</b><span>Reputation Index ${esc(op.ris.score)} of 100</span></div></div>
       <p class="pf-ris-d">${esc(tier.d)}</p>
-      <ol class="pf-ladder" aria-label="Reputation Index tiers">${ladder.map((t) => `<li class="${t.v === tier.v ? 'on' : ''}" ${t.v === tier.v ? 'aria-current="true"' : ''} title="${esc(t.l)}: ${esc(t.d)}"><span class="pf-ladder-seal">${RN.ui.hexSeal(t.l)}</span><b>${esc(t.l)}</b><span>${t.v === 'indexing' ? '<50' : `${t.min}–${t.max}`}</span></li>`).join('')}</ol>
+      ${RN.ui.tierLadder(tier.v, { score: op.ris.score })}
       <details class="pf-ris-how"><summary>${icon('chev-right')}How score is calculated</summary><div class="pf-ris-exp">${RN.ui.risExplainer()}</div><a class="act" href="#levels">See every tier and what it unlocks${icon('arrow')}</a></details>
     </section>`;
   }
@@ -1438,11 +1443,63 @@
     tmp.innerHTML = html;
     el.replaceWith(tmp.firstElementChild);
   }
-  RN.actions['pf-jump'] = (el) => {
-    const t = document.getElementById(el.dataset.to);
+  /* Section jumps (sub-nav, "+N verified", "Confirmed by", proof-link contents). Scrolls so the target sits just
+     under the fixed header and the sticky sub-nav, then keeps it there while logos, photos and charts above it
+     finish loading and push it down (likely in the hosted artifact): re-checks at 700ms, then every 250ms for
+     about 2 seconds. Stops as soon as the visitor scrolls on their own (wheel, touch, key or mouse). */
+  const JUMP_STOP = ['wheel', 'touchstart', 'keydown', 'mousedown'];
+  const JUMP_AT = [700, 950, 1200, 1450, 1700, 1950, 2200, 2450, 2700];
+  let jumpRun = null;
+  function stopJump() {
+    if (!jumpRun) return;
+    jumpRun.timers.forEach(clearTimeout);
+    JUMP_STOP.forEach((ev) => window.removeEventListener(ev, jumpRun.stop, true));
+    jumpRun = null;
+  }
+  // Space taken at the top of the viewport: the header plus the profile sub-nav when there is one, and a 12px gap
+  function jumpOffset() {
+    const hdr = document.querySelector('.hdr');
+    const hb = hdr ? hdr.getBoundingClientRect().bottom : 0;
+    const navH = hb > 0 ? hb : parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 76;
+    const sub = document.querySelector('.pf-subnav');
+    return navH + (sub ? sub.offsetHeight : 0) + 12;
+  }
+  function jumpY(t) {
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    return Math.max(0, Math.min(max, Math.round(window.scrollY + t.getBoundingClientRect().top - jumpOffset())));
+  }
+  function jumpTo(id) {
+    const t = document.getElementById(id);
     if (!t) return;
-    t.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
+    stopJump();
+    const smooth = !reduced();
+    let aim = jumpY(t), lastY = window.scrollY;
+    window.scrollTo({ top: aim, behavior: smooth ? 'smooth' : 'auto' });
     t.classList.remove('pf-flash'); void t.offsetWidth; t.classList.add('pf-flash');
+    const run = { timers: [] };
+    run.stop = () => { if (jumpRun === run) stopJump(); };
+    jumpRun = run;
+    JUMP_STOP.forEach((ev) => window.addEventListener(ev, run.stop, { capture: true, passive: true }));
+    const check = (last) => {
+      if (jumpRun !== run) return;
+      if (!t.isConnected) { stopJump(); return; }
+      const y = jumpY(t), now = window.scrollY;
+      const moving = Math.abs(now - lastY) > 1;
+      lastY = now;
+      // Re-aim when the target moved, or when the scroll has settled off target. A smooth scroll still on its
+      // way to an unchanged target is left alone (re-issuing it would restart its easing).
+      if (Math.abs(now - y) > 2 && (last || !moving || Math.abs(y - aim) > 2)) {
+        aim = y;
+        window.scrollTo({ top: y, behavior: smooth && !last ? 'smooth' : 'auto' });
+      }
+      if (last) stopJump();
+    };
+    JUMP_AT.forEach((ms, i) => run.timers.push(setTimeout(() => check(i === JUMP_AT.length - 1), ms)));
+  }
+  RN.actions['pf-jump'] = (el) => {
+    // The sub-nav marks its link at once; the section observer takes over once the page settles
+    if (el.dataset.nav) RN.$$('[data-nav]', el.parentElement).forEach((l) => l.classList.toggle('on', l === el));
+    jumpTo(el.dataset.to);
   };
   RN.actions['pf-focus'] = (el) => {
     const k = { kind: el.dataset.kind, key: el.dataset.key };
@@ -1571,12 +1628,11 @@
         <section class="pf-pl-id night">
           <div class="pf-band-bg" aria-hidden="true">${hexLattice()}</div>
           <div class="pf-pl-id-in">
-            <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}<span class="pf-photo-seal">${RN.ui.hexSeal(tier.l)}</span></div>
+            <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}<span class="pf-photo-seal">${RN.ui.hexSeal(tier.l, { size: 32, score: op.ris.score })}</span></div>
             <div class="grow">
-              <div class="pf-pills"><span class="pf-pill pf-pill-tier"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l)}</span>${esc(tier.l)} · ${esc(op.ris.score)}</span><span class="pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
+              <div class="pf-pills"><span class="pf-pill pf-pill-tier"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)} · ${esc(op.ris.score)}</span><span class="pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
               <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
               <p class="pf-role">Fractional ${esc(op.role)}</p>
-              ${founderLine(op)}
               ${op.headline ? `<p class="pf-headline hl-m">${esc(smart(op.headline))}</p>` : ''}
             </div>
             <div class="pf-pl-cta" data-pl-slot="top">${proofCtas(rec, op, 'top', true)}</div>
@@ -1637,7 +1693,7 @@
         <div class="pf-rate-main">
           ${op.rate ? `<div class="pf-rate-big"><span class="label pf-lab">${esc(F.rate.label)}</span><b class="serif-up">${esc(RN.fmt.usd(op.rate))}<small>/ hr</small></b></div>
             ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.usd(monthly))}<small>/ mo</small></b></div>` : ''}
-            <p class="pf-rate-range">Typical engagement range: <b>${esc(RN.fmt.usd(lo))} - ${esc(RN.fmt.usd(hi))}/mo</b> (20 to 60 hrs / month). These are ${esc(op.first)}’s own rates.</p>`
+            <p class="pf-rate-range">Typical engagement range: <b>${esc(RN.fmt.usd(lo))} - ${esc(RN.fmt.usd(hi))}/mo</b> (20 to 60 hrs / month). No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
           : `<p class="pf-rate-range">${esc(op.first)} quotes a rate on the first call.</p>`}
         </div>
         <dl class="pf-facts">
@@ -1807,7 +1863,7 @@
             <div class="pf-band-bg" aria-hidden="true">${hexLattice()}</div>
             <span class="eyebrow pf-vf-k">${icon('shield')}Revenue Nomad verification</span>
             <div class="pf-vf-id">
-              <span class="pf-vf-seal ${gold ? 'gold' : ''}">${RN.ui.hexSeal(tier.l)}<b>${esc(op.ris.score)}</b></span>
+              <span class="pf-vf-seal">${RN.ui.hexSeal(tier.l, { size: 72, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</span>
               <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
             </div>
             <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> · as of ${esc(asOf)}</span></p>
@@ -1821,7 +1877,6 @@
           <div class="pf-vf-body">
             <p class="pf-vf-d"><b>${esc(tier.l)}</b> ${esc(tier.d)}</p>
             <p class="small muted">Reviews are submitted by the client on Revenue Nomad and publish as submitted. A focus area is verified when a client confirms it in a review. The score is recalculated whenever a review arrives, so this page always shows the current tier.</p>
-            ${founderLine(op)}
             <div class="row pf-vf-act"><a class="btn" href="#op.${esc(op.slug)}" data-view-source="badge">View ${esc(op.first)}’s full profile${icon('arrow')}</a><a class="act" href="#levels">How the Reputation Index works</a></div>
           </div>
         </article>

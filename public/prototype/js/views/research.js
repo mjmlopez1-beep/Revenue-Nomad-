@@ -9,9 +9,12 @@
      RN.research.guides        guide registry. Each entry: { id, title, cat, group, href, slug, q, ... }
                                id = slug, route #guide.<id>; title = the question; cat = roleCategory slug or null
      RN.research.guidesFor(cat, n)  up to n guides for a role category (cost guide first), for Browse category pages
-     RN.research.relatedOps(guide|id) the operators a guide's "From the network" module shows (staff excluded)
+     RN.research.relatedOps(guide|id) the operators a guide's "From the network" module shows
    Market figures come from RN.data.market and are illustrative; every surface says so.
-   Fee copy: the 25% platform fee and the no-fee rule for operator-sourced deals are proposals, labelled "Proposed". */
+   Fee copy (founder decision, Sep 25, 2026): companies pay no fees, so research quotes the operator's rate as the price
+   and never mentions a fee, margin, split or all-in figure. Research is public and client-facing, including the guides
+   written for operators; they point to #operators, which is the only place the operator fee is stated.
+   Editorial modules rank every operator by the same rules, with no exclusions or callouts for any profile. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -59,8 +62,6 @@
   // "Win deals at Qualify", but "Lead & plan across every stage" for Foundation
   const cellText = (area, stage) => (stage === 'Foundation' ? `${area} across every stage` : `${area} at ${stage}`);
   const cellHtml = (area, stage) => esc(cellText(area, stage));
-  // The founder and team profiles stay out of editorial "strongest here" modules (they still appear in Browse)
-  const isStaff = (op) => !!(op && (op.staff || op.isMatt));
   // The title a client would hire for in each role category (from RN.fields.rolesByCat)
   const ROLE_PICK = { sales_leadership: 1, sales_enablement: 1 };
   const roleFor = (cat) => { const r = F.rolesByCat[cat] || []; return r[ROLE_PICK[cat] || 0] || F.catLabel(cat) + ' leader'; };
@@ -207,7 +208,7 @@
 
   // Operators strongest in a cell, area or stage: verified proof first, then claims, then Reputation Index
   function topOps(area, stage, n, cat) {
-    return RN.model.ops.filter((op) => !op.hidden && !isStaff(op) && (!cat || op.catKey === cat)).map((op) => {
+    return RN.model.ops.filter((op) => !op.hidden && (!cat || op.catKey === cat)).map((op) => {
       const hits = op.tags.filter((t) => {
         const info = RN.model.tagInfo(t.t) || {};
         const ax = t.axis || info.axis;
@@ -240,10 +241,8 @@
   const crumbs = (items) => `<nav class="crumbs" aria-label="Breadcrumb"><a href="#insights">Insights</a>${items.map((x) => `${icon('chev-right')}${x.to ? `<a href="#${esc(x.to)}">${esc(x.l)}</a>` : `<span>${esc(x.l)}</span>`}`).join('')}</nav>`;
   const illus = (label) => RN.ui.illus(label || 'Illustrative', 'Market and survey figures in this prototype are invented to show shape and value, not to be cited.');
   const jsonAttr = (o) => esc(JSON.stringify(o));
-  // Fee copy lives in one place: the 25% platform fee is a proposal until the founder confirms it
-  const FEE = () => (RN.projects && RN.projects.FEE) || 0.25;
-  const allInRate = (rate) => (RN.projects && RN.projects.allIn ? RN.projects.allIn(rate) : Math.round(rate / (1 - FEE())));
-  const FEE_PCT = () => Math.round(FEE() * 100) + '%';
+  // The one line companies read about pricing
+  const NO_FEES = 'No fees for companies. You pay the operator\'s rate, nothing more.';
 
   // Browse hand-off (SPEC loop 10): same store keys Browse reads, same event Insights logs.
   // A single role category lands on that category's page (#browse.<cat>), the SEO role page.
@@ -604,7 +603,7 @@
       return `<div class="rs-dr">
         <span class="eyebrow">Your result</span>
         <h3 class="h3 rs-dr-t">No clear leak. Your engine looks healthy.</h3>
-        <p class="rs-dr-p">Companies in your position usually hire fractional help to scale what already works, often a new segment, a new channel or a larger team. Engagement Blueprints show what those projects look like.</p>
+        <p class="rs-dr-p">Companies in your position usually hire fractional help to scale what already works, often a new segment, a new channel or a larger team. Engagement Blueprints show what those engagements look like.</p>
         <div class="row" style="margin-top:22px"><a class="btn btn-leaf" href="#blueprints">Browse Engagement Blueprints${icon('arrow')}</a><button type="button" class="btn btn-line" data-act="rs-dg-reset">${icon('refresh')}Start over</button></div>
       </div>`;
     }
@@ -621,8 +620,8 @@
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
       ${r.second ? `<p class="small rs-dr-also">Also worth a look: ${esc(cellText(r.second.area, r.second.stage))}.</p>` : ''}
       <div class="rs-dr-grid">
-        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)} in operator rates.` : '.'}</span></div>
-        <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as a project.</span></div>
+        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)}.` : '.'}</span></div>
+        <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as an engagement.</span></div>
       </div>
       <div class="row rs-dr-acts">
         ${browseBtn(`See ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-leaf')}
@@ -665,7 +664,7 @@
     RN.track('diagnostic_save', { source: 'framework', meta: r.top ? { area: r.top.area, stage: r.top.stage, roleCategory: cat, revenueRange: rev || null } : { area: null, revenueRange: rev || null } });
     RN.mail(email, 'Your GTM Framework result', [
       `Your biggest leak: ${where}.`,
-      cat ? `Who to hire: a fractional ${roleFor(cat)} (${F.catLabel(cat)}). Typical month at 40 hrs${rev ? ` for a ${RN.w.label('companyRevenue', rev)} company` : ''}: ${range} in operator rates.` : '',
+      cat ? `Who to hire: a fractional ${roleFor(cat)} (${F.catLabel(cat)}). Typical month at 40 hrs${rev ? ` for a ${RN.w.label('companyRevenue', rev)} company` : ''}: ${range}. ${NO_FEES}` : '',
       bp ? `Scope it: ${bp.title} Blueprint, revenuenomad.com/${bp.to.replace('.', '/')}` : '',
       ops.length ? `Operators with proof there: ${ops.map((o) => `${o.name} (${o.role})`).join(', ')}.` : '',
       'Retake it any time at revenuenomad.com/framework.',
@@ -679,7 +678,7 @@
     const cat = r.cat || AREA_META[r.top.area].cat;
     let list = topOps(r.top.area, r.top.stage, 3, cat);
     if (list.length < 3) list = list.concat(topOps(r.top.area, null, 6, cat).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
-    if (list.length < 3) list = list.concat(RN.model.search({ filters: { roleCategories: [cat] }, sort: 'ris' }).filter((x) => !isStaff(x.op)).map((x) => ({ op: x.op, hits: [], v: [] })).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    if (list.length < 3) list = list.concat(RN.model.search({ filters: { roleCategories: [cat] }, sort: 'ris' }).map((x) => ({ op: x.op, hits: [], v: [] })).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
     return list;
   }
   function diagOps() {
@@ -808,7 +807,7 @@
         <div class="rs-method-links">
           <a class="rs-link" href="#library">${icon('list')}<span><b>Fit Tag Library</b><small>Every focus area, defined</small></span>${icon('arrow')}</a>
           <a class="rs-link" href="#guides">${icon('book')}<span><b>Guides</b><small>Straight answers with the numbers</small></span>${icon('arrow')}</a>
-          <a class="rs-link" href="#blueprints">${icon('doc')}<span><b>Engagement Blueprints</b><small>Scoped projects by cell</small></span>${icon('arrow')}</a>
+          <a class="rs-link" href="#blueprints">${icon('doc')}<span><b>Engagement Blueprints</b><small>Scoped engagements by cell</small></span>${icon('arrow')}</a>
         </div>
       </div>
     </section>
@@ -1069,7 +1068,7 @@
       ${crumbs([{ l: 'Fit Tag Library' }])}
       <span class="eyebrow">Fit Tag Library</span>
       <h1 class="h1">The shared vocabulary of <span class="serif">fractional GTM work.</span></h1>
-      <p class="lede">Focus areas (fit tags) name the specific work an operator does. Operators add them to their profiles, clients filter by them, and a client review turns a claim into proof. One list, used on every profile, brief and review.</p>
+      <p class="lede">Focus areas (fit tags) name the specific work an operator does. Operators add them to their profiles, clients filter by them, and a client review turns a claim into proof. One list, used on every profile, posted engagement and review.</p>
       <div class="stats-row rs-kpis" style="--cols:4">
         <div class="stat"><span class="stat-v">${RN.fmt.int(libN)}</span><span class="stat-l">Focus areas, ${groupsN} groups</span></div>
         <div class="stat"><span class="stat-v">${RN.fmt.int(claims)}</span><span class="stat-l">Focus areas listed on operator profiles</span></div>
@@ -1121,16 +1120,9 @@
     const h = hoursNum(hours), m = mult(rev);
     return `${usd(r500(b.p25 * m * h))} - ${usd(r500(b.p75 * m * h))}/mo`;
   }
-  // What a client would pay through a Revenue Nomad intro under the proposed fee: operator rate / 0.75, same $500 rounding
-  function monthAllIn(cat, hours, rev) {
-    const b = RIX().byCat[cat] || RIX().byCat.sales_leadership;
-    const h = hoursNum(hours), m = mult(rev);
-    return `${usd(r500(allInRate(b.p25 * m) * h))} - ${usd(r500(allInRate(b.p75 * m) * h))}/mo`;
-  }
-  const proposed = () => '<span class="pill pill-line rs-prop">Proposed</span>';
-  const allInNote = () => `<p class="rs-src">${icon('info')}<span>Operator rates come from the Rate Index. The all-in column is what a client would pay through a Revenue Nomad intro under the proposed ${FEE_PCT()} platform fee (operator rate ÷ ${(1 - FEE()).toFixed(2)}). The fee is a proposal the founder is confirming. Illustrative.</span></p>`;
-  // Monthly table for a role category: operator rates and the proposed all-in, at a $5M–$20M company
-  const monthTable = (cat, hrs) => tbl(['Available time', 'Operator rates', 'All-in, proposed fee'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m')), esc(monthAllIn(cat, h, '5m_20m'))])) + allInNote();
+    const rateNote = () => `<p class="rs-src">${icon('info')}<span>Rates come from the Rate Index: the middle half of hourly rates for the role, times the hours. ${esc(NO_FEES)} Illustrative.</span></p>`;
+  // Monthly table for a role category at a $5M–$20M company. The rate is the price (no fees for companies).
+  const monthTable = (cat, hrs) => tbl(['Available time', 'Typical month'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m'))])) + rateNote();
   const HOURS = { h_under_20: '19', h_20: '20', h_40: '40', h_60: '60', h_80: '80', h_100: '100', h_160: '160' };
   const hoursRows = () => REP().hours.map((r) => ({ code: HOURS[r.h] || r.h, v: r.v }));
   const sumStat = (re, dflt) => { const x = (REP().summary || []).find((s) => re.test(s.l)); return x ? x.v : dflt; };
@@ -1155,8 +1147,8 @@
     {
       slug: 'fractional-vp-of-sales-cost', bp: 'vp-sales', group: 'clients', updated: '2026-09-18', mins: 6, cat: 'sales_leadership', opsQ: 'VP of Sales',
       q: 'How much does a fractional VP of Sales cost?',
-      answer: () => { const b = RIX().byCat.sales_leadership; return [`A fractional VP of Sales costs a median of ${hr(b.p50)} an hour on the Revenue Nomad Rate Index, and the middle half of operators charge between ${hr(b.p25)} and ${hr(b.p75)}.`, `At 40 hours a month, the most common engagement size, that is a typical range of ${monthRange('sales_leadership', '40', '5m_20m')} in operator rates for a company with $5M–$20M in revenue.`]; },
-      stats: () => { const b = RIX().byCat.sales_leadership; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Sales Leadership' }, { v: monthRange('sales_leadership', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs, operator rates' }, { v: plural(b.n, 'rate'), l: 'In the index for this role' }]; },
+      answer: () => { const b = RIX().byCat.sales_leadership; return [`A fractional VP of Sales costs a median of ${hr(b.p50)} an hour on the Revenue Nomad Rate Index, and the middle half of operators charge between ${hr(b.p25)} and ${hr(b.p75)}.`, `At 40 hours a month, the most common engagement size, that is a typical range of ${monthRange('sales_leadership', '40', '5m_20m')} for a company with $5M–$20M in revenue.`]; },
+      stats: () => { const b = RIX().byCat.sales_leadership; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Sales Leadership' }, { v: monthRange('sales_leadership', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: plural(b.n, 'rate'), l: 'In the index for this role' }]; },
       sections: () => {
         const b = RIX().byCat.sales_leadership;
         const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b.p50 * mult(o.v)), hi: o.v === '5m_20m' }));
@@ -1185,7 +1177,8 @@
         { q: 'Is a fractional CRO more expensive than a fractional VP of Sales?', a: `Usually, by 10% to 20% an hour, because a CRO also owns marketing and customer success. Both roles sit in the Sales Leadership category of the Rate Index, where the median is ${hr(b.p50)} an hour.` },
         { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
         { q: 'Do fractional sales leaders take commission or equity?', a: 'Some do, on top of a lower base rate. On Revenue Nomad rates are listed per hour; any variable pay is agreed between you and the operator.' },
-        { q: 'Can I see an operator\'s rate before I contact them?', a: `Yes. Signed-in clients see each operator's own hourly rate on their profile and can filter search by rate. Under the proposed ${FEE_PCT()} platform fee, the all-in rate through Revenue Nomad is the operator's rate divided by ${(1 - FEE()).toFixed(2)}: ${hr(b.p50)} becomes ${hr(allInRate(b.p50))}.` },
+        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
+        { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. You pay the operator's rate, nothing more: at the Sales Leadership median of ${hr(b.p50)} an hour, 40 hours a month is ${usd(b.p50 * 40)}.` },
       ]; },
       cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
     },
@@ -1232,7 +1225,7 @@
         return [
           { id: 'outcome', h: 'Start with the outcome', html: `<p>Write the outcome before the title. Describe the result you want in 90 days in a sentence a board member would understand, for example: "A written sales process, two reps hired and ramping, and a forecast within 10% of actuals."</p>
             <p>Then pick the one number you will review every month. Pipeline created, win rate, ramp time and forecast accuracy all work. Revenue alone does not, because it lags the work by a quarter or more.</p>` },
-          { id: 'type', h: 'Pick the engagement type', html: `<p>Revenue Nomad uses four engagement types on every profile and project:</p>
+          { id: 'type', h: 'Pick the engagement type', html: `<p>Revenue Nomad uses four engagement types on every profile and every engagement a company posts:</p>
             <dl class="rs-dl">${F.engagementTypes.options.map((o) => `<div><dt>${esc(o.l)}</dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>` },
           { id: 'hours', h: 'Choose hours and term', html: `<p>Most engagements run 20 to 59 hours a month. Buy fewer hours than you think for the first 90 days: the operator spends the first weeks learning, and adding hours later is easy.</p>
             ${chartSlot('g3-hours', (w) => bars(hRows, { fmt: (n) => n + '%', label: 'Share of engagements by available time' }, w))}
@@ -1253,17 +1246,17 @@
       },
       faq: () => [
         { q: 'How many hours a month should I buy?', a: 'For a first sales leader, 40 hours a month is the most common starting point. Advisory work runs under 20; interim cover is closer to 160.' },
-        { q: 'Should I pay hourly or a monthly retainer?', a: 'Most operators price per hour and bill a fixed monthly retainer for an agreed block of hours. Scoped projects are priced per project.' },
+        { q: 'Should I pay hourly or a monthly retainer?', a: 'Most operators price per hour and bill a fixed monthly retainer for an agreed block of hours. Project engagements, with a fixed scope and price, are priced per project.' },
         { q: 'What if the scope changes halfway through?', a: 'Review scope at day 30 and day 60. Changing hours or outcomes at those points is normal and cheaper than pushing through the wrong plan.' },
-        { q: 'Can I post the scope and get matched?', a: 'Yes. Post a project from a Blueprint and Revenue Nomad ranks operators against it using the same fields as their profiles.' },
+        { q: 'Can I post the scope and get matched?', a: 'Yes. Post an engagement from a Blueprint and Revenue Nomad ranks operators against it using the same fields as their profiles. Posting is free, like everything else for companies.' },
       ],
-      cta: { label: 'Post a project', to: 'project.new' },
+      cta: { label: 'Post an engagement', to: 'engagement.new' },
     },
     {
       slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'clients', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
       answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
-      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs, operator rates' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
+      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
       sections: () => [
         { id: 'audit', h: 'Days 1 to 30: audit', html: `<p>The first month is diagnosis. Expect a written audit that covers:</p><ul>
           <li><b>The CRM.</b> Duplicates, stale records, fields nobody uses, stages that mean different things to different reps. See ${L('library', 'CRM cleanup')} in the library.</li>
@@ -1279,7 +1272,7 @@
           <li>Dashboards for pipeline, conversion by stage and forecast, used in the weekly meeting.</li>
           <li>A forecast cadence that the sales leader runs, with RevOps preparing the data.</li>
           <li>Documentation: a metrics dictionary and a short admin guide, so the next hire can take over.</li></ul>` },
-        { id: 'cost', h: 'What it costs', html: `<p>Revenue Operations has a median of ${hr(RIX().byCat.revenue_operations.p50)} an hour on the Rate Index. At 40 hours a month for a $5M–$20M company, a typical range is ${monthRange('revenue_operations', '40', '5m_20m')} in operator rates (${monthAllIn('revenue_operations', '40', '5m_20m')} all-in under the proposed ${FEE_PCT()} fee). Many RevOps engagements drop to 20 hours after the rebuild, at ${monthRange('revenue_operations', '20', '5m_20m')}.</p>` },
+        { id: 'cost', h: 'What it costs', html: `<p>Revenue Operations has a median of ${hr(RIX().byCat.revenue_operations.p50)} an hour on the Rate Index. At 40 hours a month for a $5M–$20M company, a typical range is ${monthRange('revenue_operations', '40', '5m_20m')}, and that is the whole cost: companies pay no fees. Many RevOps engagements drop to 20 hours after the rebuild, at ${monthRange('revenue_operations', '20', '5m_20m')}.</p>` },
         { id: 'signs', h: 'Signs you need RevOps now', html: `<ul><li>Two leaders quote different pipeline numbers in the same meeting.</li><li>Reps keep their own spreadsheets because they do not trust the CRM.</li><li>You are about to hire a sales leader and want them to inherit clean data.</li><li>Tool spend keeps growing and nobody can say what each tool does.</li></ul>` },
       ],
       faq: () => [
@@ -1293,12 +1286,12 @@
       slug: 'fractional-cmo-vs-marketing-agency', bp: 'cmo', group: 'clients', updated: '2026-08-22', mins: 5, cat: 'marketing', opsQ: 'CMO',
       q: 'Fractional CMO vs marketing agency: which one do you need?',
       answer: () => ['A fractional CMO owns your marketing strategy, budget and team, and decides what to do; an agency executes defined work such as ads, content or design.', 'If nobody at the company owns marketing yet, start with a fractional CMO who sets the plan, then hire agencies for the execution they choose.'],
-      stats: () => { const b = RIX().byCat.marketing; const ag = (REP().fracVsFull || []).find((r) => /agency/i.test(r[0])); return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Marketing' }, { v: monthRange('marketing', '40', '5m_20m').replace('/mo', ''), l: 'Fractional CMO at 40 hrs a month, operator rates' }, { v: ag ? ag[1] : '$15,000+', l: 'Typical agency retainer a month' }]; },
+      stats: () => { const b = RIX().byCat.marketing; const ag = (REP().fracVsFull || []).find((r) => /agency/i.test(r[0])); return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Marketing' }, { v: monthRange('marketing', '40', '5m_20m').replace('/mo', ''), l: 'Fractional CMO at 40 hrs a month' }, { v: ag ? ag[1] : '$15,000+', l: 'Typical agency retainer a month' }]; },
       sections: () => [
         { id: 'difference', h: 'What each one does', html: tbl(['', 'Fractional CMO', 'Agency'], [
           ['Owns', 'Strategy, budget, positioning, the plan', 'A defined scope of execution'],
           ['Accountable for', 'Pipeline and the marketing number', 'Deliverables and channel metrics'],
-          ['Typical cost', esc(monthRange('marketing', '40', '5m_20m')) + ' (operator rates)', esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[1] || '$15,000+') + '/mo'],
+          ['Typical cost', esc(monthRange('marketing', '40', '5m_20m')),esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[1] || '$15,000+') + '/mo'],
           ['Time to start', '2 to 3 weeks', esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[2] || '4 to 6 weeks')],
           ['Best when', 'Nobody owns marketing or the plan is unclear', 'The plan is clear and you need hands'],
         ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + src('Monthly costs from the Rate Index (Marketing, $5M–$20M company, 40 hrs a month) and the State of Fractional GTM 2027 survey. Illustrative.') },
@@ -1308,7 +1301,7 @@
       ],
       faq: () => [
         { q: 'Can a fractional CMO also do the execution?', a: 'Some do, especially at 40 hours a month or more. Most prefer to direct execution and keep their hours for strategy, positioning and the team.' },
-        { q: 'Is a fractional CMO cheaper than an agency?', a: `Often similar per month. The Rate Index median for Marketing is ${hr(RIX().byCat.marketing.p50)} an hour; a 40-hour month for a $5M–$20M company is ${monthRange('marketing', '40', '5m_20m')} in operator rates.` },
+        { q: 'Is a fractional CMO cheaper than an agency?', a: `Often similar per month. The Rate Index median for Marketing is ${hr(RIX().byCat.marketing.p50)} an hour; a 40-hour month for a $5M–$20M company is ${monthRange('marketing', '40', '5m_20m')}.` },
         { q: 'How do I measure a fractional CMO?', a: 'On pipeline sourced or influenced by marketing, cost per qualified opportunity and progress against the 90-day plan.' },
       ],
       cta: { label: 'Browse Marketing', filters: { roleCategories: ['marketing'] } },
@@ -1358,7 +1351,7 @@
             ['3 to 4', 'Rep', 'Joins late-stage calls and the largest deals only'],
             ['5 to 6', 'Rep, with the sales leader coaching', 'Executive sponsor on strategic accounts'],
           ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + `<p>Measure win rate and sales cycle by who led the deal. When rep-led deals close at a similar rate, the handover is done.</p>` },
-          { id: 'who', h: 'Who to hire for it', html: `<p>A fractional VP of Sales who has done this before, usually at 40 hours a month for six months, at a typical ${monthRange('sales_leadership', '40', '1m_5m')} in operator rates for a $1M–$5M company.</p>
+          { id: 'who', h: 'Who to hire for it', html: `<p>A fractional VP of Sales who has done this before, usually at 40 hours a month for six months, at a typical ${monthRange('sales_leadership', '40', '1m_5m')} for a $1M–$5M company.</p>
             ${mk ? `<p>Clients search for the Founder-Led Sales Exit focus area about ${RN.fmt.int(mk.demand)} times a month, and only ${mk.verified} ${mk.verified === 1 ? 'operator holds' : 'operators hold'} it client-verified today (${mk.supply} claim it). Ask candidates for the client they did it with.</p>` : ''}` },
         ];
       },
@@ -1386,7 +1379,7 @@
           { id: 'revenue', h: 'Adjust for the clients you serve', html: `<p>Rates rise with client size. Against a $5M–$20M company as the baseline:</p>
             ${tbl(['Company revenue', 'Rate vs baseline'], F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => { const m = RIX().byRevenue[o.v]; return [esc(o.l), `${m >= 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`]; }))}` },
           { id: 'model', h: 'Hourly, retainer or project', html: `<p>Most operators list an hourly rate and bill a monthly retainer for a block of hours. At the Sales Leadership median, 20 hours a month is ${usd(RIX().byCat.sales_leadership.p50 * 20)}, 40 hours is ${usd(RIX().byCat.sales_leadership.p50 * 40)}. Scoped projects (${esc(F.engagementTypes.options.find((o) => o.v === 'project').d.toLowerCase().replace(/\.$/, ''))}) are priced per project, from the hours you expect to spend.</p>
-            <p>${proposed()} On engagements that start from a Revenue Nomad intro, clients would pay an all-in rate that adds a ${FEE_PCT()} platform fee to your rate. You keep your listed rate: at ${hr(300)} an hour, the client pays ${hr(allInRate(300))} all-in. The fee is a proposal the founder is confirming.</p>` },
+            <p>The rate on your profile is the price clients pay. Set it in ${L('studio.profile', 'Studio')} and compare it with the Rate Index for your role.</p>` },
           { id: 'proof', h: 'Proof moves your rate more than discounts do', html: `<p>Operators with three or more client-verified reviews are rehired ${sumStat(/Rehire rate/i, '2.4x')} as often as those with none. Clients comparing two operators at similar rates pick the one with verified proof in the work they need. Before you lower your rate, ask two past clients for a CORE review.</p>
             <p>Signed in, the Positioning tab in Studio shows where your rate sits against the 25th, 50th and 75th percentile for your category, next to how often operators at each band win.</p>` },
           { id: 'load', h: 'How many clients to carry', html: (REP().concurrent || []).length ? `<p>${REP().concurrent.map((c) => `${esc(c.l)}: ${c.v}%`).join(', ')}. Two clients is the most common load. Price so that two clients at your usual hours cover your income target, with a third as upside.</p>` : '' },
@@ -1396,6 +1389,7 @@
         { q: 'Should I show my rate on my profile?', a: 'Yes. Clients filter by rate, and profiles without a rate drop out of those searches. Rates are visible to signed-in clients only.' },
         { q: 'Should I discount for my first client on the platform?', a: 'Prefer a shorter initial term or fewer hours over a lower rate. A discounted rate becomes the reference point for renewals.' },
         { q: 'How often should I raise my rate?', a: 'Review it each quarter against the Rate Index and after every new verified review. Raise it for new clients first.' },
+        { q: 'What does it cost to join?', a: 'Nothing. Joining, your profile and Studio are free.' },
       ],
       cta: { label: 'See your rate position', to: 'studio.positioning', operator: true },
     },
@@ -1403,7 +1397,7 @@
       slug: 'how-fractional-operators-win-direct-deals', group: 'operators', updated: '2026-09-16', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do fractional operators win clients without a marketplace intro?',
       answer: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0) || 67; return [`Most fractional work still comes from referrals and former colleagues: ${ref}% of clients in our survey found their operator that way.`, 'Operators win those deals faster when they can send proof: a profile with client-verified focus areas, CORE reviews and a private proof link that shows which parts the prospect read.']; },
-      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '0%', l: 'Proposed fee on deals you source yourself' }]; },
+      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: ((REP().hindsight || [])[0] || [])[2] || '81%', l: 'Of clients say stage fit mattered most, in hindsight' }]; },
       sections: () => {
         const s = (REP().sources || []).map((x) => ({ label: x.l, value: x.v, hi: /Referral/i.test(x.l) }));
         return [
@@ -1413,13 +1407,13 @@
             <p>A referral gets you the first call. What the prospect checks after that call decides the deal.</p>` },
           { id: 'check', h: 'What prospects check before they call you back', html: `<p>Stage and deal-size fit, how you communicate in a part-time seat and verified references from prior clients were the top three factors companies wish they had weighed. A résumé shows none of them. A profile with client-verified focus areas, CORE reviews and Engagement History shows all three.</p>` },
           { id: 'proof-link', h: 'Send proof with every proposal', html: `<p>From Studio you can create a <b>proof link</b>: a private version of your profile prepared for one prospect, with the sections you choose. The prospect sees a notice that you can see what they read. You see which sections they opened, for how long, and whether they forwarded it inside their team.</p>
-            <p>${proposed()} Revenue Nomad would charge no fee on deals you source yourself. This is a proposal the founder is confirming. The link makes the deal easier to win; it does not route it through the marketplace.</p>` },
+            <p>The link makes the deal easier to win; it does not route it through the marketplace.</p>` },
           { id: 'findable', h: 'Get found in search and AI answers', html: `<ul><li>Write a headline that names the problem you solve and the stage you solve it at.</li><li>Ask past clients to verify your top focus areas: verified tags rank first on cards and in search.</li><li>Keep availability current; fresh availability ranks higher.</li><li>A long-form About section feeds Google and AI answer engines, which increasingly answer "who is a good fractional VP of Sales for..." directly.</li></ul>` },
           { id: 'studio', h: 'What you get even without an intro', html: `<p>Studio shows every search you appeared in and why, the firmographic segments that viewed you (never company names), where you were compared and not chosen, and how your rate and focus areas compare with demand. None of it depends on an intro.</p>` },
         ];
       },
       faq: () => [
-        { q: 'Does Revenue Nomad take a fee on clients I bring myself?', a: 'Not under the current proposal: no fee on deals you bring yourself. This is a proposal the founder is confirming. Proof links exist to help you close those deals.' },
+        { q: 'Does a proof link route the deal through Revenue Nomad?', a: 'No. The deal stays between you and your client; the link helps you close it.' },
         { q: 'Will the prospect know I can see what they read?', a: 'Yes. Every proof link shows the prospect a notice that viewing is shared with the operator.' },
         { q: 'How do I get my first verified review?', a: 'Send a review request from Studio to a past client. When they submit a CORE review rated 4.0 or higher, the focus areas they confirm turn verified.' },
       ],
@@ -1504,8 +1498,8 @@
     return {
       slug: c.slug, bp: c.bp, group: 'costs', updated: '2026-09-22', mins: 4, cat, opsQ: c.opsQ,
       q: `How much does a fractional ${c.noun} cost?`,
-      answer: () => [`A fractional ${c.noun} costs a median of ${hr(b().p50)} an hour on the Revenue Nomad Rate Index, and the middle half of ${catL} operators charge between ${hr(b().p25)} and ${hr(b().p75)}.`, `At ${hrsL.replace(' / ', ' a ')}, that is a typical range of ${monthRange(cat, c.hours, '5m_20m')} in operator rates for a company with $5M–$20M in revenue.`],
-      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}` }, { v: monthRange(cat, c.hours, '5m_20m').replace('/mo', ''), l: `Typical month at ${hrsL}, operator rates` }, { v: plural(b().n, 'rate'), l: 'In the index for this role category' }],
+      answer: () => [`A fractional ${c.noun} costs a median of ${hr(b().p50)} an hour on the Revenue Nomad Rate Index, and the middle half of ${catL} operators charge between ${hr(b().p25)} and ${hr(b().p75)}.`, `At ${hrsL.replace(' / ', ' a ')}, that is a typical range of ${monthRange(cat, c.hours, '5m_20m')} for a company with $5M–$20M in revenue.`],
+      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}` }, { v: monthRange(cat, c.hours, '5m_20m').replace('/mo', ''), l: `Typical month at ${hrsL}` }, { v: plural(b().n, 'rate'), l: 'In the index for this role category' }],
       sections: () => {
         const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b().p50 * mult(o.v)), hi: o.v === '5m_20m' }));
         const bp = bpOf();
@@ -1517,13 +1511,13 @@
           { id: 'monthly', h: 'What a month costs', html: `<p>Multiply the hourly range by the hours you need. For a $5M–$20M company:</p>
             ${monthTable(cat, c.hrs || ['20', '40', '60', '80'])}
             <p>${esc(c.buys)}</p>` },
-          { id: 'scope', h: 'Scope it before you talk to anyone', html: `<p>${bp ? `The ${L(bp.to, bp.title + ' Blueprint')} gives you` : `An ${L('blueprints', 'Engagement Blueprint')} gives you`} the hours, term, a 30/60/90-day plan and the focus areas the work needs, ready to post as a project. ${L('guide.how-to-scope-a-fractional-sales-engagement', 'How to scope a fractional engagement')} covers the outcome, the hours and the operating rhythm.</p>` },
+          { id: 'scope', h: 'Scope it before you talk to anyone', html: `<p>${bp ? `The ${L(bp.to, bp.title + ' Blueprint')} gives you` : `An ${L('blueprints', 'Engagement Blueprint')} gives you`} the hours, term, a 30/60/90-day plan and the focus areas the work needs, ready to post as an engagement. ${L('guide.how-to-scope-a-fractional-sales-engagement', 'How to scope a fractional engagement')} covers the outcome, the hours and the operating rhythm.</p>` },
         ];
       },
       faq: () => [
         { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
-        { q: 'What does the all-in rate include?', a: `The operator's own rate plus the proposed ${FEE_PCT()} Revenue Nomad platform fee. At the ${catL} median of ${hr(b().p50)} an hour, that is ${hr(allInRate(b().p50))} an hour all-in. The fee is a proposal the founder is confirming.` },
-        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate.' },
+        { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. You pay the operator's rate, nothing more: at the ${catL} median of ${hr(b().p50)} an hour, ${hrsL.replace(' / ', ' a ')} is ${usd(b().p50 * hoursNum(c.hours))}.` },
+        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
       ],
       cta: { label: `Browse ${catL}`, filters: { roleCategories: [cat] } },
     };
@@ -1547,7 +1541,7 @@
     { t: 'Interim', d: () => F.engagementTypes.options.find((o) => o.v === 'interim').d + ' Closer to full time for a defined period.' },
     { t: 'Advisory', d: () => F.engagementTypes.options.find((o) => o.v === 'advisory').d },
     { t: 'Project engagement', d: () => F.engagementTypes.options.find((o) => o.v === 'project').d, to: 'blueprints' },
-    { t: 'Available time', d: () => `The hours a month an operator can give a new client, from ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options[0].v)} to ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options.slice(-1)[0].v)}. Clients filter by it; projects ask for it.` },
+    { t: 'Available time', d: () => `The hours a month an operator can give a new client, from ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options[0].v)} to ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options.slice(-1)[0].v)}. Clients filter by it; every posted engagement asks for it.` },
     { t: 'Initial term', d: () => `How long the first engagement is agreed for: ${F.term.options.map((o) => o.l).join(', ')}.`, to: 'guide.how-to-scope-a-fractional-sales-engagement' },
     { t: 'Role category', d: () => `The discipline an operator leads. There are ${F.roleCategory.options.length}: ${F.roleCategory.options.map((o) => o.l).join(', ')}.`, to: 'browse' },
     { t: 'Focus area (fit tag)', d: () => 'A specific kind of work, such as Pipeline Inspection or HubSpot admin. Operators call them fit tags and add up to 25; clients see them as focus areas and filter by them.', to: 'library' },
@@ -1558,7 +1552,7 @@
     { t: 'Emerging', d: () => F.risTier.options.find((t) => t.v === 'emerging').d, to: 'levels' },
     { t: 'CORE', d: () => 'Revenue Nomad\'s client review: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5, plus "Would you hire this operator again?"', to: 'guide.what-is-core' },
     { t: 'Engagement History', d: () => 'The client engagements on an operator\'s profile, with dates, scope and company size, marked verified when the client confirmed them.' },
-    { t: 'Engagement Blueprint', d: () => 'A scoped project template: role category, typical hours and term, a 30/60/90-day plan, the focus areas it needs and a typical rate range. Post one as a project in three steps.', to: 'blueprints' },
+    { t: 'Engagement Blueprint', d: () => 'A scoped engagement template: role category, typical hours and term, a 30/60/90-day plan, the focus areas it needs and a typical rate range. Post it as is, or adjust the hours, term and start first.', to: 'blueprints' },
     { t: 'GTM Framework', d: () => 'Revenue Nomad\'s map of go-to-market work: six areas across seven customer-journey stages, from Awareness to Expand. Every focus area sits in one cell.', to: 'framework' },
     { t: 'Rate Index', d: () => 'Revenue Nomad\'s benchmark of hourly rates by role category and company revenue range, reported as the 25th percentile, median and 75th percentile each quarter.', to: 'rates' },
     { t: 'Match Signals', d: () => 'Five checks shown to a signed-in client on every profile: company revenue, company size, GTM motion, industry and expertise, scored against the client\'s company profile.' },
@@ -1620,7 +1614,7 @@
           <span class="rs-cost-v"><span class="label">Median</span><b class="tnum">${hr(b.p50)}/hr</b></span>
           <span class="rs-cost-v"><span class="label">${esc(RN.w.label('hoursPerMonth', h))}</span><b class="tnum">${esc(monthRange(o.v, h, '5m_20m'))}</b></span>
           ${icon('arrow')}</a>`; }).join('')}</div>
-        <p class="rs-src" style="margin-top:12px">${icon('info')}<span>Operator rates from the Rate Index: the median per hour and a typical month for a company with $5M–$20M in revenue. Each guide also shows the all-in price under the proposed ${FEE_PCT()} platform fee.</span></p>
+        <p class="rs-src" style="margin-top:12px">${icon('info')}<span>Rates from the Rate Index: the median per hour and a typical month for a company with $5M–$20M in revenue. ${esc(NO_FEES)}</span></p>
       </section>
       <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${GROUPS.filter((g) => g.k === 'operators' || g.k === 'methods').map((g) => `<section class="rs-ggrp" id="rs-g-${g.k}" aria-labelledby="rs-g-${g.k}-t">
         ${grpHd(g)}
@@ -1629,7 +1623,7 @@
     })()}
     <section class="wrap rs-sec-sm" id="rs-glossary" aria-labelledby="rs-gl-t">
       <div class="rs-gloss card">
-        <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, defined once</h2><p class="small muted">The same terms appear on every profile, brief, review and report on Revenue Nomad.</p></div>
+        <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, defined once</h2><p class="small muted">The same terms appear on every profile, posted engagement, review and report on Revenue Nomad.</p></div>
         <dl class="rs-gl">${GLOSSARY.map((x) => `<div class="rs-gl-i" id="rs-term-${esc(RN.slug(x.t))}"><dt>${esc(x.t)}</dt><dd>${esc(x.d())}${x.to ? ` <a class="rs-gl-a" href="#${esc(x.to)}" aria-label="More on ${esc(x.t)}">More${icon('arrow')}</a>` : ''}</dd></div>`).join('')}</dl>
       </div>
       <div style="margin-top:20px">${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}</div>
@@ -1710,11 +1704,11 @@
   };
 
   /* The guide's "From the network" module: search results for the guide's topic in its role category, then the
-     highest Reputation Index. Staff profiles stay out (editorial module). Returns RN.model.search rows {op, why}. */
+     highest Reputation Index. Every operator is ranked by the same rules. Returns RN.model.search rows {op, why}. */
   function relatedOps(g) {
     const f = g.cat ? { roleCategories: [g.cat] } : {};
-    let rel = g.opsQ ? RN.model.search({ q: g.opsQ, filters: f }).filter((x) => !isStaff(x.op)).slice(0, 3) : [];
-    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: f, sort: 'ris' }).filter((x) => !isStaff(x.op) && !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    let rel = g.opsQ ? RN.model.search({ q: g.opsQ, filters: f }).slice(0, 3) : [];
+    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: f, sort: 'ris' }).filter((x) => !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
     return rel;
   }
   R.relatedOps = (g) => relatedOps(typeof g === 'string' ? guideBy(g) || {} : g);
@@ -1802,7 +1796,7 @@
           <div class="grid g-2 rs-glinks">
           <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
             <span class="rs-bp-ic">${icon('doc')}</span>
-            <span class="grow"><span class="label">Engagement Blueprint</span><b>${esc(bp ? bp.title : `Scope this work${g.cat ? ` with a ${F.catLabel(g.cat)} Blueprint` : ' with a Blueprint'}`)}</b><span class="small muted">${esc(bp && bp.sub ? bp.sub : 'Typical hours, term, a 30/60/90-day plan and a rate range from the Rate Index, ready to post as a project.')}</span></span>
+            <span class="grow"><span class="label">Engagement Blueprint</span><b>${esc(bp ? bp.title : `Scope this work${g.cat ? ` with a ${F.catLabel(g.cat)} Blueprint` : ' with a Blueprint'}`)}</b><span class="small muted">${esc(bp && bp.sub ? bp.sub : 'Typical hours, term, a 30/60/90-day plan and a rate range from the Rate Index, ready to post as an engagement.')}</span></span>
             ${icon('arrow')}
           </a>
           ${g.cat && RIX().byCat[g.cat] ? `<a class="rs-bp card card-link" href="#rates">

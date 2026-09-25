@@ -2,6 +2,10 @@
    Rows use the registry labels (RN.fields) so compare reads exactly like intake, profile and filters,
    including the role details for each compared category (RN.fields.roleFields read through RN.roleDetail).
    Missing data says "Not added" (never N/A). The best value in a row is tinted, never shouted.
+   Mixed role categories (D8): every role has its own onboarding questions. Shared questions stay as normal rows;
+   role answers that measure the same thing sit in "Comparable scope" (with the source question under each value);
+   the rest is grouped by role, and a question another role was never asked reads "Not asked for {role}".
+   Rates are the price (no fees for companies), so the rate row shows the operator's rate only.
    Rate and match signals are login-gated. Loops: compare_view per operator (Studio "Compared, not
    chosen"), intro-open per column (shared intro flow), shortlist-toggle; profile links inherit
    data-view-source="compare" so core ui.js records profile_view source=compare. */
@@ -20,7 +24,6 @@
   const today = () => { const d = RN.now(); d.setHours(0, 0, 0, 0); return d; };
   // MM/DD/YYYY on profile and compare (Sheet3 #4); RN.fmt.mdy once core has it
   const mdy = (d) => (RN.fmt.mdy ? RN.fmt.mdy(d) : `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`);
-  const allIn = (rate) => (RN.projects && RN.projects.allIn ? RN.projects.allIn(rate) : Math.round(rate / 0.75));
   /* Next available start date: never a past date; "Available now" uses today when no future date exists (L506). */
   function startFor(op) {
     const t = today();
@@ -50,7 +53,7 @@
   const sub = (t) => `<span class="cmp-sub">${t}</span>`;
   function risCell(op) {
     const t = RN.fields.risTierFor(op.ris.score);
-    return `<span class="ris"><span class="ris-seal">${RN.ui.hexSeal(op.ris.label)}<b>${esc(op.ris.score)}</b></span><span class="ris-txt"><b>${esc(op.ris.label)}</b><span>${esc(t.min)}–${esc(t.max)} tier</span></span></span>`;
+    return `<span class="ris t-${esc(t.v)}">${RN.ui.tierBadge(t.v, { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}<span class="ris-txt"><b>${esc(op.ris.label)}</b><span>${esc(t.min)}–${esc(t.max)} tier</span></span></span>`;
   }
   function coreCell(op) {
     const c = coreAvg(op);
@@ -83,8 +86,7 @@
     if (!op.rate) return NA;
     if (RN.store.state.persona === 'visitor') return `<button type="button" class="cmp-lock" data-act="cmp-login" aria-label="Log in to see ${esc(op.first)}’s hourly rate">${icon('lock')}Log in to see rate</button>`;
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
-    // The operator's rate, then the all-in rate the client pays through Revenue Nomad (rate / 0.75, the 25% fee)
-    return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${sub(`<b class="cmp-allin">${esc(RN.fmt.rate(allIn(op.rate)))} all-in</b> through Revenue Nomad, including the 25% fee`)}${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)} (operator rate)`) : ''}`;
+    return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}/hr`) : ''}`;
   }
   function listCell(key, vals, mine) {
     vals = (vals || []).filter(Boolean);
@@ -108,11 +110,41 @@
     const t = RN.roleDetail && RN.roleDetail.text ? RN.roleDetail.text(op, key) : '';
     return t ? `<span class="cmp-txt">${esc(t)}</span>` : NA;
   }
-  // Union of the compared categories' role-detail keys, in registry order. GTM motion has its own row below.
-  function roleKeys(ops) {
-    const F = RN.fields, keys = [];
-    ops.forEach((op) => (F.roleFields[op.catKey] || []).forEach((k) => { if (k !== 'salesMotions' && F[k] && !keys.includes(k)) keys.push(k); }));
-    return keys;
+  // A category's role-detail keys, in registry order. GTM motion and CRM are shared rows (every role is asked them).
+  const SHARED_ROLE = ['salesMotions', 'crm'];
+  const catKeys = (cat) => (RN.fields.roleFields[cat] || []).filter((k) => !SHARED_ROLE.includes(k) && RN.fields[k]);
+  const asked = (op, key) => catKeys(op.catKey).includes(key);
+  const notAsked = (op) => `<span class="cmp-na cmp-na-ask">Not asked for ${esc(RN.fields.catLabel(op.catKey))}</span>`;
+  const srcOf = (key) => `<span class="cmp-src">${esc(RN.fields[key].label)}</span>`;
+
+  /* Comparable scope: role answers mapped onto shared measures. Each value names the question it came from. */
+  const SCOPE = [
+    { l: 'Team led', by: { sales_leadership: 'largestTeamManaged', marketing: 'typicalTeamSize', customer_success_growth: 'largestCsTeam', sales_enablement: 'largestRepCount' } },
+    { l: 'Revenue or budget owned', by: { sales_leadership: 'largestTeamQuota', marketing: 'largestBudget', customer_success_growth: 'largestArrBook', partnerships: 'partnerRevenue', sellers: 'individualQuota' },
+      kind: { sales_leadership: 'sales quota', marketing: 'marketing budget', customer_success_growth: 'ARR book', partnerships: 'partner-attributed revenue', sellers: 'seller quota' } },
+    { l: 'Built the function from zero', key: 'builtFromZero' },
+    { key: 'methodologies' },
+  ];
+  const scopeKey = (row, cat) => (row.key ? (catKeys(cat).includes(row.key) ? row.key : null) : row.by[cat] || null);
+  const SCOPE_KEYS = ['largestTeamManaged', 'typicalTeamSize', 'largestCsTeam', 'largestRepCount', 'largestTeamQuota', 'largestBudget', 'largestArrBook', 'partnerRevenue', 'individualQuota', 'builtFromZero', 'methodologies'];
+  function scopeCell(op, row) {
+    const key = scopeKey(row, op.catKey);
+    if (!key) return notAsked(op);
+    // The source question, unless the row is already named after it
+    const src = (k) => ((row.l || RN.fields[k].label) === RN.fields[k].label ? '' : srcOf(k));
+    if (key === 'builtFromZero') {
+      const t = RN.roleDetail.text(op, key);
+      const rf = op.roleFields || {}, rd = op.roleDetails || {};
+      const no = !t && [rf.builtFromZero, rd.built_from_zero, rd.built_revops_from_zero].some((v) => v === false || /^(no|false)$/i.test(String(v == null ? '' : v)));
+      return (t ? `<span class="cmp-txt">Yes</span>` : no ? `<span class="cmp-txt">No</span>` : NA) + src(key);
+    }
+    const rv = RN.roleDetail.value(op, key);
+    if (!rv) return NA + src(key);
+    if (rv.kind === 'big') {
+      const unit = row.kind ? row.kind[op.catKey] : rv.unit;
+      return `<b class="cmp-v cmp-v-sm">${esc(rv.value)}</b>${unit ? ` <span class="cmp-unit">${esc(unit)}</span>` : ''}${src(key)}`;
+    }
+    return `<span class="cmp-txt">${esc(RN.roleDetail.text(op, key))}</span>${src(key)}`;
   }
 
   /* ---------- Rows (standard labels) ---------- */
@@ -130,8 +162,25 @@
     R.push({ l: 'Engagement history', cell: engCell, val: (op) => (op.engagements || []).length || null, dir: 'max' });
     R.push({ sec: 'Expertise', l: 'Verified focus areas', note: 'Top 6 by score', cell: tagsCell, val: (op) => verifiedTags(op).length || null, dir: 'max' });
     const cats = [...new Set(ops.map((op) => op.catKey))];
-    const rtip = `<b>Operating range</b><br>Role details each operator gave when they joined, from the standard fields for ${esc(cats.map((c) => F.catLabel(c)).join(' and '))}.${cats.length > 1 ? ' Each role category answers its own questions, so a field from another category shows Not added.' : ''}`;
-    roleKeys(ops).forEach((k, i) => R.push({ sec: i === 0 ? 'Operating range' : '', secTip: i === 0 ? rtip : '', l: F[k].label, cell: (op) => roleCell(op, k) }));
+    const mixed = cats.length > 1;
+    const byRole = [];
+    if (!mixed) {
+      // One role category: its role-detail rows, as every operator here answered the same questions
+      const rtip = `<b>Operating range</b><br>Role details each operator gave when they joined, from the standard fields for ${esc(F.catLabel(cats[0]))}.`;
+      catKeys(cats[0]).forEach((k, i) => R.push({ sec: i === 0 ? 'Operating range' : '', secTip: i === 0 ? rtip : '', l: F[k].label, cell: (op) => roleCell(op, k) }));
+    } else {
+      // Mixed: role answers that measure the same thing, side by side, with the question each one answers
+      const stip = '<b>Comparable scope</b><br>Each role answers its own onboarding questions. These rows line up answers that measure the same thing, such as team size or the revenue or budget owned. The question each value answers is shown under it.';
+      const scopeRows = SCOPE.filter((row) => cats.some((c) => scopeKey(row, c)));
+      scopeRows.forEach((row, i) => R.push({ sec: i === 0 ? 'Comparable scope' : '', secTip: i === 0 ? stip : '', l: row.l || F[row.key].label, cell: (op) => scopeCell(op, row) }));
+      // The rest, grouped by role; each question once, under the first compared role that asks it
+      const done = new Set(SCOPE_KEYS);
+      cats.forEach((cat) => {
+        const keys = catKeys(cat).filter((k) => !done.has(k));
+        keys.forEach((k) => done.add(k));
+        keys.forEach((k, i) => byRole.push({ sec: i === 0 ? `${esc(F.catLabel(cat))} questions` : '', secTip: i === 0 ? `<b>${esc(F.catLabel(cat))} questions</b><br>Asked of ${esc(F.catLabel(cat))} operators when they join. Operators in other roles were not asked.` : '', l: F[k].label, cell: (op) => (asked(op, k) ? roleCell(op, k) : notAsked(op)) }));
+      });
+    }
     R.push({ sec: 'Availability', l: F.availability.label, cell: (op) => RN.ui.avail(op, { hours: false }), val: (op) => AVAIL_SCORE[op.avail.key] || null, dir: 'max' });
     R.push({ l: F.startDate.label, cell: startCell, val: (op) => { const d = startFor(op); return d ? -d.getTime() : null; }, dir: 'max' });
     R.push({ l: F.hoursPerMonth.label, cell: hoursCell, val: (op) => +(op.avail.hoursCode || 0) || null, dir: 'max' });
@@ -141,7 +190,8 @@
     R.push({ l: F.employeeRange.label, cell: (op) => listCell('employeeRange', op.employeeRanges, buyer ? co.employeeRange : null), val: buyer ? (op) => (op.employeeRanges.includes(co.employeeRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.industries.label, cell: (op) => listCell('industries', op.industries, buyer ? co.industry : null), val: buyer ? (op) => (op.industries.includes(co.industry) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.salesMotions.label, cell: (op) => listCell('salesMotions', op.motions) });
-    return R;
+    R.push({ l: F.crm.label, cell: (op) => roleCell(op, 'crm') });
+    return R.concat(byRole);
   }
   function bestSet(ops, r) {
     if (!r.val || !r.dir || ops.length < 2) return new Set();
@@ -251,9 +301,10 @@
     }
     return `<div class="cmp-page" data-view-source="compare">${head}
       <section class="wrap cmp-body">
+        ${new Set(ops.map((op) => op.catKey)).size > 1 ? `<p class="cmp-mixnote">${icon('info')}<span>These operators answered different onboarding questions for their roles. Shared questions and comparable scope sit side by side; the rest is grouped by role.</span></p>` : ''}
         ${ops.length > 1 ? `<p class="cmp-swipe">${icon('arrow')}Swipe sideways to see all ${ops.length} operators</p>` : ''}
         ${table(ops)}
-        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and match signals</button>` : ''}</p>
+        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet.${new Set(ops.map((op) => op.catKey)).size > 1 ? ' Not asked means the question is not part of that role’s onboarding.' : ''} No fees for companies. You pay the operator’s rate, nothing more. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and match signals</button>` : ''}</p>
       </section></div>`;
   }
 

@@ -29,12 +29,10 @@
   const hr = (n) => '$' + Math.round(n);
   // L58 format: "$10,000 - $30,000/mo"
   ins.fmtRange = (lo, hi) => `${usd(r500(lo))} - ${usd(r500(hi))}/mo`;
-  /* The Rate Index is operator rates. A client hiring through Revenue Nomad pays the all-in price:
-     operator rate / 0.75 (the 25% fee), rounded to $500 like the range. Always labelled. */
-  const FEE = () => (RN.projects && RN.projects.FEE) || 0.25;
-  const allIn = (n) => r500(n / (1 - FEE()));
-  ins.allIn = allIn;
-  const feePct = () => Math.round(FEE() * 100) + '%';
+  /* The Rate Index is the price: a client pays the operator's listed rate and no fees (founder
+     decision D1, Sep 25, 2026). Nothing on these client-facing pages mentions a fee, margin or split. */
+  const NO_FEES = 'No fees for companies. You pay the operator’s rate, nothing more.';
+  ins.noFees = NO_FEES;
   const catLabel = (c) => F.catLabel(c);
   const revLabel = (v) => RN.w.label('companyRevenue', v);
   const hoursLabel = (v) => RN.w.label('hoursPerMonth', v);
@@ -44,7 +42,9 @@
   const personaCo = () => (RN.store.state.persona === 'buyer' ? RN.personas.buyer.company : null);
   const opMe = () => (RN.store.state.persona === 'operator' ? RN.myOp() : null);
   const weekStart = () => { const d = RN.now(); const back = (d.getDay() + 6) % 7; const m = new Date(d.getTime() - back * 864e5); m.setHours(0, 0, 0, 0); return m; };
-  const nextMonday = () => new Date(weekStart().getTime() + 7 * 864e5);
+  // The Pulse is quarterly: the next issue lands on the first day of the next calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1)
+  const nextQuarter = () => { const d = RN.now(); return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3 + 3, 1); };
+  ins.nextIssue = nextQuarter;
   // One "Illustrative" label for every invented figure (RN.ui.illus)
   const illus = (text) => RN.ui.illus(text);
   const jsonAttr = (o) => esc(JSON.stringify(o || {}));
@@ -174,14 +174,14 @@
   let pendingJump = null;
   RN.actions['ins-report-ch'] = (el) => { pendingJump = el.dataset.ch; RN.go('report'); };
 
-  /* ---------- Newsletter (hub and report end) ---------- */
+  /* ---------- Newsletter (hub and report end): the Fractional GTM Pulse, quarterly ---------- */
   const SUB_KEY = 'ins-pulse';
   function newsForm(src) {
     const st = RN.store.state;
     const sub = st.seen && st.seen[SUB_KEY];
     if (sub) {
       return `<div class="ins-news-done" data-ins-news>
-        <p class="ins-news-ok">${icon('check-circle')}<span>Subscribed as <b>${esc(sub.email)}</b>. The next Pulse lands ${esc(RN.fmt.date(nextMonday()))}.</span></p>
+        <p class="ins-news-ok">${icon('check-circle')}<span>Subscribed as <b>${esc(sub.email)}</b>. The next Pulse lands ${esc(RN.fmt.date(nextQuarter()))}.</span></p>
         <button type="button" class="act" data-act="ins-unsub">Unsubscribe</button>
       </div>`;
     }
@@ -192,22 +192,22 @@
       ${RN.w.control('email', pre, { name: 'email', id: 'ins-news-' + src })}
       <button class="btn btn-leaf" type="submit">Subscribe</button>
     </form>
-    <p class="ins-news-fine">One email every Monday. Unsubscribe in one click.</p>`;
+    <p class="ins-news-fine">One email a quarter. Unsubscribe in one click.</p>`;
   }
   RN.submits['ins-subscribe'] = (form, data) => {
     const email = String(data.email || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { RN.ui.toast('Enter a work email so we can send the Pulse.', { icon: 'info' }); form.querySelector('input[name=email]').focus(); return; }
     RN.store.update((s) => { s.seen = s.seen || {}; s.seen[SUB_KEY] = { email, ts: RN.now().toISOString(), source: form.dataset.src }; }, 'seen');
     RN.track('newsletter_signup', { source: form.dataset.src, meta: { list: 'pulse' } });
-    RN.mail(email, 'You are subscribed to the Fractional GTM Pulse', `Every Monday: the Rate Index by role category, the demand index, and the focus areas clients searched for that week.\n\nFirst issue: ${RN.fmt.date(nextMonday())}.\nUnsubscribe from any issue in one click.`, 'newsletter');
-    RN.ui.toast(`Subscribed. The next Pulse lands ${esc(RN.fmt.dateShort(nextMonday()))}.`);
+    RN.mail(email, 'You are subscribed to the Fractional GTM Pulse', `Once a quarter: the Rate Index by role category, the Demand Index and new research.\n\nFirst issue: ${RN.fmt.date(nextQuarter())}.\nOne email a quarter. Unsubscribe from any issue in one click.`, 'newsletter');
+    RN.ui.toast(`Subscribed. The next Pulse lands ${esc(RN.fmt.dateShort(nextQuarter()))}.`);
     RN.$$('[data-ins-news]').forEach((n) => { const box = n.closest('.ins-news-slot'); if (box) box.innerHTML = newsForm(box.dataset.src); });
   };
   RN.actions['ins-unsub'] = () => {
     const sub = RN.store.state.seen && RN.store.state.seen[SUB_KEY];
     RN.store.update((s) => { if (s.seen) delete s.seen[SUB_KEY]; }, 'seen');
-    if (sub) RN.mail(sub.email, 'You are unsubscribed from the Fractional GTM Pulse', 'You will not get the Monday email anymore. Rates and research stay open at Revenue Nomad Insights.', 'newsletter');
-    RN.ui.toast('Unsubscribed. No more Monday emails.');
+    if (sub) RN.mail(sub.email, 'You are unsubscribed from the Fractional GTM Pulse', 'You will not get the quarterly Pulse anymore. Rates and research stay open at Revenue Nomad Insights.', 'newsletter');
+    RN.ui.toast('Unsubscribed. No more quarterly emails.');
     RN.$$('.ins-news-slot').forEach((box) => { box.innerHTML = newsForm(box.dataset.src); });
   };
   const newsSlot = (src) => `<div class="ins-news-slot" data-src="${esc(src)}">${newsForm(src)}</div>`;
@@ -310,10 +310,10 @@
           <span class="ins-tool-go">Search the library${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('doc')}</span><div><h3 class="h4"><a href="#blueprints" class="ins-stretch">Engagement Blueprints</a></h3><p class="small muted">Scoped projects with the hours, term and 30/60/90-day plan they need, priced from the Rate Index.</p></div></div>
+          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('doc')}</span><div><h3 class="h4"><a href="#blueprints" class="ins-stretch">Engagement Blueprints</a></h3><p class="small muted">Scoped engagements with the hours, term and 30/60/90-day plan they need, priced from the Rate Index.</p></div></div>
           ${bpList.length ? `<ul class="ins-mini-list">${bpList.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
           <ol class="ins-plan" aria-label="Every Blueprint has a 30, 60 and 90-day plan"><li><b>30</b><span>days</span></li><li><b>60</b><span>days</span></li><li><b>90</b><span>days</span></li></ol>
-          <p class="tiny muted">Start from a Blueprint and post a project in three steps.</p>
+          <p class="tiny muted">Start from a Blueprint and post an engagement in three steps.</p>
           <span class="ins-tool-go">Browse Blueprints${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
@@ -380,8 +380,8 @@
           <span class="eyebrow">For companies hiring</span>
           <h3 class="h3">Price the role before you post it.</h3>
           <p class="body">${co
-            ? `For ${esc(co.name)} (${esc(revLabel(co.revenueRange))} revenue), a fractional Sales Leadership leader at ${esc(hoursLabel('40'))} typically costs <b>${esc(coRange.label)}</b> at operator rates, or <b>${esc(ins.fmtRange(allIn(coRange.lo), allIn(coRange.hi)))}</b> all-in through Revenue Nomad (includes the ${feePct()} fee).`
-            : `A fractional Sales Leadership leader at ${esc(hoursLabel('40'))} for a ${esc(revLabel('5m_20m'))} company typically costs <b>${esc(coRange.label)}</b> at operator rates, or <b>${esc(ins.fmtRange(allIn(coRange.lo), allIn(coRange.hi)))}</b> all-in through Revenue Nomad (includes the ${feePct()} fee). Pick your role and company revenue for your number.`}</p>
+            ? `For ${esc(co.name)} (${esc(revLabel(co.revenueRange))} revenue), a fractional Sales Leadership leader at ${esc(hoursLabel('40'))} typically costs <b>${esc(coRange.label)}</b>. ${esc(NO_FEES)}`
+            : `A fractional Sales Leadership leader at ${esc(hoursLabel('40'))} for a ${esc(revLabel('5m_20m'))} company typically costs <b>${esc(coRange.label)}</b>. ${esc(NO_FEES)} Pick your role and company revenue for your number.`}</p>
           <a class="btn btn-line" href="#rates">Open the estimator${icon('arrow')}</a>
         </div>
         <div class="card ins-you-card">
@@ -398,8 +398,9 @@
     <section class="wrap">
       <div class="panel-night ins-news">
         <div>
-          <span class="eyebrow">The Fractional GTM Pulse</span>
-          <h2 class="h3 ins-news-h">One email every Monday: rates, demand and what clients searched for.</h2>
+          <span class="eyebrow">Quarterly newsletter</span>
+          <h2 class="h3 ins-news-h">The Fractional GTM Pulse</h2>
+          <p class="ins-news-p">Once a quarter: the Rate Index by role category, the Demand Index and new research.</p>
         </div>
         ${newsSlot('hub')}
       </div>
@@ -510,8 +511,8 @@
     const netN = net.length || 1;
     const dsMax = Math.max(...R.intent.map((r) => Math.max(r.v, ((mk.catSupply[r.cat] || 0) / netN) * 100)), 1);
     const outcomes = R.outcomes;
-    // Fractional row priced from the Rate Index (Sales Leadership median at 40 hrs / month), shown at the
-    // operator rate and all-in, so it matches #rates, Blueprints and the guides
+    // Fractional row priced from the Rate Index (Sales Leadership median at 40 hrs / month), shown as the
+    // rate itself (the price a client pays), so it matches #rates, Blueprints and the guides
     const vp = ins.range('sales_leadership', null, '40');
     const fvf = R.fracVsFull.map((r, i) => (i === 0 ? [`Fractional VP of Sales, ${hoursLabel('40')}`, usd(vp.mid), r[2], r[3]] : r));
     // One fieldwork line, read from the methodology so the cover, citation and method never disagree
@@ -564,7 +565,7 @@
 
     <section class="wrap-narrow ins-ch" id="ins-ch2">
       ${chapterHead('2', 'Chapter 2', 'What it costs', 'The question every hiring company asks first and every operator asks quietly.')}
-      ${figure({ title: 'Median hourly rate by role category', sub: 'Rate Index medians at operator rates, before the Revenue Nomad fee',
+      ${figure({ title: 'Median hourly rate by role category', sub: 'Rate Index medians, the hourly rates operators list',
         controls: `<div class="ins-ctl"><span class="label">${esc(F.companyRevenue.label)}</span><div data-deselect>${RN.w.control('companyRevenue', rep.rev || '', { name: 'ins-rep-rev', id: 'ins-rep-rev', change: 'ins-rep-rev' })}</div><p class="tiny muted" data-ins-adj>${esc(ch2Adj())}</p></div>`,
         chart: 'rateCat',
         body: pos && pos.rate ? `<p class="note info ins-you-note">${icon('user')}<span>Your rate of <b>${hr(pos.rate)}/hr</b> sits at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}. <a href="#studio.positioning">See your positioning in Studio</a></span></p>`
@@ -573,8 +574,8 @@
         take: `Companies at ${esc(revLabel(hi.range))} pay ${stagePremium}% more per hour than companies ${esc(revLabel(lo.range).replace(/^Under/, 'under'))} for the same role. <em>Company stage sets the rate more than the title does.</em>` })}
       ${figure({ title: 'Fractional vs full time, monthly cost', sub: 'For a VP of Sales. The fractional row uses the Rate Index median',
         body: `<div class="tbl-wrap"><table class="tbl ins-tbl ins-tbl-stack"><thead><tr><th>Option</th><th class="r">Monthly cost</th><th>Time to start</th><th>Exit cost</th></tr></thead>
-          <tbody>${fvf.map((r, i) => `<tr class="${i === 0 ? 'ins-tr-hi' : ''}"><td class="ins-td-h">${esc(r[0])}</td><td class="r num" data-l="Monthly cost"><b>${esc(r[1])}</b>${i === 0 ? `<span class="ins-allin">${esc(usd(allIn(vp.mid)))} all-in</span>` : ''}</td><td data-l="Time to start">${esc(r[2])}</td><td data-l="Exit cost">${esc(r[3])}</td></tr>`).join('')}</tbody></table></div>
-          <p class="tiny muted ins-fig-foot">Fractional cost is the operator’s rate. All-in is what a client pays through Revenue Nomad, including the ${feePct()} fee.</p>
+          <tbody>${fvf.map((r, i) => `<tr class="${i === 0 ? 'ins-tr-hi' : ''}"><td class="ins-td-h">${esc(r[0])}</td><td class="r num" data-l="Monthly cost"><b>${esc(r[1])}</b></td><td data-l="Time to start">${esc(r[2])}</td><td data-l="Exit cost">${esc(r[3])}</td></tr>`).join('')}</tbody></table></div>
+          <p class="tiny muted ins-fig-foot">The fractional row is the Rate Index median rate at ${esc(hoursLabel('40'))}.</p>
           <p class="ins-fig-more"><a class="act" href="#rates">${icon('sliders')}Run the numbers for your company in the Rate Index</a></p>` })}
       ${chLink({ text: `Browse ${catSelect(rep.cat, 'ins-rep-cat')} operators <span data-ins-ch2-rev>${esc(ch2RevText())}</span>.`, primary: ch2Link() })}
     </section>
@@ -650,7 +651,7 @@
       <div class="panel-night ins-news">
         <div>
           <span class="eyebrow">Get the next edition</span>
-          <h2 class="h3 ins-news-h">Get the next edition first, and the weekly Pulse by email.</h2>
+          <h2 class="h3 ins-news-h">Get the next edition first, and the quarterly Pulse by email.</h2>
         </div>
         ${newsSlot('report')}
       </div>
@@ -741,7 +742,9 @@
      3. RATE INDEX (#rates)
      ===================================================================== */
   const est = { cat: undefined, rev: undefined, hours: undefined };
-  const calc = { base: 220000, benefits: 25, fee: 25, months: 4 };
+  // Full-time side of the calculator. variable is '' until the user types their own figure (then varCustom).
+  const calc = { base: 220000, benefits: 25, variable: '', recruit: 25, months: 4 };
+  let varCustom = false;
   let idxRev = undefined;
   let routeCat = null; // role permalink (#rates.<roleCategory>)
   function estDefaults() {
@@ -790,13 +793,13 @@
     const maxX = ins.range(est.cat, '50m_plus', est.hours).mid || 1;
     return `<span class="label">Typical Engagement Range</span>
       <div class="ins-est-big num">${esc(g.label)}</div>
-      <p class="ins-est-mid">Operator rates. Median <b>${usd(g.mid)}/mo</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
-      <p class="ins-est-allin">All-in through Revenue Nomad: <b>${esc(ins.fmtRange(allIn(g.lo), allIn(g.hi)))}</b>, including the ${feePct()} fee.</p>
+      <p class="ins-est-mid">Median <b>${usd(g.mid)}/mo</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
+      <p class="ins-est-nofee">${icon('check-circle')}<span>${esc(NO_FEES)}</span></p>
       <div class="ins-est-scale">${rangeBar(r.p25, r.p50, r.p75, 450, { labels: true, cls: 'ins-rtrack-night' })}
         <div class="ins-est-legend tiny"><span><i class="b"></i>Middle 50% of rates (p25 to p75)</span><span><i class="m"></i>Median</span></div></div>
-      <div class="ins-est-sizes"><span class="label">Median by company revenue, operator rates</span>
+      <div class="ins-est-sizes"><span class="label">Median by company revenue</span>
         <ul>${F.companyRevenue.options.map((o) => { const x = ins.range(est.cat, o.v, est.hours); return `<li class="${o.v === est.rev ? 'on' : ''}"><button type="button" data-act="ins-est-size" data-v="${esc(o.v)}" aria-pressed="${o.v === est.rev}"><span>${esc(o.l)}</span><span class="ins-est-sbar"><i style="width:${((x.mid / maxX) * 100).toFixed(1)}%"></i></span><b class="num">${usd(x.mid)}</b></button></li>`; }).join('')}</ul></div>
-      <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${usd(allIn(g.mid * 3))} to ${usd(allIn(g.mid * 6))}</b> all-in for the first term.</p>
+      <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${usd(r500(g.mid * 3))} to ${usd(r500(g.mid * 6))}</b> for the first term.</p>
       <p class="ins-est-basis small">Based on ${RN.fmt.int(r.n)} ${esc(catLabel(est.cat))} rates, adjusted for ${esc(revLabel(est.rev))} companies (×${r.m.toFixed(2)}).${low ? ` <span class="ins-low">${icon('info')}${esc(low)}</span>` : ''}</p>
       <div class="row ins-est-cta">
         <button type="button" class="btn btn-leaf" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(hand.f)}">${esc(hand.label)}${icon('arrow')}</button>
@@ -822,28 +825,52 @@
         </div>`;
       }).join('')}`;
   }
-  const idxCaption = () => (idxRev ? `Adjusted for ${revLabel(idxRev)} companies (×${ins.mult(idxRev).toFixed(2)} on the network median). Operator rates, before the Revenue Nomad fee.` : 'Network-wide medians at operator rates, before the Revenue Nomad fee. Pick a company revenue range to adjust.');
+  const idxCaption = () => (idxRev ? `Adjusted for ${revLabel(idxRev)} companies (×${ins.mult(idxRev).toFixed(2)} on the network median).` : 'Network-wide medians. Pick a company revenue range to adjust.');
 
-  /* Fractional vs full time. The fractional side is what a client pays through Revenue Nomad:
-     the all-in median (operator rate plus the 25% fee), so the comparison does not flatter fractional. */
+  /* Fractional vs full time (founder decisions D1 and D2, Sep 25, 2026).
+     Fractional side: the Rate Index median monthly cost at the estimate's hours. The rate is the price.
+     Full-time side: (base x (1 + benefits) + target commission and bonus) / 12, plus the recruiting fee on
+     first-year cash pay (base + variable), spread over year one. */
+  // Typical target commission and bonus as a share of base, by role category (illustrative defaults)
+  const VAR_PCT = { sales_leadership: 60, sellers: 100, marketing: 25, revenue_operations: 25, sales_enablement: 25, customer_success_growth: 25, partnerships: 25, ai_gtm: 15 };
+  const varPct = (cat) => (VAR_PCT[cat] != null ? VAR_PCT[cat] : 25);
+  const varDefault = () => Math.round((Math.max(0, +calc.base || 0) * varPct(est.cat)) / 100 / 1000) * 1000;
+  const varValue = () => (varCustom && calc.variable !== '' ? Math.max(0, +calc.variable || 0) : varDefault());
+  function varHelp() {
+    const pct = varPct(est.cat);
+    return `<span>Illustrative default: ${pct}% of base, typical for ${esc(catLabel(est.cat))}.${varCustom ? ` <button type="button" class="act" data-act="ins-calc-var-reset">Reset to ${esc(usd(varDefault()))}</button>` : ' Type your own to change it.'}</span>`;
+  }
+  // Keep the variable-pay default in step with the estimate's role and the base, unless the user typed their own
+  function syncVar() {
+    const inp = document.getElementById('ins-calc-variable');
+    if (inp) inp.placeholder = varDefault(); // an empty field shows the default in use
+    if (inp && !varCustom && document.activeElement !== inp) inp.value = varDefault();
+    const h = RN.$('[data-ins-var-help]'); if (h) h.innerHTML = varHelp();
+  }
+  // Leaving the variable field empty puts the role default back in it (the breakdown already uses the default)
+  function bindVar(root) {
+    const v = root.querySelector('#ins-calc-variable');
+    if (v) v.addEventListener('blur', () => { if (!varCustom) v.value = varDefault(); });
+  }
   function calcNums() {
     const g = ins.range(est.cat, est.rev, est.hours);
-    const base = Math.max(0, +calc.base || 0), b = Math.max(0, +calc.benefits || 0) / 100, fee = Math.max(0, +calc.fee || 0) / 100;
+    const base = Math.max(0, +calc.base || 0), b = Math.max(0, +calc.benefits || 0) / 100, fee = Math.max(0, +calc.recruit || 0) / 100;
+    const variable = varValue();
     const months = RN.clamp(+calc.months || 0, 0, 12);
     const ftBase = (base * (1 + b)) / 12;
-    const ftFee = (base * fee) / 12;
-    const ft = ftBase + ftFee;
-    const opRate = g.mid;
-    const frac = allIn(g.mid);
+    const ftVar = variable / 12;
+    const ftFee = ((base + variable) * fee) / 12;
+    const ft = ftBase + ftVar + ftFee;
+    const frac = g.mid;
     const fracYear = frac * 11.5; // in the seat within 2 to 3 weeks
-    const ftYear = base * fee + ftBase * Math.max(0, 12 - months);
-    return { g, base, b, fee, months, ftBase, ftFee, ft, opRate, frac, fracYear, ftYear };
+    const ftYear = (base + variable) * fee + (ftBase + ftVar) * Math.max(0, 12 - months);
+    return { g, base, b, fee, variable, months, ftBase, ftVar, ftFee, ft, frac, fracYear, ftYear };
   }
   DRAW.calc = (w) => {
     const c = calcNums();
     return bars([
-      { label: `Fractional, ${hoursLabel(est.hours)}, all-in`, value: Math.round(c.frac), hi: true },
-      { label: 'Full-time hire, all-in', value: Math.round(c.ft), muted: false },
+      { label: `Fractional, ${hoursLabel(est.hours)}`, value: Math.round(c.frac), hi: true },
+      { label: 'Full-time hire', value: Math.round(c.ft), muted: false },
     ], { fmt: (n) => RN.fmt.usdK(n), label: 'Monthly cost, fractional vs full time' }, w);
   };
   function calcOut() {
@@ -852,24 +879,24 @@
     const share = c.ft ? Math.round((c.frac / c.ft) * 100) : 0;
     return `<div class="ins-chart" data-ins-chart="calc"></div>
       <div class="ins-calc-sum">
-        <p class="body">${diff >= 0 ? `Hiring fractional through Revenue Nomad costs <b>${usd(r500(diff))} less per month</b>, about ${share}% of a full-time hire.` : `At these inputs a fractional leader costs <b>${usd(r500(-diff))} more per month</b> than a full-time hire.`}</p>
+        <p class="body">${diff >= 0 ? `A fractional leader costs <b>${usd(r500(diff))} less per month</b>, about ${share}% of a full-time hire.` : `At these inputs a fractional leader costs <b>${usd(r500(-diff))} more per month</b> than a full-time hire.`}</p>
         <div class="stats-row" style="--cols:2">
-          <div class="stat"><span class="stat-l">Next 12 months, fractional</span><span class="stat-v">${RN.fmt.usdK(r500(c.fracYear))}</span><span class="tiny muted">All-in. In the seat within 2 to 3 weeks</span></div>
+          <div class="stat"><span class="stat-l">Next 12 months, fractional</span><span class="stat-v">${RN.fmt.usdK(r500(c.fracYear))}</span><span class="tiny muted">In the seat within 2 to 3 weeks</span></div>
           <div class="stat"><span class="stat-l">Next 12 months, full time</span><span class="stat-v">${RN.fmt.usdK(r500(c.ftYear))}</span><span class="tiny muted">${c.months ? `Seat empty for ${RN.fmt.plural(c.months, 'month')} while you hire` : 'Starts right away'}</span></div>
         </div>
         <dl class="ins-calc-break small">
           <div><dt>Base plus benefits and taxes</dt><dd>${usd(r500(c.ftBase))}/mo</dd></div>
+          <div><dt>Commission and bonus</dt><dd>${usd(r500(c.ftVar))}/mo</dd></div>
           <div><dt>Recruiting fee, spread over year one</dt><dd>${usd(r500(c.ftFee))}/mo</dd></div>
-          <div><dt>Fractional median, operator rate</dt><dd>${usd(c.opRate)}/mo</dd></div>
-          <div><dt>Fractional median, all-in with the ${feePct()} Revenue Nomad fee</dt><dd>${usd(c.frac)}/mo</dd></div>
+          <div><dt>Fractional, typical monthly rate</dt><dd>${usd(c.frac)}/mo</dd></div>
         </dl>
         <p class="tiny muted">A fractional leader works ${esc(hoursLabel(est.hours))}. A full-time leader works about 170 hours a month. Compare the outcomes you need in those hours.</p>
       </div>`;
   }
   function calcInput(key, label, val, o) {
     return `<div class="field"><label for="ins-calc-${key}">${esc(label)}</label>
-      <div class="input-affix">${o.pre ? `<span class="affix">${esc(o.pre)}</span>` : ''}<input class="input" id="ins-calc-${key}" name="${key}" type="number" inputmode="numeric" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(val)}" data-input="ins-calc">${o.unit ? `<span class="affix">${esc(o.unit)}</span>` : ''}</div>
-      ${o.help ? `<p class="help">${esc(o.help)}</p>` : ''}</div>`;
+      <div class="input-affix">${o.pre ? `<span class="affix">${esc(o.pre)}</span>` : ''}<input class="input" id="ins-calc-${key}" name="${key}" type="number" inputmode="numeric" min="${o.min}" max="${o.max}" step="${o.step}" value="${esc(val)}"${o.placeholder != null ? ` placeholder="${esc(o.placeholder)}"` : ''} data-input="ins-calc"${o.helpHtml || o.help ? ` aria-describedby="ins-calc-${key}-help"` : ''}>${o.unit ? `<span class="affix">${esc(o.unit)}</span>` : ''}</div>
+      ${o.helpHtml ? `<p class="help ins-calc-help" id="ins-calc-${key}-help" ${o.helpAttr || ''}>${o.helpHtml}</p>` : o.help ? `<p class="help" id="ins-calc-${key}-help">${esc(o.help)}</p>` : ''}</div>`;
   }
 
   function rates() {
@@ -939,7 +966,7 @@
             <li><b>Sources.</b> Hourly rates operators list on their profiles (claimed), rates from client-verified engagements (verified), and the State of Fractional GTM survey (survey).</li>
             <li><b>Median and range.</b> The median is the middle rate. The range covers the middle half of rates, from the 25th to the 75th percentile.</li>
             <li><b>Company revenue.</b> Larger companies pay more for the same role. We adjust with one multiplier per revenue range.</li>
-            <li><b>Operator rates.</b> The index shows what operators charge. Hiring through Revenue Nomad adds a ${feePct()} fee, so the all-in rate is the operator rate divided by ${(1 - FEE()).toFixed(2)}.</li>
+            <li><b>The rate is the price.</b> The index shows the hourly rates operators list. That is what a company pays.</li>
             <li><b>Sample size.</b> We show n for every category. Under ${MIN_CELL} rates, read the number as directional.</li>
           </ul>
           <div class="tbl-wrap"><table class="tbl ins-tbl ins-mult"><thead><tr><th>${esc(F.companyRevenue.label)}</th><th class="r">Multiplier</th></tr></thead><tbody>
@@ -954,14 +981,15 @@
     </section>
 
     <section class="wrap ins-calc" id="ins-calc">
-      <div class="ins-sec-hd"><div><span class="eyebrow">Calculator</span><h2 class="h2">Fractional or full time? Compare the monthly cost.</h2></div></div>
+      <div class="ins-sec-hd"><div><span class="eyebrow">Calculator</span><h2 class="h2">Fractional or full time? Compare the monthly cost.</h2></div>${illus('Illustrative defaults')}</div>
       <div class="card ins-calc-card">
         <div class="ins-calc-in stack" style="--gap:18px">
           <p class="small muted ins-calc-uses">${icon('sliders')}<span>Fractional side uses your estimate: <b data-ins-calc-uses>${esc(catLabel(est.cat))}, ${esc(revLabel(est.rev))}, ${esc(hoursLabel(est.hours))}</b>. <button type="button" class="act" data-act="ins-jump" data-to="ins-est">Change</button></span></p>
-          ${calcInput('base', 'Full-time base salary', calc.base, { pre: '$', min: 50000, max: 1000000, step: 5000, help: 'Base only. Add expected bonus if the role carries variable pay.' })}
-          <div class="grid g-2" style="--gap:16px">
+          ${calcInput('base', 'Full-time base salary', calc.base, { pre: '$', min: 50000, max: 1000000, step: 5000, help: 'Base salary only. Commission and bonus go in the next field.' })}
+          ${calcInput('variable', 'Target commission and bonus (annual)', varCustom ? calc.variable : varDefault(), { pre: '$', min: 0, max: 2000000, step: 5000, placeholder: varDefault(), helpHtml: varHelp(), helpAttr: 'data-ins-var-help' })}
+          <div class="grid g-2 ins-calc-pair" style="--gap:16px">
             ${calcInput('benefits', 'Benefits and payroll taxes', calc.benefits, { unit: '%', min: 0, max: 60, step: 1 })}
-            ${calcInput('fee', 'Recruiting fee, % of base', calc.fee, { unit: '%', min: 0, max: 40, step: 1 })}
+            ${calcInput('recruit', 'Recruiting fee, % of first-year cash pay', calc.recruit, { unit: '%', min: 0, max: 40, step: 1 })}
           </div>
           ${calcInput('months', 'Months to hire full time', calc.months, { unit: 'months', min: 0, max: 12, step: 1, help: 'The report median is 90 to 120 days for a VP of Sales.' })}
         </div>
@@ -1036,6 +1064,7 @@
     }
     const out = document.getElementById('ins-est-out'); if (out) out.innerHTML = estOut();
     const uses = RN.$('[data-ins-calc-uses]'); if (uses) uses.textContent = `${catLabel(est.cat)}, ${revLabel(est.rev)}, ${hoursLabel(est.hours)}`;
+    syncVar();
     const co = document.getElementById('ins-calc-out'); if (co) { co.innerHTML = calcOut(); drawAll(co); }
     clearTimeout(estTrack);
     estTrack = setTimeout(() => RN.track('rate_estimate', { filters: { roleCategories: [est.cat], revenueRange: [est.rev], hoursPerMonth: [est.hours] } }), 600);
@@ -1053,6 +1082,15 @@
   RN.inputs['ins-calc'] = (el) => {
     const v = el.value === '' ? '' : +el.value;
     calc[el.name] = v;
+    // Typing a commission and bonus figure keeps it; clearing the field goes back to the role default
+    if (el.name === 'variable') varCustom = v !== '';
+    syncVar();
+    const co = document.getElementById('ins-calc-out'); if (co) { co.innerHTML = calcOut(); drawAll(co); }
+  };
+  RN.actions['ins-calc-var-reset'] = () => {
+    varCustom = false; calc.variable = '';
+    const inp = document.getElementById('ins-calc-variable'); if (inp) inp.value = varDefault();
+    syncVar();
     const co = document.getElementById('ins-calc-out'); if (co) { co.innerHTML = calcOut(); drawAll(co); }
   };
 
@@ -1060,7 +1098,7 @@
     route: 'rates', nav: 'insights',
     title: () => 'Rate Index',
     render: () => { routeCat = null; return rates(); },
-    mount: (root) => lifecycle(root),
+    mount: (root) => { lifecycle(root); bindVar(root); },
     unmount,
   });
   /* Role permalink (#rates.revenue_operations): the estimator opens on that role and the row is marked */
@@ -1074,7 +1112,7 @@
       if (routeCat) { estDefaults(); est.cat = routeCat; }
       return rates();
     },
-    mount: (root) => lifecycle(root),
+    mount: (root) => { lifecycle(root); bindVar(root); },
     unmount,
   });
 })();

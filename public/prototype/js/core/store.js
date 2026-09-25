@@ -16,7 +16,8 @@
       shortlist: [],               // operator ids saved by the buyer
       compare: [],                 // operator ids, max 4
       intros: [],                  // intro requests (buyer -> operator)
-      projects: [],                // buyer projects
+      projects: [],                // client engagements (the key keeps its old name; UI says "engagement")
+      hires: [],                   // confirmed hires and their terms (RN.hire, js/views/intro.js)
       events: [],                  // analytics events (feed Studio + Admin)
       reviewRequests: [],          // operator -> past client
       reviews: [],                 // reviews submitted during this session
@@ -77,7 +78,8 @@
 
   /* Analytics event log. Every surface calls RN.track so Studio and Admin read one source.
      type: search | impression | profile_view | shortlist_add | shortlist_remove | compare_add | compare_view |
-           intro_request | project_post | project_invite | proof_view | review_request | review_submit | signup_submit */
+           intro_request | project_post | project_invite | hire | hire_end | hire_extend | proof_view | review_request |
+           review_submit | signup_submit */
   RN.track = function (type, data) {
     const ev = Object.assign({ id: RN.uid('ev'), type, ts: RN.now().toISOString(), persona: store.state.persona }, data || {});
     if (store.state.persona === 'buyer' && RN.personas && !ev.buyer) ev.buyer = RN.personas.buyer.company;

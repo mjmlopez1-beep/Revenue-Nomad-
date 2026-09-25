@@ -1,4 +1,4 @@
-/* Operator Studio, part B: Inbox, Credibility, Opportunities, Edit profile.
+/* Operator Studio, part B: Inbox, Engagements (hires and their terms), Credibility, Opportunities, Edit profile.
    Registered as Studio tabs (shell in studio.js). Every structured input and filter reads RN.fields
    through RN.w, so values match the live operator signup.
    Prefix: sb- (actions, inputs, submits, CSS classes). */
@@ -175,11 +175,11 @@
   RN.actions['sb-edit'] = (el) => editSection(el.dataset.sec);
 
   /* ======================================================================
-     INBOX: intro requests (blind until introduced) + project invites
+     INBOX: intro requests (blind until introduced) + engagement invites (stored as projects)
      ====================================================================== */
   const WINDOW_H = 72;
   // Pass reasons come from the shared RN.fields.passReason. For intros the client gets a short, polite
-  // sentence per reason (keyed on the stored slug); for projects only Revenue Nomad sees the reason.
+  // sentence per reason (keyed on the stored slug); for engagements only Revenue Nomad sees the reason.
   const PASS_CLIENT = {
     capacity: (f) => `${f} is at capacity right now.`,
     expertise: (f) => `${f} doesn’t think this is the best use of their expertise.`,
@@ -193,9 +193,13 @@
     ? RN.w.control('passReason', value || '', { name: 'reason' })
     : `<div class="chipset">${Object.keys(PASS_CLIENT).map((k) => `<button type="button" class="chip" aria-pressed="${value === k}" data-act="w-chip" data-name="reason" data-v="${k}">${esc(k)}</button>`).join('')}<input type="hidden" name="reason" value="${esc(value || '')}"></div>`);
   const passLabel = (v) => (RN.fields.passReason ? RN.w.label('passReason', v) : v);
-  // Projects carry a proposed 25% platform fee (not confirmed yet; copy says "Proposed"). RN.projects (projects.js) owns the money math; fallbacks keep Studio working alone.
+  /* Pricing (D1, founder decision Sep 25, 2026): clients pay the operator's listed rate and no fees. Revenue Nomad
+     charges the operator a percentage of billed earnings each month (proposed: 25%). Studio is operator-facing, so it
+     states that plainly and shows take-home. A client's budget compares directly to a rate (no conversion).
+     RN.projects (projects.js) owns the money math; the fallbacks keep Studio working alone. */
   const PJ = () => RN.projects || null;
-  const takeHome = (n) => (PJ() && PJ().payFor ? PJ().payFor(n) : Math.floor(n * 0.75));
+  const takeHome = (n) => (!n ? 0 : RN.model.takeHome(n));
+  const FEE_LINE = RN.model.feeLine();
 
   function introGroup(i) {
     if (i.status === 'pending') return 'reply';
@@ -255,17 +259,17 @@
     const shown = items.filter((x) => f === 'all' || (f === 'intro' ? x.kind === 'intro' : x.kind === 'project'));
     const nIntro = items.filter((x) => x.kind === 'intro').length, nProj = items.length - nIntro;
     const groups = [
-      { k: 'reply', l: 'Needs reply', empty: 'You’re all caught up. New intro requests and project invites land here first.' },
+      { k: 'reply', l: 'Needs reply', empty: 'You’re all caught up. New intro requests and engagement invites land here first.' },
       { k: 'progress', l: 'In progress' },
       { k: 'closed', l: 'Closed' },
     ];
     const needs = items.filter((x) => x.group === 'reply').length;
     const nProof = items.filter((x) => x.kind === 'intro' && isProofLead(x.rec)).length;
     return `<div class="sb sb-inbox">
-      ${head('Inbox', `Intro requests, project invites and requests from your proof links. Marketplace clients stay anonymous until Revenue Nomad introduces you. Reply within ${WINDOW_H} hours.`)}
+      ${head('Inbox', `Intro requests, engagement invites and requests from your proof links. Marketplace clients stay anonymous until Revenue Nomad introduces you. Reply within ${WINDOW_H} hours.`)}
       <div class="sb-toolbar">
         <div class="seg" role="group" aria-label="Show">
-          ${[['all', 'All', items.length], ['intro', 'Intro requests', nIntro], ['project', 'Project invites', nProj]].map(([k, l, n]) => `<button type="button" aria-pressed="${f === k}" data-act="sb-inbox-filter" data-f="${k}">${l} <span class="sb-n">${n}</span></button>`).join('')}
+          ${[['all', 'All', items.length], ['intro', 'Intro requests', nIntro], ['project', 'Engagement invites', nProj]].map(([k, l, n]) => `<button type="button" aria-pressed="${f === k}" data-act="sb-inbox-filter" data-f="${k}">${l} <span class="sb-n">${n}</span></button>`).join('')}
         </div>
         <span class="small muted">${needs ? `<b class="sb-ink">${needs}</b> waiting on you` : 'Nothing waiting on you'}${nProof ? ` · ${nProof} from your proof ${nProof === 1 ? 'link' : 'links'}` : ''}</span>
       </div>
@@ -276,7 +280,7 @@
           <h2 class="eyebrow sb-group-h" id="sb-g-${g.k}">${esc(g.l)}<span class="sb-count">${list.length}</span></h2>
           ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => (x.kind === 'intro' ? introCard(x.rec, op) : projectCard(x.rec, op, x.stage))).join('')}</div>` : `<p class="sb-caught">${icon('check-circle')}${esc(g.empty)}</p>`}
         </section>`;
-      }).join('') : RN.ui.empty({ icon: 'inbox', title: 'No requests yet', body: 'When a client asks to meet you or invites you to a project, it lands here. Proof links and reviews help clients pick you first.', cta: `<div class="row" style="justify-content:center"><a class="btn btn-sm" href="#studio.credibility">Build credibility</a><a class="btn btn-line btn-sm" href="#studio.profile">Edit profile</a></div>` })}
+      }).join('') : RN.ui.empty({ icon: 'inbox', title: 'No requests yet', body: 'When a client asks to meet you or invites you to an engagement, it lands here. Proof links and reviews help clients pick you first.', cta: `<div class="row" style="justify-content:center"><a class="btn btn-sm" href="#studio.credibility">Build credibility</a><a class="btn btn-line btn-sm" href="#studio.profile">Edit profile</a></div>` })}
     </div>`;
   }
 
@@ -341,7 +345,7 @@
         <a class="btn btn-sm" href="mailto:${esc(b.email)}">${icon('mail')}Email ${esc(RN.fmt.first(b.name))}</a>
         <button type="button" class="btn btn-line btn-sm" data-act="sb-copy" data-text="${esc(b.email)}" data-msg="Email address copied">${icon('copy')}Copy email</button>
       </div>
-      <p class="tiny muted sb-contact-note">${i.status === 'hired' ? 'Engagement started. When it wraps, Revenue Nomad asks the client for a CORE review, which verifies your fit tags.' : 'Revenue Nomad introduced you by email. Reply-all to book the first call.'}</p>
+      <p class="tiny muted sb-contact-note">${i.status === 'hired' ? `Engagement started. When it wraps, Revenue Nomad asks the client for a CORE review, which verifies your fit tags.${RN.hire && RN.hire.forSource('intro', i.id) ? ' <a href="#studio.engagements">See the terms</a>' : ''}` : 'Revenue Nomad introduced you by email. Reply-all to book the first call.'}</p>
     </div>`;
   }
 
@@ -381,7 +385,7 @@
     RN.rerender();
   };
 
-  /* ---------- Project invites ---------- */
+  /* ---------- Engagement invites ---------- */
   function projectFirm(p) {
     if (PJ() && PJ().blind) return PJ().blind(p);
     const f = p.fields || {};
@@ -400,14 +404,15 @@
     ].filter(Boolean);
     return `<dl class="sb-facts">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
   }
+  // The client's budget is the rate they pay you; take-home is what lands with you after Revenue Nomad's share
   function payBlock(p) {
     const f = pFields(p);
-    const tip = RN.ui.tip('Proposed: projects carry a 25% Revenue Nomad fee (a proposal the founder is confirming). The client’s budget is all-in; your take-home is what lands with you. You name your own rate in your response.', 'How take-home is calculated');
+    const tip = RN.ui.tip(`${FEE_LINE} Take-home is what lands with you after that share. You name your own rate in your response.`, 'How take-home is calculated');
     if (f.engagementType === 'project' && f.projectBudget) {
-      return `<div class="sb-pay"><div><span class="label">Client budget, all-in</span><b>${esc(RN.fmt.usd(f.projectBudget))}</b></div><div class="sb-pay-you"><span class="label">Your take-home ${tip}</span><b>${esc(RN.fmt.usd(takeHome(f.projectBudget)))}</b></div></div>`;
+      return `<div class="sb-pay"><div><span class="label">Client budget</span><b>${esc(RN.fmt.usd(f.projectBudget))}</b></div><div class="sb-pay-you"><span class="label">Your take-home ${tip}</span><b>${esc(RN.fmt.usd(takeHome(f.projectBudget)))}</b></div></div>`;
     }
     if (f.rateMax) {
-      return `<div class="sb-pay"><div><span class="label">Client budget, all-in</span><b>Up to $${esc(f.rateMax)}/hr</b></div><div class="sb-pay-you"><span class="label">Your take-home ${tip}</span><b>Up to $${esc(takeHome(f.rateMax))}/hr</b></div></div>`;
+      return `<div class="sb-pay"><div><span class="label">Client budget</span><b>Up to $${esc(f.rateMax)}/hr</b></div><div class="sb-pay-you"><span class="label">Your take-home ${tip}</span><b>Up to $${esc(takeHome(f.rateMax))}/hr</b></div></div>`;
     }
     return '';
   }
@@ -425,7 +430,7 @@
     const tags = (f.tags || []).map((t) => { const mine = op.tags.find((x) => x.t.toLowerCase() === t.toLowerCase()); return RN.ui.ftag(mine ? mine : { t, tier: 'claimed' }); }).join('');
     return `<article class="card sb-item ${stage === 'invited' ? 'is-new' : ''}" id="sb-p-${esc(p.id)}">
       <div class="sb-item-top">
-        <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('briefcase')}Project invite</span><span class="pill ${meta.pill}">${esc(meta.l)}</span>${src === 'rn' ? `<span class="pill pill-gold">${icon('seal')}Suggested by Revenue Nomad</span>` : ''}</div>
+        <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('briefcase')}Engagement invite</span><span class="pill ${meta.pill}">${esc(meta.l)}</span>${src === 'rn' ? `<span class="pill pill-gold">${icon('seal')}Suggested by Revenue Nomad</span>` : ''}</div>
         <span class="tiny muted">${src === 'rn' ? 'Suggested' : 'Invited'} ${esc(RN.fmt.ago(inviteTs(p, op)))}</span>
       </div>
       <h3 class="sb-item-h">${esc(p.title)}</h3>
@@ -435,27 +440,28 @@
       ${payBlock(p)}
       ${tags ? `<div class="sb-tags"><span class="label">Focus areas</span><div class="opc-tags">${tags}</div></div>` : ''}
       <div class="sb-fitrow">${fitPill(fit, { you: true })}${fitSignals(fit)}</div>
-      ${stage !== 'invited' && stage !== 'passed' && stage !== 'closed' ? stepper(['Invited', 'Responded', 'Under review', stage === 'not_selected' ? 'Not selected' : 'Selected'], stage === 'selected' ? 4 : idx, { lost: stage === 'not_selected', label: 'Project progress' }) : ''}
+      ${stage !== 'invited' && stage !== 'passed' && stage !== 'closed' ? stepper(['Invited', 'Responded', 'Under review', stage === 'not_selected' ? 'Not selected' : 'Selected'], stage === 'selected' ? 4 : idx, { lost: stage === 'not_selected', label: 'Engagement progress' }) : ''}
       ${r && !open ? `<div class="sb-sent">
           <span class="label">What you sent</span>
-          <p>${r.status === 'declined' ? `You passed${r.reason ? ': ' + esc(passLabel(r.reason)) : ''}. Only Revenue Nomad sees your reason.` : `<b>Interested</b>${r.rate ? ` · $${esc(r.rate)}/hr take-home` : ''}${r.rate && PJ() && PJ().allIn ? ` · the client sees $${esc(PJ().allIn(r.rate))}/hr all-in` : ''} · ${esc(RN.fmt.dateShort(r.ts))}`}</p>
+          <p>${r.status === 'declined' ? `You passed${r.reason ? ': ' + esc(passLabel(r.reason)) : ''}. Only Revenue Nomad sees your reason.` : `<b>Interested</b>${r.rate ? ` · $${esc(r.rate)}/hr · your take-home $${esc(takeHome(r.rate))}/hr` : ''} · ${esc(RN.fmt.dateShort(r.ts))}`}</p>
           ${r.note ? `<blockquote class="sb-quote">${esc(r.note)}</blockquote>` : ''}
         </div>` : ''}
       ${stage === 'responded' ? `<p class="sb-next">${icon('info')}<span>Your response is with the client. Most clients review responses within three business days.</span></p>` : ''}
       ${stage === 'review' ? `<p class="sb-next">${icon('check-circle')}<span>You are on the shortlist. You hear from us the moment the client wants a call.</span></p>` : ''}
-      ${stage === 'selected' ? `<p class="sb-next">${icon('check-circle')}<span>You’re selected. Revenue Nomad sends the agreement for signature, then sets up kickoff.</span></p>` : ''}
+      ${stage === 'selected' ? `<p class="sb-next">${icon('check-circle')}<span>You’re selected. Revenue Nomad sends the agreement for signature, then sets up kickoff.${RN.hire && RN.hire.forSource('engagement', p.id, op.id) ? ' <a href="#studio.engagements">See the terms in Engagements</a>' : ''}</span></p>` : ''}
       ${stage === 'not_selected' ? `<p class="sb-next is-muted">${icon('info')}<span>The client went another direction. Your response stays on file, and Revenue Nomad uses it to put you forward for similar roles.</span></p>` : ''}
       ${open ? respondForm(p, op, r) : live && ['invited', 'responded', 'passed'].includes(stage) ? `<div class="sb-actions">
           <button type="button" class="btn btn-sm ${r ? 'btn-line' : ''}" data-act="sb-proj-open" data-id="${esc(p.id)}">${stage === 'passed' ? 'Change your answer' : r ? 'Edit response' : 'Respond'}${r ? '' : icon('arrow')}</button>
           ${!r ? '<span class="tiny muted sb-actions-note">About two minutes. The client sees it once you send.</span>' : ''}
         </div>` : ''}
-      ${lost && stage === 'closed' ? `<p class="sb-next is-muted">${icon('info')}<span>This project is no longer taking responses.</span></p>` : ''}
+      ${lost && stage === 'closed' ? `<p class="sb-next is-muted">${icon('info')}<span>This engagement is no longer taking responses.</span></p>` : ''}
     </article>`;
   }
 
   function respondForm(p, op, r) {
     const f = pFields(p);
-    const cap = f.engagementType !== 'project' && f.rateMax ? takeHome(f.rateMax) : null;
+    // The client's budget is a rate, so it compares directly with yours
+    const cap = f.engagementType !== 'project' && f.rateMax ? +f.rateMax : null;
     const over = (v) => (cap ? (PJ() && PJ().overBudget ? PJ().overBudget(v, f.rateMax) > 0 : +v > cap) : false);
     const declined = r && r.status === 'declined';
     const rate = r && r.rate ? r.rate : op.rate || '';
@@ -466,15 +472,16 @@
       </div>
       <input type="hidden" name="mode" value="${declined ? 'declined' : 'interested'}">
       <div class="stack" style="--gap:16px" data-mode-pane="interested" ${declined ? 'hidden' : ''}>
-        <div data-input="sb-rate-chk" data-cap="${cap || ''}">${RN.w.field('rate', rate, { name: 'rate', id: 'sb-rate-' + p.id, label: 'Your hourly rate for this project', help: cap ? `What you want per hour, take-home. This project pays up to $${cap}/hr after the proposed 25% fee.` : 'What you want per hour, take-home.' })}</div>
-        ${cap ? `<p class="sb-warn" data-rate-warn ${over(rate) ? '' : 'hidden'}>${icon('info')}<span><span data-rate-txt>$${esc(rate)} is more than this project pays ($${cap}/hr)</span>, so the client sees you as over budget. <button type="button" class="act" data-act="sb-rate-use" data-v="${cap}" data-for="sb-rate-${esc(p.id)}">Use $${cap}</button></span></p>` : ''}
+        <div data-input="sb-rate-chk" data-cap="${cap || ''}">${RN.w.field('rate', rate, { name: 'rate', id: 'sb-rate-' + p.id, label: 'Your hourly rate for this engagement', help: cap ? `The rate the client pays. Their budget is up to $${cap}/hr.` : 'The rate the client pays.' })}
+          <p class="tiny muted sb-take" data-take>${rate ? `Your take-home at $${esc(rate)}/hr: $${esc(takeHome(rate))}/hr. ` : ''}${esc(FEE_LINE)}</p></div>
+        ${cap ? `<p class="sb-warn" data-rate-warn ${over(rate) ? '' : 'hidden'}>${icon('info')}<span><span data-rate-txt>$${esc(rate)} is more than this engagement’s budget ($${cap}/hr)</span>, so the client sees you as over budget. <button type="button" class="act" data-act="sb-rate-use" data-v="${cap}" data-for="sb-rate-${esc(p.id)}">Use $${cap}</button></span></p>` : ''}
         <div class="field"><label for="sb-rn-${esc(p.id)}">Note to the client <span class="opt">Optional</span></label>
           <textarea class="textarea" id="sb-rn-${esc(p.id)}" name="note" maxlength="600" style="min-height:90px" placeholder="Where you have done this before, and what your first 30 days would cover.">${esc(r && !declined ? r.note || '' : '')}</textarea></div>
       </div>
       <div class="stack" style="--gap:14px" data-mode-pane="declined" ${declined ? '' : 'hidden'}>
         <div class="field"><span class="field-label">What made it a pass?</span>
           ${passControl(declined ? r.reason : '')}
-          <p class="help">Only Revenue Nomad sees this. It tunes which projects we send you.</p>
+          <p class="help">Only Revenue Nomad sees this. It tunes which engagements we send you.</p>
         </div>
         <div class="field"><label for="sb-rd-${esc(p.id)}">Anything else <span class="opt">Optional</span></label>
           <textarea class="textarea" id="sb-rd-${esc(p.id)}" name="passNote" maxlength="300" style="min-height:64px">${esc(declined ? r.note || '' : '')}</textarea></div>
@@ -494,20 +501,25 @@
     RN.$$('[data-act="sb-resp-mode"]', form).forEach((b) => b.setAttribute('aria-pressed', b.dataset.m === m));
     RN.$$('[data-mode-pane]', form).forEach((pn) => { pn.hidden = pn.dataset.modePane !== m; });
   };
+  const takeLine = (v) => `${+v > 0 ? `Your take-home at $${Math.round(+v)}/hr: $${takeHome(+v)}/hr. ` : ''}${FEE_LINE}`;
   RN.actions['sb-rate-use'] = (el) => {
     const input = document.getElementById(el.dataset.for);
     if (input) input.value = el.dataset.v;
     const warn = el.closest('[data-rate-warn]'); if (warn) warn.hidden = true;
+    const form = el.closest('form'); const take = form && form.querySelector('[data-take]');
+    if (take) take.textContent = takeLine(el.dataset.v);
   };
   RN.inputs['sb-rate-chk'] = (el, ev) => {
     const cap = +el.dataset.cap; const form = el.closest('form');
+    const v = +ev.target.value;
+    const take = form && form.querySelector('[data-take]');
+    if (take) take.textContent = takeLine(v);
     const warn = form && form.querySelector('[data-rate-warn]');
     if (!cap || !warn) return;
-    const v = +ev.target.value;
     const p = st().projects.find((x) => x.id === form.dataset.id);
     const max = p ? pFields(p).rateMax : null;
     warn.hidden = !(PJ() && PJ().overBudget && max ? PJ().overBudget(v, max) > 0 : v > cap);
-    warn.querySelector('[data-rate-txt]').textContent = `$${v} is more than this project pays ($${cap}/hr)`;
+    warn.querySelector('[data-rate-txt]').textContent = `$${v} is more than this engagement’s budget ($${cap}/hr)`;
   };
   RN.submits['sb-proj-send'] = (form, data) => {
     const op = RN.myOp();
@@ -516,7 +528,7 @@
     if (!p) return;
     const declined = data.mode === 'declined';
     if (declined && !data.reason) { RN.ui.toast('Pick a reason so we can send better matches.', { icon: 'info' }); return; }
-    if (!declined && !(+data.rate > 0)) { RN.ui.toast('Add your hourly rate for this project.', { icon: 'info' }); return; }
+    if (!declined && !(+data.rate > 0)) { RN.ui.toast('Add your hourly rate for this engagement.', { icon: 'info' }); return; }
     const had = (p.responses || []).some((x) => x.opId === op.id);
     const note = (declined ? data.passNote : data.note || '').trim();
     if (PJ() && PJ().respond) {
@@ -536,6 +548,60 @@
     RN.shell.renderHeader();
     RN.rerender();
   };
+
+  /* ======================================================================
+     ENGAGEMENTS: hires confirmed with clients (RN.hire, js/views/intro.js), with the terms and dates.
+     Operator-facing, so billed amounts and take-home both show (D1). Clients confirm the terms; the operator
+     reads them here and can email the client (they were introduced, so names are shared).
+     ====================================================================== */
+  const hiresOf = (op) => (RN.hire ? RN.hire.list({ opId: op.id }) : []);
+  const monthlyTake = (h) => takeHome(RN.hire.monthly(h));
+  function hireItem(h) {
+    const t = h.terms || {};
+    const ended = h.status === 'ended';
+    const c = h.client || {};
+    const m = RN.hire.monthly(h);
+    const from = h.source === 'engagement' && PJ() && PJ().get && PJ().get(h.sourceId) ? `From the engagement “${PJ().get(h.sourceId).title}”` : 'From an intro request';
+    const project = t.engagementType === 'project';
+    const pay = project
+      ? `<div class="sb-pay"><div><span class="label">Project budget</span><b>${t.projectBudget ? esc(RN.fmt.usd(t.projectBudget)) : 'Not set'}</b></div><div class="sb-pay-you"><span class="label">Your take-home</span><b>${esc(RN.fmt.usd(takeHome(t.projectBudget)))}</b></div></div>`
+      : `<div class="sb-pay sb-pay-3"><div><span class="label">Your rate</span><b>${t.rate ? esc(RN.fmt.rate(t.rate)) : 'Not set'}</b></div><div class="sb-pay-you"><span class="label">Your take-home</span><b>${esc(RN.fmt.rate(takeHome(t.rate)))}</b></div><div><span class="label">${ended ? 'Billed a month while active' : 'Billed a month'}</span><b>${m ? esc(RN.fmt.usd(m)) : 'Not set'}</b><span class="tiny muted">Take-home about ${esc(RN.fmt.usd(monthlyTake(h)))}</span></div></div>`;
+    return `<article class="card sb-item sb-hire${ended ? ' is-ended' : ''}" id="sb-h-${esc(h.id)}">
+      <div class="sb-item-top">
+        <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('handshake')}Engagement</span>${RN.hire.statusPill(h)}</div>
+        <span class="tiny muted">Confirmed ${esc(RN.fmt.ago(h.createdAt))}</span>
+      </div>
+      <h3 class="sb-item-h">${esc(c.company || 'Client')}</h3>
+      <p class="sb-who">${icon('building')}<span>${segs([c.name, from].filter(Boolean).join(' · '))}</span></p>
+      <dl class="sb-facts">${RN.hire.facts(h).filter(([k]) => k !== 'Rate' && k !== RN.fields.projectBudget.label).map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
+      ${pay}
+      ${t.notes ? `<blockquote class="sb-quote">${esc(t.notes)}</blockquote>` : ''}
+      ${h.cancelled ? `<p class="sb-next is-muted">${icon('info')}<span>Cancelled ${esc(RN.hire.date(h.endedAt))}, before the start date. No review is requested.</span></p>`
+        : ended ? `<p class="sb-next is-muted">${icon('check-circle')}<span>Ended ${esc(RN.hire.date(h.endedAt))}. Revenue Nomad asked ${esc(c.name || 'the client')} for a CORE review, which verifies your fit tags.</span></p>`
+        : RN.hire.overdue(h) ? `<p class="sb-next">${icon('calendar')}<span>The initial term ended ${esc(RN.hire.date(t.endDate))}. The client can extend it from their workspace.</span></p>` : ''}
+      ${c.email && !ended ? `<div class="sb-actions"><a class="btn btn-line btn-sm" href="mailto:${esc(c.email)}">${icon('mail')}Email ${esc(RN.fmt.first(c.name) || 'the client')}</a><span class="tiny muted sb-actions-note">Changes to the terms come from the client, so both sides see one record.</span></div>` : ''}
+    </article>`;
+  }
+  function renderEngagements(op) {
+    const list = hiresOf(op).sort((a, b) => (a.status === 'ended') - (b.status === 'ended') || new Date(b.createdAt) - new Date(a.createdAt));
+    const active = list.filter((h) => h.status === 'active');
+    const billed = active.reduce((a, h) => a + RN.hire.monthly(h), 0);
+    const take = active.reduce((a, h) => a + monthlyTake(h), 0);
+    return `<div class="sb sb-hires">
+      ${head('Engagements', 'Clients who hired you through Revenue Nomad, with the terms and dates they confirmed.')}
+      ${list.length ? `<div class="stats-row" style="--cols:3">
+          <div class="stat"><span class="stat-v">${active.length}</span><span class="stat-l">Active engagements</span></div>
+          <div class="stat"><span class="stat-v">${esc(RN.fmt.usd(billed))}</span><span class="stat-l">Billed a month</span></div>
+          <div class="stat"><span class="stat-v">${esc(RN.fmt.usd(take))}</span><span class="stat-l">Your take-home a month ${RN.ui.tip(FEE_LINE, 'How take-home is calculated')}</span></div>
+        </div>
+        <p class="tiny muted">${esc(FEE_LINE)}</p>
+        <section class="sb-group" aria-labelledby="sb-g-active"><h2 class="eyebrow sb-group-h" id="sb-g-active">Active engagements<span class="sb-count">${active.length}</span></h2>
+          ${active.length ? `<div class="stack" style="--gap:14px">${active.map(hireItem).join('')}</div>` : `<p class="sb-caught">${icon('check-circle')}No active engagements right now.</p>`}</section>
+        ${list.length > active.length ? `<section class="sb-group" aria-labelledby="sb-g-ended"><h2 class="eyebrow sb-group-h" id="sb-g-ended">Ended<span class="sb-count">${list.length - active.length}</span></h2>
+          <div class="stack" style="--gap:14px">${list.filter((h) => h.status === 'ended').map(hireItem).join('')}</div></section>` : ''}`
+      : RN.ui.empty({ icon: 'briefcase', title: 'No engagements yet', body: 'When a client hires you, the terms they confirm show here: rate, available time, start date and term, with what you bill and take home each month.', cta: `<div class="row" style="justify-content:center"><a class="btn btn-sm" href="#studio.inbox">Open your inbox</a></div>` })}
+    </div>`;
+  }
 
   /* ======================================================================
      CREDIBILITY: Reputation Index, tiers, reviews, verified tags, proof links, badge
@@ -589,7 +655,7 @@
     const gap = next ? next.min - op.ris.score : 0;
     const reviewsToNext = next ? Math.ceil(gap / RN.model.risGain('review')) : 0;
     return `<div class="sb sb-cred">
-      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. Proposed: no fee on deals you bring yourself, including deals you win with a proof link.')}
+      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. Proposed: Revenue Nomad takes no share of deals you bring yourself, including deals you win with a proof link.')}
       <nav class="sb-jump" aria-label="On this page">
         ${[['sb-c-ri', 'Reputation Index'], ['sb-c-rev', 'Reviews'], ['sb-c-tags', 'Verified tags'], ['sb-c-proof', 'Proof links'], ['sb-c-badge', 'Badge']].map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}
       </nav>
@@ -624,7 +690,7 @@
             const here = t.v === tier.v;
             const got = tierRank(t.v) <= tierRank(tier.v);
             return `<li class="${here ? 'is-here' : got ? 'is-got' : ''}">
-              <span class="sb-seal t-${t.v}">${RN.ui.hexSeal(t.l)}<b>${t.v === 'indexing' ? '' : t.min}</b></span>
+              <span class="sb-seal">${RN.ui.tierBadge(t.v, here ? { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` } : { size: 32 })}</span>
               <div class="sb-tier-b">
                 <div class="row" style="--gap:8px"><b class="sb-tier-n">${esc(t.l)}</b><span class="tiny muted tnum">${t.min}–${t.max}</span>${here ? '<span class="pill pill-accent">You are here</span>' : t.v === 'indexing' ? '<span class="pill">Before approval</span>' : got ? `<span class="pill pill-good">${icon('check')}Included</span>` : `<span class="pill">${icon('lock')}${t.min - op.ris.score} pts away</span>`}</div>
                 <ul>${(UNLOCKS[t.v] || []).map((u) => `<li>${esc(u)}</li>`).join('')}</ul>
@@ -760,7 +826,7 @@
       <div class="sb-badge-wrap ${unlocked ? '' : 'is-locked'}">
         <div class="sb-badge-stage">
           <a class="sb-badge ${S.badgeFmt === 'email' ? 'is-sig' : ''}" href="${esc(verifyHref(op))}" title="Opens the verification page">
-            <span class="sb-seal t-${esc(RN.fields.risTierFor(op.ris.score).v)}">${RN.ui.hexSeal(op.ris.label)}<b>${esc(op.ris.score)}</b></span>
+            <span class="sb-seal">${RN.ui.tierBadge(tierOf(op), { size: 48, score: op.ris.score })}</span>
             <span class="sb-badge-t"><b>${esc(op.ris.label)} · Reputation Index</b><span>Verified on Revenue Nomad</span><em>${esc(op.name)} · ${esc(RN.fmt.monthYear(RN.now()))}</em></span>
           </a>
         </div>
@@ -1749,7 +1815,7 @@
         </div>
         <button type="button" class="btn btn-line btn-sm btn-block" data-act="sb-avail-confirm">${icon('check')}I’m still available</button>
         <p class="tiny muted">Clients see when you last confirmed. One tap keeps it current.</p>
-        <div class="sb-alert-row"><span class="field-label" id="sb-al-proj">New matching projects</span>
+        <div class="sb-alert-row"><span class="field-label" id="sb-al-proj">New matching engagements</span>
           <div class="seg" role="group" aria-labelledby="sb-al-proj">${[['instant', 'Instant'], ['daily', 'Daily digest'], ['off', 'Off']].map(([k, l]) => `<button type="button" aria-pressed="${a.projects === k}" data-act="sb-alert" data-k="projects" data-v="${k}">${l}</button>`).join('')}</div></div>
         <label class="switch sb-alert-row"><input type="checkbox" data-change="sb-alert-weekly" ${a.weekly ? 'checked' : ''}><i></i><span>Weekly visibility digest<br><span class="tiny muted">Searches you appeared in and who viewed you.</span></span></label>
       </section>`;
@@ -1820,7 +1886,7 @@
   RN.actions['sb-alert'] = (el) => {
     setSeen('alerts', (a) => { a[el.dataset.k] = el.dataset.v; });
     RN.$$(`[data-act="sb-alert"][data-k="${el.dataset.k}"]`).forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v));
-    RN.ui.toast({ instant: 'You get an email the moment a matching project is posted.', daily: 'Matching projects arrive in one daily digest.', off: 'Project alerts are off. Invites still reach your Inbox.' }[el.dataset.v], { icon: 'mail' });
+    RN.ui.toast({ instant: 'You get an email the moment a matching engagement is posted.', daily: 'Matching engagements arrive in one daily digest.', off: 'Engagement alerts are off. Invites still reach your Inbox.' }[el.dataset.v], { icon: 'mail' });
   };
   RN.inputs['sb-alert-weekly'] = (el) => {
     setSeen('alerts', (a) => { a.weekly = el.checked; });
@@ -1915,6 +1981,7 @@
      Register tabs
      ====================================================================== */
   RN.studio.tab('inbox', { label: 'Inbox', icon: 'inbox', group: 'Work', order: 5, badge: (op) => inboxBadge(op), render: (op) => renderInbox(op) });
+  RN.studio.tab('engagements', { label: 'Engagements', icon: 'briefcase', group: 'Work', order: 5.5, render: (op) => renderEngagements(op) });
   RN.studio.tab('credibility', { label: 'Credibility', icon: 'shield', group: 'Grow', order: 6, render: (op) => renderCredibility(op), mount: () => focusSection() });
   RN.studio.tab('opportunities', { label: 'Opportunities', icon: 'target', group: 'Work', order: 7, badge: () => 0, render: (op) => renderOpps(op) });
   RN.studio.tab('profile', { label: 'Edit profile', icon: 'edit', group: 'Grow', order: 8, render: (op) => renderProfile(op), mount: () => focusSection() });

@@ -1,5 +1,7 @@
 /* Admin: the Revenue Nomad team console (#admin, #admin.<tab>).
-   Tabs: Overview, Demand, Approvals, Intros, Projects, Directory, Emails.
+   Tabs: Overview, Demand, Hires, Approvals, Intros, Engagements (#admin.engagements; old #admin.projects still opens it),
+   Directory, Emails. Hires (D15) lists every confirmed hire and its terms from RN.hire (intro.js). Admin is internal, so it
+   may show Revenue Nomad's share: operators pay a percentage of billed earnings (proposed 25%); clients pay the rate.
    It reads the one store and model every surface shares, so a search a client runs in Browse, an
    application from Join or an intro requested on a profile shows up here, and every action taken
    here (approve and score, introduce, suggest operators, edit, hide) lands back on those surfaces.
@@ -33,13 +35,15 @@
   const TABS = [
     { key: 'overview', label: 'Overview', icon: 'home', group: 'Marketplace' },
     { key: 'demand', label: 'Demand', icon: 'target', group: 'Marketplace' },
+    { key: 'hires', label: 'Hires', icon: 'check-circle', group: 'Marketplace', badge: () => hiresNeedingTerms().length },
     { key: 'approvals', label: 'Approvals', icon: 'seal', group: 'Work queue', badge: () => queue().length + pendingAnswers().length },
     { key: 'intros', label: 'Intros', icon: 'handshake', group: 'Work queue', badge: () => introsForTeam().length },
-    { key: 'projects', label: 'Projects', icon: 'briefcase', group: 'Work queue', badge: () => liveProjects().filter((p) => projInfo(p).flag).length },
+    { key: 'engagements', label: 'Engagements', icon: 'briefcase', group: 'Work queue', badge: () => liveProjects().filter((p) => projInfo(p).flag).length },
     { key: 'directory', label: 'Directory', icon: 'users', group: 'Network' },
     { key: 'emails', label: 'Emails', icon: 'mail', group: 'Network' },
   ];
-  const tabDef = (k) => TABS.find((x) => x.key === k);
+  const TAB_ALIAS = { projects: 'engagements' };   // old links keep working (D12)
+  const tabDef = (k) => TABS.find((x) => x.key === (TAB_ALIAS[k] || k));
 
   function side(cur) {
     const groups = {};
@@ -68,8 +72,8 @@
   function render(key) {
     hydrate();
     charts = {}; ctx = {};
-    const tab = tabDef(key) ? key : 'overview';
-    const body = { overview, demand, approvals, intros: introsTab, projects: projectsTab, directory, emails }[tab]();
+    const tab = tabDef(key) ? tabDef(key).key : 'overview';
+    const body = { overview, demand, hires: hiresTab, approvals, intros: introsTab, engagements: projectsTab, directory, emails }[tab]();
     return `<div class="wrap shell adm" data-adm="${esc(tab)}">${side(tab)}<div class="adm-main">${body}</div></div>`;
   }
 
@@ -109,7 +113,7 @@
   });
   RN.view('admin-tab', {
     route: 'admin.:tab', nav: '', requires: 'admin', footer: false,
-    samples: { tab: 'demand', extra: ['admin.approvals', 'admin.intros', 'admin.projects', 'admin.directory', 'admin.emails'] },
+    samples: { tab: 'demand', extra: ['admin.hires', 'admin.approvals', 'admin.intros', 'admin.engagements', 'admin.projects', 'admin.directory', 'admin.emails'] },
     title: (p) => (tabDef(p.tab) ? tabDef(p.tab).label : 'Overview') + ' · Admin',
     render: (p) => render(p.tab),
     mount: (root) => mount(root),
@@ -135,8 +139,15 @@
   const hasProof = (op) => (RN.browse && RN.browse.hasProof ? RN.browse.hasProof(op) : (op.reviews || []).length > 0 || op.tags.some((t) => t.tier !== 'claimed'));
   // RN.model.search plus the proof filter Browse applies after it, so counts match what a client sees
   const liveSearch = (o) => { const r = RN.model.search(o); return o && o.filters && o.filters.verifiedProof ? r.filter((x) => hasProof(x.op)) : r; };
+  // Location filters (D9): filters.locations (a country or US state name), filters.timeZones (registry slugs) and
+  // filters.usHours ('yes' = based in the US or answered yes), shown with readable labels, never raw keys
+  const US_HOURS_L = 'Works US hours';
+  const TZ_L = { eastern: 'Eastern (ET)', central: 'Central (CT)', mountain: 'Mountain (MT)', pacific: 'Pacific (PT)', alaska_hawaii: 'Alaska and Hawaii', uk_europe: 'UK and Europe', other: 'Other' };
+  const FILTER_L = { locations: 'Location', timeZones: 'Time zone', usHours: US_HOURS_L };
   function fmtVal(k, v) {
     if (k === 'verifiedProof') return PROOF_L;
+    if (k === 'usHours') return US_HOURS_L;
+    if (k === 'timeZones') return RN.fields.timeZones ? RN.w.label('timeZones', v) : TZ_L[v] || String(v);
     if (k === 'rateMax') return '$' + v + '/hr';
     if (k === 'tags') return String(v);
     if (RN.fields[k]) return RN.w.label(k, v);
@@ -144,6 +155,7 @@
   }
   function fieldName(k) {
     if (k === 'verifiedProof') return PROOF_L;
+    if (FILTER_L[k]) return FILTER_L[k];
     if (k === 'tags') return RN.fields.fitTags.clientLabel;
     return RN.fields[k] ? RN.fields[k].label : k;
   }
@@ -151,6 +163,7 @@
     const out = [];
     Object.keys(filters || {}).forEach((k) => {
       if (k === 'verifiedProof') { if (filters[k] && filters[k] !== 'false') out.push({ k, v: '1', l: PROOF_L, vl: PROOF_L, flag: true }); return; }
+      if (k === 'usHours') { if (arr(filters[k]).includes('yes')) out.push({ k, v: 'yes', l: US_HOURS_L, vl: US_HOURS_L, flag: true }); return; }
       arr(filters[k]).forEach((v) => out.push({ k, v, l: fieldName(k), vl: fmtVal(k, v) }));
     });
     arr(tags).forEach((v) => out.push({ k: 'tags', v, l: fieldName('tags'), vl: v }));
@@ -405,7 +418,7 @@
   const introsForTeam = () => intros().filter((i) => i.status === 'interested' || i.status === 'rn_qualified' || (i.status === 'pending' && clock(i).late));
 
   /* =====================================================================================
-     Projects: posted client projects, 72-hour no-response flag, RN suggestions (max 3)
+     Engagements (stored as projects): posted client engagements, 72-hour no-response flag, RN suggestions (max 3)
      ===================================================================================== */
   const liveProjects = () => (st().projects || []).filter((p) => p.status === 'posted' || p.status === 'in_progress');
   function projInfo(p) {
@@ -433,8 +446,9 @@
     const needs = [
       q.length && { ic: 'seal', t: `${RN.fmt.plural(q.length, 'operator application')} to review`, sub: `Oldest submitted ${RN.fmt.ago(oldest.submittedAt)}. Approve the profile, then generate the score to put it live at Emerging 50.`, to: 'admin.approvals', cta: 'Review' },
       team.filter((i) => i.status !== 'pending').length && { ic: 'handshake', t: `${RN.fmt.plural(team.filter((i) => i.status !== 'pending').length, 'intro')} waiting on the team`, sub: 'Operators said yes. Qualify the fit, then introduce both sides by email.', to: 'admin.intros', cta: 'Open pipeline' },
+      hiresNeedingTerms().length && { ic: 'check-circle', t: `${RN.fmt.plural(hiresNeedingTerms().length, 'hire')} without recorded terms`, sub: 'Record the rate, available time, start date and term so the client’s Team tab and the operator’s Studio show them.', to: 'admin.hires', cta: 'Record terms' },
       late.length && { ic: 'clock', late: true, t: `${RN.fmt.plural(late.length, 'intro request')} past the 72-hour reply window`, sub: 'Nudge the operator, or decline for them and suggest two operators with the same fit.', to: 'admin.intros', cta: 'Nudge' },
-      pf.length && { ic: 'briefcase', late: true, t: `${RN.fmt.plural(pf.length, 'project')} with no interested operator after 72 hours`, sub: 'Add up to three suggested operators to each one.', to: 'admin.projects', cta: 'Suggest' },
+      pf.length && { ic: 'briefcase', late: true, t: `${RN.fmt.plural(pf.length, 'engagement')} with no interested operator after 72 hours`, sub: 'Add up to three suggested operators to each one.', to: 'admin.engagements', cta: 'Suggest' },
       zero.length && { ic: 'search', t: `${RN.fmt.plural(zero.length, 'search term')} found no operator this week`, sub: `Latest: “${zero[0].q || 'filters only'}”. Each one returns no operator in Browse today. This is the supply gap list.`, to: 'admin.demand', cta: 'Recruit', illus: zero.some((z) => z.base) },
     ].filter(Boolean);
 
@@ -455,7 +469,7 @@
       <section class="card adm-sec" aria-labelledby="adm-needs-h">
         ${cardHead('<span id="adm-needs-h">Needs you</span>', 'Work only the team can do, most urgent first.')}
         ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}"><span class="adm-need-ic">${icon(n.ic)}</span><div class="grow"><b>${esc(n.t)}</b>${n.illus ? illus('Volumes illustrative') : ''}<p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
-        : RN.ui.empty({ icon: 'check-circle', title: 'Nothing needs you right now', body: 'New applications, intros waiting on the team and quiet projects show up here.' })}
+        : RN.ui.empty({ icon: 'check-circle', title: 'Nothing needs you right now', body: 'New applications, intros waiting on the team, hires without terms and quiet engagements show up here.' })}
       </section>
 
       <div class="stats-row adm-stats" style="--cols:4">
@@ -517,8 +531,12 @@
       case 'compare_add': return { ic: 'compare', t: `Added ${who} to compare` };
       case 'compare_view': return { ic: 'compare', t: `Compared ${who}` };
       case 'intro_request': return { ic: 'handshake', t: `Requested an intro to ${who}` };
-      case 'project_post': return { ic: 'briefcase', t: 'Posted a project' };
-      case 'project_invite': return { ic: 'send', t: `Invited ${who} to a project` };
+      case 'project_post': return { ic: 'briefcase', t: 'Posted an engagement' };
+      case 'project_invite': return { ic: 'send', t: `Invited ${who} to an engagement` };
+      case 'project_select': return { ic: 'handshake', t: `Selected ${who} for an engagement` };
+      case 'hire': return { ic: 'handshake', t: `Hired ${who}`, sub: e.source === 'engagement' ? 'From an engagement' : 'From an intro' };
+      case 'hire_end': return { ic: 'check-circle', t: `Ended the engagement with ${who}` };
+      case 'hire_extend': return { ic: 'calendar', t: `Extended the engagement with ${who}` };
       case 'proof_view': return { ic: 'link', t: `Opened ${op ? op.first + '’s' : 'a'} proof link` };
       case 'review_request': return { ic: 'star', t: `${who} asked a client for a review` };
       case 'review_submit': return { ic: 'star', t: `Submitted a review for ${who}` };
@@ -625,7 +643,7 @@
     liveEv('search', days).forEach((e) => {
       filterList(e.filters, e.tags).forEach((x) => { const key = x.k + '|' + x.v; const r = m.get(key) || { k: x.k, v: x.v, n: 0 }; r.n++; m.set(key, r); });
     });
-    return [...m.values()].sort((a, b) => b.n - a.n).slice(0, 8).map((x) => ({ label: x.k === 'verifiedProof' ? PROOF_L : `${fieldName(x.k)}: ${fmtVal(x.k, x.v)}`, short: x.k === 'risMin' ? 'Reputation Index ' + fmtVal(x.k, x.v) : fmtVal(x.k, x.v), value: x.n }));
+    return [...m.values()].sort((a, b) => b.n - a.n).slice(0, 8).map((x) => ({ label: x.k === 'verifiedProof' || x.k === 'usHours' ? fieldName(x.k) : `${fieldName(x.k)}: ${fmtVal(x.k, x.v)}`, short: x.k === 'risMin' ? 'Reputation Index ' + fmtVal(x.k, x.v) : fmtVal(x.k, x.v), value: x.n }));
   }
 
   const FIRMO = {
@@ -931,14 +949,17 @@
     pending: (op) => ({ label: `Nudge ${op.first}`, short: 'Nudge', act: 'adm-intro-nudge', icon: 'send' }),
     interested: () => ({ label: 'Mark RN Qualified', short: 'Qualify', act: 'adm-intro-next', to: 'rn_qualified', icon: 'check' }),
     rn_qualified: () => ({ label: 'Introduce', short: 'Introduce', act: 'adm-introduce', icon: 'handshake' }),
-    introduced: () => ({ label: 'Mark hired', short: 'Mark hired', act: 'adm-intro-next', to: 'hired', icon: 'briefcase' }),
+    introduced: () => ({ label: 'Mark hired', short: 'Mark hired', act: 'adm-intro-hire', icon: 'briefcase' }),
+    // A hire recorded without terms (older data, or marked elsewhere): the team can record them
+    hired: (op, i) => (i && !hireOfIntro(i) ? { label: 'Record terms', short: 'Terms', act: 'adm-intro-hire', icon: 'edit' } : null),
   };
+  const hireOfIntro = (i) => (RN.hire ? RN.hire.forSource('intro', i.id, i.opId) : null);
   function clockPill(i) {
     const c = clock(i);
     if (!c) {
       if (i.status === 'rn_qualified') return RN.ui.statusPill('intro', 'rn_qualified', 'Ready to introduce');
       if (i.status === 'introduced') return RN.ui.statusPill('intro', 'introduced', `Introduced ${RN.fmt.ago(lastTs(i))}`);
-      if (i.status === 'hired') return RN.ui.statusPill('intro', 'hired', `Hired ${RN.fmt.dateShort(lastTs(i))}`);
+      if (i.status === 'hired') return RN.ui.statusPill('intro', 'hired', hireOfIntro(i) ? `Hired ${RN.fmt.dateShort(lastTs(i))}` : 'Hired · terms missing');
       return '';
     }
     if (c.who === 'op') return c.late ? `<span class="pill pill-bad">${icon('clock')}Overdue ${dur(-c.left)}</span>` : `<span class="pill ${c.left < 12 * HOUR ? 'pill-warn' : ''}">${icon('clock')}${dur(c.left)} left to reply</span>`;
@@ -951,7 +972,7 @@
     const co = b.company || {};
     const sum = RN.intro.summary(i, false);
     const c = clock(i);
-    const nx = NEXT[i.status] && NEXT[i.status](op);
+    const nx = NEXT[i.status] && NEXT[i.status](op, i);
     const nudged = (seen().admNudged || {})[i.id];
     return `<article class="adm-icard${c && c.late ? ' is-late' : ''}">
       <div class="adm-icard-top">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="adm-op-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(op.role)}</span></div></div>
@@ -994,14 +1015,63 @@
   }
 
   /* =====================================================================================
-     PROJECTS
+     HIRES (D15): every confirmed hire and its terms (RN.hire, intro.js). Internal: Admin may show Revenue Nomad's
+     share. Operators pay a percentage of their billed earnings each month (proposed 25%); clients pay the listed rate.
+     ===================================================================================== */
+  const allHires = () => (RN.hire ? RN.hire.list() : []);
+  const hiresNeedingTerms = () => intros().filter((i) => i.status === 'hired' && !hireOfIntro(i));
+  const rnShare = (h) => { const m = RN.hire.monthly(h); return m - RN.hire.takeHome(m); };
+  function hiresTab() {
+    const list = allHires().sort((a, b) => (a.status === 'ended') - (b.status === 'ended') || ms(b.createdAt) - ms(a.createdAt));
+    const active = list.filter((h) => h.status === 'active');
+    const billed = active.reduce((a, h) => a + RN.hire.monthly(h), 0);
+    const share = active.reduce((a, h) => a + rnShare(h), 0);
+    const missing = hiresNeedingTerms();
+    return `${head('Hires', `Every confirmed hire and the terms both sides agreed. Clients pay the operator’s listed rate and no fees. Operators pay Revenue Nomad a percentage of their billed earnings each month (proposed ${RN.model.feePct()}).`)}
+      <div class="stats-row adm-stats" style="--cols:4">
+        <div class="stat"><span class="stat-v">${active.length}</span><span class="stat-l">Active hires</span></div>
+        <div class="stat"><span class="stat-v">${esc(RN.fmt.usd(billed))}</span><span class="stat-l">Billed a month, active hires</span></div>
+        <div class="stat"><span class="stat-v">${esc(RN.fmt.usd(share))}</span><span class="stat-l">Revenue Nomad share a month (proposed ${RN.model.feePct()})</span></div>
+        <div class="stat"><span class="stat-v ${missing.length ? 'adm-bad' : ''}">${missing.length}</span><span class="stat-l">Hires without terms</span></div>
+      </div>
+      ${missing.length ? `<section class="card adm-sec">${cardHead('Hired, terms not recorded', 'The intro moved to Hired before anyone recorded the terms. Record them so both sides see one record.')}
+        <ul class="adm-decided">${missing.map((i) => { const op = RN.model.byId(i.opId); return `<li>${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><b>${esc(op ? op.name : 'Operator')}</b><span class="tiny muted">${esc(((i.buyer || {}).company || {}).name || 'Client')} · hired ${esc(RN.fmt.ago(lastTs(i)))}</span></div><button type="button" class="btn btn-sm btn-line" data-act="adm-intro-hire" data-id="${esc(i.id)}">Record terms</button></li>`; }).join('')}</ul></section>` : ''}
+      <section class="card adm-sec">
+        ${cardHead('All hires', `${RN.fmt.plural(list.length, 'hire')} · ${active.length} active. Terms come from the client or the team; the operator sees the same record in Studio.`)}
+        ${list.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl adm-stacktbl adm-hires">
+          <thead><tr><th>Operator and client</th><th>Terms</th><th>Dates</th><th class="r">Billed a month</th><th class="r">RN share</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody>${list.map((h) => {
+            const op = RN.model.byId(h.opId);
+            if (!op) return '';
+            const t = h.terms || {};
+            const project = t.engagementType === 'project';
+            const terms = [t.engagementType && RN.w.label('engagementType', t.engagementType), t.rate ? RN.fmt.rate(t.rate) : '', project ? (t.projectBudget ? RN.fmt.usd(t.projectBudget) + ' budget' : '') : t.hoursPerMonth ? RN.w.label('hoursPerMonth', t.hoursPerMonth) : ''].filter(Boolean).join(' · ');
+            const dates = h.cancelled ? `Was to start ${RN.hire.date(t.startDate)}; cancelled ${RN.hire.date(h.endedAt)}` : `${t.startDate ? RN.hire.date(t.startDate) : 'Start not set'} to ${h.status === 'ended' ? RN.hire.date(h.endedAt) : t.endDate ? RN.hire.date(t.endDate) : 'open-ended'}`;
+            const src = h.source === 'engagement' ? `<a href="#engagement.${esc(h.sourceId)}">Engagement</a>` : 'Intro';
+            return `<tr>
+              <td class="adm-w"><div class="adm-op">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="adm-op-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">for ${esc(h.client.company || h.client.email || 'Client')} · ${src}</span></div></div></td>
+              <td class="small" data-l="Terms">${esc(terms || 'Not recorded')}${t.term ? `<span class="tiny muted adm-block">${esc(RN.w.label('term', t.term))}${(h.extensions || []).length ? ' · extended' : ''}</span>` : ''}</td>
+              <td class="small" data-l="Dates">${esc(dates)}</td>
+              <td class="r tnum" data-l="Billed a month">${esc(RN.fmt.usd(RN.hire.monthly(h)))}</td>
+              <td class="r tnum" data-l="RN share">${esc(RN.fmt.usd(rnShare(h)))}</td>
+              <td data-l="Status">${RN.hire.statusPill(h)}</td>
+              <td class="r adm-act-cell"><div class="adm-rowact"><button type="button" class="act" data-act="hire-edit" data-id="${esc(h.id)}">Edit terms</button>${h.status === 'active' ? `<button type="button" class="act muted" data-act="hire-end" data-id="${esc(h.id)}">End</button>` : ''}</div></td>
+            </tr>`;
+          }).join('')}</tbody></table></div>`
+        : RN.ui.empty({ icon: 'check-circle', title: 'No hires yet', body: 'A hire lands here when a client marks an intro as hired, selects a responder on an engagement, or the team moves an intro to Hired. Each one carries the terms both sides agreed.', cta: '<a class="btn btn-sm btn-line" href="#admin.intros">Open the intro pipeline</a>' })}
+        <p class="tiny muted adm-foot">Billed a month is the rate times the available time (or a project budget spread over its term). RN share is Revenue Nomad’s proposed ${RN.model.feePct()} of the operator’s billed earnings. Clients never see it.</p>
+      </section>`;
+  }
+
+  /* =====================================================================================
+     ENGAGEMENTS (client postings, stored as projects)
      ===================================================================================== */
   function projectsTab() {
     const list = liveProjects().slice().sort((a, b) => (projInfo(b).flag - projInfo(a).flag) || ms(a.postedAt || a.createdAt) - ms(b.postedAt || b.createdAt));
     const flagged = list.filter((p) => projInfo(p).flag).length;
-    return `${head('Client projects', `${RN.fmt.plural(list.length, 'live project')}${flagged ? ` · ${flagged} with no interested operator after 72 hours` : ''}. Add up to three suggested operators to any project, ranked by Match Signals. The client decides.`)}
+    return `${head('Client engagements', `${RN.fmt.plural(list.length, 'live engagement')}${flagged ? ` · ${flagged} with no interested operator after 72 hours` : ''}. Add up to three suggested operators to any engagement, ranked by Match Signals. The client decides.`)}
       ${list.length ? `<div class="stack" style="--gap:16px">${list.map(projCard).join('')}</div>`
-      : RN.ui.empty({ icon: 'briefcase', title: 'No live projects', body: 'Projects clients post from a Blueprint appear here with invites, responses and the 72-hour flag.', cta: '<a class="btn btn-sm btn-line" href="#projects">Open projects</a>' })}`;
+      : RN.ui.empty({ icon: 'briefcase', title: 'No live engagements', body: 'Engagements clients post from a Blueprint appear here with invites, responses and the 72-hour flag.', cta: '<a class="btn btn-sm btn-line" href="#engagements">Open engagements</a>' })}`;
   }
   function projCard(p) {
     const info = projInfo(p);
@@ -1013,7 +1083,7 @@
     return `<article class="card adm-proj${info.flag ? ' is-late' : ''}">
       <div class="adm-proj-hd">
         <div class="grow"><div class="row" style="--gap:8px">${f.roleCategory ? `<span class="pill">${RN.ui.catDot(f.roleCategory)}${esc(catLabel(f.roleCategory))}</span>` : ''}${RN.ui.statusPill('project', p.status)}${info.flag ? `<span class="pill pill-bad">${icon('flag')}No interested operator in 72 hrs</span>` : ''}</div>
-          <h2 class="h4 adm-proj-t"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></h2>
+          <h2 class="h4 adm-proj-t"><a href="#engagement.${esc(p.id)}">${esc(p.title || 'Untitled engagement')}</a></h2>
           <p class="small muted">${esc(c.company || c.name)}${scope ? ' · ' + esc(scope) : ''}</p></div>
       </div>
       <div class="adm-proj-stats">
@@ -1026,7 +1096,7 @@
       <div class="adm-app-ft">
         ${sug.length ? `<span class="ava-stack">${sug.map((id) => RN.ui.avatar(RN.model.byId(id), 'ava-sm')).join('')}</span><span class="tiny muted">${RN.fmt.plural(sug.length, 'operator')} suggested by Revenue Nomad</span>` : ''}
         <span class="grow"></span>
-        <a class="btn btn-sm btn-line" href="#project.${esc(p.id)}">View project</a>
+        <a class="btn btn-sm btn-line" href="#engagement.${esc(p.id)}">View engagement</a>
         ${left ? `<button type="button" class="btn btn-sm" data-act="adm-suggest" data-id="${esc(p.id)}">${icon('plus')}Add suggested operators</button>` : '<span class="pill pill-good">3 suggested</span>'}
       </div>
     </article>`;
@@ -1189,7 +1259,7 @@
       <section class="card adm-sec">
         ${cardHead('Outbox', `${RN.fmt.plural(mails.length, 'email')} sent in this session, newest first.`, `<div class="seg" role="group" aria-label="Filter outbox">${[['all', 'All'], ['team', 'Team'], ['operators', 'Operators'], ['clients', 'Clients']].map(([k, l]) => `<button type="button" class="${ui.mailSeg === k ? 'on' : ''}" aria-pressed="${ui.mailSeg === k}" data-act="adm-mail-seg" data-s="${k}">${l}</button>`).join('')}</div>`)}
         ${shown.length ? `<div class="adm-mails">${shown.slice(0, 40).map((m) => `<details class="adm-mail"><summary><span class="adm-mail-to">${esc(AUD[audience(m)])} · To ${esc(m.to)}</span><b>${esc(m.subject)}</b><span class="tiny muted nowrap">${esc(RN.fmt.ago(m.ts))}</span>${icon('chev-down')}</summary><p>${esc(m.body)}</p></details>`).join('')}</div>`
-        : RN.ui.empty({ icon: 'inbox', title: 'Nothing here yet', body: 'Emails appear as people request intros, post projects, apply or get approved.' })}
+        : RN.ui.empty({ icon: 'inbox', title: 'Nothing here yet', body: 'Emails appear as people request intros, post engagements, hire, apply or get approved.' })}
       </section>`;
   }
 
@@ -1291,9 +1361,19 @@
 
   /* ---------- Intros ---------- */
   const introById = (id) => intros().find((i) => i.id === id);
+  // Moving an intro to Hired records the terms (RN.hire, intro.js): the same modal the client uses
+  RN.actions['adm-intro-hire'] = (el) => {
+    const i = introById(el.dataset.id);
+    if (!i) return;
+    if (el.closest('.scrim')) RN.ui.closeModal();
+    const f = i.fields || {};
+    const b = i.buyer || {};
+    RN.hire.open({ opId: i.opId, source: 'intro', sourceId: i.id, prefill: { engagementType: f.engagementType, hoursPerMonth: f.hoursPerMonth, projectBudget: f.projectBudget, startBy: f.startBy, client: { email: b.email, company: (b.company || {}).name, name: b.name } } });
+  };
   RN.actions['adm-intro-next'] = (el) => {
     const i = introById(el.dataset.id);
     if (!i) return;
+    if (el.dataset.to === 'hired' && RN.hire) { RN.actions['adm-intro-hire'](el); return; }
     const op = RN.model.byId(i.opId);
     const to = el.dataset.to;
     if (el.closest('.scrim')) RN.ui.closeModal();
@@ -1361,7 +1441,7 @@
     const b = i.buyer || {};
     const co = b.company || {};
     const f = i.fields || {};
-    const nx = NEXT[i.status] && NEXT[i.status](op);
+    const nx = NEXT[i.status] && NEXT[i.status](op, i);
     const kv = [
       [RN.fields.need.label, f.need ? RN.w.label('need', f.need) : 'N/A'],
       [RN.fields.engagementType.label, f.engagementType ? RN.w.label('engagementType', f.engagementType) : 'N/A'],
@@ -1391,7 +1471,7 @@
   // Nudge from inside the drawer closes it first
   { const fn = RN.actions['adm-intro-nudge']; RN.actions['adm-intro-nudge'] = (el, ev) => { if (el.closest('.scrim')) RN.ui.closeModal(); fn(el, ev); }; }
 
-  /* ---------- Projects ---------- */
+  /* ---------- Engagements ---------- */
   function suggestions(p) {
     const inv = p.invited || [];
     const left = Math.max(0, 3 - (p.suggested || []).length);
@@ -1403,8 +1483,8 @@
     const picks = suggestions(p);
     const c = projClient(p);
     RN.ui.modal({
-      width: 600, title: `Suggest operators for ${esc(p.title || 'this project')}`,
-      sub: `Ranked by Match Signals against the project brief. ${esc(c.company || c.name)} sees them as “Suggested by Revenue Nomad”.`,
+      width: 600, title: `Suggest operators for ${esc(p.title || 'this engagement')}`,
+      sub: `Ranked by Match Signals against the engagement brief. ${esc(c.company || c.name)} sees them as “Suggested by Revenue Nomad”.`,
       body: picks.length ? `<ul class="adm-picks">${picks.map((r) => `<li>${RN.ui.avatar(r.op, 'ava-md')}<div class="grow"><a class="adm-op-n" href="#op.${esc(r.op.slug)}" data-act="go" data-to="op.${esc(r.op.slug)}">${esc(r.op.name)}</a><span class="tiny muted">${esc(r.op.role)} · ${esc(r.op.ris.label)} ${esc(r.op.ris.score)} · ${esc(r.op.avail.label)}</span>
           <span class="small adm-pick-why">${esc(r.fit.signals.filter((s) => s.state === 'match').map((s) => s.text).slice(0, 2).join('. ') || 'Closest available fit in the role category')}</span></div>${fitPill(r.fit)}</li>`).join('')}</ul>
           <p class="small muted">Each operator gets an invite in their Studio inbox. The client is emailed.</p>`
@@ -1426,13 +1506,13 @@
     const c = projClient(p);
     const ops = ids.map((o) => RN.model.byId(o)).filter(Boolean);
     const catL = p.fields && p.fields.roleCategory ? catLabel(p.fields.roleCategory) : 'fractional';
-    RN.mail(c.email, `Revenue Nomad suggested ${RN.fmt.plural(ops.length, 'operator')}`, `Hi ${RN.fmt.first(c.name)},\n\nWe picked ${ops.length === 1 ? 'an operator' : ops.length + ' operators'} for “${p.title}” based on your brief:\n${ops.map((o) => `- ${o.name}, ${o.role} (${o.ris.label} ${o.ris.score})`).join('\n')}\n\nThey are invited now. Responses land on your project page as they come in.`, 'project');
+    RN.mail(c.email, `Revenue Nomad suggested ${RN.fmt.plural(ops.length, 'operator')}`, `Hi ${RN.fmt.first(c.name)},\n\nWe picked ${ops.length === 1 ? 'an operator' : ops.length + ' operators'} for “${p.title}” based on your brief:\n${ops.map((o) => `- ${o.name}, ${o.role} (${o.ris.label} ${o.ris.score})`).join('\n')}\n\nThey are invited now. Responses land on your engagement page as they come in.`, 'project');
     ops.forEach((o) => {
-      RN.mail(o.name, `Revenue Nomad invited you to a project: ${p.title}`, `Hi ${o.first},\n\nRevenue Nomad suggested you to a ${catL} project from a ${RN.w.label('companyRevenue', (p.fields || {}).revenueRange) || ''} company.\n${[(p.fields || {}).engagementType && RN.w.label('engagementType', p.fields.engagementType), (p.fields || {}).hoursPerMonth && RN.w.label('hoursPerMonth', p.fields.hoursPerMonth)].filter(Boolean).join(' · ')}\n\nIt is in your Studio inbox. Responding takes about two minutes.`, 'project');
+      RN.mail(o.name, `Revenue Nomad invited you to an engagement: ${p.title}`, `Hi ${o.first},\n\nRevenue Nomad suggested you for a ${catL} engagement from a ${RN.w.label('companyRevenue', (p.fields || {}).revenueRange) || ''} company.\n${[(p.fields || {}).engagementType && RN.w.label('engagementType', p.fields.engagementType), (p.fields || {}).hoursPerMonth && RN.w.label('hoursPerMonth', p.fields.hoursPerMonth)].filter(Boolean).join(' · ')}\n\nIt is in your Studio inbox. Responding takes about two minutes.`, 'project');
       RN.track('project_invite', { opId: o.id, source: 'rn_suggested', meta: { projectId: id } });
     });
     RN.ui.closeModal();
-    toast(`${RN.fmt.plural(ops.length, 'operator')} invited. ${esc(RN.fmt.first(c.name))} was emailed.`, { icon: 'mail', action: { label: 'View project', act: 'go', attrs: `data-to="project.${esc(id)}"` } });
+    toast(`${RN.fmt.plural(ops.length, 'operator')} invited. ${esc(RN.fmt.first(c.name))} was emailed.`, { icon: 'mail', action: { label: 'View engagement', act: 'go', attrs: `data-to="engagement.${esc(id)}"` } });
     RN.rerender();
   };
 
@@ -1669,7 +1749,7 @@
   RN.actions['adm-drip-preview'] = (el) => {
     const d = DRIP.find((x) => x.k === el.dataset.k);
     const live = apps().filter((a) => statusOf(a) === 'live').map((a) => RN.model.byId(opIdFor(a))).filter(Boolean);
-    const op = live[live.length - 1] || RN.model.ops.find((o) => !o.isMatt && o.ris.score === 50 && o.rate) || RN.model.ops[0];
+    const op = live[live.length - 1] || RN.model.ops.find((o) => o.ris.score === 50 && o.rate) || RN.model.ops[0];
     RN.ui.modal({
       width: 580, title: `${d.k} · Day ${d.day}`, sub: `Preview for ${esc(op.name)}. ${esc(d.skipL)}`,
       body: `<article class="adm-email"><div class="adm-email-hd"><span class="tiny muted">From Revenue Nomad · To ${esc(op.name)}</span><b>${esc(d.subj)}</b></div><p>${esc(dripBody(d.k, op))}</p></article>`,

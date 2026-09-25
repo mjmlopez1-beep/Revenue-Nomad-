@@ -160,7 +160,7 @@
     return RN.store.state.events.filter((e) => e.opId === op.id && (e.persona === 'buyer' || e.persona === 'visitor') && nowMs() - t(e.ts) < (maxDays || 90) * DAY);
   }
 
-  /* Project match appearances: the client's project ranked you in its top matches, or invited you (L42 "shortlist appearances") */
+  /* Engagement match appearances: the client's engagement ranked you in its top matches, or invited you (L42 "shortlist appearances") */
   function matchApps(op, lo, hi) {
     return RN.store.state.projects.filter((p) => {
       const when = p.postedAt || p.createdAt;
@@ -305,10 +305,10 @@
       const s = RN.intro ? RN.intro.summary(i, true) : { who: '', need: '' };
       items.push({ ts: i.createdAt, ic: 'handshake', text: `Intro request${s.need ? ': ' + esc(s.need) : ''}`, meta: s.who, pill: RN.intro ? RN.intro.statusPill(i.status) : '', to: 'studio.inbox', key: 'intro' });
     });
-    // Project invites
+    // Engagement invites
     st.projects.filter((p) => (p.invited || []).includes(op.id)).forEach((p) => {
       const r = (p.responses || []).find((x) => x.opId === op.id);
-      items.push({ ts: p.postedAt || p.createdAt, ic: 'briefcase', text: `You were invited to a project: ${esc(p.title)}`, meta: r ? `You replied: ${r.status === 'interested' ? 'Interested' : 'Passed'}` : 'Waiting for your reply', to: 'studio.inbox' });
+      items.push({ ts: p.postedAt || p.createdAt, ic: 'briefcase', text: `You were invited to an engagement: ${esc(p.title)}`, meta: r ? `You replied: ${r.status === 'interested' ? 'Interested' : 'Passed'}` : 'Waiting for your reply', to: 'studio.inbox' });
     });
     // Proof link opens (the prospect was told viewing is shared)
     st.proofLinks.filter((p) => p.opId === op.id).forEach((p) => {
@@ -380,7 +380,7 @@
           meta: [e.results != null ? plural(e.results, 'operator') + ' matched' : '', appeared ? 'You were in the results' : 'You were not in the results'].filter(Boolean).join(' · '),
           act: appeared ? { l: 'See why', to: 'studio.visibility' } : { l: 'Check positioning', to: 'studio.positioning' } });
       });
-      // 2. Posted projects (scope and firmographics only)
+      // 2. Posted engagements (scope and firmographics only)
       st.projects.filter((p) => ['posted', 'in_progress'].includes(p.status)).forEach((p) => {
         const fl = p.fields || {};
         const b = { industry: (fl.industries || [])[0], revenueRange: fl.revenueRange, employeeRange: fl.employeeRange };
@@ -388,7 +388,7 @@
         const fit = fitOf({ revenueRange: fl.revenueRange, employeeRange: fl.employeeRange, industries: fl.industries, tags: fl.tags, roleCategory: fl.roleCategory, salesMotions: fl.salesMotions });
         const invited = (p.invited || []).includes(op.id);
         items.push({ ts: p.postedAt || p.createdAt, ic: 'briefcase', rev: fl.revenueRange,
-          text: `${cap(esc(f.who))} posted a ${esc(p.title)} project`,
+          text: `${cap(esc(f.who))} posted an engagement: ${esc(p.title)}`,
           meta: [f.rev, fl.engagementType && lab('engagementType', fl.engagementType), fl.hoursPerMonth && lab('hoursPerMonth', fl.hoursPerMonth), fl.term && lab('term', fl.term)].filter(Boolean).join(' · '),
           fit, act: invited ? { l: 'You are invited', to: 'studio.inbox' } : { l: 'See opportunities', to: 'studio.opportunities' } });
       });
@@ -535,7 +535,7 @@
     const k = [
       { k: 'imp', l: 'Search impressions', tip: 'Times your card showed in client search results, at least half visible for one second. Counted once per client session. Bots, staff and your own visits are excluded.', to: 'studio.visibility' },
       { k: 'views', l: 'Profile views', tip: 'Times a client or visitor opened your profile. Repeat opens by the same person within 30 minutes count once.', to: 'studio.visibility' },
-      { k: 'sl', l: 'Shortlist appearances', tip: 'Times a client saved you to a shortlist or a client project ranked you in its top matches.', to: 'studio.visibility' },
+      { k: 'sl', l: 'Shortlist appearances', tip: 'Times a client saved you to a shortlist or a client engagement ranked you in its top matches.', to: 'studio.visibility' },
       { k: 'intros', l: 'Intro requests', tip: 'Clients who asked to meet you. You see scope and company size until you are introduced.', to: 'studio.inbox' },
     ];
     return `<section class="card sa-kpis" aria-label="Your numbers for ${esc(periodLabel(d))}">
@@ -595,10 +595,10 @@
       ${cardHd('Reputation Index', 'The five published factors and the points still available', `<a class="act" href="#studio.credibility">Credibility${icon('arrow')}</a>`)}
       ${r ? `<p class="sa-rise-note">${icon('trend-up')}<span><b>${esc(r.base)} → ${esc(b.score)}</b> since ${esc(fmt.dateShort(r.since))}${r.cause ? `. ${esc(r.cause)}.` : '.'}</span></p>` : ''}
       <div class="sa-ris-top">
-        <span class="sa-ris-seal">${RN.ui.hexSeal(b.tier.l)}<b>${esc(b.score)}</b></span>
+        <span class="sa-ris-seal">${RN.ui.tierBadge(b.tier.v, { size: 64, score: b.score, label: `${b.tier.l}, Reputation Index ${b.score}` })}</span>
         <div class="grow">
           <div class="sa-ris-tier"><b>${esc(b.tier.l)}</b><span class="small muted">${b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
-          <div class="sa-ladder" aria-label="Tier ladder">${tiers.map((x) => `<i class="${x.v === b.tier.v ? 'on' : b.score > x.max ? 'past' : ''}" title="${esc(x.l)} ${x.min} to ${x.max}"><span>${esc(x.l)}</span></i>`).join('')}</div>
+          <div class="sa-ladder">${RN.ui.tierLadder(b.tier.v, { orientation: 'row', compact: true, only: tiers.map((x) => x.v), label: 'Tier ladder' })}</div>
         </div>
       </div>
       <ul class="sa-factors">${b.rows.map((r) => `<li>
@@ -949,7 +949,7 @@
     const lost = a.lost;
     const live = lost.filter((l) => l.live);
     const pend = a.lostPending;
-    const verb = (l) => ({ shortlisted: 'shortlisted them and not you', selected: 'selected them for a project', 'requested an intro': 'asked to meet them instead' }[l.picked] || 'picked them');
+    const verb = (l) => ({ shortlisted: 'shortlisted them and not you', selected: 'selected them for an engagement', 'requested an intro': 'asked to meet them instead' }[l.picked] || 'picked them');
     return `<section class="card sa-card">
       ${cardHd('Compared, not chosen', 'When a client compares you with other operators and picks one of them. Anonymous, batched and shown 7 days after the decision.', live.length < lost.length ? illus('Includes illustrative rows', 'Rows marked Illustrative are invented to show the shape. Rows marked Live come from comparisons in this prototype session.') : '')}
       ${pend ? `<p class="note info sa-lost-pend">${icon('clock')}<span>${plural(pend.n, 'more decision')} from a recent comparison ${pend.n === 1 ? 'shows' : 'show'} here on ${esc(fmt.dateShort(pend.until))}, 7 days after the client decided.</span></p>` : ''}
@@ -973,7 +973,7 @@
       <dl>
         <div><dt>Search impression</dt><dd>Your card was at least half visible in a client's results for one second. Counted once per operator, per result list, per session.</dd></div>
         <div><dt>Profile view</dt><dd>Someone opened your profile. Repeat opens by the same person within 30 minutes count once.</dd></div>
-        <div><dt>Shortlist appearance</dt><dd>A client saved you to a shortlist, or a client project ranked you in its top matches.</dd></div>
+        <div><dt>Shortlist appearance</dt><dd>A client saved you to a shortlist, or a client engagement ranked you in its top matches.</dd></div>
         <div><dt>What is excluded</dt><dd>Bots, the Revenue Nomad team, other operators and your own visits.</dd></div>
         <div><dt>Privacy</dt><dd>Viewers are shown by industry, company revenue and employee range, using the same picklists as your profile. Groups under 5 visits are combined. Company names are never shown.</dd></div>
       </dl>
@@ -1030,6 +1030,7 @@
         <div>
           <div class="sa-rate-big"><span class="num">${fmt.usd(rate)}</span><span class="muted">/hr</span></div>
           <p class="small">Higher than about <b>${pos.pctile}%</b> of ${esc(cat)} operators, ${esc(where)}.</p>
+          <p class="tiny muted sa-rate-fee">Clients pay this rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()}), so your take-home is about ${fmt.usd(RN.model.takeHome(rate))}/hr.</p>
           <div class="sa-range" role="img" aria-label="Your rate ${fmt.usd(rate)} against 25th ${fmt.usd(idx.p25)}, median ${fmt.usd(idx.p50)} and 75th percentile ${fmt.usd(idx.p75)}">
             <div class="sa-range-track">
               <i class="sa-range-band" style="left:${x(idx.p25)}%;width:${x(idx.p75) - x(idx.p25)}%"></i>

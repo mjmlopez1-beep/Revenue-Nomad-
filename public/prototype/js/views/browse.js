@@ -9,7 +9,10 @@
    compare_add / shortlist via the shared card, saved searches (seen.savedSearches
    [{id, name, q, tags, filters, createdAt, owner}], owner = the client's email; also listed in the
    client workspace; run one from anywhere with data-act="br-saved-apply" data-id="<id>").
-   "Client-verified proof" (filters.verifiedProof) is applied here, after RN.model.search. */
+   "Client-verified proof" (filters.verifiedProof) is applied here, after RN.model.search.
+   Location filters (D9): filters.locations (countries or US states, OR), filters.timeZones (OR) and
+   filters.usHours ('yes': based in the US or answered yes). RN.model.search applies them; the drawer uses
+   RN.fields.locations / RN.fields.timeZones and RN.model.place(op), with small fallbacks until those exist. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -17,10 +20,11 @@
   const BR = (RN.browse = RN.browse || {});
 
   const PAGE = 24;
-  const FILTER_KEYS = ['verifiedProof', 'roleCategories', 'availability', 'hoursPerMonth', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes', 'rateMax', 'risMin'];
-  // Chip colour by field type (founder L222): role, focus area, industry, availability, company, engagement, rate, reputation, proof
-  const TYPE = { q: 'q', tags: 'focus', roleCategories: 'role', availability: 'avail', hoursPerMonth: 'avail', revenueRange: 'company', employeeRange: 'company', industries: 'industry', engagementTypes: 'engage', salesMotions: 'motion', rateMax: 'rate', risMin: 'ris', verifiedProof: 'proof' };
+  const FILTER_KEYS = ['verifiedProof', 'roleCategories', 'availability', 'hoursPerMonth', 'locations', 'timeZones', 'usHours', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes', 'rateMax', 'risMin'];
+  // Chip colour by field type (L222): role, focus area, industry, availability, location, company, engagement, rate, reputation, proof
+  const TYPE = { q: 'q', tags: 'focus', roleCategories: 'role', availability: 'avail', hoursPerMonth: 'avail', locations: 'location', timeZones: 'location', usHours: 'location', revenueRange: 'company', employeeRange: 'company', industries: 'industry', engagementTypes: 'engage', salesMotions: 'motion', rateMax: 'rate', risMin: 'ris', verifiedProof: 'proof' };
   const PROOF = 'Client-verified proof';
+  const US_HOURS = 'Works US hours';
   const REV_LABEL = () => RN.fields.revenueRange.clientLabel || 'Company revenue';
   // Each category page links to its own Engagement Blueprint (RN.projects.blueprints ids)
   const CAT_BP = { sales_leadership: 'vp-sales', marketing: 'vp-marketing', revenue_operations: 'vp-revops', customer_success_growth: 'vp-cs', sales_enablement: 'enablement-director', ai_gtm: 'ai-gtm-architect', partnerships: 'vp-partnerships', sellers: 'account-executive' };
@@ -77,6 +81,40 @@
   const hasProof = (op) => (op.reviews || []).length > 0 || (op.tags || []).some((t) => t.tier !== 'claimed');
   BR.hasProof = hasProof;
 
+  /* ---------- Location (D9) ---------- */
+  const TZ_OPTS = [['eastern', 'Eastern (ET)'], ['central', 'Central (CT)'], ['mountain', 'Mountain (MT)'], ['pacific', 'Pacific (PT)'], ['alaska_hawaii', 'Alaska and Hawaii'], ['uk_europe', 'UK and Europe'], ['other', 'Other']];
+  const optsOf = (a) => (a || []).map((x) => (Array.isArray(x) ? { v: x[0], l: x[1] } : x));
+  // RN.model.place(op) -> {city, state, country, tz}; a rough reading of op.location until the model has it
+  function placeOf(op) {
+    if (RN.model.place) return RN.model.place(op) || {};
+    const parts = String(op.location || '').split(',').map((x) => x.trim()).filter(Boolean);
+    return { city: parts.length > 1 ? parts[0] : '', state: '', country: parts[parts.length - 1] || '', tz: 'other' };
+  }
+  const usBased = (p) => !!(p && (p.state || p.country === 'United States'));
+  // The registry fields the drawer renders; filled here only if the registry does not provide them yet
+  function ensureLocationFields() {
+    const F = RN.fields;
+    if (!F.locations) F.locations = { label: 'Location', type: 'tagsearch', max: 5, help: 'Country, or US state', options: [] };
+    if (!(F.locations.options || []).length) {
+      const countries = new Set(), states = new Set();
+      RN.model.ops.forEach((op) => { if (op.hidden) return; const p = placeOf(op); if (p.country) countries.add(p.country); if (p.state) states.add(p.state); });
+      F.locations.options = [...countries].sort().concat([...states].sort()).map((v) => ({ v, l: v }));
+    }
+    if (!F.timeZones) F.timeZones = { label: 'Time zone', type: 'multi', options: optsOf(TZ_OPTS) };
+    else if (Array.isArray((F.timeZones.options || [])[0])) F.timeZones.options = optsOf(F.timeZones.options);
+  }
+  // Until RN.model.search reads the location keys, apply them here (same rules: OR within a key, AND across keys)
+  function locationFilter(res, f) {
+    if (RN.model.place || !(f.locations || f.timeZones || f.usHours)) return res;
+    return res.filter((r) => {
+      const p = placeOf(r.op);
+      if (f.locations && !f.locations.some((x) => x === p.country || x === p.state)) return false;
+      if (f.timeZones && !f.timeZones.includes(p.tz || 'other')) return false;
+      if (f.usHours && !(usBased(p) || r.op.usHours === 'yes')) return false;
+      return true;
+    });
+  }
+
   /* Run the model search with the view's sort rules. */
   function run(c, sort) {
     RN.model.applyEdits && RN.model.applyEdits();
@@ -85,6 +123,7 @@
     // A budget filter only keeps operators who publish a rate (Studio tells operators: no rate, no budget searches)
     if (c.filters.rateMax) res = res.filter((r) => r.op.rate);
     if (c.filters.verifiedProof) res = res.filter((r) => hasProof(r.op));
+    res = locationFilter(res, c.filters);
     if (sort === 'available') {
       const t = (r) => { const d = r.op.avail.startDate ? new Date(r.op.avail.startDate).getTime() : 0; return Math.max(d, RN.now().getTime() - 864e5); };
       res.sort((a, b) => (AVAIL_RANK[a.op.avail.key] || 0) - (AVAIL_RANK[b.op.avail.key] || 0) || t(a) - t(b) || b.score - a.score);
@@ -157,11 +196,15 @@
       case 'rateMax': return 'Up to $' + Math.round(+v) + ' / hr';
       case 'risMin': return 'Reputation Index ' + RN.w.label('risMin', v);
       case 'verifiedProof': return PROOF;
+      case 'usHours': return US_HOURS;
+      case 'locations': return RN.fields.locations ? RN.w.label('locations', v) : String(v);
+      case 'timeZones': return RN.fields.timeZones ? RN.w.label('timeZones', v) : String(v);
       default: return RN.fields[k] ? RN.w.label(k, v) : String(v);
     }
   }
-  const typeName = (k) => ({ q: 'Search', tags: 'Focus area', revenueRange: REV_LABEL(), rateMax: 'Hourly rate', hoursPerMonth: 'Minimum available time', verifiedProof: 'Proof' }[k] || (RN.fields[k] ? RN.fields[k].label : k));
-  const chipAria = (k, v) => (k === 'verifiedProof' ? `Remove filter: ${PROOF}` : `Remove ${typeName(k)}: ${chipText(k, v)}`);
+  const typeName = (k) => ({ q: 'Search', tags: 'Focus area', revenueRange: REV_LABEL(), rateMax: 'Hourly rate', hoursPerMonth: 'Minimum available time', verifiedProof: 'Proof', locations: 'Location', timeZones: 'Time zone', usHours: 'US hours' }[k] || (RN.fields[k] ? RN.fields[k].label : k));
+  const chipAria = (k, v) => (k === 'verifiedProof' ? `Remove filter: ${PROOF}` : k === 'usHours' ? `Remove filter: ${US_HOURS}` : k === 'locations' ? `Remove location: ${chipText(k, v)}` : `Remove ${typeName(k)}: ${chipText(k, v)}`);
+  const CHIP_ICON = { q: 'search', verifiedProof: 'seal', locations: 'pin', timeZones: 'clock', usHours: 'clock' };
   function groupLabel(k, v) {
     if (k === 'q') return `“${v}”`;
     if (Array.isArray(v)) return v.map((x) => chipText(k, x)).join(' or ');
@@ -188,6 +231,11 @@
     const emp = !rev && f.employeeRange && f.employeeRange.find((x) => op.employeeRanges.includes(x));
     if (emp) out.push(`Works with ${RN.w.label('employeeRange', emp)} employee companies`);
     if (f.risMin) out.push(`Reputation Index ${op.ris.score}`);
+    if ((f.locations || f.timeZones || f.usHours) && !out.some((x) => /^Based in /.test(x))) {
+      const p = placeOf(op);
+      const where = [p.city, p.state || p.country].filter(Boolean).join(', ') || op.location;
+      if (where) out.unshift('Based in ' + where);
+    }
     return out.slice(0, 2).join(' · ');
   }
   BR.card = function (op, opts) {
@@ -297,10 +345,8 @@
     const titles = (RN.fields.rolesByCat[cat] || []).join(' · ');
     const tags = catTopTags(cat);
     const sel = st().tags.map((t) => t.toLowerCase());
-    // Same range and $500 rounding as the Rate Index estimator; all-in adds the 25% Revenue Nomad fee (rate / 0.75)
+    // A typical month at 40 hrs, from the same range and $500 rounding as the Rate Index estimator. Rates are the price.
     const mr = idx && RN.model.monthlyRange ? RN.model.monthlyRange(cat, null, '40') : null;
-    const r500 = (n) => Math.round(n / 500) * 500;
-    const allIn = mr ? `${RN.fmt.usd(r500(mr.lo / 0.75))} - ${RN.fmt.usd(r500(mr.hi / 0.75))}/mo` : '';
     return `<header class="wrap br-head br-head-cat">
       <nav class="crumbs" aria-label="Breadcrumb"><a href="#browse">Browse talent</a>${icon('chev-right')}<span>${esc(label)}</span></nav>
       <div class="br-cat-grid">
@@ -317,9 +363,9 @@
           <div class="br-rate-big"><span class="num">$${esc(idx.p50)}</span><span class="small muted">median per hour</span></div>
           <p class="small">Typical range <b>$${esc(idx.p25)}–$${esc(idx.p75)} / hr</b> (middle half of ${esc(idx.n)} profiles).</p>
           ${mr ? `<dl class="br-rate-mo">
-            <div><dt>Operator rates at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(mr.label)}</dd></div>
-            <div><dt>All-in through Revenue Nomad, including the 25% fee</dt><dd class="tnum">${esc(allIn)}</dd></div>
-          </dl>` : ''}
+            <div><dt>Typical month at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(mr.label)}</dd></div>
+          </dl>
+          <p class="small muted br-rate-free">No fees for companies. You pay the operator’s rate, nothing more.</p>` : ''}
           <div class="br-rate-chart" data-br-chart="${esc(cat)}" aria-label="Median hourly rate by role category"></div>
           <div class="row between br-rate-foot"><a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a>${RN.ui.illus('Illustrative figures')}</div>
         </aside>` : ''}
@@ -361,7 +407,7 @@
       <div class="grid g-3" style="--gap:16px">
         <a class="card card-link br-plan-card" href="#rates">${icon('chart')}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
         <div class="card br-plan-card">${icon('layers')}<h3 class="h4">Scope it from a Blueprint</h3>
-          <p class="small muted">${bps.length ? esc(bps[0].blurb) + ' ' : ''}Hours, term and a 30/60/90-day plan. Post it as a project in minutes.</p>
+          <p class="small muted">${bps.length ? esc(bps[0].blurb) + ' ' : ''}Hours, term and a 30/60/90-day plan. Post it as an engagement in minutes.</p>
           <ul class="br-plan-links">${bps.length ? bps.map((b) => link('#blueprint.' + esc(b.id), `${b.role} Blueprint`)).join('') : link('#blueprints', 'Browse Blueprints')}</ul></div>
         <div class="card br-plan-card">${icon('book')}<h3 class="h4">Hiring guides</h3>
           <p class="small muted">Plain answers on scoping, pricing and managing a fractional ${esc(noun)}.</p>
@@ -458,7 +504,7 @@
     const chips = chipList(c);
     if (chips.length) {
       return `${saidNote()}<div class="br-chips" role="list" aria-label="Active filters">
-        ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${x.k === 'q' ? icon('search') : x.k === 'verifiedProof' ? icon('seal') : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
+        ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${CHIP_ICON[x.k] ? icon(CHIP_ICON[x.k]) : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
         ${chips.length > 1 ? `<span role="listitem"><button type="button" class="act muted br-clear" data-act="br-clear">Clear all</button></span>` : ''}
       </div>`;
     }
@@ -675,6 +721,7 @@
       ${RN.w.field('roleCategories', f.roleCategories || [], { name: 'roleCategories' })}
       ${availField(f.availability || [])}
       <div data-deselect>${RN.w.field('minHours', (f.hoursPerMonth || [])[0] || '', { name: 'hoursPerMonth', help: 'Operators with at least this much time a month for a new client.' })}</div>
+      ${locationFields(f)}
       ${RN.w.field('revenueRange', f.revenueRange || [], { name: 'revenueRange', label: REV_LABEL(), help: 'Operators who work with companies in any selected range.' })}
       ${RN.w.field('employeeRange', f.employeeRange || [], { name: 'employeeRange', help: 'Operators who work with companies of any selected size.' })}
       ${RN.w.field('industries', f.industries || [], { name: 'industries', max: 3, help: 'Pick up to 3. Operators in any selected industry are shown.' })}
@@ -683,12 +730,24 @@
       ${rateField(f.rateMax)}
       <div data-deselect>${RN.w.field('risMin', f.risMin || '', { name: 'risMin', help: 'Minimum score. Every approved profile starts at 50.' })}</div>`;
   }
+  /* Location, Time zone and Works US hours: the registry fields (tag search and chips) and one switch */
+  function locationFields(f) {
+    ensureLocationFields();
+    const loc = RN.w.field('locations', f.locations || [], { name: 'locations', id: 'f-br-locations', max: 5, help: 'Country, or US state. Operators based in any selected place are shown.' })
+      .replace(/(placeholder="Search [\d,]+ )location"/, '$1countries and US states"').replace('aria-label="Search location"', 'aria-label="Search countries and US states"');
+    const tz = RN.w.field('timeZones', f.timeZones || [], { name: 'timeZones', id: 'f-br-timeZones', help: 'Where the operator is based. Operators in any selected time zone are shown.' });
+    const us = `<div class="field br-us-field" data-field="usHours">
+        <label class="switch br-proof br-us"><input type="checkbox" name="usHours" value="yes" ${f.usHours ? 'checked' : ''}><i></i><span><b>${US_HOURS}</b><span class="small muted">Based in the US, or said yes to working US time zone hours.</span></span></label>
+      </div>`;
+    return loc + tz + us;
+  }
   function readForm(form) {
     const d = RN.ui.formData(form);
     const cur = st().filters;
     const f = {};
     if ([].concat(d.verifiedProof || []).length) f.verifiedProof = true;
-    ['roleCategories', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes'].forEach((k) => { if (Array.isArray(d[k]) && d[k].length) f[k] = d[k]; });
+    ['roleCategories', 'locations', 'timeZones', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes'].forEach((k) => { if (Array.isArray(d[k]) && d[k].length) f[k] = d[k]; });
+    if ([].concat(d.usHours || []).length) f.usHours = 'yes';
     const av = d.availability ? (Array.isArray(d.availability) ? d.availability : String(d.availability).split('|')).filter(Boolean) : [];
     if (av.length) f.availability = av;
     if (d.hoursPerMonth) f.hoursPerMonth = [d.hoursPerMonth];

@@ -1,8 +1,11 @@
-/* Home (#home): the destination for fractional GTM.
+/* Home (#home): the destination for companies hiring fractional GTM leaders.
    One bold moment (the photo hero with search), then calm, ruled sections that each open a deeper
    surface: Browse (search, role chips, focus areas, problems), profiles (featured operators),
-   the GTM Framework, the Rate Index and Insights (market pulse), the 2027 report, Studio (for
-   operators) and Talk to us.
+   the GTM Framework, the Rate Index and Insights (market pulse), the 2027 report and Talk to us.
+   Home is for clients (founder decision, Sep 25, 2026): operator messaging (the Studio preview and
+   how featuring works) lives on #operators in pages.js. The header's For Operators link and the footer stay.
+   Pricing copy is client-side (D1): rates are shown as the price, companies pay no fees, and the
+   operator fee is never mentioned here.
 
    Loops wired here:
    - Hero search, role chips, problems and trending searches write RN.store.state.browse
@@ -10,13 +13,14 @@
    - Hero search and trending clicks log RN.track('search', {q, tags, filters, results, source}).
    - Operator cards log one 'impression' each per visit (source 'home') and mark the next
      profile_view source as 'home' (RN.store.state._viewSource).
-   - Featured = Proven (60+) and above only. The founder (op.isMatt) is never featured; where he
-     appears on Home (client reviews, the Studio preview) the page says he founded Revenue Nomad.
-   - The activity strip reads intros, projects, review requests, reviews and pending applications
+   - Featured = Proven (60+) and above only, ranked by the same rules for every operator. No founder
+     callouts and no exclusions (founder decision, Sep 25, 2026): op.isMatt is demo data only.
+   - The activity strip reads intros, engagements (state.projects), review requests, reviews and pending applications
      from the store. Seeded records and hand-written samples are illustrative (one RN.ui.illus()
      on the strip); records created in this prototype session are marked "Your session".
-   - The Fractional GTM Pulse (the one weekly newsletter, shared with Insights) stores seen['ins-pulse'], tracks
-     'newsletter_signup' {source:'home', meta:{list:'pulse'}} and mails a confirmation to the Outbox.
+   - The Fractional GTM Pulse (the one quarterly newsletter, shared with Insights) stores seen['ins-pulse'], tracks
+     'newsletter_signup' {source:'home', meta:{list:'pulse'}} and mails a confirmation to the Outbox. The next
+     issue is the first day of the next calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1).
    Type: .h-hero for the H1, .h2 for section heads, .h1 for the closing band. One Newsreader italic
    accent on the page (the hero line). */
 (function () {
@@ -63,10 +67,7 @@
       <div class="hm-head-l"><span class="eyebrow">${esc(eyebrow)}</span><h2 class="h2 hm-h2">${title}</h2>${sub ? `<p class="lede hm-head-sub">${sub}</p>` : ''}</div>
       ${right ? `<div class="hm-head-r">${right}</div>` : ''}
     </header>`;
-  const isFounder = (o) => !!(o && (o.isMatt || (RN.model.matt && o.id === RN.model.matt.id)));
   const seeded = (id) => /-seed-/.test(String(id || ''));
-  const r500 = (n) => Math.round(n / 500) * 500;
-  const allIn = (n) => r500(n / (1 - ((RN.projects && RN.projects.FEE) || 0.25)));
 
   /* Write the Browse state with standard slugs, then route. From home every entry starts fresh. */
   function toBrowse(patch, route) {
@@ -83,9 +84,9 @@
   }
 
   // Founder's curation order (L466): photo, then Reputation Index, video, reviews, engagements, completeness.
-  // The founder is never in an editorial selection.
+  // Every operator is ranked by the same rules (no founder exclusion, founder decision Sep 25, 2026).
   const curate = (a, b) => b.ris.score - a.ris.score || (b.video ? 1 : 0) - (a.video ? 1 : 0) || b.reviews.length - a.reviews.length || b.engagements.length - a.engagements.length || b.completeness - a.completeness;
-  const pool = () => liveOps().filter((o) => o.photo && !isFounder(o));
+  const pool = () => liveOps().filter((o) => o.photo);
   // Featured: Proven and above only (the tier ladder's unlock), up to three
   function featured() { return pool().filter((o) => o.ris.score >= PROVEN).sort(curate).slice(0, 3); }
   // A separate, labelled row: Emerging operators who can start now
@@ -148,7 +149,7 @@
   /* ---------- Activity strip ----------
      Honest by construction: seeded demo records (ids with -seed-) and the hand-written samples are
      illustrative, so the strip carries one RN.ui.illus(). Records created in this prototype session
-     (intros, projects, reviews, applications) are real within the prototype and marked "Your session". */
+     (intros, engagements, reviews, applications) are real within the prototype and marked "Your session". */
   function networkItems() {
     const st = RN.store.state;
     const role = (opId) => { const op = RN.model.byId(opId); return op ? 'Fractional ' + op.role : 'A fractional operator'; };
@@ -165,7 +166,8 @@
     });
     (st.projects || []).filter((p) => p.status !== 'draft' && p.postedAt).forEach((p) => {
       const f = p.fields || {};
-      add(p.id, p.postedAt, `${co({ industry: (f.industries || [])[0] }).replace(/^./, (x) => x.toUpperCase())} posted a ${RN.fields.catLabel(f.roleCategory || '') || 'fractional'} project`);
+      const kind = RN.fields.catLabel(f.roleCategory || '') || 'fractional';
+      add(p.id, p.postedAt, `${co({ industry: (f.industries || [])[0] }).replace(/^./, (x) => x.toUpperCase())} posted ${an(kind)} ${kind} engagement`);
     });
     const done = (st.reviewRequests || []).filter((r) => r.status === 'completed');
     done.forEach((r) => add(r.id, r.completedAt, `${role(r.opId)} received a new client review`));
@@ -195,7 +197,7 @@
     const mine = items.filter((it) => it.mine).length;
     const note = mine
       ? `Sample activity, except the ${RN.fmt.plural(mine, 'item')} marked Your session, which came from what you did in this prototype.`
-      : 'Sample activity that shows how the strip works. It is not live network data. Anything you do in this prototype (an intro request, a project) shows up here marked Your session.';
+      : 'Sample activity that shows how the strip works. It is not live network data. Anything you do in this prototype (an intro request, an engagement) shows up here marked Your session.';
     const row = (hidden) => `<ul class="hm-strip-list" ${hidden ? 'aria-hidden="true"' : ''}>${items.map((it) => `<li class="hm-tick"><span>${esc(it.text)}</span><small>${esc(it.meta)}</small>${it.mine ? '<em class="hm-mine">Your session</em>' : ''}</li>`).join('')}</ul>`;
     return `<section class="hm-strip night ${S.paused ? 'is-paused' : ''}" aria-labelledby="hm-strip-t">
       <div class="hm-strip-tag"><span id="hm-strip-t">Network activity</span>${RN.ui.illus('Illustrative', note)}<span class="sr-only">${esc(note)}</span>${pauseBtn()}</div>
@@ -247,17 +249,13 @@
     const feat = featured();
     const emerging = emergingNow();
     const n = liveOps().length;
-    const how = `<aside class="hm-feat-how ${feat.length >= 3 ? 'wide' : ''}" aria-label="How featuring works">
-        ${icon('seal')}
-        <h3 class="h5">How featuring works</h3>
-        <p class="small">Featured spots go to operators at Proven (Reputation Index 60+) and above ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')}, ranked by score, then client reviews and engagement history. Placement is never paid, and our founder's own profile is never featured.</p>
-        <a class="link small" href="#levels">How levels work</a>
-      </aside>`;
+    // One short, client-facing trust line. How featuring works for operators lives on #operators.
+    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and client reviews. Placement is never paid.</span></p>`;
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
         ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles in this prototype`, 'href="#browse" data-act="hm-all"'))}
-        <div class="hm-row-hd"><h3 class="label">Featured · Proven and above</h3></div>
-        <div class="hm-ops hm-ops-feat">${feat.map((op) => RN.ui.opCard(op)).join('')}${how}</div>
+        ${feat.length ? `<div class="hm-row-hd"><h3 class="label">Featured · Proven and above</h3>${trust}</div>
+        <div class="hm-ops hm-ops-feat">${feat.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
         ${emerging.length ? `<div class="hm-row-hd"><h3 class="label">Emerging · available now</h3><span class="small muted">Approved by our team. Client reviews still to come.</span></div>
         <div class="hm-ops">${emerging.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
       </div>
@@ -313,7 +311,7 @@
     return Q.sort((a, b) => b.n - a.n).slice(0, 5);
   }
   // Monthly range in the "Typical Engagement Range" format (L58), one rounding rule (RN.model.monthlyRange,
-  // $500 steps). Labelled as the operator's rate, with the all-in figure a client pays through Revenue Nomad.
+  // $500 steps). The rate is the price: companies pay no fees (founder decision D1, Sep 25, 2026).
   function typical() {
     const byCat = RN.data.market.rateIndex.byCat;
     const cat = Object.keys(byCat).sort((a, b) => byCat[b].n - byCat[a].n)[0];
@@ -322,8 +320,8 @@
     const usd = RN.fmt.usd;
     const ft = (RN.data.market.report.fracVsFull || [])[1];
     return `<dl class="hm-typ">
-      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}, operator rate</dt><dd class="num">${esc(usd(m.lo))} - ${esc(usd(m.hi))}<small>/mo</small></dd>
-        <dd class="hm-typ-sub">${esc(usd(allIn(m.lo)))} - ${esc(usd(allIn(m.hi)))}/mo all-in through Revenue Nomad, including the 25% fee</dd></div>
+      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}</dt><dd class="num">${esc(usd(m.lo))} - ${esc(usd(m.hi))}<small>/mo</small></dd>
+        <dd class="hm-typ-sub">Typical monthly rate. No fees for companies: you pay the operator’s rate, nothing more.</dd></div>
       ${ft ? `<div><dt>Full-time VP of Sales, fully loaded</dt><dd class="num">${esc(ft[1])}<small>/mo</small></dd><dd class="hm-typ-sub">Base, OTE, benefits and equity</dd></div>` : ''}
     </dl>`;
   }
@@ -398,8 +396,9 @@
     </section>`;
   }
 
-  /* ---------- The Fractional GTM Pulse (weekly newsletter, same list as Insights) ---------- */
-  const nextIssue = () => { const n = RN.now(); return new Date(n.getFullYear(), n.getMonth(), n.getDate() + (((8 - n.getDay()) % 7) || 7)); };
+  /* ---------- The Fractional GTM Pulse (quarterly newsletter, same list as Insights) ---------- */
+  // Next issue: the first day of the next calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1). Month 12 rolls to Jan 1.
+  const nextIssue = () => { const n = RN.now(); return new Date(n.getFullYear(), (Math.floor(n.getMonth() / 3) + 1) * 3, 1); };
   const briefSub = () => (RN.store.state.seen || {})[BRIEF_KEY] || null;
   function briefInner() {
     const sub = briefSub();
@@ -416,15 +415,15 @@
         ${input}
         <button type="submit" class="btn">Subscribe</button>
       </form>
-      <p class="tiny muted">One email every Monday. Unsubscribe in one click.</p>`;
+      <p class="tiny muted">One email a quarter. Unsubscribe in one click.</p>`;
   }
   function briefSec() {
     return `<section class="hm-brief section-sm" aria-labelledby="hm-brief-t">
       <div class="wrap hm-brief-in">
         <div class="hm-brief-txt">
-          <span class="eyebrow">Weekly newsletter</span>
+          <span class="eyebrow">Quarterly newsletter</span>
           <h2 class="h2" id="hm-brief-t">The Fractional GTM Pulse</h2>
-          <p>Every Monday: the Rate Index by role category, the Demand Index and the focus areas clients searched for. Free.</p>
+          <p>Once a quarter: the Rate Index by role category, the Demand Index and new research. Free.</p>
         </div>
         <div class="hm-brief-slot" data-hm-brief>${briefInner()}</div>
       </div>
@@ -440,26 +439,30 @@
 
   /* ---------- Client quotes ---------- */
   function quotesSec() {
-    const matt = RN.model.matt;
-    const eric = matt && matt.reviews.find((r) => r.reviewer === 'Eric Barbalace');
+    // One neutral rule for every operator's reviews (founder decision, Sep 25, 2026): highest score, then most
+    // recent. The second quote comes from a different operator when there is one.
+    const top = RN.model.topReviews();
+    const lead = top[0];
+    const mini = lead ? (top.find((x) => x.op.id !== lead.op.id) || top[1]) : null;
     const sq = RN.data.market.report.quote;
-    const disclose = matt ? `Both client reviews here are of engagements led by ${esc(matt.name)}, who founded Revenue Nomad. Every operator's reviews follow the same rules: published as written, by the client, under their name.` : '';
+    const rules = 'Every operator’s reviews follow the same rules: published as written, by the client, under their name.';
+    const by = (r) => [r.role, r.company].filter(Boolean).join(', ');
     return `<section class="hm-sec section">
       <div class="wrap">
-        ${head('Results, in their words', 'Client reviews, published as written.', '', disclose)}
-        <div class="hm-q-feature">
-          <div class="hm-arch"><div class="arch-logo">${RN.ui.logo('ferryWordmark', { h: 46, name: 'Ferry' })}</div></div>
+        ${head('Results, in their words', 'Client reviews, published as written.', '', rules)}
+        ${lead ? `<div class="hm-q-feature">
+          <div class="hm-arch"><div class="arch-logo">${RN.ui.logo(RN.model.reviewLogo(lead.op, lead.r), { h: 46, name: lead.r.company || 'Client' })}</div></div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>
-            <blockquote class="hm-q-text">I couldn’t recommend working with Matt and his team more. I hope to work with him again on future growth projects.</blockquote>
-            <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>Trista Kempa</b><span>COO, Ferry</span></figcaption>
-            <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Client review</span>${matt ? `<a class="act" href="#op.${esc(matt.slug)}" data-track-view="${esc(matt.id)}">Read the full review on ${esc(matt.first)}’s profile${icon('arrow')}</a>` : ''}</div>
+            <blockquote class="hm-q-text">${esc(RN.model.pullQuote(lead.r.quote || lead.r.text, 180))}</blockquote>
+            <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(lead.r.reviewer || 'Client')}</b><span>${esc(by(lead.r))}</span></figcaption>
+            <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Client review</span><a class="act" href="#op.${esc(lead.op.slug)}" data-track-view="${esc(lead.op.id)}">Read the full review on ${esc(lead.op.first)}’s profile${icon('arrow')}</a></div>
           </figure>
-        </div>
+        </div>` : ''}
         <div class="hm-q-row">
-          ${eric ? `<figure class="hm-q-mini">
-            <blockquote>${esc(/[.!?]$/.test(eric.quote.trim()) ? eric.quote.trim() : eric.quote.trim() + '.')}</blockquote>
-            <figcaption><b>${esc(eric.reviewer)}</b><span>${esc(eric.role)}, ${esc(eric.company)}</span><span class="pill pill-good">${icon('check-circle')}Client review</span></figcaption>
+          ${mini ? `<figure class="hm-q-mini">
+            <blockquote>${esc(RN.model.pullQuote(mini.r.quote || mini.r.text, 200))}</blockquote>
+            <figcaption><b>${esc(mini.r.reviewer || 'Client')}</b><span>${esc(by(mini.r))}</span><span class="pill pill-good">${icon('check-circle')}Client review</span></figcaption>
           </figure>` : ''}
           <figure class="hm-q-mini">
             <blockquote>${esc(sq.text)}</blockquote>
@@ -474,55 +477,13 @@
   function howSec() {
     const steps = [
       ['Search the network', 'Search by role, focus area or the problem you have. Every profile is open, and anything a client confirmed is marked Verified. No login needed.'],
-      ['Request an intro or post a project', 'Ask to meet one operator, or post a project and get ranked matches. Operators reply within 72 hours.'],
-      ['Start on clear terms', 'Agree scope, hours and rate up front: fractional, interim, advisory or a scoped project. Built to move revenue from the first month.'],
+      ['Request an intro or post an engagement', 'Ask to meet one operator, or post an engagement and get ranked matches. Operators reply within 72 hours.'],
+      ['Start on clear terms', 'Agree scope, hours and rate up front: fractional, interim, advisory or a fixed-scope project.'],
     ];
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
-        ${head('How it works', 'Three steps. No retained search, no mystery bench.', more('Clients and operators, side by side', 'href="#how"'))}
+        ${head('How it works', 'Three steps. No retained search, no mystery bench.', more('Every step, in detail', 'href="#how"'))}
         <ol class="hm-ruled hm-steps">${steps.map((s, i) => `<li><span class="hm-step-n">${String(i + 1).padStart(2, '0')}</span><h3 class="h3">${esc(s[0])}</h3><p>${esc(s[1])}</p></li>`).join('')}</ol>
-      </div>
-    </section>`;
-  }
-
-  /* ---------- For operators ---------- */
-  function operatorsSec() {
-    const persona = RN.store.state.persona;
-    const matt = RN.model.matt;
-    const a = matt ? RN.model.analytics(matt.id, { days: 30 }) : null;
-    const vals = [
-      ['eye', 'Who viewed and why', 'Firmographic segments and the search terms behind every view. Never names.'],
-      ['target', 'Positioning', 'Your rate against the Rate Index, and the focus areas clients search for most.'],
-      ['link', 'Proof links for direct deals', 'Send a tracked profile to a prospect and see which sections they read.'],
-      ['ai', 'Search and AI visibility', 'How often Google and AI answer engines surface your profile.'],
-    ];
-    const ctas = persona === 'operator'
-      ? `<a class="btn" href="#studio">Open your Studio${icon('arrow')}</a>${matt ? `<a class="btn btn-line" href="#op.${esc(matt.slug)}">See your public profile</a>` : ''}`
-      : `<a class="btn" href="#operators">Why operators join${icon('arrow')}</a><a class="btn btn-line" href="#join">Join the network</a>`;
-    let preview = '';
-    if (a) {
-      const seg = a.viewers[0];
-      const tile = (l, v, p) => `<div class="hm-st-tile"><span class="hm-st-v num">${RN.fmt.int(v)}</span><span class="hm-st-l">${esc(l)}</span>${p != null ? RN.ui.delta(v, p) : ''}</div>`;
-      preview = `<div class="hm-studio night" role="group" aria-label="Illustrative preview of the operator Studio, shown on our founder's profile">
-        <div class="hm-studio-hd"><span class="row-nw" style="--gap:10px">${RN.ui.avatar(matt, 'ava-sm')}<span><b>Studio</b><span>${esc(matt.name)}, Revenue Nomad founder · last 30 days</span></span></span>${RN.ui.illus('Illustrative preview', 'Numbers invented to show the Studio. Shown on our founder’s own profile.')}</div>
-        <div class="hm-st-tiles">${tile('Search impressions', a.totals.impressions, a.prev.impressions)}${tile('Profile views', a.totals.views, a.prev.views)}${tile('Shortlists', a.totals.shortlists, a.prev.shortlists)}</div>
-        <div class="hm-studio-spark" data-hm-chart="studio"></div>
-        <div class="hm-studio-blk"><span class="label">Why clients found you</span>
-          <ul class="hm-st-q">${a.queries.slice(0, 3).map((q) => `<li><span>“${esc(q.q)}”</span><span class="hm-st-m"><i style="width:${Math.max(6, Math.round(q.share * 100 / Math.max(0.01, a.queries[0].share)))}%"></i></span><span class="tnum">${Math.round(q.share * 100)}%</span></li>`).join('')}</ul></div>
-        ${seg ? `<div class="hm-studio-blk"><span class="label">Viewed most by</span><p>${esc(RN.w.label('industries', seg.industry))} companies · ${esc(RN.w.label('revenueRange', seg.revenueRange))} revenue · ${esc(RN.w.label('employeeRange', seg.employeeRange))} employees</p></div>` : ''}
-      </div>`;
-    }
-    return `<section class="hm-sec section">
-      <div class="wrap hm-opv">
-        <div class="hm-opv-txt">
-          <span class="eyebrow">For operators</span>
-          <h2 class="h2 hm-h2">Your Studio shows who viewed you and why.</h2>
-          <p class="lede">Most months, most operators get no intro. Studio pays off anyway: the searches you appeared in, the companies that viewed you by industry and size, how your rate compares, and what to add to rank higher.</p>
-          <ul class="hm-vals">${vals.map((v) => `<li>${icon(v[0])}<div><b>${esc(v[1])}</b><span>${esc(v[2])}</span></div></li>`).join('')}</ul>
-          <div class="row hm-ctas">${ctas}</div>
-          <p class="tiny muted">Placement is never paid. The Reputation Index moves only on client evidence.</p>
-        </div>
-        ${preview}
       </div>
     </section>`;
   }
@@ -556,11 +517,6 @@
     }
     const dem = root.querySelector('[data-hm-chart="demand"]');
     if (dem) dem.innerHTML = RN.chart.spark(RN.data.market.report.demandIndex.map((x) => x.v), { w: Math.max(200, Math.round(dem.clientWidth)), h: 64, label: 'Demand Index, 2023 to 2027 projected' });
-    const stu = root.querySelector('[data-hm-chart="studio"]');
-    if (stu && RN.model.matt) {
-      const a = RN.model.analytics(RN.model.matt.id, { days: 30 });
-      stu.innerHTML = RN.chart.spark(a.series.views, { w: Math.max(200, Math.round(stu.clientWidth)), h: 52, stroke: 'var(--leaf)', label: 'Profile views, last 30 days' });
-    }
   }
 
   /* ---------- Motion (skipped for reduced motion and automated captures) ---------- */
@@ -639,7 +595,7 @@
       const rise = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('hm-rv-in'); rise.unobserve(e.target); } }), { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
       targets.forEach(([el, delay]) => { if (!below(el)) return; el.style.setProperty('--rv-d', delay + 'ms'); el.classList.add('hm-rv'); rise.observe(el); });
       const count = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { countIn(e.target); count.unobserve(e.target); } }), { threshold: 0.6 });
-      root.querySelectorAll('section.hm-sec .num, section.hm-sec .hm-st-tiles b, section.hm-sec .hm-kpi .num').forEach((el) => {
+      root.querySelectorAll('section.hm-sec .num, section.hm-sec .hm-kpi .num').forEach((el) => {
         if (!below(el) || el._rnNums) return;
         el._rnNums = numNodes(el);
         if (!el._rnNums.length) return;
@@ -766,15 +722,15 @@
     RN.store.update((s) => { s.seen = s.seen || {}; s.seen[BRIEF_KEY] = { email, ts: RN.now().toISOString(), source: 'home' }; }, 'seen');
     RN.track('newsletter_signup', { source: 'home', meta: { list: 'pulse' } });
     const first = RN.fmt.date(nextIssue());
-    RN.mail(email, 'You are subscribed to the Fractional GTM Pulse', `Every Monday: the Rate Index by role category, the demand index, and the focus areas clients searched for that week.\n\nFirst issue: ${first}.\nUnsubscribe from any issue in one click.`, 'newsletter');
+    RN.mail(email, 'You are subscribed to the Fractional GTM Pulse', `Once a quarter: the Rate Index by role category, the Demand Index and new research.\n\nFirst issue: ${first}.\nOne email a quarter. Unsubscribe from any issue in one click.`, 'newsletter');
     RN.ui.toast(`Subscribed. The next Pulse lands ${esc(RN.fmt.dateShort(nextIssue()))}.`, { icon: 'mail', action: { label: 'Open outbox', act: 'outbox' } });
     refreshBrief(true);
   };
   RN.actions['hm-brief-unsub'] = () => {
     const sub = briefSub();
     RN.store.update((s) => { if (s.seen) delete s.seen[BRIEF_KEY]; }, 'seen');
-    if (sub) RN.mail(sub.email, 'You are unsubscribed from the Fractional GTM Pulse', 'You will not get the Monday email anymore. Rates and research stay open at Revenue Nomad Insights.', 'newsletter');
-    RN.ui.toast('Unsubscribed. No more Monday emails.');
+    if (sub) RN.mail(sub.email, 'You are unsubscribed from the Fractional GTM Pulse', 'You will not get the quarterly email anymore. Rates and research stay open at Revenue Nomad Insights.', 'newsletter');
+    RN.ui.toast('Unsubscribed. No more quarterly emails.');
     refreshBrief(false);
   };
 
@@ -786,7 +742,7 @@
     title: () => 'Revenue Nomad · Fractional GTM leaders, research and rates',
     render: () => {
       const anim = !S.played && !calm();
-      return [hero(anim), strip(), problems(), featuredSec(), frameworkSec(), pulseSec(), reportSec(), briefSec(), quotesSec(), howSec(), operatorsSec(), talkSec()].join('');
+      return [hero(anim), strip(), problems(), featuredSec(), frameworkSec(), pulseSec(), reportSec(), briefSec(), quotesSec(), howSec(), talkSec()].join('');
     },
     mount: (root) => {
       teardown();

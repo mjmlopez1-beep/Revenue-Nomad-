@@ -69,6 +69,18 @@
   --gold: #7E5A0B;            /* stars, tier seals, "Illustrative" labels (4.5:1 on --gold-bg) */
   --gold-bg: #FAF1D8;
 
+  /* Reputation Index tier badges (RN.ui.tierBadge). Rarity reads from material: dashed outline,
+     single line, solid forest, forest with a ring, bevelled gold, black stone in a gold rim. */
+  --tb-idx-line: #7A847D; --tb-idx-fill: rgba(14, 20, 17, .03); --tb-idx-ink: #47524B;
+  --tb-emg-fill: #E6EEDF; --tb-emg-line: #0B7352; --tb-emg-ink: #0B3D2C;
+  --tb-prv-fill: #095D42; --tb-prv-edge: #095D42; --tb-prv-ink: #FFFFFF;
+  --tb-tru-1: #0E7C57; --tb-tru-2: #0B3D2C; --tb-tru-ring: #C2E7B0; --tb-tru-ink: #FFFFFF;
+  --tb-au-1: #FFF0BF; --tb-au-2: #F2D688; --tb-au-3: #E2BE62; --tb-au-4: #C49A3A; --tb-au-5: #A07620; --tb-au-6: #7E5A0B;
+  --tb-au-edge: #6B4C08;
+  --tb-eli-face-1: #F7E2A0; --tb-eli-face-2: #E6C56E; --tb-eli-face-3: #D2A847; --tb-eli-ink: #3A2802;
+  --tb-apx-1: #26332C; --tb-apx-2: #070B09; --tb-apx-glow: #E8C766; --tb-apx-ink: #F6E09A;
+  --tb-pill-bg: #FFFFFF; --tb-pill-line: #D8D7CC; --tb-pill-ink: #0E1411;
+
   /* Role category hues (tiles, small markers only; never large fills) */
   --cat-sales: #0F7A55;
   --cat-mkt: #B3265E;
@@ -169,6 +181,13 @@
     --viz-muted: #4A544E;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
     --shadow-2: 0 2px 6px rgba(0, 0, 0, .35), 0 18px 44px rgba(0, 0, 0, .35);
+    --tb-idx-line: #7E8981; --tb-idx-fill: rgba(255, 255, 255, .03); --tb-idx-ink: #A9B2AC;
+    --tb-emg-fill: #16271F; --tb-emg-line: #6BA85F; --tb-emg-ink: #C2E7B0;
+    --tb-prv-fill: #0F7A55; --tb-prv-edge: #3FA57E; --tb-prv-ink: #FFFFFF;
+    --tb-tru-1: #16956A; --tb-tru-2: #0A4733; --tb-tru-ring: #C2E7B0; --tb-tru-ink: #FFFFFF;
+    --tb-au-edge: #8A6512;
+    --tb-apx-1: #22302A; --tb-apx-2: #040705;
+    --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
   }
 }
 
@@ -215,4 +234,22 @@
   --viz-muted: #4A544E;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
   --shadow-2: 0 2px 6px rgba(0, 0, 0, .35), 0 18px 44px rgba(0, 0, 0, .35);
+  --tb-idx-line: #7E8981; --tb-idx-fill: rgba(255, 255, 255, .03); --tb-idx-ink: #A9B2AC;
+  --tb-emg-fill: #16271F; --tb-emg-line: #6BA85F; --tb-emg-ink: #C2E7B0;
+  --tb-prv-fill: #0F7A55; --tb-prv-edge: #3FA57E; --tb-prv-ink: #FFFFFF;
+  --tb-tru-1: #16956A; --tb-tru-2: #0A4733; --tb-tru-ring: #C2E7B0; --tb-tru-ink: #FFFFFF;
+  --tb-au-edge: #8A6512;
+  --tb-apx-1: #22302A; --tb-apx-2: #040705;
+  --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
+}
+
+/* The night band is dark in both themes, so tier badges on it take the dark set */
+.night, .panel-night {
+  --tb-idx-line: #7E8981; --tb-idx-fill: rgba(255, 255, 255, .03); --tb-idx-ink: #A9B2AC;
+  --tb-emg-fill: #16271F; --tb-emg-line: #6BA85F; --tb-emg-ink: #C2E7B0;
+  --tb-prv-fill: #0F7A55; --tb-prv-edge: #3FA57E; --tb-prv-ink: #FFFFFF;
+  --tb-tru-1: #16956A; --tb-tru-2: #0A4733; --tb-tru-ring: #C2E7B0; --tb-tru-ink: #FFFFFF;
+  --tb-au-edge: #8A6512;
+  --tb-apx-1: #22302A; --tb-apx-2: #040705;
+  --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
 }

@@ -65,7 +65,8 @@
       end: det.ongoing ? '' : ym(det.end) || (eng ? ym(eng.end) : ''),
       ongoing: det.ongoing != null ? !!det.ongoing : eng ? !eng.end : !!intro,
       engagementType: det.engagementType || introF.engagementType || (eng && eng.engagementType) || (eng && /interim/i.test(eng.role) ? 'interim' : 'fractional'),
-      monthlySpend: '', investment: introF.projectBudget || '',
+      // A hire from the client's Team tab carries its terms (RN.hire): the monthly cost is the rate times the hours
+      monthlySpend: det.monthlySpend || '', investment: det.projectBudget || introF.projectBudget || '',
       employeeRange: pick('employeeRange'), revenueRange: pick('revenueRange'),
       overall: '', hireAgain: '',
       // The focus areas the operator asked this client to verify start selected; ones not on the profile yet go to "add"
@@ -224,7 +225,7 @@
         <div class="field" data-rv-f="title"><label for="rv-rtitle">Your title</label><input class="input" id="rv-rtitle" name="title" value="${esc(d.title)}" autocomplete="organization-title" maxlength="80"></div>
         <div class="field" data-rv-f="company"><label for="rv-co">Company</label><input class="input" id="rv-co" name="company" value="${esc(d.company)}" autocomplete="organization" maxlength="80"></div>
       </div>`)}
-    ${sec('The engagement', `What ${esc(op.first)} did for ${co}. ${rr.source === 'client' ? 'We prefilled what we know from your intro request.' : `We prefilled what ${esc(op.first)} listed.`} Correct anything that is off.`, `
+    ${sec('The engagement', `What ${esc(op.first)} did for ${co}. ${rr.source === 'client' ? (rr.hireId ? 'We prefilled the terms you recorded when you hired.' : 'We prefilled what we know from your intro request.') : `We prefilled what ${esc(op.first)} listed.`} Correct anything that is off.`, `
       <div class="stack" style="--gap:24px">
         <div data-rv-f="roleCategory">${RN.w.field('roleCategory', d.roleCategory, { name: 'roleCategory', label: 'Functional role delivered', help: '' })}</div>
         <div class="field" data-rv-f="opTitle"><label for="rv-title">${esc(op.first)}’s title at the time</label>${titleControl(d.roleCategory, d.opTitle, d.opTitleOther)}</div>
@@ -237,7 +238,7 @@
         </div>
         <div data-rv-f="engagementType">${RN.w.field('engagementType', d.engagementType, { name: 'engagementType', help: '' })}</div>
         <div class="field" data-rv-spend="retainer" ${project ? 'hidden' : ''}><label for="rv-spend">Average monthly spend <span class="opt">Optional</span></label>${RN.w.control('projectBudget', d.monthlySpend, { name: 'monthlySpend', id: 'rv-spend', placeholder: 'e.g. 12000' })}<p class="help">What ${co} paid per month, in USD.</p></div>
-        <div class="field" data-rv-spend="project" ${project ? '' : 'hidden'}><label for="rv-inv">Project investment <span class="opt">Optional</span></label>${RN.w.control('projectBudget', d.investment, { name: 'investment', id: 'rv-inv', placeholder: 'e.g. 24000' })}<p class="help">Total fixed fee for the project, in USD.</p></div>
+        <div class="field" data-rv-spend="project" ${project ? '' : 'hidden'}><label for="rv-inv">Project investment <span class="opt">Optional</span></label>${RN.w.control('projectBudget', d.investment, { name: 'investment', id: 'rv-inv', placeholder: 'e.g. 24000' })}<p class="help">The total agreed price for the project, in USD.</p></div>
         <div data-rv-f="employeeRange">${RN.w.field('companyEmployees', d.employeeRange, { name: 'employeeRange', help: `${d.company ? esc(d.company) + '’s' : 'Your company’s'} headcount during the engagement. The same ranges operators use, so this proves company-size fit.` })}</div>
         <div data-rv-f="revenueRange">${RN.w.field('companyRevenue', d.revenueRange, { name: 'revenueRange', help: 'Annual revenue during the engagement. It verifies the revenue stages this operator has worked at.' })}</div>
       </div>`)}`;

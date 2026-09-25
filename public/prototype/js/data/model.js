@@ -164,16 +164,140 @@
   const bySlug = new Map(M.ops.map((o) => [o.slug, o]));
   M.byId = (id) => byId.get(id) || null;
   M.bySlug = (slug) => bySlug.get(slug) || null;
-  M.add = function (op) { M.ops.push(op); byId.set(op.id, op); bySlug.set(op.slug, op); };
+  M.add = function (op) { M.ops.push(op); byId.set(op.id, op); bySlug.set(op.slug, op); if (M.refreshLocations) M.refreshLocations(); };
   M.norm = norm;
   M.matt = M.ops.find((o) => o.isMatt);
+
+  /* ---------- Place: where an operator is based (Browse location filters, D9) ----------
+     RN.model.place(op) -> {city, state, country, tz}, read from op.location ("Newtown, Connecticut", "Boston, MA",
+     "London, UK", "Madrid, Spain"), op.timezone and op.country. state is a US state's full name or ''; country is
+     'United States' for US states, otherwise the normalized country ('UK' -> 'United Kingdom'); tz is one of
+     F.timeZones: from op.timezone when present, else from the US state, else from the country (or province).
+     Cached on op.place and re-read when location, timezone or country change (Studio and Admin edits). */
+  const US_STATES = [
+    ['AL', 'Alabama', 'central'], ['AK', 'Alaska', 'alaska_hawaii'], ['AZ', 'Arizona', 'mountain'], ['AR', 'Arkansas', 'central'],
+    ['CA', 'California', 'pacific'], ['CO', 'Colorado', 'mountain'], ['CT', 'Connecticut', 'eastern'], ['DE', 'Delaware', 'eastern'],
+    ['DC', 'District of Columbia', 'eastern'], ['FL', 'Florida', 'eastern'], ['GA', 'Georgia', 'eastern'], ['HI', 'Hawaii', 'alaska_hawaii'],
+    ['ID', 'Idaho', 'mountain'], ['IL', 'Illinois', 'central'], ['IN', 'Indiana', 'eastern'], ['IA', 'Iowa', 'central'],
+    ['KS', 'Kansas', 'central'], ['KY', 'Kentucky', 'eastern'], ['LA', 'Louisiana', 'central'], ['ME', 'Maine', 'eastern'],
+    ['MD', 'Maryland', 'eastern'], ['MA', 'Massachusetts', 'eastern'], ['MI', 'Michigan', 'eastern'], ['MN', 'Minnesota', 'central'],
+    ['MS', 'Mississippi', 'central'], ['MO', 'Missouri', 'central'], ['MT', 'Montana', 'mountain'], ['NE', 'Nebraska', 'central'],
+    ['NV', 'Nevada', 'pacific'], ['NH', 'New Hampshire', 'eastern'], ['NJ', 'New Jersey', 'eastern'], ['NM', 'New Mexico', 'mountain'],
+    ['NY', 'New York', 'eastern'], ['NC', 'North Carolina', 'eastern'], ['ND', 'North Dakota', 'central'], ['OH', 'Ohio', 'eastern'],
+    ['OK', 'Oklahoma', 'central'], ['OR', 'Oregon', 'pacific'], ['PA', 'Pennsylvania', 'eastern'], ['RI', 'Rhode Island', 'eastern'],
+    ['SC', 'South Carolina', 'eastern'], ['SD', 'South Dakota', 'central'], ['TN', 'Tennessee', 'central'], ['TX', 'Texas', 'central'],
+    ['UT', 'Utah', 'mountain'], ['VT', 'Vermont', 'eastern'], ['VA', 'Virginia', 'eastern'], ['WA', 'Washington', 'pacific'],
+    ['WV', 'West Virginia', 'eastern'], ['WI', 'Wisconsin', 'central'], ['WY', 'Wyoming', 'mountain'],
+  ];
+  const US = 'United States';
+  const STATE_BY = new Map();
+  US_STATES.forEach(([ab, name, tz]) => { const x = { ab, name, tz }; STATE_BY.set(ab.toLowerCase(), x); STATE_BY.set(name.toLowerCase(), x); });
+  // Canadian provinces: the country is Canada, the time zone follows the province (Atlantic ones read as Other)
+  const PROVINCES = { on: 'eastern', ontario: 'eastern', qc: 'eastern', quebec: 'eastern', 'québec': 'eastern', mb: 'central', manitoba: 'central', sk: 'central', saskatchewan: 'central', ab: 'mountain', alberta: 'mountain', bc: 'pacific', 'british columbia': 'pacific', ns: 'other', 'nova scotia': 'other', nb: 'other', 'new brunswick': 'other', nl: 'other', newfoundland: 'other', pe: 'other', pei: 'other', 'prince edward island': 'other', yt: 'pacific', yukon: 'pacific' };
+  // Country names and the ways people write them (lower case) -> normalized country
+  const COUNTRY_ALIAS = {
+    'united states': US, 'united states of america': US, usa: US, us: US, america: US,
+    uk: 'United Kingdom', 'united kingdom': 'United Kingdom', 'great britain': 'United Kingdom', britain: 'United Kingdom', england: 'United Kingdom', scotland: 'United Kingdom', wales: 'United Kingdom', 'northern ireland': 'United Kingdom', gb: 'United Kingdom',
+    canada: 'Canada', ireland: 'Ireland', spain: 'Spain', portugal: 'Portugal', france: 'France', germany: 'Germany', netherlands: 'Netherlands', 'the netherlands': 'Netherlands', holland: 'Netherlands',
+    belgium: 'Belgium', switzerland: 'Switzerland', ch: 'Switzerland', austria: 'Austria', italy: 'Italy', poland: 'Poland', romania: 'Romania', 'czech republic': 'Czech Republic', czechia: 'Czech Republic',
+    sweden: 'Sweden', denmark: 'Denmark', norway: 'Norway', finland: 'Finland', greece: 'Greece', hungary: 'Hungary', estonia: 'Estonia', ukraine: 'Ukraine', israel: 'Israel',
+    australia: 'Australia', 'new zealand': 'New Zealand', singapore: 'Singapore', india: 'India', kenya: 'Kenya', nigeria: 'Nigeria', 'south africa': 'South Africa', thailand: 'Thailand', philippines: 'Philippines',
+    mexico: 'Mexico', brazil: 'Brazil', argentina: 'Argentina', colombia: 'Colombia', japan: 'Japan', 'united arab emirates': 'United Arab Emirates', uae: 'United Arab Emirates',
+  };
+  const EUROPE = new Set(['United Kingdom', 'Ireland', 'Spain', 'Portugal', 'France', 'Germany', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Italy', 'Poland', 'Romania', 'Czech Republic', 'Sweden', 'Denmark', 'Norway', 'Finland', 'Greece', 'Hungary', 'Estonia', 'Ukraine']);
+  // Cities written without a country ("London, Prague", "Dublin & Malaga") and UK counties
+  const CITY_COUNTRY = { london: 'United Kingdom', manchester: 'United Kingdom', edinburgh: 'United Kingdom', prague: 'Czech Republic', dublin: 'Ireland', malaga: 'Spain', 'málaga': 'Spain', madrid: 'Spain', barcelona: 'Spain', lisbon: 'Portugal', paris: 'France', berlin: 'Germany', munich: 'Germany', amsterdam: 'Netherlands', zurich: 'Switzerland', lugano: 'Switzerland', geneva: 'Switzerland', bucharest: 'Romania', toronto: 'Canada', vancouver: 'Canada', montreal: 'Canada', sydney: 'Australia', melbourne: 'Australia', nairobi: 'Kenya', bengaluru: 'India', bangalore: 'India', phuket: 'Thailand' };
+  const COUNTRY_TZ = { Canada: 'eastern' };
+  // Time zone text (IANA ids from the live export, intake labels such as "Eastern Time (ET)") -> F.timeZones value
+  function tzOf(s) {
+    s = String(s || '').trim();
+    if (!s || /^not provided$/i.test(s)) return '';
+    if (/\//.test(s) && !/\(/.test(s)) {
+      if (/^Europe\/|^Atlantic\/(Reykjavik|Canary|Madeira|Faroe)/.test(s)) return 'uk_europe';
+      if (/Pacific\/Honolulu|America\/(Anchorage|Juneau|Sitka|Nome|Yakutat|Metlakatla|Adak)/.test(s)) return 'alaska_hawaii';
+      if (/America\/(New_York|Detroit|Toronto|Montreal|Nassau|Indiana|Kentucky|Louisville|Iqaluit|Nipigon|Thunder_Bay)/.test(s)) return 'eastern';
+      if (/America\/(Chicago|Winnipeg|Menominee|North_Dakota|Regina|Rainy_River|Mexico_City|Rankin_Inlet)/.test(s)) return 'central';
+      if (/America\/(Denver|Phoenix|Boise|Edmonton|Yellowknife|Cambridge_Bay|Ojinaga)/.test(s)) return 'mountain';
+      if (/America\/(Los_Angeles|Vancouver|Tijuana|Whitehorse|Dawson)/.test(s)) return 'pacific';
+      return 'other';
+    }
+    // Other regions first, so "Australian Eastern Time", "East Africa Time" and "India Standard Time (IST)" stay Other
+    if (/austral|africa|india|singapore|asia|china|japan|korea|philippine|indochina|gulf|arabia|brazil|argentin|new zealand|\b(AEST|AEDT|ACST|AWST|SGT|EAT|WAT|CAT|JST|HKT|NZST|GST)\b/i.test(s)) return 'other';
+    if (/europe|\buk\b|british|irish|london|greenwich|\b(GMT|BST|CET|CEST|WET|WEST|EET|EEST)\b/i.test(s)) return 'uk_europe';
+    if (/alaska|hawaii|\b(AKST|AKDT|HST|HAST)\b/i.test(s)) return 'alaska_hawaii';
+    // Zone names in any case; abbreviations only in capitals ("ET", "PT")
+    if (/eastern/i.test(s) || /\b(ET|EST|EDT)\b/.test(s)) return 'eastern';
+    if (/central/i.test(s) || /\b(CT|CST|CDT)\b/.test(s)) return 'central';
+    if (/mountain/i.test(s) || /\b(MT|MST|MDT)\b/.test(s)) return 'mountain';
+    if (/pacific/i.test(s) || /\b(PT|PST|PDT)\b/.test(s)) return 'pacific';
+    return 'other';
+  }
+  M.tzOf = tzOf;
+  // One location value (a filter value or a typed place) -> the registry form: a US state's full name or a country
+  M.placeValue = function (v) {
+    const k = String(v || '').trim().toLowerCase().replace(/\./g, '');
+    if (!k) return '';
+    const st = STATE_BY.get(k);
+    if (st && (k.length > 2 || String(v).trim() === String(v).trim().toUpperCase())) return st.name;
+    return COUNTRY_ALIAS[k] || CITY_COUNTRY[k] || String(v).trim();
+  };
+  function readPlace(loc, country) {
+    const out = { city: '', state: '', country: '', tz: '' };
+    // Several places ("Lugano, CH / Phuket", "Dublin & Malaga"): the first one counts
+    const first = String(loc || '').split(/\s+\/\s+|\s*&\s*|\s*;\s*/)[0].trim();
+    const parts = first.split(',').map((x) => x.trim()).filter(Boolean);
+    const lc = (x) => x.toLowerCase().replace(/\./g, '');
+    for (let i = parts.length - 1; i >= 0 && !out.country; i--) {
+      const raw = parts[i], k = lc(raw);
+      const st = STATE_BY.get(k);
+      // Two-letter state codes only count in capitals ("Boston, MA"); "Toronto, ON" stays Canadian
+      if (st && (k.length > 2 || (i > 0 && raw.replace(/\./g, '') === raw.replace(/\./g, '').toUpperCase()))) { out.state = st.name; out.country = US; out.tz = st.tz; }
+      else if (i > 0 && PROVINCES[k]) { out.country = 'Canada'; out.tz = PROVINCES[k]; }
+      else if (COUNTRY_ALIAS[k]) out.country = COUNTRY_ALIAS[k];
+      else if (i > 0 && /shire$/.test(k)) out.country = 'United Kingdom';
+      // A known city on its own, or first in a list of cities ("London, Prague")
+      else if (i === 0 && CITY_COUNTRY[k]) { out.country = CITY_COUNTRY[k]; out.city = raw; }
+      else continue;
+      if (i > 0) out.city = parts.slice(0, i).join(', ');
+    }
+    if (!out.country && country) {
+      out.country = COUNTRY_ALIAS[lc(String(country))] || String(country).trim();
+      if (!out.city && parts.length) out.city = parts[0];
+    }
+    if (!out.country && /^europe$/i.test(first)) out.tz = 'uk_europe';
+    return out;
+  }
+  M.place = function (op) {
+    if (!op) return { city: '', state: '', country: '', tz: 'other' };
+    const key = [op.location || '', op.timezone || '', op.country || ''].join('|');
+    if (op.place && op._placeKey === key) return op.place;
+    const p = readPlace(op.location, op.country);
+    const tz = tzOf(op.timezone) || p.tz || (EUROPE.has(p.country) ? 'uk_europe' : COUNTRY_TZ[p.country]) || 'other';
+    const place = { city: p.city, state: p.state, country: p.country, tz };
+    Object.defineProperty(op, '_placeKey', { value: key, writable: true, configurable: true, enumerable: false });
+    op.place = place;
+    return place;
+  };
+  M.usBased = (op) => M.place(op).country === US;
+  // F.locations options: the countries operators are based in, then the US states (each {v, l})
+  M.refreshLocations = function () {
+    const countries = new Set(), states = new Set();
+    M.ops.forEach((op) => { if (op.hidden) return; const p = M.place(op); if (p.country) countries.add(p.country); if (p.state) states.add(p.state); });
+    const us = countries.has(US) ? [US] : [];
+    countries.delete(US);
+    F.locations.options = us.concat([...countries].sort(), [...states].sort()).map((v) => ({ v, l: v }));
+    return F.locations.options;
+  };
+  M.refreshLocations();
 
   /* Apply Studio edits (profile changes made during the session) */
   M.applyEdits = function () {
     const edits = (RN.store && RN.store.state.edits) || {};
+    let moved = false;
     Object.keys(edits).forEach((id) => {
       const op = byId.get(id); if (!op) return;
       const e = edits[id];
+      if (e.location !== undefined && e.location !== op.location) moved = true;
       ['headline', 'bio', 'rate', 'industries', 'revenueRanges', 'employeeRanges', 'crm', 'methodologies', 'motions', 'engagementTypes', 'location', 'newClientCapacity', 'role'].forEach((k) => { if (e[k] !== undefined) op[k] = e[k]; });
       if (e.roleFields) op.roleFields = Object.assign({}, op.roleFields, e.roleFields);
       if (e.catKey && e.catKey !== op.catKey) { op.catKey = e.catKey; op.cat = F.catLabel(e.catKey); }
@@ -197,6 +321,8 @@
       op.clients = op.engagements.map((x) => ({ name: x.company, logo: x.logo, verified: !!x.clientVerified }));
       op.completeness = completeness(op);
     });
+    // A Studio location edit can add a country or state to the Browse location picker
+    if (moved) M.refreshLocations();
     // Reviews submitted in-session verify tags and lift the score
     ((RN.store && RN.store.state.reviews) || []).forEach((rv) => {
       const op = byId.get(rv.opId); if (!op || op.reviews.some((r) => r.id === rv.id)) return;
@@ -287,6 +413,9 @@
     const f = o.filters || {};
     const groups = M.parseQuery(o.q);
     const tags = (o.tags || []).map((t) => t.toLowerCase());
+    const locs = [].concat(f.locations || []).filter(Boolean).map(M.placeValue);
+    const tzs = [].concat(f.timeZones || []).filter(Boolean);
+    const ush = [].concat(f.usHours || []).includes('yes');
     const out = [];
     for (const op of M.ops) {
       if (op.hidden) continue;
@@ -302,6 +431,13 @@
       // A rate filter drops operators with no rate (Studio tells operators this)
       if (f.rateMax && (!op.rate || op.rate > +f.rateMax)) continue;
       if (f.risMin && op.ris.score < +f.risMin) continue;
+      // Location (D9): a country or US state (OR), a time zone (OR), and US hours ('yes': based in the US or said yes)
+      if (locs.length || tzs.length || ush) {
+        const p = M.place(op);
+        if (locs.length && !locs.some((x) => x === p.country || x === p.state)) continue;
+        if (tzs.length && !tzs.includes(p.tz)) continue;
+        if (ush && !(p.country === US || op.usHours === 'yes')) continue;
+      }
       const opTags = op.tags.map((t) => t.t.toLowerCase());
       if (tags.length && !tags.every((t) => opTags.includes(t))) continue;
       // Text relevance: each query group is matched by any of its alternatives; most groups must match
@@ -448,6 +584,9 @@
       case 'salesMotions': return F.salesMotions.label + ': ' + L('salesMotions', v);
       case 'rateMax': return +v >= F.rateMax.max ? '' : 'Hourly rate: up to $' + Math.round(+v);
       case 'risMin': return F.risMin.label + ': ' + L('risMin', v);
+      case 'locations': return F.locations.label + ': ' + L('locations', v);
+      case 'timeZones': return F.timeZones.label + ': ' + L('timeZones', v);
+      case 'usHours': return v === 'yes' ? 'Works US hours' : '';
       default: return '';
     }
   }
@@ -697,6 +836,46 @@
       return Object.assign({}, t, { have: !!mine, tier: mine ? mine.tier : null, action });
     });
     return { op, rate, idx, pctile, opps, checklist: M.checklist(op), completeness: op.completeness };
+  };
+
+  /* Operator fee (D1). Revenue Nomad charges the OPERATOR a percentage of their billed earnings each month
+     (proposed: 25%). Companies pay no fees: a client pays the operator's listed rate and nothing more.
+     OPERATOR-FACING AND ADMIN ONLY: never show the fee, a take-home figure or a split on a client surface. */
+  M.FEE = 0.25;                                   // the one source for the proposed fee (RN.projects.FEE reads it)
+  M.takeHome = (rate) => (rate ? Math.floor(+rate * (1 - M.FEE)) : null);
+  M.feePct = () => Math.round(M.FEE * 100) + '%';
+  // The one line operators read about the fee (Studio, #operators, #join, the operator intake and operator emails)
+  M.feeLine = () => `Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${M.feePct()}). Clients pay your listed rate and no fees.`;
+
+  /* Client reviews for editorial modules (Home "Results, in their words", #results). One neutral rule for every
+     operator: highest overall score first, then most recent. No profile is singled out or excluded (founder
+     decision, Sep 25, 2026). Items are { op, r }. */
+  M.reviewScore = (r) => (typeof r.overall === 'number' ? r.overall : typeof r.coreAvg === 'number' ? r.coreAvg : null);
+  M.reviewRank = (a, b) => (M.reviewScore(b.r) || 0) - (M.reviewScore(a.r) || 0)
+    || String(b.r.date || b.r.ts || '').localeCompare(String(a.r.date || a.r.ts || ''));
+  M.topReviews = function () {
+    const out = [];
+    M.ops.forEach((op) => { if (!op.hidden) (op.reviews || []).forEach((r) => out.push({ op, r })); });
+    return out.sort(M.reviewRank);
+  };
+  // Logo key for the reviewing company, from the operator's matching engagement ('' when there is none: callers show the name)
+  M.reviewLogo = function (op, r) {
+    const co = String((r && r.company) || '').toLowerCase();
+    const e = ((op && op.engagements) || []).find((x) => String(x.company || '').toLowerCase() === co);
+    const L = RN.data.logos || {};
+    if (!e || !e.logo) return '';
+    return L[e.logo + 'Wordmark'] ? e.logo + 'Wordmark' : L[e.logo] ? e.logo : '';
+  };
+  // A quote short enough for a large pull quote: whole sentences up to about max characters, with an ellipsis when cut
+  M.pullQuote = function (text, max) {
+    const t = String(text || '').trim();
+    max = max || 180;
+    if (t.length <= max) return /[.!?]$/.test(t) ? t : t + '.';
+    const parts = t.match(/[^.!?]+[.!?]+(\s|$)/g) || [t];
+    let out = '';
+    for (const s of parts) { if ((out + s).trim().length > max && out) break; out += s; }
+    out = out.trim();
+    return out.length < t.length ? out.replace(/[.!?]$/, '') + '…' : out;
   };
 
   /* Rate Index maths, shared by Home, Rates, Blueprints, Browse category pages and Studio.

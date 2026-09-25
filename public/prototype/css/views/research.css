@@ -13,7 +13,6 @@
 .rs-sec-hd .body { color: var(--mute); }
 @media (max-width: 900px) { .rs-sec-hd { grid-template-columns: minmax(0, 1fr); align-items: start; } }
 .rs .illus { cursor: help; }
-.rs-prop { height: 22px; margin-right: 6px; vertical-align: 1px; }
 .rs-chart { width: 100%; min-height: 20px; }
 .rs-sbar-row + .rs-sbar-row { margin-top: 10px; }
 .rs-sbar-row .chart svg { margin-top: 2px; }

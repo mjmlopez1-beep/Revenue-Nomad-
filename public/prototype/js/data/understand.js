@@ -3,6 +3,7 @@
    platform's standard fields, so search runs on the same slugs as operator signup:
      role category, industry, company revenue, employee range, availability, minimum available time,
      engagement type, hourly rate cap, plus focus-area keywords and the "what do you need" answer.
+     location: filters.locations (countries or US states), filters.timeZones and filters.usHours (D9).
    M.understand(text)        -> {natural, facts:[{k, v, label, src}], filters, q, need}
    M.understandSearch(text, base) -> the same, plus the filters and keywords actually applied after relaxing
                                   anything that would leave zero operators ({applied:{q, filters}, dropped:[facts]}). */
@@ -95,6 +96,94 @@
     ['churn', /\bchurn\b/], ['channel', /\bchannel partners?\b|\bresellers?\b/], ['MEDDPICC', /\bmeddpicc\b|\bmeddic\b/], ['compensation', /\bcomp plans?\b|\bcompensation\b|\bcommission plans?\b/],
   ];
 
+  /* ---------- Location: "based in Boston", "in Texas", "US-based", "East Coast", "Pacific time", "UK", "Europe" ----------
+     Places become registry values (RN.fields.locations): a US state's full name or a country, as RN.model.place
+     reads operators. Major cities map to their state or country. Time zones use RN.fields.timeZones values, and
+     "US hours" sets filters.usHours = 'yes'. */
+  const US = 'United States';
+  const STATES = ['Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada', 'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming'];
+  const STATE_AB = { AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California', CO: 'Colorado', CT: 'Connecticut', DC: 'District of Columbia', FL: 'Florida', GA: 'Georgia', IA: 'Iowa', ID: 'Idaho', IL: 'Illinois', KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', MA: 'Massachusetts', MD: 'Maryland', MI: 'Michigan', MN: 'Minnesota', MO: 'Missouri', MS: 'Mississippi', MT: 'Montana', NC: 'North Carolina', ND: 'North Dakota', NE: 'Nebraska', NH: 'New Hampshire', NJ: 'New Jersey', NM: 'New Mexico', NV: 'Nevada', NY: 'New York', OH: 'Ohio', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina', SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VA: 'Virginia', VT: 'Vermont', WA: 'Washington', WI: 'Wisconsin', WV: 'West Virginia', WY: 'Wyoming' };
+  // Major cities (and a few regions) -> US state or country. Sources are lower case, without \b (added below).
+  const CITIES = [
+    ['boston', 'Massachusetts'], ['new york city|nyc|manhattan|brooklyn', 'New York'],
+    ['san francisco|sf|bay area|silicon valley|los angeles|la|l\\.a\\.|san diego|san jose', 'California'],
+    ['chicago', 'Illinois'], ['austin|dallas|houston|san antonio', 'Texas'], ['denver|boulder', 'Colorado'],
+    ['seattle', 'Washington'], ['atlanta', 'Georgia'], ['miami', 'Florida'], ['philadelphia|philly', 'Pennsylvania'],
+    ['washington,? d\\.?c\\.?|d\\.c\\.', 'District of Columbia'], ['nashville', 'Tennessee'], ['minneapolis', 'Minnesota'], ['phoenix', 'Arizona'],
+    ['toronto|vancouver|montreal', 'Canada'], ['london', 'United Kingdom'], ['dublin', 'Ireland'], ['madrid|barcelona', 'Spain'],
+  ];
+  const COUNTRIES = [
+    ['united states|the us|the u\\.s\\.?|usa|u\\.s\\.a\\.?', US], ['united kingdom|uk|u\\.k\\.?|britain|great britain|england|scotland', 'United Kingdom'],
+    ['canada|ontario|quebec|british columbia|alberta|manitoba|nova scotia', 'Canada'], ['ireland', 'Ireland'], ['spain', 'Spain'], ['portugal', 'Portugal'], ['france', 'France'], ['germany', 'Germany'],
+    ['netherlands|holland', 'Netherlands'], ['switzerland', 'Switzerland'], ['romania', 'Romania'], ['poland', 'Poland'], ['sweden', 'Sweden'],
+    ['australia', 'Australia'], ['singapore', 'Singapore'], ['india', 'India'], ['kenya', 'Kenya'], ['mexico', 'Mexico'], ['israel', 'Israel'],
+  ];
+  const LOC_CUE = '(?:based (?:in|out of)|located in|living in|lives in|in|from|out of|near|around)';
+  // "<cue> [the] <place>" or "<place>-based"; the place must end on a word boundary
+  const placeRe = (body) => new RegExp('\\b' + LOC_CUE + ' (?:the )?(?:' + body + ')(?![a-z])|(?:^|[^a-z.])(?:' + body + ')[- ]based\\b');
+  const STATE_RE = STATES.slice().sort((a, b) => b.length - a.length)
+    .map((n) => [new RegExp('\\b' + LOC_CUE + ' ' + n.toLowerCase() + '\\b(?!\\s+(city|times|post|university|state university))|\\b' + n.toLowerCase() + '[- ]based\\b'), n]);
+  const CITY_RE = CITIES.map(([b, v]) => [placeRe(b), v]);
+  const COUNTRY_RE = COUNTRIES.map(([b, v]) => [placeRe(b), v]);
+  // A list after the first place: "in SF or NYC", "in Georgia, Florida and Texas"
+  const listRe = (body) => new RegExp('(?:\\bor\\s+|\\band\\s+|,\\s*|/\\s*)(?:the )?(?:' + body + ')(?![a-z])');
+  const LIST_RE = CITIES.concat(STATES.slice().sort((a, b) => b.length - a.length).map((n) => [n.toLowerCase(), n]), COUNTRIES.filter(([, v]) => v !== US))
+    .map(([b, v]) => [listRe(b), v]);
+  function readLocation(raw, t, add) {
+    const locs = [], tzs = [], src = [];
+    const put = (arr, v, s) => { if (v && !arr.includes(v)) { arr.push(v); if (s) src.push(s.trim()); } };
+    // Matched text is blanked so "West Virginia" is not also read as "Virginia". A place that describes the
+    // client's own company ("we're in Boston", "a Boston-based SaaS company") is skipped: it is not where the
+    // operator has to be.
+    let rest = t;
+    const blank = (m) => { rest = rest.slice(0, m.index) + ' '.repeat(m[0].length) + rest.slice(m.index + m[0].length); };
+    const ours = (m) => {
+      const before = t.slice(Math.max(0, m.index - 48), m.index + (m[0].match(/^[^a-z]*/) || [''])[0].length);
+      const after = t.slice(m.index + m[0].length, m.index + m[0].length + 40);
+      return /\b(we|we're|we are|i'm|i am|our (company|team|office|offices|hq|headquarters|business)( is| are)?|headquartered|hq|company|startup|business|firm|office|offices)( (also|mostly|currently|all))?( based| located)?\s*$/.test(before)
+        || (/[- ]based$/.test(m[0]) && /^\s*([a-z0-9$&.'-]+\s+){0,2}(company|startup|business|firm|brand|agency|team|org|organization|saas|client)\b/.test(after));
+    };
+    // A market the client sells into is not where the operator is based: "has sold in Europe", "open the UK market",
+    // "expanding into Canada", "UK customers"
+    const MARKET_BEFORE = /\b(sell(ing|s)?|sold|expand(ed|ing|s)?|launch(ed|ing|es)?|enter(ed|ing|s)?|open(ed|ing|s)?( up)?|grow(ing|s)?|grew|scal(e|ed|es|ing)|into|across|throughout)\s+((in|into|to|across)\s+)?(the )?$/;
+    const MARKET_AFTER = /^[\s-]*(markets?|expansion|launch|customers|buyers|go-to-market|gtm)\b/;
+    const market = (m) => MARKET_BEFORE.test(t.slice(Math.max(0, m.index - 48), m.index)) || MARKET_AFTER.test(t.slice(m.index + m[0].length, m.index + m[0].length + 24));
+    const take = (re) => { for (;;) { const m = rest.match(re); if (!m) return null; blank(m); if (!ours(m) && !market(m)) return m; } };
+    let m;
+    // "US-based" ("us" alone is a pronoun, so the country otherwise needs "the US", "USA" or "United States")
+    if ((m = take(/\b(us|u\.s\.|usa)[- ]based\b/))) put(locs, US, m[0]);
+    CITY_RE.forEach(([re, v]) => { const hit = take(re); if (hit) put(locs, v, hit[0]); });
+    STATE_RE.forEach(([re, v]) => { const hit = take(re); if (hit) put(locs, v, hit[0]); });
+    COUNTRY_RE.forEach(([re, v]) => { const hit = take(re); if (hit) put(locs, v, hit[0]); });
+    if (locs.length) for (let i = 0; i < 4; i++) { let more = false; LIST_RE.forEach(([re, v]) => { const hit = take(re); if (hit) { put(locs, v, hit[0].replace(/^(or|and|,|\/)\s*/, '')); more = true; } }); if (!more) break; }
+    // London and the UK count on their own ("a London-area CMO", "UK operator")
+    if ((m = take(/\blondon\b/))) put(locs, 'United Kingdom', m[0]);
+    if ((m = take(/\buk\b|\bu\.k\.|\bunited kingdom\b|\bbritish\b(?! columbia)/))) put(locs, 'United Kingdom', m[0]);
+    // Capitalized state codes after a location cue ("based in TX", "in NY"); codes that are also words are skipped
+    const codeRe = /\b(?:[Bb]ased in|[Ll]ocated in|[Ii]n|[Ff]rom|[Oo]ut of)\s+([A-Z]{2})\b/g;
+    // A code whose words a city already took is skipped ("in LA" is Los Angeles, not Louisiana)
+    while ((m = codeRe.exec(raw))) {
+      const code = m[1], hit = { index: m.index + 1, 0: m[0].toLowerCase() };
+      if (src.some((x) => x.toLowerCase() === hit[0])) continue;
+      if (STATE_AB[code] && !ours(hit) && !market(hit)) put(locs, STATE_AB[code], m[0]);
+    }
+    // Time zones: coasts, named zones and their abbreviations (EST, CST, MST, PST; "ET" in capitals)
+    const zone = '(?: (?:standard |daylight )?(?:time|timezone|time zone|hours))';
+    if ((m = t.match(/\beast(?:ern)? coast\b/) || t.match(new RegExp('\\beastern' + zone)) || raw.match(/\b(EST|EDT|ET)\b/))) put(tzs, 'eastern', m[0]);
+    if ((m = t.match(new RegExp('\\bcentral' + zone)) || raw.match(/\b(CST|CDT)\b/))) put(tzs, 'central', m[0]);
+    if ((m = t.match(new RegExp('\\bmountain' + zone)) || raw.match(/\b(MST|MDT)\b/))) put(tzs, 'mountain', m[0]);
+    if ((m = t.match(/\bwest(?:ern)? coast\b/) || t.match(new RegExp('\\bpacific' + zone)) || raw.match(/\b(PST|PDT)\b/))) put(tzs, 'pacific', m[0]);
+    // Europe as a place to be based, not a market to enter ("expanding into Europe" is not a location)
+    if ((m = t.match(/\b(europe|european|emea)\b/)) && !/\b(into|to|across|throughout|expand(ing)?|launch(ing)?|enter(ing)?|open(ing)?|(sell(ing)?|sells|sold) (in|into))\s+(the )?$/.test(t.slice(0, m.index)) && !market(m)) put(tzs, 'uk_europe', m[0]);
+    // US hours: "works US hours", "overlap with US business hours", "US time zones"
+    const ush = t.match(/\b(us|u\.s\.) (business |working |work )?(hours|time ?zones?)\b/);
+    const the = (v) => (/^(United States|United Kingdom|Netherlands|District of Columbia)$/.test(v) ? 'the ' + v : v);
+    const tzLabel = (v) => (F.timeZones ? RN.w.label('timeZones', v) : v);
+    if (locs.length) add('locations', locs.slice(0, 5), 'Based in ' + locs.slice(0, 5).map(the).join(' or '), src.join(', '));
+    if (tzs.length) add('timeZones', tzs, 'Time zone: ' + tzs.map(tzLabel).join(' or '), '');
+    if (ush) add('usHours', 'yes', 'Works US hours', ush[0]);
+  }
+
   const REV_SLUG = (usd) => (usd < 1e6 ? 'under_1m' : usd < 5e6 ? '1m_5m' : usd < 20e6 ? '5m_20m' : usd < 50e6 ? '20m_50m' : '50m_plus');
   const EMP_SLUG = (n) => (n <= 10 ? '1_10' : n <= 50 ? '11_50' : n <= 200 ? '51_200' : n <= 500 ? '201_500' : n <= 1000 ? '501_1000' : '1001_plus');
   const HOURS_FLOOR = (h) => { const codes = [20, 40, 60, 80, 100, 160].filter((c) => c <= h + 0.5); return codes.length ? String(codes[codes.length - 1]) : null; };
@@ -162,12 +251,16 @@
     const hrs = (facts.find((f) => f.k === '_hours') || {}).v;
     if (hrs) { const code = HOURS_FLOOR(hrs); if (code) add('hoursPerMonth', [code], `At least ${RN.w.label('hoursPerMonth', code)}`, (facts.find((f) => f.k === '_hours') || {}).src); }
 
-    // A monthly budget becomes an hourly cap once hours are known (operator rate = budget x 0.75 / hours)
+    // A monthly budget becomes an hourly cap once hours are known. Companies pay the listed rate and no fees,
+    // so the cap is simply budget / hours.
     const bud = (facts.find((f) => f.k === '_budgetMonth') || {}).v;
     if (bud && hrs && !facts.some((f) => f.k === 'rateMax')) {
-      const cap = Math.round((bud * 0.75) / hrs / 5) * 5;
-      if (cap >= 50) add('rateMax', cap, `Up to $${cap}/hr operator rate (from ${RN.fmt.usd(Math.round(bud))}/mo at ${hrs} hrs)`, '');
+      const cap = Math.round(bud / hrs / 5) * 5;
+      if (cap >= 50) add('rateMax', cap, `Up to $${cap}/hr (from ${RN.fmt.usd(Math.round(bud))}/mo at ${hrs} hrs)`, '');
     }
+
+    // Location (D9): where the operator is based, their time zone, and US hours
+    readLocation(raw, t, add);
 
     // Start date
     if (/\b(asap|a\.s\.a\.p|immediately|right away|right now|urgent(ly)?|this week|start now|yesterday|as soon as possible)\b/.test(t)) add('availability', ['available_now'], 'Available now', 'asap');
@@ -194,9 +287,9 @@
   };
 
   /* Applies the reading to search. If the full reading leaves no operator, it drops the least important parts
-     (keywords, rate, time, engagement type, start date, employees, revenue, industry) until operators match, and
-     reports what it left out. Role category is never dropped. base: filters the client set by hand. */
-  const DROP_ORDER = ['q', 'rateMax', 'hoursPerMonth', 'engagementTypes', 'availability', 'employeeRange', 'revenueRange', 'industries'];
+     (keywords, rate, time, engagement type, start date, employees, revenue, location, industry) until operators
+     match, and reports what it left out. Role category is never dropped. base: filters the client set by hand. */
+  const DROP_ORDER = ['q', 'rateMax', 'hoursPerMonth', 'engagementTypes', 'availability', 'employeeRange', 'revenueRange', 'usHours', 'timeZones', 'locations', 'industries'];
   M.understandSearch = function (text, base) {
     const u = M.understand(text);
     const filters = Object.assign({}, base || {}, u.filters);
