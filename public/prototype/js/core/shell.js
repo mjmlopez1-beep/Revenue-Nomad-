@@ -117,7 +117,7 @@
     } else if (p === 'operator') {
       const me = RN.myOp();
       const unread = RN.studioB && me ? RN.studioB.inboxBadge(me) : st.intros.filter((i) => i.opId === RN.personas.operator.opId && i.status === 'pending').length + st.projects.filter((pr) => ['posted', 'in_progress'].includes(pr.status) && (pr.invited || []).includes(RN.personas.operator.opId) && !(pr.responses || []).some((r) => r.opId === RN.personas.operator.opId)).length;
-      right = `<a class="btn btn-leaf btn-sm" href="#studio" aria-label="Studio">${icon('chart')}<span class="hide-s">Studio</span>${unread ? `<span class="nav-count">${unread}</span>` : ''}</a>
+      right = `<a class="btn btn-leaf btn-sm" href="#studio" aria-label="${unread ? `Studio, ${RN.fmt.plural(unread, 'item')} waiting for your reply` : 'Studio'}">${icon('chart')}<span class="hide-s">Studio</span>${unread ? `<span class="nav-count" aria-hidden="true">${unread}</span>` : ''}</a>
         <a href="#op.${esc(me ? me.slug : '')}" title="My public profile">${RN.ui.avatar(me, 'ava-sm')}</a>`;
     } else if (p === 'admin') {
       right = `<a class="btn btn-sm" href="#admin">${icon('settings')}Admin</a>`;
