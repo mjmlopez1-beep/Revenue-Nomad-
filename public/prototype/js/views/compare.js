@@ -1,6 +1,7 @@
 /* Compare (#compare): up to four operators side by side on the standard fields.
-   Rows use the registry labels (RN.fields) so compare reads exactly like intake, profile and filters.
-   Missing data shows "N/A" (Scope L272/L281). The best value in a row is tinted, never shouted.
+   Rows use the registry labels (RN.fields) so compare reads exactly like intake, profile and filters,
+   including the role details for each compared category (RN.fields.roleFields read through RN.roleDetail).
+   Missing data says "Not added" (never N/A). The best value in a row is tinted, never shouted.
    Rate and match signals are login-gated. Loops: compare_view per operator (Studio "Compared, not
    chosen"), intro-open per column (shared intro flow), shortlist-toggle; profile links inherit
    data-view-source="compare" so core ui.js records profile_view source=compare. */
@@ -8,7 +9,8 @@
   'use strict';
   const RN = window.RN;
   const esc = RN.esc, icon = RN.icon;
-  const NA = '<span class="cmp-na">N/A</span>';
+  const none = (t) => `<span class="cmp-na">${t || 'Not added'}</span>`;
+  const NA = none();
   const AVAIL_SCORE = { available_now: 3, available_2_weeks: 2, available_2_plus_weeks: 1 };
   const viewed = new Set();
   let undo = null;
@@ -16,7 +18,9 @@
   /* ---------- Values ---------- */
   const day = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
   const today = () => { const d = RN.now(); d.setHours(0, 0, 0, 0); return d; };
-  const mdy = (d) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+  // MM/DD/YYYY on profile and compare (Sheet3 #4); RN.fmt.mdy once core has it
+  const mdy = (d) => (RN.fmt.mdy ? RN.fmt.mdy(d) : `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`);
+  const allIn = (rate) => (RN.projects && RN.projects.allIn ? RN.projects.allIn(rate) : Math.round(rate / 0.75));
   /* Next available start date: never a past date; "Available now" uses today when no future date exists (L506). */
   function startFor(op) {
     const t = today();
@@ -50,24 +54,24 @@
   }
   function coreCell(op) {
     const c = coreAvg(op);
-    if (!c) return NA + sub('No client reviews yet');
+    if (!c) return none('No reviews yet');
     return `<div class="cmp-core"><b class="cmp-v">${c.avg.toFixed(1)}</b><span class="muted">/ 5</span>${RN.ui.stars(c.avg)}</div>${sub(esc(RN.fmt.plural(c.n, 'client review')))}`;
   }
   function engCell(op) {
     const e = op.engagements || [];
-    if (!e.length) return NA + sub('None listed yet');
+    if (!e.length) return NA;
     const names = e.map((x) => x.company).filter(Boolean);
     return `<div><b class="cmp-v">${e.length}</b> <span>${e.length === 1 ? 'engagement' : 'engagements'}</span></div>${names.length ? sub(esc(names.slice(0, 3).join(', ')) + (names.length > 3 ? ` +${names.length - 3}` : '')) : ''}`;
   }
   function tagsCell(op) {
     const v = verifiedTags(op);
-    if (!v.length) return NA + sub(`${esc(RN.fmt.plural((op.tags || []).length, 'focus area'))} claimed, none verified yet`);
+    if (!v.length) return none('None verified yet') + sub(`${esc(RN.fmt.plural((op.tags || []).length, 'focus area'))} listed by the operator`);
     const sel = ((RN.store.state.browse || {}).tags || []).map((t) => t.toLowerCase());
     return `<div class="cmp-tags">${v.slice(0, 6).map((t) => RN.ui.ftag({ t: t.t, tier: 'verified' }).replace('class="ftag ', `class="ftag ${sel.includes(t.t.toLowerCase()) ? 'cmp-tag-hit ' : ''}`)).join('')}</div>${v.length > 6 ? sub(`+${v.length - 6} more verified`) : ''}`;
   }
   function startCell(op) {
     const d = startFor(op);
-    if (!d) return NA + sub('Date not confirmed');
+    if (!d) return NA;
     const days = Math.round((d - today()) / 864e5);
     return `<b class="cmp-v cmp-v-sm tnum">${mdy(d)}</b>${sub(days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`)}`;
   }
@@ -77,9 +81,10 @@
   }
   function rateCell(op) {
     if (!op.rate) return NA;
-    if (RN.store.state.persona === 'visitor') return `<button type="button" class="cmp-lock" data-act="cmp-login">${icon('lock')}Log in to see rate</button>`;
+    if (RN.store.state.persona === 'visitor') return `<button type="button" class="cmp-lock" data-act="cmp-login" aria-label="Log in to see ${esc(op.first)}’s hourly rate">${icon('lock')}Log in to see rate</button>`;
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
-    return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}`) : ''}`;
+    // The operator's rate, then the all-in rate the client pays through Revenue Nomad (rate / 0.75, the 25% fee)
+    return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${sub(`<b class="cmp-allin">${esc(RN.fmt.rate(allIn(op.rate)))} all-in</b> through Revenue Nomad, including the 25% fee`)}${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)} (operator rate)`) : ''}`;
   }
   function listCell(key, vals, mine) {
     vals = (vals || []).filter(Boolean);
@@ -98,8 +103,20 @@
     </div>`;
   }
 
+  /* Role details (intake step 4): one reading for profile and compare through RN.roleDetail */
+  function roleCell(op, key) {
+    const t = RN.roleDetail && RN.roleDetail.text ? RN.roleDetail.text(op, key) : '';
+    return t ? `<span class="cmp-txt">${esc(t)}</span>` : NA;
+  }
+  // Union of the compared categories' role-detail keys, in registry order. GTM motion has its own row below.
+  function roleKeys(ops) {
+    const F = RN.fields, keys = [];
+    ops.forEach((op) => (F.roleFields[op.catKey] || []).forEach((k) => { if (k !== 'salesMotions' && F[k] && !keys.includes(k)) keys.push(k); }));
+    return keys;
+  }
+
   /* ---------- Rows (standard labels) ---------- */
-  function rowsFor() {
+  function rowsFor(ops) {
     const st = RN.store.state;
     const buyer = st.persona === 'buyer', visitor = st.persona === 'visitor';
     const co = RN.personas.buyer.company;
@@ -112,12 +129,15 @@
     R.push({ l: 'CORE average', tip: coreTip, cell: coreCell, val: (op) => { const c = coreAvg(op); return c ? c.avg : null; }, dir: 'max' });
     R.push({ l: 'Engagement history', cell: engCell, val: (op) => (op.engagements || []).length || null, dir: 'max' });
     R.push({ sec: 'Expertise', l: 'Verified focus areas', note: 'Top 6 by score', cell: tagsCell, val: (op) => verifiedTags(op).length || null, dir: 'max' });
+    const cats = [...new Set(ops.map((op) => op.catKey))];
+    const rtip = `<b>Operating range</b><br>Role details each operator gave when they joined, from the standard fields for ${esc(cats.map((c) => F.catLabel(c)).join(' and '))}.${cats.length > 1 ? ' Each role category answers its own questions, so a field from another category shows Not added.' : ''}`;
+    roleKeys(ops).forEach((k, i) => R.push({ sec: i === 0 ? 'Operating range' : '', secTip: i === 0 ? rtip : '', l: F[k].label, cell: (op) => roleCell(op, k) }));
     R.push({ sec: 'Availability', l: F.availability.label, cell: (op) => RN.ui.avail(op, { hours: false }), val: (op) => AVAIL_SCORE[op.avail.key] || null, dir: 'max' });
     R.push({ l: F.startDate.label, cell: startCell, val: (op) => { const d = startFor(op); return d ? -d.getTime() : null; }, dir: 'max' });
     R.push({ l: F.hoursPerMonth.label, cell: hoursCell, val: (op) => +(op.avail.hoursCode || 0) || null, dir: 'max' });
     R.push({ l: F.rate.label, cell: rateCell, val: (op) => (visitor ? null : op.rate || null), dir: 'min' });
     R.push({ l: F.engagementTypes.label, cell: (op) => listCell('engagementTypes', op.engagementTypes) });
-    R.push({ sec: 'Company fit', l: 'Company revenue', cell: (op) => listCell('revenueRange', op.revenueRanges, buyer ? co.revenueRange : null), val: buyer ? (op) => (op.revenueRanges.includes(co.revenueRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
+    R.push({ sec: 'Company fit', l: F.revenueRange.clientLabel || 'Company revenue', cell: (op) => listCell('revenueRange', op.revenueRanges, buyer ? co.revenueRange : null), val: buyer ? (op) => (op.revenueRanges.includes(co.revenueRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.employeeRange.label, cell: (op) => listCell('employeeRange', op.employeeRanges, buyer ? co.employeeRange : null), val: buyer ? (op) => (op.employeeRanges.includes(co.employeeRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.industries.label, cell: (op) => listCell('industries', op.industries, buyer ? co.industry : null), val: buyer ? (op) => (op.industries.includes(co.industry) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.salesMotions.label, cell: (op) => listCell('salesMotions', op.motions) });
@@ -163,16 +183,16 @@
     const asked = st.persona === 'buyer' && !!RN.intro.mine(op.id);
     return `<th scope="col" class="cmp-col"><div class="cmp-hd">
       <div class="cmp-hd-id">${RN.ui.avatar(op, 'ava-md')}<div class="grow"><a class="cmp-name" href="#op.${esc(op.slug)}" title="${esc(op.name)}">${esc(op.name)}</a><span class="cmp-role">Fractional ${esc(op.role)}</span></div></div>
-      <button type="button" class="btn btn-sm cmp-intro ${asked ? 'btn-line' : ''}" data-act="intro-open" data-id="${esc(op.id)}">${asked ? icon('check') + 'Intro requested' : 'Request intro'}</button>
+      <button type="button" class="btn btn-sm cmp-intro ${asked ? 'btn-line' : ''}" data-act="intro-open" data-id="${esc(op.id)}" aria-label="${asked ? `Intro requested with ${esc(op.first)}. See status` : `Request intro to ${esc(op.name)}`}">${asked ? icon('check') + 'Intro requested' : 'Request intro'}</button>
       <div class="cmp-hd-acts">
-        <button type="button" class="act ${saved ? '' : 'muted'}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}">${icon('bookmark')}${saved ? 'Saved' : 'Save'}</button>
+        <button type="button" class="act ${saved ? '' : 'muted'}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}" aria-label="${saved ? `Saved to shortlist: ${esc(op.name)}` : `Save ${esc(op.name)} to shortlist`}">${icon('bookmark')}${saved ? 'Saved' : 'Save'}</button>
         <button type="button" class="act muted" data-act="cmp-remove" data-id="${esc(op.id)}" aria-label="Remove ${esc(op.name)} from compare">${icon('x')}Remove</button>
       </div>
     </div></th>`;
   }
 
   function table(ops) {
-    const rows = rowsFor();
+    const rows = rowsFor(ops);
     const add = ops.length < 4;
     const cols = ops.length + (add ? 1 : 0);
     const sugg = add ? suggestions(ops, Math.min(4, 5 - ops.length)) : [];
@@ -186,10 +206,10 @@
         ${sugg.length ? `<span class="label">Suggested</span>${sugg.map(suggItem).join('')}` : `<p class="small muted">Browse to add more operators.</p>`}
       </div></td>` : '';
     const body = rows.map((r, i) => {
-      const lab = `<th scope="row" class="cmp-lab">${r.sec ? `<span class="cmp-sec">${r.sec}</span>` : ''}<span class="cmp-l">${esc(r.l)}${r.tip ? RN.ui.tip(r.tip, 'About ' + r.l) : ''}</span>${r.note ? `<span class="cmp-sub">${esc(r.note)}</span>` : ''}</th>`;
+      const lab = `<th scope="row" class="cmp-lab">${r.sec ? `<span class="cmp-sec">${r.sec}${r.secTip ? RN.ui.tip(r.secTip, 'About ' + r.sec) : ''}</span>` : ''}<span class="cmp-l">${esc(r.l)}${r.tip ? RN.ui.tip(r.tip, 'About ' + r.l) : ''}</span>${r.note ? `<span class="cmp-sub">${esc(r.note)}</span>` : ''}</th>`;
       let cells;
       if (r.lock) {
-        cells = `<td colspan="${ops.length}" class="cmp-lockrow"><div class="cmp-lockbox">${icon('lock')}<span><b>See how each operator fits your company.</b> Sign in as a client and every column is scored on company revenue, size, industry and expertise.</span><button type="button" class="btn btn-sm" data-act="cmp-login" data-fit="1">Log in as a client</button></div></td>`;
+        cells = `<td colspan="${ops.length}" class="cmp-lockrow"><div class="cmp-lockbox">${icon('lock')}<span><b>See how each operator fits your company.</b> Sign in as a client and every column is scored on company revenue, employee range, industry and expertise.</span><button type="button" class="act" data-act="cmp-login" data-fit="1">Log in to see fit${icon('arrow')}</button></div></td>`;
       } else {
         const best = bestSet(ops, r);
         cells = ops.map((op, j) => `<td class="${best.has(j) ? 'cmp-best' : ''}">${r.cell(op)}</td>`).join('');
@@ -233,7 +253,7 @@
       <section class="wrap cmp-body">
         ${ops.length > 1 ? `<p class="cmp-swipe">${icon('arrow')}Swipe sideways to see all ${ops.length} operators</p>` : ''}
         ${table(ops)}
-        <p class="cmp-foot tiny muted">N/A means the operator has not added this to their profile yet. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and match signals</button>` : ''}</p>
+        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and match signals</button>` : ''}</p>
       </section></div>`;
   }
 

@@ -5,7 +5,11 @@
    industries OR (up to 3), every other filter AND. Every filter control is RN.w.field, so the
    values are the same slugs operators store at signup.
    Loops wired here: search + impressions (Studio "Why you appeared"), zero-result searches
-   ("Tell us what you need" -> Admin demand), compare_add / shortlist via the shared card. */
+   ("Tell us what you need" -> Admin demand, with the search handed to #talk in seen.talkPrefill),
+   compare_add / shortlist via the shared card, saved searches (seen.savedSearches
+   [{id, name, q, tags, filters, createdAt, owner}], owner = the client's email; also listed in the
+   client workspace; run one from anywhere with data-act="br-saved-apply" data-id="<id>").
+   "Client-verified proof" (filters.verifiedProof) is applied here, after RN.model.search. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -13,9 +17,14 @@
   const BR = (RN.browse = RN.browse || {});
 
   const PAGE = 24;
-  const FILTER_KEYS = ['roleCategories', 'availability', 'hoursPerMonth', 'revenueRange', 'employeeRange', 'industries', 'engagementTypes', 'rateMax', 'risMin'];
-  // Chip colour by field type (founder L222): role, focus area, industry, availability, company, engagement, rate, reputation
-  const TYPE = { q: 'q', tags: 'focus', roleCategories: 'role', availability: 'avail', hoursPerMonth: 'avail', revenueRange: 'company', employeeRange: 'company', industries: 'industry', engagementTypes: 'engage', salesMotions: 'motion', rateMax: 'rate', risMin: 'ris' };
+  const FILTER_KEYS = ['verifiedProof', 'roleCategories', 'availability', 'hoursPerMonth', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes', 'rateMax', 'risMin'];
+  // Chip colour by field type (founder L222): role, focus area, industry, availability, company, engagement, rate, reputation, proof
+  const TYPE = { q: 'q', tags: 'focus', roleCategories: 'role', availability: 'avail', hoursPerMonth: 'avail', revenueRange: 'company', employeeRange: 'company', industries: 'industry', engagementTypes: 'engage', salesMotions: 'motion', rateMax: 'rate', risMin: 'ris', verifiedProof: 'proof' };
+  const PROOF = 'Client-verified proof';
+  const REV_LABEL = () => RN.fields.revenueRange.clientLabel || 'Company revenue';
+  // Each category page links to its own Engagement Blueprint (RN.projects.blueprints ids)
+  const CAT_BP = { sales_leadership: 'vp-sales', marketing: 'vp-marketing', revenue_operations: 'vp-revops', customer_success_growth: 'vp-cs', sales_enablement: 'enablement-director', ai_gtm: 'ai-gtm-architect', partnerships: 'vp-partnerships', sellers: 'account-executive' };
+  const THIN = 5; // fewer live operators than this in a category: capture the demand instead of showing a thin page
   const SORTS = [['best', 'Best match'], ['ris', 'Reputation Index'], ['available', 'Available soonest'], ['rate', 'Rate']];
   const AVAIL_RANK = { available_now: 0, available_2_weeks: 1, available_2_plus_weeks: 2 };
 
@@ -64,6 +73,10 @@
   let landedCat = null;      // category landing currently applied
   let compact = false;       // sticky bar minimized while scrolling down
 
+  /* Client-verified proof: at least one client review, or a focus area a client confirmed (tier verified or expert) */
+  const hasProof = (op) => (op.reviews || []).length > 0 || (op.tags || []).some((t) => t.tier !== 'claimed');
+  BR.hasProof = hasProof;
+
   /* Run the model search with the view's sort rules. */
   function run(c, sort) {
     RN.model.applyEdits && RN.model.applyEdits();
@@ -71,6 +84,7 @@
     let res = RN.model.search({ q: c.q, tags: c.tags, filters: c.filters, sort });
     // A budget filter only keeps operators who publish a rate (Studio tells operators: no rate, no budget searches)
     if (c.filters.rateMax) res = res.filter((r) => r.op.rate);
+    if (c.filters.verifiedProof) res = res.filter((r) => hasProof(r.op));
     if (sort === 'available') {
       const t = (r) => { const d = r.op.avail.startDate ? new Date(r.op.avail.startDate).getTime() : 0; return Math.max(d, RN.now().getTime() - 864e5); };
       res.sort((a, b) => (AVAIL_RANK[a.op.avail.key] || 0) - (AVAIL_RANK[b.op.avail.key] || 0) || t(a) - t(b) || b.score - a.score);
@@ -123,10 +137,12 @@
       case 'employeeRange': return RN.w.label('employeeRange', v) + ' employees';
       case 'rateMax': return 'Up to $' + Math.round(+v) + ' / hr';
       case 'risMin': return 'Reputation Index ' + RN.w.label('risMin', v);
+      case 'verifiedProof': return PROOF;
       default: return RN.fields[k] ? RN.w.label(k, v) : String(v);
     }
   }
-  const typeName = (k) => ({ q: 'Search', tags: 'Focus area', revenueRange: 'Company revenue', rateMax: 'Hourly rate', hoursPerMonth: 'Available time' }[k] || (RN.fields[k] ? RN.fields[k].label : k));
+  const typeName = (k) => ({ q: 'Search', tags: 'Focus area', revenueRange: REV_LABEL(), rateMax: 'Hourly rate', hoursPerMonth: 'Available time', verifiedProof: 'Proof' }[k] || (RN.fields[k] ? RN.fields[k].label : k));
+  const chipAria = (k, v) => (k === 'verifiedProof' ? `Remove filter: ${PROOF}` : `Remove ${typeName(k)}: ${chipText(k, v)}`);
   function groupLabel(k, v) {
     if (k === 'q') return `“${v}”`;
     if (Array.isArray(v)) return v.map((x) => chipText(k, x)).join(' or ');
@@ -179,6 +195,7 @@
     const p = RN.personas.buyer;
     RN.ui.modal({
       width: 480,
+      onClose: o.onClose,
       title: esc(o.title || 'Log in to see rates'),
       sub: esc(o.sub || 'Hourly rates and match signals are shown to signed-in clients. Browsing stays open to everyone.'),
       body: `<div class="stack" style="--gap:12px">
@@ -207,13 +224,21 @@
       ${cat ? catHead(cat) : genHead()}
       ${bar(c)}
       <section class="wrap br-body">
+        <div id="br-saved" class="br-saved">${savedRow(c)}</div>
         <div id="br-assist" class="br-assist">${assist(c, cat)}</div>
         <div class="br-rhead">
-          <p id="br-count" class="br-count" aria-live="polite">${countHtml(res, c)}</p>
-          ${sortHtml()}
+          <div class="br-rhead-l">
+            <p id="br-count" class="br-count" aria-live="polite">${countHtml(res, c)}</p>
+            <span id="br-save-slot" class="br-save-slot">${saveBtn(c)}</span>
+          </div>
+          <div class="br-rhead-r">
+            ${proofSwitch(c)}
+            ${sortHtml()}
+          </div>
         </div>
         <div id="br-results" data-view-source="search">${resultsHtml(res, c)}</div>
       </section>
+      ${cat ? thinBlock(cat) : ''}
       ${cat ? catPlan(cat) : ''}
       ${rolesNav(cat)}
     </div>`;
@@ -223,7 +248,7 @@
     return `<header class="wrap br-head">
       <span class="eyebrow">Direct access to talent</span>
       <h1 class="h1">Browse <span class="serif">operators</span></h1>
-      <p class="lede">Open profiles with client-verified proof of work. No login needed to browse.</p>
+      <p class="lede">Open profiles. Reviews and focus areas a client confirmed are marked Verified. No login needed to browse.</p>
     </header>`;
   }
 
@@ -248,7 +273,10 @@
     const titles = (RN.fields.rolesByCat[cat] || []).join(' · ');
     const tags = catTopTags(cat);
     const sel = st().tags.map((t) => t.toLowerCase());
-    const mo = (h) => RN.fmt.usd(Math.round((idx.p50 * h) / 100) * 100);
+    // Same range and $500 rounding as the Rate Index estimator; all-in adds the 25% Revenue Nomad fee (rate / 0.75)
+    const mr = idx && RN.model.monthlyRange ? RN.model.monthlyRange(cat, null, '40') : null;
+    const r500 = (n) => Math.round(n / 500) * 500;
+    const allIn = mr ? `${RN.fmt.usd(r500(mr.lo / 0.75))} - ${RN.fmt.usd(r500(mr.hi / 0.75))}/mo` : '';
     return `<header class="wrap br-head br-head-cat">
       <nav class="crumbs" aria-label="Breadcrumb"><a href="#browse">Browse talent</a>${icon('chev-right')}<span>${esc(label)}</span></nav>
       <div class="br-cat-grid">
@@ -263,9 +291,13 @@
         ${idx ? `<aside class="card br-rate-card" aria-label="Rate Index for ${esc(label)}">
           <span class="label">Rate Index · ${esc(label)}</span>
           <div class="br-rate-big"><span class="num">$${esc(idx.p50)}</span><span class="small muted">median per hour</span></div>
-          <p class="small">Typical range <b>$${esc(idx.p25)}–$${esc(idx.p75)} / hr</b> (middle half of ${esc(idx.n)} profiles). About <b>${mo(20)}–${mo(40)} a month</b> at 20 to 40 hrs.</p>
+          <p class="small">Typical range <b>$${esc(idx.p25)}–$${esc(idx.p75)} / hr</b> (middle half of ${esc(idx.n)} profiles).</p>
+          ${mr ? `<dl class="br-rate-mo">
+            <div><dt>Operator rates at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(mr.label)}</dd></div>
+            <div><dt>All-in through Revenue Nomad, including the 25% fee</dt><dd class="tnum">${esc(allIn)}</dd></div>
+          </dl>` : ''}
           <div class="br-rate-chart" data-br-chart="${esc(cat)}" aria-label="Median hourly rate by role category"></div>
-          <div class="row between br-rate-foot"><a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a><span class="tiny muted">Illustrative figures</span></div>
+          <div class="row between br-rate-foot"><a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a>${RN.ui.illus('Illustrative figures')}</div>
         </aside>` : ''}
       </div>
     </header>`;
@@ -280,17 +312,66 @@
     return RN.chart.bars(rows, { w: Math.max(240, Math.round(w)), labelW, rowH: 26, barH: 10, fmt: (n) => '$' + n, label: 'Median hourly rate by role category' });
   }
 
+  /* The category's own Blueprints (primary first) and up to 2 guides for it (general client guides fill the gap) */
+  function catBlueprints(cat) {
+    const all = (RN.projects && RN.projects.blueprints) || [];
+    const main = all.find((b) => b.id === CAT_BP[cat]);
+    return (main ? [main] : []).concat(all.filter((b) => b.cat === cat && b !== main));
+  }
+  function catGuides(cat) {
+    const all = (RN.research && RN.research.guides) || [];
+    const own = all.filter((g) => g.cat === cat);
+    const general = all.filter((g) => !g.cat && g.group === 'clients');
+    return own.concat(general).slice(0, 2);
+  }
+  const guideRoute = () => Object.values(RN.views || {}).some((v) => v.tokens && v.tokens.length === 2 && v.tokens[0] === 'guide');
   function catPlan(cat) {
     const noun = CAT[cat].noun;
     const label = RN.fields.catLabel(cat);
-    const card = (href, ic, h, p, cta) => `<a class="card card-link br-plan-card" href="${href}">${icon(ic)}<h3 class="h4">${esc(h)}</h3><p class="small muted">${esc(p)}</p><span class="act">${esc(cta)}${icon('arrow')}</span></a>`;
+    const bps = catBlueprints(cat);
+    const guides = catGuides(cat);
+    const perGuide = guideRoute();
+    const link = (href, text) => `<li><a class="act" href="${href}">${esc(text)}${icon('arrow')}</a></li>`;
     return `<section class="wrap br-plan" aria-labelledby="br-plan-h">
       <h2 class="h3" id="br-plan-h">Plan a fractional ${esc(noun)} engagement</h2>
       <div class="grid g-3" style="--gap:16px">
-        ${card('#rates', 'chart', `What does a fractional ${noun} cost?`, `Hourly medians and ranges for ${label}, adjusted for company revenue, in the Rate Index.`, 'See rates')}
-        ${card('#blueprints', 'layers', 'Scope the work', 'Engagement Blueprints give you the hours, term and a 30/60/90-day plan. Post one as a project in minutes.', 'Browse Blueprints')}
-        ${card('#guides', 'book', 'Hiring guides', 'Plain answers on scoping, pricing and managing a fractional GTM leader.', 'Read the guides')}
+        <a class="card card-link br-plan-card" href="#rates">${icon('chart')}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
+        <div class="card br-plan-card">${icon('layers')}<h3 class="h4">Scope it from a Blueprint</h3>
+          <p class="small muted">${bps.length ? esc(bps[0].blurb) + ' ' : ''}Hours, term and a 30/60/90-day plan. Post it as a project in minutes.</p>
+          <ul class="br-plan-links">${bps.length ? bps.map((b) => link('#blueprint.' + esc(b.id), `${b.role} Blueprint`)).join('') : link('#blueprints', 'Browse Blueprints')}</ul></div>
+        <div class="card br-plan-card">${icon('book')}<h3 class="h4">Hiring guides</h3>
+          <p class="small muted">Plain answers on scoping, pricing and managing a fractional ${esc(noun)}.</p>
+          <ul class="br-plan-links">${perGuide ? guides.map((g) => link('#guide.' + esc(g.slug), g.q)).join('') : ''}${link('#guides', perGuide && guides.length ? 'All guides' : 'Read the guides')}</ul></div>
       </div>
+    </section>`;
+  }
+
+  /* Thin categories (fewer than THIN live operators): say so, capture the need, show adjacent expertise */
+  const catCount = (cat) => RN.model.ops.filter((op) => !op.hidden && op.catKey === cat).length;
+  function thinNote(cat) {
+    const n = catCount(cat);
+    const label = RN.fields.catLabel(cat);
+    return `<div class="br-thin-note">
+      <span class="br-zero-ic">${icon('users')}</span>
+      <div class="grow stack" style="--gap:4px">
+        <h2 class="h4">${n === 1 ? `One ${esc(label)} operator is live today` : `${esc(RN.fmt.int(n))} ${esc(label)} operators are live today`}</h2>
+        <p class="small muted">Tell us what you need and our team will find more ${esc(CAT[cat].noun)}s for you. Your search comes with you.</p>
+      </div>
+      <button type="button" class="btn btn-line" data-act="br-tell" data-zero="">Tell us what you need</button>
+    </div>`;
+  }
+  function thinBlock(cat) {
+    if (catCount(cat) >= THIN) return '';
+    const label = RN.fields.catLabel(cat);
+    const near = RN.model.ops.filter((op) => !op.hidden && op.catKey !== cat)
+      .map((op) => { const t = (op.tags || []).filter((x) => x.c === cat).sort((a, b) => (a.tier === 'claimed') - (b.tier === 'claimed')); return { op, t, v: t.filter((x) => x.tier !== 'claimed').length }; })
+      .filter((x) => x.t.length)
+      .sort((a, b) => b.v - a.v || b.t.length - a.t.length || b.op.ris.score - a.op.ris.score)
+      .slice(0, 3);
+    if (!near.length) return '';
+    return `<section class="wrap br-near" aria-labelledby="br-near-h" data-view-source="search">
+      <h2 class="h4" id="br-near-h">Operators in other categories with ${esc(label)} focus areas</h2>
+      <div class="grid g-3 br-grid">${near.map((x) => BR.card(x.op, { why: x.v ? `Client-verified in ${x.t.filter((t) => t.tier !== 'claimed').slice(0, 2).map((t) => t.t).join(' and ')}` : `Lists ${x.t.slice(0, 2).map((t) => t.t).join(' and ')}` })).join('')}</div>
     </section>`;
   }
 
@@ -304,8 +385,9 @@
   /* ---------- Sticky search bar ---------- */
   function badge(n) { return n ? `<span class="nav-count br-badge">${n}</span>` : ''; }
   function barBtns(c) {
-    return `<button type="button" class="btn btn-line br-bar-btn" data-act="br-tags-toggle" aria-expanded="${tagsOpen}" aria-controls="br-tp" id="br-tags-btn">${icon('target')}<span class="br-bar-l">Focus areas</span>${badge(c.tags.length)}</button>
-      <button type="button" class="btn btn-line br-bar-btn" data-act="br-filters" id="br-filters-btn">${icon('sliders')}<span class="br-bar-l">Filters</span>${badge(filterCount(c))}</button>`;
+    const nt = c.tags.length, nf = filterCount(c);
+    return `<button type="button" class="btn btn-line br-bar-btn" data-act="br-tags-toggle" aria-expanded="${tagsOpen}" aria-controls="br-tp" id="br-tags-btn" aria-label="Focus areas${nt ? `, ${nt} selected` : ''}">${icon('target')}<span class="br-bar-l">Focus areas</span>${badge(nt)}</button>
+      <button type="button" class="btn btn-line br-bar-btn" data-act="br-filters" id="br-filters-btn" aria-haspopup="dialog" aria-label="Filters${nf ? `, ${nf} active` : ''}">${icon('sliders')}<span class="br-bar-l">Filters</span>${badge(nf)}</button>`;
   }
   function bar(c) {
     return `<div class="br-bar${compact ? ' is-compact' : ''}" id="br-bar">
@@ -345,7 +427,7 @@
     const chips = chipList(c);
     if (chips.length) {
       return `<div class="br-chips" role="list" aria-label="Active filters">
-        ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="Remove ${esc(typeName(x.k))}: ${esc(chipText(x.k, x.v))}">${x.k === 'q' ? icon('search') : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
+        ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${x.k === 'q' ? icon('search') : x.k === 'verifiedProof' ? icon('seal') : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
         ${chips.length > 1 ? `<span role="listitem"><button type="button" class="act muted br-clear" data-act="br-clear">Clear all</button></span>` : ''}
       </div>`;
     }
@@ -353,6 +435,48 @@
     const pop = RN.data.market.queries.filter((q) => !q.zero).slice().sort((a, b) => b.vol - a.vol).slice(0, 6);
     return `<div class="br-popular"><span class="label">Popular searches</span>
       <div class="br-popular-list">${pop.map((q) => `<button type="button" class="chip chip-sm" data-act="br-q-set" data-q="${esc(q.q)}">${esc(q.q)}</button>`).join('')}</div></div>`;
+  }
+
+  /* ---------- Saved searches: RN.store.state.seen.savedSearches [{id, name, q, tags, filters, createdAt}] ---------- */
+  const isClient = () => RN.store.state.persona === 'buyer';
+  // Each record carries owner (the client's email); Browse and the workspace list only the signed-in client's own
+  const me = () => String(RN.personas.buyer.email || '').toLowerCase();
+  const allSaved = () => { const s = RN.store.state.seen; return s && Array.isArray(s.savedSearches) ? s.savedSearches : []; };
+  function savedList() { const m = me(); return allSaved().filter((x) => String(x.owner || '').toLowerCase() === m); }
+  BR.saved = savedList;
+  const savedKey = (x) => critKey({ q: String(x.q || '').trim(), tags: (x.tags || []).slice(0, 5), filters: cleanFilters(x.filters || {}) });
+  const findSaved = (c) => { const k = critKey(c); return savedList().find((x) => savedKey(x) === k) || null; };
+  function critParts(c) { return chipList(c).map((x) => (x.k === 'q' ? x.v : chipText(x.k, x.v))); }
+  function defaultName(c) {
+    const parts = critParts(c);
+    let name = parts.slice(0, 2).join(' · ') + (parts.length > 2 ? ` +${parts.length - 2}` : '');
+    return name.length > 60 ? name.slice(0, 59).trim() + '…' : name;
+  }
+  function savedRow(c) {
+    const list = isClient() ? savedList() : [];
+    if (!list.length) return '';
+    const k = critKey(c);
+    return `<div class="br-sv-row"><span class="label" id="br-sv-l">Saved searches</span>
+      <ul class="br-sv-list" aria-labelledby="br-sv-l">${list.map((x) => {
+        const on = savedKey(x) === k;
+        return `<li class="br-sv${on ? ' on' : ''}"><button type="button" class="br-sv-go" data-act="br-saved-apply" data-id="${esc(x.id)}" aria-pressed="${on}" aria-label="Saved search: ${esc(x.name)}" title="${esc(critParts({ q: x.q || '', tags: x.tags || [], filters: cleanFilters(x.filters || {}) }).join(' · '))}">${icon(on ? 'check' : 'bookmark')}<span>${esc(x.name)}</span></button><button type="button" class="br-sv-x" data-act="br-saved-del" data-id="${esc(x.id)}" aria-label="Delete saved search: ${esc(x.name)}">${icon('x')}</button></li>`;
+      }).join('')}</ul></div>`;
+  }
+  function saveBtn(c) {
+    if (!hasCrit(c)) return '';
+    const ex = isClient() ? findSaved(c) : null;
+    return ex
+      ? `<button type="button" class="act br-save on" data-act="br-save" aria-label="Saved as ${esc(ex.name)}. Rename or delete">${icon('check')}Saved</button>`
+      : `<button type="button" class="act br-save" data-act="br-save">${icon('bookmark')}Save search</button>`;
+  }
+  function proofSwitch(c) {
+    return `<label class="switch br-proof-sw" title="Operators with a client review or a focus area a client confirmed"><input type="checkbox" data-change="br-proof" ${c.filters.verifiedProof ? 'checked' : ''}><i></i><span>${PROOF}</span></label>`;
+  }
+  const refocus = (sel) => { const el = document.querySelector('.br-page ' + sel); if (el) el.focus(); };
+  function syncSaved() {
+    const c = crit();
+    const a = document.getElementById('br-saved'); if (a) a.innerHTML = savedRow(c);
+    const b = document.getElementById('br-save-slot'); if (b) b.innerHTML = saveBtn(c);
   }
 
   function countHtml(res, c) {
@@ -375,7 +499,7 @@
     const more = res.length - shown.length;
     return `<div class="grid g-3 br-grid">${shown.map((r) => BR.card(r.op, { why: whyFor(r, c) })).join('')}</div>
       ${more > 0 ? `<div class="br-more"><button type="button" class="btn btn-line" data-act="br-more">Show ${Math.min(PAGE, more)} more</button><span class="small muted">Showing ${shown.length} of ${res.length}</span></div>` : ''}
-      <p class="br-tell">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`;
+      ${landedCat && catCount(landedCat) < THIN ? thinNote(landedCat) : `<p class="br-tell">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`}`;
   }
 
   /* ---------- Zero results: never a dead end ---------- */
@@ -439,6 +563,9 @@
     set('br-count', countHtml(res, c));
     set('br-results', resultsHtml(res, c));
     set('br-bar-acts', barBtns(c));
+    set('br-saved', savedRow(c));
+    set('br-save-slot', saveBtn(c));
+    const pc = root.querySelector('.br-proof-sw input'); if (pc) pc.checked = !!c.filters.verifiedProof;
     const x = root.querySelector('.br-q-x'); if (x) x.hidden = !st().q;
     const qi = document.getElementById('br-q'); if (qi && document.activeElement !== qi && qi.value !== st().q) qi.value = st().q;
     RN.$$('[data-act="br-tag-toggle"]', root).forEach((b) => b.setAttribute('aria-pressed', st().tags.some((t) => t.toLowerCase() === b.dataset.t.toLowerCase())));
@@ -495,14 +622,24 @@
       <div class="br-rate-scale" aria-hidden="true"><span>$${d.min}</span><span>$${d.max}+</span></div>
     </div>`;
   }
-  function formHtml(f) {
+  function availField(v) {
     const F = RN.fields;
-    return `${RN.w.field('roleCategories', f.roleCategories || [], { name: 'roleCategories' })}
-      ${withTempDef('brAvailability', Object.assign({}, F.availability, { type: 'multi', options: F.availability.options }), () => RN.w.field('brAvailability', f.availability || [], { name: 'availability', id: 'f-br-availability', help: 'Pick any that work for you.' }))}
+    const o = { name: 'availability', id: 'f-br-availability', help: 'Pick any that work for you.' };
+    // Uses the registry's multi-select availability once it exists (core request); until then a same-slug stand-in
+    if (F.availabilities) return RN.w.field('availabilities', v, o);
+    return withTempDef('brAvailability', Object.assign({}, F.availability, { type: 'multi', options: F.availability.options }), () => RN.w.field('brAvailability', v, o));
+  }
+  function formHtml(f) {
+    return `<div class="field br-proof-field" data-field="verifiedProof">
+        <label class="switch br-proof"><input type="checkbox" name="verifiedProof" value="1" ${f.verifiedProof ? 'checked' : ''}><i></i><span><b>${PROOF}</b><span class="small muted">Only operators with a client review or a focus area a client confirmed.</span></span></label>
+      </div>
+      ${RN.w.field('roleCategories', f.roleCategories || [], { name: 'roleCategories' })}
+      ${availField(f.availability || [])}
       <div data-deselect>${RN.w.field('hoursPerMonth', (f.hoursPerMonth || [])[0] || '', { name: 'hoursPerMonth', help: 'Shows operators with at least this much time each month.' })}</div>
-      ${RN.w.field('revenueRange', f.revenueRange || [], { name: 'revenueRange', label: 'Company revenue', help: 'Operators who work with companies in any selected range.' })}
+      ${RN.w.field('revenueRange', f.revenueRange || [], { name: 'revenueRange', label: REV_LABEL(), help: 'Operators who work with companies in any selected range.' })}
       ${RN.w.field('employeeRange', f.employeeRange || [], { name: 'employeeRange', help: 'Operators who work with companies of any selected size.' })}
       ${RN.w.field('industries', f.industries || [], { name: 'industries', max: 3, help: 'Pick up to 3. Operators in any selected industry are shown.' })}
+      ${RN.w.field('salesMotions', f.salesMotions || [], { name: 'salesMotions', help: 'Operators with experience in any selected motion.' + (RN.model.ops.filter((op) => !op.hidden && (op.motions || []).length).length < 10 ? ' Few profiles list it yet.' : '') })}
       ${RN.w.field('engagementTypes', f.engagementTypes || [], { name: 'engagementTypes', help: 'Operators who offer any selected type.' })}
       ${rateField(f.rateMax)}
       <div data-deselect>${RN.w.field('risMin', f.risMin || '', { name: 'risMin', help: 'Minimum score. Every approved profile starts at 50.' })}</div>`;
@@ -511,7 +648,8 @@
     const d = RN.ui.formData(form);
     const cur = st().filters;
     const f = {};
-    ['roleCategories', 'revenueRange', 'employeeRange', 'industries', 'engagementTypes'].forEach((k) => { if (Array.isArray(d[k]) && d[k].length) f[k] = d[k]; });
+    if ([].concat(d.verifiedProof || []).length) f.verifiedProof = true;
+    ['roleCategories', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes'].forEach((k) => { if (Array.isArray(d[k]) && d[k].length) f[k] = d[k]; });
     const av = d.availability ? (Array.isArray(d.availability) ? d.availability : String(d.availability).split('|')).filter(Boolean) : [];
     if (av.length) f.availability = av;
     if (d.hoursPerMonth) f.hoursPerMonth = [d.hoursPerMonth];
@@ -563,12 +701,102 @@
     RN.ui.closeModal();
     setCrit({ filters: f }, { trackNow: true });
   };
-  // Signing in from inside the drawer unlocks the rate control in place
+  // Signing in from inside the drawer unlocks the rate control in place.
+  // A visitor who clicked Save search and then signed in as a client gets the search saved (no second click).
+  let pendingSave = false;
   RN.store.on((key) => {
     if (key !== 'persona') return;
     const box = document.querySelector('#br-ff [data-br-rate]');
     if (box) box.outerHTML = rateField(st().filters.rateMax);
+    if (pendingSave && isClient()) {
+      pendingSave = false;
+      setTimeout(() => { if (document.querySelector('.br-page') && isClient()) RN.actions['br-save'](); }, 80);
+    }
   });
+
+  /* ---------- Saved search and proof actions ---------- */
+  RN.inputs['br-proof'] = (el) => {
+    const f = clone(st().filters);
+    if (el.checked) f.verifiedProof = true; else delete f.verifiedProof;
+    setCrit({ filters: f }, { trackNow: true });
+  };
+  RN.actions['br-save'] = () => {
+    const c = crit();
+    if (!hasCrit(c)) return;
+    if (!isClient()) {
+      pendingSave = true;
+      BR.loginPrompt({ title: 'Log in to save this search', sub: 'Signed-in clients save searches and run them again in one click. Browsing stays open to everyone.', onClose: () => { pendingSave = false; } });
+      return;
+    }
+    const ex = findSaved(c);
+    if (ex) { renameSaved(ex.id); return; }
+    const rec = { id: RN.uid('ss'), name: defaultName(c), q: c.q, tags: c.tags.slice(), filters: clone(c.filters), createdAt: RN.now().toISOString(), owner: RN.personas.buyer.email };
+    RN.store.update((s) => {
+      s.seen = s.seen || {};
+      s.seen.savedSearches = [rec].concat(Array.isArray(s.seen.savedSearches) ? s.seen.savedSearches : []).slice(0, 20);
+    }, 'seen');
+    RN.track('saved_search', { q: rec.q, tags: rec.tags, filters: clone(rec.filters), results: run(c, 'best').length, source: landedCat ? 'category' : 'browse', meta: { savedSearchId: rec.id, name: rec.name } });
+    RN.mail(RN.personas.buyer.email, `Search saved: ${rec.name}`, `You saved “${rec.name}” on Revenue Nomad.\n\nRun it again in one click from Browse or your workspace. We will email you when a new operator matches it.`, 'system');
+    syncSaved();
+    refocus('.br-save');
+    RN.ui.toast(`Search saved as “${esc(rec.name)}”`, { action: { label: 'Rename', act: 'br-saved-rename', attrs: `data-id="${esc(rec.id)}"` } });
+  };
+  function renameSaved(id) {
+    const x = savedList().find((s) => s.id === id);
+    if (!x) return;
+    const summary = critParts({ q: x.q || '', tags: x.tags || [], filters: cleanFilters(x.filters || {}) }).join(' · ');
+    RN.ui.modal({
+      width: 460,
+      title: 'Name this search',
+      sub: 'Saved searches are listed on Browse and in your workspace.',
+      body: `<form id="br-sv-form" class="stack" style="--gap:12px" data-submit="br-saved-name" data-id="${esc(id)}">
+        <div class="field"><label for="br-sv-name">Name</label><input class="input" id="br-sv-name" name="name" maxlength="60" required autocomplete="off" value="${esc(x.name)}"></div>
+        <p class="small muted">${esc(summary)}</p>
+      </form>`,
+      foot: `<button type="button" class="act muted" data-act="br-saved-del" data-id="${esc(id)}">${icon('x')}Delete saved search</button><span class="grow"></span><button class="btn" type="submit" form="br-sv-form">Save name</button>`,
+    });
+  }
+  RN.actions['br-saved-rename'] = (el) => renameSaved(el.dataset.id);
+  RN.submits['br-saved-name'] = (form, data) => {
+    const name = String(data.name || '').trim().slice(0, 60);
+    if (!name) { RN.ui.toast('Give the search a name.', { icon: 'info' }); return; }
+    RN.store.update((s) => { const x = ((s.seen || {}).savedSearches || []).find((y) => y.id === form.dataset.id); if (x) x.name = name; }, 'seen');
+    RN.ui.closeModal();
+    syncSaved();
+    RN.ui.toast(`Renamed to “${esc(name)}”`);
+  };
+  let lastDeleted = null;
+  RN.actions['br-saved-del'] = (el) => {
+    const id = el.dataset.id;
+    const list = savedList();
+    const i = list.findIndex((x) => x.id === id);
+    if (i < 0) return;
+    const inModal = !!el.closest('.modal');
+    if (inModal) RN.ui.closeModal();
+    lastDeleted = { rec: list[i], at: allSaved().indexOf(list[i]) };
+    RN.store.update((s) => { s.seen.savedSearches = s.seen.savedSearches.filter((x) => x.id !== id); }, 'seen');
+    syncSaved();
+    if (!inModal) { const left = RN.$$('[data-act="br-saved-apply"]'); if (left.length) left[Math.min(i, left.length - 1)].focus(); else refocus('#br-q'); }
+    else refocus('.br-save');
+    RN.ui.toast(`Deleted “${esc(lastDeleted.rec.name)}”`, { action: { label: 'Undo', act: 'br-saved-undo' } });
+  };
+  RN.actions['br-saved-undo'] = () => {
+    if (!lastDeleted) return;
+    const d = lastDeleted; lastDeleted = null;
+    RN.store.update((s) => { s.seen = s.seen || {}; const l = Array.isArray(s.seen.savedSearches) ? s.seen.savedSearches : []; l.splice(Math.min(Math.max(0, d.at), l.length), 0, d.rec); s.seen.savedSearches = l; }, 'seen');
+    syncSaved();
+  };
+  /* Run a saved search. On Browse the chip toggles (pressed again clears it); anywhere else it opens Browse. */
+  RN.actions['br-saved-apply'] = (el) => {
+    const x = savedList().find((s) => s.id === el.dataset.id);
+    if (!x) return;
+    const c = { q: x.q || '', tags: (x.tags || []).slice(0, 5), filters: clone(x.filters || {}) };
+    if (!el.closest('.br-page')) { RN.ui.closeModal(); BR.go(c); return; }
+    if (el.getAttribute('aria-pressed') === 'true') { RN.actions['br-clear'](); return; }
+    const i = document.getElementById('br-q'); if (i) i.value = c.q;
+    setCrit(c, { trackNow: true });
+    refocus(`[data-act="br-saved-apply"][data-id="${x.id}"]`);
+  };
 
   /* ---------- Actions ---------- */
   let qTimer = null;
@@ -626,6 +854,8 @@
     if (same && lastKey === key) RN.store.update(() => { prev.meta = Object.assign({}, prev.meta, { tellUs: true }); }, 'events');
     else RN.track('search', { q: c.q, tags: c.tags, filters: clone(c.filters), results: n, source: 'tell_us', meta: { tellUs: true } });
     lastKey = key;
+    // Hand the search to Talk to us so the client does not describe the need twice (pages.js reads and clears it)
+    RN.store.update((s) => { s.seen = s.seen || {}; s.seen.talkPrefill = { q: c.q, tags: c.tags.slice(), filters: clone(c.filters), source: landedCat ? 'category' : 'browse', results: n }; }, 'seen');
     RN.go('talk');
   };
 
