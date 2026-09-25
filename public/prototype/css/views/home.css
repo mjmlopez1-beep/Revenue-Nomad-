@@ -418,7 +418,22 @@
 }
 
 /* Reduced motion: no marquee (the strip scrolls by hand), no line mask, no lifts */
+/* Scroll motion (original site): prepared only below the fold after the visitor starts scrolling */
+[data-view="home"] .hm-rv { opacity: 0; transform: translateY(34px); }
+[data-view="home"] .hm-rv.hm-rv-in { opacity: 1; transform: none; transition: opacity .9s cubic-bezier(.2, .7, .2, 1) var(--rv-d, 0ms), transform .9s cubic-bezier(.2, .7, .2, 1) var(--rv-d, 0ms); }
+/* Cards lift on hover, as in the original */
+[data-view="home"] .opc:hover { transform: translateY(-8px); border-color: var(--accent); box-shadow: var(--shadow-2); }
+[data-view="home"] .opc.hm-rv.hm-rv-in:hover { transition: transform .45s cubic-bezier(.2, .8, .2, 1), border-color .3s ease, box-shadow .45s ease; }
+/* Live pulse on the network activity label */
+[data-view="home"] .hm-strip-tag #hm-strip-t { position: relative; padding-left: 16px; }
+[data-view="home"] .hm-strip-tag #hm-strip-t::before { content: ""; position: absolute; left: 0; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--leaf); }
+[data-view="home"] .hm-strip-tag #hm-strip-t::after { content: ""; position: absolute; left: -5px; top: 50%; width: 17px; height: 17px; margin-top: -8.5px; border-radius: 50%; border: 1px solid var(--leaf); animation: hmPulse 2.2s ease-out infinite; }
+[data-view="home"] .hm-strip.is-paused .hm-strip-tag #hm-strip-t::after { animation: none; opacity: 0; }
+@keyframes hmPulse { from { transform: scale(.5); opacity: .9; } to { transform: scale(1.4); opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
+  [data-view="home"] .hm-rv { opacity: 1; transform: none; }
+  [data-view="home"] .hm-strip-tag #hm-strip-t::after { animation: none; opacity: 0; }
   [data-view="home"] .hm-strip-track { animation: none; }
   [data-view="home"] .hm-strip-view { overflow-x: auto; scrollbar-width: none; }
   [data-view="home"] .hm-strip-list[aria-hidden="true"] { display: none; }

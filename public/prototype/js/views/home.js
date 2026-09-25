@@ -594,6 +594,58 @@
     on(window, 'scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(upd); } }, { passive: true });
   }
 
+  /* Scroll motion from the original site: blocks rise in with a stagger and numbers count up as they arrive.
+     Nothing is hidden at rest: elements are prepared only after the visitor starts scrolling, and only while
+     they are still below the fold, so a still frame (or a visitor who never scrolls) always sees the full page. */
+  const NUM_RE = /\d[\d,]*(?:\.\d+)?/g;
+  function numNodes(el) {
+    const out = [], w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) if (/\d/.test(n.nodeValue) && !(n.parentElement && n.parentElement.closest('.tip, small'))) out.push({ n, v: n.nodeValue });
+    return out;
+  }
+  const paint = (nodes, p) => nodes.forEach((x) => { x.n.nodeValue = p >= 1 ? x.v : x.v.replace(NUM_RE, (m) => { const dec = (m.split('.')[1] || '').length; const v = parseFloat(m.replace(/,/g, '')) * p; return dec ? v.toFixed(dec) : RN.fmt.int(Math.round(v)); }); });
+  function countIn(el) {
+    const nodes = el._rnNums;
+    if (!nodes || el._rnCounted) return;
+    el._rnCounted = true;
+    const t0 = performance.now(), dur = 1400;
+    const step = (t) => { const p = Math.min(1, (t - t0) / dur); paint(nodes, 1 - Math.pow(1 - p, 4)); if (p < 1 && document.body.contains(el)) requestAnimationFrame(step); else paint(nodes, 1); };
+    requestAnimationFrame(step);
+  }
+  function scrollMotion(root) {
+    if (!('IntersectionObserver' in window)) return;
+    let armed = false;
+    const arm = () => {
+      if (armed || !document.body.contains(root)) return;
+      armed = true;
+      const fold = window.innerHeight;
+      const below = (el) => el.getBoundingClientRect().top > fold + 8;
+      const targets = [];
+      root.querySelectorAll('section.hm-sec, section.hm-brief, section.hm-talk').forEach((sec) => {
+        const box = sec.querySelector(':scope > .wrap') || sec;
+        [...box.children].forEach((c) => {
+          const items = [...c.children].filter((x) => x.nodeType === 1);
+          const d = getComputedStyle(c).display;
+          if (items.length >= 3 && /grid|flex/.test(d) && !c.matches('dl.hm-rep-stats, dl.hm-fw-stats')) items.forEach((x, i) => targets.push([x, (i % 6) * 90]));
+          else targets.push([c, 0]);
+        });
+      });
+      const rise = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('hm-rv-in'); rise.unobserve(e.target); } }), { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
+      targets.forEach(([el, delay]) => { if (!below(el)) return; el.style.setProperty('--rv-d', delay + 'ms'); el.classList.add('hm-rv'); rise.observe(el); });
+      const count = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { countIn(e.target); count.unobserve(e.target); } }), { threshold: 0.6 });
+      root.querySelectorAll('section.hm-sec .num, section.hm-sec .hm-st-tiles b, section.hm-sec .hm-kpi .num').forEach((el) => {
+        if (!below(el) || el._rnNums) return;
+        el._rnNums = numNodes(el);
+        if (!el._rnNums.length) return;
+        paint(el._rnNums, 0);
+        count.observe(el);
+      });
+      S.offs.push(() => { rise.disconnect(); count.disconnect(); root.querySelectorAll('.hm-rv').forEach((el) => el.classList.add('hm-rv-in')); });
+    };
+    ['scroll', 'wheel', 'touchmove', 'keydown'].forEach((t) => on(window, t, arm, { passive: true }));
+  }
+
   /* ---------- Focus areas picker (shared tag picker with inline search, E479) ---------- */
   function matchCount() { return RN.model.search({ q: S.q, tags: S.tags }).length; }
   function syncTagUI() {
@@ -743,6 +795,7 @@
         if (first) root.querySelectorAll('.hm-stats [data-count]').forEach(countUp);
         startTyping(root.querySelector('#hm-q'));
         parallax(root);
+        scrollMotion(root);
       }
       // Profile views that start on a home card are attributed to 'home'. Window listeners run after
       // the global document handler (which sets 'card'), so this wins for clicks inside home.
