@@ -695,14 +695,27 @@
     const op = c.op;
     const engRev = {}, engEmp = {};
     c.engs.forEach((e) => { if (e.revenueRange) engRev[e.revenueRange] = (engRev[e.revenueRange] || 0) + 1; if (e.employeeRange) engEmp[e.employeeRange] = (engEmp[e.employeeRange] || 0) + 1; });
-    const hasEngDots = Object.keys(engRev).length || Object.keys(engEmp).length;
-    const strip = (key, sel, dots, label) => `<div class="pf-strip-w"><span class="label pf-lab">${esc(label)}</span>
-      <div class="pf-strip" role="list">${F[key].options.map((o) => `<span role="listitem" class="pf-cell ${sel.includes(o.v) ? 'on' : ''}" aria-label="${esc(o.l)}${sel.includes(o.v) ? ', selected' : ''}${dots[o.v] ? `, ${dots[o.v]} engagement${dots[o.v] > 1 ? 's' : ''}` : ''}"><span>${esc(o.l)}</span>${dots[o.v] ? `<i class="pf-cell-dots">${'<b></b>'.repeat(Math.min(3, dots[o.v]))}</i>` : ''}</span>`).join('')}</div></div>`;
-    const left = (op.revenueRanges.length || op.employeeRanges.length) ? `<div class="pf-fit-size">
-        <h3 class="h5 pf-h3">Company fit</h3>
-        ${op.revenueRanges.length ? strip('revenueRange', op.revenueRanges, engRev, revLabel()) : ''}
-        ${op.employeeRanges.length ? strip('employeeRange', op.employeeRanges, engEmp, F.employeeRange.label) : ''}
-        <p class="pf-note">${hasEngDots ? `<span class="pf-key-i"><span class="pf-key on"></span>Where ${esc(op.first)} does their best work</span><span class="pf-key-i"><span class="pf-key-dot"></span>A past engagement at that size</span>` : `Company sizes ${esc(op.first)} works with, from the operator’s profile.`}</p>
+    const nEng = c.engs.filter((e) => e.revenueRange || e.employeeRange).length;
+    // With engagement history: bar charts of engagements per company size, as in the original explorer.
+    // Without it: the operator's stated ranges on a segmented scale. Both use the registry picklists.
+    const bars = (key, counts, title, note) => {
+      const max = Math.max(1, ...F[key].options.map((o) => counts[o.v] || 0));
+      return `<div class="pf-bb-w"><h3 class="h5 pf-h3">${esc(title)}</h3>
+        <div class="pf-bb" role="list">${F[key].options.map((o) => { const n = counts[o.v] || 0;
+          return `<div class="pf-bb-row" role="listitem" aria-label="${esc(o.l)}: ${n ? plural(n, 'engagement') : 'no engagements'}"><span class="pf-bb-l">${esc(o.l)}</span><span class="pf-bb-track"><span class="pf-bb-fill" style="width:${(n / max) * 100}%"></span></span><span class="pf-bb-n">${n || '–'}</span></div>`; }).join('')}</div>
+        <p class="pf-note">${esc(note)}</p></div>`;
+    };
+    const scale = (key, sel, label) => `<div class="pf-strip-w"><span class="label pf-lab">${esc(label)}</span>
+      <div class="pf-strip" role="list">${F[key].options.map((o) => `<span role="listitem" class="pf-cell ${sel.includes(o.v) ? 'on' : ''}" aria-label="${esc(o.l)}${sel.includes(o.v) ? ', selected' : ''}"><span>${esc(o.l)}</span></span>`).join('')}</div></div>`;
+    const left = nEng ? `<div class="pf-fit-size">
+        ${bars('revenueRange', engRev, 'Company size worked with', `Annual revenue at the start of each of ${plural(nEng, 'engagement')}.`)}
+        ${bars('employeeRange', engEmp, 'Employee count', `Company headcount at each of ${plural(nEng, 'engagement')}.`)}
+      </div>`
+      : (op.revenueRanges.length || op.employeeRanges.length) ? `<div class="pf-fit-size">
+        <h3 class="h5 pf-h3">Company size</h3>
+        ${op.revenueRanges.length ? scale('revenueRange', op.revenueRanges, 'Annual revenue') : ''}
+        ${op.employeeRanges.length ? scale('employeeRange', op.employeeRanges, 'Employee count') : ''}
+        <p class="pf-note">Company sizes ${esc(op.first)} works with.</p>
       </div>` : '';
     const inds = op.industries.length ? `<div class="pf-fit-ind"><h3 class="h5 pf-h3">${esc(F.industries.label)} <span class="pf-count">${op.industries.length}</span></h3>
       <div class="pf-chips">${op.industries.map((i) => `<span class="pf-chip">${esc(RN.w.label('industries', i))}</span>`).join('')}</div></div>` : '';
@@ -716,7 +729,7 @@
         ${rest.map((x) => roleValHtml(x.k, x.rv)).join('')}
       </div>` : '';
     if (!left && !inds && !range) return '';
-    const facts = c.engs.length ? `<dl class="pf-facts">
+    const facts = c.engs.length ? `<h3 class="h5 pf-h3 pf-facts-h">Engagements</h3><dl class="pf-facts">
         <div class="pf-facts-stack"><dt>Roles held</dt><dd class="pf-chips">${[...new Set(c.engs.map((e) => e.role).filter(Boolean))].slice(0, 4).map((r) => `<span class="pf-chip sm">${esc(r)}</span>`).join('')}</dd></div>
         <div><dt>Engagement length</dt><dd>${esc((() => { const m = c.engs.map((e) => e.months || 0).filter(Boolean); return m.length ? (Math.min(...m) === Math.max(...m) ? plural(m[0], 'month') : `${Math.min(...m)} – ${Math.max(...m)} months`) : '—'; })())}</dd></div>
         <div><dt>Client-verified</dt><dd>${Math.round((c.engs.filter((e) => e.verified).length / c.engs.length) * 100)}%</dd></div>

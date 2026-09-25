@@ -231,6 +231,17 @@
 /* ============================ Fit ============================ */
 .pf-fit { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 36px; align-items: start; }
 .pf-fit-l, .pf-fit-r { min-width: 0; }
+/* Company size worked with: engagements per registry band (the original explorer's band bars) */
+.pf-bb-w + .pf-bb-w { margin-top: 24px; }
+.pf-bb { display: grid; gap: 10px; margin-top: 14px; }
+.pf-bb-row { display: grid; grid-template-columns: 104px minmax(0, 1fr) 24px; align-items: center; gap: 12px; }
+.pf-bb-l { font-size: var(--t-14); color: var(--ink-2); white-space: nowrap; }
+.pf-bb-track { position: relative; height: 10px; border-radius: var(--r-pill); background: var(--sunk); overflow: hidden; }
+.pf-bb-fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--r-pill); background: var(--accent); }
+.pf-bb-n { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.pf-bb-w .pf-note { margin-top: 12px; }
+.pf-facts-h { margin-top: 28px; }
+.pf-facts-h + .pf-facts { margin-top: 10px; }
 .pf-strip-w { margin-top: 16px; }
 .pf-strip-w .pf-lab { margin: 0 0 8px; }
 .pf-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; }
