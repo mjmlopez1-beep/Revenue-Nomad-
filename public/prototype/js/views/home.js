@@ -208,21 +208,24 @@
   /* ---------- Start from the problem ---------- */
   function problems() {
     const needs = RN.fields.need.options;
-    const cells = needs.map((o) => {
+    // Problem tiles: one brand palette (forest on paper), an index number, categories as quiet text, a forest fill on hover
+    const cells = needs.map((o, i) => {
       const cats = RN.fields.needCats[o.v] || [];
-      const ic = `<span class="hm-ic" aria-hidden="true">${icon(NEED_IC[o.v] || 'target')}</span>`;
+      const num = `<span class="hm-need-i" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>`;
+      const ic = `<span class="hm-need-ic" aria-hidden="true">${icon(NEED_IC[o.v] || 'target')}</span>`;
+      const go = `<span class="hm-need-go" aria-hidden="true">${icon('arrow')}</span>`;
       if (!cats.length) {
-        return `<button type="button" class="hm-need hm-need-talk" style="--tc:var(--forest)" data-act="hm-need" data-need="${esc(o.v)}">
-          ${ic}<span class="hm-go">${icon('arrow')}</span>
+        return `<button type="button" class="hm-need hm-need-talk" data-act="hm-need" data-need="${esc(o.v)}">
+          <span class="hm-need-top">${num}${ic}</span>
           <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span><span class="hm-need-cats">Talk it through with a person first</span></span>
-          <span class="hm-need-n">Reply within one business day</span>
+          <span class="hm-need-ft"><span class="hm-need-n">Reply within one business day</span>${go}</span>
         </button>`;
       }
-      return `<button type="button" class="hm-need" style="--tc:${RN.fields.catColor(cats[0])}" data-act="hm-need" data-need="${esc(o.v)}">
-        ${ic}<span class="hm-go">${icon('arrow')}</span>
+      return `<button type="button" class="hm-need" data-act="hm-need" data-need="${esc(o.v)}">
+        <span class="hm-need-top">${num}${ic}</span>
         <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span>
-          <span class="hm-need-cats">${cats.map((c) => `<span>${RN.ui.catDot(c)}${esc(catLabel(c))}</span>`).join('')}</span></span>
-        <span class="hm-need-n">${RN.fmt.plural(opsIn(cats), 'operator')}</span>
+          <span class="hm-need-cats">${cats.map((c) => esc(catLabel(c))).join(' <i>/</i> ')}</span></span>
+        <span class="hm-need-ft"><span class="hm-need-n">${RN.fmt.plural(opsIn(cats), 'operator')}</span>${go}</span>
       </button>`;
     }).join('');
     // Before you hire: the research surfaces, one click from the problem grid
@@ -289,7 +292,7 @@
           <span class="eyebrow">The GTM Framework</span>
           <h2 class="h2 hm-h2">One shared map of go-to-market work.</h2>
           <p class="lede">Every focus area on Revenue Nomad maps to an area of go-to-market work and the stage of the client journey it moves. Operators are scored against it. Companies use it to find the gap.</p>
-          <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Journey stages</dd></div><div><dt class="num">${RN.fmt.int(lib.length)}</dt><dd>Focus areas</dd></div></dl>
+          <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Stages of the customer journey</dd></div><div><dt class="num">${RN.fmt.int(lib.length)}</dt><dd>Focus areas</dd></div></dl>
           ${more('Explore the framework', 'href="#framework"')}
         </div>
         <div>
@@ -336,7 +339,7 @@
     const maxN = Math.max(...top.map((t) => t.n), 1);
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
-        ${head('Market pulse', 'This week in fractional GTM.', `${RN.ui.illus('Illustrative data')}${more('All insights', 'href="#insights"')}`)}
+        ${head('Market pulse', 'This quarter in fractional GTM.', `${RN.ui.illus('Illustrative data')}${more('All insights', 'href="#insights"')}`)}
         <div class="hm-pulse">
           <article class="card hm-card hm-rate">
             <div class="hm-card-hd">
@@ -357,7 +360,7 @@
               <div class="hm-axis tiny"><span>${esc(di[0].l)}</span><span>${esc(di[di.length - 1].l.replace('proj', 'projected'))}</span></div>
             </article>
             <article class="card hm-card">
-              <div class="hm-card-hd"><div><h3 class="h4">Top searched this week</h3><p class="small muted">Searches by clients in the last 7 days. Select one to run it.</p></div></div>
+              <div class="hm-card-hd"><div><h3 class="h4">Top searched this quarter</h3><p class="small muted">Searches by clients so far this quarter. Select one to run it.</p></div></div>
               <ol class="hm-top">${top.map((t, i) => `<li><button type="button" data-act="hm-q" data-q="${esc(t.q)}">
                 <span class="hm-top-i">${i + 1}</span>
                 <span class="hm-top-b"><span class="hm-top-q">${esc(t.q)}</span><span class="hm-top-m"><i style="width:${Math.max(4, Math.round((t.n / maxN) * 100))}%"></i></span></span>
