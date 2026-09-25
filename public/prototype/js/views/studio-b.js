@@ -561,7 +561,7 @@
     const ended = h.status === 'ended';
     const c = h.client || {};
     const m = RN.hire.monthly(h);
-    const from = h.source === 'engagement' && PJ() && PJ().get && PJ().get(h.sourceId) ? `From the engagement “${PJ().get(h.sourceId).title}”` : 'From an intro request';
+    const from = h.source === 'engagement' && PJ() && PJ().get && PJ().get(h.sourceId) ? `From the engagement “${PJ().get(h.sourceId).title}”` : h.source === 'rehire' ? 'A rehire by the same client' : 'From an intro request';
     const project = t.engagementType === 'project';
     const pay = project
       ? `<div class="sb-pay"><div><span class="label">Project budget</span><b>${t.projectBudget ? esc(RN.fmt.usd(t.projectBudget)) : 'Not set'}</b></div><div class="sb-pay-you"><span class="label">Your take-home</span><b>${esc(RN.fmt.usd(takeHome(t.projectBudget)))}</b></div></div>`

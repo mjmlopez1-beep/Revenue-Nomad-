@@ -534,7 +534,7 @@
       case 'project_post': return { ic: 'briefcase', t: 'Posted an engagement' };
       case 'project_invite': return { ic: 'send', t: `Invited ${who} to an engagement` };
       case 'project_select': return { ic: 'handshake', t: `Selected ${who} for an engagement` };
-      case 'hire': return { ic: 'handshake', t: `Hired ${who}`, sub: e.source === 'engagement' ? 'From an engagement' : 'From an intro' };
+      case 'hire': return { ic: 'handshake', t: `Hired ${who}`, sub: e.source === 'engagement' ? 'From an engagement' : e.source === 'rehire' ? 'Rehire' : 'From an intro' };
       case 'hire_end': return { ic: 'check-circle', t: `Ended the engagement with ${who}` };
       case 'hire_extend': return { ic: 'calendar', t: `Extended the engagement with ${who}` };
       case 'proof_view': return { ic: 'link', t: `Opened ${op ? op.first + '’s' : 'a'} proof link` };
@@ -1047,7 +1047,7 @@
             const project = t.engagementType === 'project';
             const terms = [t.engagementType && RN.w.label('engagementType', t.engagementType), t.rate ? RN.fmt.rate(t.rate) : '', project ? (t.projectBudget ? RN.fmt.usd(t.projectBudget) + ' budget' : '') : t.hoursPerMonth ? RN.w.label('hoursPerMonth', t.hoursPerMonth) : ''].filter(Boolean).join(' · ');
             const dates = h.cancelled ? `Was to start ${RN.hire.date(t.startDate)}; cancelled ${RN.hire.date(h.endedAt)}` : `${t.startDate ? RN.hire.date(t.startDate) : 'Start not set'} to ${h.status === 'ended' ? RN.hire.date(h.endedAt) : t.endDate ? RN.hire.date(t.endDate) : 'open-ended'}`;
-            const src = h.source === 'engagement' ? `<a href="#engagement.${esc(h.sourceId)}">Engagement</a>` : 'Intro';
+            const src = h.source === 'engagement' ? `<a href="#engagement.${esc(h.sourceId)}">Engagement</a>` : h.source === 'rehire' ? 'Rehire' : 'Intro';
             return `<tr>
               <td class="adm-w"><div class="adm-op">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="adm-op-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">for ${esc(h.client.company || h.client.email || 'Client')} · ${src}</span></div></div></td>
               <td class="small" data-l="Terms">${esc(terms || 'Not recorded')}${t.term ? `<span class="tiny muted adm-block">${esc(RN.w.label('term', t.term))}${(h.extensions || []).length ? ' · extended' : ''}</span>` : ''}</td>

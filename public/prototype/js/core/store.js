@@ -52,6 +52,11 @@
         try { window.localStorage.setItem(KEY, JSON.stringify(store.state)); } catch (e) { /* ignore */ }
       }, 120);
     },
+    // Write now instead of after the save debounce (before a reload)
+    flush() {
+      clearTimeout(saveTimer);
+      try { window.localStorage.setItem(KEY, JSON.stringify(store.state)); } catch (e) { /* ignore */ }
+    },
     get(key) { return store.state[key]; },
     set(key, value, opts) {
       store.state[key] = value;

@@ -112,7 +112,7 @@
         <a class="btn btn-leaf btn-sm" href="#talk">Talk to us</a>`;
     } else if (p === 'buyer') {
       const n = st.shortlist.length;
-      right = `<a class="btn btn-line btn-sm hide-m" href="#buyer.shortlist">${icon('bookmark')}Shortlist${n ? `<span class="nav-count">${n}</span>` : ''}</a>
+      right = `<a class="btn btn-line btn-sm hide-m" href="#buyer.talent">${icon('bookmark')}Shortlist${n ? `<span class="nav-count">${n}</span>` : ''}</a>
         <a class="row-nw" href="#buyer" style="--gap:8px" title="Workspace">${RN.ui.avatar({ name: RN.personas.buyer.name, initials: RN.fmt.initials(RN.personas.buyer.name) }, 'ava-sm')}<span class="hide-m" style="font-family:var(--f-display);font-weight:700;font-size:13px">Workspace</span></a>`;
     } else if (p === 'operator') {
       const me = RN.myOp();
@@ -261,20 +261,29 @@
     { key: 'buyer', label: 'Client: search, compare, request an intro', persona: 'buyer', to: 'browse' },
     { key: 'project', label: 'Client: post an engagement, get ranked responses', persona: 'buyer', to: 'engagement.new' },
     { key: 'hire', label: 'Client: hire an operator and track the terms', persona: 'buyer', to: 'buyer.team' },
+    { key: 'client-new', label: 'Client: new client, nothing posted yet', persona: 'buyer', to: 'buyer', client: 'new' },
+    { key: 'client-team', label: 'Client: returning client with a team (sample)', persona: 'buyer', to: 'buyer', sample: true },
     { key: 'studio', label: 'Operator: who viewed me and why', persona: 'operator', to: 'studio' },
     { key: 'proof', label: 'Operator: win a direct deal with a proof link', persona: 'operator', to: 'studio.credibility' },
     { key: 'join', label: 'Operator: join the network (standard intake)', persona: 'visitor', to: 'join' },
     { key: 'insights', label: 'Anyone: rates, research and the GTM framework', persona: 'visitor', to: 'insights' },
     { key: 'admin', label: 'Team: approvals and unmet demand', persona: 'admin', to: 'admin' },
   ];
+  /* A new client with no records yet (the S0 workspace). Sam Rivera is the same fictional client as the intro sheet's
+     "Fill sample details", so records made while walking this journey stay with Sam. */
+  const NEW_CLIENT = { name: 'Sam Rivera', title: 'CEO', email: 'sam@harborlinesoftware.com', company: { name: 'Harborline Software', industry: 'Saas', revenueRange: '5m_20m', employeeRange: '51_200' } };
   RN.actions['journey'] = (el) => {
     const j = JOURNEYS.find((x) => x.key === el.dataset.j);
-    if (j.persona === 'buyer' && !RN.personas.buyer.demo) shell.setClient(null);
+    if (j.client === 'new') shell.setClient(NEW_CLIENT);
+    else if (j.persona === 'buyer' && !RN.personas.buyer.demo) shell.setClient(null);
     RN.store.set('persona', j.persona);
-    if (j.persona === 'buyer') enterDemoClient();
+    if (j.persona === 'buyer' && j.client !== 'new') enterDemoClient();
+    // The sample scenario is idempotent and marked sample; the workspace labels it and can clear it
+    if (j.sample && RN.sample) RN.sample.apply();
     dockOpen = false;
     shell.renderHeader(); shell.renderDock();
     RN.go(j.to);
+    if (j.sample) RN.ui.toast('Sample scenario loaded: a returning client with a team. Clear it from the banner in the workspace.', { icon: 'info', ms: 5200 });
   };
 
   /* ---------- Theme ---------- */

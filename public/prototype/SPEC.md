@@ -48,7 +48,7 @@ The thing a client posts is an **engagement**: "Post an Engagement", "Engagement
 | `#guides`, `#guide.<slug>` | Guides and Q&A pages written for search and AI answers (one cost guide per role category; operators can answer, the team approves) | research.js |
 | `#join`, `#join.operator`, `#join.operator.<step>`, `#join.done` | Sign-up decision, operator intake (standard fields, each step in history), after-submit landing | join.js |
 | `#studio`, `#studio.<tab>` | Operator Studio (shell in studio.js), including active engagements and their terms | studio-a.js, studio-b.js |
-| `#buyer`, `#buyer.<tab>` | Client workspace: overview, shortlist, intros, engagements, team (`#buyer.team`: hires and terms), company profile + match preferences | buyer.js |
+| `#buyer`, `#buyer.<tab>` | Client workspace: overview (adapts to the client's lifecycle), team (`#buyer.team`: active and past hires with terms), engagements, talent (shortlist, intros, saved searches), history, company profile + match preferences. Old tabs (`projects`, `hires`, `shortlist`, `intros`) redirect | buyer.js |
 | `#review.<requestId>`, `#review.<requestId>.<step>` | Client submits a CORE review (prefilled from the request) | review.js |
 | `#admin`, `#admin.<tab>` | Team: approvals, demand intelligence, intro lifecycle, engagements pipeline, hires, directory | admin.js |
 | `#about`, `#how`, `#results`, `#talk`, `#talk.<need>`, `#operators`, `#levels` | Company pages, talk-to-us flow, operator value proposition (everything aimed at operators), levels explainer | pages.js |
@@ -127,9 +127,38 @@ studio-a.js owns: **Overview** (this week at a glance: impressions, views, short
 studio-b.js owns: **Inbox** (intro requests blind until introduced, with Interested / Pass and the 72-hour clock; engagement invites with Respond, where the operator sees their take-home), **Active engagements** (`#studio.engagements`, D15: hires with the client, terms, start and end dates, and take-home), **Credibility** (Reputation Index breakdown by the five factors with points available, tier ladder (`RN.ui.tierLadder`) and what each tier unlocks, review requests with Sent / Completed only and a 3-step request form, verified fit tags, proof links: create, copy, see views by section; embeddable verified badge with copyable code), **Opportunities** (fractional job board and predictive prospects from the repo's Operator Portal, research: a_repo.md and repo_samples.json: why-now signals, fit and timing meters, suggested angle, draft outreach), **Profile** (edit with the same standard fields as intake, saved to `RN.store.state.edits`, Preview as client, completeness checklist). Studio is operator-facing: it states the fee plainly and may show take-home. Studio previews never label the operator as the founder.
 
 ### Client workspace (`#buyer`) and review (`#review.<id>`)
-Workspace tabs: Overview (next steps across intros, engagements and hires; "Active hires" and "Monthly spend on fractional talent"), Shortlist (cards, compare selected, request intros), Intros (status timeline per request; an introduced intro gets "Mark as hired", which opens `RN.hire.open`), Engagements (link into projects.js), Team, Company (company profile with the same revenue, employee, industry picklists + match preferences: role you are hiring for, GTM motion, engagement type, what you need; "Every operator profile you open is scored against these").
+The workspace follows the client's lifecycle (founder decision D16). Everything is derived from the client's records (matched on the client email); nothing is set per scenario.
 
-**Team (`#buyer.team`, founder decision D15).** The client's hires (matched on the client email) as cards: operator, role, status pill, terms (engagement type, rate as the price, available time or budget, start date, term and end date), estimated monthly cost (rate × hours, no fees), and actions: Extend, End engagement, Leave a review (once ended, or any time after 30 days; links into the review flow) and "Request a check-in" (emails through `RN.mail`, no mailto). The empty state explains what shows here and how to hire. The path to a first hire is 3 clicks or fewer from the workspace (Jordan's intro to Matt can be moved to Introduced in Admin, and any introduced intro can be marked hired).
+**States.** `BW.lifecycle()` sets `data-bw-state` and only picks the Overview layout:
+- S0 New: nothing posted, no intros, no hires. "What do you need help with?" in plain English (read by `RN.model.understand`, with the facts shown as chips), "Get set up" steps and Blueprints.
+- S1 Hiring: engagements open or intros in flight, no hire yet.
+- S2 Active team: at least one active hire, with no past hires.
+- S3 Mixed: active and past hires together (the founder's example: an active sales leader; an ended RevOps manager and VP Marketing; engagements open, draft and closed).
+- S4 Alumni: every hire has ended. Rehiring or finding someone similar leads, with 3 similar operators inline, and "What is next for <company>?" asks what they need.
+
+**Overview.** A header line says how many decisions wait on the client and the next date. From S2 on, a stats row shows: in seat now, monthly now (sum of active rate × hours), spent to date (estimated, since the first start) and the next date. The Now feed (`BW.now()`) ranks what needs the client in four tiers:
+1. Someone is waiting on the client: new responses, an introduced intro.
+2. Something is due: a term ending within 30 days (Extend, Request a check-in, Let it end).
+3. Something is owed: a review.
+4. Worth a look: a rehire, a draft, match preferences.
+The first item is the Next step card, which holds the page's only primary button. Up to 3 "Also needs you" rows follow, then "Show N more". "Waiting on others" lists intros and invites the client is waiting on. The rest of the page: the team strip (active and past people with status, time in seat, next date and spend), by role category spend, engagements grouped by status (responses to review, posted, draft, closed), and a history line.
+
+**Team (`#buyer.team`, D15, D16).** Filters: All, Active, Past. It shows:
+- **Team over time:** a timeline with the agreed term ahead hatched.
+- **Spend:** spend by month, the current month hatched, with "Show as a table". Spend by role category.
+- **Active cards:** the term meter (with the extension tick), terms, time in seat, spend to date, term end, "Decide on renewal by" (term end minus 30 days), last check-in, and the terms' "Also agreed" note. Actions: Extend, Request a check-in, Leave a review, End engagement.
+- **Past cards:** dates, terms, total spend, how it ended and the client's end note. Actions: Leave a review, "Rehire <first>" (`RN.hire.open({source: 'rehire'})`, a new hire on the same terms), "Find someone like <first>" (Browse, same role category) and "Seat open again" when a live engagement is in the same role category.
+- **Ready to hire:** introduced intros and interested responses.
+Spend is rate × hours × months elapsed per hire (or the project budget), always labelled estimated, with no fees.
+
+**Engagements, Talent, History.**
+- Engagements: grouped by status. An open engagement whose role category lost a hire says "Replaces <name>".
+- Talent: shortlist, intros and saved searches in one tab.
+- History: the account log grouped by month, filterable, plus coverage over time by role category.
+
+**Company.** Company profile with the same revenue, employee and industry picklists, plus match preferences: role you are hiring for, GTM motion, engagement type and what you need ("Every operator profile you open is scored against these").
+
+**Sample scenario.** The dock's "Client: returning client with a team (sample)" (`RN.sample.apply()` in seed.js) sets the founder's example on the demo client. Every record is marked `sample: true`, and a banner says so with "Clear the sample", which restores the client's own records. Reviews written against the sample are removed on clear, so nothing lands on a real operator's public profile. "Client: new client, nothing posted yet" walks S0 as Sam Rivera. The default seed invents no hires.
 
 Review page (`#review.<id>` for a review request): 3 short steps: engagement (role delivered, dates, engagement type, spend), CORE (four questions verbatim with 1–5 stars each + optional reason, overall experience required, would hire again), focus areas to verify (the ones the operator asked about start selected; add missing). Outcomes were removed (scope L496). Submit pushes to `RN.store.state.reviews`, marks the request Completed, emails the operator, and thanks the reviewer.
 
@@ -191,3 +220,4 @@ Comments on the published prototype, and where each decision lives. Code comment
 | D13 | Blueprint cards "too bland and too text heavy" | Problem-led visual cards | Engagements, `#blueprints` |
 | D14 | "Even playing field" | No founder callouts or exclusions | §5, profile, lists |
 | D15 | "See that and associated terms of hire in their workspace" | Hires with terms: Team tab, Studio, Admin | Loop 16, workspace |
+| D16 | "Does this workspace really have the right appreciation for the various states of usage" | The workspace follows the client's lifecycle (S0 to S4): a ranked Now feed, active and past team with time in seat and spend, rehire, engagements by status, history; sample scenario in the dock | Client workspace |

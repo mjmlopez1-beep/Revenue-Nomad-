@@ -182,9 +182,12 @@
   };
   /* =====================================================================================
      Hires (D15, founder decision Sep 25, 2026): once a client hires an operator, the agreed terms live in
-     RN.store.state.hires = [{id, opId, client: {email, company, name}, source: 'intro'|'engagement', sourceId,
-       terms: {engagementType, rate, hoursPerMonth, startDate, term, endDate, projectBudget, notes},
-       status: 'active'|'ended', createdAt, endedAt, extensions: [{term, from, to, at}]}]
+     RN.store.state.hires = [{id, opId, client: {email, company, name}, source: 'intro'|'engagement'|'rehire', sourceId,
+       terms: {engagementType, rate, hoursPerMonth, startDate, term, endDate, projectBudget, notes, roleCategory?},
+       status: 'active'|'ended', createdAt, endedAt, extensions: [{term, from, to, at}], checkins: [{ts, note}],
+       endNote?, cancelled?, endPlanned? (the client chose "Let it end": we ask them to confirm on the end date),
+       sample? (a record from the dock's sample scenario)}]
+     A rehire (source 'rehire', sourceId = the earlier hire's id) always creates a new hire; hire.open({hireId}) edits one.
      RN.hire.open({opId, source, sourceId, prefill}) opens "Confirm the terms", built from registry fields
      (engagementType, rate, hoursPerMonth or projectBudget, a start date, term). Saving creates the hire (or updates
      the one already recorded for that source) and marks the source hired: the intro becomes 'hired'; an engagement's
@@ -192,11 +195,14 @@
      store key). It emails the client and the operator and toasts a link to the workspace Team tab (#buyer.team).
      Clients pay the operator's listed rate and no fees (D1), so every client figure is the rate itself. Only the
      operator's email states their take-home (operator-facing). Also: RN.hire.list(filter), get(id), forSource(),
-     end(id), extend(id, newTerm), monthly(h), facts(h), statusPill(h), reviewable(h), takeHome(rate), notStarted(h).
+     end(id), extend(id, newTerm), monthly(h), facts(h), statusPill(h), reviewable(h), takeHome(rate), notStarted(h),
+     and the time-in-seat and spend helpers below (spent, committed, spendByMonth, timeInSeat, meter, winEnd).
      Ending a hire before its start date cancels it: status 'ended' with cancelled: true, labelled "Cancelled before
      start", and no review is asked for.
      ===================================================================================== */
   const hire = (RN.hire = {});
+  // Where a hire came from: an intro, an engagement response, or a rehire of an earlier hire (sourceId = that hire's id)
+  const SOURCES = ['intro', 'engagement', 'rehire'];
   const TERM_MONTHS = { '1_3': 3, '3_6': 6, '6_12': 12, '12_plus': 12 };
   const pad = (n) => String(n).padStart(2, '0');
   const isoDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -242,6 +248,148 @@
     if (isProject(h)) return t.projectBudget ? `${RN.fmt.usd(t.projectBudget)} project budget over the term` : 'Project budget not recorded';
     return t.rate && t.hoursPerMonth ? `${RN.fmt.rate(t.rate)} × ${hire.hours(t.hoursPerMonth)} hrs${+t.hoursPerMonth === 19 ? ' (under 20)' : ''}` : 'Rate or available time not recorded';
   };
+  /* ---------- Time in seat and spend (client workspace, Admin, Studio) ----------
+     Every figure is "rate × hours × months elapsed", pro rata by day (M = 30.44 days a month), or a project budget
+     spread over its term. Estimates from the recorded terms, rounded to $100. Companies pay no fees (D1), so a
+     client figure is always the operator's rate itself.
+       started(h)       start date on or before today
+       winEnd(h)        the day spend stops accruing: min(today, endedAt when ended, else endDate or today)
+       elapsedDays(h)   days from the start date to winEnd (0 before the start)
+       spent(h)         estimated spend to date; 0 for an engagement cancelled before it started
+       committed(h)     what is still agreed on an active hire: the rest of the term (hourly) or budget - spent
+       spendByMonth(list, fromMonth, toMonth)  the same accrual split by calendar month ('YYYY-MM'); each hire's
+                        months add up to its spent(h), so the months add up to the spend to date
+       timeInSeat(h, form)  'long' "5 months, 12 days" | 'short' "Month 6 · since Apr 20" | 'past' "Mar 16 – Aug 28 · 5 months"
+       meter(h)         the term meter: {served, total, left, month, months, pct, ext: {pct, label}}
+       daysLeft(h), renewalBy(h), category(h), dateMD(v) */
+  const M_DAYS = 30.44;
+  hire.M = M_DAYS;
+  const dayOf = (v) => { const s = String(v || ''); return s.length === 10 ? s : s ? isoDay(new Date(s)) : ''; };
+  const dn = (v) => { const s = dayOf(v); if (!s) return 0; const [y, m, d] = s.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 864e5); };
+  const r100 = (n) => Math.round((+n || 0) / 100) * 100;
+  const minDay = (a, b) => (a < b ? a : b);
+  hire.dayOf = dayOf;
+  hire.dayDiff = (a, b) => dn(b) - dn(a);
+  hire.today = today;
+  hire.addDays = addDays;
+  hire.addMonths = addMonths;
+  /* "Apr 20", with the year when it is not this year */
+  hire.dateMD = (v) => { const s = dayOf(v); if (!s) return ''; const d = asDate(s); return RN.fmt.dateShort(d) + (d.getFullYear() !== RN.now().getFullYear() ? ', ' + d.getFullYear() : ''); };
+  hire.started = (h) => !!(h && h.terms && h.terms.startDate && h.terms.startDate <= today());
+  hire.winEnd = function (h) {
+    const t = (h && h.terms) || {};
+    const end = h.status === 'ended' ? dayOf(h.endedAt || t.endDate) || today() : t.endDate || today();
+    return minDay(today(), end);
+  };
+  hire.elapsedDays = (h) => (h && h.terms && h.terms.startDate ? Math.max(0, dn(hire.winEnd(h)) - dn(h.terms.startDate)) : 0);
+  hire.termDays = (h) => { const t = (h && h.terms) || {}; return t.startDate && t.endDate ? Math.max(0, dn(t.endDate) - dn(t.startDate)) : 0; };
+  hire.daysLeft = (h) => (h && h.terms && h.terms.endDate ? dn(h.terms.endDate) - dn(today()) : null);
+  hire.renewalBy = (h) => (h && h.terms && h.terms.endDate ? addDays(h.terms.endDate, -30) : '');
+  // The seat a hire filled: terms.roleCategory when recorded, else the engagement's role category, else the earlier
+  // hire's for a rehire, else the operator's own category
+  hire.category = function (h) {
+    if (!h) return '';
+    const t = h.terms || {};
+    if (t.roleCategory) return t.roleCategory;
+    if (h.source === 'engagement' && RN.projects && RN.projects.get) {
+      const p = RN.projects.get(h.sourceId);
+      if (p && p.fields && p.fields.roleCategory) return p.fields.roleCategory;
+    }
+    if (h.source === 'rehire') {
+      const prev = hire.get(h.sourceId);
+      if (prev && prev.id !== h.id) { const c = hire.category(prev); if (c) return c; }
+    }
+    const op = RN.model.byId(h.opId);
+    return (op && op.catKey) || '';
+  };
+  // Share of a project budget earned so far: the whole budget once it ran to (or past) its end date
+  function projectShare(h) {
+    const t = h.terms || {};
+    if (h.status === 'ended' && t.endDate && dayOf(h.endedAt) >= t.endDate) return 1;
+    const td = hire.termDays(h);
+    return td ? Math.min(1, hire.elapsedDays(h) / td) : h.status === 'ended' ? 1 : 0;
+  }
+  hire.spent = function (h) {
+    const t = (h && h.terms) || {};
+    if (!h || h.cancelled || !t.startDate) return 0;
+    if (isProject(h)) return r100((+t.projectBudget || 0) * projectShare(h));
+    return r100((+t.rate || 0) * hire.hours(t.hoursPerMonth) * hire.elapsedDays(h) / M_DAYS);
+  };
+  hire.committed = function (h) {
+    const t = (h && h.terms) || {};
+    if (!h || h.status !== 'active' || h.cancelled || !t.startDate) return 0;
+    if (isProject(h)) return Math.max(0, r100((+t.projectBudget || 0) - hire.spent(h)));
+    if (!t.endDate) return 0;
+    const days = Math.max(0, dn(t.endDate) - Math.max(dn(today()), dn(t.startDate)));
+    return r100(hire.monthly(h) * days / M_DAYS);
+  };
+  const monthKey = (s) => String(s).slice(0, 7);
+  const nextMonth = (k) => { let [y, m] = k.split('-').map(Number); m++; if (m > 12) { m = 1; y++; } return `${y}-${pad(m)}`; };
+  hire.monthKeys = function (from, to) { const out = []; let k = monthKey(from); const end = monthKey(to); while (k <= end && out.length < 240) { out.push(k); k = nextMonth(k); } return out; };
+  /* [{key:'YYYY-MM', label, total, partial, by:[{h, amount}]}] for every month from fromMonth to toMonth */
+  hire.spendByMonth = function (list, fromMonth, toMonth) {
+    const keys = hire.monthKeys(fromMonth, toMonth);
+    const rows = keys.map((key) => ({ key, label: RN.fmt.monthYear(asDate(key + '-15')), total: 0, partial: key === monthKey(today()), by: [] }));
+    (list || []).forEach((h) => {
+      const target = hire.spent(h);
+      const a = h.terms && h.terms.startDate;
+      if (!target || !a) return;
+      const b = hire.winEnd(h);
+      // Days of [start, winEnd) that fall in each month
+      const raw = rows.map((r) => {
+        const ms = dn(r.key + '-01'), me = dn(nextMonth(r.key) + '-01');
+        return Math.max(0, Math.min(dn(b), me) - Math.max(dn(a), ms));
+      });
+      const sum = raw.reduce((x, y) => x + y, 0);
+      if (!sum) return;
+      let left = target;
+      const last = raw.reduce((k, v, i) => (v ? i : k), -1);
+      raw.forEach((d, i) => {
+        if (!d) return;
+        const amt = i === last ? left : Math.round((target * d) / sum);
+        left -= amt;
+        rows[i].total += amt;
+        rows[i].by.push({ h, amount: amt });
+      });
+    });
+    return rows;
+  };
+  function span(a, b, withDays) {
+    const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    let m = 0;
+    while (m < 600 && addMonths(a, m + 1) <= b) m++;
+    const days = dn(b) - dn(addMonths(a, m));
+    const y = Math.floor(m / 12), mo = m % 12;
+    if (y) return pl(y, 'year') + (mo ? ', ' + pl(mo, 'month') : '');
+    if (m) return pl(m, 'month') + (withDays && days ? ', ' + pl(days, 'day') : '');
+    return pl(Math.max(0, days), 'day');
+  }
+  hire.timeInSeat = function (h, form) {
+    const t = (h && h.terms) || {};
+    if (!t.startDate) return '';
+    const b = hire.winEnd(h);
+    if (h.cancelled) return 'Cancelled before start';
+    if (form === 'short') {
+      if (!hire.started(h)) return 'Not started yet';
+      // Past the end date the count stops at the term's last month (time in seat stops at winEnd too)
+      const mt = hire.meter(h);
+      const mo = Math.floor(hire.elapsedDays(h) / M_DAYS) + 1;
+      return `Month ${mt ? Math.min(mt.months, mo) : mo} · since ${hire.dateMD(t.startDate)}`;
+    }
+    if (form === 'past') return `${hire.dateMD(t.startDate)} – ${hire.dateMD(b)} · ${span(t.startDate, b, false)}`;
+    return hire.started(h) ? span(t.startDate, b, true) : 'Not started';
+  };
+  hire.meter = function (h) {
+    const t = (h && h.terms) || {};
+    if (!t.startDate || !t.endDate) return null;
+    const total = Math.max(1, dn(t.endDate) - dn(t.startDate));
+    const served = RN.clamp(dn(today()) - dn(t.startDate), 0, total);
+    const months = Math.max(1, Math.round(total / M_DAYS));
+    const e = (h.extensions || [])[0];
+    const ext = e && e.from && e.from > t.startDate && e.from < t.endDate ? { pct: ((dn(e.from) - dn(t.startDate)) / total) * 100, label: `First term end · extended ${hire.dateMD(e.at)}`, from: e.from } : null;
+    return { served, total, left: Math.max(0, dn(t.endDate) - dn(today())), month: Math.min(months, Math.floor(served / M_DAYS) + 1), months, pct: (served / total) * 100, ext };
+  };
+
   hire.overdue = (h) => h.status === 'active' && h.terms && h.terms.endDate && h.terms.endDate < today();
   // An active hire whose start date is still ahead: ending it cancels it (h.cancelled), with no end date before the start
   hire.notStarted = (h) => !!(h && h.status === 'active' && h.terms && h.terms.startDate && h.terms.startDate > today());
@@ -281,9 +429,11 @@
     if (!op) return;
     const st = RN.store.state;
     if (st.persona === 'operator' || st.persona === 'visitor') { RN.ui.toast('The client or the Revenue Nomad team confirms a hire.', { icon: 'info' }); return; }
-    const source = o.source === 'engagement' ? 'engagement' : 'intro';
+    const source = SOURCES.includes(o.source) ? o.source : 'intro';
+    const rehire = source === 'rehire';
     const intr = source === 'intro' ? st.intros.find((i) => i.id === o.sourceId) : null;
-    const existing = hire.forSource(source, o.sourceId, op.id);
+    // A rehire is always a new engagement (sourceId is the earlier hire); it never edits the old terms
+    const existing = o.hireId ? hire.get(o.hireId) : rehire ? null : hire.forSource(source, o.sourceId, op.id);
     const pre = o.prefill || {};
     const f = (intr && intr.fields) || {};
     const t = existing ? existing.terms : {};
@@ -302,10 +452,10 @@
     const project = v.engagementType === 'project';
     RN.ui.modal({
       width: 640,
-      title: existing ? `Terms with ${esc(op.first)}` : admin ? `Record the hire: ${esc(client.company || 'Client')} and ${esc(op.first)}` : `Confirm the terms with ${esc(op.first)}`,
+      title: existing ? `Terms with ${esc(op.first)}` : rehire ? `Rehire ${esc(op.first)} on these terms` : admin ? `Record the hire: ${esc(client.company || 'Client')} and ${esc(op.first)}` : `Confirm the terms with ${esc(op.first)}`,
       sub: `${esc(op.name)} · Fractional ${esc(op.role)}${client.company ? ' · ' + esc(client.company) : ''}`,
-      body: `<form id="hire-form" class="stack hire-form" style="--gap:22px" data-submit="hire-save" data-input="hire-calc" data-change="hire-calc" data-op="${esc(op.id)}" data-source="${esc(source)}" data-source-id="${esc(o.sourceId || '')}" data-client="${esc(JSON.stringify(client))}" novalidate>
-        <p class="small muted">${admin ? `Record what ${esc(client.company || 'the client')} and ${esc(op.first)} agreed. Both get the terms by email, and they show in the client’s Team tab and ${esc(op.first)}’s Studio.` : `Record what you agreed with ${esc(op.first)}. The terms show in your Team tab with the dates, and ${esc(op.first)} sees the same terms.`}</p>
+      body: `<form id="hire-form" class="stack hire-form" style="--gap:22px" data-submit="hire-save" data-input="hire-calc" data-change="hire-calc" data-op="${esc(op.id)}" data-source="${esc(source)}" data-source-id="${esc(o.sourceId || '')}"${existing ? ` data-hire-id="${esc(existing.id)}"` : ''} data-client="${esc(JSON.stringify(client))}" novalidate>
+        <p class="small muted">${rehire && !existing ? `Record the terms for this new engagement with ${esc(op.first)}. We email them to ${esc(op.first)}, and they show in your Team tab.` : admin ? `Record what ${esc(client.company || 'the client')} and ${esc(op.first)} agreed. Both get the terms by email, and they show in the client’s Team tab and ${esc(op.first)}’s Studio.` : `Record what you agreed with ${esc(op.first)}. The terms show in your Team tab with the dates, and ${esc(op.first)} sees the same terms.`}</p>
         ${RN.w.field('engagementType', v.engagementType, { name: 'engagementType', id: 'hire-type', compact: true })}
         <div class="grid g-2" style="--gap:18px">
           <div data-hire-rate>${RN.w.field('rate', v.rate, { name: 'rate', id: 'hire-rate', label: 'Rate', help: op.rate ? `${op.first}’s listed rate is ${RN.fmt.rate(op.rate)}.` : '' })}</div>
@@ -318,7 +468,7 @@
           <textarea class="textarea" id="hire-notes" name="notes" maxlength="400" style="min-height:72px" placeholder="Scope, check-in rhythm, who ${esc(op.first)} reports to.">${esc(v.notes)}</textarea></div>
         <div class="hire-sum" data-hire-sum aria-live="polite">${sumHtml(v)}</div>
       </form>`,
-      foot: `<button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="hire-form">${existing ? 'Save terms' : admin ? 'Record hire' : `Confirm hire`}</button>`,
+      foot: `<button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="hire-form">${existing ? 'Save terms' : rehire ? `Rehire ${esc(op.first)}` : admin ? 'Record hire' : `Confirm hire`}</button>`,
     });
   };
   function sumHtml(v) {
@@ -352,7 +502,7 @@
     let client = {};
     try { client = JSON.parse(form.dataset.client || '{}'); } catch (e) { client = {}; }
     RN.ui.closeModal();
-    hire.save({ opId: form.dataset.op, source: form.dataset.source, sourceId: form.dataset.sourceId, client, terms: d });
+    hire.save({ opId: form.dataset.op, source: form.dataset.source, sourceId: form.dataset.sourceId, hireId: form.dataset.hireId || '', client, terms: d });
   };
 
   /* Create (or update) a hire from known terms, mark its source hired, email both sides and point to the terms.
@@ -361,15 +511,17 @@
     const op = RN.model.byId(o.opId);
     if (!op) return null;
     const st = RN.store.state;
-    const source = o.source === 'engagement' ? 'engagement' : 'intro';
+    const source = SOURCES.includes(o.source) ? o.source : 'intro';
     const d = o.terms || {};
     const project = d.engagementType === 'project';
     const terms = {
       engagementType: d.engagementType || 'fractional', rate: +d.rate || null, hoursPerMonth: project ? '' : String(d.hoursPerMonth || ''),
       startDate: d.startDate || hire.startFrom(''), term: d.term || '', endDate: '', projectBudget: project ? +d.projectBudget || null : null, notes: String(d.notes || '').trim(),
     };
+    if (d.roleCategory) terms.roleCategory = d.roleCategory;
     terms.endDate = hire.endFor(terms.startDate, terms.term);
-    const prev = hire.forSource(source, o.sourceId, op.id);
+    // A rehire always creates a new hire; the earlier one (sourceId) keeps its own terms and dates
+    const prev = o.hireId ? hire.get(o.hireId) : source === 'rehire' ? null : hire.forSource(source, o.sourceId, op.id);
     const intr = source === 'intro' ? st.intros.find((i) => i.id === o.sourceId) : null;
     const client = o.client && o.client.email ? o.client : clientFor({ source, sourceId: o.sourceId }, intr);
     const now = RN.now().toISOString();
@@ -378,7 +530,13 @@
       s.hires = s.hires || [];
       const cur = prev && s.hires.find((h) => h.id === prev.id);
       if (cur) { cur.terms = Object.assign({}, cur.terms, terms); cur.updatedAt = now; rec = cur; }
-      else { rec = { id: RN.uid('hire'), opId: op.id, client: { email: client.email, company: client.company || '', name: client.name || '' }, source, sourceId: o.sourceId || '', terms, status: 'active', createdAt: now, endedAt: null, extensions: [] }; s.hires.unshift(rec); }
+      else {
+        rec = { id: RN.uid('hire'), opId: op.id, client: { email: client.email, company: client.company || '', name: client.name || '' }, source, sourceId: o.sourceId || '', terms, status: 'active', createdAt: now, endedAt: null, extensions: [] };
+        // A hire made from a sample record (the dock's sample scenario) is part of the sample and clears with it
+        const from = source === 'rehire' ? s.hires.find((h) => h.id === o.sourceId) : source === 'engagement' ? (s.projects || []).find((p) => p.id === o.sourceId) : intr;
+        if (from && from.sample) rec.sample = true;
+        s.hires.unshift(rec);
+      }
       if (intr) { const r = s.intros.find((i) => i.id === intr.id); if (r) { r.hiredAt = r.hiredAt || now; r.hireId = rec.id; } }
     }, 'hires');
     if (intr && intr.status !== 'hired') RN.intro.setStatus(intr.id, 'hired', `${client.company || 'The client'} hired ${op.first}`, { quiet: true });
@@ -392,13 +550,19 @@
     if (prev) {
       RN.mail(client.email, `Terms updated: ${op.name}`, `${lines}\n\nSee them in your workspace: #buyer.team`, 'hire');
       RN.mail(op.name, `Terms updated with ${co}`, `${lines}\n\nSee them in Studio: #studio.engagements`, 'hire');
+    } else if (source === 'rehire') {
+      // The rehire is recorded as agreed; the operator replies only if something should change. Our team sees it too
+      // (the operator email may state the take-home)
+      RN.mail(op.name, `${co} rehired you`, `${co} rehired you on these terms:\n${lines}${terms.rate ? `\n\nYour take-home at ${RN.fmt.rate(terms.rate)} is ${RN.fmt.rate(hire.takeHome(terms.rate))}. ${hire.FEE_LINE}` : `\n\n${hire.FEE_LINE}`}\n\nReply if anything should change. See it in Studio: #studio.engagements`, 'hire');
+      RN.mail('Revenue Nomad team', `Rehire: ${co} and ${op.name}`, `${client.name || co} (${co}) rehired ${op.name}.\n${lines}`, 'hire');
+      RN.track('hire', { opId: op.id, source, sourceId: o.sourceId || '' });
     } else {
       RN.mail(client.email, `You hired ${op.name}`, `${op.first} starts ${hire.date(terms.startDate)}. The terms you recorded:\n${lines}\n\nNo fees for companies: you pay ${op.first}’s rate, nothing more. Your Team tab keeps these terms, the end date and a check-in button: #buyer.team`, 'hire');
       RN.mail(op.name, `Engagement confirmed with ${co}`, `Congratulations. ${co} confirmed the terms:\n${lines}${terms.rate ? `\n\nYour take-home at ${RN.fmt.rate(terms.rate)} is ${RN.fmt.rate(hire.takeHome(terms.rate))}. ${hire.FEE_LINE}` : `\n\n${hire.FEE_LINE}`}\n\nWhen the engagement wraps, we ask the client for a CORE review, which verifies your fit tags. See it in Studio: #studio.engagements`, 'hire');
       RN.track('hire', { opId: op.id, source, sourceId: o.sourceId || '' });
     }
     const admin = st.persona === 'admin';
-    RN.ui.toast(prev ? `Terms saved for ${esc(op.first)}.` : admin ? `Hire recorded. ${esc(co)} and ${esc(op.first)} were emailed the terms.` : `You hired ${esc(op.first)}. The terms are in your Team tab.`,
+    RN.ui.toast(prev ? `Terms saved for ${esc(op.first)}.` : admin ? `Hire recorded. ${esc(co)} and ${esc(op.first)} were emailed the terms.` : source === 'rehire' ? `Rehired ${esc(op.first)}. The terms are in your Team tab.` : `You hired ${esc(op.first)}. The terms are in your Team tab.`,
       { icon: 'handshake', ms: 5200, action: admin ? { label: 'See hires', act: 'go', attrs: 'data-to="admin.hires"' } : { label: 'Open Team', act: 'go', attrs: 'data-to="buyer.team"' } });
     if (RN.shell && RN.shell.renderHeader) RN.shell.renderHeader();
     RN.rerender();
@@ -434,7 +598,7 @@
       const x = s.hires.find((y) => y.id === id);
       x.terms = Object.assign({}, x.terms, { endDate: to });
       x.extensions = (x.extensions || []).concat({ term: newTerm, from, to, at: RN.now().toISOString() });
-      x.status = 'active'; x.endedAt = null; x.cancelled = false;
+      x.status = 'active'; x.endedAt = null; x.cancelled = false; x.endPlanned = false;
     }, 'hires');
     if (op) {
       RN.mail(op.name, `Engagement extended: ${h.client.company || 'client'}`, `${h.client.company || 'The client'} extended your engagement by ${RN.w.label('term', newTerm).toLowerCase()}. New end date: ${hire.date(to)}.`, 'hire');
@@ -445,7 +609,7 @@
   };
 
   /* Shared modals (workspace Team tab and Admin): data-act="hire-edit|hire-extend|hire-end" data-id="<hireId>" */
-  RN.actions['hire-edit'] = (el) => { const h = hire.get(el.dataset.id); if (h) { RN.ui.closeModal(); hire.open({ opId: h.opId, source: h.source, sourceId: h.sourceId, prefill: { client: h.client } }); } };
+  RN.actions['hire-edit'] = (el) => { const h = hire.get(el.dataset.id); if (h) { RN.ui.closeModal(); hire.open({ opId: h.opId, source: h.source, sourceId: h.sourceId, hireId: h.id, prefill: { client: h.client } }); } };
   RN.actions['hire-extend'] = (el) => {
     const h = hire.get(el.dataset.id);
     const op = h && RN.model.byId(h.opId);
