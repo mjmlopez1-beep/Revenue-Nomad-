@@ -447,15 +447,20 @@
     const sq = RN.data.market.report.quote;
     const rules = 'Every operator’s reviews follow the same rules: published as written, by the client, under their name.';
     const by = (r) => [r.role, r.company].filter(Boolean).join(', ');
+    // A reviewer's own headshot fills the arch when we have one; the company logo then sits under the quote
+    const leadPhoto = lead ? (RN.data.reviewerPhotos || {})[lead.r.reviewer] : '';
+    const leadLogo = lead ? RN.ui.logo(RN.model.reviewLogo(lead.op, lead.r), { h: leadPhoto ? 30 : 46, name: lead.r.company || 'Client' }) : '';
     return `<section class="hm-sec section">
       <div class="wrap">
         ${head('Results, in their words', 'Client reviews, published as written.', '', rules)}
         ${lead ? `<div class="hm-q-feature">
-          <div class="hm-arch"><div class="arch-logo">${RN.ui.logo(RN.model.reviewLogo(lead.op, lead.r), { h: 46, name: lead.r.company || 'Client' })}</div></div>
+          ${leadPhoto ? `<div class="hm-arch hm-arch-photo"><img src="${esc(leadPhoto)}" alt="${esc(lead.r.reviewer || 'Client')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
+          <div class="hm-arch hm-arch-logo"><div class="arch-logo">${leadLogo}</div></div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>
             <blockquote class="hm-q-text">${esc(RN.model.pullQuote(lead.r.quote || lead.r.text, 180))}</blockquote>
             <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(lead.r.reviewer || 'Client')}</b><span>${esc(by(lead.r))}</span></figcaption>
+            ${leadPhoto ? `<div class="hm-q-co">${leadLogo}</div>` : ''}
             <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Client review</span><a class="act" href="#op.${esc(lead.op.slug)}" data-track-view="${esc(lead.op.id)}">Read the full review on ${esc(lead.op.first)}’s profile${icon('arrow')}</a></div>
           </figure>
         </div>` : ''}

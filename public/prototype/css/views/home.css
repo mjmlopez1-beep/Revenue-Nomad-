@@ -254,6 +254,13 @@
 [data-view="home"] .hm-arch { position: relative; height: 440px; width: min(380px, 100%); }
 [data-view="home"] .hm-arch::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 84%; border-radius: 999px 999px 0 0; background: var(--tint); }
 [data-view="home"] .hm-arch img { position: absolute; left: 50%; bottom: 0; height: 100%; width: auto; max-width: none; transform: translateX(-50%); }
+/* Reviewer headshot in the arch; the company logo moves under the quote. With no photo file, the logo arch shows instead */
+[data-view="home"] .hm-arch-photo img { left: 0; right: 0; width: 100%; height: 84%; max-width: 100%; transform: none; object-fit: cover; object-position: center 30%; border-radius: 999px 999px 0 0; }
+[data-view="home"] .hm-q-feature:has(.hm-arch-photo) .hm-arch-logo { display: none; }
+[data-view="home"] .hm-q-feature.hm-q-nophoto .hm-arch-photo, [data-view="home"] .hm-q-feature.hm-q-nophoto .hm-q-co { display: none; }
+[data-view="home"] .hm-q-feature.hm-q-nophoto .hm-arch-logo { display: block; }
+[data-view="home"] .hm-q-co { margin-top: var(--s-4); display: flex; align-items: center; }
+[data-view="home"] .hm-q-co img { height: 30px; width: auto; }
 [data-view="home"] .hm-q { margin: 0; }
 [data-view="home"] .hm-q-mark { display: block; height: 64px; font-family: var(--f-serif); font-size: 140px; line-height: 1; color: var(--accent); }
 [data-view="home"] .hm-q-text { margin: var(--s-4) 0 0; font-family: var(--f-serif); font-size: clamp(27px, 3.1vw, 42px); line-height: 1.18; letter-spacing: -0.015em; color: var(--ink); text-wrap: pretty; }
