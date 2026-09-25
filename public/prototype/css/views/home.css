@@ -102,9 +102,17 @@
 @keyframes hmMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 /* ---------- Start from the problem ---------- */
-[data-view="home"] .hm-needs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-[data-view="home"] .hm-need { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; grid-template-areas: "ic go" "body body" "n n"; gap: var(--s-4); min-height: 236px; padding: 28px 28px 28px 28px; border: 0; text-align: left; color: var(--ink); cursor: pointer; transition: background var(--dur) ease; }
-[data-view="home"] .hm-need:hover { background: var(--card); }
+/* Problem tiles: separate cards tinted by the role category that fixes the problem (--tc), with depth and a lift on hover */
+[data-view="home"] .hm-needs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+[data-view="home"] .hm-need { --tc: var(--accent); position: relative; isolation: isolate; overflow: hidden; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; grid-template-areas: "ic go" "body body" "n n"; gap: var(--s-4); min-height: 236px; padding: 28px; border: 1px solid color-mix(in srgb, var(--tc) 22%, var(--line)); border-radius: var(--r-card); background: linear-gradient(160deg, color-mix(in srgb, var(--tc) 9%, var(--card)) 0%, var(--card) 58%); box-shadow: var(--shadow-1); text-align: left; color: var(--ink); cursor: pointer; transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s ease, border-color .35s ease; }
+[data-view="home"] .hm-need::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--tc); z-index: -1; }
+[data-view="home"] .hm-need::after { content: ""; position: absolute; width: 220px; height: 220px; right: -70px; top: -90px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--tc) 26%, transparent) 0%, transparent 70%); opacity: .55; z-index: -1; transition: opacity .35s ease, transform .5s cubic-bezier(.2,.8,.2,1); }
+[data-view="home"] .hm-need:hover, [data-view="home"] .hm-need:focus-visible { transform: translateY(-5px); box-shadow: var(--shadow-2); border-color: color-mix(in srgb, var(--tc) 55%, var(--line)); }
+[data-view="home"] .hm-need:hover::after, [data-view="home"] .hm-need:focus-visible::after { opacity: 1; transform: scale(1.25); }
+[data-view="home"] .hm-need .hm-ic { width: 48px; height: 48px; border-radius: 14px; background: color-mix(in srgb, var(--tc) 15%, var(--card)); color: var(--tc); border: 1px solid color-mix(in srgb, var(--tc) 28%, transparent); transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+[data-view="home"] .hm-need:hover .hm-ic { transform: rotate(-6deg) scale(1.06); }
+[data-view="home"] .hm-need .hm-go { background: var(--card); }
+@media (prefers-reduced-motion: reduce) { [data-view="home"] .hm-need, [data-view="home"] .hm-need::after, [data-view="home"] .hm-need .hm-ic { transition: none; } [data-view="home"] .hm-need:hover { transform: none; } }
 [data-view="home"] .hm-need:hover .hm-go { background: var(--btn); border-color: var(--btn); color: var(--btn-ink); transform: translateX(3px); }
 [data-view="home"] .hm-need .hm-ic { grid-area: ic; align-self: center; }
 [data-view="home"] .hm-need .hm-go { grid-area: go; }
@@ -113,7 +121,8 @@
 [data-view="home"] .hm-need-cats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--t-13); color: var(--mute); }
 [data-view="home"] .hm-need-cats > span { display: inline-flex; align-items: center; gap: 7px; }
 [data-view="home"] .hm-need-cats .dot { width: 7px; height: 7px; }
-[data-view="home"] .hm-need-n { grid-area: n; font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--ink-2); }
+[data-view="home"] .hm-need-n { grid-area: n; justify-self: start; display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--tc) 12%, var(--card)); font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--ink); }
+[data-view="home"] .hm-need-n::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--tc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tc) 22%, transparent); }
 
 /* Not ready to hire yet: the research surfaces, one row under the problem grid */
 [data-view="home"] .hm-prep { margin-top: var(--s-10); }
@@ -340,8 +349,9 @@
 @media (max-width: 640px) {
   [data-view="home"] .hm-head { margin-bottom: var(--s-8); }
   [data-view="home"] .hm-needs { grid-template-columns: minmax(0, 1fr); }
-  [data-view="home"] .hm-need { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-rows: auto auto; grid-template-areas: "ic body go" ". n go"; min-height: 0; padding: 20px 0; gap: 6px var(--s-3); }
-  [data-view="home"] .hm-need:hover { background: transparent; }
+  [data-view="home"] .hm-needs { gap: 12px; }
+  [data-view="home"] .hm-need { grid-template-columns: 44px minmax(0, 1fr) auto; grid-template-rows: auto auto; grid-template-areas: "ic body go" ". n go"; min-height: 0; padding: 18px 16px; gap: 8px var(--s-3); }
+  [data-view="home"] .hm-need .hm-ic { width: 44px; height: 44px; border-radius: 12px; }
   [data-view="home"] .hm-need .hm-ic { align-self: start; }
   [data-view="home"] .hm-need .hm-go { align-self: center; }
   [data-view="home"] .hm-need-t { font-size: 18px; max-width: none; }
