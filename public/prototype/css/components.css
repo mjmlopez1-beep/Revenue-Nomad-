@@ -262,7 +262,7 @@
 .tbl tbody tr:hover { background: var(--card-2); }
 
 /* ---------- Tooltip ("i" explainer) ---------- */
-.tip { position: relative; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--mute); font-family: var(--f-serif); font-style: italic; font-size: 12px; font-weight: 600; cursor: help; flex: 0 0 auto; vertical-align: middle; }
+.tip { position: relative; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--mute); font-family: var(--f-display); font-style: normal; font-size: 11px; font-weight: 800; cursor: help; flex: 0 0 auto; vertical-align: middle; }
 .tip:hover, .tip:focus { color: var(--accent); border-color: var(--accent); }
 .tip-pop { position: absolute; z-index: 100; width: min(320px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 12px; background: var(--night-2); color: #fff; font-family: var(--f-text); font-style: normal; font-size: var(--t-13); font-weight: 400; line-height: 1.5; box-shadow: var(--shadow-3); pointer-events: none; }
 .tip-pop b { font-family: var(--f-display); font-weight: 700; }
@@ -342,7 +342,7 @@ body:has(#tray:not([hidden])) .toasts { bottom: calc(96px + env(safe-area-inset-
 /* ---------- Footer ---------- */
 .ftr { background: var(--night); color: var(--night-ink); padding-block: var(--s-16) var(--s-10); margin-top: var(--s-20); }
 .ftr-grid { display: grid; grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr)); gap: var(--s-8); }
-.ftr h4 { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--leaf); margin-bottom: var(--s-4); }
+.ftr h2.ftr-h { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: var(--leaf); margin-bottom: var(--s-4); }
 .ftr a { display: block; padding: 5px 0; color: var(--night-mute); font-size: var(--t-14); }
 .ftr a:hover { color: #fff; }
 .ftr a.logo { display: inline-flex; padding: 0; color: #fff; }

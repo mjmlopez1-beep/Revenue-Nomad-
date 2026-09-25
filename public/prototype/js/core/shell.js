@@ -168,13 +168,13 @@
       <div class="ftr-grid">
         <div class="stack" style="--gap:16px">
           <a class="logo" href="#home" style="color:#fff"><img src="assets/brand/mark.png" alt=""><span><b>REVENUE</b><span>NOMAD</span></span></a>
-          <p class="serif" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch">The home of fractional go-to-market leadership.</p>
+          <p class="serif-up" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch">The home of fractional go-to-market leadership.</p>
           <p class="small" style="color:var(--night-mute);max-width:40ch">Open profiles, verified proof of work, and the market data behind every engagement.</p>
         </div>
-        <div><h4>Hire</h4><a href="#browse">Browse talent</a><a href="#projects">Post a project</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>
-        <div><h4>Operators</h4><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
-        <div><h4>Insights</h4><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
-        <div><h4>Company</h4><a href="#about">About us</a><a href="#results">Client stories</a><a href="#talk">Contact</a><a href="#standards">Field standards</a></div>
+        <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#projects">Post a project</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>
+        <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
+        <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
+        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#results">Client stories</a><a href="#talk">Contact</a><a href="#standards">Field standards</a></div>
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
