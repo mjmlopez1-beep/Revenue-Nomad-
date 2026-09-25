@@ -179,7 +179,7 @@
       <p class="lede" style="margin:14px auto 0">In the prototype you can switch persona in one click. Your place in the flow is kept.</p>
       <div class="row" style="justify-content:center;margin-top:24px">
         ${p ? `<button class="btn" data-act="persona" data-p="${esc(role)}">Continue as ${esc(p.name)}</button>` : ''}
-        <a class="btn btn-line" href="#home">Back to home</a>
+        ${role === 'operator' ? '<a class="btn btn-line" href="#join">Apply to join</a>' : '<a class="btn btn-line" href="#home">Back to home</a>'}
       </div></div></section>`;
   };
 
