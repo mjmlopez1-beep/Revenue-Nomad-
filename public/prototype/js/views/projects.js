@@ -37,12 +37,18 @@
   PJ.ALLIN_LABEL = 'All-in rate (includes the 25% Revenue Nomad fee)';
   PJ.OWN_RATE_NOTE = 'Operator profiles show the operator’s own rate. All-in rates here add the 25% Revenue Nomad fee.';
   PJ.overBudget = (rate, rateMax) => { const a = PJ.allIn(rate); return a && rateMax ? Math.max(0, a - rateMax) : 0; };
+  /* Monthly and project totals round to $500, the Rate Index estimator's rule (RN.model.monthlyRange) */
+  const r500 = (n) => Math.round((+n || 0) / 500) * 500;
+  const allIn500 = (n) => r500(+n / (1 - PJ.FEE));
 
-  /* ---------- Engagement Blueprints (public IP) ---------- */
+  /* ---------- Engagement Blueprints (public IP) ----------
+     Each Blueprint is framed as the problem it solves (problem), keyed to the `need` picklist and a
+     GTM Framework cell (area x stage), then scoped as a seat (role, hours, term) on the standard fields. */
   const PLAN_D = ['Days 1 to 30', 'Days 31 to 60', 'Days 61 to 90'];
   const BP = [
     {
       id: 'vp-sales', cat: 'sales_leadership', role: 'VP of Sales', blurb: 'Build the sales process and hire the first team.',
+      problem: 'Sales still runs through the founder', need: 'sales_motion', area: 'Win deals', stage: 'qualify',
       engagementType: 'fractional', hoursPerMonth: '40', term: '6_12', startBy: 'available_2_weeks',
       when: ['The founder still closes most deals and wants out of the day-to-day pipeline.', 'You are about to hire your first two or three AEs and need someone who has ramped a team before.', 'Revenue is growing but nobody can say why deals win or stall.'],
       tags: ['Sales Process Design', 'Sales Team Hiring & Ramp', 'Sales Playbook', 'Pipeline Inspection', 'Outbound Motion Build', 'Founder-Led Sales Exit'],
@@ -57,6 +63,7 @@
     },
     {
       id: 'cro', cat: 'sales_leadership', role: 'Chief Revenue Officer', blurb: 'Own the number across sales, marketing and customer success.',
+      problem: 'Every team reports a different revenue number', need: 'sales_motion', area: 'Lead & plan', stage: 'commit',
       engagementType: 'fractional', hoursPerMonth: '40', term: '6_12', startBy: 'available_2_weeks',
       when: ['Sales, marketing and CS each report a different number to the board.', 'You raised a round and the plan assumes growth the current team has not delivered.', 'A sales leader left and you need someone senior to hold the number while you hire.'],
       tags: ['Revenue forecasting', 'Board Revenue Reporting', 'Pipeline Inspection', 'Sales org design', 'Annual GTM planning', 'Sales-marketing alignment'],
@@ -71,6 +78,7 @@
     },
     {
       id: 'cmo', cat: 'marketing', role: 'Chief Marketing Officer', blurb: 'Positioning, brand and a marketing plan with a budget.',
+      problem: 'Prospects cannot say what you do', need: 'pipeline', area: 'Generate demand', stage: 'awareness',
       engagementType: 'fractional', hoursPerMonth: '40', term: '3_6', startBy: 'available_2_weeks',
       when: ['Prospects cannot repeat what you do after the first call.', 'You spend on marketing but cannot tie it to pipeline.', 'You are ready for a first marketing hire and want to scope the role right.'],
       tags: ['Brand positioning', 'ICP definition', 'Product Marketing', 'Demand Generation', 'Marketing function build', 'Marketing Team Hiring'],
@@ -85,6 +93,7 @@
     },
     {
       id: 'vp-revops', cat: 'revenue_operations', role: 'VP of Revenue Operations', blurb: 'A clean CRM, one forecast and reporting leaders use.',
+      problem: 'Nobody trusts the CRM or the dashboards', need: 'systems', area: 'Systems & data', stage: 'qualify',
       engagementType: 'fractional', hoursPerMonth: '20', term: '3_6', startBy: 'available_now',
       when: ['Your CRM data is a mess and nobody trusts the dashboards.', 'Every leader pulls a different pipeline number.', 'You are adding tools faster than anyone can connect them.'],
       tags: ['CRM cleanup', 'RevOps Infrastructure Build', 'Revenue Reporting & Dashboards', 'Stage Definitions', 'Lead Routing', 'GTM Tech Stack Audit', 'HubSpot admin'],
@@ -99,6 +108,7 @@
     },
     {
       id: 'vp-marketing', cat: 'marketing', role: 'VP of Marketing', blurb: 'Demand generation and pipeline you can trace to marketing.',
+      problem: 'Marketing cannot show where pipeline comes from', need: 'pipeline', area: 'Generate demand', stage: 'engage',
       engagementType: 'fractional', hoursPerMonth: '20', term: '3_6', startBy: 'available_2_weeks',
       when: ['Sales asks for more pipeline and marketing cannot show where it comes from.', 'You have one channel that works and need a second.', 'Attribution is guesswork.'],
       tags: ['Demand Generation', 'Paid Acquisition', 'Attribution Modeling', 'Marketing ROI reporting', 'Content Marketing Strategy', 'ABM Strategy'],
@@ -113,6 +123,7 @@
     },
     {
       id: 'vp-cs', cat: 'customer_success_growth', role: 'VP of Customer Success', blurb: 'Retention and an expansion motion with a named owner.',
+      problem: 'Churn shows up at renewal time', need: 'retention', area: 'Retain & expand', stage: 'onboard',
       engagementType: 'fractional', hoursPerMonth: '20', term: '3_6', startBy: 'available_2_weeks',
       when: ['Churn is rising and you find out at renewal time.', 'Onboarding depends on which person the customer gets.', 'Expansion happens by accident, not by plan.'],
       tags: ['Customer Onboarding Program', 'Customer Health Scoring', 'Churn Reduction Program', 'NRR & Expansion Motion', 'Renewal playbook', 'CS Playbook'],
@@ -127,6 +138,7 @@
     },
     {
       id: 'enablement-director', cat: 'sales_enablement', role: 'Director of Enablement', blurb: 'Onboarding, training and call coaching that cut ramp time.',
+      problem: 'New reps take too long to close a first deal', need: 'team', area: 'Build the team', stage: 'qualify',
       engagementType: 'project', projectHours: 60, term: '1_3', startBy: 'available_2_weeks',
       when: ['New reps take six months or more to close their first deal.', 'Every manager coaches differently, or not at all.', 'You are hiring several reps this year and need onboarding that scales.'],
       tags: ['New Hire Sales Onboarding', 'Call Coaching & Feedback', 'Sales Training Program', 'Competitive Battlecards', 'Objection Handling Framework', 'Call Scorecards'],
@@ -141,6 +153,7 @@
     },
     {
       id: 'ai-gtm-architect', cat: 'ai_gtm', role: 'AI GTM Architect', blurb: 'AI workflows and automation across the funnel, measured.',
+      problem: 'Reps lose hours a week to research and data entry', need: 'ai', area: 'Systems & data', stage: 'engage',
       engagementType: 'project', projectHours: 80, term: '1_3', startBy: 'available_now',
       when: ['Your team tries AI tools one by one and nothing is measured.', 'Reps spend hours a week on research and data entry.', 'You want outbound and enrichment to scale without adding headcount.'],
       tags: ['GTM AI Strategy', 'GTM Workflow Automation', 'AI Sales Automation', 'AI Lead Scoring', 'Clay Workflow Build', 'CRM workflow automation'],
@@ -155,6 +168,7 @@
     },
     {
       id: 'vp-partnerships', cat: 'partnerships', role: 'VP of Partnerships', blurb: 'A partner channel that sources and closes revenue.',
+      problem: 'Partner deals happen by accident', need: 'partners', area: 'Generate demand', stage: 'engage',
       engagementType: 'fractional', hoursPerMonth: '20', term: '6_12', startBy: 'available_2_plus_weeks',
       when: ['Partners send a deal now and then but nobody owns the channel.', 'Your customers already use a platform you could integrate or co-sell with.', 'Direct sales costs too much to reach part of your market.'],
       tags: ['Partner Program Build', 'Reseller Channel Build', 'Technology Partnership Build', 'Channel strategy', 'Partnership strategy'],
@@ -169,6 +183,7 @@
     },
     {
       id: 'account-executive', cat: 'sellers', role: 'Account Executive', blurb: 'An experienced closer who works your pipeline part time.',
+      problem: 'More qualified pipeline than time to work it', need: 'sales_motion', area: 'Win deals', stage: 'commit',
       engagementType: 'fractional', hoursPerMonth: '60', term: '3_6', startBy: 'available_now',
       when: ['The founder has more qualified pipeline than time to work it.', 'You want to prove a new segment before hiring a full-time rep.', 'You need an experienced seller to set the bar for future hires.'],
       tags: ['Discovery Call Execution', 'Enterprise Deal Closing', 'Outbound Prospecting', 'Account Expansion Selling', 'Pipeline management', 'Opportunity Qualification'],
@@ -186,16 +201,27 @@
   PJ.blueprints = BP;
   PJ.blueprint = (id) => BP.find((b) => b.id === id) || null;
 
-  const hoursNum = (code) => (String(code) === '19' ? 15 : +code || 0);
-  const rateIdx = (cat) => ((RN.data.market && RN.data.market.rateIndex.byCat) || {})[cat] || { p25: 0, p50: 0, p75: 0, n: 0 };
+  /* Rate Index figures for a Blueprint, at the signed-in client's revenue band when there is one.
+     Operator rates come from RN.model.rateFor / monthlyRange; all-in adds the 25% fee (rate / 0.75). */
+  const rateIdx = (cat, rev) => RN.model.rateFor(cat, rev || null);
+  const clientRev = () => (S().persona === 'buyer' ? (RN.personas.buyer.company || {}).revenueRange || null : null);
+  PJ.price = function (bp, rev) {
+    const project = bp.engagementType === 'project';
+    const r = rateIdx(bp.cat, rev);
+    const m = project ? null : RN.model.monthlyRange(bp.cat, rev || null, bp.hoursPerMonth);
+    const h = project ? bp.projectHours : m.h;
+    const lo = project ? r500(r.p25 * h) : m.lo, hi = project ? r500(r.p75 * h) : m.hi;
+    return {
+      project, h, rev: rev || null, n: r.n,
+      rate: { lo: Math.round(r.p25), mid: Math.round(r.p50), hi: Math.round(r.p75) },
+      rateAll: { lo: PJ.allIn(r.p25), hi: PJ.allIn(r.p75) },
+      total: { lo, hi, label: `${usd(lo)} - ${usd(hi)}${project ? '' : '/mo'}` },
+      totalAll: { lo: allIn500(lo), hi: allIn500(hi), label: `${usd(allIn500(lo))} - ${usd(allIn500(hi))}${project ? '' : '/mo'}` },
+    };
+  };
   function bpBudget(bp) {
-    const r = rateIdx(bp.cat);
+    const r = rateIdx(bp.cat, clientRev());
     return bp.engagementType === 'project' ? Math.round((PJ.allIn(r.p50) * bp.projectHours) / 1000) * 1000 : Math.round(PJ.allIn(r.p50) / 5) * 5;
-  }
-  function bpSpend(bp) {
-    const r = rateIdx(bp.cat);
-    const h = bp.engagementType === 'project' ? bp.projectHours : hoursNum(bp.hoursPerMonth);
-    return { lo: PJ.allIn(r.p25) * h, hi: PJ.allIn(r.p75) * h, h };
   }
 
   /* ---------- Normalizing and reading projects ---------- */
@@ -303,8 +329,16 @@
     return null;
   };
 
-  const STATUS_PILL = { draft: 'pill-warn', posted: 'pill-info', in_progress: 'pill-accent', staffed: 'pill-good', closed: '' };
-  const statusPill = (p) => `<span class="pill ${STATUS_PILL[p.status] || ''}">${esc(W().label('projectStatus', p.status))}</span>`;
+  /* One project status pill for the whole system (RN.ui.statusPill holds the colour map) */
+  const statusPill = (p) => RN.ui.statusPill('project', p.status);
+  PJ.statusPill = statusPill;
+  /* Revenue Nomad staff are labeled wherever they are listed and kept out of editorial rankings */
+  const isStaff = (op) => !!(op && (op.staff || op.isMatt));
+  const staffPill = (op) => (isStaff(op) ? '<span class="pill pill-line pj-staff">Revenue Nomad founder</span>' : '');
+  /* One toast at a time on this surface: clear earlier ones before a step that ends a flow */
+  const clearToasts = () => { if (RN.ui.clearToasts) RN.ui.clearToasts(); else RN.$$('.toasts .toast').forEach((t) => t.remove()); };
+  /* Every toast on this surface replaces the previous one, so they never stack */
+  const toast = (msg, o) => { clearToasts(); RN.ui.toast(msg, o); };
   const catTag = (cat) => (cat ? `<span class="pj-cat">${RN.ui.catDot(cat)}${esc(RN.fields.catLabel(cat))}</span>` : '');
   const fitPill = (fit) => `<span class="pill ${fit.pct >= 75 ? 'pill-good' : fit.pct >= 50 ? 'pill-accent' : ''} pj-fitpill">${esc(fit.label)} · ${fit.pct}</span>`;
   const SIG_ICON = { match: 'check', partial: 'minus', low: 'x', info: 'info' };
@@ -353,17 +387,23 @@
   function notFound(title, cta, to) {
     return `<section class="wrap-narrow section">${RN.ui.empty({ icon: 'doc', title, body: 'It may have been deleted, or the link is out of date.', cta: `<a class="btn" href="#${esc(to)}">${esc(cta)}</a>` })}</section>`;
   }
+  const bpScope = (bp) => [W().label('engagementType', bp.engagementType), bp.engagementType === 'project' ? `About ${bp.projectHours} hours` : W().label('hoursPerMonth', bp.hoursPerMonth), W().label('term', bp.term)].join(' · ');
+  /* Blueprint card: the problem first, then the seat that solves it and what it costs.
+     The whole card opens the Blueprint; "Post this project" starts the brief from it in one click. */
   function bpCard(bp) {
-    const r = rateIdx(bp.cat);
-    const project = bp.engagementType === 'project';
-    return `<a class="card card-link pj-bp" href="#blueprint.${esc(bp.id)}" style="--cat:${RN.fields.catColor(bp.cat)}">
-      <span class="pj-bp-cat">${esc(RN.fields.catLabel(bp.cat))}</span>
-      <h3 class="h4">${esc(bp.title)}</h3>
+    const pr = PJ.price(bp, clientRev());
+    return `<article class="card card-link pj-bp" data-go="blueprint.${esc(bp.id)}" style="--cat:${RN.fields.catColor(bp.cat)}">
+      <span class="label pj-bp-cat">${esc(RN.fields.catLabel(bp.cat))}</span>
+      <h3 class="h4 pj-bp-t"><a href="#blueprint.${esc(bp.id)}">${esc(bp.problem)}</a></h3>
+      <p class="small pj-bp-seat">${esc(bp.title)}</p>
       <p class="small muted pj-bp-blurb">${esc(bp.blurb)}</p>
-      <p class="tiny pj-bp-scope">${esc([W().label('engagementType', bp.engagementType), project ? `About ${bp.projectHours} hours` : W().label('hoursPerMonth', bp.hoursPerMonth), W().label('term', bp.term)].join(' · '))}</p>
-      <p class="pj-bp-rate"><b class="num">${usd(r.p25)} - ${usd(r.p75)}</b><span class="tiny muted">/hr typical operator rate</span></p>
-    </a>`;
+      <p class="tiny pj-bp-scope">${esc(bpScope(bp))}</p>
+      <div class="pj-bp-rate"><b class="num">${esc(pr.total.label)}</b><span class="tiny muted">${pr.project ? 'Typical project, operator rate' : 'Operator rate'} · ${esc(pr.totalAll.label.replace('/mo', ''))} all-in</span></div>
+      <button type="button" class="btn btn-line btn-sm pj-bp-post" data-act="go" data-to="project.new.${esc(bp.id)}">Post this project${icon('arrow')}</button>
+    </article>`;
   }
+  /* One "illustrative" note for any grid of Blueprint prices */
+  const bpPriceNote = () => `<p class="tiny muted pj-bp-note">${RN.ui.illus('Rate Index figures are illustrative')}<span>Operator rates from the Rate Index${clientRev() ? ` for ${esc(W().label('companyRevenue', clientRev()))} revenue companies` : ''}. All-in adds the 25% Revenue Nomad fee.</span></p>`;
   function miniOp(op, right) {
     return `<div class="pj-mini">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="pj-mini-n" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a><span class="tiny muted">Fractional ${esc(op.role)}</span></div>${right || ''}</div>`;
   }
@@ -380,23 +420,43 @@
     { k: 'done', l: 'Staffed or closed', test: (p) => p.status === 'staffed' || p.status === 'closed' },
   ];
 
-  PJ.card = function (p) {
+  /* ---------- RN.projects.card(p, opts): the one project card ----------
+     Shared by #projects and the client workspace (buyer.js). Returns an HTML string.
+     p: a stored project record (RN.store.state.projects[]).
+     opts (all optional):
+       primary  true   the card's action is the filled .btn; pass false for every card but one to keep one primary per area
+       compact  false  one line of counts instead of the four-cell stat grid, and no 72-hour note
+       brief    false  show the 90-day success line (two lines, clamped)
+       hx       'h3'   heading tag for the title ('h2' | 'h3' | 'h4')
+     Action: a draft gets "Finish and post"; a live project with responses gets "Review responses". */
+  PJ.card = function (p, opts) {
+    const o = Object.assign({ primary: true, compact: false, brief: false, hx: 'h3' }, opts && typeof opts === 'object' ? opts : {});
+    const hx = /^h[2-4]$/.test(o.hx) ? o.hx : 'h3';
     const f = PJ.fields(p);
     const draft = p.status === 'draft';
+    const live = LIVE.includes(p.status);
     const resp = p.responses || [];
-    const interested = resp.filter((r) => r.status === 'interested').length;
+    const interested = resp.filter((r) => r.status === 'interested');
     const intros = resp.filter((r) => r.introId || r.decision === 'intro_requested').length;
     const c = draft ? null : counts(f);
+    const btn = o.primary ? 'btn btn-sm' : 'btn btn-line btn-sm';
+    const act = draft ? `<button type="button" class="${btn}" data-act="pj-finish" data-id="${esc(p.id)}">Finish and post${icon('arrow')}</button>`
+      : live && interested.length ? `<button type="button" class="${btn}" data-act="pj-open" data-id="${esc(p.id)}" data-t="responses">Review responses${icon('arrow')}</button>` : '';
+    const faces = interested.map((r) => RN.model.byId(r.opId)).filter(Boolean).slice(0, 4);
     const stat = (v, l, hi) => `<div class="pj-cs${hi ? ' hi' : ''}"><b class="num">${esc(v)}</b><span>${esc(l)}</span></div>`;
-    return `<article class="card card-link pj-card" data-go="project.${esc(p.id)}">
+    const line = draft ? ((p.picked || []).length ? `${RN.fmt.plural(p.picked.length, 'operator')} picked to invite` : '')
+      : [`${clientInvites(p)} of ${MAX_INVITES} invited`, RN.fmt.plural(interested.length, 'response'), `${c.strong} strong matches`].join(' · ');
+    return `<article class="card card-link pj-card${o.compact ? ' is-compact' : ''}" data-go="project.${esc(p.id)}">
       <div class="pj-card-top">${statusPill(p)}${catTag(f.roleCategory)}<span class="tiny muted pj-card-when">${esc(whenLine(p))}</span></div>
-      <h3 class="pj-card-t">${esc(p.title || 'Untitled project')}</h3>
+      <${hx} class="pj-card-t"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></${hx}>
       <p class="small muted">${esc(scopeLine(f, { budget: true }) || 'Brief not started')}</p>
-      ${draft ? `<div class="row pj-card-acts"><button type="button" class="btn btn-sm" data-act="pj-finish" data-id="${esc(p.id)}">Finish and post${icon('arrow')}</button>${(p.picked || []).length ? `<span class="tiny muted">${RN.fmt.plural(p.picked.length, 'operator')} picked to invite</span>` : ''}</div>`
-        : `<div class="pj-card-stats">${stat(`${clientInvites(p)} of ${MAX_INVITES}`, 'Invited')}${stat(interested, 'Responses')}${stat(c.strong, 'Strong matches')}${stat(intros, 'Intros requested', true)}</div>`}
-      ${isQuiet(p) ? `<p class="note pj-card-note">${icon('clock')}<span>No responses in 72 hours. Invite more operators from the ranked matches.</span></p>` : ''}
+      ${o.brief && p.brief ? `<p class="small pj-card-brief clamp-2">${esc(p.brief)}</p>` : ''}
+      ${draft || o.compact ? `<div class="row pj-card-acts">${act}${line ? `<span class="tiny muted">${esc(line)}</span>` : ''}${faces.length ? `<span class="ava-stack">${faces.map((x) => RN.ui.avatar(x, 'ava-xs')).join('')}</span>` : ''}</div>`
+        : `<div class="pj-card-stats">${stat(`${clientInvites(p)} of ${MAX_INVITES}`, 'Invited')}${stat(interested.length, 'Responses')}${stat(c.strong, 'Strong matches')}${stat(intros, 'Intros requested', true)}</div>${act ? `<div class="row pj-card-acts">${act}${faces.length ? `<span class="ava-stack">${faces.map((x) => RN.ui.avatar(x, 'ava-xs')).join('')}</span>` : ''}</div>` : ''}`}
+      ${!o.compact && isQuiet(p) ? `<p class="note pj-card-note">${icon('clock')}<span>No responses in 72 hours. Invite more operators from the ranked matches.</span></p>` : ''}
     </article>`;
   };
+  RN.actions['pj-open'] = (el) => { tabBy[el.dataset.id] = el.dataset.t || 'matches'; RN.go('project.' + el.dataset.id); };
 
   function renderProjects() {
     const persona = S().persona;
@@ -406,34 +466,37 @@
     all.forEach((p) => syncSuggestions(p));
     const f = FILTERS.find((x) => x.k === listFilter) || FILTERS[0];
     const list = all.filter(f.test).slice().sort((a, b) => new Date(b.updatedAt || b.postedAt || b.createdAt) - new Date(a.updatedAt || a.postedAt || a.createdAt));
+    // One primary per area: the newest actionable card owns it; the header button steps back when a card has one
+    const lead = list.find((p) => p.status === 'draft' || (LIVE.includes(p.status) && (p.responses || []).some((r) => r.status === 'interested')));
     return `<section class="wrap pj-list">
       <div class="app-head pj-list-head">
         <div><span class="eyebrow">${esc(me.company.name)}</span><h1 style="margin-top:8px">Projects</h1>
         <p class="sub">Post a role, invite who fits, and compare responses ranked by the same Match Signals shown on every profile.</p></div>
-        <a class="btn" href="#project.new">${icon('plus')}Post a project</a>
+        <a class="btn ${lead ? 'btn-line' : ''}" href="#project.new">${icon('plus')}Post a project</a>
       </div>
       <div class="chipset pj-filter" role="group" aria-label="Filter projects by status">
         ${FILTERS.map((x) => `<button type="button" class="chip" aria-pressed="${x.k === f.k}" data-act="pj-filter" data-f="${x.k}">${esc(x.l)} <span class="pj-n">${all.filter(x.test).length}</span></button>`).join('')}
       </div>
       <div class="stack pj-cards" style="--gap:14px">
-        ${list.length ? list.map(PJ.card).join('') : RN.ui.empty({ icon: 'briefcase', title: f.k === 'all' ? 'No projects yet' : `No ${f.l.toLowerCase()} projects`, body: 'Start from an Engagement Blueprint and you can post in three short steps.', cta: '<a class="btn" href="#project.new">Post a project</a>' })}
+        ${list.length ? list.map((p) => PJ.card(p, { primary: p === lead })).join('') : RN.ui.empty({ icon: 'briefcase', title: f.k === 'all' ? 'No projects yet' : `No ${f.l.toLowerCase()} projects`, body: 'Start from an Engagement Blueprint below and post in one click.', cta: '' })}
       </div>
       <section class="pj-sec">
-        <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h3" style="margin-top:6px">Start from a scoped template</h2></div><a class="act" href="#blueprints">See all ${BP.length}${icon('arrow')}</a></div>
+        <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h3" style="margin-top:6px">Start from the problem you have</h2></div><a class="act" href="#blueprints">See all ${BP.length}${icon('arrow')}</a></div>
         <div class="grid g-4 pj-bps">${BP.slice(0, 4).map(bpCard).join('')}</div>
+        ${bpPriceNote()}
       </section>
     </section>`;
   }
 
   function landing(persona) {
     const sample = { roleCategory: 'sales_leadership', revenueRange: '20m_50m', employeeRange: '51_200', industries: ['Health Care'], tags: BP[0].tags.slice(0, 3), engagementType: 'fractional', hoursPerMonth: '40', rateMax: 365, startBy: 'available_2_weeks' };
-    const top = matches(sample, 3);
+    // A sample ranking is editorial: Revenue Nomad staff are left out of it
+    const top = matches(sample, 8).filter((r) => !isStaff(r.op)).slice(0, 3);
     const pool = RN.model.ops.filter((o) => o.catKey === 'sales_leadership').length;
     const steps = [
-      ['doc', 'Post free', 'Start from a Blueprint or a blank brief. Three short steps, every field from the same lists operators fill in.'],
-      ['target', 'Ranked matches in minutes', 'Every operator in the role category is scored on five Match Signals, with budget and hours notes.'],
-      ['clock', 'Responses within 72 hours', `Invite up to ${MAX_INVITES} in one click. Operators reply from their Studio with a note and their rate.`],
-      ['users', 'Suggested by the team', 'Revenue Nomad adds up to 3 operators we know fit within 72 hours, labeled Suggested by Revenue Nomad.'],
+      ['doc', 'Post free', 'Start from a Blueprint and the brief fills itself. Every field uses the same lists operators fill in.'],
+      ['target', 'Invite ranked matches', `Every operator in the role is scored on five Match Signals. The top 3 are picked for you; invite up to ${MAX_INVITES}.`],
+      ['clock', 'Compare responses in 72 hours', 'Operators reply from their Studio with a note and their rate. Revenue Nomad can add up to 3 more we know fit.'],
     ];
     return `${persona === 'operator' ? `<div class="wrap" style="padding-top:20px"><div class="note info">${icon('inbox')}<span>You are signed in as an operator. When a client invites you to a project it lands in your Studio inbox. <a href="#studio.inbox">Open your inbox</a></span></div></div>` : ''}
     <section class="wrap pj-hero">
@@ -446,7 +509,7 @@
           <p class="small muted">No account needed. You give company basics once.</p>
         </div>
         <div class="card pj-demo" aria-label="Sample ranked matches">
-          <div class="pj-demo-hd"><span class="label">Sample brief</span><span class="pill pill-accent">${icon('target')}Live ranking</span></div>
+          <div class="pj-demo-hd"><span class="label">Sample brief</span><span class="pill pill-accent">${icon('target')}Ranked from live profiles</span></div>
           <h3 class="h4">Fractional VP of Sales</h3>
           <p class="small muted">${esc(scopeLine(sample))} · ${esc(W().label('industries', 'Health Care'))} · ${esc(W().label('companyRevenue', '20m_50m'))} revenue</p>
           <div class="pj-demo-list">${top.map((r, i) => `<div class="pj-demo-row"><span class="pj-rank num">${i + 1}</span>${miniOp(r.op, fitPill(r.fit))}</div>`).join('')}</div>
@@ -456,11 +519,12 @@
     </section>
     <section class="wrap section-sm">
       <span class="eyebrow">How posting works</span>
-      <div class="grid g-4 pj-steps4">${steps.map((s, i) => `<div class="pj-step4"><span class="pj-step4-i">${icon(s[0])}</span><span class="label">Step ${i + 1}</span><h3 class="h4">${esc(s[1])}</h3><p class="small muted">${esc(s[2])}</p></div>`).join('')}</div>
+      <ol class="grid g-3 pj-steps4">${steps.map((s, i) => `<li class="pj-step4"><span class="pj-step4-i">${icon(s[0])}</span><span class="label">Step ${i + 1}</span><h3 class="h4">${esc(s[1])}</h3><p class="small muted">${esc(s[2])}</p></li>`).join('')}</ol>
     </section>
     <section class="wrap section-sm">
-      <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h2" style="margin-top:8px">Start from a <span class="serif">scoped template</span></h2></div><a class="act" href="#blueprints">What a Blueprint includes${icon('arrow')}</a></div>
+      <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h2" style="margin-top:8px">Start from the problem you have</h2></div><a class="act" href="#blueprints">What a Blueprint includes${icon('arrow')}</a></div>
       <div class="grid g-auto pj-bps" style="--min:250px">${BP.map(bpCard).join('')}</div>
+      ${bpPriceNote()}
     </section>
     <section class="wrap section-sm">
       <div class="panel-night night pj-band">
@@ -472,11 +536,28 @@
   }
 
   /* =====================================================================
-     #project.new and #project.new.<blueprint | draft>: 3 steps, autosaved
+     #project.new, #project.new.<blueprint | draft> and #project.new.<draft>.<step>: 3 steps, autosaved.
+     The step lives in the URL, so browser Back moves one step back and a reload keeps your place.
+     A signed-in client who starts from a Blueprint lands on Review and post: the Blueprint fills the role
+     and scope, the company profile fills the rest, and the top 3 ranked matches are picked to invite.
      ===================================================================== */
   const form = { id: null, bp: null, step: 1, dirtyTitle: false };
-  const stepBy = {};
+  const editing = new Set();   // posted projects opened through "Edit brief"
+  const editBuf = {};          // unsaved edits to a posted brief, kept while moving between its steps
+  const trail = [];            // forward step moves this session pushed to history: {id, from, to}
+  let pendingErrs = null;      // errors to show once the step that has them renders
   const STEPS = ['Role and scope', 'Company and needs', 'Review and post'];
+  const newRoute = (id, step) => 'project.new.' + id + (step ? '.' + step : '');
+  const setHash = (route) => { try { history.replaceState(history.state, '', '#' + route); } catch (e) { /* file:// in some browsers */ } };
+  /* Each form entry in browser history carries {pj: draftId, depth}: 0 for the entry the form opened on, +1 per step
+     pushed after it. Posting or saving goes back that many entries, so Back from the project page leaves the form. */
+  const depthOf = (id) => (history.state && history.state.pj === id ? history.state.depth || 0 : null);
+  const markDepth = (id, depth) => { try { history.replaceState({ pj: id, depth }, '', location.hash); } catch (e) { /* ignore */ } };
+  const leaveForm = (id, extra, fallback) => {
+    const d = depthOf(id);
+    if (d !== null && d + extra > 0 && history.length > d + extra) history.go(-(d + extra));
+    else RN.go(fallback, { replace: true });
+  };
 
   function defaultsFor(company) {
     return { roleCategory: '', role: '', engagementType: 'fractional', hoursPerMonth: '', term: '', startBy: '', revenueRange: company.revenueRange || '', employeeRange: company.employeeRange || '', industries: company.industry ? [company.industry] : [], salesMotions: [], tags: [], rateMax: null, projectBudget: null };
@@ -487,6 +568,32 @@
       term: bp.term, startBy: bp.startBy, tags: bp.tags.slice(0, 8),
       rateMax: bp.engagementType === 'project' ? null : bpBudget(bp), projectBudget: bp.engagementType === 'project' ? bpBudget(bp) : null,
     });
+  }
+  const clientNow = () => { const b = RN.personas.buyer; return { name: b.name, title: b.title, email: b.email, company: Object.assign({}, b.company) }; };
+  const companyComplete = (c) => !!(c && c.name && c.industry && c.revenueRange && c.employeeRange);
+  const recX = (p) => ({ f: PJ.fields(p), title: p.title || '', brief: p.brief || '', client: PJ.clientOf(p) });
+  const firstGap = (p) => (validate(recX(p), 1).length ? 1 : validate(recX(p), 2).length ? 2 : 3);
+
+  /* A Blueprint start reuses the client's untouched draft of it from the last 24 hours instead of adding a copy */
+  function blueprintDraft(bp) {
+    const client = clientNow();
+    const now = RN.now();
+    const mail = (client.email || '').toLowerCase();
+    const reuse = (S().projects || []).find((p) => p.status === 'draft' && p.auto && !p.touched && p.template === bp.id
+      && now - new Date(p.createdAt) < 864e5 && (PJ.clientOf(p).email || '').toLowerCase() === mail);
+    if (reuse) return reuse;
+    const iso = now.toISOString();
+    const rec = { id: RN.uid('proj'), status: 'draft', auto: true, title: bp.title, template: bp.id, fields: bpFields(bp, client.company), brief: bp.success, client,
+      visibility: 'open', suggest: true, invited: [], picked: [], inviteMeta: {}, suggested: [], responses: [], createdAt: iso, updatedAt: iso };
+    RN.store.update((s) => { s.projects.unshift(rec); }, 'projects');
+    return PJ.get(rec.id);
+  }
+  /* The top 3 ranked matches are picked to invite the first time the review step opens. The client can change them. */
+  function preselect(p) {
+    if (!p || p.status !== 'draft' || p.preselected) return p;
+    const picks = (p.picked || []).length ? p.picked : PJ.matches(p, 3).map((r) => r.op.id);
+    update(p.id, (q) => { q.preselected = true; q.picked = picks.slice(0, MAX_INVITES); });
+    return PJ.get(p.id);
   }
 
   function notClient(to) {
@@ -502,37 +609,65 @@
   function renderNew(params) {
     const persona = S().persona;
     const from = params && params.from;
-    if (persona === 'operator' || persona === 'admin') return notClient(from ? 'project.new.' + from : 'project.new');
-    const draft = from ? PJ.get(from) : null;
+    const want = Math.max(0, Math.min(3, parseInt(params && params.step, 10) || 0));
+    if (persona === 'operator' || persona === 'admin') return notClient(from ? newRoute(from, want) : 'project.new');
+    let draft = from ? PJ.get(from) : null;
     const bp = draft ? PJ.blueprint(draft.template) : from ? PJ.blueprint(from) : null;
     if (from && !draft && !bp) return notFound('That draft or Blueprint no longer exists', 'Post a project', 'project.new');
+    // A posted project opens here only through "Edit brief". Browser Back after posting returns to the project page.
+    if (draft && draft.status !== 'draft' && !editing.has(draft.id)) {
+      const id = draft.id;
+      setTimeout(() => RN.go('project.' + id, { replace: true }), 0);
+      return `<section class="wrap-narrow section"><p class="muted">Opening the project page for ${esc(draft.title || 'this project')}.</p></section>`;
+    }
     const signedIn = persona === 'buyer';
-    const client = draft && draft.client ? PJ.clientOf(draft) : { name: RN.personas.buyer.name, title: RN.personas.buyer.title, email: RN.personas.buyer.email, company: Object.assign({}, RN.personas.buyer.company) };
-    const f = draft ? PJ.fields(draft) : bp ? bpFields(bp, client.company) : defaultsFor(client.company);
-    if (draft) { f.revenueRange = f.revenueRange || client.company.revenueRange || ''; f.employeeRange = f.employeeRange || client.company.employeeRange || ''; }
+    let auto = false;
+    if (!draft && bp && signedIn) { draft = blueprintDraft(bp); auto = true; }
+    const posted = !!(draft && draft.status !== 'draft');
+    let step;
+    if (draft) {
+      const gap = posted ? 3 : firstGap(draft);
+      step = want || (auto ? 3 : draft.step || gap);
+      if (!posted) step = Math.min(step, gap);
+      if (auto && !companyComplete(PJ.clientOf(draft).company)) step = Math.min(step, 2);
+      if (step !== want) setHash(newRoute(draft.id, step));
+      if (depthOf(draft.id) === null) markDepth(draft.id, 0);
+      if (!posted && step === 3) draft = preselect(draft);
+    } else step = bp ? 2 : 1; // a visitor starting from a Blueprint: role and scope are already filled in
+    const buf = posted ? editBuf[draft.id] : null;
+    const client = buf ? buf.client : draft && draft.client ? PJ.clientOf(draft) : clientNow();
+    const f = buf ? Object.assign({}, buf.f) : draft ? PJ.fields(draft) : bp ? bpFields(bp, client.company) : defaultsFor(client.company);
+    if (draft && !buf) { f.revenueRange = f.revenueRange || client.company.revenueRange || ''; f.employeeRange = f.employeeRange || client.company.employeeRange || ''; }
     form.id = draft ? draft.id : null;
     form.bp = bp;
-    form.step = draft ? stepBy[draft.id] || 1 : 1;
-    const title = draft ? draft.title || '' : bp ? bp.title : '';
-    form.dirtyTitle = !!(draft && draft.title && f.role && draft.title !== 'Fractional ' + f.role);
-    const posted = draft && draft.status !== 'draft';
+    form.step = step;
+    const title = buf ? buf.title : draft ? draft.title || '' : bp ? bp.title : '';
+    const brief = buf ? buf.brief : draft ? draft.brief || '' : bp ? bp.success : '';
+    form.dirtyTitle = !!(title && f.role && title !== 'Fractional ' + f.role);
     const project = f.engagementType === 'project';
-    const suggest = draft ? draft.suggest !== false : true;
+    const suggest = buf ? buf.suggest : draft ? draft.suggest !== false : true;
     const open = draft ? draft.visibility !== 'invite_only' : true;
+    const view = draft ? Object.assign({}, draft, buf ? { title: buf.title, brief: buf.brief, fields: buf.f, client: buf.client, suggest: buf.suggest } : {}) : null;
+    const bpLink = bp ? `<a href="#blueprint.${esc(bp.id)}">${esc(bp.title)} Blueprint</a>` : '';
+    const fromNote = posted ? ''
+      : draft && draft.copiedFrom ? `<div class="note info pj-from">${icon('copy')}<span>Copied from ${esc(draft.copiedFrom)}. Check the brief, then post.</span></div>`
+      : bp && draft && draft.auto ? `<div class="note info pj-from">${icon('layers')}<span>Filled in from the ${bpLink} and your company profile. Change anything, then post.</span></div>`
+      : bp && !draft ? `<div class="note info pj-from">${icon('layers')}<span>Role and scope are filled in from the ${bpLink}. Add your company basics. <a href="#project.new">Start blank</a></span></div>`
+      : '';
 
     return `<section class="wrap pj-new" data-pj-new>
       ${crumbs([['Projects', 'projects'], [posted ? 'Edit brief' : 'Post a project', '']])}
       <div class="pj-new-grid">
         <form id="pj-form" class="pj-form" data-submit="pj-post" novalidate>
           <div class="pj-form-hd">
-            <div class="row between"><span class="step-count" data-pj-count>Step ${form.step} of 3</span><span class="tiny muted pj-saved" data-pj-saved>${draft ? (posted ? `Posted ${esc(RN.fmt.ago(draft.postedAt))}` : `Draft saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`) : 'Saves as you go'}</span></div>
+            <div class="row between"><span class="step-count">Step ${step} of 3 · ${esc(STEPS[step - 1])}</span><span class="tiny muted pj-saved" data-pj-saved>${draft ? (posted ? `Posted ${esc(RN.fmt.ago(draft.postedAt))}` : `Draft saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`) : 'Saves as you go'}</span></div>
+            <div class="stepper" aria-hidden="true">${[1, 2, 3].map((i) => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div>
             <h1 class="h2">${posted ? 'Edit the brief' : 'Post a project'}</h1>
-            <ol class="pj-stepper" data-pj-stepper>${stepperHtml(form.step)}</ol>
-            ${bp && !draft ? `<div class="note info pj-from">${icon('layers')}<span>Started from the <a href="#blueprint.${esc(bp.id)}">${esc(bp.title)} Blueprint</a>. Change anything. <a href="#project.new">Start blank</a></span></div>` : ''}
-            ${!bp && !draft ? `<div class="pj-pickbp"><span class="label">Start from a Blueprint</span><div class="chipset">${BP.map((b) => `<a class="chip chip-sm" href="#project.new.${esc(b.id)}">${RN.ui.catDot(b.cat)}${esc(b.role)}</a>`).join('')}</div></div>` : ''}
+            ${fromNote}
+            ${!bp && !draft && step === 1 ? `<div class="pj-pickbp"><span class="label">Start from a Blueprint</span><div class="chipset">${BP.map((b) => `<a class="chip chip-sm" href="#project.new.${esc(b.id)}">${RN.ui.catDot(b.cat)}${esc(b.role)}</a>`).join('')}</div></div>` : ''}
           </div>
 
-          <div class="pj-step stack" data-step="1" ${form.step !== 1 ? 'hidden' : ''}>
+          <div class="pj-step stack" data-step="1" ${step !== 1 ? 'hidden' : ''}>
             <h2 class="h4 pj-step-t">Role and scope</h2>
             ${W().field('roleCategory', f.roleCategory, { name: 'roleCategory', help: 'The discipline this project needs. Matching starts here.' })}
             <div class="field" data-field="role" data-pj-role>${roleControl(f.roleCategory, f.role)}</div>
@@ -550,10 +685,10 @@
               ${W().field('startBy', f.startBy, { name: 'startBy' })}
             </div>
             <div class="field" data-field="brief"><label for="pj-brief">What does success look like in 90 days?</label>
-              <textarea class="textarea" id="pj-brief" name="brief" maxlength="900" placeholder="The result you want by day 90, in plain words. Operators read this first.">${esc(draft ? draft.brief || '' : bp ? bp.success : '')}</textarea></div>
+              <textarea class="textarea" id="pj-brief" name="brief" maxlength="900" placeholder="The result you want by day 90, in plain words. Operators read this first.">${esc(brief)}</textarea></div>
           </div>
 
-          <div class="pj-step stack" data-step="2" ${form.step !== 2 ? 'hidden' : ''}>
+          <div class="pj-step stack" data-step="2" ${step !== 2 ? 'hidden' : ''}>
             <h2 class="h4 pj-step-t">Company and needs</h2>
             ${signedIn ? companyCard(client, f) : visitorFields(client, f)}
             ${W().field('industries', f.industries, { name: 'industries', max: 3, help: 'Pick up to 3. Operators with experience here rank higher.' })}
@@ -561,9 +696,9 @@
             ${W().field('fitTags', f.tags, { name: 'tags', max: 8, client: true, noCustom: true, cat: f.roleCategory, label: 'Focus areas the role needs', help: 'From the Fit Tag Library. Operators with these verified by a client review rank first.' })}
           </div>
 
-          <div class="pj-step stack" data-step="3" ${form.step !== 3 ? 'hidden' : ''}>
+          <div class="pj-step stack" data-step="3" ${step !== 3 ? 'hidden' : ''}>
             <h2 class="h4 pj-step-t">Review and post</h2>
-            <div data-pj-review>${form.step === 3 ? reviewHtml() : ''}</div>
+            <div data-pj-review>${step === 3 ? reviewHtml(view) : ''}</div>
             <div class="pj-switches stack" style="--gap:14px">
               <label class="switch"><input type="checkbox" name="open" value="1" ${open ? 'checked' : ''} ${posted ? 'disabled' : ''}><i></i><span><b>Send a role alert to matching operators</b><span class="small muted">Off means invite only: just the operators you invite${suggest ? ' and our suggestions' : ''} can respond.</span></span></label>
               <label class="switch"><input type="checkbox" name="suggest" value="1" ${suggest ? 'checked' : ''}><i></i><span><b>Let Revenue Nomad suggest up to 3 operators</b><span class="small muted">We invite them within 72 hours. They show as Suggested by Revenue Nomad.</span></span></label>
@@ -571,22 +706,19 @@
             <p class="small muted pj-fee">${icon('info')}<span>Posting is free. You pay only when you hire, at the ${esc(PJ.ALLIN_LABEL.charAt(0).toLowerCase() + PJ.ALLIN_LABEL.slice(1))}.</span></p>
           </div>
 
-          <div class="pj-form-ft" data-pj-foot>${footHtml(form.step, posted)}</div>
+          <div class="pj-form-ft">${footHtml(step, posted)}</div>
         </form>
         <aside class="pj-rail" data-pj-rail>${railHtml(f)}</aside>
       </div>
     </section>`;
   }
 
-  function stepperHtml(step) {
-    return STEPS.map((l, i) => `<li class="${i + 1 === step ? 'on' : i + 1 < step ? 'done' : ''}"><button type="button" data-act="pj-step" data-to="${i + 1}" aria-current="${i + 1 === step ? 'step' : 'false'}"><span class="pj-stepper-n">${i + 1 < step ? icon('check') : i + 1}</span><span class="pj-stepper-l">${esc(l)}</span></button></li>`).join('');
-  }
   function footHtml(step, posted) {
     const back = step > 1 ? `<button type="button" class="btn btn-line" data-act="pj-step" data-to="${step - 1}">${icon('arrow-left')}Back</button>` : '';
-    const discard = form.id && !posted ? '<button type="button" class="act muted" data-act="pj-discard">Discard draft</button>' : '';
+    const leave = posted ? '<button type="button" class="act muted" data-act="pj-edit-cancel">Cancel</button>' : form.id ? '<button type="button" class="act muted" data-act="pj-discard">Discard draft</button>' : '';
     const save = posted ? '' : '<button type="button" class="btn btn-ghost" data-act="pj-save">Save draft</button>';
     const next = step < 3 ? `<button type="button" class="btn" data-act="pj-step" data-to="${step + 1}">Continue${icon('arrow')}</button>` : `<button type="submit" class="btn">${posted ? 'Save changes' : 'Post project'}${icon('arrow')}</button>`;
-    return `<div class="row pj-foot-l">${back}${discard}</div><div class="row pj-foot-r">${save}${next}</div>`;
+    return `<div class="row pj-foot-l">${back}${leave}</div><div class="row pj-foot-r">${save}${next}</div>`;
   }
   function roleControl(cat, val) {
     const roles = cat ? RN.fields.rolesByCat[cat] || [] : [];
@@ -626,7 +758,7 @@
 
   function railHtml(f) {
     const next = `<div class="card-flat pj-next"><span class="label">What happens next</span><ol>
-      <li><b>Post free.</b> Operators who fit get your role; you invite up to ${MAX_INVITES} in one click.</li>
+      <li><b>Post free.</b> The operators you picked get an invite; matching operators get a role alert.</li>
       <li><b>Responses within 72 hours,</b> each with a note, a rate and the same Match Signals.</li>
       <li><b>Request an intro</b> to the ones you like. We set up the call.</li></ol></div>`;
     if (!f.roleCategory) return `<div class="card pj-live"><span class="pj-live-l"><i class="dot dot-now"></i>Live match</span><h3 class="h4">Pick a role category</h3><p class="small muted">Then every operator in it is scored against your brief as you fill it in.</p></div>${next}`;
@@ -641,8 +773,9 @@
     </div>${next}`;
   }
 
-  function reviewHtml() {
-    const p = PJ.get(form.id);
+  /* The review step reads a project record (or a posted brief with its unsaved edits applied) */
+  function reviewHtml(rec) {
+    const p = rec || PJ.get(form.id);
     if (!p) return '';
     const f = PJ.fields(p);
     const c = PJ.clientOf(p).company;
@@ -656,21 +789,26 @@
     ].filter(Boolean);
     const rows2 = [
       ['Company', c.name || 'Your company'], [RN.fields.companyRevenue.label, W().label('companyRevenue', f.revenueRange)], [RN.fields.companyEmployees.label, W().label('companyEmployees', f.employeeRange)],
-      [RN.fields.industries.label, W().labels('industries', f.industries) || 'Any'], [RN.fields.salesMotions.label, f.salesMotions.join(', ') || 'Any'],
+      [RN.fields.industries.label, W().labels('industries', f.industries) || 'Any'], [RN.fields.salesMotions.label, f.salesMotions.map((m) => W().label('salesMotions', m)).join(', ') || 'Any'],
     ];
     const dl = (rows) => `<dl class="pj-dl">${rows.map((r) => `<div><dt>${esc(r[0])}</dt><dd>${esc(r[1] || 'Not set')}</dd></div>`).join('')}</dl>`;
-    const top = p.status === 'draft' ? matches(f, 6) : [];
     const picked = p.picked || [];
-    const invite = p.status !== 'draft' ? '' : `<section class="pj-rv-inv" data-pid="${esc(p.id)}">
-        <div class="pj-rv-hd"><div><h3 class="h5">Invite when you post</h3><p class="small muted">Top matches right now. Pick up to ${MAX_INVITES}; you can invite more after posting.</p></div><span class="pill">${picked.length} of ${MAX_INVITES} picked</span></div>
-        <div class="stack" style="--gap:8px">${top.map((r) => { const on = picked.includes(r.op.id); return `<div class="pj-pickrow">${miniOp(r.op, fitPill(r.fit))}<button type="button" class="btn btn-sm ${on ? '' : 'btn-line'}" data-act="pj-pick" data-id="${esc(r.op.id)}" aria-pressed="${on}">${on ? icon('check') + 'Picked' : 'Pick'}</button></div>`; }).join('') || '<p class="small muted">No operators match yet. Widen the focus areas or pick another role category.</p>'}</div>
+    let invite = '';
+    if (p.status === 'draft') {
+      const top = matches(f, 6);
+      const extra = picked.filter((id) => !top.some((r) => r.op.id === id)).map(RN.model.byId).filter(Boolean).map((op) => ({ op, fit: fitOf(op, p) }));
+      const rows = top.concat(extra);
+      invite = `<section class="pj-rv-inv" data-pid="${esc(p.id)}">
+        <div class="pj-rv-hd"><div><h3 class="h5">Invite when you post</h3><p class="small muted">${p.preselected ? `The top 3 ranked matches are picked. Change any, up to ${MAX_INVITES}.` : `Top matches right now. Pick up to ${MAX_INVITES}.`} You can invite more after posting.</p></div><span class="pill ${picked.length ? 'pill-accent' : ''}" data-pj-count>${picked.length} of ${MAX_INVITES} picked</span></div>
+        <div class="stack" style="--gap:8px">${rows.map((r) => { const on = picked.includes(r.op.id); return `<div class="pj-pickrow${on ? ' is-on' : ''}">${miniOp(r.op)}<div class="pj-pick-r">${staffPill(r.op)}${fitPill(r.fit)}</div><button type="button" class="btn btn-sm ${on ? '' : 'btn-line'}" data-act="pj-pick" data-id="${esc(r.op.id)}" aria-pressed="${on}" aria-label="${esc(`${on ? 'Picked' : 'Pick'} ${r.op.name} to invite`)}">${on ? icon('check') + 'Picked' : 'Pick'}</button></div>`; }).join('') || '<p class="small muted">No operators match yet. Widen the focus areas or pick another role category.</p>'}</div>
       </section>`;
+    }
     return `<div class="stack" style="--gap:18px">
-      <section class="card-flat pj-rv"><div class="pj-rv-hd"><h3 class="h5">Role and scope</h3><button type="button" class="act" data-act="pj-step" data-to="1">${icon('edit')}Edit</button></div>${dl(rows1)}
-        <div class="pj-rv-brief"><span class="label">What does success look like in 90 days?</span><p>${esc(p.brief || 'Not set')}</p></div></section>
-      <section class="card-flat pj-rv"><div class="pj-rv-hd"><h3 class="h5">Company and needs</h3><button type="button" class="act" data-act="pj-step" data-to="2">${icon('edit')}Edit</button></div>${dl(rows2)}
-        <div class="pj-rv-brief"><span class="label">Focus areas the role needs</span>${f.tags.length ? `<div class="opc-tags">${f.tags.map((t) => `<span class="ftag claimed">${esc(t)}</span>`).join('')}</div>` : '<p class="small muted">None picked. Matching uses the role category.</p>'}</div></section>
       ${invite}
+      <section class="card-flat pj-rv"><div class="pj-rv-hd"><h3 class="h5">Role and scope</h3><button type="button" class="act" data-act="pj-step" data-to="1" aria-label="Edit role and scope">${icon('edit')}Edit</button></div>${dl(rows1)}
+        <div class="pj-rv-brief"><span class="label">What does success look like in 90 days?</span><p>${esc(p.brief || 'Not set')}</p></div></section>
+      <section class="card-flat pj-rv"><div class="pj-rv-hd"><h3 class="h5">Company and needs</h3><button type="button" class="act" data-act="pj-step" data-to="2" aria-label="Edit company and needs">${icon('edit')}Edit</button></div>${dl(rows2)}
+        <div class="pj-rv-brief"><span class="label">Focus areas the role needs</span>${f.tags.length ? `<div class="opc-tags">${f.tags.map((t) => `<span class="ftag claimed">${esc(t)}</span>`).join('')}</div>` : '<p class="small muted">None picked. Matching uses the role category.</p>'}</div></section>
     </div>`;
   }
 
@@ -696,25 +834,25 @@
   function ensureDraft() {
     if (form.id && PJ.get(form.id)) return PJ.get(form.id);
     const now = RN.now().toISOString();
-    const rec = { id: RN.uid('proj'), status: 'draft', title: '', template: form.bp ? form.bp.id : null, fields: {}, brief: '', invited: [], picked: [], inviteMeta: {}, suggested: [], responses: [], createdAt: now, updatedAt: now };
+    const rec = { id: RN.uid('proj'), status: 'draft', title: '', template: form.bp ? form.bp.id : null, fields: {}, brief: '', invited: [], picked: [], inviteMeta: {}, suggested: [], responses: [], step: form.step, createdAt: now, updatedAt: now };
     RN.store.update((s) => { s.projects.unshift(rec); }, 'projects');
     form.id = rec.id;
-    try { history.replaceState(null, '', '#project.new.' + rec.id); } catch (e) { /* file:// in some browsers */ }
+    setHash(newRoute(rec.id, form.step));
+    markDepth(rec.id, 0);
     return rec;
   }
   function save(formEl, o) {
     const cur = form.id ? PJ.get(form.id) : null;
-    if (cur && cur.status !== 'draft' && !(o && o.force)) return cur; // a posted brief saves on "Save changes"
+    if (cur && cur.status !== 'draft') return cur; // a posted brief saves on "Save changes"
     const x = collect(formEl);
     const rec = ensureDraft();
-    const draftOnly = rec.status === 'draft';
     update(rec.id, (q) => {
       q.title = x.title; q.brief = x.brief; q.fields = x.f; q.client = x.client; q.updatedAt = RN.now().toISOString();
-      q.suggest = x.suggest;
-      if (draftOnly) q.visibility = x.open ? 'open' : 'invite_only';
+      q.suggest = x.suggest; q.visibility = x.open ? 'open' : 'invite_only';
+      if (o && o.touched) q.touched = true;
     });
     const el = formEl.querySelector('[data-pj-saved]');
-    if (el && draftOnly) el.textContent = 'Draft saved just now';
+    if (el) el.textContent = 'Draft saved just now';
     return PJ.get(rec.id);
   }
 
@@ -754,44 +892,44 @@
       field.appendChild(p);
       if (!first) first = field;
     });
-    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    RN.ui.toast('Fix the highlighted fields to continue.', { icon: 'info' });
+    if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); const i = first.querySelector('input:not([type=hidden]), select, textarea, button'); if (i) i.focus({ preventScroll: true }); }
   }
 
+  /* Move to a step: save, then navigate so the step is in the URL. Moving back to the step this session
+     came from uses history.back(), so browser history never gains a loop of the same two steps. */
   function goStep(formEl, to) {
-    form.step = to;
-    if (form.id) stepBy[form.id] = to;
-    RN.$$('[data-step]', formEl).forEach((s) => { s.hidden = +s.dataset.step !== to; });
-    formEl.querySelector('[data-pj-stepper]').innerHTML = stepperHtml(to);
-    formEl.querySelector('[data-pj-count]').textContent = `Step ${to} of 3`;
-    const cur = PJ.get(form.id);
-    formEl.querySelector('[data-pj-foot]').innerHTML = footHtml(to, cur && cur.status !== 'draft');
-    if (to === 3) formEl.querySelector('[data-pj-review]').innerHTML = reviewHtml();
-    const top = formEl.getBoundingClientRect().top + window.scrollY - 90;
-    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    const cur = form.id ? PJ.get(form.id) : null;
+    let id = form.id;
+    if (!cur || cur.status === 'draft') { id = save(formEl).id; update(id, (q) => { q.step = to; }); }
+    else editBuf[id] = collect(formEl);
+    const top = trail[trail.length - 1];
+    if (to < form.step && top && top.id === id && top.from === to && top.to === form.step) { trail.pop(); history.back(); return; }
+    const d = depthOf(id) || 0;
+    trail.push({ id, from: form.step, to });
+    RN.go(newRoute(id, to));
+    markDepth(id, d + 1);
   }
 
   RN.actions['pj-step'] = (el) => {
     const formEl = document.getElementById('pj-form');
     if (!formEl) return;
     const to = +el.dataset.to;
-    const x = collect(formEl);
+    if (!to || to === form.step) return;
     if (to > form.step) {
+      const x = collect(formEl);
       for (let s = form.step; s < to; s++) {
         const errs = validate(x, s);
-        if (errs.length) { if (s !== form.step) goStep(formEl, s); showErrs(formEl, errs); return; }
+        if (errs.length) { if (s === form.step) showErrs(formEl, errs); else { pendingErrs = { step: s, errs }; goStep(formEl, s); } return; }
       }
     }
     clearErrs(formEl);
-    const cur = form.id ? PJ.get(form.id) : null;
-    if (!cur || cur.status === 'draft') save(formEl);
     goStep(formEl, to);
   };
   RN.actions['pj-save'] = () => {
     const formEl = document.getElementById('pj-form');
     if (!formEl) return;
-    save(formEl);
-    RN.ui.toast('Draft saved. It waits under Projects until you post it.', { action: { label: 'View projects', act: 'go', attrs: 'data-to="projects"' } });
+    save(formEl, { touched: true });
+    toast('Draft saved. It waits under Projects until you post it.', { action: { label: 'View projects', act: 'go', attrs: 'data-to="projects"' } });
   };
   RN.actions['pj-discard'] = () => {
     RN.ui.modal({ title: 'Discard this draft?', sub: 'The brief and your picks are deleted. Nothing was sent to operators.', foot: '<button class="btn btn-line" data-act="modal-close">Keep draft</button><button class="btn btn-danger" data-act="pj-discard-go">Discard draft</button>' });
@@ -801,33 +939,42 @@
     RN.ui.closeModal();
     if (id) RN.store.update((s) => { s.projects = s.projects.filter((p) => p.id !== id); }, 'projects');
     form.id = null;
-    RN.go('projects');
-    RN.ui.toast('Draft discarded');
+    clearToasts();
+    RN.go('projects', { replace: true });
+    toast('Draft discarded');
   };
+  RN.actions['pj-edit-cancel'] = () => {
+    const id = form.id;
+    editing.delete(id); delete editBuf[id];
+    leaveForm(id, 1, 'project.' + id); // back to the project page the edit started from
+  };
+  /* Pick or unpick an operator to invite on post. The button and the count are the feedback: no toast. */
   RN.actions['pj-pick'] = (el) => {
     const pid = pidOf(el), id = el.dataset.id;
     const p = PJ.get(pid);
     if (!p) return;
     const on = (p.picked || []).includes(id);
-    if (!on && (p.picked || []).length >= MAX_INVITES) { RN.ui.toast(`Pick up to ${MAX_INVITES}. Remove one to add another.`, { icon: 'info' }); return; }
-    update(pid, (q) => { q.picked = on ? (q.picked || []).filter((x) => x !== id) : (q.picked || []).concat(id); });
+    if (!on && (p.picked || []).length >= MAX_INVITES) { toast(`Pick up to ${MAX_INVITES}. Remove one to add another.`, { icon: 'info' }); return; }
+    update(pid, (q) => { q.picked = on ? (q.picked || []).filter((x) => x !== id) : (q.picked || []).concat(id); q.preselected = true; });
     const box = document.querySelector('[data-pj-review]');
-    if (box && document.getElementById('pj-form')) box.innerHTML = reviewHtml();
-    else RN.rerender();
-    const op = RN.model.byId(id);
-    if (!on) RN.ui.toast(`${esc(op.first)} will be invited when you post.`);
+    if (box && document.getElementById('pj-form')) {
+      box.innerHTML = reviewHtml();
+      const btn = box.querySelector(`[data-act="pj-pick"][data-id="${id}"]`);
+      if (btn) btn.focus({ preventScroll: true });
+    } else RN.rerender();
   };
 
   RN.submits['pj-post'] = (formEl) => {
     if (form.step < 3) { RN.actions['pj-step']({ dataset: { to: String(form.step + 1) } }); return; }
     const x = collect(formEl);
-    for (const s of [1, 2]) { const errs = validate(x, s); if (errs.length) { goStep(formEl, s); showErrs(formEl, errs); return; } }
+    for (const s of [1, 2]) { const errs = validate(x, s); if (errs.length) { pendingErrs = { step: s, errs }; goStep(formEl, s); return; } }
     const cur = PJ.get(form.id);
     if (cur && cur.status !== 'draft') {
       update(cur.id, (q) => { q.title = x.title; q.brief = x.brief; q.fields = x.f; q.client = x.client; q.suggest = x.suggest; q.updatedAt = RN.now().toISOString(); });
       (cur.invited || []).forEach((id) => { const op = RN.model.byId(id); if (op) RN.mail(op.name, `Updated brief: ${x.title}`, `${op.first}, the client updated the brief for a project you were invited to.\n${PJ.blind(cur)}\n${scopeLine(x.f)}\n\nSee the change in your Studio inbox.`, 'invite'); });
-      RN.go('project.' + cur.id);
-      RN.ui.toast('Changes saved. Invited operators got the updated brief.');
+      editing.delete(cur.id); delete editBuf[cur.id];
+      leaveForm(cur.id, 1, 'project.' + cur.id); // back to the project page the edit started from
+      toast('Changes saved. Invited operators got the updated brief.');
       return;
     }
     const rec = save(formEl);
@@ -842,8 +989,14 @@
       q.visibility = x.open ? 'open' : 'invite_only'; q.suggest = x.suggest;
       (q.picked || []).forEach((id) => { if (!q.invited.includes(id)) { q.invited.push(id); q.inviteMeta[id] = { source: 'client', ts: now }; } });
       q.picked = [];
+      delete q.step;
     });
-    if (visitor) { RN.store.set('persona', 'buyer'); RN.shell.renderHeader(); RN.shell.renderDock(); }
+    if (visitor) {
+      // A visitor who posts becomes their own client (same as requesting an intro)
+      const demo = RN.personas.buyer.email;
+      if (x.client.email && x.client.email.toLowerCase() !== String(demo).toLowerCase() && RN.shell.setClient) RN.shell.setClient({ name: x.client.name, title: '', email: x.client.email, company: x.client.company });
+      RN.store.set('persona', 'buyer'); RN.shell.renderHeader(); RN.shell.renderDock();
+    }
     const p = PJ.get(pid);
     const f = PJ.fields(p);
     const client = PJ.clientOf(p);
@@ -858,15 +1011,18 @@
     }
     const c = counts(f);
     RN.mail(client.email, `Your project is live: ${p.title}`, `We ranked ${RN.fmt.plural(c.total, 'operator')} in ${RN.fields.catLabel(f.roleCategory)} against your brief: ${c.strong} strong and ${c.good} good matches.\n${p.invited.length ? `${RN.fmt.plural(p.invited.length, 'invite')} sent. ` : ''}${x.open ? `${RN.fmt.plural(alerted, 'matching operator')} got a role alert. ` : 'Invite only: just the operators you invite can respond. '}Responses land on your project page within 72 hours.${x.suggest ? '\nRevenue Nomad adds up to 3 suggested operators within 72 hours.' : ''}`, 'project_post');
-    flash = { id: pid, text: x.open ? `Posted and live. ${p.invited.length ? `${RN.fmt.plural(p.invited.length, 'invite')} sent and matching` : 'Matching'} operators got a role alert. Responses land here within 72 hours.` : `Posted and live. ${p.invited.length ? `Your ${RN.fmt.plural(p.invited.length, 'invite')} went out. ` : 'Invite operators from the ranked matches below. '}Responses land here within 72 hours.` };
-    tabBy[pid] = 'matches';
-    delete stepBy[pid];
+    const n = p.invited.length;
+    flash = { id: pid, text: `Posted and live. ${n ? `${RN.fmt.plural(n, 'invite')} sent` : 'No invites yet: invite from the ranked matches'}${x.open ? `${n ? ' and' : '.'} ${RN.fmt.plural(alerted, 'matching operator')} got a role alert` : ''}. Responses land here within 72 hours, ranked by match.` };
+    tabBy[pid] = n ? 'responses' : 'matches';
     form.id = null;
-    RN.go('project.' + pid);
-    if (visitor) RN.ui.toast(`Posted. We created a client workspace for ${esc(client.company.name)}.`, { action: { label: 'Open workspace', act: 'go', attrs: 'data-to="buyer"' } });
+    for (let i = trail.length - 1; i >= 0; i--) if (trail[i].id === pid) trail.splice(i, 1);
+    clearToasts();
+    // Back from the project page skips the posting form: return to the form's first entry, which redirects to the project
+    leaveForm(pid, 0, 'project.' + pid);
+    if (visitor) toast(`Posted. We created a client workspace for ${esc(client.company.name)}.`, { action: { label: 'Open workspace', act: 'go', attrs: 'data-to="buyer"' } });
   }
 
-  function sendInvite(p, opId, silentTrackBuyer) {
+  function sendInvite(p, opId) {
     const op = RN.model.byId(opId);
     if (!op) return;
     const f = PJ.fields(p);
@@ -878,6 +1034,7 @@
   function mountNew(root) {
     const formEl = root.querySelector('#pj-form');
     if (!formEl) return;
+    if (pendingErrs) { const pe = pendingErrs; pendingErrs = null; if (pe.step === form.step) showErrs(formEl, pe.errs); }
     let timer = null;
     const handler = (e) => {
       const t = e.target;
@@ -891,11 +1048,11 @@
       if (name === 'engagementType') onType(formEl, t.value);
       if (name === 'rateMax') { const h = formEl.querySelector('[data-pj-rate] .help'); if (h) h.textContent = rateHelp(+t.value || null); }
       if (name === 'projectBudget') { const h = formEl.querySelector('[data-pj-budget] .help'); if (h) h.textContent = budgetHelp(+t.value || null); }
-      if (name === 'suggest' || name === 'open') { /* switch copy stays; saved below */ }
       clearTimeout(timer);
       timer = setTimeout(() => {
         const cur = form.id ? PJ.get(form.id) : null;
-        if (!cur || cur.status === 'draft') save(formEl);
+        if (!cur || cur.status === 'draft') save(formEl, { touched: true });
+        else editBuf[cur.id] = collect(formEl);
         const rail = root.querySelector('[data-pj-rail]');
         if (rail) rail.innerHTML = railHtml(collect(formEl).f);
       }, e.type === 'input' ? 350 : 60);
@@ -937,7 +1094,8 @@
       const inv = p && (p.invited || []).includes(me);
       return `<section class="wrap-narrow section"><div class="card pj-gate"><span class="eyebrow">Client project</span>
         <h1 class="h2" style="margin-top:10px">${inv ? 'You were invited to this project.' : 'This page belongs to the client who posted it.'}</h1>
-        <p class="lede" style="margin:14px auto 0">${inv ? `Your stage: ${esc(PJ.stage(p, me).l)}. Read the brief and respond from your Studio inbox.` : 'Project invites and role alerts land in your Studio inbox.'}</p>
+        ${inv ? `<p class="h5" style="margin-top:14px">${esc(p.title)}</p><p class="small muted">${esc(PJ.blind(p))} · ${esc(scopeLine(PJ.fields(p)))}</p>` : ''}
+        <p class="lede" style="margin:14px auto 0">${inv ? `Your stage: ${esc(PJ.stage(p, me).l)}. Respond from your Studio inbox: interested with your rate, or a pass with a reason.` : 'Project invites and role alerts land in your Studio inbox.'}</p>
         <div class="row" style="justify-content:center;margin-top:24px"><a class="btn" href="#studio.inbox">Open Studio inbox</a><button type="button" class="btn btn-line" data-act="persona" data-p="buyer" data-to="project.${esc(params.id)}">View as the client</button></div></div></section>`;
     }
     if (persona !== 'buyer') return RN.ui.gate('buyer');
@@ -1016,7 +1174,7 @@
   }
   function matchMeta(p, r) {
     const inv = (p.invited || []).includes(r.op.id), picked = (p.picked || []).includes(r.op.id);
-    const tag = inv ? srcPill(p, r.op.id) : picked ? '<span class="pill pill-accent">Picked to invite</span>' : '';
+    const tag = (inv ? srcPill(p, r.op.id) : picked ? '<span class="pill pill-accent">Picked to invite</span>' : '') + staffPill(r.op);
     return `<div class="pj-fit">
       <div class="pj-fit-hd">${fitPill(r.fit)}<span class="tiny muted">${r.fit.count} of ${r.fit.signals.length} signals</span>${tag}</div>
       ${sigList(r.fit)}${notesHtml(r.notes)}
@@ -1068,14 +1226,14 @@
       <div class="pj-resp-top">
         ${RN.ui.avatar(op, 'ava-md')}
         <div class="grow">
-          <div class="row pj-resp-name"><a class="serif-up" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a>${srcPill(p, op.id)}<span class="pill ${declined ? 'pill-bad' : 'pill-good'}">${declined ? 'Declined' : 'Interested'}</span>${dec ? `<span class="pill ${dec[1]}">${esc(dec[0])}</span>` : ''}</div>
+          <div class="row pj-resp-name"><a class="serif-up" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a>${staffPill(op)}${srcPill(p, op.id)}<span class="pill ${declined ? 'pill-bad' : 'pill-good'}">${declined ? 'Declined' : 'Interested'}</span>${dec ? `<span class="pill ${dec[1]}">${esc(dec[0])}</span>` : ''}</div>
           <p class="small muted">Fractional ${esc(op.role)} · ${esc(op.ris.label)} ${esc(op.ris.score)} Reputation Index · ${esc(declined ? 'Passed' : 'Responded')} ${esc(RN.fmt.ago(r.ts || p.postedAt))}${r.simulated ? ' · Simulated' : ''}</p>
         </div>
         <div class="pj-resp-fit">${fitPill(fit)}</div>
       </div>
       ${r.note ? `<blockquote class="pj-quote">${esc(r.note)}</blockquote>` : ''}
       ${declined ? '' : `<dl class="pj-facts">
-        <div class="pj-fact-wide"><dt>${esc(PJ.ALLIN_LABEL)}</dt><dd>${ai ? `<b class="num">${usd(ai)}/hr</b>` : 'Rate on request'}${ai && f.engagementType !== 'project' && f.rateMax ? `<span class="${over ? 'pj-bad' : 'pj-good'}">${over ? `${usd(over)} over your ${usd(f.rateMax)} budget` : 'Inside your budget'}</span>` : ''}</dd></div>
+        <div class="pj-fact-wide"><dt>${esc(PJ.ALLIN_LABEL)}</dt><dd>${ai ? `<b class="num">${usd(ai)}/hr</b><span class="tiny muted">${usd(rate)}/hr operator rate</span>` : 'Rate on request'}${ai && f.engagementType !== 'project' && f.rateMax ? `<span class="${over ? 'pj-bad' : 'pj-good'}">${over ? `${usd(over)} over your ${usd(f.rateMax)} budget` : 'Inside your budget'}</span>` : ''}</dd></div>
         <div><dt>${esc(RN.fields.hoursPerMonth.label)}</dt><dd>${esc(hrs ? W().label('hoursPerMonth', hrs) : 'Not listed')}</dd></div>
         <div><dt>${esc(RN.fields.availability.label)}</dt><dd>${esc(op.avail.label)}</dd></div>
       </dl>
@@ -1126,16 +1284,15 @@
   /* ---------- Project page actions ---------- */
   RN.actions['pj-tab'] = (el) => { const pid = pidOf(el); if (!pid) return; tabBy[pid] = el.dataset.t; RN.rerender(); };
   RN.actions['pj-see-resp'] = (el) => { const pid = pidOf(el); tabBy[pid] = 'responses'; RN.rerender(); };
-  RN.actions['pj-noop'] = () => RN.ui.toast('This project is closed to new invites.', { icon: 'info' });
+  RN.actions['pj-noop'] = () => toast('This project is closed to new invites.', { icon: 'info' });
   RN.actions['pj-filter'] = (el) => { listFilter = el.dataset.f; RN.rerender(); };
+  /* Finish a draft: open it at the first step with a gap, or at Review and post when it is complete */
   RN.actions['pj-finish'] = (el) => {
     const p = PJ.get(el.dataset.id);
     if (!p) return;
-    const x = { f: PJ.fields(p), title: p.title || '', brief: p.brief || '', client: PJ.clientOf(p) };
-    stepBy[p.id] = validate(x, 1).length ? 1 : validate(x, 2).length ? 2 : 3;
-    RN.go('project.new.' + p.id);
+    RN.go(newRoute(p.id, firstGap(p)));
   };
-  RN.actions['pj-edit'] = (el) => { stepBy[el.dataset.id] = 1; RN.go('project.new.' + el.dataset.id); };
+  RN.actions['pj-edit'] = (el) => { const id = el.dataset.id; editing.add(id); delete editBuf[id]; RN.go(newRoute(id, 1)); };
   RN.actions['pj-delete'] = (el) => {
     RN.ui.modal({ title: 'Delete this draft?', sub: 'Nothing was sent to operators.', foot: `<button class="btn btn-line" data-act="modal-close">Keep draft</button><button class="btn btn-danger" data-act="pj-delete-go" data-id="${esc(el.dataset.id)}">Delete draft</button>` });
   };
@@ -1143,18 +1300,17 @@
     const id = el.dataset.id;
     RN.ui.closeModal();
     RN.store.update((s) => { s.projects = s.projects.filter((p) => p.id !== id); }, 'projects');
-    RN.go('projects');
-    RN.ui.toast('Draft deleted');
+    clearToasts();
+    RN.go('projects', { replace: true });
+    toast('Draft deleted');
   };
   RN.actions['pj-duplicate'] = (el) => {
     const p = PJ.get(el.dataset.id);
     if (!p) return;
     const now = RN.now().toISOString();
-    const rec = { id: RN.uid('proj'), status: 'draft', title: p.title, template: p.template || null, fields: JSON.parse(JSON.stringify(p.fields || {})), brief: p.brief, client: p.client, suggest: true, visibility: 'open', invited: [], picked: [], inviteMeta: {}, suggested: [], responses: [], createdAt: now, updatedAt: now };
+    const rec = { id: RN.uid('proj'), status: 'draft', title: p.title, template: p.template || null, fields: JSON.parse(JSON.stringify(p.fields || {})), brief: p.brief, client: p.client, suggest: true, visibility: 'open', invited: [], picked: [], inviteMeta: {}, suggested: [], responses: [], copiedFrom: p.title, createdAt: now, updatedAt: now };
     RN.store.update((s) => { s.projects.unshift(rec); }, 'projects');
-    stepBy[rec.id] = 3;
-    RN.go('project.new.' + rec.id);
-    RN.ui.toast('Copied the brief into a new draft. Review and post.');
+    RN.go(newRoute(rec.id, firstGap(rec))); // the page says it is a copy; no toast
   };
   RN.actions['pj-suggest-now'] = (el) => {
     const p = PJ.get(pidOf(el));
@@ -1162,13 +1318,13 @@
     syncSuggestions(p, true);
     const q = PJ.get(p.id);
     RN.rerender();
-    RN.ui.toast((q.suggested || []).length ? `Revenue Nomad invited ${RN.fmt.plural(q.suggested.length, 'suggested operator')}.` : 'No new operators fit well enough to suggest.', { icon: 'seal' });
+    toast((q.suggested || []).length ? `Revenue Nomad invited ${RN.fmt.plural(q.suggested.length, 'suggested operator')}.` : 'No new operators fit well enough to suggest.', { icon: 'seal' });
   };
   RN.actions['pj-suggest-on'] = (el) => {
     const pid = pidOf(el);
     update(pid, (q) => { q.suggest = true; });
     RN.rerender();
-    RN.ui.toast('Suggestions on. Revenue Nomad adds up to 3 operators within 72 hours.', { icon: 'seal' });
+    toast('Suggestions on. Revenue Nomad adds up to 3 operators within 72 hours.', { icon: 'seal' });
   };
 
   RN.actions['pj-invite'] = (el) => {
@@ -1176,13 +1332,13 @@
     const id = el.dataset.id;
     if (!p || !LIVE.includes(p.status)) return;
     if ((p.invited || []).includes(id)) return;
-    if (clientInvites(p) >= MAX_INVITES) { RN.ui.toast(`You can invite up to ${MAX_INVITES} operators. Uninvite one to add another.`, { icon: 'info' }); return; }
+    if (clientInvites(p) >= MAX_INVITES) { toast(`You can invite up to ${MAX_INVITES} operators. Uninvite one to add another.`, { icon: 'info' }); return; }
     const now = RN.now().toISOString();
     update(p.id, (q) => { q.invited.push(id); q.inviteMeta[id] = { source: 'client', ts: now }; q.uninvited = (q.uninvited || []).filter((x) => x !== id); q.updatedAt = now; });
     sendInvite(PJ.get(p.id), id);
     const op = RN.model.byId(id);
     RN.rerender();
-    RN.ui.toast(`Invited ${esc(op.first)}. It is in their Studio inbox with 72 hours to reply.`);
+    toast(`Invited ${esc(op.first)}. It is in their Studio inbox with 72 hours to reply.`);
   };
   RN.actions['pj-uninvite'] = (el) => {
     const p = PJ.get(pidOf(el));
@@ -1191,7 +1347,7 @@
     update(p.id, (q) => { q.invited = q.invited.filter((x) => x !== id); delete q.inviteMeta[id]; q.suggested = (q.suggested || []).filter((x) => x !== id); q.uninvited = (q.uninvited || []).concat(id); });
     const op = RN.model.byId(id);
     RN.rerender();
-    RN.ui.toast(`Invite withdrawn. ${esc(op.first)} no longer sees this project in Studio.`, { icon: 'info' });
+    toast(`Invite withdrawn. ${esc(op.first)} no longer sees this project in Studio.`, { icon: 'info' });
   };
 
   RN.actions['pj-shortlist'] = (el) => {
@@ -1205,7 +1361,7 @@
     if (!on && !inList) { RN.store.update((s) => { s.shortlist = [id].concat(s.shortlist); }, 'shortlist'); RN.track('shortlist_add', { opId: id, source: 'project', projectId: p.id }); }
     const op = RN.model.byId(id);
     RN.rerender();
-    RN.ui.toast(on ? `Moved ${esc(op.first)} back to review.` : `Shortlisted ${esc(op.first)}. Also saved to your workspace shortlist.`, on ? { icon: 'info' } : { action: { label: 'View shortlist', act: 'go', attrs: 'data-to="buyer.shortlist"' } });
+    toast(on ? `Moved ${esc(op.first)} back to review.` : `Shortlisted ${esc(op.first)}. Also saved to your workspace shortlist.`, on ? { icon: 'info' } : { action: { label: 'View shortlist', act: 'go', attrs: 'data-to="buyer.shortlist"' } });
   };
 
   RN.actions['pj-intro'] = (el) => {
@@ -1216,7 +1372,9 @@
     const f = PJ.fields(p);
     const client = PJ.clientOf(p);
     const st = S();
-    const existing = RN.intro.mine(id);
+    // Only this project's client's own open request counts as "already asked" (never another client's)
+    const mail = (client.email || '').toLowerCase();
+    const existing = (st.intros || []).find((i) => i.opId === id && i.status !== 'declined' && !i.withdrawn && i.buyer && (i.buyer.email || '').toLowerCase() === mail) || null;
     let introId = existing && existing.id;
     if (!existing) {
       const need = Object.keys(RN.fields.needCats).find((k) => (RN.fields.needCats[k] || []).includes(f.roleCategory)) || 'not_sure';
@@ -1236,12 +1394,13 @@
     }
     update(p.id, (q) => { const r = respOf(q, id); if (r) { r.decision = 'intro_requested'; r.introId = introId; } if (q.status === 'posted') q.status = 'in_progress'; });
     RN.rerender();
-    RN.ui.toast(existing ? `You already asked to meet ${esc(op.first)}. Linked that request to this project.` : `Intro requested. ${esc(op.first)} has 72 hours to confirm.`, { action: { label: 'Track intro', act: 'go', attrs: 'data-to="buyer.intros"' } });
+    toast(existing ? `You already asked to meet ${esc(op.first)}. Linked that request to this project.` : `Intro requested. ${esc(op.first)} has 72 hours to confirm.`, { action: { label: 'Track intro', act: 'go', attrs: 'data-to="buyer.intros"' } });
   };
 
-  /* Not a fit: one close email, sent now. The reason list is local until it is promoted to RN.fields. */
-  const REASONS = [['rate', 'Rate is above our budget'], ['time', 'Not enough available time'], ['timing', 'Start date does not work'], ['experience', 'Not enough relevant experience'], ['closer', 'Went with a closer match'], ['other', 'Other']];
-  const reasonLabel = (v) => (REASONS.find((r) => r[0] === v) || [v, v])[1];
+  /* Not a fit: one close email, sent now. Reasons use the one registry list, RN.fields.passReason, which is also
+     what operators pick when they pass, so client and operator reasons can be joined for match tuning. */
+  const reasonLabel = (v) => W().label('passReason', v);
+  const isReason = (v) => !!(RN.fields.passReason && RN.fields.passReason.options.some((o) => o.v === v));
   RN.actions['pj-notfit'] = (el) => {
     const pid = pidOf(el), id = el.dataset.id;
     const op = RN.model.byId(id);
@@ -1249,14 +1408,14 @@
       title: `Not a fit: ${esc(op.name)}`,
       sub: `${esc(op.first)} gets one short close email now. The reason stays with Revenue Nomad and tunes future matches.`,
       body: `<form id="pj-nf" data-submit="pj-notfit-go" data-pid="${esc(pid)}" data-id="${esc(id)}" class="stack" style="--gap:18px" novalidate>
-        <div class="field"><label>What did not fit?</label><div class="chipset" role="group" aria-label="Reason">${REASONS.map((r) => `<button type="button" class="chip" aria-pressed="false" data-act="w-chip" data-name="reason" data-v="${r[0]}" data-multi="" data-max="">${esc(r[1])}</button>`).join('')}<input type="hidden" name="reason" value=""></div></div>
+        ${W().field('passReason', '', { name: 'reason', id: 'pj-nf-reason', label: 'What did not fit?', help: 'Only Revenue Nomad sees this. It is the same list operators use when they pass.' })}
         <div class="field"><label for="pj-nf-note">Note for our team <span class="opt">Optional</span></label><textarea class="textarea" id="pj-nf-note" name="note" maxlength="400" style="min-height:80px" placeholder="Anything that helps us match better next time."></textarea></div>
       </form>`,
       foot: '<button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="pj-nf">Send close email</button>',
     });
   };
   RN.submits['pj-notfit-go'] = (formEl, data) => {
-    if (!data.reason) { RN.ui.toast('Pick a reason so we can match better next time.', { icon: 'info' }); return; }
+    if (!data.reason) { toast('Pick a reason so we can match better next time.', { icon: 'info' }); return; }
     const pid = formEl.dataset.pid, id = formEl.dataset.id;
     const p = PJ.get(pid);
     const op = RN.model.byId(id);
@@ -1266,7 +1425,7 @@
     if (send) closeMail(p, op);
     RN.ui.closeModal();
     RN.rerender();
-    RN.ui.toast(`Marked not a fit. ${esc(op.first)} got one close email.`, { icon: 'info' });
+    toast(`Marked not a fit. ${esc(op.first)} got one close email.`, { icon: 'info' });
   };
   function closeMail(p, op, unfilled) {
     RN.mail(op.name, `Update on ${p.title}`, `${op.first}, thank you for responding to the ${p.title} project. ${unfilled ? 'The client closed the project without filling it.' : 'The client went another direction.'} Your response stays on file and we keep matching you with new projects.`, 'close');
@@ -1308,7 +1467,7 @@
     RN.track('project_select', { opId: id, projectId: pid });
     RN.ui.closeModal();
     RN.rerender();
-    RN.ui.toast(`Selected ${esc(op.first)}. ${toClose.length ? `${RN.fmt.plural(toClose.length, 'close email')} sent.` : ''}`);
+    toast(`Selected ${esc(op.first)}. ${toClose.length ? `${RN.fmt.plural(toClose.length, 'close email')} sent.` : ''}`);
   };
 
   RN.actions['pj-close'] = (el) => {
@@ -1323,7 +1482,7 @@
     toClose.forEach((oid) => { const o = RN.model.byId(oid); if (o) closeMail(p, o, true); });
     RN.ui.closeModal();
     RN.rerender();
-    RN.ui.toast(`Project closed.${toClose.length ? ` ${RN.fmt.plural(toClose.length, 'close email')} sent.` : ''}`, { icon: 'info' });
+    toast(`Project closed.${toClose.length ? ` ${RN.fmt.plural(toClose.length, 'close email')} sent.` : ''}`, { icon: 'info' });
   };
 
   /* Prototype tool: an invited operator replies (normally done from the Studio inbox) */
@@ -1337,10 +1496,10 @@
     const top = op.tags.find((t) => t.tier !== 'claimed') || op.tags[0];
     const ind = op.industries.find((i) => f.industries.includes(i)) || op.industries[0];
     const note = `Interested. I have run ${top ? top.t : 'this work'}${ind ? ` for ${W().label('industries', ind)} companies` : ''} and can start ${op.avail.key === 'available_now' ? 'right away' : op.avail.label.replace(/^Available /, '').toLowerCase()}. Happy to share the 90-day plan I would use.`;
-    PJ.respond(p.id, op.id, { status: 'interested', note, rate: op.rate || rateIdx(op.catKey).p50, hours: op.avail.hoursCode, simulated: true });
+    PJ.respond(p.id, op.id, { status: 'interested', note, rate: op.rate || Math.round(rateIdx(op.catKey).p50), hours: op.avail.hoursCode, simulated: true });
     tabBy[p.id] = 'responses';
     RN.rerender();
-    RN.ui.toast(`${esc(op.first)} responded (simulated).`, { icon: 'message' });
+    toast(`${esc(op.first)} responded (simulated).`, { icon: 'message' });
   };
 
   /* Operator response entry point for Studio (studio-b) and the prototype tool. Emails the client once. */
@@ -1353,7 +1512,7 @@
       let x = respOf(q, opId);
       if (!x) { x = { opId }; q.responses.push(x); }
       const declined = r.status === 'declined';
-      Object.assign(x, { status: declined ? 'declined' : 'interested', note: r.note || '', reason: declined ? r.reason || null : null, rate: declined ? null : r.rate ? +r.rate : op.rate || null, hours: declined ? '' : r.hours || op.avail.hoursCode || '', ts: RN.now().toISOString() });
+      Object.assign(x, { status: declined ? 'declined' : 'interested', note: r.note || '', reason: declined ? (isReason(r.reason) ? r.reason : r.reason ? 'other' : null) : null, rate: declined ? null : r.rate ? +r.rate : op.rate || null, hours: declined ? '' : r.hours || op.avail.hoursCode || '', ts: RN.now().toISOString() });
       if (r.simulated) x.simulated = true;
       if (!q.invited.includes(opId)) q.inviteMeta[opId] = q.inviteMeta[opId] || { source: 'alert', ts: x.ts };
     });
@@ -1378,19 +1537,20 @@
     return `<section class="wrap phead pj-bph">
       ${crumbs([['Post a project', 'projects'], ['Engagement Blueprints', '']])}
       <span class="eyebrow">Engagement Blueprints</span>
-      <h1 class="h1">Scoped fractional GTM engagements, <span class="serif">ready to post.</span></h1>
-      <p class="lede">Ten templates drawn from engagements on the network. Each one covers when to use it, the typical scope, a 30/60/90-day plan, the focus areas to look for, what it costs on the Rate Index, and the questions to ask in the first call.</p>
+      <h1 class="h1">Start from the problem <span class="serif">you need solved.</span></h1>
+      <p class="lede">Ten Blueprints written by the Revenue Nomad team for the engagements clients ask for most. Each one names the problem, the fractional seat that solves it, the typical scope, a 30/60/90-day plan, what it costs on the Rate Index, and the questions to ask in the first call.</p>
     </section>
     <section class="wrap">
       <div class="pj-bp-filter"><span class="label">${esc(RN.fields.roleCategory.label)}</span><div data-deselect>${W().control('roleCategory', bpCat, { name: 'bpCat', change: 'pj-bp-cat' })}</div>
         <p class="small muted">${RN.fmt.plural(list.length, 'Blueprint')}${bpCat ? ` in ${esc(RN.fields.catLabel(bpCat))} · <button type="button" class="act" data-act="pj-bp-all">Show all</button>` : ''}</p></div>
       <div class="grid g-3 pj-bps">${list.map(bpCard).join('')}</div>
+      ${bpPriceNote()}
     </section>
     <section class="wrap section-sm">
       <div class="grid g-3 pj-how">
         <div><span class="pj-step4-i">${icon('layers')}</span><h3 class="h4">Built on standard fields</h3><p class="small muted">Engagement type, available time, term and focus areas use the same lists operators fill in, so a Blueprint matches profiles with no translation.</p></div>
-        <div><span class="pj-step4-i">${icon('chart')}</span><h3 class="h4">Priced from the Rate Index</h3><p class="small muted">Typical rates are the p25 to p75 hourly rates operators list in each role category. Market figures are illustrative in this prototype.</p></div>
-        <div><span class="pj-step4-i">${icon('send')}</span><h3 class="h4">One click to post</h3><p class="small muted">Post this project fills the brief. Change anything, then see ranked matches before you post.</p></div>
+        <div><span class="pj-step4-i">${icon('chart')}</span><h3 class="h4">Priced from the Rate Index</h3><p class="small muted">Operator rates are the p25 to p75 hourly rates operators list in each role category. All-in prices add the 25% Revenue Nomad fee. Market figures are illustrative in this prototype.</p></div>
+        <div><span class="pj-step4-i">${icon('send')}</span><h3 class="h4">One click to post</h3><p class="small muted">Post this project fills the brief from the Blueprint and your company profile, with the top 3 ranked matches picked to invite. Change anything before you post.</p></div>
       </div>
     </section>`;
   }
@@ -1398,34 +1558,44 @@
   function renderBlueprint(params) {
     const bp = PJ.blueprint(params.id);
     if (!bp) return notFound('That Blueprint does not exist', 'See all Engagement Blueprints', 'blueprints');
-    const r = rateIdx(bp.cat);
-    const sp = bpSpend(bp);
-    const project = bp.engagementType === 'project';
+    const rev = clientRev();
+    const pr = PJ.price(bp, rev);
+    const project = pr.project;
     const cat = RN.fields.catLabel(bp.cat);
-    const top = RN.model.rank({ roleCategory: bp.cat, tags: bp.tags }, { limit: 3 });
+    const stageName = (((RN.data.framework || {}).stages || []).find((s) => s.id === bp.stage) || {}).name || '';
     const related = BP.filter((b) => b.id !== bp.id && b.cat === bp.cat).concat(BP.filter((b) => b.id !== bp.id && b.cat !== bp.cat)).slice(0, 3);
     const supply = (t) => { let all = 0, ver = 0; RN.model.ops.forEach((o) => { const x = o.tags.find((y) => y.t.toLowerCase() === t.toLowerCase()); if (x) { all++; if (x.tier !== 'claimed') ver++; } }); return { all, ver }; };
-    const pos = (v) => RN.clamp(((v - r.p25 * 0.8) / (r.p75 * 1.15 - r.p25 * 0.8)) * 100, 0, 100);
+    const pos = (v) => RN.clamp(((v - pr.rate.lo * 0.8) / (pr.rate.hi * 1.15 - pr.rate.lo * 0.8)) * 100, 0, 100);
     const facts = [
       [RN.fields.engagementType.label, W().label('engagementType', bp.engagementType)],
       project ? ['Typical size', `About ${bp.projectHours} hours`] : ['Available time needed', W().label('hoursPerMonth', bp.hoursPerMonth)],
       [RN.fields.term.label, W().label('term', bp.term)],
-      ['Typical rate', `${usd(r.p25)} - ${usd(r.p75)}/hr`],
+      ['Operator rate', `${usd(pr.rate.lo)} - ${usd(pr.rate.hi)}/hr`, `All-in ${usd(pr.rateAll.lo)} - ${usd(pr.rateAll.hi)}/hr`],
     ];
+    // Who offers it: operators who list this Blueprint first, then the best fits who have not packaged it.
+    // The fits ranking is editorial, so Revenue Nomad staff are left out of it.
+    const offer = RN.model.ops.filter((o) => !o.hidden && (o.offers || []).includes(bp.id));
+    const fits = RN.model.rank({ roleCategory: bp.cat, tags: bp.tags }, { limit: 12 }).filter((x) => !isStaff(x.op) && !offer.includes(x.op)).slice(0, 3);
+    const me = RN.myOp();
+    const mine = !!(me && (me.offers || []).includes(bp.id));
+    const staffMeta = (o) => (isStaff(o) ? `<div class="pj-staff-row">${staffPill(o)}</div>` : '');
+    const listLink = `<a class="act" href="#framework">${esc(bp.area)}${stageName ? ` × ${esc(stageName)}` : ''}</a>`;
     return `<section class="wrap pj-bpd-top">
       ${crumbs([['Post a project', 'projects'], ['Blueprints', 'blueprints'], [bp.role, '']])}
       <div class="panel-night night pj-bpd-hero" style="--cat:${RN.fields.catColor(bp.cat)}">
         <span class="eyebrow">Engagement Blueprint · ${esc(cat)}</span>
-        <h1 class="h1">Fractional <span class="serif">${esc(bp.role)}</span></h1>
-        <p class="lede">${esc(bp.blurb)} ${esc(bp.success)}</p>
-        <dl class="pj-bpd-facts">${facts.map((x) => `<div><dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd></div>`).join('')}</dl>
-        <div class="row pj-bpd-cta"><a class="btn btn-leaf btn-lg" href="#project.new.${esc(bp.id)}">Post this project${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pj-scroll" data-to="pj-top-ops">See top operators</button></div>
+        <h1 class="h1">${esc(bp.problem)}</h1>
+        <p class="lede">The seat that fixes it: <span class="serif">${esc(bp.title)}.</span> ${esc(bp.blurb)}</p>
+        <dl class="pj-bpd-facts">${facts.map((x) => `<div><dt>${esc(x[0])}</dt><dd>${esc(x[1])}${x[2] ? `<span class="pj-bpd-sub">${esc(x[2])}</span>` : ''}</dd></div>`).join('')}</dl>
+        <div class="row pj-bpd-cta"><a class="btn btn-leaf btn-lg" href="#project.new.${esc(bp.id)}">Post this project${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pj-scroll" data-to="pj-top-ops">Operators who offer this</button></div>
       </div>
     </section>
     <section class="wrap pj-bpd">
       <div class="pj-bpd-grid">
         <div class="pj-bpd-main">
-          <section class="pj-bpd-sec"><h2 class="h3">When to use it</h2><ul class="pj-checks">${bp.when.map((w) => `<li>${icon('check')}<span>${esc(w)}</span></li>`).join('')}</ul></section>
+          <section class="pj-bpd-sec"><h2 class="h3">Signs you have this problem</h2><ul class="pj-checks">${bp.when.map((w) => `<li>${icon('check')}<span>${esc(w)}</span></li>`).join('')}</ul>
+            <p class="small muted pj-bpd-map">${icon('grid')}<span>On the GTM Framework: ${listLink} · ${esc(RN.fields.need ? W().label('need', bp.need) : '')}</span></p></section>
+          <section class="pj-bpd-sec"><h2 class="h3">What you get by day 90</h2><p class="pj-bpd-success">${esc(bp.success)}</p></section>
           <section class="pj-bpd-sec"><h2 class="h3">Typical scope</h2>
             <dl class="pj-dl">
               <div><dt>${esc(RN.fields.roleCategory.label)}</dt><dd>${esc(cat)}</dd></div>
@@ -1437,40 +1607,65 @@
             </dl>
             <p class="small muted" style="margin-top:12px">${esc(W().opt('engagementType', bp.engagementType).d || '')}</p></section>
           <section class="pj-bpd-sec"><h2 class="h3">The 30/60/90-day plan</h2>
-            <p class="small muted">What success looks like by day 90: ${esc(bp.success)}</p>
             <ol class="pj-plan">${bp.plan.map((ph, i) => `<li><span class="label">${PLAN_D[i]}</span><h3 class="h4">${esc(ph.t)}</h3><ul>${ph.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul></li>`).join('')}</ol></section>
           <section class="pj-bpd-sec"><h2 class="h3">Focus areas to look for</h2>
             <p class="small muted">From the Fit Tag Library. Operators with these verified by a client review rank first when you post.</p>
             <ul class="pj-fas">${bp.tags.map((t) => { const s = supply(t); const info = RN.model.tagInfo(t) || {}; return `<li><span class="ftag claimed" title="${esc(info.d || '')}">${esc(t)}</span><span class="tiny muted">${s.all ? `${s.all} on the network${s.ver ? `, ${s.ver} client-verified` : ''}` : 'New in the library'}</span></li>`; }).join('')}</ul>
             <a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></section>
-          <section class="pj-bpd-sec"><h2 class="h3">Outcomes to measure</h2><ol class="pj-num">${bp.outcomes.map((o) => `<li>${esc(o)}</li>`).join('')}</ol></section>
-          <section class="pj-bpd-sec"><h2 class="h3">Questions to ask in the first call</h2><ol class="pj-num pj-qs">${bp.questions.map((q) => `<li>${esc(q)}</li>`).join('')}</ol></section>
+          <section class="pj-bpd-sec"><h2 class="h3">Outcomes to measure</h2><ul class="pj-list-plain">${bp.outcomes.map((o) => `<li>${icon('target')}<span>${esc(o)}</span></li>`).join('')}</ul></section>
+          <section class="pj-bpd-sec"><h2 class="h3">Questions to ask in the first call</h2><ul class="pj-list-plain pj-qs">${bp.questions.map((q) => `<li>${icon('message')}<span>${esc(q)}</span></li>`).join('')}</ul></section>
         </div>
         <aside class="pj-bpd-side">
           <div class="card pj-rate">
-            <span class="label">Typical rate · Rate Index</span>
-            <div class="pj-range" aria-label="${esc(`p25 ${usd(r.p25)}, median ${usd(r.p50)}, p75 ${usd(r.p75)}`)}"><i class="pj-range-band" style="left:${pos(r.p25).toFixed(1)}%;right:${(100 - pos(r.p75)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${pos(r.p50).toFixed(1)}%"></i></div>
-            <div class="pj-range-l"><span>${usd(r.p25)}</span><b>${usd(r.p50)} median</b><span>${usd(r.p75)}</span></div>
-            <p class="tiny muted">Operators’ own hourly rates in ${esc(cat)}, p25 to p75, from ${r.n} profiles. Illustrative.</p>
+            <div class="pj-rate-hd"><span class="label">Operator rate · Rate Index</span>${RN.ui.illus()}</div>
+            <div class="pj-range" role="img" aria-label="${esc(`Operator rate p25 ${usd(pr.rate.lo)}, median ${usd(pr.rate.mid)}, p75 ${usd(pr.rate.hi)} per hour`)}"><i class="pj-range-band" style="left:${pos(pr.rate.lo).toFixed(1)}%;right:${(100 - pos(pr.rate.hi)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${pos(pr.rate.mid).toFixed(1)}%"></i></div>
+            <div class="pj-range-l"><span>${usd(pr.rate.lo)}</span><b>${usd(pr.rate.mid)}/hr median</b><span>${usd(pr.rate.hi)}</span></div>
+            <p class="tiny muted">Operators’ own hourly rates in ${esc(cat)}${rev ? ` for ${esc(W().label('companyRevenue', rev))} revenue companies` : ''}, p25 to p75, from ${pr.n} profiles.</p>
+            <p class="small pj-allin-note">Operator rate. All-in with the 25% platform fee: <b class="num">${usd(pr.rateAll.lo)} - ${usd(pr.rateAll.hi)}/hr</b></p>
             <hr>
-            <span class="label">${project ? 'Typical project, all-in' : 'Typical month, all-in'}</span>
-            <p class="pj-spend num">${usd(sp.lo)} - ${usd(sp.hi)}${project ? '' : '/mo'}</p>
-            <p class="tiny muted">${project ? `About ${sp.h} hours` : `At ${esc(W().label('hoursPerMonth', bp.hoursPerMonth))}`}. ${esc(PJ.ALLIN_LABEL)}.</p>
-            <a class="btn btn-block" href="#project.new.${esc(bp.id)}" style="margin-top:18px">Post this project</a>
-            <a class="act" href="#rates" style="margin-top:12px">See the Rate Index${icon('arrow')}</a>
+            <span class="label">${project ? 'Typical project' : 'Typical month'} · operator rate</span>
+            <p class="pj-spend num">${esc(pr.total.label)}</p>
+            <p class="small pj-allin-note">All-in with the 25% platform fee: <b class="num">${esc(pr.totalAll.label)}</b></p>
+            <p class="tiny muted">${project ? `About ${pr.h} hours` : `At ${esc(W().label('hoursPerMonth', bp.hoursPerMonth))}`}, rounded to $500.</p>
+            <a class="btn btn-line btn-block" href="#project.new.${esc(bp.id)}" style="margin-top:14px">Post this project</a>
+            <a class="act" href="#rates" style="margin-top:8px">See the Rate Index${icon('arrow')}</a>
           </div>
         </aside>
       </div>
     </section>
-    <section class="wrap section-sm" id="pj-top-ops">
-      <div class="row between pj-sec-hd"><div><span class="eyebrow">Top operators for this Blueprint</span><h2 class="h3" style="margin-top:6px">Ranked on the focus areas above</h2></div><a class="act" href="#browse.${esc(bp.cat)}">Browse all ${esc(cat)}${icon('arrow')}</a></div>
-      <div class="grid g-3">${top.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the project and our team will source candidates.', cta: `<a class="btn" href="#project.new.${esc(bp.id)}">Post this project</a>` })}</div>
+    <section class="wrap section-sm pj-offer" id="pj-top-ops">
+      <div class="row between pj-sec-hd"><div><span class="eyebrow">Operators who offer this</span><h2 class="h3" style="margin-top:6px">Who runs this engagement</h2></div><a class="act" href="#browse.${esc(bp.cat)}">Browse all ${esc(cat)}${icon('arrow')}</a></div>
+      <div class="pj-offer-grp">
+        <div class="pj-offer-hd"><h3 class="h4">Offer this Blueprint</h3><span class="pill">${offer.length}</span></div>
+        <p class="small muted">They list it on their profile as a packaged engagement.</p>
+        ${offer.length ? `<div class="grid g-3">${offer.map((o) => RN.ui.opCard(o, { meta: staffMeta(o) })).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet.</p>'}
+        ${me ? `<div class="pj-offer-me">${mine ? `<span class="small">${icon('check-circle')}You offer this Blueprint. Clients see you in this list.</span><button type="button" class="act" data-act="pj-offer" data-id="${esc(bp.id)}">Remove it</button>`
+          : `<span class="small">Do you run this engagement? Offer it as a packaged engagement and clients see you here.</span><button type="button" class="btn btn-line btn-sm" data-act="pj-offer" data-id="${esc(bp.id)}">I offer this Blueprint</button>`}</div>` : ''}
+      </div>
+      <div class="pj-offer-grp">
+        <div class="pj-offer-hd"><h3 class="h4">Strong fits</h3><span class="pill">${fits.length}</span></div>
+        <p class="small muted">Ranked on the focus areas above. They have not packaged this Blueprint. Revenue Nomad staff are not ranked here.</p>
+        <div class="grid g-3">${fits.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the project and our team will source candidates.', cta: '' })}</div>
+      </div>
     </section>
     <section class="wrap section-sm">
       <div class="row between pj-sec-hd"><h2 class="h3">Related Blueprints</h2><a class="act" href="#blueprints">All Blueprints${icon('arrow')}</a></div>
       <div class="grid g-3 pj-bps">${related.map(bpCard).join('')}</div>
+      ${bpPriceNote()}
     </section>`;
   }
+  /* An operator lists (or removes) a Blueprint as a packaged engagement: Studio edits, same store as the Profile tab */
+  RN.actions['pj-offer'] = (el) => {
+    const me = RN.myOp();
+    if (!me) return;
+    const id = el.dataset.id;
+    const on = (me.offers || []).includes(id);
+    RN.store.update((s) => { s.edits = s.edits || {}; const e = (s.edits[me.id] = s.edits[me.id] || {}); const cur = (e.offers || me.offers || []).slice(); e.offers = on ? cur.filter((x) => x !== id) : cur.concat(id); }, 'edits');
+    RN.model.applyEdits();
+    RN.track('studio_action', { action: on ? 'offer_remove' : 'offer_add', opId: me.id, blueprint: id });
+    RN.rerender();
+    toast(on ? 'Removed from your offers.' : 'Added. Clients see you under Offer this Blueprint.');
+  };
   RN.actions['pj-scroll'] = (el) => { const t = document.getElementById(el.dataset.to); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
   /* =====================================================================
@@ -1478,10 +1673,14 @@
      ===================================================================== */
   RN.view('projects', { route: 'projects', nav: 'projects', title: () => (S().persona === 'buyer' ? 'Projects' : 'Post a project'), render: renderProjects });
   RN.view('project-new', { route: 'project.new', nav: 'projects', footer: false, title: () => 'Post a project', render: () => renderNew({}), mount: (root) => mountNew(root) });
+  const newTitle = (p) => { const d = PJ.get(p.from); return d && d.status !== 'draft' ? 'Edit brief' : 'Post a project'; };
   RN.view('project-new-from', {
     route: 'project.new.:from', nav: 'projects', footer: false, samples: { from: 'vp-sales', extra: ['project.new.proj-seed-2'] },
-    title: (p) => { const d = PJ.get(p.from); return d && d.status !== 'draft' ? 'Edit brief' : 'Post a project'; },
-    render: (p) => renderNew(p), mount: (root) => mountNew(root),
+    title: newTitle, render: (p) => renderNew(p), mount: (root) => mountNew(root),
+  });
+  RN.view('project-new-step', {
+    route: 'project.new.:from.:step', nav: 'projects', footer: false, samples: { from: 'proj-seed-2', step: '2', extra: ['project.new.proj-seed-2.3'] },
+    title: newTitle, render: (p) => renderNew(p), mount: (root) => mountNew(root),
   });
   RN.view('project', {
     route: 'project.:id', nav: 'projects', samples: { id: 'proj-seed-1', extra: ['project.proj-seed-2'] },

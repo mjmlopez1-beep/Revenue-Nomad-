@@ -17,9 +17,9 @@
     report: {
       title: 'The State of Fractional GTM',
       year: 2027,
-      fieldwork: 'Oct to Nov 2026',
+      fieldwork: 'Jul to Aug 2026',
       sample: { operators: 212, companies: 96, profiles: '350+' },
-      lede: 'What companies pay, how they scope the work, which roles they hire first, and what separates the operators who get rehired. Built from a survey of operators and hiring companies plus anonymized data from 350+ profiles on the Revenue Nomad network.',
+      lede: 'What companies pay, how they scope the work, which roles they hire first, and what separates the operators who get rehired. Built from a survey of operators and hiring companies, plus anonymized profile data from 350+ operators (100 in this prototype).',
       summary: [
         { v: '$240', l: 'Median hourly rate for a fractional GTM leader, up 9% year over year' },
         { v: '41%', l: 'Of engagements scoped under 40 hours a month. 40 hours is the single most common shape' },
@@ -59,7 +59,7 @@
         { range: '50m_plus', v: 300 },
       ],
       fracVsFull: [
-        ['Fractional VP of Sales, 40 hrs a month', '$11,000', '2 to 3 weeks', '30 days notice'],
+        ['Fractional VP of Sales, 40 hrs / month', '$11,000', '2 to 3 weeks', '30 days notice'],
         ['Full time VP of Sales, base + OTE + benefits + equity', '$27,000+', '90 to 120 days', 'Severance plus 4 to 6 months lost'],
         ['Agency or consultancy', '$15,000+', '4 to 6 weeks', 'Contract term'],
       ],
@@ -73,7 +73,7 @@
       outcomes: [
         { v: '48%', l: 'Extended past the original term' },
         { v: '22%', l: 'Converted to a full time hire' },
-        { v: '9%', l: 'Ended early, most often for fit, not performance' },
+        { v: '9%', l: 'Ended early. Fit was the most common reason' },
       ],
       // Hiring intent next 12 months, by standard role category
       intent: [
@@ -93,11 +93,11 @@
       concurrent: [
         { l: '1 client', v: 22 }, { l: '2 clients', v: 39 }, { l: '3 clients', v: 27 }, { l: '4+', v: 12 },
       ],
-      quote: { text: 'I did not need a closer. I needed someone to build the machine and then hand me the keys.', by: 'CEO, $5M–$20M B2B services company, survey respondent' },
+      quote: { text: 'I did not need a closer. I needed someone to build the machine and then hand me the keys.', by: 'CEO, $5M–$20M B2B services company' },
       methodology: [
-        'Survey fielded October 1 to November 5, 2026 to fractional GTM operators (n=212) and companies that hired one in the last 18 months (n=96). Rate and scope figures are medians of self reported data. Demand growth combines a monthly scan of public fractional GTM job posts with stated hiring intent. Profile analysis uses anonymized, aggregated data from 350+ operator profiles on the Revenue Nomad network. Minimum cell size for any reported segment is 20.',
-        'Every segment in this report uses the same fields operators and companies fill in on Revenue Nomad: role category, revenue range, employee range, hours per month and industry. That is why a number here can be compared directly with any profile or brief on the platform.',
-        'Revenue Nomad is a marketplace for fractional go to market leadership. It has a commercial interest in this market growing. Every figure in this report is reported as collected.',
+        'Survey fielded July 1 to August 15, 2026 to fractional GTM operators (n=212) and companies that hired one in the last 18 months (n=96). Rate and scope figures are medians of self-reported data. Demand growth combines a monthly scan of public fractional GTM job posts with stated hiring intent. Profile analysis uses anonymized, aggregated data from 350+ operators on the Revenue Nomad network (100 in this prototype). Segments with fewer than 20 responses are marked directional.',
+        'Every segment in this report uses the same fields operators and companies fill in on Revenue Nomad: role category, revenue range, employee range, available time and industry. That is why a number here can be compared directly with any profile or brief on the platform.',
+        'Revenue Nomad is a marketplace for fractional go-to-market leadership, so it has a commercial interest in this market growing. In this prototype edition every figure is illustrative, invented to show the shape of the published report.',
       ],
     },
 
@@ -122,7 +122,7 @@
       ],
     },
 
-    /* ---------- What buyers search (drives impressions "why", demand vs supply, AEO) ---------- */
+    /* ---------- What clients search (drives impressions "why", demand vs supply, AEO) ---------- */
     queries: [
       { q: 'fractional VP of Sales', cat: 'sales_leadership', tags: ['Sales Process Design', 'Sales Team Hiring & Ramp'], vol: 540 },
       { q: 'founder-led sales transition', cat: 'sales_leadership', tags: ['Founder-Led Sales Exit', 'Sales Playbook'], vol: 310 },
@@ -164,7 +164,7 @@
     ],
     aiEngines: ['ChatGPT', 'Perplexity', 'Google AI Overviews', 'Claude', 'Gemini'],
 
-    /* ---------- Buyer companies (fictional) used for company-level "who viewed" ---------- */
+    /* ---------- Client companies (fictional) used for company-level "who viewed" ---------- */
     companies: [
       { name: 'Northwind Health', industry: 'Health Care', revenueRange: '20m_50m', employeeRange: '51_200', hq: 'Boston, MA' },
       { name: 'Clearpath Freight', industry: 'Freight & Trucking', revenueRange: '20m_50m', employeeRange: '201_500', hq: 'Columbus, OH' },

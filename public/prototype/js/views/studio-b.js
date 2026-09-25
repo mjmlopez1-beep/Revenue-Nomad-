@@ -11,7 +11,7 @@
   const st = () => RN.store.state;
 
   /* UI state that does not need to persist */
-  const S = { jobMore: false, inboxFilter: 'all', passOpen: {}, respOpen: {}, jobCat: '', jobEng: '', jobStatus: 'board', prosStatus: 'review', badgeFmt: 'web' };
+  const S = { jobMore: false, inboxFilter: 'all', passOpen: {}, respOpen: {}, jobCat: '', jobEng: '', jobStatus: 'board', prosStatus: 'review', badgeFmt: 'web', dirty: false, focusSec: '', newProof: '', addEng: false, removedEng: new Set(), leaveTo: null };
 
   /* ======================================================================
      Shared helpers
@@ -47,12 +47,70 @@
     return ok;
   }
 
+  const lc = (s) => String(s || '').trim().toLowerCase();
+
+  /* ---------- Engagement History edits ----------
+     Studio saves edits[opId].engagements as [{id, company, role, start, end, engagementType, revenueRange, employeeRange, industry, months}].
+     Live-export engagements have no id, so they get a stable one from company + start. RN.model.applyEdits adds new ids
+     but does not update or remove existing ones yet (see hand-off notes), so syncEngagements reconciles the in-memory op:
+     edited entries are merged by id, duplicates dropped and removed Studio entries taken off. */
+  const engKey = (g) => g.id || 'eng-' + RN.slug(g.company || 'client') + '-' + (g.start || 'na');
+  function monthsBetween(start, end) {
+    if (!start) return 0;
+    const [y1, m1] = String(start).split('-').map(Number);
+    const n = RN.now();
+    const [y2, m2] = end ? String(end).split('-').map(Number) : [n.getFullYear(), n.getMonth() + 1];
+    return Math.max(1, (y2 * 12 + m2) - (y1 * 12 + m1));
+  }
+  function syncEngagements(op) {
+    const list = op.engagements || (op.engagements = []);
+    const used = new Set();
+    list.forEach((g) => { if (!g.id) { let k = engKey(g), n = 2; while (used.has(k)) k = engKey(g) + '-' + n++; g.id = k; } used.add(g.id); });
+    const e = edits(op);
+    if (!e.engagements) return false;
+    const before = list.length;
+    const keep = new Set(e.engagements.map((x) => x.id));
+    e.engagements.forEach((x) => {
+      const hits = list.filter((g) => g.id === x.id);
+      if (!hits.length) list.push(Object.assign({ logo: null, mine: true }, x));
+      else { Object.assign(hits[0], x); hits.slice(1).forEach((h) => list.splice(list.indexOf(h), 1)); }
+    });
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].mine && !list[i].fromReview && !list[i].clientVerified && !keep.has(list[i].id)) list.splice(i, 1);
+    op.clients = list.map((x) => ({ name: x.company, logo: x.logo, verified: !!x.clientVerified }));
+    op.completeness = RN.model.completeness(op);
+    return list.length !== before;
+  }
+  // Keep every edited operator in step from the first render on (profile, compare and admin read op.engagements)
+  setTimeout(() => {
+    let changed = false;
+    Object.keys(st().edits || {}).forEach((id) => { const op = RN.model.byId(id); if (op && syncEngagements(op)) changed = true; });
+    if (changed && RN.currentRoute()) RN.rerender();
+  }, 0);
+
+  /* Review status of one engagement: none | sent | verified */
+  const reqFor = (r, g) => (r.engId && r.engId === g.id) || lc(r.engagement) === lc(g.company) || lc(r.details && r.details.company) === lc(g.company);
+  function engStatus(op, g) {
+    const reqs = st().reviewRequests.filter((r) => r.opId === op.id && reqFor(r, g));
+    const review = (op.reviews || []).find((r) => lc(r.company) === lc(g.company));
+    if (g.clientVerified || review || reqs.some((r) => r.status === 'completed')) {
+      return { k: 'verified', review, pill: RN.ui.statusPill('review', 'completed', 'Client-verified') };
+    }
+    const open = reqs.filter((r) => r.status !== 'completed').sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0];
+    if (open) return { k: 'sent', req: open, pill: RN.ui.statusPill('review', 'sent', 'Request sent') };
+    return { k: 'none', pill: RN.ui.statusPill('review', 'none', 'No review yet') };
+  }
+  const ST_ORDER = { none: 0, sent: 1, verified: 2 };
+  const byRecent = (a, b) => String(b.end || '9999').localeCompare(String(a.end || '9999')) || String(b.start || '').localeCompare(String(a.start || ''));
+  // Unreviewed first, then open requests, then verified; most recent first inside each group
+  function engList(op) {
+    return (op.engagements || []).map((g) => ({ g, s: engStatus(op, g) })).sort((a, b) => ST_ORDER[a.s.k] - ST_ORDER[b.s.k] || byRecent(a.g, b.g));
+  }
+  const engDates = (g) => `${ym(g.start) || 'Start not set'} to ${g.end ? ym(g.end) : 'now'}`;
+  const engTypeOf = (g) => g.engagementType || (/interim/i.test(g.role || '') ? 'interim' : /advis/i.test(g.role || '') ? 'advisory' : 'fractional');
+
   /* Studio edits that RN.model.applyEdits does not cover yet (see hand-off notes) */
   function applyExtras(op) {
-    const e = edits(op);
-    if (e.newClientCapacity != null) op.newClientCapacity = e.newClientCapacity;
-    if (e.roleFields) op.roleFields = e.roleFields;
-    if (e.availConfirmedAt) op.avail = Object.assign({}, op.avail, { confirmedAt: e.availConfirmedAt });
+    syncEngagements(op);
     return op;
   }
 
@@ -66,9 +124,14 @@
     return `<ul class="sb-sigs" aria-label="Match signals">${fit.signals.map((s) => `<li class="sb-sig-${s.state}" title="${esc(s.text)}">${icon(s.state === 'match' ? 'check' : s.state === 'partial' ? 'minus' : 'x')}${esc(s.l)}</li>`).join('')}</ul>`;
   }
 
+  // Lifecycles use the shared track (same look as the client workspace and Admin)
   function stepper(labels, cur, o) {
     o = o || {};
-    return `<ol class="sb-steps ${o.lost ? 'is-lost' : ''}" aria-label="${esc(o.label || 'Progress')}">${labels.map((l, i) => `<li class="${i < cur ? 'done' : i === cur ? 'on' : ''}"><i aria-hidden="true">${i < cur ? icon('check') : ''}</i><span>${esc(l)}${o.dates && o.dates[i] ? `<em>${esc(o.dates[i])}</em>` : ''}</span></li>`).join('')}</ol>`;
+    return RN.ui.track(labels.map((l, i) => ({ l, date: o.dates && o.dates[i], state: i < cur ? 'done' : i === cur ? (o.lost ? 'stop' : 'cur') : 'todo' })), o.label);
+  }
+  // Multi-step forms use the shared step count and bar
+  function flowProgress(labels, cur) {
+    return `<div class="sb-flow"><span class="step-count">Step ${cur + 1} of ${labels.length} · ${esc(labels[cur])}</span><div class="stepper" aria-hidden="true">${labels.map((l, i) => `<i class="${i <= cur ? 'on' : ''}"></i>`).join('')}</div></div>`;
   }
 
   function head(title, sub, right) {
@@ -83,6 +146,33 @@
     const ok = copyText(el.dataset.text || '');
     RN.ui.toast(ok ? esc(el.dataset.msg || 'Copied') : 'Copy did not work in this browser. Select the text and copy it.', { icon: ok ? 'copy' : 'info' });
   };
+  // Open one Edit profile section from anywhere (Studio overview, the checklist, profile edit shortcuts)
+  const SEC_IDS = { about: 'sb-f-about', avail: 'sb-f-avail', fit: 'sb-f-fit', sell: 'sb-f-sell', role: 'sb-f-role', engagements: 'sb-f-eng', samples: 'sb-f-samples', media: 'sb-f-media', photo: 'sb-f-media', video: 'sb-f-media', offers: 'sb-f-offers', tags: 'sb-f-tags' };
+  function editSection(key) {
+    // 'engagements-new' opens the Engagement History section with a blank engagement ready to fill in
+    const add = key === 'engagements-new';
+    if (add) key = 'engagements';
+    S.focusSec = SEC_IDS[key] || key || '';
+    const cur = RN.currentRoute();
+    if (cur && cur.params && cur.params.tab === 'profile') {
+      if (add && RN.actions['sb-eng-add']) { S.focusSec = ''; RN.actions['sb-eng-add'](); return; }
+      focusSection(); return;
+    }
+    S.addEng = add;
+    RN.go('studio.profile');
+  }
+  function focusSection() {
+    const id = S.focusSec; S.focusSec = '';
+    const t = id && document.getElementById(id);
+    if (!t) return;
+    setTimeout(() => {
+      t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const sel = 'input:not([type=hidden]):not([type=search]), select, textarea';
+      const f = t.querySelector('details[open] ' + sel.split(', ').join(', details[open] ')) || t.querySelector(sel);
+      if (f) setTimeout(() => f.focus({ preventScroll: true }), 400);
+    }, 60);
+  }
+  RN.actions['sb-edit'] = (el) => editSection(el.dataset.sec);
 
   /* ======================================================================
      INBOX: intro requests (blind until introduced) + project invites
@@ -112,7 +202,11 @@
     if (['interested', 'rn_qualified', 'introduced'].includes(i.status)) return 'progress';
     return 'closed';
   }
-  function hoursLeft(i) { return (new Date(i.createdAt).getTime() + WINDOW_H * 36e5 - RN.now().getTime()) / 36e5; }
+  // Clamped to the window: a record dated after "now" (clock moved back) never reads more than 72 hours
+  function hoursLeft(i) { return RN.clamp((new Date(i.createdAt).getTime() + WINDOW_H * 36e5 - RN.now().getTime()) / 36e5, 0, WINDOW_H); }
+  // Leads from the operator's own proof link (the prospect asked to talk from #proof.<id>)
+  const isProofLead = (i) => i.source === 'proof' || !!i.proofId;
+  const proofOf = (i) => (i.proofId ? st().proofLinks.find((l) => l.id === i.proofId) : null);
 
   function projStage(p, op) {
     if (PJ() && PJ().stage) {
@@ -166,19 +260,20 @@
       { k: 'closed', l: 'Closed' },
     ];
     const needs = items.filter((x) => x.group === 'reply').length;
+    const nProof = items.filter((x) => x.kind === 'intro' && isProofLead(x.rec)).length;
     return `<div class="sb sb-inbox">
-      ${head('Inbox', `Intro requests and project invites. Clients stay anonymous until Revenue Nomad introduces you. Reply within ${WINDOW_H} hours.`)}
+      ${head('Inbox', `Intro requests, project invites and requests from your proof links. Marketplace clients stay anonymous until Revenue Nomad introduces you. Reply within ${WINDOW_H} hours.`)}
       <div class="sb-toolbar">
         <div class="seg" role="group" aria-label="Show">
           ${[['all', 'All', items.length], ['intro', 'Intro requests', nIntro], ['project', 'Project invites', nProj]].map(([k, l, n]) => `<button type="button" aria-pressed="${f === k}" data-act="sb-inbox-filter" data-f="${k}">${l} <span class="sb-n">${n}</span></button>`).join('')}
         </div>
-        <span class="small muted">${needs ? `<b class="sb-ink">${needs}</b> waiting on you` : 'Nothing waiting on you'}</span>
+        <span class="small muted">${needs ? `<b class="sb-ink">${needs}</b> waiting on you` : 'Nothing waiting on you'}${nProof ? ` · ${nProof} from your proof ${nProof === 1 ? 'link' : 'links'}` : ''}</span>
       </div>
       ${items.length ? groups.map((g) => {
         const list = shown.filter((x) => x.group === g.k);
         if (!list.length && g.k !== 'reply') return '';
         return `<section class="sb-group" aria-labelledby="sb-g-${g.k}">
-          <h2 class="sb-group-h" id="sb-g-${g.k}">${esc(g.l)}<span class="sb-count">${list.length}</span></h2>
+          <h2 class="eyebrow sb-group-h" id="sb-g-${g.k}">${esc(g.l)}<span class="sb-count">${list.length}</span></h2>
           ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => (x.kind === 'intro' ? introCard(x.rec, op) : projectCard(x.rec, op, x.stage))).join('')}</div>` : `<p class="sb-caught">${icon('check-circle')}${esc(g.empty)}</p>`}
         </section>`;
       }).join('') : RN.ui.empty({ icon: 'inbox', title: 'No requests yet', body: 'When a client asks to meet you or invites you to a project, it lands here. Proof links and reviews help clients pick you first.', cta: `<div class="row" style="justify-content:center"><a class="btn btn-sm" href="#studio.credibility">Build credibility</a><a class="btn btn-line btn-sm" href="#studio.profile">Edit profile</a></div>` })}
@@ -193,34 +288,35 @@
     const fit = RN.model.fit(op, { revenueRange: firm.revenueRange, employeeRange: firm.employeeRange, industries: firm.industry ? [firm.industry] : [], need: f.need, roleCategory: f.roleCategory || op.catKey });
     const left = hoursLeft(i);
     const pending = i.status === 'pending';
-    const stepIdx = RN.intro.steps.indexOf(i.status);
-    const stepDates = RN.intro.steps.map((s) => {
-      if (s === 'pending') return RN.fmt.dateShort(i.createdAt);
-      const t = (i.thread || []).find((x) => x.text === RN.w.label('introStatus', s));
-      return t ? RN.fmt.dateShort(t.ts) : '';
-    });
+    const proof = isProofLead(i);
+    const link = proof ? proofOf(i) : null;
+    // A proof-link lead is the operator's own prospect, so who they are is not hidden
+    const b = i.buyer || {};
+    const proofWho = proof ? [b.name, b.title, (b.company && b.company.name) || (link && link.prospect.company)].filter(Boolean).join(' · ') : '';
     let clock = '';
     if (pending) {
       const pct = RN.clamp(1 - left / WINDOW_H, 0, 1);
       clock = left > 0
-        ? `<div class="sb-clock ${left < 24 ? 'is-late' : ''}">${icon('hourglass')}<span><b>${Math.ceil(left)} hours</b> left to reply</span><span class="meter" aria-hidden="true"><i style="width:${(pct * 100).toFixed(0)}%"></i></span></div>`
-        : `<div class="sb-clock is-over">${icon('hourglass')}<span>The 72-hour window closed ${esc(RN.fmt.ago(new Date(new Date(i.createdAt).getTime() + WINDOW_H * 36e5)))}. You can still reply.</span></div>`;
+        ? `<div class="sb-clock ${left < 24 ? 'is-late' : ''}">${icon('hourglass')}<span><b>${Math.ceil(left)} ${Math.ceil(left) === 1 ? 'hour' : 'hours'}</b> left to reply</span><span class="meter" aria-hidden="true"><i style="width:${(pct * 100).toFixed(0)}%"></i></span></div>`
+        : `<div class="sb-clock is-over">${icon('hourglass')}<span><b>Overdue.</b> The ${WINDOW_H}-hour reply window has closed. You can still reply.</span></div>`;
     }
     const passOpen = S.passOpen[i.id];
     const declined = i.status === 'declined';
     const lastNote = declined ? ((i.thread || []).slice(-1)[0] || {}).text : '';
     return `<article class="card sb-item ${pending ? 'is-new' : ''}" id="sb-i-${esc(i.id)}">
       <div class="sb-item-top">
-        <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('handshake')}Intro request</span>${RN.intro.statusPill(i.status)}</div>
+        <div class="row" style="--gap:8px">${proof ? `<span class="pill pill-accent">${icon('link')}From your proof link</span>` : `<span class="pill pill-line">${icon('handshake')}Intro request</span>`}${RN.intro.statusPill(i.status)}</div>
         <span class="tiny muted">Received ${esc(RN.fmt.ago(i.createdAt))}</span>
       </div>
       <h3 class="sb-item-h">${esc(sum.need || 'Fractional ' + op.role)}</h3>
-      <p class="sb-who">${icon(revealed ? 'building' : 'eye-off')}<span>${segs(sum.who)}</span>${revealed ? '' : RN.ui.tip('Company and contact names stay hidden until Revenue Nomad introduces you. You see the scope, size and industry now (blind intro, L369).', 'Why the company is hidden')}</p>
+      ${proof
+        ? `<p class="sb-who">${icon('link')}<span>${segs(proofWho || sum.who)}${link ? ` · <span class="nowrap">from the link you made for ${esc(link.prospect.company)}</span>` : ''}</span></p>`
+        : `<p class="sb-who">${icon(revealed ? 'building' : 'eye-off')}<span>${segs(sum.who)}</span>${revealed ? '' : RN.ui.tip('Company and contact names stay hidden until Revenue Nomad introduces you. You see the scope, size and industry now (blind intro, L369).', 'Why the company is hidden')}</p>`}
       ${sum.scope ? `<p class="sb-scope">${icon('briefcase')}<span>${segs(sum.scope)}</span></p>` : ''}
       ${i.note ? `<blockquote class="sb-quote">${esc(i.note)}</blockquote>` : ''}
       <div class="sb-fitrow">${fitPill(fit, { you: true })}${fitSignals(fit)}</div>
       ${clock}
-      ${!pending && !declined ? stepper(['Pending', 'Interested', 'RN Qualified', 'Introduced', 'Hired'], stepIdx, { dates: stepDates, label: 'Intro progress' }) : ''}
+      ${!pending && !declined ? RN.ui.introTrack(i) : ''}
       ${revealed ? contactBlock(i) : ''}
       ${i.status === 'interested' ? `<p class="sb-next">${icon('info')}<span>Revenue Nomad is confirming fit with the client. You will see the company and contact once you are introduced.</span></p>` : ''}
       ${i.status === 'rn_qualified' ? `<p class="sb-next">${icon('check-circle')}<span>Fit confirmed. Expect an introduction email within one business day.</span></p>` : ''}
@@ -338,7 +434,7 @@
       ${payBlock(p)}
       ${tags ? `<div class="sb-tags"><span class="label">Focus areas</span><div class="opc-tags">${tags}</div></div>` : ''}
       <div class="sb-fitrow">${fitPill(fit, { you: true })}${fitSignals(fit)}</div>
-      ${stage !== 'invited' && stage !== 'passed' && stage !== 'closed' ? stepper(['Invited', 'Responded', 'Under review', stage === 'not_selected' ? 'Not selected' : 'Selected'], idx, { lost: stage === 'not_selected', label: 'Project progress' }) : ''}
+      ${stage !== 'invited' && stage !== 'passed' && stage !== 'closed' ? stepper(['Invited', 'Responded', 'Under review', stage === 'not_selected' ? 'Not selected' : 'Selected'], stage === 'selected' ? 4 : idx, { lost: stage === 'not_selected', label: 'Project progress' }) : ''}
       ${r && !open ? `<div class="sb-sent">
           <span class="label">What you sent</span>
           <p>${r.status === 'declined' ? `You passed${r.reason ? ': ' + esc(passLabel(r.reason)) : ''}. Only Revenue Nomad sees your reason.` : `<b>Interested</b>${r.rate ? ` · $${esc(r.rate)}/hr take-home` : ''}${r.rate && PJ() && PJ().allIn ? ` · the client sees $${esc(PJ().allIn(r.rate))}/hr all-in` : ''} · ${esc(RN.fmt.dateShort(r.ts))}`}</p>
@@ -446,7 +542,21 @@
   // What each tier unlocks. Nothing on the ladder is paid: tiers move only with client evidence.
   const UNLOCKS = RN.fields.risUnlocks; // one source, shared with For operators and Levels
   const tierRank = (v) => ['indexing', 'vetted', 'proven', 'trusted', 'elite', 'apex'].indexOf(v);
-  const badgeUnlocked = (op) => tierRank(RN.fields.risTierFor(op.ris.score).v) >= tierRank('proven');
+  const tierOf = (op) => RN.fields.risTierFor(op.ris.score).v;
+  // RN.fields.risUnlocks: proof links from Vetted (5 a month), unlimited links and the badge from Proven
+  const badgeUnlocked = (op) => tierRank(tierOf(op)) >= tierRank('proven');
+  const PROOF_MONTHLY = 5;
+  function proofQuota(op) {
+    const n = RN.now();
+    const used = st().proofLinks.filter((l) => { const d = new Date(l.createdAt); return l.opId === op.id && d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth(); }).length;
+    const unlocked = tierRank(tierOf(op)) >= tierRank('vetted');
+    const unlimited = tierRank(tierOf(op)) >= tierRank('proven');
+    const left = unlimited ? Infinity : Math.max(0, PROOF_MONTHLY - used);
+    return { unlocked, unlimited, used, left, canCreate: unlocked && left > 0 };
+  }
+  const quotaText = (q) => (!q.unlocked ? 'Proof links unlock when your profile is approved at Vetted.'
+    : q.unlimited ? 'Unlimited proof links at your tier.'
+    : `${q.left} of ${PROOF_MONTHLY} proof links left this month · Unlimited at Proven`);
 
   function monthsSince(ymStr) {
     if (!ymStr) return null;
@@ -467,6 +577,7 @@
   }
 
   function renderCredibility(op) {
+    applyExtras(op);
     const tier = RN.fields.risTierFor(op.ris.score);
     const tiers = RN.fields.risTier.options;
     const next = tiers.filter((t) => t.min > op.ris.score).sort((a, b) => a.min - b.min)[0];
@@ -475,7 +586,7 @@
     const gap = next ? next.min - op.ris.score : 0;
     const reviewsToNext = next ? Math.ceil(gap / RN.model.risGain('review')) : 0;
     return `<div class="sb sb-cred">
-      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. There is no fee on deals you source with a proof link.')}
+      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. No fee on deals you source with a proof link (a proposal the founder is confirming).')}
       <nav class="sb-jump" aria-label="On this page">
         ${[['sb-c-ri', 'Reputation Index'], ['sb-c-rev', 'Reviews'], ['sb-c-tags', 'Verified tags'], ['sb-c-proof', 'Proof links'], ['sb-c-badge', 'Badge']].map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}
       </nav>
@@ -491,7 +602,7 @@
               ${next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more client ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : '<p class="sb-next-tier">You are at the top of the ladder.</p>'}
             </div>
           </div>
-          <div class="sb-ri-avail"><span class="stat-v">+${avail}</span><span class="stat-l">estimated points available ${RN.ui.tip('Estimates from the published factor weights. Only client evidence moves the score: reviews, verified tags and recent engagements. Nothing here can be bought.', 'About these estimates')}</span></div>
+          <div class="sb-ri-avail"><span class="stat-v">+${avail}</span><span class="stat-l">estimated points available ${RN.ui.tip('Estimates from the published factor weights. Client evidence moves most of the score: reviews, verified tags and recent engagements. A complete profile adds a few points. Nothing here can be bought.', 'About these estimates')}</span></div>
         </div>
         <div class="sb-factors">
           ${rows.map((r) => `<div class="sb-factor">
@@ -504,7 +615,7 @@
       </section>
 
       <section class="card sb-ladder" aria-labelledby="sb-lad-h">
-        <div class="card-hd"><div><h3 id="sb-lad-h">Tiers and what each one unlocks</h3><p class="sub">Tiers come only from client evidence. Nothing on this ladder can be bought.</p></div><a class="act" href="#levels">How levels work${icon('arrow')}</a></div>
+        <div class="card-hd"><div><h3 id="sb-lad-h">Tiers and what each one unlocks</h3><p class="sub">Tiers move on client evidence. Profile completeness is the one factor you control alone. Nothing on this ladder can be bought.</p></div><a class="act" href="#levels">How levels work${icon('arrow')}</a></div>
         <ol class="sb-tiers">
           ${tiers.map((t) => {
             const here = t.v === tier.v;
@@ -534,19 +645,34 @@
     let prompt = '';
     if (nRev === 0) prompt = `<b>Request your first 3 reviews.</b> Operators with 3 or more verified reviews are rehired 2.4x as often.`;
     else if (nRev < 3) prompt = `<b>You have ${nRev} client ${nRev === 1 ? 'review' : 'reviews'}. ${3 - nRev} more ${3 - nRev === 1 ? 'gets' : 'get'} you to 3</b>, where operators are rehired 2.4x as often.${sent ? ` ${sent} ${sent === 1 ? 'request is' : 'requests are'} out now.` : ''}`;
-    const pill = (s) => `<span class="pill ${s === 'completed' ? 'pill-good' : 'pill-warn'}">${s === 'completed' ? icon('check') : icon('send')}${esc(RN.w.label('reviewStatus', s === 'completed' ? 'completed' : 'sent'))}</span>`;
+    const engs = engList(op);
+    // Requests that match no engagement in the history (older data) still show, so nothing goes missing
+    const loose = reqs.filter((r) => !(op.engagements || []).some((g) => reqFor(r, g)));
+    const reqActs = (r) => (r.status === 'completed'
+      ? `<a class="act" href="#op.${esc(op.slug)}">See on profile</a>`
+      : `<span class="row" style="--gap:12px"><button type="button" class="act" data-act="sb-rr-remind" data-id="${esc(r.id)}">Send reminder</button><a class="act muted" href="#review.${esc(r.id)}" title="Open the page the client sees">Client’s view</a></span>`);
     return `<section class="card" id="sb-c-rev" aria-labelledby="sb-rev-h">
       <div class="card-hd"><div><h3 id="sb-rev-h">Client reviews</h3><p class="sub">${reqs.length} ${reqs.length === 1 ? 'review' : 'reviews'} requested · ${reqs.filter((r) => r.status === 'completed').length} completed · ${nRev} published on your profile</p></div>
         <button type="button" class="btn btn-sm" data-act="sb-rr-open">${icon('plus')}Request a review</button></div>
       ${prompt ? `<div class="note info sb-prompt">${icon('star')}<div>${prompt}</div></div>` : ''}
-      ${reqs.length ? `<ul class="sb-reqs">${reqs.map((r) => `<li>
-          <span class="ava ava-sm" aria-hidden="true">${esc(initials(r.reviewer.name))}</span>
-          <div class="grow"><b>${esc(r.reviewer.name)}</b><span class="small muted">${esc([r.reviewer.title, r.reviewer.company].filter(Boolean).join(', '))}${r.engagement && r.engagement !== r.reviewer.company ? ' · ' + esc(r.engagement) : ''}</span></div>
-          <div class="sb-req-r">${pill(r.status)}<span class="tiny muted">${r.status === 'completed' ? 'Completed ' + esc(RN.fmt.dateShort(r.completedAt || r.sentAt)) : 'Sent ' + esc(RN.fmt.ago(r.sentAt))}</span>
-            ${r.status === 'completed' ? `<a class="act" href="#op.${esc(op.slug)}">See on profile</a>` : `<span class="row" style="--gap:12px"><button type="button" class="act" data-act="sb-rr-remind" data-id="${esc(r.id)}">Send reminder</button><a class="act muted" href="#review.${esc(r.id)}" title="Open the page the client sees">Client’s view</a></span>`}
+      <div class="row between sb-engs-h"><span class="label">Your engagements</span><button type="button" class="act" data-act="sb-edit" data-sec="engagements-new">${icon('plus')}Add an engagement</button></div>
+      ${engs.length ? `<ul class="sb-reqs sb-englist">${engs.map(({ g, s }) => {
+          const detail = s.k === 'verified' ? (s.review ? `Reviewed by ${esc(s.review.reviewer)}${s.review.role ? ', ' + esc(s.review.role) : ''}` : 'Confirmed by the client')
+            : s.k === 'sent' ? `Sent to ${esc(s.req.reviewer.placeholder ? s.req.reviewer.company || s.req.reviewer.name : s.req.reviewer.name)} ${esc(RN.fmt.ago(s.req.sentAt))}` : 'Ask this client to confirm your work';
+          return `<li data-eng-status="${s.k}">
+          <span class="ava ava-sm" aria-hidden="true">${esc(initials(g.company))}</span>
+          <div class="grow"><b>${esc(g.company)}</b><span class="small muted">${esc([g.role, engDates(g)].filter(Boolean).join(' · '))}</span><span class="tiny muted">${detail}</span></div>
+          <div class="sb-req-r">${s.pill}
+            ${s.k === 'none' ? `<button type="button" class="act" data-act="sb-rr-open" data-eng="${esc(g.id)}">Request a review${icon('arrow')}</button>` : s.k === 'sent' ? reqActs(s.req) : `<a class="act" href="#op.${esc(op.slug)}">See on profile</a>`}
           </div>
-        </li>`).join('')}</ul>` : ''}
-      <p class="tiny muted" style="margin-top:14px">You see two states: Sent and Completed. Reviews publish as soon as the client submits. Ask every client when an engagement wraps, not only the happiest ones.</p>
+        </li>`;
+        }).join('')}</ul>` : `<p class="sb-caught">${icon('briefcase')}No engagements in your history yet. Add one, then ask that client for a review.</p>`}
+      ${loose.length ? `<details class="sb-more-tags sb-loose"><summary>${icon('chev-down')}Other requests (${loose.length})</summary><ul class="sb-reqs">${loose.map((r) => `<li>
+          <span class="ava ava-sm" aria-hidden="true">${esc(initials(r.reviewer.name))}</span>
+          <div class="grow"><b>${esc(r.reviewer.name)}</b><span class="small muted">${esc([r.reviewer.title, r.reviewer.company || r.engagement].filter(Boolean).join(', '))}</span></div>
+          <div class="sb-req-r">${RN.ui.statusPill('review', r.status === 'completed' ? 'completed' : 'sent')}<span class="tiny muted">${r.status === 'completed' ? 'Completed ' + esc(RN.fmt.dateShort(r.completedAt || r.sentAt)) : 'Sent ' + esc(RN.fmt.ago(r.sentAt))}</span>${reqActs(r)}</div>
+        </li>`).join('')}</ul></details>` : ''}
+      <p class="tiny muted" style="margin-top:14px">Reviews publish as soon as the client submits, and the engagement turns Client-verified. Ask every client when an engagement wraps, not only the happiest ones.</p>
     </section>`;
   }
 
@@ -573,11 +699,15 @@
 
   function proofSection(op) {
     const links = st().proofLinks.filter((p) => p.opId === op.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const unlocked = badgeUnlocked(op);
+    const q = proofQuota(op);
+    const leads = st().intros.filter((i) => i.opId === op.id && isProofLead(i)).length;
+    const action = q.canCreate ? `<button type="button" class="btn btn-sm" data-act="sb-proof-new">${icon('link')}Create proof link</button>`
+      : `<span class="pill">${icon('lock')}${q.unlocked ? `${PROOF_MONTHLY} of ${PROOF_MONTHLY} used this month` : 'Unlocks at Vetted'}</span>`;
     return `<section class="card" id="sb-c-proof" aria-labelledby="sb-proof-h">
-      <div class="card-hd"><div><h3 id="sb-proof-h">Proof links</h3><p class="sub">A private page for one prospect with the proof you choose. You see who read what; they see a notice that you can.</p></div>
-        ${unlocked ? `<button type="button" class="btn btn-sm" data-act="sb-proof-new">${icon('link')}Create proof link</button>` : `<span class="pill">${icon('lock')}Unlocks at Proven</span>`}</div>
-      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock at Proven (60). Your first client reviews are the fastest way there.', cta: unlocked ? '<button type="button" class="btn btn-sm" data-act="sb-proof-new">Create proof link</button>' : '<button type="button" class="btn btn-sm" data-act="sb-rr-open">Request a review</button>' })}
+      <div class="card-hd"><div><h3 id="sb-proof-h">Proof links</h3><p class="sub">A private page for one prospect with the proof you choose. You see who read what; they see a notice that you can.</p>
+        <p class="sb-quota ${q.unlimited ? '' : q.left ? 'is-count' : 'is-out'}"><span class="sb-quota-t">${icon(q.unlimited ? 'check-circle' : 'link')}${esc(quotaText(q))}</span>${leads ? `<a class="act" href="#studio.inbox">${leads} ${leads === 1 ? 'request' : 'requests'} in your Inbox</a>` : ''}</p></div>
+        ${action}</div>
+      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: q.unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock when your profile is approved at Vetted (5 a month). Unlimited from Proven.', cta: q.canCreate ? '<button type="button" class="btn btn-line btn-sm" data-act="sb-proof-new">Create your first proof link</button>' : '' })}
     </section>`;
   }
   function proofCard(l) {
@@ -585,12 +715,14 @@
     const total = views.reduce((a, v) => a + (v.seconds || 0), 0);
     const fwd = views.some((v) => v.forwarded);
     const secs2 = (l.sections || []).map((s) => ({ s, n: views.filter((v) => (v.sections || []).includes(s)).length }));
-    return `<article class="sb-proof">
+    const fresh = S.newProof === l.id && !views.length;
+    return `<article class="sb-proof ${fresh ? 'is-new' : ''}" id="sb-proof-${esc(l.id)}">
       <div class="sb-proof-top">
-        <div class="grow"><b class="sb-proof-co">${esc(l.prospect.company)}</b><span class="small muted">${esc(l.prospect.contact || 'No contact named')} · created ${esc(RN.fmt.dateShort(l.createdAt))}</span></div>
-        <div class="row" style="--gap:8px">
+        <div class="grow"><b class="sb-proof-co">${esc(l.prospect.company)}${fresh ? ' <span class="pill pill-accent">New</span>' : ''}</b><span class="small muted">${esc(l.prospect.contact || 'No contact named')} · created ${esc(RN.fmt.dateShort(l.createdAt))}</span></div>
+        <div class="row sb-proof-acts" style="--gap:8px">
           <button type="button" class="btn btn-line btn-sm" data-act="sb-copy" data-text="${esc(proofUrl(l.id))}" data-msg="Proof link copied">${icon('copy')}Copy link</button>
-          <a class="btn btn-ghost btn-sm" href="#proof.${esc(l.id)}">${icon('external')}Open</a>
+          <a class="btn btn-ghost btn-sm" href="#proof.${esc(l.id)}" title="See the page as the prospect will">${icon('eye')}Preview</a>
+          <button type="button" class="act" data-act="persona" data-p="visitor" data-to="proof.${esc(l.id)}" title="Prototype: sign out and open the link as the prospect, so the visit is tracked">Open as prospect</button>
         </div>
       </div>
       <div class="sb-proof-stats">
@@ -615,6 +747,8 @@
       ? `<a href="${base}/verify/${op.slug}"><img src="${base}/badge/${op.slug}.png?style=signature" width="180" height="40" alt="${alt}"></a>`
       : `<a href="${base}/verify/${op.slug}" title="Verify ${op.name} on Revenue Nomad">\n  <img src="${base}/badge/${op.slug}.svg" width="240" height="72"\n       alt="${alt}">\n</a>`;
   }
+  // The badge lands on a dated verification page when the prototype has one (#verify.<slug>), else the profile
+  const verifyHref = (op) => (Object.values(RN.views).some((v) => v.tokens && v.tokens[0] === 'verify' && v.tokens.length === 2) ? '#verify.' : '#op.') + op.slug;
   function badgeSection(op) {
     const unlocked = badgeUnlocked(op);
     const code = badgeSnippet(op, S.badgeFmt);
@@ -622,7 +756,7 @@
       <div class="card-hd"><div><h3 id="sb-badge-h">Embeddable verified badge</h3><p class="sub">For your website, proposals and email signature. It links to a dated verification page and updates itself if your tier changes.</p></div></div>
       <div class="sb-badge-wrap ${unlocked ? '' : 'is-locked'}">
         <div class="sb-badge-stage">
-          <a class="sb-badge ${S.badgeFmt === 'email' ? 'is-sig' : ''}" href="#op.${esc(op.slug)}" title="Opens the verification page">
+          <a class="sb-badge ${S.badgeFmt === 'email' ? 'is-sig' : ''}" href="${esc(verifyHref(op))}" title="Opens the verification page">
             <span class="sb-seal t-${esc(RN.fields.risTierFor(op.ris.score).v)}">${RN.ui.hexSeal(op.ris.label)}<b>${esc(op.ris.score)}</b></span>
             <span class="sb-badge-t"><b>${esc(op.ris.label)} · Reputation Index</b><span>Verified on Revenue Nomad</span><em>${esc(op.name)} · ${esc(RN.fmt.monthYear(RN.now()))}</em></span>
           </a>
@@ -648,52 +782,75 @@
     const op = RN.myOp();
     const r = st().reviewRequests.find((x) => x.id === el.dataset.id);
     if (!r) return;
-    RN.mail(r.reviewer.email, `Reminder: working with ${op.name}`, `Hi ${RN.fmt.first(r.reviewer.name)},\n\nA quick reminder from ${op.name}. The review takes about 4 minutes.\n\nStart the review: ${pageUrl()}#review.${r.id}`, 'review');
-    RN.ui.toast(`Reminder sent to ${esc(r.reviewer.name)}`, { icon: 'mail' });
+    const first = r.reviewer.placeholder ? '' : RN.fmt.first(r.reviewer.name);
+    RN.mail(r.reviewer.email, `Reminder: working with ${op.name}`, `Hi ${first || 'there'},\n\nA quick reminder from ${op.name}. The review takes about 4 minutes.\n\nStart the review: ${pageUrl()}#review.${r.id}`, 'review');
+    if (el.closest('.modal')) RN.ui.closeModal();
+    RN.ui.toast(`Reminder sent to ${esc(r.reviewer.placeholder ? r.reviewer.email : r.reviewer.name)}`, { icon: 'mail' });
   };
 
-  /* ---------- Request a review: 3 steps (Engagement → Reviewer and focus areas → Preview) ---------- */
+  /* ---------- Request a review: 3 steps (Engagement → Reviewer and focus areas → Preview) ----------
+     RN.studioB.openReviewRequest(opts) opens it anywhere in Studio.
+     opts: { engId, company, verify, reviewer: {name, email, title, company} }. With no engId it defaults to the most
+     recent engagement that has no review and no open request. The client confirms the engagement, answers the four
+     CORE questions and confirms focus areas (outcomes were dropped, scope L496). */
   const RR_STEPS = ['Engagement', 'Reviewer and focus areas', 'Preview'];
+  function engCard(g, s, on) {
+    return `<button type="button" class="optcard sb-engcard" aria-pressed="${on}" data-act="w-chip" data-name="eng" data-v="${esc(g.id)}">
+      <b>${esc(g.company)}</b><span>${esc([g.role, engDates(g)].filter(Boolean).join(' · '))}</span><span class="sb-engcard-s">${s.pill}</span></button>`;
+  }
+  function rrHint(op, x) {
+    if (!x) return '';
+    if (x.s.k === 'sent') {
+      const r = x.s.req;
+      const who = r.reviewer.placeholder ? `your contact at ${r.reviewer.company}` : r.reviewer.name;
+      return `${icon('send')}<span>A request is already out to ${esc(who)}, sent ${esc(RN.fmt.ago(r.sentAt))}. <button type="button" class="act" data-act="sb-rr-remind" data-id="${esc(r.id)}">Send a reminder instead</button></span>`;
+    }
+    if (x.s.k === 'verified') return `${icon('check-circle')}<span>${esc(x.g.company)} is already client-verified. Ask a different person there for a second review.</span>`;
+    return '';
+  }
   function openReviewRequest(o) {
     o = o || {};
     const op = RN.myOp();
-    const engs = op.engagements || [];
-    const e0 = engs[0];
+    if (!op) return;
+    applyExtras(op);
+    const engs = engList(op);
+    const byCo = o.company ? engs.find((x) => lc(x.g.company) === lc(o.company)) : null;
+    const pick = (o.engId && engs.find((x) => x.g.id === o.engId)) || byCo || (o.company ? null : engs.find((x) => x.s.k === 'none')) || null;
+    const sel = pick ? pick.g.id : 'new';
+    const newCo = !pick && o.company ? o.company : '';
+    const rv = o.reviewer || {};
     const claimed = op.tags.filter((t) => t.tier === 'claimed').sort((a, b) => (b.c === op.catKey) - (a.c === op.catKey)).map((t) => t.t);
     const pre = o.verify ? claimed.slice(0, 6) : claimed.slice(0, 4);
-    const ongoing0 = e0 && !e0.end;
     const body = `<form id="sb-rr-form" class="sb-rr" data-submit="sb-rr-send" data-step="1" novalidate>
-      <div class="sb-rr-prog">${stepper(RR_STEPS, 0, { label: 'Steps' })}</div>
-      <section data-step-pane="1" class="stack" style="--gap:20px">
-        <div class="field"><span class="field-label">Which engagement?</span>
-          <div class="optcards sb-engpick" role="group" aria-label="Engagement">
-            ${engs.map((e, i) => `<button type="button" class="optcard" aria-pressed="${i === 0}" data-act="w-chip" data-name="eng" data-v="${i}"><b>${esc(e.company)}</b><span>${esc(e.role)} · ${esc(ym(e.start))} to ${e.end ? esc(ym(e.end)) : 'now'}</span></button>`).join('')}
-            <button type="button" class="optcard" aria-pressed="${!engs.length}" data-act="w-chip" data-name="eng" data-v="new"><b>Another engagement</b><span>A client not in your Engagement History yet.</span></button>
-            <input type="hidden" name="eng" value="${engs.length ? 0 : 'new'}" data-change="sb-rr-eng">
+      <div class="sb-rr-prog">${flowProgress(RR_STEPS, 0)}</div>
+      <section data-step-pane="1" class="stack" style="--gap:18px">
+        <div class="field"><span class="field-label" id="sb-rr-eng-l">Which engagement?</span>
+          <div class="optcards sb-engpick" role="group" aria-labelledby="sb-rr-eng-l">
+            ${engs.map(({ g, s }) => engCard(g, s, g.id === sel)).join('')}
+            <button type="button" class="optcard sb-engcard" aria-pressed="${sel === 'new'}" data-act="w-chip" data-name="eng" data-v="new"><b>Another engagement</b><span>A client not in your Engagement History yet.</span></button>
+            <input type="hidden" name="eng" value="${esc(sel)}" data-change="sb-rr-eng">
           </div>
+          <p class="sb-rr-hint" data-rr-hint aria-live="polite">${rrHint(op, pick)}</p>
         </div>
-        <div class="grid g-2" style="--gap:16px">
-          <div class="field"><label for="sb-rr-co">Client company</label><input class="input" id="sb-rr-co" name="company" value="${esc(e0 ? e0.company : '')}" placeholder="Company name" required></div>
-          ${RN.w.field('engagementType', 'fractional', { name: 'engagementType', compact: true })}
-        </div>
-        <div class="grid g-2" style="--gap:16px">
-          <div class="field"><label for="sb-rr-start">Start</label><input class="input" type="month" id="sb-rr-start" name="start" value="${esc(e0 ? e0.start : '')}"></div>
-          <div class="field"><label for="sb-rr-end">End</label><input class="input" type="month" id="sb-rr-end" name="end" value="${esc(e0 && e0.end ? e0.end : '')}" ${ongoing0 ? 'disabled' : ''}>
-            <label class="sb-check"><input type="checkbox" name="ongoing" value="1" data-change="sb-rr-ongoing" ${ongoing0 ? 'checked' : ''}><span>Engagement is ongoing</span></label></div>
-        </div>
-        <div class="field"><span class="field-label">Outcomes you claim <span class="opt">1 to 3</span></span>
-          <p class="help" style="margin-top:-2px">The client rates each one: ${esc(RN.w.labels('outcomeRating', RN.fields.outcomeRating.options.map((x) => x.v)))}.</p>
-          <div class="stack" style="--gap:8px">
-            ${[1, 2, 3].map((n) => `<input class="input" name="o${n}" maxlength="140" aria-label="Outcome ${n}${n === 1 ? ' (required)' : ''}" placeholder="${esc(['Outcome 1 (required): e.g. Cut new AE ramp from 6 to 4 months', 'Outcome 2: e.g. Forecast within 10% for two quarters', 'Outcome 3'][n - 1])}">`).join('')}
+        <div class="stack" style="--gap:16px" data-rr-new ${sel === 'new' ? '' : 'hidden'}>
+          <div class="grid g-2" style="--gap:16px">
+            <div class="field"><label for="sb-rr-co">Client company</label><input class="input" id="sb-rr-co" name="company" value="${esc(newCo)}" placeholder="Company name" autocomplete="organization"></div>
+            ${RN.w.field('engagementType', 'fractional', { name: 'engagementType', id: 'sb-rr-type', compact: true })}
           </div>
+          <div class="grid g-2" style="--gap:16px">
+            <div class="field"><label for="sb-rr-start">Start month</label><input class="input" type="month" id="sb-rr-start" name="start"></div>
+            <div class="field"><label for="sb-rr-end">End month</label><input class="input" type="month" id="sb-rr-end" name="end">
+              <label class="sb-check"><input type="checkbox" name="ongoing" value="1" data-change="sb-rr-ongoing"><span>Engagement is ongoing</span></label></div>
+          </div>
+          <p class="help">We add it to your Engagement History as self-reported. It turns Client-verified when the review comes in.</p>
         </div>
       </section>
       <section data-step-pane="2" class="stack" style="--gap:20px" hidden>
         <div class="grid g-2" style="--gap:16px">
-          ${RN.w.field('fullName', '', { name: 'rname', id: 'sb-rr-name', label: 'Reviewer name', help: 'Shown on the published review, so it never reads “Client”.' })}
-          ${RN.w.field('email', '', { name: 'remail', id: 'sb-rr-email', label: 'Reviewer work email', help: '' })}
-          <div class="field"><label for="sb-rr-title">Their title</label><input class="input" id="sb-rr-title" name="rtitle" placeholder="e.g. CEO"></div>
-          <div class="field"><label for="sb-rr-rco">Their company</label><input class="input" id="sb-rr-rco" name="rcompany" value="${esc(e0 ? e0.company : '')}"></div>
+          ${RN.w.field('fullName', rv.name || '', { name: 'rname', id: 'sb-rr-name', label: 'Reviewer name', help: 'Shown on the published review, so it never reads “Client”.' })}
+          ${RN.w.field('email', rv.email || '', { name: 'remail', id: 'sb-rr-email', label: 'Reviewer work email', help: '' })}
+          <div class="field"><label for="sb-rr-title">Their title</label><input class="input" id="sb-rr-title" name="rtitle" value="${esc(rv.title || '')}" placeholder="e.g. CEO"></div>
+          <div class="field"><label for="sb-rr-rco">Their company</label><input class="input" id="sb-rr-rco" name="rcompany" value="${esc(rv.company || (pick ? pick.g.company : newCo))}"></div>
         </div>
         ${RN.w.field('fitTags', pre, { name: 'tags', id: 'sb-rr-tags', max: 10, cat: op.catKey, label: 'Focus areas to verify', help: 'Pick what you delivered for this client. Each one they confirm in a review rated 4.0 or higher turns Verified.' })}
         ${RN.w.field('techStack', op.crm && RN.w.opt('techStack', op.crm) ? [op.crm] : [], { name: 'tech', id: 'sb-rr-tech', label: 'Tech stack used on this engagement', compact: true })}
@@ -703,29 +860,30 @@
     RN.ui.modal({
       width: 700,
       title: 'Request a review',
-      sub: `Ask a past client to confirm your work. It takes them about 4 minutes.`,
+      sub: 'Ask a past client to confirm your work. It takes them about 4 minutes.',
       body,
-      foot: `<span class="small muted grow" data-rr-label>Step 1 of 3 · ${RR_STEPS[0]}</span>
-        <button type="button" class="btn btn-line" data-act="sb-rr-back" hidden>Back</button>
+      foot: `<button type="button" class="btn btn-line" data-act="sb-rr-back" hidden>Back</button>
         <button type="button" class="btn" data-act="sb-rr-next">Next${icon('arrow')}</button>
         <button type="submit" class="btn" form="sb-rr-form" data-rr-send hidden>${icon('send')}Send request</button>`,
     });
   }
+  // Form values, with the chosen engagement's own details filled in
   function rrData(form) {
     const d = RN.ui.formData(form);
+    const op = RN.myOp();
     d.ongoing = [].concat(d.ongoing || []).includes('1');
-    d.outcomes = [d.o1, d.o2, d.o3].map((x) => (x || '').trim()).filter(Boolean);
+    d.company = (d.company || '').trim();
+    const g = d.eng && d.eng !== 'new' ? (op.engagements || []).find((x) => x.id === d.eng) : null;
+    if (g) Object.assign(d, { engId: g.id, company: g.company, engagementType: engTypeOf(g), start: g.start || '', end: g.end || '', ongoing: !g.end, role: g.role || op.role });
+    else Object.assign(d, { engId: '', role: op.role });
     return d;
   }
   function rrValidate(form, step) {
     const d = rrData(form);
-    if (step === 1) {
-      if (!d.company.trim()) return 'Add the client company.';
-      if (!d.outcomes.length) return 'Add at least one outcome you delivered.';
-    }
+    if (step === 1 && !d.company) return 'Add the client company.';
     if (step === 2) {
-      if (!d.rname.trim()) return 'Add the reviewer’s name. It appears on the published review.';
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.remail.trim())) return 'Add the reviewer’s work email.';
+      if (!(d.rname || '').trim()) return 'Add the reviewer’s name. It appears on the published review.';
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test((d.remail || '').trim())) return 'Add the reviewer’s work email.';
     }
     return '';
   }
@@ -733,25 +891,33 @@
     const modal = form.closest('.modal');
     form.dataset.step = step;
     RN.$$('[data-step-pane]', form).forEach((p) => { p.hidden = +p.dataset.stepPane !== step; });
-    form.querySelector('.sb-rr-prog').innerHTML = stepper(RR_STEPS, step - 1, { label: 'Steps' });
-    modal.querySelector('[data-rr-label]').textContent = `Step ${step} of 3 · ${RR_STEPS[step - 1]}`;
+    form.querySelector('.sb-rr-prog').innerHTML = flowProgress(RR_STEPS, step - 1);
     modal.querySelector('[data-act="sb-rr-back"]').hidden = step === 1;
     modal.querySelector('[data-act="sb-rr-next"]').hidden = step === 3;
     modal.querySelector('[data-rr-send]').hidden = step !== 3;
     if (step === 3) form.querySelector('[data-rr-preview]').innerHTML = rrPreview(rrData(form));
-    modal.scrollTop = 0;
+    if (step === 2) { const n = form.querySelector('#sb-rr-name'); if (n && !n.value) setTimeout(() => n.focus(), 30); }
+    modal.querySelector('.modal-bd').scrollTop = 0;
   }
   function rrEmail(op, d, id) {
     const dates = d.start ? `${ym(d.start)} to ${d.ongoing || !d.end ? 'now' : ym(d.end)}` : d.ongoing ? 'ongoing' : '';
     const tags = d.tags || [];
+    const tech = d.tech || [];
+    const asks = [
+      `· Confirm the engagement: ${RN.w.label('engagementType', d.engagementType) || 'Fractional'}${dates ? ', ' + dates : ''}`,
+      `· Answer four CORE questions: ${RN.fields.coreDims.options.map((x) => x.l).join(', ')}`,
+      tags.length ? `· Confirm ${tags.length} focus ${tags.length === 1 ? 'area' : 'areas'}: ${tags.join(', ')}` : '',
+      tech.length ? `· Confirm the stack: ${RN.w.labels('techStack', tech)}` : '',
+    ].filter(Boolean).join('\n');
     return {
       subject: `Working with ${op.name}`,
-      body: `Hi ${RN.fmt.first(d.rname) || 'there'},\n\n${op.name} asked you to review your work together at ${d.company}. It takes about 4 minutes. Your review is published on ${op.first}’s Revenue Nomad profile under your name and title.\n\nYou’ll be asked to confirm:\n· The engagement: ${RN.w.label('engagementType', d.engagementType) || 'Fractional'}${dates ? ', ' + dates : ''}\n· ${d.outcomes.length} ${d.outcomes.length === 1 ? 'outcome' : 'outcomes'} ${op.first} delivered, each rated ${RN.w.labels('outcomeRating', RN.fields.outcomeRating.options.map((x) => x.v), ', ')}\n· ${tags.length} focus ${tags.length === 1 ? 'area' : 'areas'} to verify${tags.length ? ': ' + tags.join(', ') : ''}\n· Four CORE questions: ${RN.fields.coreDims.options.map((x) => x.l).join(', ')}\n\nStart the review: ${pageUrl()}#review.${id || '…'}\n\nThank you,\nRevenue Nomad, on behalf of ${op.name}`,
+      body: `Hi ${RN.fmt.first(d.rname) || 'there'},\n\n${op.name} asked you to review your work together at ${d.company}. It takes about 4 minutes. Your review is published on ${op.first}’s Revenue Nomad profile under your name and title.\n\nYou’ll be asked to:\n${asks}\n\nStart the review: ${pageUrl()}#review.${id || '…'}\n\nThank you,\nRevenue Nomad, on behalf of ${op.name}`,
     };
   }
   function rrPreview(d) {
     const op = RN.myOp();
     const m = rrEmail(op, d);
+    const tags = d.tags || [];
     return `<div class="sb-mail">
       <div class="sb-mail-h"><span><b>To</b> ${esc(d.rname)} &lt;${esc(d.remail)}&gt;</span><span><b>Subject</b> ${esc(m.subject)}</span></div>
       <div class="sb-mail-b">${esc(m.body.split('\n\nStart the review:')[0])}</div>
@@ -762,16 +928,14 @@
       <span class="label">The form ${esc(RN.fmt.first(d.rname))} fills in</span>
       <ol>
         <li>Confirm the engagement at ${esc(d.company)}</li>
-        <li>Rate your outcomes: ${d.outcomes.map((x) => `“${esc(x)}”`).join(', ')}</li>
-        <li>Verify ${(d.tags || []).length} focus areas${(d.tech || []).length ? ` and the stack (${esc(W().labels('techStack', d.tech))})` : ''}</li>
         <li>Answer the four CORE questions and say if they would hire you again</li>
+        <li>${tags.length ? `Confirm ${tags.length} focus ${tags.length === 1 ? 'area' : 'areas'}` : 'Confirm the focus areas they saw'}${(d.tech || []).length ? ` and the stack (${esc(W().labels('techStack', d.tech))})` : ''}</li>
       </ol>
     </div>`;
   }
   RN.actions['sb-rr-open'] = (el) => {
-    const cur = RN.currentRoute();
-    if (!(cur && cur.params && cur.params.tab === 'credibility')) RN.go('studio.credibility');
-    openReviewRequest({ verify: el && el.dataset && !!el.dataset.verify });
+    const ds = (el && el.dataset) || {};
+    openReviewRequest({ verify: !!ds.verify, engId: ds.eng || '', company: ds.company || '' });
   };
   RN.actions['sb-rr-next'] = () => {
     const form = document.getElementById('sb-rr-form');
@@ -784,16 +948,13 @@
   RN.inputs['sb-rr-eng'] = (el) => {
     const form = el.closest('form');
     const op = RN.myOp();
-    const e = op.engagements[+el.value];
-    const set = (n, v) => { const x = form.querySelector(`[name="${n}"]`); if (x) x.value = v; };
-    set('company', e ? e.company : '');
-    set('rcompany', e ? e.company : '');
-    set('start', e ? e.start || '' : '');
-    set('end', e && e.end ? e.end : '');
-    const on = form.querySelector('[name=ongoing]');
-    on.checked = !!(e && !e.end);
-    form.querySelector('[name=end]').disabled = on.checked;
-    if (!e) form.querySelector('[name=company]').focus();
+    const isNew = el.value === 'new';
+    const x = isNew ? null : engList(op).find((y) => y.g.id === el.value) || null;
+    form.querySelector('[data-rr-new]').hidden = !isNew;
+    form.querySelector('[data-rr-hint]').innerHTML = rrHint(op, x);
+    const rco = form.querySelector('[name="rcompany"]');
+    if (rco) rco.value = x ? x.g.company : form.querySelector('[name="company"]').value;
+    if (isNew) form.querySelector('[name=company]').focus();
   };
   RN.inputs['sb-rr-ongoing'] = (el) => { const end = el.closest('form').querySelector('[name=end]'); end.disabled = el.checked; if (el.checked) end.value = ''; };
   RN.submits['sb-rr-send'] = (form) => {
@@ -803,12 +964,21 @@
     const op = RN.myOp();
     const d = rrData(form);
     const id = 'rr-' + RN.slug(d.rname).slice(0, 16) + '-' + Math.random().toString(36).slice(2, 6);
+    // "Another engagement" joins Engagement History as self-reported, so the request has an engagement to verify
+    if (!d.engId) {
+      const g = { id: 'eng-' + RN.slug(d.company).slice(0, 18) + '-' + Math.random().toString(36).slice(2, 6), company: d.company, role: op.role, start: d.start || '', end: d.ongoing ? '' : d.end || '', engagementType: d.engagementType || 'fractional', revenueRange: '', employeeRange: '', industry: '' };
+      g.months = monthsBetween(g.start, g.end);
+      RN.store.update((s) => { const e = (s.edits[op.id] = Object.assign({}, s.edits[op.id])); e.engagements = (e.engagements || []).concat(g); }, 'edits');
+      RN.model.applyEdits();
+      syncEngagements(op);
+      d.engId = g.id;
+    }
     const rec = {
       id, opId: op.id, status: 'sent', sentAt: RN.now().toISOString(),
       reviewer: { name: d.rname.trim(), email: d.remail.trim(), company: (d.rcompany || d.company).trim(), title: (d.rtitle || '').trim() },
-      engagement: d.company.trim(),
-      details: { company: d.company.trim(), engagementType: d.engagementType, start: d.start || null, end: d.ongoing ? null : d.end || null, ongoing: d.ongoing, roleCategory: op.catKey, role: op.role },
-      tags: d.tags || [], outcomes: d.outcomes, tech: d.tech || [],
+      engagement: d.company, engId: d.engId,
+      details: { company: d.company, engagementType: d.engagementType, start: d.start || null, end: d.ongoing ? null : d.end || null, ongoing: d.ongoing, roleCategory: op.catKey, role: d.role },
+      tags: d.tags || [], tech: d.tech || [],
     };
     RN.store.update((s) => { s.reviewRequests.unshift(rec); }, 'reviewRequests');
     RN.track('review_request', { opId: op.id, meta: { requestId: id, company: rec.engagement, tags: rec.tags.length } });
@@ -816,24 +986,33 @@
     RN.mail(rec.reviewer.email, m.subject, m.body, 'review');
     RN.ui.closeModal();
     RN.ui.toast(`Request sent to ${esc(rec.reviewer.name)}. Their link: <a class="mono sb-toast-link" href="#review.${esc(id)}">#review.${esc(id)}</a>`, { icon: 'send', ms: 7000, action: { label: 'Open as client', act: 'go', attrs: `data-to="review.${esc(id)}"` } });
-    RN.rerender();
+    // Keep unsaved Edit profile changes on screen; everything else re-renders to show the new status
+    if (!leaving()) RN.rerender();
   };
 
   /* ---------- Proof link: create, copy, open ---------- */
+  /* RN.studioB.openProofModal(opts) opens it anywhere in Studio. opts: { company, contact, from: 'outreach' }.
+     Vetted operators get 5 links a month; Proven and above are unlimited (RN.fields.risUnlocks). */
   function openProofModal(o) {
     o = o || {};
     const op = RN.myOp();
+    if (!op) return;
+    const q = proofQuota(op);
+    if (!q.canCreate) {
+      RN.ui.toast(q.unlocked ? `You have used your ${PROOF_MONTHLY} proof links for this month. Links are unlimited at Proven.` : 'Proof links unlock when your profile is approved at Vetted.', { icon: 'lock', action: { label: 'Request a review', act: 'sb-rr-open' }, ms: 5000 });
+      return;
+    }
     RN.ui.modal({
       width: 600,
       title: 'Create a proof link',
-      sub: 'A private page with the proof you pick, for one prospect. No fee on deals you win this way.',
+      sub: `A private page with the proof you pick, for one prospect. ${esc(quotaText(q))}`,
       body: `<form id="sb-proof-form" class="stack" style="--gap:20px" data-submit="sb-proof-create" data-from="${esc(o.from || '')}">
         <div class="grid g-2" style="--gap:16px">
-          <div class="field"><label for="sb-pf-co">Prospect company</label><input class="input" id="sb-pf-co" name="company" value="${esc(o.company || '')}" placeholder="e.g. Harbor Property Group" required></div>
+          <div class="field"><label for="sb-pf-co">Prospect company</label><input class="input" id="sb-pf-co" name="company" value="${esc(o.company || '')}" placeholder="e.g. Harbor Property Group" autocomplete="organization" required></div>
           <div class="field"><label for="sb-pf-ct">Contact <span class="opt">Optional</span></label><input class="input" id="sb-pf-ct" name="contact" value="${esc(o.contact || '')}" placeholder="Name, title"></div>
         </div>
-        <div class="field"><span class="field-label">Sections to include</span>
-          <div class="chipset" role="group" aria-label="Sections">
+        <div class="field"><span class="field-label" id="sb-pf-sec-l">Sections to include</span>
+          <div class="chipset" role="group" aria-labelledby="sb-pf-sec-l">
             ${SECTIONS.map((s) => `<button type="button" class="chip" aria-pressed="${s.v !== 'rate'}" data-act="w-chip" data-name="sections" data-v="${s.v}" data-multi="1">${esc(s.l)}</button>`).join('')}
             <input type="hidden" name="sections" value="reviews|core|engagements|samples" data-multi="1">
           </div>
@@ -843,15 +1022,16 @@
           <textarea class="textarea" id="sb-pf-note" name="note" maxlength="400" style="min-height:80px" placeholder="Why you are sharing this and what to look at first."></textarea></div>
         <div class="note info">${icon('eye')}<div>The prospect sees: “${esc(op.first)} will see that this page was opened and which sections were read.”</div></div>
       </form>`,
-      foot: `<button type="button" class="btn btn-line" data-act="modal-close">Cancel</button><button type="submit" class="btn" form="sb-proof-form">${icon('link')}${o.from === 'outreach' ? 'Create and add to email' : 'Create, copy and open'}</button>`,
+      foot: `<button type="button" class="btn btn-line" data-act="modal-close">Cancel</button><button type="submit" class="btn" form="sb-proof-form">${icon('link')}${o.from === 'outreach' ? 'Create and add to email' : 'Create and copy link'}</button>`,
     });
   }
-  RN.actions['sb-proof-new'] = () => openProofModal();
+  RN.actions['sb-proof-new'] = (el) => openProofModal({ company: (el && el.dataset && el.dataset.company) || '' });
   RN.submits['sb-proof-create'] = (form, data) => {
     const op = RN.myOp();
     const company = (data.company || '').trim();
     if (!company) { RN.ui.toast('Add the prospect’s company.', { icon: 'info' }); return; }
     if (!(data.sections || []).length) { RN.ui.toast('Pick at least one section to share.', { icon: 'info' }); return; }
+    if (!proofQuota(op).canCreate) { RN.ui.closeModal(); openProofModal(); return; }
     const id = 'proof-' + RN.slug(company).slice(0, 18) + '-' + Math.random().toString(36).slice(2, 6);
     const rec = { id, opId: op.id, prospect: { company, contact: (data.contact || '').trim() }, sections: data.sections, note: (data.note || '').trim(), createdAt: RN.now().toISOString(), views: [] };
     RN.store.update((s) => { s.proofLinks.unshift(rec); }, 'proofLinks');
@@ -868,9 +1048,15 @@
       RN.ui.toast(`Proof link added to your email${copied ? ' and copied' : ''}.`, { icon: 'link' });
       return;
     }
-    RN.ui.toast(`Proof link for ${esc(company)} ${copied ? 'copied' : 'created'}: <span class="mono sb-toast-link">#proof.${esc(id)}</span>`, { icon: 'link', ms: 6000 });
-    RN.go('proof.' + id);
+    // Stay in Studio: the new card is highlighted as "Not opened yet". Opening it yourself is a Preview, not a prospect visit.
+    S.newProof = id;
+    const cur = RN.currentRoute();
+    const onCred = cur && cur.params && cur.params.tab === 'credibility';
+    RN.ui.toast(`Proof link for ${esc(company)} ${copied ? 'copied' : 'created'}: <span class="mono sb-toast-link">#proof.${esc(id)}</span>`, { icon: 'link', ms: 6000, action: onCred ? { label: 'Preview', act: 'go', attrs: `data-to="proof.${esc(id)}"` } : { label: 'See the link', act: 'sb-proof-see', attrs: `data-id="${esc(id)}"` } });
+    if (onCred) { RN.rerender(); scrollToEl('sb-proof-' + id); } else RN.rerender();
   };
+  function scrollToEl(id) { setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 60); }
+  RN.actions['sb-proof-see'] = (el) => { S.newProof = el.dataset.id; S.focusSec = 'sb-proof-' + el.dataset.id; RN.go('studio.credibility'); };
 
   /* ======================================================================
      OPPORTUNITIES: fractional roles (job board) + predictive prospects
@@ -906,21 +1092,35 @@
   const termCode = (m) => (!m ? null : m <= 3 ? '1_3' : m <= 6 ? '3_6' : m <= 12 ? '6_12' : '12_plus');
   const jobHours = (j) => (j.hpw ? RN.fields.hoursCode(j.hpw * 4.33) : null);
 
-  // Sales Leadership signal set (repo signalLibrary), wording cleaned up
-  const SL_SIGNALS = [
-    ['sl_seat_req', 'Are they hiring a full-time sales leader right now (a 4 to 6 month search you can bridge)?'],
-    ['sl_reps_no_leader', 'Are they hiring reps with no sales leadership posted to run them?'],
-    ['sl_quota_burst', 'Is there a burst of quota-carrying hires that needs a playbook before the reps land?'],
-    ['sl_founder_ceiling', 'Is founder-led sales at its ceiling (15 to 60 people, no sales leadership anywhere)?'],
-    ['sl_hiring_composition', 'Are they growing headcount with no sales hiring at all?'],
-    ['sl_upmarket_move', 'Did a self-serve product just add a sales-led enterprise plan nobody has run before?'],
+  // Signal sets keyed to the operator's role category. Sales Leadership is the repo's signalLibrary (wording cleaned up);
+  // the other categories are illustrative until their signal sets ship. Company-wide signals apply to everyone.
+  const GEN_SIGNALS = [
     ['restructuring', 'Did they just have a layoff, with the targets still in place?'],
-    ['departure', 'Did the leader in this seat leave, in the news or on the roster?'],
     ['funding', 'Did they raise in the last 150 days?'],
     ['started-hiring', 'Did they switch to hiring mode this week?'],
     ['headcount-jump', 'Did headcount grow 20% or more?'],
     ['newly-launched', 'Did they just launch publicly?'],
   ];
+  const CAT_SIGNALS = {
+    sales_leadership: [
+      ['sl_seat_req', 'Are they hiring a full-time sales leader right now (a 4 to 6 month search you can bridge)?'],
+      ['sl_reps_no_leader', 'Are they hiring reps with no sales leadership posted to run them?'],
+      ['sl_quota_burst', 'Is there a burst of quota-carrying hires that needs a playbook before the reps land?'],
+      ['sl_founder_ceiling', 'Is founder-led sales at its ceiling (15 to 60 people, no sales leadership anywhere)?'],
+      ['sl_hiring_composition', 'Are they growing headcount with no sales hiring at all?'],
+      ['sl_upmarket_move', 'Did a self-serve product just add a sales-led enterprise plan nobody has run before?'],
+      ['departure', 'Did the leader in this seat leave, in the news or on the roster?'],
+    ],
+    marketing: [['mk_seat_req', 'Are they hiring a full-time marketing leader right now?'], ['mk_no_owner', 'Is paid spend or content growing with nobody who owns marketing?']],
+    revenue_operations: [['ro_crm', 'Are they moving CRMs or rebuilding pipeline reporting?'], ['ro_no_owner', 'Are they hiring sales or marketing ops roles with no RevOps lead?']],
+    sales_enablement: [['se_cohort', 'Is a cohort of new reps about to start with no onboarding program?'], ['se_seat_req', 'Are they hiring an enablement lead full time?']],
+    customer_success_growth: [['cs_renewals', 'Is a large renewal cohort coming with no customer success leader?'], ['cs_seat_req', 'Are they hiring a head of customer success full time?']],
+    ai_gtm: [['ai_tools', 'Are they adopting AI outbound or enrichment tools with nobody to build the workflows?'], ['ai_hiring', 'Are they hiring GTM engineers?']],
+    partnerships: [['pt_program', 'Are they launching a partner or reseller program?'], ['pt_seat_req', 'Are they hiring a partnerships lead full time?']],
+    sellers: [['sd_new_segment', 'Are they hiring reps for a new segment or region?'], ['sd_founder', 'Is the founder still closing every deal?']],
+  };
+  const sigSet = (op) => (CAT_SIGNALS[op.catKey] || []).concat(GEN_SIGNALS);
+  const sigsFor = (p, op) => { const ids = new Set(sigSet(op).map(([id]) => id)); return p.sig.filter((x) => ids.has(x.q)); };
   const SIG = {
     departure: { l: 'Departure', c: 'bad' }, 'leadership-gap': { l: 'Leadership gap', c: 'accent' }, 'team-without-leader': { l: 'Team without a leader', c: 'info' },
     funding: { l: 'Funding', c: 'gold' }, 'hiring-role': { l: 'Open GTM roles', c: 'info' }, 'function-gap': { l: 'Function gap', c: 'warn' },
@@ -985,10 +1185,11 @@
     const brief = { revenueRange: p.rev, employeeRange: p.emp, industries: [p.ind] };
     if ((op.motions || []).length && p.motion) brief.salesMotions = [p.motion];
     const fit = RN.model.fit(op, brief);
-    const timing = Math.round(100 * (1 - p.sig.reduce((a, s) => a * (1 - sigStrength(s)), 1)));
+    const sig = sigsFor(p, op);
+    const timing = Math.round(100 * (1 - sig.reduce((a, s) => a * (1 - sigStrength(s)), 1)));
     const priority = Math.round(Math.pow(fit.pct / 100, 1.5) * timing);
-    const top = p.sig.slice().sort((a, b) => sigStrength(b) - sigStrength(a))[0];
-    return { fit, timing, priority, top };
+    const top = sig.slice().sort((a, b) => sigStrength(b) - sigStrength(a))[0] || { t: 'function-gap' };
+    return { fit, timing, priority, top, sig };
   }
 
   function renderOpps(op) {
@@ -1058,8 +1259,8 @@
         <label class="sb-sel"><span class="sr-only">${esc(RN.fields.engagementTypes.label)}</span><select class="select" data-change="sb-job-eng" aria-label="${esc(RN.fields.engagementTypes.label)}"><option value="">All engagement types</option>${RN.fields.engagementTypes.options.map((o) => `<option value="${esc(o.v)}" ${S.jobEng === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></label>
       </div>
       ${list.length ? (showSplit
-        ? `<h2 class="sb-group-h">In ${esc(RN.fields.catLabel(op.catKey))}<span class="sb-count">${mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => j.mine).map((j) => jobCard(j, stOf(j))).join('')}</div>
-           <h2 class="sb-group-h">Other role categories<span class="sb-count">${list.length - mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => !j.mine).slice(0, S.jobMore ? 99 : 3).map((j) => jobCard(j, stOf(j))).join('')}</div>
+        ? `<h2 class="eyebrow sb-group-h">In ${esc(RN.fields.catLabel(op.catKey))}<span class="sb-count">${mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => j.mine).map((j) => jobCard(j, stOf(j))).join('')}</div>
+           <h2 class="eyebrow sb-group-h">Other role categories<span class="sb-count">${list.length - mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => !j.mine).slice(0, S.jobMore ? 99 : 3).map((j) => jobCard(j, stOf(j))).join('')}</div>
            ${!S.jobMore && list.length - mineN > 3 ? `<button type="button" class="btn btn-line sb-more" data-act="sb-job-more">${icon('chev-down')}Show ${list.length - mineN - 3} more roles in other categories</button>` : ''}`
         : `<div class="stack" style="--gap:12px;margin-top:8px">${list.map((j) => jobCard(j, stOf(j))).join('')}</div>`)
         : RN.ui.empty({ icon: 'briefcase', title: S.jobStatus === 'board' ? 'No roles match these filters' : `Nothing ${S.jobStatus} yet`, body: S.jobStatus === 'board' ? 'Clear a filter to see every open fractional role.' : 'Save roles from the board to keep a shortlist here.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sb-job-reset">Show the full board</button>` })}`;
@@ -1090,6 +1291,7 @@
         <button type="button" class="btn btn-sm ${status === 'saved' || status === 'applied' ? '' : 'btn-line'}" data-act="sb-job-set" data-id="${j.id}" data-s="saved" aria-pressed="${status === 'saved' || status === 'applied'}">${icon('bookmark')}${status === 'saved' || status === 'applied' ? 'Saved' : 'Save'}</button>
         <button type="button" class="btn btn-line btn-sm" data-act="sb-job-set" data-id="${j.id}" data-s="applied" aria-pressed="${status === 'applied'}">${icon('check')}${status === 'applied' ? 'Applied' : 'Mark applied'}</button>
         <button type="button" class="btn btn-ghost btn-sm" data-act="sb-job-set" data-id="${j.id}" data-s="hidden">${status === 'hidden' ? icon('refresh') + 'Restore' : icon('eye-off') + 'Hide'}</button>
+        ${j.kind === 'discussion' ? '' : `<button type="button" class="btn btn-ghost btn-sm" data-act="sb-proof-new" data-company="${esc(j.co)}" title="A private page of your proof for ${esc(j.co)}">${icon('link')}Proof link</button>`}
       </div>
     </article>`;
   }
@@ -1130,19 +1332,23 @@
         <div><span class="sb-how-n">2</span><b>× Company signals</b><span>Leadership gaps, departures, funding and hiring patterns, each fading over time.</span></div>
         <div><span class="sb-how-n">3</span><b>= Priority</b><span class="mono">fit<sup>1.5</sup> × timing</span></div>
       </div>
-      <details class="sb-scan"><summary>${icon('radar')}Scanning ${SL_SIGNALS.length} signals for ${esc(RN.fields.catLabel('sales_leadership'))}${icon('chev-down')}</summary>
-        <ol>${SL_SIGNALS.map(([, q]) => `<li>${esc(q)}</li>`).join('')}</ol></details>
+      <details class="sb-scan"><summary>${icon('radar')}Scanning ${sigSet(op).length} signals for ${esc(RN.fields.catLabel(op.catKey))}${icon('chev-down')}</summary>
+        <ol>${sigSet(op).map(([, q]) => `<li>${esc(q)}</li>`).join('')}</ol></details>
       <div class="sb-filters"><div class="seg" role="group" aria-label="List">${[['review', 'To review'], ['queued', 'Queued'], ['contacted', 'Contacted'], ['dismissed', 'Dismissed']].map(([k, l]) => `<button type="button" aria-pressed="${S.prosStatus === k}" data-act="sb-pros-status" data-s="${k}">${l} <span class="sb-n">${counts[k] || 0}</span></button>`).join('')}</div></div>
       ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => prospectCard(x, op, stOf(x))).join('')}</div>${held && S.prosStatus === 'review' ? `<p class="sb-held">${icon('filter')}<span>${held} more ${held === 1 ? 'company scored' : 'companies scored'} under ${QUEUE_MIN} on your profile and ${held === 1 ? 'is' : 'are'} held back. Their industry or size is outside your ranges. <a class="link" href="#studio.profile">Edit your company fit</a></span></p>` : ''}`
-        : S.prosStatus === 'review' && !pros.length && held ? RN.ui.empty({ icon: 'filter', title: `No companies clear ${QUEUE_MIN} on your profile yet`, body: 'Prospects are matched on your industries, revenue range and employee range. Add them and the queue fills in.', cta: '<a class="btn btn-sm" href="#studio.profile">Add company fit</a>' })
+        : S.prosStatus === 'review' && !pros.length && held ? (hasFit(op)
+          ? RN.ui.empty({ icon: 'filter', title: `No sample companies clear ${QUEUE_MIN} for you yet`, body: `The sample companies are outside your industries (${RN.w.labels('industries', op.industries.slice(0, 3))}) or company sizes, or show no ${RN.fields.catLabel(op.catKey)} signals. In the live product, new companies enter the queue as signals fire.`, cta: '<button type="button" class="btn btn-line btn-sm" data-act="sb-edit" data-sec="fit">Review your company fit</button>' })
+          : RN.ui.empty({ icon: 'filter', title: `No companies clear ${QUEUE_MIN} on your profile yet`, body: 'Prospects are matched on your industries, revenue range and employee range. Add them and the queue fills in.', cta: '<button type="button" class="btn btn-sm" data-act="sb-edit" data-sec="fit">Add company fit</button>' }))
         : RN.ui.empty({ icon: 'target', title: S.prosStatus === 'review' ? 'You have reviewed every prospect' : `Nothing ${S.prosStatus} yet`, body: S.prosStatus === 'review' ? 'New companies appear as signals fire. Sharper profile fields give sharper matches.' : 'Queue a prospect to plan outreach, or mark it contacted once you reach out.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sb-pros-status" data-s="review">Back to To review</button>` })}`;
   }
+  const hasFit = (op) => op.industries.length > 0 && op.revenueRanges.length > 0 && op.employeeRanges.length > 0;
   function prospectCard(x, op, status) {
     const p = x.p;
-    const sigs = p.sig.slice().sort((a, b) => sigStrength(b) - sigStrength(a));
-    const fired = new Set(p.sig.map((s) => s.q));
-    const unfired = SL_SIGNALS.filter(([id]) => !fired.has(id));
-    const isNew = status === 'review' && p.sig.some((s) => s.days != null && s.days <= 7);
+    const sigs = x.sig.slice().sort((a, b) => sigStrength(b) - sigStrength(a));
+    const fired = new Set(x.sig.map((s) => s.q));
+    const set = sigSet(op);
+    const unfired = set.filter(([id]) => !fired.has(id));
+    const isNew = status === 'review' && x.sig.some((s) => s.days != null && s.days <= 7);
     const pri = x.priority;
     return `<article class="card sb-pros" id="sb-pr-${p.id}">
       <div class="sb-pros-top">
@@ -1164,7 +1370,7 @@
         <div><div class="row between"><span class="label">Timing ${RN.ui.tip('Combined strength of the signals below, faded to today by each signal’s half-life.', 'About timing')}</span><span class="small"><b>${x.timing}</b> today</span></div><span class="meter sb-meter-t"><i style="width:${x.timing}%"></i></span></div>
       </div>
       <div class="sb-whynow">
-        <div class="row between sb-whynow-h"><span class="label">Why now · ${p.sig.length} of ${SL_SIGNALS.length} signals fired</span><span class="label hide-s">Strength today</span></div>
+        <div class="row between sb-whynow-h"><span class="label">Why now · ${x.sig.length} of ${set.length} signals fired</span><span class="label hide-s">Strength today</span></div>
         <ul>${sigs.map((s) => {
           const str = sigStrength(s);
           const d = sigDays(s);
@@ -1183,6 +1389,7 @@
       <div class="sb-angle"><span class="label">Suggested angle</span><p>${esc((ANGLE[x.top.t] || ANGLE['function-gap'])(op.role))}</p></div>
       <div class="sb-job-act">
         <button type="button" class="btn btn-sm" data-act="sb-pros-draft" data-id="${p.id}">${icon('mail')}Draft outreach</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-act="sb-proof-new" data-company="${esc(p.co)}">${icon('link')}Proof link</button>
         ${status === 'dismissed'
           ? `<button type="button" class="btn btn-line btn-sm" data-act="sb-pros-set" data-id="${p.id}" data-s="review">${icon('refresh')}Restore</button>`
           : `<button type="button" class="btn btn-line btn-sm" data-act="sb-pros-set" data-id="${p.id}" data-s="queued" aria-pressed="${status === 'queued'}">${status === 'queued' ? 'Queued' : 'Queue'}</button>
@@ -1253,14 +1460,17 @@
   };
 
   /* ======================================================================
-     EDIT PROFILE: the same standard fields as intake, saved to RN.store.state.edits
+     EDIT PROFILE: the same standard fields as intake, saved to RN.store.state.edits.
+     One section per topic and one Save. Engagement History, work samples, photo and video, and
+     "Ways to work with me" save to edits[opId].{engagements, samples, photo, video, offers}.
      ====================================================================== */
   const SHOWN_ELSEWHERE = ['salesMotions', 'methodologies', 'crm'];
   function roleValue(op, k) {
-    const ed = edits(op).roleFields || {};
-    if (ed[k] !== undefined) return ed[k];
-    const rd = op.roleDetails || {};
     const d = RN.fields[k];
+    // Registry answers first (intake, Studio and Admin edits, merged by RN.model.applyEdits), then the live export
+    const rf = op.roleFields || {};
+    if (rf[k] !== undefined && rf[k] !== null && rf[k] !== '') return d.type === 'multi' ? [].concat(rf[k]) : rf[k];
+    const rd = op.roleDetails || {};
     switch (k) {
       case 'largestTeamManaged': { const n = +(rd.largest_team_managed || rd.salespeople_managed || 0); return !n ? '' : n < 5 ? '<5' : n <= 10 ? '5-10' : n <= 25 ? '10-25' : n <= 50 ? '25-50' : '50+'; }
       case 'largestTeamQuota': { const q = +(rd.largest_team_quota_managed || rd.largest_team_quota_usd || 0) / 1e6; return !q ? '' : q < 5 ? '1_5m' : q < 10 ? '5_10m' : q < 25 ? '10_25m' : q < 50 ? '25_50m' : q < 100 ? '50_100m' : '100m_plus'; }
@@ -1275,19 +1485,183 @@
   }
   function alerts() { return Object.assign({ projects: 'instant', weekly: true }, seenMap('alerts')); }
 
+  /* ---------- Engagement History editor ---------- */
+  const newId = (p) => p + '-' + Math.random().toString(36).slice(2, 8);
+  function roleSelect(v, name, id) {
+    let html = RN.w.field('role', v || '', { name, id, label: 'Role title', placeholder: 'Select the title you held' });
+    // Keep a title from the live export that is not in the registry list, so saving never drops it
+    if (v && !RN.w.opt('role', v)) html = html.replace('</option>', `</option><option value="${esc(v)}" selected>${esc(v)}</option>`);
+    return html;
+  }
+  function engFields(g) {
+    const n = (k) => `eng__${g.id}__${k}`;
+    const idp = (k) => `sb-eng-${g.id}-${k}`;
+    return `<div class="grid g-2 sb-grid">
+        <div class="field"><label for="${idp('company')}">Company</label><input class="input" id="${idp('company')}" name="${n('company')}" value="${esc(g.company || '')}" placeholder="Client company" autocomplete="organization"></div>
+        ${roleSelect(g.role, n('role'), idp('role'))}
+        <div class="field"><label for="${idp('start')}">Start month</label><input class="input" type="month" id="${idp('start')}" name="${n('start')}" value="${esc(g.start || '')}"></div>
+        <div class="field"><label for="${idp('end')}">End month <span class="opt">Leave empty if ongoing</span></label><input class="input" type="month" id="${idp('end')}" name="${n('end')}" value="${esc(g.end || '')}"></div>
+      </div>
+      ${RN.w.field('engagementType', engTypeOf(g), { name: n('engagementType'), id: idp('type'), compact: true })}
+      ${RN.w.field('companyRevenue', g.revenueRange || '', { name: n('revenueRange'), id: idp('rev'), label: 'Client revenue range', compact: true })}
+      ${RN.w.field('companyEmployees', g.employeeRange || '', { name: n('employeeRange'), id: idp('emp'), label: 'Client employee range', compact: true })}
+      <div class="sb-half">${RN.w.field('industry', g.industry || '', { name: n('industry'), id: idp('ind'), label: 'Client industry', placeholder: 'Select an industry' })}</div>`;
+  }
+  function engFacts(g) {
+    const rows = [
+      ['Role title', g.role], ['Dates', engDates(g)], [RN.fields.engagementType.label, RN.w.label('engagementType', engTypeOf(g))],
+      ['Client revenue range', g.revenueRange && RN.w.label('companyRevenue', g.revenueRange)], ['Client employee range', g.employeeRange && RN.w.label('companyEmployees', g.employeeRange)],
+      ['Client industry', g.industry && RN.w.label('industry', g.industry)],
+    ].filter((r) => r[1]);
+    return `<dl class="sb-facts">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+  }
+  function engItem(op, g, s, o) {
+    o = o || {};
+    const locked = !!(s && s.k === 'verified');
+    const removable = !locked && (o.isNew || (g.mine && !g.fromReview));
+    return `<details class="sb-eng" data-eng-id="${esc(g.id)}" ${o.isNew ? 'data-eng-new="1"' : ''} ${locked ? 'data-locked="1"' : ''} ${o.open ? 'open' : ''}>
+      <summary><span class="sb-eng-sum"><b data-eng-title>${esc(g.company || 'New engagement')}</b><span class="small muted">${esc(g.company ? [g.role, engDates(g)].filter(Boolean).join(' · ') : 'Not saved yet')}</span></span>${s ? s.pill : ''}${icon('chev-down')}</summary>
+      <div class="sb-eng-bd stack" style="--gap:18px">
+        ${locked ? `<p class="sb-next">${icon('check-circle')}<span>${esc(g.company)} confirmed this engagement in a client review, so its details are locked.</span></p>${engFacts(g)}` : engFields(g)}
+        ${(s && s.k === 'none' && !o.isNew) || (s && s.k === 'sent') || removable ? `<div class="sb-eng-acts">
+          ${s && s.k === 'none' && !o.isNew ? `<button type="button" class="act" data-act="sb-rr-open" data-eng="${esc(g.id)}">${icon('send')}Request a review from ${esc(g.company)}</button>` : ''}
+          ${s && s.k === 'sent' ? `<span class="small muted">${icon('send')}Review request sent ${esc(RN.fmt.ago(s.req.sentAt))}</span>` : ''}
+          ${removable ? `<button type="button" class="act sb-remove" data-act="sb-eng-remove">${icon('x')}Remove</button>` : ''}
+        </div>` : ''}
+      </div>
+    </details>`;
+  }
+  RN.actions['sb-eng-add'] = () => {
+    const op = RN.myOp();
+    const list = document.querySelector('[data-eng-list]');
+    if (!list) return;
+    const g = { id: newId('eng-new'), company: '', role: op.role, start: '', end: '', engagementType: 'fractional' };
+    list.insertAdjacentHTML('beforeend', engItem(op, g, null, { open: true, isNew: true }));
+    const empty = document.querySelector('[data-eng-empty]'); if (empty) empty.remove();
+    const f = list.lastElementChild.querySelector('input'); if (f) f.focus();
+  };
+  RN.actions['sb-eng-remove'] = (el) => {
+    const box = el.closest('[data-eng-id]');
+    const form = el.closest('form');
+    const name = box.querySelector('[data-eng-title]').textContent;
+    S.removedEng.add(box.dataset.engId);
+    box.remove();
+    markDirty(form);
+    RN.ui.toast(`${esc(name)} removed. Save changes to confirm.`, { icon: 'info' });
+    const add = form.querySelector('[data-act="sb-eng-add"]'); if (add) add.focus();
+  };
+
+  /* ---------- Work samples editor ---------- */
+  // Sample types match the Portfolio filters on the profile (Playbooks, Frameworks, Builds). Promote to RN.fields when it exists.
+  const SAMPLE_TYPES = () => (RN.fields.sampleType ? RN.fields.sampleType.options : ['Playbook', 'Framework', 'Program', 'Process map', 'Template', 'Build', 'System'].map((v) => ({ v, l: v })));
+  const SAMPLE_MAX = 10;
+  function sampleItem(op, x, o) {
+    o = o || {};
+    const n = (k) => `smp__${x.id}__${k}`;
+    const idp = (k) => `sb-smp-${x.id}-${k}`;
+    const cos = [...new Set((op.engagements || []).map((g) => g.company).filter(Boolean))];
+    if (x.at && !cos.includes(x.at)) cos.push(x.at);
+    return `<details class="sb-eng" data-smp-id="${esc(x.id)}" ${o.open ? 'open' : ''}>
+      <summary><span class="sb-eng-sum"><b data-smp-title>${esc(x.title || 'New work sample')}</b><span class="small muted">${esc([x.type, x.at, x.pages ? x.pages + ' pages' : ''].filter(Boolean).join(' · ') || 'Not saved yet')}</span></span>${icon('chev-down')}</summary>
+      <div class="sb-eng-bd stack" style="--gap:18px">
+        <div class="grid g-2 sb-grid">
+          <div class="field"><label for="${idp('title')}">Title</label><input class="input" id="${idp('title')}" name="${n('title')}" value="${esc(x.title || '')}" maxlength="90" placeholder="e.g. Sales playbook for a first repeatable motion"></div>
+          <div class="field"><label for="${idp('type')}">Type</label><select class="select" id="${idp('type')}" name="${n('type')}">${SAMPLE_TYPES().map((t) => `<option value="${esc(t.v)}" ${t.v === (x.type || 'Playbook') ? 'selected' : ''}>${esc(t.l)}</option>`).join('')}</select></div>
+          <div class="field"><label for="${idp('at')}">From which engagement</label><select class="select" id="${idp('at')}" name="${n('at')}"><option value="">Not tied to one engagement</option>${cos.map((c) => `<option value="${esc(c)}" ${c === x.at ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+          <div class="field"><label for="${idp('pages')}">Pages <span class="opt">Optional</span></label><input class="input" type="number" inputmode="numeric" min="1" max="400" id="${idp('pages')}" name="${n('pages')}" value="${esc(x.pages || '')}"></div>
+        </div>
+        ${RN.w.field('fitTags', x.skills || [], { name: n('skills'), id: idp('skills'), max: 3, cat: op.catKey, noCustom: true, label: 'Focus areas it shows', help: 'Up to 3. Shown as chips on the sample.' })}
+        <div class="sb-eng-acts"><button type="button" class="act sb-remove" data-act="sb-smp-remove">${icon('x')}Remove</button></div>
+      </div>
+    </details>`;
+  }
+  RN.actions['sb-smp-add'] = () => {
+    const op = RN.myOp();
+    const list = document.querySelector('[data-smp-list]');
+    if (!list) return;
+    if (list.querySelectorAll('[data-smp-id]').length >= SAMPLE_MAX) { RN.ui.toast(`Up to ${SAMPLE_MAX} work samples. Remove one to add another.`, { icon: 'info' }); return; }
+    list.insertAdjacentHTML('beforeend', sampleItem(op, { id: newId('smp'), type: 'Playbook', skills: [] }, { open: true }));
+    const empty = document.querySelector('[data-smp-empty]'); if (empty) empty.remove();
+    const f = list.lastElementChild.querySelector('input'); if (f) f.focus();
+  };
+  RN.actions['sb-smp-remove'] = (el) => {
+    const box = el.closest('[data-smp-id]');
+    const form = el.closest('form');
+    box.remove();
+    markDirty(form);
+    RN.ui.toast('Work sample removed. Save changes to confirm.', { icon: 'info' });
+    const add = form.querySelector('[data-act="sb-smp-add"]'); if (add) add.focus();
+  };
+
+  /* ---------- Ways to work with me: up to 3 Engagement Blueprints ---------- */
+  const OFFER_MAX = 3;
+  function offersInner(op) {
+    const bps = (RN.projects && RN.projects.blueprints) || [];
+    const sel = (op.offers || []).filter((id) => bps.some((b) => b.id === id));
+    const mine = bps.filter((b) => b.cat === op.catKey), rest = bps.filter((b) => b.cat !== op.catKey);
+    const card = (b) => `<button type="button" class="optcard sb-offer" aria-pressed="${sel.includes(b.id)}" data-act="sb-offer" data-v="${esc(b.id)}"><b>${esc(b.role)}</b><span>${esc(b.blurb)}</span><span class="sb-offer-m">${esc([RN.w.label('engagementType', b.engagementType), b.hoursPerMonth && RN.w.label('hoursPerMonth', b.hoursPerMonth), b.term && RN.w.label('term', b.term)].filter(Boolean).join(' · '))}</span></button>`;
+    if (!bps.length) return '<p class="small muted">Blueprints are not loaded in this view.</p>';
+    return `${mine.length ? `<div class="optcards sb-offers" role="group" aria-label="Blueprints in ${esc(RN.fields.catLabel(op.catKey))}">${mine.map(card).join('')}</div>` : ''}
+      ${rest.length ? `<details class="sb-more-tags" ${!mine.length || rest.some((b) => sel.includes(b.id)) ? 'open' : ''}><summary>${icon('chev-down')}Blueprints in other role categories (${rest.length})</summary><div class="optcards sb-offers" role="group" aria-label="Blueprints in other role categories">${rest.map(card).join('')}</div></details>` : ''}
+      <input type="hidden" name="offers" value="${esc(sel.join('|'))}" data-multi="1">
+      <p class="small muted" data-offer-count aria-live="polite">${sel.length} of ${OFFER_MAX} selected · <a class="link" href="#blueprints">What a Blueprint includes</a></p>`;
+  }
+  RN.actions['sb-offer'] = (el) => {
+    const form = el.closest('form');
+    const input = form.querySelector('input[name="offers"]');
+    let vals = input.value ? input.value.split('|') : [];
+    const v = el.dataset.v;
+    if (vals.includes(v)) vals = vals.filter((x) => x !== v);
+    else if (vals.length >= OFFER_MAX) { RN.ui.toast(`Pick up to ${OFFER_MAX}. Remove one to add another.`, { icon: 'info' }); return; }
+    else vals.push(v);
+    input.value = vals.join('|');
+    RN.$$('[data-act="sb-offer"]', form).forEach((b) => b.setAttribute('aria-pressed', vals.includes(b.dataset.v)));
+    const c = form.querySelector('[data-offer-count]');
+    if (c) c.firstChild.textContent = `${vals.length} of ${OFFER_MAX} selected · `;
+    markDirty(form);
+  };
+
+  /* ---------- Photo and intro video ---------- */
+  function mediaInner(op) {
+    return `<div class="sb-media">
+      <div class="sb-media-prev" data-photo-prev aria-hidden="true">${op.photo ? `<img src="${esc(op.photo)}" alt="">` : `<span>${esc(op.initials)}</span>`}</div>
+      <div class="stack grow" style="--gap:18px">
+        <div class="field"><label for="sb-photo">Photo URL</label><input class="input" type="url" inputmode="url" id="sb-photo" name="photo" value="${esc(op.photo || '')}" placeholder="https://example.com/headshot.jpg" spellcheck="false" data-input="sb-photo-prev"><p class="help">A link to a square headshot, JPG or PNG. Shown on your card and profile.</p></div>
+        <div class="field"><label for="sb-video">Intro video URL <span class="opt">Optional</span></label><input class="input" type="url" inputmode="url" id="sb-video" name="video" value="${esc(op.video || '')}" placeholder="https://example.com/intro.mp4" spellcheck="false"><p class="help">A link to an MP4 file, 60 to 90 seconds. It plays at the top of your profile.</p></div>
+      </div>
+    </div>`;
+  }
+  const urlOk = (v) => !v || /^(https?:\/\/|assets\/|\.?\/)/i.test(v);
+  RN.inputs['sb-photo-prev'] = (el) => {
+    markDirty(el.closest('form'));
+    const box = document.querySelector('[data-photo-prev]');
+    const v = el.value.trim();
+    if (box) box.innerHTML = v && urlOk(v) ? `<img src="${esc(v)}" alt="">` : `<span>${esc(RN.myOp().initials)}</span>`;
+  };
+
+  /* ---------- The page ---------- */
+  const PROF_NAV = [['sb-f-about', 'About'], ['sb-f-media', 'Photo and video'], ['sb-f-avail', 'Availability'], ['sb-f-fit', 'Company fit'], ['sb-f-sell', 'How you sell'], ['sb-f-role', 'Role details'], ['sb-f-eng', 'Engagements'], ['sb-f-samples', 'Work samples'], ['sb-f-offers', 'Ways to work with me'], ['sb-f-tags', 'Fit tags']];
   function renderProfile(op) {
     applyExtras(op);
+    S.dirty = false;
     const e = edits(op);
     const roleKeys = (RN.fields.roleFields[op.catKey] || []).filter((k) => !SHOWN_ELSEWHERE.includes(k));
     const claimedCount = op.tags.filter((t) => t.tier === 'claimed' && !(e.addTags || []).includes(t.t)).length;
     const room = Math.max(0, RN.fields.fitTags.max - claimedCount);
+    const engs = (op.engagements || []).slice().sort(byRecent);
+    const samples = e.samples || [];
     const sec = (id, title, sub, inner) => `<section class="card sb-sec-card" id="${id}" aria-labelledby="${id}-h"><div class="card-hd"><div><h3 id="${id}-h">${title}</h3>${sub ? `<p class="sub">${sub}</p>` : ''}</div></div><div class="stack" style="--gap:22px">${inner}</div></section>`;
+    const addEng = S.addEng; S.addEng = false;
+    S.removedEng = new Set();
+    const preview = (cls) => `<button type="button" class="btn btn-line btn-sm ${cls || ''}" data-act="sb-prof-preview">${icon('eye')}Preview as client</button>`;
     return `<div class="sb sb-profile">
-      ${head('Edit profile', 'The same fields as sign-up, so clients filter and match on exactly what you enter here.', `<a class="btn btn-line btn-sm" href="#op.${esc(op.slug)}">${icon('eye')}Preview as client</a><button type="submit" class="btn btn-sm" form="sb-prof-form">Save changes</button>`)}
+      ${head('Edit profile', 'The same fields as sign-up, so clients filter and match on exactly what you enter here.', `${preview()}<button type="submit" class="btn btn-sm" form="sb-prof-form">Save changes</button>`)}
+      <nav class="sb-jump" aria-label="Profile sections">${PROF_NAV.filter(([id]) => id !== 'sb-f-role' || roleKeys.length).map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}</nav>
       <div class="sb-prof">
         <form id="sb-prof-form" class="sb-prof-main stack" style="--gap:18px" data-submit="sb-prof-save" data-input="sb-prof-dirty" data-change="sb-prof-dirty" novalidate>
           ${sec('sb-f-about', 'Headline and about', 'The first two things a client reads about you.',
             RN.w.field('headline', op.headline, { name: 'headline' }) + RN.w.field('bio', op.bio, { name: 'bio' }))}
+          ${sec('sb-f-media', 'Photo and intro video', 'Cards with a photo are opened more often. A short video helps a client decide before the first call.', mediaInner(op))}
           ${sec('sb-f-avail', 'Availability and rate', 'Clients filter on these first. Keep them current.',
             RN.w.field('availability', op.avail.key, { name: 'availability' })
             + `<div class="grid g-2" style="--gap:18px">${RN.w.field('startDate', op.avail.startDate || '', { name: 'startDate' })}${RN.w.field('newClientCapacity', op.newClientCapacity || '', { name: 'newClientCapacity' })}</div>`
@@ -1304,10 +1678,19 @@
             + RN.w.field('methodologies', op.methodologies || [], { name: 'methodologies' }))}
           ${roleKeys.length ? sec('sb-f-role', `Role details: ${esc(RN.fields.catLabel(op.catKey))}`, 'Shown in the Operating range section of your profile.',
             roleKeys.map((k) => RN.w.field(k, roleValue(op, k), { name: 'rf_' + k, id: 'sb-rf-' + k })).join('')) : ''}
+          ${sec('sb-f-eng', 'Engagement history', `${engs.length} ${engs.length === 1 ? 'engagement' : 'engagements'}. Each one turns Client-verified when that client leaves a review.`,
+            `<div class="sb-englist-edit" data-eng-list>${engs.map((g) => engItem(op, g, engStatus(op, g))).join('')}${addEng ? engItem(op, { id: newId('eng-new'), company: '', role: op.role, engagementType: 'fractional' }, null, { open: true, isNew: true }) : ''}</div>
+            ${engs.length || addEng ? '' : `<p class="sb-caught" data-eng-empty>${icon('briefcase')}No engagements yet. Add your recent clients so prospects can see stage and deal-size fit.</p>`}
+            <div><button type="button" class="btn btn-line btn-sm" data-act="sb-eng-add">${icon('plus')}Add an engagement</button></div>`)}
+          ${sec('sb-f-samples', 'Work samples', 'Playbooks, frameworks and templates from your engagements. Add the title and details here; file upload comes later.',
+            `<div class="sb-englist-edit" data-smp-list>${samples.map((x) => sampleItem(op, x)).join('')}</div>
+            ${samples.length ? '' : `<p class="sb-caught" data-smp-empty>${icon('doc')}No work samples added here yet.</p>`}
+            <div><button type="button" class="btn btn-line btn-sm" data-act="sb-smp-add">${icon('plus')}Add a work sample</button></div>`)}
+          ${sec('sb-f-offers', 'Ways to work with me', `Pick up to ${OFFER_MAX} Engagement Blueprints you offer as packaged engagements. Blueprints in ${esc(RN.fields.catLabel(op.catKey))} come first.`, offersInner(op))}
           ${sec('sb-f-tags', 'Fit tags', `${op.tags.length} on your profile. Up to ${RN.fields.fitTags.max} self-claimed tags; verified tags don’t count toward the limit.`,
             `<div class="sb-curtags"><span class="label">On your profile</span><div class="opc-tags">${op.tags.slice().sort((a, b) => (a.tier === 'claimed') - (b.tier === 'claimed')).map((t) => RN.ui.ftag(t)).join('')}</div></div>`
             + RN.w.field('fitTags', e.addTags || [], { name: 'addTags', id: 'sb-addtags', max: room || 1, cat: op.catKey, label: 'Add fit tags', help: room ? `Room for ${room} more. Each new tag starts as claimed and turns Verified when a client review confirms it.` : 'You are at the limit. Ask clients to verify tags to free up room.' }))}
-          <div class="sb-savebar"><span class="small muted" data-dirty>Changes go live on your profile when you save.</span><a class="btn btn-line btn-sm" href="#op.${esc(op.slug)}">Preview as client</a><button type="submit" class="btn btn-sm">Save changes</button></div>
+          <div class="sb-savebar"><span class="small muted" data-dirty aria-live="polite">Changes go live on your profile when you save.</span>${preview('sb-savebar-prev')}<button type="submit" class="btn btn-sm">Save changes</button></div>
         </form>
         <aside class="sb-rail" id="sb-rail" aria-label="Profile strength and availability">${railHtml(op)}</aside>
       </div>
@@ -1328,8 +1711,9 @@
   function railHtml(op) {
     const list = RN.model.checklist(op);
     const done = list.filter((x) => x.done), todo = list.filter((x) => !x.done);
-    const target = { headline: 'sb-f-about', bio: 'sb-f-about', rate: 'sb-f-avail', avail: 'sb-f-avail', ranges: 'sb-f-fit', industries: 'sb-f-fit', role: 'sb-f-role', tags: 'sb-f-tags' };
-    const cred = { verified: 1, reviews: 1, engagements: 1 };
+    const target = { headline: 'sb-f-about', bio: 'sb-f-about', photo: 'sb-f-media', video: 'sb-f-media', rate: 'sb-f-avail', avail: 'sb-f-avail', ranges: 'sb-f-fit', industries: 'sb-f-fit', role: 'sb-f-role', engagements: 'sb-f-eng', samples: 'sb-f-samples', tags: 'sb-f-tags' };
+    if (!(RN.fields.roleFields[op.catKey] || []).some((k) => !SHOWN_ELSEWHERE.includes(k))) delete target.role;
+    const cred = { verified: 1, reviews: 1 };
     const a = alerts();
     const e = edits(op);
     const conf = e.availConfirmedAt;
@@ -1354,17 +1738,62 @@
         </div>
         <button type="button" class="btn btn-line btn-sm btn-block" data-act="sb-avail-confirm">${icon('check')}I’m still available</button>
         <p class="tiny muted">Clients see when you last confirmed. One tap keeps it current.</p>
-        <div class="sb-alert-row"><span class="field-label">New matching projects</span>
-          <div class="seg" role="group" aria-label="New matching projects">${[['instant', 'Instant'], ['daily', 'Daily digest'], ['off', 'Off']].map(([k, l]) => `<button type="button" aria-pressed="${a.projects === k}" data-act="sb-alert" data-k="projects" data-v="${k}">${l}</button>`).join('')}</div></div>
+        <div class="sb-alert-row"><span class="field-label" id="sb-al-proj">New matching projects</span>
+          <div class="seg" role="group" aria-labelledby="sb-al-proj">${[['instant', 'Instant'], ['daily', 'Daily digest'], ['off', 'Off']].map(([k, l]) => `<button type="button" aria-pressed="${a.projects === k}" data-act="sb-alert" data-k="projects" data-v="${k}">${l}</button>`).join('')}</div></div>
         <label class="switch sb-alert-row"><input type="checkbox" data-change="sb-alert-weekly" ${a.weekly ? 'checked' : ''}><i></i><span>Weekly visibility digest<br><span class="tiny muted">Searches you appeared in and who viewed you.</span></span></label>
       </section>`;
   }
   function refreshRail() { const el = document.getElementById('sb-rail'); const op = RN.myOp(); if (el && op) el.innerHTML = railHtml(applyExtras(op)); }
 
-  RN.inputs['sb-prof-dirty'] = (el) => {
-    const bar = el.closest('.sb-profile') && el.closest('.sb-profile').querySelector('[data-dirty]');
+  /* ---------- Unsaved changes: mark, guard navigation, save before preview ---------- */
+  function markDirty(form) {
+    S.dirty = true;
+    const bar = (form || document).querySelector('[data-dirty]');
     if (bar) { bar.textContent = 'Unsaved changes'; bar.classList.add('is-dirty'); }
+  }
+  RN.inputs['sb-prof-dirty'] = (el, ev) => {
+    markDirty(el);
+    const t = ev && ev.target;
+    // Keep the engagement and sample headings in step with what is typed
+    if (t && t.name && /^eng__.+__company$/.test(t.name)) { const b = t.closest('[data-eng-id]').querySelector('[data-eng-title]'); if (b) b.textContent = t.value.trim() || 'New engagement'; }
+    if (t && t.name && /^smp__.+__title$/.test(t.name)) { const b = t.closest('[data-smp-id]').querySelector('[data-smp-title]'); if (b) b.textContent = t.value.trim() || 'New work sample'; }
   };
+  const profForm = () => document.getElementById('sb-prof-form');
+  const leaving = () => S.dirty && !!profForm();
+  function guardLeave(go) {
+    RN.ui.modal({
+      width: 460,
+      title: 'Save your changes?',
+      sub: 'You have unsaved changes on your profile.',
+      foot: `<button type="button" class="btn btn-line" data-act="sb-leave" data-save="">Discard changes</button><button type="button" class="btn" data-act="sb-leave" data-save="1">Save and continue</button>`,
+    });
+    S.leaveTo = go;
+  }
+  RN.actions['sb-leave'] = (el) => {
+    const go = S.leaveTo; S.leaveTo = null;
+    RN.ui.closeModal();
+    if (el.dataset.save) { if (!saveProfile(profForm(), { quiet: true })) return; }
+    S.dirty = false;
+    if (go) go();
+  };
+  // Links and route actions that would drop unsaved edits ask first (sidebar, header, toasts, dock)
+  document.addEventListener('click', (ev) => {
+    if (!leaving()) return;
+    const a = ev.target.closest && ev.target.closest('a[href^="#"], [data-act="go"], [data-act="persona"], [data-act="journey"]');
+    if (!a || a.closest('.modal') || a.getAttribute('href') === '#') return;
+    const href = a.getAttribute('href');
+    if (href && href.startsWith('#sb-')) return;
+    ev.preventDefault(); ev.stopPropagation();
+    guardLeave(() => { if (href) RN.go(href.slice(1)); else { const fn = RN.actions[a.dataset.act]; if (fn) fn(a, ev); } });
+  }, true);
+  window.addEventListener('beforeunload', (ev) => { if (leaving()) { ev.preventDefault(); ev.returnValue = ''; } });
+  RN.actions['sb-prof-preview'] = () => {
+    const op = RN.myOp();
+    if (S.dirty && !saveProfile(profForm(), { quiet: true })) return;
+    S.dirty = false;
+    RN.go('op.' + op.slug);
+  };
+
   RN.actions['sb-avail-confirm'] = () => {
     const op = RN.myOp();
     const today = todayISO();
@@ -1387,16 +1816,63 @@
     RN.ui.toast(el.checked ? 'Weekly visibility digest on.' : 'Weekly visibility digest off.', { icon: 'mail' });
   };
 
-  RN.submits['sb-prof-save'] = (form, d) => {
+  /* ---------- Save ---------- */
+  const engNorm = (g) => ({ company: g.company || '', role: g.role || '', start: g.start || '', end: g.end || '', engagementType: engTypeOf(g), revenueRange: g.revenueRange || '', employeeRange: g.employeeRange || '', industry: g.industry || '' });
+  function readEngagements(form, op, prev) {
+    const prevById = new Map((prev.engagements || []).map((x) => [x.id, x]));
+    const out = [];
+    const seen = new Set();
+    let err = '';
+    RN.$$('[data-eng-id]', form).forEach((box) => {
+      const id = box.dataset.engId;
+      seen.add(id);
+      if (box.dataset.locked) { if (prevById.has(id)) out.push(prevById.get(id)); return; }
+      const val = (k) => { const el = box.querySelector(`[name="eng__${id}__${k}"]`); return el ? el.value.trim() : ''; };
+      const g = { id, company: val('company'), role: val('role'), start: val('start'), end: val('end'), engagementType: val('engagementType') || 'fractional', revenueRange: val('revenueRange'), employeeRange: val('employeeRange'), industry: val('industry') };
+      if (box.dataset.engNew && !g.company && !g.start) return; // an untouched new row is dropped
+      if (!err && !g.company) err = 'Add the company for each engagement.';
+      if (!err && !g.start) err = `Add the start month for ${g.company}.`;
+      if (!err && g.end && g.end < g.start) err = `The end month for ${g.company} is before the start.`;
+      const cur = (op.engagements || []).find((x) => x.id === id);
+      const changed = !cur || JSON.stringify(engNorm(cur)) !== JSON.stringify(engNorm(g));
+      if (box.dataset.engNew || prevById.has(id) || changed) out.push(Object.assign(g, { months: monthsBetween(g.start, g.end) }));
+    });
+    // Entries saved elsewhere since this page rendered (e.g. "Another engagement" in a review request) are kept
+    (prev.engagements || []).forEach((x) => { if (!seen.has(x.id) && !(S.removedEng || new Set()).has(x.id)) out.push(x); });
+    return { list: out, err };
+  }
+  function readSamples(form) {
+    const out = [];
+    RN.$$('[data-smp-id]', form).forEach((box) => {
+      const id = box.dataset.smpId;
+      const val = (k) => { const el = box.querySelector(`[name="smp__${id}__${k}"]`); return el ? el.value.trim() : ''; };
+      const title = val('title');
+      if (!title) return;
+      const skills = val('skills');
+      out.push({ id, type: val('type') || 'Playbook', title, at: val('at'), pages: +val('pages') || null, skills: skills ? skills.split('|').filter(Boolean) : [] });
+    });
+    return out;
+  }
+  function saveProfile(form, o) {
+    o = o || {};
+    if (!form) return true;
+    const d = RN.ui.formData(form);
     const op = RN.myOp();
     const prev = edits(op);
     const num = (v) => (v === '' || v == null ? null : +v);
-    if (d.rate && +d.rate < RN.fields.rate.min) { RN.ui.toast(`Hourly rate starts at $${RN.fields.rate.min}.`, { icon: 'info' }); return; }
-    if (d.newClientCapacity && (+d.newClientCapacity < 1 || +d.newClientCapacity > 10)) { RN.ui.toast('New client capacity is 1 to 10 clients.', { icon: 'info' }); return; }
+    const fail = (m, id) => { RN.ui.toast(m, { icon: 'info' }); const el = id && document.getElementById(id); if (el) { const box = el.closest('details'); if (box) box.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } return false; };
+    if (d.rate && +d.rate < RN.fields.rate.min) return fail(`Hourly rate starts at $${RN.fields.rate.min}.`);
+    if (d.newClientCapacity && (+d.newClientCapacity < 1 || +d.newClientCapacity > 10)) return fail('New client capacity is 1 to 10 clients.');
+    const photo = (d.photo || '').trim(), video = (d.video || '').trim();
+    if (!urlOk(photo)) return fail('The photo URL should start with https://', 'sb-photo');
+    if (!urlOk(video)) return fail('The intro video URL should start with https://', 'sb-video');
+    const eng = readEngagements(form, op, prev);
+    if (eng.err) return fail(eng.err, 'sb-f-eng');
     const roleFields = {};
     (RN.fields.roleFields[op.catKey] || []).filter((k) => !SHOWN_ELSEWHERE.includes(k)).forEach((k) => {
       const t = RN.fields[k].type;
       const v = d['rf_' + k];
+      if (v === undefined) return;
       roleFields[k] = t === 'number' || t === 'money' ? num(v) : t === 'multi' ? v || [] : v || '';
     });
     const next = {
@@ -1405,7 +1881,9 @@
       newClientCapacity: num(d.newClientCapacity), engagementTypes: d.engagementTypes || [],
       revenueRanges: d.revenueRange || [], employeeRanges: d.employeeRange || [], industries: d.industries || [],
       motions: d.salesMotions || [], crm: d.crm || '', methodologies: d.methodologies || [],
-      addTags: d.addTags || [], roleFields,
+      // Merge, so role details set elsewhere (Admin, intake) are kept
+      addTags: d.addTags || [], roleFields: Object.assign({}, prev.roleFields, roleFields),
+      engagements: eng.list, samples: readSamples(form), photo, video, offers: (d.offers || []).slice(0, OFFER_MAX),
     };
     // Tags removed from the "Add fit tags" picker come off the profile (only never-verified ones)
     const dropped = (prev.addTags || []).filter((t) => !next.addTags.includes(t));
@@ -1413,18 +1891,26 @@
     RN.store.update((s) => { s.edits[op.id] = Object.assign({}, s.edits[op.id], next); }, 'edits');
     RN.model.applyEdits();
     applyExtras(op);
-    RN.ui.toast('Profile saved. Clients see the changes now.', { action: { label: 'Preview as client', act: 'go', attrs: `data-to="op.${esc(op.slug)}"` }, ms: 5000 });
-    RN.rerender();
-  };
+    S.dirty = false;
+    if (!o.quiet) {
+      RN.ui.toast('Profile saved. Clients see the changes now.', { action: { label: 'Preview as client', act: 'go', attrs: `data-to="op.${esc(op.slug)}"` }, ms: 5000 });
+      RN.rerender();
+    }
+    return true;
+  }
+  RN.submits['sb-prof-save'] = (form) => { saveProfile(form); };
 
   /* ======================================================================
      Register tabs
      ====================================================================== */
   RN.studio.tab('inbox', { label: 'Inbox', icon: 'inbox', group: 'Work', order: 5, badge: (op) => inboxBadge(op), render: (op) => renderInbox(op) });
-  RN.studio.tab('credibility', { label: 'Credibility', icon: 'shield', group: 'Grow', order: 6, render: (op) => renderCredibility(op) });
+  RN.studio.tab('credibility', { label: 'Credibility', icon: 'shield', group: 'Grow', order: 6, render: (op) => renderCredibility(op), mount: () => focusSection() });
   RN.studio.tab('opportunities', { label: 'Opportunities', icon: 'target', group: 'Work', order: 7, badge: () => 0, render: (op) => renderOpps(op) });
-  RN.studio.tab('profile', { label: 'Edit profile', icon: 'edit', group: 'Grow', order: 8, render: (op) => renderProfile(op) });
+  RN.studio.tab('profile', { label: 'Edit profile', icon: 'edit', group: 'Grow', order: 8, render: (op) => renderProfile(op), mount: () => focusSection() });
 
-  // Hand-off helpers other surfaces can reuse
-  RN.studioB = { openReviewRequest, openProofModal, inboxBadge, projStage };
+  /* Hand-off helpers other surfaces can reuse (Studio A's next best action, profile edit shortcuts):
+     openReviewRequest({engId, company, verify, reviewer}) and openProofModal({company, contact}) open their flows as modals;
+     editSection('engagements' | 'samples' | 'media' | 'offers' | 'about' | ...) opens Edit profile at that section
+     (or use data-act="sb-edit" data-sec="..." in markup); engStatus(op, engagement) gives none | sent | verified. */
+  RN.studioB = { openReviewRequest, openProofModal, editSection, engStatus: (op, g) => engStatus(op, g).k, proofQuota, inboxBadge, projStage };
 })();

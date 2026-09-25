@@ -412,6 +412,99 @@
     }
     return { series, rand, catDemand };
   }
+  /* Helpers used only by M.analytics */
+  const visitsOf = (s) => s.views + s.shortlists + s.compares;
+  // Readable label for one browse filter value, in the registry's words ('' when the value filters nothing)
+  function filterLabel(k, v) {
+    const L = (f, x) => RN.w.label(f, x);
+    switch (k) {
+      case 'roleCategories': return F.roleCategory.label + ': ' + F.catLabel(v);
+      case 'industries': return F.industry.label + ': ' + L('industries', v);
+      case 'revenueRange': return 'Company revenue: ' + L('revenueRange', v);
+      case 'employeeRange': return F.employeeRange.label + ': ' + L('employeeRange', v);
+      case 'availability': return F.availability.label + ': ' + L('availability', v);
+      case 'hoursPerMonth': return String(v) === '19' ? '' : F.hoursPerMonth.label + ': at least ' + L('hoursPerMonth', v);
+      case 'engagementTypes': return F.engagementType.label + ': ' + L('engagementTypes', v);
+      case 'salesMotions': return F.salesMotions.label + ': ' + L('salesMotions', v);
+      case 'rateMax': return +v >= F.rateMax.max ? '' : 'Hourly rate: up to $' + Math.round(+v);
+      case 'risMin': return F.risMin.label + ': ' + L('risMin', v);
+      default: return '';
+    }
+  }
+  /* Segments under 5 visits: first try one-field groups of 5+ (revenue, employee range, then industry), taking the
+     biggest group each time so no visit counts twice. Whatever is left is "Other companies". */
+  function groupSmall(small) {
+    let pool = small.slice();
+    const groups = [];
+    for (;;) {
+      let best = null;
+      ['revenueRange', 'employeeRange', 'industry'].forEach((dim) => {
+        const m = {};
+        pool.forEach((s) => {
+          if (!s[dim]) return;
+          const g = m[s[dim]] || (m[s[dim]] = { dim, v: s[dim], views: 0, shortlists: 0, compares: 0, last: s.last });
+          g.views += s.views; g.shortlists += s.shortlists; g.compares += s.compares;
+          if (s.last > g.last) g.last = s.last;
+        });
+        Object.values(m).forEach((g) => { if (visitsOf(g) >= 5 && (!best || visitsOf(g) > visitsOf(best))) best = g; });
+      });
+      if (!best) break;
+      groups.push(best);
+      pool = pool.filter((s) => s[best.dim] !== best.v);
+    }
+    return { groups, other: pool.reduce((a, s) => a + visitsOf(s), 0) };
+  }
+  /* What the picked operator had that this one did not. Anonymized: category and tier only, never a name. */
+  const AVAIL_RANK = { available_now: 0, available_2_weeks: 1, available_2_plus_weeks: 2 };
+  function lostRow(op, p, industry) {
+    const edge = [];
+    if (industry && p.industries.includes(industry) && !op.industries.includes(industry)) edge.push('experience in ' + RN.w.label('industries', industry));
+    if (p.reviews.length > op.reviews.length) edge.push('more client reviews');
+    if (p.tags.filter((t) => t.tier !== 'claimed').length > op.tags.filter((t) => t.tier !== 'claimed').length) edge.push('more client-verified focus areas');
+    if ((AVAIL_RANK[p.avail.key] || 0) < (AVAIL_RANK[op.avail.key] || 0)) edge.push('could start sooner');
+    if (p.rate && op.rate && p.rate < op.rate * 0.9) edge.push('a lower rate');
+    if (p.video && !op.video) edge.push('an intro video');
+    const other = p.industries.find((i) => !op.industries.includes(i));
+    if (edge.length < 2 && other && !edge.some((e) => /^experience in/.test(e))) edge.push('experience in ' + RN.w.label('industries', other));
+    if (!edge.length) edge.push('a closer stage fit');
+    return { who: `An operator in ${F.catLabel(p.catKey)}, ${p.ris.label} tier`, cat: p.catKey, tier: p.ris.label, edge: edge.slice(0, 3) };
+  }
+  /* Loop 3: a client compared this operator with others (compare_view, meta.with) and then, within 14 days, asked
+     to meet, selected or shortlisted one of the others and not this operator. Released 7 days after the decision. */
+  function lostFromEvents(op) {
+    const all = (RN.store && RN.store.state.events) || [];
+    const now = RN.now().getTime();
+    const ms = (e) => new Date(e.ts).getTime();
+    const client = (e) => e.persona === 'buyer' || e.persona === 'visitor';
+    const who = (e) => (e.buyer && e.buyer.name) || '';
+    const same = (a, b) => !who(a) || !who(b) || who(a) === who(b);
+    const cmps = all.filter((e) => e.type === 'compare_view' && e.opId === op.id && client(e) && e.meta && (e.meta.with || []).length && now - ms(e) < 97 * DAY);
+    const acts = all.filter((e) => client(e) && ['intro_request', 'project_select', 'shortlist_add'].includes(e.type));
+    const byKey = {};
+    let pending = 0, until = null;
+    cmps.forEach((c) => {
+      const after = acts.filter((d) => same(c, d) && ms(d) >= ms(c) - 6e4 && ms(d) - ms(c) <= 14 * DAY);
+      if (after.some((d) => d.opId === op.id && d.type !== 'shortlist_add')) return;           // they chose you
+      const strong = after.filter((d) => d.type !== 'shortlist_add' && c.meta.with.includes(d.opId));
+      const soft = after.filter((d) => d.type === 'shortlist_add' && c.meta.with.includes(d.opId));
+      const pick = strong[0] || (soft.length && !after.some((d) => d.opId === op.id) ? soft[0] : null);
+      if (!pick) return;
+      const key = (who(c) || 'anon') + '|' + pick.opId;
+      if (byKey[key]) return;                                                                  // one decision, logged once
+      const release = ms(pick) + 7 * DAY;
+      if (now < release) { byKey[key] = { pending: true }; pending += 1; until = until == null ? release : Math.min(until, release); return; }
+      const p = M.byId(pick.opId);
+      if (!p) return;
+      byKey[key] = Object.assign(lostRow(op, p, c.buyer && c.buyer.industry), { key: 'live|' + key, n: 1, picked: strong[0] ? (pick.type === 'project_select' ? 'selected' : 'requested an intro') : 'shortlisted', live: true, ts: pick.ts });
+    });
+    const rows = [];
+    Object.values(byKey).filter((x) => !x.pending).forEach((r) => {
+      // Batch: the same kind of operator picked for the same reason reads as one row with a count
+      const hit = rows.find((x) => x.who === r.who && x.picked === r.picked);
+      if (hit) hit.n += 1; else rows.push(r);
+    });
+    return { rows, pending: pending ? { n: pending, until: new Date(until).toISOString() } : null };
+  }
   M.analytics = function (opId, o) {
     o = o || {};
     const days = o.days || 30;
@@ -433,25 +526,50 @@
     const proofViews = ((RN.store && RN.store.state.proofLinks) || []).filter((p) => p.opId === opId).reduce((a, p) => a + p.views.length, 0);
     const prevT = { impressions: sum(prev, 'imp'), views: sum(prev, 'views'), shortlists: Math.round(sum(prev, 'views') * 0.085), compares: Math.round(sum(prev, 'views') * 0.11), intros: since(days * 2, days) + Math.round(sum(prev, 'views') * 0.015) };
 
-    // Why you appeared: queries in your category or tags, weighted
+    // Why you appeared: queries in your category or tags, weighted (illustrative), then this session's live searches
     const Q = RN.data.market.queries;
     const opTags = op.tags.map((t) => t.t.toLowerCase());
     const qs = Q.filter((q) => q.cat === op.catKey || q.tags.some((t) => opTags.includes(t.toLowerCase())))
-      .map((q) => { const hit = q.tags.filter((t) => opTags.includes(t.toLowerCase())); return { q: q.q, tags: hit, n: Math.round(q.vol * (0.05 + hit.length * 0.05) * (0.6 + rand() * 0.8) * (days / 30)) }; })
+      .map((q) => { const hit = q.tags.filter((t) => opTags.includes(t.toLowerCase())); const n = Math.round(q.vol * (0.05 + hit.length * 0.05) * (0.6 + rand() * 0.8) * (days / 30)); return { q: q.q, tags: hit, n, clicks: Math.round(n * (0.04 + rand() * 0.06)) }; })
       .filter((q) => q.n > 0);
-    ev.filter((e) => e.type === 'impression' && e.q).forEach((e) => { const x = qs.find((q) => q.q.toLowerCase() === e.q.toLowerCase()); if (x) x.n += 1; else qs.push({ q: e.q, tags: [], n: 1, live: true }); });
+    // A profile view opened from a search result within 30 minutes of a live impression counts as a click on that term
+    const pv = ev.filter((e) => e.type === 'profile_view');
+    const usedPv = new Set();
+    ev.filter((e) => e.type === 'impression' && e.q).slice().reverse().forEach((e) => {
+      const key = String(e.q).trim().toLowerCase();
+      let x = qs.find((q) => q.q.toLowerCase() === key);
+      if (x) { x.n += 1; x.live = true; } else { x = { q: String(e.q).trim(), tags: [], n: 1, clicks: 0, live: true }; qs.push(x); }
+      const gap = (v) => new Date(v.ts) - new Date(e.ts);
+      const hit = pv.find((v) => !usedPv.has(v.id) && v.persona === e.persona && (v.q ? String(v.q).trim().toLowerCase() === key : ['card', 'search'].includes(v.source)) && gap(v) >= 0 && gap(v) < 30 * 6e4);
+      if (hit) { usedPv.add(hit.id); x.clicks += 1; }
+    });
     qs.sort((a, b) => b.n - a.n);
     const qTotal = qs.reduce((a, q) => a + q.n, 0) || 1;
-    qs.forEach((q) => { q.share = q.n / qTotal; q.clicks = Math.round(q.n * (0.04 + rand() * 0.06)); });
+    qs.forEach((q) => { q.share = q.n / qTotal; q.clicks = Math.min(q.clicks, q.n); });
 
-    // Filters clients applied when you showed up
-    const filters = [
-      { l: RN.fields.roleCategory.label + ': ' + RN.fields.catLabel(op.catKey), n: Math.round(impressions * 0.46) },
-      op.industries[0] && { l: 'Industries: ' + RN.w.label('industries', op.industries[0]), n: Math.round(impressions * 0.21) },
-      op.revenueRanges[0] && { l: 'Company revenue: ' + RN.w.label('revenueRange', op.revenueRanges[op.revenueRanges.length - 1]), n: Math.round(impressions * 0.17) },
-      { l: 'Availability: Available now', n: Math.round(impressions * 0.14) },
-      { l: 'Reputation Index: 70+', n: Math.round(impressions * 0.06) },
-    ].filter(Boolean);
+    // Filters clients had on when your card showed: live impression filters, plus illustrative rows this operator
+    // can actually satisfy (a filter that would have hidden them is never listed)
+    const baseImp = sum(cur, 'imp');
+    const fl = {};
+    const addF = (k, v, n, isLive) => {
+      const l = filterLabel(k, v);
+      if (!l || !n) return;
+      const x = fl[l] || (fl[l] = { l, k, v, n: 0, liveN: 0 });
+      x.n += n;
+      if (isLive) x.liveN += n;
+    };
+    addF('roleCategories', op.catKey, Math.round(baseImp * 0.46));
+    if (op.industries[0]) addF('industries', op.industries[0], Math.round(baseImp * 0.21));
+    if (op.revenueRanges.length) addF('revenueRange', op.revenueRanges[op.revenueRanges.length - 1], Math.round(baseImp * 0.17));
+    if (op.avail.key === 'available_now') addF('availability', 'available_now', Math.round(baseImp * 0.14));
+    else {
+      const hrs = F.hoursPerMonth.options.map((x) => x.v).filter((h) => +h >= 20 && +h <= 40 && +op.avail.hoursCode >= +h).pop();
+      if (hrs) addF('hoursPerMonth', hrs, Math.round(baseImp * 0.12));
+    }
+    const risT = F.risMin.options.map((x) => x.v).filter((v) => op.ris.score >= +v).pop();
+    if (risT) addF('risMin', risT, Math.round(baseImp * 0.06));
+    ev.filter((e) => e.type === 'impression' && e.filters).forEach((e) => Object.keys(e.filters).forEach((k) => [].concat(e.filters[k]).filter((v) => v !== '' && v != null).forEach((v) => addF(k, v, 1, true))));
+    const filters = Object.values(fl).sort((a, b) => b.n - a.n).map((x) => Object.assign(x, { live: x.liveN > 0 }));
 
     // Who viewed: firmographic segments (no company names)
     const C = RN.data.market.companies;
@@ -462,38 +580,40 @@
       segs[k][kind] += 1;
       if (ts > segs[k].last) segs[k].last = ts;
     };
-    for (let i = 0; i < views; i++) {
+    const baseViews = sum(cur, 'views');
+    for (let i = 0; i < baseViews; i++) {
       const pool = C.filter((c) => op.industries.includes(c.industry) || op.revenueRanges.includes(c.revenueRange));
       const c = rand() < 0.72 && pool.length ? RN.pick(rand, pool) : RN.pick(rand, C);
       const kind = rand() < 0.1 ? 'shortlists' : rand() < 0.12 ? 'compares' : 'views';
       add(c.industry, c.revenueRange, c.employeeRange, kind, new Date(RN.now().getTime() - Math.floor(rand() * days) * DAY).toISOString());
     }
-    ev.filter((e) => e.buyer && (e.type === 'profile_view' || e.type === 'shortlist_add' || e.type === 'compare_add')).forEach((e) => add(e.buyer.industry, e.buyer.revenueRange, e.buyer.employeeRange, e.type === 'profile_view' ? 'views' : e.type === 'shortlist_add' ? 'shortlists' : 'compares', e.ts));
-    let viewers = Object.values(segs).sort((a, b) => (b.views + b.shortlists * 3 + b.compares * 2) - (a.views + a.shortlists * 3 + a.compares * 2));
-    const small = viewers.filter((v) => v.views + v.shortlists + v.compares < 5 && !ev.some((e) => e.buyer && e.buyer.industry === v.industry));
-    viewers = viewers.filter((v) => !small.includes(v));
-    const other = small.reduce((a, v) => a + v.views + v.shortlists + v.compares, 0);
+    const SEG_EV = ['profile_view', 'shortlist_add', 'compare_add'];
+    const segEv = ev.filter((e) => e.buyer && SEG_EV.includes(e.type));
+    segEv.forEach((e) => add(e.buyer.industry, e.buyer.revenueRange, e.buyer.employeeRange, e.type === 'profile_view' ? 'views' : e.type === 'shortlist_add' ? 'shortlists' : 'compares', e.ts));
+    const all = Object.values(segs).sort((a, b) => (b.views + b.shortlists * 3 + b.compares * 2) - (a.views + a.shortlists * 3 + a.compares * 2));
+    // Only the exact segment of a live client in this session is exempt from the 5-visit rule (prototype demo)
+    all.forEach((s) => { s.live = segEv.some((e) => e.buyer.industry === s.industry && e.buyer.revenueRange === s.revenueRange && e.buyer.employeeRange === s.employeeRange); });
+    const viewers = all.filter((s) => visitsOf(s) >= 5 || s.live);
+    const pooled = groupSmall(all.filter((s) => !viewers.includes(s)));
 
     const mix = (key, field) => {
       const m = {};
-      Object.values(segs).forEach((s) => { m[s[key]] = (m[s[key]] || 0) + s.views + s.shortlists + s.compares; });
+      Object.values(segs).forEach((s) => { m[s[key]] = (m[s[key]] || 0) + visitsOf(s); });
       return Object.entries(m).map(([v, n]) => ({ v, l: RN.w.label(field, v), n })).sort((a, b) => b.n - a.n);
     };
 
-    // Compared against, and who was picked instead
+    // Compared, not chosen: this session's decisions first, then illustrative rows. Never names the other operator.
+    const lostLive = lostFromEvents(op);
+    const lost = lostLive.rows.slice();
     const peers = M.ops.filter((x) => x.id !== op.id && x.catKey === op.catKey).slice(0, 40);
-    const lost = [];
-    for (let i = 0; i < Math.min(5, Math.max(2, Math.round(compares / 6))); i++) {
+    const target = Math.min(3, Math.max(2, Math.round(compares / 6)));
+    for (let i = 0; i < 60 && lost.length < target; i++) {
       const p = RN.pick(rand, peers);
-      if (!p || lost.some((l) => l.op.id === p.id)) continue;
-      const edge = [];
-      if (p.tags.filter((t) => t.tier !== 'claimed').length > op.tags.filter((t) => t.tier !== 'claimed').length) edge.push('more client-verified fit tags');
-      if (p.reviews.length > op.reviews.length) edge.push('more client reviews');
-      if (p.avail.key === 'available_now' && op.avail.key !== 'available_now') edge.push('available now');
-      if (p.rate && op.rate && p.rate < op.rate) edge.push('a lower rate');
-      if (p.video && !op.video) edge.push('an intro video');
-      if (!edge.length) edge.push(p.industries.find((x) => !op.industries.includes(x)) ? 'experience in ' + RN.w.label('industries', p.industries.find((x) => !op.industries.includes(x))) : 'a closer stage fit');
-      lost.push({ op: p, n: 1 + Math.floor(rand() * 3), picked: rand() < 0.5 ? 'shortlisted' : 'requested an intro', edge });
+      if (!p || lost.some((l) => l.key === p.id)) continue;
+      const row = lostRow(op, p, null);
+      // Illustrative rows show different kinds of operators and reasons, so each one teaches something
+      if (i < 40 && lost.some((l) => l.who === row.who && l.edge.join() === row.edge.join())) continue;
+      lost.push(Object.assign(row, { key: p.id, n: 1 + Math.floor(rand() * 3), picked: rand() < 0.5 ? 'shortlisted' : 'requested an intro', illus: true }));
     }
 
     // Traffic sources
@@ -514,9 +634,11 @@
       prev: prevT,
       series: { labels, impressions: cur.map((d) => d.imp), views: cur.map((d) => d.views) },
       queries: qs.slice(0, 10).concat(qs.slice(10).filter((q) => q.live)), filters,
-      viewers, otherViewers: other,
+      // viewers: segments with 5+ visits (or this session's live segment); groups: one-field groups of 5+ built from
+      // the smaller segments; otherViewers: what is left, shown only as "Other companies"
+      viewers, groups: pooled.groups, otherViewers: pooled.other,
       mix: { industry: mix('industry', 'industries'), revenue: mix('revenueRange', 'revenueRange'), employees: mix('employeeRange', 'employeeRange') },
-      lost, sources,
+      lost, lostPending: lostLive.pending, sources,
       benchmark: { median, pctile, n: peerViews.length },
       funnel: [{ label: 'Search impressions', value: impressions }, { label: 'Profile views', value: views }, { label: 'Shortlists', value: shortlists }, { label: 'Intro requests', value: intros }],
       live: ev,

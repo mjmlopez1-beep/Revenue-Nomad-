@@ -53,13 +53,17 @@
     </nav>`;
   }
 
+  /* Same page header as Studio and the client Workspace: surface eyebrow, plain Display title (the shared
+     .app-head size, no serif accent), one line of context, optional actions on the right. */
   function head(title, sub, actions) {
     return `<header class="app-head adm-head"><div class="grow"><span class="eyebrow">Revenue Nomad team</span><h1>${title}</h1>${sub ? `<p class="sub">${sub}</p>` : ''}</div>${actions ? `<div class="adm-head-act">${actions}</div>` : ''}</header>`;
   }
   function cardHead(title, sub, right) {
-    return `<div class="adm-card-hd"><div class="grow"><h2>${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ''}</div>${right || ''}</div>`;
+    return `<div class="card-hd adm-card-hd"><div class="grow"><h2 class="h4">${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ''}</div>${right ? `<div class="adm-card-r">${right}</div>` : ''}</div>`;
   }
-  const illus = (txt) => `<span class="pill pill-line adm-illus">${icon('info')}${esc(txt || 'Illustrative')}</span>`;
+  const illus = (txt) => RN.ui.illus(txt);
+  // One caption for KPI rows that blend an illustrative baseline with live session events
+  const blendNote = () => `<p class="tiny muted adm-stats-note">${illus()}<span>Baseline volumes are illustrative. Live searches, views and intro requests from this session are added on top.</span></p>`;
 
   function render(key) {
     hydrate();
@@ -210,8 +214,14 @@
   const opIdFor = (a) => 'op-' + a.id;
 
   // Reads the intake record defensively: seed and Join may name a few keys differently.
+  // Intake stores role details under profile.roleFields (registry keys; older records use profile.roleDetails),
+  // and crm, methodologies, salesMotions and usHours at the top level of profile.
+  const filled = (v) => (Array.isArray(v) ? v.filter((x) => x !== '' && x != null).length > 0 : v !== '' && v != null);
+  const first = (...vs) => vs.find(filled);
+  const appRoleFields = (p) => Object.assign({}, p.roleDetails, p.roleFields);
   function prof(a) {
     const p = a.profile || a;
+    const rd = appRoleFields(p);
     const name = p.name || p.fullName || [p.first, p.last].filter(Boolean).join(' ') || 'New applicant';
     const cat = RN.fields.catKey(p.roleCategory || p.cat || '');
     return {
@@ -220,11 +230,32 @@
       rate: +p.rate || null, availability: p.availability || p.availKey || 'available_now', hoursPerMonth: String(p.hoursPerMonth || p.hoursCode || ''),
       startDate: p.startDate || '', revenueRange: arr(p.revenueRange || p.revenueRanges), employeeRange: arr(p.employeeRange || p.employeeRanges),
       industries: arr(p.industries), fitTags: arr(p.fitTags || p.tags).map((x) => (typeof x === 'string' ? x : x.t)),
-      location: p.location || [p.city, p.region].filter(Boolean).join(', ') || p.country || '', timezone: p.timezone || '',
-      crm: p.crm || '', salesMotions: arr(p.salesMotions), methodologies: arr(p.methodologies), engagementTypes: arr(p.engagementTypes),
-      newClientCapacity: p.newClientCapacity || null, photo: p.photo || '', video: p.video || '', linkedin: p.linkedin || '', roleDetails: p.roleDetails || {},
+      location: p.location || [p.city, p.region].filter(Boolean).join(', ') || p.country || '', timezone: p.timezone || '', country: p.country || '', usHours: p.usHours || '',
+      crm: first(p.crm, rd.crm) || '', salesMotions: arr(first(p.salesMotions, rd.salesMotions)), methodologies: arr(first(p.methodologies, rd.methodologies)), methodologyOther: first(p.methodologyOther, rd.methodologyOther) || '',
+      engagementTypes: arr(p.engagementTypes),
+      newClientCapacity: p.newClientCapacity || null, photo: p.photo || '', video: p.video || '', linkedin: p.linkedin || '', roleFields: rd,
     };
   }
+
+  /* Role details of an application, read from the intake record (profile.roleFields, then top-level profile keys)
+     and printed with the registry's labels. Live operators use RN.roleDetail.text(op, key) instead. */
+  function appRoleText(a, key) {
+    const p = a.profile || a;
+    const rd = appRoleFields(p);
+    const d = RN.fields[key];
+    if (!d) return '';
+    const v = filled(rd[key]) ? rd[key] : p[key];
+    if (!filled(v)) return '';
+    if (d.type === 'multi' || (d.type === 'optcards' && d.multi)) {
+      const other = first(p.methodologyOther, rd.methodologyOther);
+      const list = arr(v).map((x) => (x === 'Other' && key === 'methodologies' && other ? other : RN.w.label(key, x)));
+      return list.join(', ');
+    }
+    if (d.type === 'money') return RN.fmt.usdK(+v);
+    if (d.type === 'number') { const u = d.unit || ''; return RN.fmt.int(+v) + (u ? (u[0] === '%' ? u : ' ' + u) : ''); }
+    return RN.w.label(key, v);
+  }
+  const roleKeys = (cat) => RN.fields.roleFields[cat] || [];
 
   // Builds the live-record shape RN.model.norm expects (see js/data/operators.js), then pins the exact standard slugs.
   function buildOp(a) {
@@ -233,9 +264,16 @@
     const hours = p.hoursPerMonth ? +p.hoursPerMonth : null;
     const tags = p.fitTags.map((x) => { const info = RN.model.tagInfo(x) || {}; return { t: info.v || x, c: info.c ? catLabel(info.c) : cat, g: info.g || '', axis: info.axis || '', stage: info.stage || '', r: 0 }; });
     const std = { revRange: '', empRange: '', crm: p.crm, hours, industries: p.industries };
+    // Role details keep their registry keys (op.roleFields, which RN.roleDetail reads first). CRM, methodologies and
+    // GTM motion ride along, so the profile's Operating range shows every intake answer.
+    const reg = Object.assign({}, p.roleFields,
+      p.crm ? { crm: p.crm } : null,
+      p.methodologies.length ? { methodologies: p.methodologies } : null,
+      p.methodologyOther ? { methodologyOther: p.methodologyOther } : null,
+      p.salesMotions.length ? { salesMotions: p.salesMotions } : null);
     const raw = {
       id: opIdFor(a), name: p.name, role: p.role, cat, rate: p.rate, isMatt: false, photo: p.photo, initials: RN.fmt.initials(p.name),
-      standard: std, roleDetails: p.roleDetails,
+      standard: std, roleDetails: reg,
       profile: {
         name: p.name, title: p.role, desc: p.headline, bio: p.bio, tags, reviews: [], core: null,
         profile: { reputationIndex: 50, reputationLabel: 'Vetted', engagements: 0, wouldHireAgain: null, totalTags: tags.length },
@@ -251,7 +289,14 @@
     op.employeeRanges = p.employeeRange.slice();
     if (p.engagementTypes.length) op.engagementTypes = p.engagementTypes.slice();
     if (p.newClientCapacity) op.newClientCapacity = +p.newClientCapacity;
+    op.roleFields = Object.assign({}, op.roleFields, RN.model.registryRoleFields(reg));
+    if (p.crm) op.crm = p.crm;
+    if (p.methodologies.length) op.methodologies = p.methodologies.filter((x) => x !== 'Other').concat(p.methodologyOther ? [p.methodologyOther] : []);
+    if (p.salesMotions.length) op.motions = p.salesMotions.slice();
     op.location = p.location;
+    // Non-US applicants answer "Willing to work US time zone hours?" at intake; keep it on the operator
+    if (p.usHours) op.usHours = p.usHours;
+    if (p.country) op.country = p.country;
     op.video = p.video || null;
     op.admin = { appId: a.id, liveAt: a.liveAt || null };
     op.completeness = RN.model.completeness(op);
@@ -316,6 +361,10 @@
     const custom = p.fitTags.filter((x) => !RN.model.tagInfo(x));
     if (custom.length) out.push(['warn', `${RN.fmt.plural(custom.length, 'new tag')} not in the library yet: ${custom.slice(0, 3).join(', ')}. Review before it is added.`]);
     if (p.fitTags.length < 10) out.push(['warn', `${RN.fmt.plural(p.fitTags.length, 'fit tag')}. Ten or more gives clients more ways to find them.`]);
+    const rk = roleKeys(p.roleCategory);
+    const answered = rk.filter((k) => appRoleText(a, k)).length;
+    if (rk.length && !answered) out.push(['warn', `No role details for ${catLabel(p.roleCategory)}. The Operating range section on the profile will be empty.`]);
+    else if (rk.length && answered < rk.length) out.push(['warn', `${answered} of ${rk.length} role details answered.`]);
     if (!p.bio) out.push(['warn', 'No About section yet.']);
     if (!p.photo) out.push(['warn', 'No profile photo.']);
     const sd = supplyDemand().find((x) => x.cat === p.roleCategory);
@@ -334,10 +383,13 @@
   const intros = () => st().intros || [];
   const lastTs = (i) => { const th = i.thread || []; return th.length ? th[th.length - 1].ts : i.createdAt; };
   // Operators have 72 hours to reply; once interested, the team qualifies within one business day.
+  // Countdowns never read above their window: records stamped later than the prototype clock (after the
+  // dock moves time back) show the full window, not "240h left".
   function clock(i) {
-    if (i.status === 'pending') { const left = 72 * HOUR - (nowMs() - ms(i.createdAt)); return { who: 'op', left, late: left < 0, frac: RN.clamp(1 - left / (72 * HOUR), 0, 1) }; }
-    if (i.status === 'interested') { const left = 24 * HOUR - (nowMs() - ms(lastTs(i))); return { who: 'team', left, late: left < 0, frac: RN.clamp(1 - left / (24 * HOUR), 0, 1) }; }
-    return null;
+    const win = i.status === 'pending' ? 72 * HOUR : i.status === 'interested' ? 24 * HOUR : 0;
+    if (!win) return null;
+    const left = Math.min(win, win - (nowMs() - ms(i.status === 'pending' ? i.createdAt : lastTs(i))));
+    return { who: i.status === 'pending' ? 'op' : 'team', left, late: left < 0, frac: RN.clamp(1 - left / win, 0, 1) };
   }
   const introsLate = () => intros().filter((i) => i.status === 'pending' && clock(i).late);
   const introsForTeam = () => intros().filter((i) => i.status === 'interested' || i.status === 'rn_qualified' || (i.status === 'pending' && clock(i).late));
@@ -373,7 +425,7 @@
       team.filter((i) => i.status !== 'pending').length && { ic: 'handshake', t: `${RN.fmt.plural(team.filter((i) => i.status !== 'pending').length, 'intro')} waiting on the team`, sub: 'Operators said yes. Qualify the fit, then introduce both sides by email.', to: 'admin.intros', cta: 'Open pipeline' },
       late.length && { ic: 'clock', late: true, t: `${RN.fmt.plural(late.length, 'intro request')} past the 72-hour reply window`, sub: 'Nudge the operator, or decline for them and suggest two operators with the same fit.', to: 'admin.intros', cta: 'Nudge' },
       pf.length && { ic: 'briefcase', late: true, t: `${RN.fmt.plural(pf.length, 'project')} with no interested operator after 72 hours`, sub: 'Add up to three suggested operators to each one.', to: 'admin.projects', cta: 'Suggest' },
-      zero.length && { ic: 'search', t: `${RN.fmt.plural(zero.length, 'search term')} found no operator this week`, sub: `Latest: “${zero[0].q || 'filters only'}”. This is the supply gap list.`, to: 'admin.demand', cta: 'Recruit' },
+      zero.length && { ic: 'search', t: `${RN.fmt.plural(zero.length, 'search term')} found no operator this week`, sub: `Latest: “${zero[0].q || 'filters only'}”. Each one returns no operator in Browse today. This is the supply gap list.`, to: 'admin.demand', cta: 'Recruit', illus: zero.some((z) => z.base) },
     ].filter(Boolean);
 
     const f7 = funnel(7);
@@ -388,11 +440,11 @@
     const maxShare = Math.max(...sd.map((x) => Math.max(x.supply, x.demand)), 0.01);
     ctx['cat:' + gap.cat] = { kind: 'cat', cat: gap.cat, title: `${gap.l} operators` };
 
-    return `${head('Marketplace <span class="serif">health</span>', `${esc(RN.fmt.date(RN.now()))} · ${RN.fmt.plural(opsLive, 'operator')} live · ${q.length ? RN.fmt.plural(q.length, 'application') + ' to review' : 'No applications waiting'}`)}
+    return `${head('Marketplace health', `${esc(RN.fmt.date(RN.now()))} · ${RN.fmt.plural(opsLive, 'operator')} live · ${q.length ? RN.fmt.plural(q.length, 'application') + ' to review' : 'No applications waiting'}`)}
 
       <section class="card adm-sec" aria-labelledby="adm-needs-h">
         ${cardHead('<span id="adm-needs-h">Needs you</span>', 'Work only the team can do, most urgent first.')}
-        ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}"><span class="adm-need-ic">${icon(n.ic)}</span><div class="grow"><b>${esc(n.t)}</b><p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
+        ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}"><span class="adm-need-ic">${icon(n.ic)}</span><div class="grow"><b>${esc(n.t)}</b>${n.illus ? illus('Volumes illustrative') : ''}<p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
         : RN.ui.empty({ icon: 'check-circle', title: 'Nothing needs you right now', body: 'New applications, intros waiting on the team and quiet projects show up here.' })}
       </section>
 
@@ -402,6 +454,7 @@
         <div class="stat"><span class="stat-v">${int(f7.cur.v)}</span><span class="stat-l">Profile views, last 7 days ${RN.ui.delta(f7.cur.v, f7.prev.v)}</span></div>
         <div class="stat"><span class="stat-v">${int(intros30)}</span><span class="stat-l">Intro requests, last 30 days</span></div>
       </div>
+      ${blendNote()}
 
       <div class="adm-cols">
         <section class="card adm-sec">
@@ -486,7 +539,7 @@
         const who = typeof r.reviewer === 'string' ? r.reviewer : (r.reviewer && r.reviewer.name) || r.name || 'Client';
         const co = r.company || (r.reviewer && r.reviewer.company) || '';
         const rating = +(r.overall || r.coreAvg || 0);
-        return `<li><div class="grow"><a class="adm-op-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(who)}${co ? ', ' + esc(co) : ''} · ${esc(RN.fmt.dateShort(d))}</span></div>${rating ? RN.ui.stars(rating) : ''}<span class="pill pill-good">Published</span></li>`;
+        return `<li><div class="grow"><a class="adm-op-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(who)}${co ? ', ' + esc(co) : ''} · ${esc(RN.fmt.dateShort(d))}</span></div>${rating ? RN.ui.stars(rating) : ''}${RN.ui.statusPill('review', 'completed', 'Published')}</li>`;
       }).join('')}</ul>` : RN.ui.empty({ icon: 'star', title: 'No reviews yet', body: 'Operators request reviews from Studio. Each one lands here as soon as the client submits.' })}`;
   }
 
@@ -496,7 +549,6 @@
   function termRows(days) {
     const k = days / 30;
     const m = new Map();
-    const ops = liveOps();
     RN.data.market.queries.filter((q) => !q.zero).forEach((q) => {
       const key = normQ(q.q);
       const r = RN.rng('adm-term-' + key);
@@ -516,23 +568,23 @@
     liveEv('impression', days).filter((e) => e.q).forEach((e) => { const x = m.get(normQ(e.q)); if (x) x.imp++; });
     liveEv('profile_view', days).filter((e) => e.q).forEach((e) => { const x = m.get(normQ(e.q)); if (x) x.views++; });
     const rows = [...m.values()].sort((a, b) => b.s - a.s).slice(0, 25);
+    // Results = what Browse returns for the term today (the same RN.model.search clients run, hidden profiles excluded).
+    // Verified = results with a client-verified focus area behind the term.
     rows.forEach((x) => {
-      if (x.tags && x.tags.length) {
-        const tl = x.tags.map((t) => t.toLowerCase());
-        const holders = ops.filter((o) => o.tags.some((t) => tl.includes(t.t.toLowerCase())));
-        x.supply = holders.length;
-        x.verified = holders.filter((o) => o.tags.some((t) => tl.includes(t.t.toLowerCase()) && t.tier !== 'claimed')).length;
-      } else x.supply = x.lastResults != null ? +x.lastResults : RN.model.search({ q: x.q }).length;
+      const res = RN.model.search({ q: x.q });
+      const tl = (x.tags || []).map((t) => t.toLowerCase());
+      x.supply = res.length;
+      x.verified = tl.length ? res.filter((r) => r.op.tags.some((t) => tl.includes(t.t.toLowerCase()) && t.tier !== 'claimed')).length : null;
     });
     return rows;
   }
 
   function zeroRows(days) {
     const k = days / 30;
-    const base = RN.model.market().zero.filter((z) => !z.live).map((z) => {
-      const q = RN.data.market.queries.find((x) => x.q === z.q) || {};
-      return { key: 'z:' + normQ(z.q), q: z.q, n: Math.max(1, Math.round(z.vol * k)), filters: { roleCategories: z.cat ? [z.cat] : [], industries: z.industry ? [z.industry] : [] }, tags: q.tags || [], cat: z.cat, base: true };
-    });
+    // Every illustrative search term that Browse answers with no operator today, whether or not the market data
+    // flagged it as a zero-result term (RN.model.market only re-checks the flagged ones)
+    const base = RN.data.market.queries.filter((q) => RN.model.search({ q: q.q }).length === 0).map((q) => (
+      { key: 'z:' + normQ(q.q), q: q.q, n: Math.max(1, Math.round(q.vol * k)), filters: { roleCategories: q.cat ? [q.cat] : [], industries: q.industry ? [q.industry] : [] }, tags: q.tags || [], cat: q.cat, base: true }));
     const since = nowMs() - days * DAY;
     const groups = new Map();
     (st().events || []).filter((e) => e.type === 'search' && +e.results === 0 && e.results !== '' && e.results != null && ms(e.ts) >= since && (e.persona === 'buyer' || e.persona === 'visitor')).forEach((e) => {
@@ -572,12 +624,56 @@
     return { rows, identified: ident + live.length, total: f.cur.s };
   }
 
+  /* Unmet demand by focus area. Demand comes from RN.model.market() (illustrative query volumes plus live
+     searches that used the focus area). Supply is what the Browse focus-area filter returns today. */
+  function gapRows() {
+    return RN.model.market().tags.map((g) => {
+      const tl = g.t.toLowerCase();
+      const res = RN.model.search({ tags: [g.t] });
+      const verified = res.filter((r) => r.op.tags.some((t) => t.t.toLowerCase() === tl && t.tier !== 'claimed')).length;
+      return Object.assign({}, g, { supply: res.length, verified, ratio: Math.round((g.demand / Math.max(1, verified)) * 10) / 10 });
+    }).sort((a, b) => b.ratio - a.ratio || b.demand - a.demand).slice(0, 10);
+  }
+
+  /* Where client visits start: proof links and the verified badge are operators bringing clients to the
+     platform. Illustrative baseline for the window plus live profile views and research clicks. */
+  const SOURCES = [
+    { k: 'browse', l: 'Browse and search', share: 0.46 },
+    { k: 'direct', l: 'Direct link', share: 0.16 },
+    { k: 'home', l: 'Homepage', share: 0.12 },
+    { k: 'guides', l: 'Guides and research', share: 0.1 },
+    { k: 'rates', l: 'Rate Index', share: 0.07 },
+    { k: 'proof', l: 'Operator proof links', share: 0.06 },
+    { k: 'badge', l: 'Verified badge', share: 0.03 },
+  ];
+  function sourceOf(src) {
+    const x = String(src || 'direct').toLowerCase();
+    if (x === 'proof') return 'proof';
+    if (x === 'badge' || x === 'verify') return 'badge';
+    if (x === 'home') return 'home';
+    if (/^rates?/.test(x)) return 'rates';
+    if (/^(guide|research|framework|library|report|hub|insights)/.test(x)) return 'guides';
+    if (x === 'direct') return 'direct';
+    return 'browse';
+  }
+  function sourceRows(days) {
+    const f = funnel(days);
+    const base = f.cur.v - f.live.v;
+    const live = {};
+    liveEv('profile_view', days).forEach((e) => { const k = sourceOf(e.source); live[k] = (live[k] || 0) + 1; });
+    liveEv('research_cta', days).forEach((e) => { const k = sourceOf(e.source); live[k] = (live[k] || 0) + 1; });
+    (st().leads || []).filter((l) => l && nowMs() - ms(l.ts || l.createdAt || 0) <= days * DAY).forEach((l) => { const k = sourceOf(l.source); live[k] = (live[k] || 0) + 1; });
+    const n = Object.values(live).reduce((a, x) => a + x, 0);
+    return { rows: SOURCES.map((x) => ({ label: x.l, value: Math.round(base * x.share) + (live[x.k] || 0) })), live: n };
+  }
+
   function demand() {
     const days = ui.days;
     const f = funnel(days);
     const terms = termRows(days);
     const zero = zeroRows(days);
-    const gaps = RN.model.market().tags.slice(0, 10);
+    const gaps = gapRows();
+    const src = sourceRows(days);
     const rev = firmo(days, 'revenueRange'), emp = firmo(days, 'employeeRange');
     const recruit = seen().admRecruit || {};
     const nudged = seen().admTagNudged || {};
@@ -586,7 +682,7 @@
     const seg = `<div class="seg" role="group" aria-label="Date range">${[7, 30, 90].map((d) => `<button type="button" class="${days === d ? 'on' : ''}" aria-pressed="${days === d}" data-act="adm-days" data-d="${d}">${d} days</button>`).join('')}</div>`;
     const shownTerms = ui.termsAll ? terms : terms.slice(0, 10);
 
-    return `${head('Demand <span class="serif">intelligence</span>', 'What clients search for, what they cannot find, and where supply falls short. Every cut uses the same fields as operator profiles.', seg)}
+    return `${head('Demand intelligence', 'What clients search for, what they cannot find, and where supply falls short. Every cut uses the same fields as operator profiles.', seg)}
 
       <div class="stats-row adm-stats" style="--cols:4">
         <div class="stat"><span class="stat-v">${int(f.cur.s)}</span><span class="stat-l">Client searches, ${win} ${RN.ui.delta(f.cur.s, f.prev.s)}</span></div>
@@ -594,9 +690,10 @@
         <div class="stat"><span class="stat-v">${pct(f.cur.v / Math.max(1, f.cur.i), 1)}</span><span class="stat-l">View rate (views per impression)</span></div>
         <div class="stat"><span class="stat-v">${pct(f.cur.r / Math.max(1, f.cur.v), 1)}</span><span class="stat-l">Intro rate (intros per view)</span></div>
       </div>
+      ${blendNote()}
 
       <section class="card adm-sec">
-        ${cardHead('Searches that found no one', `The exact query and filters, ${win}. This is demand we cannot serve yet: recruit for it, or ask close operators to add the focus area.`, `<span class="pill pill-bad">${RN.fmt.plural(zero.length, 'term')}</span>`)}
+        ${cardHead('Searches that found no one', `The exact query and filters, ${win}. Each term is re-run against Browse, so it stays here only while it still finds no operator. Recruit for it, or ask close operators to add the focus area.`, `<span class="pill pill-bad">${RN.fmt.plural(zero.length, 'term')}</span>${zero.some((z) => z.base) ? illus('Volumes illustrative') : ''}`)}
         ${zero.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl adm-zero adm-stacktbl">
           <thead><tr><th>Query</th><th>Filters applied</th><th class="r">Searches</th><th>Last searched</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
           <tbody>${zero.map((z) => {
@@ -607,11 +704,11 @@
               <td class="adm-w">${filterChips(z.filters, z.base ? [] : z.tags)}</td>
               <td class="r tnum" data-l="Searches">${int(z.n)}</td>
               <td class="small" data-l="Last searched">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? 'Signed-in client' : 'Visitor, not signed in'}</span>`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>
-              <td data-l="Status">${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : '<span class="pill pill-bad">No match</span>'}</td>
-              <td class="r adm-act-cell"><button type="button" class="btn btn-sm ${rec ? 'btn-line' : ''}" data-act="adm-recruit" data-k="${esc(z.key)}">${rec ? 'Edit note' : 'Recruit for this'}</button></td>
+              <td data-l="Status">${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : !z.base && z.now ? `<span class="pill pill-info">${RN.fmt.plural(z.now, 'match', 'matches')} now</span>` : '<span class="pill pill-bad">No match</span>'}</td>
+              <td class="r adm-act-cell"><button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(z.key)}" aria-label="${esc((rec ? 'Edit recruiting note for ' : 'Recruit for ') + (z.q ? '“' + z.q + '”' : 'this filter-only search'))}">${rec ? 'Edit note' : 'Recruit'}</button></td>
             </tr>`;
           }).join('')}</tbody></table></div>
-          <p class="tiny muted adm-foot">Rows marked Live come from searches in this session. The rest are illustrative 30-day volumes scaled to the date range.</p>`
+          <p class="tiny muted adm-foot">Rows marked Live come from searches in this session. The rest are illustrative search terms with 30-day volumes scaled to the date range; each one returns no operator in Browse today.</p>`
         : RN.ui.empty({ icon: 'search', title: 'Every search found someone', body: 'Zero-result searches from Browse land here with the exact query and filters.' })}
       </section>
 
@@ -622,14 +719,14 @@
       </section>
 
       <section class="card adm-sec">
-        ${cardHead('Top search terms', `Normalized to one term per search (AP-05), so spelling and case variants count once. Supply is operators holding the focus areas behind each term.`, illus())}
+        ${cardHead('Top search terms', `Normalized to one term per search (AP-05), so spelling and case variants count once. Results is what Browse returns for the term today.`, illus())}
         <div class="tbl-wrap"><table class="tbl adm-tbl adm-terms">
-          <thead><tr><th>#</th><th>Search term</th><th class="r">Searches</th><th class="r">Supply</th><th class="r adm-hide-m">Impressions</th><th class="r adm-hide-m">Views</th><th class="r">View rate</th><th class="r adm-hide-m">Intros</th><th class="r">Intro rate</th></tr></thead>
+          <thead><tr><th>#</th><th>Search term</th><th class="r">Searches</th><th class="r">Results</th><th class="r adm-hide-m">Impressions</th><th class="r adm-hide-m">Views</th><th class="r">View rate</th><th class="r adm-hide-m">Intros</th><th class="r">Intro rate</th></tr></thead>
           <tbody>${shownTerms.map((x, i) => `<tr>
             <td class="tnum muted">${i + 1}</td>
             <td><span class="adm-term">${esc(x.q)}</span>${x.live ? `<span class="pill pill-accent adm-live">${x.live} live</span>` : ''}${x.variants.size > 1 ? `<span class="tiny muted adm-block">${x.variants.size} spellings merged</span>` : ''}</td>
             <td class="r tnum">${int(x.s)}</td>
-            <td class="r tnum">${int(x.supply)}${x.verified != null ? `<span class="tiny muted adm-block">${int(x.verified)} verified</span>` : ''}</td>
+            <td class="r tnum${x.supply ? '' : ' adm-bad'}">${int(x.supply)}${x.verified != null ? `<span class="tiny muted adm-block">${int(x.verified)} verified</span>` : ''}</td>
             <td class="r tnum adm-hide-m">${int(x.imp)}</td>
             <td class="r tnum adm-hide-m">${int(x.views)}</td>
             <td class="r tnum">${x.imp ? pct(x.views / x.imp, 1) : 'N/A'}</td>
@@ -640,9 +737,9 @@
       </section>
 
       <section class="card adm-sec">
-        ${cardHead('Unmet demand by focus area', 'Monthly searches per client-verified operator. High numbers mean clients look for this and few operators can prove it.', illus())}
+        ${cardHead('Unmet demand by focus area', 'Monthly searches per client-verified operator. High numbers mean clients look for this and few operators can prove it. Supply is what the Browse focus-area filter returns today.', illus('Searches illustrative'))}
         <div class="tbl-wrap"><table class="tbl adm-tbl adm-gaps adm-stacktbl">
-          <thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r">On profiles</th><th class="r">Verified</th><th>Per verified operator</th><th><span class="sr-only">Action</span></th></tr></thead>
+          <thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r">In Browse</th><th class="r">Verified</th><th>Per verified operator</th><th><span class="sr-only">Action</span></th></tr></thead>
           <tbody>${gaps.map((g) => {
             const tl = g.t.toLowerCase();
             const claimers = liveOps().filter((o) => o.tags.some((t) => t.t.toLowerCase() === tl && t.tier === 'claimed'));
@@ -653,7 +750,7 @@
             return `<tr>
               <td class="adm-w"><b class="adm-term">${esc(g.t)}</b><span class="tiny muted adm-block adm-cat">${g.c ? RN.ui.catDot(g.c) : ''}${esc(g.c ? catLabel(g.c) : 'No role category')}</span></td>
               <td class="r tnum" data-l="Searches / mo">${int(g.demand)}</td>
-              <td class="r tnum" data-l="On profiles">${int(g.supply)}</td>
+              <td class="r tnum" data-l="In Browse">${int(g.supply)}</td>
               <td class="r tnum" data-l="Verified">${int(g.verified)}</td>
               <td class="adm-w" data-l="Per verified operator"><div class="adm-ratio"><span class="meter"><i style="width:${Math.max(3, (g.ratio / mx) * 100).toFixed(1)}%"></i></span><b class="tnum">${int(g.ratio)}</b></div></td>
               <td class="r adm-act-cell">${nd ? `<span class="pill pill-good">${icon('check')}${nd.n} nudged</span>`
@@ -661,7 +758,13 @@
                 : `<button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(key)}">Recruit</button>`}</td>
             </tr>`;
           }).join('')}</tbody></table></div>
-        <p class="tiny muted adm-foot">A nudge emails every operator who claims the focus area but has no client review confirming it, and points them to Studio to request one. The same numbers drive Studio Positioning.</p>
+        <p class="tiny muted adm-foot">A nudge emails every operator who claims the focus area but has no client review confirming it, and points them to Studio to request one. Studio Positioning uses the same demand figures.</p>
+      </section>
+
+      <section class="card adm-sec">
+        ${cardHead('Clients by source', `Where client visits to profiles started, ${win}. Proof links and the verified badge are operators bringing clients to the platform.`, illus())}
+        ${chartSlot('dm-src', (w) => barsChart(src.rows, w, { labelW: 180, label: 'Client visits by source' }), 240)}
+        <p class="tiny muted adm-foot">Illustrative baseline plus ${RN.fmt.plural(src.live, 'live visit')} from this session (profile views by source and clicks from research pages into Browse).</p>
       </section>
 
       <div class="adm-grid">
@@ -686,7 +789,7 @@
   function approvals() {
     const q = queue().slice().sort((a, b) => ms(a.submittedAt) - ms(b.submittedAt));
     const decided = apps().filter((a) => ['live', 'rejected'].includes(statusOf(a))).sort((a, b) => ms(b.liveAt || b.decidedAt || 0) - ms(a.liveAt || a.decidedAt || 0));
-    return `${head('Operator <span class="serif">approvals</span>', `${q.length ? RN.fmt.plural(q.length, 'application') + ' waiting' : 'No applications waiting'}. We review every application within 2 business days.`)}
+    return `${head('Operator approvals', `${q.length ? RN.fmt.plural(q.length, 'application') + ' waiting' : 'No applications waiting'}. We review every application within 2 business days.`)}
       <ol class="adm-flow" aria-label="How approval works">
         <li><span class="adm-flow-n">1</span><div><b>Approve profile</b><span>Identity, work history and fit tags checked by the team.</span></div></li>
         <li><span class="adm-flow-n">2</span><div><b>Generate score</b><span>Reputation Index set to 50. The profile goes live in Browse at Vetted.</span></div></li>
@@ -698,8 +801,8 @@
           const p = prof(a);
           const op = statusOf(a) === 'live' ? RN.model.byId(a.opId) : null;
           return `<li>${RN.ui.avatar({ name: p.name, initials: RN.fmt.initials(p.name) }, 'ava-sm')}<div class="grow"><b>${esc(p.name)}</b><span class="tiny muted">${esc(p.role)} · ${esc(catLabel(p.roleCategory))}</span></div>
-            ${op ? `<span class="pill pill-good">${icon('check')}Live at ${esc(op.ris.label)} ${esc(op.ris.score)}</span><span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.liveAt))}</span><a class="btn btn-sm btn-line" href="#op.${esc(op.slug)}">View profile</a>`
-            : `<span class="pill pill-bad">Rejected</span><span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.decidedAt || a.submittedAt))}</span><button type="button" class="btn btn-sm btn-line" data-act="adm-reopen" data-id="${esc(a.id)}">Reopen</button>`}
+            ${op ? `${RN.ui.statusPill('application', 'live', `Live at ${op.ris.label} ${op.ris.score}`)}<span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.liveAt))}</span><a class="btn btn-sm btn-line" href="#op.${esc(op.slug)}">View profile</a>`
+            : `${RN.ui.statusPill('application', 'rejected')}<span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.decidedAt || a.submittedAt))}</span><button type="button" class="btn btn-sm btn-line" data-act="adm-reopen" data-id="${esc(a.id)}">Reopen</button>`}
           </li>`;
         }).join('')}</ul></section>` : ''}`;
   }
@@ -718,26 +821,33 @@
       [RN.fields.hoursPerMonth.label, p.hoursPerMonth ? RN.w.label('hoursPerMonth', p.hoursPerMonth) : 'N/A'],
       [RN.fields.rate.label, p.rate ? RN.fmt.rate(p.rate) : 'N/A'],
       ['Location', p.location || 'N/A'],
+      p.timezone && ['Time zone', p.timezone],
+      p.usHours && [RN.fields.usHours.label, RN.w.label('usHours', p.usHours)],
       [RN.fields.revenueRange.label, RN.w.labels('revenueRange', p.revenueRange) || 'N/A'],
       [RN.fields.employeeRange.label, RN.w.labels('employeeRange', p.employeeRange) || 'N/A'],
-    ];
+      !roleKeys(p.roleCategory).includes('salesMotions') && [RN.fields.salesMotions.label, RN.w.labels('salesMotions', p.salesMotions) || 'N/A'],
+    ].filter(Boolean);
+    const rk = roleKeys(p.roleCategory);
+    const rdRows = rk.map((k) => ({ l: RN.fields[k].label, v: appRoleText(a, k) }));
     return `<article class="card adm-app" aria-label="Application from ${esc(p.name)}">
       <div class="adm-app-hd">
         ${RN.ui.avatar({ name: p.name, initials: RN.fmt.initials(p.name), photo: p.photo }, 'ava-md')}
         <div class="grow">
-          <div class="row" style="--gap:8px"><h2 class="adm-app-name">${esc(p.name)}</h2>
-            ${status === 'approved' ? `<span class="pill pill-info">${icon('check')}Profile approved</span>` : status === 'changes_requested' ? '<span class="pill pill-warn">Changes requested</span>' : '<span class="pill">In review</span>'}</div>
+          <div class="row" style="--gap:8px"><h2 class="h3 adm-app-name">${esc(p.name)}</h2>
+            ${RN.ui.statusPill('application', status, { approved: 'Profile approved', in_review: 'In review', changes_requested: 'Changes requested' }[status])}</div>
           <div class="adm-app-role">Fractional ${esc(p.role)}</div>
           <div class="adm-app-meta"><span>${icon('mail')}${esc(p.email || 'No email')}</span><span>${icon('clock')}Submitted ${esc(RN.fmt.ago(a.submittedAt))}</span>
             <span class="${lateBy > 0 ? 'adm-late' : ''}">${icon('calendar')}${lateBy > 0 ? `Review overdue by ${dur(lateBy)}` : `Review by ${esc(RN.fmt.dateShort(due))}`}</span></div>
         </div>
       </div>
-      ${p.headline ? `<p class="adm-quote">${esc(p.headline)}</p>` : '<p class="note">No headline yet. Clients read it first in search.</p>'}
+      ${p.headline ? `<div class="adm-hl"><span class="label">${esc(RN.fields.headline.label)}</span><p>${esc(p.headline)}</p></div>` : '<p class="note">No headline yet. Clients read it first in search.</p>'}
       <div class="adm-app-body">
         <div class="stack" style="--gap:18px">
           <dl class="adm-kv">${kv.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}
             <div class="full"><dt>${esc(RN.fields.industries.label)}</dt><dd>${esc(RN.w.labels('industries', p.industries) || 'N/A')}</dd></div>
           </dl>
+          ${rk.length ? `<div class="adm-rd"><span class="label">Role details · ${esc(catLabel(p.roleCategory))} · ${rdRows.filter((r) => r.v).length} of ${rk.length} answered</span>
+            <dl class="adm-kv">${rdRows.map((r) => `<div><dt>${esc(r.l)}</dt><dd>${r.v ? esc(r.v) : '<span class="muted">Not answered</span>'}</dd></div>`).join('')}</dl></div>` : ''}
           <div><span class="label">${esc(RN.fields.fitTags.label)} · ${p.fitTags.length}</span><div class="opc-tags adm-tags">${p.fitTags.map((x) => RN.ui.ftag({ t: x, tier: 'claimed' })).join('') || '<span class="small muted">None yet</span>'}</div></div>
         </div>
         <div class="adm-check">
@@ -781,9 +891,9 @@
   function clockPill(i) {
     const c = clock(i);
     if (!c) {
-      if (i.status === 'rn_qualified') return '<span class="pill pill-info">Ready to introduce</span>';
-      if (i.status === 'introduced') return `<span class="pill pill-good">Introduced ${esc(RN.fmt.ago(lastTs(i)))}</span>`;
-      if (i.status === 'hired') return `<span class="pill pill-accent">Hired ${esc(RN.fmt.dateShort(lastTs(i)))}</span>`;
+      if (i.status === 'rn_qualified') return RN.ui.statusPill('intro', 'rn_qualified', 'Ready to introduce');
+      if (i.status === 'introduced') return RN.ui.statusPill('intro', 'introduced', `Introduced ${RN.fmt.ago(lastTs(i))}`);
+      if (i.status === 'hired') return RN.ui.statusPill('intro', 'hired', `Hired ${RN.fmt.dateShort(lastTs(i))}`);
       return '';
     }
     if (c.who === 'op') return c.late ? `<span class="pill pill-bad">${icon('clock')}Overdue ${dur(-c.left)}</span>` : `<span class="pill ${c.left < 12 * HOUR ? 'pill-warn' : ''}">${icon('clock')}${dur(c.left)} left to reply</span>`;
@@ -806,7 +916,7 @@
       ${c ? `<span class="adm-clock"><i style="width:${(c.frac * 100).toFixed(0)}%"></i></span>` : ''}
       <div class="row between adm-icard-meta">${clockPill(i)}${nudged ? `<span class="tiny muted">Nudged ${esc(RN.fmt.ago(nudged))}</span>` : ''}</div>
       <div class="row adm-icard-act" style="--gap:8px">
-        ${nx ? `<button type="button" class="btn btn-sm" data-act="${nx.act}" data-id="${esc(i.id)}"${nx.to ? ` data-to="${nx.to}"` : ''} title="${esc(nx.label)}"><span class="adm-lbl-s">${esc(nx.short)}</span><span class="adm-lbl-l">${esc(nx.label)}</span></button>` : ''}
+        ${nx ? `<button type="button" class="btn btn-sm${i.status === 'pending' && !(c && c.late) ? ' btn-line' : ''}" data-act="${nx.act}" data-id="${esc(i.id)}"${nx.to ? ` data-to="${nx.to}"` : ''} title="${esc(nx.label)}"><span class="adm-lbl-s">${esc(nx.short)}</span><span class="adm-lbl-l">${esc(nx.label)}</span></button>` : ''}
         <button type="button" class="act" data-act="adm-intro-open" data-id="${esc(i.id)}">Details</button>
       </div>
     </article>`;
@@ -819,7 +929,7 @@
     const introduced30 = all.filter((i) => ['introduced', 'hired'].includes(i.status) && nowMs() - ms(lastTs(i)) <= 30 * DAY).length;
     const cols = RN.intro.steps;
     const declined = all.filter((i) => i.status === 'declined');
-    return `${head('Intro <span class="serif">pipeline</span>', 'Every intro request, from the client’s ask to a hire. Operators see requests blind until you introduce them.')}
+    return `${head('Intro pipeline', 'Every intro request, from the client’s ask to a hire. Operators see requests blind until you introduce them.')}
       <div class="stats-row adm-stats" style="--cols:4">
         <div class="stat"><span class="stat-v">${open.length}</span><span class="stat-l">Open requests</span></div>
         <div class="stat"><span class="stat-v ${late.length ? 'adm-bad' : ''}">${late.length}</span><span class="stat-l">Past their clock</span></div>
@@ -829,7 +939,7 @@
       ${all.length ? `<div class="adm-board" role="list">${cols.map((s) => {
         const list = all.filter((i) => i.status === s).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
         return `<section class="adm-col" role="listitem" aria-label="${esc(RN.w.label('introStatus', s))}">
-          <header class="adm-col-hd">${RN.intro.statusPill(s)}<span class="tnum muted">${list.length}</span></header>
+          <header class="adm-col-hd">${RN.ui.statusPill('intro', s)}<span class="tnum muted">${list.length}</span></header>
           ${list.length ? list.map(introCard).join('') : `<p class="tiny muted adm-col-empty">${esc({ pending: 'No requests waiting on an operator.', interested: 'Nothing to qualify.', rn_qualified: 'Nothing to introduce.', introduced: 'No open introductions.', hired: 'No hires yet.' }[s])}</p>`}
         </section>`;
       }).join('')}</div>` : RN.ui.empty({ icon: 'handshake', title: 'No intro requests yet', body: 'Clients request intros from profiles, compare and their shortlist.', cta: '<a class="btn btn-sm btn-line" href="#browse">Open Browse</a>' })}
@@ -844,7 +954,7 @@
   function projectsTab() {
     const list = liveProjects().slice().sort((a, b) => (projInfo(b).flag - projInfo(a).flag) || ms(a.postedAt || a.createdAt) - ms(b.postedAt || b.createdAt));
     const flagged = list.filter((p) => projInfo(p).flag).length;
-    return `${head('Client <span class="serif">projects</span>', `${RN.fmt.plural(list.length, 'live project')}${flagged ? ` · ${flagged} with no interested operator after 72 hours` : ''}. Add up to three suggested operators to any project, ranked by Match Signals. The client decides.`)}
+    return `${head('Client projects', `${RN.fmt.plural(list.length, 'live project')}${flagged ? ` · ${flagged} with no interested operator after 72 hours` : ''}. Add up to three suggested operators to any project, ranked by Match Signals. The client decides.`)}
       ${list.length ? `<div class="stack" style="--gap:16px">${list.map(projCard).join('')}</div>`
       : RN.ui.empty({ icon: 'briefcase', title: 'No live projects', body: 'Projects clients post from a Blueprint appear here with invites, responses and the 72-hour flag.', cta: '<a class="btn btn-sm btn-line" href="#projects">Open projects</a>' })}`;
   }
@@ -857,8 +967,8 @@
     const scope = [f.engagementType && RN.w.label('engagementType', f.engagementType), f.hoursPerMonth && RN.w.label('hoursPerMonth', f.hoursPerMonth), f.term && RN.w.label('term', f.term), f.startBy && 'Start ' + RN.w.label('startBy', f.startBy).toLowerCase()].filter(Boolean).join(' · ');
     return `<article class="card adm-proj${info.flag ? ' is-late' : ''}">
       <div class="adm-proj-hd">
-        <div class="grow"><div class="row" style="--gap:8px">${f.roleCategory ? `<span class="pill">${RN.ui.catDot(f.roleCategory)}${esc(catLabel(f.roleCategory))}</span>` : ''}<span class="pill ${p.status === 'posted' ? 'pill-info' : 'pill-accent'}">${esc(RN.w.label('projectStatus', p.status))}</span>${info.flag ? `<span class="pill pill-bad">${icon('flag')}No interested operator in 72 hrs</span>` : ''}</div>
-          <h2 class="adm-proj-t"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></h2>
+        <div class="grow"><div class="row" style="--gap:8px">${f.roleCategory ? `<span class="pill">${RN.ui.catDot(f.roleCategory)}${esc(catLabel(f.roleCategory))}</span>` : ''}${RN.ui.statusPill('project', p.status)}${info.flag ? `<span class="pill pill-bad">${icon('flag')}No interested operator in 72 hrs</span>` : ''}</div>
+          <h2 class="h4 adm-proj-t"><a href="#project.${esc(p.id)}">${esc(p.title || 'Untitled project')}</a></h2>
           <p class="small muted">${esc(c.company || c.name)}${scope ? ' · ' + esc(scope) : ''}</p></div>
       </div>
       <div class="adm-proj-stats">
@@ -927,7 +1037,7 @@
     const all = RN.model.ops.filter(inDir);
     const hidden = all.filter((o) => o.hidden).length;
     const segs = [['all', 'All'], ['work', 'Profile under 60%'], ['edited', 'Edited by team'], ['hidden', `Hidden${hidden ? ' (' + hidden + ')' : ''}`]];
-    return `${head('Operator <span class="serif">directory</span>', `${RN.fmt.plural(all.length - hidden, 'operator')} in search${hidden ? `, ${hidden} hidden` : ''}. Edit a profile on the operator’s behalf, or hide it from search. Hidden profiles stay reachable by direct link.`)}
+    return `${head('Operator directory', `${RN.fmt.plural(all.length - hidden, 'operator')} in search${hidden ? `, ${hidden} hidden` : ''}. Edit a profile on the operator’s behalf, or hide it from search. Hidden profiles stay reachable by direct link.`)}
       <section class="card adm-sec adm-dir-card">
         <div class="adm-dir-ctl">
           <div class="input-wrap adm-dir-q">${icon('search')}<input class="input" type="search" placeholder="Search name, role, location or focus area" value="${esc(ui.dirQ)}" data-input="adm-dir-q" aria-label="Search operators"></div>
@@ -949,8 +1059,8 @@
     { k: 'A0', day: 0, subj: 'You are live on Revenue Nomad at Vetted 50', purpose: 'Welcome. What the Reputation Index measures and the one action worth the most points next.', skipL: 'Always sends, the moment the score is generated.', skip: null, gain: null },
     { k: 'A1', day: 3, subj: 'Two client reviews move you past Vetted', purpose: 'Ask two past clients for a CORE review. Each review verifies the fit tags the client confirms.', skipL: 'Skips if the operator has 2 or more reviews.', skip: (op) => op.reviews.length >= 2, gain: 'review', per: 'per review' },
     { k: 'A2', day: 8, subj: 'Add your engagements, each with a work sample', purpose: 'Engagement History proves stage and deal-size fit, the top hiring factor for clients.', skipL: 'Skips if 3 or more engagements are logged.', skip: (op) => op.engagements.length >= 3, gain: 'engagement', per: 'per engagement' },
-    { k: 'A3', day: 14, subj: 'Record a 60-second intro video', purpose: 'Profiles with video hold client attention 40% longer and complete the profile factor.', skipL: 'Skips if the profile has a video.', skip: (op) => !!op.video, gain: 'complete', per: 'profile factor' },
-    { k: 'A4', day: 24, subj: 'Share your profile where clients already look', purpose: 'Amplify on LinkedIn or a blog post with the verified badge and a tracked proof link.', skipL: 'Skips if the operator has created a proof link.', skip: (op) => (st().proofLinks || []).some((x) => x.opId === op.id), gain: 'recent', per: 'engagement recency' },
+    { k: 'A3', day: 14, subj: 'Record a 60-second intro video', purpose: 'A short video in the operator’s own words helps them stand out and completes the profile factor.', skipL: 'Skips if the profile has a video.', skip: (op) => !!op.video, gain: 'complete', per: 'profile factor' },
+    { k: 'A4', day: 24, subj: 'Share your profile where clients already look', purpose: 'Share the profile on LinkedIn or a blog post, and send a tracked proof link to a prospect.', skipL: 'Skips if the operator has created a proof link.', skip: (op) => (st().proofLinks || []).some((x) => x.opId === op.id), gain: 'recent', per: 'engagement recency' },
     { k: 'A5', day: 30, subj: 'Your first 30 days on Revenue Nomad', purpose: 'A personal scorecard: impressions, profile views, the searches that found them, Reputation Index change and the next best action.', skipL: 'Always sends.', skip: null, gain: null },
   ];
   function dripBody(k, op) {
@@ -960,8 +1070,8 @@
       case 'A0': return `Hi ${f},\n\nYour profile is live at Vetted 50. Clients can find you in Browse, on your role page and in Google.\n\nThe Reputation Index blends five signals: review volume, fit tag verification, strong ratings, a complete profile and engagement recency. The step worth the most right now: ${miss ? miss.l.toLowerCase() : 'a client review'}. ${miss ? miss.gain + '.' : ''}\n\nOpen Studio to see who views you and why.`;
       case 'A1': return `Hi ${f},\n\nClient reviews are the biggest part of the Reputation Index. Each one adds about ${RN.model.risGain('review')} points and verifies the fit tags your client confirms.\n\nAsk two past clients from Studio > Credibility. It takes them about four minutes.`;
       case 'A2': return `Hi ${f},\n\nClients hire on stage and deal-size fit. Add three engagements to your Engagement History, each with a work sample, and clients can see the companies and outcomes behind your tags.\n\nEach verified engagement adds about ${RN.model.risGain('engagement')} points.`;
-      case 'A3': return `Hi ${f},\n\nA 60-second video in your own words is the fastest way to stand out in a crowded category. Profiles with video hold client attention 40% longer.\n\nRecord it from Studio > Profile.`;
-      case 'A4': return `Hi ${f},\n\nMost of your deals start outside a marketplace. Share your profile on LinkedIn, or send a tracked proof link to a prospect, and see which sections they read.\n\nCreate one from Studio > Credibility.`;
+      case 'A3': return `Hi ${f},\n\nA 60-second video in your own words helps you stand out in a crowded category, and it completes your profile.\n\nRecord it from Studio > Profile.`;
+      case 'A4': return `Hi ${f},\n\nMost of your deals start outside a marketplace. Share your profile on LinkedIn, or send a tracked proof link to a prospect, and see which sections they read.\n\nEvery approved profile can send proof links: ${op.ris.score >= 60 ? 'yours are unlimited' : '5 a month at Vetted, unlimited from Proven'}. Create one from Studio > Credibility.`;
       case 'A5': {
         const an = RN.model.analytics(op.id, { days: 30 });
         const q = an && an.queries[0];
@@ -1002,7 +1112,7 @@
     const mails = st().outbox || [];
     const shown = ui.mailSeg === 'all' ? mails : mails.filter((m) => audience(m) === ui.mailSeg);
     const pill = { sent: '<span class="pill pill-good">Sent</span>', due: '<span class="pill pill-warn">Due now</span>', scheduled: '<span class="pill">Scheduled</span>', skipped: '<span class="pill pill-line">Skipped, already done</span>' };
-    return `${head('Platform <span class="serif">emails</span>', 'The activation drip every approved operator gets, the alerts the team receives, and everything the platform has sent in this session.')}
+    return `${head('Platform emails', 'The activation drip every approved operator gets, the alerts the team receives, and everything the platform has sent in this session.')}
       <section class="card adm-sec">
         ${cardHead('30-day activation drip, A0 to A5', 'Replaces the single profile-approved email. Each email is framed as raising the Reputation Index and skips itself when the operator has already done the step.')}
         <div class="tbl-wrap"><table class="tbl adm-tbl adm-drip adm-stacktbl">
@@ -1206,7 +1316,6 @@
     const b = i.buyer || {};
     const co = b.company || {};
     const f = i.fields || {};
-    const cur = RN.intro.steps.indexOf(i.status);
     const nx = NEXT[i.status] && NEXT[i.status](op);
     const kv = [
       [RN.fields.need.label, f.need ? RN.w.label('need', f.need) : 'N/A'],
@@ -1219,16 +1328,16 @@
     ];
     RN.ui.drawer({
       title: `${esc(co.name || 'Client')} and ${esc(op.first)}`,
-      sub: `Requested ${esc(RN.fmt.date(i.createdAt))} · ${RN.intro.statusPill(i.status)}`,
+      sub: `Requested ${esc(RN.fmt.date(i.createdAt))} · ${RN.ui.statusPill('intro', i.status)}`,
       body: `<div class="stack adm-drawer" style="--gap:22px">
-        ${i.status !== 'declined' ? `<ol class="adm-istep">${RN.intro.steps.map((s, n) => `<li class="${n < cur ? 'done' : n === cur ? 'cur' : ''}"><i></i><span>${esc(RN.w.label('introStatus', s))}</span></li>`).join('')}</ol>` : ''}
+        ${RN.ui.introTrack(i)}
         ${clock(i) ? `<div>${clockPill(i)}</div>` : ''}
         <div class="adm-parties">
           <div><span class="label">Client</span><b>${esc(b.name || 'Client')}</b><span class="small muted">${esc([b.title, co.name].filter(Boolean).join(', '))}</span><span class="small">${esc(b.email || '')}</span></div>
           <div><span class="label">Operator</span><a class="adm-op-n" href="#op.${esc(op.slug)}" data-act="go" data-to="op.${esc(op.slug)}">${esc(op.name)}</a><span class="small muted">Fractional ${esc(op.role)}</span><span class="small">${esc(op.avail.label)}</span></div>
         </div>
         <dl class="adm-kv">${kv.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
-        ${i.note ? `<div><span class="label">Note from the client</span><p class="adm-quote adm-quote-sm">${esc(i.note)}</p></div>` : ''}
+        ${i.note ? `<div><span class="label">Note from the client</span><p class="adm-note-q">${esc(i.note)}</p></div>` : ''}
         <div><span class="label">History</span><ol class="adm-thread"><li><b>Requested</b><span class="tiny muted">${esc(b.name || 'Client')} · ${esc(RN.fmt.date(i.createdAt))}</span></li>${(i.thread || []).map((m) => `<li><b>${esc(m.text)}</b><span class="tiny muted">${esc(m.from)} · ${esc(RN.fmt.date(m.ts))}</span></li>`).join('')}</ol></div>
       </div>`,
       foot: `${!['hired', 'declined'].includes(i.status) ? `<button type="button" class="btn btn-line btn-sm adm-danger" data-act="adm-intro-decline" data-id="${esc(i.id)}">Decline</button>` : ''}<span class="grow"></span>${nx ? `<button type="button" class="btn btn-sm" data-act="${nx.act}" data-id="${esc(i.id)}"${nx.to ? ` data-to="${nx.to}"` : ''}>${icon(nx.icon)}${esc(nx.label)}</button>` : '<button type="button" class="btn btn-line btn-sm" data-act="modal-close">Close</button>'}`,
@@ -1292,49 +1401,135 @@
     toast(on ? `${esc(op.name)} is back in search.` : `${esc(op.name)} is hidden from search. The profile link still works.`, { icon: on ? 'eye' : 'eye-off', action: { label: 'Undo', act: 'adm-hide', attrs: `data-id="${esc(op.id)}"` } });
     RN.rerender();
   };
+  /* Edit drawer: the same standard fields and order as intake and Studio > Profile. The role title list follows
+     the chosen role category, and the role-detail fields are the category's RN.fields.roleFields keys. */
+  const GTM_KEYS = ['salesMotions', 'crm', 'methodologies'];   // asked for every role, shown in their own group
+  const detailKeysFor = (cat) => roleKeys(cat).filter((k) => !GTM_KEYS.includes(k));
+  // Split a stored list into registry values and legacy free text (kept on save, never shown as a chip)
+  function slugsOf(key, list) {
+    const out = { v: [], extra: [] };
+    arr(list).forEach((x) => { const o = RN.w.opt(key, x); if (o) { if (!out.v.includes(o.v)) out.v.push(o.v); } else if (x !== 'Other') out.extra.push(x); });
+    return out;
+  }
+  // Current registry answer for a role-detail key: op.roleFields first, then the reading of legacy data where it maps to an option
+  function detailValue(op, key) {
+    const d = RN.fields[key];
+    const multi = d.type === 'multi' || (d.type === 'optcards' && d.multi);
+    const rf = op.roleFields || {};
+    if (filled(rf[key])) return multi ? arr(rf[key]) : rf[key];
+    const rv = RN.roleDetail && RN.roleDetail.value(op, key);
+    if (rv) {
+      if (rv.kind === 'chips') { const v = slugsOf(key, rv.value).v; return multi ? v : v[0] || ''; }
+      if (rv.kind === 'scale') return (RN.w.opt(key, rv.value) || {}).v || '';
+      if (rv.kind === 'flag') return 'yes';
+      if (rv.kind === 'split') return rv.value;
+    }
+    return multi ? [] : '';
+  }
+  function detailFields(op, cat) {
+    const keys = detailKeysFor(cat);
+    if (!keys.length) return '<p class="small muted">This role category has no role-detail fields.</p>';
+    return keys.map((k) => {
+      const now = cat === op.catKey && RN.roleDetail ? RN.roleDetail.text(op, k) : '';
+      return RN.w.field(k, cat === op.catKey ? detailValue(op, k) : RN.fields[k].type === 'multi' ? [] : '', { name: 'rd_' + k, id: 'adm-rd-' + k, help: now ? `On the profile now: ${now}` : 'Not answered yet' });
+    }).join('');
+  }
+  const isoDay = (d) => (/^\d{4}-\d{2}-\d{2}/.test(String(d || '')) ? String(d).slice(0, 10) : '');
+  const editSec = (title, inner, attrs) => `<fieldset class="adm-edit-sec"${attrs || ''}><legend class="label">${title}</legend><div class="stack" style="--gap:18px">${inner}</div></fieldset>`;
   RN.actions['adm-edit'] = (el) => {
     const op = RN.model.byId(el.dataset.id);
     if (!op) return;
+    const motions = slugsOf('salesMotions', op.motions).v;
+    const meth = slugsOf('methodologies', op.methodologies).v;
     RN.ui.drawer({
-      title: `Edit ${esc(op.name)}`, sub: 'Changes go live on the profile and are logged with the date. The operator gets an email listing what changed.',
-      body: `<form id="adm-edit-form" data-submit="adm-edit-save" data-id="${esc(op.id)}" class="stack adm-edit" style="--gap:22px">
-        ${RN.w.field('roleCategory', op.catKey, { name: 'roleCategory', compact: true })}
-        ${RN.w.field('role', op.role, { name: 'role', compact: true })}
-        ${RN.w.field('headline', op.headline, { name: 'headline' })}
-        ${RN.w.field('bio', op.bio, { name: 'bio' })}
-        ${RN.w.field('availability', op.avail.key, { name: 'availability', compact: true })}
-        ${RN.w.field('hoursPerMonth', op.avail.hoursCode || '', { name: 'hoursPerMonth', compact: true })}
-        ${RN.w.field('rate', op.rate || '', { name: 'rate', compact: true })}
-        ${RN.w.field('revenueRange', op.revenueRanges, { name: 'revenueRange', compact: true })}
-        ${RN.w.field('employeeRange', op.employeeRanges, { name: 'employeeRange', compact: true })}
-        ${RN.w.field('industries', op.industries, { name: 'industries', compact: true })}
+      title: `Edit ${esc(op.name)}’s profile`, sub: `Changes go live on the profile and are logged with the date. We email ${esc(op.first)} a list of what changed.`,
+      body: `<form id="adm-edit-form" data-submit="adm-edit-save" data-id="${esc(op.id)}" class="stack adm-edit" style="--gap:26px" novalidate>
+        ${editSec('Role', RN.w.field('roleCategory', op.catKey, { name: 'roleCategory', compact: true, change: 'adm-edit-cat' })
+          + `<div data-adm-edit-role>${RN.w.field('role', op.role, { name: 'role', cat: op.catKey, compact: true })}</div>`)}
+        ${editSec('Headline and about', RN.w.field('headline', op.headline, { name: 'headline', compact: true }) + RN.w.field('bio', op.bio, { name: 'bio', compact: true }))}
+        ${editSec('Availability and rate', RN.w.field('availability', op.avail.key, { name: 'availability', compact: true })
+          + `<div class="grid g-2 adm-edit-2" style="--gap:18px">${RN.w.field('startDate', isoDay(op.avail.startDate), { name: 'startDate', compact: true })}${RN.w.field('newClientCapacity', op.newClientCapacity || '', { name: 'newClientCapacity', compact: true })}</div>`
+          + RN.w.field('hoursPerMonth', op.avail.hoursCode || '', { name: 'hoursPerMonth', compact: true })
+          + RN.w.field('engagementTypes', op.engagementTypes || [], { name: 'engagementTypes', compact: true })
+          + RN.w.field('rate', op.rate || '', { name: 'rate', compact: true }))}
+        ${editSec('Company fit', RN.w.field('revenueRange', op.revenueRanges, { name: 'revenueRange', compact: true })
+          + RN.w.field('employeeRange', op.employeeRanges, { name: 'employeeRange', compact: true })
+          + RN.w.field('industries', op.industries, { name: 'industries', compact: true }))}
+        ${editSec('GTM experience', RN.w.field('salesMotions', motions, { name: 'salesMotions', compact: true })
+          + RN.w.field('crm', slugsOf('crm', [op.crm]).v[0] || '', { name: 'crm', compact: true })
+          + RN.w.field('methodologies', meth, { name: 'methodologies', compact: true }))}
+        <div data-adm-edit-rd>${editSec(`Role details for ${esc(catLabel(op.catKey))}`, detailFields(op, op.catKey))}</div>
       </form>`,
       foot: `<button type="button" class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="adm-edit-form">Save changes</button>`,
     });
   };
+  // Changing the role category re-lists the role titles for that category and swaps in its role-detail fields
+  RN.inputs['adm-edit-cat'] = (el) => {
+    const form = el.closest('form');
+    if (!form) return;
+    const op = RN.model.byId(form.dataset.id);
+    const cat = el.value || (op && op.catKey);
+    if (!op || !cat) return;
+    const sel = form.querySelector('select[name="role"]');
+    const cur = sel ? sel.value : '';
+    const keep = (RN.fields.rolesByCat[cat] || []).includes(cur) ? cur : cat === op.catKey ? op.role : '';
+    const rb = form.querySelector('[data-adm-edit-role]');
+    if (rb) rb.innerHTML = RN.w.field('role', keep, { name: 'role', cat, compact: true });
+    const db = form.querySelector('[data-adm-edit-rd]');
+    if (db) db.innerHTML = editSec(`Role details for ${esc(catLabel(cat))}`, detailFields(op, cat));
+  };
   RN.submits['adm-edit-save'] = (form, d) => {
     const op = RN.model.byId(form.dataset.id);
     if (!op) return;
+    const cat = d.roleCategory || op.catKey;
+    // A legacy title outside the registry list stays as it is unless the team picks a new one
+    const role = d.role || (cat === op.catKey ? op.role : '');
+    if (!role || (d.role && !(RN.fields.rolesByCat[cat] || []).includes(d.role))) {
+      toast(`Pick a role title for ${esc(catLabel(cat))}.`, { icon: 'info' });
+      const sel = form.querySelector('select[name="role"]'); if (sel) sel.focus();
+      return;
+    }
+    if (d.newClientCapacity && (+d.newClientCapacity < 1 || +d.newClientCapacity > 10)) { toast('New client capacity is 1 to 10 clients.', { icon: 'info' }); return; }
     const same = (x, y) => (Array.isArray(x) || Array.isArray(y) ? arr(x).join('|') === arr(y).join('|') : String(x == null ? '' : x) === String(y == null ? '' : y));
     const e = {}, changed = [];
     const chk = (key, val, cur, label) => { if (!same(val, cur)) { e[key] = val; changed.push(label); } };
-    if (d.roleCategory) chk('catKey', d.roleCategory, op.catKey, RN.fields.roleCategory.label);
-    if (d.role) chk('role', d.role, op.role, RN.fields.role.label);
-    chk('headline', String(d.headline || '').trim(), op.headline, RN.fields.headline.label);
-    chk('bio', String(d.bio || '').trim(), op.bio, RN.fields.bio.label);
-    if (d.availability) chk('availKey', d.availability, op.avail.key, RN.fields.availability.label);
-    if (d.hoursPerMonth) chk('hoursCode', d.hoursPerMonth, op.avail.hoursCode, RN.fields.hoursPerMonth.label);
-    chk('rate', d.rate ? +d.rate : null, op.rate, RN.fields.rate.label);
-    chk('revenueRanges', arr(d.revenueRange), op.revenueRanges, RN.fields.revenueRange.label);
-    chk('employeeRanges', arr(d.employeeRange), op.employeeRanges, RN.fields.employeeRange.label);
-    chk('industries', arr(d.industries), op.industries, RN.fields.industries.label);
+    const L = (k) => RN.fields[k].label;
+    chk('catKey', cat, op.catKey, L('roleCategory'));
+    chk('role', role, op.role, L('role'));
+    chk('headline', String(d.headline || '').trim(), op.headline, L('headline'));
+    chk('bio', String(d.bio || '').trim(), op.bio, L('bio'));
+    if (d.availability) chk('availKey', d.availability, op.avail.key, L('availability'));
+    chk('startDate', d.startDate || '', isoDay(op.avail.startDate), L('startDate'));
+    chk('newClientCapacity', d.newClientCapacity ? +d.newClientCapacity : null, op.newClientCapacity, L('newClientCapacity'));
+    if (d.hoursPerMonth) chk('hoursCode', d.hoursPerMonth, op.avail.hoursCode, L('hoursPerMonth'));
+    chk('engagementTypes', arr(d.engagementTypes), op.engagementTypes, L('engagementTypes'));
+    chk('rate', d.rate ? +d.rate : null, op.rate, L('rate'));
+    chk('revenueRanges', arr(d.revenueRange), op.revenueRanges, L('revenueRange'));
+    chk('employeeRanges', arr(d.employeeRange), op.employeeRanges, L('employeeRange'));
+    chk('industries', arr(d.industries), op.industries, L('industries'));
+    // GTM fields: compare registry values only, and keep any legacy free text the operator already had
+    const mo = slugsOf('salesMotions', op.motions), me = slugsOf('methodologies', op.methodologies);
+    if (!same(arr(d.salesMotions), mo.v)) { e.motions = arr(d.salesMotions).concat(mo.extra); changed.push(L('salesMotions')); }
+    if (!same(d.crm || '', slugsOf('crm', [op.crm]).v[0] || '')) { e.crm = d.crm || ''; changed.push(L('crm')); }
+    if (!same(arr(d.methodologies), me.v)) { e.methodologies = arr(d.methodologies).concat(me.extra); changed.push(L('methodologies')); }
+    // Role details for the chosen category, stored under their registry keys
+    const rf = {};
+    detailKeysFor(cat).forEach((k) => {
+      const t = RN.fields[k].type;
+      const raw = d['rd_' + k];
+      const val = t === 'multi' || (t === 'optcards' && RN.fields[k].multi) ? arr(raw) : t === 'number' || t === 'money' ? (raw === '' || raw == null ? '' : +raw) : raw || '';
+      const cur = cat === op.catKey ? detailValue(op, k) : (t === 'multi' ? [] : '');
+      if (!same(val, cur)) { rf[k] = val; changed.push(L(k)); }
+    });
     if (!changed.length) { toast('No changes to save.', { icon: 'info' }); return; }
     const ts = RN.now().toISOString();
     RN.store.update((s) => {
       const prev = s.edits[op.id] || {};
-      s.edits[op.id] = Object.assign({}, prev, e, { _log: (prev._log || []).concat({ ts, by: 'Revenue Nomad team', fields: changed }) });
+      const next = Object.assign({}, prev, e, { _log: (prev._log || []).concat({ ts, by: 'Revenue Nomad team', fields: changed }) });
+      // Store the full registry set, so any surface that reads edits.roleFields sees every answer
+      if (Object.keys(rf).length) next.roleFields = Object.assign({}, op.roleFields, prev.roleFields, rf);
+      s.edits[op.id] = next;
     }, 'edits');
-    if (e.headline !== undefined) op.headline = e.headline;
     applyAdminEdits();
     op.completeness = RN.model.completeness(op);
     RN.mail(op.name, 'The Revenue Nomad team updated your profile', `Hi ${op.first},\n\nWe updated your profile: ${changed.join(', ')}.\n\nReview it any time in Studio > Profile. Reply to this email if anything looks wrong.`, 'admin');
@@ -1474,7 +1669,8 @@
     } else if (kind === 'app') {
       const p = prof(x);
       if (alreadyAlerted(p.name)) return;
-      RN.mail(TEAM, `New operator application: ${p.name}, ${p.role}`, `${p.name} applied as ${p.role} (${catLabel(p.roleCategory)}).\nEmail: ${p.email || 'Not given'}\nRate: ${p.rate ? RN.fmt.rate(p.rate) : 'Not given'} · ${RN.w.label('availability', p.availability)}\n\nReview within 2 business days in Admin > Approvals.`, 'alert');
+      const rk = roleKeys(p.roleCategory);
+      RN.mail(TEAM, `New operator application: ${p.name}, Fractional ${p.role}`, `${p.name} applied as Fractional ${p.role} (${catLabel(p.roleCategory)}).\nEmail: ${p.email || 'Not given'}\n${[p.location || p.country, p.rate ? RN.fmt.rate(p.rate) : 'No rate', RN.w.label('availability', p.availability)].filter(Boolean).join(' · ')}\n${RN.fmt.plural(p.fitTags.length, 'fit tag')}, ${RN.fmt.plural(p.industries.length, 'industry', 'industries')}, ${rk.filter((k) => appRoleText(x, k)).length} of ${rk.length} role details, photo ${p.photo ? 'added' : 'missing'}, video ${p.video ? 'added' : 'missing'}.\n\nReview within 2 business days in Admin > Approvals: Approve profile, then Generate score to publish at Vetted 50.\nReference: ${x.id}`, 'alert');
     }
   }
   function checkAlerts() {
@@ -1487,7 +1683,9 @@
     (s.pending || []).forEach((a) => { if (!al.apps.includes(a.id)) { al.apps.push(a.id); fresh.push(['app', a]); } });
     if (!fresh.length) return;
     RN.store.save();
-    fresh.forEach(([k, x]) => { try { sendAlert(k, x); } catch (e) { console.error(e); } });
+    // Sent after the surface that added the record finishes its own emails, so a team email it already sent
+    // (Join sends one for each application) is found by alreadyAlerted and the team gets exactly one.
+    setTimeout(() => fresh.forEach(([k, x]) => { try { sendAlert(k, x); } catch (e) { console.error(e); } }), 0);
   }
 
   /* ---------- Boot: after app.js has loaded the store and seeded the demo ---------- */

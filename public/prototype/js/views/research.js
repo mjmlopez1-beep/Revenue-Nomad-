@@ -6,8 +6,11 @@
    Prefix: rs- (actions, inputs, CSS). Shared helpers live on RN.research so they can be promoted to core:
      RN.research.stageOf(tag)  curated stage for a fit tag (see CURATED below and the hand-off notes)
      RN.research.def(tag)      published definition for a fit tag (library d, else Revenue Nomad Research's)
-     RN.research.guides        guide registry
-   Market figures come from RN.data.market and are illustrative; every surface says so. */
+     RN.research.guides        guide registry. Each entry: { id, title, cat, group, href, slug, q, ... }
+                               id = slug, route #guide.<id>; title = the question; cat = roleCategory slug or null
+     RN.research.guidesFor(cat, n)  up to n guides for a role category (cost guide first), for Browse category pages
+   Market figures come from RN.data.market and are illustrative; every surface says so.
+   Fee copy: the 25% platform fee and the no-fee rule for operator-sourced deals are proposals, labelled "Proposed". */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -54,7 +57,9 @@
   const stageBy = (name) => allStages().find((s) => s.name === name || s.id === name);
   // "Win deals at Qualify", but "Lead & plan across every stage" for Foundation
   const cellText = (area, stage) => (stage === 'Foundation' ? `${area} across every stage` : `${area} at ${stage}`);
-  const cellHtml = (area, stage) => `${esc(area)} <span class="serif">${stage === 'Foundation' ? 'across' : 'at'}</span> ${stage === 'Foundation' ? 'every stage' : esc(stage)}`;
+  const cellHtml = (area, stage) => esc(cellText(area, stage));
+  // The founder and team profiles stay out of editorial "strongest here" modules (they still appear in Browse)
+  const isStaff = (op) => !!(op && (op.staff || op.isMatt));
   // The title a client would hire for in each role category (from RN.fields.rolesByCat)
   const ROLE_PICK = { sales_leadership: 1, sales_enablement: 1 };
   const roleFor = (cat) => { const r = F.rolesByCat[cat] || []; return r[ROLE_PICK[cat] || 0] || F.catLabel(cat) + ' leader'; };
@@ -201,7 +206,7 @@
 
   // Operators strongest in a cell, area or stage: verified proof first, then claims, then Reputation Index
   function topOps(area, stage, n, cat) {
-    return RN.model.ops.filter((op) => !op.hidden && (!cat || op.catKey === cat)).map((op) => {
+    return RN.model.ops.filter((op) => !op.hidden && !isStaff(op) && (!cat || op.catKey === cat)).map((op) => {
       const hits = op.tags.filter((t) => {
         const info = RN.model.tagInfo(t.t) || {};
         const ax = t.axis || info.axis;
@@ -213,12 +218,16 @@
   }
   const whyLine = (x) => x.v.length ? `Client-verified in ${x.v[0].t}${x.v.length > 1 ? ` and ${x.v.length - 1} more here` : ''}` : `Claims ${x.hits.slice(0, 2).map((t) => t.t).join(' and ')}`;
 
-  // Proof-strength fill: tint -> brand by verified operators (sqrt spreads the low end). Claimed-only and empty get their own styles.
+  /* Proof-strength fill: five steps from tint to brand by verified operators (sqrt spreads the low end).
+     The steps skip the middle of the ramp on purpose. In light and dark, --ink reads at 4.5:1 or better on
+     steps 1-3 and --accent-ink on steps 4-5; no text color passes on a mid-green in dark mode.
+     Claimed-only and empty cells get their own styles. */
+  const STEPS = [14, 27, 40, 82, 94];
   function fill(ver, any, maxV, libN) {
     if (ver > 0) {
       const t = Math.min(1, Math.sqrt(ver / Math.max(1, maxV)));
-      const p = Math.round(18 + t * 74);
-      return { cls: 'is-v' + (p > 55 ? ' is-hi' : ''), style: `--rs-p:${p}%` };
+      const i = Math.min(STEPS.length - 1, Math.floor(t * STEPS.length));
+      return { cls: 'is-v' + (i >= 3 ? ' is-hi' : ''), style: `--rs-p:${STEPS[i]}%` };
     }
     if (any > 0) return { cls: 'is-c', style: '' };
     return { cls: libN ? 'is-open' : 'is-empty', style: '' };
@@ -228,25 +237,31 @@
      Shared bits
      ===================================================================== */
   const crumbs = (items) => `<nav class="crumbs" aria-label="Breadcrumb"><a href="#insights">Insights</a>${items.map((x) => `${icon('chev-right')}${x.to ? `<a href="#${esc(x.to)}">${esc(x.l)}</a>` : `<span>${esc(x.l)}</span>`}`).join('')}</nav>`;
-  const illus = (label) => `<span class="pill pill-warn rs-illus" title="Market and survey figures in this prototype are invented to show shape and value">${icon('info')}${esc(label || 'Illustrative data')}</span>`;
+  const illus = (label) => RN.ui.illus(label || 'Illustrative', 'Market and survey figures in this prototype are invented to show shape and value, not to be cited.');
   const jsonAttr = (o) => esc(JSON.stringify(o));
+  // Fee copy lives in one place: the 25% platform fee is a proposal until the founder confirms it
+  const FEE = () => (RN.projects && RN.projects.FEE) || 0.25;
+  const allInRate = (rate) => (RN.projects && RN.projects.allIn ? RN.projects.allIn(rate) : Math.round(rate / (1 - FEE())));
+  const FEE_PCT = () => Math.round(FEE() * 100) + '%';
 
-  // Browse hand-off (SPEC loop 10): same store keys Browse reads, same event Insights logs
+  // Browse hand-off (SPEC loop 10): same store keys Browse reads, same event Insights logs.
+  // A single role category lands on that category's page (#browse.<cat>), the SEO role page.
   function goBrowse(o) {
     const f = {};
     Object.keys(o.filters || {}).forEach((k) => { const v = o.filters[k]; if (Array.isArray(v) ? v.length : v) f[k] = v; });
-    RN.store.update((s) => { s.browse = Object.assign({}, s.browse, { q: o.q || '', tags: o.tags || [], filters: f, sort: 'best' }); }, 'browse');
+    RN.store.update((s) => { s.browse = Object.assign({}, s.browse, { q: o.q || '', tags: o.tags || [], filters: f, sort: o.sort || 'best' }); }, 'browse');
     RN.track('research_cta', { source: o.source || 'research', filters: f, q: o.q || '', tags: o.tags || [] });
     while (RN.ui.modalEl()) RN.ui.closeModal();
-    RN.go('browse');
+    const cats = f.roleCategories || [];
+    RN.go(cats.length === 1 ? 'browse.' + cats[0] : 'browse');
   }
   RN.actions['rs-browse'] = (el) => {
     let f = {}, tags = [];
     try { f = JSON.parse(el.dataset.f || '{}'); } catch (e) { f = {}; }
     try { tags = el.dataset.tags ? JSON.parse(el.dataset.tags) : []; } catch (e) { tags = []; }
-    goBrowse({ filters: f, tags, q: el.dataset.q || '', source: el.dataset.src });
+    goBrowse({ filters: f, tags, q: el.dataset.q || '', sort: el.dataset.sort || '', source: el.dataset.src });
   };
-  const browseBtn = (label, o, cls) => `<button type="button" class="${cls || 'btn'}" data-act="rs-browse" data-src="${esc(o.src || 'research')}" data-f="${jsonAttr(o.filters || {})}" data-tags="${jsonAttr(o.tags || [])}" data-q="${esc(o.q || '')}">${esc(label)}${icon('arrow')}</button>`;
+  const browseBtn = (label, o, cls) => `<button type="button" class="${cls || 'btn'}" data-act="rs-browse" data-src="${esc(o.src || 'research')}" data-f="${jsonAttr(o.filters || {})}" data-tags="${jsonAttr(o.tags || [])}" data-q="${esc(o.q || '')}"${o.sort ? ` data-sort="${esc(o.sort)}"` : ''}>${esc(label)}${icon('arrow')}</button>`;
 
   RN.actions['rs-scroll'] = (el) => {
     const t = document.getElementById(el.dataset.to);
@@ -359,12 +374,12 @@
     const before = st.filter((s) => s.side === 'before');
     const after = st.filter((s) => s.side !== 'before');
     return `<div class="rs-bow-wrap">
-      <div class="rs-bow-sides" aria-hidden="true"><span style="flex:${before.length}">Before the sale</span><span class="rs-bow-sides-k"></span><span style="flex:${after.length}">After the sale</span></div>
+      <div class="rs-bow-sides" aria-hidden="true"><span class="label" style="flex:${before.length}">Before the sale</span><span class="rs-bow-sides-k"></span><span class="label" style="flex:${after.length}">After the sale</span></div>
       <div class="rs-bow">
-        <span class="rs-bow-m">Before the sale</span>
+        <span class="rs-bow-m label">Before the sale</span>
         ${before.map((s) => seg(s, aggs[st.indexOf(s)])).join('')}
-        <div class="rs-knot" aria-hidden="true"><span class="rs-knot-dot">${icon('seal')}</span><span>Signed</span></div>
-        <span class="rs-bow-m">After the sale</span>
+        <div class="rs-knot" aria-hidden="true"><span class="rs-knot-dot">${icon('seal')}</span><span class="label">Signed</span></div>
+        <span class="rs-bow-m label">After the sale</span>
         ${after.map((s) => seg(s, aggs[st.indexOf(s)])).join('')}
       </div>
     </div>`;
@@ -372,7 +387,7 @@
 
   function legend() {
     return `<div class="rs-legend" aria-label="Legend">
-      <span><i class="rs-sw rs-sw-v"></i>Client-verified proof (stronger color, more operators)</span>
+      <span><span class="rs-ramp" aria-hidden="true">${STEPS.map((p) => `<i class="rs-sw rs-sw-v" style="--rs-p:${p}%"></i>`).join('')}</span>Operators with client-verified proof, fewer to more</span>
       <span><i class="rs-sw rs-sw-c"></i>Self-claimed only</span>
       <span><i class="rs-sw rs-sw-o"></i>Focus areas mapped, no operators yet</span>
     </div>`;
@@ -409,10 +424,10 @@
     const nb = js.filter((s) => s.side === 'before').length;
     const desktop = `<div class="rs-grid" role="group" aria-label="GTM Framework: areas by stage. Each cell opens a panel.">
       <div class="rs-gh rs-gh-corner" aria-hidden="true"></div>
-      <div class="rs-gh rs-gh-side" style="grid-column: span ${nb}">Before the sale</div>
-      <div class="rs-gh rs-gh-side is-after" style="grid-column: span ${js.length - nb}">After the sale</div>
+      <div class="rs-gh rs-gh-side label" style="grid-column: span ${nb}">Before the sale</div>
+      <div class="rs-gh rs-gh-side label is-after" style="grid-column: span ${js.length - nb}">After the sale</div>
       <div class="rs-gsp" aria-hidden="true"></div>
-      <div class="rs-gh rs-gh-side is-all">Every stage</div>
+      <div class="rs-gh rs-gh-side label is-all">Every stage</div>
       <div class="rs-gh rs-gh-corner"><span class="label">Area</span></div>
       ${js.map((s) => `<button type="button" class="rs-gh rs-gh-stage" data-act="rs-fw-open" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
       <div class="rs-gsp" aria-hidden="true"></div>
@@ -493,7 +508,7 @@
     const body = `<div class="rs-pn">
       ${st ? `<div class="rs-pn-block"><span class="label">What good looks like${st.side === 'all' ? '' : ` at ${esc(st.name)}`}</span>
         <p class="rs-pn-what">${esc(st.what)}</p>
-        <p class="rs-pn-skilled serif-up">${esc(st.skilled)}</p></div>` : ''}
+        <p class="rs-pn-skilled">${esc(st.skilled)}</p></div>` : ''}
       ${ar ? `<div class="rs-pn-block"><span class="label">The area</span><p class="rs-pn-what">${esc(ar.def)}</p></div>` : ''}
       ${breakdown}
       <div class="rs-pn-block"><div class="row between"><span class="label">Focus areas here (${a.tags.length})</span>${a.tags.length ? `<button type="button" class="act" data-act="rs-lib-open" data-area="${esc(libFilter.area)}" data-stage="${esc(libFilter.stage)}">${a.tags.length > 10 ? 'See all' : 'Open in library'}${icon('arrow')}</button>` : ''}</div>
@@ -575,7 +590,7 @@
     return `<div class="rs-dq" role="group" aria-labelledby="rs-dq-t">
       <div class="row between"><span class="step-count">Question ${i + 1} of ${DIAG.length}</span>${i ? `<button type="button" class="act rs-dq-back" data-act="rs-dg-back">${icon('arrow-left')}Back</button>` : ''}</div>
       <div class="stepper" aria-hidden="true">${DIAG.map((_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
-      <h3 class="rs-dq-t" id="rs-dq-t">${esc(q.q)}</h3>
+      <h3 class="h3 rs-dq-t" id="rs-dq-t">${esc(q.q)}</h3>
       <div class="rs-dq-opts" role="radiogroup" aria-labelledby="rs-dq-t">
         ${q.o.map((o, k) => `<button type="button" class="rs-dq-opt" role="radio" aria-checked="${diag.ans[i] === k}" data-act="rs-dg-pick" data-i="${k}"><span class="rs-dq-radio" aria-hidden="true"></span><span>${esc(o.l)}</span></button>`).join('')}
       </div>
@@ -587,7 +602,7 @@
     if (!r.top) {
       return `<div class="rs-dr">
         <span class="eyebrow">Your result</span>
-        <h3 class="rs-dr-t">No clear leak. Your engine looks healthy.</h3>
+        <h3 class="h3 rs-dr-t">No clear leak. Your engine looks healthy.</h3>
         <p class="rs-dr-p">Companies in your position usually hire fractional help to scale what already works, often a new segment, a new channel or a larger team. Engagement Blueprints show what those projects look like.</p>
         <div class="row" style="margin-top:22px"><a class="btn btn-leaf" href="#blueprints">Browse Engagement Blueprints${icon('arrow')}</a><button type="button" class="btn btn-line" data-act="rs-dg-reset">${icon('refresh')}Start over</button></div>
       </div>`;
@@ -598,31 +613,79 @@
     const range = monthRange(cat, '40', '5m_20m');
     const catL = F.catLabel(cat);
     const bp = blueprintFor(cat);
+    const saved = diag.saved && diag.saved.key === diagKey() ? diag.saved : null;
     return `<div class="rs-dr">
       <span class="eyebrow">Your result</span>
-      <h3 class="rs-dr-t">Your biggest leak: <span class="serif">${esc(r.top.area)}</span> ${r.top.stage === 'Foundation' ? 'across every stage' : 'at ' + esc(r.top.stage)}.</h3>
+      <h3 class="h3 rs-dr-t">Your biggest leak: ${esc(cellText(r.top.area, r.top.stage))}.</h3>
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
       ${r.second ? `<p class="small rs-dr-also">Also worth a look: ${esc(cellText(r.second.area, r.second.stage))}.</p>` : ''}
       <div class="rs-dr-grid">
-        <div class="rs-dr-box"><span class="label">Who to hire</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)}.` : '.'}</span></div>
+        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)} in operator rates.` : '.'}</span></div>
         <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as a project.</span></div>
       </div>
       <div class="row rs-dr-acts">
         ${browseBtn(`See ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-leaf')}
         <a class="btn btn-line" href="#${esc(bp ? bp.to : 'blueprints')}">${bp ? 'See the Blueprint' : 'Blueprints'}</a>
         <button type="button" class="btn btn-line" data-act="rs-fw-open" data-area="${esc(r.top.area)}" data-stage="${esc(r.top.stage)}">Open this cell</button>
+      </div>
+      <div class="row rs-dr-more">
+        ${saved ? `<span class="rs-dr-sent">${icon('check-circle')}Sent to ${esc(saved.email)}</span>` : `<button type="button" class="act rs-dr-reset" data-act="rs-dg-save">${icon('mail')}Email me this result and the 3 operators</button>`}
         <button type="button" class="act rs-dr-reset" data-act="rs-dg-reset">${icon('refresh')}Start over</button>
       </div>
-      <p class="tiny rs-dr-note">Your answers stay in this browser tab. We record only the cell and role category, never your answers.</p>
+      <p class="tiny rs-dr-note">We record only the cell and role category, never your answers. If you ask for the email, we keep your work email and company revenue range to send it.</p>
     </div>`;
+  }
+  const diagKey = () => diag.ans.join('-');
+  // Save the result by email (value: a reason to come back). Work email + the standard company revenue field.
+  RN.actions['rs-dg-save'] = () => {
+    const me = RN.me && RN.me();
+    const co = (me && me.company) || {};
+    RN.ui.modal({
+      width: 480,
+      title: 'Email me this result',
+      sub: 'We send the cell, the role to hire, the Blueprint and three operators with proof there.',
+      body: `<form id="rs-dg-form" data-submit="rs-dg-save" class="stack" style="--gap:18px" novalidate>
+        ${RN.w.field('email', (me && me.email) || '', { name: 'email' })}
+        ${RN.w.field('companyRevenue', co.revenueRange || '', { name: 'revenueRange' })}
+        <button class="btn" type="submit">Email my result</button>
+      </form>`,
+    });
+  };
+  RN.submits['rs-dg-save'] = (form, data) => {
+    const email = String(data.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { RN.ui.toast('Enter a work email so we can send your result.', { icon: 'info' }); const i = form.querySelector('input[name=email]'); if (i) i.focus(); return; }
+    const rev = Array.isArray(data.revenueRange) ? data.revenueRange[0] : data.revenueRange;
+    const r = diagScore();
+    const cat = r.top ? (r.cat || AREA_META[r.top.area].cat) : null;
+    const ops = r.top ? diagList(r).map((x) => x.op) : [];
+    const bp = cat ? blueprintFor(cat) : null;
+    const where = r.top ? cellText(r.top.area, r.top.stage) : 'No clear leak';
+    const range = cat ? monthRange(cat, '40', rev || '5m_20m') : '';
+    RN.track('diagnostic_save', { source: 'framework', meta: r.top ? { area: r.top.area, stage: r.top.stage, roleCategory: cat, revenueRange: rev || null } : { area: null, revenueRange: rev || null } });
+    RN.mail(email, 'Your GTM Framework result', [
+      `Your biggest leak: ${where}.`,
+      cat ? `Who to hire: a fractional ${roleFor(cat)} (${F.catLabel(cat)}). Typical month at 40 hrs${rev ? ` for a ${RN.w.label('companyRevenue', rev)} company` : ''}: ${range} in operator rates.` : '',
+      bp ? `Scope it: ${bp.title} Blueprint, revenuenomad.com/${bp.to.replace('.', '/')}` : '',
+      ops.length ? `Operators with proof there: ${ops.map((o) => `${o.name} (${o.role})`).join(', ')}.` : '',
+      'Retake it any time at revenuenomad.com/framework.',
+    ].filter(Boolean).join('\n\n'), 'research');
+    diag.saved = { key: diagKey(), email };
+    RN.ui.closeModal();
+    RN.ui.toast(`Result sent to ${esc(email)}`, { icon: 'mail' });
+    paintDiag();
+  };
+  function diagList(r) {
+    const cat = r.cat || AREA_META[r.top.area].cat;
+    let list = topOps(r.top.area, r.top.stage, 3, cat);
+    if (list.length < 3) list = list.concat(topOps(r.top.area, null, 6, cat).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    if (list.length < 3) list = list.concat(RN.model.search({ filters: { roleCategories: [cat] }, sort: 'ris' }).filter((x) => !isStaff(x.op)).map((x) => ({ op: x.op, hits: [], v: [] })).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    return list;
   }
   function diagOps() {
     const r = diagScore();
     if (!r.top) return '';
     const cat = r.cat || AREA_META[r.top.area].cat;
-    let list = topOps(r.top.area, r.top.stage, 3, cat);
-    if (list.length < 3) list = list.concat(topOps(r.top.area, null, 6, cat).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
-    if (list.length < 3) list = list.concat(RN.model.search({ filters: { roleCategories: [cat] }, sort: 'ris' }).map((x) => ({ op: x.op, hits: [], v: [] })).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    const list = diagList(r);
     return `<div class="rs-dops">
       <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">Matched to your result</span><h3 class="h3" style="margin-top:8px">Operators strong in ${esc(cellText(r.top.area, r.top.stage))}</h3></div>
       ${browseBtn('See more', { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-line btn-sm')}</div>
@@ -675,35 +738,35 @@
       </div>
     </header>
 
-    <section class="wrap rs-sec" aria-labelledby="rs-bow-t">
+    <section class="wrap section-sm rs-sec" aria-labelledby="rs-bow-t">
       <div class="rs-sec-hd">
-        <div><span class="kicker">The customer journey</span><h2 class="h2" id="rs-bow-t">Seven stages, <span class="serif">one bowtie.</span></h2></div>
+        <div><span class="eyebrow">The customer journey</span><h2 class="h2" id="rs-bow-t">Seven stages, one bowtie</h2></div>
         <p class="body">Four stages narrow toward the signature. Three widen after it, as a customer adopts and grows. Shading shows where operators on the network have client-verified proof. Select a stage for what good looks like there.</p>
       </div>
       ${bowtie(ix)}
       ${legend()}
     </section>
 
-    <section class="wrap rs-sec" aria-labelledby="rs-grid-t">
+    <section class="wrap section-sm rs-sec" aria-labelledby="rs-grid-t">
       <div class="rs-sec-hd">
-        <div><span class="kicker">The map</span><h2 class="h2" id="rs-grid-t">Six areas <span class="serif">across seven stages.</span></h2></div>
+        <div><span class="eyebrow">The map</span><h2 class="h2" id="rs-grid-t">Six areas across seven stages</h2></div>
         <p class="body">Each cell counts the operators with client-verified proof there and the operators who claim the work. Select a cell to see what good looks like, the focus areas that live in it and who is strongest. Foundation holds the work every stage runs on.</p>
       </div>
       <div class="rs-grid-box" data-rs-grid>${grid(ix)}</div>
       ${legend()}
     </section>
 
-    <section class="wrap rs-sec rs-find" aria-labelledby="rs-find-t">
+    <section class="wrap section-sm rs-sec rs-find" aria-labelledby="rs-find-t">
       <h2 class="sr-only" id="rs-find-t">What the map shows today</h2>
       <div class="rs-finds">
-        <div class="rs-finds-hd"><span class="kicker">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? ` (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)` : ''}. A focus area counts as verified once a client review rated 4.0 or higher confirms it.</p></div>
+        <div class="rs-finds-hd"><span class="eyebrow">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? ` (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)` : ''}. A focus area counts as verified once a client review rated 4.0 or higher confirms it.</p></div>
         ${finds.map((f) => `<div class="rs-fnd"><span class="rs-fnd-v num">${esc(f.v)}</span><p>${esc(f.l)}</p><button type="button" class="act" ${f.act}>${esc(f.cta)}${icon('arrow')}</button></div>`).join('')}
       </div>
     </section>
 
-    <section class="wrap rs-sec" aria-labelledby="rs-areas-t">
+    <section class="wrap section-sm rs-sec" aria-labelledby="rs-areas-t">
       <div class="rs-sec-hd">
-        <div><span class="kicker">The areas</span><h2 class="h2" id="rs-areas-t">Six kinds of <span class="serif">go-to-market work.</span></h2></div>
+        <div><span class="eyebrow">The areas</span><h2 class="h2" id="rs-areas-t">Six kinds of go-to-market work</h2></div>
         <p class="body">An operator's profile shows how much client-verified proof they have in each area. The same six areas describe what a company needs and what an Engagement Blueprint delivers.</p>
       </div>
       <div class="grid g-3 rs-areas">
@@ -720,7 +783,7 @@
       <div class="wrap rs-diag">
         <div class="rs-diag-intro">
           <span class="eyebrow">Self-diagnostic for companies</span>
-          <h2 class="h2" id="rs-diag-t">Where is your revenue engine <span class="serif">leaking?</span></h2>
+          <h2 class="h2" id="rs-diag-t">Where is your revenue engine leaking?</h2>
           <p class="lede">Five questions, about a minute. You get the cell where your gap sits, the role to hire for it, a Blueprint to scope it and three operators with proof there.</p>
           <ul class="rs-diag-list">
             <li>${icon('check')}No sign-up, nothing to type</li>
@@ -733,11 +796,11 @@
     </section>
     <section class="wrap rs-diag-ops-sec" id="rs-diag-ops" ${diag.step >= DIAG.length && diagScore().top ? '' : 'hidden'}>${diag.step >= DIAG.length ? diagOps() : ''}</section>
 
-    <section class="wrap rs-sec rs-method" aria-labelledby="rs-m-t">
+    <section class="wrap section-sm rs-sec rs-method" aria-labelledby="rs-m-t">
       <div class="rs-method-in">
-        <div><span class="kicker">How the map is built</span><h2 class="h3" id="rs-m-t">Method and sources</h2></div>
+        <div><span class="eyebrow">How the map is built</span><h2 class="h3" id="rs-m-t">Method and sources</h2></div>
         <div class="prose small">
-          <p>Every fit tag in the <a href="#library">Fit Tag Library</a> carries one area and one stage. Counts on this page come from the ${RN.fmt.int(RN.model.ops.length)} operator profiles on the network. An operator counts as <b>claiming</b> a cell when they list a focus area in it, and as <b>client-verified</b> when a client review rated 4.0 or higher confirms that focus area.</p>
+          <p>Every focus area in the <a href="#library">Fit Tag Library</a> carries one area and one stage. Counts on this page come from the ${RN.fmt.int(RN.model.ops.length)} operator profiles on the network. An operator counts as <b>claiming</b> a cell when they list a focus area in it, and as <b>client-verified</b> when a client review rated 4.0 or higher confirms that focus area.</p>
           <p>Revenue Nomad Research reviewed the stage of ${Object.keys(CURATED).length} focus areas in this edition so each sits at the stage it changes: brand and content work at Awareness, pricing and negotiation at Commit, onboarding at Onboard, expansion selling at Expand. Areas were not changed.</p>
           <p>Stage copy is Revenue Nomad's own. Cite it as "Revenue Nomad GTM Framework, 2026".</p>
         </div>
@@ -878,6 +941,26 @@
     if (c) c.textContent = r.count;
     const act = RN.$('#rs-lib-active');
     if (act) act.innerHTML = activeChips();
+    const gd = RN.$('#rs-lib-guides');
+    if (gd) gd.innerHTML = libGuides();
+  }
+  /* Guides for the work on screen: the role categories that own most of the filtered focus areas
+     (the whole library when nothing is filtered), cost guide first. Links to real #guide.<id> routes. */
+  function libGuides() {
+    const rows = libFilter(libRows(netIndex(), {}));
+    const n = {};
+    rows.forEach((r) => { if (r.cat) n[r.cat] = (n[r.cat] || 0) + 1; });
+    let cats = Object.keys(n).sort((a, b) => n[b] - n[a]);
+    if (lib.cat) cats = [lib.cat].concat(cats.filter((c) => c !== lib.cat));
+    else if (lib.area && !lib.stage && AREA_META[lib.area]) cats = [AREA_META[lib.area].cat].concat(cats.filter((c) => c !== AREA_META[lib.area].cat));
+    const out = [];
+    cats.forEach((c) => { R.guidesFor(c, 2).forEach((g) => { if (out.length < 3 && !out.includes(g)) out.push(g); }); });
+    if (!out.length) return '';
+    const what = lib.stage && lib.area ? cellText(lib.area, lib.stage) : lib.stage ? `${lib.stage === 'Foundation' ? 'Foundation work' : 'the ' + lib.stage + ' stage'}` : lib.area ? lib.area : lib.cat ? F.catLabel(lib.cat) : lib.q ? `“${lib.q}”` : 'this work';
+    return `<nav class="rs-lg" aria-label="Guides on ${esc(what)}">
+      <span class="label">Guides on ${esc(what)}</span>
+      <div class="rs-lg-list">${out.map((g) => `<a class="rs-lg-a" href="#guide.${esc(g.id)}">${icon('book')}<span>${esc(g.title)}</span>${icon('arrow')}</a>`).join('')}</div>
+    </nav>`;
   }
   function activeChips() {
     const chips = [];
@@ -985,10 +1068,10 @@
       ${crumbs([{ l: 'Fit Tag Library' }])}
       <span class="eyebrow">Fit Tag Library</span>
       <h1 class="h1">The shared vocabulary of <span class="serif">fractional GTM work.</span></h1>
-      <p class="lede">Operators add fit tags to say what they do. Clients see them as focus areas and filter by them. A client review turns a claim into proof. One list, used on every profile, brief and review.</p>
+      <p class="lede">Focus areas (fit tags) name the specific work an operator does. Operators add them to their profiles, clients filter by them, and a client review turns a claim into proof. One list, used on every profile, brief and review.</p>
       <div class="stats-row rs-kpis" style="--cols:4">
         <div class="stat"><span class="stat-v">${RN.fmt.int(libN)}</span><span class="stat-l">Focus areas, ${groupsN} groups</span></div>
-        <div class="stat"><span class="stat-v">${RN.fmt.int(claims)}</span><span class="stat-l">Fit tags on operator profiles</span></div>
+        <div class="stat"><span class="stat-v">${RN.fmt.int(claims)}</span><span class="stat-l">Focus areas listed on operator profiles</span></div>
         <div class="stat"><span class="stat-v">${RN.fmt.int(verified)}</span><span class="stat-l">Confirmed by a client review</span></div>
         <div class="stat"><span class="stat-v">${Object.values(ix.tags).filter((t) => t.any.length).length}</span><span class="stat-l">In use on live profiles</span></div>
       </div>
@@ -1004,11 +1087,12 @@
         <div class="input-wrap rs-lib-search">${icon('search')}<input class="input" type="search" value="${esc(lib.q)}" placeholder="Search ${libN} focus areas" aria-label="Search focus areas" data-input="rs-lib-q" autocomplete="off"></div>
         <div class="rs-lib-cats" data-deselect><span class="label">${esc(F.roleCategory.label)}</span>${RN.w.control('roleCategory', lib.cat, { name: 'rsLibCat', id: 'rs-lib-cat', change: 'rs-lib-cat' })}</div>
         <div class="rs-lib-meta">
-          <span class="small" id="rs-lib-count" aria-live="polite">${esc(r.count)}</span>
+          <span class="row rs-lib-count-row" style="--gap:10px"><span class="small" id="rs-lib-count" aria-live="polite">${esc(r.count)}</span>${illus('Search counts illustrative')}</span>
           <div class="row" style="--gap:10px"><span id="rs-lib-active" class="row" style="--gap:8px">${activeChips()}</span>
           <div class="seg" role="group" aria-label="Sort">${sortBtn('used', 'Most proven')}${sortBtn('demand', 'Most searched')}${sortBtn('az', 'A–Z')}</div></div>
         </div>
       </div>
+      <div id="rs-lib-guides" class="rs-lib-guides">${libGuides()}</div>
       <div id="rs-lib-results" class="rs-lib-results">${r.html}</div>
     </section>
 
@@ -1029,12 +1113,23 @@
   const r500 = (n) => Math.round(n / 500) * 500;
   const usd = (n) => RN.fmt.usd(n);
   const hr = (n) => '$' + Math.round(n);
-  // Same formula and rounding as the Rate Index estimator (insights.js) so numbers agree across surfaces
+  // Same formula and rounding as the Rate Index estimator (RN.model.monthlyRange, $500 steps) so numbers agree across surfaces
   function monthRange(cat, hours, rev) {
+    if (RN.model.monthlyRange) return RN.model.monthlyRange(cat, rev, hours).label;
     const b = RIX().byCat[cat] || RIX().byCat.sales_leadership;
     const h = hoursNum(hours), m = mult(rev);
     return `${usd(r500(b.p25 * m * h))} - ${usd(r500(b.p75 * m * h))}/mo`;
   }
+  // What a client would pay through a Revenue Nomad intro under the proposed fee: operator rate / 0.75, same $500 rounding
+  function monthAllIn(cat, hours, rev) {
+    const b = RIX().byCat[cat] || RIX().byCat.sales_leadership;
+    const h = hoursNum(hours), m = mult(rev);
+    return `${usd(r500(allInRate(b.p25 * m) * h))} - ${usd(r500(allInRate(b.p75 * m) * h))}/mo`;
+  }
+  const proposed = () => '<span class="pill pill-line rs-prop">Proposed</span>';
+  const allInNote = () => `<p class="rs-src">${icon('info')}<span>Operator rates come from the Rate Index. The all-in column is what a client would pay through a Revenue Nomad intro under the proposed ${FEE_PCT()} platform fee (operator rate ÷ ${(1 - FEE()).toFixed(2)}). The fee is a proposal the founder is confirming. Illustrative.</span></p>`;
+  // Monthly table for a role category: operator rates and the proposed all-in, at a $5M–$20M company
+  const monthTable = (cat, hrs) => tbl(['Available time', 'Typical range, operator rates', 'All-in, proposed fee'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m')), esc(monthAllIn(cat, h, '5m_20m'))])) + allInNote();
   const HOURS = { h_under_20: '19', h_20: '20', h_40: '40', h_60: '60', h_80: '80', h_100: '100', h_160: '160' };
   const hoursRows = () => REP().hours.map((r) => ({ code: HOURS[r.h] || r.h, v: r.v }));
   const sumStat = (re, dflt) => { const x = (REP().summary || []).find((s) => re.test(s.l)); return x ? x.v : dflt; };
@@ -1050,6 +1145,7 @@
 
   const GROUPS = [
     { k: 'clients', l: 'For clients', d: 'Hiring a fractional go-to-market leader: cost, scope, timing and how to judge proof.' },
+    { k: 'costs', l: 'What each role costs', d: 'Rate Index medians and a typical month for every role category.' },
     { k: 'operators', l: 'For operators', d: 'Pricing your work and winning clients, with or without a marketplace intro.' },
     { k: 'methods', l: 'About our methods', d: 'How Revenue Nomad measures reputation and collects client reviews.' },
   ];
@@ -1058,8 +1154,8 @@
     {
       slug: 'fractional-vp-of-sales-cost', bp: 'vp-sales', group: 'clients', updated: '2026-09-18', mins: 6, cat: 'sales_leadership', opsQ: 'VP of Sales',
       q: 'How much does a fractional VP of Sales cost?',
-      answer: () => { const b = RIX().byCat.sales_leadership; return [`A fractional VP of Sales costs a median of ${hr(b.p50)} an hour on the Revenue Nomad Rate Index, and the middle half of operators charge between ${hr(b.p25)} and ${hr(b.p75)}.`, `At 40 hours a month, the most common engagement size, that is a typical range of ${monthRange('sales_leadership', '40', '5m_20m')} for a company with $5M–$20M in revenue.`]; },
-      stats: () => { const b = RIX().byCat.sales_leadership; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Sales Leadership' }, { v: monthRange('sales_leadership', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: plural(b.n, 'rate'), l: 'In the index for this role' }]; },
+      answer: () => { const b = RIX().byCat.sales_leadership; return [`A fractional VP of Sales costs a median of ${hr(b.p50)} an hour on the Revenue Nomad Rate Index, and the middle half of operators charge between ${hr(b.p25)} and ${hr(b.p75)}.`, `At 40 hours a month, the most common engagement size, that is a typical range of ${monthRange('sales_leadership', '40', '5m_20m')} in operator rates for a company with $5M–$20M in revenue.`]; },
+      stats: () => { const b = RIX().byCat.sales_leadership; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Sales Leadership' }, { v: monthRange('sales_leadership', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs, operator rates' }, { v: plural(b.n, 'rate'), l: 'In the index for this role' }]; },
       sections: () => {
         const b = RIX().byCat.sales_leadership;
         const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b.p50 * mult(o.v)), hi: o.v === '5m_20m' }));
@@ -1072,7 +1168,7 @@
             ${src(`Median hourly rate for Sales Leadership by company revenue range. Rate Index, ${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'Q3 26')}. Illustrative.`)}
             ${chartGo('Browse Sales Leadership operators who work with $5M–$20M companies', { filters: { roleCategories: ['sales_leadership'], revenueRange: ['5m_20m'] }, src: 'guide_chart_rate_revenue' })}` },
           { id: 'monthly', h: 'What a month costs at each size', html: `<p>Multiply the hourly range by the hours you need. For a $5M–$20M company:</p>
-            ${tbl(['Available time', 'Typical Engagement Range'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange('sales_leadership', h, '5m_20m'))]))}
+            ${monthTable('sales_leadership', hrs)}
             <p>Twenty hours buys a leader who sets the plan, runs the weekly pipeline review and coaches the team. Forty hours adds hands-on work: hiring, building the playbook and joining key deals. Sixty or more usually means the operator is also managing reps day to day.</p>` },
           { id: 'vs-full-time', h: 'How it compares with a full-time hire', html: `<p>A full-time VP of Sales costs more than twice as much per month once base, commission, benefits and equity are counted, and takes three to four months to hire.</p>
             ${ff.length ? tbl(['Option', 'Monthly cost', 'Time to start'], ff.map((r) => [esc(r[0]), esc(r[1]), esc(r[2])])) : ''}
@@ -1088,7 +1184,7 @@
         { q: 'Is a fractional CRO more expensive than a fractional VP of Sales?', a: `Usually, by 10% to 20% an hour, because a CRO also owns marketing and customer success. Both roles sit in the Sales Leadership category of the Rate Index, where the median is ${hr(b.p50)} an hour.` },
         { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
         { q: 'Do fractional sales leaders take commission or equity?', a: 'Some do, on top of a lower base rate. On Revenue Nomad rates are listed per hour; any variable pay is agreed between you and the operator.' },
-        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate.' },
+        { q: 'Can I see an operator\'s rate before I contact them?', a: `Yes. Signed-in clients see each operator's own hourly rate on their profile and can filter search by rate. Under the proposed ${FEE_PCT()} platform fee, the all-in rate through Revenue Nomad is the operator's rate divided by ${(1 - FEE()).toFixed(2)}: ${hr(b.p50)} becomes ${hr(allInRate(b.p50))}.` },
       ]; },
       cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
     },
@@ -1133,7 +1229,7 @@
         const hRows = hoursRows().map((r) => ({ label: RN.w.label('hoursPerMonth', r.code), value: r.v, hi: r.code === '40' }));
         const term = REP().term || [];
         return [
-          { id: 'outcome', h: 'Start with the outcome', html: `<p>A title is not a scope. Write the result you want in 90 days in a sentence a board member would understand, for example: "A written sales process, two reps hired and ramping, and a forecast within 10% of actuals."</p>
+          { id: 'outcome', h: 'Start with the outcome', html: `<p>Write the outcome before the title. Describe the result you want in 90 days in a sentence a board member would understand, for example: "A written sales process, two reps hired and ramping, and a forecast within 10% of actuals."</p>
             <p>Then pick the one number you will review every month. Pipeline created, win rate, ramp time and forecast accuracy all work. Revenue alone does not, because it lags the work by a quarter or more.</p>` },
           { id: 'type', h: 'Pick the engagement type', html: `<p>Revenue Nomad uses four engagement types on every profile and project:</p>
             <dl class="rs-dl">${F.engagementTypes.options.map((o) => `<div><dt>${esc(o.l)}</dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>` },
@@ -1166,7 +1262,7 @@
       slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'clients', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
       answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
-      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
+      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs, operator rates' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
       sections: () => [
         { id: 'audit', h: 'Days 1 to 30: audit', html: `<p>The first month is diagnosis. Expect a written audit that covers:</p><ul>
           <li><b>The CRM.</b> Duplicates, stale records, fields nobody uses, stages that mean different things to different reps. See ${L('library', 'CRM cleanup')} in the library.</li>
@@ -1182,7 +1278,7 @@
           <li>Dashboards for pipeline, conversion by stage and forecast, used in the weekly meeting.</li>
           <li>A forecast cadence that the sales leader runs, with RevOps preparing the data.</li>
           <li>Documentation: a metrics dictionary and a short admin guide, so the next hire can take over.</li></ul>` },
-        { id: 'cost', h: 'What it costs', html: `<p>Revenue Operations has a median of ${hr(RIX().byCat.revenue_operations.p50)} an hour on the Rate Index. At 40 hours a month for a $5M–$20M company, a typical range is ${monthRange('revenue_operations', '40', '5m_20m')}. Many RevOps engagements drop to 20 hours after the rebuild, at ${monthRange('revenue_operations', '20', '5m_20m')}.</p>` },
+        { id: 'cost', h: 'What it costs', html: `<p>Revenue Operations has a median of ${hr(RIX().byCat.revenue_operations.p50)} an hour on the Rate Index. At 40 hours a month for a $5M–$20M company, a typical range is ${monthRange('revenue_operations', '40', '5m_20m')} in operator rates (${monthAllIn('revenue_operations', '40', '5m_20m')} all-in under the proposed ${FEE_PCT()} fee). Many RevOps engagements drop to 20 hours after the rebuild, at ${monthRange('revenue_operations', '20', '5m_20m')}.</p>` },
         { id: 'signs', h: 'Signs you need RevOps now', html: `<ul><li>Two leaders quote different pipeline numbers in the same meeting.</li><li>Reps keep their own spreadsheets because they do not trust the CRM.</li><li>You are about to hire a sales leader and want them to inherit clean data.</li><li>Tool spend keeps growing and nobody can say what each tool does.</li></ul>` },
       ],
       faq: () => [
@@ -1196,12 +1292,12 @@
       slug: 'fractional-cmo-vs-marketing-agency', bp: 'cmo', group: 'clients', updated: '2026-08-22', mins: 5, cat: 'marketing', opsQ: 'CMO',
       q: 'Fractional CMO vs marketing agency: which one do you need?',
       answer: () => ['A fractional CMO owns your marketing strategy, budget and team, and decides what to do; an agency executes defined work such as ads, content or design.', 'If nobody at the company owns marketing yet, start with a fractional CMO who sets the plan, then hire agencies for the execution they choose.'],
-      stats: () => { const b = RIX().byCat.marketing; const ag = (REP().fracVsFull || []).find((r) => /agency/i.test(r[0])); return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Marketing' }, { v: monthRange('marketing', '40', '5m_20m').replace('/mo', ''), l: 'Fractional CMO at 40 hrs a month' }, { v: ag ? ag[1] : '$15,000+', l: 'Typical agency retainer a month' }]; },
+      stats: () => { const b = RIX().byCat.marketing; const ag = (REP().fracVsFull || []).find((r) => /agency/i.test(r[0])); return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Marketing' }, { v: monthRange('marketing', '40', '5m_20m').replace('/mo', ''), l: 'Fractional CMO at 40 hrs a month, operator rates' }, { v: ag ? ag[1] : '$15,000+', l: 'Typical agency retainer a month' }]; },
       sections: () => [
         { id: 'difference', h: 'What each one does', html: tbl(['', 'Fractional CMO', 'Agency'], [
           ['Owns', 'Strategy, budget, positioning, the plan', 'A defined scope of execution'],
           ['Accountable for', 'Pipeline and the marketing number', 'Deliverables and channel metrics'],
-          ['Typical cost', esc(monthRange('marketing', '40', '5m_20m')), esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[1] || '$15,000+') + '/mo'],
+          ['Typical cost', esc(monthRange('marketing', '40', '5m_20m')) + ' (operator rates)', esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[1] || '$15,000+') + '/mo'],
           ['Time to start', '2 to 3 weeks', esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[2] || '4 to 6 weeks')],
           ['Best when', 'Nobody owns marketing or the plan is unclear', 'The plan is clear and you need hands'],
         ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + src('Monthly costs from the Rate Index (Marketing, $5M–$20M company, 40 hrs a month) and the State of Fractional GTM 2027 survey. Illustrative.') },
@@ -1211,7 +1307,7 @@
       ],
       faq: () => [
         { q: 'Can a fractional CMO also do the execution?', a: 'Some do, especially at 40 hours a month or more. Most prefer to direct execution and keep their hours for strategy, positioning and the team.' },
-        { q: 'Is a fractional CMO cheaper than an agency?', a: `Often similar per month. The Rate Index median for Marketing is ${hr(RIX().byCat.marketing.p50)} an hour; a 40-hour month for a $5M–$20M company is ${monthRange('marketing', '40', '5m_20m')}.` },
+        { q: 'Is a fractional CMO cheaper than an agency?', a: `Often similar per month. The Rate Index median for Marketing is ${hr(RIX().byCat.marketing.p50)} an hour; a 40-hour month for a $5M–$20M company is ${monthRange('marketing', '40', '5m_20m')} in operator rates.` },
         { q: 'How do I measure a fractional CMO?', a: 'On pipeline sourced or influenced by marketing, cost per qualified opportunity and progress against the 90-day plan.' },
       ],
       cta: { label: 'Browse Marketing', filters: { roleCategories: ['marketing'] } },
@@ -1219,7 +1315,7 @@
     {
       slug: 'evaluate-fractional-operator-track-record', group: 'clients', updated: '2026-09-15', mins: 7, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do you evaluate a fractional operator\'s track record?',
-      answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the clients they did it for.', 'On Revenue Nomad that proof is client-verified focus areas, CORE review scores, Engagement History and the Reputation Index, all built from client evidence rather than self-description.'],
+      answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the clients they did it for.', 'On Revenue Nomad that proof is client-verified focus areas, CORE review scores, Engagement History and the Reputation Index, built mostly from client evidence rather than self-description.'],
       stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of clients say stage fit mattered most, in hindsight' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
       sections: () => [
         { id: 'hindsight', h: 'What clients wish they had checked', html: `<p>We asked companies what they weighed when they hired a fractional leader, and what they would weigh now.</p>
@@ -1243,7 +1339,7 @@
         { q: 'Can an operator pay to raise their score or verify a focus area?', a: 'No. Only client reviews, verified engagements and a complete profile move the score, and only reviews rated 4.0 or higher verify a focus area.' },
         { q: 'Should I ask for references if a profile has verified reviews?', a: 'Yes, for the engagement most like yours. Verified reviews tell you the work happened; a call tells you how it would go at your company.' },
       ],
-      cta: { label: 'Browse Reputation Index 70+', filters: { risMin: '70' } },
+      cta: { label: 'Browse operators, highest Reputation Index first', sort: 'ris' },
     },
     {
       slug: 'transition-out-of-founder-led-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-09', mins: 7, cat: 'sales_leadership', opsQ: 'founder-led',
@@ -1261,7 +1357,7 @@
             ['3 to 4', 'Rep', 'Joins late-stage calls and the largest deals only'],
             ['5 to 6', 'Rep, with the sales leader coaching', 'Executive sponsor on strategic accounts'],
           ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + `<p>Measure win rate and sales cycle by who led the deal. When rep-led deals close at a similar rate, the handover is done.</p>` },
-          { id: 'who', h: 'Who to hire for it', html: `<p>A fractional VP of Sales who has done this before, usually at 40 hours a month for six months, at a typical ${monthRange('sales_leadership', '40', '1m_5m')} for a $1M–$5M company.</p>
+          { id: 'who', h: 'Who to hire for it', html: `<p>A fractional VP of Sales who has done this before, usually at 40 hours a month for six months, at a typical ${monthRange('sales_leadership', '40', '1m_5m')} in operator rates for a $1M–$5M company.</p>
             ${mk ? `<p>Clients search for the Founder-Led Sales Exit focus area about ${RN.fmt.int(mk.demand)} times a month, and only ${mk.verified} ${mk.verified === 1 ? 'operator holds' : 'operators hold'} it client-verified today (${mk.supply} claim it). Ask candidates for the client they did it with.</p>` : ''}` },
         ];
       },
@@ -1288,7 +1384,8 @@
             ${chartGo('Browse operators by role category and rate', { filters: {}, src: 'guide_chart_rate_cat' })}` },
           { id: 'revenue', h: 'Adjust for the clients you serve', html: `<p>Rates rise with client size. Against a $5M–$20M company as the baseline:</p>
             ${tbl(['Company revenue', 'Rate vs baseline'], F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => { const m = RIX().byRevenue[o.v]; return [esc(o.l), `${m >= 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`]; }))}` },
-          { id: 'model', h: 'Hourly, retainer or project', html: `<p>Most operators list an hourly rate and bill a monthly retainer for a block of hours. At the Sales Leadership median, 20 hours a month is ${usd(RIX().byCat.sales_leadership.p50 * 20)}, 40 hours is ${usd(RIX().byCat.sales_leadership.p50 * 40)}. Scoped projects (${esc(F.engagementTypes.options.find((o) => o.v === 'project').d.toLowerCase().replace(/\.$/, ''))}) are priced per project, from the hours you expect to spend.</p>` },
+          { id: 'model', h: 'Hourly, retainer or project', html: `<p>Most operators list an hourly rate and bill a monthly retainer for a block of hours. At the Sales Leadership median, 20 hours a month is ${usd(RIX().byCat.sales_leadership.p50 * 20)}, 40 hours is ${usd(RIX().byCat.sales_leadership.p50 * 40)}. Scoped projects (${esc(F.engagementTypes.options.find((o) => o.v === 'project').d.toLowerCase().replace(/\.$/, ''))}) are priced per project, from the hours you expect to spend.</p>
+            <p>${proposed()} On engagements that start from a Revenue Nomad intro, clients would pay an all-in rate that adds a ${FEE_PCT()} platform fee to your rate. You keep your listed rate: at ${hr(300)} an hour, the client pays ${hr(allInRate(300))} all-in. The fee is a proposal the founder is confirming.</p>` },
           { id: 'proof', h: 'Proof moves your rate more than discounts do', html: `<p>Operators with three or more client-verified reviews are rehired ${sumStat(/Rehire rate/i, '2.4x')} as often as those with none. Clients comparing two operators at similar rates pick the one with verified proof in the work they need. Before you lower your rate, ask two past clients for a CORE review.</p>
             <p>Signed in, the Positioning tab in Studio shows where your rate sits against the 25th, 50th and 75th percentile for your category, next to how often operators at each band win.</p>` },
           { id: 'load', h: 'How many clients to carry', html: (REP().concurrent || []).length ? `<p>${REP().concurrent.map((c) => `${esc(c.l)}: ${c.v}%`).join(', ')}. Two clients is the most common load. Price so that two clients at your usual hours cover your income target, with a third as upside.</p>` : '' },
@@ -1305,7 +1402,7 @@
       slug: 'how-fractional-operators-win-direct-deals', group: 'operators', updated: '2026-09-16', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do fractional operators win clients without a marketplace intro?',
       answer: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0) || 67; return [`Most fractional work still comes from referrals and former colleagues: ${ref}% of clients in our survey found their operator that way.`, 'Operators win those deals faster when they can send proof: a profile with client-verified focus areas, CORE reviews and a private proof link that shows which parts the prospect read.']; },
-      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '0%', l: 'Fee on deals you source yourself' }]; },
+      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '0%', l: 'Proposed fee on deals you source yourself' }]; },
       sections: () => {
         const s = (REP().sources || []).map((x) => ({ label: x.l, value: x.v, hi: /Referral/i.test(x.l) }));
         return [
@@ -1314,14 +1411,14 @@
             <p class="rs-chart-go"><a class="act" href="#${RN.store.state.persona === 'operator' ? 'studio.visibility' : 'join'}">${RN.store.state.persona === 'operator' ? 'See where your own profile views come from' : 'Join the network to see where your views come from'}${icon('arrow')}</a></p>
             <p>A referral gets you the first call. What the prospect checks after that call decides the deal.</p>` },
           { id: 'check', h: 'What prospects check before they call you back', html: `<p>Stage and deal-size fit, how you communicate in a part-time seat and verified references from prior clients were the top three factors companies wish they had weighed. A résumé shows none of them. A profile with client-verified focus areas, CORE reviews and Engagement History shows all three.</p>` },
-          { id: 'proof-link', h: 'Send proof, not a résumé', html: `<p>From Studio you can create a <b>proof link</b>: a private version of your profile prepared for one prospect, with the sections you choose. The prospect sees a notice that you can see what they read. You see which sections they opened, for how long, and whether they forwarded it inside their team.</p>
-            <p>Revenue Nomad charges no fee on deals you source yourself. The link makes the deal easier to win; it does not route it through the marketplace.</p>` },
+          { id: 'proof-link', h: 'Send proof with every proposal', html: `<p>From Studio you can create a <b>proof link</b>: a private version of your profile prepared for one prospect, with the sections you choose. The prospect sees a notice that you can see what they read. You see which sections they opened, for how long, and whether they forwarded it inside their team.</p>
+            <p>${proposed()} Revenue Nomad would charge no fee on deals you source yourself. This is a proposal the founder is confirming. The link makes the deal easier to win; it does not route it through the marketplace.</p>` },
           { id: 'findable', h: 'Get found in search and AI answers', html: `<ul><li>Write a headline that names the problem you solve and the stage you solve it at.</li><li>Ask past clients to verify your top focus areas: verified tags rank first on cards and in search.</li><li>Keep availability current; fresh availability ranks higher.</li><li>A long-form About section feeds Google and AI answer engines, which increasingly answer "who is a good fractional VP of Sales for..." directly.</li></ul>` },
           { id: 'studio', h: 'What you get even without an intro', html: `<p>Studio shows every search you appeared in and why, the firmographic segments that viewed you (never company names), where you were compared and not chosen, and how your rate and focus areas compare with demand. None of it depends on an intro.</p>` },
         ];
       },
       faq: () => [
-        { q: 'Does Revenue Nomad take a fee on clients I bring myself?', a: 'No. There is no fee on operator-sourced deals. Proof links exist to help you close them.' },
+        { q: 'Does Revenue Nomad take a fee on clients I bring myself?', a: 'Not under the current proposal: no fee on deals you bring yourself. This is a proposal the founder is confirming. Proof links exist to help you close those deals.' },
         { q: 'Will the prospect know I can see what they read?', a: 'Yes. Every proof link shows the prospect a notice that viewing is shared with the operator.' },
         { q: 'How do I get my first verified review?', a: 'Send a review request from Studio to a past client. When they submit a CORE review rated 4.0 or higher, the focus areas they confirm turn verified.' },
       ],
@@ -1331,7 +1428,7 @@
       slug: 'what-is-the-reputation-index', group: 'methods', updated: '2026-09-01', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is the Revenue Nomad Reputation Index?',
       answer: () => ['The Reputation Index is a 0 to 100 score that shows how much client evidence stands behind an operator\'s profile.', 'Every approved profile starts at 50 (Vetted), and the score rises only with client reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
-      stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: 'Factors, all from client evidence' }, { v: String(hi), l: `Operators at Proven or above today` }]; },
+      stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from client evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
       sections: () => {
         const ops = RN.model.ops.filter((o) => !o.hidden);
         const tiers = F.risTier.options.filter((t) => t.v !== 'indexing').slice().reverse();
@@ -1343,7 +1440,7 @@
             <p>"Vetted" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a client confirmed: verified focus areas and verified engagements.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
             ${src(`Live count across ${ops.length} operator profiles in this prototype.`)}
-            ${chartGo('Browse operators at Trusted and above (Reputation Index 70+)', { filters: { risMin: '70' }, src: 'guide_chart_tiers' })}
+            ${chartGo('Browse operators, highest Reputation Index first', { filters: {}, sort: 'ris', src: 'guide_chart_tiers' })}
             <p>Most profiles sit at Vetted because the index only moves with client evidence. That is by design: a score that starts high means nothing.</p>` },
           { id: 'not', h: 'What it is not', html: `<ul><li>It is not for sale. No plan, fee or sponsorship changes it.</li><li>It is not a popularity score. Profile views and searches do not count.</li><li>It does not punish operators for engagements that were never reviewed.</li></ul>
             <p>Operators can see how their own score breaks down in Studio, and the ${L('levels', 'Levels page')} explains what each tier unlocks.</p>` },
@@ -1354,7 +1451,7 @@
         { q: 'How quickly does the score update?', a: 'Immediately. A submitted review, a verified engagement or a completed profile recalculates the score the same day.' },
         { q: 'Can a bad review lower the score?', a: 'Low CORE ratings reduce the Strong ratings factor, and reviews rated under 4.0 do not verify focus areas. Reviews publish automatically; there is no moderation queue to hide them.' },
       ],
-      cta: { label: 'Browse Reputation Index 70+', filters: { risMin: '70' } },
+      cta: { label: 'Browse operators, highest Reputation Index first', sort: 'ris' },
     },
     {
       slug: 'what-is-core', group: 'methods', updated: '2026-09-01', mins: 4, cat: null, opsQ: '', opsSort: 'ris',
@@ -1368,7 +1465,7 @@
           <li><b>CORE.</b> Four ratings from 1 to 5, each with an optional reason, a required overall experience note, and ${esc(F.hireAgain.label.replace(/\?$/, '').toLowerCase())}.</li>
           <li><b>Focus areas and outcomes.</b> The client confirms the operator's focus areas they saw in action and rates up to three outcomes: ${esc(RN.w.labels('outcomeRating', F.outcomeRating.options.map((o) => o.v)))}.</li></ol>
           <p>Only clients the operator requests a review from can submit one. Reviews publish automatically. Operators see two states for each request: ${esc(RN.w.labels('reviewStatus', ['sent', 'completed'], ' and '))}.</p>` },
-        { id: 'feeds', h: 'What a review changes', html: `<ul><li>Focus areas the client confirms turn <b>verified</b> when the review averages 4.0 or higher. Five such reviews make a focus area Expert.</li><li>The Reputation Index recalculates: review volume, strong ratings and fit tag verification all move.</li><li>The review appears on the profile, in the CORE section and on any proof link that includes reviews.</li></ul>` },
+        { id: 'feeds', h: 'What a review changes', html: `<ul><li>Focus areas the client confirms turn <b>verified</b> when the review averages 4.0 or higher. Five such reviews make a focus area Expert.</li><li>The Reputation Index recalculates: review volume, strong ratings and focus area verification all move.</li><li>The review appears on the profile, in the CORE section and on any proof link that includes reviews.</li></ul>` },
         { id: 'why', h: 'Why four dimensions instead of five stars', html: `<p>Star averages drift toward 4.9 on most marketplaces, which makes them useless for comparison. Four specific questions show where an operator is strong and where they are average, and "Would hire again" is harder to inflate than a star.</p>` },
       ],
       faq: () => [
@@ -1379,8 +1476,64 @@
       cta: { label: 'Read how the score works', to: 'levels' },
     },
   ];
+
+  /* Cost guides for every other role category (value: each Browse category page links to its own guide).
+     Built from one template on the Rate Index, so the numbers match #rates, Blueprints and the category pages. */
+  const COST = {
+    marketing: { slug: 'fractional-cmo-cost', noun: 'CMO', bp: 'cmo', opsQ: 'CMO', hours: '40',
+      buys: 'Twenty hours buys a marketing leader who sets positioning, the plan and the budget, and directs agencies. Forty hours adds running demand generation and managing a small team. Sixty or more usually means hands-on campaign work as well.' },
+    revenue_operations: { slug: 'fractional-revops-cost', noun: 'RevOps leader', bp: 'vp-revops', opsQ: 'RevOps', hours: '40',
+      buys: 'Twenty hours covers CRM administration, reporting and the data behind the weekly forecast. Forty hours adds a rebuild: stages, routing, data cleanup and dashboards. Sixty or more usually means a CRM migration or a new tool rollout.' },
+    sales_enablement: { slug: 'fractional-sales-enablement-cost', noun: 'sales enablement leader', bp: 'enablement-director', opsQ: 'enablement', hours: '40',
+      buys: 'Twenty hours buys a training calendar and call coaching for a small team. Forty hours adds a full onboarding program, a content library and coaching for managers. Sixty or more usually means running enablement for several teams at once.' },
+    customer_success_growth: { slug: 'fractional-customer-success-cost', noun: 'VP of Customer Success', bp: 'vp-cs', opsQ: 'customer success', hours: '40',
+      buys: 'Twenty hours buys a retention review, a customer health score and a renewal forecast. Forty hours adds an onboarding program and an expansion motion with a named owner. Sixty or more usually means managing the CS team day to day.' },
+    ai_gtm: { slug: 'fractional-ai-gtm-cost', noun: 'AI GTM architect', bp: 'ai-gtm-architect', opsQ: 'AI', hours: '40',
+      buys: 'Twenty hours buys an audit of how the team uses AI today and one or two automated workflows. Forty hours adds building and measuring workflows across research, outreach and CRM updates. Sixty or more usually means rebuilding part of the go-to-market stack.' },
+    partnerships: { slug: 'fractional-partnerships-cost', noun: 'VP of Partnerships', bp: 'vp-partnerships', opsQ: 'partner', hours: '40',
+      buys: 'Twenty hours buys partner selection, terms and the first two or three partners. Forty hours adds partner enablement, co-selling and a target for partner-sourced pipeline. Sixty or more usually means running a reseller channel.' },
+    sellers: { slug: 'fractional-account-executive-cost', noun: 'account executive', bp: 'account-executive', opsQ: 'account executive', hours: '60', hrs: ['40', '60', '80', '100'],
+      buys: 'Forty hours covers one segment or a short list of named accounts. Sixty to eighty hours is a part-time closer who owns a pipeline number. At 100 hours or more, compare the cost with a full-time hire.' },
+  };
+  function costGuide(cat, c) {
+    const b = () => RIX().byCat[cat];
+    const catL = F.catLabel(cat);
+    const hrsL = RN.w.label('hoursPerMonth', c.hours);
+    const bpOf = () => blueprintFor(cat, c.bp);
+    return {
+      slug: c.slug, bp: c.bp, group: 'costs', updated: '2026-09-22', mins: 4, cat, opsQ: c.opsQ,
+      q: `How much does a fractional ${c.noun} cost?`,
+      answer: () => [`A fractional ${c.noun} costs a median of ${hr(b().p50)} an hour on the Revenue Nomad Rate Index, and the middle half of ${catL} operators charge between ${hr(b().p25)} and ${hr(b().p75)}.`, `At ${hrsL.replace(' / ', ' a ')}, that is a typical range of ${monthRange(cat, c.hours, '5m_20m')} in operator rates for a company with $5M–$20M in revenue.`],
+      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}` }, { v: monthRange(cat, c.hours, '5m_20m').replace('/mo', ''), l: `Typical month at ${hrsL}, operator rates` }, { v: plural(b().n, 'rate'), l: 'In the index for this role category' }],
+      sections: () => {
+        const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b().p50 * mult(o.v)), hi: o.v === '5m_20m' }));
+        const bp = bpOf();
+        return [
+          { id: 'drivers', h: 'What sets the price', html: `<p>Hours a month move the number most, then the size of your company. Operators who serve larger companies charge more per hour because the work carries more risk: bigger teams, longer cycles and more people who depend on the result.</p>
+            ${chartSlot('gc-' + cat, (w) => bars(revRows, { fmt: (n) => '$' + n + '/hr', label: `Median hourly rate for ${catL} by company revenue` }, w))}
+            ${src(`Median hourly rate for ${esc(catL)} by company revenue range. Rate Index, ${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'Q3 26')}. Illustrative.`)}
+            ${chartGo(`Browse ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'guide_cost_' + cat })}` },
+          { id: 'monthly', h: 'What a month costs', html: `<p>Multiply the hourly range by the hours you need. For a $5M–$20M company:</p>
+            ${monthTable(cat, c.hrs || ['20', '40', '60', '80'])}
+            <p>${esc(c.buys)}</p>` },
+          { id: 'scope', h: 'Scope it before you talk to anyone', html: `<p>${bp ? `The ${L(bp.to, bp.title + ' Blueprint')} gives you` : `An ${L('blueprints', 'Engagement Blueprint')} gives you`} the hours, term, a 30/60/90-day plan and the focus areas the work needs, ready to post as a project. ${L('guide.how-to-scope-a-fractional-sales-engagement', 'How to scope a fractional engagement')} covers the outcome, the hours and the operating rhythm.</p>` },
+        ];
+      },
+      faq: () => [
+        { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
+        { q: 'What does the all-in rate include?', a: `The operator's own rate plus the proposed ${FEE_PCT()} Revenue Nomad platform fee. At the ${catL} median of ${hr(b().p50)} an hour, that is ${hr(allInRate(b().p50))} an hour all-in. The fee is a proposal the founder is confirming.` },
+        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate.' },
+      ],
+      cta: { label: `Browse ${catL}`, filters: { roleCategories: [cat] } },
+    };
+  }
+  Object.keys(COST).forEach((cat) => GUIDES.push(costGuide(cat, COST[cat])));
+  // Public shape for other surfaces: { id, title, cat, group, href } (slug and q stay for older callers)
+  GUIDES.forEach((g) => { g.id = g.slug; g.title = g.q; g.href = '#guide.' + g.slug; });
   R.guides = GUIDES;
   const guideBy = (slug) => GUIDES.find((g) => g.slug === slug);
+  const isCost = (g) => g.group === 'costs' || g.slug === 'fractional-vp-of-sales-cost';
+  R.guidesFor = (cat, n) => GUIDES.filter((g) => g.cat === cat).sort((a, b) => (isCost(b) ? 1 : 0) - (isCost(a) ? 1 : 0)).slice(0, n || 2);
   const KIND = {
     'fractional-vp-of-sales-cost': 'Cost', 'fractional-vs-full-time-vp-of-sales': 'Hiring decision', 'how-to-scope-a-fractional-sales-engagement': 'Scoping',
     'fractional-revops-first-90-days': 'First 90 days', 'fractional-cmo-vs-marketing-agency': 'Comparison', 'evaluate-fractional-operator-track-record': 'Due diligence',
@@ -1422,13 +1575,13 @@
         <p class="rs-gfeat-a">${a.map(esc).join(' ')}</p>
         <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span><span class="act">Read the guide${icon('arrow')}</span></span>
       </div>
-      <div class="rs-gfeat-stats">${st.map((x) => `<div class="stat"><span class="stat-v">${esc(x.v)}</span><span class="stat-l">${esc(x.l)}</span></div>`).join('')}</div>
+      <div class="rs-gfeat-stats"><span class="rs-gfeat-il">${illus()}</span>${st.map((x) => `<div class="stat"><span class="stat-v">${esc(x.v)}</span><span class="stat-l">${esc(x.l)}</span></div>`).join('')}</div>
     </a>`;
   }
   function guideCard(g) {
     const a = g.answer();
     return `<a class="card card-link rs-gcard" href="#guide.${esc(g.slug)}">
-      <span class="label">${esc(KIND[g.slug] || GROUPS.find((x) => x.k === g.group).l)}</span>
+      <span class="label">${esc(KIND[g.slug] || (g.group === 'costs' ? 'Cost' : GROUPS.find((x) => x.k === g.group).l))}</span>
       <h3 class="h4">${esc(g.q)}</h3>
       <p class="small muted clamp-3">${esc(a[0])}</p>
       <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span>${icon('arrow')}</span>
@@ -1451,20 +1604,31 @@
     </header>
     ${(() => {
       const cl = GUIDES.filter((x) => x.group === 'clients');
-      const grpHd = (g) => `<div class="rs-ggrp-hd"><h2 class="h3" id="rs-g-${g.k}-t">${esc(g.l)}</h2><p class="small muted">${esc(g.d)}</p></div>`;
+      const grpHd = (g, extra) => `<div class="rs-ggrp-hd"><div class="row between" style="--gap:12px"><h2 class="h3" id="rs-g-${g.k}-t">${esc(g.l)}</h2>${extra || ''}</div><p class="small muted">${esc(g.d)}</p></div>`;
+      const gc = GROUPS.find((x) => x.k === 'costs');
+      const costs = F.roleCategory.options.map((o) => ({ o, g: GUIDES.find((x) => x.cat === o.v && isCost(x)) })).filter((x) => x.g && RIX().byCat[x.o.v]);
       return `<section class="wrap rs-sec-sm rs-ggrp" id="rs-g-clients" aria-labelledby="rs-g-clients-t">
         ${grpHd(GROUPS[0])}
         ${guideFeature(cl[0])}
         <div class="grid g-3" style="margin-top:24px">${cl.slice(1).map(guideCard).join('')}</div>
       </section>
-      <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${GROUPS.slice(1).map((g) => `<section class="rs-ggrp" id="rs-g-${g.k}" aria-labelledby="rs-g-${g.k}-t">
+      <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
+        ${grpHd(gc, illus())}
+        <div class="card rs-costs">${costs.map(({ o, g }) => { const b = RIX().byCat[o.v]; const h = (COST[o.v] && COST[o.v].hours) || '40'; return `<a class="rs-cost" href="#guide.${esc(g.id)}">
+          <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)}</span></span></span>
+          <span class="rs-cost-v"><span class="label">Median</span><b class="tnum">${hr(b.p50)}/hr</b></span>
+          <span class="rs-cost-v"><span class="label">${esc(RN.w.label('hoursPerMonth', h))}</span><b class="tnum">${esc(monthRange(o.v, h, '5m_20m'))}</b></span>
+          ${icon('arrow')}</a>`; }).join('')}</div>
+        <p class="rs-src" style="margin-top:12px">${icon('info')}<span>Operator rates from the Rate Index: the median per hour and a typical month for a company with $5M–$20M in revenue. Each guide also shows the all-in price under the proposed ${FEE_PCT()} platform fee.</span></p>
+      </section>
+      <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${GROUPS.filter((g) => g.k === 'operators' || g.k === 'methods').map((g) => `<section class="rs-ggrp" id="rs-g-${g.k}" aria-labelledby="rs-g-${g.k}-t">
         ${grpHd(g)}
         <div class="grid g-2 rs-gpair-in">${GUIDES.filter((x) => x.group === g.k).map(guideCard).join('')}</div>
       </section>`).join('')}</div></div>`;
     })()}
     <section class="wrap rs-sec-sm" id="rs-glossary" aria-labelledby="rs-gl-t">
       <div class="rs-gloss card">
-        <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, <span class="serif">defined once.</span></h2><p class="small muted">The same terms appear on every profile, brief, review and report on Revenue Nomad.</p></div>
+        <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, defined once</h2><p class="small muted">The same terms appear on every profile, brief, review and report on Revenue Nomad.</p></div>
         <dl class="rs-gl">${GLOSSARY.map((x) => `<div class="rs-gl-i" id="rs-term-${esc(RN.slug(x.t))}"><dt>${esc(x.t)}</dt><dd>${esc(x.d())}${x.to ? ` <a class="rs-gl-a" href="#${esc(x.to)}" aria-label="More on ${esc(x.t)}">More${icon('arrow')}</a>` : ''}</dd></div>`).join('')}</dl>
       </div>
       <div style="margin-top:20px">${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}</div>
@@ -1472,6 +1636,77 @@
     </div>`;
   }
 
+
+  /* Operator answers (value: an input operators control). Stored in state.answers as
+     { id, guideId, opId, text, engagementId, engagement: {company, role}, status: 'in_review' | 'approved', createdAt }; the team approves them.
+     Approved answers show with a byline and profile link. They earn placement here, never Reputation Index points. */
+  const ANS_MAX = 600;
+  const answersFor = (id) => (RN.store.state.answers || []).filter((a) => a.guideId === id);
+  const engKey = (e) => e.id || `${e.company}|${e.start || ''}`;
+  function answersBlock(g) {
+    const me = RN.myOp();
+    const opView = RN.store.state.persona === 'operator' && me;
+    const all = answersFor(g.id);
+    const live = all.filter((a) => a.status === 'approved' && RN.model.byId(a.opId));
+    const mine = me ? all.find((a) => a.opId === me.id) : null;
+    if (!live.length && !opView) return '';
+    const card = (a) => {
+      const op = RN.model.byId(a.opId);
+      const eng = (op.engagements || []).find((e) => engKey(e) === a.engagementId) || (a.engagement ? { company: a.engagement.company, clientVerified: false } : null);
+      return `<article class="rs-ans">
+        <div class="rs-ans-by">${RN.ui.avatar(op, 'ava-sm')}<span><a class="rs-ans-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(op.role)}${eng ? ` · Proof: ${esc(eng.company)}${eng.clientVerified ? ', client-verified' : ''}` : ''}</span></span>${RN.ui.ris(op)}</div>
+        <p class="rs-ans-t">${esc(a.text)}</p>
+      </article>`;
+    };
+    let foot = '';
+    if (opView) {
+      if (mine && mine.status !== 'approved') foot = `<div class="note rs-ans-mine">${RN.ui.statusPill('application', 'in_review', 'In review')}<span class="small">Your answer is with the Revenue Nomad team. It appears here with your byline once approved.</span></div>`;
+      else if (!mine) foot = `<div class="rs-ans-cta"><p class="small">Have you done this work? Answer in up to ${ANS_MAX} characters and attach one engagement as proof. Approved answers carry your byline and link to your profile. They earn placement on this page, never Reputation Index points.</p>
+        <button type="button" class="btn btn-line btn-sm" data-act="rs-answer" data-g="${esc(g.id)}">${icon('edit')}Answer this question</button></div>`;
+    }
+    return `<section id="rs-s-answers" class="rs-answers" aria-labelledby="rs-ans-t">
+      <h2 class="h3" id="rs-ans-t">Operators who answered</h2>
+      ${live.length ? `<div class="rs-ans-list">${live.map(card).join('')}</div>` : '<p class="small muted">No operator has answered this question yet.</p>'}
+      ${foot}
+    </section>`;
+  }
+  RN.actions['rs-answer'] = (el) => {
+    const me = RN.myOp();
+    if (!me) { RN.actions.login(el); return; }
+    const g = guideBy(el.dataset.g);
+    if (!g) return;
+    const engs = me.engagements || [];
+    RN.ui.modal({
+      width: 560,
+      title: 'Answer this question',
+      sub: esc(g.title),
+      body: `<form data-submit="rs-answer" data-g="${esc(g.id)}" class="stack" style="--gap:18px" novalidate>
+        <div class="field"><label for="rs-ans-text">Your answer</label>
+          <textarea class="textarea" id="rs-ans-text" name="text" maxlength="${ANS_MAX}" rows="6" required></textarea>
+          <p class="help">Up to ${ANS_MAX} characters, from your own engagements. The team reviews every answer before it appears.</p></div>
+        ${engs.length ? `<div class="field"><label for="rs-ans-eng">Engagement as proof</label>
+          <select class="select" id="rs-ans-eng" name="engagement">${engs.map((e) => `<option value="${esc(engKey(e))}">${esc(e.company)}${e.role ? ' · ' + esc(e.role) : ''}${e.clientVerified ? ' (client-verified)' : ''}</option>`).join('')}</select>
+          <p class="help">From your Engagement History. Client-verified engagements rank first.</p></div>`
+          : `<p class="small muted">Add an engagement in Studio to attach proof. <a href="#studio.profile">Open Studio</a></p>`}
+        <button class="btn" type="submit">Send for review</button>
+      </form>`,
+    });
+  };
+  RN.submits['rs-answer'] = (form, data) => {
+    const me = RN.myOp();
+    const g = guideBy(form.dataset.g);
+    const text = String(data.text || '').trim();
+    if (!me || !g) return;
+    if (text.length < 40) { RN.ui.toast('Write at least a couple of sentences, from your own work.', { icon: 'info' }); const t = form.querySelector('textarea'); if (t) t.focus(); return; }
+    const eng = (me.engagements || []).find((e) => engKey(e) === data.engagement);
+    const rec = { id: RN.uid('ans'), guideId: g.id, opId: me.id, text: text.slice(0, ANS_MAX), engagementId: eng ? engKey(eng) : null, engagement: eng ? { company: eng.company, role: eng.role || '' } : null, status: 'in_review', createdAt: RN.now().toISOString() };
+    RN.store.update((s) => { s.answers = (s.answers || []).filter((a) => !(a.guideId === g.id && a.opId === me.id)).concat(rec); }, 'answers');
+    RN.track('guide_answer', { opId: me.id, source: 'guide', meta: { guideId: g.id } });
+    RN.mail('team@revenuenomad.com', `Guide answer to review: ${g.title}`, `${me.name} answered "${g.title}".\n\n${rec.text}`, 'admin');
+    RN.ui.closeModal();
+    RN.ui.toast('Answer sent for review');
+    RN.rerender();
+  };
 
   function renderGuide(slug) {
     chartFns = {};
@@ -1489,8 +1724,8 @@
 
     // Related operators
     let rel = [];
-    if (g.opsQ) rel = RN.model.search({ q: g.opsQ, filters: g.cat ? { roleCategories: [g.cat] } : {} }).slice(0, 3);
-    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: g.cat ? { roleCategories: [g.cat] } : {}, sort: 'ris' }).filter((x) => !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
+    if (g.opsQ) rel = RN.model.search({ q: g.opsQ, filters: g.cat ? { roleCategories: [g.cat] } : {} }).filter((x) => !isStaff(x.op)).slice(0, 3);
+    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: g.cat ? { roleCategories: [g.cat] } : {}, sort: 'ris' }).filter((x) => !isStaff(x.op) && !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
     const bp = blueprintFor(g.cat, g.bp);
 
     // CTA
@@ -1498,21 +1733,22 @@
     let cta = '';
     if (c.operator && persona !== 'operator') cta = `<a class="btn btn-block" href="#join">Join as an operator${icon('arrow')}</a>`;
     else if (c.to) cta = `<a class="btn btn-block" href="#${esc(c.to)}">${esc(c.label)}${icon('arrow')}</a>`;
-    else cta = browseBtn(c.label || 'Browse operators', { filters: c.filters || {}, tags: c.tags || [], src: 'guide_' + g.slug }, 'btn btn-block');
+    else cta = browseBtn(c.label || 'Browse operators', { filters: c.filters || {}, tags: c.tags || [], sort: c.sort, src: 'guide_' + g.slug }, 'btn btn-block');
 
     const schema = {
       '@context': 'https://schema.org', '@type': 'FAQPage',
       mainEntity: [{ q: g.q, a: answer.join(' ') }].concat(faq).map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })),
     };
     const others = GUIDES.filter((x) => x.slug !== g.slug).sort((a, b) => (a.group === g.group ? -1 : 0) - (b.group === g.group ? -1 : 0)).slice(0, 3);
-    const toc = secs.map((s) => ({ id: s.id, h: s.h })).concat([{ id: 'faq', h: 'Common questions' }, { id: 'operators', h: rel.length ? 'Operators' : 'Next steps' }]);
+    const ans = answersBlock(g);
+    const toc = secs.map((s) => ({ id: s.id, h: s.h })).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'operators', h: rel.length ? 'Operators' : 'Next steps' }]);
 
     return `<div class="rs rs-guide-pg">
     <div class="wrap rs-guide">
       <article class="rs-art" aria-labelledby="rs-g-h1">
         ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
         <span class="eyebrow">${esc(grp.l)}</span>
-        <h1 class="rs-g-h1" id="rs-g-h1">${esc(g.q)}</h1>
+        <h1 class="h1 rs-g-h1" id="rs-g-h1">${esc(g.q)}</h1>
         <div class="rs-byline">
           <span class="rs-by-ava" aria-hidden="true">${icon('book')}</span>
           <span><b>Revenue Nomad Research</b><span class="tiny muted">Last updated <time datetime="${esc(g.updated)}">${esc(updated)}</time> · ${g.mins} min read</span></span>
@@ -1530,6 +1766,7 @@
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
           ${faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${esc(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${esc(f.a)}</p></details>`).join('')}
         </section>
+        ${ans}
         <footer class="rs-gfoot">
           <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. Market and survey figures in this prototype are illustrative. Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
           ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Revenue Nomad Research, dateModified) and BreadcrumbList.')}
@@ -1544,15 +1781,15 @@
             <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : g.group === 'methods' ? 'See it on a profile' : 'Ready to hire?')}</b>
             <p class="small muted">${esc(g.group === 'operators' ? (persona === 'operator' ? 'Studio shows your numbers next to the benchmarks in this guide.' : 'Join the network to get a Studio with your numbers next to these benchmarks.') : g.group === 'methods' ? 'Every profile shows its Reputation Index, CORE reviews and verified focus areas.' : 'Browse operators with client-verified proof, or estimate the cost first.')}</p>
             ${cta}
-            ${g.group === 'clients' ? `<a class="btn btn-line btn-block" href="#rates">Estimate the cost</a>` : ''}
+            ${g.group === 'clients' || g.group === 'costs' ? `<a class="btn btn-line btn-block" href="#rates">Estimate the cost</a>` : ''}
           </div>
         </div>
       </aside>
     </div>
     <div class="wrap rs-guide-after">
         <section id="rs-s-operators" class="rs-rel" aria-labelledby="rs-rel-t">
-          <div class="row between" style="align-items:flex-end"><div><span class="kicker">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most client evidence'}</h2></div>
-          ${browseBtn('Browse all', { filters: g.cat ? { roleCategories: [g.cat] } : {}, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
+          <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most client evidence'}</h2></div>
+          ${browseBtn(g.cat ? `Browse ${F.catLabel(g.cat)}` : 'Browse all', { filters: g.cat ? { roleCategories: [g.cat] } : {}, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
           <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}</div>
           <div class="grid g-2 rs-glinks">
           <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
