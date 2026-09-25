@@ -277,10 +277,13 @@
   };
 
   /* ---------- Theme ---------- */
+  // "System" follows the host: a theme the embedding page stamped on <html> (artifact viewer) wins over the OS setting
+  const HOST_THEME = document.documentElement.getAttribute('data-theme');
   shell.applyTheme = function () {
     const t = RN.store.state.theme;
-    if (t === 'system') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', t);
+    if (t !== 'system') document.documentElement.setAttribute('data-theme', t);
+    else if (HOST_THEME) document.documentElement.setAttribute('data-theme', HOST_THEME);
+    else document.documentElement.removeAttribute('data-theme');
   };
 
   /* Called by the router after each render */
