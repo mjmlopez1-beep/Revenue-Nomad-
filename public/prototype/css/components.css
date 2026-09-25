@@ -156,7 +156,6 @@
 .ris-txt b { font-family: var(--f-display); font-size: var(--t-13); font-weight: 800; }
 .ris-txt span { font-size: var(--t-12); color: var(--mute); }
 .ris.t-elite .ris-txt b, .ris.t-apex .ris-txt b { color: var(--gold); }
-.ris-quiet { gap: 8px; }
 
 /* ---------- Tier badges (RN.ui.tierBadge, tierPill, tierLadder; D11) ----------
    Rarity reads from material and depth, never colour alone. Only Elite and Apex glow, and only they move. */

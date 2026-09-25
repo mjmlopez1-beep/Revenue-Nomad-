@@ -201,8 +201,7 @@
     const r = op.ris || { score: 0 };
     const tipHtml = ui.risExplainer(o && o.viewer === 'operator');
     const t = tierOpt(r.tier || RN.fields.risTierFor(r.score).v);
-    // At the floor (Emerging) the mark stays quiet: an inline pill, no big seal
-    if (t.v === 'emerging' && !(o && o.full)) return `<span class="ris ris-quiet">${ui.tierPill('emerging', r.score)}<span class="ris-txt"><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
+    // Every tier, Emerging included, uses the same seal layout on cards and rails
     return `<span class="ris t-${t.v}">${ui.tierBadge(t.v, { size: 40, score: r.score, label: `${t.l}, Reputation Index ${r.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
   };
   /* Legacy entry point: a tier label ("Elite") to its badge. Never draws a hexagon itself. */
