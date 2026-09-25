@@ -55,6 +55,7 @@ Header nav: Browse Talent · Post a Project · Insights · For Operators · Abou
 12. **Visitor → client.** A visitor who requests an intro becomes their own client (`RN.shell.setClient`, saved in `seen.client`); the workspace shows only their own records (matched on email). Jordan Ellis is the demo client (dock: "Switch client to the demo client"); the demo shortlist appears only for Jordan.
 13. **Saved searches.** Clients save a Browse search in one click (`seen.savedSearches`, owner = client email); chips on Browse and a list in the workspace re-apply it; Admin counts `saved_search` events.
 14. **Guide answers.** Operators answer a guide question with one engagement as proof (`state.answers`, in review); the team approves in Admin > Approvals; approved answers carry a byline on the guide (placement, never Reputation Index points).
+15. **Requests in plain English.** A sentence typed in Home or Browse search ("We're a $12M SaaS company, about 80 people, need someone to build our sales team in two weeks, 2 days a week") is read by `RN.model.understand` into the standard fields: role category, industry, company revenue, employee range, availability, minimum available time, engagement type, hourly rate cap (a monthly budget converts once hours are known), focus-area keywords and the need. Browse shows them as removable chips, says what it left out when nothing matches everything, and offers "Search the exact words instead". The need prefills the intro request; the sentence rides with the search event for Admin.
 
 ## 4. Surface briefs
 

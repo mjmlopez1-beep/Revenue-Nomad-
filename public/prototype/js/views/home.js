@@ -26,7 +26,7 @@
 
   /* ---------- Module state (kept across re-renders of the same visit) ---------- */
   const S = { q: '', tags: [], played: false, impressed: false, paused: false, timers: [], offs: [], raf: 0 };
-  const PH = 'Search a role, focus area or industry';
+  const PH = 'Describe what you need, or search a role or focus area';
   const TYPE_WORDS = ['VP of Sales', 'RevOps', 'Demand Generation', 'Outbound Motion Build', 'Partnerships', 'HubSpot'];
   const PROVEN = 60; // Reputation Index floor for a featured spot (RN.fields.risUnlocks)
   const BRIEF_KEY = 'ins-pulse'; // same list and key as the Insights sign-up
@@ -70,9 +70,14 @@
 
   /* Write the Browse state with standard slugs, then route. From home every entry starts fresh. */
   function toBrowse(patch, route) {
+    // A request written as a sentence ("We're a $12M SaaS company...") arrives on Browse as standard filters
+    if (patch && patch.q && !(patch.filters && Object.keys(patch.filters).length) && RN.browse && RN.browse.fromText) {
+      const p = RN.browse.fromText(patch.q, {});
+      if (p) patch = Object.assign({}, patch, p);
+    }
     RN.store.update((s) => {
       const prev = s.browse || {};
-      s.browse = Object.assign({ q: '', tags: [], filters: {}, sort: 'best', view: prev.view || 'grid' }, patch);
+      s.browse = Object.assign({ q: '', tags: [], filters: {}, sort: 'best', view: prev.view || 'grid', said: '', saidKeys: [], saidDropped: [] }, patch);
     }, 'browse');
     RN.go(route || 'browse');
   }

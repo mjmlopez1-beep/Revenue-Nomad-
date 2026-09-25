@@ -118,10 +118,29 @@
     refresh(o);
   }
 
+  /* A request written the way clients talk becomes standard filters (RN.model.understandSearch). Returns the browse
+     state patch, or null when the text reads as plain keywords. base: filters to keep (set by hand). */
+  BR.fromText = function (text, base) {
+    const u = String(text || '').trim() ? RN.model.understandSearch(text, base || {}) : null;
+    if (!u || !u.natural) return null;
+    return { q: u.applied.q, filters: u.applied.filters, said: String(text).trim(), saidKeys: u.keys, saidDropped: u.dropped.map((f) => f.label), need: u.need || undefined };
+  };
+  const saidBase = () => { const b = st(); const base = cleanFilters(b.filters); (b.saidKeys || []).forEach((k) => delete base[k]); return base; };
+  const setSaid = (said, keys, dropped, need) => RN.store.update((s) => { s.browse.said = said || ''; s.browse.saidKeys = keys || []; s.browse.saidDropped = dropped || []; if (need) s.browse.need = need; }, 'browse');
+  function applyText(text, o) {
+    const patch = BR.fromText(text, saidBase());
+    if (patch) { setSaid(patch.said, patch.saidKeys, patch.saidDropped, patch.need); setCrit({ q: patch.q, filters: patch.filters }, o); return; }
+    const hadSaid = !!st().said;
+    const base = saidBase();
+    if (hadSaid) setSaid('');
+    setCrit(hadSaid ? { q: text, filters: base } : { q: text }, o);
+  }
+
   BR.go = function (c) {
     c = c || {};
+    if (c.q && !c.said && !Object.keys(c.filters || {}).length) { const p = BR.fromText(c.q, {}); if (p) c = Object.assign({}, c, p); }
     RN.store.update((s) => {
-      s.browse = Object.assign({ sort: 'best', view: 'grid' }, s.browse || {}, { q: c.q || '', tags: (c.tags || []).slice(0, 5), filters: cleanFilters(c.filters || {}) });
+      s.browse = Object.assign({ sort: 'best', view: 'grid' }, s.browse || {}, { q: c.q || '', tags: (c.tags || []).slice(0, 5), filters: cleanFilters(c.filters || {}), said: c.said || '', saidKeys: c.saidKeys || [], saidDropped: c.saidDropped || [] }, c.need ? { need: c.need } : {});
     }, 'browse');
     RN.go('browse');
   };
@@ -400,8 +419,8 @@
         <form class="br-search" role="search" data-submit="br-search" autocomplete="off">
           <label class="sr-only" for="br-q">Search operators</label>
           ${icon('search')}
-          <input id="br-q" class="br-q" name="q" type="search" enterkeyhint="search" value="${esc(st().q)}" placeholder="Search a role, skill, industry or name" data-input="br-q">
-          <button type="button" class="br-q-x" data-act="br-q-clear" aria-label="Clear search" ${st().q ? '' : 'hidden'}>${icon('x')}</button>
+          <input id="br-q" class="br-q" name="q" type="search" enterkeyhint="search" value="${esc(st().said || st().q)}" placeholder="Describe what you need, or search a role, skill or name" data-input="br-q">
+          <button type="button" class="br-q-x" data-act="br-q-clear" aria-label="Clear search" ${st().said || st().q ? '' : 'hidden'}>${icon('x')}</button>
         </form>
         <div class="br-bar-acts" id="br-bar-acts">${barBtns(c)}</div>
         <div class="br-tp" id="br-tp" role="dialog" aria-label="Focus areas" ${tagsOpen ? '' : 'hidden'}>${tagsOpen ? tagPanel() : ''}</div>
@@ -428,10 +447,17 @@
   }
 
   /* ---------- Assist row: active chips, or popular searches when nothing is set ---------- */
+  function saidNote() {
+    const b = st();
+    if (!b.said) return '';
+    const dropped = b.saidDropped || [];
+    return `<div class="br-said" role="status">${icon('message')}<p><b>We matched your request to these filters.</b> Remove any that don’t fit.${dropped.length ? ` No operator matched all of it, so we left out: ${dropped.map(esc).join('; ')}.` : ''}</p>
+      <button type="button" class="act" data-act="br-said-exact">Search the exact words instead</button></div>`;
+  }
   function assist(c, cat) {
     const chips = chipList(c);
     if (chips.length) {
-      return `<div class="br-chips" role="list" aria-label="Active filters">
+      return `${saidNote()}<div class="br-chips" role="list" aria-label="Active filters">
         ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${x.k === 'q' ? icon('search') : x.k === 'verifiedProof' ? icon('seal') : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
         ${chips.length > 1 ? `<span role="listitem"><button type="button" class="act muted br-clear" data-act="br-clear">Clear all</button></span>` : ''}
       </div>`;
@@ -578,8 +604,9 @@
     set('br-saved', savedRow(c));
     set('br-save-slot', saveBtn(c));
     const pc = root.querySelector('.br-proof-sw input'); if (pc) pc.checked = !!c.filters.verifiedProof;
-    const x = root.querySelector('.br-q-x'); if (x) x.hidden = !st().q;
-    const qi = document.getElementById('br-q'); if (qi && document.activeElement !== qi && qi.value !== st().q) qi.value = st().q;
+    const shown = st().said || st().q;
+    const x = root.querySelector('.br-q-x'); if (x) x.hidden = !shown;
+    const qi = document.getElementById('br-q'); if (qi && document.activeElement !== qi && qi.value !== shown) qi.value = shown;
     RN.$$('[data-act="br-tag-toggle"]', root).forEach((b) => b.setAttribute('aria-pressed', st().tags.some((t) => t.toLowerCase() === b.dataset.t.toLowerCase())));
     RN.$$('[data-act="br-sort"]', root).forEach((b) => b.setAttribute('aria-pressed', b.dataset.s === st().sort));
     if (tagsOpen && !o.fromPicker) { const tp = document.getElementById('br-tp'); if (tp) { tp.innerHTML = tagPanel(); } }
@@ -609,7 +636,7 @@
       lastKey = key;
       const res = run(c, 'best');
       const sorted = run(c);
-      if (hasCrit(c) && !justLogged(c)) RN.track('search', { q: c.q, tags: c.tags, filters: clone(c.filters), results: res.length, source });
+      if (hasCrit(c) && !justLogged(c)) RN.track('search', Object.assign({ q: c.q, tags: c.tags, filters: clone(c.filters), results: res.length, source }, st().said ? { said: st().said } : {}));
       sorted.slice(0, 12).forEach((r, i) => RN.track('impression', { opId: r.op.id, q: c.q, tags: c.tags, filters: clone(c.filters), position: i + 1, source }));
     }, now ? 0 : 900);
   }
@@ -812,18 +839,22 @@
 
   /* ---------- Actions ---------- */
   let qTimer = null;
+  // Keywords search as you type; a sentence waits for a pause (or Enter) so filters don't jump while you write
   RN.inputs['br-q'] = (el) => {
     const x = document.querySelector('.br-q-x'); if (x) x.hidden = !el.value;
     clearTimeout(qTimer);
-    qTimer = setTimeout(() => setCrit({ q: el.value }), 160);
+    const natural = RN.model.understand(el.value).natural;
+    qTimer = setTimeout(() => applyText(el.value), natural ? 900 : 160);
   };
   RN.submits['br-search'] = (form) => {
     clearTimeout(qTimer);
     const i = form.querySelector('input[name=q]');
-    setCrit({ q: i.value }, { trackNow: true });
+    applyText(i.value, { trackNow: true });
     if (window.matchMedia('(max-width: 640px)').matches) i.blur();
   };
-  RN.actions['br-q-clear'] = () => { clearTimeout(qTimer); const i = document.getElementById('br-q'); if (i) { i.value = ''; i.focus(); } setCrit({ q: '' }); };
+  RN.actions['br-q-clear'] = () => { clearTimeout(qTimer); const i = document.getElementById('br-q'); if (i) { i.value = ''; i.focus(); } applyText(''); };
+  // Undo the reading: search the sentence as plain words, without the filters it produced
+  RN.actions['br-said-exact'] = () => { const said = st().said; const base = saidBase(); setSaid(''); setCrit({ q: said, filters: base }, { trackNow: true }); };
   RN.actions['br-q-set'] = (el) => { const i = document.getElementById('br-q'); if (i) i.value = el.dataset.q; setCrit({ q: el.dataset.q }, { trackNow: true }); };
   RN.actions['br-tags-toggle'] = () => setTagsOpen(!tagsOpen);
   RN.actions['br-tags-close'] = () => { setTagsOpen(false); const b = document.getElementById('br-tags-btn'); if (b) b.focus(); };
@@ -845,7 +876,7 @@
     if (Array.isArray(f[k])) f[k] = f[k].filter((x) => String(x) !== v); else delete f[k];
     setCrit({ filters: f });
   };
-  RN.actions['br-clear'] = () => { const i = document.getElementById('br-q'); if (i) i.value = ''; setCrit({ q: '', tags: [], filters: {} }); };
+  RN.actions['br-clear'] = () => { const i = document.getElementById('br-q'); if (i) i.value = ''; setSaid(''); setCrit({ q: '', tags: [], filters: {} }); };
   RN.actions['br-relax'] = (el) => {
     const c = without(crit(), { k: el.dataset.k, v: el.dataset.v });
     const i = document.getElementById('br-q'); if (i) i.value = c.q;

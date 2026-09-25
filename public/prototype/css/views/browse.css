@@ -73,6 +73,12 @@
 .br-sv-x svg { width: 14px; height: 14px; }
 .br-assist:empty { display: none; }
 .br-assist { margin-bottom: var(--s-4); }
+/* How a written request was read */
+.br-said { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--tint-line); border-radius: var(--r-input); background: var(--tint); color: var(--ink-2); }
+.br-said > svg { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; color: var(--accent); }
+.br-said p { flex: 1 1 280px; margin: 0; font-size: var(--t-14); line-height: 1.5; }
+.br-said p b { color: var(--ink); }
+.br-said .act { flex: 0 0 auto; font-size: var(--t-13); }
 .br-popular { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .br-popular-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .br-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
