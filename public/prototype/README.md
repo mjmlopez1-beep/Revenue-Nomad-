@@ -36,4 +36,4 @@ See `DESIGN.md` (build contract), `SPEC.md` (routes, loops, surface briefs, deci
 ## Tools
 
 - `node tools/check.js [--routes a,b] [--personas visitor,buyer] [--width 390] [--theme dark] [--shots dir] [--full]`: headless smoke test of every route.
-- `node tools/build-artifact.js`: bundles everything into `dist/artifact.html` for sharing as a single page.
+- `node tools/build-artifact.js`: bundles everything into `dist/artifact.html` for sharing as a single page. Published (private) at https://claude.ai/artifact/7dB7TB1ApErfENfBtrndnS.

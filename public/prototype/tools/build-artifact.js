@@ -15,7 +15,8 @@ html = html.replace(/<link rel="stylesheet" href="(css\/[^"]+)">/g, (m, href) =>
 html = html.replace(/<script src="(js\/[^"]+)"><\/script>/g, (m, src) => `<script data-src="${src}">\n${read(src).replace(/<\/script/gi, '<\\/script')}\n</script>`);
 
 // Unwrap the document for the artifact skeleton
-const title = (html.match(/<title>[\s\S]*?<\/title>/) || ['<title>Revenue Nomad</title>'])[0];
+// The gallery name for the published prototype (the site itself keeps "Revenue Nomad")
+const title = '<title>Revenue Nomad Master Prototype</title>';
 const head = (html.match(/<head>([\s\S]*?)<\/head>/) || [, ''])[1]
   .replace(/<meta charset[^>]*>/, '').replace(/<meta name="viewport"[^>]*>/, '').replace(/<title>[\s\S]*?<\/title>/, '')
   .replace(/<link rel="icon"[^>]*>/, '');
