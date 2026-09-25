@@ -208,24 +208,21 @@
   /* ---------- Start from the problem ---------- */
   function problems() {
     const needs = RN.fields.need.options;
-    // Problem tiles: one brand palette (forest on paper), an index number, categories as quiet text, a forest fill on hover
-    const cells = needs.map((o, i) => {
+    const cells = needs.map((o) => {
       const cats = RN.fields.needCats[o.v] || [];
-      const num = `<span class="hm-need-i" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span>`;
-      const ic = `<span class="hm-need-ic" aria-hidden="true">${icon(NEED_IC[o.v] || 'target')}</span>`;
-      const go = `<span class="hm-need-go" aria-hidden="true">${icon('arrow')}</span>`;
+      const ic = `<span class="hm-ic" aria-hidden="true">${icon(NEED_IC[o.v] || 'target')}</span>`;
       if (!cats.length) {
         return `<button type="button" class="hm-need hm-need-talk" data-act="hm-need" data-need="${esc(o.v)}">
-          <span class="hm-need-top">${num}${ic}</span>
+          ${ic}<span class="hm-go">${icon('arrow')}</span>
           <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span><span class="hm-need-cats">Talk it through with a person first</span></span>
-          <span class="hm-need-ft"><span class="hm-need-n">Reply within one business day</span>${go}</span>
+          <span class="hm-need-n">Reply within one business day</span>
         </button>`;
       }
       return `<button type="button" class="hm-need" data-act="hm-need" data-need="${esc(o.v)}">
-        <span class="hm-need-top">${num}${ic}</span>
+        ${ic}<span class="hm-go">${icon('arrow')}</span>
         <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span>
-          <span class="hm-need-cats">${cats.map((c) => esc(catLabel(c))).join(' <i>/</i> ')}</span></span>
-        <span class="hm-need-ft"><span class="hm-need-n">${RN.fmt.plural(opsIn(cats), 'operator')}</span>${go}</span>
+          <span class="hm-need-cats">${cats.map((c) => `<span>${RN.ui.catDot(c)}${esc(catLabel(c))}</span>`).join('')}</span></span>
+        <span class="hm-need-n">${RN.fmt.plural(opsIn(cats), 'operator')}</span>
       </button>`;
     }).join('');
     // Before you hire: the research surfaces, one click from the problem grid
@@ -238,7 +235,7 @@
     return `<section class="hm-sec section">
       <div class="wrap">
         ${head('Start here', 'Start from the problem you have.', '', `Pick what is broken. Browse opens on the role categories that fix it. Counts are the ${esc(RN.fmt.int(liveOps().length))} profiles in this prototype.`)}
-        <div class="hm-needs">${cells}</div>
+        <div class="hm-ruled hm-needs">${cells}</div>
         <nav class="hm-prep" aria-labelledby="hm-prep-t">
           <h3 class="label" id="hm-prep-t">Not ready to hire yet</h3>
           <ul class="hm-prep-list">${prep.map((p) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-ic" aria-hidden="true">${icon(p[0])}</span><span class="hm-prep-b"><b>${esc(p[1])}</b><span>${esc(p[2])}</span></span>${icon('arrow')}</a></li>`).join('')}</ul>
