@@ -265,7 +265,7 @@
           </div>
           <dl class="pg-dl">
             <div><dt>Who runs it</dt><dd>Founder led by Matt Lopez, with a small team that has done this work.</dd></div>
-            <div><dt>The network</dt><dd>350+ vetted operators on the live network across ${cats} go-to-market disciplines. This prototype loads ${RN.fmt.int(ops.length)} of them from the live export.</dd></div>
+            <div><dt>The network</dt><dd>350+ operators on the live network across ${cats} go-to-market disciplines, each reviewed by our team. This prototype loads ${RN.fmt.int(ops.length)} of them from the live export.</dd></div>
             <div><dt>Since</dt><dd>The open platform took ten months to build and launched in August 2026.</dd></div>
             <div><dt>Who we serve</dt><dd>B2B companies from their first sales hire to established teams going through a transformation.</dd></div>
             <div><dt>Research</dt><dd>The State of Fractional GTM ${esc(R.year)} surveys operators and hiring companies. The figures in this prototype are illustrative. ${illus()}</dd></div>

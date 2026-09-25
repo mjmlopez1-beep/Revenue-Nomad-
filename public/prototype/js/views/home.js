@@ -121,7 +121,7 @@
             <span class="hm-ln"><span>who already solved</span></span>
             <span class="hm-ln"><span class="serif">your revenue problem.</span></span>
           </h1>
-          <p class="hm-sub">Vetted fractional sales, marketing, RevOps and AI GTM leaders. Open profiles, client-confirmed proof marked Verified, no login to browse.</p>
+          <p class="hm-sub">Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, client-confirmed proof marked Verified, no login to browse.</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>
@@ -137,7 +137,7 @@
           </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>Vetted operators on the live network<small>${esc(RN.fmt.int(n))} in this prototype</small></dt><dd class="num">${esc(RN.data.market.network.operators)}</dd></div>
+          <div><dt>Operators on the live network<small>${esc(RN.fmt.int(n))} in this prototype</small></dt><dd class="num">${esc(RN.data.market.network.operators)}</dd></div>
           <div><dt>GTM disciplines</dt><dd class="num" data-count="${cats.length}">${cats.length}</dd></div>
           <div><dt>Reply window on every intro request</dt><dd class="num">72 hrs</dd></div>
         </dl>

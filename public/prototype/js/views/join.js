@@ -918,7 +918,7 @@
         </article>
       </section>
       <section class="wrap" aria-label="Network facts"><div class="jn-facts">
-        <div><b class="num">${esc(RN.data.market.network.operators)}</b><span>vetted operators on the live network (${RN.fmt.int(RN.model.ops.length)} in this prototype)</span></div>
+        <div><b class="num">${esc(RN.data.market.network.operators)}</b><span>operators on the live network (${RN.fmt.int(RN.model.ops.length)} in this prototype)</span></div>
         <div><b class="num">${RN.fields.roleCategory.options.length}</b><span>role categories, from Sales Leadership to AI GTM</span></div>
         <div><b class="num">2</b><span>business days to review an application</span></div>
         <div><b class="num">$0</b><span>for companies to browse, shortlist and request intros</span></div>

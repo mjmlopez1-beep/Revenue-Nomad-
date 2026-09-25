@@ -1283,7 +1283,7 @@
     return `<section class="pf-card pf-talk night">
       <span class="eyebrow pf-talk-k">Revenue Nomad team</span>
       <h3 class="h4">Rather have us find the right operator?</h3>
-      <p>Share what you need and we’ll shortlist vetted operators and set up the intros.</p>
+      <p>Share what you need and we’ll shortlist operators who fit and set up the intros.</p>
       <a class="btn btn-leaf btn-block" href="#talk">Talk to us</a>
       <a class="pf-talk-phone" href="tel:+12032000482">${icon('message')}+1 203-200-0482</a>
     </section>`;
