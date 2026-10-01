@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nomad Match</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23095D42'/%3E%3Cpath d='M10 22V10l12 12V10' stroke='%23fff' stroke-width='3' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --bg: #F7F8F5; --card: #FFFFFF; --green: #095D42; --green-2: #0B7352; --green-tint: #E8F0EA;
+    --ink: #212121; --muted: #5F635F; --line: #E2E5DF; --gold: #E9A63D; --gold-tint: #FBF1DF;
+    --bad: #A3321F; --bad-tint: #F7E7E2; --r: 20px; --r-sm: 12px;
+    --font: "Red Hat Display", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font); }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 28px; border-bottom: 1px solid var(--line); background: var(--card); }
+  .brand { display: flex; align-items: baseline; gap: 12px; }
+  .brand b { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; color: var(--green); }
+  .brand span { color: var(--muted); font-size: 14px; }
+  .status { display: flex; align-items: center; gap: 14px; font-size: 13px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; color: var(--ink); }
+  .switch input { accent-color: var(--green); width: 16px; height: 16px; }
+  main { display: grid; grid-template-columns: 340px 360px minmax(0, 1fr); gap: 20px; padding: 20px 28px 40px; align-items: start; }
+  @media (max-width: 1180px) { main { grid-template-columns: 1fr 1fr; } .col-results { grid-column: 1 / -1; } }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; padding: 16px; } header.top { padding: 14px 16px; flex-wrap: wrap; } }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; }
+  .panel + .panel { margin-top: 16px; }
+  h2 { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--green); margin: 0 0 12px; }
+  h3 { font-size: 15px; margin: 0; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin: 12px 0 5px; }
+  textarea, input, select { width: 100%; font: inherit; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; }
+  textarea { resize: vertical; min-height: 120px; }
+  textarea:focus, input:focus, select:focus { outline: 2px solid rgba(9, 93, 66, .25); border-color: var(--green); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  button { font: inherit; font-weight: 700; cursor: pointer; border-radius: 999px; padding: 11px 20px; border: 1px solid var(--green); background: var(--green); color: #fff; }
+  button:hover { background: var(--green-2); }
+  button.ghost { background: transparent; color: var(--green); }
+  button.ghost:hover { background: var(--green-tint); }
+  button:disabled { opacity: .55; cursor: progress; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .note { font-size: 13px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--gold-tint); color: #6b4a0e; margin-bottom: 12px; }
+  .empty { color: var(--muted); font-size: 14px; }
+  .q { background: var(--green-tint); border-radius: var(--r-sm); padding: 12px; margin-bottom: 10px; }
+  .q p { margin: 0 0 6px; font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--green-tint); color: var(--green); }
+  .chip.expert { background: var(--gold-tint); color: #7a5208; }
+  .src { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .cards { display: grid; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; }
+  .card.top1 { border-color: var(--green); box-shadow: 0 10px 30px -18px rgba(9, 93, 66, .5); }
+  .card-hd { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+  .rank { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .name { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .role { color: var(--green); font-weight: 600; font-size: 14px; }
+  .headline { color: var(--muted); font-size: 14px; margin: 6px 0 12px; }
+  .ris { text-align: center; min-width: 64px; }
+  .ris b { display: block; font-size: 26px; font-weight: 800; color: var(--green); line-height: 1; }
+  .ris span { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .ris.low b { color: var(--muted); }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .facts strong { color: var(--ink); }
+  .avail-available { color: var(--green); } .avail-limited { color: #9a6a10; } .avail-booked { color: var(--bad); }
+  .why { font-weight: 600; margin: 12px 0 8px; }
+  ul.ev { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  ul.ev li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; font-size: 14px; }
+  ul.ev .ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: var(--green-tint); color: var(--green); }
+  ul.ev .ic.gold { background: var(--gold-tint); color: #7a5208; }
+  .quote { font-style: italic; }
+  .muted { color: var(--muted); }
+  .mini { display: grid; gap: 10px; }
+  .mini .card { padding: 14px 16px; }
+  .mini-hd { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .mini-hd b { font-size: 16px; }
+  .out { border-left: 4px solid var(--bad); }
+  .reason { color: var(--bad); font-size: 13px; font-weight: 600; }
+  .debug { display: none; margin-top: 12px; font-size: 12px; background: #F1F3EF; border-radius: var(--r-sm); padding: 10px 12px; font-family: ui-monospace, Menlo, monospace; white-space: pre-wrap; }
+  body.show-debug .debug { display: block; }
+  .section-t { margin: 24px 0 10px; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.5); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>Nomad Match</b><span>Describe the problem. Get the right three operators, with evidence.</span></div>
+  <div class="status">
+    <span id="engine"></span>
+    <label class="switch" style="margin:0"><input type="checkbox" id="debugToggle"> Show scoring</label>
+  </div>
+</header>
+
+<main>
+  <!-- LEFT: problem and filters -->
+  <section class="col-input">
+    <div class="panel">
+      <h2>1. Your situation</h2>
+      <label for="sample">Try a sample</label>
+      <select id="sample"></select>
+      <label for="problem">Describe what's not working</label>
+      <textarea id="problem" rows="6"></textarea>
+      <label>Filters <span style="font-weight:400">(optional; empty ones use the brief)</span></label>
+      <div class="row2">
+        <div><label for="fStage" style="margin-top:0">Revenue stage</label><select id="fStage"></select></div>
+        <div><label for="fIndustry" style="margin-top:0">Industry</label><select id="fIndustry"></select></div>
+      </div>
+      <div class="row2">
+        <div><label for="fRate">Max hourly rate ($)</label><input id="fRate" type="number" min="0" step="5" placeholder="from brief"></div>
+        <div><label for="fHours">Min hours / month</label><input id="fHours" type="number" min="0" step="5" placeholder="from brief"></div>
+      </div>
+      <div class="actions"><button id="matchBtn">Match</button></div>
+    </div>
+  </section>
+
+  <!-- MIDDLE: brief -->
+  <section class="col-brief">
+    <div class="panel" id="briefPanel">
+      <h2>2. The brief</h2>
+      <p class="empty" id="briefEmpty">Press Match. Claude reads your situation, may ask up to two quick questions, and writes a brief you can edit.</p>
+      <div id="briefNote"></div>
+      <div id="questions"></div>
+      <div id="briefForm" hidden>
+        <div class="src" id="briefSrc"></div>
+        <label for="bRole">Recommended role</label><select id="bRole"></select>
+        <label for="bScope">90-day scope</label><textarea id="bScope" rows="5"></textarea>
+        <div class="row2">
+          <div><label for="bStage">Revenue stage</label><select id="bStage"></select></div>
+          <div><label for="bHours">Hours / month</label><input id="bHours" type="number" min="0" step="5"></div>
+        </div>
+        <div class="row2">
+          <div><label for="bRateMin">Rate from ($/hr)</label><input id="bRateMin" type="number" min="0" step="5"></div>
+          <div><label for="bRateMax">Rate to ($/hr)</label><input id="bRateMax" type="number" min="0" step="5"></div>
+        </div>
+        <label for="bTags">Fit tags to look for <span style="font-weight:400">(comma separated)</span></label>
+        <textarea id="bTags" rows="3" style="min-height:70px"></textarea>
+        <p class="hint" id="bRationale"></p>
+        <div class="actions"><button class="ghost" id="rematchBtn">Re-run match with this brief</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: results -->
+  <section class="col-results">
+    <div class="panel" id="resultsPanel">
+      <h2>3. Your best matches</h2>
+      <p class="empty" id="resultsEmpty">Your top three operators appear here, each with the engagement, review and verified tags behind the match.</p>
+      <div id="effective" class="hint" style="margin-bottom:12px"></div>
+      <div class="cards" id="top"></div>
+      <div id="also"></div>
+      <div id="out"></div>
+      <div class="debug" id="queryDebug"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const money = (n) => "$" + Number(n).toLocaleString("en-US");
+let META = null, BRIEF = null, ANSWERS = [], PENDING = [];
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+function options(el, list, blank) { el.innerHTML = (blank ? `<option value="">${esc(blank)}</option>` : "") + list.map((v) => `<option>${esc(v)}</option>`).join(""); }
+
+async function init() {
+  META = await api("/api/meta");
+  options($("sample"), META.samples.map((s, i) => `${i + 1}. ${s}`));
+  $("problem").value = META.samples[0];
+  options($("fStage"), META.revenue_stages, "Any (use brief)");
+  options($("fIndustry"), META.industries, "Any");
+  options($("bRole"), META.role_categories);
+  options($("bStage"), META.revenue_stages);
+  $("engine").innerHTML = META.claude
+    ? `<span class="dot" style="background:var(--green)"></span>Intake: Claude (${esc(META.model)})`
+    : `<span class="dot" style="background:var(--gold)"></span>Intake: rules (no API key)`;
+  $("sample").onchange = () => { $("problem").value = META.samples[$("sample").selectedIndex]; };
+  $("debugToggle").onchange = (e) => document.body.classList.toggle("show-debug", e.target.checked);
+  $("matchBtn").onclick = startIntake;
+  $("rematchBtn").onclick = () => { BRIEF = readBrief(); runMatch(); };
+}
+
+function busy(btn, on, label) {
+  btn.disabled = on;
+  if (on) { btn.dataset.label = btn.textContent; btn.innerHTML = `<span class="spinner"></span>${esc(label)}`; }
+  else if (btn.dataset.label) btn.textContent = btn.dataset.label;
+}
+
+async function startIntake() {
+  ANSWERS = []; PENDING = [];
+  await intake();
+}
+
+async function intake() {
+  const btn = $("matchBtn");
+  busy(btn, true, ANSWERS.length ? "Updating brief" : "Reading your situation");
+  try {
+    const res = await api("/api/intake", { text: $("problem").value, answers: ANSWERS });
+    BRIEF = res.brief;
+    showBrief(res);
+    if (res.questions && res.questions.length) { PENDING = res.questions; showQuestions(); }
+    else { $("questions").innerHTML = ""; await runMatch(); }
+  } catch (e) {
+    $("briefNote").innerHTML = `<div class="note">Something went wrong: ${esc(e.message)}</div>`;
+  } finally { busy(btn, false); }
+}
+
+function showQuestions() {
+  $("questions").innerHTML = `<p class="src" style="margin:0 0 8px">A couple of quick questions (optional)</p>` +
+    PENDING.map((q, i) => `<div class="q"><p>${esc(q)}</p><input id="ans${i}" placeholder="Your answer"></div>`).join("") +
+    `<div class="actions" style="margin-top:4px;margin-bottom:12px"><button id="ansBtn">Continue</button><button class="ghost" id="skipBtn">Skip and match now</button></div>`;
+  $("ansBtn").onclick = async () => {
+    ANSWERS = ANSWERS.concat(PENDING.map((q, i) => ({ question: q, answer: $("ans" + i).value })));
+    PENDING = []; $("questions").innerHTML = ""; await intake();
+  };
+  $("skipBtn").onclick = async () => { PENDING = []; $("questions").innerHTML = ""; await runMatch(); };
+  const first = $("ans0"); if (first) first.focus();
+}
+
+function showBrief(res) {
+  $("briefEmpty").hidden = true;
+  $("briefForm").hidden = false;
+  $("briefNote").innerHTML = res.note ? `<div class="note">${esc(res.note)}</div>` : "";
+  $("briefSrc").textContent = res.source === "claude" ? "Written by Claude. Edit anything, then re-run." : "Written by keyword rules. Edit anything, then re-run.";
+  const b = res.brief;
+  $("bRole").value = b.role_category;
+  $("bScope").value = b.scope_summary;
+  $("bStage").value = b.revenue_stage;
+  $("bHours").value = b.suggested_hours_per_month;
+  $("bRateMin").value = b.rate_range.min;
+  $("bRateMax").value = b.rate_range.max;
+  $("bTags").value = b.inferred_fit_tags.join(", ");
+  $("bRationale").textContent = b.rationale || "";
+}
+
+function readBrief() {
+  return {
+    role_category: $("bRole").value,
+    scope_summary: $("bScope").value,
+    revenue_stage: $("bStage").value,
+    suggested_hours_per_month: Number($("bHours").value) || 0,
+    rate_range: { min: Number($("bRateMin").value) || 0, max: Number($("bRateMax").value) || 0 },
+    inferred_fit_tags: $("bTags").value.split(",").map((s) => s.trim()).filter(Boolean),
+    rationale: $("bRationale").textContent,
+  };
+}
+
+function effectiveFilters(b) {
+  const f = {};
+  f.revenue_stage = $("fStage").value || b.revenue_stage || null;
+  f.industry = $("fIndustry").value || null;
+  f.max_rate = Number($("fRate").value) || (b.rate_range && b.rate_range.max) || null;
+  f.min_hours = Number($("fHours").value) || b.suggested_hours_per_month || null;
+  return f;
+}
+
+async function runMatch() {
+  if (!BRIEF) return;
+  const btn = $("rematchBtn");
+  busy(btn, true, "Matching");
+  const f = effectiveFilters(BRIEF);
+  try {
+    const res = await api("/api/match", { problem: $("problem").value, brief: BRIEF, filters: f });
+    renderResults(res, f);
+  } catch (e) {
+    $("top").innerHTML = `<div class="note">Matching failed: ${esc(e.message)}</div>`;
+  } finally { busy(btn, false); }
+}
+
+function availLine(a) {
+  if (a.status === "booked") return `<span class="avail-booked">Booked</span>`;
+  return `<span class="avail-${a.status}">${a.status === "limited" ? "Limited" : "Available"}</span>, ${a.hours_per_month} hrs/month`;
+}
+function debugBlock(r) {
+  const s = r.scores;
+  return `<div class="debug">semantic: profile cosine ${s.doc_cosine.toFixed(3)}, best engagement cosine ${s.best_engagement_cosine.toFixed(3)}, mean ${s.semantic_raw.toFixed(3)}, normalised ${s.semantic_normalised.toFixed(2)}
+reputation: ${r.reputation_index} / 99 = ${s.reputation_normalised.toFixed(2)}
+verified tag coverage: ${s.tag_coverage.toFixed(2)}
+final = ${esc(s.formula)}</div>`;
+}
+
+function card(r, i) {
+  const ev = r.evidence, e = ev.engagement;
+  const tags = ev.matched_tags.length
+    ? `<div class="chips">${ev.matched_tags.map((t) => `<span class="chip ${t.tier === "expert" ? "expert" : ""}">${esc(t.tag)} · ${esc(t.tier)}</span>`).join("")}</div>`
+    : `<span class="muted">None of the brief's tags are verified for ${esc(r.name.split(" ")[0])} yet.</span>`;
+  const review = ev.review
+    ? `<span class="quote">“${esc(ev.review.quote)}”</span> <span class="muted">(${"★".repeat(ev.review.rating)}${ev.review.would_hire_again ? ", would hire again" : ""})</span>`
+    : `<span class="muted">No client reviews yet. Their record rests on engagements and self-reported tags, which is why their Reputation Index is lower.</span>`;
+  return `<article class="card ${i === 0 ? "top1" : ""}">
+    <div class="card-hd">
+      <div><div class="rank">Match ${i + 1}</div><div class="name">${esc(r.name)}</div><div class="role">${esc(r.role_category)}</div></div>
+      <div class="ris ${r.reputation_index < 50 ? "low" : ""}"><b>${r.reputation_index}</b><span>Reputation<br>Index</span></div>
+    </div>
+    <p class="headline">${esc(r.headline)}</p>
+    <div class="facts"><span><strong>${money(r.hourly_rate)}</strong>/hr</span><span>${availLine(r.availability)}</span><span>${esc(r.location)}</span><span>${r.review_count} review${r.review_count === 1 ? "" : "s"}</span></div>
+    <p class="why">${esc(r.why)}</p>
+    <ul class="ev">
+      <li><span class="ic">1</span><span><b>Engagement:</b> ${esc(e.company)}${e.current ? " (current)" : ""}, ${e.duration_months} months. ${esc(e.what_they_did)} <b>Result:</b> ${esc(e.outcome)}</span></li>
+      <li><span class="ic gold">2</span><span><b>Client review:</b> ${review}</span></li>
+      <li><span class="ic">3</span><span><b>Verified tags that match:</b> ${tags}</span></li>
+    </ul>
+    ${debugBlock(r)}
+  </article>`;
+}
+
+function mini(r, out) {
+  return `<article class="card ${out ? "out" : ""}">
+    <div class="mini-hd"><b>${esc(r.name)}</b><span class="muted">${esc(r.role_category)} · ${money(r.hourly_rate)}/hr · RI ${r.reputation_index}</span></div>
+    ${out ? r.filter_reasons.map((x) => `<div class="reason">${esc(x)}</div>`).join("") : `<div class="muted" style="font-size:14px;margin-top:4px">${esc(r.why)}</div>`}
+    ${debugBlock(r)}
+  </article>`;
+}
+
+function renderResults(res, f) {
+  $("resultsEmpty").hidden = true;
+  const bits = [f.revenue_stage && `stage ${f.revenue_stage}`, f.industry && `industry ${f.industry}`, f.max_rate && `rate up to ${money(f.max_rate)}/hr`, f.min_hours && `at least ${f.min_hours} hrs/month`].filter(Boolean);
+  $("effective").textContent = bits.length ? `Hard filters applied: ${bits.join(", ")}.` : "No hard filters applied.";
+  $("top").innerHTML = res.top.length ? res.top.map(card).join("") : `<p class="empty">No operator passes these filters. Loosen a filter and run again.</p>`;
+  $("also").innerHTML = res.also_consider.length ? `<div class="section-t">Also consider</div><div class="mini">${res.also_consider.map((r) => mini(r, false)).join("")}</div>` : "";
+  $("out").innerHTML = res.filtered_out.length ? `<div class="section-t">Filtered out, and why</div><div class="mini">${res.filtered_out.map((r) => mini(r, true)).join("")}</div>` : "";
+  $("queryDebug").textContent = `Weights: semantic ${res.weights.semantic}, reputation ${res.weights.reputation}, verified tags ${res.weights.tags}.\nSemantic is normalised so the closest operator scores 1 and the furthest 0.\n\nText embedded for the search:\n${res.query_text}`;
+}
+
+init();
+</script>
+</body>
+</html>

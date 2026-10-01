@@ -1,0 +1,317 @@
+[
+  {
+    "id": "dana-whitfield",
+    "name": "Dana Whitfield",
+    "headline": "Fractional VP of Sales who turns founder-led services firms into sales-led teams that actually work their inbound",
+    "location": "Denver, CO",
+    "hourly_rate": 235,
+    "availability": {"hours_per_month": 60, "status": "available"},
+    "role_category": "Fractional VP of Sales",
+    "revenue_stage_fit": ["$5M-$20M", "$20M-$50M"],
+    "industries": ["professional services", "marketing agencies", "home services"],
+    "fit_tags": [
+      {"tag": "founder-led to sales-led transition", "dimension": "playbook", "tier": "expert"},
+      {"tag": "inbound", "dimension": "sales motion", "tier": "expert"},
+      {"tag": "first sales hire", "dimension": "playbook", "tier": "verified"},
+      {"tag": "lead response SLA", "dimension": "playbook", "tier": "verified"},
+      {"tag": "mid-market", "dimension": "sales motion", "tier": "verified"},
+      {"tag": "ACV $25K-$100K", "dimension": "contract value", "tier": "verified"},
+      {"tag": "sales cycle 30-90 days", "dimension": "sales cycle", "tier": "self"},
+      {"tag": "team of 3-8 reps", "dimension": "team size", "tier": "verified"},
+      {"tag": "HubSpot", "dimension": "tech stack", "tier": "verified"},
+      {"tag": "sales process design", "dimension": "playbook", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A $14M IT managed-services firm", "revenue_stage": "$5M-$20M", "problem": "Inbound leads were going unanswered for days because the founder was still the only closer and nobody owned follow-up.", "what_they_did": "Set a 15-minute lead response SLA, hired and trained two account executives, moved the founder out of first calls, and built a simple qualification script in HubSpot.", "outcome": "Inbound-to-meeting conversion went from 18% to 46% and the founder stopped taking first calls within 4 months.", "duration_months": 7, "current": false, "ended": "2026-06"},
+      {"company": "A $9M accounting and advisory practice", "revenue_stage": "$5M-$20M", "problem": "Partners sold ad hoc with no pipeline, so revenue was lumpy and nobody knew what would close.", "what_they_did": "Introduced a three-stage pipeline, weekly forecast meeting and the firm's first business development hire.", "outcome": "Forecast accuracy within 10% for three straight quarters and 31% revenue growth in year one.", "duration_months": 10, "current": false, "ended": "2025-09"},
+      {"company": "A $22M commercial landscaping company", "revenue_stage": "$20M-$50M", "problem": "Bids came in through the website and phone but the owner reviewed every one personally and many went stale.", "what_they_did": "Built an estimator-plus-closer team structure, a bid response playbook and a HubSpot workflow for quote follow-up.", "outcome": "Average bid turnaround dropped from 9 days to 2 and win rate rose from 22% to 34%.", "duration_months": 6, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "Dana got me out of the sales seat without anything falling through the cracks. Our inbound leads finally get a call the same day, and my team closes deals I used to think only I could close."},
+      {"rating": 5, "would_hire_again": true, "quote": "She is direct, practical and fast. The pipeline meeting she set up is now the most useful hour of our week."},
+      {"rating": 5, "would_hire_again": true, "quote": "We had tried two sales managers before Dana. She built the process first and then hired against it, which is why it stuck."},
+      {"rating": 4, "would_hire_again": true, "quote": "Strong operator who knows professional services buyers. I wish we had brought her in a year earlier."}
+    ]
+  },
+  {
+    "id": "marcus-bell",
+    "name": "Marcus Bell",
+    "headline": "Fractional VP of Sales for Series A SaaS: builds the first outbound team and the comp plan to go with it",
+    "location": "Austin, TX",
+    "hourly_rate": 220,
+    "availability": {"hours_per_month": 80, "status": "available"},
+    "role_category": "Fractional VP of Sales",
+    "revenue_stage_fit": ["$1M-$5M", "$5M-$20M"],
+    "industries": ["SaaS", "fintech", "edtech"],
+    "fit_tags": [
+      {"tag": "SDR team build", "dimension": "playbook", "tier": "expert"},
+      {"tag": "outbound", "dimension": "sales motion", "tier": "expert"},
+      {"tag": "comp plan design", "dimension": "playbook", "tier": "verified"},
+      {"tag": "PLG", "dimension": "sales motion", "tier": "verified"},
+      {"tag": "first sales hire", "dimension": "playbook", "tier": "verified"},
+      {"tag": "SMB", "dimension": "sales motion", "tier": "self"},
+      {"tag": "ACV $10K-$50K", "dimension": "contract value", "tier": "verified"},
+      {"tag": "sales cycle under 60 days", "dimension": "sales cycle", "tier": "self"},
+      {"tag": "Apollo", "dimension": "tech stack", "tier": "verified"},
+      {"tag": "Outreach", "dimension": "tech stack", "tier": "self"},
+      {"tag": "Salesforce", "dimension": "tech stack", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A Series A product-led analytics SaaS company", "revenue_stage": "$1M-$5M", "problem": "Self-serve signups had plateaued and the board wanted an outbound motion, but nobody had ever built one.", "what_they_did": "Defined the ICP from product usage data, hired and ramped the first three SDRs and an AE, wrote the outbound sequences in Apollo and designed a comp plan tied to qualified pipeline.", "outcome": "$1.9M in new qualified pipeline in the first two quarters; outbound became 35% of new ARR.", "duration_months": 9, "current": false, "ended": "2026-04"},
+      {"company": "A seed-to-Series A payments startup", "revenue_stage": "$1M-$5M", "problem": "The founders were closing every deal and had no comp structure for their first sales hires.", "what_they_did": "Wrote the first sales playbook, built OTE and quota models for AEs and SDRs, and hired the first two reps.", "outcome": "First two AEs hit 90% of quota by month six; founder time on sales fell by half.", "duration_months": 6, "current": false, "ended": "2025-11"},
+      {"company": "A $6M edtech platform selling to school districts", "revenue_stage": "$5M-$20M", "problem": "Pipeline depended entirely on conferences and inbound, and there was no repeatable outbound playbook.", "what_they_did": "Built an account list by district size, a 14-touch Outreach sequence and a weekly SDR coaching cadence.", "outcome": "Meetings booked per month tripled and cost per opportunity fell 40%.", "duration_months": 8, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "Marcus built our outbound engine from nothing. The comp plan he designed is still the one we use, and our SDRs actually understand it."},
+      {"rating": 4, "would_hire_again": true, "quote": "Very strong on hiring and structure. He pushed us hard on ICP definition, which annoyed us at first and paid off later."},
+      {"rating": 5, "would_hire_again": true, "quote": "He knows how to bolt sales onto a product-led motion without breaking what already works."}
+    ]
+  },
+  {
+    "id": "priya-desai",
+    "name": "Priya Desai",
+    "headline": "Fractional CRO for $20M+ B2B companies: enterprise motion, forecasting discipline and sales leadership hiring",
+    "location": "Chicago, IL",
+    "hourly_rate": 265,
+    "availability": {"hours_per_month": 0, "status": "booked"},
+    "role_category": "Fractional VP of Sales",
+    "revenue_stage_fit": ["$5M-$20M", "$20M-$50M", "$50M+"],
+    "industries": ["SaaS", "professional services", "logistics", "healthtech"],
+    "fit_tags": [
+      {"tag": "enterprise", "dimension": "sales motion", "tier": "expert"},
+      {"tag": "forecasting", "dimension": "playbook", "tier": "expert"},
+      {"tag": "founder-led to sales-led transition", "dimension": "playbook", "tier": "verified"},
+      {"tag": "inbound", "dimension": "sales motion", "tier": "verified"},
+      {"tag": "pipeline recovery", "dimension": "playbook", "tier": "verified"},
+      {"tag": "ACV $100K+", "dimension": "contract value", "tier": "verified"},
+      {"tag": "sales cycle 6-12 months", "dimension": "sales cycle", "tier": "verified"},
+      {"tag": "team of 10-25 reps", "dimension": "team size", "tier": "expert"},
+      {"tag": "Salesforce", "dimension": "tech stack", "tier": "verified"},
+      {"tag": "Gong", "dimension": "tech stack", "tier": "verified"},
+      {"tag": "sales leadership hiring", "dimension": "playbook", "tier": "expert"}
+    ],
+    "engagements": [
+      {"company": "A $38M logistics software company", "revenue_stage": "$20M-$50M", "problem": "The CEO was still running the enterprise pipeline and the forecast missed by 30% two quarters in a row.", "what_they_did": "Installed MEDDICC qualification, rebuilt the forecast cadence in Salesforce and Gong, and hired a permanent VP of Sales.", "outcome": "Forecast accuracy within 5% for three quarters and a successful hand-off to a full-time VP.", "duration_months": 11, "current": false, "ended": "2026-03"},
+      {"company": "A $16M professional services firm selling to hospitals", "revenue_stage": "$5M-$20M", "problem": "Strong inbound demand, but the partners were the only closers and large deals stalled.", "what_they_did": "Built a deal desk, a partner-plus-seller selling model and a proposal process for enterprise buyers.", "outcome": "Average deal size up 60% and sales cycle shortened by five weeks.", "duration_months": 9, "current": false, "ended": "2025-08"},
+      {"company": "A $70M healthtech company", "revenue_stage": "$50M+", "problem": "Two regional sales teams with different processes and no shared forecast.", "what_they_did": "Unified the sales process, territory design and weekly forecast across both teams.", "outcome": "Unified forecast in one quarter; regional win rates converged at the higher team's level.", "duration_months": 12, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "Priya is the best sales leader I have worked with, fractional or full-time. She made our forecast something the board trusts."},
+      {"rating": 5, "would_hire_again": true, "quote": "She took enterprise deals off my plate and hired the VP who now runs the team. Calm, rigorous and very good with people."},
+      {"rating": 5, "would_hire_again": true, "quote": "We grew the average deal by more than half while she was here. Worth every dollar."},
+      {"rating": 5, "would_hire_again": true, "quote": "The rare operator who is equally strong on process and on coaching. Our reps still use her deal reviews."},
+      {"rating": 4, "would_hire_again": true, "quote": "Excellent, though in high demand, so book her early."}
+    ]
+  },
+  {
+    "id": "grant-holloway",
+    "name": "Grant Holloway",
+    "headline": "Turnaround VP of Sales for mid-market companies whose pipeline has dried up",
+    "location": "Atlanta, GA",
+    "hourly_rate": 300,
+    "availability": {"hours_per_month": 40, "status": "limited"},
+    "role_category": "Fractional VP of Sales",
+    "revenue_stage_fit": ["$5M-$20M", "$20M-$50M"],
+    "industries": ["manufacturing", "logistics", "professional services"],
+    "fit_tags": [
+      {"tag": "pipeline recovery", "dimension": "playbook", "tier": "expert"},
+      {"tag": "mid-market", "dimension": "sales motion", "tier": "verified"},
+      {"tag": "channel", "dimension": "sales motion", "tier": "verified"},
+      {"tag": "outbound", "dimension": "sales motion", "tier": "self"},
+      {"tag": "ACV $50K-$250K", "dimension": "contract value", "tier": "verified"},
+      {"tag": "sales cycle 3-6 months", "dimension": "sales cycle", "tier": "verified"},
+      {"tag": "team of 10-25 reps", "dimension": "team size", "tier": "verified"},
+      {"tag": "Salesforce", "dimension": "tech stack", "tier": "self"},
+      {"tag": "sales team restructure", "dimension": "playbook", "tier": "verified"},
+      {"tag": "pricing", "dimension": "playbook", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A $27M industrial equipment manufacturer", "revenue_stage": "$20M-$50M", "problem": "Pipeline had fallen 45% year over year after two senior reps left and the distributor channel went quiet.", "what_they_did": "Re-engaged the top 20 distributors with a joint selling program, restructured territories and put the team on a weekly pipeline review.", "outcome": "Pipeline rebuilt to 3.2x coverage in five months and the year closed at 96% of plan.", "duration_months": 8, "current": false, "ended": "2025-12"},
+      {"company": "A $12M freight brokerage", "revenue_stage": "$5M-$20M", "problem": "Reps were chasing small shippers and margins were collapsing.", "what_they_did": "Re-segmented accounts by lane value, changed the pricing guardrails and moved two reps to strategic accounts.", "outcome": "Gross margin per load up 18% and average account size up 2.1x.", "duration_months": 7, "current": false, "ended": "2025-05"}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "Grant walked into a mess and had a plan in two weeks. The distributor program he built saved our year."},
+      {"rating": 4, "would_hire_again": true, "quote": "Expensive, and blunt with the team, but he knows exactly how to find pipeline when there is none."},
+      {"rating": 4, "would_hire_again": false, "quote": "Delivered the numbers. Less interested in documenting how so the team could keep it going after he left."}
+    ]
+  },
+  {
+    "id": "elena-vasquez",
+    "name": "Elena Vasquez",
+    "headline": "Fractional CMO for product-led SaaS: positioning, demand generation and the content engine behind it",
+    "location": "San Diego, CA",
+    "hourly_rate": 210,
+    "availability": {"hours_per_month": 60, "status": "available"},
+    "role_category": "Fractional CMO",
+    "revenue_stage_fit": ["$1M-$5M", "$5M-$20M"],
+    "industries": ["SaaS", "edtech", "fintech"],
+    "fit_tags": [
+      {"tag": "PLG", "dimension": "sales motion", "tier": "expert"},
+      {"tag": "demand generation", "dimension": "playbook", "tier": "verified"},
+      {"tag": "positioning and messaging", "dimension": "playbook", "tier": "verified"},
+      {"tag": "inbound", "dimension": "sales motion", "tier": "verified"},
+      {"tag": "SMB", "dimension": "sales motion", "tier": "self"},
+      {"tag": "content engine", "dimension": "playbook", "tier": "self"},
+      {"tag": "team of 3-8 marketers", "dimension": "team size", "tier": "self"},
+      {"tag": "HubSpot", "dimension": "tech stack", "tier": "verified"},
+      {"tag": "lifecycle email", "dimension": "playbook", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A $4M collaboration SaaS tool", "revenue_stage": "$1M-$5M", "problem": "Traffic was growing but trial-to-paid conversion was stuck at 2% and messaging was generic.", "what_they_did": "Rewrote positioning around one use case, rebuilt onboarding emails and launched a content program targeting operations managers.", "outcome": "Trial-to-paid conversion rose from 2.1% to 3.8% and organic signups grew 70% in two quarters.", "duration_months": 8, "current": false, "ended": "2026-02"},
+      {"company": "A $7M tutoring marketplace", "revenue_stage": "$5M-$20M", "problem": "Paid acquisition costs doubled in a year with no clear channel strategy.", "what_they_did": "Shifted budget from paid social to partnerships and SEO, and set up channel-level CAC reporting.", "outcome": "Blended CAC down 34% while new customers held flat.", "duration_months": 6, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "Elena found the one sentence that explains our product. Everything got easier after that, from ads to sales calls."},
+      {"rating": 4, "would_hire_again": true, "quote": "Smart and data-driven. Needed a bit more support from our side on design resources than we expected."}
+    ]
+  },
+  {
+    "id": "tom-becker",
+    "name": "Tom Becker",
+    "headline": "Fractional CMO for local and regional service businesses: brand, lead generation and reviews",
+    "location": "Columbus, OH",
+    "hourly_rate": 160,
+    "availability": {"hours_per_month": 80, "status": "available"},
+    "role_category": "Fractional CMO",
+    "revenue_stage_fit": ["Under $1M", "$1M-$5M"],
+    "industries": ["home services", "professional services"],
+    "fit_tags": [
+      {"tag": "local lead generation", "dimension": "playbook", "tier": "verified"},
+      {"tag": "brand refresh", "dimension": "playbook", "tier": "self"},
+      {"tag": "inbound", "dimension": "sales motion", "tier": "self"},
+      {"tag": "SMB", "dimension": "sales motion", "tier": "self"},
+      {"tag": "review generation", "dimension": "playbook", "tier": "self"},
+      {"tag": "paid search", "dimension": "playbook", "tier": "self"},
+      {"tag": "team of 1-2 marketers", "dimension": "team size", "tier": "self"},
+      {"tag": "HubSpot", "dimension": "tech stack", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A $2M residential HVAC company", "revenue_stage": "$1M-$5M", "problem": "Phones were quiet outside peak season and the brand looked dated next to competitors.", "what_they_did": "Refreshed the brand and website, launched local search ads and a review request program.", "outcome": "Off-season call volume up 40% and Google rating from 4.1 to 4.7.", "duration_months": 5, "current": false, "ended": "2024-10"},
+      {"company": "A $700K boutique law practice", "revenue_stage": "Under $1M", "problem": "Relied entirely on referrals and wanted a second source of clients.", "what_they_did": "Built a simple website, a legal-guide content series and paid search for two practice areas.", "outcome": "Twelve new client matters from search in the first six months.", "duration_months": 4, "current": false, "ended": "2024-06"}
+    ],
+    "reviews": [
+      {"rating": 4, "would_hire_again": true, "quote": "Tom gets small businesses. He was practical about our budget and the phones did start ringing."},
+      {"rating": 3, "would_hire_again": false, "quote": "Good ideas but slow to execute, and we had to chase updates more than I would like."}
+    ]
+  },
+  {
+    "id": "aisha-okafor",
+    "name": "Aisha Okafor",
+    "headline": "Fractional RevOps leader who makes HubSpot trustworthy before the board meeting",
+    "location": "Raleigh, NC",
+    "hourly_rate": 185,
+    "availability": {"hours_per_month": 60, "status": "available"},
+    "role_category": "Fractional RevOps leader",
+    "revenue_stage_fit": ["$1M-$5M", "$5M-$20M", "$20M-$50M"],
+    "industries": ["SaaS", "professional services", "healthtech"],
+    "fit_tags": [
+      {"tag": "HubSpot", "dimension": "tech stack", "tier": "expert"},
+      {"tag": "CRM cleanup", "dimension": "playbook", "tier": "expert"},
+      {"tag": "pipeline reporting", "dimension": "playbook", "tier": "verified"},
+      {"tag": "board metrics", "dimension": "playbook", "tier": "verified"},
+      {"tag": "forecasting", "dimension": "playbook", "tier": "verified"},
+      {"tag": "lifecycle stages", "dimension": "playbook", "tier": "verified"},
+      {"tag": "mid-market", "dimension": "sales motion", "tier": "self"},
+      {"tag": "attribution", "dimension": "playbook", "tier": "self"},
+      {"tag": "Gong", "dimension": "tech stack", "tier": "self"},
+      {"tag": "data hygiene", "dimension": "playbook", "tier": "verified"}
+    ],
+    "engagements": [
+      {"company": "An $11M B2B SaaS company preparing a Series B", "revenue_stage": "$5M-$20M", "problem": "HubSpot had three competing deal pipelines and duplicate companies, so nobody trusted the pipeline numbers going into the board deck.", "what_they_did": "Merged pipelines, defined stage exit criteria, deduplicated 14,000 records and built a board dashboard with one definition of pipeline and bookings.", "outcome": "Board pack built from HubSpot in under an hour; leadership stopped arguing about the numbers within six weeks.", "duration_months": 4, "current": false, "ended": "2026-05"},
+      {"company": "A $3M healthtech startup", "revenue_stage": "$1M-$5M", "problem": "Marketing and sales reported different lead numbers and could not agree on what an MQL was.", "what_they_did": "Defined lifecycle stages, rebuilt lead scoring and set up a shared funnel report.", "outcome": "Single funnel report adopted by both teams; MQL-to-SQL conversion became measurable for the first time (22%).", "duration_months": 3, "current": false, "ended": "2025-10"},
+      {"company": "A $24M consulting firm", "revenue_stage": "$20M-$50M", "problem": "Forecasts lived in partner spreadsheets and the CFO had no visibility.", "what_they_did": "Moved the forecast into HubSpot with weighted stages and a weekly roll-up.", "outcome": "Quarterly forecast within 8% of actual for the first time.", "duration_months": 5, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "We had a board meeting in five weeks and a CRM nobody believed. Aisha cleaned it up and gave us numbers I could defend."},
+      {"rating": 5, "would_hire_again": true, "quote": "She explains RevOps in plain English, which made it easy for our sales and marketing leads to agree on definitions."},
+      {"rating": 4, "would_hire_again": true, "quote": "Fast, organized and calm. A few dashboards needed tweaks after she left, but the foundation is solid."}
+    ]
+  },
+  {
+    "id": "ryan-cho",
+    "name": "Ryan Cho",
+    "headline": "RevOps architect for Salesforce-heavy teams: CRM migrations, territory models and forecasting infrastructure",
+    "location": "Seattle, WA",
+    "hourly_rate": 195,
+    "availability": {"hours_per_month": 80, "status": "available"},
+    "role_category": "Fractional RevOps leader",
+    "revenue_stage_fit": ["$5M-$20M", "$20M-$50M", "$50M+"],
+    "industries": ["SaaS", "logistics", "manufacturing"],
+    "fit_tags": [
+      {"tag": "Salesforce", "dimension": "tech stack", "tier": "expert"},
+      {"tag": "CRM migration", "dimension": "playbook", "tier": "expert"},
+      {"tag": "HubSpot", "dimension": "tech stack", "tier": "self"},
+      {"tag": "forecasting", "dimension": "playbook", "tier": "self"},
+      {"tag": "territory design", "dimension": "playbook", "tier": "self"},
+      {"tag": "pipeline reporting", "dimension": "playbook", "tier": "self"},
+      {"tag": "enterprise", "dimension": "sales motion", "tier": "self"},
+      {"tag": "CPQ", "dimension": "tech stack", "tier": "self"},
+      {"tag": "data hygiene", "dimension": "playbook", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A $45M logistics technology company", "revenue_stage": "$20M-$50M", "problem": "Moving from HubSpot to Salesforce with eight years of messy data and a hard cut-over date.", "what_they_did": "Designed the Salesforce data model, ran the migration and built the forecasting and territory reports.", "outcome": "Migrated on schedule with no lost opportunities; forecast reports live on day one.", "duration_months": 6, "current": false, "ended": "2026-07"},
+      {"company": "A $15M manufacturing software company", "revenue_stage": "$5M-$20M", "problem": "Territories were assigned by hand and reps fought over accounts.", "what_they_did": "Built rules-based territory assignment and an account ownership policy in Salesforce.", "outcome": "Account disputes dropped to near zero and new-rep ramp time fell by three weeks.", "duration_months": 4, "current": true, "ended": null}
+    ],
+    "reviews": []
+  },
+  {
+    "id": "megan-torres",
+    "name": "Megan Torres",
+    "headline": "Fractional Sales Enablement leader: onboarding, playbooks and call coaching that get new AEs productive faster",
+    "location": "Boston, MA",
+    "hourly_rate": 175,
+    "availability": {"hours_per_month": 60, "status": "available"},
+    "role_category": "Fractional Sales Enablement leader",
+    "revenue_stage_fit": ["$1M-$5M", "$5M-$20M"],
+    "industries": ["SaaS", "fintech", "healthtech"],
+    "fit_tags": [
+      {"tag": "AE onboarding and ramp", "dimension": "playbook", "tier": "expert"},
+      {"tag": "sales playbook", "dimension": "playbook", "tier": "expert"},
+      {"tag": "call coaching", "dimension": "playbook", "tier": "verified"},
+      {"tag": "Gong", "dimension": "tech stack", "tier": "verified"},
+      {"tag": "discovery framework", "dimension": "playbook", "tier": "verified"},
+      {"tag": "mid-market", "dimension": "sales motion", "tier": "self"},
+      {"tag": "ACV $25K-$100K", "dimension": "contract value", "tier": "self"},
+      {"tag": "certification program", "dimension": "playbook", "tier": "self"},
+      {"tag": "Salesforce", "dimension": "tech stack", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "An $8M fintech SaaS company", "revenue_stage": "$5M-$20M", "problem": "Two new AEs were taking nine months to close their first deals and there was no written playbook.", "what_they_did": "Wrote the sales playbook, built a 30-60-90 onboarding plan with certification checkpoints and ran weekly Gong call reviews.", "outcome": "Time to first closed deal fell from nine months to four; both AEs hit 80% of quota in their second quarter.", "duration_months": 6, "current": false, "ended": "2026-03"},
+      {"company": "A $4M healthtech SaaS company", "revenue_stage": "$1M-$5M", "problem": "Reps ran demos without discovery and win rates were falling.", "what_they_did": "Introduced a discovery framework, talk tracks and a call scorecard in Gong.", "outcome": "Win rate on qualified opportunities rose from 19% to 28%.", "duration_months": 4, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "We did not need another manager, we needed someone to teach our AEs how to sell our product. Megan did exactly that."},
+      {"rating": 4, "would_hire_again": true, "quote": "The onboarding program she built means our next hires will ramp in half the time. Great with reps."}
+    ]
+  },
+  {
+    "id": "jordan-blake",
+    "name": "Jordan Blake",
+    "headline": "Fractional Customer Success leader for agencies and services firms: stop churn, then build expansion",
+    "location": "Nashville, TN",
+    "hourly_rate": 170,
+    "availability": {"hours_per_month": 40, "status": "available"},
+    "role_category": "Fractional Customer Success leader",
+    "revenue_stage_fit": ["$1M-$5M", "$5M-$20M"],
+    "industries": ["marketing agencies", "professional services", "SaaS"],
+    "fit_tags": [
+      {"tag": "CS to expansion", "dimension": "playbook", "tier": "expert"},
+      {"tag": "churn reduction", "dimension": "playbook", "tier": "verified"},
+      {"tag": "account management", "dimension": "playbook", "tier": "verified"},
+      {"tag": "QBR program", "dimension": "playbook", "tier": "verified"},
+      {"tag": "health scoring", "dimension": "playbook", "tier": "self"},
+      {"tag": "SMB", "dimension": "sales motion", "tier": "self"},
+      {"tag": "retainer renewals", "dimension": "playbook", "tier": "verified"},
+      {"tag": "team of 3-8 account managers", "dimension": "team size", "tier": "self"},
+      {"tag": "HubSpot", "dimension": "tech stack", "tier": "self"}
+    ],
+    "engagements": [
+      {"company": "A $4.5M performance marketing agency", "revenue_stage": "$1M-$5M", "problem": "Clients were leaving after six months and new business barely covered the churn.", "what_they_did": "Built a 90-day client onboarding plan, a monthly results review and an account health score, and trained account managers to propose expansions.", "outcome": "Logo churn fell from 38% to 19% a year and expansion revenue reached 22% of total.", "duration_months": 8, "current": false, "ended": "2026-01"},
+      {"company": "A $9M digital design agency", "revenue_stage": "$5M-$20M", "problem": "Retainers renewed on autopilot with no upsell motion and several large clients quietly shrinking scope.", "what_they_did": "Introduced quarterly business reviews, renewal playbooks and an account planning template.", "outcome": "Net revenue retention went from 92% to 109%.", "duration_months": 6, "current": true, "ended": null}
+    ],
+    "reviews": [
+      {"rating": 5, "would_hire_again": true, "quote": "Jordan stopped the bleeding. Our account managers now walk into client meetings with a plan, not an apology."},
+      {"rating": 4, "would_hire_again": true, "quote": "Practical, agency-savvy and good with clients. The health score was simple enough that we actually use it."}
+    ]
+  }
+]
