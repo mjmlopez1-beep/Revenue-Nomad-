@@ -26,6 +26,15 @@ Without a key the demo still works. The brief comes from simple keyword rules, a
 
 Requirements: Python 3.10 or newer and an internet connection for the first run.
 
+## Browser version (no install)
+
+A click-through copy runs as a claude.ai artifact: https://claude.ai/artifact/V759HaxmHjg5Bv31rNkPJZ
+
+It works the same way, with three differences:
+- **Embeddings are precomputed.** A browser page can't run the embedding model, so every operator, engagement, review, sample prompt, role and fit tag is embedded ahead of time (`python -m nomad_match.export_artifact`). For your own text, the search uses the brief's role and tags; the local app also embeds the text itself. The five samples rank the same in both.
+- **Claude runs through the page,** on the viewer's own Claude account, and the platform picks the model. The first use asks permission. If Claude is unavailable, the keyword rules take over.
+- **Rebuild it** after changing the data or UI: `python -m nomad_match.export_artifact && python artifact/build.py`, then republish `artifact/nomad-match.html`.
+
 ## How to use it
 
 1. **Pick a sample** from the dropdown, or type your own situation.

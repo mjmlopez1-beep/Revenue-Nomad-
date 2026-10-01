@@ -327,7 +327,7 @@ function renderResults(res, f) {
   $("top").innerHTML = res.top.length ? res.top.map(card).join("") : `<p class="empty">No operator passes these filters. Loosen a filter and run again.</p>`;
   $("also").innerHTML = res.also_consider.length ? `<div class="section-t">Also consider</div><div class="mini">${res.also_consider.map((r) => mini(r, false)).join("")}</div>` : "";
   $("out").innerHTML = res.filtered_out.length ? `<div class="section-t">Filtered out, and why</div><div class="mini">${res.filtered_out.map((r) => mini(r, true)).join("")}</div>` : "";
-  $("queryDebug").textContent = `Weights: semantic ${res.weights.semantic}, reputation ${res.weights.reputation}, verified tags ${res.weights.tags}.\nSemantic is normalised so the closest operator scores 1 and the furthest 0.\n\nText embedded for the search:\n${res.query_text}`;
+  $("queryDebug").textContent = `Weights: semantic ${res.weights.semantic}, reputation ${res.weights.reputation}, verified tags ${res.weights.tags}.\nSemantic is normalised so the closest operator scores 1 and the furthest 0.\n\nSearch vector (normalised blend of local embeddings):\n${res.query_text}`;
 }
 
 init();

@@ -29,15 +29,32 @@ def tag_match(brief_tag: str, op_tag: str) -> bool:
     return bool(ta and tb) and len(ta & tb) / len(ta | tb) >= 0.5
 
 
-def query_text(problem: str, brief: dict | None) -> str:
-    if not brief:
-        return problem
-    return "\n".join([
-        problem,
-        f"Looking for: {brief.get('role_category', '')}.",
-        f"Scope: {brief.get('scope_summary', '')}",
-        "Needs: " + ", ".join(brief.get("inferred_fit_tags", [])) + ".",
-    ])
+# The search vector blends three embeddings: the problem as written, the brief's role and the
+# brief's fit tags. Editing the brief therefore moves the search, and the same pieces can be
+# precomputed for the browser version of the demo.
+W_PROBLEM, W_ROLE, W_TAG_MEAN = 1.0, 0.5, 0.5
+
+
+def role_sentence(role: str) -> str:
+    return f"Looking for: {role}."
+
+
+def tag_sentence(tag: str) -> str:
+    return f"Needs: {tag}."
+
+
+def query_vector(problem: str, brief: dict | None) -> tuple[np.ndarray, str]:
+    parts = [W_PROBLEM * embeddings.embed_one(problem)] if problem.strip() else []
+    desc = [f"{W_PROBLEM} x problem"] if parts else []
+    if brief and brief.get("role_category"):
+        parts.append(W_ROLE * embeddings.embed_one(role_sentence(brief["role_category"])))
+        desc.append(f"{W_ROLE} x role ({brief['role_category']})")
+    tags = (brief or {}).get("inferred_fit_tags", [])
+    if tags:
+        parts.append(W_TAG_MEAN * embeddings.embed([tag_sentence(t) for t in tags]).mean(axis=0))
+        desc.append(f"{W_TAG_MEAN} x mean of {len(tags)} tag vectors ({', '.join(tags)})")
+    v = np.sum(parts, axis=0)
+    return v / np.linalg.norm(v), " + ".join(desc)
 
 
 def hard_filters(op: dict, f: dict) -> list[str]:
@@ -87,8 +104,7 @@ class Matcher:
         self.index = Index()
 
     def match(self, problem: str, brief: dict | None, filters: dict) -> dict:
-        q_text = query_text(problem, brief)
-        q = embeddings.embed_one(q_text)
+        q, q_text = query_vector(problem, brief)
         doc = self.index.doc_scores(q)
         best_eng = self.index.best_engagements(q)
         # semantic = mean of the whole-profile match and the best single engagement
