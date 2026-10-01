@@ -165,8 +165,14 @@
     return { q: u.applied.q, filters: u.applied.filters, said: String(text).trim(), saidKeys: u.keys, saidDropped: u.dropped.map((f) => f.label), need: u.need || undefined };
   };
   const saidBase = () => { const b = st(); const base = cleanFilters(b.filters); (b.saidKeys || []).forEach((k) => delete base[k]); return base; };
+  /* Free text gets the ranked view (RN.rank): everyone who passes the filters set by hand, force-ranked by the
+     vector search. view 'cards' is the opt-out back to the card grid. */
+  const searchText = () => (st().said || st().q || '').trim();
+  const ranked = () => !!searchText() && st().view !== 'cards';
+  const rankPool = () => run({ q: '', tags: [], filters: saidBase() }).map((r) => r.op);
   const setSaid = (said, keys, dropped, need) => RN.store.update((s) => { s.browse.said = said || ''; s.browse.saidKeys = keys || []; s.browse.saidDropped = dropped || []; if (need) s.browse.need = need; }, 'browse');
   function applyText(text, o) {
+    if (st().view === 'cards') RN.store.update((s) => { s.browse.view = 'grid'; }, 'browse');
     const patch = BR.fromText(text, saidBase());
     if (patch) { setSaid(patch.said, patch.saidKeys, patch.saidDropped, patch.need); setCrit({ q: patch.q, filters: patch.filters }, o); return; }
     const hadSaid = !!st().said;
@@ -179,7 +185,7 @@
     c = c || {};
     if (c.q && !c.said && !Object.keys(c.filters || {}).length) { const p = BR.fromText(c.q, {}); if (p) c = Object.assign({}, c, p); }
     RN.store.update((s) => {
-      s.browse = Object.assign({ sort: 'best', view: 'grid' }, s.browse || {}, { q: c.q || '', tags: (c.tags || []).slice(0, 5), filters: cleanFilters(c.filters || {}), said: c.said || '', saidKeys: c.saidKeys || [], saidDropped: c.saidDropped || [] }, c.need ? { need: c.need } : {});
+      s.browse = Object.assign({ sort: 'best' }, s.browse || {}, { view: 'grid', q: c.q || '', tags: (c.tags || []).slice(0, 5), filters: cleanFilters(c.filters || {}), said: c.said || '', saidKeys: c.saidKeys || [], saidDropped: c.saidDropped || [] }, c.need ? { need: c.need } : {});
     }, 'browse');
     RN.go('browse');
   };
@@ -301,11 +307,12 @@
         <div class="br-rhead">
           <div class="br-rhead-l">
             <p id="br-count" class="br-count" aria-live="polite">${countHtml(res, c)}</p>
+            <span id="br-mode" class="br-mode-slot">${modeHtml()}</span>
             <span id="br-save-slot" class="br-save-slot">${saveBtn(c)}</span>
           </div>
           <div class="br-rhead-r">
             ${proofSwitch(c)}
-            ${sortHtml()}
+            <span id="br-sort-slot"${ranked() ? ' hidden' : ''}>${sortHtml()}</span>
           </div>
         </div>
         <div id="br-results" data-view-source="search">${resultsHtml(res, c)}</div>
@@ -501,9 +508,12 @@
       <button type="button" class="act" data-act="br-said-exact">Search the exact words instead</button></div>`;
   }
   function assist(c, cat) {
-    const chips = chipList(c);
+    // Ranked: the words live in the search box and the facts read from them are drawn as checks, so only hand-set filters show
+    const rk = ranked(), sk = st().saidKeys || [];
+    const chips = rk ? chipList(c).filter((x) => x.k !== 'q' && !sk.includes(x.k)) : chipList(c);
+    if (rk && !chips.length) return '';
     if (chips.length) {
-      return `${saidNote()}<div class="br-chips" role="list" aria-label="Active filters">
+      return `${rk ? '' : saidNote()}<div class="br-chips" role="list" aria-label="Active filters">
         ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${CHIP_ICON[x.k] ? icon(CHIP_ICON[x.k]) : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
         ${chips.length > 1 ? `<span role="listitem"><button type="button" class="act muted br-clear" data-act="br-clear">Clear all</button></span>` : ''}
       </div>`;
@@ -564,10 +574,17 @@
     return n ? ` <span class="br-count-note">· ${RN.fmt.int(n)} more don’t list a rate. <button type="button" class="act" data-act="br-chip-x" data-k="rateMax">Clear the rate filter</button></span>` : '';
   }
   function countHtml(res, c) {
+    if (ranked()) { const n = rankPool().length; return `<b class="num">${RN.fmt.int(n)}</b> ranked for you${unlistedNote(c)}`; }
     const n = res.length;
     if (!n) return '<b class="num">0</b> operators match' + unlistedNote(c);
     return `<b class="num">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'}${hasCrit(c) ? ' match' : ''}${unlistedNote(c)}`;
   }
+  function modeHtml() {
+    if (!searchText()) return '';
+    const r = ranked();
+    return `<div class="seg br-mode" role="group" aria-label="Show results as"><button type="button" data-act="br-mode" data-v="grid" aria-pressed="${r}">${icon('chart')}Ranked</button><button type="button" data-act="br-mode" data-v="cards" aria-pressed="${!r}">${icon('users')}Cards</button></div>`;
+  }
+  RN.actions['br-mode'] = (el) => { RN.store.update((s) => { s.browse.view = el.dataset.v; }, 'browse'); refresh({ noTrack: true }); };
   function sortHtml() {
     const s = st().sort;
     return `<div class="br-sort">
@@ -578,6 +595,7 @@
   }
 
   function resultsHtml(res, c) {
+    if (ranked()) { const pool = rankPool(); if (pool.length) return RN.rank.html(searchText(), pool); }
     if (!res.length) return zeroHtml(c);
     const shown = res.slice(0, limit);
     const more = res.length - shown.length;
@@ -636,6 +654,7 @@
   }
 
   /* ---------- Refresh the result region in place (keeps focus in the search field) ---------- */
+  BR.refresh = (o) => refresh(o);
   function refresh(o) {
     o = o || {};
     const root = document.querySelector('.br-page');
@@ -646,6 +665,9 @@
     set('br-assist', assist(c, landedCat && root.dataset.cat ? landedCat : null));
     set('br-count', countHtml(res, c));
     set('br-results', resultsHtml(res, c));
+    set('br-mode', modeHtml());
+    const ss = document.getElementById('br-sort-slot'); if (ss) ss.hidden = ranked();
+    if (ranked()) RN.rank.mount(rankPool);
     set('br-bar-acts', barBtns(c));
     set('br-saved', savedRow(c));
     set('br-save-slot', saveBtn(c));
@@ -1005,10 +1027,12 @@
     const qi = document.getElementById('br-q');
     if (qi && window.matchMedia('(max-width: 640px)').matches) qi.placeholder = 'Search operators';
     drawCharts();
+    if (ranked()) RN.rank.mount(rankPool);
     scheduleTrack();
   }
   function unmount() {
     clearTimeout(trackTimer);
+    RN.rank.reset();
     lastKey = null; mountedAt = 0; landedCat = null; tagsOpen = false; compact = false; limit = PAGE;
   }
 

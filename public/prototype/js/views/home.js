@@ -85,7 +85,7 @@
     }
     RN.store.update((s) => {
       const prev = s.browse || {};
-      s.browse = Object.assign({ q: '', tags: [], filters: {}, sort: 'best', view: prev.view || 'grid', said: '', saidKeys: [], saidDropped: [] }, patch);
+      s.browse = Object.assign({ q: '', tags: [], filters: {}, sort: 'best', view: patch && patch.q ? 'grid' : (prev.view || 'grid'), said: '', saidKeys: [], saidDropped: [] }, patch);
     }, 'browse');
     RN.go(route || 'browse');
   }
