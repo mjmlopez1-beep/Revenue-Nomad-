@@ -120,9 +120,9 @@
   };
   window.addEventListener('hashchange', () => { if (/^#op\./.test(location.hash)) S.fromProfile = true; });
 
-  function dots() {
+  function bar() {
     const m = me();
-    return `<span class="fm-dots" aria-hidden="true">${KEYS.map((k) => `<i class="${m[k] ? 'on' : ''}"></i>`).join('')}</span>`;
+    return `<span class="fm-bar" aria-hidden="true">${KEYS.map((k) => `<i class="${m[k] ? 'on' : ''}"></i>`).join('')}</span>`;
   }
   function chips(k) {
     const cur = me()[k];
@@ -145,7 +145,7 @@
     let body = '';
     if (s.kind === 'confirm') {
       const said = s.keys.map((k) => esc(lab(k, s.g[k]))).join(' · ');
-      body = `<p class="fm-q">From your search, your company looks like <b>${said}</b>. Is that right?</p>
+      body = `<p class="fm-q">From your search, your company looks like <span class="fm-hl">${said}</span>. Is that right?</p>
         <div class="fm-row"><button type="button" class="btn btn-sm" data-act="fm-confirm" data-keys="${s.keys.join(',')}">${icon('check')}Yes, that’s us</button>
         <button type="button" class="btn btn-line btn-sm" data-act="fm-reject" data-keys="${s.keys.join(',')}">No, different</button></div>`;
     } else if (s.kind === 'ask') {
@@ -158,7 +158,8 @@
     }
     return `<li class="rk-ask" data-step="${s.kind}">
       <div class="fm-card">
-        <div class="fm-top"><span class="fm-k">${icon('target')}Sharpen your matches</span>${dots()}<span class="fm-why">Each answer re-ranks the list</span>
+        ${bar()}
+        <div class="fm-top"><span class="fm-k">${icon('target')}Sharpen your matches</span><span class="fm-step">${KEYS.filter((k) => me()[k]).length} of 3</span><span class="fm-why">${icon('chart')}Each answer re-ranks the list</span>
           <button type="button" class="fm-x" data-act="fm-dismiss" aria-label="Hide this for now">${icon('x')}</button></div>
         ${body}
       </div></li>`;
