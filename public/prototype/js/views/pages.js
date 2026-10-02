@@ -181,7 +181,7 @@
     const glance = `<dl class="ab-stats" aria-label="Revenue Nomad at a glance">
         <div class="ab-stat is-forest"><dt>Operators in the network, each reviewed by our team</dt><dd class="num">350<span class="u-plus">+</span></dd></div>
         <div class="ab-stat is-leaf"><dt>Fees for companies. You pay the operator’s rate.</dt><dd class="num">$0</dd></div>
-        <div class="ab-stat is-gold"><dt>Reply window on every intro request</dt><dd class="num">72<span class="u">hrs</span></dd></div>
+        <div class="ab-stat is-gold"><dt>Typical first reply to an intro request</dt><dd class="num"><span class="u-lt">&lt;</span>2<span class="u">hrs</span></dd></div>
         <div class="ab-stat is-night"><dt>Founded by operators who still do the work</dt><dd class="num">2023</dd></div>
       </dl>`;
 
@@ -323,7 +323,7 @@
       lede: 'Companies find proven fractional leaders without a retained search. Operators get found, build proof, and get value even in months with no intro.',
       aside: `<div class="pg-hero-stats">
         <div><b class="num">$0</b><span>In fees for companies. Browse with no login, and pay the operator’s rate, nothing more.</span></div>
-        <div><b class="num">72 hrs</b><span>For an operator to reply to an intro request</span></div>
+        <div><b class="num">&lt;2 hrs</b><span>Typical first reply to an intro request. Every request is answered within 72 hours.</span></div>
         <div><b class="num">1 day</b><span>From an operator’s yes to an email intro, in business days</span></div>
         <div><b class="num">2 days</b><span>To review an operator application, in business days</span></div>
       </div>`,

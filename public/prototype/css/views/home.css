@@ -108,6 +108,7 @@
 /* A unit sits smaller than its figure (100%, 72 hrs, 6.4 mo, 2.4×) and a range takes a true en dash */
 [data-view="home"] .u { font-size: .54em; font-weight: 700; letter-spacing: .01em; margin-left: .14em; opacity: .66; }
 [data-view="home"] .u-sym { font-size: .6em; margin-left: .04em; }
+[data-view="home"] .u-lt, .ab-stat .u-lt { font-size: .62em; font-weight: 600; margin-right: .06em; opacity: .75; vertical-align: .14em; }
 [data-view="home"] .u-x { font-size: .78em; font-weight: 500; margin-left: .05em; }
 [data-view="home"] .rng { margin-inline: .08em; font-weight: 500; }
 

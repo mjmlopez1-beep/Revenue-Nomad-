@@ -170,9 +170,9 @@
           </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>Days from intro to first meeting<small>Typical, from the <span class="nowrap">72-hour</span> reply to a booked call ${RN.ui.illus('Illustrative', 'Illustrative figure: a typical time from intro request to first meeting, not yet measured from network data.')}</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span></dd></div>
+          <div><dt>Days from intro to first meeting<small>Typical, from the first reply to a booked call ${RN.ui.illus('Illustrative', 'Illustrative figure: a typical time from intro request to first meeting, not yet measured from network data.')}</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span></dd></div>
           <div><dt>Would hire again${hire.n ? `<small>${esc(RN.fmt.plural(hire.n, 'company review'))} on the live network</small>` : ''}</dt><dd class="num"><span data-count="${hire.pct}">${hire.pct}</span><span class="u u-sym">%</span></dd></div>
-          <div><dt>Reply window on every intro request</dt><dd class="num">72<span class="u">hrs</span></dd></div>
+          <div><dt>Typical first reply to an intro request<small>Every request answered within 72 hours</small></dt><dd class="num"><span class="u-lt">&lt;</span>2<span class="u">hrs</span></dd></div>
         </dl>
       </div>
     </section>`;
