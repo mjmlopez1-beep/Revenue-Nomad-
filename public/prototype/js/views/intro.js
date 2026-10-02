@@ -144,7 +144,8 @@
       title: `Meet ${esc(op.first)}`,
       sub: `${esc(op.name)} · Fractional ${esc(op.role)} · ${esc(op.avail.label)}`,
       body: `<form id="intro-form" data-submit="intro-send" data-op="${esc(op.id)}" class="stack" style="--gap:22px" novalidate>
-        ${fit ? (() => { const hits = fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2); return `<div class="note info">${icon('target')}<div><b>${esc(fit.label)} for ${esc(me.company.name)}</b> · ${fit.count} of ${fit.signals.length} signals.${hits.length ? ' ' + hits.join('. ') + '.' : ''}</div></div>`; })() : ''}
+        ${/* Once someone presses a high-intent button, only reinforce: a strong fit says why, anything weaker says nothing */ ''}
+        ${fit && fit.pct >= 75 ? (() => { const hits = fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2); return `<div class="note info">${icon('check-circle')}<div><b>Strong fit for ${esc(me.company.name)}.</b>${hits.length ? ' ' + hits.join('. ') + '.' : ''}</div></div>`; })() : ''}
         ${x ? (() => { const W = { proven: 'A company proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' }; return `<div class="in-search">
           <div class="in-search-hd"><span class="label">From your search</span>${x.match != null ? `<span class="in-search-m">${x.match}% match</span>` : ''}</div>
           <p class="in-search-q">“${esc(x.text)}”</p>
