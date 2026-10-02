@@ -127,9 +127,10 @@
     return { n: rs.length, pct: rs.length ? Math.round(rs.filter((r) => r.hireAgain === true).length / rs.length * 100) : 0 };
   }
   // Company logos directly under the search box. Names without a logo file render as a clean wordmark.
-  const LOGO_LINE = [['skaled', 'Skaled'], ['weave', 'Weave'], ['diligent', 'Diligent']];
+  // [key, name, height]: heights set by eye so a thin wide wordmark and a bold mark read the same size
+  const LOGO_LINE = [['skaled', 'Skaled', 15], ['weave', 'Weave', 22], ['diligent', 'Diligent', 24]];
   function logoLine() {
-    return `<div class="hm-logos"><span class="label">Trusted by teams at</span><ul>${LOGO_LINE.map(([k, name]) => `<li>${(RN.data.logos || {})[k] ? RN.ui.logo(k, { h: 22, name }) : `<span class="hm-wm">${esc(name)}</span>`}</li>`).join('')}</ul></div>`;
+    return `<div class="hm-logos"><span class="label">Trusted by teams at</span><ul>${LOGO_LINE.map(([k, name, h]) => `<li>${(RN.data.logos || {})[k] ? RN.ui.logo(k, { h, name }) : `<span class="hm-wm">${esc(name)}</span>`}</li>`).join('')}</ul></div>`;
   }
 
   function hero(anim) {
