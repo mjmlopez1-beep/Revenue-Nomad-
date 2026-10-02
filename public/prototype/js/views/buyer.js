@@ -692,7 +692,7 @@
   const pillHtml = (p) => (p && p.t ? `<span class="pill ${p.tone ? 'pill-' + p.tone : ''}">${esc(p.t)}</span>` : '');
   function peopleHtml(list, label) {
     if (!list || !list.length) return '';
-    return `<div class="bw-people">${label ? `<span class="label">${esc(label)}</span>` : ''}<ul>${list.map((x) => `<li><a class="bw-person" href="#op.${esc(x.op.slug)}" data-track-view="${esc(x.op.id)}">${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span><b class="serif-up">${esc(x.op.name)}</b><span class="tiny muted">${esc(x.sub)}</span></span></a></li>`).join('')}</ul></div>`;
+    return `<div class="bw-people">${label ? `<span class="label">${esc(label)}</span>` : ''}<ul>${list.map((x) => `<li><a class="bw-person" href="#op.${esc(x.op.slug)}" data-track-view="${esc(x.op.id)}">${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span><b class="serif-up">${esc(x.op.name)}</b><span class="tiny muted">${esc(x.sub).split(' · ').map((s, k, a) => `<span class="nowrap">${s}${k < a.length - 1 ? ' ·' : ''}</span>`).join(' ')}</span></span></a></li>`).join('')}</ul></div>`;
   }
   function rehireRows(rows, lead) {
     return `<ul class="bw-rh">${rows.map((h, k) => {
@@ -1024,10 +1024,10 @@
     return `<section class="bw-sec" aria-labelledby="bw-pipe-t">
       ${secHead('<span id="bw-pipe-t">Hiring pipeline</span>')}
       <div class="card bw-pipe">
-        <a class="bw-pipe-c" href="#buyer.talent"><span class="label">Shortlisted</span><b class="num">${ops.length}</b>${ops.length ? `<span class="ava-stack">${ops.slice(0, 4).map((o) => RN.ui.avatar(o, 'ava-xs', { decorative: true })).join('')}</span>` : '<span class="tiny muted">Save operators from Browse</span>'}</a>
-        <a class="bw-pipe-c" href="#buyer.intros"><span class="label">Intro requests</span><b class="num">${intr.length}</b><span class="tiny muted">${pending} pending · ${introduced} introduced</span></a>
-        <a class="bw-pipe-c" href="#buyer.engagements"><span class="label">Engagement responses</span><b class="num">${resp}</b><span class="tiny muted">across ${plural(L.live.length, 'live engagement')}</span></a>
-        <a class="bw-pipe-c" href="#buyer.team"><span class="label">Hired</span><b class="num">0</b><span class="tiny muted">${close.length ? `${esc(close.join(' and '))} ${close.length === 1 ? 'is' : 'are'} closest` : 'No one close yet'}</span></a>
+        <a class="bw-pipe-c${ops.length ? '' : ' is-zero'}" href="#buyer.talent"><span class="label">Shortlisted</span><b class="num">${ops.length}</b>${ops.length ? `<span class="ava-stack">${ops.slice(0, 4).map((o) => RN.ui.avatar(o, 'ava-xs', { decorative: true })).join('')}</span>` : '<span class="tiny muted">Save operators from Browse</span>'}</a>
+        <a class="bw-pipe-c${intr.length ? '' : ' is-zero'}" href="#buyer.intros"><span class="label">Intro requests</span><b class="num">${intr.length}</b><span class="tiny muted">${pending} pending · ${introduced} introduced</span></a>
+        <a class="bw-pipe-c${resp ? ' is-due' : ' is-zero'}" href="#buyer.engagements"><span class="label">Engagement responses</span><b class="num">${resp}</b><span class="tiny ${resp ? 'bw-pipe-due' : 'muted'}">${resp ? `Waiting on your review` : `across ${plural(L.live.length, 'live engagement')}`}</span></a>
+        <a class="bw-pipe-c is-zero" href="#buyer.team"><span class="label">Hired</span><b class="num">0</b><span class="tiny muted">${close.length ? `${esc(close.join(' and '))} ${close.length === 1 ? 'is' : 'are'} closest` : 'No one close yet'}</span></a>
       </div>
       <p class="small muted bw-pipe-ft">When you hire, record the terms. Your team then shows here with time in seat, next dates and spend.</p>
     </section>`;
@@ -1148,20 +1148,27 @@
     const jumps = [['bw-sl', 'Shortlist', ops.length], ['bw-intros', 'Intros', list.length], ['bw-ss', 'Saved searches', ss.length], ['bw-recent', 'Recently viewed', viewed.length]].filter((j) => j[2] > 0);
     return `${hd}
     ${jumps.length >= 2 ? `<nav class="chipset bw-jumps" aria-label="On this page">${jumps.map((j) => chip(j[0], j[1], j[2])).join('')}</nav>` : ''}
-    <section class="bw-sec bw-sec-first" id="bw-sl" aria-labelledby="bw-sl-t">
+    ${talentSections([
+      [ops.length, `<section class="bw-sec" id="bw-sl" aria-labelledby="bw-sl-t">
       ${secHead(`<span id="bw-sl-t" tabindex="-1">Shortlist</span> <span class="muted">${ops.length}</span>`, ops.length ? arrowLink('browse', 'Find more') : '')}
       ${shortlistBody()}
-    </section>
-    <section class="bw-sec" id="bw-intros" aria-labelledby="bw-intros-t">
+    </section>`],
+      [list.length, `<section class="bw-sec" id="bw-intros" aria-labelledby="bw-intros-t">
       <div class="bw-sec-hd"><div><h2 class="h4" id="bw-intros-t" tabindex="-1">Intro requests <span class="muted">${list.length}</span></h2><p class="small muted">Operators reply within 72 hours, then our team introduces you by email.</p></div></div>
       ${introsBody()}
-    </section>
-    <div id="bw-ss">${savedSearchesSection()}</div>
-    <section class="bw-sec" id="bw-recent" aria-labelledby="bw-recent-t">
+    </section>`],
+      [ss.length, `<div id="bw-ss">${savedSearchesSection()}</div>`],
+      [viewed.length, `<section class="bw-sec" id="bw-recent" aria-labelledby="bw-recent-t">
       ${secHead('<span id="bw-recent-t" tabindex="-1">Recently viewed</span>')}
       ${viewed.length ? `<div class="bw-mini-list">${viewed.map((v) => miniRow(v.op, `Viewed ${RN.fmt.ago(v.ts)}`)).join('')}</div>`
         : `<div class="bw-quiet">${icon('eye')}<span>Profiles you open show up here so you can get back to them.</span>${arrowLink('browse', 'Browse talent')}</div>`}
-    </section>`;
+    </section>`],
+    ])}`;
+  }
+  // Sections with something in them come first, in their usual order; empty ones follow, so the page opens on activity
+  function talentSections(rows) {
+    const full = rows.filter((r) => r[0] > 0), empty = rows.filter((r) => !(r[0] > 0));
+    return full.concat(empty).map((r, k) => (k === 0 ? r[1].replace('class="bw-sec"', 'class="bw-sec bw-sec-first"') : r[1])).join('');
   }
   RN.actions['bw-jump'] = (el) => {
     const t = document.getElementById(el.dataset.to);
@@ -1342,7 +1349,7 @@
     const open = list.filter(isOpen).length;
     // One primary in the section: the first intro that waits on a hire decision or on its terms
     const lead = list.find((i) => i.status === 'introduced' || (i.status === 'hired' && !hireForIntro(i)));
-    return `${list.length ? `<p class="small muted bw-count">${RN.fmt.plural(list.length, 'request')} · ${open} in progress</p>
+    return `${list.length ? `${open && open !== list.length ? `<p class="small muted bw-count">${open} of ${list.length} in progress</p>` : ''}
       <div class="stack bw-intros" style="--gap:18px">${list.map((i) => introCard(i, lead && lead.id === i.id)).join('')}</div>`
       : RN.ui.empty({ icon: 'handshake', title: 'No intro requests yet', body: 'Request an intro from any profile, your shortlist or a compare. Operators reply within 72 hours.', cta: '<a class="btn btn-line btn-sm" href="#browse">Browse talent</a>' })}`;
   }
@@ -1371,13 +1378,13 @@
       const h = hoursLeft(i);
       const f1 = esc(op.first);
       next = h > 0 ? `${f1} has <b>${h} hours</b> left to reply. ${f1} sees your scope and company size, not your name. If ${f1} passes, we suggest two operators with the same fit.` : `${f1} has not replied in 72 hours. Our team is following up and will suggest two operators with the same fit today.`;
-      actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
+      actions = `<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'interested') {
       next = `<b>${esc(op.name)} is interested.</b> Our team will introduce you within one business day.`;
-      actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
+      actions = `<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'rn_qualified') {
       next = `<b>Our team confirmed the fit.</b> Your intro email to ${esc(op.first)} goes out within one business day.`;
-      actions = `<button type="button" class="btn btn-line btn-sm" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
+      actions = `<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'introduced') {
       next = `<b>You are connected by email.</b> Book the first call with ${esc(op.first)}. When you hire, record the terms here and they move to your Team tab.`;
       actions = `<button type="button" class="${solid}" data-act="bw-hired" data-id="${esc(i.id)}">${icon('handshake')}Mark as hired</button><button type="button" class="btn btn-line btn-sm" data-act="bw-notfit" data-id="${esc(i.id)}">Not a fit</button>`;
@@ -2143,7 +2150,7 @@
     <div class="bw-co">
       <form class="stack bw-co-form" style="--gap:18px" data-submit="bw-company" data-change="bw-co-live" data-input="bw-co-dirty" novalidate>
         <section class="card">
-          <div class="card-hd"><div><h3>Your company</h3><p class="sub">Shared with operators as firmographics only (industry and size) until you are introduced.</p></div><span class="tiny muted bw-co-pct">${filled} of 10 filled</span></div>
+          <div class="card-hd"><div><h3>Your company</h3><p class="sub">Shared with operators as firmographics only (industry and size) until you are introduced.</p></div><span class="bw-co-pct" role="img" aria-label="${filled} of 10 fields filled"><span class="tiny muted"><b class="tnum">${filled}</b> of 10 filled</span><i><b style="width:${filled * 10}%"></b></i></span></div>
           <div class="stack" style="--gap:22px">
             <div class="grid g-2" style="--gap:16px">
               <div class="field"><label for="bw-co-name">Company name</label><input class="input" id="bw-co-name" name="name" value="${esc(c.name || '')}" autocomplete="organization" required></div>

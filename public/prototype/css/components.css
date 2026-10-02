@@ -509,7 +509,13 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 .track li.cur i { border-color: var(--accent); box-shadow: 0 0 0 4px var(--focus); }
 .track li.done b, .track li.cur b { color: var(--ink); }
 .track li.stop i { background: var(--bad-bg); border-color: var(--bad); }
-@media (max-width: 520px) { .track li b { font-size: 11px; } .track li span { display: none; } }
+/* Phones: five labels never fit five narrow columns, so only the current (or stopped) step is named; the others stay
+   available to screen readers. The named label may run past its column, since its neighbours are hidden. */
+@media (max-width: 520px) {
+  .track li b { font-size: 12px; white-space: nowrap; }
+  .track li span { display: none; }
+  .track li:not(.cur):not(.stop) b { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
 
 /* ---------- Hire terms ("Confirm the terms" modal, RN.hire in intro.js; shared by workspace, engagements and Admin) ---------- */
 .hire-form .grid { align-items: start; }

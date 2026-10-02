@@ -326,7 +326,7 @@
 
   /* ---------- Intro requests and engagements (internal keys keep the name "project") ---------- */
   // Intro lifecycle proposed in the sheet (L471, on hold): Pending, Interested, Intro Approved, Introduced, Hired
-  F.introStatus = { label: 'Status', type: 'single', options: opts([['pending', 'Pending'], ['interested', 'Interested'], ['rn_qualified', 'Intro Approved'], ['introduced', 'Introduced'], ['hired', 'Hired'], ['declined', 'Declined']]) };
+  F.introStatus = { label: 'Status', type: 'single', options: opts([['pending', 'Pending'], ['interested', 'Interested'], ['rn_qualified', 'Intro approved'], ['introduced', 'Introduced'], ['hired', 'Hired'], ['declined', 'Declined']]) };
   // Resolves the "ASAP / 2 Weeks / 1+ Month" vs availability conflict: the client's start timeline uses the
   // operator availability slugs, so an intro request matches availability with no translation.
   F.startBy = { label: 'When do you need them to start?', type: 'single', options: opts([['available_now', 'As soon as possible'], ['available_2_weeks', 'In 2 weeks'], ['available_2_plus_weeks', 'In 2+ weeks']]) };

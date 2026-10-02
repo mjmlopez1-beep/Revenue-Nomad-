@@ -547,3 +547,34 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
   .bw-log-i { grid-template-columns: 48px minmax(0, 1fr); padding: 12px 14px; }
   .bw-log-ic { display: none; }
 }
+
+/* ---------- Detail pass (Oct 2026): a connected pipeline, quiet secondary actions, a filled meter ---------- */
+/* Pipeline: one funnel left to right. A small chevron joins each stage to the next; empty stages step back,
+   the stage that is waiting on you is marked in accent. */
+.bw-pipe { overflow: visible; }
+.bw-pipe-c { position: relative; }
+.bw-pipe-c:first-child { border-radius: var(--r-card) 0 0 var(--r-card); }
+.bw-pipe-c:last-child { border-radius: 0 var(--r-card) var(--r-card) 0; }
+.bw-pipe-c + .bw-pipe-c::before { content: ""; position: absolute; left: -7px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-top: 1px solid var(--line-2); border-right: 1px solid var(--line-2); background: var(--card); transform: rotate(45deg); z-index: 1; }
+.bw-pipe-c:hover + .bw-pipe-c::before { background: var(--card-2); }
+.bw-pipe-c .num { font-variant-numeric: tabular-nums; transition: color var(--dur) ease; }
+.bw-pipe-c.is-zero .num { color: var(--mute-2); font-weight: 600; }
+.bw-pipe-c.is-due { background: color-mix(in srgb, var(--tint) 60%, var(--card)); }
+.bw-pipe-c.is-due .num { color: var(--accent); }
+.bw-pipe-c.is-due + .bw-pipe-c::before { background: color-mix(in srgb, var(--tint) 60%, var(--card)); }
+.bw-pipe-due { font-weight: 700; color: var(--accent); }
+.bw-pipe-c:focus-visible { outline-offset: -3px; }
+@media (max-width: 640px) { .bw-pipe-c + .bw-pipe-c::before { display: none; } .bw-pipe-c:first-child, .bw-pipe-c:last-child { border-radius: 0; } }
+
+/* Withdraw sits as a quiet text action; the next step keeps the weight */
+.bw-intro-act .bw-withdraw { font-size: var(--t-13); font-weight: 600; }
+.bw-intro-act .bw-withdraw:hover { color: var(--bad); }
+
+/* Company profile: how complete it is, as a short meter */
+.bw-co-pct { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: 0 0 auto; }
+.bw-co-pct b { color: var(--ink); font-weight: 700; }
+.bw-co-pct > i { display: block; width: 96px; height: 4px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.bw-co-pct > i > b { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .4s var(--ease); }
+
+/* People chips in the Now card: separators never strand at a line end */
+.bw-person .tiny { overflow-wrap: normal; }
