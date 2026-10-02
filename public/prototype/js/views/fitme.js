@@ -147,14 +147,16 @@
       const said = s.keys.map((k) => esc(lab(k, s.g[k]))).join(' · ');
       body = `<p class="fm-q">From your search, your company looks like <span class="fm-hl">${said}</span>. Is that right?</p>
         <div class="fm-row"><button type="button" class="btn btn-sm" data-act="fm-confirm" data-keys="${s.keys.join(',')}">${icon('check')}Yes, that’s us</button>
-        <button type="button" class="btn btn-line btn-sm" data-act="fm-reject" data-keys="${s.keys.join(',')}">No, different</button></div>`;
+        <button type="button" class="btn btn-line btn-sm" data-act="fm-reject" data-keys="${s.keys.join(',')}">No, different</button><span class="fm-login">Already have an account? <button type="button" class="act" data-act="fm-login">Log in</button></span></div>`;
     } else if (s.kind === 'ask') {
       body = `<p class="fm-q">${esc(ASK[s.k])}</p>${chips(s.k)}
-        <div class="fm-row"><button type="button" class="act muted" data-act="fm-skip" data-k="${s.k}">${s.edit ? 'Keep as is' : 'Skip'}</button></div>`;
+        <div class="fm-row"><button type="button" class="act muted" data-act="fm-skip" data-k="${s.k}">${s.edit ? 'Keep as is' : 'Skip'}</button><span class="fm-login">Already have an account? <button type="button" class="act" data-act="fm-login">Log in</button></span></div>`;
     } else {
-      body = `<p class="fm-q"><b>Save these matches.</b> We’ll email you when someone new fits.</p>
+      const known = KEYS.filter((k) => me()[k]).map((k) => `<span>${esc(lab(k, me()[k]))}</span>`).join('');
+      body = `<p class="fm-q">Create your free client profile</p><p class="fm-sub">Your matches and answers are saved to it. We’ll email you when someone new fits.</p>
+        ${known ? `<div class="fm-known">${known}</div>` : ''}
         ${emailForm('matches')}
-        <div class="fm-row"><button type="button" class="act muted" data-act="fm-save-skip">No thanks</button></div>`;
+        <div class="fm-row"><button type="button" class="act muted" data-act="fm-save-skip">No thanks</button><span class="fm-login">Already have an account? <button type="button" class="act" data-act="fm-login">Log in</button></span></div>`;
     }
     return `<li class="rk-ask" data-step="${s.kind}">
       <div class="fm-card">
@@ -168,7 +170,7 @@
     return `<form class="fm-email" data-submit="fm-email" data-reason="${reason}" novalidate>
       <label class="sr-only" for="fm-email-${reason}">Work email</label>
       <input class="input" id="fm-email-${reason}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@company.com" required>
-      <button class="btn" type="submit">Save</button>
+      <button class="btn" type="submit">${reason === 'login' ? 'Email me a link' : 'Create profile'}</button>
       <p class="fm-err small" hidden></p>
       <p class="fm-priv small muted">${icon('lock')}No password. Operators don’t see your company until you ask to meet.</p>
     </form>`;
@@ -202,15 +204,17 @@
     rerank();
     setTimeout(() => { const c = document.querySelector('.rk-ask'); if (c) c.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
   };
+  RN.actions['fm-login'] = () => FM.ask('login');
   RN.actions['fm-use-profile'] = () => { S.profileWins = curText(); rerank(); };
   RN.actions['fm-use-words'] = () => { S.profileWins = ''; rerank(); };
 
   /* ---------- Save: one field, a work email ---------- */
   const TITLES = {
-    shortlist: ['Keep your shortlist', 'Add your work email and your shortlist is saved to your own client account.'],
-    rates: ['See operator rates', 'Rates are shown to clients. Add your work email to see them on every profile.'],
-    search: ['Save this search', 'We’ll email you when a new operator matches it.'],
-    matches: ['Save these matches', 'We’ll email you when someone new fits.'],
+    shortlist: ['Keep your shortlist', 'Add your work email to create your free client profile. Your shortlist is saved to it.'],
+    rates: ['See operator rates', 'Rates are shown to clients. Add your work email to create your free client profile.'],
+    search: ['Save this search', 'Add your work email to create your free client profile. We’ll email you when a new operator matches.'],
+    matches: ['Create your client profile', 'These matches and your answers are saved to it.'],
+    login: ['Log in', 'Enter your work email and we’ll send you a sign-in link. No password.'],
   };
   FM.ask = function (reason, o) {
     o = o || {};
@@ -221,7 +225,7 @@
       width: 460,
       title: t[0],
       sub: t[1],
-      body: `${emailForm(reason)}${known.length ? `<p class="small muted fm-carry">${icon('check')}Your answers come with you: ${known.join(' · ')}</p>` : ''}`,
+      body: `${emailForm(reason)}${known.length && reason !== 'login' ? `<p class="small muted fm-carry">${icon('check')}Your answers come with you: ${known.join(' · ')}</p>` : ''}`,
       foot: `<button class="btn btn-line" data-act="modal-close">Not now</button>`,
       onClose: o.onCancel,
     });
@@ -247,6 +251,7 @@
     const reason = form.dataset.reason;
     const acct = findAccount(email);
     if (acct) { sendLink(acct.email, reason); return; }
+    if (reason === 'login') return fail('No account uses that email yet. Close this and save your matches to create one in a few seconds.');
     RN.ui.closeModal();
     create(email, reason);
   };
@@ -257,7 +262,7 @@
     RN.ui.closeModal();
     RN.ui.modal({
       width: 460,
-      title: 'You already have an account',
+      title: reason === 'login' ? 'Check your email' : 'You already have an account',
       sub: `We sent a sign-in link to ${esc(email)}.`,
       body: `<p class="muted">Open it on this device and you’re back in, with everything from this search: your answers, shortlist and saved matches.</p>`,
       foot: `<button class="btn btn-line" data-act="modal-close">Close</button><button class="btn" data-act="fm-open-link" data-email="${esc(email)}">Open the link <span class="fm-proto">prototype</span></button>`,
@@ -322,10 +327,33 @@
     setSeen({ searchMe: null });
     RN.track('signup_submit', { meta: { kind: 'client', via: 'search', reason } });
     RN.mail(email, 'Welcome to Revenue Nomad', `Your client account for ${coName} is ready. Use the sign-in link in this email next time; there is no password.\n\nYour shortlist and searches are saved in your workspace.`, 'system');
-    RN.ui.toast(`Saved. Your client account for ${esc(coName)} is ready, and we emailed you a sign-in link for next time.`, { icon: 'check-circle', ms: 5200 });
     afterSave(reason);
     rerank();
+    // The email made a client profile, not a mailing-list entry: show it, with name and company to correct in place
+    const c = RN.personas.buyer.company;
+    const facts = KEYS.filter((k) => c[k]).map((k) => `<span>${esc(lab(k, c[k]))}</span>`).join('');
+    RN.ui.modal({
+      width: 480,
+      title: 'Your client profile is ready',
+      sub: `Signed in as ${esc(email)}. We emailed you a sign-in link for next time.`,
+      body: `<form id="fm-profile" data-submit="fm-profile" class="stack" style="--gap:14px">
+          <div class="field"><label for="fm-p-name">Your name</label><input class="input" id="fm-p-name" name="name" autocomplete="name" value="${esc(name)}" placeholder="First and last name"></div>
+          <div class="field"><label for="fm-p-co">Company</label><input class="input" id="fm-p-co" name="company" autocomplete="organization" value="${esc(coName)}"></div>
+          ${facts ? `<div class="fm-known is-light">${facts}</div>` : ''}
+          <p class="small muted">Your shortlist, saved searches and intro requests live in your workspace. Operators see your company’s industry and size, not your name, until you ask to meet.</p>
+        </form>`,
+      foot: `<button class="btn btn-line" data-act="go" data-to="buyer">Open my workspace</button><button class="btn" type="submit" form="fm-profile">Looks right</button>`,
+    });
   }
+  RN.submits['fm-profile'] = (form, d) => {
+    const b = RN.personas.buyer;
+    const who = { name: (d.name || '').trim() || b.name, title: b.title || '', email: b.email, company: Object.assign({}, b.company, { name: (d.company || '').trim() || b.company.name }) };
+    RN.shell.setClient(who);
+    RN.shell.renderHeader(); RN.shell.renderDock();
+    RN.ui.closeModal();
+    RN.ui.toast(`Profile saved for ${esc(who.company.name)}`, { icon: 'check-circle' });
+    rerank();
+  };
 
   /* ---------- Save triggers from the ranked rows ---------- */
   RN.actions['fm-rates'] = () => FM.ask('rates');

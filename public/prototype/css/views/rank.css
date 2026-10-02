@@ -143,6 +143,12 @@
 .fm-card .input:focus { border-color: rgba(255, 255, 255, .5); }
 .fm-card .fm-priv { color: var(--night-mute); }
 .fm-card .fm-err { color: #FF9C8A; }
+.fm-sub { margin: -8px 0 0; font-size: var(--t-14); color: var(--night-mute); }
+.fm-login { margin-left: auto; font-size: var(--t-13); color: var(--night-mute); }
+.fm-card .fm-login .act { color: var(--night-ink); text-decoration: underline; text-underline-offset: 3px; }
+.fm-known { display: flex; flex-wrap: wrap; gap: 6px; }
+.fm-known span { padding: 4px 10px; border-radius: 8px; background: rgba(255, 255, 255, .08); border: 1px solid var(--night-line); font-family: var(--f-display); font-weight: 700; font-size: var(--t-12); color: #F2C77E; }
+.fm-known.is-light span { background: color-mix(in srgb, var(--good) 12%, var(--card)); border-color: transparent; color: var(--good); }
 .fm-email { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; max-width: 460px; }
 .fm-email .fm-err, .fm-email .fm-priv { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 640px) { .fm-card { padding: 20px 16px 16px; } .fm-why { display: none; } .fm-x { margin-left: auto; } }
