@@ -161,7 +161,6 @@
     const R = market().report;
     const hind = R.hindsight;
     const fvf = R.fracVsFull;
-    const first = R.summary.find((s) => /first/i.test(s.l)) || R.summary[4];
     const ops = RN.model.ops;
     const verified = ops.reduce((a, o) => a + o.tags.filter((t) => t.tier !== 'claimed').length, 0);
     const lib = RN.fields.fitTags.options.length;
@@ -170,48 +169,56 @@
     const eng = (matt ? matt.engagements.slice() : []).sort((a, b) => String(a.start).localeCompare(String(b.start)));
     const yr = (e) => { const a = String(e.start).slice(0, 4), b = String(e.end || '').slice(0, 4); return !b || a === b ? a : `${a} to ${b}`; };
 
+    // Bars drawn to scale from the research figures ("$12,500" or "68%")
+    const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
+    const bars = (rows) => { const max = Math.max(...rows.map((r) => num(r[1]))) || 1; return `<div class="ab-bars">${rows.map(([l, v, hi]) => `<div class="ab-bar${hi ? ' is-hi' : ''}"><span class="ab-bar-l">${esc(l)}</span><span class="ab-bar-t"><i style="--w:${Math.round((num(v) / max) * 100)}%"></i></span><b>${esc(v)}</b></div>`).join('')}</div>`; };
+    const fame = ['Big logo on the resume', 'Impressive title', 'A friend’s referral'];
+    const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Proof a client confirmed'];
+
     return `
     ${hero({
       eyebrow: 'About Revenue Nomad',
       h: 'Built by operators who got tired of watching good companies <span class="serif">hire the wrong person.</span>',
-      lede: 'Revenue Nomad is the open network for fractional go-to-market leadership. Real operators, real track records, and a team behind it that still does this work for a living.',
+      lede: 'The open network for fractional go-to-market leaders. Run by people who still do the work.',
       actions: `<a class="btn btn-lg" href="#browse">Browse operators${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#how">How it works</a>`,
     })}
-
-    <section class="section pg-story">
-      <div class="wrap pg-story-in">
-        <div class="pg-story-l"><span class="eyebrow">Why we exist</span><h2 class="h2">The problem was always fit.</h2></div>
-        <div class="pg-story-r">
-          <p class="pg-lead">Our founder spent ten years building and fixing B2B sales organizations, first as an early team member and partner at Skaled Consulting, then as a fractional revenue leader himself. He kept seeing the same expensive mistake.</p>
-          <p class="pg-p">A company would hire an impressive name and wait for the magic. Six months and a lot of cash later, nothing had changed. The leader was capable. They were wrong for that business.</p>
-          <p class="pg-p">A great CRO from a $500M healthtech company will likely struggle at a $30M hospitality tech company. Deal size, sales cycle, stage and motion decide whether a fractional leader succeeds, and none of it shows up on a LinkedIn profile.</p>
-          <blockquote class="pg-pull">Fractional leaders are specialists. Companies were being asked to choose them like generalists.</blockquote>
-          <p class="pg-p">There was nowhere to judge fit. LinkedIn was not built for it. Freelance marketplaces skew tactical and junior. Word of mouth misses the nuance between one business and the next. So we built the place we wished had existed when we were the ones being hired.</p>
-        </div>
-      </div>
+    <section class="wrap ab-stats" aria-label="Revenue Nomad at a glance">
+      <div class="ab-stat is-forest"><b class="num">${RN.fmt.int(ops.length)}</b><span>Open profiles</span></div>
+      <div class="ab-stat is-leaf"><b class="num">${RN.fmt.int(verified)}</b><span>Focus areas a client verified</span></div>
+      <div class="ab-stat is-gold"><b class="num">$0</b><span>Fees for companies</span></div>
+      <div class="ab-stat is-night"><b class="num">2023</b><span>Founded</span></div>
     </section>
 
-    <section class="section pg-pov-sec">
+    <section class="section ab-why">
+      <div class="wrap ab-why-in">
+        <div class="ab-why-l">
+          <span class="eyebrow">Why we exist</span>
+          <h2 class="h2">The problem was always <span class="serif">fit.</span></h2>
+          <p class="ab-line">Great leaders fail in the wrong business.</p>
+          <p class="ab-line">A $500M company’s CRO rarely fits a $30M one.</p>
+        </div>
+        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Hired on fit: same stage, same deal size, same motion, proof a client confirmed.">
+          <div class="ab-vs-col is-fame"><span class="ab-vs-h">Hired on fame</span><ul>${fame.map((x) => `<li>${icon('x')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">6 months, nothing changed</span></div>
+          <div class="ab-vs-col is-fit"><span class="ab-vs-h">Hired on fit</span><ul>${fit.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">Results in the first quarter</span></div>
+        </div>
+      </div>
+      <div class="wrap"><blockquote class="ab-pull">Fractional leaders are specialists. Companies were choosing them <span class="serif">like generalists.</span></blockquote></div>
+    </section>
+
+    <section class="section ab-pov-sec">
       <div class="wrap">
-        ${shead('Our point of view', 'Two beliefs behind every screen we build.')}
-        <div class="grid g-2 pg-pov">
-          <article class="pg-pov-card">
-            <h3 class="h3">Fractional is a hiring strategy in its own right.</h3>
-            <p class="pg-p">The best companies bring in a fractional leader on purpose: to build the process, hire the first team and hand over a machine that runs. It starts in weeks and costs a fraction of a full-time executive. No fees for companies: you pay the operator’s rate, nothing more.</p>
-            <div class="pg-pov-stats">
-              <div><b class="num">${esc(fvf[0][1])}</b><span>a month for a ${esc(fvf[0][0].split(',')[0].replace(/^F/, 'f'))} at ${esc(RN.w.label('hoursPerMonth', '40'))}, vs ${esc(fvf[1][1])} for a full-time hire</span></div>
-              <div><b class="num">${esc(first.v)}</b><span>of first-time clients hired a fractional leader as their first sales leadership hire</span></div>
-            </div>
-            <div class="row pg-pov-foot">${illus('Illustrative research')}<a class="act" href="#rates">Compare the cost${icon('arrow')}</a></div>
+        ${shead('What we believe', 'Two beliefs behind every screen.')}
+        <div class="ab-pov">
+          <article class="ab-pov-card is-tint">
+            <h3 class="h3">Fractional is a strategy, not a stopgap.</h3>
+            ${bars([['Fractional, per month', fvf[0][1], true], ['Full-time, per month', fvf[1][1]]])}
+            <div class="ab-pov-foot">${illus('Illustrative research')}<a class="act" href="#rates">Compare the cost${icon('arrow')}</a></div>
           </article>
-          <article class="pg-pov-card">
+          <article class="ab-pov-card is-gold">
             <h3 class="h3">Fit and proof beat fame.</h3>
-            <p class="pg-p">Stage, deal size, motion and a record that clients have confirmed predict success. A famous logo on a resume predicts very little. That is why every profile leads with fit and verified proof.</p>
-            <div class="pg-pov-stats">
-              <div><b class="num">${esc(hind[0][2])}</b><span>of hiring companies put “${esc(hind[0][0].toLowerCase())}” in their top three</span></div>
-              <div><b class="num">${esc(hind[hind.length - 1][2])}</b><span>said the same of ${esc(hind[hind.length - 1][0].toLowerCase())}</span></div>
-            </div>
-            <div class="row pg-pov-foot">${illus('Illustrative research')}<a class="act" href="#levels">How we verify proof${icon('arrow')}</a></div>
+            ${bars([[hind[0][0], hind[0][2], true], [hind[hind.length - 1][0], hind[hind.length - 1][2]]])}
+            <span class="ab-pov-k">Share of hiring companies ranking it top three</span>
+            <div class="ab-pov-foot">${illus('Illustrative research')}<a class="act" href="#levels">How we verify proof${icon('arrow')}</a></div>
           </article>
         </div>
       </div>
@@ -219,24 +226,23 @@
 
     <section class="section night pg-core">
       <div class="wrap">
-        ${shead('What clients rate', 'Fractional work takes skills a full-time career never teaches.', 'These are the four things every client rates after an engagement. We call it CORE, and it is how the Reputation Index knows who delivers.')}
-        <div class="pg-core-grid">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
+        ${shead('What clients rate', 'Four scores after every engagement.')}
+        <div class="pg-core-grid ab-core">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
             <span class="pg-core-l" aria-hidden="true">${esc(d.v)}</span>
             <h3 class="h4">${esc(d.l)}</h3>
-            <p>${esc(CORE_COPY[d.v] || d.d)}</p>
             <p class="pg-core-q"><span>Clients answer</span>${esc(d.q)}</p>
           </article>`).join('')}</div>
         <a class="act pg-core-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a>
       </div>
     </section>
 
-    <section class="section pg-diff-sec">
+    <section class="section ab-diff-sec">
       <div class="wrap">
-        ${shead('How we are different', 'Three decisions most talent firms will not make.')}
-        <ul class="pg-diff">
-          <li><span class="pg-value-i" aria-hidden="true">${icon('eye')}</span><h3 class="h3">Open profiles</h3><div><p class="pg-p">Every profile is public. No login and no sales call before you can see who is on the bench. If we are confident in our operators, we should be willing to show them to you.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></div></li>
-          <li><span class="pg-value-i" aria-hidden="true">${icon('seal')}</span><h3 class="h3">Verified proof</h3><div><p class="pg-p">The Reputation Index moves on client evidence: CORE reviews, focus areas a client confirmed and engagements a client verified. Operators cannot pay for a better badge, and reviews publish without a moderation queue.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></div></li>
-          <li><span class="pg-value-i" aria-hidden="true">${icon('chart')}</span><h3 class="h3">Research we publish</h3><div><p class="pg-p">We turn what the network sees into public research: the State of Fractional GTM report, the Rate Index, the GTM Framework and the Fit Tag Library of ${RN.fmt.int(lib)} focus areas. Anyone can use it, hiring or not.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></div></li>
+        ${shead('How we are different', 'Three things most talent firms won’t do.')}
+        <ul class="ab-diff">
+          <li class="is-forest"><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p>No login. No sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
+          <li class="is-leaf"><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p>Only clients can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
+          <li class="is-gold"><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p>Rates, reports and ${RN.fmt.int(lib)} focus areas. Free.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
         </ul>
       </div>
     </section>
@@ -245,41 +251,30 @@
       <div class="wrap pg-founder">
         <div class="pg-arch pg-arch-forest"><img src="assets/brand/founder.webp" alt="Matt Lopez, founder of Revenue Nomad"></div>
         <div class="pg-founder-body">
-          <span class="eyebrow">A note from our founder</span>
-          <blockquote class="pg-founder-q">I still take fractional engagements myself, and my profile sits on this platform with the same scoring as everyone else.</blockquote>
-          <p class="pg-p">I have been the fractional CRO walking into a team that did not ask for me. I have built the playbook, sold the first deals to prove it worked, then hired and managed the people who took it over. That is a different job from being a great closer, and it is the job most growing companies actually need done.</p>
-          <p class="pg-p">When you reach out, you get someone who has sat in your seat before. We will tell you honestly if fractional is the wrong answer for you right now.</p>
+          <span class="eyebrow">From our founder</span>
+          <blockquote class="pg-founder-q">I still take fractional engagements, scored by the same rules as everyone here.</blockquote>
+          <p class="ab-line">You get someone who has sat in your seat before.</p>
           <div class="pg-sign"><b>Matt Lopez</b><span>Founder and CEO</span>${matt ? `<span class="pg-sign-ris">${RN.ui.ris(matt)}</span>` : ''}</div>
           ${eng.length ? `<div class="pg-track-wrap"><span class="label">Engagements include</span><ol class="pg-track">${eng.map((e) => `<li><span class="pg-track-y">${esc(yr(e))}</span><b>${esc(e.company)}</b><span>${esc(e.role)}</span></li>`).join('')}</ol></div>` : ''}
-          <div class="row pg-founder-cta">${matt ? `<a class="act" href="#op.${esc(matt.slug)}">See Matt’s profile, same rules as everyone${icon('arrow')}</a>` : ''}<button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call with the team</button></div>
+          <div class="row pg-founder-cta">${matt ? `<a class="act" href="#op.${esc(matt.slug)}">See Matt’s profile${icon('arrow')}</a>` : ''}<button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call with the team</button></div>
         </div>
       </div>
     </section>
 
-    <section class="section pg-facts-sec">
-      <div class="wrap pg-facts">
-        <div class="pg-facts-l"><h2 class="h2">The plain facts, for anyone checking.</h2>
-          <p class="small muted">Profile counts come from the live network export loaded in this prototype. Market figures come from the illustrative research mockup and are marked.</p></div>
-        <div class="pg-facts-r">
-          <div class="stats-row pg-facts-stats" style="--cols:4">
-            <div class="stat"><span class="stat-v">${RN.fmt.int(ops.length)}</span><span class="stat-l">Operator profiles in this prototype</span>${livePill()}</div>
-            <div class="stat"><span class="stat-v">${cats}</span><span class="stat-l">Go-to-market disciplines</span>${livePill('Standard field')}</div>
-            <div class="stat"><span class="stat-v">${RN.fmt.int(verified)}</span><span class="stat-l">Focus areas verified by a client review</span>${livePill()}</div>
-            <div class="stat"><span class="stat-v">$${esc(trend[trend.length - 1].v)}</span><span class="stat-l">Median hourly rate, ${esc(trend[trend.length - 1].l)}</span>${illus()}</div>
-          </div>
-          <dl class="pg-dl">
-            <div><dt>Who runs it</dt><dd>Founder led by Matt Lopez, with a small team that has done this work.</dd></div>
-            <div><dt>The network</dt><dd>350+ operators on the live network across ${cats} go-to-market disciplines, each reviewed by our team. This prototype loads ${RN.fmt.int(ops.length)} of them from the live export.</dd></div>
-            <div><dt>Since</dt><dd>Revenue Nomad launched in September 2023. The open platform launched in August 2026.</dd></div>
-            <div><dt>Who we serve</dt><dd>B2B companies from their first sales hire to established teams going through a transformation.</dd></div>
-            <div><dt>Research</dt><dd>The State of Fractional GTM ${esc(R.year)} surveys operators and hiring companies. The figures in this prototype are illustrative. ${illus()}</dd></div>
-            <div><dt>Reach a person</dt><dd><div class="stack" style="--gap:10px"><span><a class="link" href="mailto:${EMAIL}">${EMAIL}</a>, or <a class="link" href="#talk">Talk to us</a> and expect a reply within one business day.</span>${PG.phone()}</div></dd></div>
-          </dl>
-        </div>
+    <section class="section ab-facts-sec">
+      <div class="wrap">
+        <h2 class="h3 ab-facts-h">The plain facts</h2>
+        <dl class="ab-facts">
+          <div><dt>Launched</dt><dd>Sept 2023<span>Open platform Aug 2026</span></dd></div>
+          <div><dt>Network</dt><dd>350+ operators<span>${cats} GTM disciplines, each reviewed</span></dd></div>
+          <div><dt>Who we serve</dt><dd>B2B companies<span>First sales hire to full transformation</span></dd></div>
+          <div><dt>Median rate</dt><dd>$${esc(trend[trend.length - 1].v)}/hr<span>${esc(trend[trend.length - 1].l)} ${illus()}</span></dd></div>
+          <div class="ab-facts-reach"><dt>Reach a person</dt><dd><a class="link" href="mailto:${EMAIL}">${EMAIL}</a><span>Reply within one business day</span>${PG.phone()}</dd></div>
+        </dl>
       </div>
     </section>
 
-    ${band({ h: 'Now you know who we are. Tell us about you.', text: 'Four quick questions and your email, then a real reply from a person within one business day.', actions: talkActions() })}`;
+    ${band({ h: 'Now you know us. Tell us about you.', text: 'Four questions. A real reply in one business day.', actions: talkActions() })}`;
   }
 
   /* =====================================================================

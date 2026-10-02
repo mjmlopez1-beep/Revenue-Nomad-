@@ -348,6 +348,33 @@
 .pf-x { margin-left: auto; width: 32px; height: 32px; }
 .pf-x svg { width: 15px; height: 15px; }
 .pf-focus-p { font-size: var(--t-14); color: var(--ink-2); line-height: 1.6; margin-top: 10px; }
+/* How scores work: a points ladder and a 3-slot sum instead of a paragraph */
+.pf-how { display: grid; gap: 22px; }
+.pf-how-h { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: var(--t-18); letter-spacing: -.01em; color: var(--ink); }
+.pf-how-blk { display: grid; gap: 10px; }
+.pf-how-k { font-family: var(--f-display); font-weight: 700; font-size: var(--t-12); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
+.pf-how-sub { font-size: var(--t-13); color: var(--mute); }
+.pf-ladder { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: end; gap: 6px; height: 132px; }
+.pf-rung { display: grid; grid-template-rows: auto 1fr auto; justify-items: center; height: 100%; gap: 4px; }
+.pf-rung b { align-self: end; font-family: var(--f-display); font-weight: 800; font-size: var(--t-13); color: var(--ink); font-variant-numeric: tabular-nums; }
+.pf-rung i { align-self: end; width: 100%; height: var(--h); min-height: 8px; border-radius: 6px 6px 2px 2px; background: linear-gradient(180deg, var(--good), color-mix(in srgb, var(--good) 70%, var(--card))); transform-origin: bottom; animation: pfRung .7s var(--ease) both; animation-delay: calc(var(--i) * 70ms); }
+.pf-rung.is-cl i { background: repeating-linear-gradient(135deg, var(--line) 0 4px, transparent 4px 8px); box-shadow: inset 0 0 0 1px var(--line); }
+.pf-rung.is-x i { background: linear-gradient(180deg, #E9A63D, color-mix(in srgb, #E9A63D 65%, var(--card))); }
+.pf-rung span { font-size: 11px; font-weight: 600; color: var(--mute); white-space: nowrap; }
+@keyframes pfRung { from { transform: scaleY(0); } }
+.pf-ladder-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: var(--t-12); color: var(--mute); }
+.pf-ladder-key span { display: inline-flex; align-items: center; gap: 6px; }
+.pf-ladder-key i { width: 10px; height: 10px; border-radius: 3px; background: var(--good); }
+.pf-ladder-key i.is-cl { background: repeating-linear-gradient(135deg, var(--line) 0 2px, transparent 2px 4px); box-shadow: inset 0 0 0 1px var(--line); }
+.pf-ladder-key i.is-x { background: #E9A63D; }
+.pf-sum { display: flex; align-items: center; gap: 8px; }
+.pf-sum-slot { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: color-mix(in srgb, var(--good) 14%, var(--card)); color: var(--good); }
+.pf-sum-slot svg { width: 18px; height: 18px; stroke-width: 3; }
+.pf-sum em { font-style: normal; font-weight: 700; color: var(--mute); }
+.pf-sum b { font-family: var(--f-display); font-weight: 800; font-size: var(--t-24, 24px); letter-spacing: -.02em; color: var(--ink); }
+.pf-how-tip { display: inline-flex; align-items: center; gap: 8px; justify-self: start; margin: 0; padding: 8px 12px; border-radius: 99px; background: var(--paper-2); color: var(--ink-2); font-size: var(--t-13); font-weight: 600; }
+.pf-how-tip svg { width: 15px; height: 15px; color: var(--good); }
+@media (prefers-reduced-motion: reduce) { .pf-rung i { animation: none; } }
 .pf-focus-hint { display: flex; gap: 10px; align-items: center; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--tint); color: var(--ink-2); font-size: var(--t-13); line-height: 1.45; }
 .pf-focus-hint svg { width: 18px; height: 18px; color: var(--accent); }
 .pf-slots { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }

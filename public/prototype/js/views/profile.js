@@ -859,9 +859,26 @@
     const op = c.op;
     const f = S.focus;
     if (!f) {
-      return `<h3 class="h5 pf-h3">How these scores work</h3>
-        <p class="pf-focus-p">Each stage and area scores its <b>best three focus areas</b>. One client review verifies a focus area at 50 points, each further review adds more (60, 70, 80), and a fifth makes it Expert (85 and up). Self-claimed focus areas count 10. Three focus areas at 100 make 100%.</p>
-        <p class="pf-focus-hint">${icon('target')}Select a stage in the bowtie or an area on the map to see what counts.</p>`;
+      // Pictures, not paragraphs: points per focus area by proof, then how three of them make a score
+      const LADDER = [['Self', 10, 'cl'], ['1 review', 50, 'v'], ['2', 60, 'v'], ['3', 70, 'v'], ['4', 80, 'v'], ['5+', 85, 'x']];
+      return `<div class="pf-how">
+        <h3 class="pf-how-h">How scores work</h3>
+        <div class="pf-how-blk">
+          <span class="pf-how-k">Points per focus area</span>
+          <div class="pf-ladder" role="img" aria-label="Self-claimed 10 points; 1 client review 50; 2 reviews 60; 3 reviews 70; 4 reviews 80; 5 or more reviews Expert, 85 and up">
+            ${LADDER.map(([l, v, k], i) => `<div class="pf-rung is-${k}" style="--h:${v}%;--i:${i}"><b>${v}${k === 'x' ? '+' : ''}</b><i></i><span>${l}</span></div>`).join('')}
+          </div>
+          <div class="pf-ladder-key"><span><i class="is-cl"></i>Self-claimed</span><span><i class="is-v"></i>Client reviews</span><span><i class="is-x"></i>Expert</span></div>
+        </div>
+        <div class="pf-how-blk">
+          <span class="pf-how-k">Each stage and area</span>
+          <div class="pf-sum" aria-label="The best three focus areas add up; three at 100 make 100%">
+            <span class="pf-sum-slot">${icon('check')}</span><em>+</em><span class="pf-sum-slot">${icon('check')}</span><em>+</em><span class="pf-sum-slot">${icon('check')}</span><em>=</em><b>100%</b>
+          </div>
+          <span class="pf-how-sub">Best 3 focus areas, at 100 each</span>
+        </div>
+        <p class="pf-how-tip">${icon('target')}Tap a stage or area to see what counts</p>
+      </div>`;
     }
     const isStage = f.kind === 'stage';
     const stage = isStage ? c.stages.find((s) => s.name === f.key) : null;
