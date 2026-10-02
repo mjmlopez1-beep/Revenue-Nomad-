@@ -1,6 +1,8 @@
 /* Intro request: one short sheet, reachable from every card, profile, compare and shortlist.
-   - Clients who are signed in get everything prefilled; they pick 3 things and send.
-   - Visitors give work email and company basics once (progressive profiling, same picklists as operator intake).
+   - First screen is three things: what you need, when, and (visitors) a work email. Engagement type, hours and a note
+     sit behind "Add details". Opened from a ranked search row, need, when and the note default from that search.
+   - Visitors: the company name comes from the email domain (personal domains are refused); industry and size are
+     collected later in the workspace (progressive profiling). Signed-in clients never see the email field.
    - Operators receive the request blind (scope and value, no company or person name) until introduced (L369).
    Lifecycle (L471): Pending -> Interested -> Intro Approved -> Introduced -> Hired, or Declined. 72-hour response window.
    Also home to RN.hire (D15): the one "Confirm the terms" flow every hire goes through (workspace, engagements, Admin). */
@@ -26,8 +28,8 @@
     const f = i.fields || {};
     const firm = i.buyer && i.buyer.company ? i.buyer.company : {};
     const who = forOperator && !['introduced', 'hired'].includes(i.status)
-      ? `A ${RN.w.label('industry', firm.industry) || 'client'} company · ${RN.w.label('companyRevenue', firm.revenueRange)} revenue · ${RN.w.label('companyEmployees', firm.employeeRange)} employees`
-      : `${firm.name || 'Company'} · ${RN.w.label('industry', firm.industry)}`;
+      ? [`A ${(firm.industry && RN.w.label('industry', firm.industry)) || 'client'} company`, firm.revenueRange && `${RN.w.label('companyRevenue', firm.revenueRange)} revenue`, firm.employeeRange && `${RN.w.label('companyEmployees', firm.employeeRange)} employees`].filter(Boolean).join(' · ')
+      : [firm.name || 'Company', firm.industry && RN.w.label('industry', firm.industry)].filter(Boolean).join(' · ');
     const scope = [
       f.engagementType && RN.w.label('engagementType', f.engagementType),
       f.engagementType === 'project' ? (f.projectBudget ? RN.fmt.usd(f.projectBudget) + ' budget' : '') : f.hoursPerMonth && RN.w.label('hoursPerMonth', f.hoursPerMonth),
@@ -36,19 +38,65 @@
     return { who, scope, need: f.need ? RN.w.label('need', f.need) : '' };
   };
 
-  /* A fictional client used by "Fill sample details" (distinct from the demo client, so the request is new) */
-  const SAMPLE = { name: 'Sam Rivera', email: 'sam@harborlinesoftware.com', company: 'Harborline Software', industry: 'SMB Software', revenueRange: '5m_20m', employeeRange: '51_200' };
+  /* A fictional client used by "Use a sample email" (distinct from the demo client, so the request is new) */
+  const SAMPLE = { email: 'sam.rivera@harborlinesoftware.com' };
   const openFor = (opId, email) => RN.store.state.intros.find((i) => i.opId === opId && i.status !== 'declined' && !i.withdrawn && i.buyer && (i.buyer.email || '').toLowerCase() === String(email || '').toLowerCase()) || null;
+
+  /* ---------- Work email: the only "about you" field on the first screen ----------
+     Company name comes from the email domain; industry and size are collected after the request is in. */
+  const PERSONAL = ['gmail', 'googlemail', 'yahoo', 'ymail', 'outlook', 'hotmail', 'live', 'msn', 'icloud', 'me', 'mac', 'aol', 'proton', 'protonmail', 'pm'];
+  const SLD = ['co', 'com', 'org', 'net', 'ac', 'gov', 'edu']; // second-level parts of country domains (acme.co.uk)
+  const domainOf = (email) => String(email || '').trim().toLowerCase().split('@')[1] || '';
+  const brandOf = (domain) => {
+    const parts = domain.split('.').filter(Boolean);
+    if (parts.length < 2) return parts[0] || '';
+    const i = parts.length >= 3 && SLD.includes(parts[parts.length - 2]) ? parts.length - 3 : parts.length - 2;
+    return parts[i];
+  };
+  intro.isPersonalEmail = (email) => { const d = domainOf(email); return !!d && (PERSONAL.includes(brandOf(d)) || /^(proton\.me|pm\.me)$/.test(d)); };
+  // dana@tidewaterlabs.com -> "Tidewaterlabs"; ops@hr-cloud.io -> "HR Cloud" (tokens of two letters or fewer read as acronyms)
+  intro.companyFromEmail = (email) => brandOf(domainOf(email)).split(/[-_]+/).filter(Boolean)
+    .map((t) => (t.length <= 2 ? t.toUpperCase() : t[0].toUpperCase() + t.slice(1))).join(' ');
+  // dana.reyes@… -> "Dana Reyes"; anything else falls back to the company name
+  intro.nameFromEmail = (email, company) => {
+    const local = String(email || '').trim().split('@')[0] || '';
+    const bits = local.split(/[._]/).filter(Boolean);
+    return bits.length === 2 && bits.every((b) => /^[a-z][a-z'-]*$/i.test(b)) ? bits.map((b) => b[0].toUpperCase() + b.slice(1).toLowerCase()).join(' ') : company;
+  };
+  const emailErr = (form, msg) => {
+    const f = form.querySelector('[data-field="email"]');
+    if (!f) return;
+    let e = f.querySelector('.err');
+    if (!msg) { if (e) e.remove(); f.querySelector('input').removeAttribute('aria-invalid'); return; }
+    if (!e) { e = document.createElement('p'); e.className = 'err'; e.id = 'intro-email-err'; e.setAttribute('role', 'alert'); f.appendChild(e); }
+    e.textContent = msg;
+    const input = f.querySelector('input');
+    input.setAttribute('aria-invalid', 'true'); input.setAttribute('aria-describedby', 'intro-email-err'); input.focus();
+    // The sheet's footer is sticky: scroll the message clear of it
+    const sheet = form.closest('.modal'), ft = sheet && sheet.querySelector('.modal-ft');
+    if (ft) requestAnimationFrame(() => { const over = e.getBoundingClientRect().bottom - ft.getBoundingClientRect().top + 12; if (over > 0) sheet.scrollTop += over; });
+  };
 
   /* ---------- Open the sheet ---------- */
   RN.actions['intro-open'] = (el) => intro.open(el.dataset.id);
   RN.actions['intro-sample'] = (el) => {
     const form = document.getElementById('intro-form');
-    const keep = form ? RN.ui.formData(form) : {};
+    const input = form && form.querySelector('input[name="email"]');
+    if (input) { input.value = SAMPLE.email; emailErr(form, ''); return; }
     RN.ui.closeModal();
-    intro.open(el.dataset.id, Object.assign({}, keep, SAMPLE));
+    intro.open(el.dataset.id, SAMPLE);
   };
-  /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, name, email, company, industry, revenueRange, employeeRange} */
+  const optOf = (key, v) => (v && ((RN.fields[key] || {}).options || []).some((o) => o.v === v) ? v : '');
+  // When: what the search text says ("ASAP", "in two weeks"), else the earliest the operator can start
+  function startFor(op, text) {
+    const t = String(text || '');
+    if (/\b(asap|urgent(ly)?|immediately|right away|this week|next week|now)\b/i.test(t)) return 'available_now';
+    if (/\bin (two|2) weeks\b/i.test(t)) return 'available_2_weeks';
+    if (/\b(next (month|quarter)|in a month|in (three|four|3|4|\d{2,}) weeks)\b/i.test(t)) return 'available_2_plus_weeks';
+    return optOf('startBy', op.avail.key) || 'available_now';
+  }
+  /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, email,
+     search: {text, need, match, needs: [{label, status, color}]}}  (search: opened from a ranked search row) */
   intro.open = function (opId, prefill) {
     prefill = prefill || {};
     const op = RN.model.byId(opId);
@@ -66,54 +114,65 @@
     }
     const signedIn = st.persona === 'buyer';
     const me = RN.personas.buyer;
+    const x = prefill.search || null;
     // Same brief as profile and compare scores: company firmographics plus saved match preferences
     const brief = signedIn ? Object.assign({}, RN.clientBrief(), { roleCategory: op.catKey }) : null;
     const fit = brief ? RN.model.fit(op, brief) : null;
-    // What the client already told us wins: saved preferences, then the need picked on Home or Browse, then the category
+    // What the client already told us wins: the search they ran, saved preferences, the need picked on Home or Browse, then the category
     const NC = RN.fields.needCats || {};
     const fits = (n) => n && (NC[n] || []).includes(op.catKey);
+    const searchNeed = optOf('need', prefill.need) || optOf('need', x && x.need);
     const said = [brief && brief.need, st.browse && st.browse.need].find(fits);
-    const defaults = Object.assign({ need: said || Object.keys(NC).find((k) => (NC[k] || []).includes(op.catKey)) || 'not_sure', engagementType: (brief && brief.engagementType) || 'fractional', startBy: op.avail.key === 'available_now' ? 'available_now' : op.avail.key, hoursPerMonth: op.avail.hoursCode || '20' }, prefill);
-    // Visitors start blank (their own details), with Browse filters as a head start; signed-in clients never see these fields
-    const bf = (st.browse && st.browse.filters) || {};
-    const first = (v) => [].concat(v || [])[0] || '';
-    const who = Object.assign({ name: '', email: '', company: '', industry: first(bf.industries), revenueRange: first(bf.revenueRange), employeeRange: first(bf.employeeRange) }, prefill);
+    const need = searchNeed || said || Object.keys(NC).find((k) => (NC[k] || []).includes(op.catKey)) || 'not_sure';
+    // The note: what they typed, else the search itself (same wording as the ranked row's Meet button)
+    const note = prefill.note || (x && x.text ? `${x.text}${(x.needs || []).length ? `\n\nWhat we need: ${x.needs.map((n) => n.label).join(', ')}.` : ''}` : '');
+    const d = {
+      need,
+      startBy: optOf('startBy', prefill.startBy) || startFor(op, x && x.text),
+      engagementType: optOf('engagementType', prefill.engagementType) || (brief && brief.engagementType) || 'fractional',
+      hoursPerMonth: prefill.hoursPerMonth || op.avail.hoursCode || '20',
+      note,
+      email: prefill.email || '',
+    };
+    // A note from the search is one of the three things the client confirms, so a signed-in client sees it up front
+    const noteUp = signedIn && !!x;
+    const noteField = `<div class="field"><label for="intro-note">${x ? `What ${esc(op.first)} will read` : `Anything ${esc(op.first)} should know?`} <span class="opt">${x ? 'From your search' : 'Optional'}</span></label>
+          <textarea class="textarea" id="intro-note" name="note" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days." style="min-height:${noteUp ? 110 : 90}px">${esc(d.note)}</textarea></div>`;
+    const project = d.engagementType === 'project';
     RN.ui.modal({
       width: 620,
-      title: `Request an intro to ${esc(op.first)}`,
+      title: `Meet ${esc(op.first)}`,
       sub: `${esc(op.name)} · Fractional ${esc(op.role)} · ${esc(op.avail.label)}`,
-      body: `<form id="intro-form" data-submit="intro-send" data-op="${esc(op.id)}" class="stack" style="--gap:22px">
+      body: `<form id="intro-form" data-submit="intro-send" data-op="${esc(op.id)}" class="stack" style="--gap:22px" novalidate>
         ${fit ? (() => { const hits = fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2); return `<div class="note info">${icon('target')}<div><b>${esc(fit.label)} for ${esc(me.company.name)}</b> · ${fit.count} of ${fit.signals.length} signals.${hits.length ? ' ' + hits.join('. ') + '.' : ''}</div></div>`; })() : ''}
-        ${prefill.search ? (() => { const x = prefill.search; const W = { proven: 'A company proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' }; return `<div class="in-search">
+        ${x ? (() => { const W = { proven: 'A company proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' }; return `<div class="in-search">
           <div class="in-search-hd"><span class="label">From your search</span>${x.match != null ? `<span class="in-search-m">${x.match}% match</span>` : ''}</div>
           <p class="in-search-q">“${esc(x.text)}”</p>
-          ${x.needs.length ? `<ul class="in-search-n">${x.needs.map((n) => `<li>${RN.rank.dotMini(n)}<b>${esc(n.label)}</b><span>${esc(W[n.status])}</span></li>`).join('')}</ul>` : ''}
+          ${(x.needs || []).length ? `<ul class="in-search-n">${x.needs.map((n) => `<li>${RN.rank.dotMini(n)}<b>${esc(n.label)}</b><span>${esc(W[n.status] || '')}</span></li>`).join('')}</ul>` : ''}
         </div>`; })() : ''}
-        ${RN.w.field('need', defaults.need, { name: 'need', compact: true })}
-        ${RN.w.field('engagementType', defaults.engagementType, { name: 'engagementType', compact: true, change: 'intro-type' })}
-        <div class="grid g-2" style="--gap:18px">
-          <div data-intro-hours>${RN.w.field('hoursPerMonth', defaults.hoursPerMonth, { name: 'hoursPerMonth', label: 'Available time needed', compact: true })}</div>
-          <div data-intro-budget hidden>${RN.w.field('projectBudget', '', { name: 'projectBudget', compact: true })}</div>
-          ${RN.w.field('startBy', defaults.startBy, { name: 'startBy', compact: true })}
-        </div>
-        <div class="field"><label for="intro-note">Anything ${esc(op.first)} should know? <span class="opt">Optional</span></label>
-          <textarea class="textarea" id="intro-note" name="note" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days." style="min-height:90px">${esc(defaults.note || '')}</textarea></div>
-        ${signedIn ? '' : `<fieldset class="card-flat stack" style="--gap:16px;border:1px solid var(--line-2)">
-          <legend class="label" style="padding:0 6px">About you</legend>
-          <div class="row between" style="--gap:12px;align-items:flex-start"><p class="small muted grow" style="max-width:44ch">Asked once. Operators see your company’s industry and size, not your name, until you are introduced.</p>
-            <button type="button" class="act" data-act="intro-sample" data-id="${esc(op.id)}">${icon('edit')}Fill sample details</button></div>
-          <div class="grid g-2" style="--gap:14px">
-            ${RN.w.field('fullName', who.name, { name: 'name', compact: true })}
-            ${RN.w.field('email', who.email, { name: 'email', compact: true })}
+        ${RN.w.field('need', d.need, { name: 'need', compact: true })}
+        ${RN.w.field('startBy', d.startBy, { name: 'startBy', compact: true })}
+        ${noteUp ? noteField : ''}
+        ${signedIn ? '' : `<div class="in-email">
+          ${RN.w.field('email', d.email, { name: 'email', compact: true })}
+          <p class="small muted">We name your company from your email. ${esc(op.first)} sees its industry and size, not your name, until you are introduced. <button type="button" class="act in-sample" data-act="intro-sample" data-id="${esc(op.id)}">Use a sample email</button></p>
+        </div>`}
+        <details class="in-more">
+          <summary>${icon('chev-down')}Add details <span class="opt">Optional${x && !noteUp ? ' · note from your search included' : ''}</span></summary>
+          <div class="stack" style="--gap:18px;margin-top:14px">
+            ${RN.w.field('engagementType', d.engagementType, { name: 'engagementType', compact: true, change: 'intro-type' })}
+            <div class="grid g-2" style="--gap:18px">
+              <div data-intro-hours ${project ? 'hidden' : ''}>${RN.w.field('hoursPerMonth', d.hoursPerMonth, { name: 'hoursPerMonth', label: 'Available time needed', compact: true })}</div>
+              <div data-intro-budget ${project ? '' : 'hidden'}>${RN.w.field('projectBudget', '', { name: 'projectBudget', compact: true })}</div>
+            </div>
+            ${noteUp ? '' : noteField}
           </div>
-          <div class="field"><label for="intro-co">Company</label><input class="input" id="intro-co" name="company" autocomplete="organization" placeholder="Company name" value="${esc(who.company)}"></div>
-          ${RN.w.field('industry', who.industry, { name: 'industry', compact: true })}
-          ${RN.w.field('companyRevenue', who.revenueRange, { name: 'revenueRange', compact: true })}
-          ${RN.w.field('companyEmployees', who.employeeRange, { name: 'employeeRange', compact: true })}
-        </fieldset>`}
+        </details>
       </form>`,
-      foot: `<span class="small muted grow">No fees for companies. Operators reply within 72 hours.</span><button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="intro-form">Send request</button>`,
+      foot: `<span class="small muted grow">No fees for companies. ${esc(op.first)} replies within 72 hours.</span><button class="btn btn-line" data-act="modal-close">Cancel</button><button class="btn" type="submit" form="intro-form">Meet ${esc(op.first)}</button>`,
     });
+    const form = document.getElementById('intro-form');
+    if (form) form.addEventListener('input', (e) => { if (e.target.name === 'email') emailErr(form, ''); });
   };
 
   RN.inputs['intro-type'] = (el) => {
@@ -128,39 +187,47 @@
     const st = RN.store.state;
     const me = RN.personas.buyer;
     const signedIn = st.persona === 'buyer';
-    const company = signedIn ? me.company : { name: data.company || 'Your company', industry: data.industry, revenueRange: data.revenueRange, employeeRange: data.employeeRange };
-    if (!signedIn && (!data.name || !data.email || !data.company || !data.revenueRange || !data.employeeRange)) { RN.ui.toast('Add your name, work email, company, revenue range and employee range so we can match you.', { icon: 'info' }); return; }
+    const email = signedIn ? me.email : String(data.email || '').trim();
+    if (!signedIn) {
+      if (!email) { emailErr(form, `Add your work email so ${op.first} can reply.`); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { emailErr(form, 'That email doesn’t look right. Check it and try again.'); return; }
+      if (intro.isPersonalEmail(email)) { emailErr(form, `Use your work email. ${op.first} only meets companies, and we name yours from it.`); return; }
+    }
+    // Visitors: company from the email domain; industry and size are asked for later in the workspace
+    const company = signedIn ? me.company : { name: intro.companyFromEmail(email) || 'Your company', industry: '', revenueRange: '', employeeRange: '' };
+    const name = signedIn ? me.name : intro.nameFromEmail(email, company.name);
     // One open request per client and operator, checked on the email actually submitted
-    const dup = openFor(op.id, signedIn ? me.email : data.email);
-    if (dup) { RN.ui.toast(`${esc(signedIn ? 'You' : data.email)} already asked to meet ${esc(op.first)}. Status: ${esc(RN.w.label('introStatus', dup.status))}.`, { icon: 'info' }); return; }
+    const dup = openFor(op.id, email);
+    if (dup) { RN.ui.toast(`${esc(signedIn ? 'You' : email)} already asked to meet ${esc(op.first)}. Status: ${esc(RN.w.label('introStatus', dup.status))}.`, { icon: 'info' }); return; }
+    const type = data.engagementType || 'fractional';
     const rec = {
       id: RN.uid('intro'), opId: op.id, status: 'pending', createdAt: RN.now().toISOString(),
-      buyer: { name: signedIn ? me.name : data.name, title: signedIn ? me.title : '', email: signedIn ? me.email : data.email, company },
+      buyer: { name, title: signedIn ? me.title : '', email, company },
       need: data.need,
-      fields: { need: data.need, engagementType: data.engagementType, hoursPerMonth: data.engagementType === 'project' ? '' : data.hoursPerMonth, projectBudget: data.engagementType === 'project' ? +data.projectBudget || null : null, startBy: data.startBy, roleCategory: op.catKey },
+      fields: { need: data.need, engagementType: type, hoursPerMonth: type === 'project' ? '' : data.hoursPerMonth, projectBudget: type === 'project' ? +data.projectBudget || null : null, startBy: data.startBy, roleCategory: op.catKey },
       note: data.note || '',
       thread: [],
     };
     RN.store.update((s) => { s.intros.unshift(rec); }, 'intros');
     // A visitor who asks for an intro becomes their own client (not the demo client) and is signed in
-    if (!signedIn) { RN.shell.setClient({ name: data.name, email: data.email, title: '', company }); RN.store.set('persona', 'buyer'); }
+    if (!signedIn) { RN.shell.setClient({ name, email, title: '', company }); RN.store.set('persona', 'buyer'); }
     RN.track('intro_request', { opId: op.id, buyer: { name: company.name, industry: company.industry, revenueRange: company.revenueRange, employeeRange: company.employeeRange } });
     const sum = intro.summary(rec, true);
     RN.mail(op.name, `New intro request: ${sum.need || 'Fractional ' + op.role}`, `${sum.who}\n${sum.scope}\n\nReply within 72 hours from your Studio. You will see the company and contact once you are introduced.`, 'intro');
-    RN.mail(rec.buyer.email, `We sent your request to ${op.first}`, `${op.name} has 72 hours to reply. We will email you when ${op.first} responds, and our team will set up the call.\n\nTrack it in your workspace.`, 'intro');
+    RN.mail(rec.buyer.email, `${op.first} reads your request today`, `You'll hear back within 72 hours. We will email you when ${op.first} replies, and our team will set up the call.\n\nTrack it in your workspace.`, 'intro');
     RN.ui.closeModal();
     RN.shell.renderHeader();
     RN.ui.modal({
       width: 560,
-      title: `Request sent to ${esc(op.first)}`,
-      sub: 'Here is what happens next.',
+      title: `${esc(op.first)} reads this today.`,
+      sub: 'You’ll hear back within 72 hours.',
       body: `<ol class="stack" style="--gap:14px;padding-left:20px;margin:0">
-          <li><b>${esc(op.first)} replies within 72 hours.</b> <span class="muted">They see your scope and company size, not your name.</span></li>
-          <li><b>Our team qualifies the fit.</b> <span class="muted">If ${esc(op.first)} passes, we suggest two operators with the same fit.</span></li>
-          <li><b>You are introduced by email</b> <span class="muted">and book the first call directly.</span></li>
+          <li><b>${esc(op.first)} says yes or passes.</b> <span class="muted">${esc(op.first)} sees your scope${signedIn ? ' and company size' : ''}, not your name.</span></li>
+          <li><b>We confirm the fit.</b> <span class="muted">If ${esc(op.first)} can’t take it, you get two operators with the same fit.</span></li>
+          <li><b>We introduce you by email.</b> <span class="muted">You book the first call directly.</span></li>
         </ol>
-        ${!signedIn ? `<p class="note info" style="margin-top:18px">${icon('check-circle')}<span>We created a company workspace for ${esc(company.name)}. Your shortlist, compares and requests are saved there.</span></p>` : ''}`,
-      foot: `<button class="btn btn-line" data-act="modal-close">Done</button><button class="btn" data-act="go" data-to="buyer.intros">Track in workspace</button>`,
+        ${!signedIn ? `<p class="note info" style="margin-top:18px">${icon('check-circle')}<span>Your workspace for ${esc(company.name)} is ready. Add your industry and size there for sharper matches.</span></p>` : ''}`,
+      foot: `<button class="btn btn-line" data-act="modal-close">Keep browsing</button><button class="btn" data-act="go" data-to="buyer.intros">Track it in your workspace</button>`,
     });
     if (RN.currentRoute() && RN.currentRoute().view.name !== 'profile') RN.rerender();
   };
