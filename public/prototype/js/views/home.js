@@ -255,10 +255,29 @@
     // One small living graphic per destination: a rate spread with its median, five questions with the gap found,
     // a 30/60/90 plan filling in, and a question getting its answer. Drawn in the panel's fixed dark palette.
     const PREP_ART = [
-      `<svg viewBox="0 0 160 72"><line class="ln" x1="6" y1="64" x2="154" y2="64"/>${[18, 30, 46, 58, 40, 26, 14].map((h, i) => `<rect class="bar${i === 3 ? ' hi' : ''}" x="${14 + i * 20}" y="${64 - h}" width="12" height="${h}" rx="2" style="--i:${i}"/>`).join('')}<line class="med" x1="80" y1="2" x2="80" y2="64"/><rect class="tag" x="88" y="2" width="44" height="16" rx="8"/><text x="110" y="13.5">$240/hr</text></svg>`,
-      `<svg viewBox="0 0 160 72"><line class="ln" x1="16" y1="36" x2="144" y2="36"/>${[16, 48, 80, 112, 144].map((x, i) => i === 3 ? `<circle class="gap-ring" cx="${x}" cy="36" r="14"/><circle class="gap" cx="${x}" cy="36" r="7"/>` : `<circle class="q${i < 3 ? ' on' : ''}" cx="${x}" cy="36" r="7" style="--i:${i}"/>`).join('')}<text class="cap" x="112" y="66">Your gap</text></svg>`,
-      `<svg viewBox="0 0 160 72">${[['30', 8, 1], ['60', 58, .66], ['90', 108, .33]].map(([l, x, f], i) => `<rect class="seg" x="${x}" y="28" width="44" height="12" rx="6"/><rect class="seg-f" x="${x}" y="28" width="44" height="12" rx="6" style="--f:${f};--i:${i}"/><text class="cap" x="${x}" y="58">Day ${l}</text>`).join('')}<circle class="mark" cx="30" cy="34" r="9"/></svg>`,
-      `<svg viewBox="0 0 160 72"><rect class="bub-q" x="6" y="6" width="96" height="26" rx="13"/><rect class="tx" x="18" y="16" width="56" height="6" rx="3"/><rect class="bub-a" x="40" y="40" width="114" height="26" rx="13"/><rect class="tx-a" x="52" y="50" width="78" height="6" rx="3"/><circle class="dot" cx="140" cy="53" r="2.5" style="--i:0"/></svg>`,
+      // Rate spread: a smooth distribution, the middle half shaded, the median marked and labeled
+      `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6FCF97" stop-opacity=".55"/><stop offset="1" stop-color="#6FCF97" stop-opacity="0"/></linearGradient><clipPath id="hpC"><rect x="66" y="0" width="68" height="88"/></clipPath></defs>
+        ${[18, 46, 74].map((y) => `<line class="grid" x1="10" y1="${y}" x2="190" y2="${y}"/>`).join('')}
+        <path class="dist-fill" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70 Z" fill="url(#hpA)"/>
+        <path class="dist-band" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70 Z" clip-path="url(#hpC)"/>
+        <path class="dist-line" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70"/>
+        <line class="axis" x1="10" y1="70" x2="190" y2="70"/>
+        <line class="med" x1="100" y1="18" x2="100" y2="70"/><circle class="med-dot" cx="100" cy="18" r="4"/>
+        <g class="tag"><rect x="108" y="6" width="58" height="18" rx="9"/><text x="137" y="18.5">$240/hr</text></g>
+        <text class="tick" x="10" y="84">$150</text><text class="tick" x="100" y="84" text-anchor="middle">median</text><text class="tick" x="190" y="84" text-anchor="end">$350</text></svg>`,
+      // Five questions: a track that fills, checks on the answered ones, the gap found on the fourth
+      `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6FCF97"/><stop offset="1" stop-color="#E9A63D"/></linearGradient></defs>
+        <line class="track" x1="22" y1="40" x2="178" y2="40"/><line class="track-on" x1="22" y1="40" x2="139" y2="40" stroke="url(#hpG)"/>
+        ${[22, 61, 100, 139, 178].map((x, i) => i < 3 ? `<g class="q-on" style="--i:${i}"><circle cx="${x}" cy="40" r="9"/><path d="M${x - 4} 40 l3 3 l5 -6"/></g>` : i === 3 ? `<circle class="gap-ring" cx="${x}" cy="40" r="13"/><circle class="gap" cx="${x}" cy="40" r="9"/><text class="gap-n" x="${x}" y="43.5">4</text>` : `<circle class="q" cx="${x}" cy="40" r="9"/><text class="q-n" x="${x}" y="43.5">5</text>`).join('')}
+        <g class="tag tag-gap"><rect x="104" y="60" width="70" height="18" rx="9"/><text x="139" y="72.5">Gap: pipeline</text></g></svg>`,
+      // 30/60/90: a small Gantt, each phase starting where the last one hands off, with a milestone at the end
+      `<svg viewBox="0 0 200 88">${[46, 90, 134].map((x) => `<line class="grid" x1="${x}" y1="6" x2="${x}" y2="70"/>`).join('')}
+        ${[['Diagnose', 8, 70, 14], ['Build', 46, 74, 34], ['Hand over', 90, 82, 54]].map(([l, x, w, y], i) => `<rect class="gantt-bg" x="${x}" y="${y}" width="${w}" height="12" rx="6"/><rect class="gantt" x="${x}" y="${y}" width="${w}" height="12" rx="6" style="--i:${i}"/><text class="gantt-l" x="${x + 7}" y="${y + 8.6}">${l}</text>`).join('')}
+        <path class="mile" d="M176 60 l6 6 l-6 6 l-6 -6 Z"/>
+        <text class="tick" x="46" y="84" text-anchor="middle">Day 30</text><text class="tick" x="90" y="84" text-anchor="middle">Day 60</text><text class="tick" x="134" y="84" text-anchor="middle">Day 90</text></svg>`,
+      // A question and its straight answer: two message cards, the answer marked with a check
+      `<svg viewBox="0 0 200 88"><g class="msg-q"><rect x="8" y="8" width="118" height="30" rx="10"/><circle cx="22" cy="23" r="6"/><rect class="ln" x="34" y="17" width="72" height="5" rx="2.5"/><rect class="ln" x="34" y="26" width="48" height="5" rx="2.5"/></g>
+        <g class="msg-a"><rect x="58" y="46" width="134" height="34" rx="10"/><rect class="bar-a" x="58" y="46" width="4" height="34" rx="2"/><rect class="ln-a" x="72" y="55" width="94" height="5" rx="2.5"/><rect class="ln-a" x="72" y="65" width="66" height="5" rx="2.5"/><circle class="ok" cx="176" cy="63" r="7"/><path class="ok-t" d="M172.5 63 l2.5 2.5 l4.5 -5"/></g></svg>`,
     ];
     const prep = [
       ['chart', 'Price a role', 'Rate Index medians and a monthly budget estimate', 'href="#rates"'],
