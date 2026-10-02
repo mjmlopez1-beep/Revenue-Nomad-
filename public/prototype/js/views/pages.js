@@ -162,32 +162,37 @@
     const hind = R.hindsight;
     const fvf = R.fracVsFull;
     const ops = RN.model.ops;
-    const verified = ops.reduce((a, o) => a + o.tags.filter((t) => t.tier !== 'claimed').length, 0);
     const lib = RN.fields.fitTags.options.length;
     const cats = RN.fields.roleCategory.options.length;
     const trend = market().rateIndex.trend;
     const eng = (matt ? matt.engagements.slice() : []).sort((a, b) => String(a.start).localeCompare(String(b.start)));
-    const yr = (e) => { const a = String(e.start).slice(0, 4), b = String(e.end || '').slice(0, 4); return !b || a === b ? a : `${a} to ${b}`; };
+    const yr = (e) => { const a = String(e.start).slice(0, 4), b = String(e.end || '').slice(0, 4); return !b || a === b ? a : `${a}–${b}`; };
+    const smart = (t) => esc(RN.fmt.smart(t));
+    const keep = (t) => smart(t).replace(/[^\s<>]+-[^\s<>]+/g, (w) => `<span class="nowrap">${w}</span>`);
 
-    // Bars drawn to scale from the research figures ("$12,500" or "68%")
+    // Bars drawn to scale from the research figures ("$12,500" or "68%"); the highlighted row carries the point
     const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
-    const bars = (rows) => { const max = Math.max(...rows.map((r) => num(r[1]))) || 1; return `<div class="ab-bars">${rows.map(([l, v, hi]) => `<div class="ab-bar${hi ? ' is-hi' : ''}"><span class="ab-bar-l">${esc(l)}</span><span class="ab-bar-t"><i style="--w:${Math.round((num(v) / max) * 100)}%"></i></span><b>${esc(v)}</b></div>`).join('')}</div>`; };
+    const bars = (rows, max) => { max = max || Math.max(...rows.map((r) => num(r[1]))) || 1; return `<div class="ab-bars">${rows.map(([l, v, hi]) => `<div class="ab-bar${hi ? ' is-hi' : ''}"><span class="ab-bar-l">${keep(l)}</span><span class="ab-bar-t"><i style="--w:${Math.round((num(v) / max) * 100)}%"></i></span><b class="num">${esc(v)}</b></div>`).join('')}</div>`; };
+    const pct = Math.round((num(fvf[0][1]) / num(fvf[1][1])) * 100);
+    const fitFirst = hind[0], brand = hind[hind.length - 1];
+    const times = (num(fitFirst[2]) / num(brand[2])).toFixed(1);
     const fame = ['Big logo on the resume', 'Impressive title', 'A friend’s referral'];
     const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Culture fit', 'Proof a company confirmed'];
+    const glance = `<dl class="ab-stats" aria-label="Revenue Nomad at a glance">
+        <div class="ab-stat is-forest"><dt>Operators in the network, each reviewed by our team</dt><dd class="num">350<span class="u-plus">+</span></dd></div>
+        <div class="ab-stat is-leaf"><dt>Fees for companies. You pay the operator’s rate.</dt><dd class="num">$0</dd></div>
+        <div class="ab-stat is-gold"><dt>Reply window on every intro request</dt><dd class="num">72<span class="u">hrs</span></dd></div>
+        <div class="ab-stat is-night"><dt>Founded by operators who still do the work</dt><dd class="num">2023</dd></div>
+      </dl>`;
 
     return `
     ${hero({
       eyebrow: 'About Revenue Nomad',
       h: 'Built by operators who got tired of watching good companies <span class="serif">hire the wrong person.</span>',
-      lede: 'The open network for fractional go-to-market leaders. Run by people who still do the work.',
+      lede: `The open network for fractional <span class="nowrap">go-to-market</span> leaders, matched on fit and backed by proof a company confirmed.`,
       actions: `<a class="btn btn-lg" href="#browse">Browse operators${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#how">How it works</a>`,
+      aside: glance,
     })}
-    <section class="wrap ab-stats" aria-label="Revenue Nomad at a glance">
-      <div class="ab-stat is-forest"><b class="num">${RN.fmt.int(ops.length)}</b><span>Open profiles</span></div>
-      <div class="ab-stat is-leaf"><b class="num">${RN.fmt.int(verified)}</b><span>Focus areas a company verified</span></div>
-      <div class="ab-stat is-gold"><b class="num">$0</b><span>Fees for companies</span></div>
-      <div class="ab-stat is-night"><b class="num">2023</b><span>Founded</span></div>
-    </section>
 
     <section class="section ab-why">
       <div class="wrap ab-why-in">
@@ -196,8 +201,9 @@
           <h2 class="h2">The problem was always <span class="serif">fit.</span></h2>
           <p class="ab-line">Great leaders fail in the wrong business.</p>
           <p class="ab-line">A $500M company’s CRO rarely fits a $30M one.</p>
+          <p class="ab-line is-answer">So we match on fit, and show you the proof before you talk to anyone.</p>
         </div>
-        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Hired on fit: same stage, same deal size, same motion, culture fit, proof a company confirmed.">
+        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Six months, nothing changed. Hired on fit: same stage, same deal size, same motion, culture fit, proof a company confirmed. Results in the first quarter.">
           <div class="ab-vs-col is-fame"><span class="ab-vs-h">Hired on fame</span><ul>${fame.map((x) => `<li>${icon('x')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">6 months, nothing changed</span></div>
           <div class="ab-vs-col is-fit"><span class="ab-vs-h">Hired on fit</span><ul>${fit.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">Results in the first quarter</span></div>
         </div>
@@ -207,17 +213,24 @@
 
     <section class="section ab-pov-sec">
       <div class="wrap">
-        ${shead('What we believe', 'Two beliefs behind every screen.')}
+        ${shead('What we believe', 'Two beliefs behind every introduction.')}
         <div class="ab-pov">
           <article class="ab-pov-card is-tint">
             <h3 class="h3">Fractional is a strategy, not a stopgap.</h3>
+            <p class="ab-pov-p">Senior leadership for about ${pct}% of the monthly cost of a full-time hire, and far less risk if it is not working.</p>
             ${bars([['Fractional, per month', fvf[0][1], true], ['Full-time, per month', fvf[1][1]]])}
+            <dl class="ab-cmp">
+              <div class="ab-cmp-h" aria-hidden="true"><span></span><span>Fractional</span><span>Full-time</span></div>
+              <div><dt>Time to start</dt><dd class="is-hi">${keep(fvf[0][2])}</dd><dd>${keep(fvf[1][2])}</dd></div>
+              <div><dt>If it isn’t working</dt><dd class="is-hi">${keep(fvf[0][3])}</dd><dd>${keep(fvf[1][3])}</dd></div>
+            </dl>
             <div class="ab-pov-foot">${illus('Illustrative research')}<a class="act" href="#rates">Compare the cost${icon('arrow')}</a></div>
           </article>
           <article class="ab-pov-card is-gold">
             <h3 class="h3">Fit and proof beat fame.</h3>
-            ${bars([[hind[0][0], hind[0][2], true], [hind[hind.length - 1][0], hind[hind.length - 1][2]]])}
-            <span class="ab-pov-k">Share of hiring companies ranking it top three</span>
+            <p class="ab-pov-p">Looking back on a hire, companies ranked relevant experience ${times}<span class="u-x">×</span> more often than brand-name employers.</p>
+            ${bars(hind.map((h, i) => [h[0], h[2], i === 0]), 100)}
+            <span class="ab-pov-k">Share of hiring companies ranking it in their top three, looking back</span>
             <div class="ab-pov-foot">${illus('Illustrative research')}<a class="act" href="#levels">How we verify proof${icon('arrow')}</a></div>
           </article>
         </div>
@@ -226,11 +239,12 @@
 
     <section class="section night pg-core">
       <div class="wrap">
-        ${shead('What companies rate', 'Four scores after every engagement.')}
+        ${shead('What companies rate', 'Four scores after every engagement.', 'Only the company that hired them can give these. Together they move the Reputation Index you see on every profile.')}
         <div class="pg-core-grid ab-core">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
             <span class="pg-core-l" aria-hidden="true">${esc(d.v)}</span>
             <h3 class="h4">${esc(d.l)}</h3>
-            <p class="pg-core-q"><span>Companies answer</span>${esc(d.q)}</p>
+            <p class="ab-core-d">${smart(CORE_COPY[d.v] || '')}</p>
+            <p class="pg-core-q"><span>Companies answer</span>${smart(d.q)}</p>
           </article>`).join('')}</div>
         <a class="act pg-core-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a>
       </div>
@@ -240,9 +254,9 @@
       <div class="wrap">
         ${shead('How we are different', 'Three things most talent firms won’t do.')}
         <ul class="ab-diff">
-          <li class="is-forest"><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p>No login. No sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
-          <li class="is-leaf"><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p>Only companies can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
-          <li class="is-gold"><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p>Rates, reports and ${RN.fmt.int(lib)} focus areas. Free.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
+          <li class="is-forest"><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p class="ab-diff-was">A shortlist, after a sales call</p><p>Every profile is open. No login, no sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
+          <li class="is-leaf"><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p>Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
+          <li class="is-gold"><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p>Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
         </ul>
       </div>
     </section>
@@ -255,7 +269,7 @@
           <blockquote class="pg-founder-q">I still take fractional engagements, scored by the same rules as everyone here.</blockquote>
           <p class="ab-line">You get someone who has sat in your seat before.</p>
           <div class="pg-sign"><b>Matt Lopez</b><span>Founder and CEO</span>${matt ? `<span class="pg-sign-ris">${RN.ui.ris(matt)}</span>` : ''}</div>
-          ${eng.length ? `<div class="pg-track-wrap"><span class="label">Engagements include</span><ol class="pg-track">${eng.map((e) => `<li><span class="pg-track-y">${esc(yr(e))}</span><b>${esc(e.company)}</b><span>${esc(e.role)}</span></li>`).join('')}</ol></div>` : ''}
+          ${eng.length ? `<div class="pg-track-wrap"><span class="label">Engagements include</span><ol class="pg-track">${eng.map((e) => `<li><span class="pg-track-y tnum">${esc(yr(e))}</span><b>${esc(e.company)}</b><span>${esc(e.role)}</span></li>`).join('')}</ol></div>` : ''}
           <div class="row pg-founder-cta">${matt ? `<a class="act" href="#op.${esc(matt.slug)}">See Matt’s profile${icon('arrow')}</a>` : ''}<button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call with the team</button></div>
         </div>
       </div>
@@ -268,7 +282,7 @@
           <div><dt>Launched</dt><dd>Sept 2023<span>Open platform Aug 2026</span></dd></div>
           <div><dt>Network</dt><dd>350+ operators<span>${cats} GTM disciplines, each reviewed</span></dd></div>
           <div><dt>Who we serve</dt><dd>B2B companies<span>First sales hire to full transformation</span></dd></div>
-          <div><dt>Median rate</dt><dd>$${esc(trend[trend.length - 1].v)}/hr<span>${esc(trend[trend.length - 1].l)} ${illus()}</span></dd></div>
+          <div><dt>Median rate</dt><dd class="tnum"><b class="ab-fv">$${esc(trend[trend.length - 1].v)}<small>/hr</small></b><span>Rate Index, ${esc(String(trend[trend.length - 1].l).replace(/ (\d\d)$/, ' 20$1'))} ${illus()}</span></dd></div>
           <div class="ab-facts-reach"><dt>Reach a person</dt><dd><a class="link" href="mailto:${EMAIL}">${EMAIL}</a><span>Reply within one business day</span>${PG.phone()}</dd></div>
         </dl>
       </div>
