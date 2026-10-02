@@ -832,14 +832,18 @@
     if (persona() === 'buyer') { const b = RN.personas.buyer; return { name: b.name, email: b.email, company: b.company.name }; }
     return null;
   }
-  PG.book = function () {
+  /* o.intro: an intro request this call is for (company workspace). The call is the fit call with our team that comes
+     before the introduction; the booked time is stored on the intro (intro.rnCall) so its card shows it. */
+  PG.book = function (o) {
+    o = o || {};
+    PG._bookFor = o.intro || null;
     const k = knownContact();
     const days = [];
     slots(6).forEach((t) => { const key = t.toDateString(); let g = days.find((x) => x.key === key); if (!g) { g = { key, list: [] }; days.push(g); } g.list.push(t); });
     RN.ui.modal({
       width: 560,
-      title: 'Book a 30-minute call',
-      sub: 'With Matt Lopez or someone on our team who has sat in your seat. Pick a time and we send the invite.',
+      title: o.intro ? 'Book your call with Revenue Nomad' : 'Book a 30-minute call',
+      sub: o.intro ? `${esc(o.opFirst || 'The operator')} is interested. On a 30-minute call our team confirms the scope and fit with you, then introduces you both by email.` : 'With Matt Lopez or someone on our team who has sat in your seat. Pick a time and we send the invite.',
       body: `<div class="stack pg-book" style="--gap:20px">
         ${k ? `<p class="note info">${icon('user')}<span>Booking as <b>${esc(k.name)}</b>, ${esc(k.email)}</span></p>`
           : `<div class="grid g-2" style="--gap:14px">${RN.w.field('fullName', '', { name: 'bk-name', id: 'pg-bk-name', label: 'Your name', compact: true })}${RN.w.field('email', '', { name: 'bk-email', id: 'pg-bk-email', compact: true })}</div>`}
@@ -849,7 +853,12 @@
       </div>`,
     });
   };
-  RN.actions['pg-book'] = () => PG.book();
+  RN.actions['pg-book'] = (el) => {
+    const id = el && el.dataset && el.dataset.intro;
+    const i = id && (RN.store.state.intros || []).find((x) => x.id === id);
+    const op = i && RN.model.byId(i.opId);
+    PG.book(i ? { intro: id, opFirst: op ? op.first : '' } : {});
+  };
   RN.actions['pg-slot'] = (el) => {
     const m = el.closest('.modal') || document;
     let k = knownContact();
@@ -876,6 +885,12 @@
     RN.track('contact_submit', { kind: 'call', source: from });
     RN.ui.closeModal();
     RN.ui.toast(`Call booked for ${esc(label)}`, { icon: 'calendar' });
+    const forIntro = PG._bookFor; PG._bookFor = null;
+    if (forIntro) {
+      RN.store.update((s) => { const i = (s.intros || []).find((x) => x.id === forIntro); if (i) { i.rnCall = { ts: el.dataset.ts, label }; (i.thread = i.thread || []).push({ from: 'Revenue Nomad', text: `Fit call booked for ${label}`, ts: RN.now().toISOString() }); } }, 'intros');
+      RN.rerender();
+      return;
+    }
     if (onTalk()) RN.rerender();
   };
 

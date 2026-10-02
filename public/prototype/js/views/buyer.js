@@ -325,7 +325,17 @@
     myIntros().forEach((i) => {
       const op = RN.model.byId(i.opId);
       if (!op || hireForIntro(i)) return;
-      if (i.status === 'introduced') {
+      if (i.status === 'interested' && !i.rnCall) {
+        // The operator said yes: the next step is the company's fit call with our team, booked here
+        const ts = stepDate(i, 'interested') || lastTs(i);
+        add({
+          kind: 'bookcall', tier: 1, sort: -(RN.now() - new Date(ts)), tab: 'talent', icon: 'calendar', pill: waitPill(daysSince(ts), 2),
+          ctx: catTag(op.catKey), title: `${op.first} is interested. Book your call with Revenue Nomad`,
+          body: `A 30-minute call with our team to confirm the scope and fit. Then we introduce you to ${op.first} by email.`,
+          people: [{ op, sub: personSub(op) }],
+          primary: { label: 'Book your call', act: 'pg-book', attrs: `data-intro="${esc(i.id)}"` },
+        });
+      } else if (i.status === 'introduced') {
         const ts = stepDate(i, 'introduced') || lastTs(i);
         add({
           kind: 'introduced', tier: 1, sort: -(RN.now() - new Date(ts)), tab: 'talent', icon: 'mail', pill: waitPill(daysSince(ts), 3),
@@ -535,7 +545,7 @@
       return {
         team: n(['overdue', 'ending', 'review', 'checkin']) + items.filter((i) => i.checkinMerged).length,
         engagements: n(['responses', 'draft']),
-        talent: n(['introduced', 'confirm']),
+        talent: n(['bookcall', 'introduced', 'confirm']),
       };
     });
   }
@@ -550,7 +560,9 @@
         if (i.status === 'pending') {
           const h = hoursLeft(i);
           out.push({ icon: 'hourglass', ts: i.createdAt, html: h > 0 ? `<b>${esc(op.name)}</b> has ${h} hours left to reply to your intro request.` : `<b>${esc(op.first)}</b> has not replied in 72 hours. Our team is following up today.` });
-        } else if (i.status === 'interested' || i.status === 'rn_qualified') {
+        } else if (i.status === 'interested' && i.rnCall) {
+          out.push({ icon: 'calendar', ts: lastTs(i), html: `Your call with Revenue Nomad about <b>${esc(op.first)}</b> is booked for ${esc(i.rnCall.label)}.` });
+        } else if (i.status === 'rn_qualified') {
           out.push({ icon: 'handshake', ts: lastTs(i), html: `Our team introduces you to <b>${esc(op.first)}</b> within one business day.` });
         } else if (i.status === 'declined' && i.closedBy !== 'client' && daysSince(lastTs(i)) <= 14) {
           out.push({ icon: 'refresh', ts: lastTs(i), html: `<b>${esc(op.first)}</b> can’t take this one. We picked two operators with the same fit.`, link: { href: 'buyer.intros', label: 'See alternatives' } });
@@ -1380,8 +1392,11 @@
       next = h > 0 ? `${f1} has <b>${h} hours</b> left to reply. ${f1} sees your scope and company size, not your name. If ${f1} passes, we suggest two operators with the same fit.` : `${f1} has not replied in 72 hours. Our team is following up and will suggest two operators with the same fit today.`;
       actions = `<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'interested') {
-      next = `<b>${esc(op.name)} is interested.</b> Our team will introduce you within one business day.`;
-      actions = `<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
+      const call = i.rnCall;
+      next = call
+        ? `<b>Your call with Revenue Nomad is booked for ${esc(call.label)}.</b> We confirm the scope and fit with you, then introduce you to ${esc(op.first)} by email.`
+        : `<b>${esc(op.name)} is interested.</b> <span class="bw-next-step">Next step: a 30-minute call with Revenue Nomad.</span> We confirm the scope and fit with you, then introduce you to ${esc(op.first)} by email.`;
+      actions = `${call ? `<button type="button" class="btn btn-line btn-sm" data-act="pg-book" data-intro="${esc(i.id)}">${icon('calendar')}Change the time</button>` : `<button type="button" class="btn btn-sm" data-act="pg-book" data-intro="${esc(i.id)}">${icon('calendar')}Book your call with Revenue Nomad</button>`}<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;
     } else if (i.status === 'rn_qualified') {
       next = `<b>Our team confirmed the fit.</b> Your intro email to ${esc(op.first)} goes out within one business day.`;
       actions = `<button type="button" class="act muted bw-withdraw" data-act="bw-withdraw" data-id="${esc(i.id)}">Withdraw request</button>${simBtn}`;

@@ -578,3 +578,5 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
 
 /* People chips in the Now card: separators never strand at a line end */
 .bw-person .tiny { overflow-wrap: normal; }
+/* The step after an operator's yes reads as the next step, not a footnote */
+.bw-intro-next .bw-next-step { font-weight: 700; color: var(--accent); }
