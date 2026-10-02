@@ -249,7 +249,7 @@
         <div class="hm-ruled hm-needs">${cells}</div>
         <nav class="hm-prep" aria-labelledby="hm-prep-t">
           <h3 class="label" id="hm-prep-t">Not ready to hire yet</h3>
-          <ul class="hm-prep-list">${prep.map((p) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-ic" aria-hidden="true">${icon(p[0])}</span><span class="hm-prep-b"><b>${esc(p[1])}</b><span>${esc(p[2])}</span></span>${icon('arrow')}</a></li>`).join('')}</ul>
+          <ul class="hm-prep-list">${prep.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><span class="hm-prep-b"><b>${esc(p[1])}</b><span>${esc(p[2])}</span></span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
         </nav>
       </div>
     </section>`;
