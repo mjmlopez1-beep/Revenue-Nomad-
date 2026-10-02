@@ -141,7 +141,7 @@
   function hero(anim) {
     const cats = RN.fields.roleCategory.options;
     const hire = hireAgain();
-    const meetDays = +((RN.data.market && RN.data.market.network && RN.data.market.network.introToMeetingDays) || 5);
+    const meetDays = +((RN.data.market && RN.data.market.network && RN.data.market.network.introToMeetingDays) || 2); // founder figure, Oct 2, 2026
     return `<section class="hm-hero night ${anim ? 'hm-anim' : ''}" aria-labelledby="hm-h1">
       <img class="hm-hero-img" src="assets/brand/hero-highfive.webp" alt="" fetchpriority="high">
       <div class="hm-hero-shade" aria-hidden="true"></div>
@@ -170,7 +170,7 @@
           </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>Days from intro to first meeting<small>Typical, from the first reply to a booked call ${RN.ui.illus('Illustrative', 'Illustrative figure: a typical time from intro request to first meeting, not yet measured from network data.')}</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span></dd></div>
+          <div><dt>From intro to first meeting<small>Typical, from the first reply to a booked call</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span><span class="u">${meetDays === 1 ? 'day' : 'days'}</span></dd></div>
           <div><dt>Would hire again${hire.n ? `<small>${esc(RN.fmt.plural(hire.n, 'company review'))} on the live network</small>` : ''}</dt><dd class="num"><span data-count="${hire.pct}">${hire.pct}</span><span class="u u-sym">%</span></dd></div>
           <div><dt>Typical first reply to an intro request<small>Every request answered within 72 hours</small></dt><dd class="num"><span class="u-lt">&lt;</span>2<span class="u">hrs</span></dd></div>
         </dl>
