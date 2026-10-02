@@ -15,9 +15,33 @@
 (function () {
   'use strict';
   const RN = window.RN;
-  const V = RN.data.vectors;
   const VS = (RN.vsearch = RN.vsearch || {});
-  const DIM = V.dim;
+  // The vector index (js/data/vectors.js, about 1.9 MB) is not part of the page: it loads on the first search,
+  // or when the browser is idle a few seconds after load, so Home and every other page stay light.
+  let V = RN.data.vectors || null;
+  const DIM = 384;
+  let loading = null;
+  VS.isReady = () => !!(V || (V = RN.data.vectors || null));
+  VS.ready = function () {
+    if (VS.isReady()) return Promise.resolve(true);
+    if (loading) return loading;
+    // Published next to the page as JSON (fetched: the artifact host serves files but does not run extra scripts);
+    // opened from disk, fetch is not allowed, so fall back to the script version
+    const viaScript = () => new Promise((resolve) => {
+      const s = document.createElement('script');
+      s.src = 'js/data/vectors.js';
+      s.async = true;
+      s.onload = () => { V = RN.data.vectors || null; resolve(!!V); };
+      s.onerror = () => { loading = null; resolve(false); };
+      document.head.appendChild(s);
+    });
+    loading = (location.protocol === 'file:' ? viaScript() : fetch('js/data/vectors.json').then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then((d) => { RN.data.vectors = V = d; return true; }).catch(viaScript));
+    return loading;
+  };
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1));
+  window.addEventListener('load', () => setTimeout(() => idle(() => VS.ready()), 3000));
+  document.addEventListener('focusin', (e) => { if (e.target && e.target.matches && e.target.matches('input[type="search"], #hm-q, #br-q')) VS.ready(); });
   const NEAR = 0.8, CLOSE = 0.62; // focus-area cosine thresholds: meets the need / is nearby
   const W = { needs: 0.5, sem: 0.2, facts: 0.15, ris: 0.15 };
 

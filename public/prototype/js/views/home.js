@@ -119,9 +119,23 @@
       <button type="button" class="act hm-sel-clear" data-act="hm-tags-clear">Clear</button>`;
   }
 
+  /* Buyer outcomes for the hero. Would hire again is computed from company reviews on real (non-sample)
+     profiles. Intro to first meeting has no network data yet, so it reads from the market file when present
+     and otherwise uses a typical figure, labelled illustrative either way. */
+  function hireAgain() {
+    const rs = RN.model.ops.filter((o) => !o.sample).flatMap((o) => o.reviews || []).filter((r) => typeof r.hireAgain === 'boolean');
+    return { n: rs.length, pct: rs.length ? Math.round(rs.filter((r) => r.hireAgain === true).length / rs.length * 100) : 0 };
+  }
+  // Company logos directly under the search box. Names without a logo file render as a clean wordmark.
+  const LOGO_LINE = [['skaled', 'Skaled'], ['weave', 'Weave'], ['diligent', 'Diligent']];
+  function logoLine() {
+    return `<div class="hm-logos"><span class="label">Trusted by teams at</span><ul>${LOGO_LINE.map(([k, name]) => `<li>${(RN.data.logos || {})[k] ? RN.ui.logo(k, { h: 22, name }) : `<span class="hm-wm">${esc(name)}</span>`}</li>`).join('')}</ul></div>`;
+  }
+
   function hero(anim) {
-    const n = liveOps().length;
     const cats = RN.fields.roleCategory.options;
+    const hire = hireAgain();
+    const meetDays = +((RN.data.market && RN.data.market.network && RN.data.market.network.introToMeetingDays) || 5);
     return `<section class="hm-hero night ${anim ? 'hm-anim' : ''}" aria-labelledby="hm-h1">
       <img class="hm-hero-img" src="assets/brand/hero-highfive.webp" alt="" fetchpriority="high">
       <div class="hm-hero-shade" aria-hidden="true"></div>
@@ -133,15 +147,16 @@
             <span class="hm-ln"><span>who already solved</span></span>
             <span class="hm-ln"><span class="serif">your revenue problem.</span></span>
           </h1>
-          <p class="hm-sub">Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse.</p>
+          <p class="hm-sub">Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse and no fees for companies.</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>
             <div class="hm-search-acts">
               <button type="button" class="hm-fa" data-act="hm-tags-open" aria-haspopup="dialog">${icon('plus')}<span>Focus areas</span><b class="hm-fa-n" ${S.tags.length ? '' : 'hidden'}>${S.tags.length}</b></button>
-              <button type="submit" class="btn btn-lg hm-go-btn">Browse operators</button>
+              <button type="submit" class="btn btn-lg hm-go-btn">Show my matches</button>
             </div>
           </form>
+          ${logoLine()}
           <div class="hm-sel" ${S.tags.length ? '' : 'hidden'}>${selHtml()}</div>
           <div class="hm-cats">
             <span class="label">Or browse by role</span>
@@ -149,8 +164,8 @@
           </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>Operators on the live network<small>${esc(RN.fmt.int(n))} in this prototype</small></dt><dd class="num">${esc(RN.data.market.network.operators)}</dd></div>
-          <div><dt>GTM disciplines</dt><dd class="num" data-count="${cats.length}">${cats.length}</dd></div>
+          <div><dt>Days from intro to first meeting<small>Typical, from the 72-hour reply to a booked call ${RN.ui.illus('Illustrative', 'Illustrative figure: a typical time from intro request to first meeting, not yet measured from network data.')}</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span></dd></div>
+          <div><dt>Would hire again${hire.n ? `<small>${esc(RN.fmt.plural(hire.n, 'company review'))} on the live network</small>` : ''}</dt><dd class="num"><span data-count="${hire.pct}">${hire.pct}</span>%</dd></div>
           <div><dt>Reply window on every intro request</dt><dd class="num">72 hrs</dd></div>
         </dl>
       </div>
@@ -567,7 +582,7 @@
     return `<form class="hm-brief-form" data-submit="hm-brief" novalidate>
         <label class="sr-only" for="hm-brief-email">${esc(RN.fields.email.label)}</label>
         ${input}
-        <button type="submit" class="btn">Subscribe</button>
+        <button type="submit" class="btn">Get the quarterly Pulse</button>
       </form>
       <p class="tiny muted">One email a quarter. Unsubscribe in one click.</p>`;
   }

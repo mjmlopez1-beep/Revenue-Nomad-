@@ -190,7 +190,7 @@
     return `<form class="ins-news-form" data-submit="ins-subscribe" data-src="${esc(src)}" data-ins-news novalidate>
       <label class="sr-only" for="ins-news-${esc(src)}">${esc(F.email.label)}</label>
       ${RN.w.control('email', pre, { name: 'email', id: 'ins-news-' + src })}
-      <button class="btn btn-leaf" type="submit">Subscribe</button>
+      <button class="btn btn-leaf" type="submit">Get the quarterly Pulse</button>
     </form>
     <p class="ins-news-fine">One email a quarter. Unsubscribe in one click.</p>`;
   }

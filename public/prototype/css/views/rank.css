@@ -217,3 +217,29 @@
 .in-search-n li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .in-search-n b { font-family: var(--f-display); font-weight: 700; font-size: var(--t-14); color: var(--ink); }
 .in-search-n span:last-child { font-size: var(--t-12); color: var(--mute); }
+
+/* One-line why on the top three ranked rows */
+.rk-why { grid-column: 2 / -1; display: flex; align-items: center; gap: 8px; margin: -2px 0 0; font-size: var(--t-13); color: var(--ink-2); min-width: 0; }
+.rk-why svg { flex: none; width: 15px; height: 15px; color: var(--good); }
+.rk-why span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-why b { font-weight: 700; color: var(--ink); }
+@media (max-width: 900px) { .rk-why { grid-column: 2 / -1; grid-row: auto; } .rk-why span { white-space: normal; } }
+
+/* Browse phone action bar (same pattern as the profile's) */
+.br-mbar { display: none; }
+@media (max-width: 640px) {
+  .br-page { padding-bottom: 76px; }
+  .br-mbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--card) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line-2); box-shadow: 0 -8px 24px rgba(0, 0, 0, .08); }
+  body:has(.dock) .br-mbar { padding-left: 68px; }
+  .br-mbar .btn { width: 100%; --h: 46px; padding: 0 12px; }
+  .br-mbar > span { display: block; }
+}
+
+/* While the search index loads */
+.rk.is-loading .rk-skel, .rk-row-skel { background: linear-gradient(90deg, var(--paper-2) 0%, var(--card) 50%, var(--paper-2) 100%); background-size: 200% 100%; animation: rkShim 1.2s linear infinite; }
+.rk.is-loading .rk-skel { height: 64px; border-radius: 12px; }
+.rk-row-skel { height: 72px; border-radius: 14px; border: 1px solid var(--line-2); }
+@keyframes rkShim { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .rk.is-loading .rk-skel, .rk-row-skel { animation: none; } }

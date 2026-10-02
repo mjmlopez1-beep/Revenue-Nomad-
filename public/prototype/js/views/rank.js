@@ -53,8 +53,28 @@
       ${client ? `<button type="button" class="rk-act is-meet" data-act="rk-meet" data-id="${esc(op.id)}" title="Ask to meet ${esc(op.first)}">${icon('handshake')}<span>Meet</span></button>` : ''}
     </span>`;
   }
+  // Top rows only: the matched engagement, in words. A need the operator proved, tied to the company whose review
+  // confirmed it and that engagement; else their closest engagement; else the focus area that matched.
+  function why(r) {
+    const op = r.op;
+    const hits = r.meets.filter((m) => m.status === 'proven' || m.status === 'claimed');
+    const engFor = (co) => (op.engagements || []).find((e) => String(e.company).toLowerCase() === String(co).toLowerCase());
+    for (const m of hits) {
+      const rv = (op.reviews || []).find((x) => (x.tags || []).some((t) => String(t).toLowerCase() === String(m.via).toLowerCase()));
+      if (rv) {
+        const e = engFor(rv.company);
+        return `${icon('check-circle')}<span><b>${esc(m.need.label)}</b> at ${esc(rv.company)}${e ? ` · ${esc(e.role)}${e.months ? ', ' + e.months + ' months' : ''}` : ''}${rv.reviewer ? `, confirmed by ${esc(rv.reviewer.split(' ')[0])}` : ''}</span>`;
+      }
+    }
+    const e = (op.engagements || [])[0];
+    if (hits.length && e) return `${icon('briefcase')}<span><b>${esc(hits[0].need.label)}</b>: ${esc(e.role)} at ${esc(e.company)}${e.months ? ', ' + e.months + ' months' : ''}</span>`;
+    if (e) return `${icon('briefcase')}<span>Closest: ${esc(e.role)} at ${esc(e.company)}${e.months ? ', ' + e.months + ' months' : ''}</span>`;
+    if (hits.length) return `${icon('target')}<span><b>${esc(hits[0].need.label)}</b>: ${esc(hits[0].via)} on their profile</span>`;
+    return '';
+  }
   function row(r, i) {
     const op = r.op, h = r.hist;
+    const w = i < 3 ? why(r) : '';
     return `<li class="rk-row${i === 0 ? ' is-first' : ''}${h && h.k === 'declined' ? ' is-dim' : ''}" data-id="${esc(op.id)}" style="--i:${Math.min(i, 14)}">
       <a class="rk-link" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}" aria-label="${esc(op.name)}, ${r.match}% match${h ? ', ' + esc(h.l) : ''}"></a>
       <span class="rk-n" aria-hidden="true">${i + 1}</span>
@@ -64,6 +84,7 @@
       ${side(op)}
       ${ring(r.match, i === 0)}
       ${acts(op)}
+      ${w ? `<p class="rk-why">${w}</p>` : ''}
     </li>`;
   }
 
@@ -108,13 +129,18 @@
     if (FM) { res.rows.forEach((r) => { r.hist = FM.history(r.op.id); }); res.rows.sort((a, b) => (b.score + (b.hist ? b.hist.bonus : 0)) - (a.score + (a.hist ? a.hist.bonus : 0))); }
     return res;
   }
-  RK.rows = (text, pool) => compute(text, pool).rows;
+  RK.rows = (text, pool) => (RN.vsearch.isReady() ? compute(text, pool).rows : (RN.vsearch.ready().then((ok) => { if (ok && RN.browse && RN.browse.refresh) RN.browse.refresh({ noTrack: true }); }), []));
   // The one-line reason on a card: the needs this person can do, else how close they are to the words
   RK.why = function (r) {
     const can = r.meets.filter((m) => m.status === 'proven' || m.status === 'claimed').map((m) => m.need.label);
     return `${r.match}% match · ` + (can.length ? can.slice(0, 2).join(', ') : 'closest to your words');
   };
   RK.html = function (text, pool) {
+    // The vector index loads on demand; until it lands (well under a second on most connections) show the frame
+    if (!RN.vsearch.isReady()) {
+      RN.vsearch.ready().then((ok) => { if (ok && document.querySelector('.rk.is-loading') && RN.browse && RN.browse.refresh) RN.browse.refresh({ noTrack: true }); });
+      return `<div class="rk is-loading" data-rk-text="${esc(text)}" aria-busy="true"><div class="rk-head"><span class="label">Ranking everyone for your search</span><div class="rk-skel"></div></div><ol class="rk-list">${'<li class="rk-row rk-row-skel"></li>'.repeat(5)}</ol></div>`;
+    }
     const refined = !!RN.vsearch.refined(text);
     const FM = RN.fitme;
     const res = compute(text, pool);
@@ -174,7 +200,7 @@
   }
   RK.mount = function (getPool) {
     const box = document.querySelector('.rk');
-    if (!box) return;
+    if (!box || box.classList.contains('is-loading')) return;
     poolFn = getPool;
     const text = box.dataset.rkText;
     if (RN.fitme) {

@@ -34,6 +34,15 @@ const walk = (dir) => fs.readdirSync(path.join(root, dir)).forEach((f) => {
   files[rel] = path.join(root, rel);
 });
 walk('assets');
+// Loaded on demand by js/data/vsearch.js, so it ships next to the page instead of inside it
+{
+  const src = read('js/data/vectors.js');
+  const json = src.slice(src.indexOf('RN.data.vectors = ') + 'RN.data.vectors = '.length).trim().replace(/;$/, '');
+  JSON.parse(json); // fail the build on a malformed index
+  fs.writeFileSync(path.join(root, 'dist', 'vectors.json'), json);
+  files['js/data/vectors.json'] = path.join(root, 'dist', 'vectors.json');
+  files['js/data/vectors.js'] = path.join(root, 'js/data/vectors.js');
+}
 fs.writeFileSync(path.join(root, 'dist', 'files.json'), JSON.stringify(files, null, 1));
 const kb = (n) => Math.round(n / 1024) + ' KB';
 console.log('dist/artifact.html', kb(Buffer.byteLength(out)), '| media files', Object.keys(files).length);

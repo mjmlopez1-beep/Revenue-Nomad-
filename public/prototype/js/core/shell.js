@@ -93,9 +93,10 @@
 
   /* ---------- Header ---------- */
   const NAV = [
+    // Browse and Talk to us are the two paths for a cold visitor; posting an engagement is a bigger ask, so it comes after Insights
     { key: 'browse', label: 'Browse Talent', to: 'browse' },
-    { key: 'projects', label: 'Post an Engagement', to: 'engagements' },   // view nav key stays 'projects' (D12)
     { key: 'insights', label: 'Insights', to: 'insights' },
+    { key: 'projects', label: 'Post an Engagement', to: 'engagements' },   // view nav key stays 'projects' (D12)
     { key: 'operators', label: 'For Operators', to: 'operators' },
     { key: 'about', label: 'About', to: 'about' },
   ];

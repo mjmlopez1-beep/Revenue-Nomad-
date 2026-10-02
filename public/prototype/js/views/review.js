@@ -193,7 +193,7 @@
         ${body}
         <div class="rv-foot">
           ${step > 1 ? `<button type="button" class="btn btn-line" data-act="rv-back" data-id="${esc(rr.id)}">${icon('arrow-left')}Back</button>` : `<span class="small muted rv-save-note">${icon('check-circle')}Your answers save as you type</span>`}
-          <button type="submit" class="btn ${step === 3 ? 'btn-lg' : ''}">${step === 3 ? 'Submit review' : 'Continue'}${step === 3 ? '' : icon('arrow')}</button>
+          <button type="submit" class="btn ${step === 3 ? 'btn-lg' : ''}">${step === 3 ? 'Publish my review' : 'Continue'}${step === 3 ? '' : icon('arrow')}</button>
         </div>
       </form>
       <p class="rv-fine small muted">${icon('shield')}<span>Reviews publish right away and Revenue Nomad never edits them. ${esc(op.first)} sees your review, not your spend. Spend is used anonymously in the Rate Index.</span></p>

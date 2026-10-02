@@ -320,6 +320,7 @@
       ${cat ? thinBlock(cat) : ''}
       ${cat ? catPlan(cat) : ''}
       ${rolesNav(cat)}
+      <div class="br-mbar" role="region" aria-label="Quick actions"><a class="btn btn-line" href="#talk">${icon('message')}Talk to us</a><span id="br-mbar-save">${mbarSave(c)}</span></div>
     </div>`;
   }
 
@@ -556,6 +557,11 @@
       ? `<button type="button" class="act br-save on" data-act="br-save" aria-label="Saved as ${esc(ex.name)}. Rename or delete">${icon('check')}Saved</button>`
       : `<button type="button" class="act br-save" data-act="br-save">${icon('bookmark')}Save search</button>`;
   }
+  // Phone action bar: the two next steps, always in reach
+  function mbarSave(c) {
+    const ex = isClient() && hasCrit(c) ? findSaved(c) : null;
+    return ex ? `<button type="button" class="btn" data-act="br-save">${icon('check')}Saved</button>` : `<button type="button" class="btn" data-act="br-save" ${hasCrit(c) ? '' : 'disabled'}>${icon('bookmark')}Save search</button>`;
+  }
   function proofSwitch(c) {
     return `<label class="switch br-proof-sw" title="Operators with a company review or a focus area a company confirmed"><input type="checkbox" data-change="br-proof" ${c.filters.verifiedProof ? 'checked' : ''}><i></i><span>${PROOF}</span></label>`;
   }
@@ -564,6 +570,7 @@
     const c = crit();
     const a = document.getElementById('br-saved'); if (a) a.innerHTML = savedRow(c);
     const b = document.getElementById('br-save-slot'); if (b) b.innerHTML = saveBtn(c);
+    const m = document.getElementById('br-mbar-save'); if (m) m.innerHTML = mbarSave(c);
   }
 
   // A rate filter hides operators who don't publish a rate; say how many, with a one-click way back
@@ -681,6 +688,7 @@
     set('br-bar-acts', barBtns(c));
     set('br-saved', savedRow(c));
     set('br-save-slot', saveBtn(c));
+    set('br-mbar-save', mbarSave(c));
     const pc = root.querySelector('.br-proof-sw input'); if (pc) pc.checked = !!c.filters.verifiedProof;
     const shown = st().said || st().q;
     const x = root.querySelector('.br-q-x'); if (x) x.hidden = !shown;

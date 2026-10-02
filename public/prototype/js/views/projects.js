@@ -1312,7 +1312,7 @@
     if (!declined && !done && !['not_a_fit', 'not_selected', 'selected'].includes(r.decision)) {
       const intro = r.decision === 'intro_requested';
       acts = `${intro ? `<button type="button" class="btn btn-sm" data-act="pj-select" data-id="${esc(op.id)}">Select ${esc(op.first)}</button><button type="button" class="btn btn-line btn-sm" data-act="go" data-to="buyer.intros">${icon('message')}Track intro</button>`
-        : `<button type="button" class="btn btn-sm" data-act="pj-intro" data-id="${esc(op.id)}">${icon('handshake')}Request intro</button><button type="button" class="btn btn-line btn-sm" data-act="pj-shortlist" data-id="${esc(op.id)}" aria-pressed="${r.decision === 'shortlisted'}">${icon('bookmark')}${r.decision === 'shortlisted' ? 'Shortlisted' : 'Shortlist'}</button>`}
+        : `<button type="button" class="btn btn-sm" data-act="pj-intro" data-id="${esc(op.id)}">${icon('handshake')}Meet ${esc(op.first)}</button><button type="button" class="btn btn-line btn-sm" data-act="pj-shortlist" data-id="${esc(op.id)}" aria-pressed="${r.decision === 'shortlisted'}">${icon('bookmark')}${r.decision === 'shortlisted' ? 'Shortlisted' : 'Shortlist'}</button>`}
         <button type="button" class="act muted" data-act="pj-notfit" data-id="${esc(op.id)}">Not a fit</button>${intro ? '' : `<button type="button" class="act" data-act="pj-select" data-id="${esc(op.id)}">Select</button>`}`;
     }
     return `<article class="card pj-resp${declined || (dec && ['not_a_fit', 'not_selected'].includes(r.decision)) ? ' is-closed' : ''}${r.decision === 'selected' ? ' is-selected' : ''}" data-op="${esc(op.id)}">

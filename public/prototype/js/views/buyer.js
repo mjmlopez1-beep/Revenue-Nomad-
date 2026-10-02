@@ -1278,7 +1278,7 @@
             <span class="tiny faint" data-saved>${notes[op.id] ? 'Saved. Only you see this.' : 'Only you see this.'}</span></div>
           <div class="bw-sl-row">
             <label class="bw-check"><input type="checkbox" value="${esc(op.id)}" data-change="bw-sel" ${on ? 'checked' : ''}><span>Select to compare</span></label>
-            ${i ? `<a class="bw-sl-intro" href="#buyer.intros" data-act="bw-jump" data-to="bw-intros">${introPill(i)}<span>View intro</span></a>` : `<button type="button" class="btn btn-line btn-sm" data-act="intro-open" data-id="${esc(op.id)}">Request intro</button>`}
+            ${i ? `<a class="bw-sl-intro" href="#buyer.intros" data-act="bw-jump" data-to="bw-intros">${introPill(i)}<span>View intro</span></a>` : `<button type="button" class="btn btn-line btn-sm" data-act="intro-open" data-id="${esc(op.id)}">Meet ${esc(op.first)}</button>`}
           </div>
         </div>`;
         return `<div class="bw-sl ${on ? 'is-sel' : ''}" data-op="${esc(op.id)}">${RN.ui.opCard(op, { why: matchLine(op), meta })}</div>`;

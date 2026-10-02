@@ -115,7 +115,8 @@
   FM.engage = function (why) { if (S.engaged) return false; S.engaged = true; RN.track('search_profile_prompt', { meta: { trigger: why } }); return true; };
   FM.noteSearch = function (text) {
     S.texts.add(String(text).trim().toLowerCase());
-    if (S.texts.size >= 2) FM.engage('second_search');
+    // The first search is the moment of highest intent, and the card is what improves the list: show it right away
+    FM.engage(S.texts.size >= 2 ? 'second_search' : 'first_search');
     if (S.fromProfile) { S.fromProfile = false; FM.engage('back_from_profile'); }
   };
   window.addEventListener('hashchange', () => { if (/^#op\./.test(location.hash)) S.fromProfile = true; });

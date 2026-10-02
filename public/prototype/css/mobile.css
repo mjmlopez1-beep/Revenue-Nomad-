@@ -1,0 +1,26 @@
+/* Mobile and touch layer, loaded last (mobile audit, Oct 2026).
+   1. Fields at 16px on phones, so iOS Safari does not zoom the page when a field is tapped.
+   2. Small text controls (text buttons, info dots, links in rows) get an invisible hit box of about 44px on touch
+      screens. The box is a pseudo-element, so nothing moves on the page.
+   3. A 12px floor for the few labels set at 10 to 11px. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]), select, textarea,
+  .input, .select, .textarea { font-size: 16px !important; }
+}
+
+@media (pointer: coarse), (max-width: 640px) {
+  .act, .tip, .logo, .br-lock, .pj-mini-n, .rs-gl-a, .pf-evlink, .ins-rrow-name, .rs-gap-name, .pf-talk-phone,
+  .adm-op-n, .bw-eng-t, .pf-hire-link, .crumbs a, .link, .ins-tool-go, .pf-tool-v, a.serif-up, summary { position: relative; }
+  .act::after, .logo::after, .br-lock::after, .pj-mini-n::after, .rs-gl-a::after, .pf-evlink::after, .ins-rrow-name::after,
+  .rs-gap-name::after, .pf-talk-phone::after, .adm-op-n::after, .bw-eng-t::after, .pf-hire-link::after, .crumbs a::after,
+  .link::after, .ins-tool-go::after, .pf-tool-v::after, a.serif-up::after, summary::after { content: ""; position: absolute; inset: -11px -6px; }
+  .tip::after { content: ""; position: absolute; inset: -13px; border-radius: 50%; }
+  .ftr a:not(.logo) { padding-block: 10px; }
+}
+
+@media (max-width: 640px) {
+  /* !important: several views set these at 10-11px with more specific selectors */
+  .mono { font-size: max(12px, .92em) !important; }
+  .pj-bp-day, .tb-l-name, .nav-count, .hm-book-k, .hm-book-m, .mg-funnel span:last-child, .pill, .label, .n { font-size: 12px !important; }
+  [data-view] .pf-ax b { font-size: 12px !important; }
+}

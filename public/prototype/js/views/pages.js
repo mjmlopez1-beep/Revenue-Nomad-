@@ -424,19 +424,72 @@
      ===================================================================== */
   const STEPS = [
     { key: 'need', q: 'What do you need help with?', cols: 2, hint: 'Pick the closest. We match it to the role categories that solve it.' },
-    { key: 'companyRevenue', q: 'How big is the business today?', cols: 3 },
-    { key: 'companyEmployees', q: 'How many people work there?', cols: 3 },
+    // Company size is one screen with two chip rows: revenue, then headcount. It advances once both are picked.
+    { key: 'size', q: 'How big is the business today?', rows: [{ key: 'companyRevenue', cols: 3 }, { key: 'companyEmployees', cols: 3 }] },
     { key: 'startBy', q: 'When do you need them to start?', cols: 3, hint: 'We match this to each operator’s availability.' },
     { key: 'contact', q: 'Last one. Where should we reply?' },
   ];
-  const TKEY = 'rn-pg-talk-v2';
+  // The answer keys a step sets (one for a single chip row, two for the size step)
+  const stepKeys = (s) => (s.rows ? s.rows.map((r) => r.key) : [s.key]);
+  const TKEY = 'rn-pg-talk-v3';
   const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, name: '', email: '', company: '', err: '', focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, note: '', usedSearch: null });
   let T = (function () { try { const s = JSON.parse(window.sessionStorage.getItem(TKEY) || 'null'); if (s && s.ans) return Object.assign(fresh(), s); } catch (e) { /* ignore */ } return fresh(); })();
   function save() { try { window.sessionStorage.setItem(TKEY, JSON.stringify(T)); } catch (e) { /* in memory only */ } }
   let advTimer = null;
 
-  const steps = () => (persona() === 'buyer' ? STEPS.filter((s) => s.key !== 'companyRevenue' && s.key !== 'companyEmployees') : STEPS);
+  // A signed-in client's company size comes from their company profile, so they skip the size step
+  const steps = () => (persona() === 'buyer' ? STEPS.filter((s) => s.key !== 'size') : STEPS);
   const needCats = (need) => (RN.fields.needCats[need] || []).slice();
+  // Operators available by the start date: "as soon as possible" wants operators free now, "2 weeks" also takes
+  // those free in 2 weeks, "2+ weeks" takes everyone. Same order the done screen ranks on (AVAIL_RANK).
+  const availBy = (startBy) => (AVAIL_RANK[startBy] == null ? [] : Object.keys(AVAIL_RANK).filter((k) => AVAIL_RANK[k] <= AVAIL_RANK[startBy]));
+  /* The Browse filters the answers stand for. One source for the live count, the done screen's
+     "See all N in Browse" and the logged search, so the number the client watches is the number they get. */
+  function matchFilters(ans) {
+    const filters = {};
+    const cats = needCats(ans.need);
+    if (cats.length) filters.roleCategories = cats;
+    if (ans.companyRevenue) filters.revenueRange = [ans.companyRevenue];
+    if (ans.companyEmployees) filters.employeeRange = [ans.companyEmployees];
+    const av = availBy(ans.startBy);
+    if (av.length && av.length < Object.keys(AVAIL_RANK).length) filters.availability = av;
+    return filters;
+  }
+  const liveCount = () => RN.model.search({ filters: matchFilters(T.ans) }).length;
+  const answered = () => ['need', 'companyRevenue', 'companyEmployees', 'startBy'].some((k) => T.ans[k]);
+  function liveText(n) {
+    if (!answered()) return `<b class="num" data-n="${n}">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'} on the network`;
+    return `<b class="num" data-n="${n}">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator matches' : 'operators match'} so far`;
+  }
+  // Live match count: a result that moves as they answer, from the first question on
+  function liveBadge() {
+    const n = liveCount();
+    return `<p class="pg-live${n ? '' : ' is-zero'}" role="status" aria-live="polite"><span class="pg-live-dot" aria-hidden="true"></span><span class="pg-live-t">${liveText(n)}</span></p>`;
+  }
+  let liveRaf = 0;
+  function updateLive() {
+    const el = RN.$('.pg-talk .pg-live');
+    if (!el) return;
+    const b = el.querySelector('b.num');
+    const from = b ? +b.dataset.n || 0 : 0;
+    const to = liveCount();
+    el.classList.toggle('is-zero', !to);
+    el.querySelector('.pg-live-t').innerHTML = liveText(to);
+    const nb = el.querySelector('b.num');
+    cancelAnimationFrame(liveRaf);
+    if (from === to) return;
+    el.classList.remove('is-bump'); void el.offsetWidth; el.classList.add('is-bump');
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) return;
+    const t0 = performance.now(), dur = 450;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      nb.textContent = RN.fmt.int(Math.round(from + (to - from) * e));
+      if (p < 1) liveRaf = requestAnimationFrame(tick);
+    };
+    nb.textContent = RN.fmt.int(from);
+    liveRaf = requestAnimationFrame(tick);
+  }
   function brief() {
     return { need: T.ans.need, revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees, availability: T.ans.startBy };
   }
@@ -456,7 +509,7 @@
     const keys = ['need', 'companyRevenue', 'companyEmployees', 'startBy'];
     const st = steps();
     return keys.filter((k) => T.ans[k]).map((k) => {
-      const i = st.findIndex((s) => s.key === k);
+      const i = st.findIndex((s) => stepKeys(s).includes(k));
       const label = RN.w.label(k, T.ans[k]);
       const name = RECAP[k] || RN.fields[k].label;
       if (o.text) return `${name}: ${label}`;
@@ -475,10 +528,7 @@
     const late = (op) => ((AVAIL_RANK[op.avail.key] || 0) > want ? 1 : 0);
     // Available by the start date first, then fit, then Reputation Index
     rows.sort((x, y) => late(x.op) - late(y.op) || y.fit.pct - x.fit.pct || y.op.ris.score - x.op.ris.score);
-    const filters = {};
-    if (cats.length) filters.roleCategories = cats;
-    if (b.revenueRange) filters.revenueRange = [b.revenueRange];
-    if (b.employeeRange) filters.employeeRange = [b.employeeRange];
+    const filters = matchFilters(T.ans);
     const matches = RN.model.search({ filters }).length;
     return { top: rows.slice(0, 3), matches, filters };
   }
@@ -509,6 +559,7 @@
     if (persona() !== 'buyer' && first(f.revenueRange)) T.ans.companyRevenue = first(f.revenueRange);
     if (persona() !== 'buyer' && first(f.employeeRange)) T.ans.companyEmployees = first(f.employeeRange);
     if (first(f.availability)) T.ans.startBy = first(f.availability);
+    if (first(f.industries)) T.industry = first(f.industries);
     // Preselect the need only when the searched role categories point to exactly one
     const needs = cats.length ? Object.keys(RN.fields.needCats).filter((n) => cats.some((c) => (RN.fields.needCats[n] || []).includes(c))) : [];
     if (needs.length === 1) T.ans.need = needs[0];
@@ -553,8 +604,17 @@
           <div class="field"><label for="pg-co">Company <span class="opt">Optional</span></label><input class="input" id="pg-co" name="company" value="${esc(T.company)}" placeholder="Company name" autocomplete="organization"></div>
           <div class="field"><label for="pg-note">What are you looking for? <span class="opt">Optional</span></label><textarea class="textarea input" id="pg-note" name="note" maxlength="500" rows="2" placeholder="The problem, the timeline, what good looks like in 90 days.">${esc(T.note || '')}</textarea></div>
           ${T.err ? `<p class="pg-err" role="alert">${icon('info')}${esc(T.err)}</p>` : ''}
-          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Send to a person${icon('arrow')}</button><span class="small">A person replies within one business day. No sales sequence, and no fees for companies.</span></div>
+          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Show my matches${icon('arrow')}</button><span class="small">We show you three operators now, and a person replies within one business day. No sales sequence, and no fees for companies.</span></div>
         </form>`;
+    } else if (s.rows) {
+      // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row
+      body = s.rows.map((r, ri) => {
+        const d = RN.fields[r.key];
+        return `<div class="pg-row" data-row="${esc(r.key)}">
+          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}${ri === 0 ? `<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span>` : ''}</p>
+          <div class="pg-tiles" data-cols="${r.cols || 2}">${RN.w.control(r.key, T.ans[r.key] || '', { name: r.key, id: 'pg-t-' + r.key, change: 'pg-talk-pick' })}</div>
+        </div>`;
+      }).join('') + (chips.length ? `<div class="pg-recap pg-recap-sm" aria-label="Your answers so far">${chips.join('')}</div>` : '');
     } else {
       const d = RN.fields[s.key];
       body = `<p class="pg-q-sub">${s.hint ? `<span>${esc(s.hint)}</span>` : `<span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}`}<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span></p>
@@ -568,6 +628,7 @@
           <span class="step-count">Question ${T.step + 1} of ${st.length}</span>
         </div>
         ${progress(T.step, st.length)}
+        ${liveBadge()}
         ${note}${T.step === 0 ? searched : ''}
         <h1 class="h2 pg-q" tabindex="-1">${esc(s.q)}</h1>
         ${body}
@@ -612,11 +673,12 @@
         <div class="pg-shead"><div class="pg-shead-l"><span class="eyebrow">${unsure ? 'A few operators to look at while you wait' : 'Operators we would start with'}</span>
           <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your company size and start date.' : `Matched on ${esc(RN.w.label('need', b.need).toLowerCase())}, your company size and start date.`}</h2></div>
           <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${(T.matches || 0) === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(T.matches || 0, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
-        ${ops.length ? `<div class="grid g-3 pg-sugg">${ops.map((op) => {
+        ${ops.length ? `<p class="pg-sugg-note">${icon('check-circle')}<span>Request intro opens with your answers filled in: ${esc(introSummary())}. Check it and send.</span></p>
+        <div class="grid g-3 pg-sugg">${ops.map((op, i) => {
           const fit = RN.model.fit(op, b);
           const order = ['expertise', 'revenue', 'employees'];
           const sig = order.map((k) => fit.signals.find((x) => x.k === k && x.state === 'match')).find(Boolean) || fit.signals.find((x) => x.state !== 'low') || fit.signals[0];
-          return RN.ui.opCard(op, { why: `${fit.label}${sig ? ': ' + sig.text : ''}`, cta: 'invite', ctaAct: 'pg-intro', ctaLabel: 'Request intro' });
+          return RN.ui.opCard(op, { why: `${fit.label}${sig ? ': ' + sig.text : ''}`, cta: 'invite', ctaAct: 'pg-intro', ctaLabel: i === 0 ? `Request intro to ${op.first}` : 'Request intro' });
         }).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No close match on the network yet', body: 'A person on our team will look for you, including operators who are not listed yet.', cta: `<button type="button" class="btn" data-act="pg-book">${icon('calendar')}Book a call</button>` })}
       </div>
     </section>`;
@@ -633,12 +695,15 @@
   function talkUnmount() {
     document.removeEventListener('keydown', onTalkKey);
     clearTimeout(advTimer);
+    cancelAnimationFrame(liveRaf);
   }
   function onTalkKey(e) {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
     const tag = ((e.target && e.target.tagName) || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || document.querySelector('.scrim, .menu-sheet')) return;
-    const chip = RN.$$('.pg-talk .pg-tiles .chip')[+e.key - 1];
+    const rows = RN.$$('.pg-talk .pg-tiles');
+    const row = rows.find((r) => !(r.querySelector('input[type=hidden]') || {}).value) || rows[0];
+    const chip = row && RN.$$('.chip', row)[+e.key - 1];
     if (chip) { e.preventDefault(); chip.focus(); chip.click(); }
   }
   const onTalk = () => ['talk', 'talk-need'].includes(curView());
@@ -648,17 +713,22 @@
     T.ans[el.name] = el.value;
     T.err = '';
     save();
+    updateLive();
     clearTimeout(advTimer);
+    const st0 = steps();
+    const cur = st0.find((x) => stepKeys(x).includes(el.name));
+    // The size step moves on only when both rows are answered
+    if (cur && cur.rows && !stepKeys(cur).every((k) => T.ans[k])) return;
     advTimer = setTimeout(() => {
       if (!onTalk()) return;
       const st = steps();
-      const i = st.findIndex((x) => x.key === el.name);
+      const i = st.findIndex((x) => stepKeys(x).includes(el.name));
       T.step = Math.min(st.length - 1, (i >= 0 ? i : T.step) + 1);
       T.moved = true;
       if (st[T.step].key === 'contact') T.focus = T.name ? (T.email ? '' : 'pg-email') : 'pg-name';
       save();
       RN.render();
-    }, 320);
+    }, 420);
   };
   RN.actions['pg-talk-back'] = () => { clearTimeout(advTimer); T.step = Math.max(0, T.step - 1); T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-jump'] = (el) => { clearTimeout(advTimer); T.step = +el.dataset.i || 0; T.moved = true; save(); RN.render(); };
@@ -702,12 +772,30 @@
     const op = RN.model.byId(el.dataset.id);
     if (!op) return;
     if (!RN.intro || typeof RN.intro.open !== 'function') { RN.go('op.' + op.slug); return; }
-    const pre = { need: T.ans.need, startBy: T.ans.startBy };
-    if (T.note) pre.note = T.note;
-    if (persona() !== 'buyer') Object.assign(pre, { name: T.name, email: T.email, company: T.company, revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees });
-    Object.keys(pre).forEach((k) => { if (pre[k] == null || pre[k] === '') delete pre[k]; });
-    RN.intro.open(op.id, pre);
+    RN.intro.open(op.id, introPrefill());
   };
+  /* Talk answers as intro-sheet prefill. Same for all three suggestions; the sheet fills its own defaults for
+     engagementType and hoursPerMonth (the flow does not ask them). */
+  function introSummary() {
+    const parts = [];
+    if (T.ans.need) parts.push(RN.w.label('need', T.ans.need));
+    const size = [T.ans.companyRevenue && RN.w.label('companyRevenue', T.ans.companyRevenue) + ' revenue', T.ans.companyEmployees && RN.w.label('companyEmployees', T.ans.companyEmployees) + ' employees'].filter(Boolean);
+    if (size.length) parts.push(size.join(', '));
+    if (T.ans.startBy) parts.push('start ' + RN.w.label('startBy', T.ans.startBy).toLowerCase());
+    return parts.join('; ');
+  }
+  function introPrefill() {
+    const sum = introSummary();
+    const extra = T.note || (T.search ? 'Searched for: ' + T.search.label : '');
+    const note = [sum ? `From Talk to us: ${sum}.` : '', extra].filter(Boolean).join(' ').slice(0, 500);
+    const pre = {
+      need: T.ans.need, startBy: T.ans.startBy, note,
+      name: T.name, email: T.email, company: T.company, industry: T.industry,
+      revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees,
+    };
+    Object.keys(pre).forEach((k) => { if (pre[k] == null || pre[k] === '') delete pre[k]; });
+    return pre;
+  }
 
   /* ---------- Book a call: 6 upcoming weekday slots from the simulated clock ---------- */
   function slots(n) {
