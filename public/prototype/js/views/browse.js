@@ -312,7 +312,7 @@
           </div>
           <div class="br-rhead-r">
             ${proofSwitch(c)}
-            <span id="br-sort-slot"${ranked() ? ' hidden' : ''}>${sortHtml()}</span>
+            <span id="br-sort-slot"${searchText() ? ' hidden' : ''}>${sortHtml()}</span>
           </div>
         </div>
         <div id="br-results" data-view-source="search">${resultsHtml(res, c)}</div>
@@ -509,7 +509,7 @@
   }
   function assist(c, cat) {
     // Ranked: the words live in the search box and the facts read from them are drawn as checks, so only hand-set filters show
-    const rk = ranked(), sk = st().saidKeys || [];
+    const rk = !!searchText(), sk = st().saidKeys || [];
     const chips = rk ? chipList(c).filter((x) => x.k !== 'q' && !sk.includes(x.k)) : chipList(c);
     if (rk && !chips.length) return '';
     if (chips.length) {
@@ -574,7 +574,7 @@
     return n ? ` <span class="br-count-note">· ${RN.fmt.int(n)} more don’t list a rate. <button type="button" class="act" data-act="br-chip-x" data-k="rateMax">Clear the rate filter</button></span>` : '';
   }
   function countHtml(res, c) {
-    if (ranked()) { const n = rankPool().length; return `<b class="num">${RN.fmt.int(n)}</b> ranked for you${unlistedNote(c)}`; }
+    if (searchText()) { const n = rankPool().length; if (n) return `<b class="num">${RN.fmt.int(n)}</b> ranked for you${unlistedNote(c)}`; }
     const n = res.length;
     if (!n) return '<b class="num">0</b> operators match' + unlistedNote(c);
     return `<b class="num">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'}${hasCrit(c) ? ' match' : ''}${unlistedNote(c)}`;
@@ -595,7 +595,17 @@
   }
 
   function resultsHtml(res, c) {
-    if (ranked()) { const pool = rankPool(); if (pool.length) return RN.rank.html(searchText(), pool); }
+    if (searchText()) {
+      const pool = rankPool();
+      if (pool.length && ranked()) return RN.rank.html(searchText(), pool);
+      // Cards: the same ranking as the ranked view, shown as cards
+      if (pool.length) {
+        const rows = RN.rank.rows(searchText(), pool);
+        const shown = rows.slice(0, limit), more = rows.length - shown.length;
+        return `<div class="grid g-3 br-grid">${shown.map((r) => BR.card(r.op, { why: RN.rank.why(r) })).join('')}</div>
+          ${more > 0 ? `<div class="br-more"><button type="button" class="btn btn-line" data-act="br-more">Show ${Math.min(PAGE, more)} more</button><span class="small muted">Showing ${shown.length} of ${rows.length}</span></div>` : ''}`;
+      }
+    }
     if (!res.length) return zeroHtml(c);
     const shown = res.slice(0, limit);
     const more = res.length - shown.length;
@@ -666,7 +676,7 @@
     set('br-count', countHtml(res, c));
     set('br-results', resultsHtml(res, c));
     set('br-mode', modeHtml());
-    const ss = document.getElementById('br-sort-slot'); if (ss) ss.hidden = ranked();
+    const ss = document.getElementById('br-sort-slot'); if (ss) ss.hidden = !!searchText();
     if (ranked()) RN.rank.mount(rankPool);
     set('br-bar-acts', barBtns(c));
     set('br-saved', savedRow(c));

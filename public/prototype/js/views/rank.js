@@ -12,6 +12,7 @@
   const COLORS = ['var(--cat-sales)', 'var(--cat-revops)', 'var(--cat-mkt)', 'var(--cat-enable)', 'var(--cat-ai)'];
   const FACT_IC = { roleCategories: 'user', revenueRange: 'building', employeeRange: 'users', industries: 'briefcase', availability: 'calendar', hoursPerMonth: 'clock', rateMax: 'chart', engagementTypes: 'handshake', locations: 'pin', timeZones: 'clock', usHours: 'pin' };
   const WORD = { proven: 'A client proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' };
+  const MEANS = { proven: 'A client confirmed they have done this.', claimed: 'On their profile, not yet confirmed by a client.', close: 'Related experience, not an exact match.', missing: 'Nothing on their profile for this yet.' };
   const showAll = new Set();
 
   const needsFor = (text) => (RN.vsearch.refined(text) || RN.vsearch.localNeeds(text));
@@ -24,17 +25,19 @@
   }
   function dot(m, i) {
     const tip = `${m.need.label}: ${WORD[m.status]}${m.status !== 'missing' && m.via ? ` (${m.via})` : ''}`;
-    return `<span class="rk-dot" data-s="${m.status}" style="--k:${COLORS[i % COLORS.length]};--d:${i}" title="${esc(tip)}"><span class="sr-only">${esc(tip)}</span>${m.status === 'proven' ? icon('check') : m.status === 'missing' ? '' : ''}</span>`;
+    const pop = `<b>${esc(m.need.label)}</b><br>${esc(WORD[m.status])}. ${esc(MEANS[m.status])}${m.status !== 'missing' && m.via ? `<br><span class="muted">From: ${esc(m.via)}</span>` : ''}`;
+    return `<span class="rk-dot" data-s="${m.status}" style="--k:${COLORS[i % COLORS.length]};--d:${i}" data-tip="${esc(pop)}"><span class="sr-only">${esc(tip)}</span>${m.status === 'proven' ? icon('check') : m.status === 'missing' ? '' : ''}</span>`;
   }
   function fact(c) {
-    return `<span class="rk-fact${c.ok ? ' is-ok' : ''}" title="${esc(c.label)}: ${c.ok ? 'yes' : 'no'}">${icon(FACT_IC[c.k] || 'check')}<i aria-hidden="true">${c.ok ? '✓' : '✕'}</i><span class="sr-only">${esc(c.label)}: ${c.ok ? 'yes' : 'no'}</span></span>`;
+    return `<span class="rk-fact${c.ok ? ' is-ok' : ''}" data-tip="${esc(`<b>${esc(c.label)}</b><br>${c.ok ? 'Yes, this matches.' : 'No, this doesn’t match.'}`)}">${icon(FACT_IC[c.k] || 'check')}<i aria-hidden="true">${c.ok ? '✓' : '✕'}</i><span class="sr-only">${esc(c.label)}: ${c.ok ? 'yes' : 'no'}</span></span>`;
   }
   // Worked with companies like yours: one segment per profile fact (industry, revenue, size)
   function like(r) {
     if (!r.like || !r.like.length) return '';
     const n = r.like.filter((c) => c.ok).length, all = n === r.like.length;
     const tip = 'Worked with companies like yours: ' + r.like.map((c) => `${c.label} ${c.ok ? '✓' : '✕'}`).join(', ');
-    return `<span class="rk-like${all ? ' is-ok' : n ? ' is-part' : ''}" title="${esc(tip)}">${icon('building')}<span class="rk-like-m" aria-hidden="true">${r.like.map((c) => `<i class="${c.ok ? 'on' : ''}"></i>`).join('')}</span><span class="sr-only">${esc(tip)}</span></span>`;
+    const pop = `<b>Worked with companies like yours</b><br>${r.like.map((c) => `${c.ok ? '✓' : '✕'} ${esc(c.label)}`).join('<br>')}`;
+    return `<span class="rk-like${all ? ' is-ok' : n ? ' is-part' : ''}" data-tip="${esc(pop)}">${icon('building')}<span class="rk-like-m" aria-hidden="true">${r.like.map((c) => `<i class="${c.ok ? 'on' : ''}"></i>`).join('')}</span><span class="sr-only">${esc(tip)}</span></span>`;
   }
   function side(op) {
     const client = RN.store.state.persona === 'buyer';
@@ -75,12 +78,9 @@
       </li>`;
     }).join('');
     const facts = res.facts.map((f) => `<span class="rk-fchip">${icon(FACT_IC[f.k] || 'check')}${esc(f.label)}</span>`).join('');
-    const src = refined
-      ? `<span class="rk-src is-ai">${icon('ai')}Read by Claude</span>`
-      : `<span class="rk-src" data-rk-src>${icon('hourglass')}Quick read<span class="rk-src-more"> · Claude is refining</span></span>`;
     return `<div class="rk-head">
       ${RN.fitme ? RN.fitme.headHtml(res, text) : ''}
-      <div class="rk-head-top"><span class="label">What you need</span>${src}</div>
+      <div class="rk-head-top"><span class="label">What you need</span></div>
       ${pills ? `<ol class="rk-needs-key">${pills}</ol>` : `<p class="rk-empty-needs">Ranked by how closely each profile matches your words.</p>`}
       ${facts ? `<div class="rk-fchips"><span class="label">Also checking</span>${facts}</div>` : ''}
       <div class="rk-legend" aria-hidden="true">
@@ -94,8 +94,8 @@
   }
 
   let lastText = '';
-  RK.html = function (text, pool) {
-    const refined = !!RN.vsearch.refined(text);
+  // One ranking for both views: the ranked rows and the Cards grid show the same people in the same order
+  function compute(text, pool) {
     const FM = RN.fitme;
     const opts = { pool, profile: FM && FM.profile(), profileWins: FM && FM.profileWins(text) };
     let needs = needsFor(text);
@@ -106,6 +106,18 @@
     if (keep.length && keep.length < needs.length) { needs = keep; res = RN.vsearch.rank(text, needs, opts); }
     // A signed-in client's history nudges the order (hired before first, declined last); the ring keeps the match
     if (FM) { res.rows.forEach((r) => { r.hist = FM.history(r.op.id); }); res.rows.sort((a, b) => (b.score + (b.hist ? b.hist.bonus : 0)) - (a.score + (a.hist ? a.hist.bonus : 0))); }
+    return res;
+  }
+  RK.rows = (text, pool) => compute(text, pool).rows;
+  // The one-line reason on a card: the needs this person can do, else how close they are to the words
+  RK.why = function (r) {
+    const can = r.meets.filter((m) => m.status === 'proven' || m.status === 'claimed').map((m) => m.need.label);
+    return `${r.match}% match · ` + (can.length ? can.slice(0, 2).join(', ') : 'closest to your words');
+  };
+  RK.html = function (text, pool) {
+    const refined = !!RN.vsearch.refined(text);
+    const FM = RN.fitme;
+    const res = compute(text, pool);
     const all = showAll.has(text);
     const rows = all ? res.rows : res.rows.slice(0, FIRST);
     const items = rows.map(row);
@@ -182,7 +194,6 @@
       const cur = document.querySelector('.rk');
       if (!cur || cur.dataset.rkText !== text) return;
       if (needs) rerender(cur, getPool());
-      else { const s = cur.querySelector('[data-rk-src]'); if (s) s.classList.add('is-done'); }
     });
   };
   RK.reset = () => { if (pending) { pending.ctl.abort(); pending = null; } if (io) { io.disconnect(); io = null; } lastText = ''; };

@@ -6,12 +6,6 @@
 /* ---------- Needs key ---------- */
 .rk-head { display: grid; gap: var(--s-4); padding: var(--s-5); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--card); }
 .rk-head-top { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
-.rk-src { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; color: var(--mute); }
-.rk-src svg { width: 14px; height: 14px; }
-.rk-src.is-ai { color: var(--forest); }
-.rk-src:not(.is-ai):not(.is-done) .rk-src-more { background: linear-gradient(90deg, var(--mute) 0%, var(--forest) 50%, var(--mute) 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: rkShimmer 1.6s linear infinite; }
-.rk-src.is-done .rk-src-more { display: none; }
-@keyframes rkShimmer { to { background-position: -200% 0; } }
 .rk-needs-key { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--s-3); }
 .rk-need { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, var(--k) 8%, var(--card)); border: 1px solid color-mix(in srgb, var(--k) 25%, var(--line)); }
 .rk-need-l { display: flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: var(--t-15); color: var(--ink); line-height: 1.2; }
@@ -191,10 +185,19 @@
   .rk-row, .rk-row.is-first { padding: 12px; gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rk-row, .rk-dot, .rk-need-bar span, .rk-ring-fg, .rk-src-more { animation: none !important; }
+  .rk-row, .rk-dot, .rk-need-bar span, .rk-ring-fg { animation: none !important; }
 }
 
 /* Ranked / Cards switch in the Browse results header */
 .br-mode button { display: inline-flex; align-items: center; gap: 6px; }
 .br-mode svg { width: 14px; height: 14px; }
-.rk-dot, .rk-fact { pointer-events: auto; }
+.rk-dot, .rk-fact { pointer-events: auto; cursor: help; }
+/* Desktop: one column grid shared by every row (subgrid), so dots, facts and rings line up whatever the name length */
+@media (min-width: 901px) {
+  @supports (grid-template-columns: subgrid) {
+    .rk-list { grid-template-columns: 36px minmax(0, 1.2fr) minmax(0, 1fr) auto auto auto auto; column-gap: var(--s-4); }
+    .rk-row, .rk-row.is-first { grid-column: 1 / -1; grid-template-columns: subgrid; }
+    .rk-ask, .rk-list > li:not(.rk-row) { grid-column: 1 / -1; }
+    .rk-ris { justify-self: end; }
+  }
+}
