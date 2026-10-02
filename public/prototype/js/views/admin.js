@@ -38,6 +38,7 @@
     { key: 'hires', label: 'Hires', icon: 'check-circle', group: 'Marketplace', badge: () => hiresNeedingTerms().length },
     { key: 'approvals', label: 'Approvals', icon: 'seal', group: 'Work queue', badge: () => queue().length + pendingAnswers().length },
     { key: 'intros', label: 'Intros', icon: 'handshake', group: 'Work queue', badge: () => introsForTeam().length },
+    { key: 'managed', label: 'Managed', icon: 'layers', group: 'Work queue', badge: () => (RN.admManaged ? RN.admManaged.dueCount() : 0) },
     { key: 'engagements', label: 'Engagements', icon: 'briefcase', group: 'Work queue', badge: () => liveProjects().filter((p) => projInfo(p).flag).length },
     { key: 'directory', label: 'Directory', icon: 'users', group: 'Network' },
     { key: 'emails', label: 'Emails', icon: 'mail', group: 'Network' },
@@ -73,7 +74,7 @@
     hydrate();
     charts = {}; ctx = {};
     const tab = tabDef(key) ? tabDef(key).key : 'overview';
-    const body = { overview, demand, hires: hiresTab, approvals, intros: introsTab, engagements: projectsTab, directory, emails }[tab]();
+    const body = { overview, demand, hires: hiresTab, approvals, intros: introsTab, engagements: projectsTab, managed: () => RN.admManaged.tab(), directory, emails }[tab]();
     return `<div class="wrap shell adm" data-adm="${esc(tab)}">${side(tab)}<div class="adm-main">${body}</div></div>`;
   }
 
@@ -113,7 +114,7 @@
   });
   RN.view('admin-tab', {
     route: 'admin.:tab', nav: '', requires: 'admin', footer: false,
-    samples: { tab: 'demand', extra: ['admin.hires', 'admin.approvals', 'admin.intros', 'admin.engagements', 'admin.projects', 'admin.directory', 'admin.emails'] },
+    samples: { tab: 'demand', extra: ['admin.managed', 'admin.hires', 'admin.approvals', 'admin.intros', 'admin.engagements', 'admin.projects', 'admin.directory', 'admin.emails'] },
     title: (p) => (tabDef(p.tab) ? tabDef(p.tab).label : 'Overview') + ' · Admin',
     render: (p) => render(p.tab),
     mount: (root) => mount(root),
@@ -1069,9 +1070,9 @@
   function projectsTab() {
     const list = liveProjects().slice().sort((a, b) => (projInfo(b).flag - projInfo(a).flag) || ms(a.postedAt || a.createdAt) - ms(b.postedAt || b.createdAt));
     const flagged = list.filter((p) => projInfo(p).flag).length;
-    return `${head('Company engagements', `${RN.fmt.plural(list.length, 'live engagement')}${flagged ? ` · ${flagged} with no interested operator after 72 hours` : ''}. Add up to three suggested operators to any engagement, ranked by Match Signals. The company decides.`)}
+    return `${head('Company engagements', `${RN.fmt.plural(list.length, 'live engagement')}${flagged ? ` · ${flagged} with no interested operator after 72 hours` : ''}. Add up to three suggested operators to any engagement, ranked by Match Signals. The company decides.`, `<a class="btn btn-line" href="#admin.managed">${icon('layers')}Managed</a><button type="button" class="btn" data-act="mg-open">${icon('plus')}Open an engagement</button>`)}
       ${list.length ? `<div class="stack" style="--gap:16px">${list.map(projCard).join('')}</div>`
-      : RN.ui.empty({ icon: 'briefcase', title: 'No live engagements', body: 'Engagements companies post from a Blueprint appear here with invites, responses and the 72-hour flag.', cta: '<a class="btn btn-sm btn-line" href="#engagements">Open engagements</a>' })}`;
+      : RN.ui.empty({ icon: 'briefcase', title: 'No live engagements', body: 'Engagements companies post from a Blueprint appear here with invites, responses and the 72-hour flag. For a company that came to you directly, open a managed engagement.', cta: `<button type="button" class="btn btn-sm" data-act="mg-open">${icon('plus')}Open an engagement</button><a class="btn btn-sm btn-line" href="#admin.managed">See managed engagements</a>` })}`;
   }
   function projCard(p) {
     const info = projInfo(p);
