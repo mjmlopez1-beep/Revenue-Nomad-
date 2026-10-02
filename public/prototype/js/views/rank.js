@@ -203,7 +203,32 @@
     RN.actions['shortlist-toggle'](el);
     if (RN.fitme) RN.fitme.afterShortlist(added);
   };
-  RN.actions['rk-meet'] = (el) => { const box = document.querySelector('.rk'); RN.intro.open(el.dataset.id, box ? { note: box.dataset.rkText } : {}); };
+  // Ask to meet carries the search into the intro: the needs read from it, how this operator meets each, and the
+  // closest "What do you need?" option (by the framework area of each need, first need counting most)
+  const AXIS_NEED = { 'Generate demand': 'pipeline', 'Win deals': 'sales_motion', 'Lead & plan': 'sales_motion', 'Build the team': 'team', 'Retain & expand': 'retention', 'Systems & data': 'systems' };
+  const CAT_NEED = { ai_gtm: 'ai', partnerships: 'partners' };
+  RK.meetContext = function (opId) {
+    const box = document.querySelector('.rk');
+    if (!box || !poolFn) return null;
+    const text = box.dataset.rkText;
+    const res = compute(text, poolFn());
+    const r = res.rows.find((x) => x.op.id === opId);
+    const votes = {};
+    res.needs.forEach((n, i) => {
+      const info = RN.model.tagInfo(n.tag) || {};
+      const k = CAT_NEED[info.c] || AXIS_NEED[info.axis];
+      if (k) votes[k] = (votes[k] || 0) + (res.needs.length - i);
+    });
+    const need = Object.keys(votes).sort((a, b) => votes[b] - votes[a])[0] || '';
+    return { text, need, match: r ? r.match : null, needs: res.needs.map((n, i) => ({ label: n.label, status: r && r.meets[i] ? r.meets[i].status : 'missing', color: COLORS[i % COLORS.length] })) };
+  };
+  RK.dotMini = (n) => `<span class="rk-dot" data-s="${n.status}" style="--k:${n.color};animation:none">${n.status === 'proven' ? icon('check') : ''}</span>`;
+  RN.actions['rk-meet'] = (el) => {
+    const ctx = RK.meetContext(el.dataset.id);
+    if (!ctx) { RN.intro.open(el.dataset.id); return; }
+    const note = `${ctx.text}${ctx.needs.length ? `\n\nWhat we need: ${ctx.needs.map((n) => n.label).join(', ')}.` : ''}`;
+    RN.intro.open(el.dataset.id, Object.assign({ note, search: ctx }, ctx.need ? { need: ctx.need } : {}));
+  };
 
   RN.actions['rk-all'] = () => {
     const box = document.querySelector('.rk');

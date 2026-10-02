@@ -173,7 +173,7 @@
     const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
     const bars = (rows) => { const max = Math.max(...rows.map((r) => num(r[1]))) || 1; return `<div class="ab-bars">${rows.map(([l, v, hi]) => `<div class="ab-bar${hi ? ' is-hi' : ''}"><span class="ab-bar-l">${esc(l)}</span><span class="ab-bar-t"><i style="--w:${Math.round((num(v) / max) * 100)}%"></i></span><b>${esc(v)}</b></div>`).join('')}</div>`; };
     const fame = ['Big logo on the resume', 'Impressive title', 'A friend’s referral'];
-    const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Proof a client confirmed'];
+    const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Culture fit', 'Proof a client confirmed'];
 
     return `
     ${hero({
@@ -197,7 +197,7 @@
           <p class="ab-line">Great leaders fail in the wrong business.</p>
           <p class="ab-line">A $500M company’s CRO rarely fits a $30M one.</p>
         </div>
-        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Hired on fit: same stage, same deal size, same motion, proof a client confirmed.">
+        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Hired on fit: same stage, same deal size, same motion, culture fit, proof a client confirmed.">
           <div class="ab-vs-col is-fame"><span class="ab-vs-h">Hired on fame</span><ul>${fame.map((x) => `<li>${icon('x')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">6 months, nothing changed</span></div>
           <div class="ab-vs-col is-fit"><span class="ab-vs-h">Hired on fit</span><ul>${fit.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">Results in the first quarter</span></div>
         </div>

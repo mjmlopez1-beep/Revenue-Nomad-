@@ -207,3 +207,13 @@
     .rk-ris { justify-self: end; }
   }
 }
+
+/* Intro request opened from a ranked row: the search it came from, with this operator's dots */
+.in-search { display: grid; gap: 10px; padding: 16px 18px; border-radius: 14px; background: var(--tint); border: 1px solid var(--tint-line); }
+.in-search-hd { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.in-search-m { font-family: var(--f-display); font-weight: 800; font-size: var(--t-13); color: var(--forest); }
+.in-search-q { margin: 0; font-size: var(--t-14); color: var(--ink-2); font-style: italic; }
+.in-search-n { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.in-search-n li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.in-search-n b { font-family: var(--f-display); font-weight: 700; font-size: var(--t-14); color: var(--ink); }
+.in-search-n span:last-child { font-size: var(--t-12); color: var(--mute); }

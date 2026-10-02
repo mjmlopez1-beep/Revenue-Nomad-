@@ -84,6 +84,11 @@
       sub: `${esc(op.name)} · Fractional ${esc(op.role)} · ${esc(op.avail.label)}`,
       body: `<form id="intro-form" data-submit="intro-send" data-op="${esc(op.id)}" class="stack" style="--gap:22px">
         ${fit ? (() => { const hits = fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2); return `<div class="note info">${icon('target')}<div><b>${esc(fit.label)} for ${esc(me.company.name)}</b> · ${fit.count} of ${fit.signals.length} signals.${hits.length ? ' ' + hits.join('. ') + '.' : ''}</div></div>`; })() : ''}
+        ${prefill.search ? (() => { const x = prefill.search; const W = { proven: 'A client proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' }; return `<div class="in-search">
+          <div class="in-search-hd"><span class="label">From your search</span>${x.match != null ? `<span class="in-search-m">${x.match}% match</span>` : ''}</div>
+          <p class="in-search-q">“${esc(x.text)}”</p>
+          ${x.needs.length ? `<ul class="in-search-n">${x.needs.map((n) => `<li>${RN.rank.dotMini(n)}<b>${esc(n.label)}</b><span>${esc(W[n.status])}</span></li>`).join('')}</ul>` : ''}
+        </div>`; })() : ''}
         ${RN.w.field('need', defaults.need, { name: 'need', compact: true })}
         ${RN.w.field('engagementType', defaults.engagementType, { name: 'engagementType', compact: true, change: 'intro-type' })}
         <div class="grid g-2" style="--gap:18px">
