@@ -261,7 +261,7 @@
       <div class="ins-hero-copy">
         <span class="eyebrow">Revenue Nomad Insights</span>
         <h1 class="h1">The numbers behind fractional go-to-market.</h1>
-        <p class="lede">Rates, demand and the frameworks behind engagements that get renewed. Built from what clients search for and what operators report on Revenue Nomad. Open to everyone, no login.</p>
+        <p class="lede">Rates, demand and the frameworks behind engagements that get renewed. Built from what companies search for and what operators report on Revenue Nomad. Open to everyone, no login.</p>
         <div class="row ins-hero-cta">
           <a class="btn btn-lg" href="#report">Read the 2027 report${icon('arrow')}</a>
           <a class="btn btn-line btn-lg" href="#rates">Estimate a rate</a>
@@ -299,14 +299,14 @@
           <span class="ins-tool-go">Open the Rate Index${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('grid')}</span><div><h3 class="h4"><a href="#framework" class="ins-stretch">GTM Framework</a></h3><p class="small muted">6 areas across 7 stages of the client journey. See what good looks like in each cell and who is strong there.</p></div></div>
+          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('grid')}</span><div><h3 class="h4"><a href="#framework" class="ins-stretch">GTM Framework</a></h3><p class="small muted">6 areas across 7 stages of the company journey. See what good looks like in each cell and who is strong there.</p></div></div>
           <div class="ins-fw" aria-hidden="true">${Array.from({ length: 42 }, (_, i) => `<i class="${[3, 9, 10, 16, 17, 24, 30, 31, 38].includes(i) ? 'on' : [2, 4, 11, 23, 25, 37].includes(i) ? 'mid' : ''}"></i>`).join('')}</div>
           <span class="ins-tool-go">Explore the framework${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('layers')}</span><div><h3 class="h4"><a href="#library" class="ins-stretch">Fit Tag Library</a></h3><p class="small muted">${RN.fmt.int(libCount)} focus areas with definitions, client demand and verified supply.</p></div></div>
+          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('layers')}</span><div><h3 class="h4"><a href="#library" class="ins-stretch">Fit Tag Library</a></h3><p class="small muted">${RN.fmt.int(libCount)} focus areas with definitions, company demand and verified supply.</p></div></div>
           <div class="opc-tags">${topDemand.slice(0, 3).map((t) => RN.ui.ftag({ t: t.t, tier: t.verified ? 'verified' : 'claimed' })).join('')}</div>
-          <p class="tiny muted">${RN.fmt.int(verifiedTags.size)} focus areas are client-verified across the ${RN.fmt.int(ops.length)} profiles in this prototype.</p>
+          <p class="tiny muted">${RN.fmt.int(verifiedTags.size)} focus areas are company-verified across the ${RN.fmt.int(ops.length)} profiles in this prototype.</p>
           <span class="ins-tool-go">Search the library${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
@@ -317,7 +317,7 @@
           <span class="ins-tool-go">Browse Blueprints${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('book')}</span><div><h3 class="h4">Guides</h3><p class="small muted">Straight answers to the questions clients ask before they hire.</p></div></div>
+          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('book')}</span><div><h3 class="h4">Guides</h3><p class="small muted">Straight answers to the questions companies ask before they hire.</p></div></div>
           <ul class="ins-q-list">
             <li><a href="#guide.fractional-vp-of-sales-cost">How much does a fractional VP of Sales cost?${icon('chev-right')}</a></li>
             <li><a href="#guide.fractional-vs-full-time-vp-of-sales">Should my first sales leader be fractional or full time?${icon('chev-right')}</a></li>
@@ -330,30 +330,30 @@
 
     <section class="wrap ins-pulse">
       <div class="ins-sec-hd">
-        <div><span class="eyebrow">This week in fractional GTM</span><h2 class="h2">Week of ${esc(RN.fmt.dateShort(week))}. What clients looked for.</h2></div>
+        <div><span class="eyebrow">This week in fractional GTM</span><h2 class="h2">Week of ${esc(RN.fmt.dateShort(week))}. What companies looked for.</h2></div>
         ${illus()}
       </div>
       <div class="stats-row ins-kpis" style="--cols:4">
         <div class="stat"><span class="stat-l">Demand index, ${esc(cur.l)}</span><span class="stat-v">${RN.fmt.int(cur.v)}</span><span class="row-nw" style="--gap:8px">${RN.ui.delta(cur.v, prevY.v)}<span class="tiny muted">vs ${esc(prevY.l)}. 2023 = 100</span></span></div>
         <div class="stat"><span class="stat-l">Rate Index median</span><span class="stat-v">${hr(last.v)}<small class="ins-unit">/hr</small></span><span class="row-nw" style="--gap:8px">${RN.ui.delta(last.v, prev.v)}<span class="tiny muted">vs ${esc(prev.l)}</span></span></div>
         <div class="stat"><span class="stat-l">New operator applications</span><span class="stat-v">${RN.fmt.int(newApps)}</span><span class="tiny muted">This week. Network: ${esc(netText())}</span></div>
-        <div class="stat"><span class="stat-l">Searches with no match</span><span class="stat-v">${RN.fmt.int(zero.length)}</span><span class="tiny muted">Clients searched and nobody fit</span></div>
+        <div class="stat"><span class="stat-l">Searches with no match</span><span class="stat-v">${RN.fmt.int(zero.length)}</span><span class="tiny muted">Companies searched and nobody fit</span></div>
       </div>
       <div class="grid g-2 ins-pulse-grid">
         <div class="card">
-          <div class="card-hd"><div><h3>Most searched focus areas</h3><p class="sub">Client searches in the last 7 days, and how many operators are verified in each</p></div></div>
+          <div class="card-hd"><div><h3>Most searched focus areas</h3><p class="sub">Company searches in the last 7 days, and how many operators are verified in each</p></div></div>
           <ol class="ins-trows">${topDemand.map((t, i) => `<li><button type="button" class="ins-trow" data-act="ins-browse" data-src="hub_top_searched" data-tags="${jsonAttr([t.t])}" data-f="{}">
               <span class="ins-trow-n num">${i + 1}</span>
               <span class="ins-trow-b"><span class="ins-trow-t"><b>${esc(t.t)}</b><span class="tiny muted">${esc(catLabel(t.c))}</span></span>
                 <span class="meter"><i style="width:${((t.demand / maxDemand) * 100).toFixed(1)}%"></i></span>
-                <span class="tiny muted">${RN.fmt.int(t.demand)} searches · ${RN.fmt.int(t.supply)} claim it · ${t.verified ? `${RN.fmt.int(t.verified)} client-verified` : 'none verified yet'}</span></span>
+                <span class="tiny muted">${RN.fmt.int(t.demand)} searches · ${RN.fmt.int(t.supply)} claim it · ${t.verified ? `${RN.fmt.int(t.verified)} company-verified` : 'none verified yet'}</span></span>
               ${icon('chev-right')}</button></li>`).join('')}</ol>
         </div>
         <div class="card ins-unmet">
-          <div class="card-hd"><div><h3>What clients typed</h3><p class="sub">Top searches in the last 7 days. Select one to run it</p></div></div>
+          <div class="card-hd"><div><h3>What companies typed</h3><p class="sub">Top searches in the last 7 days. Select one to run it</p></div></div>
           <ul class="ins-qs">${topQ.map((q) => `<li><button type="button" class="chip chip-sm" data-act="ins-browse" data-src="hub_top_query" data-q="${esc(q.q)}" data-f="{}">${icon('search')}${esc(q.q)}<span class="ins-qs-n">${RN.fmt.int(q.vol)}</span></button></li>`).join('')}</ul>
-          <div class="card-hd ins-unmet-hd"><div><h3>Searches that found no one</h3><p class="sub">Client needs the network cannot fill yet</p></div></div>
-          ${zero.length ? `<ul class="ins-zero">${zero.slice(0, 3).map((z) => `<li><span class="ins-zero-q">“${esc(z.q)}”</span><span class="tiny muted">${esc([z.cat ? catLabel(z.cat) : '', z.industry ? RN.w.label('industries', z.industry) : '', z.live ? 'searched today' : RN.fmt.plural(z.vol, 'search', 'searches') + ' this week'].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>` : RN.ui.empty({ icon: 'search', title: 'Every search found a match this week', body: 'When a client search finds no one, it shows up here.' })}
+          <div class="card-hd ins-unmet-hd"><div><h3>Searches that found no one</h3><p class="sub">Company needs the network cannot fill yet</p></div></div>
+          ${zero.length ? `<ul class="ins-zero">${zero.slice(0, 3).map((z) => `<li><span class="ins-zero-q">“${esc(z.q)}”</span><span class="tiny muted">${esc([z.cat ? catLabel(z.cat) : '', z.industry ? RN.w.label('industries', z.industry) : '', z.live ? 'searched today' : RN.fmt.plural(z.vol, 'search', 'searches') + ' this week'].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>` : RN.ui.empty({ icon: 'search', title: 'Every search found a match this week', body: 'When a company search finds no one, it shows up here.' })}
           <div class="ins-unmet-ft">
             <a class="act" href="#studio.positioning">${icon('target')}Operators: add or verify these focus areas</a>
             <a class="act" href="#talk">${icon('message')}Hiring for one of these? Talk to us</a>
@@ -389,7 +389,7 @@
           <h3 class="h3">See where your rate sits.</h3>
           <p class="body">${pos && pos.rate
             ? `Your rate of <b>${hr(pos.rate)}/hr</b> sits at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}, where the median is ${hr(pos.idx.p50)}/hr.`
-            : 'Compare your hourly rate with the Rate Index for your role category, and see which focus areas clients searched for this week.'}</p>
+            : 'Compare your hourly rate with the Rate Index for your role category, and see which focus areas companies searched for this week.'}</p>
           <a class="btn btn-line" href="#studio.positioning">Open Positioning in Studio${icon('arrow')}</a>
         </div>
       </div>
@@ -454,7 +454,7 @@
   DRAW.term = (w) => cols(REP().term.map((r, i) => ({ label: RN.w.label('term', TERM[i]) || r.l, value: r.v, hi: i === 1 })), { fmt: (n) => n + '%', label: 'Share of engagements by initial term' }, w);
   DRAW.intent = (w) => bars(REP().intent.map((r) => ({ label: catLabel(r.cat), value: r.v, hi: r.cat === 'revenue_operations' })), { fmt: (n) => n + '%', max: 40, label: 'Hiring intent by role category, next 12 months' }, w);
   DRAW.sources = (w) => bars(REP().sources.map((r) => ({ label: r.l, value: r.v, hi: /Marketplace/.test(r.l) })), { fmt: (n) => n + '%', max: 50, label: 'Where the last engagement came from' }, w);
-  DRAW.concurrent = (w) => cols(REP().concurrent.map((r, i) => ({ label: r.l, value: r.v, hi: i === 1 })), { fmt: (n) => n + '%', label: 'Concurrent clients per operator', h: w < 460 ? 250 : 220 }, w);
+  DRAW.concurrent = (w) => cols(REP().concurrent.map((r, i) => ({ label: r.l, value: r.v, hi: i === 1 })), { fmt: (n) => n + '%', label: 'Concurrent companies per operator', h: w < 460 ? 250 : 220 }, w);
 
   function chapterHead(ch, eyebrow, title, lede, label) {
     return `<header class="ins-ch-hd"><div class="ins-ch-top"><span class="eyebrow">${esc(eyebrow)}</span>${label ? illus() : ''}</div><h2 class="h2">${title}</h2>${lede ? `<p class="lede">${esc(lede)}</p>` : ''}</header>`;
@@ -585,7 +585,7 @@
         ${chapterHead('3', 'Chapter 3', 'How engagements are scoped')}
         ${figure({ title: F.hoursPerMonth.label, sub: `Share of engagements by hours a month, cut by the ${F.hoursPerMonth.label} field operators fill in`, chart: 'hours', cls: 'ins-fig-night',
           controls: `<div class="ins-ctl"><span class="label">Highlight a shape</span>${RN.w.control('hoursPerMonth', rep.hours, { name: 'ins-rep-hours', id: 'ins-rep-hours', change: 'ins-rep-hours' })}</div>`,
-          take: `${esc(String(summaryStats()[1].v))} of engagements are scoped under ${esc(hoursLabel('40'))}. <em>Most clients buy a senior leader in slices.</em>` })}
+          take: `${esc(String(summaryStats()[1].v))} of engagements are scoped under ${esc(hoursLabel('40'))}. <em>Most companies buy a senior leader in slices.</em>` })}
         <div class="ins-two">
           ${figure({ title: 'Initial term length', sub: 'Share of engagements, by the Initial term field', chart: 'term', cls: 'ins-fig-night' })}
           ${figure({ title: 'How the first term ends', sub: 'Share of engagements', cls: 'ins-fig-night',
@@ -614,7 +614,7 @@
     <section class="wrap-narrow ins-ch" id="ins-ch5">
       ${chapterHead('5', 'Chapter 5', 'What separates the operators who get rehired', '', true)}
       <div class="stats-row" style="--cols:3">
-        <div class="stat"><span class="stat-v">${esc(sum[3].v)}</span><span class="stat-l">Rehire rate with 3+ verified client reviews</span></div>
+        <div class="stat"><span class="stat-v">${esc(sum[3].v)}</span><span class="stat-l">Rehire rate with 3+ verified company reviews</span></div>
         <div class="stat"><span class="stat-v">${esc(R.hindsight[0][2])}</span><span class="stat-l">Of hiring companies put stage and deal-size experience in their top three</span></div>
         <div class="stat"><span class="stat-v">3 of 4</span><span class="stat-l">Top-rated operators had solved the same problem at the same stage before</span></div>
       </div>
@@ -622,14 +622,14 @@
         body: `<div class="tbl-wrap"><table class="tbl ins-tbl"><thead><tr><th>Factor</th><th class="r">Ranked first</th><th class="r">In top three</th></tr></thead><tbody>
           ${R.hindsight.map((r) => `<tr><td>${esc(r[0])}</td><td class="r num">${esc(r[1])}</td><td class="r num"><b>${esc(r[2])}</b></td></tr>`).join('')}</tbody></table></div>`,
         take: 'Big logos ranked last. <em>Fit and proof beat fame.</em>' })}
-      ${chLink({ text: 'Proof is what the Reputation Index measures: client reviews, verified focus areas and repeat engagements.', primary: browseBtn('See operators by Reputation Index', {}, 'report_ch5', 'btn', 'data-sort="ris"'), secondary: `<a class="btn btn-line" href="#levels">How the score works</a>` })}
+      ${chLink({ text: 'Proof is what the Reputation Index measures: company reviews, verified focus areas and repeat engagements.', primary: browseBtn('See operators by Reputation Index', {}, 'report_ch5', 'btn', 'data-sort="ris"'), secondary: `<a class="btn btn-line" href="#levels">How the score works</a>` })}
     </section>
 
     <section class="wrap-narrow ins-ch" id="ins-ch6">
       ${chapterHead('6', 'Chapter 6', 'The operator side', 'How fractional leaders find work, and how full their plate is.')}
       <div class="ins-two">
         ${figure({ title: 'Where the last engagement came from', sub: 'Operators', chart: 'sources' })}
-        ${figure({ title: 'Concurrent clients', sub: 'Operators, today', chart: 'concurrent' })}
+        ${figure({ title: 'Concurrent companies', sub: 'Operators, today', chart: 'concurrent' })}
       </div>
       <p class="ins-take ins-take-solo">Two thirds of work still comes through personal networks. <em>The market is large, fragmented and hard to see into,</em> which is why rate and demand data has been guesswork until now.</p>
       ${chLink({ text: 'Operators get found here even without a referral: open profiles, verified proof and a Studio that shows who viewed you and why.', primary: browseBtn('Browse available now', { availability: ['available_now'] }, 'report_ch6'), secondary: `<a class="btn btn-line" href="#operators">For operators</a>` })}
@@ -963,7 +963,7 @@
         <div class="card ins-how" id="ins-rates-method">
           <h3 class="h4">How the Rate Index works</h3>
           <ul class="ins-how-list">
-            <li><b>Sources.</b> Hourly rates operators list on their profiles (claimed), rates from client-verified engagements (verified), and the State of Fractional GTM survey (survey).</li>
+            <li><b>Sources.</b> Hourly rates operators list on their profiles (claimed), rates from company-verified engagements (verified), and the State of Fractional GTM survey (survey).</li>
             <li><b>Median and range.</b> The median is the middle rate. The range covers the middle half of rates, from the 25th to the 75th percentile.</li>
             <li><b>Company revenue.</b> Larger companies pay more for the same role. We adjust with one multiplier per revenue range.</li>
             <li><b>The rate is the price.</b> The index shows the hourly rates operators list. That is what a company pays.</li>
@@ -1003,8 +1003,8 @@
           <span class="eyebrow">For operators</span>
           <h2 class="h3 ins-news-h">See where your rate sits.</h2>
           <p class="ins-opband-p">${pos && pos.rate
-            ? `Your rate of <b>${hr(pos.rate)}/hr</b> is at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}. Studio shows how that compares with the operators clients shortlisted.`
-            : 'Studio compares your rate with the Rate Index for your role category and shows which focus areas clients searched for. Your rate stays on your profile; the index only uses it in aggregate.'}</p>
+            ? `Your rate of <b>${hr(pos.rate)}/hr</b> is at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}. Studio shows how that compares with the operators companies shortlisted.`
+            : 'Studio compares your rate with the Rate Index for your role category and shows which focus areas companies searched for. Your rate stays on your profile; the index only uses it in aggregate.'}</p>
         </div>
         ${pos && pos.rate ? `<div class="ins-opband-bar"><div class="ins-opband-track"><span class="ins-you-mark" style="left:${RN.clamp((pos.rate / 450) * 100, 0, 100).toFixed(1)}%">You ${hr(pos.rate)}</span>${rangeBar(pos.idx.p25, pos.idx.p50, pos.idx.p75, 450, { cls: 'ins-rtrack-night' })}</div>
           <p class="tiny ins-opband-cap">${esc(catLabel(pos.op.catKey))} median ${hr(pos.idx.p50)} · middle 50% ${hr(pos.idx.p25)} to ${hr(pos.idx.p75)} an hour</p></div>` : ''}
@@ -1037,7 +1037,7 @@
       temporalCoverage: `${iso(qStart)}/${iso(d)}`,
       dateModified: iso(d),
       variableMeasured: 'Median hourly rate by role category and company revenue range',
-      measurementTechnique: 'Hourly rates operators list on their profiles (claimed), rates from client-verified engagements (verified), and the State of Fractional GTM survey (survey)',
+      measurementTechnique: 'Hourly rates operators list on their profiles (claimed), rates from company-verified engagements (verified), and the State of Fractional GTM survey (survey)',
       isAccessibleForFree: true,
     };
   }

@@ -27,7 +27,7 @@
     const firm = i.buyer && i.buyer.company ? i.buyer.company : {};
     const who = forOperator && !['introduced', 'hired'].includes(i.status)
       ? `A ${RN.w.label('industry', firm.industry) || 'client'} company · ${RN.w.label('companyRevenue', firm.revenueRange)} revenue · ${RN.w.label('companyEmployees', firm.employeeRange)} employees`
-      : `${firm.name || 'Client'} · ${RN.w.label('industry', firm.industry)}`;
+      : `${firm.name || 'Company'} · ${RN.w.label('industry', firm.industry)}`;
     const scope = [
       f.engagementType && RN.w.label('engagementType', f.engagementType),
       f.engagementType === 'project' ? (f.projectBudget ? RN.fmt.usd(f.projectBudget) + ' budget' : '') : f.hoursPerMonth && RN.w.label('hoursPerMonth', f.hoursPerMonth),
@@ -55,7 +55,7 @@
     if (!op) return;
     const st = RN.store.state;
     if (st.persona === 'operator' || st.persona === 'admin') {
-      RN.ui.toast('Intro requests come from client accounts.', { icon: 'info', action: { label: 'View as client', act: 'persona', attrs: 'data-p="buyer"' } });
+      RN.ui.toast('Intro requests come from company accounts.', { icon: 'info', action: { label: 'View as company', act: 'persona', attrs: 'data-p="buyer"' } });
       return;
     }
     // Only this client's own open request counts (other companies may have asked the same operator)
@@ -84,7 +84,7 @@
       sub: `${esc(op.name)} · Fractional ${esc(op.role)} · ${esc(op.avail.label)}`,
       body: `<form id="intro-form" data-submit="intro-send" data-op="${esc(op.id)}" class="stack" style="--gap:22px">
         ${fit ? (() => { const hits = fit.signals.filter((s) => s.state === 'match').map((s) => esc(s.text)).slice(0, 2); return `<div class="note info">${icon('target')}<div><b>${esc(fit.label)} for ${esc(me.company.name)}</b> · ${fit.count} of ${fit.signals.length} signals.${hits.length ? ' ' + hits.join('. ') + '.' : ''}</div></div>`; })() : ''}
-        ${prefill.search ? (() => { const x = prefill.search; const W = { proven: 'A client proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' }; return `<div class="in-search">
+        ${prefill.search ? (() => { const x = prefill.search; const W = { proven: 'A company proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' }; return `<div class="in-search">
           <div class="in-search-hd"><span class="label">From your search</span>${x.match != null ? `<span class="in-search-m">${x.match}% match</span>` : ''}</div>
           <p class="in-search-q">“${esc(x.text)}”</p>
           ${x.needs.length ? `<ul class="in-search-n">${x.needs.map((n) => `<li>${RN.rank.dotMini(n)}<b>${esc(n.label)}</b><span>${esc(W[n.status])}</span></li>`).join('')}</ul>` : ''}
@@ -159,7 +159,7 @@
           <li><b>Our team qualifies the fit.</b> <span class="muted">If ${esc(op.first)} passes, we suggest two operators with the same fit.</span></li>
           <li><b>You are introduced by email</b> <span class="muted">and book the first call directly.</span></li>
         </ol>
-        ${!signedIn ? `<p class="note info" style="margin-top:18px">${icon('check-circle')}<span>We created a client workspace for ${esc(company.name)}. Your shortlist, compares and requests are saved there.</span></p>` : ''}`,
+        ${!signedIn ? `<p class="note info" style="margin-top:18px">${icon('check-circle')}<span>We created a company workspace for ${esc(company.name)}. Your shortlist, compares and requests are saved there.</span></p>` : ''}`,
       foot: `<button class="btn btn-line" data-act="modal-close">Done</button><button class="btn" data-act="go" data-to="buyer.intros">Track in workspace</button>`,
     });
     if (RN.currentRoute() && RN.currentRoute().view.name !== 'profile') RN.rerender();
@@ -433,7 +433,7 @@
     const op = RN.model.byId(o.opId);
     if (!op) return;
     const st = RN.store.state;
-    if (st.persona === 'operator' || st.persona === 'visitor') { RN.ui.toast('The client or the Revenue Nomad team confirms a hire.', { icon: 'info' }); return; }
+    if (st.persona === 'operator' || st.persona === 'visitor') { RN.ui.toast('The company or the Revenue Nomad team confirms a hire.', { icon: 'info' }); return; }
     const source = SOURCES.includes(o.source) ? o.source : 'intro';
     const rehire = source === 'rehire';
     const intr = source === 'intro' ? st.intros.find((i) => i.id === o.sourceId) : null;
@@ -457,10 +457,10 @@
     const project = v.engagementType === 'project';
     RN.ui.modal({
       width: 640,
-      title: existing ? `Terms with ${esc(op.first)}` : rehire ? `Rehire ${esc(op.first)} on these terms` : admin ? `Record the hire: ${esc(client.company || 'Client')} and ${esc(op.first)}` : `Confirm the terms with ${esc(op.first)}`,
+      title: existing ? `Terms with ${esc(op.first)}` : rehire ? `Rehire ${esc(op.first)} on these terms` : admin ? `Record the hire: ${esc(client.company || 'Company')} and ${esc(op.first)}` : `Confirm the terms with ${esc(op.first)}`,
       sub: `${esc(op.name)} · Fractional ${esc(op.role)}${client.company ? ' · ' + esc(client.company) : ''}`,
       body: `<form id="hire-form" class="stack hire-form" style="--gap:22px" data-submit="hire-save" data-input="hire-calc" data-change="hire-calc" data-op="${esc(op.id)}" data-source="${esc(source)}" data-source-id="${esc(o.sourceId || '')}"${existing ? ` data-hire-id="${esc(existing.id)}"` : ''} data-client="${esc(JSON.stringify(client))}" novalidate>
-        <p class="small muted">${rehire && !existing ? `Record the terms for this new engagement with ${esc(op.first)}. We email them to ${esc(op.first)}, and they show in your Team tab.` : admin ? `Record what ${esc(client.company || 'the client')} and ${esc(op.first)} agreed. Both get the terms by email, and they show in the client’s Team tab and ${esc(op.first)}’s Studio.` : `Record what you agreed with ${esc(op.first)}. The terms show in your Team tab with the dates, and ${esc(op.first)} sees the same terms.`}</p>
+        <p class="small muted">${rehire && !existing ? `Record the terms for this new engagement with ${esc(op.first)}. We email them to ${esc(op.first)}, and they show in your Team tab.` : admin ? `Record what ${esc(client.company || 'the company')} and ${esc(op.first)} agreed. Both get the terms by email, and they show in the company’s Team tab and ${esc(op.first)}’s Studio.` : `Record what you agreed with ${esc(op.first)}. The terms show in your Team tab with the dates, and ${esc(op.first)} sees the same terms.`}</p>
         ${RN.w.field('engagementType', v.engagementType, { name: 'engagementType', id: 'hire-type', compact: true })}
         <div class="grid g-2" style="--gap:18px">
           <div data-hire-rate>${RN.w.field('rate', v.rate, { name: 'rate', id: 'hire-rate', label: 'Rate', help: op.rate ? `${op.first}’s listed rate is ${RN.fmt.rate(op.rate)}.` : '' })}</div>
@@ -544,14 +544,14 @@
       }
       if (intr) { const r = s.intros.find((i) => i.id === intr.id); if (r) { r.hiredAt = r.hiredAt || now; r.hireId = rec.id; } }
     }, 'hires');
-    if (intr && intr.status !== 'hired') RN.intro.setStatus(intr.id, 'hired', `${client.company || 'The client'} hired ${op.first}`, { quiet: true });
+    if (intr && intr.status !== 'hired') RN.intro.setStatus(intr.id, 'hired', `${client.company || 'The company'} hired ${op.first}`, { quiet: true });
     // Staff the engagement with this operator (idempotent), unless it is already staffed with someone else
     if (source === 'engagement' && RN.projects && typeof RN.projects.select === 'function') {
       const pj = RN.projects.get ? RN.projects.get(o.sourceId) : null;
       if (pj && !(pj.status === 'staffed' && pj.selectedOpId && pj.selectedOpId !== op.id)) RN.projects.select(o.sourceId, op.id, { quiet: true });
     }
     const lines = hire.facts(rec).map(([k, v]) => `${k}: ${v}`).join('\n');
-    const co = client.company || 'the client';
+    const co = client.company || 'the company';
     if (prev) {
       RN.mail(client.email, `Terms updated: ${op.name}`, `${lines}\n\nSee them in your workspace: #buyer.team`, 'hire');
       RN.mail(op.name, `Terms updated with ${co}`, `${lines}\n\nSee them in Studio: #studio.engagements`, 'hire');
@@ -563,7 +563,7 @@
       RN.track('hire', { opId: op.id, source, sourceId: o.sourceId || '' });
     } else {
       RN.mail(client.email, `You hired ${op.name}`, `${op.first} starts ${hire.date(terms.startDate)}. The terms you recorded:\n${lines}\n\nNo fees for companies: you pay ${op.first}’s rate, nothing more. Your Team tab keeps these terms, the end date and a check-in button: #buyer.team`, 'hire');
-      RN.mail(op.name, `Engagement confirmed with ${co}`, `Congratulations. ${co} confirmed the terms:\n${lines}${terms.rate ? `\n\nYour take-home at ${RN.fmt.rate(terms.rate)} is ${RN.fmt.rate(hire.takeHome(terms.rate))}. ${hire.FEE_LINE}` : `\n\n${hire.FEE_LINE}`}\n\nWhen the engagement wraps, we ask the client for a CORE review, which verifies your fit tags. See it in Studio: #studio.engagements`, 'hire');
+      RN.mail(op.name, `Engagement confirmed with ${co}`, `Congratulations. ${co} confirmed the terms:\n${lines}${terms.rate ? `\n\nYour take-home at ${RN.fmt.rate(terms.rate)} is ${RN.fmt.rate(hire.takeHome(terms.rate))}. ${hire.FEE_LINE}` : `\n\n${hire.FEE_LINE}`}\n\nWhen the engagement wraps, we ask the company for a CORE review, which verifies your fit tags. See it in Studio: #studio.engagements`, 'hire');
       RN.track('hire', { opId: op.id, source, sourceId: o.sourceId || '' });
     }
     const admin = st.persona === 'admin';
@@ -584,10 +584,10 @@
     const cancel = hire.notStarted(h);
     RN.store.update((s) => { const x = s.hires.find((y) => y.id === id); x.status = 'ended'; x.endedAt = now; if (cancel) x.cancelled = true; if (note) x.endNote = String(note).trim(); }, 'hires');
     if (op && cancel) {
-      RN.mail(op.name, `Engagement cancelled: ${h.client.company || 'client'}`, `${h.client.company || 'The client'} cancelled the engagement before its start date (${hire.date(h.terms.startDate)}).${note ? '\nNote: ' + note : ''}`, 'hire');
+      RN.mail(op.name, `Engagement cancelled: ${h.client.company || 'client'}`, `${h.client.company || 'The company'} cancelled the engagement before its start date (${hire.date(h.terms.startDate)}).${note ? '\nNote: ' + note : ''}`, 'hire');
       RN.mail(h.client.email, `Engagement with ${op.name} cancelled`, `You cancelled the engagement with ${op.first} before it started. The terms stay in your Team tab as cancelled: #buyer.team`, 'hire');
     } else if (op) {
-      RN.mail(op.name, `Engagement ended: ${h.client.company || 'client'}`, `${h.client.company || 'The client'} ended the engagement on ${hire.date(now)}.${note ? '\nNote: ' + note : ''}\n\nWe asked them for a CORE review. Verified reviews move your Reputation Index.`, 'hire');
+      RN.mail(op.name, `Engagement ended: ${h.client.company || 'client'}`, `${h.client.company || 'The company'} ended the engagement on ${hire.date(now)}.${note ? '\nNote: ' + note : ''}\n\nWe asked them for a CORE review. Verified reviews move your Reputation Index.`, 'hire');
       RN.mail(h.client.email, `Engagement with ${op.name} ended`, `Thank you for working with ${op.first}. A short CORE review helps the next company hire well, and verifies ${op.first}’s focus areas: #buyer.team`, 'hire');
     }
     RN.track('hire_end', { opId: h.opId });
@@ -606,7 +606,7 @@
       x.status = 'active'; x.endedAt = null; x.cancelled = false; x.endPlanned = false;
     }, 'hires');
     if (op) {
-      RN.mail(op.name, `Engagement extended: ${h.client.company || 'client'}`, `${h.client.company || 'The client'} extended your engagement by ${RN.w.label('term', newTerm).toLowerCase()}. New end date: ${hire.date(to)}.`, 'hire');
+      RN.mail(op.name, `Engagement extended: ${h.client.company || 'client'}`, `${h.client.company || 'The company'} extended your engagement by ${RN.w.label('term', newTerm).toLowerCase()}. New end date: ${hire.date(to)}.`, 'hire');
       RN.mail(h.client.email, `Engagement with ${op.name} extended`, `New end date: ${hire.date(to)}. Same rate and available time. See it in your Team tab: #buyer.team`, 'hire');
     }
     RN.track('hire_extend', { opId: h.opId });
@@ -648,7 +648,7 @@
       title: cancel ? `Cancel the engagement with ${esc(op.first)} before it starts?` : `End the engagement with ${esc(op.first)}?`,
       sub: cancel
         ? `It was due to start ${esc(hire.date(h.terms.startDate))}. The terms stay ${admin ? 'on record' : 'in your Team tab'} as Cancelled before start, and we email ${admin ? 'both sides' : esc(op.first)}.`
-        : admin ? `The terms stay on record as Ended. We email both sides and ask ${esc(h.client.name || 'the client')} for a short CORE review.` : `The terms stay in your Team tab as Ended. We email ${esc(op.first)} and ask you for a short CORE review.`,
+        : admin ? `The terms stay on record as Ended. We email both sides and ask ${esc(h.client.name || 'the company')} for a short CORE review.` : `The terms stay in your Team tab as Ended. We email ${esc(op.first)} and ask you for a short CORE review.`,
       body: `<form id="hire-end-form" data-submit="hire-end" data-id="${esc(h.id)}" class="stack" style="--gap:14px">
         <div class="field"><label for="hire-end-note">Note for ${esc(op.first)} <span class="opt">Optional</span></label>
           <textarea class="textarea" id="hire-end-note" name="note" maxlength="300" style="min-height:72px" placeholder="What wrapped up, or what changed."></textarea></div></form>`,

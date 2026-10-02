@@ -16,7 +16,7 @@
      tool proficiency and CORE notes marked "sample" are illustrative. op.isMatt only selects this demo data;
      it never drives a label or an exclusion (founder decision, Sep 25, 2026: no founder callouts). */
   const MATT_ENG = {
-    Ferry: { revenueRange: '1m_5m', employeeRange: '11_50', industry: 'Saas', outcome: "Built and launched the company's first digital demand generation program, which delivered their first 20 inbound leads. Converted that pipeline into two closed deals, doubling the client base. Recruited and onboarded their first AE, who closed a deal within 60 days of starting." },
+    Ferry: { revenueRange: '1m_5m', employeeRange: '11_50', industry: 'Saas', outcome: "Built and launched the company's first digital demand generation program, which delivered their first 20 inbound leads. Converted that pipeline into two closed deals, doubling the company base. Recruited and onboarded their first AE, who closed a deal within 60 days of starting." },
     'myHR Partner': { revenueRange: '5m_20m', employeeRange: '51_200', industry: 'Professional Services', context: 'Worked with the sales team on new business and expansion: playbook, segmentation, pipeline reviews and the handoff to customer success.' },
     Trialbee: { revenueRange: '5m_20m', employeeRange: '51_200', industry: 'Pharma & Biotech' },
     BuildingLink: { revenueRange: '20m_50m', employeeRange: '201_500', industry: 'Property Management' },
@@ -75,7 +75,7 @@
     'Systems & data': 'CRM, reporting, routing, tech stack and automation: the plumbing every stage runs on.',
   };
   const LOGO_WORD = { ferry: 'ferryWordmark' };
-  const PROOF_SECTIONS = { reviews: 'Client reviews', core: 'CORE ratings', engagements: 'Engagement history', samples: 'Work samples', rate: 'Rate and availability' };
+  const PROOF_SECTIONS = { reviews: 'Company reviews', core: 'CORE ratings', engagements: 'Engagement history', samples: 'Work samples', rate: 'Rate and availability' };
 
   /* ---------- Per-visit state ---------- */
   let S = fresh();
@@ -494,7 +494,7 @@
               ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
               ${op.timezone ? `<span>${icon('clock')}${esc(tzLabel(op.timezone))}</span>` : ''}
               <span>${icon('briefcase')}${esc(catLabel(op.catKey))}</span>
-              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, clients and reviews are invented.') : ''}
+              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.') : ''}
             </div>
             ${clientsBlock(c, logos)}
           </div>
@@ -511,10 +511,10 @@
     const op = c.op;
     let html = '';
     if (c.engs.length >= 2) {
-      html = `<span class="eyebrow pf-clients-l">Clients</span>
-        <div class="pf-logos">${logos.map((e) => `<span class="pf-logo ${e.verified ? 'ver' : ''}" title="${esc(e.company)} · ${esc(plural(e.months || 0, 'month'))}${e.verified ? ' · client verified' : ' · self-reported'}">${e.logo ? logoHtml(e.logo, e.company, 30) : `<b>${esc(e.company)}</b>`}${e.verified ? `<span class="pf-logo-seal">${icon('check')}</span>` : ''}</span>`).join('')}
+      html = `<span class="eyebrow pf-clients-l">Companies</span>
+        <div class="pf-logos">${logos.map((e) => `<span class="pf-logo ${e.verified ? 'ver' : ''}" title="${esc(e.company)} · ${esc(plural(e.months || 0, 'month'))}${e.verified ? ' · company verified' : ' · self-reported'}">${e.logo ? logoHtml(e.logo, e.company, 30) : `<b>${esc(e.company)}</b>`}${e.verified ? `<span class="pf-logo-seal">${icon('check')}</span>` : ''}</span>`).join('')}
           ${c.engs.length > 5 ? jumpBtn('pf-engagements', `+${c.engs.length - 5} more`, 'pf-more') : ''}</div>
-        ${c.engs.some((e) => e.verified) ? `<span class="pf-clients-note">${icon('check-circle')}Client-verified engagement${c.engs.length > 5 ? ` · showing 5 of ${c.engs.length}, verified first` : ''}</span>` : `<span class="pf-clients-note">Self-reported engagements</span>`}`;
+        ${c.engs.some((e) => e.verified) ? `<span class="pf-clients-note">${icon('check-circle')}Company-verified engagement${c.engs.length > 5 ? ` · showing 5 of ${c.engs.length}, verified first` : ''}</span>` : `<span class="pf-clients-note">Self-reported engagements</span>`}`;
     } else if (op.video && op.industries.length) {
       html = `<span class="eyebrow pf-clients-l">${esc(F.industries.label)}</span><p class="pf-inds">${op.industries.slice(0, 5).map((i) => esc(RN.w.label('industries', i))).join('<span> · </span>')}</p>`;
     }
@@ -528,9 +528,9 @@
   function ownerBar(c) {
     const m = c.v.mode;
     return `<div class="pf-owner" role="region" aria-label="Owner view">
-      <span class="pf-owner-l">${icon('eye')}<span><b>${m === 'owner' ? 'This is how clients see your profile' : m === 'client' ? 'Previewing as a signed-in client' : 'Previewing as a logged-out visitor'}</b><span class="pf-owner-sub">${m === 'owner' ? 'Rate and Studio shortcuts are shown to you only.' : m === 'client' ? 'Sample client: Northwind Health. Buttons are inactive in preview.' : 'Rate and match signals are locked for visitors.'}</span></span></span>
+      <span class="pf-owner-l">${icon('eye')}<span><b>${m === 'owner' ? 'This is how companies see your profile' : m === 'client' ? 'Previewing as a signed-in company' : 'Previewing as a logged-out visitor'}</b><span class="pf-owner-sub">${m === 'owner' ? 'Rate and Studio shortcuts are shown to you only.' : m === 'client' ? 'Sample company: Northwind Health. Buttons are inactive in preview.' : 'Rate and match signals are locked for visitors.'}</span></span></span>
       <div class="seg pf-seg-night" role="group" aria-label="View as">
-        ${[['owner', 'Your view'], ['visitor', 'Visitor'], ['client', 'Client']].map(([k, l]) => `<button type="button" class="${m === k ? 'on' : ''}" aria-pressed="${m === k}" data-act="pf-viewas" data-v="${k}">${l}</button>`).join('')}
+        ${[['owner', 'Your view'], ['visitor', 'Visitor'], ['client', 'Company']].map(([k, l]) => `<button type="button" class="${m === k ? 'on' : ''}" aria-pressed="${m === k}" data-act="pf-viewas" data-v="${k}">${l}</button>`).join('')}
       </div>
     </div>`;
   }
@@ -609,7 +609,7 @@
         <div class="pf-bell">${RN.chart.bell({ w: 230, h: 64, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
         <div class="pf-bell-foot"><span>Median ${PEER.mean} ${RN.ui.illus('Illustrative peers')}</span><b>${ordinal(pctile)} percentile</b></div>
       </div>
-      <div class="pf-rep-x"><b class="${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${esc(tier.l)} · ${esc(op.ris.score)} of 100</b><p>${esc(tier.d)}</p><span>One score for every client, built from review volume, verified focus areas, ratings, profile completeness and engagement recency.</span></div>
+      <div class="pf-rep-x"><b class="${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${esc(tier.l)} · ${esc(op.ris.score)} of 100</b><p>${esc(tier.d)}</p><span>One score for every company, built from review volume, verified focus areas, ratings, profile completeness and engagement recency.</span></div>
     </article>`;
     // How long clients stay
     const median = medianMonths();
@@ -617,12 +617,12 @@
     const rows = (ver.length ? ver : c.engs).slice(0, 3);
     const scale = Math.max(24, ...rows.map((e) => e.months || 0));
     const stay = `<article class="pf-proof">
-      <div class="pf-proof-hd"><span>How long clients stay</span></div>
+      <div class="pf-proof-hd"><span>How long companies stay</span></div>
       ${rows.length ? `<div class="pf-stay" style="--med:${((median / scale) * 100).toFixed(1)}%">
           ${rows.map((e) => `<div class="pf-stay-row ${e.verified ? '' : 'self'}"><i style="width:calc(${Math.max(6, ((e.months || 0) / scale) * 100).toFixed(1)}% * .6)"></i><span><b>${esc(plural(e.months || 0, 'mo', 'mo'))}</b> · ${esc(e.company)}</span></div>`).join('')}
           <span class="pf-stay-med" aria-hidden="true"><em>median ${median} mo</em></span>
         </div>
-        <p class="pf-proof-note">${ver.length ? `Client-verified engagements vs the ${median}-month median in the ${jumpBtnLink('report', 'State of Fractional GTM')}` : `Self-reported. Each turns verified when that client leaves a review.`}</p>`
+        <p class="pf-proof-note">${ver.length ? `Company-verified engagements vs the ${median}-month median in the ${jumpBtnLink('report', 'State of Fractional GTM')}` : `Self-reported. Each turns verified when that company leaves a review.`}</p>`
       : `<p class="pf-proof-empty">No engagements added yet</p><p class="pf-proof-note">${c.v.owner ? '<a class="act" href="#studio.profile">Add engagement history</a>' : `Shown once ${esc(op.first)} adds engagement history.`}</p>`}
     </article>`;
     // Would hire again
@@ -634,9 +634,9 @@
       <p class="pf-big serif-up">${again}%</p>
       <button type="button" class="pf-hire-link" data-act="pf-jump" data-to="pf-reviews"><span class="pf-dots">${c.reviews.map(() => '<i></i>').join('')}</span><u>${esc(plural(n, 'client'))}</u><span>· ${avg.toFixed(1)}</span>${RN.ui.stars(avg)}${icon('arrow')}</button>
     </article>` : `<article class="pf-proof">
-      <div class="pf-proof-hd"><span>Client reviews</span></div>
+      <div class="pf-proof-hd"><span>Company reviews</span></div>
       <p class="pf-proof-empty">None yet</p>
-      <p class="pf-proof-note">${c.v.owner ? `<a class="act" href="#studio.credibility">Request a review from a past client</a>` : `Reviews come from past clients ${esc(op.first)} invites. Each one verifies focus areas.`}</p>
+      <p class="pf-proof-note">${c.v.owner ? `<a class="act" href="#studio.credibility">Request a review from a past company</a>` : `Reviews come from past companies ${esc(op.first)} invites. Each one verifies focus areas.`}</p>
     </article>`;
     return rep + stay + hire;
   }
@@ -689,7 +689,7 @@
     if (!bps.length) {
       if (!v.owner) return '';
       return sec(c, 'offers', 'Ways to work', `Ways to work with ${esc(op.first)}`, RN.ui.empty({ icon: 'briefcase', title: 'No packaged engagements yet',
-        body: 'Pick the Engagement Blueprints you run. Clients see the problem each one solves, a typical monthly range and a one-click request.',
+        body: 'Pick the Engagement Blueprints you run. Companies see the problem each one solves, a typical monthly range and a one-click request.',
         cta: '<a class="btn btn-sm" href="#studio.profile">Add offers in Studio</a>' }));
     }
     const rev = repRev(op), hrs = op.avail.hoursCode || '40';
@@ -756,7 +756,7 @@
     const facts = c.engs.length ? `<h3 class="h5 pf-h3 pf-facts-h">Engagements</h3><dl class="pf-facts">
         <div class="pf-facts-stack"><dt>Roles held</dt><dd class="pf-chips">${[...new Set(c.engs.map((e) => e.role).filter(Boolean))].slice(0, 4).map((r) => `<span class="pf-chip sm">${esc(r)}</span>`).join('')}</dd></div>
         <div><dt>Engagement length</dt><dd>${esc((() => { const m = c.engs.map((e) => e.months || 0).filter(Boolean); return m.length ? (Math.min(...m) === Math.max(...m) ? plural(m[0], 'month') : `${Math.min(...m)} – ${Math.max(...m)} months`) : '—'; })())}</dd></div>
-        <div><dt>Client-verified</dt><dd>${Math.round((c.engs.filter((e) => e.verified).length / c.engs.length) * 100)}%</dd></div>
+        <div><dt>Company-verified</dt><dd>${Math.round((c.engs.filter((e) => e.verified).length / c.engs.length) * 100)}%</dd></div>
       </dl>` : '';
     return sec(c, 'fit', `Fit · ${esc(catLabel(op.catKey))}`, `Who ${esc(op.first)} is right for`,
       `<div class="pf-fit">
@@ -770,7 +770,7 @@
     const op = c.op;
     if (!c.tags.length) return '';
     return sec(c, 'expertise', 'Expertise · GTM Framework', 'Where the proof is', expertiseBody(c), {
-      sub: `${plural(c.verified.length, 'focus area')} verified by clients, ${c.tags.length - c.verified.length} self-claimed. Mapped onto the ${jumpBtnLink('framework', 'GTM Framework')}.`,
+      sub: `${plural(c.verified.length, 'focus area')} verified by companies, ${c.tags.length - c.verified.length} self-claimed. Mapped onto the ${jumpBtnLink('framework', 'GTM Framework')}.`,
       edit: 'studio.profile', editLabel: 'Edit fit tags',
     });
   }
@@ -778,7 +778,7 @@
     return `<div class="pf-bow-wrap">
         <div class="pf-bow pf-bow-h">${bowtie(c, false)}</div>
         <div class="pf-bow pf-bow-v">${bowtie(c, true)}</div>
-        <div class="legend pf-legend"><span><i class="pf-lg-ramp"></i>Stronger client-verified proof</span><span><i class="pf-lg-claimed"></i>Self-claimed only</span><span><i class="pf-lg-empty"></i>Nothing tagged</span></div>
+        <div class="legend pf-legend"><span><i class="pf-lg-ramp"></i>Stronger company-verified proof</span><span><i class="pf-lg-claimed"></i>Self-claimed only</span><span><i class="pf-lg-empty"></i>Nothing tagged</span></div>
       </div>
       <div class="pf-exp-grid">
         <div class="pf-radar">${radar(c)}</div>
@@ -865,10 +865,10 @@
         <h3 class="pf-how-h">How scores work</h3>
         <div class="pf-how-blk">
           <span class="pf-how-k">Points per focus area</span>
-          <div class="pf-ladder" role="img" aria-label="Self-claimed 10 points; 1 client review 50; 2 reviews 60; 3 reviews 70; 4 reviews 80; 5 or more reviews Expert, 85 and up">
+          <div class="pf-ladder" role="img" aria-label="Self-claimed 10 points; 1 company review 50; 2 reviews 60; 3 reviews 70; 4 reviews 80; 5 or more reviews Expert, 85 and up">
             ${LADDER.map(([l, v, k], i) => `<div class="pf-rung is-${k}" style="--h:${v}%;--i:${i}"><b>${v}${k === 'x' ? '+' : ''}</b><i></i><span>${l}</span></div>`).join('')}
           </div>
-          <div class="pf-ladder-key"><span><i class="is-cl"></i>Self-claimed</span><span><i class="is-v"></i>Client reviews</span><span><i class="is-x"></i>Expert</span></div>
+          <div class="pf-ladder-key"><span><i class="is-cl"></i>Self-claimed</span><span><i class="is-v"></i>Company reviews</span><span><i class="is-x"></i>Expert</span></div>
         </div>
         <div class="pf-how-blk">
           <span class="pf-how-k">Each stage and area</span>
@@ -905,7 +905,7 @@
     const cat = catLabel(info.c || t.c);
     const g = info.g || t.g;
     const by = confirmers(op, t);
-    return `<span class="pf-tip-k">${esc(cat)}${g && g !== cat ? ' › ' + esc(g) : ''}</span><br><b>${esc(t.t)}</b>${info.d ? '<br>' + esc(info.d) : ''}<br><span style="opacity:.8">${by.length ? 'Verified by ' + esc(by.join(', ')) : 'Self-claimed. Not yet verified by a client.'}</span>`;
+    return `<span class="pf-tip-k">${esc(cat)}${g && g !== cat ? ' › ' + esc(g) : ''}</span><br><b>${esc(t.t)}</b>${info.d ? '<br>' + esc(info.d) : ''}<br><span style="opacity:.8">${by.length ? 'Verified by ' + esc(by.join(', ')) : 'Self-claimed. Not yet verified by a company.'}</span>`;
   }
   function tagList(c) {
     const op = c.op;
@@ -924,14 +924,14 @@
           <span class="pf-badge ${t.tier}">${t.tier === 'expert' ? 'Expert' : 'Verified'}</span>
           <b class="pf-tag-score">${t.score}</b></div>
         <div class="pf-bar"><i style="width:${t.score}%"></i></div>
-        <p class="pf-tag-ev">Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a client'} · ${esc(plural(t.r || by.length || 1, 'client review'))} · ${esc(CONTRIB[t.c] || '')}</p>
+        <p class="pf-tag-ev">Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a company'} · ${esc(plural(t.r || by.length || 1, 'company review'))} · ${esc(CONTRIB[t.c] || '')}</p>
       </li>`;
     };
     const title = f ? `Focus areas in ${esc(f.key)}` : ver.length ? 'Top verified focus areas' : 'Focus areas';
     return `<div class="pf-taglist-hd"><h3 class="h5 pf-h3">${title}</h3>
         ${f ? `<button type="button" class="act" data-act="pf-focus-clear">Show all expertise</button>` : ''}</div>
       ${showVer.length ? `<ul class="pf-tags">${showVer.map(row).join('')}</ul>` : ''}
-      ${showCl.length ? `<div class="pf-claimed">${ver.length ? `<p class="pf-claimed-hd"><b>Also claims ${plural(cl.length, 'focus area')}</b> not yet verified by a client</p>` : `<p class="pf-claimed-hd">Self-claimed by ${esc(op.first)}. Each one turns verified when a client confirms it in a review.</p>`}
+      ${showCl.length ? `<div class="pf-claimed">${ver.length ? `<p class="pf-claimed-hd"><b>Also claims ${plural(cl.length, 'focus area')}</b> not yet verified by a company</p>` : `<p class="pf-claimed-hd">Self-claimed by ${esc(op.first)}. Each one turns verified when a company confirms it in a review.</p>`}
         <div class="pf-chips">${showCl.map((t) => `<button type="button" class="pf-chip dashed" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>`).join('')}</div></div>` : ''}
       ${!tags.length ? `<p class="pf-focus-empty">No focus areas here yet.</p>` : ''}
       ${tags.length > LIMIT ? `<button type="button" class="pf-showall" data-act="pf-tags-all">${S.tagsAll ? 'Show top 7' : `Show all ${tags.length} focus areas`}${icon(S.tagsAll ? 'chev-up' : 'chev-down')}</button>` : ''}`;
@@ -944,7 +944,7 @@
     const meter = (lvl) => `<span class="pf-pm" aria-hidden="true">${[1, 2, 3, 4].map((i) => `<i class="${i <= lvl ? 'on' : ''} ${lvl === 4 ? 'dev' : ''}"></i>`).join('')}</span>`;
     const mark = (name) => (TOOL_LOGO[name] ? `<span class="pf-tl-mark img">${RN.ui.logo(TOOL_LOGO[name], { name, h: 20 })}</span>` : `<span class="pf-tl-mark">${esc(name[0])}</span>`);
     const groups = P.slice().reverse().map((o) => ({ l: o.l, d: o.d, lvl: o.level, tools: st.tools.filter((t) => t.lvl === o.level) }))
-      .concat([{ l: 'Level not set', d: 'Named by the operator or confirmed by a client, without a proficiency level.', lvl: 0, tools: st.tools.filter((t) => !t.lvl) }])
+      .concat([{ l: 'Level not set', d: 'Named by the operator or confirmed by a company, without a proficiency level.', lvl: 0, tools: st.tools.filter((t) => !t.lvl) }])
       .filter((g) => g.tools.length);
     return sec(c, 'stack', 'Tech stack', `Tools ${esc(op.first)} works in`, `
       <label class="pf-search">${icon('search')}<input type="search" placeholder="Search ${st.tools.length} tools, e.g. Salesforce" data-input="pf-stack-q" value="${esc(S.stackQ)}" aria-label="Search ${esc(op.first)}’s tools"></label>
@@ -955,7 +955,7 @@
           <ul>${g.tools.slice().sort((a, b) => a.name.localeCompare(b.name)).map((t) => `<li class="pf-tool" data-name="${esc(lc(t.name))}" data-lvl="${t.lvl}" data-by="${esc(t.by)}">
             ${mark(t.name)}<span class="pf-tool-n"><b>${esc(t.name)}</b>${t.by ? `<button type="button" class="pf-tool-v" data-act="pf-jump" data-to="pf-review-${RN.slug(t.by)}">${icon('check-circle')}Confirmed by ${esc(t.by)}</button>` : ''}</span></li>`).join('')}</ul>
         </div>`).join('')}</div>
-      <p class="pf-note">${st.illus ? `${RN.ui.illus('Illustrative levels')} ` : ''}Proficiency uses the four standard levels from operator intake. “Confirmed by” means a client named the tool in a review.</p>`, { edit: 'studio.profile' });
+      <p class="pf-note">${st.illus ? `${RN.ui.illus('Illustrative levels')} ` : ''}Proficiency uses the four standard levels from operator intake. “Confirmed by” means a company named the tool in a review.</p>`, { edit: 'studio.profile' });
   }
   function applyStackFilter(root) {
     const box = root.querySelector('#pf-stack');
@@ -1037,8 +1037,8 @@
       body: `<div class="pf-lb">${Array.from({ length: pages }, (_, i) => i < pages - 1 ? `<figure class="pf-lb-page"><span class="pf-doc front big"><span class="pf-doc-rule"></span><span class="pf-doc-hd"><span>${esc(lc(s.at || op.first).toUpperCase())} · ${esc(s.type.toUpperCase())}</span><span>CONFIDENTIAL</span></span>
             <b>${esc(toc[i % toc.length])}</b><i></i><i class="w8"></i><i></i><i class="w6"></i><i class="w8"></i><i></i><i class="w6"></i><span class="pf-doc-ft"><span>Prepared by ${esc(op.name)}</span><span>${i + 1}</span></span></span><figcaption>Page ${i + 1}</figcaption></figure>`
           : `<figure class="pf-lb-page locked"><span class="pf-doc front big"><span class="pf-doc-rule"></span><i></i><i class="w8"></i><i></i><i class="w6"></i></span><span class="pf-lb-lock">${icon('lock')}<b>${Math.max(1, (s.pages || pages) - (pages - 1))} more pages</b><span>Shared after an intro</span></span><figcaption>Page ${i + 1}</figcaption></figure>`).join('')}</div>
-        <div class="pf-lb-prov">${e && e.verified ? icon('check-circle') : icon('info')}<span>${s.at ? `Used at <b>${esc(s.at)}</b>${e && e.verified ? ', a client-verified engagement' : ''}` : 'Work sample'}${s.skills.length ? ` · confirms ${s.skills.map((k) => `<span class="pf-chip sm">${esc(k)}</span>`).join(' ')}` : ''}</span></div>
-        ${c.v.owner ? `<p class="small muted pf-lb-note">${icon('upload')} ${downloads(op, s)} downloads this quarter, 4 by companies in Health Care. Clients see page previews; the full file is shared after an intro. ${RN.ui.illus()}</p>` : ''}
+        <div class="pf-lb-prov">${e && e.verified ? icon('check-circle') : icon('info')}<span>${s.at ? `Used at <b>${esc(s.at)}</b>${e && e.verified ? ', a company-verified engagement' : ''}` : 'Work sample'}${s.skills.length ? ` · confirms ${s.skills.map((k) => `<span class="pf-chip sm">${esc(k)}</span>`).join(' ')}` : ''}</span></div>
+        ${c.v.owner ? `<p class="small muted pf-lb-note">${icon('upload')} ${downloads(op, s)} downloads this quarter, 4 by companies in Health Care. Companies see page previews; the full file is shared after an intro. ${RN.ui.illus()}</p>` : ''}
         <p class="tiny faint pf-lb-note">${RN.ui.illus('Illustrative previews')} Page previews are placeholders until the file is uploaded.</p>`,
       foot: c.v.owner ? `<button class="btn btn-line" data-act="modal-close">Close</button><a class="btn" href="#studio.profile" data-act="modal-close">Manage samples in Studio</a>`
         : c.v.proof ? `<button class="btn btn-line" data-act="modal-close">Back</button><button class="btn" data-act="pf-proof-sample" data-id="${esc(c.v.proofId)}" data-s="${esc(s.id)}">Ask ${esc(op.first)} for the full sample</button>`
@@ -1052,7 +1052,7 @@
     const hasReviews = c.reviews.length > 0;
     if (!c.engs.length) {
       if (hasReviews) return '';
-      return sec(c, 'engagements', 'Engagements', 'Past engagements', RN.ui.empty({ icon: 'briefcase', title: 'No engagements or client reviews yet', body: c.v.owner ? 'Add engagement history in Studio, then ask each client for a review. Reviews verify your focus areas and lift your Reputation Index.' : `${op.first} has not added engagement history yet. Ask about recent work when you request an intro.`,
+      return sec(c, 'engagements', 'Engagements', 'Past engagements', RN.ui.empty({ icon: 'briefcase', title: 'No engagements or company reviews yet', body: c.v.owner ? 'Add engagement history in Studio, then ask each company for a review. Reviews verify your focus areas and lift your Reputation Index.' : `${op.first} has not added engagement history yet. Ask about recent work when you request an intro.`,
         cta: c.v.owner ? '<a class="btn btn-sm" href="#studio.profile">Add engagement history</a>' : `<button class="btn btn-sm" data-act="${c.v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>` }));
     }
     if (S.engOpen == null) S.engOpen = { [c.engs[0].key]: true };
@@ -1064,7 +1064,7 @@
       return yr + engItem(c, e, hasReviews);
     }).join('');
     return sec(c, 'engagements', hasReviews ? 'Track record' : 'Engagements · Self-reported', hasReviews ? 'Engagement history' : 'Past engagements',
-      `<div class="pf-tl">${items}</div>`, { sub: hasReviews ? `${plural(c.engs.length, 'engagement')}, ${c.engs.filter((e) => e.verified).length} verified by the client.` : 'Self-reported by the operator. Each one turns verified when that client leaves a review.', edit: 'studio.profile' });
+      `<div class="pf-tl">${items}</div>`, { sub: hasReviews ? `${plural(c.engs.length, 'engagement')}, ${c.engs.filter((e) => e.verified).length} verified by the company.` : 'Self-reported by the operator. Each one turns verified when that company leaves a review.', edit: 'studio.profile' });
   }
   function engItem(c, e, hasReviews) {
     const open = !!(S.engOpen && S.engOpen[e.key]);
@@ -1080,7 +1080,7 @@
         <span class="pf-eng-main">
           <b class="pf-eng-role">${esc(e.role || 'Engagement')}</b>
           <span class="pf-eng-co">${esc(e.company)}${meta.length ? ` · ${esc(meta.join(' · '))}` : ''}</span>
-          <span class="pf-eng-tags">${e.industry ? `<span class="pf-ind">${esc(RN.w.label('industries', e.industry))}</span>` : ''}${e.verified ? `<span class="pf-verified">${icon('check-circle')}Client verified</span>` : `<span class="pf-self">${hasReviews ? 'Self-reported' : `Awaiting a review from ${esc(e.company)}`}</span>`}</span>
+          <span class="pf-eng-tags">${e.industry ? `<span class="pf-ind">${esc(RN.w.label('industries', e.industry))}</span>` : ''}${e.verified ? `<span class="pf-verified">${icon('check-circle')}Company verified</span>` : `<span class="pf-self">${hasReviews ? 'Self-reported' : `Awaiting a review from ${esc(e.company)}`}</span>`}</span>
         </span>
         <span class="pf-eng-when"><b>${esc(mon(e.start))} – ${esc(mon(e.end))}</b><span>${esc(plural(e.months || 0, 'mo', 'mo'))}${r ? ` · ${RN.ui.stars(r.overall || 5)}` : ''}</span></span>
         ${hasDetail ? `<span class="pf-eng-chev">${icon('chev-down')}</span>` : ''}
@@ -1101,8 +1101,8 @@
     const op = c.op;
     if (!c.reviews.length) return '';
     const avg = mean(c.reviews.map((r) => +r.overall || 5));
-    return sec(c, 'reviews', 'Client reviews', 'What clients say', `<div class="pf-reviews">${c.reviews.map((r, i) => reviewCard(c, r, i)).join('')}</div>`, {
-      sub: `${avg.toFixed(1)} average from ${plural(c.reviews.length, 'verified client')}. Reviews publish as submitted and verify the focus areas each client confirms.`,
+    return sec(c, 'reviews', 'Company reviews', 'What companies say', `<div class="pf-reviews">${c.reviews.map((r, i) => reviewCard(c, r, i)).join('')}</div>`, {
+      sub: `${avg.toFixed(1)} average from ${plural(c.reviews.length, 'verified company')}. Reviews publish as submitted and verify the focus areas each company confirms.`,
       side: c.v.owner ? `<a class="act pf-edit" href="#studio.credibility">${icon('send')}Request a review</a>` : c.v.client && !c.v.preview && reviewIntro(op) ? `<button type="button" class="btn btn-line btn-sm" data-act="bw-review-start" data-id="${esc(reviewIntro(op).id)}">${icon('star')}Leave a review</button>` : '',
     });
   }
@@ -1113,7 +1113,7 @@
       <header><span class="pf-rv-ava">${esc(RN.fmt.initials(r.reviewer))}</span><span class="grow"><b>${esc(r.reviewer)}</b><span>${esc([r.role, r.company].filter(Boolean).join(', '))}</span></span>${logoKey ? `<span class="pf-review-logo">${logoHtml(logoKey, r.company, 20)}</span>` : ''}</header>
       <div class="row-nw" style="--gap:8px">${RN.ui.stars(r.overall || 5)}<span class="small muted">${esc(r.date ? RN.fmt.date(r.date + 'T12:00:00') : '')}</span></div>
       <blockquote class="pf-review-q">“${esc(r.quote || '')}”</blockquote>
-      <footer><span class="pf-verified">${icon('check-circle')}Verified client</span>${r.hireAgain !== false ? `<span class="pf-self">Would hire again</span>` : ''}${(r.tags || []).length ? `<span class="pf-self">Confirmed ${plural(r.tags.length, 'focus area')}</span>` : ''}
+      <footer><span class="pf-verified">${icon('check-circle')}Verified company</span>${r.hireAgain !== false ? `<span class="pf-self">Would hire again</span>` : ''}${(r.tags || []).length ? `<span class="pf-self">Confirmed ${plural(r.tags.length, 'focus area')}</span>` : ''}
         <button type="button" class="act pf-readmore" data-act="pf-review" data-i="${i}">Read full review${icon('arrow')}</button></footer>
     </article>`;
   }
@@ -1129,15 +1129,15 @@
       title: `<span class="serif-up" style="font-weight:400">${esc(r.reviewer)}</span>`,
       sub: `${esc([r.role, r.company].filter(Boolean).join(', '))}${r.date ? ' · ' + esc(RN.fmt.date(r.date + 'T12:00:00')) : ''}`,
       body: `<div class="pf-rvm">
-        <div class="row" style="--gap:10px"><b class="num h4">${(+r.overall || 5).toFixed(1)}</b>${RN.ui.stars(r.overall || 5)}<span class="pill pill-good">${icon('check-circle')}Verified client</span>${r.hireAgain !== false ? `<span class="pill pill-accent">${icon('check')}Would hire again</span>` : ''}${e && e.logo ? `<span class="pf-review-logo">${logoHtml(e.logo, e.company, 20)}</span>` : ''}</div>
+        <div class="row" style="--gap:10px"><b class="num h4">${(+r.overall || 5).toFixed(1)}</b>${RN.ui.stars(r.overall || 5)}<span class="pill pill-good">${icon('check-circle')}Verified company</span>${r.hireAgain !== false ? `<span class="pill pill-accent">${icon('check')}Would hire again</span>` : ''}${e && e.logo ? `<span class="pf-review-logo">${logoHtml(e.logo, e.company, 20)}</span>` : ''}</div>
         <span class="label pf-lab">${esc(F.overallExperience.label)}</span>
         <blockquote class="pf-rvm-q">“${esc(r.quote || '')}”</blockquote>
         <span class="label pf-lab">CORE ratings</span>
         ${cr ? `<div class="pf-rvm-core">${F.coreDims.options.map((d, k) => `<div class="pf-rvm-dim"><span class="pf-core-l">${esc(d.v)}</span><div><div class="row-nw" style="--gap:10px"><b>${esc(d.l)}</b><span class="num accent">${cr.scores[k].toFixed(1)} / 5</span>${pips(cr.scores[k])}</div>
             <p class="pf-rvm-ask">${esc(d.q)}</p>${cr.notes && cr.notes[k] ? `<p class="pf-rvm-note">“${esc(cr.notes[k])}”</p>` : ''}</div></div>`).join('')}</div>
-            ${cr.notes && cr.notes.some(Boolean) ? '' : `<p class="small muted">This client scored each dimension without a written note.</p>`}`
-        : `<p class="small muted">This client left a star rating and written review without CORE ratings.</p>`}
-        ${(r.tags || []).length ? `<span class="label pf-lab">Focus areas this client verified</span><div class="pf-chips">${r.tags.map((t) => `<span class="pf-chip v">${icon('check-circle')}${esc(t)}</span>`).join('')}</div>` : ''}
+            ${cr.notes && cr.notes.some(Boolean) ? '' : `<p class="small muted">This company scored each dimension without a written note.</p>`}`
+        : `<p class="small muted">This company left a star rating and written review without CORE ratings.</p>`}
+        ${(r.tags || []).length ? `<span class="label pf-lab">Focus areas this company verified</span><div class="pf-chips">${r.tags.map((t) => `<span class="pf-chip v">${icon('check-circle')}${esc(t)}</span>`).join('')}</div>` : ''}
         ${e ? `<span class="label pf-lab">Engagement</span><dl class="pf-facts">
           <div><dt>Operator title at engagement</dt><dd>${esc(e.role || det.title || '')}</dd></div>
           <div><dt>Engagement dates</dt><dd>${esc(mon(e.start))} – ${esc(mon(e.end))} · ${esc(plural(e.months || 0, 'mo', 'mo'))}</dd></div>
@@ -1169,7 +1169,7 @@
     const op = c.op;
     const st = coreStats(c);
     const X = (v) => (((v - 1) / 4) * 100).toFixed(1) + '%';
-    return sec(c, 'core', 'CORE · Client ratings', `How clients rate working with ${esc(op.first)}`, `
+    return sec(c, 'core', 'CORE · Company ratings', `How companies rate working with ${esc(op.first)}`, `
       <div class="pf-core">
         <div class="pf-core-panel">
           <span class="eyebrow pf-core-k">CORE score</span>
@@ -1177,7 +1177,7 @@
           <p class="pf-core-vs"><b>${st.comp >= st.bench ? '+' : ''}${(st.comp - st.bench).toFixed(1)}</b> vs platform average ${st.bench.toFixed(1)}</p>
           <p class="pf-core-vs">Higher than <b>${st.compPct}%</b> of operators</p>
           <dl class="pf-core-defs">${F.coreDims.options.map((d) => `<div><dt>${esc(d.v)}</dt><dd><b>${esc(d.l)}.</b> ${esc(d.d)}</dd></div>`).join('')}</dl>
-          <p class="pf-core-foot">From ${plural(st.n, 'client rating')}. Each client scores four behaviours from 1 to 5 and can add a note to each score.</p>
+          <p class="pf-core-foot">From ${plural(st.n, 'company rating')}. Each company scores four behaviours from 1 to 5 and can add a note to each score.</p>
         </div>
         <div class="pf-core-rows">
           <div class="legend pf-core-legend"><span><i class="pf-lg-you"></i>${esc(op.first)}</span><span><i class="pf-lg-bench"></i>Platform average</span></div>
@@ -1246,7 +1246,7 @@
       </dl>
       <div class="pf-engage-act">
       ${v.owner ? `<a class="btn btn-block" href="#studio.profile">${icon('edit')}Update availability and rate</a>
-          <p class="pf-fine">Clients see this card with a Request intro button. Your rate is hidden from logged-out visitors.</p>`
+          <p class="pf-fine">Companies see this card with a Request intro button. Your rate is hidden from logged-out visitors.</p>`
       : intro ? `<div class="pf-intro-st"><span>Your intro request</span>${RN.ui.statusPill('intro', intro.status)}</div>
           ${rev ? `<button type="button" class="btn btn-block" data-act="bw-review-start" data-id="${esc(intro.id)}">${icon('star')}Leave a review</button>` : `<a class="btn btn-block btn-line" href="#buyer.intros">Track in workspace${icon('arrow')}</a>`}`
       : `<button type="button" class="btn btn-block" data-act="${v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>`}
@@ -1263,14 +1263,14 @@
     const op = c.op, v = c.v;
     if (v.owner) {
       return `<section class="pf-card pf-match"><span class="eyebrow">Match signals</span>
-        <p class="pf-match-own">Signed-in clients see how you fit their company on five signals: company revenue, employee range, GTM motion, industry and focus areas. They come from the same fields as your profile.</p>
-        <button type="button" class="act" data-act="pf-viewas" data-v="client">${icon('eye')}Preview as a client</button></section>`;
+        <p class="pf-match-own">Signed-in companies see how you fit their company on five signals: company revenue, employee range, GTM motion, industry and focus areas. They come from the same fields as your profile.</p>
+        <button type="button" class="act" data-act="pf-viewas" data-v="client">${icon('eye')}Preview as a company</button></section>`;
     }
     if (!v.client) {
       return `<section class="pf-card pf-match"><span class="eyebrow">Match signals</span>
-        <div class="pf-lock">${icon('lock')}<b>See how ${esc(op.first)} fits your company</b><p>Sign in as a client and we score every profile against your company’s needs.</p>
+        <div class="pf-lock">${icon('lock')}<b>See how ${esc(op.first)} fits your company</b><p>Sign in as a company and we score every profile against your company’s needs.</p>
         ${v.persona === 'operator' ? `<p class="tiny faint">You are signed in as an operator.</p>` : ''}
-        <button type="button" class="btn btn-block" data-act="persona" data-p="buyer">Log in as client</button></div></section>`;
+        <button type="button" class="btn btn-block" data-act="persona" data-p="buyer">Log in as company</button></div></section>`;
     }
     const co = RN.personas.buyer.company;
     // Company firmographics plus the match preferences saved in the client workspace (#buyer.company)
@@ -1287,7 +1287,7 @@
         <div><b class="pf-match-l">${esc(fit.label)}</b><span>for ${esc(co.name)} · ${fit.count} of ${fit.signals.length} signals</span></div></div>
       <ul class="pf-sigs">${fit.signals.map((s) => `<li class="is-${s.state}"><span class="pf-sig-i">${ic[s.state]}</span><span><b>${esc(s.l)}</b><span>${esc(s.text)}</span></span></li>`).join('')}</ul>
       ${fit.notes.length ? `<p class="pf-fine">${esc(fit.notes.join('. '))}.</p>` : ''}
-      <p class="pf-fine">${v.preview ? 'Scored against a sample client company profile.' : 'Scored against your company profile. Your preferences follow you to every profile.'}</p>
+      <p class="pf-fine">${v.preview ? 'Scored against a sample company profile.' : 'Scored against your company profile. Your preferences follow you to every profile.'}</p>
     </section>`;
   }
   function risCard(c) {
@@ -1551,9 +1551,9 @@
   RN.actions['pf-viewas'] = (el) => {
     S.viewAs = el.dataset.v;
     RN.rerender();
-    RN.ui.toast(S.viewAs === 'owner' ? 'Back to your view' : S.viewAs === 'client' ? 'Previewing as a signed-in client' : 'Previewing as a logged-out visitor', { icon: 'eye' });
+    RN.ui.toast(S.viewAs === 'owner' ? 'Back to your view' : S.viewAs === 'client' ? 'Previewing as a signed-in company' : 'Previewing as a logged-out visitor', { icon: 'eye' });
   };
-  RN.actions['pf-preview-cta'] = () => RN.ui.toast('Preview only. Clients use this button on your live profile.', { icon: 'eye' });
+  RN.actions['pf-preview-cta'] = () => RN.ui.toast('Preview only. Companies use this button on your live profile.', { icon: 'eye' });
   RN.actions['pf-video-play'] = (el) => {
     const c = S.ctx;
     const box = el.closest('[data-pf-video]');
@@ -1611,7 +1611,7 @@
           <span class="pf-expired-i">${icon('link')}</span>
           <span class="eyebrow">Private proof link</span>
           <h1 class="h2">This link has expired</h1>
-          <p class="lede">Proof links are private and the operator can turn them off at any time. Every profile on Revenue Nomad is also open to browse, with client reviews and verified engagements.</p>
+          <p class="lede">Proof links are private and the operator can turn them off at any time. Every profile on Revenue Nomad is also open to browse, with company reviews and verified engagements.</p>
           <div class="row pf-center"><a class="btn" href="#browse">Browse talent</a><a class="btn btn-line" href="#talk">Talk to us</a></div>
         </div>
       </section>`;
@@ -1657,7 +1657,7 @@
           </div>
           <div class="pf-pl-stats">
             <span><b class="serif-up">${esc(op.ris.score)}</b>Reputation Index</span>
-            <span><b class="serif-up">${c.reviews.length}</b>${c.reviews.length === 1 ? 'Client review' : 'Client reviews'}</span>
+            <span><b class="serif-up">${c.reviews.length}</b>${c.reviews.length === 1 ? 'Company review' : 'Company reviews'}</span>
             <span><b class="serif-up">${c.engs.filter((e) => e.verified).length}</b>Verified engagements</span>
             <span><b class="serif-up">${c.verified.length}</b>Verified focus areas</span>
           </div>
@@ -1669,7 +1669,7 @@
           <div><span class="eyebrow">Next step</span><h2 class="h2 pf-h2">Talk to ${esc(op.first)} this week</h2><p class="pf-sec-sub">A 30-minute call to walk through your goals. ${esc(op.first)} replies by email with times.</p></div>
           <div class="pf-pl-cta" data-pl-slot="end">${proofCtas(rec, op, 'end', false)}</div>
         </section>
-        <p class="pf-pl-foot">${icon('shield')}<span>Shared through Revenue Nomad. Reviews and engagements marked verified were confirmed by the client. <a class="link" href="#op.${esc(op.slug)}" data-view-source="proof">View ${esc(op.first)}’s public profile</a> · Hiring for other GTM roles? <a class="link" href="#rates">See typical rates by role</a></span></p>
+        <p class="pf-pl-foot">${icon('shield')}<span>Shared through Revenue Nomad. Reviews and engagements marked verified were confirmed by the company. <a class="link" href="#op.${esc(op.slug)}" data-view-source="proof">View ${esc(op.first)}’s public profile</a> · Hiring for other GTM roles? <a class="link" href="#rates">See typical rates by role</a></span></p>
       </div>
     </div>`;
   }
@@ -1680,7 +1680,7 @@
     const called = done('call'), refd = done('reference');
     const f = S.plForm;
     if (f && f.slot === slot && !done(f.type)) return proofForm(rec, op, f.type);
-    const sentNote = (r) => (r && r.email ? `<p class="pf-pl-sent">${icon('check-circle')}<span>${r.type === 'call' ? `Call requested from <b>${esc(r.email)}</b>. ${esc(op.first)} will email you times.` : `Reference requested from <b>${esc(r.email)}</b>. ${esc(op.first)} will introduce you to a past client.`}</span></p>` : '');
+    const sentNote = (r) => (r && r.email ? `<p class="pf-pl-sent">${icon('check-circle')}<span>${r.type === 'call' ? `Call requested from <b>${esc(r.email)}</b>. ${esc(op.first)} will email you times.` : `Reference requested from <b>${esc(r.email)}</b>. ${esc(op.first)} will introduce you to a past company.`}</span></p>` : '');
     return `<button type="button" class="btn ${called ? 'btn-line' : dark ? 'btn-leaf' : ''}" data-act="pf-proof-call" data-id="${esc(rec.id)}" data-slot="${slot}" ${called ? 'aria-disabled="true"' : ''}>${icon(called ? 'check' : 'calendar')}${called ? 'Call requested' : `Book a call with ${esc(op.first)}`}</button>
       <button type="button" class="btn btn-line" data-act="pf-proof-ref" data-id="${esc(rec.id)}" data-slot="${slot}" ${refd ? 'aria-disabled="true"' : ''}>${icon(refd ? 'check' : 'users')}${refd ? 'Reference requested' : 'Request a reference'}</button>
       ${slot === 'end' ? sentNote(called) + sentNote(refd) : ''}`;
@@ -1689,8 +1689,8 @@
     const who = prospectOf(rec);
     const last = (rec.requests || []).find((r) => r.email) || {};
     return `<form class="pf-pl-form" data-submit="pf-proof-send" data-id="${esc(rec.id)}" data-type="${type}" aria-label="${type === 'call' ? 'Book a call' : 'Request a reference'}">
-      <b class="h5">${type === 'call' ? `Book a call with ${esc(op.first)}` : `Talk to one of ${esc(op.first)}’s past clients`}</b>
-      <p class="small muted">${type === 'call' ? `${esc(op.first)} replies with times.` : `${esc(op.first)} asks a past client to reply to you.`} We use your email for this request only.</p>
+      <b class="h5">${type === 'call' ? `Book a call with ${esc(op.first)}` : `Talk to one of ${esc(op.first)}’s past companies`}</b>
+      <p class="small muted">${type === 'call' ? `${esc(op.first)} replies with times.` : `${esc(op.first)} asks a past company to reply to you.`} We use your email for this request only.</p>
       ${RN.w.field('email', last.email || '', { name: 'email', compact: true, id: 'pf-pl-email-' + type })}
       <div class="grid g-2 pf-pl-form-row">
         ${RN.w.field('fullName', last.name || who.contact, { name: 'name', compact: true, label: 'Name', id: 'pf-pl-name-' + type })}
@@ -1761,7 +1761,7 @@
     const op = RN.model.byId(rec.opId);
     if (isOwnOp(op)) { RN.ui.toast('Preview only. Your prospect uses this button to reach you.', { icon: 'eye' }); return; }
     const sent = (rec.requests || []).find((r) => r.type === type);
-    if (sent) { RN.ui.toast(type === 'call' ? `Already sent. ${esc(op.first)} will email you times.` : `Already requested. ${esc(op.first)} will introduce you to a past client.`, { icon: 'info' }); return; }
+    if (sent) { RN.ui.toast(type === 'call' ? `Already sent. ${esc(op.first)} will email you times.` : `Already requested. ${esc(op.first)} will introduce you to a past company.`, { icon: 'info' }); return; }
     const prev = S.plForm && S.plForm.slot !== el.dataset.slot ? S.plForm.slot : null;
     S.plForm = { type, slot: el.dataset.slot || 'end' };
     if (prev) redrawSlot(rec, prev);
@@ -1793,7 +1793,7 @@
     const who = prospectOf(rec);
     const name = String(data.name || who.contact || '').trim() || email;
     const company = String(data.company || who.company || '').trim() || 'Your company';
-    const ask = type === 'call' ? 'book a call' : 'speak with a past client';
+    const ask = type === 'call' ? 'book a call' : 'speak with a past company';
     const note = `${name}${who.title ? ` (${who.title})` : ''} at ${company} asked to ${ask} from your proof link.`;
     const ts = RN.now().toISOString();
     let lead = RN.store.state.intros.find((i) => i.source === 'proof' && i.proofId === rec.id && i.buyer && String(i.buyer.email).toLowerCase() === email.toLowerCase());
@@ -1819,15 +1819,15 @@
       RN.mail(op.name, `${name} wants to book a call`, `${note}\nReply to ${email} with two or three times this week.\nSections shared: ${sections}.\n\nThe lead is in your Studio inbox.`, 'proof');
       RN.mail(email, `${op.first} will email you times`, `Thanks for asking to talk with ${op.name}. ${op.first} will reply to this address with times for a 30-minute call.\n\nRevenue Nomad`, 'proof');
     } else {
-      RN.mail(op.name, `${name} asked for a reference`, `${note}\nIntroduce them to a past client by email at ${email} once your client agrees.${verified.length ? `\nVerified clients you could introduce: ${verified.join('; ')}.` : ''}\n\nThe lead is in your Studio inbox.`, 'proof');
-      RN.mail(email, `${op.first} will introduce you to a past client`, `Thanks for asking. ${op.first} will ask a past client to reply to you at this address.\n\nRevenue Nomad`, 'proof');
+      RN.mail(op.name, `${name} asked for a reference`, `${note}\nIntroduce them to a past company by email at ${email} once your company agrees.${verified.length ? `\nVerified companies you could introduce: ${verified.join('; ')}.` : ''}\n\nThe lead is in your Studio inbox.`, 'proof');
+      RN.mail(email, `${op.first} will introduce you to a past company`, `Thanks for asking. ${op.first} will ask a past company to reply to you at this address.\n\nRevenue Nomad`, 'proof');
     }
     const slot = (S.plForm && S.plForm.slot) || 'end';
     S.plForm = null;
     const fresh = proofRec(rec.id);
     redrawSlot(fresh, 'top');
     redrawSlot(fresh, 'end');
-    RN.ui.toast(type === 'call' ? `Sent. ${esc(op.first)} will email ${esc(email)} with times.` : `Sent. ${esc(op.first)} will introduce you to a past client by email.`, { icon: 'check-circle' });
+    RN.ui.toast(type === 'call' ? `Sent. ${esc(op.first)} will email ${esc(email)} with times.` : `Sent. ${esc(op.first)} will introduce you to a past company by email.`, { icon: 'check-circle' });
     const b = document.querySelector(`[data-pl-slot="${slot}"] [data-act="pf-proof-${type === 'call' ? 'call' : 'ref'}"]`);
     if (b) b.focus();
   };
@@ -1889,16 +1889,16 @@
           <dl class="pf-vf-facts">
             <div><dt>Reputation Index tier</dt><dd class="${gold ? 'gold' : ''}">${esc(tier.l)}</dd></div>
             <div><dt>Reputation Index</dt><dd>${esc(op.ris.score)}<small> of 100</small></dd></div>
-            <div><dt>Client-verified reviews</dt><dd>${reviews}</dd></div>
+            <div><dt>Company-verified reviews</dt><dd>${reviews}</dd></div>
             <div><dt>Verified focus areas</dt><dd>${verifiedTags}</dd></div>
           </dl>
           <div class="pf-vf-body">
             <p class="pf-vf-d"><b>${esc(tier.l)}</b> ${esc(tier.d)}</p>
-            <p class="small muted">Reviews are submitted by the client on Revenue Nomad and publish as submitted. A focus area is verified when a client confirms it in a review. The score is recalculated whenever a review arrives, so this page always shows the current tier.</p>
+            <p class="small muted">Reviews are submitted by the company on Revenue Nomad and publish as submitted. A focus area is verified when a company confirms it in a review. The score is recalculated whenever a review arrives, so this page always shows the current tier.</p>
             <div class="row pf-vf-act"><a class="btn" href="#op.${esc(op.slug)}" data-view-source="badge">View ${esc(op.first)}’s full profile${icon('arrow')}</a><a class="act" href="#levels">How the Reputation Index works</a></div>
           </div>
         </article>
-        <p class="pf-vf-foot">Hiring? <a class="link" href="#browse">Browse operators with client-verified proof</a></p>
+        <p class="pf-vf-foot">Hiring? <a class="link" href="#browse">Browse operators with company-verified proof</a></p>
       </section>
     </div>`;
   }

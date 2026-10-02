@@ -24,8 +24,8 @@
         { v: '$240', l: 'Median hourly rate for a fractional GTM leader, up 9% year over year' },
         { v: '41%', l: 'Of engagements scoped under 40 hours a month. 40 hours is the single most common shape' },
         { v: '6.4 mo', l: 'Median engagement length, with 48% extended past the original term' },
-        { v: '2.4x', l: 'Rehire rate for operators with three or more verified client reviews vs none' },
-        { v: '31%', l: 'Of first-time clients hired a fractional leader as their first sales leadership hire' },
+        { v: '2.4x', l: 'Rehire rate for operators with three or more verified company reviews vs none' },
+        { v: '31%', l: 'Of first-time companies hired a fractional leader as their first sales leadership hire' },
         { v: '67 days', l: 'Median time from start to the first measurable pipeline change' },
       ],
       triggers: [
@@ -83,7 +83,7 @@
       hindsight: [
         ['Had done it at our stage and deal size', '38%', '81%'],
         ['Communication cadence in a part time seat', '21%', '69%'],
-        ['Verified references from prior clients', '18%', '64%'],
+        ['Verified references from prior companies', '18%', '64%'],
         ['Industry experience', '13%', '47%'],
         ['Brand name employers on resume', '6%', '22%'],
       ],
@@ -91,7 +91,7 @@
         { l: 'Referral from peer', v: 44 }, { l: 'Prior colleague', v: 23 }, { l: 'Marketplace / network', v: 17 }, { l: 'LinkedIn inbound', v: 11 }, { l: 'Agency or firm', v: 5 },
       ],
       concurrent: [
-        { l: '1 client', v: 22 }, { l: '2 clients', v: 39 }, { l: '3 clients', v: 27 }, { l: '4+', v: 12 },
+        { l: '1 company', v: 22 }, { l: '2 companies', v: 39 }, { l: '3 companies', v: 27 }, { l: '4+', v: 12 },
       ],
       quote: { text: 'I did not need a closer. I needed someone to build the machine and then hand me the keys.', by: 'CEO, $5M–$20M B2B services company' },
       methodology: [

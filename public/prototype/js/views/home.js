@@ -133,7 +133,7 @@
             <span class="hm-ln"><span>who already solved</span></span>
             <span class="hm-ln"><span class="serif">your revenue problem.</span></span>
           </h1>
-          <p class="hm-sub">Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, client-confirmed proof marked Verified, no login to browse.</p>
+          <p class="hm-sub">Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse.</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>
@@ -181,10 +181,10 @@
       add(p.id, p.postedAt, `${co({ industry: (f.industries || [])[0] }).replace(/^./, (x) => x.toUpperCase())} posted ${an(kind)} ${kind} engagement`);
     });
     const done = (st.reviewRequests || []).filter((r) => r.status === 'completed');
-    done.forEach((r) => add(r.id, r.completedAt, `${role(r.opId)} received a new client review`));
+    done.forEach((r) => add(r.id, r.completedAt, `${role(r.opId)} received a new company review`));
     (st.reviews || []).filter((rv) => rv && rv.opId && !done.some((r) => r.id === rv.requestId)).forEach((rv) => {
       const ts = rv.ts || rv.date || rv.createdAt || RN.now().toISOString();
-      add(rv.id || rv.requestId, ts, `${role(rv.opId)} received a new client review`);
+      add(rv.id || rv.requestId, ts, `${role(rv.opId)} received a new company review`);
     });
     (st.pending || []).forEach((a) => { const p = a.profile || {}; if (p.role) add(a.id, a.submittedAt, `Fractional ${p.role} applied to join the network`); });
     out.sort((a, b) => (b.mine - a.mine) || (new Date(b.ts) - new Date(a.ts)));
@@ -397,12 +397,12 @@
     const emerging = emergingNow();
     const n = liveOps().length;
     // One short, client-facing trust line. How featuring works for operators lives on #operators.
-    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and client reviews.</span></p>`;
+    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and company reviews.</span></p>`;
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
         ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles in this prototype`, 'href="#browse" data-act="hm-all"'))}
         ${feat.length ? carousel(feat, trust) : ''}
-        ${emerging.length ? `<div class="hm-row-hd"><h3 class="label">Emerging · available now</h3><span class="small muted">Approved by our team. Client reviews still to come.</span></div>
+        ${emerging.length ? `<div class="hm-row-hd"><h3 class="label">Emerging · available now</h3><span class="small muted">Approved by our team. Company reviews still to come.</span></div>
         <div class="hm-ops">${emerging.map((op) => RN.ui.opCard(op)).join('')}</div>` : ''}
       </div>
     </section>`;
@@ -434,13 +434,13 @@
         <div class="hm-fw-intro">
           <span class="eyebrow">The GTM Framework</span>
           <h2 class="h2 hm-h2">One shared map of go-to-market work.</h2>
-          <p class="lede">Every focus area on Revenue Nomad maps to an area of go-to-market work and the stage of the client journey it moves. Operators are scored against it. Companies use it to find the gap.</p>
+          <p class="lede">Every focus area on Revenue Nomad maps to an area of go-to-market work and the stage of the company journey it moves. Operators are scored against it. Companies use it to find the gap.</p>
           <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Stages of the customer journey</dd></div><div><dt class="num">${RN.fmt.int(lib.length)}</dt><dd>Focus areas</dd></div></dl>
           ${more('Explore the framework', 'href="#framework"')}
         </div>
         <div>
           <div class="hm-ruled hm-areas">${tiles}</div>
-          <p class="hm-legend tiny"><span class="hm-stages hm-stages-key" aria-hidden="true">${stages.map(() => '<i><b style="opacity:.6"></b></i>').join('')}</span><span>Bars show where each area's focus areas sit across the client journey: ${esc(stages.join(', '))}. Foundation areas support every stage.</span></p>
+          <p class="hm-legend tiny"><span class="hm-stages hm-stages-key" aria-hidden="true">${stages.map(() => '<i><b style="opacity:.6"></b></i>').join('')}</span><span>Bars show where each area's focus areas sit across the company journey: ${esc(stages.join(', '))}. Foundation areas support every stage.</span></p>
         </div>
       </div>
     </section>`;
@@ -503,7 +503,7 @@
               <div class="hm-axis tiny"><span>${esc(di[0].l)}</span><span>${esc(di[di.length - 1].l.replace('proj', 'projected'))}</span></div>
             </article>
             <article class="card hm-card">
-              <div class="hm-card-hd"><div><h3 class="h4">Top searched this quarter</h3><p class="small muted">Searches by clients so far this quarter. Select one to run it.</p></div></div>
+              <div class="hm-card-hd"><div><h3 class="h4">Top searched this quarter</h3><p class="small muted">Searches by companies so far this quarter. Select one to run it.</p></div></div>
               <ol class="hm-top">${top.map((t, i) => `<li><button type="button" data-act="hm-q" data-q="${esc(t.q)}">
                 <span class="hm-top-i">${i + 1}</span>
                 <span class="hm-top-b"><span class="hm-top-q">${esc(t.q)}</span><span class="hm-top-m"><i style="width:${Math.max(4, Math.round((t.n / maxN) * 100))}%"></i></span></span>
@@ -591,33 +591,33 @@
     const lead = top[0];
     const mini = lead ? (top.find((x) => x.op.id !== lead.op.id) || top[1]) : null;
     const sq = RN.data.market.report.quote;
-    const rules = 'Every operator’s reviews follow the same rules: published as written, by the client, under their name.';
+    const rules = 'Every operator’s reviews follow the same rules: published as written, by the company, under their name.';
     const by = (r) => [r.role, r.company].filter(Boolean).join(', ');
     // A reviewer's own headshot fills the arch when we have one; the company logo then sits under the quote
     const leadPhoto = lead ? (RN.data.reviewerPhotos || {})[lead.r.reviewer] : '';
-    const leadLogo = lead ? RN.ui.logo(RN.model.reviewLogo(lead.op, lead.r), { h: leadPhoto ? 30 : 46, name: lead.r.company || 'Client' }) : '';
+    const leadLogo = lead ? RN.ui.logo(RN.model.reviewLogo(lead.op, lead.r), { h: leadPhoto ? 30 : 46, name: lead.r.company || 'Company' }) : '';
     return `<section class="hm-sec section">
       <div class="wrap">
-        ${head('Results, in their words', 'Client reviews, published as written.', '', rules)}
+        ${head('Results, in their words', 'Company reviews, published as written.', '', rules)}
         ${lead ? `<div class="hm-q-feature">
-          ${leadPhoto ? `<div class="hm-arch hm-arch-photo"><img src="${esc(leadPhoto)}" alt="${esc(lead.r.reviewer || 'Client')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
+          ${leadPhoto ? `<div class="hm-arch hm-arch-photo"><img src="${esc(leadPhoto)}" alt="${esc(lead.r.reviewer || 'Company')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
           <div class="hm-arch hm-arch-logo"><div class="arch-logo">${leadLogo}</div></div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>
             <blockquote class="hm-q-text">${esc(RN.model.pullQuote(lead.r.quote || lead.r.text, 180))}</blockquote>
-            <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(lead.r.reviewer || 'Client')}</b><span>${esc(by(lead.r))}</span></figcaption>
+            <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(lead.r.reviewer || 'Company')}</b><span>${esc(by(lead.r))}</span></figcaption>
             ${leadPhoto ? `<div class="hm-q-co">${leadLogo}</div>` : ''}
-            <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Client review</span><a class="act" href="#op.${esc(lead.op.slug)}" data-track-view="${esc(lead.op.id)}">Read the full review on ${esc(lead.op.first)}’s profile${icon('arrow')}</a></div>
+            <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Company review</span><a class="act" href="#op.${esc(lead.op.slug)}" data-track-view="${esc(lead.op.id)}">Read the full review on ${esc(lead.op.first)}’s profile${icon('arrow')}</a></div>
           </figure>
         </div>` : ''}
         <div class="hm-q-row">
           ${mini ? `<figure class="hm-q-mini">
             <blockquote>${esc(RN.model.pullQuote(mini.r.quote || mini.r.text, 200))}</blockquote>
-            <figcaption><b>${esc(mini.r.reviewer || 'Client')}</b><span>${esc(by(mini.r))}</span><span class="pill pill-good">${icon('check-circle')}Client review</span></figcaption>
+            <figcaption><b>${esc(mini.r.reviewer || 'Company')}</b><span>${esc(by(mini.r))}</span><span class="pill pill-good">${icon('check-circle')}Company review</span></figcaption>
           </figure>` : ''}
           <figure class="hm-q-mini">
             <blockquote>${esc(sq.text)}</blockquote>
-            <figcaption><b>${esc(sq.by.split(',')[0])}</b><span>${esc(sq.by.split(',').slice(1, 2).join(',').trim())}</span>${RN.ui.illus('Sample quote', 'Written for this prototype to show the format. Not from a real client.')}</figcaption>
+            <figcaption><b>${esc(sq.by.split(',')[0])}</b><span>${esc(sq.by.split(',').slice(1, 2).join(',').trim())}</span>${RN.ui.illus('Sample quote', 'Written for this prototype to show the format. Not from a real company.')}</figcaption>
           </figure>
         </div>
       </div>
@@ -627,7 +627,7 @@
   /* ---------- How it works ---------- */
   function howSec() {
     const steps = [
-      ['search', 'Search the network', 'Search by role, focus area or the problem you have. Every profile is open, and anything a client confirmed is marked Verified. No login needed.'],
+      ['search', 'Search the network', 'Search by role, focus area or the problem you have. Every profile is open, and anything a company confirmed is marked Verified. No login needed.'],
       ['message', 'Request an intro or post an engagement', 'Ask to meet one operator, or post an engagement and get ranked matches. Operators reply within 72 hours.'],
       ['handshake', 'Start on clear terms', 'Agree scope, hours and rate up front: fractional, interim, advisory or a fixed-scope project.'],
     ];
@@ -865,7 +865,7 @@
       const note = m.querySelector('[data-hm-note]');
       if (note) {
         note.className = 'hm-tp-note small' + (S.tags.length && !n ? ' warn' : '');
-        note.innerHTML = !S.tags.length ? `${icon('info')}<span>Operators must match every focus area you add. Client-verified matches rank first.</span>`
+        note.innerHTML = !S.tags.length ? `${icon('info')}<span>Operators must match every focus area you add. Company-verified matches rank first.</span>`
           : n ? `${icon('check-circle')}<span>${RN.fmt.plural(n, 'operator')} ${n === 1 ? 'matches' : 'match'} ${S.tags.length > 1 ? 'all ' + S.tags.length : 'it'}${S.q ? ` with “${esc(S.q)}”` : ''}.</span>`
             : `${icon('info')}<span>No operator matches all ${S.tags.length} yet. Remove one to widen the search, or search anyway to see the closest profiles.</span>`;
       }

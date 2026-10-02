@@ -64,7 +64,7 @@
   // Stored codes match the live data (19 is the code for "<20", Sheet3 #4). Label "Available time" (Sheet3 #4 rename).
   F.hoursPerMonth = {
     label: 'Available time', type: 'single', unit: 'hrs / month',
-    help: 'Hours per month you can give a new client.',
+    help: 'Hours per month you can give a new company.',
     options: opts([
       ['19', '<20 hrs / month'], ['20', '20 hrs / month'], ['40', '40 hrs / month'], ['60', '60 hrs / month'],
       ['80', '80 hrs / month'], ['100', '100 hrs / month'], ['160', '160 hrs / month'],
@@ -73,7 +73,7 @@
   // Client filter: the same stored chip codes, read as a floor ("at least"); <20 is left out because it is no floor
   F.minHours = { label: 'Minimum available time', type: 'single', unit: 'hrs / month', options: opts([['20', '20+ hrs / month'], ['40', '40+ hrs / month'], ['60', '60+ hrs / month'], ['80', '80+ hrs / month'], ['100', '100+ hrs / month'], ['160', '160 hrs / month']]) };
   F.hoursCode = (n) => { n = +n || 0; return n < 20 ? '19' : n < 40 ? '20' : n < 60 ? '40' : n < 80 ? '60' : n < 100 ? '80' : n < 160 ? '100' : '160'; };
-  F.newClientCapacity = { label: 'New client capacity', type: 'number', min: 1, max: 10, unit: 'clients', help: 'Maximum 10 clients.' };
+  F.newClientCapacity = { label: 'New company capacity', type: 'number', min: 1, max: 10, unit: 'clients', help: 'Maximum 10 companies.' };
   // L192 order; "turnaround" removed, "fractional" and "project" added (row 23)
   F.engagementTypes = {
     label: 'Engagement type', type: 'multi',
@@ -253,7 +253,7 @@
   F.bio = { label: 'About', type: 'textarea', maxlength: 900, placeholder: 'Who you help, what you build, and the result.', help: 'Write in first person. Name the stage and the problem.' };
   // Scope: Country -> postal code -> city picklist, timezone derived (not free text)
   F.country = { label: 'Country', type: 'select', placeholder: 'Select a country', options: opts(['United States', 'Canada', 'United Kingdom', 'Ireland', 'Australia', 'Germany', 'Netherlands', 'Singapore', 'Kenya', 'India']) };
-  F.postalCode = { label: 'Postal code', type: 'text', placeholder: 'e.g. 06470', help: 'We derive your city and time zone from it, so clients can filter by region.' };
+  F.postalCode = { label: 'Postal code', type: 'text', placeholder: 'e.g. 06470', help: 'We derive your city and time zone from it, so companies can filter by region.' };
   F.city = { label: 'City', type: 'text', placeholder: 'City', help: 'Used when we cannot derive your city from the postal code.' };
   F.methodologyOther = { label: 'Other methodology', type: 'text', placeholder: 'e.g. Miller Heiman', help: 'We review new methodologies and add common ones to the list.' };
   F.usHours = { label: 'Willing to work US time zone hours?', type: 'single', options: opts([['yes', 'Yes'], ['no', 'No']]) };
@@ -268,7 +268,7 @@
 
   /* ---------- Fit tags (library assembled in model.js from live tags + taxonomy groups) ---------- */
   // Operators call them fit tags; clients see "Focus areas" (L131). Browse filter: up to 5, AND (Part A).
-  F.fitTags = { label: 'Fit tags', clientLabel: 'Focus areas', type: 'tags', max: 25, help: 'Up to 25 self-claimed tags. Each one turns Verified when a client review confirms it.', options: [] };
+  F.fitTags = { label: 'Fit tags', clientLabel: 'Focus areas', type: 'tags', max: 25, help: 'Up to 25 self-claimed tags. Each one turns Verified when a company review confirms it.', options: [] };
 
   /* ---------- Reputation Index (RIS) ----------
      Three ladders conflicted (sheet L247, explorer REP_TIERS, live stored labels; comment H390).
@@ -280,9 +280,9 @@
     label: 'Reputation Index tier', type: 'single',
     options: [
       { v: 'apex', l: 'Apex', min: 90, max: 100, d: 'The highest standing on the network. Very few operators reach it.' },
-      { v: 'elite', l: 'Elite', min: 80, max: 89, d: 'A deep record of reviewed outcomes across multiple clients.' },
-      { v: 'trusted', l: 'Trusted', min: 70, max: 79, d: 'Repeat engagements and consistently strong client reviews.' },
-      { v: 'proven', l: 'Proven', min: 60, max: 69, d: 'Verified engagements, client reviews and published proof of work.' },
+      { v: 'elite', l: 'Elite', min: 80, max: 89, d: 'A deep record of reviewed outcomes across multiple companies.' },
+      { v: 'trusted', l: 'Trusted', min: 70, max: 79, d: 'Repeat engagements and consistently strong company reviews.' },
+      { v: 'proven', l: 'Proven', min: 60, max: 69, d: 'Verified engagements, company reviews and published proof of work.' },
       { v: 'emerging', l: 'Emerging', min: 50, max: 59, d: 'Identity and work history checked by the Revenue Nomad team. Every approved profile starts at 50.' },
       { v: 'indexing', l: 'Indexing', min: 0, max: 49, d: 'New to the network. Shown until the profile is approved and scored.' },
     ],
@@ -292,7 +292,7 @@
     indexing: ['Your profile is reviewed by the team within 2 business days', 'Studio setup checklist while you wait'],
     emerging: ['Listed and searchable in Browse', 'Studio insights: who viewed you, why you appeared, positioning, search and AI visibility', 'Proof links for your direct deals (5 a month)', 'Fractional roles and predictive prospects in Opportunities'],
     proven: ['Unlimited proof links', 'Embeddable verified badge with a dated verification page'],
-    trusted: ['Priority placement on role category pages', 'Eligible for the curated shortlists the team sends to clients'],
+    trusted: ['Priority placement on role category pages', 'Eligible for the curated shortlists the team sends to companies'],
     elite: ['First in line for homepage features', 'Invited to State of Fractional GTM research panels'],
     apex: ['Invited to the State of Fractional GTM advisory panel', 'First look at new Studio tools'],
   };
@@ -301,8 +301,8 @@
   F.risFactors = {
     label: 'How score is calculated', type: 'single',
     options: [
-      { v: 'volume', l: 'Review volume', d: 'How many clients have reviewed the operator.', w: 0.3 },
-      { v: 'verification', l: 'Focus area verification', d: 'Share of focus areas confirmed by a client review.', w: 0.2 },
+      { v: 'volume', l: 'Review volume', d: 'How many companies have reviewed the operator.', w: 0.3 },
+      { v: 'verification', l: 'Focus area verification', d: 'Share of focus areas confirmed by a company review.', w: 0.2 },
       { v: 'ratings', l: 'Strong ratings', d: 'Average CORE rating across reviews.', w: 0.25 },
       { v: 'complete', l: 'Complete profile', d: 'Photo, video, rate, role details, engagement history and work samples.', w: 0.15 },
       { v: 'recency', l: 'Engagement recency', d: 'How recently the operator finished a verified engagement.', w: 0.1 },
@@ -313,7 +313,7 @@
   F.coreDims = {
     label: 'CORE', type: 'single',
     options: [
-      { v: 'C', l: 'Communication', q: 'Did this operator keep you informed without you having to ask?', d: 'Translates strategy to any audience and communicates proactively, so clients never have to chase.' },
+      { v: 'C', l: 'Communication', q: 'Did this operator keep you informed without you having to ask?', d: 'Translates strategy to any audience and communicates proactively, so companies never have to chase.' },
       { v: 'O', l: 'Ownership', q: 'Did this operator act like a member of your team or like an outside vendor?', d: 'Treats outcomes like an equity holder, not a contractor waiting for direction.' },
       { v: 'R', l: 'Results Focus', q: 'Did this operator track progress against measurable goals and adjust their approach based on what the data was telling them?', d: 'Moves a number that was defined at the start of the engagement.' },
       { v: 'E', l: 'Expertise', q: 'Did this operator demonstrate the skills and domain knowledge required to do the job at the level you needed?', d: 'Depth in their stated specialization, not breadth.' },

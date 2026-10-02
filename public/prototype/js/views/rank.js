@@ -11,8 +11,8 @@
   const FIRST = 12;
   const COLORS = ['var(--cat-sales)', 'var(--cat-revops)', 'var(--cat-mkt)', 'var(--cat-enable)', 'var(--cat-ai)'];
   const FACT_IC = { roleCategories: 'user', revenueRange: 'building', employeeRange: 'users', industries: 'briefcase', availability: 'calendar', hoursPerMonth: 'clock', rateMax: 'chart', engagementTypes: 'handshake', locations: 'pin', timeZones: 'clock', usHours: 'pin' };
-  const WORD = { proven: 'A client proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' };
-  const MEANS = { proven: 'A client confirmed they have done this.', claimed: 'On their profile, not yet confirmed by a client.', close: 'Related experience, not an exact match.', missing: 'Nothing on their profile for this yet.' };
+  const WORD = { proven: 'A company proved it', claimed: 'Says they can', close: 'Close', missing: 'Not yet' };
+  const MEANS = { proven: 'A company confirmed they have done this.', claimed: 'On their profile, not yet confirmed by a company.', close: 'Related experience, not an exact match.', missing: 'Nothing on their profile for this yet.' };
   const showAll = new Set();
 
   const needsFor = (text) => (RN.vsearch.refined(text) || RN.vsearch.localNeeds(text));

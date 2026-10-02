@@ -173,7 +173,7 @@
     const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
     const bars = (rows) => { const max = Math.max(...rows.map((r) => num(r[1]))) || 1; return `<div class="ab-bars">${rows.map(([l, v, hi]) => `<div class="ab-bar${hi ? ' is-hi' : ''}"><span class="ab-bar-l">${esc(l)}</span><span class="ab-bar-t"><i style="--w:${Math.round((num(v) / max) * 100)}%"></i></span><b>${esc(v)}</b></div>`).join('')}</div>`; };
     const fame = ['Big logo on the resume', 'Impressive title', 'A friend’s referral'];
-    const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Culture fit', 'Proof a client confirmed'];
+    const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Culture fit', 'Proof a company confirmed'];
 
     return `
     ${hero({
@@ -184,7 +184,7 @@
     })}
     <section class="wrap ab-stats" aria-label="Revenue Nomad at a glance">
       <div class="ab-stat is-forest"><b class="num">${RN.fmt.int(ops.length)}</b><span>Open profiles</span></div>
-      <div class="ab-stat is-leaf"><b class="num">${RN.fmt.int(verified)}</b><span>Focus areas a client verified</span></div>
+      <div class="ab-stat is-leaf"><b class="num">${RN.fmt.int(verified)}</b><span>Focus areas a company verified</span></div>
       <div class="ab-stat is-gold"><b class="num">$0</b><span>Fees for companies</span></div>
       <div class="ab-stat is-night"><b class="num">2023</b><span>Founded</span></div>
     </section>
@@ -197,7 +197,7 @@
           <p class="ab-line">Great leaders fail in the wrong business.</p>
           <p class="ab-line">A $500M company’s CRO rarely fits a $30M one.</p>
         </div>
-        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Hired on fit: same stage, same deal size, same motion, culture fit, proof a client confirmed.">
+        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Hired on fit: same stage, same deal size, same motion, culture fit, proof a company confirmed.">
           <div class="ab-vs-col is-fame"><span class="ab-vs-h">Hired on fame</span><ul>${fame.map((x) => `<li>${icon('x')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">6 months, nothing changed</span></div>
           <div class="ab-vs-col is-fit"><span class="ab-vs-h">Hired on fit</span><ul>${fit.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">Results in the first quarter</span></div>
         </div>
@@ -226,11 +226,11 @@
 
     <section class="section night pg-core">
       <div class="wrap">
-        ${shead('What clients rate', 'Four scores after every engagement.')}
+        ${shead('What companies rate', 'Four scores after every engagement.')}
         <div class="pg-core-grid ab-core">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
             <span class="pg-core-l" aria-hidden="true">${esc(d.v)}</span>
             <h3 class="h4">${esc(d.l)}</h3>
-            <p class="pg-core-q"><span>Clients answer</span>${esc(d.q)}</p>
+            <p class="pg-core-q"><span>Companies answer</span>${esc(d.q)}</p>
           </article>`).join('')}</div>
         <a class="act pg-core-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a>
       </div>
@@ -241,7 +241,7 @@
         ${shead('How we are different', 'Three things most talent firms won’t do.')}
         <ul class="ab-diff">
           <li class="is-forest"><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p>No login. No sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
-          <li class="is-leaf"><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p>Only clients can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
+          <li class="is-leaf"><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p>Only companies can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
           <li class="is-gold"><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p>Rates, reports and ${RN.fmt.int(lib)} focus areas. Free.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
         </ul>
       </div>
@@ -286,15 +286,15 @@
       { t: 'Browse free', d: 'Every profile is open. Search by role, focus area, industry and company size. No login and no sales call first.', l: act('browse', 'Browse talent') },
       { t: 'Shortlist and compare', d: 'Save operators as you go, then put up to four side by side: Reputation Index, CORE ratings, verified focus areas, availability and rate.', l: act('compare', 'Open compare') },
       { t: 'Request an intro or post an engagement', d: 'Ask to meet one operator by name, or post an engagement from a Blueprint and get ranked matches who reply in their Studio. No fees for companies: you pay the operator’s rate, nothing more.', l: act('engagement.new', 'Post an engagement') + act('blueprints', 'See Blueprints') },
-      { t: 'Introduced within one business day', d: 'The operator replies within 72 hours. Once they say yes, our team confirms the fit and introduces you by email within one business day.', l: asLink('buyer', 'buyer.intros', { mine: `Track your intros${icon('arrow')}`, other: `See a client workspace${icon('arrow')}` }, 'act') },
+      { t: 'Introduced within one business day', d: 'The operator replies within 72 hours. Once they say yes, our team confirms the fit and introduces you by email within one business day.', l: asLink('buyer', 'buyer.intros', { mine: `Track your intros${icon('arrow')}`, other: `See a company workspace${icon('arrow')}` }, 'act') },
       { t: 'Review after the engagement', d: 'When the work wraps, you rate the operator on CORE. Your review verifies the focus areas you saw and moves their Reputation Index.', l: act('levels', 'How reviews count') },
     ];
     const cred = studioRoute(/cred/i, 'studio');
     const operators = [
-      { t: 'Apply', d: 'One intake with the same fields clients filter on: role, company fit, role details, availability, rate and fit tags.', l: act('join.operator', 'Apply to join') },
+      { t: 'Apply', d: 'One intake with the same fields companies filter on: role, company fit, role details, availability, rate and fit tags.', l: act('join.operator', 'Apply to join') },
       { t: 'Approved and live at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50.', l: act('levels', 'See the levels') },
       { t: 'Studio insights from day one', d: 'See the searches you appeared in, the kinds of companies that viewed you, and where your rate sits against the Rate Index.', l: asLink('operator', studioRoute(/visib/i), { mine: `Open Studio${icon('arrow')}`, other: `See Studio as Matt${icon('arrow')}` }, 'act') },
-      { t: 'Verified proof raises your Reputation Index', d: 'Ask past clients for a CORE review from Studio. Each review rated 4.0 or higher verifies the fit tags it confirms and lifts your score.', l: asLink('operator', cred, { mine: `Open review requests${icon('arrow')}`, other: `See review requests as Matt${icon('arrow')}` }, 'act') },
+      { t: 'Verified proof raises your Reputation Index', d: 'Ask past companies for a CORE review from Studio. Each review rated 4.0 or higher verifies the fit tags it confirms and lifts your score.', l: asLink('operator', cred, { mine: `Open review requests${icon('arrow')}`, other: `See review requests as Matt${icon('arrow')}` }, 'act') },
       { t: 'Direct deals with proof links', d: 'Send a prospect a private proof link with your reviews and engagement history, then see which sections they read.', l: asLink('operator', cred, { mine: `Create a proof link${icon('arrow')}`, other: `See proof links as Matt${icon('arrow')}` }, 'act') },
     ];
     const col = (key, eyebrow, h, steps, cta) => `<div class="pg-how-col pg-how-${key}">
@@ -306,7 +306,7 @@
     ${hero({
       eyebrow: 'How it works',
       h: `One network, <span class="serif">two sides that both win.</span>`,
-      lede: 'Clients find proven fractional leaders without a retained search. Operators get found, build proof, and get value even in months with no intro.',
+      lede: 'Companies find proven fractional leaders without a retained search. Operators get found, build proof, and get value even in months with no intro.',
       aside: `<div class="pg-hero-stats">
         <div><b class="num">$0</b><span>In fees for companies. Browse with no login, and pay the operator’s rate, nothing more.</span></div>
         <div><b class="num">72 hrs</b><span>For an operator to reply to an intro request</span></div>
@@ -316,7 +316,7 @@
     })}
     <section class="section">
       <div class="wrap pg-how">
-        ${col('c', 'For clients', 'Hire on fit and proof, in days.', clients, `<a class="btn btn-lg" href="#browse">Browse talent${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#talk">Talk to us</a>`)}
+        ${col('c', 'For companies', 'Hire on fit and proof, in days.', clients, `<a class="btn btn-lg" href="#browse">Browse talent${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#talk">Talk to us</a>`)}
         ${col('o', 'For operators', 'Get found, and get value without an intro.', operators, `<a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#operators">Why join</a>`)}
       </div>
     </section>
@@ -352,10 +352,10 @@
     ${hero({
       eyebrow: 'Results',
       h: `Proof, <span class="serif">in their words.</span>`,
-      lede: 'Client reviews of operators on the network, written by the client and published as submitted. Where a figure comes from research instead of a review, we say so.',
+      lede: 'Company reviews of operators on the network, written by the company and published as submitted. Where a figure comes from research instead of a review, we say so.',
       aside: `<div class="pg-hero-stats">
-        <div><b class="num">${RN.fmt.int(all.length)}</b><span>Client reviews on the network, ${avg ? avg.toFixed(1) : 'no'} average overall</span></div>
-        <div><b class="num">${all.length ? Math.round((again / all.length) * 100) : 0}%</b><span>Of reviewing clients would hire the operator again</span></div>
+        <div><b class="num">${RN.fmt.int(all.length)}</b><span>Company reviews on the network, ${avg ? avg.toFixed(1) : 'no'} average overall</span></div>
+        <div><b class="num">${all.length ? Math.round((again / all.length) * 100) : 0}%</b><span>Of reviewing companies would hire the operator again</span></div>
         <div><b class="num">${RN.fmt.int(verified)}</b><span>Focus areas verified by those reviews</span></div>
         <span class="pg-hero-note">${icon('check-circle')}Live network export</span>
       </div>`,
@@ -363,7 +363,7 @@
 
     ${featured ? `<section class="section pg-feature-sec">
       <div class="wrap pg-feature">
-        <div class="pg-arch pg-arch-sage"><div class="arch-logo">${RN.ui.logo(RN.model.reviewLogo(featured.op, featured.r), { h: 46, name: featured.r.company || 'Client' })}</div></div>
+        <div class="pg-arch pg-arch-sage"><div class="arch-logo">${RN.ui.logo(RN.model.reviewLogo(featured.op, featured.r), { h: 46, name: featured.r.company || 'Company' })}</div></div>
         <figure class="pg-feature-q">
           <span class="pg-qmark" aria-hidden="true">“</span>
           <blockquote>${esc(reviewText(featured.r))}</blockquote>
@@ -382,17 +382,17 @@
 
     ${wall.length ? `<section class="section pg-wall-sec">
       <div class="wrap">
-        ${shead('Client reviews', 'More from their clients.', `${RN.fmt.plural(all.length, 'client review')} on the network so far, and this page shows every one. Reviews publish without a moderation queue.`)}
+        ${shead('Company reviews', 'More from their companies.', `${RN.fmt.plural(all.length, 'company review')} on the network so far, and this page shows every one. Reviews publish without a moderation queue.`)}
         <div class="grid g-3 pg-wall">${wall.map(({ op, r }) => `<article class="card pg-rev">
             <div class="row between"><span class="row-nw" style="--gap:6px">${reviewScore(r) ? RN.ui.stars(reviewScore(r)) : ''}</span>${r.hireAgain ? `<span class="pill pill-good">${icon('check')}Would hire again</span>` : ''}</div>
             <blockquote class="pg-rev-q">“${esc(reviewText(r))}”</blockquote>
-            <p class="small"><b>${esc(r.reviewer || 'Client')}</b> <span class="muted">${esc([r.role, r.company].filter(Boolean).join(', '))}</span></p>
+            <p class="small"><b>${esc(r.reviewer || 'Company')}</b> <span class="muted">${esc([r.role, r.company].filter(Boolean).join(', '))}</span></p>
             <a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)} · ${RN.fmt.plural((r.tags || []).length, 'focus area')} verified</span></span>${icon('arrow')}</a>
           </article>`).join('')}
           <article class="pg-rev pg-rev-how">
             <span class="pg-value-i">${icon('star')}</span>
-            <h3 class="h4">Every client gets asked</h3>
-            <p class="small">Operators request a review from Studio when an engagement ends. The client answers four CORE questions, rates the outcome and says whether they would hire again. The review publishes the day it lands.</p>
+            <h3 class="h4">Every company gets asked</h3>
+            <p class="small">Operators request a review from Studio when an engagement ends. The company answers four CORE questions, rates the outcome and says whether they would hire again. The review publishes the day it lands.</p>
             <a class="act" href="#levels">How reviews move the Reputation Index${icon('arrow')}</a>
           </article></div>
       </div>
@@ -801,7 +801,7 @@
         ${stat(T0.intros, 'Intro requests')}
       </div>
       <div class="pg-sp-grid">
-        <div class="pg-sp-box"><span class="label">Why clients found you</span>
+        <div class="pg-sp-box"><span class="label">Why companies found you</span>
           <ol class="pg-sp-list">${a.queries.slice(0, 3).map((q) => `<li><span class="grow">“${esc(q.q)}”</span><span class="meter"><i style="width:${Math.round(q.share * 100 / Math.max(0.01, a.queries[0].share))}%"></i></span><b class="num">${RN.fmt.int(q.n)}</b></li>`).join('')}</ol></div>
         <div class="pg-sp-box"><span class="label">Who viewed you</span>
           <ol class="pg-sp-list">${viewers.map((v) => `<li><span class="grow">${esc(RN.w.label('industries', v.industry))} · ${esc(RN.w.label('revenueRange', v.revenueRange))} · ${esc(RN.w.label('employeeRange', v.employeeRange))} employees</span><b class="num">${RN.fmt.int(v.views + v.shortlists + v.compares)}</b></li>`).join('')}</ol>
@@ -845,24 +845,24 @@
     const topShare = Math.round(((supply[top.v] || 0) / total) * 100);
     const maxShare = Math.max(...RN.fields.roleCategory.options.map((o) => Math.max((supply[o.v] || 0) / total * 100, intent[o.v] || 0)), 1);
     const values = [
-      { i: 'eye', t: 'Who viewed you and why', d: 'The type of company behind every profile view (industry, revenue range, employee range), plus the searches and filters that surfaced you. Never names, so clients keep browsing freely.', to: studioRoute(/visib/i) },
-      { i: 'sliders', t: 'Positioning vs the Rate Index', d: 'Your rate against the p25, median and p75 for your role category, and the focus areas clients search for that few operators have verified.', to: studioRoute(/posit/i) },
+      { i: 'eye', t: 'Who viewed you and why', d: 'The type of company behind every profile view (industry, revenue range, employee range), plus the searches and filters that surfaced you. Never names, so companies keep browsing freely.', to: studioRoute(/visib/i) },
+      { i: 'sliders', t: 'Positioning vs the Rate Index', d: 'Your rate against the p25, median and p75 for your role category, and the focus areas companies search for that few operators have verified.', to: studioRoute(/posit/i) },
       { i: 'globe', t: 'Search and AI visibility', d: `An indexable profile page with structured data, the Google queries that found it, and whether ${market().aiEngines.join(', ').replace(/, ([^,]*)$/, ' and $1')} mention you.`, to: studioRoute(/search|ai/i) },
       { i: 'shield', t: 'Credibility for direct deals', d: 'Private proof links that show a prospect your reviews, CORE ratings and engagement history, and tell you which sections they read. A verified badge for your site and proposals.', to: studioRoute(/cred/i) },
       { i: 'radar', t: 'Predictive prospects and fractional roles', d: 'Fractional job posts that match your tags, and companies showing signs they need you now: a raise, a sales leader leaving, a hiring spree.', to: studioRoute(/opport|prospect|job/i) },
     ];
     const samples = [
-      { q: 'The Studio showed three healthcare companies had looked at my profile in one week. I asked a past client to verify two tags, and the next month I made two shortlists.', by: 'Fractional VP of Sales' },
+      { q: 'The Studio showed three healthcare companies had looked at my profile in one week. I asked a past company to verify two tags, and the next month I made two shortlists.', by: 'Fractional VP of Sales' },
       { q: 'I send a proof link with every proposal now. Seeing that the prospect read my reviews twice and forwarded the link changed how I ran the follow-up call.', by: 'Fractional RevOps leader' },
       { q: 'No intros in my first month, and I still opened Studio every Monday. The rate position alone was worth it: I was pricing well under the median for my category.', by: 'Fractional CMO' },
     ];
     const faq = [
-      ['Does it cost anything to join?', 'No. Joining, your profile, Studio and every tool on this page are free. Our only charge is a share of what you bill clients you meet here (next question). Rank, labels and badges will never be for sale.'],
-      ['How does Revenue Nomad charge operators?', `Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${FEE_PCT}%) on engagements with clients you meet here. Clients pay your listed rate and no fees, so the rate on your profile is the price they see. At a $200 hourly rate, you take home ${RN.fmt.usd(200 * (1 - FEE_PCT / 100))} an hour. Proposed: no fee on deals you bring yourself, including deals you win with a proof link. The founder is confirming both, and we will say so plainly before anything changes.`],
+      ['Does it cost anything to join?', 'No. Joining, your profile, Studio and every tool on this page are free. Our only charge is a share of what you bill companies you meet here (next question). Rank, labels and badges will never be for sale.'],
+      ['How does Revenue Nomad charge operators?', `Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${FEE_PCT}%) on engagements with companies you meet here. Companies pay your listed rate and no fees, so the rate on your profile is the price they see. At a $200 hourly rate, you take home ${RN.fmt.usd(200 * (1 - FEE_PCT / 100))} an hour. Proposed: no fee on deals you bring yourself, including deals you win with a proof link. The founder is confirming both, and we will say so plainly before anything changes.`],
       ['How long does approval take?', 'We review applications within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50, and Studio opens the same day.'],
-      ['I have no reviews yet. Will clients find me?', 'Yes. Search ranks on fit first: role, focus areas, company size and industry. A complete profile ranks higher, and Studio shows which searches you appear in so you can close the gaps.'],
-      ['Can I see which companies viewed me?', 'You see the type of company: industry, revenue range and employee range. Never the name. Clients browse more when they know that, which means more views for you.'],
-      ['Who sees my rate?', 'Signed-in clients see it on your card and profile, and it is the price they pay: nothing is added on top. It also feeds the Rate Index, anonymized, so every operator can price with real data.'],
+      ['I have no reviews yet. Will companies find me?', 'Yes. Search ranks on fit first: role, focus areas, company size and industry. A complete profile ranks higher, and Studio shows which searches you appear in so you can close the gaps.'],
+      ['Can I see which companies viewed me?', 'You see the type of company: industry, revenue range and employee range. Never the name. Companies browse more when they know that, which means more views for you.'],
+      ['Who sees my rate?', 'Signed-in companies see it on your card and profile, and it is the price they pay: nothing is added on top. It also feeds the Rate Index, anonymized, so every operator can price with real data.'],
     ];
     return `
     ${hero({
@@ -873,7 +873,7 @@
       foot: `<div class="pg-hero-strip">
         <div><b class="num">${RN.fmt.int(ops.length)}</b><span>Operator profiles in this prototype, from 350+ on the live network</span></div>
         <div><b class="num">${topShare}%</b><span>Of them lead ${esc(top.l)}</span></div>
-        <div><b class="num">$0</b><span>To join. We charge a share of what you bill clients you meet here (proposed: ${FEE_PCT}%)</span></div>
+        <div><b class="num">$0</b><span>To join. We charge a share of what you bill companies you meet here (proposed: ${FEE_PCT}%)</span></div>
       </div>`,
     })}
 
@@ -882,13 +882,13 @@
         <div class="pg-honest-l">
           <span class="eyebrow">The honest part</span>
           <h2 class="h2">Supply is crowded. Proof is how you stand out.</h2>
-          <p class="pg-p">${topShare}% of the ${RN.fmt.int(ops.length)} profiles in this prototype lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of client hiring intent sits there (illustrative survey data). Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
-          <p class="pg-p">Categories where client intent runs ahead of supply are where a verified record pays off fastest.</p>
+          <p class="pg-p">${topShare}% of the ${RN.fmt.int(ops.length)} profiles in this prototype lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of company hiring intent sits there (illustrative survey data). Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
+          <p class="pg-p">Categories where company intent runs ahead of supply are where a verified record pays off fastest.</p>
           <a class="act" href="#library">See demand vs verified supply by focus area${icon('arrow')}</a>
         </div>
         <div class="card pg-honest-r">
-          <div class="card-hd"><div><h3>Where operators are vs where clients are hiring</h3><p class="sub">Share by role category</p></div></div>
-          <div class="legend"><span><i style="background:var(--viz-muted)"></i>Operators in this prototype ${livePill()}</span><span><i style="background:var(--viz-1)"></i>Client hiring intent ${illus()}</span></div>
+          <div class="card-hd"><div><h3>Where operators are vs where companies are hiring</h3><p class="sub">Share by role category</p></div></div>
+          <div class="legend"><span><i style="background:var(--viz-muted)"></i>Operators in this prototype ${livePill()}</span><span><i style="background:var(--viz-1)"></i>Company hiring intent ${illus()}</span></div>
           <div class="pg-sd">${RN.fields.roleCategory.options.map((o) => {
             const s = Math.round(((supply[o.v] || 0) / total) * 100);
             const d = intent[o.v];
@@ -926,13 +926,13 @@
 
     <section class="section pg-ladder-sec">
       <div class="wrap">
-        ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on client evidence: reviews, verified fit tags and engagements. What each tier unlocks is proposed and not final.', `<a class="act" href="#levels">How the Reputation Index works${icon('arrow')}</a>`)}
+        ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on company evidence: reviews, verified fit tags and engagements. What each tier unlocks is proposed and not final.', `<a class="act" href="#levels">How the Reputation Index works${icon('arrow')}</a>`)}
         ${ladder({ counts: true, me: true })}
         <div class="pg-principles">
-          <div><span class="pg-pr-i">${icon('lock')}</span><h3 class="h5">Nothing is for sale</h3><p class="small muted">No paid rank, no paid badge, no paid access to client engagements. Every tier and every tool on this page is free.</p></div>
-          <div><span class="pg-pr-i">${icon('star')}</span><h3 class="h5">How featuring works</h3><p class="small muted">Home features up to three operators with a profile photo at Proven (Reputation Index 60+) and above, ranked by score, then client reviews and engagement history. Emerging operators who can start now get their own row. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} in this prototype qualify for a featured spot today.</p></div>
-          <div><span class="pg-pr-i">${icon('handshake')}</span><h3 class="h5">One fee, from what you bill</h3><p class="small muted">Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${FEE_PCT}%). Clients pay your listed rate and no fees. Proposed: no fee on deals you bring yourself.</p></div>
-          <div><span class="pg-pr-i">${icon('seal')}</span><h3 class="h5">Evidence moves the score</h3><p class="small muted">Client reviews rated 4.0 or higher verify your fit tags. A complete profile adds a little. Logging in more adds nothing.</p></div>
+          <div><span class="pg-pr-i">${icon('lock')}</span><h3 class="h5">Nothing is for sale</h3><p class="small muted">No paid rank, no paid badge, no paid access to company engagements. Every tier and every tool on this page is free.</p></div>
+          <div><span class="pg-pr-i">${icon('star')}</span><h3 class="h5">How featuring works</h3><p class="small muted">Home features up to three operators with a profile photo at Proven (Reputation Index 60+) and above, ranked by score, then company reviews and engagement history. Emerging operators who can start now get their own row. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} in this prototype qualify for a featured spot today.</p></div>
+          <div><span class="pg-pr-i">${icon('handshake')}</span><h3 class="h5">One fee, from what you bill</h3><p class="small muted">Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${FEE_PCT}%). Companies pay your listed rate and no fees. Proposed: no fee on deals you bring yourself.</p></div>
+          <div><span class="pg-pr-i">${icon('seal')}</span><h3 class="h5">Evidence moves the score</h3><p class="small muted">Company reviews rated 4.0 or higher verify your fit tags. A complete profile adds a little. Logging in more adds nothing.</p></div>
         </div>
       </div>
     </section>
@@ -955,14 +955,14 @@
       </div>
     </section>
 
-    ${band({ h: 'Put your proof where clients look.', text: 'Apply in one intake with the same fields clients filter on. We review it within 2 business days.', actions: `<a class="btn btn-leaf btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a>${studioAsMatt('studio')}` })}`;
+    ${band({ h: 'Put your proof where companies look.', text: 'Apply in one intake with the same fields companies filter on. We review it within 2 business days.', actions: `<a class="btn btn-leaf btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a>${studioAsMatt('studio')}` })}`;
   }
 
   /* =====================================================================
      LEVELS: Reputation Index explainer for clients and operators
      ===================================================================== */
   /* Client wording for the factor list: clients see "focus areas", not fit tags. Prefers registry clientLabel/clientD. */
-  const CLIENT_FACTOR = { verification: { l: 'Focus area verification', d: 'Share of focus areas a client confirmed in a review.' } };
+  const CLIENT_FACTOR = { verification: { l: 'Focus area verification', d: 'Share of focus areas a company confirmed in a review.' } };
   const factorLabel = (f) => f.clientLabel || (CLIENT_FACTOR[f.v] && CLIENT_FACTOR[f.v].l) || f.l;
   const factorDesc = (f) => f.clientD || (CLIENT_FACTOR[f.v] && CLIENT_FACTOR[f.v].d) || f.d;
 
@@ -977,10 +977,10 @@
     const tierName = (t) => ({ claimed: 'Self-claimed', verified: 'Verified', expert: 'Expert' }[t] || t);
     const tierPill = (t) => `<span class="pill ${t === 'expert' ? 'pill-gold' : t === 'verified' ? 'pill-good' : 'pill-line'}">${esc(tierName(t))}</span>`;
     const principles = [
-      ['lock', 'No pay-to-win', 'Nothing you can buy moves a score, a label or a place in search. The inputs are client evidence and a complete profile.'],
+      ['lock', 'No pay-to-win', 'Nothing you can buy moves a score, a label or a place in search. The inputs are company evidence and a complete profile.'],
       ['send', 'Reviews auto-publish', 'There is no moderation queue and no hand-picking. Every review counts the day it lands, good or bad.'],
-      ['users', 'One label for clients and operators', 'The label comes from the score, and the score is the same on cards, profiles, compare and in Studio.'],
-      ['seal', 'Team-checked is not client-verified','Emerging means our team checked identity and work history. Verified is kept for what a client confirmed: focus areas and engagements.'],
+      ['users', 'One label for companies and operators', 'The label comes from the score, and the score is the same on cards, profiles, compare and in Studio.'],
+      ['seal', 'Team-checked is not company-verified','Emerging means our team checked identity and work history. Verified is kept for what a company confirmed: focus areas and engagements.'],
       ['layers', 'A floor of 50', 'Every approved profile starts at 50, so a new operator with no reviews yet still shows as Emerging.'],
     ];
     // Only offer minimums that at least one profile in this prototype meets
@@ -989,13 +989,13 @@
     ${hero({
       eyebrow: 'Levels and the Reputation Index',
       h: 'One score. <span class="serif">Earned, never bought.</span>',
-      lede: 'The Reputation Index is a 0 to 100 score built from client evidence. Clients and operators see the same number and the same label, everywhere on Revenue Nomad.',
+      lede: 'The Reputation Index is a 0 to 100 score built from company evidence. Companies and operators see the same number and the same label, everywhere on Revenue Nomad.',
       actions: `<button type="button" class="btn btn-lg" data-act="pg-browse-sort" data-sort="ris">Browse by Reputation Index${icon('arrow')}</button>${studioAsMatt(studioRoute(/cred/i), 'btn btn-line btn-lg', 'See your level in Studio')}`,
     })}
 
     <section class="section pg-ladder-sec">
       <div class="wrap">
-        ${shead('The ladder', 'Six tiers, one for every score.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. That is expected on a network that started collecting client reviews this year, and it is why every review moves a profile. What each tier unlocks is proposed and not final.`)}
+        ${shead('The ladder', 'Six tiers, one for every score.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. That is expected on a network that started collecting company reviews this year, and it is why every review moves a profile. What each tier unlocks is proposed and not final.`)}
         ${ladder({ desc: true, counts: true, me: true })}
       </div>
     </section>
@@ -1011,7 +1011,7 @@
         <div class="card pg-factors-r">
           <div class="card-hd"><div><h3>Weight of each signal</h3><p class="sub">Share of the score above the floor of 50</p></div><span class="pill pill-warn">Proposed weights</span></div>
           <div class="pg-meters">${factors.map((f) => `<div class="pg-mrow"><span>${esc(factorLabel(f))}</span><div class="meter"><i style="width:${Math.round((f.w / maxW) * 100)}%"></i></div><b>${Math.round((f.w || 0) * 100)}%</b></div>`).join('')}</div>
-          <p class="small muted pg-factors-note">Profile completeness is the only signal an operator controls alone. Everything else needs a client.</p>
+          <p class="small muted pg-factors-note">Profile completeness is the only signal an operator controls alone. Everything else needs a company.</p>
         </div>
       </div>
     </section>
@@ -1021,14 +1021,14 @@
         <div class="pg-curve-l">
           <span class="eyebrow">Focus area verification</span>
           <h2 class="h2">A claim becomes proof one review at a time.</h2>
-          <p class="pg-p">Operators claim up to 25 focus areas (in Studio they are called fit tags). A focus area turns Verified when a client review confirms it, and its score climbs with each confirming review. Only reviews rated 4.0 or higher count. A focus area a client adds in a review joins the profile as Verified.</p>
+          <p class="pg-p">Operators claim up to 25 focus areas (in Studio they are called fit tags). A focus area turns Verified when a company review confirms it, and its score climbs with each confirming review. Only reviews rated 4.0 or higher count. A focus area a company adds in a review joins the profile as Verified.</p>
           <div class="row pg-curve-ex">${RN.ui.ftag({ t: 'Sales Playbook', tier: 'verified' })}${RN.ui.ftag({ t: 'Board Revenue Reporting', tier: 'claimed' })}</div>
-          <p class="small muted">Solid with a check is verified by a client. Dashed is claimed by the operator.</p>
-          <div class="pg-curve-chart">${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w: 440, h: 200, fmt: (n) => String(n), label: 'Focus area score by number of confirming client reviews' })}<p class="tiny muted">Score by number of confirming client reviews. Expert from 5.</p></div>
+          <p class="small muted">Solid with a check is verified by a company. Dashed is claimed by the operator.</p>
+          <div class="pg-curve-chart">${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w: 440, h: 200, fmt: (n) => String(n), label: 'Focus area score by number of confirming company reviews' })}<p class="tiny muted">Score by number of confirming company reviews. Expert from 5.</p></div>
         </div>
         <div class="tbl-wrap card pg-curve-tbl">
           <table class="tbl">
-            <thead><tr><th>Client reviews</th><th class="r">Score</th><th>Tier</th></tr></thead>
+            <thead><tr><th>Company reviews</th><th class="r">Score</th><th>Tier</th></tr></thead>
             <tbody>${curve.map((c) => `<tr><td>${c.r === 10 ? '10 or more' : c.r === 0 ? '0, self-claimed' : c.r}</td><td class="r num">${c.score || '0'}</td><td>${tierPill(c.tier)}</td></tr>`).join('')}</tbody>
           </table>
         </div>
@@ -1037,7 +1037,7 @@
 
     <section class="section night pg-core">
       <div class="wrap">
-        ${shead('CORE client reviews', 'Four questions, asked the same way every time.', 'Each client rates the operator from 1 to 5 on all four and can explain every score. The review also asks for the overall experience and whether they would hire the operator again.')}
+        ${shead('CORE company reviews', 'Four questions, asked the same way every time.', 'Each company rates the operator from 1 to 5 on all four and can explain every score. The review also asks for the overall experience and whether they would hire the operator again.')}
         <div class="pg-core-grid">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
             <span class="pg-core-l" aria-hidden="true">${esc(d.v)}</span>
             <h3 class="h4">${esc(d.l)}</h3>
@@ -1057,15 +1057,15 @@
     <section class="section-sm">
       <div class="wrap grid g-2 pg-uses">
         <div class="card">
-          <span class="eyebrow">For clients</span>
+          <span class="eyebrow">For companies</span>
           <h3 class="h3" style="margin-top:8px">Start with confirmed records</h3>
           <p class="small muted" style="margin-top:8px">Sort Browse by Reputation Index, or set a minimum. Counts are profiles in this prototype.</p>
           <div class="row pg-uses-chips"><button type="button" class="btn btn-sm" data-act="pg-browse-sort" data-sort="ris">Sort by Reputation Index</button>${risOpts.map(({ o, n }) => `<button type="button" class="chip" data-act="pg-browse-ris" data-v="${esc(o.v)}">${icon('filter')}${esc(RN.fields.risMin.label)} ${esc(o.l)} · ${RN.fmt.plural(n, 'profile')}</button>`).join('')}</div>
         </div>
         <div class="card">
           <span class="eyebrow">For operators</span>
-          <h3 class="h3" style="margin-top:8px">Raise your score with client evidence</h3>
-          <p class="small muted" style="margin-top:8px">Request CORE reviews from past clients and see points available for each signal in Studio.</p>
+          <h3 class="h3" style="margin-top:8px">Raise your score with company evidence</h3>
+          <p class="small muted" style="margin-top:8px">Request CORE reviews from past companies and see points available for each signal in Studio.</p>
           <div class="row pg-uses-chips">${studioAsMatt(studioRoute(/cred/i), 'btn btn-sm', 'Open Credibility')}<a class="btn btn-line btn-sm" href="#join.operator">Apply to join</a></div>
         </div>
       </div>

@@ -23,7 +23,7 @@
   const FILTER_KEYS = ['verifiedProof', 'roleCategories', 'availability', 'hoursPerMonth', 'locations', 'timeZones', 'usHours', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes', 'rateMax', 'risMin'];
   // Chip colour by field type (L222): role, focus area, industry, availability, location, company, engagement, rate, reputation, proof
   const TYPE = { q: 'q', tags: 'focus', roleCategories: 'role', availability: 'avail', hoursPerMonth: 'avail', locations: 'location', timeZones: 'location', usHours: 'location', revenueRange: 'company', employeeRange: 'company', industries: 'industry', engagementTypes: 'engage', salesMotions: 'motion', rateMax: 'rate', risMin: 'ris', verifiedProof: 'proof' };
-  const PROOF = 'Client-verified proof';
+  const PROOF = 'Company-verified proof';
   const US_HOURS = 'Works US hours';
   const REV_LABEL = () => RN.fields.revenueRange.clientLabel || 'Company revenue';
   // Each category page links to its own Engagement Blueprint (RN.projects.blueprints ids)
@@ -270,9 +270,9 @@
       width: 480,
       onClose: o.onClose,
       title: esc(o.title || 'Log in to see rates'),
-      sub: esc(o.sub || 'Hourly rates and match signals are shown to signed-in clients. Browsing stays open to everyone.'),
+      sub: esc(o.sub || 'Hourly rates and match signals are shown to signed-in companies. Browsing stays open to everyone.'),
       body: `<div class="stack" style="--gap:12px">
-        <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>Prototype client account. You stay on this page.</span></button>
+        <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>Prototype company account. You stay on this page.</span></button>
         <button type="button" class="act" data-act="br-login-all" style="align-self:flex-start">${icon('user')}Log in as an operator or the team</button>
       </div>`,
     });
@@ -327,7 +327,7 @@
     return `<header class="wrap br-head">
       <span class="eyebrow">Direct access to talent</span>
       <h1 class="h1">Browse <span class="serif">operators</span></h1>
-      <p class="lede">Open profiles. Reviews and focus areas a client confirmed are marked Verified. No login needed to browse.</p>
+      <p class="lede">Open profiles. Reviews and focus areas a company confirmed are marked Verified. No login needed to browse.</p>
     </header>`;
   }
 
@@ -448,7 +448,7 @@
     if (!near.length) return '';
     return `<section class="wrap br-near" aria-labelledby="br-near-h" data-view-source="search">
       <h2 class="h4" id="br-near-h">Operators in other categories with ${esc(label)} focus areas</h2>
-      <div class="grid g-3 br-grid">${near.map((x) => BR.card(x.op, { why: x.v ? `Client-verified in ${x.t.filter((t) => t.tier !== 'claimed').slice(0, 2).map((t) => t.t).join(' and ')}` : `Lists ${x.t.slice(0, 2).map((t) => t.t).join(' and ')}` })).join('')}</div>
+      <div class="grid g-3 br-grid">${near.map((x) => BR.card(x.op, { why: x.v ? `Company-verified in ${x.t.filter((t) => t.tier !== 'claimed').slice(0, 2).map((t) => t.t).join(' and ')}` : `Lists ${x.t.slice(0, 2).map((t) => t.t).join(' and ')}` })).join('')}</div>
     </section>`;
   }
 
@@ -557,7 +557,7 @@
       : `<button type="button" class="act br-save" data-act="br-save">${icon('bookmark')}Save search</button>`;
   }
   function proofSwitch(c) {
-    return `<label class="switch br-proof-sw" title="Operators with a client review or a focus area a client confirmed"><input type="checkbox" data-change="br-proof" ${c.filters.verifiedProof ? 'checked' : ''}><i></i><span>${PROOF}</span></label>`;
+    return `<label class="switch br-proof-sw" title="Operators with a company review or a focus area a company confirmed"><input type="checkbox" data-change="br-proof" ${c.filters.verifiedProof ? 'checked' : ''}><i></i><span>${PROOF}</span></label>`;
   }
   const refocus = (sel) => { const el = document.querySelector('.br-page ' + sel); if (el) el.focus(); };
   function syncSaved() {
@@ -730,7 +730,7 @@
     const d = RN.fields.rateMax;
     if (RN.store.state.persona === 'visitor') {
       return `<div class="field" data-field="rateMax" data-br-rate><label>${esc(d.label)}</label>
-        <div class="br-ratelock">${icon('lock')}<span>Rates are shown to signed-in clients.</span><button type="button" class="act" data-act="br-login">Log in</button></div></div>`;
+        <div class="br-ratelock">${icon('lock')}<span>Rates are shown to signed-in companies.</span><button type="button" class="act" data-act="br-login">Log in</button></div></div>`;
     }
     const val = v && +v < d.max ? +v : d.max;
     return `<div class="field" data-field="rateMax" data-br-rate>
@@ -748,11 +748,11 @@
   }
   function formHtml(f) {
     return `<div class="field br-proof-field" data-field="verifiedProof">
-        <label class="switch br-proof"><input type="checkbox" name="verifiedProof" value="1" ${f.verifiedProof ? 'checked' : ''}><i></i><span><b>${PROOF}</b><span class="small muted">Only operators with a client review or a focus area a client confirmed.</span></span></label>
+        <label class="switch br-proof"><input type="checkbox" name="verifiedProof" value="1" ${f.verifiedProof ? 'checked' : ''}><i></i><span><b>${PROOF}</b><span class="small muted">Only operators with a company review or a focus area a company confirmed.</span></span></label>
       </div>
       ${RN.w.field('roleCategories', f.roleCategories || [], { name: 'roleCategories' })}
       ${availField(f.availability || [])}
-      <div data-deselect>${RN.w.field('minHours', (f.hoursPerMonth || [])[0] || '', { name: 'hoursPerMonth', help: 'Operators with at least this much time a month for a new client.' })}</div>
+      <div data-deselect>${RN.w.field('minHours', (f.hoursPerMonth || [])[0] || '', { name: 'hoursPerMonth', help: 'Operators with at least this much time a month for a new company.' })}</div>
       ${locationFields(f)}
       ${RN.w.field('revenueRange', f.revenueRange || [], { name: 'revenueRange', label: REV_LABEL(), help: 'Operators who work with companies in any selected range.' })}
       ${RN.w.field('employeeRange', f.employeeRange || [], { name: 'employeeRange', help: 'Operators who work with companies of any selected size.' })}
@@ -857,7 +857,7 @@
     if (st().persona === 'visitor' && RN.fitme) { RN.fitme.ask('search'); return; }
     if (!isClient()) {
       pendingSave = true;
-      BR.loginPrompt({ title: 'Log in to save this search', sub: 'Signed-in clients save searches and run them again in one click. Browsing stays open to everyone.', onClose: () => { pendingSave = false; } });
+      BR.loginPrompt({ title: 'Log in to save this search', sub: 'Signed-in companies save searches and run them again in one click. Browsing stays open to everyone.', onClose: () => { pendingSave = false; } });
       return;
     }
     const ex = findSaved(c);

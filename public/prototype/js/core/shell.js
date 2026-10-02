@@ -23,9 +23,9 @@
   const DEMO_CLIENT = JSON.parse(JSON.stringify(RN.personas.buyer));
   function applyClient(who) {
     const b = RN.personas.buyer, src = who || DEMO_CLIENT;
-    b.name = src.name; b.first = String(src.name || 'Client').split(' ')[0]; b.email = src.email; b.title = src.title || '';
+    b.name = src.name; b.first = String(src.name || 'Company').split(' ')[0]; b.email = src.email; b.title = src.title || '';
     b.company = Object.assign({}, DEMO_CLIENT.company, who ? { website: '', hq: '' } : {}, src.company);
-    b.sub = [b.title, b.company.name].filter(Boolean).join(', ') || 'Client';
+    b.sub = [b.title, b.company.name].filter(Boolean).join(', ') || 'Company';
     b.demo = !who;
   }
   shell.applyClient = () => applyClient((RN.store.state.seen || {}).client || null);
@@ -72,7 +72,7 @@
     dockOpen = false;
     shell.renderHeader(); shell.renderDock();
     RN.go('buyer');
-    RN.ui.toast(`Viewing as the demo client, ${esc(RN.personas.buyer.name)}`);
+    RN.ui.toast(`Viewing as the demo company, ${esc(RN.personas.buyer.name)}`);
   };
   // Log in from inside a page (a gate, "Log in to see rate") keeps you on that page; from the header it opens your home
   RN.actions['login'] = (el) => {
@@ -176,7 +176,7 @@
         <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#engagements">Post an engagement</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>
         <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
         <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
-        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#results">Client stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
+        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
@@ -209,7 +209,7 @@
         <div class="row between"><span class="eyebrow" style="color:var(--leaf)">Prototype controls</span><button class="x-btn" data-act="dock" aria-label="Close" style="width:32px;height:32px;background:transparent;color:#fff;border-color:rgba(255,255,255,.25)">${icon('x')}</button></div>
         <div class="stack" style="--gap:8px"><span class="label">View the system as</span>
           <div class="dock-persona">${['visitor', 'buyer', 'operator', 'admin'].map((k) => `<button type="button" class="${p === k ? 'on' : ''}" data-act="persona" data-p="${k}" data-stay="1" aria-pressed="${p === k}"><b>${esc(k === 'visitor' ? 'Visitor' : RN.personas[k].name)}</b><span>${esc(k === 'visitor' ? 'Logged out' : RN.personas[k].sub)}</span></button>`).join('')}</div>
-          ${RN.personas.buyer.demo ? '' : `<button type="button" class="act" style="color:var(--leaf);justify-content:flex-start;padding:4px 0" data-act="client-demo">${icon('refresh')}<span>Switch client to the demo client (${esc(DEMO_CLIENT.name)})</span></button>`}</div>
+          ${RN.personas.buyer.demo ? '' : `<button type="button" class="act" style="color:var(--leaf);justify-content:flex-start;padding:4px 0" data-act="client-demo">${icon('refresh')}<span>Switch company to the demo company (${esc(DEMO_CLIENT.name)})</span></button>`}</div>
         <div class="stack" style="--gap:8px"><span class="label">Walk a journey</span>
           <div class="stack" style="--gap:2px">${JOURNEYS.map((j) => `<button type="button" class="act" style="color:#fff;justify-content:flex-start;padding:6px 0" data-act="journey" data-j="${j.key}">${icon('arrow')}<span>${esc(j.label)}</span></button>`).join('')}</div></div>
         <div class="stack" style="--gap:8px"><span class="label">Clock · ${esc(RN.fmt.date(RN.now()))}</span>
@@ -260,14 +260,14 @@
   };
 
   const JOURNEYS = [
-    { key: 'buyer', label: 'Client: search, compare, request an intro', persona: 'buyer', to: 'browse' },
-    { key: 'project', label: 'Client: post an engagement, get ranked responses', persona: 'buyer', to: 'engagement.new' },
-    { key: 'hire', label: 'Client: hire an operator and track the terms', persona: 'buyer', to: 'buyer.team' },
-    { key: 'client-new', label: 'Client: new client, nothing posted yet', persona: 'buyer', to: 'buyer', client: 'new' },
-    { key: 'client-team', label: 'Client: returning client with a team (sample)', persona: 'buyer', to: 'buyer', sample: true },
-    { key: 'search-client', label: 'Search: signed-in client, company known', persona: 'buyer', to: 'browse', search: 'We need a VP of Sales to build a repeatable sales process' },
+    { key: 'buyer', label: 'Company: search, compare, request an intro', persona: 'buyer', to: 'browse' },
+    { key: 'project', label: 'Company: post an engagement, get ranked responses', persona: 'buyer', to: 'engagement.new' },
+    { key: 'hire', label: 'Company: hire an operator and track the terms', persona: 'buyer', to: 'buyer.team' },
+    { key: 'client-new', label: 'Company: new company, nothing posted yet', persona: 'buyer', to: 'buyer', client: 'new' },
+    { key: 'client-team', label: 'Company: returning company with a team (sample)', persona: 'buyer', to: 'buyer', sample: true },
+    { key: 'search-client', label: 'Search: signed-in company, profile known', persona: 'buyer', to: 'browse', search: 'We need a VP of Sales to build a repeatable sales process' },
     { key: 'search-new', label: 'Search: first-time visitor, never signed up', persona: 'visitor', to: 'home', fresh: true },
-    { key: 'search-back', label: 'Search: returning client, signed out', persona: 'visitor', to: 'home', fresh: true, returning: true },
+    { key: 'search-back', label: 'Search: returning company, signed out', persona: 'visitor', to: 'home', fresh: true, returning: true },
     { key: 'studio', label: 'Operator: who viewed me and why', persona: 'operator', to: 'studio' },
     { key: 'proof', label: 'Operator: win a direct deal with a proof link', persona: 'operator', to: 'studio.credibility' },
     { key: 'join', label: 'Operator: join the network (standard intake)', persona: 'visitor', to: 'join' },
@@ -289,7 +289,7 @@
     dockOpen = false;
     shell.renderHeader(); shell.renderDock();
     if (j.search && RN.browse) RN.browse.go({ q: j.search }); else RN.go(j.to);
-    if (j.sample) RN.ui.toast('Sample scenario loaded: a returning client with a team. Clear it from the banner in the workspace.', { icon: 'info', ms: 5200 });
+    if (j.sample) RN.ui.toast('Sample scenario loaded: a returning company with a team. Clear it from the banner in the workspace.', { icon: 'info', ms: 5200 });
   };
 
   /* ---------- Theme ---------- */

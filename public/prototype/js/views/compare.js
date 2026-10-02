@@ -58,7 +58,7 @@
   function coreCell(op) {
     const c = coreAvg(op);
     if (!c) return none('No reviews yet');
-    return `<div class="cmp-core"><b class="cmp-v">${c.avg.toFixed(1)}</b><span class="muted">/ 5</span>${RN.ui.stars(c.avg)}</div>${sub(esc(RN.fmt.plural(c.n, 'client review')))}`;
+    return `<div class="cmp-core"><b class="cmp-v">${c.avg.toFixed(1)}</b><span class="muted">/ 5</span>${RN.ui.stars(c.avg)}</div>${sub(esc(RN.fmt.plural(c.n, 'company review')))}`;
   }
   function engCell(op) {
     const e = op.engagements || [];
@@ -153,7 +153,7 @@
     const buyer = st.persona === 'buyer', visitor = st.persona === 'visitor';
     const co = RN.personas.buyer.company;
     const F = RN.fields;
-    const coreTip = `<b>CORE client reviews</b><br>Clients rate ${F.coreDims.options.map((d) => esc(d.l)).join(', ')} from 1 to 5 after an engagement. Shown as the average across reviews.`;
+    const coreTip = `<b>CORE company reviews</b><br>Companies rate ${F.coreDims.options.map((d) => esc(d.l)).join(', ')} from 1 to 5 after an engagement. Shown as the average across reviews.`;
     const R = [];
     if (buyer) R.push({ sec: `Fit for ${esc(co.name)}`, l: 'Match signals', tip: `<b>Match signals</b><br>Scored against ${esc(co.name)}: company revenue, employee range, industry, plus the role, GTM motion and need in your saved match preferences.`, cell: fitCell, val: (op) => RN.model.fit(op, brief(op)).pct, dir: 'max' });
     else if (visitor) R.push({ sec: 'Fit for your company', l: 'Match signals', lock: true });
@@ -259,7 +259,7 @@
       const lab = `<th scope="row" class="cmp-lab">${r.sec ? `<span class="cmp-sec">${r.sec}${r.secTip ? RN.ui.tip(r.secTip, 'About ' + r.sec) : ''}</span>` : ''}<span class="cmp-l">${esc(r.l)}${r.tip ? RN.ui.tip(r.tip, 'About ' + r.l) : ''}</span>${r.note ? `<span class="cmp-sub">${esc(r.note)}</span>` : ''}</th>`;
       let cells;
       if (r.lock) {
-        cells = `<td colspan="${ops.length}" class="cmp-lockrow"><div class="cmp-lockbox">${icon('lock')}<span><b>See how each operator fits your company.</b> Sign in as a client and every column is scored on company revenue, employee range, industry and expertise.</span><button type="button" class="act" data-act="cmp-login" data-fit="1">Log in to see fit${icon('arrow')}</button></div></td>`;
+        cells = `<td colspan="${ops.length}" class="cmp-lockrow"><div class="cmp-lockbox">${icon('lock')}<span><b>See how each operator fits your company.</b> Sign in as a company and every column is scored on company revenue, employee range, industry and expertise.</span><button type="button" class="act" data-act="cmp-login" data-fit="1">Log in to see fit${icon('arrow')}</button></div></td>`;
       } else {
         const best = bestSet(ops, r);
         cells = ops.map((op, j) => `<td class="${best.has(j) ? 'cmp-best' : ''}">${r.cell(op)}</td>`).join('');
@@ -331,7 +331,7 @@
   };
   RN.actions['cmp-login'] = (el) => {
     const fit = el && el.dataset.fit;
-    if (RN.browse && RN.browse.loginPrompt) RN.browse.loginPrompt(fit ? { title: 'Log in to see match signals', sub: 'Every operator is scored against your company once you sign in as a client. Browsing and compare stay open to everyone.' } : { title: 'Log in to see rates', sub: 'Hourly rates are shown to signed-in clients. Browsing and compare stay open to everyone.' });
+    if (RN.browse && RN.browse.loginPrompt) RN.browse.loginPrompt(fit ? { title: 'Log in to see match signals', sub: 'Every operator is scored against your company once you sign in as a company. Browsing and compare stay open to everyone.' } : { title: 'Log in to see rates', sub: 'Hourly rates are shown to signed-in companies. Browsing and compare stay open to everyone.' });
     else RN.actions.login();
   };
 

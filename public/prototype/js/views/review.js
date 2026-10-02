@@ -115,7 +115,7 @@
     if (want) dr.step = RN.clamp(Math.round(want), 1, Math.min(3, dr.max || 1));
     return form(rr, op);
   }
-  function titleFor(p) { const rr = findRR(p.id); const op = rr && RN.model.byId(rr.opId); return op ? `Review ${op.name}` : 'Client review'; }
+  function titleFor(p) { const rr = findRR(p.id); const op = rr && RN.model.byId(rr.opId); return op ? `Review ${op.name}` : 'Company review'; }
   function mountReview(root, p) {
     // Keep the step in the URL so browser Back moves one step back (and a reload stays on this step)
     const rr = findRR(p.id);
@@ -151,7 +151,7 @@
     return `<div class="rv wrap-narrow">
       <div class="rv-expired card">
         <span class="rv-seal is-muted">${icon('link')}</span>
-        <span class="eyebrow">Client review</span>
+        <span class="eyebrow">Company review</span>
         <h1 class="h2">This review link is no longer active</h1>
         <p class="lede">Review links work once and expire after 30 days. Ask the operator who sent it for a new link, or tell our team and we will send one.</p>
         <div class="row rv-cta"><a class="btn" href="#talk">Talk to us</a><a class="btn btn-line" href="#browse">Browse operators</a></div>
@@ -172,7 +172,7 @@
     const ask = rr.source === 'client' ? `${first ? 'your' : 'Your'} review of ${esc(op.first)}’s work at ${esc(co)} helps the next company hire well.` : `${esc(op.first)} asked for your review of the ${esc(co)} engagement.`;
     return `<header class="rv-hd">
       <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${coName ? ` at ${esc(coName)}` : ''}${start ? ` · ${esc(monthLabel(start))} to ${end ? esc(monthLabel(end)) : 'now'}` : ''}</span></div></div>
-      <span class="eyebrow">CORE client review</span>
+      <span class="eyebrow">CORE company review</span>
       <h1 class="h1">How was working with ${esc(op.first)}?</h1>
       <p class="lede">${first ? `${esc(first)}, ` : ''}${ask} Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
     </header>
@@ -253,7 +253,7 @@
   }
 
   function step2(rr, op, d) {
-    return `${sec('CORE ratings', `CORE is how Revenue Nomad measures operators: four behaviours, rated 1 to 5 by the clients who worked with them. Say why if you can. Your reasons are the most useful part for the next company.`, `
+    return `${sec('CORE ratings', `CORE is how Revenue Nomad measures operators: four behaviours, rated 1 to 5 by the companies who worked with them. Say why if you can. Your reasons are the most useful part for the next company.`, `
       <div class="rv-core-list">${DIMS().map((x) => `<div class="rv-core">
         <span class="rv-letter" aria-hidden="true">${esc(x.v)}</span>
         <div class="rv-core-b">
@@ -336,7 +336,7 @@
           <div class="rv-pv-score"><b class="num">${avg ? fmt1(avg) : '–'}</b>${RN.ui.stars(Math.round(avg * 10) / 10)}</div></div>
         ${q ? `<p class="rv-pv-q">“${esc(q.length > 220 ? q.slice(0, 217) + '…' : q)}”</p>` : ''}
         <div class="row" style="--gap:8px">
-          <span class="pill pill-good">${icon('check-circle')}Verified client</span>
+          <span class="pill pill-good">${icon('check-circle')}Verified company</span>
           ${d.hireAgain === 'yes' ? `<span class="pill pill-accent">${icon('check')}Would hire again</span>` : d.hireAgain === 'no' ? '<span class="pill">Would not hire again</span>' : ''}
           ${n ? `<span class="pill pill-line">${n} focus area${n === 1 ? '' : 's'} confirmed</span>` : ''}
         </div>
@@ -554,7 +554,7 @@
           <b class="num">${res.tags.length}</b>
           <span class="rv-imp-l">${res.good ? `focus area${res.tags.length === 1 ? '' : 's'} verified by you` : `focus area${res.tags.length === 1 ? '' : 's'} recorded`}</span>
           ${shownTags.length ? `<div class="opc-tags">${shownTags.slice(0, 8).map((t) => RN.ui.ftag({ t, tier: res.good ? 'verified' : 'claimed' })).join('')}${shownTags.length > 8 ? `<span class="ftag more">+${shownTags.length - 8} more</span>` : ''}</div>` : ''}
-          <p class="small muted">${!res.tags.length ? 'No focus areas confirmed. Your ratings and quote still count toward CORE.' : res.good ? `${fresh ? `${fresh} ${fresh === 1 ? 'was' : 'were'} only claimed until now. ` : ''}Each one now carries one more client verification, and verified focus areas rank first in search.` : 'Focus areas verify on reviews with a CORE average of 4.0 or higher.'}</p>
+          <p class="small muted">${!res.tags.length ? 'No focus areas confirmed. Your ratings and quote still count toward CORE.' : res.good ? `${fresh ? `${fresh} ${fresh === 1 ? 'was' : 'were'} only claimed until now. ` : ''}Each one now carries one more company verification, and verified focus areas rank first in search.` : 'Focus areas verify on reviews with a CORE average of 4.0 or higher.'}</p>
         </section>
         <section class="card rv-imp">
           <span class="rv-imp-ic">${icon('radar')}</span>

@@ -153,7 +153,7 @@
         <div class="fm-row"><button type="button" class="act muted" data-act="fm-skip" data-k="${s.k}">${s.edit ? 'Keep as is' : 'Skip'}</button><span class="fm-login">Already have an account? <button type="button" class="act" data-act="fm-login">Log in</button></span></div>`;
     } else {
       const known = KEYS.filter((k) => me()[k]).map((k) => `<span>${esc(lab(k, me()[k]))}</span>`).join('');
-      body = `<p class="fm-q">Create your free client profile</p><p class="fm-sub">Your matches and answers are saved to it. We’ll email you when someone new fits.</p>
+      body = `<p class="fm-q">Create your free company profile</p><p class="fm-sub">Your matches and answers are saved to it. We’ll email you when someone new fits.</p>
         ${known ? `<div class="fm-known">${known}</div>` : ''}
         ${emailForm('matches')}
         <div class="fm-row"><button type="button" class="act muted" data-act="fm-save-skip">No thanks</button><span class="fm-login">Already have an account? <button type="button" class="act" data-act="fm-login">Log in</button></span></div>`;
@@ -210,10 +210,10 @@
 
   /* ---------- Save: one field, a work email ---------- */
   const TITLES = {
-    shortlist: ['Keep your shortlist', 'Add your work email to create your free client profile. Your shortlist is saved to it.'],
-    rates: ['See operator rates', 'Rates are shown to clients. Add your work email to create your free client profile.'],
-    search: ['Save this search', 'Add your work email to create your free client profile. We’ll email you when a new operator matches.'],
-    matches: ['Create your client profile', 'These matches and your answers are saved to it.'],
+    shortlist: ['Keep your shortlist', 'Add your work email to create your free company profile. Your shortlist is saved to it.'],
+    rates: ['See operator rates', 'Rates are shown to companies. Add your work email to create your free company profile.'],
+    search: ['Save this search', 'Add your work email to create your free company profile. We’ll email you when a new operator matches.'],
+    matches: ['Create your company profile', 'These matches and your answers are saved to it.'],
     login: ['Log in', 'Enter your work email and we’ll send you a sign-in link. No password.'],
   };
   FM.ask = function (reason, o) {
@@ -326,7 +326,7 @@
     asClient({ name: name || coName, title: '', email, company: { name: coName, industry: m.industry || '', revenueRange: m.revenueRange || '', employeeRange: m.employeeRange || '' } });
     setSeen({ searchMe: null });
     RN.track('signup_submit', { meta: { kind: 'client', via: 'search', reason } });
-    RN.mail(email, 'Welcome to Revenue Nomad', `Your client account for ${coName} is ready. Use the sign-in link in this email next time; there is no password.\n\nYour shortlist and searches are saved in your workspace.`, 'system');
+    RN.mail(email, 'Welcome to Revenue Nomad', `Your company account for ${coName} is ready. Use the sign-in link in this email next time; there is no password.\n\nYour shortlist and searches are saved in your workspace.`, 'system');
     afterSave(reason);
     rerank();
     // The email made a client profile, not a mailing-list entry: show it, with name and company to correct in place
@@ -334,7 +334,7 @@
     const facts = KEYS.filter((k) => c[k]).map((k) => `<span>${esc(lab(k, c[k]))}</span>`).join('');
     RN.ui.modal({
       width: 480,
-      title: 'Your client profile is ready',
+      title: 'Your company profile is ready',
       sub: `Signed in as ${esc(email)}. We emailed you a sign-in link for next time.`,
       body: `<form id="fm-profile" data-submit="fm-profile" class="stack" style="--gap:14px">
           <div class="field"><label for="fm-p-name">Your name</label><input class="input" id="fm-p-name" name="name" autocomplete="name" value="${esc(name)}" placeholder="First and last name"></div>

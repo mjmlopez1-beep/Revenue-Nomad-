@@ -51,7 +51,7 @@
     if (!b) return;
     if (c) Object.assign(b.company, c);
     // Keep the one-line identity in step with the company name (header, dock, sign-in toast)
-    b.sub = [b.title, b.company.name].filter(Boolean).join(', ') || 'Client';
+    b.sub = [b.title, b.company.name].filter(Boolean).join(', ') || 'Company';
   };
   // The store loads after view scripts run; apply saved company details once boot finishes.
   setTimeout(() => { try { BW.applyCompany(); } catch (e) { /* ignore */ } }, 0);
@@ -665,7 +665,7 @@
 
   // One header on every tab: the surface eyebrow (company · Client workspace), a title, a line of context.
   function head(o) {
-    const eyebrow = `${esc(me().company.name || 'Your company')} · Client workspace`;
+    const eyebrow = `${esc(me().company.name || 'Your company')} · Company workspace`;
     return `<header class="app-head bw-head">
       <div><span class="eyebrow">${eyebrow}</span><h1>${o.title}</h1>${o.sub ? `<p class="sub">${o.sub}</p>` : ''}</div>
       ${o.actions ? `<div class="row bw-head-act">${o.actions}</div>` : ''}
@@ -807,7 +807,7 @@
   function teaser(L) {
     const since = clientSince(L);
     const bits = [
-      since ? `Client since ${RN.fmt.date(since + 'T12:00:00')}` : 'New client',
+      since ? `Company since ${RN.fmt.date(since + 'T12:00:00')}` : 'New company',
       plural(L.projects.length, 'engagement'), plural(myIntros().length, 'intro request'), plural(L.hires.length, 'hire'),
     ];
     if (L.state === 'S2' || L.state === 'S3') {
@@ -900,7 +900,7 @@
     <section class="bw-sec" aria-labelledby="bw-how-t">
       ${secHead('<span id="bw-how-t">How hiring works here</span>')}
       <ol class="bw-how">
-        <li><span class="bw-how-n">1</span><b>Describe or browse</b><p class="small muted">Write what you need, start from a Blueprint, or browse profiles with rates and client reviews.</p></li>
+        <li><span class="bw-how-n">1</span><b>Describe or browse</b><p class="small muted">Write what you need, start from a Blueprint, or browse profiles with rates and company reviews.</p></li>
         <li><span class="bw-how-n">2</span><b>Meet</b><p class="small muted">Request an intro. The operator replies within 72 hours and our team introduces you by email.</p></li>
         <li><span class="bw-how-n">3</span><b>Hire</b><p class="small muted">Agree the terms and record them here.</p></li>
       </ol>
@@ -1442,7 +1442,7 @@
     const i = findIntro(el.dataset.id);
     if (!i) return;
     RN.intro.setStatus(i.id, el.dataset.to);
-    RN.ui.toast(`Status: ${esc(statusLabel(el.dataset.to))}. The client email is in the Outbox.`, { icon: 'bolt' });
+    RN.ui.toast(`Status: ${esc(statusLabel(el.dataset.to))}. The company email is in the Outbox.`, { icon: 'bolt' });
     RN.rerender();
   };
 
@@ -1465,7 +1465,7 @@
     RN.store.update((s) => {
       const r = s.intros.find((x) => x.id === i.id);
       r.status = 'declined'; r.withdrawn = true; r.closedBy = 'client';
-      r.thread.push({ from: me().name, text: 'Withdrawn by the client', ts: RN.now().toISOString() });
+      r.thread.push({ from: me().name, text: 'Withdrawn by the company', ts: RN.now().toISOString() });
     }, 'intros');
     RN.mail(op.name, 'An intro request was withdrawn', `The ${RN.w.label('industry', i.buyer.company.industry) || 'client'} company that asked to meet you withdrew its request. No action needed.`, 'intro');
     RN.ui.toast(`Request to ${esc(op.first)} withdrawn`);
@@ -1514,7 +1514,7 @@
       r.thread.push({ from: me().name, text: 'Not a fit' + (reason ? ': ' + reason : ''), ts: RN.now().toISOString() });
     }, 'intros');
     RN.mail(op.name, `Update from ${me().company.name}`, `${me().name} decided not to move forward after your intro. Thank you for making time.\n\nClients who pass after a first call most often cite timing. Your profile and availability stay live.`, 'intro');
-    RN.mail('Revenue Nomad team', `Client closed an intro: ${op.name}`, `${me().name} (${me().company.name}) marked ${op.name} as not a fit.${reason ? '\nReason: ' + reason : ''}\nSuggest two similar operators.`, 'intro');
+    RN.mail('Revenue Nomad team', `Company closed an intro: ${op.name}`, `${me().name} (${me().company.name}) marked ${op.name} as not a fit.${reason ? '\nReason: ' + reason : ''}\nSuggest two similar operators.`, 'intro');
     RN.ui.toast('Request closed. We picked two operators with a similar fit.');
     RN.rerender();
   };
@@ -1921,7 +1921,7 @@
       (i.thread || []).forEach((x, k) => {
         const text = String(x.text || '');
         if (text === statusLabel('introduced')) push(x.ts, 'intros', 'mail', `Introduced to ${op.name}`, 'By our team, by email');
-        else if (text === 'Withdrawn by the client') push(x.ts, 'intros', 'x', `You withdrew your request to ${op.name}`);
+        else if (text === 'Withdrawn by the company' || text === 'Withdrawn by the client') push(x.ts, 'intros', 'x', `You withdrew your request to ${op.name}`);
         else if (/^Not a fit/.test(text) && x.from !== op.name) push(x.ts, 'intros', 'x', `You closed the intro with ${op.name}`, text.replace(/^Not a fit:?\s*/, ''));
         else if (i.status === 'declined' && !i.closedBy && x.from === op.name && k === i.thread.length - 1 && text !== statusLabel('interested')) push(x.ts, 'intros', 'x', `${op.name} passed`, text === statusLabel('declined') ? '' : clip(text, 120));
       });
@@ -2031,7 +2031,7 @@
     const shown = list.slice(0, histLimit);
     const months = [];
     shown.forEach((e) => { const k = RN.fmt.monthYear(e.ts); let g = months.find((x) => x.k === k); if (!g) months.push((g = { k, items: [] })); g.items.push(e); });
-    const summary = [since ? `Client since ${RN.fmt.date(since + 'T12:00:00')}` : 'New client', plural(L.projects.length, 'engagement'), plural(myIntros().length, 'intro request'), plural(L.hires.length, 'hire'), `${usd(m.spent)} spent, estimated`];
+    const summary = [since ? `Company since ${RN.fmt.date(since + 'T12:00:00')}` : 'New company', plural(L.projects.length, 'engagement'), plural(myIntros().length, 'intro request'), plural(L.hires.length, 'hire'), `${usd(m.spent)} spent, estimated`];
     return `${hd}
     <p class="bw-hist-sum">${esc(summary.join(' · '))}</p>
     ${L.hires.length || L.projects.some((p) => p.postedAt && p.status !== 'draft') ? coverage(L) : ''}
@@ -2163,7 +2163,7 @@
             ${RN.w.field('roleCategory', p.roleCategory || '', { name: 'roleCategory', help: 'The role you are hiring for.' })}
             ${RN.w.field('salesMotions', p.salesMotions || [], { name: 'salesMotions', label: 'GTM motion', help: 'How you sell today. Operators who have run the same motion score higher.' })}
             ${RN.w.field('engagementType', p.engagementType || '', { name: 'engagementType', help: 'Pick the shape of help you expect. You can change it per request.' })}
-            ${RN.w.field('need', p.need || '', { name: 'need', help: 'We match this to operators with client-verified skills in the areas that solve it.' })}
+            ${RN.w.field('need', p.need || '', { name: 'need', help: 'We match this to operators with company-verified skills in the areas that solve it.' })}
           </div>
         </section>
         <div class="bw-co-save">

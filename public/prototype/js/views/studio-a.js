@@ -39,7 +39,7 @@
     const i = b.industry ? ind(b.industry) : '';
     const rev = b.revenueRange ? lab('revenueRange', b.revenueRange) : '';
     const emp = b.employeeRange ? lab('employeeRange', b.employeeRange) : '';
-    return { ind: i, rev, emp, who: i ? `${an(i)} ${i} company` : 'a client company', detail: [rev && rev + ' revenue', emp && emp + ' employees'].filter(Boolean).join(', ') };
+    return { ind: i, rev, emp, who: i ? `${an(i)} ${i} company` : 'a company', detail: [rev && rev + ' revenue', emp && emp + ' employees'].filter(Boolean).join(', ') };
   }
 
   /* ---------- Who viewed: one list of rows for Overview, Visibility and the digest ----------
@@ -86,11 +86,11 @@
         g.searches = mq.reduce((s, q) => s + q.vol, 0);
         if (D.k === 'industry') {
           const named = head.includes(l.toLowerCase());
-          g.why = named ? `No client review names ${l} work yet. Ask a ${l} client` : `Your headline does not mention ${l}`;
+          g.why = named ? `No company review names ${l} work yet. Ask a ${l} company` : `Your headline does not mention ${l}`;
           g.act = named ? { l: 'Request a review', k: 'reviews' } : { l: 'Name it in your headline', k: 'headline-ideas' };
         } else {
           const has = op.engagements.some((e) => e.clientVerified && (e.revenueRange === v || e.revenueBand === v || e.employeeRange === v));
-          g.why = has ? 'Clients this size rarely open your card' : 'No client-verified engagement at this size on your profile. Ask a client this size for a review';
+          g.why = has ? 'Companies this size rarely open your card' : 'No company-verified engagement at this size on your profile. Ask a company this size for a review';
           g.act = has ? { l: 'Headline ideas', k: 'headline-ideas' } : { l: 'Request a review', k: 'reviews' };
         }
         out.push(g);
@@ -116,7 +116,7 @@
     const first = subs.length ? subs[subs.length - 1].ts : revs.length ? revs[revs.length - 1].date : RN.now().toISOString();
     const r0 = revs[0];
     const verified = r0 && (r0.coreAvg || r0.overall || 5) >= 4 ? (r0.tags || []).length : 0;
-    return { up, base, since: first, cause: r0 ? `${r0.reviewer || 'A client'}’s review${verified ? ` verified ${plural(verified, 'focus area')}` : ' was added'}` : '' };
+    return { up, base, since: first, cause: r0 ? `${r0.reviewer || 'A company'}’s review${verified ? ` verified ${plural(verified, 'focus area')}` : ' was added'}` : '' };
   }
   const risePill = (r) => `<span class="sa-rise" title="Reputation Index ${r.base} before this session">${icon('trend-up')}+${r.up} since ${esc(fmt.dateShort(r.since))}</span>`;
 
@@ -212,7 +212,7 @@
     photo: 'Add a photo', headline: 'Write your headline', bio: 'Expand your About section',
     rate: 'Add your hourly rate', avail: 'Confirm availability', ranges: 'Add company ranges',
     industries: 'Add industries', role: 'Add role details', tags: 'Add fit tags',
-    verified: 'Ask a client to verify tags', reviews: 'Request a review',
+    verified: 'Ask a company to verify tags', reviews: 'Request a review',
     engagements: 'Add an engagement', video: 'Record an intro video', samples: 'Add a work sample',
   };
   // Edit profile section for each profile item (first id that exists wins; Studio B owns these sections)
@@ -257,8 +257,8 @@
   const HEADING = {
     photo: 'Add a profile photo', headline: 'Write a headline in your own words', bio: 'Expand your About section to 400+ characters',
     rate: 'Add your hourly rate', avail: 'Confirm your availability', ranges: 'Add your revenue and employee ranges', industries: 'List 3 or more industries',
-    role: 'Fill in the role details for your category', tags: 'Get to 10 fit tags', verified: 'Get 3 fit tags verified by clients',
-    reviews: 'Get to 3 client reviews', engagements: 'Add 2 engagements to your history', video: 'Record an intro video', samples: 'Add a work sample to your portfolio',
+    role: 'Fill in the role details for your category', tags: 'Get to 10 fit tags', verified: 'Get 3 fit tags verified by companies',
+    reviews: 'Get to 3 company reviews', engagements: 'Add 2 engagements to your history', video: 'Record an intro video', samples: 'Add a work sample to your portfolio',
   };
   function progressOf(op, k) {
     const verified = op.tags.filter((x) => x.tier !== 'claimed').length;
@@ -271,7 +271,7 @@
   }
 
   /* ---------- Recent activity (notification center) ---------- */
-  const SECTION = { reviews: 'client reviews', core: 'CORE ratings', engagements: 'engagement history', samples: 'portfolio', rate: 'rate', about: 'about', expertise: 'expertise', fit: 'fit' };
+  const SECTION = { reviews: 'company reviews', core: 'CORE ratings', engagements: 'engagement history', samples: 'portfolio', rate: 'rate', about: 'about', expertise: 'expertise', fit: 'fit' };
   const SRC = { badge: 'from your verified badge', card: 'from a search result', search: 'from search', compare: 'from a comparison', proof: 'from your proof link', home: 'from the homepage', direct: 'from a direct link' };
   function activity(op) {
     const st = RN.store.state;
@@ -294,9 +294,9 @@
         if (searchSeen[k]) return; searchSeen[k] = 1;
         const where = e.surface === 'homepage_emerging' ? 'You appeared in the homepage Emerging row'
           : e.surface === 'homepage_carousel' || e.source === 'home' ? 'You were featured on the homepage'
-          : e.source === 'talk' ? `You were suggested to a client${e.q ? ' who needs to ' + e.q.toLowerCase() : ''}`
+          : e.source === 'talk' ? `You were suggested to a company${e.q ? ' who needs to ' + e.q.toLowerCase() : ''}`
           : e.surface === 'related_operators' ? 'You were suggested as a similar operator'
-          : e.q ? `You appeared in a client search for ${quote(e.q)}` : (e.tags || []).length ? `You appeared in a client search for ${e.tags.map(quote).join(' + ')}` : e.source === 'category' ? 'You appeared on a category page' : 'You appeared in client search results';
+          : e.q ? `You appeared in a company search for ${quote(e.q)}` : (e.tags || []).length ? `You appeared in a company search for ${e.tags.map(quote).join(' + ')}` : e.source === 'category' ? 'You appeared on a category page' : 'You appeared in company search results';
         items.push({ ts: e.ts, ic: e.source === 'home' ? 'home' : 'search', live: true, text: where, meta: [e.buyer ? cap(f.who) : 'A visitor', e.position ? 'position ' + e.position : ''].filter(Boolean).join(' · '), to: 'studio.visibility' });
       }
     });
@@ -328,7 +328,7 @@
     });
     sessionReviews.forEach((r) => {
       const score = r.coreAvg || r.overall;
-      const name = (r.reviewer && (r.reviewer.name || r.reviewer)) || r.name || 'A client';
+      const name = (r.reviewer && (r.reviewer.name || r.reviewer)) || r.name || 'A company';
       const req = st.reviewRequests.find((x) => x.id === r.requestId);
       const good = (score || 5) >= 4;
       items.push({ ts: (req && req.completedAt) || r.ts || r.submittedAt || r.date || RN.now().toISOString(), ic: 'star', live: true, text: `New review from ${esc(name)}${score ? `: ${(+score).toFixed(2)} / 5` : ''}`, meta: [r.company, (r.tags || []).length ? (good ? `Verified ${plural(r.tags.length, 'fit tag')}` : `${plural(r.tags.length, 'fit tag')} reviewed`) : ''].filter(Boolean).join(' · '), to: 'studio.credibility' });
@@ -418,12 +418,12 @@
           text: `${n} ${esc(ind(c.industry))} companies searched ${quote(q.q)}`,
           meta: `${mineV ? (ver <= 1 ? `You are the only operator with ${tag} verified` : `You are one of ${ver} operators with ${tag} verified`) : ver ? `${plural(ver, 'operator has', 'operators have')} ${tag} verified` : `No operator has ${tag} verified yet`} · ${lab('hoursPerMonth', hours)} · typical budget ${budget(q.cat, c.revenueRange, hours)}`,
           you: my ? my.tier : 'none', tag,
-          act: !my ? { l: `Add ${tag}`, act: 'sa-tag-sheet', t: tag } : my.tier === 'claimed' ? { l: 'Ask a client to verify it', act: 'sa-do', k: 'verified', t: tag } : { l: 'Put it in your headline', act: 'sa-do', k: 'headline-ideas' } });
+          act: !my ? { l: `Add ${tag}`, act: 'sa-tag-sheet', t: tag } : my.tier === 'claimed' ? { l: 'Ask a company to verify it', act: 'sa-do', k: 'verified', t: tag } : { l: 'Put it in your headline', act: 'sa-do', k: 'headline-ideas' } });
       });
       // 5. Zero-result searches: demand nobody serves yet
       mk.zero.slice(0, 3).forEach((z, i) => {
         items.push({ ts: z.ts || new Date(nowMs() - (1.5 + i * 1.7) * DAY).toISOString(), live: !!z.live, ic: 'flag',
-          text: `Clients searched ${quote(z.q)} and no operator matched`,
+          text: `Companies searched ${quote(z.q)} and no operator matched`,
           meta: [z.cat ? RN.fields.catLabel(z.cat) : '', z.vol > 1 ? plural(z.vol, 'search', 'searches') + ' this month' : 'Just now'].filter(Boolean).join(' · '),
           act: { l: 'See unmet searches', to: 'studio.positioning' } });
       });
@@ -515,7 +515,7 @@
           <div class="grow"><b>${esc(x.name)}</b>${x.live ? ` <span class="pill pill-good sa-pill-live" title="${esc(liveTip)}">Live</span>` : ''}<span class="sa-segs-m">${esc(x.meta)}</span></div>
           <span class="sa-who-n"><b class="num">${fmt.int(x.n)}</b> ${x.n === 1 ? 'visit' : 'visits'}</span>
         </li>`).join('')}</ul>` : `<p class="small muted">No group reached 5 visits ${esc(periodLabel(d))}, so every visit is combined below.${d === 7 ? ' Switch to 30 days for more detail.' : ''}</p>`}
-      ${other ? `<div class="sa-segs-other">${icon('users')}<div class="grow"><b>Other companies</b><span class="sa-segs-m">${plural(other, 'visit')} from groups under 5, combined to protect client privacy</span></div></div>` : ''}
+      ${other ? `<div class="sa-segs-other">${icon('users')}<div class="grow"><b>Other companies</b><span class="sa-segs-m">${plural(other, 'visit')} from groups under 5, combined to protect company privacy</span></div></div>` : ''}
       ${gap ? `<div class="sa-gap-mini">
           <span class="label">Who is not visiting</span>
           <p class="small"><b>${esc(gap.name)}</b>: you list ${gap.dim === 'industry' ? 'this industry' : 'this range'}, ${gap.n ? `only ${plural(gap.n, 'visit')}` : 'no visits'} ${esc(periodLabel(d))}. ${esc(gap.why)}.</p>
@@ -533,10 +533,10 @@
 
   function kpiRow(op, m, d) {
     const k = [
-      { k: 'imp', l: 'Search impressions', tip: 'Times your card showed in client search results, at least half visible for one second. Counted once per client session. Bots, staff and your own visits are excluded.', to: 'studio.visibility' },
-      { k: 'views', l: 'Profile views', tip: 'Times a client or visitor opened your profile. Repeat opens by the same person within 30 minutes count once.', to: 'studio.visibility' },
-      { k: 'sl', l: 'Shortlist appearances', tip: 'Times a client saved you to a shortlist or a client engagement ranked you in its top matches.', to: 'studio.visibility' },
-      { k: 'intros', l: 'Intro requests', tip: 'Clients who asked to meet you. You see scope and company size until you are introduced.', to: 'studio.inbox' },
+      { k: 'imp', l: 'Search impressions', tip: 'Times your card showed in company search results, at least half visible for one second. Counted once per company session. Bots, staff and your own visits are excluded.', to: 'studio.visibility' },
+      { k: 'views', l: 'Profile views', tip: 'Times a company or visitor opened your profile. Repeat opens by the same person within 30 minutes count once.', to: 'studio.visibility' },
+      { k: 'sl', l: 'Shortlist appearances', tip: 'Times a company saved you to a shortlist or a company engagement ranked you in its top matches.', to: 'studio.visibility' },
+      { k: 'intros', l: 'Intro requests', tip: 'Companies who asked to meet you. You see scope and company size until you are introduced.', to: 'studio.inbox' },
     ];
     return `<section class="card sa-kpis" aria-label="Your numbers for ${esc(periodLabel(d))}">
       ${k.map((x) => `<div class="sa-kpi">
@@ -558,9 +558,9 @@
           <div class="sa-why-t"><b>${quote(q.q)}</b><span class="num">${fmt.int(q.n)}</span></div>
           <div class="meter"><i style="width:${Math.max(3, (q.n / qs[0].n) * 100).toFixed(1)}%"></i></div>
           <p class="tiny muted">${pct(q.n / total)} of search impressions${q.tags.length ? ` · matched ${q.tags.map(esc).join(', ')}` : ' · not matched by your tags'}${q.live ? ' · <b>live</b>' : ''}</p>
-        </div></li>`).join('')}</ol>` : RN.ui.empty({ icon: 'search', title: 'No searches yet', body: 'Add fit tags that match what clients search for and you will start appearing.', cta: `<a class="btn btn-sm" href="#studio.positioning">See what clients search</a>` });
+        </div></li>`).join('')}</ol>` : RN.ui.empty({ icon: 'search', title: 'No searches yet', body: 'Add fit tags that match what companies search for and you will start appearing.', cta: `<a class="btn btn-sm" href="#studio.positioning">See what companies search</a>` });
     return `<section class="card sa-card">
-      ${cardHd('Why clients found you', `Search terms that showed your card, ${esc(periodLabel(d))}`, `<a class="act" href="#studio.visibility">All terms${icon('arrow')}</a>`)}
+      ${cardHd('Why companies found you', `Search terms that showed your card, ${esc(periodLabel(d))}`, `<a class="act" href="#studio.visibility">All terms${icon('arrow')}</a>`)}
       ${body}
       ${top ? `<div class="sa-why-f">${icon('filter')}<div><span class="tiny muted">Most used filter when you appeared${/^Role category/.test(top.l) ? '' : ', after role category'}</span><b>${esc(top.l)}</b></div><span class="num">${fmt.int(top.n)}</span></div>` : ''}
     </section>`;
@@ -583,7 +583,7 @@
         <p class="small">${esc(it.gain)}.</p>
         ${prog ? `<div class="sa-nba-prog"><div class="meter"><i style="width:${Math.min(100, (prog[0] / prog[1]) * 100)}%"></i></div><span class="tiny muted">${fmt.int(prog[0])} of ${fmt.int(prog[1])}</span></div>` : ''}
         <div class="row" style="--gap:12px"><button type="button" class="btn btn-sm" data-act="sa-do" data-k="${esc(it.k)}">${esc(label)}${icon('arrow')}</button>${gainRI ? `<span class="tiny muted">About +${gainRI} Reputation Index points each</span>` : ''}</div>
-      </div>` : `<div class="sa-nba-body"><span class="eyebrow">Next best action</span><h2 class="h4">Your profile is complete</h2><p class="small">Send a proof link to your next prospect. Every open shows here, and each shared link brings a client to your verified record.</p><div><button type="button" class="btn btn-sm" data-act="sa-do" data-k="proof">Create a proof link${icon('arrow')}</button></div></div>`}
+      </div>` : `<div class="sa-nba-body"><span class="eyebrow">Next best action</span><h2 class="h4">Your profile is complete</h2><p class="small">Send a proof link to your next prospect. Every open shows here, and each shared link brings a company to your verified record.</p><div><button type="button" class="btn btn-sm" data-act="sa-do" data-k="proof">Create a proof link${icon('arrow')}</button></div></div>`}
     </section>`;
   }
 
@@ -617,7 +617,7 @@
     const total = list.length;
     if (!showAll.demand) list = list.slice(0, 5);
     return `<section class="card sa-card sa-demand">
-      ${cardHd('What clients are looking for', `Anonymized demand in ${esc(RN.fields.catLabel(op.catKey))} and your focus areas, this week. ${fmt.int(dm.catWeek)} searches, ${fmt.int(dm.supply)} operators.`, illus('Illustrative volumes', 'Search volumes and company counts are illustrative. Rows marked Live happened in this prototype session.'))}
+      ${cardHd('What companies are looking for', `Anonymized demand in ${esc(RN.fields.catLabel(op.catKey))} and your focus areas, this week. ${fmt.int(dm.catWeek)} searches, ${fmt.int(dm.supply)} operators.`, illus('Illustrative volumes', 'Search volumes and company counts are illustrative. Rows marked Live happened in this prototype session.'))}
       <div class="sa-demand-seg" data-deselect>
         <span class="label">Company revenue</span>
         ${RN.w.control('companyRevenue', rev, { name: 'saDemandRev', id: 'sa-demand-rev', change: 'sa-demand-rev' })}
@@ -728,7 +728,7 @@
     const m = metrics(op, d);
     const a = m.a;
     return `<div class="sa sa-vis">
-      ${head('Who viewed you', `Who looked at your profile, where you showed up and what clients did next, ${esc(periodLabel(d))}. Company names are never shown.`, seg())}
+      ${head('Who viewed you', `Who looked at your profile, where you showed up and what companies did next, ${esc(periodLabel(d))}. Company names are never shown.`, seg())}
       <p class="tiny muted sa-foot sa-foot-top">${illus()}<span>Illustrative history plus live activity from this prototype session. Rows marked Live happened in this session.</span></p>
       ${viewersCard(op, a, d)}
       ${gapsCard(op, a, d)}
@@ -752,12 +752,12 @@
   };
   function filtersCard(op, a, d) {
     const max = (a.filters[0] && a.filters[0].n) || 1;
-    return `<section class="card sa-card">${cardHd('Filters that surfaced you', `Filters clients had on when your card appeared, ${esc(periodLabel(d))}`)}
+    return `<section class="card sa-card">${cardHd('Filters that surfaced you', `Filters companies had on when your card appeared, ${esc(periodLabel(d))}`)}
       ${a.filters.length ? `<ul class="sa-bars">${a.filters.map((f) => {
         const x = FILTER_ACT[f.k];
         const act = x ? (x.k ? `<button type="button" class="act" data-act="sa-do" data-k="${x.k}">${esc(x.l)}${icon('arrow')}</button>` : `<a class="act" href="#${x.to}">${esc(x.l)}${icon('arrow')}</a>`) : '';
         return meterRow(`${esc(f.l)}${f.live ? ` <span class="pill pill-good sa-pill-live" title="${esc(plural(f.liveN, 'live search', 'live searches'))} in this session">Live</span>` : ''}`, fmt.int(f.n), f.n / max, { note: act });
-      }).join('')}</ul>` : RN.ui.empty({ icon: 'filter', title: 'No filters yet', body: 'When clients filter a search and your card shows, the filters appear here.' })}
+      }).join('')}</ul>` : RN.ui.empty({ icon: 'filter', title: 'No filters yet', body: 'When companies filter a search and your card shows, the filters appear here.' })}
     </section>`;
   }
   function sourcesCard(op, a) {
@@ -768,7 +768,7 @@
       'Google search': `<a class="act" href="#studio.seo">See your Google queries${icon('arrow')}</a>`,
       'AI answers (ChatGPT, Perplexity)': `<a class="act" href="#studio.seo">See AI visibility${icon('arrow')}</a>`,
     };
-    return `<section class="card sa-card">${cardHd('Where your views came from', 'The page or channel a client opened your profile from')}
+    return `<section class="card sa-card">${cardHd('Where your views came from', 'The page or channel a company opened your profile from')}
       <ul class="sa-bars">${list.map((x) => meterRow(esc(x.l), fmt.int(x.n), x.n / max, { note: ACT[x.l] || '' })).join('')}</ul></section>`;
   }
 
@@ -846,7 +846,7 @@
     const words = ((op.headline || '') + ' ' + op.tags.map((x) => x.t).join(' ')).toLowerCase();
     const mq = (q) => RN.data.market.queries.find((x) => x.q.toLowerCase() === q.toLowerCase());
     return `<section class="card sa-card">
-      ${cardHd('Search terms that surfaced you', `What clients typed when your card appeared, ${esc(periodLabel(d))}`)}
+      ${cardHd('Search terms that surfaced you', `What companies typed when your card appeared, ${esc(periodLabel(d))}`)}
       ${a.queries.length ? `<div class="tbl-wrap"><table class="tbl sa-terms sa-stack"><thead><tr><th>Search term</th><th class="r">Impressions</th><th class="sa-hide-s">Share</th><th class="r">Profile views</th><th class="r sa-hide-s">View rate</th><th>On your profile</th></tr></thead><tbody>
         ${a.queries.map((q) => {
           const inProfile = q.tags.length > 0 || words.includes(q.q.toLowerCase());
@@ -861,7 +861,7 @@
             <td>${inProfile ? `<span class="pill pill-good">${icon('check')}In your ${q.tags.length ? 'tags' : 'headline'}</span>` : addTag ? `<button type="button" class="act" data-act="sa-tag-sheet" data-t="${esc(addTag)}">${icon('plus')}Add ${esc(addTag)}</button>` : '<span class="pill sa-pill-none">Not in your tags</span>'}</td>
           </tr>`;
         }).join('')}
-      </tbody></table></div>` : RN.ui.empty({ icon: 'search', title: 'No search terms yet', body: 'Terms appear once clients search and your card shows in the results.' })}
+      </tbody></table></div>` : RN.ui.empty({ icon: 'search', title: 'No search terms yet', body: 'Terms appear once companies search and your card shows in the results.' })}
     </section>`;
   }
 
@@ -892,8 +892,8 @@
           <div class="sa-segs-r">${tag}<span class="tiny muted">${esc(fmt.ago(n.last))}</span></div>
         </li>`;
       }).join('')}</ul>` : `<div class="note info">${icon('lock')}<span>${filt === 'all' ? `No group reached 5 visits ${esc(periodLabel(d))}, so every visit is combined below.${d === 7 ? ' Switch to 30 days for more detail.' : ''}` : 'No group of 5 or more visits matches this filter.'}</span></div>`}
-      ${other ? `<div class="sa-segs-other">${icon('users')}<div class="grow"><b>Other companies</b><span class="sa-segs-m">${plural(other, 'visit')} from groups under 5, combined to protect client privacy</span></div></div>` : ''}
-      <p class="sa-privacy">${icon('lock')}<span>Company and person names are never shown to operators. A client is named only after you are introduced, or when they open a proof link you sent them.</span></p>
+      ${other ? `<div class="sa-segs-other">${icon('users')}<div class="grow"><b>Other companies</b><span class="sa-segs-m">${plural(other, 'visit')} from groups under 5, combined to protect company privacy</span></div></div>` : ''}
+      <p class="sa-privacy">${icon('lock')}<span>Company and person names are never shown to operators. A company is named only after you are introduced, or when they open a proof link you sent them.</span></p>
     </section>`;
   }
 
@@ -906,12 +906,12 @@
           <span class="sa-segs-ic">${icon('target')}</span>
           <div class="grow">
             <b>${esc(g.name)}</b>
-            <span class="sa-segs-m">You list it · ${g.n ? plural(g.n, 'visit') : 'no visits'} ${esc(periodLabel(d))}${g.live ? ` · ${plural(g.live, 'live client search', 'live client searches')} used this filter` : ''}${g.searches ? ` · about ${fmt.int(g.searches)} searches a month in ${esc(RN.fields.catLabel(op.catKey))} name it` : ''}</span>
+            <span class="sa-segs-m">You list it · ${g.n ? plural(g.n, 'visit') : 'no visits'} ${esc(periodLabel(d))}${g.live ? ` · ${plural(g.live, 'live company search', 'live company searches')} used this filter` : ''}${g.searches ? ` · about ${fmt.int(g.searches)} searches a month in ${esc(RN.fields.catLabel(op.catKey))} name it` : ''}</span>
             <p class="small">${esc(g.why)}.</p>
           </div>
           <button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="${esc(g.act.k)}">${esc(g.act.l)}</button>
         </li>`).join('')}</ul>
-        <p class="tiny muted sa-gap-foot">Not a focus any more? <button type="button" class="link" data-act="sa-do" data-k="ranges">Remove it in Edit profile</button> so clients see where you are strongest.</p>` : RN.ui.empty({ icon: 'check-circle', title: 'Every industry and range you list is getting views', body: 'When one of them goes quiet, it shows here with one thing to change.' })}
+        <p class="tiny muted sa-gap-foot">Not a focus any more? <button type="button" class="link" data-act="sa-do" data-k="ranges">Remove it in Edit profile</button> so companies see where you are strongest.</p>` : RN.ui.empty({ icon: 'check-circle', title: 'Every industry and range you list is getting views', body: 'When one of them goes quiet, it shows here with one thing to change.' })}
     </section>`;
   }
 
@@ -939,7 +939,7 @@
   const EDGE_ACT = (edge) => {
     if (/start sooner/.test(edge)) return { l: 'Confirm your next available start date', k: 'avail' };
     if (/review/.test(edge)) return { l: 'Request a review', k: 'reviews' };
-    if (/verified/.test(edge)) return { l: 'Ask a client to verify tags', k: 'verified' };
+    if (/verified/.test(edge)) return { l: 'Ask a company to verify tags', k: 'verified' };
     if (/rate/.test(edge)) return { l: 'See your rate position', to: 'studio.positioning' };
     if (/video/.test(edge)) return { l: 'Add an intro video', k: 'video' };
     if (/experience in/.test(edge)) return { l: 'Review your industries', k: 'industries' };
@@ -951,19 +951,19 @@
     const pend = a.lostPending;
     const verb = (l) => ({ shortlisted: 'shortlisted them and not you', selected: 'selected them for an engagement', 'requested an intro': 'asked to meet them instead' }[l.picked] || 'picked them');
     return `<section class="card sa-card">
-      ${cardHd('Compared, not chosen', 'When a client compares you with other operators and picks one of them. Anonymous, batched and shown 7 days after the decision.', live.length < lost.length ? illus('Includes illustrative rows', 'Rows marked Illustrative are invented to show the shape. Rows marked Live come from comparisons in this prototype session.') : '')}
-      ${pend ? `<p class="note info sa-lost-pend">${icon('clock')}<span>${plural(pend.n, 'more decision')} from a recent comparison ${pend.n === 1 ? 'shows' : 'show'} here on ${esc(fmt.dateShort(pend.until))}, 7 days after the client decided.</span></p>` : ''}
+      ${cardHd('Compared, not chosen', 'When a company compares you with other operators and picks one of them. Anonymous, batched and shown 7 days after the decision.', live.length < lost.length ? illus('Includes illustrative rows', 'Rows marked Illustrative are invented to show the shape. Rows marked Live come from comparisons in this prototype session.') : '')}
+      ${pend ? `<p class="note info sa-lost-pend">${icon('clock')}<span>${plural(pend.n, 'more decision')} from a recent comparison ${pend.n === 1 ? 'shows' : 'show'} here on ${esc(fmt.dateShort(pend.until))}, 7 days after the company decided.</span></p>` : ''}
       ${lost.length ? `<div class="sa-lost">${lost.map((l) => {
         const actn = EDGE_ACT(l.edge[0]);
         const rateEdge = l.edge.some((x) => /rate/.test(x));
         return `<article class="sa-lost-c">
           <div class="row-nw" style="--gap:12px"><span class="sa-segs-ic">${icon('user')}</span><div class="grow"><b class="sa-lost-n">${esc(l.who)}</b><span class="tiny muted">${l.live ? `<span class="pill pill-good sa-pill-live">Live</span>${esc(fmt.ago(l.ts))}` : illus()}</span></div></div>
-          <p class="small">A client compared you and ${esc(verb(l))}${l.n > 1 ? `, ${plural(l.n, 'time')}` : ''}.</p>
+          <p class="small">A company compared you and ${esc(verb(l))}${l.n > 1 ? `, ${plural(l.n, 'time')}` : ''}.</p>
           <div class="sa-lost-e"><span class="label">What they had</span><div class="row" style="--gap:6px">${l.edge.map((e) => `<span class="pill pill-line">${esc(cap(e))}</span>`).join('')}</div></div>
           ${rateEdge ? '<p class="tiny muted">Rate is rarely the only reason. Check where you sit on the Rate Index before changing anything.</p>' : ''}
           ${actn.k ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="${actn.k}">${esc(actn.l)}${icon('arrow')}</button>` : `<a class="btn btn-line btn-sm" href="#${actn.to}">${esc(actn.l)}${icon('arrow')}</a>`}
         </article>`;
-      }).join('')}</div>` : RN.ui.empty({ icon: 'compare', title: 'No comparisons to learn from yet', body: 'When a client compares you with other operators and picks one of them, the difference shows here.' })}
+      }).join('')}</div>` : RN.ui.empty({ icon: 'compare', title: 'No comparisons to learn from yet', body: 'When a company compares you with other operators and picks one of them, the difference shows here.' })}
     </section>`;
   }
 
@@ -971,9 +971,9 @@
     return `<details class="card sa-card sa-how">
       <summary><span class="h5">How we count</span>${icon('chev-down')}</summary>
       <dl>
-        <div><dt>Search impression</dt><dd>Your card was at least half visible in a client's results for one second. Counted once per operator, per result list, per session.</dd></div>
+        <div><dt>Search impression</dt><dd>Your card was at least half visible in a company's results for one second. Counted once per operator, per result list, per session.</dd></div>
         <div><dt>Profile view</dt><dd>Someone opened your profile. Repeat opens by the same person within 30 minutes count once.</dd></div>
-        <div><dt>Shortlist appearance</dt><dd>A client saved you to a shortlist, or a client engagement ranked you in its top matches.</dd></div>
+        <div><dt>Shortlist appearance</dt><dd>A company saved you to a shortlist, or a company engagement ranked you in its top matches.</dd></div>
         <div><dt>What is excluded</dt><dd>Bots, the Revenue Nomad team, other operators and your own visits.</dd></div>
         <div><dt>Privacy</dt><dd>Viewers are shown by industry, company revenue and employee range, using the same picklists as your profile. Groups under 5 visits are combined. Company names are never shown.</dd></div>
       </dl>
@@ -1005,7 +1005,7 @@
     const cat = RN.fields.catLabel(op.catKey);
     if (!pos.rate) {
       return `<section class="card sa-card">${cardHd('Your rate vs the Rate Index', `${esc(cat)} · ${fmt.int(idx.n)} rates`)}
-        ${RN.ui.empty({ icon: 'clock', title: 'Add your hourly rate to see where you stand', body: `The ${cat} median is ${fmt.usd(idx.p50)}/hr, with the middle half between ${fmt.usd(idx.p25)} and ${fmt.usd(idx.p75)}. Clients filter by budget, so profiles without a rate drop out of those searches.`, cta: `<button type="button" class="btn btn-sm" data-act="sa-do" data-k="rate">Add your rate</button>` })}</section>`;
+        ${RN.ui.empty({ icon: 'clock', title: 'Add your hourly rate to see where you stand', body: `The ${cat} median is ${fmt.usd(idx.p50)}/hr, with the middle half between ${fmt.usd(idx.p25)} and ${fmt.usd(idx.p75)}. Companies filter by budget, so profiles without a rate drop out of those searches.`, cta: `<button type="button" class="btn btn-sm" data-act="sa-do" data-k="rate">Add your rate</button>` })}</section>`;
     }
     const rate = pos.rate;
     const lo = Math.floor(Math.min(idx.p25 * 0.72, rate * 0.9) / 10) * 10;
@@ -1030,7 +1030,7 @@
         <div>
           <div class="sa-rate-big"><span class="num">${fmt.usd(rate)}</span><span class="muted">/hr</span></div>
           <p class="small">Higher than about <b>${pos.pctile}%</b> of ${esc(cat)} operators, ${esc(where)}.</p>
-          <p class="tiny muted sa-rate-fee">Clients pay this rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()}), so your take-home is about ${fmt.usd(RN.model.takeHome(rate))}/hr.</p>
+          <p class="tiny muted sa-rate-fee">Companies pay this rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()}), so your take-home is about ${fmt.usd(RN.model.takeHome(rate))}/hr.</p>
           <div class="sa-range" role="img" aria-label="Your rate ${fmt.usd(rate)} against 25th ${fmt.usd(idx.p25)}, median ${fmt.usd(idx.p50)} and 75th percentile ${fmt.usd(idx.p75)}">
             <div class="sa-range-track">
               <i class="sa-range-band" style="left:${x(idx.p25)}%;width:${x(idx.p75) - x(idx.p25)}%"></i>
@@ -1043,7 +1043,7 @@
               <span style="left:${x(idx.p75)}%"><b>${fmt.usd(idx.p75)}</b>75th</span>
             </div>
           </div>
-          <div class="sa-rate-rev"><span class="label">Median by client revenue, in your ranges</span>
+          <div class="sa-rate-rev"><span class="label">Median by company revenue, in your ranges</span>
             <ul>${revRows.map((r) => `<li><span>${esc(r.l)}</span><b class="num">${fmt.usd(r.v)}/hr</b></li>`).join('')}</ul>
           </div>
         </div>
@@ -1059,7 +1059,7 @@
   function oppsCard(op, pos) {
     const opps = pos.opps;
     return `<section class="card sa-card">
-      ${cardHd('Focus-area opportunities', `Client demand vs operators with the focus area verified, in ${esc(RN.fields.catLabel(op.catKey))} and your tags`)}
+      ${cardHd('Focus-area opportunities', `Company demand vs operators with the focus area verified, in ${esc(RN.fields.catLabel(op.catKey))} and your tags`)}
       <div class="tbl-wrap"><table class="tbl sa-opps sa-stack"><thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r sa-hide-s">Verified operators</th><th>You</th><th></th></tr></thead><tbody>
         ${opps.map((o) => {
           const act = !o.have ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-tag-sheet" data-t="${esc(o.t)}">${icon('plus')}Add</button>`
@@ -1075,7 +1075,7 @@
           </tr>`;
         }).join('')}
       </tbody></table></div>
-      <p class="tiny muted sa-card-foot">${illus('Illustrative volumes')}<span>Added tags show as Claimed until a client review verifies them.</span></p>
+      <p class="tiny muted sa-card-foot">${illus('Illustrative volumes')}<span>Added tags show as Claimed until a company review verifies them.</span></p>
     </section>`;
   }
 
@@ -1083,7 +1083,7 @@
     const mk = RN.model.market();
     const zero = mk.zero.slice().sort((x, y) => (y.cat === op.catKey) - (x.cat === op.catKey));
     return `<section class="card sa-card">
-      ${cardHd('Unmet searches', 'Clients searched and no operator matched. Demand you could serve.')}
+      ${cardHd('Unmet searches', 'Companies searched and no operator matched. Demand you could serve.')}
       ${zero.length ? `<ul class="sa-unmet">${zero.map((z) => {
         const mineInd = z.industry && op.industries.includes(z.industry);
         const inCat = z.cat === op.catKey;
@@ -1095,7 +1095,7 @@
             <p class="small">${esc(hint)}</p></div>
           ${inCat && mineInd ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-scroll" data-to="sa-headlines">Headline ideas</button>` : inCat ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="tags">Edit tags</button>` : ''}
         </li>`;
-      }).join('')}</ul>` : RN.ui.empty({ icon: 'check-circle', title: 'Every search found someone', body: 'When a client search returns no operators, it shows here.' })}
+      }).join('')}</ul>` : RN.ui.empty({ icon: 'check-circle', title: 'Every search found someone', body: 'When a company search returns no operators, it shows here.' })}
     </section>`;
   }
 
@@ -1147,7 +1147,7 @@
     const cands = [
       terms.length && { h: fits((k) => `${role} for ${span || list(inds)} companies: ${list(terms.slice(0, Math.min(k, 2)))}`, 2), why: terms.slice(0, 2) },
       founder && lead.length && { h: fits((k) => `I take ${inds[0] || 'B2B'} teams from founder-led sales to a repeatable motion: ${list(lead.slice(0, k))}`, 3), why: [founder, lead[0]] },
-      lead.length && { h: fits((k) => `${role} · ${lead.slice(0, k).join(' · ')} · Client-verified`, 3), why: [a.queries[0] && a.queries[0].q].filter(Boolean).concat(lead.slice(0, 1)) },
+      lead.length && { h: fits((k) => `${role} · ${lead.slice(0, k).join(' · ')} · Company-verified`, 3), why: [a.queries[0] && a.queries[0].q].filter(Boolean).concat(lead.slice(0, 1)) },
       lead.length > 1 && { h: fits((k) => `${role}. ${list(lead.slice(0, k))} for ${span || 'growing'} companies`, 2), why: lead.slice(0, 2) },
     ].filter((c) => c && c.h && c.h.length > 30 && c.h !== op.headline);
     const seenH = new Set();
@@ -1160,13 +1160,13 @@
     const list = headlines(op, a);
     const orig = (seen().saHeadlineOrig || {})[op.id];
     return `<section class="card sa-card sa-heads" id="sa-headlines">
-      ${cardHd('Headline suggestions', 'Your headline is the first line clients read in search. These use the words clients actually typed.', '<span class="pill pill-info">Suggestions</span>')}
+      ${cardHd('Headline suggestions', 'Your headline is the first line companies read in search. These use the words companies actually typed.', '<span class="pill pill-info">Suggestions</span>')}
       <div class="sa-heads-cur"><span class="label">Your headline now</span><p class="serif-up">${op.headline ? esc(op.headline) : '<span class="muted">No headline yet</span>'}</p>${orig != null && orig !== op.headline ? `<button type="button" class="act" data-act="sa-headline-undo">${icon('refresh')}Restore previous</button>` : ''}</div>
       ${list.length ? `<ol class="sa-heads-l">${list.map((c, i) => `<li>
           <span class="sa-rank num">${String.fromCharCode(65 + i)}</span>
           <div class="grow"><p class="sa-heads-h">${esc(c.h)}</p><p class="tiny muted">${c.h.length} of 110 characters${c.why.length ? ' · uses ' + c.why.join(', ') : ''}</p></div>
           <div class="sa-heads-a"><button type="button" class="btn btn-line btn-sm" data-act="sa-headline" data-h="${esc(c.h)}">Use this</button><button type="button" class="btn btn-ghost btn-sm btn-icon" data-act="sa-copy" data-copy="${esc(c.h)}" aria-label="Copy headline">${icon('copy')}</button></div>
-        </li>`).join('')}</ol>` : RN.ui.empty({ icon: 'edit', title: 'No suggestions yet', body: 'Suggestions appear once clients search terms that match your tags.' })}
+        </li>`).join('')}</ol>` : RN.ui.empty({ icon: 'edit', title: 'No suggestions yet', body: 'Suggestions appear once companies search terms that match your tags.' })}
       <p class="tiny muted" style="margin-top:12px">Suggestions are drafts. Edit the wording in your profile so it sounds like you.</p>
     </section>`;
   }
@@ -1234,7 +1234,7 @@
       headline: { l: 'Put a searched term in your headline', k: 'headline-ideas', todo: !headHits },
       about: { l: 'Name the stage and the problem in About', k: 'bio', todo: (op.bio || '').length < 400 },
       fresh: { l: 'Confirm your availability', k: 'avail', todo: !fresh },
-      engagement: { l: 'Get an engagement confirmed by a client', k: 'confirm-eng', todo: !ev.verifiedEng },
+      engagement: { l: 'Get an engagement confirmed by a company', k: 'confirm-eng', todo: !ev.verifiedEng },
       proof: { l: 'Send a proof link to a prospect', k: 'proof', todo: true },
     };
   }
@@ -1298,7 +1298,7 @@
     const inds = op.industries.slice(0, 2).map(ind);
     const title = `${op.name}: Fractional ${op.role}${inds.length ? ' for ' + inds.join(' and ') : ''} | Revenue Nomad`;
     const verifiedN = op.tags.filter((x) => x.tier !== 'claimed').length;
-    const desc = `${op.headline ? op.headline + ' ' : ''}${verifiedN} client-verified focus areas. Reputation Index ${op.ris.score}. ${op.avail.label}.`;
+    const desc = `${op.headline ? op.headline + ' ' : ''}${verifiedN} company-verified focus areas. Reputation Index ${op.ris.score}. ${op.avail.label}.`;
     const weekly = (() => { const r = RN.rng('gsc-w-' + op.id); return Array.from({ length: 4 }, (_, i) => Math.round((gc / 4) * (0.8 + i * 0.07 + r() * 0.2))); })();
     const cat = RN.fields.catLabel(op.catKey);
     return `<div class="sa sa-seo">
@@ -1327,12 +1327,12 @@
       </section>
 
       <section class="card sa-card sa-aeo">
-        ${cardHd('AI answer engines', `The questions clients ask AI about ${esc(cat)}, sampled weekly on ${ai.engines.length} engines. ${PERIOD}.`, illus('Illustrative', 'Invented to show the shape of this report. Answers change from run to run, so we only say cited, named or not yet.'))}
+        ${cardHd('AI answer engines', `The questions companies ask AI about ${esc(cat)}, sampled weekly on ${ai.engines.length} engines. ${PERIOD}.`, illus('Illustrative', 'Invented to show the shape of this report. Answers change from run to run, so we only say cited, named or not yet.'))}
         <p class="sa-aeo-lead">${ai.any
           ? `Some answers name you. Treat this as direction, not a score: answers change from run to run, and nobody can promise a placement.`
           : ai.ev.any
             ? `You are not named in these answers yet. Revenue Nomad guides and the Rate Index are cited on some of them, so the next step is evidence engines can quote.`
-            : `You are not named in these answers yet. Answer engines quote verified outcomes, and your profile has no client review yet. Revenue Nomad guides are cited on some of these questions, so one review that names an outcome is the fastest way in.`}</p>
+            : `You are not named in these answers yet. Answer engines quote verified outcomes, and your profile has no company review yet. Revenue Nomad guides are cited on some of these questions, so one review that names an outcome is the fastest way in.`}</p>
         <ul class="sa-eng">${ai.byEngine.map((x) => `<li>
             <div class="sa-eng-h"><b>${esc(x.e)}</b>${aiPill(x.st)}</div>
             <p class="small muted">${esc(x.why)}</p>
@@ -1382,11 +1382,11 @@
     const top = a.queries[0];
     const acts = aeoActions(op);
     const items = [
-      { l: 'A client-verified engagement with an outcome number', ok: evidenceOf(op).verifiedEng, k: 'confirm-eng', cta: 'Ask a client to confirm', why: 'Pages with specific, verified outcomes are the ones AI answers quote.' },
-      { l: '3 or more client reviews with quotes', ok: op.reviews.length >= 3, k: 'reviews', cta: 'Request a review', why: `You have ${op.reviews.length}. Review text is indexed on your profile.` },
-      { l: 'Headline uses the words clients search', ok: !acts.headline.todo, k: 'headline-ideas', cta: 'See headline ideas', why: top ? `Your top term is ${quote(top.q)}.` : '' },
+      { l: 'A company-verified engagement with an outcome number', ok: evidenceOf(op).verifiedEng, k: 'confirm-eng', cta: 'Ask a company to confirm', why: 'Pages with specific, verified outcomes are the ones AI answers quote.' },
+      { l: '3 or more company reviews with quotes', ok: op.reviews.length >= 3, k: 'reviews', cta: 'Request a review', why: `You have ${op.reviews.length}. Review text is indexed on your profile.` },
+      { l: 'Headline uses the words companies search', ok: !acts.headline.todo, k: 'headline-ideas', cta: 'See headline ideas', why: top ? `Your top term is ${quote(top.q)}.` : '' },
       { l: 'About section names the stage and the problem', ok: !acts.about.todo, k: 'bio', cta: 'Edit About', why: 'Long-form text feeds Google and AI answer engines.' },
-      { l: '3 or more focus areas verified by clients', ok: !acts.verify.todo, k: 'verified', cta: 'Ask a client to verify', why: 'Verified focus areas go into the structured data engines read.' },
+      { l: '3 or more focus areas verified by companies', ok: !acts.verify.todo, k: 'verified', cta: 'Ask a company to verify', why: 'Verified focus areas go into the structured data engines read.' },
     ];
     const done = items.filter((x) => x.ok).length;
     return `<div class="sa-raise-k"><div class="meter"><i style="width:${(done / items.length) * 100}%"></i></div><span class="small"><b>${done} of ${items.length}</b> in place</span></div>
@@ -1419,7 +1419,7 @@
     const pages = [
       rank && { to: `browse.${op.catKey}`, ic: 'grid', t: `Fractional ${cat} operators`, m: `You rank ${rank} of ${res.length} by match and Reputation Index` },
       ...onGuides.slice(0, 2).map((g) => ({ to: 'guide.' + g.slug, ic: 'book', t: g.q, m: `Guide, listed under “${cat} operators who do this work”` })),
-      verified[0] && { to: 'library', ic: 'layers', t: `Fit Tag Library: ${verified[0].t}`, m: 'Listed as client-verified' },
+      verified[0] && { to: 'library', ic: 'layers', t: `Fit Tag Library: ${verified[0].t}`, m: 'Listed as company-verified' },
       axis && { to: 'framework', ic: 'radar', t: `GTM Framework: ${axis}`, m: `Where most of your verified focus areas sit` },
       op.rate && { to: 'rates', ic: 'chart', t: `Rate Index: ${cat}`, m: 'Your rate is part of the benchmark' },
     ].filter(Boolean).map((p) => Object.assign(p, { n: Math.round(40 + rand() * 260) }));
@@ -1454,14 +1454,14 @@
     RN.ui.modal({
       width: 520,
       title: `Add ${esc(tag)}`,
-      sub: 'Have you done this for a client?',
+      sub: 'Have you done this for a company?',
       body: `<div class="stack" style="--gap:14px">
         ${info.d ? `<p class="small">${esc(info.d)}</p>` : ''}
-        <p class="small">Claimed focus areas help you show up in search. Clients rank client-verified ones first, so the strongest move is to add it and ask the client you did it for to confirm it.</p>
+        <p class="small">Claimed focus areas help you show up in search. Companies rank company-verified ones first, so the strongest move is to add it and ask the company you did it for to confirm it.</p>
       </div>`,
       foot: `<button type="button" class="btn btn-ghost" data-act="modal-close">Not my work</button>
         <button type="button" class="btn btn-line" data-act="sa-tag-add" data-t="${esc(tag)}">Add as claimed</button>
-        <button type="button" class="btn" data-act="sa-tag-add" data-t="${esc(tag)}" data-ask="1">Add and ask a client${icon('arrow')}</button>`,
+        <button type="button" class="btn" data-act="sa-tag-add" data-t="${esc(tag)}" data-ask="1">Add and ask a company${icon('arrow')}</button>`,
     });
   };
   RN.actions['sa-read'] = () => { setSeen('saActivitySeen', RN.now().toISOString()); RN.rerender(); RN.ui.toast('All caught up'); };
@@ -1500,7 +1500,7 @@
     RN.track('studio_action', { opId: op.id, action: 'tag_add', tag, meta: { ask } });
     RN.rerender();
     if (ask) { doAction('verified', { tags: [tag] }); return; }
-    RN.ui.toast(`Added ${esc(tag)}. It shows as Claimed until a client review verifies it.`, { action: { label: 'Undo', act: 'sa-tag-undo', attrs: `data-t="${esc(tag)}"` }, ms: 5000 });
+    RN.ui.toast(`Added ${esc(tag)}. It shows as Claimed until a company review verifies it.`, { action: { label: 'Undo', act: 'sa-tag-undo', attrs: `data-t="${esc(tag)}"` }, ms: 5000 });
   };
   RN.actions['sa-tag-undo'] = (el) => {
     const op = RN.myOp();

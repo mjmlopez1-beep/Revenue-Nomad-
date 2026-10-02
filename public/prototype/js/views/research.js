@@ -218,7 +218,7 @@
       return { op, hits, v, s: v.length * 100 + Math.min(hits.length, 6) * 8 + op.ris.score * 0.5 + (op.photo ? 4 : 0) };
     }).filter((x) => x.hits.length).sort((a, b) => b.s - a.s).slice(0, n || 3);
   }
-  const whyLine = (x) => x.v.length ? `Client-verified in ${x.v[0].t}${x.v.length > 1 ? ` and ${x.v.length - 1} more here` : ''}` : `Claims ${x.hits.slice(0, 2).map((t) => t.t).join(' and ')}`;
+  const whyLine = (x) => x.v.length ? `Company-verified in ${x.v[0].t}${x.v.length > 1 ? ` and ${x.v.length - 1} more here` : ''}` : `Claims ${x.hits.slice(0, 2).map((t) => t.t).join(' and ')}`;
 
   /* Proof-strength fill: five steps from tint to brand by verified operators (sqrt spreads the low end).
      The steps skip the middle of the ramp on purpose. In light and dark, --ink reads at 4.5:1 or better on
@@ -366,7 +366,7 @@
       const hh = H[s.id] || [1, 1];
       const f = fill(a.ver, a.any, maxV, a.tags.length);
       return `<button type="button" class="rs-seg ${f.cls}" style="--a:${inset(hh[0])};--b:${inset(hh[1])};${f.style}" data-act="rs-fw-open" data-stage="${esc(s.name)}"
-        aria-label="${esc(s.name)}: ${a.ver} operators with client-verified proof, ${a.any} claim work here. Open the stage.">
+        aria-label="${esc(s.name)}: ${a.ver} operators with company-verified proof, ${a.any} claim work here. Open the stage.">
         <span class="rs-seg-shape" aria-hidden="true"></span>
         <span class="rs-seg-txt"><b>${esc(s.name)}</b><span class="rs-seg-n">${a.ver} verified</span><span class="rs-seg-sub">${a.any} claim</span></span>
       </button>`;
@@ -387,7 +387,7 @@
 
   function legend() {
     return `<div class="rs-legend" aria-label="Legend">
-      <span><span class="rs-ramp" aria-hidden="true">${STEPS.map((p) => `<i class="rs-sw rs-sw-v" style="--rs-p:${p}%"></i>`).join('')}</span>Operators with client-verified proof, fewer to more</span>
+      <span><span class="rs-ramp" aria-hidden="true">${STEPS.map((p) => `<i class="rs-sw rs-sw-v" style="--rs-p:${p}%"></i>`).join('')}</span>Operators with company-verified proof, fewer to more</span>
       <span><i class="rs-sw rs-sw-c"></i>Self-claimed only</span>
       <span><i class="rs-sw rs-sw-o"></i>Focus areas mapped, no operators yet</span>
     </div>`;
@@ -403,7 +403,7 @@
   function cellBtn(g, a, s, mobile) {
     const x = g.map[a.name + '|' + s.name];
     const f = fill(x.ver, x.any, g.maxV, x.tags.length);
-    const label = `${a.name} at ${s.name}: ${x.ver} operators with client-verified proof, ${x.any} claim work here, ${x.tags.length} focus areas`;
+    const label = `${a.name} at ${s.name}: ${x.ver} operators with company-verified proof, ${x.any} claim work here, ${x.tags.length} focus areas`;
     if (mobile) {
       return `<button type="button" class="rs-mcell ${f.cls}" style="${f.style}" data-act="rs-fw-open" data-area="${esc(a.name)}" data-stage="${esc(s.name)}" aria-label="${esc(label)}">
         <span class="rs-mcell-sw" aria-hidden="true"></span>
@@ -461,7 +461,7 @@
     const stAggs = journey().map((s) => ({ s, a: agg(ix, null, s.name) }));
     const topStage = stAggs.slice().sort((x, y) => y.a.ver - x.a.ver || y.a.any - x.a.any)[0];
     const where = topStage.a.ver === verTotal ? `All of them have it at ${topStage.s.name}.` : `${topStage.a.ver} of them have it at ${topStage.s.name}, more than at any other stage.`;
-    out.push({ v: String(verTotal), l: `${verTotal === 1 ? 'operator on the network has' : 'operators on the network have'} client-verified proof so far. ${where}`, act: `data-act="rs-fw-open" data-stage="${esc(topStage.s.name)}"`, cta: `Open ${topStage.s.name}` });
+    out.push({ v: String(verTotal), l: `${verTotal === 1 ? 'operator on the network has' : 'operators on the network have'} company-verified proof so far. ${where}`, act: `data-act="rs-fw-open" data-stage="${esc(topStage.s.name)}"`, cta: `Open ${topStage.s.name}` });
     const afterOps = new Set();
     Object.values(ix.cells).forEach((c) => { const st = stageBy(c.stage); if (st && st.side === 'after') c.ver.forEach((i) => afterOps.add(i)); });
     const afterClaim = new Set();
@@ -469,7 +469,7 @@
     out.push({ v: String(afterOps.size), l: `${afterOps.size === 1 ? 'operator has' : 'operators have'} verified proof after the sale, while ${afterClaim.size} claim onboarding, adoption or expansion work. That is the thinnest proof on the map.`, act: 'data-act="rs-fw-open" data-stage="Adopt"', cta: 'Open Adopt' });
     let best = null;
     areas.forEach((a) => journey().forEach((s) => { const x = agg(ix, a.name, s.name); if (!best || x.any > best.any) best = x; }));
-    if (best) out.push({ v: String(best.any), l: `operators claim ${cellText(best.area + ' work', best.stage)}, the most crowded cell. Clients should ask for verified proof here before they hire.`, act: `data-act="rs-fw-open" data-area="${esc(best.area)}" data-stage="${esc(best.stage)}"`, cta: 'Open the cell' });
+    if (best) out.push({ v: String(best.any), l: `operators claim ${cellText(best.area + ' work', best.stage)}, the most crowded cell. Companies should ask for verified proof here before they hire.`, act: `data-act="rs-fw-open" data-area="${esc(best.area)}" data-stage="${esc(best.stage)}"`, cta: 'Open the cell' });
     return out;
   }
 
@@ -481,7 +481,7 @@
     const tops = topOps(area || null, stage || null, 3);
     const topTag = a.tags.find((t) => t.any > 0) || a.tags[0];
     const title = area && stage ? cellHtml(area, stage) : esc(area || stage);
-    const sub = `${plural(a.ver, 'operator')} with client-verified proof · ${a.any} claim work here`;
+    const sub = `${plural(a.ver, 'operator')} with company-verified proof · ${a.any} claim work here`;
     const libFilter = { area: area || '', stage: stage || '' };
 
     // Breakdown along the open dimension (stage panel lists areas, area panel lists stages)
@@ -729,19 +729,19 @@
       ${crumbs([{ l: 'GTM Framework' }])}
       <span class="eyebrow">Revenue Nomad GTM Framework</span>
       <h1 class="h1">Every revenue problem has <span class="serif">an address.</span></h1>
-      <p class="lede">The framework places all go-to-market work on two lenses: the area of work, and the stage of the customer's journey it changes. Every focus area, profile, client review and Engagement Blueprint on Revenue Nomad uses it, so a company's problem and an operator's proof are described in the same words.</p>
+      <p class="lede">The framework places all go-to-market work on two lenses: the area of work, and the stage of the customer's journey it changes. Every focus area, profile, company review and Engagement Blueprint on Revenue Nomad uses it, so a company's problem and an operator's proof are described in the same words.</p>
       <div class="stats-row rs-kpis" style="--cols:4">
         <div class="stat"><span class="stat-v">6</span><span class="stat-l">Areas of work</span></div>
         <div class="stat"><span class="stat-v">7</span><span class="stat-l">Customer-journey stages</span></div>
         <div class="stat"><span class="stat-v">${RN.fmt.int(libN)}</span><span class="stat-l">Focus areas mapped</span></div>
-        <div class="stat"><span class="stat-v">${RN.fmt.int(ix.verOps.size)}</span><span class="stat-l">Operators with client-verified proof</span></div>
+        <div class="stat"><span class="stat-v">${RN.fmt.int(ix.verOps.size)}</span><span class="stat-l">Operators with company-verified proof</span></div>
       </div>
     </header>
 
     <section class="wrap section-sm rs-sec" aria-labelledby="rs-bow-t">
       <div class="rs-sec-hd">
         <div><span class="eyebrow">The customer journey</span><h2 class="h2" id="rs-bow-t">Seven stages, one bowtie</h2></div>
-        <p class="body">Four stages narrow toward the signature. Three widen after it, as a customer adopts and grows. Shading shows where operators on the network have client-verified proof. Select a stage for what good looks like there.</p>
+        <p class="body">Four stages narrow toward the signature. Three widen after it, as a customer adopts and grows. Shading shows where operators on the network have company-verified proof. Select a stage for what good looks like there.</p>
       </div>
       ${bowtie(ix)}
       ${legend()}
@@ -750,7 +750,7 @@
     <section class="wrap section-sm rs-sec" aria-labelledby="rs-grid-t">
       <div class="rs-sec-hd">
         <div><span class="eyebrow">The map</span><h2 class="h2" id="rs-grid-t">Six areas across seven stages</h2></div>
-        <p class="body">Each cell counts the operators with client-verified proof there and the operators who claim the work. Select a cell to see what good looks like, the focus areas that live in it and who is strongest. Foundation holds the work every stage runs on.</p>
+        <p class="body">Each cell counts the operators with company-verified proof there and the operators who claim the work. Select a cell to see what good looks like, the focus areas that live in it and who is strongest. Foundation holds the work every stage runs on.</p>
       </div>
       <div class="rs-grid-box" data-rs-grid>${grid(ix)}</div>
       ${legend()}
@@ -759,7 +759,7 @@
     <section class="wrap section-sm rs-sec rs-find" aria-labelledby="rs-find-t">
       <h2 class="sr-only" id="rs-find-t">What the map shows today</h2>
       <div class="rs-finds">
-        <div class="rs-finds-hd"><span class="eyebrow">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? ` (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)` : ''}. A focus area counts as verified once a client review rated 4.0 or higher confirms it.</p></div>
+        <div class="rs-finds-hd"><span class="eyebrow">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? ` (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)` : ''}. A focus area counts as verified once a company review rated 4.0 or higher confirms it.</p></div>
         ${finds.map((f) => `<div class="rs-fnd"><span class="rs-fnd-v num">${esc(f.v)}</span><p>${esc(f.l)}</p><button type="button" class="act" ${f.act}>${esc(f.cta)}${icon('arrow')}</button></div>`).join('')}
       </div>
     </section>
@@ -767,7 +767,7 @@
     <section class="wrap section-sm rs-sec" aria-labelledby="rs-areas-t">
       <div class="rs-sec-hd">
         <div><span class="eyebrow">The areas</span><h2 class="h2" id="rs-areas-t">Six kinds of go-to-market work</h2></div>
-        <p class="body">An operator's profile shows how much client-verified proof they have in each area. The same six areas describe what a company needs and what an Engagement Blueprint delivers.</p>
+        <p class="body">An operator's profile shows how much company-verified proof they have in each area. The same six areas describe what a company needs and what an Engagement Blueprint delivers.</p>
       </div>
       <div class="grid g-3 rs-areas">
         ${areas.map((a) => { const x = agg(ix, a.name, null); return `<button type="button" class="rs-area card" data-act="rs-fw-open" data-area="${esc(a.name)}">
@@ -800,7 +800,7 @@
       <div class="rs-method-in">
         <div><span class="eyebrow">How the map is built</span><h2 class="h3" id="rs-m-t">Method and sources</h2></div>
         <div class="prose small">
-          <p>Every focus area in the <a href="#library">Fit Tag Library</a> carries one area and one stage. Counts on this page come from the ${RN.fmt.int(RN.model.ops.length)} operator profiles on the network. An operator counts as <b>claiming</b> a cell when they list a focus area in it, and as <b>client-verified</b> when a client review rated 4.0 or higher confirms that focus area.</p>
+          <p>Every focus area in the <a href="#library">Fit Tag Library</a> carries one area and one stage. Counts on this page come from the ${RN.fmt.int(RN.model.ops.length)} operator profiles on the network. An operator counts as <b>claiming</b> a cell when they list a focus area in it, and as <b>company-verified</b> when a company review rated 4.0 or higher confirms that focus area.</p>
           <p>Revenue Nomad Research reviewed the stage of ${Object.keys(CURATED).length} focus areas in this edition so each sits at the stage it changes: brand and content work at Awareness, pricing and negotiation at Commit, onboarding at Onboard, expansion selling at Expand. Areas were not changed.</p>
           <p>Stage copy is Revenue Nomad's own. Cite it as "Revenue Nomad GTM Framework, 2026".</p>
         </div>
@@ -860,7 +860,7 @@
     let opAct = '';
     if (me) {
       opAct = mine
-        ? (mine.tier === 'claimed' ? `<button type="button" class="act" data-act="go" data-to="studio.credibility">${icon('seal')}Ask a client to verify</button>` : '')
+        ? (mine.tier === 'claimed' ? `<button type="button" class="act" data-act="go" data-to="studio.credibility">${icon('seal')}Ask a company to verify</button>` : '')
         : `<button type="button" class="act" data-act="rs-add-tag" data-tag="${esc(r.name)}">${icon('plus')}Add to my profile</button>`;
     }
     return `<article class="rs-tag" id="rs-tag-${esc(RN.slug(r.name))}">
@@ -874,9 +874,9 @@
         </div>
       </div>
       <div class="rs-tag-stats">
-        <div class="rs-tag-n">${r.any ? `<span><b class="num">${r.any}</b> ${r.any === 1 ? 'operator' : 'operators'}</span><span class="${r.ver ? 'accent' : 'muted'}">${r.ver ? icon('check-circle') : ''}<b class="num">${r.ver}</b> client-verified</span>` : '<span class="muted">No operators yet</span>'}</div>
-        ${vShow.length ? `<div class="rs-tag-vops">${vShow.map((op) => `<a href="#op.${esc(op.slug)}" title="${esc(op.name)}, verified">${RN.ui.avatar(op, 'ava-xs')}</a>`).join('')}<span class="tiny muted">verified by clients</span></div>` : ''}
-        ${r.demand ? `<div class="rs-tag-d">${icon('trend-up')}<span><b class="tnum">${RN.fmt.int(r.demand)}</b> client searches / mo</span>${gap ? '<span class="pill pill-warn">Proof is thin</span>' : ''}</div>` : ''}
+        <div class="rs-tag-n">${r.any ? `<span><b class="num">${r.any}</b> ${r.any === 1 ? 'operator' : 'operators'}</span><span class="${r.ver ? 'accent' : 'muted'}">${r.ver ? icon('check-circle') : ''}<b class="num">${r.ver}</b> company-verified</span>` : '<span class="muted">No operators yet</span>'}</div>
+        ${vShow.length ? `<div class="rs-tag-vops">${vShow.map((op) => `<a href="#op.${esc(op.slug)}" title="${esc(op.name)}, verified">${RN.ui.avatar(op, 'ava-xs')}</a>`).join('')}<span class="tiny muted">verified by companies</span></div>` : ''}
+        ${r.demand ? `<div class="rs-tag-d">${icon('trend-up')}<span><b class="tnum">${RN.fmt.int(r.demand)}</b> company searches / mo</span>${gap ? '<span class="pill pill-warn">Proof is thin</span>' : ''}</div>` : ''}
       </div>
       <div class="rs-tag-acts">
         <button type="button" class="btn btn-line btn-sm" data-act="rs-browse" data-src="library" data-f="{}" data-tags="${jsonAttr([r.name])}" data-q="">Find operators${icon('arrow')}</button>
@@ -908,7 +908,7 @@
         return `<section class="rs-lib-cat">
           <div class="rs-lib-cat-hd">
             <h2 class="h3">${RN.ui.catDot(c)}${esc(F.catLabel(c))}</h2>
-            <span class="small muted">${plural(cr.length, 'focus area')} · ${ver} client-verified</span>
+            <span class="small muted">${plural(cr.length, 'focus area')} · ${ver} company-verified</span>
             <button type="button" class="act" data-act="rs-lib-cat-set" data-cat="${esc(c)}">See all ${cr.length}${icon('arrow')}</button>
           </div>
           <div class="rs-tags card">${cr.slice(0, 4).map(tagRow).join('')}</div>
@@ -1005,7 +1005,7 @@
     if (claimed >= max) { RN.ui.toast(`Your profile holds ${max} self-claimed tags. Remove one in Studio to add another.`, { icon: 'info', action: { label: 'Open Studio', act: 'go', attrs: 'data-to="studio.profile"' } }); return; }
     RN.store.update((s) => { const e = (s.edits[me.id] = s.edits[me.id] || {}); e.addTags = (e.addTags || []).filter((x) => x.toLowerCase() !== t.toLowerCase()).concat(t); }, 'edits');
     RN.model.applyEdits();
-    RN.ui.toast(`Added “${esc(t)}” to your profile as self-claimed. A client review verifies it.`, { ms: 4200, action: { label: 'Ask a client', act: 'go', attrs: 'data-to="studio.credibility"' } });
+    RN.ui.toast(`Added “${esc(t)}” to your profile as self-claimed. A company review verifies it.`, { ms: 4200, action: { label: 'Ask a company', act: 'go', attrs: 'data-to="studio.credibility"' } });
     RN.rerender();
   };
 
@@ -1013,12 +1013,12 @@
     const rows = [];
     for (let r = 0; r <= 10; r++) rows.push({ label: r === 10 ? '10+' : String(r), value: RN.model.tagScore(r), hi: r === 1 || r === 5 });
     return `<div class="card rs-curve">
-      <div class="card-hd"><div><h3>How a focus area gets verified</h3><p class="sub">Score of one focus area by the number of client reviews that confirm it</p></div></div>
-      ${chartSlot('curve', (w) => RN.chart.columns(rows, { w, h: 196, fmt: (n) => String(n), label: 'Focus area score by client reviews' }))}
-      <p class="tiny muted rs-curve-x">Client reviews rated 4.0 or higher that confirm the focus area</p>
+      <div class="card-hd"><div><h3>How a focus area gets verified</h3><p class="sub">Score of one focus area by the number of company reviews that confirm it</p></div></div>
+      ${chartSlot('curve', (w) => RN.chart.columns(rows, { w, h: 196, fmt: (n) => String(n), label: 'Focus area score by company reviews' }))}
+      <p class="tiny muted rs-curve-x">Company reviews rated 4.0 or higher that confirm the focus area</p>
       <ol class="rs-steps">
         <li><b>0 reviews: self-claimed.</b> The operator added it. It shows with a dashed outline and counts only a little in search.</li>
-        <li><b>1 review: verified at 50.</b> A client confirmed it in a CORE review. Each further review adds points: 60, 70, 80.</li>
+        <li><b>1 review: verified at 50.</b> A company confirmed it in a CORE review. Each further review adds points: 60, 70, 80.</li>
         <li><b>5+ reviews: Expert.</b> 85 at five reviews, rising to 100 at ten.</li>
       </ol>
       <p class="small rs-curve-rule">${icon('shield')}Only reviews rated 4.0 or higher verify a focus area. Nobody can buy, request or edit a verification.</p>
@@ -1030,7 +1030,7 @@
     const me = RN.myOp();
     const rows = tags.filter((t) => t.verified <= 1).sort((a, b) => b.demand - a.demand).slice(0, 6);
     return `<div class="card rs-gaps">
-      <div class="card-hd"><div><h3>Where clients search and proof is thin</h3><p class="sub">Monthly client searches vs operators with client-verified proof</p></div>${illus('Illustrative')}</div>
+      <div class="card-hd"><div><h3>Where companies search and proof is thin</h3><p class="sub">Monthly company searches vs operators with company-verified proof</p></div>${illus('Illustrative')}</div>
       <div class="rs-gap-list">
         ${rows.map((t) => {
           const mine = me && me.tags.find((x) => x.t.toLowerCase() === t.t.toLowerCase());
@@ -1044,7 +1044,7 @@
           </div>`;
         }).join('')}
       </div>
-      <p class="tiny muted" style="margin-top:14px">${me ? 'Do this work? Add the tag, then ask a past client to confirm it in a review.' : 'Clients: these are the focus areas where a verified operator is hardest to find. Talk to us and we will source one.'}</p>
+      <p class="tiny muted" style="margin-top:14px">${me ? 'Do this work? Add the tag, then ask a past company to confirm it in a review.' : 'Companies: these are the focus areas where a verified operator is hardest to find. Talk to us and we will source one.'}</p>
     </div>`;
   }
 
@@ -1068,11 +1068,11 @@
       ${crumbs([{ l: 'Fit Tag Library' }])}
       <span class="eyebrow">Fit Tag Library</span>
       <h1 class="h1">The shared vocabulary of <span class="serif">fractional GTM work.</span></h1>
-      <p class="lede">Focus areas (fit tags) name the specific work an operator does. Operators add them to their profiles, clients filter by them, and a client review turns a claim into proof. One list, used on every profile, posted engagement and review.</p>
+      <p class="lede">Focus areas (fit tags) name the specific work an operator does. Operators add them to their profiles, companies filter by them, and a company review turns a claim into proof. One list, used on every profile, posted engagement and review.</p>
       <div class="stats-row rs-kpis" style="--cols:4">
         <div class="stat"><span class="stat-v">${RN.fmt.int(libN)}</span><span class="stat-l">Focus areas, ${groupsN} groups</span></div>
         <div class="stat"><span class="stat-v">${RN.fmt.int(claims)}</span><span class="stat-l">Focus areas listed on operator profiles</span></div>
-        <div class="stat"><span class="stat-v">${RN.fmt.int(verified)}</span><span class="stat-l">Confirmed by a client review</span></div>
+        <div class="stat"><span class="stat-v">${RN.fmt.int(verified)}</span><span class="stat-l">Confirmed by a company review</span></div>
         <div class="stat"><span class="stat-v">${Object.values(ix.tags).filter((t) => t.any.length).length}</span><span class="stat-l">In use on live profiles</span></div>
       </div>
     </header>
@@ -1137,10 +1137,10 @@
   const L = (to, t) => `<a href="#${esc(to)}">${esc(t)}</a>`;
 
   const GROUPS = [
-    { k: 'clients', l: 'For clients', d: 'Hiring a fractional go-to-market leader: cost, scope, timing and how to judge proof.' },
+    { k: 'clients', l: 'For companies', d: 'Hiring a fractional go-to-market leader: cost, scope, timing and how to judge proof.' },
     { k: 'costs', l: 'What each role costs', d: 'Rate Index medians and a typical month for every role category.' },
-    { k: 'operators', l: 'For operators', d: 'Pricing your work and winning clients, with or without a marketplace intro.' },
-    { k: 'methods', l: 'About our methods', d: 'How Revenue Nomad measures reputation and collects client reviews.' },
+    { k: 'operators', l: 'For operators', d: 'Pricing your work and winning companies, with or without a marketplace intro.' },
+    { k: 'methods', l: 'About our methods', d: 'How Revenue Nomad measures reputation and collects company reviews.' },
   ];
 
   const GUIDES = [
@@ -1169,7 +1169,7 @@
           { id: 'spend-less', h: 'How to get more for the same budget', html: `<ul>
             <li><b>Scope one outcome.</b> "Two reps hired and ramping, a written sales process and a forecast the board trusts" is easier to price than "own sales".</li>
             <li><b>Start at 20 to 40 hours</b> for the first 90 days, then adjust. Scaling hours up is easier than paying for hours you do not use.</li>
-            <li><b>Pay for proof.</b> Operators with client-verified focus areas in the work you need cost about the same per hour and waste fewer of them.</li>
+            <li><b>Pay for proof.</b> Operators with company-verified focus areas in the work you need cost about the same per hour and waste fewer of them.</li>
             <li><b>Start from a Blueprint.</b> An ${L('blueprints', 'Engagement Blueprint')} gives you the hours, term and a 30/60/90-day plan before you talk to anyone.</li></ul>` },
         ];
       },
@@ -1177,7 +1177,7 @@
         { q: 'Is a fractional CRO more expensive than a fractional VP of Sales?', a: `Usually, by 10% to 20% an hour, because a CRO also owns marketing and customer success. Both roles sit in the Sales Leadership category of the Rate Index, where the median is ${hr(b.p50)} an hour.` },
         { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
         { q: 'Do fractional sales leaders take commission or equity?', a: 'Some do, on top of a lower base rate. On Revenue Nomad rates are listed per hour; any variable pay is agreed between you and the operator.' },
-        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
+        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in companies see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
         { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. You pay the operator's rate, nothing more: at the Sales Leadership median of ${hr(b.p50)} an hour, 40 hours a month is ${usd(b.p50 * 40)}.` },
       ]; },
       cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
@@ -1185,7 +1185,7 @@
     {
       slug: 'fractional-vs-full-time-vp-of-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-12', mins: 7, cat: 'sales_leadership', opsQ: 'sales team hiring',
       q: 'Fractional vs full-time VP of Sales: which should your first sales leader be?',
-      answer: () => [`Hire fractional first when you still need someone to build the sales motion, and hire full-time once there is a proven process and a team to run every day.`, `In our survey, ${sumStat(/first sales leadership hire/i, '31%')} of first-time clients made a fractional leader their first sales leadership hire, and ${(REP().outcomes || []).find((o) => /full time/i.test(o.l)) ? REP().outcomes.find((o) => /full time/i.test(o.l)).v : '22%'} of fractional engagements later converted to a full-time role.`],
+      answer: () => [`Hire fractional first when you still need someone to build the sales motion, and hire full-time once there is a proven process and a team to run every day.`, `In our survey, ${sumStat(/first sales leadership hire/i, '31%')} of first-time companies made a fractional leader their first sales leadership hire, and ${(REP().outcomes || []).find((o) => /full time/i.test(o.l)) ? REP().outcomes.find((o) => /full time/i.test(o.l)).v : '22%'} of fractional engagements later converted to a full-time role.`],
       stats: () => [{ v: sumStat(/first sales leadership hire/i, '31%'), l: 'Chose fractional for their first sales leader' }, { v: (REP().outcomes || [])[1] ? REP().outcomes[1].v : '22%', l: 'Of engagements converted to full time' }, { v: sumStat(/pipeline change/i, '67 days'), l: 'Median time to a measurable pipeline change' }],
       sections: () => {
         const ff = REP().fracVsFull || [];
@@ -1202,9 +1202,9 @@
             <li>The team is large enough (usually eight or more quota carriers) to need daily management.</li>
             <li>The board wants a named executive who will be there for several years.</li></ul>
             <p>Many companies do both in sequence: a fractional leader builds the playbook, hires the first reps, then helps interview the full-time leader who inherits a working machine.</p>` },
-          { id: 'risks', h: 'Risks on each side', html: `<p>With a full-time hire, the risk is the wrong person for your stage. With fractional, the risk is attention: the operator has other clients. In our survey, clients rated communication cadence as a hiring factor far more in hindsight than at the time of hiring.</p>
-            ${(REP().hindsight || []).length ? tbl(['What clients weighed', 'At hire', 'In hindsight'], REP().hindsight.map((r) => [esc(r[0]), esc(r[1]), `<b>${esc(r[2])}</b>`])) : ''}
-            <p>Ask how the operator reports progress, how many clients they carry and which hours are yours. ${L('guide.evaluate-fractional-operator-track-record', 'How to evaluate a fractional operator')} covers the rest.</p>` },
+          { id: 'risks', h: 'Risks on each side', html: `<p>With a full-time hire, the risk is the wrong person for your stage. With fractional, the risk is attention: the operator has other companies. In our survey, companies rated communication cadence as a hiring factor far more in hindsight than at the time of hiring.</p>
+            ${(REP().hindsight || []).length ? tbl(['What companies weighed', 'At hire', 'In hindsight'], REP().hindsight.map((r) => [esc(r[0]), esc(r[1]), `<b>${esc(r[2])}</b>`])) : ''}
+            <p>Ask how the operator reports progress, how many companies they carry and which hours are yours. ${L('guide.evaluate-fractional-operator-track-record', 'How to evaluate a fractional operator')} covers the rest.</p>` },
         ];
       },
       faq: () => [
@@ -1309,28 +1309,28 @@
     {
       slug: 'evaluate-fractional-operator-track-record', group: 'clients', updated: '2026-09-15', mins: 7, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do you evaluate a fractional operator\'s track record?',
-      answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the clients they did it for.', 'On Revenue Nomad that proof is client-verified focus areas, CORE review scores, Engagement History and the Reputation Index, built mostly from client evidence rather than self-description.'],
-      stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of clients say stage fit mattered most, in hindsight' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
+      answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the companies they did it for.', 'On Revenue Nomad that proof is company-verified focus areas, CORE review scores, Engagement History and the Reputation Index, built mostly from company evidence rather than self-description.'],
+      stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of companies say stage fit mattered most, in hindsight' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
       sections: () => [
-        { id: 'hindsight', h: 'What clients wish they had checked', html: `<p>We asked companies what they weighed when they hired a fractional leader, and what they would weigh now.</p>
+        { id: 'hindsight', h: 'What companies wish they had checked', html: `<p>We asked companies what they weighed when they hired a fractional leader, and what they would weigh now.</p>
           ${(REP().hindsight || []).length ? tbl(['Factor', 'Weighed at hire', 'Would weigh now'], REP().hindsight.map((r) => [esc(r[0]), esc(r[1]), `<b>${esc(r[2])}</b>`])) : ''}
           ${src('State of Fractional GTM 2027 survey of companies that hired a fractional leader in the last 18 months. Illustrative.')}
           <p>Stage and deal-size fit came first by a wide margin. Brand-name employers came last.</p>` },
-        { id: 'fit', h: 'Check stage and deal-size fit', html: `<p>Compare the operator's ${esc(F.revenueRange.label.toLowerCase())} and ${esc(F.employeeRange.label.toLowerCase())} with yours, then read their Engagement History for companies like yours. Signed-in clients see Match Signals on every profile, scored against the company profile they filled in once.</p>` },
-        { id: 'verified', h: 'Separate verified from self-claimed', html: `<p>Every focus area on a profile is either <b>self-claimed</b> (dashed outline) or <b>client-verified</b> (solid, with a check). A focus area verifies when a client review rated 4.0 or higher confirms it; five or more make it Expert. The ${L('library', 'Fit Tag Library')} shows how many operators hold each one verified.</p>` },
+        { id: 'fit', h: 'Check stage and deal-size fit', html: `<p>Compare the operator's ${esc(F.revenueRange.label.toLowerCase())} and ${esc(F.employeeRange.label.toLowerCase())} with yours, then read their Engagement History for companies like yours. Signed-in companies see Match Signals on every profile, scored against the company profile they filled in once.</p>` },
+        { id: 'verified', h: 'Separate verified from self-claimed', html: `<p>Every focus area on a profile is either <b>self-claimed</b> (dashed outline) or <b>company-verified</b> (solid, with a check). A focus area verifies when a company review rated 4.0 or higher confirms it; five or more make it Expert. The ${L('library', 'Fit Tag Library')} shows how many operators hold each one verified.</p>` },
         { id: 'reviews', h: 'Read the reviews the right way', html: `<p>CORE reviews rate four things. Look for the one that matters most for your seat:</p>
           <dl class="rs-dl">${F.coreDims.options.map((o) => `<div><dt>${esc(o.l)}</dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>
           <p>Then read "Would hire again". A yes there is the strongest single signal on a profile. ${L('guide.what-is-core', 'What is CORE?')} explains the questions.</p>` },
         { id: 'questions', h: 'Questions to ask on the first call', html: `<ol>
           <li>Tell me about a company at our stage where this worked. What did you ship in the first 90 days?</li>
           <li>Where did it not work, and what did you change?</li>
-          <li>How many clients do you carry, and which hours would be ours?</li>
+          <li>How many companies do you carry, and which hours would be ours?</li>
           <li>How will you report progress, and how often?</li>
-          <li>Can I speak with the client from that engagement?</li></ol>` },
+          <li>Can I speak with the company from that engagement?</li></ol>` },
       ],
       faq: () => [
-        { q: 'What is a good Reputation Index score?', a: 'Every approved profile starts at 50 (Emerging). Scores of 70 and above (Trusted) mean repeat engagements and consistently strong client reviews.' },
-        { q: 'Can an operator pay to raise their score or verify a focus area?', a: 'No. Only client reviews, verified engagements and a complete profile move the score, and only reviews rated 4.0 or higher verify a focus area.' },
+        { q: 'What is a good Reputation Index score?', a: 'Every approved profile starts at 50 (Emerging). Scores of 70 and above (Trusted) mean repeat engagements and consistently strong company reviews.' },
+        { q: 'Can an operator pay to raise their score or verify a focus area?', a: 'No. Only company reviews, verified engagements and a complete profile move the score, and only reviews rated 4.0 or higher verify a focus area.' },
         { q: 'Should I ask for references if a profile has verified reviews?', a: 'Yes, for the engagement most like yours. Verified reviews tell you the work happened; a call tells you how it would go at your company.' },
       ],
       cta: { label: 'Browse operators, highest Reputation Index first', sort: 'ris' },
@@ -1338,8 +1338,8 @@
     {
       slug: 'transition-out-of-founder-led-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-09', mins: 7, cat: 'sales_leadership', opsQ: 'founder-led',
       q: 'How do you transition out of founder-led sales?',
-      answer: () => ['Write down how the founder actually wins deals, turn it into a repeatable process, then hand deals over in stages while the founder stays in the room for the largest ones.', `Most companies bring in a fractional sales leader to run this: founders stepping out of sales was the second most common reason clients gave for hiring one, at ${trig(/Founder/i) || 24}%.`],
-      stats: () => [{ v: (trig(/Founder/i) || 24) + '%', l: 'Hired fractional to move sales off the founder' }, { v: '6 months', l: 'Typical handover, from shadowing to full ownership' }, { v: String(((RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t)) || { demand: 155 }).demand), l: 'Client searches a month for Founder-Led Sales Exit' }],
+      answer: () => ['Write down how the founder actually wins deals, turn it into a repeatable process, then hand deals over in stages while the founder stays in the room for the largest ones.', `Most companies bring in a fractional sales leader to run this: founders stepping out of sales was the second most common reason companies gave for hiring one, at ${trig(/Founder/i) || 24}%.`],
+      stats: () => [{ v: (trig(/Founder/i) || 24) + '%', l: 'Hired fractional to move sales off the founder' }, { v: '6 months', l: 'Typical handover, from shadowing to full ownership' }, { v: String(((RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t)) || { demand: 155 }).demand), l: 'Company searches a month for Founder-Led Sales Exit' }],
       sections: () => {
         const mk = (RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t));
         return [
@@ -1352,7 +1352,7 @@
             ['5 to 6', 'Rep, with the sales leader coaching', 'Executive sponsor on strategic accounts'],
           ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + `<p>Measure win rate and sales cycle by who led the deal. When rep-led deals close at a similar rate, the handover is done.</p>` },
           { id: 'who', h: 'Who to hire for it', html: `<p>A fractional VP of Sales who has done this before, usually at 40 hours a month for six months, at a typical ${monthRange('sales_leadership', '40', '1m_5m')} for a $1M–$5M company.</p>
-            ${mk ? `<p>Clients search for the Founder-Led Sales Exit focus area about ${RN.fmt.int(mk.demand)} times a month, and only ${mk.verified} ${mk.verified === 1 ? 'operator holds' : 'operators hold'} it client-verified today (${mk.supply} claim it). Ask candidates for the client they did it with.</p>` : ''}` },
+            ${mk ? `<p>Companies search for the Founder-Led Sales Exit focus area about ${RN.fmt.int(mk.demand)} times a month, and only ${mk.verified} ${mk.verified === 1 ? 'operator holds' : 'operators hold'} it company-verified today (${mk.supply} claim it). Ask candidates for the company they did it with.</p>` : ''}` },
         ];
       },
       faq: () => [
@@ -1365,8 +1365,8 @@
     {
       slug: 'how-much-should-a-fractional-operator-charge', group: 'operators', updated: '2026-09-20', mins: 6, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How much should a fractional operator charge?',
-      answer: () => { const c = RIX().byCat; return [`Price from the Rate Index for your role category and the revenue range of the clients you serve, then adjust for your verified proof and the scope of the seat.`, `The median across fractional GTM leaders is ${hr(latestMedian())} an hour, from ${hr(c.sellers.p50)} for sellers to ${hr(c.sales_leadership.p50)} for sales leadership.`]; },
-      stats: () => [{ v: hr(latestMedian()) + '/hr', l: 'All-category median, latest quarter' }, { v: yoy(), l: 'Change in the median, year over year' }, { v: (REP().concurrent || []).slice().sort((a, b) => b.v - a.v)[0] ? REP().concurrent.slice().sort((a, b) => b.v - a.v)[0].l : '2 clients', l: 'Most common client load' }],
+      answer: () => { const c = RIX().byCat; return [`Price from the Rate Index for your role category and the revenue range of the companies you serve, then adjust for your verified proof and the scope of the seat.`, `The median across fractional GTM leaders is ${hr(latestMedian())} an hour, from ${hr(c.sellers.p50)} for sellers to ${hr(c.sales_leadership.p50)} for sales leadership.`]; },
+      stats: () => [{ v: hr(latestMedian()) + '/hr', l: 'All-category median, latest quarter' }, { v: yoy(), l: 'Change in the median, year over year' }, { v: (REP().concurrent || []).slice().sort((a, b) => b.v - a.v)[0] ? REP().concurrent.slice().sort((a, b) => b.v - a.v)[0].l : '2 companies', l: 'Most common company load' }],
       sections: () => {
         const cats = F.roleCategory.options.filter((o) => RIX().byCat[o.v]);
         const rows = cats.map((o) => ({ label: o.l, value: RIX().byCat[o.v].p50 })).sort((a, b) => b.value - a.value);
@@ -1376,73 +1376,73 @@
             ${tbl(['Role category', '25th pct', 'Median', '75th pct'], cats.map((o) => { const b = RIX().byCat[o.v]; return [esc(o.l), hr(b.p25), `<b>${hr(b.p50)}</b>`, hr(b.p75)]; }))}
             ${src(`Rate Index, latest quarter. See the full index and estimator on ${L('rates', 'Rates')}. Illustrative.`)}
             ${chartGo('Browse operators by role category and rate', { filters: {}, src: 'guide_chart_rate_cat' })}` },
-          { id: 'revenue', h: 'Adjust for the clients you serve', html: `<p>Rates rise with client size. Against a $5M–$20M company as the baseline:</p>
+          { id: 'revenue', h: 'Adjust for the companies you serve', html: `<p>Rates rise with company size. Against a $5M–$20M company as the baseline:</p>
             ${tbl(['Company revenue', 'Rate vs baseline'], F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => { const m = RIX().byRevenue[o.v]; return [esc(o.l), `${m >= 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`]; }))}` },
           { id: 'model', h: 'Hourly, retainer or project', html: `<p>Most operators list an hourly rate and bill a monthly retainer for a block of hours. At the Sales Leadership median, 20 hours a month is ${usd(RIX().byCat.sales_leadership.p50 * 20)}, 40 hours is ${usd(RIX().byCat.sales_leadership.p50 * 40)}. Scoped projects (${esc(F.engagementTypes.options.find((o) => o.v === 'project').d.toLowerCase().replace(/\.$/, ''))}) are priced per project, from the hours you expect to spend.</p>
-            <p>The rate on your profile is the price clients pay. Set it in ${L('studio.profile', 'Studio')} and compare it with the Rate Index for your role.</p>` },
-          { id: 'proof', h: 'Proof moves your rate more than discounts do', html: `<p>Operators with three or more client-verified reviews are rehired ${sumStat(/Rehire rate/i, '2.4x')} as often as those with none. Clients comparing two operators at similar rates pick the one with verified proof in the work they need. Before you lower your rate, ask two past clients for a CORE review.</p>
+            <p>The rate on your profile is the price companies pay. Set it in ${L('studio.profile', 'Studio')} and compare it with the Rate Index for your role.</p>` },
+          { id: 'proof', h: 'Proof moves your rate more than discounts do', html: `<p>Operators with three or more company-verified reviews are rehired ${sumStat(/Rehire rate/i, '2.4x')} as often as those with none. Companies comparing two operators at similar rates pick the one with verified proof in the work they need. Before you lower your rate, ask two past companies for a CORE review.</p>
             <p>Signed in, the Positioning tab in Studio shows where your rate sits against the 25th, 50th and 75th percentile for your category, next to how often operators at each band win.</p>` },
-          { id: 'load', h: 'How many clients to carry', html: (REP().concurrent || []).length ? `<p>${REP().concurrent.map((c) => `${esc(c.l)}: ${c.v}%`).join(', ')}. Two clients is the most common load. Price so that two clients at your usual hours cover your income target, with a third as upside.</p>` : '' },
+          { id: 'load', h: 'How many companies to carry', html: (REP().concurrent || []).length ? `<p>${REP().concurrent.map((c) => `${esc(c.l)}: ${c.v}%`).join(', ')}. Two companies is the most common load. Price so that two companies at your usual hours cover your income target, with a third as upside.</p>` : '' },
         ];
       },
       faq: () => [
-        { q: 'Should I show my rate on my profile?', a: 'Yes. Clients filter by rate, and profiles without a rate drop out of those searches. Rates are visible to signed-in clients only.' },
-        { q: 'Should I discount for my first client on the platform?', a: 'Prefer a shorter initial term or fewer hours over a lower rate. A discounted rate becomes the reference point for renewals.' },
-        { q: 'How often should I raise my rate?', a: 'Review it each quarter against the Rate Index and after every new verified review. Raise it for new clients first.' },
+        { q: 'Should I show my rate on my profile?', a: 'Yes. Companies filter by rate, and profiles without a rate drop out of those searches. Rates are visible to signed-in companies only.' },
+        { q: 'Should I discount for my first company on the platform?', a: 'Prefer a shorter initial term or fewer hours over a lower rate. A discounted rate becomes the reference point for renewals.' },
+        { q: 'How often should I raise my rate?', a: 'Review it each quarter against the Rate Index and after every new verified review. Raise it for new companies first.' },
         { q: 'What does it cost to join?', a: 'Nothing. Joining, your profile and Studio are free.' },
       ],
       cta: { label: 'See your rate position', to: 'studio.positioning', operator: true },
     },
     {
       slug: 'how-fractional-operators-win-direct-deals', group: 'operators', updated: '2026-09-16', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
-      q: 'How do fractional operators win clients without a marketplace intro?',
-      answer: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0) || 67; return [`Most fractional work still comes from referrals and former colleagues: ${ref}% of clients in our survey found their operator that way.`, 'Operators win those deals faster when they can send proof: a profile with client-verified focus areas, CORE reviews and a private proof link that shows which parts the prospect read.']; },
-      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: ((REP().hindsight || [])[0] || [])[2] || '81%', l: 'Of clients say stage fit mattered most, in hindsight' }]; },
+      q: 'How do fractional operators win companies without a marketplace intro?',
+      answer: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0) || 67; return [`Most fractional work still comes from referrals and former colleagues: ${ref}% of companies in our survey found their operator that way.`, 'Operators win those deals faster when they can send proof: a profile with company-verified focus areas, CORE reviews and a private proof link that shows which parts the prospect read.']; },
+      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: ((REP().hindsight || [])[0] || [])[2] || '81%', l: 'Of companies say stage fit mattered most, in hindsight' }]; },
       sections: () => {
         const s = (REP().sources || []).map((x) => ({ label: x.l, value: x.v, hi: /Referral/i.test(x.l) }));
         return [
-          { id: 'sources', h: 'Where clients find operators', html: `${chartSlot('g9-src', (w) => bars(s, { fmt: (n) => n + '%', label: 'Where companies found their fractional operator' }, w))}
+          { id: 'sources', h: 'Where companies find operators', html: `${chartSlot('g9-src', (w) => bars(s, { fmt: (n) => n + '%', label: 'Where companies found their fractional operator' }, w))}
             ${src('State of Fractional GTM 2027 survey of companies that hired a fractional leader. Illustrative.')}
             <p class="rs-chart-go"><a class="act" href="#${RN.store.state.persona === 'operator' ? 'studio.visibility' : 'join'}">${RN.store.state.persona === 'operator' ? 'See where your own profile views come from' : 'Join the network to see where your views come from'}${icon('arrow')}</a></p>
             <p>A referral gets you the first call. What the prospect checks after that call decides the deal.</p>` },
-          { id: 'check', h: 'What prospects check before they call you back', html: `<p>Stage and deal-size fit, how you communicate in a part-time seat and verified references from prior clients were the top three factors companies wish they had weighed. A résumé shows none of them. A profile with client-verified focus areas, CORE reviews and Engagement History shows all three.</p>` },
+          { id: 'check', h: 'What prospects check before they call you back', html: `<p>Stage and deal-size fit, how you communicate in a part-time seat and verified references from prior companies were the top three factors companies wish they had weighed. A résumé shows none of them. A profile with company-verified focus areas, CORE reviews and Engagement History shows all three.</p>` },
           { id: 'proof-link', h: 'Send proof with every proposal', html: `<p>From Studio you can create a <b>proof link</b>: a private version of your profile prepared for one prospect, with the sections you choose. The prospect sees a notice that you can see what they read. You see which sections they opened, for how long, and whether they forwarded it inside their team.</p>
             <p>The link makes the deal easier to win; it does not route it through the marketplace.</p>` },
-          { id: 'findable', h: 'Get found in search and AI answers', html: `<ul><li>Write a headline that names the problem you solve and the stage you solve it at.</li><li>Ask past clients to verify your top focus areas: verified tags rank first on cards and in search.</li><li>Keep availability current; fresh availability ranks higher.</li><li>A long-form About section feeds Google and AI answer engines, which increasingly answer "who is a good fractional VP of Sales for..." directly.</li></ul>` },
+          { id: 'findable', h: 'Get found in search and AI answers', html: `<ul><li>Write a headline that names the problem you solve and the stage you solve it at.</li><li>Ask past companies to verify your top focus areas: verified tags rank first on cards and in search.</li><li>Keep availability current; fresh availability ranks higher.</li><li>A long-form About section feeds Google and AI answer engines, which increasingly answer "who is a good fractional VP of Sales for..." directly.</li></ul>` },
           { id: 'studio', h: 'What you get even without an intro', html: `<p>Studio shows every search you appeared in and why, the firmographic segments that viewed you (never company names), where you were compared and not chosen, and how your rate and focus areas compare with demand. None of it depends on an intro.</p>` },
         ];
       },
       faq: () => [
-        { q: 'Does a proof link route the deal through Revenue Nomad?', a: 'No. The deal stays between you and your client; the link helps you close it.' },
+        { q: 'Does a proof link route the deal through Revenue Nomad?', a: 'No. The deal stays between you and your company; the link helps you close it.' },
         { q: 'Will the prospect know I can see what they read?', a: 'Yes. Every proof link shows the prospect a notice that viewing is shared with the operator.' },
-        { q: 'How do I get my first verified review?', a: 'Send a review request from Studio to a past client. When they submit a CORE review rated 4.0 or higher, the focus areas they confirm turn verified.' },
+        { q: 'How do I get my first verified review?', a: 'Send a review request from Studio to a past company. When they submit a CORE review rated 4.0 or higher, the focus areas they confirm turn verified.' },
       ],
       cta: { label: 'Create a proof link', to: 'studio.credibility', operator: true },
     },
     {
       slug: 'what-is-the-reputation-index', group: 'methods', updated: '2026-09-01', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is the Revenue Nomad Reputation Index?',
-      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much client evidence stands behind an operator\'s profile.', 'Every approved profile starts at 50 (Emerging), and the score rises only with client reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
-      stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from client evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
+      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much company evidence stands behind an operator\'s profile.', 'Every approved profile starts at 50 (Emerging), and the score rises only with company reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
+      stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from company evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
       sections: () => {
         const ops = RN.model.ops.filter((o) => !o.hidden);
         const tiers = F.risTier.options.filter((t) => t.v !== 'indexing').slice().reverse();
         const tierRows = tiers.map((t) => ({ label: `${t.l} (${t.min}–${t.max})`, value: ops.filter((o) => o.ris.tier === t.v).length }));
         return [
           { id: 'factors', h: 'The five factors', html: `<dl class="rs-dl rs-dl-w">${F.risFactors.options.map((o) => `<div><dt>${esc(o.l)}<span class="tnum">${Math.round((o.w || 0) * 100)}%</span></dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>
-            <p>Weights are published so operators know exactly what moves the score and clients know what it measures.</p>` },
+            <p>Weights are published so operators know exactly what moves the score and companies know what it measures.</p>` },
           { id: 'tiers', h: 'The tiers', html: `${tbl(['Tier', 'Score', 'What it means'], F.risTier.options.map((t) => [`<b>${esc(t.l)}</b>`, `${t.min}–${t.max}`, esc(t.d)]), 'rs-tbl-l')}
-            <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a client confirmed: verified focus areas and verified engagements.</p>` },
+            <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a company confirmed: verified focus areas and verified engagements.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
             ${src(`Live count across ${ops.length} operator profiles in this prototype.`)}
             ${chartGo('Browse operators, highest Reputation Index first', { filters: {}, sort: 'ris', src: 'guide_chart_tiers' })}
-            <p>Most profiles sit at Emerging because the index only moves with client evidence. That is by design: a score that starts high means nothing.</p>` },
+            <p>Most profiles sit at Emerging because the index only moves with company evidence. That is by design: a score that starts high means nothing.</p>` },
           { id: 'not', h: 'What it is not', html: `<ul><li>It is not for sale. No plan, fee or sponsorship changes it.</li><li>It is not a popularity score. Profile views and searches do not count.</li><li>It does not punish operators for engagements that were never reviewed.</li></ul>
             <p>Operators can see how their own score breaks down in Studio, and the ${L('levels', 'Levels page')} explains what each tier unlocks.</p>` },
         ];
       },
       faq: () => [
-        { q: 'Why do most operators have a score of 50?', a: 'Every approved profile starts at 50 and rises only with client evidence. New operators have not collected reviews on the platform yet.' },
+        { q: 'Why do most operators have a score of 50?', a: 'Every approved profile starts at 50 and rises only with company evidence. New operators have not collected reviews on the platform yet.' },
         { q: 'How quickly does the score update?', a: 'Immediately. A submitted review, a verified engagement or a completed profile recalculates the score the same day.' },
         { q: 'Can a bad review lower the score?', a: 'Low CORE ratings reduce the Strong ratings factor, and reviews rated under 4.0 do not verify focus areas. Reviews publish automatically; there is no moderation queue to hide them.' },
       ],
@@ -1451,22 +1451,22 @@
     {
       slug: 'what-is-core', group: 'methods', updated: '2026-09-01', mins: 4, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is CORE?',
-      answer: () => ['CORE is Revenue Nomad\'s client review framework: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5 by a client who worked with the operator.', 'Every review ends with a yes or no answer to "Would you hire this operator again?", and reviews rated 4.0 or higher verify the focus areas the client confirms.'],
-      stats: () => [{ v: '4', l: 'Questions, each rated 1 to 5' }, { v: '4.0+', l: 'Average needed to verify focus areas' }, { v: '3', l: 'Short steps for the client' }],
+      answer: () => ['CORE is Revenue Nomad\'s company review framework: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5 by a company who worked with the operator.', 'Every review ends with a yes or no answer to "Would you hire this operator again?", and reviews rated 4.0 or higher verify the focus areas the company confirms.'],
+      stats: () => [{ v: '4', l: 'Questions, each rated 1 to 5' }, { v: '4.0+', l: 'Average needed to verify focus areas' }, { v: '3', l: 'Short steps for the company' }],
       sections: () => [
         { id: 'questions', h: 'The four questions', html: `<dl class="rs-dl">${F.coreDims.options.map((o) => `<div><dt><span class="rs-core-l">${esc(o.v)}</span>${esc(o.l)}</dt><dd><span class="rs-core-q">“${esc(o.q)}”</span> ${esc(o.d)}</dd></div>`).join('')}</dl>` },
         { id: 'how', h: 'How a review works', html: `<ol>
-          <li><b>The engagement.</b> The client confirms the role delivered, the dates, the ${esc(F.engagementType.label.toLowerCase())} and the spend.</li>
+          <li><b>The engagement.</b> The company confirms the role delivered, the dates, the ${esc(F.engagementType.label.toLowerCase())} and the spend.</li>
           <li><b>CORE.</b> Four ratings from 1 to 5, each with an optional reason, a required overall experience note, and ${esc(F.hireAgain.label.replace(/\?$/, '').toLowerCase())}.</li>
-          <li><b>Focus areas and outcomes.</b> The client confirms the operator's focus areas they saw in action and rates up to three outcomes: ${esc(RN.w.labels('outcomeRating', F.outcomeRating.options.map((o) => o.v)))}.</li></ol>
-          <p>Only clients the operator requests a review from can submit one. Reviews publish automatically. Operators see two states for each request: ${esc(RN.w.labels('reviewStatus', ['sent', 'completed'], ' and '))}.</p>` },
-        { id: 'feeds', h: 'What a review changes', html: `<ul><li>Focus areas the client confirms turn <b>verified</b> when the review averages 4.0 or higher. Five such reviews make a focus area Expert.</li><li>The Reputation Index recalculates: review volume, strong ratings and focus area verification all move.</li><li>The review appears on the profile, in the CORE section and on any proof link that includes reviews.</li></ul>` },
+          <li><b>Focus areas and outcomes.</b> The company confirms the operator's focus areas they saw in action and rates up to three outcomes: ${esc(RN.w.labels('outcomeRating', F.outcomeRating.options.map((o) => o.v)))}.</li></ol>
+          <p>Only companies the operator requests a review from can submit one. Reviews publish automatically. Operators see two states for each request: ${esc(RN.w.labels('reviewStatus', ['sent', 'completed'], ' and '))}.</p>` },
+        { id: 'feeds', h: 'What a review changes', html: `<ul><li>Focus areas the company confirms turn <b>verified</b> when the review averages 4.0 or higher. Five such reviews make a focus area Expert.</li><li>The Reputation Index recalculates: review volume, strong ratings and focus area verification all move.</li><li>The review appears on the profile, in the CORE section and on any proof link that includes reviews.</li></ul>` },
         { id: 'why', h: 'Why four dimensions instead of five stars', html: `<p>Star averages drift toward 4.9 on most marketplaces, which makes them useless for comparison. Four specific questions show where an operator is strong and where they are average, and "Would hire again" is harder to inflate than a star.</p>` },
       ],
       faq: () => [
-        { q: 'Who can leave a CORE review?', a: 'A client the operator worked with and sent a review request to. Operators cannot review themselves or each other.' },
+        { q: 'Who can leave a CORE review?', a: 'A company the operator worked with and sent a review request to. Operators cannot review themselves or each other.' },
         { q: 'Can an operator hide a review?', a: 'No. Reviews publish automatically and there is no moderation queue.' },
-        { q: 'What does CORE stand for?', a: 'Communication, Ownership, Results Focus and Expertise, the four things clients rate.' },
+        { q: 'What does CORE stand for?', a: 'Communication, Ownership, Results Focus and Expertise, the four things companies rate.' },
       ],
       cta: { label: 'Read how the score works', to: 'levels' },
     },
@@ -1517,7 +1517,7 @@
       faq: () => [
         { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
         { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. You pay the operator's rate, nothing more: at the ${catL} median of ${hr(b().p50)} an hour, ${hrsL.replace(' / ', ' a ')} is ${usd(b().p50 * hoursNum(c.hours))}.` },
-        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in clients see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
+        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in companies see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
       ],
       cta: { label: `Browse ${catL}`, filters: { roleCategories: [cat] } },
     };
@@ -1541,21 +1541,21 @@
     { t: 'Interim', d: () => F.engagementTypes.options.find((o) => o.v === 'interim').d + ' Closer to full time for a defined period.' },
     { t: 'Advisory', d: () => F.engagementTypes.options.find((o) => o.v === 'advisory').d },
     { t: 'Project engagement', d: () => F.engagementTypes.options.find((o) => o.v === 'project').d, to: 'blueprints' },
-    { t: 'Available time', d: () => `The hours a month an operator can give a new client, from ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options[0].v)} to ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options.slice(-1)[0].v)}. Clients filter by it; every posted engagement asks for it.` },
+    { t: 'Available time', d: () => `The hours a month an operator can give a new company, from ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options[0].v)} to ${RN.w.label('hoursPerMonth', F.hoursPerMonth.options.slice(-1)[0].v)}. Companies filter by it; every posted engagement asks for it.` },
     { t: 'Initial term', d: () => `How long the first engagement is agreed for: ${F.term.options.map((o) => o.l).join(', ')}.`, to: 'guide.how-to-scope-a-fractional-sales-engagement' },
     { t: 'Role category', d: () => `The discipline an operator leads. There are ${F.roleCategory.options.length}: ${F.roleCategory.options.map((o) => o.l).join(', ')}.`, to: 'browse' },
-    { t: 'Focus area (fit tag)', d: () => 'A specific kind of work, such as Pipeline Inspection or HubSpot admin. Operators call them fit tags and add up to 25; clients see them as focus areas and filter by them.', to: 'library' },
-    { t: 'Self-claimed', d: () => 'A focus area the operator added that no client review has confirmed yet. Shown with a dashed outline.', to: 'library' },
-    { t: 'Client-verified', d: () => 'A focus area confirmed by at least one client review rated 4.0 or higher. One review verifies it at a score of 50.', to: 'library' },
-    { t: 'Expert', d: () => 'A focus area confirmed by five or more client reviews rated 4.0 or higher, scored 85 to 100.', to: 'library' },
-    { t: 'Reputation Index', d: () => 'A 0 to 100 score of the client evidence behind a profile, from five published factors. Every approved profile starts at 50.', to: 'guide.what-is-the-reputation-index' },
+    { t: 'Focus area (fit tag)', d: () => 'A specific kind of work, such as Pipeline Inspection or HubSpot admin. Operators call them fit tags and add up to 25; companies see them as focus areas and filter by them.', to: 'library' },
+    { t: 'Self-claimed', d: () => 'A focus area the operator added that no company review has confirmed yet. Shown with a dashed outline.', to: 'library' },
+    { t: 'Client-verified', d: () => 'A focus area confirmed by at least one company review rated 4.0 or higher. One review verifies it at a score of 50.', to: 'library' },
+    { t: 'Expert', d: () => 'A focus area confirmed by five or more company reviews rated 4.0 or higher, scored 85 to 100.', to: 'library' },
+    { t: 'Reputation Index', d: () => 'A 0 to 100 score of the company evidence behind a profile, from five published factors. Every approved profile starts at 50.', to: 'guide.what-is-the-reputation-index' },
     { t: 'Emerging', d: () => F.risTier.options.find((t) => t.v === 'emerging').d, to: 'levels' },
-    { t: 'CORE', d: () => 'Revenue Nomad\'s client review: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5, plus "Would you hire this operator again?"', to: 'guide.what-is-core' },
-    { t: 'Engagement History', d: () => 'The client engagements on an operator\'s profile, with dates, scope and company size, marked verified when the client confirmed them.' },
+    { t: 'CORE', d: () => 'Revenue Nomad\'s company review: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5, plus "Would you hire this operator again?"', to: 'guide.what-is-core' },
+    { t: 'Engagement History', d: () => 'The company engagements on an operator\'s profile, with dates, scope and company size, marked verified when the company confirmed them.' },
     { t: 'Engagement Blueprint', d: () => 'A scoped engagement template: role category, typical hours and term, a 30/60/90-day plan, the focus areas it needs and a typical rate range. Post it as is, or adjust the hours, term and start first.', to: 'blueprints' },
     { t: 'GTM Framework', d: () => 'Revenue Nomad\'s map of go-to-market work: six areas across seven customer-journey stages, from Awareness to Expand. Every focus area sits in one cell.', to: 'framework' },
     { t: 'Rate Index', d: () => 'Revenue Nomad\'s benchmark of hourly rates by role category and company revenue range, reported as the 25th percentile, median and 75th percentile each quarter.', to: 'rates' },
-    { t: 'Match Signals', d: () => 'Five checks shown to a signed-in client on every profile: company revenue, company size, GTM motion, industry and expertise, scored against the client\'s company profile.' },
+    { t: 'Match Signals', d: () => 'Five checks shown to a signed-in company on every profile: company revenue, company size, GTM motion, industry and expertise, scored against the company\'s company profile.' },
     { t: 'Proof link', d: () => 'A private version of an operator\'s profile prepared for one prospect. The prospect is told the operator can see which sections they read.', to: 'guide.how-fractional-operators-win-direct-deals' },
   ];
   R.glossary = GLOSSARY;
@@ -1649,7 +1649,7 @@
       const op = RN.model.byId(a.opId);
       const eng = (op.engagements || []).find((e) => engKey(e) === a.engagementId) || (a.engagement ? { company: a.engagement.company, clientVerified: false } : null);
       return `<article class="rs-ans">
-        <div class="rs-ans-by">${RN.ui.avatar(op, 'ava-sm')}<span><a class="rs-ans-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(op.role)}${eng ? ` · Proof: ${esc(eng.company)}${eng.clientVerified ? ', client-verified' : ''}` : ''}</span></span>${RN.ui.ris(op)}</div>
+        <div class="rs-ans-by">${RN.ui.avatar(op, 'ava-sm')}<span><a class="rs-ans-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(op.role)}${eng ? ` · Proof: ${esc(eng.company)}${eng.clientVerified ? ', company-verified' : ''}` : ''}</span></span>${RN.ui.ris(op)}</div>
         <p class="rs-ans-t">${esc(a.text)}</p>
       </article>`;
     };
@@ -1680,8 +1680,8 @@
           <textarea class="textarea" id="rs-ans-text" name="text" maxlength="${ANS_MAX}" rows="6" required></textarea>
           <p class="help">Up to ${ANS_MAX} characters, from your own engagements. The team reviews every answer before it appears.</p></div>
         ${engs.length ? `<div class="field"><label for="rs-ans-eng">Engagement as proof</label>
-          <select class="select" id="rs-ans-eng" name="engagement">${engs.map((e) => `<option value="${esc(engKey(e))}">${esc(e.company)}${e.role ? ' · ' + esc(e.role) : ''}${e.clientVerified ? ' (client-verified)' : ''}</option>`).join('')}</select>
-          <p class="help">From your Engagement History. Client-verified engagements rank first.</p></div>`
+          <select class="select" id="rs-ans-eng" name="engagement">${engs.map((e) => `<option value="${esc(engKey(e))}">${esc(e.company)}${e.role ? ' · ' + esc(e.role) : ''}${e.clientVerified ? ' (company-verified)' : ''}</option>`).join('')}</select>
+          <p class="help">From your Engagement History. Company-verified engagements rank first.</p></div>`
           : `<p class="small muted">Add an engagement in Studio to attach proof. <a href="#studio.profile">Open Studio</a></p>`}
         <button class="btn" type="submit">Send for review</button>
       </form>`,
@@ -1781,7 +1781,7 @@
           </div>
           <div class="card rs-rail-cta">
             <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : g.group === 'methods' ? 'See it on a profile' : 'Ready to hire?')}</b>
-            <p class="small muted">${esc(g.group === 'operators' ? (persona === 'operator' ? 'Studio shows your numbers next to the benchmarks in this guide.' : 'Join the network to get a Studio with your numbers next to these benchmarks.') : g.group === 'methods' ? 'Every profile shows its Reputation Index, CORE reviews and verified focus areas.' : 'Browse operators with client-verified proof, or estimate the cost first.')}</p>
+            <p class="small muted">${esc(g.group === 'operators' ? (persona === 'operator' ? 'Studio shows your numbers next to the benchmarks in this guide.' : 'Join the network to get a Studio with your numbers next to these benchmarks.') : g.group === 'methods' ? 'Every profile shows its Reputation Index, CORE reviews and verified focus areas.' : 'Browse operators with company-verified proof, or estimate the cost first.')}</p>
             ${cta}
             ${g.group === 'clients' || g.group === 'costs' ? `<a class="btn btn-line btn-block" href="#rates">Estimate the cost</a>` : ''}
           </div>
@@ -1790,7 +1790,7 @@
     </div>
     <div class="wrap rs-guide-after">
         <section id="rs-s-operators" class="rs-rel" aria-labelledby="rs-rel-t">
-          <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most client evidence'}</h2></div>
+          <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most company evidence'}</h2></div>
           ${browseBtn(g.cat ? `Browse ${F.catLabel(g.cat)}` : 'Browse all', { filters: g.cat ? { roleCategories: [g.cat] } : {}, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
           <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}</div>
           <div class="grid g-2 rs-glinks">
@@ -1805,7 +1805,7 @@
             ${icon('arrow')}
           </a>` : `<a class="rs-bp card card-link" href="#framework">
             <span class="rs-bp-ic">${icon('grid')}</span>
-            <span class="grow"><span class="label">GTM Framework</span><b>Where operators have client-verified proof</b><span class="small muted">Six areas across seven stages of the customer journey, counted from live profiles.</span></span>
+            <span class="grow"><span class="label">GTM Framework</span><b>Where operators have company-verified proof</b><span class="small muted">Six areas across seven stages of the customer journey, counted from live profiles.</span></span>
             ${icon('arrow')}
           </a>`}
           </div>

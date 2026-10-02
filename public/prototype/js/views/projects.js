@@ -561,7 +561,7 @@
       ['target', 'Invite ranked matches', `Every operator in the role is scored on five Match Signals. The top 3 are picked for you; invite up to ${MAX_INVITES}.`],
       ['clock', 'Compare responses in 72 hours', 'Operators reply from their Studio with a note and their rate. Revenue Nomad can add up to 3 more we know fit.'],
     ];
-    return `${persona === 'operator' ? `<div class="wrap" style="padding-top:20px"><div class="note info">${icon('inbox')}<span>You are signed in as an operator. When a client invites you to an engagement it lands in your Studio inbox. <a href="#studio.inbox">Open your inbox</a></span></div></div>` : ''}
+    return `${persona === 'operator' ? `<div class="wrap" style="padding-top:20px"><div class="note info">${icon('inbox')}<span>You are signed in as an operator. When a company invites you to an engagement it lands in your Studio inbox. <a href="#studio.inbox">Open your inbox</a></span></div></div>` : ''}
     <section class="wrap pj-hero">
       <div class="pj-hero-grid">
         <div class="pj-hero-copy">
@@ -576,7 +576,7 @@
           <h3 class="h4">Fractional VP of Sales</h3>
           <p class="small muted">${esc(scopeLine(sample))} · ${esc(W().label('industries', 'Health Care'))} · ${esc(W().label('companyRevenue', '20m_50m'))} revenue</p>
           <div class="pj-demo-list">${top.map((r, i) => `<div class="pj-demo-row"><span class="pj-rank num">${i + 1}</span>${miniOp(r.op, fitPill(r.fit))}</div>`).join('')}</div>
-          <p class="tiny muted">Ranked from ${pool} Sales Leadership profiles with the same Match Signals clients see on every profile.</p>
+          <p class="tiny muted">Ranked from ${pool} Sales Leadership profiles with the same Match Signals companies see on every profile.</p>
         </div>
       </div>
     </section>
@@ -675,7 +675,7 @@
     return `<section class="wrap-narrow section"><div class="card pj-gate">
       <span class="eyebrow">Post an engagement</span>
       <h1 class="h2" style="margin-top:10px">Posting is for companies hiring.</h1>
-      <p class="lede" style="margin:14px auto 0">You are signed in as ${op ? 'an operator' : 'the Revenue Nomad team'}. Switch to the client view to post, or ${op ? 'open your Studio inbox to answer engagement invites' : 'go back to Admin'}.</p>
+      <p class="lede" style="margin:14px auto 0">You are signed in as ${op ? 'an operator' : 'the Revenue Nomad team'}. Switch to the company view to post, or ${op ? 'open your Studio inbox to answer engagement invites' : 'go back to Admin'}.</p>
       <div class="row" style="justify-content:center;margin-top:24px"><button type="button" class="btn" data-act="persona" data-p="buyer" data-to="${esc(to)}">Continue as ${esc(RN.personas.buyer.name)}</button><a class="btn btn-line" href="#${op ? 'studio.inbox' : 'admin'}">${op ? 'Open Studio inbox' : 'Back to Admin'}</a></div>
     </div></section>`;
   }
@@ -767,7 +767,7 @@
             ${signedIn ? companyCard(client, f) : visitorFields(client, f)}
             ${W().field('industries', f.industries, { name: 'industries', max: 3, help: 'Pick up to 3. Operators with experience here rank higher.' })}
             ${W().field('salesMotions', f.salesMotions, { name: 'salesMotions', help: 'The motion you run today or want to build.' })}
-            ${W().field('fitTags', f.tags, { name: 'tags', max: 8, client: true, noCustom: true, cat: f.roleCategory, label: 'Focus areas the role needs', help: 'From the Fit Tag Library. Operators with these verified by a client review rank first.' })}
+            ${W().field('fitTags', f.tags, { name: 'tags', max: 8, client: true, noCustom: true, cat: f.roleCategory, label: 'Focus areas the role needs', help: 'From the Fit Tag Library. Operators with these verified by a company review rank first.' })}
           </div>
 
           <div class="pj-step stack" data-step="3" ${step !== 3 ? 'hidden' : ''}>
@@ -822,7 +822,7 @@
     const c = client.company;
     return `<fieldset class="card-flat stack pj-co" style="--gap:16px">
       <legend class="label">About your company</legend>
-      <p class="small muted">Asked once. Operators see your company’s industry and size, not your name, until you request an intro. Sample client details are filled in for the prototype.</p>
+      <p class="small muted">Asked once. Operators see your company’s industry and size, not your name, until you request an intro. Sample company details are filled in for the prototype.</p>
       <div class="grid g-2 pj-g">${W().field('fullName', client.name, { name: 'name', compact: true })}${W().field('email', client.email, { name: 'email', compact: true })}</div>
       <div class="grid g-2 pj-g"><div class="field" data-field="company"><label for="pj-co">Company</label><input class="input" id="pj-co" name="company" value="${esc(c.name || '')}" autocomplete="organization"></div>
       ${W().field('industry', c.industry, { name: 'industry', compact: true })}</div>
@@ -1048,7 +1048,7 @@
     const cur = PJ.get(form.id);
     if (cur && cur.status !== 'draft') {
       update(cur.id, (q) => { q.title = x.title; q.brief = x.brief; q.fields = x.f; q.client = x.client; q.suggest = x.suggest; q.updatedAt = RN.now().toISOString(); });
-      (cur.invited || []).forEach((id) => { const op = RN.model.byId(id); if (op) RN.mail(op.name, `Updated brief: ${x.title}`, `${op.first}, the client updated the brief for an engagement you were invited to.\n${PJ.blind(cur)}\n${scopeLine(x.f)}\n\nSee the change in your Studio inbox.`, 'invite'); });
+      (cur.invited || []).forEach((id) => { const op = RN.model.byId(id); if (op) RN.mail(op.name, `Updated brief: ${x.title}`, `${op.first}, the company updated the brief for an engagement you were invited to.\n${PJ.blind(cur)}\n${scopeLine(x.f)}\n\nSee the change in your Studio inbox.`, 'invite'); });
       editing.delete(cur.id); delete editBuf[cur.id];
       leaveForm(cur.id, 1, 'engagement.' + cur.id); // back to the engagement page the edit started from
       toast('Changes saved. Invited operators got the updated brief.');
@@ -1096,7 +1096,7 @@
     clearToasts();
     // Back from the engagement page skips the posting form: return to the form's first entry, which redirects to the engagement
     leaveForm(pid, 0, 'engagement.' + pid);
-    if (visitor) toast(`Posted. We created a client workspace for ${esc(client.company.name)}.`, { action: { label: 'Open workspace', act: 'go', attrs: 'data-to="buyer"' } });
+    if (visitor) toast(`Posted. We created a company workspace for ${esc(client.company.name)}.`, { action: { label: 'Open workspace', act: 'go', attrs: 'data-to="buyer"' } });
   }
 
   function sendInvite(p, opId) {
@@ -1104,7 +1104,7 @@
     if (!op) return;
     const f = PJ.fields(p);
     const fit = fitOf(op, p);
-    RN.mail(op.name, `You’re invited: ${p.title}`, `${op.first}, a client invited you to respond to their engagement.\n${PJ.blind(p)}\n${scopeLine(f)}${payLine(f)}\nYour fit: ${fit.label} (${fit.pct}).\n\nIt is in your Studio inbox. Reply within 72 hours with a short note and your rate.`, 'invite');
+    RN.mail(op.name, `You’re invited: ${p.title}`, `${op.first}, a company invited you to respond to their engagement.\n${PJ.blind(p)}\n${scopeLine(f)}${payLine(f)}\nYour fit: ${fit.label} (${fit.pct}).\n\nIt is in your Studio inbox. Reply within 72 hours with a short note and your rate.`, 'invite');
     RN.track('project_invite', { opId, projectId: p.id, source: 'client' });
   }
 
@@ -1181,11 +1181,11 @@
     if (persona === 'operator') {
       const me = RN.personas.operator.opId;
       const inv = p && (p.invited || []).includes(me);
-      return `<section class="wrap-narrow section"><div class="card pj-gate"><span class="eyebrow">Client engagement</span>
-        <h1 class="h2" style="margin-top:10px">${inv ? 'You were invited to this engagement.' : 'This page belongs to the client who posted it.'}</h1>
+      return `<section class="wrap-narrow section"><div class="card pj-gate"><span class="eyebrow">Company engagement</span>
+        <h1 class="h2" style="margin-top:10px">${inv ? 'You were invited to this engagement.' : 'This page belongs to the company who posted it.'}</h1>
         ${inv ? `<p class="h5" style="margin-top:14px">${esc(p.title)}</p><p class="small muted">${esc(PJ.blind(p))} · ${esc(scopeLine(PJ.fields(p)))}</p>` : ''}
         <p class="lede" style="margin:14px auto 0">${inv ? `Your stage: ${esc(PJ.stage(p, me).l)}. Respond from your Studio inbox: interested with your rate, or a pass with a reason.` : 'Engagement invites and role alerts land in your Studio inbox.'}</p>
-        <div class="row" style="justify-content:center;margin-top:24px"><a class="btn" href="#studio.inbox">Open Studio inbox</a><button type="button" class="btn btn-line" data-act="persona" data-p="buyer" data-to="engagement.${esc(params.id)}">View as the client</button></div></div></section>`;
+        <div class="row" style="justify-content:center;margin-top:24px"><a class="btn" href="#studio.inbox">Open Studio inbox</a><button type="button" class="btn btn-line" data-act="persona" data-p="buyer" data-to="engagement.${esc(params.id)}">View as the company</button></div></div></section>`;
     }
     if (persona !== 'buyer') return RN.ui.gate('buyer');
     if (!p) return notFound('That engagement does not exist', 'Back to engagements', 'engagements');
@@ -1250,7 +1250,7 @@
     const invited = (p.invited || []).map(RN.model.byId).filter(Boolean);
     const picks = (p.picked || []).map(RN.model.byId).filter(Boolean);
     const strip = draft ? picks : invited;
-    return `<div class="pj-toolbar"><p class="small muted">${draft ? `Pick up to ${MAX_INVITES} to invite. Invites go out when you post.` : `Ranked against your brief with the five Match Signals clients see on every profile. Strong match 75+, Good match 50+. Invite up to ${MAX_INVITES} in one click.`}</p>
+    return `<div class="pj-toolbar"><p class="small muted">${draft ? `Pick up to ${MAX_INVITES} to invite. Invites go out when you post.` : `Ranked against your brief with the five Match Signals companies see on every profile. Strong match 75+, Good match 50+. Invite up to ${MAX_INVITES} in one click.`}</p>
         <span class="pill">${draft ? `${picks.length} of ${MAX_INVITES} picked` : `${clientInvites(p)} of ${MAX_INVITES} invited`}</span></div>
       ${strip.length ? `<div class="pj-invited"><span class="label">${draft ? 'Picked to invite' : 'Invited'}</span><div class="pj-invited-list">${strip.map((op) => { const s = draft ? { l: 'Picked' } : PJ.stage(p, op.id); return `<div class="pj-inv">${RN.ui.avatar(op, 'ava-xs')}<a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a><span class="pill pj-stage-${esc(s.k || 'picked')}">${esc(srcOf(p, op.id) === 'rn' && !draft ? 'Suggested · ' + s.l : s.l)}</span></div>`; }).join('')}</div></div>` : ''}
       <div class="grid g-3 pj-matches">${list.map((r) => {
@@ -1480,7 +1480,7 @@
       RN.store.update((s) => { s.intros.unshift(rec); }, 'intros');
       RN.track('intro_request', { opId: id, projectId: p.id, source: 'project', buyer: { name: client.company.name, industry: client.company.industry, revenueRange: f.revenueRange, employeeRange: f.employeeRange } });
       const sum = RN.intro && RN.intro.summary ? RN.intro.summary(rec, true) : { who: PJ.blind(p), scope: scopeLine(f) };
-      RN.mail(op.name, `New intro request: ${p.title}`, `${sum.who}\n${sum.scope}\n\nThe client read your response and wants to talk. Reply within 72 hours from your Studio. You see the company and contact once you are introduced.`, 'intro');
+      RN.mail(op.name, `New intro request: ${p.title}`, `${sum.who}\n${sum.scope}\n\nThe company read your response and wants to talk. Reply within 72 hours from your Studio. You see the company and contact once you are introduced.`, 'intro');
       RN.mail(client.email, `We sent your intro request to ${op.first}`, `${op.name} has 72 hours to confirm. Our team then introduces you by email so you can book the first call.\n\nTrack it in your workspace.`, 'intro');
       introId = rec.id;
     }
@@ -1521,7 +1521,7 @@
     toast(`Marked not a fit. ${esc(op.first)} got one close email.`, { icon: 'info' });
   };
   function closeMail(p, op, unfilled) {
-    RN.mail(op.name, `Update on ${p.title}`, `${op.first}, thank you for responding to the ${p.title} engagement. ${unfilled ? 'The client closed the engagement without filling it.' : 'The client went another direction.'} Your response stays on file and we keep matching you with new engagements.`, 'close');
+    RN.mail(op.name, `Update on ${p.title}`, `${op.first}, thank you for responding to the ${p.title} engagement. ${unfilled ? 'The company closed the engagement without filling it.' : 'The company went another direction.'} Your response stays on file and we keep matching you with new engagements.`, 'close');
   }
 
   /* ---------- Selecting a responder is a hire (D15) ----------
@@ -1702,7 +1702,7 @@
       ${crumbs([['Post an engagement', 'engagements'], ['Engagement Blueprints', '']])}
       <span class="eyebrow">Engagement Blueprints</span>
       <h1 class="h1">Start from the problem <span class="serif">you need solved.</span></h1>
-      <p class="lede">Ten Blueprints written by the Revenue Nomad team for the engagements clients ask for most. Each one names the problem, the fractional seat that solves it, the typical scope, a 30/60/90-day plan, the rates on the Rate Index, and the questions to ask in the first call.</p>
+      <p class="lede">Ten Blueprints written by the Revenue Nomad team for the engagements companies ask for most. Each one names the problem, the fractional seat that solves it, the typical scope, a 30/60/90-day plan, the rates on the Rate Index, and the questions to ask in the first call.</p>
     </section>
     <section class="wrap">
       <div class="pj-bp-filter"><span class="label">${esc(RN.fields.roleCategory.label)}</span><div data-deselect>${W().control('roleCategory', bpCat, { name: 'bpCat', change: 'pj-bp-cat' })}</div>
@@ -1843,8 +1843,8 @@
           <section class="pj-bpd-sec"><h2 class="h3">The 30/60/90-day plan</h2>
             <ol class="pj-plan">${bp.plan.map((ph, i) => `<li><span class="label">${PLAN_D[i]}</span><h3 class="h4">${esc(ph.t)}</h3><ul>${ph.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul></li>`).join('')}</ol></section>
           <section class="pj-bpd-sec"><h2 class="h3">Focus areas to look for</h2>
-            <p class="small muted">From the Fit Tag Library. Operators with these verified by a client review rank first when you post.</p>
-            <ul class="pj-fas">${bp.tags.map((tg) => { const x = supply(tg); const info = RN.model.tagInfo(tg) || {}; return `<li><span class="ftag claimed" title="${esc(info.d || '')}">${esc(tg)}</span><span class="tiny muted">${x.all ? `${x.all} on the network${x.ver ? `, ${x.ver} client-verified` : ''}` : 'New in the library'}</span></li>`; }).join('')}</ul>
+            <p class="small muted">From the Fit Tag Library. Operators with these verified by a company review rank first when you post.</p>
+            <ul class="pj-fas">${bp.tags.map((tg) => { const x = supply(tg); const info = RN.model.tagInfo(tg) || {}; return `<li><span class="ftag claimed" title="${esc(info.d || '')}">${esc(tg)}</span><span class="tiny muted">${x.all ? `${x.all} on the network${x.ver ? `, ${x.ver} company-verified` : ''}` : 'New in the library'}</span></li>`; }).join('')}</ul>
             <a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></section>
           <section class="pj-bpd-sec"><h2 class="h3">Outcomes to measure</h2><ul class="pj-list-plain">${bp.outcomes.map((o) => `<li>${icon('target')}<span>${esc(o)}</span></li>`).join('')}</ul></section>
           <section class="pj-bpd-sec"><h2 class="h3">Questions to ask in the first call</h2><ul class="pj-list-plain pj-qs">${bp.questions.map((q) => `<li>${icon('message')}<span>${esc(q)}</span></li>`).join('')}</ul></section>
@@ -1873,8 +1873,8 @@
         <div class="pj-offer-hd"><h3 class="h4">Offer this Blueprint</h3><span class="pill">${offer.length}</span></div>
         <p class="small muted">They list it on their profile as a packaged engagement.</p>
         ${offer.length ? `<div class="grid g-3">${offer.map((o) => RN.ui.opCard(o)).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet.</p>'}
-        ${me ? `<div class="pj-offer-me">${mine ? `<span class="small">${icon('check-circle')}You offer this Blueprint. Clients see you in this list.</span><button type="button" class="act" data-act="pj-offer" data-id="${esc(bp.id)}">Remove it</button>`
-          : `<span class="small">Do you run this engagement? Offer it as a packaged engagement and clients see you here.</span><button type="button" class="btn btn-line btn-sm" data-act="pj-offer" data-id="${esc(bp.id)}">I offer this Blueprint</button>`}</div>` : ''}
+        ${me ? `<div class="pj-offer-me">${mine ? `<span class="small">${icon('check-circle')}You offer this Blueprint. Companies see you in this list.</span><button type="button" class="act" data-act="pj-offer" data-id="${esc(bp.id)}">Remove it</button>`
+          : `<span class="small">Do you run this engagement? Offer it as a packaged engagement and companies see you here.</span><button type="button" class="btn btn-line btn-sm" data-act="pj-offer" data-id="${esc(bp.id)}">I offer this Blueprint</button>`}</div>` : ''}
       </div>
       <div class="pj-offer-grp">
         <div class="pj-offer-hd"><h3 class="h4">Strong fits</h3><span class="pill">${fits.length}</span></div>
@@ -1898,7 +1898,7 @@
     RN.model.applyEdits();
     RN.track('studio_action', { action: on ? 'offer_remove' : 'offer_add', opId: me.id, blueprint: id });
     RN.rerender();
-    toast(on ? 'Removed from your offers.' : 'Added. Clients see you under Offer this Blueprint.');
+    toast(on ? 'Removed from your offers.' : 'Added. Companies see you under Offer this Blueprint.');
   };
   RN.actions['pj-scroll'] = (el) => { const t = document.getElementById(el.dataset.to); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 

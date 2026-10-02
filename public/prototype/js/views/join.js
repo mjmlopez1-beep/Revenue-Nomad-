@@ -36,12 +36,12 @@
   const STEPS = [
     null,
     { k: 'role', label: 'Role', title: 'What do you lead?', sub: 'Pick the discipline you lead and the highest title you have held in it. This sets where you appear in search.' },
-    { k: 'you', label: 'About you', title: 'Who you are and where you work', sub: 'Clients see your city and time zone. We work both out from your postal code.' },
-    { k: 'fit', label: 'Company fit', title: 'The companies you do your best work with', sub: 'Signed-in clients see Match Signals: how your revenue range, company size, GTM motion and industries line up with their company.' },
+    { k: 'you', label: 'About you', title: 'Who you are and where you work', sub: 'Companies see your city and time zone. We work both out from your postal code.' },
+    { k: 'fit', label: 'Company fit', title: 'The companies you do your best work with', sub: 'Signed-in companies see Match Signals: how your revenue range, company size, GTM motion and industries line up with their company.' },
     { k: 'details', label: 'Role details', optional: true, title: 'Your operating range', sub: 'These fill the Operating range section of your profile and count toward a complete profile. Skip now and add them later in Studio.' },
-    { k: 'avail', label: 'Availability', title: 'Availability and rate', sub: 'Clients filter by when you can start and how many hours you can give. You can change these any time in Studio.' },
-    { k: 'tags', label: 'Fit tags', title: 'The problems you solve', sub: 'Fit tags are the specific problems you solve. Clients search and filter by them, and each tag turns Verified when a client review confirms it.' },
-    { k: 'profile', label: 'Profile', title: 'How clients meet you', sub: 'Your headline and About are the first things clients read. Photo and video are optional, and you can add them later from Studio.' },
+    { k: 'avail', label: 'Availability', title: 'Availability and rate', sub: 'Companies filter by when you can start and how many hours you can give. You can change these any time in Studio.' },
+    { k: 'tags', label: 'Fit tags', title: 'The problems you solve', sub: 'Fit tags are the specific problems you solve. Companies search and filter by them, and each tag turns Verified when a company review confirms it.' },
+    { k: 'profile', label: 'Profile', title: 'How companies meet you', sub: 'Your headline and About are the first things companies read. Photo and video are optional, and you can add them later from Studio.' },
     { k: 'review', label: 'Review', title: 'Review your profile', sub: 'Check each section before you submit. Edit takes you straight to that section and back here.' },
   ];
 
@@ -186,7 +186,7 @@
     if (n === 5) {
       ['availability', 'hoursPerMonth', 'engagementTypes'].forEach((k) => need(k));
       const cap = F.newClientCapacity;
-      need('newClientCapacity', 'Add how many new clients you can take on');
+      need('newClientCapacity', 'Add how many new companies you can take on');
       if (!e.newClientCapacity && !(Number.isInteger(+d.newClientCapacity) && +d.newClientCapacity >= cap.min && +d.newClientCapacity <= cap.max)) e.newClientCapacity = `Enter a whole number from ${cap.min} to ${cap.max}`;
       need('rate', 'Add your hourly rate');
       inRange('rate');
@@ -333,8 +333,8 @@
         <i class="med" style="left:${pct(idx.p50)}"></i>
         ${rate ? `<i class="you" style="left:${pct(rate)}"></i>` : ''}
       </div>
-      <p class="small">Middle half <b>${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}/hr</b>, median <b>${RN.fmt.usd(idx.p50)}/hr</b>.${rate ? ` Your ${esc(RN.fmt.rate(rate))} sits ${where}.` : ''}${billed ? ` At ${esc(RN.w.label('hoursPerMonth', d.hoursPerMonth))} a client pays you about ${RN.fmt.usd(billed)} a month, and you take home about ${RN.fmt.usd(Math.round(take(billed) / 100) * 100)}.` : ''}</p>
-      <p class="tiny muted jn-rate-fee">Clients pay your listed rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()})${rate ? `, so your take-home at ${esc(RN.fmt.rate(rate))} is ${esc(RN.fmt.rate(take(rate)))}` : ''}.</p>
+      <p class="small">Middle half <b>${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}/hr</b>, median <b>${RN.fmt.usd(idx.p50)}/hr</b>.${rate ? ` Your ${esc(RN.fmt.rate(rate))} sits ${where}.` : ''}${billed ? ` At ${esc(RN.w.label('hoursPerMonth', d.hoursPerMonth))} a company pays you about ${RN.fmt.usd(billed)} a month, and you take home about ${RN.fmt.usd(Math.round(take(billed) / 100) * 100)}.` : ''}</p>
+      <p class="tiny muted jn-rate-fee">Companies pay your listed rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()})${rate ? `, so your take-home at ${esc(RN.fmt.rate(rate))} is ${esc(RN.fmt.rate(take(rate)))}` : ''}.</p>
     </div>`;
   }
   function demandStrip(d) {
@@ -343,7 +343,7 @@
     const rows = RN.model.market().tags.filter((t) => t.c === d.roleCategory && !have.has(String(t.t).toLowerCase())).sort((a, b) => b.demand - a.demand).slice(0, 6);
     if (!rows.length) return '';
     return `<div class="jn-demand">
-      <div class="jn-demand-hd"><span class="label">${icon('trend-up')}In demand in ${esc(catLabel(d.roleCategory))}</span><span class="jn-demand-src"><span class="tiny muted">Client searches, last 30 days</span>${RN.ui.illus()}</span></div>
+      <div class="jn-demand-hd"><span class="label">${icon('trend-up')}In demand in ${esc(catLabel(d.roleCategory))}</span><span class="jn-demand-src"><span class="tiny muted">Company searches, last 30 days</span>${RN.ui.illus()}</span></div>
       <div class="chipset">${rows.map((t) => `<button type="button" class="chip chip-sm" data-act="join-tag-demand" data-t="${esc(t.t)}">${icon('plus')}${esc(t.t)}<span class="jn-demand-n">${RN.fmt.int(t.demand)}</span></button>`).join('')}</div>
     </div>`;
   }
@@ -385,7 +385,7 @@
     const video = `<div class="jn-mcard">
       <div class="jn-mcard-hd"><b>Intro video</b><span class="opt">Optional</span></div>
       ${frame}
-      <p class="tiny muted">Shown as “Meet ${esc(first)}” on your profile, so clients hear how you work before an intro call.</p>
+      <p class="tiny muted">Shown as “Meet ${esc(first)}” on your profile, so companies hear how you work before an intro call.</p>
     </div>`;
     return `<div class="jn-media">${photo}${video}</div>`;
   }
@@ -412,10 +412,10 @@
           </div>
           <div data-jn-ush ${d.country && d.country !== US ? '' : 'hidden'}>${f('usHours', { help: '' })}</div>
         </div>
-        <p class="small muted jn-help">${icon('lock')}Your postal code is never shown. Clients see your city and time zone.</p>`;
+        <p class="small muted jn-help">${icon('lock')}Your postal code is never shown. Companies see your city and time zone.</p>`;
     }
     if (n === 3) return `${f('revenueRange')}
-      ${f('salesMotions', { help: 'Pick every motion you have run. Clients who name a motion see it in Match Signals.' })}
+      ${f('salesMotions', { help: 'Pick every motion you have run. Companies who name a motion see it in Match Signals.' })}
       ${f('employeeRange')}
       ${f('industries')}
       ${f('crm', { help: 'The CRM you have worked in most.' })}`;
@@ -435,10 +435,10 @@
       ${f('hoursPerMonth')}
       <div class="jn-eng">${f('engagementTypes', { help: '' })}
         <dl class="jn-legend">${F.engagementTypes.options.map((o) => `<div><dt>${esc(o.l)}</dt><dd>${esc(o.d || '')}</dd></div>`).join('')}</dl></div>
-      <div class="jn-group">${f('rate', { help: 'The rate clients pay. Shown to signed-in clients and used in the Rate Index. Whole dollars.' })}<div data-jn-rate>${rateHint(d)}</div></div>`;
+      <div class="jn-group">${f('rate', { help: 'The rate companies pay. Shown to signed-in companies and used in the Rate Index. Whole dollars.' })}<div data-jn-rate>${rateHint(d)}</div></div>`;
     if (n === 6) {
       const n6 = (d.fitTags || []).length;
-      return `<div class="note info jn-tagnote">${icon('seal')}<div><b>How fit tags work.</b> Add up to ${maxOf('fitTags')} self-claimed tags. Clients see them as focus areas. A tag turns <b>Verified</b> when a client review rated 4.0 or higher confirms it, and verified tags rank first.</div></div>
+      return `<div class="note info jn-tagnote">${icon('seal')}<div><b>How fit tags work.</b> Add up to ${maxOf('fitTags')} self-claimed tags. Companies see them as focus areas. A tag turns <b>Verified</b> when a company review rated 4.0 or higher confirms it, and verified tags rank first.</div></div>
         ${demandStrip(d)}
         ${RN.w.field('fitTags', d.fitTags || [], { cat: d.roleCategory || '', help: 'Suggestions start with your role category. Search the library, or type your own tag.' })}
         <div class="jn-tagmeter"><div class="meter"><i style="width:${Math.min(100, (n6 / 10) * 100)}%"></i></div><span class="small ${n6 >= 10 ? 'accent' : 'muted'}" data-jn-tagmsg>${n6 >= 10 ? 'Strong: 10+ tags gets you found for more searches.' : `${n6} added. 10 or more gets you found for more searches.`}</span></div>`;
@@ -794,14 +794,14 @@
     sellers: { crm: 'Salesforce', individualQuota: '1500000', avgDealSize: '75000', salesCycle: ['30 - 90 days', '3 - 6 months'], methodologies: ['MEDDPICC'], commissionOnly: 'no' },
   };
   const SAMPLE_COPY = {
-    sales_leadership: ['I turn founder-led sales into a repeatable motion a hired team can run.', 'I help $5M to $50M B2B companies move from founder-led sales to a team that hits its number without the founder on every call. I have built three sales teams from the first hire and set up the forecast the board reviews each month. Clients bring me in after a missed quarter or before their first sales leader hire.'],
-    marketing: ['I build B2B demand programs that hand sales qualified pipeline every week.', 'I help B2B SaaS companies between $5M and $50M build demand programs sales trusts. I have run paid, ABM and content with budgets up to $3M a year and set up the attribution that shows what works. Clients bring me in when pipeline stalls.'],
-    revenue_operations: ['I rebuild messy CRMs into a revenue system the board trusts.', 'I help growing B2B companies turn a cluttered CRM into one revenue system: clean data, clear stages, routing that works and a forecast leadership believes. I have rebuilt HubSpot and Salesforce for teams from 20 to 400 people. Clients call me before a fundraise or a new sales leader.'],
-    sales_enablement: ['I cut new rep ramp time with onboarding and coaching that sticks.', 'I help sales teams ramp new reps faster and keep experienced reps sharp. I have built onboarding for teams of up to 120 reps and rolled out MEDDPICC at two companies. Clients bring me in when they are hiring a sales class and ramp time costs them a quarter.'],
-    customer_success_growth: ['I cut churn and turn customer success into an expansion engine.', 'I help B2B software companies keep the customers they win and grow them. I have run high-touch and digital CS teams, taken net revenue retention from 98% to 118%, and built renewal and expansion playbooks. Clients bring me in when churn shows up in the board deck.'],
-    ai_gtm: ['I build AI prospecting workflows that book meetings without adding headcount.', 'I help lean GTM teams automate prospecting, enrichment and routing with Clay, n8n and LLMs. I have shipped workflows that process hundreds of thousands of records a month. Clients bring me in when outbound needs to scale and more SDRs is not the answer.'],
-    partnerships: ['I launch partner programs that source and close revenue every quarter.', 'I help B2B software companies build partner programs that source and influence real pipeline. I have launched technology and channel partnerships that grew to $12M in attributed revenue. Clients bring me in when partners are signed but not selling.'],
-    sellers: ['I close mid-market and enterprise deals for teams between sales hires.', 'I carry a quota for companies that need deals closed while they hire. I sell to mid-market and enterprise clients with 30 to 180 day cycles and average deals around $75K. Clients bring me in to cover an open AE seat or to prove a new segment.'],
+    sales_leadership: ['I turn founder-led sales into a repeatable motion a hired team can run.', 'I help $5M to $50M B2B companies move from founder-led sales to a team that hits its number without the founder on every call. I have built three sales teams from the first hire and set up the forecast the board reviews each month. Companies bring me in after a missed quarter or before their first sales leader hire.'],
+    marketing: ['I build B2B demand programs that hand sales qualified pipeline every week.', 'I help B2B SaaS companies between $5M and $50M build demand programs sales trusts. I have run paid, ABM and content with budgets up to $3M a year and set up the attribution that shows what works. Companies bring me in when pipeline stalls.'],
+    revenue_operations: ['I rebuild messy CRMs into a revenue system the board trusts.', 'I help growing B2B companies turn a cluttered CRM into one revenue system: clean data, clear stages, routing that works and a forecast leadership believes. I have rebuilt HubSpot and Salesforce for teams from 20 to 400 people. Companies call me before a fundraise or a new sales leader.'],
+    sales_enablement: ['I cut new rep ramp time with onboarding and coaching that sticks.', 'I help sales teams ramp new reps faster and keep experienced reps sharp. I have built onboarding for teams of up to 120 reps and rolled out MEDDPICC at two companies. Companies bring me in when they are hiring a sales class and ramp time costs them a quarter.'],
+    customer_success_growth: ['I cut churn and turn customer success into an expansion engine.', 'I help B2B software companies keep the customers they win and grow them. I have run high-touch and digital CS teams, taken net revenue retention from 98% to 118%, and built renewal and expansion playbooks. Companies bring me in when churn shows up in the board deck.'],
+    ai_gtm: ['I build AI prospecting workflows that book meetings without adding headcount.', 'I help lean GTM teams automate prospecting, enrichment and routing with Clay, n8n and LLMs. I have shipped workflows that process hundreds of thousands of records a month. Companies bring me in when outbound needs to scale and more SDRs is not the answer.'],
+    partnerships: ['I launch partner programs that source and close revenue every quarter.', 'I help B2B software companies build partner programs that source and influence real pipeline. I have launched technology and channel partnerships that grew to $12M in attributed revenue. Companies bring me in when partners are signed but not selling.'],
+    sellers: ['I close mid-market and enterprise deals for teams between sales hires.', 'I carry a quota for companies that need deals closed while they hire. I sell to mid-market and enterprise companies with 30 to 180 day cycles and average deals around $75K. Companies bring me in to cover an open AE seat or to prove a new segment.'],
   };
   function sampleData(cur) {
     const cat = cur.roleCategory || 'sales_leadership';
@@ -872,7 +872,7 @@
     RN.track('signup_submit', { meta: { appId: id, roleCategory: cat, role: d.role, tags: (d.fitTags || []).length, roleDetails: Object.keys(roleDetails).length, completeness: [d.photo, d.video].filter(Boolean).length } });
     // One team alert only: Admin sends "New operator application" when the pending record lands (admin.js sendAlert).
     RN.mail(profile.email, 'We received your profile',
-      `Hi ${profile.first},\nThanks for applying to Revenue Nomad as a Fractional ${profile.role}. A person on the team reviews every application within 2 business days, so expect an update by ${dayName(reviewBy)}.\n\nWhat happens next:\n1. We check your LinkedIn and work history. If something needs a change, we email you what to fix.\n2. Once approved, your profile goes live in the directory at Reputation Index 50, tier Emerging. It stays hidden until then.\n3. Request reviews from 3 past clients to reach Proven.\n\nHow pricing works: ${RN.model.feeLine()}\n\nStudio shows who viewed you from the day you go live.\nReference: ${id}`, 'signup');
+      `Hi ${profile.first},\nThanks for applying to Revenue Nomad as a Fractional ${profile.role}. A person on the team reviews every application within 2 business days, so expect an update by ${dayName(reviewBy)}.\n\nWhat happens next:\n1. We check your LinkedIn and work history. If something needs a change, we email you what to fix.\n2. Once approved, your profile goes live in the directory at Reputation Index 50, tier Emerging. It stays hidden until then.\n3. Request reviews from 3 past companies to reach Proven.\n\nHow pricing works: ${RN.model.feeLine()}\n\nStudio shows who viewed you from the day you go live.\nReference: ${id}`, 'signup');
     if (videoURL) { URL.revokeObjectURL(videoURL); videoURL = null; }
     lastMounted = null;
     RN.go('join.done');
@@ -888,13 +888,13 @@
     return `<section class="wrap jn-hero">
         <span class="eyebrow">Join Revenue Nomad</span>
         <h1 class="h1">Are you hiring, or <span class="serif">are you the hire?</span></h1>
-        <p class="lede">Companies never need an account to browse or post an engagement, and pay no fees. Fractional operators apply once and get a profile clients can trust.</p>
+        <p class="lede">Companies never need an account to browse or post an engagement, and pay no fees. Fractional operators apply once and get a profile companies can trust.</p>
       </section>
       <section class="wrap jn-paths" aria-label="Choose how you use Revenue Nomad">
         <article class="jn-path">
           <div class="jn-path-hd"><span class="jn-path-ico">${icon('building')}</span><span class="label">For companies</span></div>
           <h2 class="h2">I’m hiring</h2>
-          <p class="jn-path-lede">No account needed. Open profiles with client reviews, rates and availability.</p>
+          <p class="jn-path-lede">No account needed. Open profiles with company reviews, rates and availability.</p>
           <div class="jn-links">
             <a class="jn-link" href="#browse">${icon('search')}<span><b>Browse talent</b><small>Filter by role, company size, industry and focus areas</small></span>${icon('arrow')}</a>
             <a class="jn-link" href="#engagement.new">${icon('briefcase')}<span><b>Post an engagement</b><small>Start from a scoped Blueprint and get ranked matches</small></span>${icon('arrow')}</a>
@@ -908,8 +908,8 @@
           <h2 class="h2">I’m a fractional operator</h2>
           <p class="jn-path-lede">Apply in about 8 minutes. ${TOTAL} short steps, one of them optional, saved as you go.</p>
           <ul class="jn-gets">
-            <li>${icon('chart')}<span><b>Studio insights</b>Who viewed you by company size and industry, the searches you appeared in, and why a client picked someone else.</span></li>
-            <li>${icon('seal')}<span><b>Reputation Index</b>A 0 to 100 score built from verified client reviews. Every approved profile starts at 50.</span></li>
+            <li>${icon('chart')}<span><b>Studio insights</b>Who viewed you by company size and industry, the searches you appeared in, and why a company picked someone else.</span></li>
+            <li>${icon('seal')}<span><b>Reputation Index</b>A 0 to 100 score built from verified company reviews. Every approved profile starts at 50.</span></li>
             <li>${icon('link')}<span><b>Proof links</b>Send a prospect a tracked version of your profile and see which sections they read.</span></li>
           </ul>
           <p class="jn-honest">${icon('shield')}<span>The network is curated. The team checks the work history on every application within 2 business days before a profile goes live.</span></p>
@@ -941,7 +941,7 @@
   function ladderBlock() {
     return `<div class="jn-ladder-wrap">
       <div class="jn-ladder-hd"><h3 class="h4">The Reputation Index ladder</h3>${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')}</div>
-      <p class="small muted">One score, the same for you and for clients. It rises with verified reviews, verified fit tags, a complete profile and recent engagements.</p>
+      <p class="small muted">One score, the same for you and for companies. It rises with verified reviews, verified fit tags, a complete profile and recent engagements.</p>
       ${ladder()}
     </div>`;
   }
@@ -1017,9 +1017,9 @@
         <div class="jn-prep">
           <span class="eyebrow">While you wait</span>
           <div class="jn-prep-grid">
-            <article class="jn-prep-card">${icon('users')}<h3 class="h5">Line up 3 past clients</h3><p class="small muted">Reviews verify your fit tags and lift your score. Have names and work emails ready to send requests from Studio.</p><a class="act" href="#levels">How reviews raise your score${icon('arrow')}</a></article>
-            <article class="jn-prep-card">${icon(missing.length ? 'video' : 'check-circle')}<h3 class="h5">${missing.length ? `Add your ${esc(missing.join(' and '))}` : 'Photo and video added'}</h3><p class="small muted">${missing.length ? 'Clients see your photo on every card and your video on your profile. Add them from Studio any time.' : 'Your profile starts with the two things clients notice first.'}</p><a class="act" href="#guides">Read the operator guides${icon('arrow')}</a></article>
-            <article class="jn-prep-card">${icon('target')}<h3 class="h5">See what clients search for</h3><p class="small muted">The Fit Tag Library shows demand against verified supply for every tag, including the ${RN.fmt.int((p.fitTags || []).length)} you picked.</p><a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></article>
+            <article class="jn-prep-card">${icon('users')}<h3 class="h5">Line up 3 past companies</h3><p class="small muted">Reviews verify your fit tags and lift your score. Have names and work emails ready to send requests from Studio.</p><a class="act" href="#levels">How reviews raise your score${icon('arrow')}</a></article>
+            <article class="jn-prep-card">${icon(missing.length ? 'video' : 'check-circle')}<h3 class="h5">${missing.length ? `Add your ${esc(missing.join(' and '))}` : 'Photo and video added'}</h3><p class="small muted">${missing.length ? 'Companies see your photo on every card and your video on your profile. Add them from Studio any time.' : 'Your profile starts with the two things companies notice first.'}</p><a class="act" href="#guides">Read the operator guides${icon('arrow')}</a></article>
+            <article class="jn-prep-card">${icon('target')}<h3 class="h5">See what companies search for</h3><p class="small muted">The Fit Tag Library shows demand against verified supply for every tag, including the ${RN.fmt.int((p.fitTags || []).length)} you picked.</p><a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></article>
           </div>
         </div>
       </section>`;
@@ -1031,14 +1031,14 @@
     const reviewed = ['approved', 'live'].includes(status);
     const live = status === 'live';
     const items = [
-      { st: app ? 'done' : '', ic: 'send', when: app ? `Done · ${RN.fmt.dateShort(sub)}` : 'Day 0', t: app ? 'Profile submitted' : 'You submit your profile', d: 'Your answers are saved with the same fields clients filter by, so nothing needs re-entering.' },
+      { st: app ? 'done' : '', ic: 'send', when: app ? `Done · ${RN.fmt.dateShort(sub)}` : 'Day 0', t: app ? 'Profile submitted' : 'You submit your profile', d: 'Your answers are saved with the same fields companies filter by, so nothing needs re-entering.' },
       { st: reviewed ? 'done' : app ? 'now' : '', ic: 'shield', when: app ? (reviewed ? 'Done' : `By ${dayName(reviewBy)}`) : 'Within 2 business days', t: 'A person on the team reviews it', d: 'We check your LinkedIn and work history against your answers, and may ask for a short call. If something needs a change, we email you what to fix. Your profile stays hidden until it is approved.' },
       { st: live ? 'done' : '', ic: 'eye', when: 'Same day as approval', t: 'Your profile goes live', d: 'You appear in Browse, search and your role category page at Reputation Index 50, tier Emerging.' },
-      { st: '', ic: 'star', when: 'First weeks', t: 'Request 3 client reviews to reach Proven', d: `Each completed review adds about ${gain} points and verifies the fit tags the client confirms. Three reviews take a new profile from 50 to about ${reached}, tier Proven.` },
+      { st: '', ic: 'star', when: 'First weeks', t: 'Request 3 company reviews to reach Proven', d: `Each completed review adds about ${gain} points and verifies the fit tags the company confirms. Three reviews take a new profile from 50 to about ${reached}, tier Proven.` },
       { st: '', ic: 'chart', when: 'From the day you go live', t: 'Studio shows who viewed you', d: 'See the company size and industry of every visitor, the searches you appeared in, and when you were compared and not chosen.' },
     ];
     return `<span class="eyebrow">What happens next</span>
-      <h2 class="h3 jn-tl-title">From review to your first client review</h2>
+      <h2 class="h3 jn-tl-title">From review to your first company review</h2>
       <ol class="jn-tl">${items.map((x) => `<li class="${x.st}"${x.st === 'now' ? ' aria-current="step"' : ''}><span class="jn-tl-dot">${icon(x.st === 'done' ? 'check' : x.ic)}</span><div><span class="label jn-tl-when">${esc(x.when)}</span><h3 class="h4">${esc(x.t)}</h3><p>${esc(x.d)}</p></div></li>`).join('')}</ol>`;
   }
 
