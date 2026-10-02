@@ -40,7 +40,7 @@
 /* ---------- Buttons ---------- */
 .btn { --h: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: var(--h); padding: 0 22px; border: 1px solid transparent; border-radius: var(--r-btn); background: var(--btn); color: var(--btn-ink); font-family: var(--f-display); font-size: var(--t-13); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; cursor: pointer; transition: background var(--dur) ease, transform var(--dur) var(--ease), box-shadow var(--dur) ease, border-color var(--dur) ease, color var(--dur) ease; text-decoration: none; }
 .btn:hover { background: var(--btn-hi); transform: translateY(-1px); }
-.btn:active { transform: none; }
+.btn:active { transform: scale(.98); transition-duration: .08s; }
 .btn svg { width: 16px; height: 16px; flex: 0 0 auto; }
 .btn[disabled], .btn.is-disabled { opacity: .45; pointer-events: none; }
 .btn-leaf { background: var(--leaf); color: var(--forest-deep); }
@@ -67,6 +67,7 @@
 /* ---------- Chips and pills ---------- */
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); color: var(--ink); font-family: var(--f-text); font-size: var(--t-14); font-weight: 500; white-space: nowrap; cursor: pointer; transition: background var(--dur) ease, border-color var(--dur) ease, color var(--dur) ease; }
 .chip:hover { border-color: var(--ink); }
+.chip:active { transform: scale(.97); }
 .chip.on, .chip[aria-pressed="true"] { background: var(--forest); border-color: var(--forest); color: #fff; }
 :root[data-theme="dark"] .chip.on, :root[data-theme="dark"] .chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.on, :root:not([data-theme="light"]) .chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); } }
@@ -119,8 +120,9 @@
 /* Client logo set inside an arch (used where no confirmed client photo exists) */
 .arch-logo { position: absolute; left: 0; right: 0; bottom: 30%; z-index: 1; display: flex; justify-content: center; }
 .arch-logo img { position: static !important; height: 46px !important; width: auto !important; max-width: 70% !important; transform: none !important; }
-:root[data-theme="dark"] .arch-logo img { filter: invert(1) hue-rotate(180deg); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .arch-logo img { filter: invert(1) hue-rotate(180deg); } }
+/* Dark theme: logos go monochrome white, like the logo line in the hero (inverting colors turned brand hues odd) */
+:root[data-theme="dark"] .arch-logo img { filter: brightness(0) invert(1); opacity: .9; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .arch-logo img { filter: brightness(0) invert(1); opacity: .9; } }
 
 /* ---------- Avatars ---------- */
 .ava { --sz: 44px; width: var(--sz); height: var(--sz); border-radius: 50%; object-fit: cover; background: var(--leaf); color: var(--forest-deep); display: inline-grid; place-items: center; font-family: var(--f-display); font-weight: 800; font-size: calc(var(--sz) * .36); flex: 0 0 auto; overflow: hidden; }

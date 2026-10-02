@@ -294,7 +294,7 @@
           <div class="opc-role">Fractional ${esc(op.role)}</div>
         </div>
       </div>
-      ${op.headline && !opts.compact ? `<p class="opc-head clamp-2 serif-up" style="font-size:16px">${esc(op.headline)}</p>` : ''}
+      ${op.headline && !opts.compact ? `<p class="opc-head clamp-2 serif-up" style="font-size:16px">${esc(RN.fmt.smart(op.headline))}</p>` : ''}
       ${opts.why ? `<div class="opc-why">${icon('target')}<span>${esc(opts.why)}</span></div>` : ''}
       ${ui.ftags(tags, opts.compact ? 2 : 3)}
       <div class="opc-meta">

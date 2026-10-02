@@ -1,7 +1,8 @@
 /* Base: reset, type scale, layout primitives. */
 
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--nav-h) + 12px); }
+/* No grey flash on tap (iOS): every control has its own hover, press and focus states */
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--nav-h) + 12px); -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0;
   background: var(--paper);
@@ -101,6 +102,8 @@ h1 .serif, h2 .serif, .h-hero .serif { font-size: 1.04em; color: var(--accent); 
 .night .eyebrow, .night .accent { color: var(--leaf); }
 .night h1 .serif, .night h2 .serif, .night .h-hero .serif { color: var(--leaf); }
 .night .label { color: var(--night-mute); }
+/* Keyboard focus on dark surfaces: a leaf ring (the forest ring all but disappears on near-black) */
+.night, .panel-night, .ftr, .menu-sheet, .toast, .dock-panel { --focus-ring: var(--leaf); }
 
 .divider { height: 1px; background: var(--line); border: 0; margin: 0; }
 .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }

@@ -75,6 +75,11 @@
       ${right ? `<div class="hm-head-r">${right}</div>` : ''}
     </header>`;
   const seeded = (id) => /-seed-/.test(String(id || ''));
+  // Display typesetting. keep: a hyphenated compound never breaks across lines ("30/60/90-day", "company-confirmed").
+  // unit: a stat's unit sits smaller than its figure ("6.4 mo", "67 days", "41%"), and "2.4x" is set with a true ×.
+  const keep = (s) => esc(s).replace(/[^\s<>]+-[^\s<>]+/g, (w) => `<span class="nowrap">${w}</span>`);
+  const unit = (v) => esc(v).replace(/^([$€£]?[\d.,]+)\s*(x|×|%|[a-z]+)$/i, (m, n, u) => /^[x×]$/i.test(u) ? `${n}<span class="u u-x">×</span>` : `${n}<span class="u${u === '%' ? ' u-sym' : ''}">${u}</span>`);
+  const sentence = (s) => String(s || '').replace(/^\s*\S/, (c) => c.toUpperCase());
 
   /* Write the Browse state with standard slugs, then route. From home every entry starts fresh. */
   function toBrowse(patch, route) {
@@ -148,7 +153,7 @@
             <span class="hm-ln"><span>who already solved</span></span>
             <span class="hm-ln"><span class="serif">your revenue problem.</span></span>
           </h1>
-          <p class="hm-sub">Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse and no fees for companies.</p>
+          <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse and no fees for companies.')}</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>
@@ -165,9 +170,9 @@
           </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>Days from intro to first meeting<small>Typical, from the 72-hour reply to a booked call ${RN.ui.illus('Illustrative', 'Illustrative figure: a typical time from intro request to first meeting, not yet measured from network data.')}</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span></dd></div>
-          <div><dt>Would hire again${hire.n ? `<small>${esc(RN.fmt.plural(hire.n, 'company review'))} on the live network</small>` : ''}</dt><dd class="num"><span data-count="${hire.pct}">${hire.pct}</span>%</dd></div>
-          <div><dt>Reply window on every intro request</dt><dd class="num">72 hrs</dd></div>
+          <div><dt>Days from intro to first meeting<small>Typical, from the <span class="nowrap">72-hour</span> reply to a booked call ${RN.ui.illus('Illustrative', 'Illustrative figure: a typical time from intro request to first meeting, not yet measured from network data.')}</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span></dd></div>
+          <div><dt>Would hire again${hire.n ? `<small>${esc(RN.fmt.plural(hire.n, 'company review'))} on the live network</small>` : ''}</dt><dd class="num"><span data-count="${hire.pct}">${hire.pct}</span><span class="u u-sym">%</span></dd></div>
+          <div><dt>Reply window on every intro request</dt><dd class="num">72<span class="u">hrs</span></dd></div>
         </dl>
       </div>
     </section>`;
@@ -292,7 +297,7 @@
         <div class="hm-ruled hm-needs">${cells}</div>
         <nav class="hm-prep" aria-labelledby="hm-prep-t">
           <div class="hm-prep-hd"><h3 id="hm-prep-t">Not ready to hire yet?</h3><p>Start with the numbers, the gap and the plan.</p></div>
-          <ul class="hm-prep-list">${prep.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><span class="hm-prep-b"><b>${esc(p[1])}</b><span>${esc(p[2])}</span></span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
+          <ul class="hm-prep-list">${prep.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-t"><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><b>${keep(p[1])}</b></span><span class="hm-prep-d">${keep(p[2])}</span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
         </nav>
       </div>
     </section>`;
@@ -509,7 +514,7 @@
     const usd = RN.fmt.usd;
     const ft = (RN.data.market.report.fracVsFull || [])[1];
     return `<dl class="hm-typ">
-      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}</dt><dd class="num">${esc(usd(m.lo))} - ${esc(usd(m.hi))}<small>/mo</small></dd>
+      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}</dt><dd class="num">${esc(usd(m.lo))}<span class="rng">–</span>${esc(usd(m.hi))}<small>/mo</small></dd>
         <dd class="hm-typ-sub">Typical monthly rate. No fees for companies: you pay the operator’s rate, nothing more.</dd></div>
       ${ft ? `<div><dt>Full-time VP of Sales, fully loaded</dt><dd class="num">${esc(ft[1])}<small>/mo</small></dd><dd class="hm-typ-sub">Base, OTE, benefits and equity</dd></div>` : ''}
     </dl>`;
@@ -549,7 +554,7 @@
               <div class="hm-card-hd"><div><h3 class="h4">Top searched this quarter</h3><p class="small muted">Searches by companies so far this quarter. Select one to run it.</p></div></div>
               <ol class="hm-top">${top.map((t, i) => `<li><button type="button" data-act="hm-q" data-q="${esc(t.q)}">
                 <span class="hm-top-i">${i + 1}</span>
-                <span class="hm-top-b"><span class="hm-top-q">${esc(t.q)}</span><span class="hm-top-m"><i style="width:${Math.max(4, Math.round((t.n / maxN) * 100))}%"></i></span></span>
+                <span class="hm-top-b"><span class="hm-top-q">${esc(sentence(t.q))}</span><span class="hm-top-m"><i style="width:${Math.max(4, Math.round((t.n / maxN) * 100))}%"></i></span></span>
                 <span class="hm-top-v tnum">${RN.fmt.int(t.n)}</span></button></li>`).join('')}</ol>
             </article>
           </div>
@@ -577,7 +582,7 @@
           <span class="eyebrow">New research · Free to read</span>
           <h2 class="h2 hm-h2">${esc(r.title)} ${esc(r.year)}. Where GTM leadership is going.</h2>
           <p class="lede">${esc(String(r.lede).split('. ')[0].replace(/\.$/, ''))}. Read it on the web, chapter by chapter. Every chart opens the matching operators in Browse.</p>
-          <dl class="hm-rep-stats">${picks.map((s) => `<div><dt class="num">${esc(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
+          <dl class="hm-rep-stats">${picks.map((s) => `<div><dt class="num">${unit(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
           <div class="row hm-ctas"><a class="btn" href="#report">Read the report${icon('arrow')}</a><a class="btn btn-line" href="#rates">Estimate a budget</a></div>
           <p class="hm-rep-fine tiny muted"><span>Open to read, no email needed.</span>${RN.ui.illus('Illustrative figures')}</p>
         </div>
@@ -648,7 +653,7 @@
           <div class="hm-arch hm-arch-logo" data-hm-arch><div class="arch-logo">${logo}</div></div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>
-            <blockquote class="hm-q-text">${esc(RN.model.pullQuote(x.r.quote || x.r.text, 180))}</blockquote>
+            <blockquote class="hm-q-text">${esc(RN.fmt.smart(RN.model.pullQuote(x.r.quote || x.r.text, 180)))}</blockquote>
             <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(x.r.reviewer || 'Company')}</b><span>${esc(by(x.r))}</span></figcaption>
             ${photo ? `<div class="hm-q-co">${logo}</div>` : ''}
             <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Company review</span><a class="act" href="#op.${esc(x.op.slug)}" data-track-view="${esc(x.op.id)}">Read the full review on ${esc(x.op.first)}’s profile${icon('arrow')}</a></div>
@@ -664,11 +669,11 @@
         </div>` : ''}
         <div class="hm-q-row">
           ${mini ? `<figure class="hm-q-mini">
-            <blockquote>${esc(RN.model.pullQuote(mini.r.quote || mini.r.text, 200))}</blockquote>
+            <blockquote>${esc(RN.fmt.smart(RN.model.pullQuote(mini.r.quote || mini.r.text, 200)))}</blockquote>
             <figcaption><b>${esc(mini.r.reviewer || 'Company')}</b><span>${esc(by(mini.r))}</span><span class="pill pill-good">${icon('check-circle')}Company review</span></figcaption>
           </figure>` : ''}
           <figure class="hm-q-mini">
-            <blockquote>${esc(sq.text)}</blockquote>
+            <blockquote>${esc(RN.fmt.smart(sq.text))}</blockquote>
             <figcaption><b>${esc(sq.by.split(',')[0])}</b><span>${esc(sq.by.split(',').slice(1, 2).join(',').trim())}</span>${RN.ui.illus('Sample quote', 'Written for this prototype to show the format. Not from a real company.')}</figcaption>
           </figure>
         </div>
@@ -870,7 +875,11 @@
         + rows.map((r, i) => `<a class="hm-bars-hit" href="#browse.${esc(r.cat)}" data-act="hm-cat" data-cat="${esc(r.cat)}" style="top:${i * rowH}px;height:${rowH}px" aria-label="Browse ${esc(r.label)} operators. Median $${r.value} an hour, $${r.p25} to $${r.p75} typical."></a>`).join('');
     }
     const dem = root.querySelector('[data-hm-chart="demand"]');
-    if (dem) dem.innerHTML = RN.chart.spark(RN.data.market.report.demandIndex.map((x) => x.v), { w: Math.max(200, Math.round(dem.clientWidth)), h: 64, label: 'Demand Index, 2023 to 2027 projected' });
+    if (dem) {
+      const di = RN.data.market.report.demandIndex;
+      // The projected years draw dashed, ending on an open point; the last measured year keeps the solid point
+      dem.innerHTML = RN.chart.spark(di.map((x) => x.v), { w: Math.max(200, Math.round(dem.clientWidth)), h: 64, proj: di.filter((x) => /proj/i.test(x.l)).length, label: 'Demand Index, 2023 to 2027 projected' });
+    }
   }
 
   /* ---------- Motion (skipped for reduced motion and automated captures) ---------- */

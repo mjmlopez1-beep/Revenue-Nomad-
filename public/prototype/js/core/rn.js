@@ -62,6 +62,17 @@
     },
     initials: (name) => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join(''),
     first: (name) => String(name || '').split(/\s+/)[0],
+    // Typesetting for display copy (review quotes, headlines). Words never change: curly quotes and apostrophes,
+    // a real ellipsis, an en dash in a spaced number range ("$9,000 - $13,500") and a spaced en dash where a
+    // spaced hyphen stands in for a dash. Run it on raw text, before RN.esc.
+    smart: (s) => String(s == null ? '' : s)
+      .replace(/\.\.\./g, '…')
+      .replace(/(\d)\s+-\s+(?=[$€£]?\d)/g, '$1–')
+      .replace(/\s-{1,2}\s/g, ' – ')
+      .replace(/(^|[\s([{–—])'/g, '$1‘')
+      .replace(/'/g, '’')
+      .replace(/(^|[\s([{–—])"/g, '$1“')
+      .replace(/"/g, '”'),
   };
 
   /* ---------- Time: the prototype runs on a simulated clock (Prototype dock can advance it) ---------- */

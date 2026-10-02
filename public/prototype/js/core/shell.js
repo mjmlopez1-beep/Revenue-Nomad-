@@ -171,7 +171,7 @@
       <div class="ftr-grid">
         <div class="stack" style="--gap:16px">
           <a class="logo" href="#home" style="color:#fff"><img src="assets/brand/mark.png" alt=""><span><b>REVENUE</b><span>NOMAD</span></span></a>
-          <p class="serif-up" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch">The home of fractional go-to-market leadership.</p>
+          <p class="serif-up" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch;text-wrap:balance">The home of fractional <span class="nowrap">go-to-market</span> leadership.</p>
           <p class="small" style="color:var(--night-mute);max-width:40ch">Open profiles, verified proof of work, and the market data behind every engagement.</p>
         </div>
         <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#engagements">Post an engagement</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>

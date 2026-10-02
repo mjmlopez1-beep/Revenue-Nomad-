@@ -8,9 +8,11 @@
   // Object.assign that ignores undefined values, so callers can pass {fmt: undefined}
   const opt = (base, o) => { const out = Object.assign({}, base); Object.keys(o || {}).forEach((k) => { if (o[k] !== undefined) out[k] = o[k]; }); return out; };
 
-  /* Sparkline with area fill and an emphasized endpoint. values: number[] */
+  /* Sparkline with area fill and an emphasized endpoint. values: number[]
+     o.proj: how many trailing values are projections. Those draw dashed over a lighter fill and end on an open
+     point, and the last measured value keeps the solid point, so a forecast never reads as a measurement. */
   C.spark = function (values, o) {
-    o = opt({ w: 120, h: 36, stroke: 'var(--viz-1)', fill: true, dot: true }, o);
+    o = opt({ w: 120, h: 36, stroke: 'var(--viz-1)', fill: true, dot: true, proj: 0 }, o);
     const v = values && values.length ? values : [0, 0];
     const max = Math.max(...v), min = Math.min(...v, 0);
     const span = max - min || 1;
@@ -18,13 +20,18 @@
     const x = (i) => pad + (i * (o.w - pad * 2)) / Math.max(1, v.length - 1);
     const y = (n) => o.h - pad - ((n - min) / span) * (o.h - pad * 2);
     const pts = v.map((n, i) => `${x(i).toFixed(1)},${y(n).toFixed(1)}`);
-    const line = 'M' + pts.join(' L');
-    const area = `${line} L${x(v.length - 1).toFixed(1)},${o.h - pad} L${x(0).toFixed(1)},${o.h - pad} Z`;
-    const last = pts[pts.length - 1].split(',');
+    const k = Math.max(0, Math.min(v.length - 1, Math.round(+o.proj || 0)));
+    const solid = pts.slice(0, v.length - k), ahead = k ? pts.slice(v.length - k - 1) : [];
+    const area = (p, i0, i1) => `M${p.join(' L')} L${x(i1).toFixed(1)},${o.h - pad} L${x(i0).toFixed(1)},${o.h - pad} Z`;
+    const pt = (s) => s.split(',');
+    const now = pt(solid[solid.length - 1]), end = pt(pts[pts.length - 1]);
     return `<svg class="spark" width="${o.w}" height="${o.h}" viewBox="0 0 ${o.w} ${o.h}" role="img" aria-label="${esc(o.label || 'Trend')}">
-      ${o.fill ? `<path d="${area}" fill="${o.stroke}" opacity=".12"/>` : ''}
-      <path d="${line}" fill="none" stroke="${o.stroke}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>
-      ${o.dot ? `<circle cx="${last[0]}" cy="${last[1]}" r="3" fill="${o.stroke}"/>` : ''}
+      ${o.fill ? `<path d="${area(solid, 0, solid.length - 1)}" fill="${o.stroke}" opacity=".12"/>` : ''}
+      ${o.fill && k ? `<path d="${area(ahead, v.length - k - 1, v.length - 1)}" fill="${o.stroke}" opacity=".05"/>` : ''}
+      <path d="M${solid.join(' L')}" fill="none" stroke="${o.stroke}" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>
+      ${k ? `<path d="M${ahead.join(' L')}" fill="none" stroke="${o.stroke}" stroke-width="1.75" stroke-linecap="round" stroke-dasharray="1 4.5" opacity=".9"/>` : ''}
+      ${o.dot ? `<circle cx="${now[0]}" cy="${now[1]}" r="3" fill="${o.stroke}"/>` : ''}
+      ${o.dot && k ? `<circle cx="${end[0]}" cy="${end[1]}" r="3" fill="var(--card)" stroke="${o.stroke}" stroke-width="1.5"/>` : ''}
     </svg>`;
   };
 
