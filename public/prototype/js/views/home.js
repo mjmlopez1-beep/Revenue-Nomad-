@@ -237,6 +237,14 @@
       </button>`;
     }).join('');
     // Before you hire: the research surfaces, one click from the problem grid
+    // One small living graphic per destination: a rate spread with its median, five questions with the gap found,
+    // a 30/60/90 plan filling in, and a question getting its answer. Drawn in the panel's fixed dark palette.
+    const PREP_ART = [
+      `<svg viewBox="0 0 160 72"><line class="ln" x1="6" y1="64" x2="154" y2="64"/>${[18, 30, 46, 58, 40, 26, 14].map((h, i) => `<rect class="bar${i === 3 ? ' hi' : ''}" x="${14 + i * 20}" y="${64 - h}" width="12" height="${h}" rx="2" style="--i:${i}"/>`).join('')}<line class="med" x1="80" y1="2" x2="80" y2="64"/><rect class="tag" x="88" y="2" width="44" height="16" rx="8"/><text x="110" y="13.5">$240/hr</text></svg>`,
+      `<svg viewBox="0 0 160 72"><line class="ln" x1="16" y1="36" x2="144" y2="36"/>${[16, 48, 80, 112, 144].map((x, i) => i === 3 ? `<circle class="gap-ring" cx="${x}" cy="36" r="14"/><circle class="gap" cx="${x}" cy="36" r="7"/>` : `<circle class="q${i < 3 ? ' on' : ''}" cx="${x}" cy="36" r="7" style="--i:${i}"/>`).join('')}<text class="cap" x="112" y="66">Your gap</text></svg>`,
+      `<svg viewBox="0 0 160 72">${[['30', 8, 1], ['60', 58, .66], ['90', 108, .33]].map(([l, x, f], i) => `<rect class="seg" x="${x}" y="28" width="44" height="12" rx="6"/><rect class="seg-f" x="${x}" y="28" width="44" height="12" rx="6" style="--f:${f};--i:${i}"/><text class="cap" x="${x}" y="58">Day ${l}</text>`).join('')}<circle class="mark" cx="30" cy="34" r="9"/></svg>`,
+      `<svg viewBox="0 0 160 72"><rect class="bub-q" x="6" y="6" width="96" height="26" rx="13"/><rect class="tx" x="18" y="16" width="56" height="6" rx="3"/><rect class="bub-a" x="40" y="40" width="114" height="26" rx="13"/><rect class="tx-a" x="52" y="50" width="78" height="6" rx="3"/><circle class="dot" cx="140" cy="53" r="2.5" style="--i:0"/></svg>`,
+    ];
     const prep = [
       ['chart', 'Price a role', 'Rate Index medians and a monthly budget estimate', 'href="#rates"'],
       ['target', 'Find your gap in 5 questions', 'The GTM Framework diagnostic', 'href="#framework" data-act="hm-diag"'],
@@ -248,8 +256,8 @@
         ${head('Start here', 'Start from the problem you have.', '', `Pick what is broken. Browse opens on the role categories that fix it. Counts are the ${esc(RN.fmt.int(liveOps().length))} profiles in this prototype.`)}
         <div class="hm-ruled hm-needs">${cells}</div>
         <nav class="hm-prep" aria-labelledby="hm-prep-t">
-          <h3 class="label" id="hm-prep-t">Not ready to hire yet</h3>
-          <ul class="hm-prep-list">${prep.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><span class="hm-prep-b"><b>${esc(p[1])}</b><span>${esc(p[2])}</span></span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
+          <div class="hm-prep-hd"><h3 id="hm-prep-t">Not ready to hire yet?</h3><p>Start with the numbers, the gap and the plan.</p></div>
+          <ul class="hm-prep-list">${prep.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><span class="hm-prep-b"><b>${esc(p[1])}</b><span>${esc(p[2])}</span></span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
         </nav>
       </div>
     </section>`;
