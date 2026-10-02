@@ -928,3 +928,42 @@
   .pf-cta-2 .btn svg { display: none; }
   .pf-strip .pf-cell { font-size: var(--t-12); }
 }
+
+/* Monthly range: shown to everyone; exact hourly rate stays behind login (one hint, in the Engage card) */
+.pf-cta-range { margin: 0 0 2px; font-size: var(--t-14); color: var(--night-mute); line-height: 1.4; }
+.pf-cta-range b { font-family: var(--f-display); font-size: var(--t-18); font-weight: 700; color: var(--night-ink); }
+.pf-dd-range { display: block; margin-top: 2px; font-family: var(--f-text); font-size: var(--t-13); font-weight: 500; color: var(--mute); }
+.pf-facts > .pf-fact-range { align-items: flex-start; }
+.pf-fact-range dd { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.pf-rate-hint { display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0; font: inherit; font-family: var(--f-text); font-size: var(--t-13); font-weight: 500; color: var(--accent); cursor: pointer; text-align: right; }
+.pf-rate-hint:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pf-rate-hint svg { width: 12px; height: 12px; flex: 0 0 auto; }
+
+/* Proof strip with zero counters hidden: 2 cards share the row, 1 card spans it with the tier explainer */
+.pf-proofs.pf-proofs-n2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.pf-proofs.pf-proofs-n1 { grid-template-columns: minmax(0, 1fr); }
+.pf-proofs-n1 .pf-rep-r { flex: 0 1 360px; }
+.pf-proofs-n1 .pf-rep-x { display: block; flex: 1 1 auto; padding-left: 24px; border-left: 1px solid var(--line-2); }
+.pf-proofs-n2 .pf-proof-rep { justify-content: center; }
+.pf-proofs-n2 .pf-rep-r { flex: 0 1 340px; }
+@media (max-width: 1080px) {
+  .pf-proofs.pf-proofs-n2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .pf-proofs.pf-proofs-n2, .pf-proofs.pf-proofs-n1 { grid-template-columns: minmax(0, 1fr); }
+  .pf-proofs-n1 .pf-rep-x { padding-left: 0; border-left: 0; padding-top: 14px; border-top: 1px solid var(--line-2); flex-basis: 100%; }
+}
+
+/* ==========================================================================
+   Intro sheet (js/views/intro.js): "Add details" disclosure and the work-email note
+   ========================================================================== */
+.in-email { display: grid; gap: 8px; }
+.in-email > p { margin: 0; max-width: 56ch; }
+.in-email .in-sample { font-size: var(--t-13); }
+.in-email .field .err { margin: 0; }
+.in-more { border-top: 1px solid var(--line-2); padding-top: 14px; }
+.in-more > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; list-style: none; cursor: pointer; font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--accent); }
+.in-more > summary::-webkit-details-marker { display: none; }
+.in-more > summary svg { width: 15px; height: 15px; transition: transform var(--dur) var(--ease); }
+.in-more[open] > summary svg { transform: rotate(180deg); }
+.in-more > summary .opt { font-family: var(--f-text); font-weight: 400; color: var(--mute-2); font-size: var(--t-13); }

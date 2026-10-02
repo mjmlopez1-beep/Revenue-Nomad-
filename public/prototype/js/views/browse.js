@@ -255,7 +255,9 @@
     const four = RN.ui.ftags((op.tags || []).map((t) => (t.tier === 'claimed' ? t : Object.assign({}, t, { tier: 'verified' }))).sort(vFirst), 4);
     if (html.includes(three)) html = html.replace(three, () => four);
     if (visitor && op.rate) {
-      const lock = `<button type="button" class="br-lock" data-act="br-login" aria-label="Log in to see ${esc(op.first)}’s hourly rate">${icon('lock')}Log in to see rate</button>`;
+      // Visitors see what it typically costs a month; the exact hourly rate stays for signed-in companies
+      const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null;
+      const lock = rg ? `<span class="br-range" title="Typical monthly cost. The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.text)}</span>` : '';
       const a = `<span>${RN.ui.avail(op)}</span>`;
       html = html.includes(a) ? html.replace(a, () => a + lock) : html.replace('<div class="opc-meta">', () => '<div class="opc-meta">' + lock);
     }

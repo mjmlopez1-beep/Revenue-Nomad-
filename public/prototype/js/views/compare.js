@@ -84,7 +84,7 @@
   }
   function rateCell(op) {
     if (!op.rate) return NA;
-    if (RN.store.state.persona === 'visitor') return `<button type="button" class="cmp-lock" data-act="cmp-login" aria-label="Log in to see ${esc(op.first)}’s hourly rate">${icon('lock')}Log in to see rate</button>`;
+    if (RN.store.state.persona === 'visitor') { const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null; return `<b class="cmp-v cmp-v-sm">${rg ? esc(rg.text) : '—'}</b>${sub('Typical monthly. <button type="button" class="act" data-act="cmp-login">Exact rate after sign-in</button>')}`; }
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
     return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}/hr`) : ''}`;
   }

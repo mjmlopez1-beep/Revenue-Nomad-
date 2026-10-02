@@ -413,7 +413,7 @@
     const secs = sections(c);
     return `<div class="pf" data-op="${esc(op.id)}">
       ${hero(c)}
-      <div class="wrap pf-proofs">${proofCards(c)}</div>
+      ${(() => { const pc = proofCards(c); return `<div class="wrap pf-proofs pf-proofs-n${pc.n}">${pc.html}</div>`; })()}
       ${subnav(c, secs)}
       <div class="wrap pf-body">
         <div class="pf-main">${secs.map((s) => s.html).join('')}</div>
@@ -528,7 +528,7 @@
   function ownerBar(c) {
     const m = c.v.mode;
     return `<div class="pf-owner" role="region" aria-label="Owner view">
-      <span class="pf-owner-l">${icon('eye')}<span><b>${m === 'owner' ? 'This is how companies see your profile' : m === 'client' ? 'Previewing as a signed-in company' : 'Previewing as a logged-out visitor'}</b><span class="pf-owner-sub">${m === 'owner' ? 'Rate and Studio shortcuts are shown to you only.' : m === 'client' ? 'Sample company: Northwind Health. Buttons are inactive in preview.' : 'Rate and match signals are locked for visitors.'}</span></span></span>
+      <span class="pf-owner-l">${icon('eye')}<span><b>${m === 'owner' ? 'This is how companies see your profile' : m === 'client' ? 'Previewing as a signed-in company' : 'Previewing as a logged-out visitor'}</b><span class="pf-owner-sub">${m === 'owner' ? 'Rate and Studio shortcuts are shown to you only.' : m === 'client' ? 'Sample company: Northwind Health. Buttons are inactive in preview.' : 'Visitors see a monthly range. Your hourly rate and match signals stay locked.'}</span></span></span>
       <div class="seg pf-seg-night" role="group" aria-label="View as">
         ${[['owner', 'Your view'], ['visitor', 'Visitor'], ['client', 'Company']].map(([k, l]) => `<button type="button" class="${m === k ? 'on' : ''}" aria-pressed="${m === k}" data-act="pf-viewas" data-v="${k}">${l}</button>`).join('')}
       </div>
@@ -576,7 +576,9 @@
     }
     const act = v.preview ? 'pf-preview-cta' : 'intro-open';
     const intro = myIntro(op);
+    const mr = RN.model.monthlyRange(op);
     return `<div class="pf-cta" data-pf-cta>
+      ${mr ? `<p class="pf-cta-range"><span>Typically</span> <b>${esc(mr.text)}</b></p>` : ''}
       ${intro ? `<a class="btn btn-leaf btn-lg btn-block" href="#buyer.intros">Track your intro · ${esc(RN.w.label('introStatus', intro.status))}${icon('arrow')}</a>`
         : `<button type="button" class="btn btn-leaf btn-lg btn-block" data-act="${act}" data-id="${esc(op.id)}">Request intro${icon('arrow')}</button>`}
       <div class="pf-cta-2">
@@ -616,7 +618,7 @@
     const ver = c.engs.filter((e) => e.verified);
     const rows = (ver.length ? ver : c.engs).slice(0, 3);
     const scale = Math.max(24, ...rows.map((e) => e.months || 0));
-    const stay = `<article class="pf-proof">
+    const stay = !rows.length && !c.v.owner ? '' : `<article class="pf-proof">
       <div class="pf-proof-hd"><span>How long companies stay</span></div>
       ${rows.length ? `<div class="pf-stay" style="--med:${((median / scale) * 100).toFixed(1)}%">
           ${rows.map((e) => `<div class="pf-stay-row ${e.verified ? '' : 'self'}"><i style="width:calc(${Math.max(6, ((e.months || 0) / scale) * 100).toFixed(1)}% * .6)"></i><span><b>${esc(plural(e.months || 0, 'mo', 'mo'))}</b> · ${esc(e.company)}</span></div>`).join('')}
@@ -633,12 +635,12 @@
       <div class="pf-proof-hd"><span>Would hire again</span></div>
       <p class="pf-big serif-up">${again}%</p>
       <button type="button" class="pf-hire-link" data-act="pf-jump" data-to="pf-reviews"><span class="pf-dots">${c.reviews.map(() => '<i></i>').join('')}</span><u>${esc(plural(n, 'client'))}</u><span>· ${avg.toFixed(1)}</span>${RN.ui.stars(avg)}${icon('arrow')}</button>
-    </article>` : `<article class="pf-proof">
+    </article>` : !c.v.owner ? '' : `<article class="pf-proof">
       <div class="pf-proof-hd"><span>Company reviews</span></div>
       <p class="pf-proof-empty">None yet</p>
       <p class="pf-proof-note">${c.v.owner ? `<a class="act" href="#studio.credibility">Request a review from a past company</a>` : `Reviews come from past companies ${esc(op.first)} invites. Each one verifies focus areas.`}</p>
     </article>`;
-    return rep + stay + hire;
+    return { html: rep + stay + hire, n: 1 + (stay ? 1 : 0) + (hire ? 1 : 0) };
   }
   function jumpBtnLink(route, label) { return `<a class="link" href="#${route}">${esc(label)}</a>`; }
   function medianMonths() {
@@ -1229,9 +1231,11 @@
     const rev = !v.preview && reviewIntro(op);
     const types = ordered('engagementTypes', op.engagementTypes);
     const cap = +op.newClientCapacity || 0;
+    // Visitors see a monthly range (ungated); the exact hourly rate stays behind login. Companies see both.
+    const mr = RN.model.monthlyRange(op);
     const rate = !op.rate ? '' : v.rate
-      ? `<div><dt>${esc(F.rate.label)}</dt><dd class="num">${esc(RN.fmt.usd(op.rate))} <span class="muted pf-dd-u">/ hr</span></dd></div>`
-      : `<div><dt>${esc(F.rate.label)}</dt><dd><button type="button" class="pf-lockpill" data-act="login">${icon('lock')}Log in to see rate</button></dd></div>`;
+      ? `<div><dt>${esc(F.rate.label)}</dt><dd class="num">${esc(RN.fmt.usd(op.rate))} <span class="muted pf-dd-u">/ hr</span>${mr ? `<span class="pf-dd-range">Typically ${esc(mr.text)}</span>` : ''}</dd></div>`
+      : mr ? `<div class="pf-fact-range"><dt>Typical monthly</dt><dd><b class="num">${esc(mr.text)}</b><button type="button" class="pf-rate-hint" data-act="login">${icon('lock')}Exact rate after you sign in</button></dd></div>` : '';
     return `<section class="pf-card pf-engage" aria-label="Engage ${esc(op.first)}">
       <span class="eyebrow">Engage ${esc(op.first)}</span>
       <p class="pf-engage-st"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</p>
@@ -1246,7 +1250,7 @@
       </dl>
       <div class="pf-engage-act">
       ${v.owner ? `<a class="btn btn-block" href="#studio.profile">${icon('edit')}Update availability and rate</a>
-          <p class="pf-fine">Companies see this card with a Request intro button. Your rate is hidden from logged-out visitors.</p>`
+          <p class="pf-fine">Companies see this card with a Request intro button. Logged-out visitors see a monthly range, not your hourly rate.</p>`
       : intro ? `<div class="pf-intro-st"><span>Your intro request</span>${RN.ui.statusPill('intro', intro.status)}</div>
           ${rev ? `<button type="button" class="btn btn-block" data-act="bw-review-start" data-id="${esc(intro.id)}">${icon('star')}Leave a review</button>` : `<a class="btn btn-block btn-line" href="#buyer.intros">Track in workspace${icon('arrow')}</a>`}`
       : `<button type="button" class="btn btn-block" data-act="${v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>`}

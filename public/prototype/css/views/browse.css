@@ -213,3 +213,5 @@
   .br-tell { text-align: left; justify-content: flex-start; }
   .br-apply { max-width: none; }
 }
+.br-range { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-13); color: var(--ink-2); }
+.br-range svg { width: 14px; height: 14px; color: var(--mute); }

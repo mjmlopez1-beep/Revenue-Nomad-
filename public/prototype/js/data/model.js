@@ -910,3 +910,39 @@
       .sort((a, b) => b.s - a.s).slice(0, n || 3).map((r) => r.x);
   };
 })();
+
+/* Operator monthly range: RN.model.monthlyRange(op) -> {lo, hi, text, hLo, hHi} or null (no rate).
+   Shown to everyone, including logged-out visitors; the exact hourly rate stays behind login.
+   Hours: the engagements' hours per month when they carry them, else the typical 20 to 40 hours, with
+   op.avail.hours (or its hoursCode) as a ceiling under 40 (floor = half of it, min 10). lo = rate x hLo, hi = rate x hHi,
+   rounded to the nearest $500 under $10k and the nearest $1k from $10k up. Text: "$6k–$9k a month".
+   Called with (cat, rev, hoursCode) it keeps the Rate Index behaviour defined above. */
+(function () {
+  const M = RN.model;
+  const base = M.monthlyRange;
+  const round = (n) => (n < 10000 ? Math.round(n / 500) * 500 : Math.round(n / 1000) * 1000);
+  const k = (n) => (n < 1000 ? '$' + n : '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k');
+  function opRange(op) {
+    const rate = +(op && op.rate) || 0;
+    if (!rate) return null;
+    let hLo = 0, hHi = 0;
+    const engH = (op.engagements || []).map((e) => +(e.hoursPerMonth || e.hours) || 0).filter((h) => h > 0);
+    const a = op.avail || {};
+    const availH = +a.hours || (a.hoursCode && M.hoursNum ? M.hoursNum(a.hoursCode) : 0);
+    if (engH.length) { hLo = Math.min(...engH); hHi = Math.max(...engH); }
+    else {
+      // A fractional engagement typically runs 20 to 40 hours; open availability caps it, never stretches it
+      hHi = Math.max(10, availH > 0 ? Math.min(availH, 40) : 40);
+      hLo = hHi >= 40 ? 20 : Math.max(10, Math.round(hHi / 2));
+    }
+    if (hLo > hHi) { const t = hLo; hLo = hHi; hHi = t; }
+    const lo = Math.max(500, round(rate * hLo)), hi = Math.max(lo, round(rate * hHi));
+    const text = lo === hi ? `About ${k(lo)} a month` : `${k(lo)}–${k(hi)} a month`;
+    return { lo, hi, text, hLo, hHi };
+  }
+  M.opMonthlyRange = opRange;
+  M.monthlyRange = function (a) {
+    if (a && typeof a === 'object') return opRange(a);
+    return base ? base.apply(this, arguments) : null;
+  };
+})();
