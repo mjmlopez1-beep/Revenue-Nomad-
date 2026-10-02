@@ -594,29 +594,38 @@
   /* ---------- Client quotes ---------- */
   function quotesSec() {
     // One neutral rule for every operator's reviews (founder decision, Sep 25, 2026): highest score, then most
-    // recent. The second quote comes from a different operator when there is one.
+    // recent. Ferry's review leads (founder request, Oct 2, 2026), then the top review from another company; the
+    // two features alternate sides and a line draws from one into the next as the page scrolls.
     const top = RN.model.topReviews();
-    const lead = top[0];
-    const mini = lead ? (top.find((x) => x.op.id !== lead.op.id) || top[1]) : null;
+    const ferry = top.find((x) => /ferry/i.test(x.r.company || ''));
+    const lead = top.find((x) => !ferry || x.r.company !== ferry.r.company);
+    const feats = [ferry, lead].filter(Boolean);
+    const mini = top.find((x) => !feats.includes(x) && !feats.some((f) => f.op.id === x.op.id)) || top.find((x) => !feats.includes(x));
     const sq = RN.data.market.report.quote;
     const rules = 'Every operator’s reviews follow the same rules: published as written, by the company, under their name.';
     const by = (r) => [r.role, r.company].filter(Boolean).join(', ');
     // A reviewer's own headshot fills the arch when we have one; the company logo then sits under the quote
-    const leadPhoto = lead ? (RN.data.reviewerPhotos || {})[lead.r.reviewer] : '';
-    const leadLogo = lead ? RN.ui.logo(RN.model.reviewLogo(lead.op, lead.r), { h: leadPhoto ? 30 : 46, name: lead.r.company || 'Company' }) : '';
+    const feature = (x, flip) => {
+      const photo = (RN.data.reviewerPhotos || {})[x.r.reviewer] || '';
+      const logo = RN.ui.logo(RN.model.reviewLogo(x.op, x.r), { h: photo ? 30 : 46, name: x.r.company || 'Company' });
+      return `<div class="hm-q-feature${flip ? ' is-flip' : ''}">
+          ${photo ? `<div class="hm-arch hm-arch-photo" data-hm-arch><img src="${esc(photo)}" alt="${esc(x.r.reviewer || 'Company')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
+          <div class="hm-arch hm-arch-logo" data-hm-arch><div class="arch-logo">${logo}</div></div>
+          <figure class="hm-q">
+            <span class="hm-q-mark" aria-hidden="true">“</span>
+            <blockquote class="hm-q-text">${esc(RN.model.pullQuote(x.r.quote || x.r.text, 180))}</blockquote>
+            <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(x.r.reviewer || 'Company')}</b><span>${esc(by(x.r))}</span></figcaption>
+            ${photo ? `<div class="hm-q-co">${logo}</div>` : ''}
+            <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Company review</span><a class="act" href="#op.${esc(x.op.slug)}" data-track-view="${esc(x.op.id)}">Read the full review on ${esc(x.op.first)}’s profile${icon('arrow')}</a></div>
+          </figure>
+        </div>`;
+    };
     return `<section class="hm-sec section">
       <div class="wrap">
         ${head('Results, in their words', 'Company reviews, published as written.', '', rules)}
-        ${lead ? `<div class="hm-q-feature">
-          ${leadPhoto ? `<div class="hm-arch hm-arch-photo"><img src="${esc(leadPhoto)}" alt="${esc(lead.r.reviewer || 'Company')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
-          <div class="hm-arch hm-arch-logo"><div class="arch-logo">${leadLogo}</div></div>
-          <figure class="hm-q">
-            <span class="hm-q-mark" aria-hidden="true">“</span>
-            <blockquote class="hm-q-text">${esc(RN.model.pullQuote(lead.r.quote || lead.r.text, 180))}</blockquote>
-            <figcaption class="hm-q-by"><i aria-hidden="true"></i><b>${esc(lead.r.reviewer || 'Company')}</b><span>${esc(by(lead.r))}</span></figcaption>
-            ${leadPhoto ? `<div class="hm-q-co">${leadLogo}</div>` : ''}
-            <div class="row hm-q-links"><span class="pill pill-good">${icon('check-circle')}Company review</span><a class="act" href="#op.${esc(lead.op.slug)}" data-track-view="${esc(lead.op.id)}">Read the full review on ${esc(lead.op.first)}’s profile${icon('arrow')}</a></div>
-          </figure>
+        ${feats.length ? `<div class="hm-q-pair" data-hm-qpair data-no-rv>
+          ${feats.length > 1 ? '<svg class="hm-qlink" aria-hidden="true" focusable="false"><path class="hm-qlink-track" d=""/><path class="hm-qlink-glow" d=""/><path class="hm-qlink-line" d=""/><circle class="hm-qlink-tip" r="6" cx="-20" cy="-20"/></svg>' : ''}
+          ${feats.map((x, i) => feature(x, i % 2 === 0 && feats.length > 1)).join('')}
         </div>` : ''}
         <div class="hm-q-row">
           ${mini ? `<figure class="hm-q-mini">
@@ -630,6 +639,67 @@
         </div>
       </div>
     </section>`;
+  }
+
+  /* The line between the two featured reviews: from the bottom of the first arch, a rounded switchback through the gap,
+     into the top of the second arch. Drawn with stroke-dashoffset as the pair scrolls up; fully drawn at rest. */
+  function quoteLink(root, quiet) {
+    const box = root.querySelector('[data-hm-qpair]');
+    const svg = box && box.querySelector('.hm-qlink');
+    if (!svg) return;
+    const paths = [...svg.querySelectorAll('path')];
+    const line = svg.querySelector('.hm-qlink-line'), glow = svg.querySelector('.hm-qlink-glow'), tip = svg.querySelector('.hm-qlink-tip');
+    let len = 0, a = null, b = null, live = false, raf = 0;
+    function layout() {
+      const r = box.getBoundingClientRect();
+      const W = Math.round(box.clientWidth), H = Math.round(box.clientHeight);
+      const feats = [...box.querySelectorAll('.hm-q-feature')];
+      const arch = (f) => [...f.querySelectorAll('[data-hm-arch]')].find((x) => x.offsetParent !== null && getComputedStyle(x).display !== 'none');
+      const A = arch(feats[0]), B = arch(feats[1]);
+      if (!W || !H || !A || !B) return;
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
+      const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
+      a = { x: ra.left + ra.width / 2 - r.left, y: ra.bottom - r.top };
+      b = { x: rb.left + rb.width / 2 - r.left, y: rb.top + rb.height * 0.16 - r.top };
+      const f = (n) => n.toFixed(1);
+      const g = (a.y + b.y) / 2, dx = b.x - a.x, sx = Math.sign(dx) || 1;
+      const rad = Math.max(0, Math.min(56, Math.abs(dx) / 2, (b.y - a.y) / 2));
+      const d = Math.abs(dx) < 2 ? `M ${f(a.x)} ${f(a.y)} L ${f(b.x)} ${f(b.y)}`
+        : `M ${f(a.x)} ${f(a.y)} L ${f(a.x)} ${f(g - rad)} Q ${f(a.x)} ${f(g)} ${f(a.x + sx * rad)} ${f(g)} L ${f(b.x - sx * rad)} ${f(g)} Q ${f(b.x)} ${f(g)} ${f(b.x)} ${f(g + rad)} L ${f(b.x)} ${f(b.y)}`;
+      paths.forEach((p) => p.setAttribute('d', d));
+      len = line.getTotalLength();
+      if (live) { [line, glow].forEach((p) => { p.style.strokeDasharray = `${len} ${len}`; }); draw(); }
+    }
+    function draw() {
+      raf = 0;
+      if (!live || !len || !a || !document.body.contains(box)) return;
+      const r = box.getBoundingClientRect();
+      const y = window.innerHeight * 0.72 - r.top;
+      const t = Math.max(0, Math.min(1, (y - a.y) / Math.max(1, b.y - a.y)));
+      const L = len * t;
+      [line, glow].forEach((p) => { p.style.strokeDashoffset = (len - L).toFixed(1); });
+      const pt = L > 0 && L < len ? line.getPointAtLength(L) : null;
+      tip.style.opacity = pt ? '1' : '0';
+      if (pt) { tip.setAttribute('cx', pt.x.toFixed(1)); tip.setAttribute('cy', pt.y.toFixed(1)); }
+      box.classList.toggle('is-reached', t >= 1);
+    }
+    const req = () => { if (!raf) raf = requestAnimationFrame(draw); };
+    layout();
+    let rz = 0;
+    on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(layout, 150); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (document.body.contains(box)) layout(); });
+    RN.$$('img', box).forEach((im) => { if (!im.complete) im.addEventListener('load', layout, { once: true }); });
+    S.offs.push(() => { clearTimeout(rz); if (raf) cancelAnimationFrame(raf); raf = 0; });
+    if (quiet) return;
+    const arm = () => {
+      if (live || !document.body.contains(box)) return;
+      if (box.getBoundingClientRect().top + (a ? a.y : 0) <= window.innerHeight) return; // already passed: leave it drawn
+      live = true;
+      box.classList.add('is-live');
+      layout();
+      on(window, 'scroll', req, { passive: true });
+    };
+    ['scroll', 'wheel', 'touchmove', 'keydown'].forEach((t) => on(window, t, arm, { passive: true }));
   }
 
   /* ---------- How it works ---------- */
@@ -1004,6 +1074,7 @@
       const quiet = calm();
       carouselRun(root);
       stepsPath(root, quiet);
+      quoteLink(root, quiet);
       if (!quiet) {
         if (first) root.querySelectorAll('.hm-stats [data-count]').forEach(countUp);
         startTyping(root.querySelector('#hm-q'));

@@ -328,6 +328,20 @@
 
 /* ---------- Client quotes ---------- */
 [data-view="home"] .hm-q-feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(40px, 6vw, 88px); align-items: center; }
+/* Two features: the first is mirrored (quote left, arch right); a line draws from one arch into the next */
+[data-view="home"] .hm-q-pair { position: relative; display: grid; gap: clamp(120px, 12vw, 180px); }
+[data-view="home"] .hm-q-feature { position: relative; z-index: 1; }
+[data-view="home"] .hm-q-feature.is-flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+[data-view="home"] .hm-q-feature.is-flip .hm-arch { order: 2; justify-self: end; }
+[data-view="home"] .hm-q-feature.is-flip .hm-q { order: 1; }
+[data-view="home"] .hm-qlink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 0; }
+[data-view="home"] .hm-qlink path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+[data-view="home"] .hm-qlink-track { stroke: var(--line); stroke-width: 3; stroke-dasharray: 1 10; }
+[data-view="home"] .hm-qlink-glow { stroke: var(--accent); stroke-width: 12; opacity: .15; filter: blur(5px); }
+[data-view="home"] .hm-qlink-line { stroke: var(--accent); stroke-width: 3; }
+[data-view="home"] .hm-qlink-tip { fill: var(--accent); stroke: var(--paper); stroke-width: 3; opacity: 0; filter: drop-shadow(0 0 8px var(--accent)); transition: opacity .2s ease; }
+[data-view="home"] .hm-q-pair.is-live .hm-q-feature + .hm-q-feature { transition: opacity .6s var(--ease), transform .6s var(--ease); }
+[data-view="home"] .hm-q-pair.is-live:not(.is-reached) .hm-q-feature + .hm-q-feature { opacity: .35; transform: translateY(16px); }
 [data-view="home"] .hm-arch { position: relative; height: 440px; width: min(380px, 100%); }
 [data-view="home"] .hm-arch::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 84%; border-radius: 999px 999px 0 0; background: var(--tint); }
 [data-view="home"] .hm-arch img { position: absolute; left: 50%; bottom: 0; height: 100%; width: auto; max-width: none; transform: translateX(-50%); }
@@ -437,7 +451,9 @@
 @media (max-width: 860px) {
   [data-view="home"] .hm-rep { grid-template-columns: minmax(0, 1fr); }
   [data-view="home"] .hm-book { width: min(260px, 70%); }
-  [data-view="home"] .hm-q-feature { grid-template-columns: minmax(0, 1fr); }
+  [data-view="home"] .hm-q-feature, [data-view="home"] .hm-q-feature.is-flip { grid-template-columns: minmax(0, 1fr); }
+  [data-view="home"] .hm-q-feature.is-flip .hm-arch { order: 0; justify-self: start; }
+  [data-view="home"] .hm-q-pair { gap: 96px; }
   [data-view="home"] .hm-arch { height: 340px; width: min(300px, 80%); }
   [data-view="home"] .hm-pulse-side { grid-template-columns: minmax(0, 1fr); }
 }
@@ -553,4 +569,8 @@
   [data-view="home"] .hm-pnode, [data-view="home"] .hm-pcard, [data-view="home"] .hm-pnode-n { transition: none; }
   [data-view="home"] .hm-path.is-live .hm-pstep .hm-pcard { opacity: 1; transform: none; }
   [data-view="home"] .hm-path .hm-pnode::after { animation: none; }
+  [data-view="home"] .hm-q-pair.is-live .hm-q-feature + .hm-q-feature { opacity: 1; transform: none; }
 }
+
+/* Moving hero pieces (parallax) can poke a few px past the edge on phones; clip without making a scroll container */
+main[data-view="home"] { overflow-x: clip; }
