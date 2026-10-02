@@ -158,16 +158,28 @@
     if (!u) return [];
     return u.facts.filter((f) => f.k !== 'q').map((f) => {
       const pass = new Set(RN.model.search({ filters: { [f.k]: f.v } }).map((r) => r.op.id));
-      return { k: f.k, label: f.label, pass };
+      return { k: f.k, v: [].concat(f.v), label: f.label, pass };
     });
   }
 
   // ---------- rank ----------
+  const PROFILE_OP = { industries: 'industries', revenueRange: 'revenueRanges', employeeRange: 'employeeRanges' };
+  const PROFILE_FIELD = { industries: 'industry', revenueRange: 'revenueRange', employeeRange: 'employeeRange' };
   VS.rank = function (text, needs, opts) {
     opts = opts || {};
     const ix = index();
     needs = (needs || []).map((n) => Object.assign({}, n, { vec: (ix.tag.get(String(n.tag).toLowerCase()) || {}).vec })).filter((n) => n.vec);
-    const facts = factsFor(text);
+    // The searcher's company (RN.fitme.profile): industry, revenue and size checked against the companies each operator
+    // has worked with. What the search words say wins on a conflict, unless the searcher chose their profile instead.
+    const prof = opts.profile || null;
+    const conflict = [];
+    let facts = factsFor(text);
+    if (prof) facts = facts.filter((f) => {
+      if (!PROFILE_OP[f.k] || !prof[f.k]) return true;
+      if (!f.v.some((v) => prof[f.k].includes(v))) conflict.push(f.k);
+      return !opts.profileWins;
+    });
+    const likeKeys = prof ? Object.keys(PROFILE_OP).filter((k) => prof[k] && prof[k].length && !facts.some((f) => f.k === k)) : [];
     const cats = (facts.find((f) => f.k === 'roleCategories') ? RN.model.understand(text).filters.roleCategories : []) || [];
     const q = normed([].concat(needs.map((n) => [n.vec, 1 / Math.max(1, needs.length)]), [[wordVector(queryWords(text)), 0.5]], cats.map((c) => [ix.cat.get(c), 0.3])));
     const pool = opts.pool || RN.model.ops.filter((o) => !o.hidden);
@@ -185,13 +197,15 @@
       const needScore = meets.length ? meets.reduce((s, m) => s + credit[m.status] * (0.75 + 0.25 * m.sim), 0) / meets.length : 0;
       const semN = hi > lo ? (sem.get(op.id) - lo) / (hi - lo) : 1;
       const checks = facts.map((f) => ({ k: f.k, label: f.label, ok: f.pass.has(op.id) }));
-      const factScore = checks.length ? checks.filter((c) => c.ok).length / checks.length : 1;
+      const like = likeKeys.map((k) => ({ k, label: RN.w.label(PROFILE_FIELD[k], prof[k][0]), ok: (op[PROFILE_OP[k]] || []).some((v) => prof[k].includes(v)) }));
+      const all = checks.concat(like);
+      const factScore = all.length ? all.filter((c) => c.ok).length / all.length : 1;
       const ris = (op.ris && op.ris.score || 50) / 100;
       const w = meets.length ? W : { needs: 0, sem: 0.6, facts: 0.2, ris: 0.2 };
       const score = w.needs * needScore + w.sem * semN + w.facts * factScore + w.ris * ris;
-      return { op, score, match: Math.round(100 * score), meets, checks, parts: { needs: needScore, sem: semN, facts: factScore, ris } };
+      return { op, score, match: Math.round(100 * score), meets, checks, like, parts: { needs: needScore, sem: semN, facts: factScore, ris } };
     }).sort((a, b) => b.score - a.score);
-    return { text, needs: needs.map(({ tag, label }) => ({ tag, label })), facts: facts.map(({ k, label }) => ({ k, label })), rows };
+    return { text, needs: needs.map(({ tag, label }) => ({ tag, label })), facts: facts.map(({ k, label }) => ({ k, label })), like: likeKeys, conflict, rows };
   };
 
   // ---------- Claude refines the needs (optional) ----------

@@ -39,6 +39,8 @@
     if (!RN.personas.buyer.demo || !(st.seen && st.seen.demoShortlist)) return;
     RN.store.update((s) => { s.shortlist = s.shortlist.concat(s.seen.demoShortlist.filter((id) => !s.shortlist.includes(id))); s.seen = Object.assign({}, s.seen); delete s.seen.demoShortlist; }, 'shortlist');
   }
+  shell.demoClient = () => JSON.parse(JSON.stringify(DEMO_CLIENT));
+  shell.enterDemoClient = enterDemoClient;
   const PERSONA_HOME = { visitor: 'home', buyer: 'buyer', operator: 'studio', admin: 'admin' };
   function allowed(view, p) { return !view || !view.requires || view.requires === p || (view.requires === 'any-user' && p !== 'visitor'); }
   /* The signed-in client's match brief for RN.model.fit: company firmographics + saved match preferences */
@@ -263,6 +265,9 @@
     { key: 'hire', label: 'Client: hire an operator and track the terms', persona: 'buyer', to: 'buyer.team' },
     { key: 'client-new', label: 'Client: new client, nothing posted yet', persona: 'buyer', to: 'buyer', client: 'new' },
     { key: 'client-team', label: 'Client: returning client with a team (sample)', persona: 'buyer', to: 'buyer', sample: true },
+    { key: 'search-client', label: 'Search: signed-in client, company known', persona: 'buyer', to: 'browse', search: 'We need a VP of Sales to build a repeatable sales process' },
+    { key: 'search-new', label: 'Search: first-time visitor, never signed up', persona: 'visitor', to: 'home', fresh: true },
+    { key: 'search-back', label: 'Search: returning client, signed out', persona: 'visitor', to: 'home', fresh: true, returning: true },
     { key: 'studio', label: 'Operator: who viewed me and why', persona: 'operator', to: 'studio' },
     { key: 'proof', label: 'Operator: win a direct deal with a proof link', persona: 'operator', to: 'studio.credibility' },
     { key: 'join', label: 'Operator: join the network (standard intake)', persona: 'visitor', to: 'join' },
@@ -276,13 +281,14 @@
     const j = JOURNEYS.find((x) => x.key === el.dataset.j);
     if (j.client === 'new') shell.setClient(NEW_CLIENT);
     else if (j.persona === 'buyer' && !RN.personas.buyer.demo) shell.setClient(null);
+    if (j.fresh && RN.fitme) RN.fitme.journey(j);
     RN.store.set('persona', j.persona);
     if (j.persona === 'buyer' && j.client !== 'new') enterDemoClient();
     // The sample scenario is idempotent and marked sample; the workspace labels it and can clear it
     if (j.sample && RN.sample) RN.sample.apply();
     dockOpen = false;
     shell.renderHeader(); shell.renderDock();
-    RN.go(j.to);
+    if (j.search && RN.browse) RN.browse.go({ q: j.search }); else RN.go(j.to);
     if (j.sample) RN.ui.toast('Sample scenario loaded: a returning client with a team. Clear it from the banner in the workspace.', { icon: 'info', ms: 5200 });
   };
 

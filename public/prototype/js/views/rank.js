@@ -29,16 +29,38 @@
   function fact(c) {
     return `<span class="rk-fact${c.ok ? ' is-ok' : ''}" title="${esc(c.label)}: ${c.ok ? 'yes' : 'no'}">${icon(FACT_IC[c.k] || 'check')}<i aria-hidden="true">${c.ok ? '✓' : '✕'}</i><span class="sr-only">${esc(c.label)}: ${c.ok ? 'yes' : 'no'}</span></span>`;
   }
+  // Worked with companies like yours: one segment per profile fact (industry, revenue, size)
+  function like(r) {
+    if (!r.like || !r.like.length) return '';
+    const n = r.like.filter((c) => c.ok).length, all = n === r.like.length;
+    const tip = 'Worked with companies like yours: ' + r.like.map((c) => `${c.label} ${c.ok ? '✓' : '✕'}`).join(', ');
+    return `<span class="rk-like${all ? ' is-ok' : n ? ' is-part' : ''}" title="${esc(tip)}">${icon('building')}<span class="rk-like-m" aria-hidden="true">${r.like.map((c) => `<i class="${c.ok ? 'on' : ''}"></i>`).join('')}</span><span class="sr-only">${esc(tip)}</span></span>`;
+  }
+  function side(op) {
+    const client = RN.store.state.persona === 'buyer';
+    const rate = !op.rate ? '' : client ? `<span class="rk-rate">${esc(RN.fmt.rate(op.rate))}</span>`
+      : RN.store.state.persona === 'visitor' ? `<button type="button" class="rk-rate is-locked" data-act="fm-rates">${icon('lock')}Rate</button>` : '';
+    return `<span class="rk-ris">${RN.ui.tierPill(op.ris.tier, op.ris.score)}${rate}</span>`;
+  }
+  function acts(op) {
+    const saved = RN.store.state.shortlist.includes(op.id);
+    const client = RN.store.state.persona === 'buyer';
+    return `<span class="rk-acts">
+      <button type="button" class="rk-act${saved ? ' on' : ''}" data-act="rk-save" data-id="${esc(op.id)}" aria-pressed="${saved}" title="${saved ? 'Saved to shortlist' : 'Save to shortlist'}">${icon('bookmark')}<span class="sr-only">${saved ? 'Saved' : 'Save'} ${esc(op.name)}</span></button>
+      ${client ? `<button type="button" class="rk-act is-meet" data-act="rk-meet" data-id="${esc(op.id)}" title="Ask to meet ${esc(op.first)}">${icon('handshake')}<span>Meet</span></button>` : ''}
+    </span>`;
+  }
   function row(r, i) {
-    const op = r.op;
-    return `<li class="rk-row${i === 0 ? ' is-first' : ''}" data-id="${esc(op.id)}" style="--i:${Math.min(i, 14)}">
-      <a class="rk-link" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}" aria-label="${esc(op.name)}, ${r.match}% match"></a>
+    const op = r.op, h = r.hist;
+    return `<li class="rk-row${i === 0 ? ' is-first' : ''}${h && h.k === 'declined' ? ' is-dim' : ''}" data-id="${esc(op.id)}" style="--i:${Math.min(i, 14)}">
+      <a class="rk-link" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}" aria-label="${esc(op.name)}, ${r.match}% match${h ? ', ' + esc(h.l) : ''}"></a>
       <span class="rk-n" aria-hidden="true">${i + 1}</span>
-      <span class="rk-who">${RN.ui.avatar(op, 'ava-md')}<span class="rk-name"><b>${esc(op.name)}</b><span>${esc(RN.fields.catLabel(op.catKey))}</span></span></span>
+      <span class="rk-who">${RN.ui.avatar(op, 'ava-md')}<span class="rk-name"><b>${esc(op.name)}</b><span>${h ? `<em class="rk-hist" data-h="${h.k}">${esc(h.l)}</em>` : ''}${esc(RN.fields.catLabel(op.catKey))}</span></span></span>
       <span class="rk-needs">${r.meets.map(dot).join('') || `<span class="rk-none">${icon('search')}</span>`}</span>
-      <span class="rk-facts">${r.checks.map(fact).join('')}</span>
-      <span class="rk-ris">${RN.ui.tierPill(op.ris.tier, op.ris.score)}</span>
+      <span class="rk-facts">${like(r)}${r.checks.map(fact).join('')}</span>
+      ${side(op)}
       ${ring(r.match, i === 0)}
+      ${acts(op)}
     </li>`;
   }
 
@@ -57,6 +79,7 @@
       ? `<span class="rk-src is-ai">${icon('ai')}Read by Claude</span>`
       : `<span class="rk-src" data-rk-src>${icon('hourglass')}Quick read<span class="rk-src-more"> · Claude is refining</span></span>`;
     return `<div class="rk-head">
+      ${RN.fitme ? RN.fitme.headHtml(res, text) : ''}
       <div class="rk-head-top"><span class="label">What you need</span>${src}</div>
       ${pills ? `<ol class="rk-needs-key">${pills}</ol>` : `<p class="rk-empty-needs">Ranked by how closely each profile matches your words.</p>`}
       ${facts ? `<div class="rk-fchips"><span class="label">Also checking</span>${facts}</div>` : ''}
@@ -65,23 +88,33 @@
         <span><span class="rk-dot" data-s="claimed" style="--k:var(--mute)"></span>Says so</span>
         <span><span class="rk-dot" data-s="close" style="--k:var(--mute)"></span>Close</span>
         <span><span class="rk-dot" data-s="missing" style="--k:var(--mute)"></span>Missing</span>
+        ${res.like && res.like.length ? `<span><span class="rk-like is-ok">${icon('building')}<span class="rk-like-m"><i class="on"></i><i class="on"></i><i class="on"></i></span></span>Worked with companies like yours</span>` : ''}
       </div>
     </div>`;
   }
 
+  let lastText = '';
   RK.html = function (text, pool) {
     const refined = !!RN.vsearch.refined(text);
+    const FM = RN.fitme;
+    const opts = { pool, profile: FM && FM.profile(), profileWins: FM && FM.profileWins(text) };
     let needs = needsFor(text);
-    let res = RN.vsearch.rank(text, needs, { pool });
+    let res = RN.vsearch.rank(text, needs, opts);
     // A need nobody on the network has can't change the order; drop it so every pill tells something
     const has = (i) => res.rows.some((r) => r.meets[i] && (r.meets[i].status === 'proven' || r.meets[i].status === 'claimed'));
     const keep = needs.filter((n, i) => has(i));
-    if (keep.length && keep.length < needs.length) { needs = keep; res = RN.vsearch.rank(text, needs, { pool }); }
+    if (keep.length && keep.length < needs.length) { needs = keep; res = RN.vsearch.rank(text, needs, opts); }
+    // A signed-in client's history nudges the order (hired before first, declined last); the ring keeps the match
+    if (FM) { res.rows.forEach((r) => { r.hist = FM.history(r.op.id); }); res.rows.sort((a, b) => (b.score + (b.hist ? b.hist.bonus : 0)) - (a.score + (a.hist ? a.hist.bonus : 0))); }
     const all = showAll.has(text);
     const rows = all ? res.rows : res.rows.slice(0, FIRST);
-    return `<div class="rk" data-rk-text="${esc(text)}">
+    const items = rows.map(row);
+    if (FM && FM.showCard(text)) items.splice(Math.min(3, items.length), 0, FM.cardHtml(text));
+    const again = lastText === text;
+    lastText = text;
+    return `<div class="rk${again ? ' is-settled' : ''}" data-rk-text="${esc(text)}">
       ${head(res, text, refined)}
-      <ol class="rk-list" aria-label="Operators ranked for your search">${rows.map(row).join('')}</ol>
+      <ol class="rk-list" aria-label="Operators ranked for your search">${items.join('')}</ol>
       ${!all && res.rows.length > FIRST ? `<div class="rk-more"><button type="button" class="btn btn-line" data-act="rk-all">Show all ${res.rows.length} ranked</button></div>` : ''}
     </div>`;
   };
@@ -89,6 +122,7 @@
   // Re-render in place; rows that stay on screen glide from their old spot to the new one (FLIP)
   function rerender(box, pool) {
     const before = new Map(RN.$$('.rk-row', box).map((el) => [el.dataset.id, el.getBoundingClientRect().top]));
+    const rankOf = new Map(RN.$$('.rk-row', box).map((el, i) => [el.dataset.id, i]));
     box.outerHTML = RK.html(box.dataset.rkText, pool);
     const fresh = document.querySelector('.rk');
     if (!fresh) return;
@@ -96,6 +130,8 @@
     RN.$$('.rk-row', fresh).forEach((el) => {
       const was = before.get(el.dataset.id);
       if (was == null) return;
+      const up = rankOf.get(el.dataset.id) - RN.$$('.rk-row', fresh).indexOf(el);
+      if (up > 0) { const n = el.querySelector('.rk-n'); if (n) { n.insertAdjacentHTML('beforeend', `<span class="rk-up">▲${up}</span>`); setTimeout(() => { const u = n.querySelector('.rk-up'); if (u) u.remove(); }, 2600); } }
       const dy = was - el.getBoundingClientRect().top;
       if (!dy) return;
       el.style.transform = `translateY(${dy}px)`;
@@ -104,11 +140,37 @@
     });
   }
 
-  let pending = null;
+  let pending = null, poolFn = null, io = null;
+  RK.rerender = function () { const box = document.querySelector('.rk'); if (box && poolFn) { rerender(box, poolFn()); watchScroll(); } };
+  // Scrolling past row 6 counts as a first real action: the question card slides in at row 4 without moving the page
+  function watchScroll() {
+    if (io) { io.disconnect(); io = null; }
+    const FM = RN.fitme;
+    if (!FM || RN.store.state.persona !== 'visitor' || !('IntersectionObserver' in window)) return;
+    const target = RN.$$('.rk-row')[5];
+    if (!target) return;
+    io = new IntersectionObserver((es) => {
+      if (!es.some((e) => e.isIntersecting)) return;
+      io.disconnect(); io = null;
+      const box = document.querySelector('.rk');
+      if (!box || !FM.engage('scroll')) return;
+      const text = box.dataset.rkText;
+      const at = RN.$$('.rk-row', box)[3];
+      if (at && !box.querySelector('.rk-ask') && FM.showCard(text)) at.insertAdjacentHTML('beforebegin', FM.cardHtml(text));
+    });
+    io.observe(target);
+  }
   RK.mount = function (getPool) {
     const box = document.querySelector('.rk');
     if (!box) return;
+    poolFn = getPool;
     const text = box.dataset.rkText;
+    if (RN.fitme) {
+      const engagedBefore = RN.fitme.showCard(text);
+      RN.fitme.noteSearch(text);
+      if (!engagedBefore && RN.fitme.showCard(text) && !box.querySelector('.rk-ask')) { const at = RN.$$('.rk-row', box)[3]; if (at) at.insertAdjacentHTML('beforebegin', RN.fitme.cardHtml(text)); }
+    }
+    watchScroll();
     if (RN.vsearch.refined(text)) return;
     if (pending && pending.text === text) return;
     if (pending) pending.ctl.abort();
@@ -123,7 +185,14 @@
       else { const s = cur.querySelector('[data-rk-src]'); if (s) s.classList.add('is-done'); }
     });
   };
-  RK.reset = () => { if (pending) { pending.ctl.abort(); pending = null; } };
+  RK.reset = () => { if (pending) { pending.ctl.abort(); pending = null; } if (io) { io.disconnect(); io = null; } lastText = ''; };
+
+  RN.actions['rk-save'] = (el) => {
+    const added = !RN.store.state.shortlist.includes(el.dataset.id);
+    RN.actions['shortlist-toggle'](el);
+    if (RN.fitme) RN.fitme.afterShortlist(added);
+  };
+  RN.actions['rk-meet'] = (el) => { const box = document.querySelector('.rk'); RN.intro.open(el.dataset.id, box ? { note: box.dataset.rkText } : {}); };
 
   RN.actions['rk-all'] = () => {
     const box = document.querySelector('.rk');

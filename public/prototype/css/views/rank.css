@@ -40,10 +40,10 @@
 
 /* ---------- Rows ---------- */
 .rk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.rk-row { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr) auto auto 52px; align-items: center; gap: var(--s-4); padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); animation: rkIn .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); transition: border-color var(--dur) ease, box-shadow var(--dur) ease, transform var(--dur) ease; }
+.rk-row { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr) auto auto 52px auto; align-items: center; gap: var(--s-4); padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); animation: rkIn .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); transition: border-color var(--dur) ease, box-shadow var(--dur) ease, transform var(--dur) ease; }
 .rk.is-settled .rk-row, .rk.is-settled .rk-dot, .rk.is-settled .rk-need-bar span { animation: none; }
 .rk-row:hover { border-color: color-mix(in srgb, var(--forest) 40%, var(--line)); box-shadow: var(--shadow-1); }
-.rk-row.is-first { grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr) auto auto 64px; padding-block: 16px; border-color: color-mix(in srgb, var(--forest) 45%, var(--line)); background: linear-gradient(90deg, var(--tint), var(--card) 45%); }
+.rk-row.is-first { grid-template-columns: 36px minmax(0, 1.4fr) minmax(0, 1fr) auto auto 64px auto; padding-block: 16px; border-color: color-mix(in srgb, var(--forest) 45%, var(--line)); background: linear-gradient(90deg, var(--tint), var(--card) 45%); }
 @keyframes rkIn { from { opacity: 0; transform: translateY(10px); } }
 .rk-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .rk-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
@@ -62,7 +62,86 @@
 .rk-fact.is-ok { background: color-mix(in srgb, var(--good) 12%, var(--card)); color: var(--good); }
 .rk-fact.is-ok svg { opacity: 1; }
 .rk-fact.is-ok i { background: var(--good); }
-.rk-ris { position: relative; z-index: 2; }
+.rk-ris { position: relative; z-index: 2; display: grid; justify-items: end; gap: 4px; }
+.rk-rate { font-family: var(--f-display); font-weight: 700; font-size: var(--t-13); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rk-rate.is-locked { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: var(--mute); cursor: pointer; }
+.rk-rate.is-locked:hover { color: var(--forest); }
+.rk-rate svg { width: 12px; height: 12px; }
+.rk-acts { position: relative; z-index: 2; display: flex; gap: 6px; }
+.rk-act { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; min-width: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--mute); font-family: var(--f-display); font-weight: 700; font-size: var(--t-13); cursor: pointer; transition: color var(--dur) ease, border-color var(--dur) ease, background var(--dur) ease; }
+.rk-act svg { width: 16px; height: 16px; }
+.rk-act:hover { color: var(--forest); border-color: color-mix(in srgb, var(--forest) 40%, var(--line)); }
+.rk-act.on { color: var(--forest); background: var(--tint); border-color: color-mix(in srgb, var(--forest) 35%, var(--line)); }
+.rk-act.on svg { fill: currentColor; }
+.rk-act.is-meet { padding: 0 12px; color: var(--good); }
+.rk-row:hover .rk-act.is-meet, .rk-row.is-first .rk-act.is-meet { color: var(--btn-ink); background: var(--btn); border-color: var(--btn); }
+.rk-hist { display: inline-block; margin-right: 6px; padding: 1px 7px; border-radius: 99px; font-style: normal; font-weight: 700; font-size: 11px; background: var(--paper-2); color: var(--ink-2); }
+.rk-hist[data-h="hired"] { background: color-mix(in srgb, var(--good) 15%, var(--card)); color: var(--good); }
+.rk-hist[data-h="met"] { background: var(--tint); color: var(--forest); }
+.rk-hist[data-h="declined"] { background: color-mix(in srgb, var(--bad) 12%, var(--card)); color: var(--bad); }
+.rk-row.is-dim { opacity: .62; }
+.rk-row.is-dim:hover { opacity: 1; }
+/* Worked with companies like yours: a building with one bar per profile fact */
+.rk-like { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border-radius: 8px; background: var(--paper-2); color: var(--mute); pointer-events: auto; }
+.rk-like svg { width: 15px; height: 15px; }
+.rk-like-m { display: inline-flex; gap: 2px; }
+.rk-like-m i { width: 5px; height: 14px; border-radius: 2px; background: var(--line-2, var(--line)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mute) 35%, transparent); }
+.rk-like-m i.on { background: var(--good); box-shadow: none; }
+.rk-like.is-ok { background: color-mix(in srgb, var(--good) 12%, var(--card)); color: var(--good); }
+.rk-like.is-part { color: var(--ink-2); }
+.rk-legend .rk-like { height: 20px; padding: 0 5px; }
+.rk-legend .rk-like svg { width: 12px; height: 12px; }
+.rk-legend .rk-like-m i { height: 10px; width: 4px; }
+/* Rank moved up after an answer */
+.rk-n { position: relative; }
+.rk-up { position: absolute; left: 50%; top: -14px; translate: -50% 0; font-size: 10px; font-weight: 800; color: var(--good); white-space: nowrap; animation: rkUp 2.6s var(--ease) both; }
+@keyframes rkUp { 0% { opacity: 0; transform: translateY(6px); } 15%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+
+/* ---------- Matching for / welcome back (RN.fitme) ---------- */
+.fm-for { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-bottom: var(--s-4); border-bottom: 1px solid var(--line); }
+.fm-for-l { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-14); color: var(--ink-2); }
+.fm-for-l svg { width: 16px; height: 16px; color: var(--good); }
+.fm-for-v { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.fm-for-v span { padding: 3px 10px; border-radius: 99px; background: color-mix(in srgb, var(--good) 12%, var(--card)); color: var(--good); font-family: var(--f-display); font-weight: 700; font-size: var(--t-12); }
+.fm-swap { flex-basis: 100%; display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: var(--t-13); color: var(--mute); }
+.fm-swap svg { width: 14px; height: 14px; }
+.fm-hello { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 12px 14px; border-radius: 12px; background: var(--tint); border: 1px solid color-mix(in srgb, var(--forest) 25%, var(--line)); }
+.fm-hello p { margin: 0; flex: 1 1 220px; color: var(--ink); font-size: var(--t-14); }
+.fm-hello > svg { width: 18px; height: 18px; color: var(--forest); }
+.fm-proto { margin-left: 4px; padding: 1px 6px; border-radius: 99px; background: color-mix(in srgb, currentColor 18%, transparent); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+
+/* ---------- One-question card at row 4 ---------- */
+.rk-ask { animation: rkIn .5s var(--ease) both; }
+.fm-card { display: grid; gap: 12px; padding: 16px 18px; border-radius: 14px; border: 1.5px dashed color-mix(in srgb, var(--forest) 45%, var(--line)); background: linear-gradient(120deg, var(--tint), var(--card) 70%); }
+.fm-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fm-k { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-weight: 800; font-size: var(--t-12); letter-spacing: .06em; text-transform: uppercase; color: var(--good); }
+.fm-k svg { width: 15px; height: 15px; }
+.fm-why { font-size: var(--t-12); color: var(--mute); }
+.fm-x { margin-left: auto; display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--mute); cursor: pointer; }
+.fm-x:hover { background: var(--paper-2); color: var(--ink); }
+.fm-x svg { width: 16px; height: 16px; }
+.fm-dots { display: inline-flex; gap: 4px; }
+.fm-dots i { width: 18px; height: 4px; border-radius: 99px; background: color-mix(in srgb, var(--forest) 18%, transparent); }
+.fm-dots i.on { background: var(--good); }
+.fm-q { margin: 0; font-size: var(--t-16); color: var(--ink); text-wrap: balance; }
+.fm-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.fm-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fm-chip { height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-family: var(--f-display); font-weight: 700; font-size: var(--t-13); cursor: pointer; transition: border-color var(--dur) ease, background var(--dur) ease, transform var(--dur) ease; }
+.fm-chip:hover { border-color: var(--forest); }
+.fm-chip:active { transform: scale(.96); }
+.fm-chip[aria-pressed="true"] { background: var(--forest); border-color: var(--forest); color: var(--paper); }
+.fm-other .select { height: 36px; border-radius: 99px; }
+.fm-email { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; max-width: 460px; }
+.fm-email .fm-err, .fm-email .fm-priv { grid-column: 1 / -1; margin: 0; }
+.fm-err { color: var(--bad); }
+.fm-priv { display: inline-flex; align-items: center; gap: 6px; }
+.fm-priv svg, .fm-carry svg { width: 13px; height: 13px; }
+.fm-carry { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; }
+.fm-diff { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fm-diff li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.fm-diff .label { min-width: 130px; }
+.fm-diff s { color: var(--mute); }
+.fm-diff svg { width: 14px; height: 14px; color: var(--mute); }
 
 /* ---------- Match ring ---------- */
 .rk-ring { position: relative; display: inline-grid; place-items: center; }
@@ -78,12 +157,13 @@
 .rk-more { display: flex; justify-content: center; }
 
 @media (max-width: 900px) {
-  .rk-row, .rk-row.is-first { grid-template-columns: 28px minmax(0, 1fr) 52px; grid-template-areas: "n who ring" ". needs ring" ". facts facts"; row-gap: 10px; }
+  .rk-row, .rk-row.is-first { grid-template-columns: 28px minmax(0, 1fr) auto 52px; grid-template-areas: "n who who ring" ". needs needs ring" ". facts facts facts" ". side side acts"; row-gap: 10px; }
+  .rk-ris { grid-area: side; display: flex; align-items: center; justify-content: flex-start; gap: 10px; }
+  .rk-acts { grid-area: acts; }
   .rk-n { grid-area: n; }
   .rk-who { grid-area: who; }
   .rk-needs { grid-area: needs; }
   .rk-facts { grid-area: facts; }
-  .rk-ris { display: none; }
   .rk-ring { grid-area: ring; justify-self: end; }
 }
 @media (max-width: 640px) {

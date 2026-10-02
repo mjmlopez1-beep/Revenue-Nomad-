@@ -843,6 +843,8 @@
   RN.actions['br-save'] = () => {
     const c = crit();
     if (!hasCrit(c)) return;
+    // A visitor saves with one field (a work email) and keeps searching; RN.fitme creates the account and saves it
+    if (st().persona === 'visitor' && RN.fitme) { RN.fitme.ask('search'); return; }
     if (!isClient()) {
       pendingSave = true;
       BR.loginPrompt({ title: 'Log in to save this search', sub: 'Signed-in clients save searches and run them again in one click. Browsing stays open to everyone.', onClose: () => { pendingSave = false; } });
