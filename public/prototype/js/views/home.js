@@ -136,7 +136,7 @@
   }
   // Company logos directly under the search box. Names without a logo file render as a clean wordmark.
   // [key, name, height]: heights set by eye so a thin wide wordmark and a bold mark read the same size
-  const LOGO_LINE = [['skaled', 'Skaled', 15], ['weave', 'Weave', 22], ['diligent', 'Diligent', 24]];
+  const LOGO_LINE = [['skaled', 'Skaled', 15], ['weave', 'Weave', 19], ['diligent', 'Diligent', 24]];
   function logoLine() {
     return `<div class="hm-logos"><span class="label">Trusted by teams at</span><ul>${LOGO_LINE.map(([k, name, h]) => `<li>${(RN.data.logos || {})[k] ? RN.ui.logo(k, { h, name }) : `<span class="hm-wm">${esc(name)}</span>`}</li>`).join('')}</ul></div>`;
   }

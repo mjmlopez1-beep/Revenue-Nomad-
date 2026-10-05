@@ -3,6 +3,8 @@
 window.RN = window.RN || {}; RN.data = RN.data || {};
 RN.data.logos = Object.assign(RN.data.logos || {}, {
   skaled: 'assets/logos/skaled.png',
+  // Weave: sent by the founder (Oct 5, 2026), navy on transparent; the hero line turns it white
+  weave: 'assets/logos/weave.png',
   // White version for dark backgrounds: the colour facets of the D leave seams when a filter flattens them
   diligent: 'assets/logos/diligent-white.png',
 });
