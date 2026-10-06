@@ -1001,3 +1001,10 @@
 .pf-ex-c b { grid-area: p; }
 .pf-ex-c b::before { content: "+"; margin-right: 1px; opacity: .6; }
 .pf-ex-eq { padding-top: 6px; border-top: 1px solid var(--line); }
+
+/* How scores work, short form: three lines, no graphics */
+.pf-how { gap: 12px; }
+.pf-how-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.pf-how-list li { position: relative; padding-left: 18px; font-size: var(--t-14); line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+.pf-how-list li::before { content: ""; position: absolute; left: 2px; top: .6em; width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+.pf-how-list b { font-family: var(--f-display); font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
