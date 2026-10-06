@@ -861,25 +861,26 @@
     const op = c.op;
     const f = S.focus;
     if (!f) {
-      // Pictures, not paragraphs: points per focus area by proof, then how three of them make a score
+      // Plain words and one worked example from this profile: what a focus area is worth, then how an area's % is made
       const LADDER = [['Self', 10, 'cl'], ['1 review', 50, 'v'], ['2', 60, 'v'], ['3', 70, 'v'], ['4', 80, 'v'], ['5+', 85, 'x']];
+      const best = c.axes.map((ax) => ({ ax, g: c.axAgg[ax] })).filter((x) => x.g).sort((x, y) => y.g.pct - x.g.pct)[0];
+      const ex = best ? [0, 1, 2].map((i) => best.g.top[i] || null) : [];
+      const chip = (x) => x ? `<span class="pf-ex-c${x.t.tier === 'claimed' ? ' is-cl' : ''}"><span class="pf-ex-n">${esc(x.t.t)}</span><b>${x.p}</b><small>${x.t.tier === 'claimed' ? 'Self-claimed' : RN.fmt.plural(x.t.r || 1, 'review')}</small></span>` : '<span class="pf-ex-c is-empty"><span class="pf-ex-n">Empty slot</span><b>0</b><small>Nothing yet</small></span>';
       return `<div class="pf-how">
         <h3 class="pf-how-h">How scores work</h3>
-        <div class="pf-how-blk">
-          <span class="pf-how-k">Points per focus area</span>
-          <div class="pf-ladder" role="img" aria-label="Self-claimed 10 points; 1 company review 50; 2 reviews 60; 3 reviews 70; 4 reviews 80; 5 or more reviews Expert, 85 and up">
-            ${LADDER.map(([l, v, k], i) => `<div class="pf-rung is-${k}" style="--h:${v}%;--i:${i}"><b>${v}${k === 'x' ? '+' : ''}</b><i></i><span>${l}</span></div>`).join('')}
-          </div>
-          <div class="pf-ladder-key"><span><i class="is-cl"></i>Self-claimed</span><span><i class="is-v"></i>Company reviews</span><span><i class="is-x"></i>Expert</span></div>
-        </div>
-        <div class="pf-how-blk">
-          <span class="pf-how-k">Each stage and area</span>
-          <div class="pf-sum" aria-label="The best three focus areas add up; three at 100 make 100%">
-            <span class="pf-sum-slot">${icon('check')}</span><em>+</em><span class="pf-sum-slot">${icon('check')}</span><em>+</em><span class="pf-sum-slot">${icon('check')}</span><em>=</em><b>100%</b>
-          </div>
-          <span class="pf-how-sub">Best 3 focus areas, at 100 each</span>
-        </div>
-        <p class="pf-how-tip">${icon('target')}Tap a stage or area to see what counts</p>
+        <ol class="pf-how-steps">
+          <li><span class="pf-how-n">1</span><div><b>Each focus area earns points from proof.</b><span>Self-claimed is worth 10. Company reviews raise it, up to 100.</span>
+            <div class="pf-ladder" role="img" aria-label="Self-claimed 10 points; 1 company review 50; 2 reviews 60; 3 reviews 70; 4 reviews 80; 5 or more reviews 85 to 100">
+              ${LADDER.map(([l, v, k], i) => `<div class="pf-rung is-${k}" style="--h:${v}%;--i:${i}"><b>${v}${k === 'x' ? '+' : ''}</b><i></i><span>${l}</span></div>`).join('')}
+            </div></div></li>
+          <li><span class="pf-how-n">2</span><div><b>An area’s score is its best three, out of 300.</b><span>More focus areas don’t add up; stronger proof does.</span>
+            ${best ? `<div class="pf-ex" aria-label="Example: ${esc(best.ax)}, ${best.g.sum} of 300 points, ${best.g.pct}%">
+              <span class="pf-ex-k">${esc(op.first)}’s ${esc(best.ax)}</span>
+              <div class="pf-ex-row">${ex.map(chip).join('<em>+</em>')}</div>
+              <div class="pf-ex-eq"><span>${best.g.sum} of 300</span><em>=</em><b>${best.g.pct}%</b></div>
+            </div>` : ''}</div></li>
+          <li><span class="pf-how-n">3</span><div><b>Tap any stage or area</b><span>to see its three focus areas and the proof behind each.</span></div></li>
+        </ol>
       </div>`;
     }
     const isStage = f.kind === 'stage';
