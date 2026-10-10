@@ -96,7 +96,10 @@
     return optOf('startBy', op.avail.key) || 'available_now';
   }
   /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, email,
-     search: {text, need, match, needs: [{label, status, color}]}}  (search: opened from a ranked search row) */
+     name, company, revenueRange, industry,   (what a visitor already told us, e.g. in Talk to us)
+     search: {text, need, match, needs: [{label, status, color}]}}  (search: opened from a ranked search row)
+     A visitor's name, company, revenue range and industry ride along as hidden fields and win over what the
+     email domain suggests, as long as the email sent is the one they gave. */
   intro.open = function (opId, prefill) {
     prefill = prefill || {};
     const op = RN.model.byId(opId);
@@ -154,6 +157,7 @@
         ${RN.w.field('need', d.need, { name: 'need', compact: true })}
         ${RN.w.field('startBy', d.startBy, { name: 'startBy', compact: true })}
         ${noteUp ? noteField : ''}
+        ${signedIn ? '' : ['name', 'company', 'revenueRange', 'industry', 'email'].filter((k) => prefill[k]).map((k) => `<input type="hidden" name="pre-${k}" value="${esc(prefill[k])}">`).join('')}
         ${signedIn ? '' : `<div class="in-email">
           ${RN.w.field('email', d.email, { name: 'email', compact: true })}
           <p class="small muted">We name your company from your email. ${esc(op.first)} sees its industry and size, not your name, until you are introduced. <button type="button" class="act in-sample" data-act="intro-sample" data-id="${esc(op.id)}">Use a sample email</button></p>
@@ -194,9 +198,13 @@
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { emailErr(form, 'That email doesn’t look right. Check it and try again.'); return; }
       if (intro.isPersonalEmail(email)) { emailErr(form, `Use your work email. ${op.first} only meets companies, and we name yours from it.`); return; }
     }
-    // Visitors: company from the email domain; industry and size are asked for later in the workspace
-    const company = signedIn ? me.company : { name: intro.companyFromEmail(email) || 'Your company', industry: '', revenueRange: '', employeeRange: '' };
-    const name = signedIn ? me.name : intro.nameFromEmail(email, company.name);
+    // Visitors: what they already told us (Talk to us passes name, company, revenue range and industry) when the email
+    // is the one they gave, else the company from the email domain; anything missing is asked for later in the workspace
+    const pre = (k) => String(data['pre-' + k] || '').trim();
+    const same = !pre('email') || pre('email').toLowerCase() === email.toLowerCase();
+    const told = (k) => (same ? pre(k) : '');
+    const company = signedIn ? me.company : { name: told('company') || intro.companyFromEmail(email) || 'Your company', industry: told('industry'), revenueRange: told('revenueRange'), employeeRange: '' };
+    const name = signedIn ? me.name : told('name') || intro.nameFromEmail(email, company.name);
     // One open request per client and operator, checked on the email actually submitted
     const dup = openFor(op.id, email);
     if (dup) { RN.ui.toast(`${esc(signedIn ? 'You' : email)} already asked to meet ${esc(op.first)}. Status: ${esc(RN.w.label('introStatus', dup.status))}.`, { icon: 'info' }); return; }

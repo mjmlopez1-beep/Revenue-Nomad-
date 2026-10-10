@@ -200,7 +200,7 @@
 [data-view="home"] .hm-seats-cost .hm-more { white-space: normal; text-wrap: balance; }
 [data-view="home"] .hm-seats-cost .hm-more svg { flex: 0 0 auto; }
 @supports (grid-template-rows: subgrid) {
-  @media (min-width: 721px) {
+  @media (min-width: 861px) {
     [data-view="home"] .hm-seat { grid-row: span 4; grid-template-rows: subgrid; row-gap: var(--s-3); }
     [data-view="home"] .hm-seat-t, [data-view="home"] .hm-seat-who { align-self: start; }
     [data-view="home"] .hm-seat-n { align-self: end; }
@@ -579,17 +579,17 @@
   [data-view="home"] .hm-q-pair { gap: 96px; }
   [data-view="home"] .hm-arch { height: 340px; width: min(300px, 80%); }
   [data-view="home"] .hm-pulse-side { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 720px) {
-  [data-view="home"] .hm-hero { min-height: 0; padding: calc(var(--nav-h) + 40px) 0 44px; }
   /* Seats stack as a ruled list: no hover fill, the category bar stays off, the count row keeps its arrow */
-  [data-view="home"] .hm-seats { margin-top: var(--s-8); }
-  [data-view="home"] .hm-seats-h { font-size: var(--t-18); }
   [data-view="home"] .hm-seat-row { grid-template-columns: minmax(0, 1fr); }
   [data-view="home"] .hm-seat { padding: 20px 0; row-gap: 8px; }
   [data-view="home"] .hm-seat:hover, [data-view="home"] .hm-seat:active { background: transparent; }
   [data-view="home"] .hm-seat::before { display: none; }
   [data-view="home"] .hm-seat-t { font-size: 18px; }
+}
+@media (max-width: 720px) {
+  [data-view="home"] .hm-hero { min-height: 0; padding: calc(var(--nav-h) + 40px) 0 44px; }
+  [data-view="home"] .hm-seats { margin-top: var(--s-8); }
+  [data-view="home"] .hm-seats-h { font-size: var(--t-18); }
   [data-view="home"] .hm-hero-img { object-position: 38% 30%; }
   [data-view="home"] .hm-kicker::before { width: 40px; }
   [data-view="home"] .hm-search { flex-wrap: wrap; padding: 6px 8px 8px 16px; gap: 6px; }

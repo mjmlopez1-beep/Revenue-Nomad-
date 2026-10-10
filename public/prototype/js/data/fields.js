@@ -358,6 +358,8 @@
      values are slugs. The generic branch serves the needs no function owns (AI, retention, partners, not sure)
      and the cost hub's form. */
   F.talkTiming = { label: 'Timing', type: 'single', options: opts([['this_month', 'This month'], ['1_3_months', '1 to 3 months'], ['exploring', 'Exploring']]) };
+  // The cost hub's form block words the middle option "next 1 to 3 months"; same values, so matching is unchanged
+  F.talkTimingCost = { label: 'Timing', type: 'single', options: opts([['this_month', 'This month'], ['1_3_months', 'Next 1 to 3 months'], ['exploring', 'Exploring']]) };
   // The cost hub's first question. It only changes the seat list and the role categories matched.
   F.talkFunction = { label: 'Function', type: 'single', options: opts([['sales', 'Sales'], ['revops', 'RevOps'], ['marketing', 'Marketing'], ['other', 'Other']]) };
   F.talkSalesCompanyType = { label: 'Company type', type: 'single', options: opts([['professional_services', 'Professional services'], ['services_led_software', 'Services-led software'], ['agency', 'Agency'], ['other', 'Other']]) };
@@ -396,6 +398,16 @@
   F.talkTimingAvail = { this_month: ['available_now', 'available_2_weeks'] };
   // Timing -> the client's start timeline on an intro request (F.startBy slugs)
   F.talkTimingStart = { this_month: 'available_now', '1_3_months': 'available_2_plus_weeks', exploring: 'available_2_plus_weeks' };
+  /* What the client gets back, in each page's own words (its form block lede and "What happens first" table): a role
+     profile on sales and the generic branch, a scope on RevOps, a scorecard with up to 7 scored profiles on marketing,
+     a price for the hours on the cost hub. Reads as "You will get {deliver}, often within 48 hours." */
+  F.talkDeliver = {
+    sales: 'a written role profile and 2 to 3 vetted operators',
+    revops: 'a scope and 2 to 3 vetted RevOps operators',
+    marketing: 'a scorecard and up to 7 scored marketing operators to meet',
+    generic: 'a written role profile and 2 to 3 vetted operators',
+    cost: 'a price for the hours your seat needs and 2 to 3 vetted operators',
+  };
   // Why an operator passes on an intro or engagement, and why a client says "Not a fit" (Engagements prototype)
   // Work sample types (Studio Portfolio, profile filter chips)
   F.sampleType = { label: 'Type', type: 'single', options: opts(['Playbook', 'Framework', 'Program', 'Process map', 'Template', 'Build', 'System']) };

@@ -474,6 +474,7 @@
   // Registry key for an answer key, so RN.w.control and RN.w.label render the branch's list
   const FIXED_KEYS = { need: 'need', timing: 'talkTiming', fn: 'talkFunction' };
   function keyFor(k) {
+    if (k === 'timing') return T.fn === 'cost' ? 'talkTimingCost' : 'talkTiming';
     if (FIXED_KEYS[k]) return FIXED_KEYS[k];
     const b = branch() || 'generic';
     return k === 'seat' ? BR[fnOf() || b].seat : BR[b][k];
@@ -487,6 +488,15 @@
     return `Add ${list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0]} so we can reply.`;
   };
   const trim = (v) => String(v || '').trim();
+  /* What the client gets back (RN.fields.talkDeliver), in the words of the page they came from: the cost hub prices
+     the hours, RevOps scopes, marketing scores up to 7 profiles, sales and the generic branch write a role profile. */
+  const deliverFor = (k) => RN.fields.talkDeliver[k] || RN.fields.talkDeliver.generic;
+  const nowKey = () => (T.fn === 'cost' ? 'cost' : branch() || 'generic');
+  const promiseLine = (k) => { const d = deliverFor(k); return `${d.charAt(0).toUpperCase() + d.slice(1)}, often within 48 hours. No sales sequence, and no fees for companies.`; };
+  const sentToast = () => `Sent. You will get ${deliverFor(nowKey())}, often within 48 hours.`;
+  // The same work-email rule as an intro request (RN.intro.isPersonalEmail), so one address works on both
+  const personalEmail = (e) => !!(RN.intro && typeof RN.intro.isPersonalEmail === 'function' && RN.intro.isPersonalEmail(e));
+  const WORK_EMAIL_ERR = 'Use your work email, so we know which company we are matching for.';
 
   /* ---------- Matching ----------
      The Browse filters the answers stand for. One source for the live count, the done screen's "See all N in
@@ -672,28 +682,32 @@
     const chips = T.step > 0 ? recap() : [];
     const B = BR[branch() || 'generic'];
     const miss = (k) => ((T.missing || []).includes(k) ? ' is-missing' : '');
+    // A missing field says so to a screen reader too, pointing at the error that names it
+    const inv = (k) => ((T.missing || []).includes(k) && T.err ? ' aria-invalid="true" aria-describedby="pg-talk-err"' : '');
     let body = '';
     if (s.key === 'contact') {
       body = `<form class="pg-contact" data-submit="pg-talk-send" novalidate>
           ${chips.length ? `<div class="pg-recap" aria-label="Your answers">${chips.join('')}</div>` : ''}
           <div class="grid g-2 pg-contact-grid">
-            <div class="field${miss('name')}"><label for="pg-name">Your name</label><input class="input" id="pg-name" name="name" value="${esc(T.name)}" placeholder="${esc(RN.fields.fullName.placeholder)}" autocomplete="name" data-input="pg-talk-text"></div>
-            <div class="field${miss('email')}"><label for="pg-email">${esc(RN.fields.email.label)}</label><input class="input" id="pg-email" name="email" type="email" value="${esc(T.email)}" placeholder="${esc(RN.fields.email.placeholder)}" autocomplete="email" data-input="pg-talk-text"></div>
+            <div class="field${miss('name')}"><label for="pg-name">Your name</label><input class="input" id="pg-name" name="name" value="${esc(T.name)}" placeholder="${esc(RN.fields.fullName.placeholder)}" autocomplete="name" data-input="pg-talk-text"${inv('name')}></div>
+            <div class="field${miss('email')}"><label for="pg-email">${esc(RN.fields.email.label)}</label><input class="input" id="pg-email" name="email" type="email" value="${esc(T.email)}" placeholder="${esc(RN.fields.email.placeholder)}" autocomplete="email" data-input="pg-talk-text"${inv('email')}></div>
           </div>
           <div class="field"><label for="pg-co">Company <span class="opt">Optional</span></label><input class="input" id="pg-co" name="company" value="${esc(T.company)}" placeholder="Company name" autocomplete="organization" data-input="pg-talk-text"></div>
-          <div class="field${miss('problem')}"><label for="pg-problem"><span>${esc(B.problem)}</span>${counter(T.problem)}</label><textarea class="textarea input" id="pg-problem" name="problem" maxlength="${PROBLEM_MAX}" rows="3" placeholder="The problem in your words" data-input="pg-talk-text">${esc(T.problem)}</textarea></div>
+          <div class="field${miss('problem')}"><label for="pg-problem"><span>${esc(B.problem)}</span>${counter(T.problem)}</label><textarea class="textarea input" id="pg-problem" name="problem" maxlength="${PROBLEM_MAX}" rows="3" placeholder="The problem in your words" data-input="pg-talk-text"${inv('problem')}>${esc(T.problem)}</textarea></div>
           <div class="field"><label for="pg-decides">Who else decides <span class="opt">Optional</span></label><input class="input" id="pg-decides" name="decides" value="${esc(T.decides)}" placeholder="${esc(B.decides)}" data-input="pg-talk-text"></div>
-          ${T.err ? `<p class="pg-err" role="alert">${icon('info')}<span>${esc(T.err)}</span></p>` : ''}
-          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Show my matches${icon('arrow')}</button><span class="small">A role profile plus 2 to 3 vetted operators, often within 48 hours. No sales sequence, and no fees for companies.</span></div>
+          ${T.err ? `<p class="pg-err" id="pg-talk-err" role="alert">${icon('info')}<span>${esc(T.err)}</span></p>` : ''}
+          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Show my matches${icon('arrow')}</button><span class="small">${esc(promiseLine(nowKey()))}</span></div>
         </form>`;
     } else if (s.rows) {
-      // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row
-      body = s.rows.map((k, ri) => {
+      // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row, and only
+      // that row shows its hint (its own option count)
+      const open = s.rows.find((k) => !T.ans[k]) || s.rows[0];
+      body = s.rows.map((k) => {
         const fk = keyFor(k);
         const d = RN.fields[fk];
         const from = k === 'revenueBand' && T.bandFrom ? `<span>${T.bandFrom === 'profile' ? 'From your company profile. Change it if it is off.' : 'From your Browse filters. Change it if it is off.'}</span>` : '';
         return `<div class="pg-row" data-row="${esc(k)}">
-          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${from}${ri === 0 ? `<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span>` : ''}</p>
+          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${from}<span class="pg-kbd hide-m" data-kbd${k === open ? '' : ' hidden'}>Press 1 to ${d.options.length}</span></p>
           <div class="pg-tiles" data-cols="${colsFor(d.options.length)}">${RN.w.control(fk, T.ans[k] || '', { name: k, id: 'pg-t-' + k, change: 'pg-talk-pick' })}</div>
         </div>`;
       }).join('') + (chips.length ? `<div class="pg-recap pg-recap-sm" aria-label="Your answers so far">${chips.join('')}</div>` : '');
@@ -724,7 +738,10 @@
     const first = RN.fmt.first(T.name) || 'thanks';
     const ops = (T.sugg || []).map((id) => RN.model.byId(id)).filter(Boolean);
     const b = brief();
-    const unsure = !catsFor().length;
+    const cats = catsFor();
+    // No operator matches every answer: say so, and show the closest instead of claiming a match
+    const none = !(T.matches || 0);
+    const unsure = !cats.length || none;
     const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : []);
     // What the suggestions were matched on: the need in the client's words, or the function behind an embedded form
     const needWords = RN.w.label('need', T.ans.need);
@@ -734,7 +751,7 @@
         <div class="pg-talk-top"><button type="button" class="pg-back" data-act="pg-talk-reset">${icon('refresh')}Start a new request</button><span class="step-count">Sent</span></div>
         ${progress(steps().length - 1, steps().length, true)}
         <h1 class="h2 pg-q" tabindex="-1">Got it, ${esc(first)}. A person is on it.</h1>
-        <p class="lede pg-done-lede">You will get a written role profile and 2 to 3 vetted operators at ${esc(T.email)}, often within 48 hours. Want to move faster? Book your discovery call now, or request an intro to one of the operators below.</p>
+        <p class="lede pg-done-lede">You will get ${esc(deliverFor(nowKey()))} at ${esc(T.email)}, often within 48 hours. Want to move faster? Book your discovery call now, or request an intro to one of the operators below.</p>
         <div class="pg-done-grid">
           <div class="pg-done-card">
             <span class="label">${icon('calendar')}Book your discovery call</span>
@@ -756,8 +773,10 @@
     <section class="section-sm pg-sugg-sec">
       <div class="wrap">
         <div class="pg-shead"><div class="pg-shead-l"><span class="eyebrow">${unsure ? 'A few operators to look at while you wait' : 'Operators we would start with'}</span>
-          <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your revenue band and timing.' : `Matched on ${esc(focus)}, your revenue band and timing.`}</h2></div>
-          <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${(T.matches || 0) === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(T.matches || 0, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
+          <h2 class="h3 pg-sugg-h">${none ? 'No operator matches every answer yet. These are the closest.' : !cats.length ? 'Ranked on your revenue band and timing.' : `Matched on ${esc(focus)}, your revenue band and timing.`}</h2></div>
+          <div class="pg-shead-r">${none
+            ? `<button type="button" class="act" data-act="pg-talk-browse" data-loose="1">${cats.length === 1 ? `See every operator in ${esc(RN.fields.catLabel(cats[0]))}` : cats.length ? 'See every operator in these role categories' : 'Browse every operator'}${icon('arrow')}</button>`
+            : `<button type="button" class="act" data-act="pg-talk-browse">${(T.matches || 0) === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(T.matches || 0, 'matching operator')} in Browse`}${icon('arrow')}</button>`}</div></div>
         ${ops.length ? `<p class="pg-sugg-note">${icon('check-circle')}<span>Request intro opens with your answers filled in: ${esc(introSummary())}. Check it and send.</span></p>
         <div class="grid g-3 pg-sugg">${ops.map((op, i) => {
           const fit = RN.model.fit(op, b);
@@ -805,8 +824,12 @@
     clearTimeout(advTimer);
     const st0 = steps();
     const cur = st0.find((x) => stepKeys(x).includes(el.name));
-    // The company step moves on only when both rows are answered
-    if (cur && cur.rows && !stepKeys(cur).every((k) => T.ans[k])) return;
+    // The company step moves on only when both rows are answered; the digits (and their hint) move to the open row
+    if (cur && cur.rows && !stepKeys(cur).every((k) => T.ans[k])) {
+      const open = cur.rows.find((k) => !T.ans[k]);
+      RN.$$('.pg-talk .pg-row').forEach((r) => { const h = r.querySelector('[data-kbd]'); if (h) h.hidden = r.dataset.row !== open; });
+      return;
+    }
     advTimer = setTimeout(() => {
       if (!onTalk()) return;
       const st = steps();
@@ -823,6 +846,7 @@
     if (el.name in T) T[el.name] = el.value;
     const field = el.closest('.field');
     if (field) field.classList.remove('is-missing');
+    el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby');
     // The error goes once every field it named has an answer; Send checks them again
     T.missing = (T.missing || []).filter((k) => k !== el.name);
     if (T.err && !T.missing.length) { T.err = ''; const err = el.closest('form') && el.closest('form').querySelector('.pg-err'); if (err) err.remove(); }
@@ -832,12 +856,15 @@
   RN.actions['pg-talk-back'] = () => { clearTimeout(advTimer); T.step = Math.max(0, T.step - 1); T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-jump'] = (el) => { clearTimeout(advTimer); T.step = +el.dataset.i || 0; T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-reset'] = () => { T = Object.assign(fresh(), { usedSearch: T.usedSearch }); save(); if (curView() === 'talk') RN.render(); else RN.go('talk'); };
-  RN.actions['pg-talk-browse'] = () => { const s = suggest(); goBrowse({ filters: s.filters }); };
+  RN.actions['pg-talk-browse'] = (el) => {
+    const s = suggest();
+    const loose = el && el.dataset && el.dataset.loose;
+    goBrowse({ filters: loose ? (s.filters.roleCategories ? { roleCategories: s.filters.roleCategories.slice() } : {}) : s.filters });
+  };
 
   /* ---------- Send ----------
      The same pipeline for #talk and the embedded forms: suggestions, tracking (Admin demand and Studio "Why you
      appeared", the same event shapes Browse logs), the two emails, then the done screen. */
-  const SENT_TOAST = 'Sent. A role profile and 2 to 3 operators follow within 48 hours.';
   function send() {
     T.err = '';
     T.missing = [];
@@ -851,12 +878,12 @@
     T.sentAt = RN.now().toISOString();
     save();
     RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { need: T.ans.need, timing: T.ans.timing, fn: T.ans.fn || undefined, embed: T.fn || undefined, searched: T.search ? T.search.q : undefined } });
-    s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk' }));
+    s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk', meta: { need: T.ans.need } }));
     RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: T.fn ? 'talk-embed' : 'talk' });
     const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : []);
     const names = s.top.map((r) => r.op.name);
-    RN.mail(TEAM, `Talk to us: ${f ? BR[f].label : needLabel}`, `${T.name} <${T.email}>${T.company ? ', ' + T.company : ''}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nSend the role profile and 2 to 3 operators within 48 hours.`, 'lead');
-    RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team is on it. You will get a written role profile and 2 to 3 vetted operators at this address, often within 48 hours.\n\nYour request\n${lines.join('\n')}\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book your discovery call from the confirmation page.`, 'talk');
+    RN.mail(TEAM, `Talk to us: ${f ? BR[f].label : needLabel}`, `${T.name} <${T.email}>${T.company ? ', ' + T.company : ''}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nSend ${deliverFor(nowKey())} within 48 hours.`, 'lead');
+    RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team is on it. You will get ${deliverFor(nowKey())} at this address, often within 48 hours.\n\nYour request\n${lines.join('\n')}\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book your discovery call from the confirmation page.`, 'talk');
   }
 
   RN.submits['pg-talk-send'] = (form, data) => {
@@ -865,16 +892,17 @@
     T.company = trim(data.company);
     T.problem = trim(data.problem).slice(0, PROBLEM_MAX);
     T.decides = trim(data.decides);
-    const missing = [!T.name && 'name', !EMAIL_RE.test(T.email) && 'email', !T.problem && 'problem'].filter(Boolean);
+    const personal = EMAIL_RE.test(T.email) && personalEmail(T.email);
+    const missing = [!T.name && 'name', (!EMAIL_RE.test(T.email) || personal) && 'email', !T.problem && 'problem'].filter(Boolean);
     if (missing.length) {
-      T.err = needErr(missing);
+      T.err = missing.length === 1 && personal ? WORK_EMAIL_ERR : needErr(missing);
       T.missing = missing;
       T.focus = { name: 'pg-name', email: 'pg-email', problem: 'pg-problem' }[missing[0]];
       save(); RN.rerender(); return;
     }
     send();
     RN.render();
-    RN.ui.toast(SENT_TOAST, { icon: 'send' });
+    RN.ui.toast(sentToast(), { icon: 'send' });
   };
 
   /* Request intro from a suggestion: open the shared intro sheet with the Talk answers prefilled.
@@ -928,11 +956,16 @@
   const embId = (fn, k) => `pg-emb-${fn}-${k}`;
   function embRow(fn, E, k, fieldKey) {
     const d = RN.fields[fieldKey];
-    return `<div class="pg-emb-row${E.missing.includes(k) ? ' is-missing' : ''}" data-row="${esc(k)}">
+    const missing = E.missing.includes(k);
+    // A missing chip row points a screen reader at the error that names it
+    const ctl = RN.w.control(fieldKey, E.ans[k] || '', { name: k, id: embId(fn, k), change: 'pg-emb-pick' });
+    return `<div class="pg-emb-row${missing ? ' is-missing' : ''}" data-row="${esc(k)}">
       <span class="pg-emb-l" id="${embId(fn, k)}-l">${esc(d.label)}</span>
-      ${RN.w.control(fieldKey, E.ans[k] || '', { name: k, id: embId(fn, k), change: 'pg-emb-pick' })}
+      ${missing && E.err ? ctl.replace('class="chipset"', `class="chipset" aria-invalid="true" aria-describedby="${embId(fn, 'err')}"`) : ctl}
     </div>`;
   }
+  // The pick rows in the order each page's form block lists them. The cost hub asks the function first and no company type.
+  const EMB_PICKS = (fn) => (fn === 'cost' ? ['fn', 'seat', 'revenueBand', 'timing'] : ['companyType', 'revenueBand', 'seat', 'timing']);
   function embed(o) {
     const fn = EMB_FN(o && o.fn);
     const E = embState(fn);
@@ -944,24 +977,23 @@
     const email = E.email || (buyer ? buyer.email : '');
     const miss = (k) => (E.missing.includes(k) ? ' is-missing' : '');
     const id = (k) => embId(fn, k);
+    const inv = (k) => (E.missing.includes(k) && E.err ? ` aria-invalid="true" aria-describedby="${id('err')}"` : '');
+    const ROW_KEY = { fn: 'talkFunction', companyType: K.companyType, revenueBand: K.revenueBand, seat: K.seat, timing: fn === 'cost' ? 'talkTimingCost' : 'talkTiming' };
+    const row = (k) => (k === 'seat' ? `<div class="pg-emb-seat" data-seat>${embRow(fn, E, 'seat', K.seat)}</div>` : embRow(fn, E, k, ROW_KEY[k]));
     return `<form class="pg-emb" data-submit="pg-talk-embed" data-fn="${esc(fn)}" novalidate aria-label="Talk to us">
       <div class="pg-emb-picks">
-        ${fn === 'cost' ? embRow(fn, E, 'fn', 'talkFunction') : ''}
-        ${embRow(fn, E, 'companyType', K.companyType)}
-        ${embRow(fn, E, 'revenueBand', K.revenueBand)}
-        <div class="pg-emb-seat" data-seat>${embRow(fn, E, 'seat', K.seat)}</div>
-        ${embRow(fn, E, 'timing', 'talkTiming')}
+        ${EMB_PICKS(fn).map(row).join('')}
       </div>
       <div class="pg-emb-write">
-        <div class="field${miss('problem')}" data-row="problem"><label for="${id('problem')}"><span>${esc(B.problem)}</span>${counter(E.problem)}</label><textarea class="textarea input" id="${id('problem')}" name="problem" maxlength="${PROBLEM_MAX}" rows="3" placeholder="The problem in your words" data-input="pg-emb-text">${esc(E.problem)}</textarea></div>
+        <div class="field${miss('problem')}" data-row="problem"><label for="${id('problem')}"><span>${esc(B.problem)}</span>${counter(E.problem)}</label><textarea class="textarea input" id="${id('problem')}" name="problem" maxlength="${PROBLEM_MAX}" rows="3" placeholder="The problem in your words" data-input="pg-emb-text"${inv('problem')}>${esc(E.problem)}</textarea></div>
         <div class="field" data-row="decides"><label for="${id('decides')}">Who else decides <span class="opt">Optional</span></label><input class="input" id="${id('decides')}" name="decides" value="${esc(E.decides)}" placeholder="${esc(B.decides)}" data-input="pg-emb-text"></div>
         <div class="grid g-2 pg-emb-who">
-          <div class="field${miss('name')}" data-row="name"><label for="${id('name')}">Your name</label><input class="input" id="${id('name')}" name="name" value="${esc(name)}" placeholder="${esc(RN.fields.fullName.placeholder)}" autocomplete="name" data-input="pg-emb-text"></div>
-          <div class="field${miss('email')}" data-row="email"><label for="${id('email')}">${esc(RN.fields.email.label)}</label><input class="input" id="${id('email')}" name="email" type="email" value="${esc(email)}" placeholder="${esc(RN.fields.email.placeholder)}" autocomplete="email" data-input="pg-emb-text"></div>
+          <div class="field${miss('name')}" data-row="name"><label for="${id('name')}">Your name</label><input class="input" id="${id('name')}" name="name" value="${esc(name)}" placeholder="${esc(RN.fields.fullName.placeholder)}" autocomplete="name" data-input="pg-emb-text"${inv('name')}></div>
+          <div class="field${miss('email')}" data-row="email"><label for="${id('email')}">${esc(RN.fields.email.label)}</label><input class="input" id="${id('email')}" name="email" type="email" value="${esc(email)}" placeholder="${esc(RN.fields.email.placeholder)}" autocomplete="email" data-input="pg-emb-text"${inv('email')}></div>
         </div>
       </div>
-      <p class="pg-err" role="alert" data-err${E.err ? '' : ' hidden'}>${icon('info')}<span>${esc(E.err)}</span></p>
-      <div class="pg-emb-foot"><button class="btn btn-leaf btn-lg" type="submit">Send${icon('arrow')}</button><span class="small">A role profile plus 2 to 3 vetted operators, often within 48 hours. No sales sequence, and no fees for companies.</span></div>
+      <p class="pg-err" id="${id('err')}" role="alert" data-err${E.err ? '' : ' hidden'}>${icon('info')}<span>${esc(E.err)}</span></p>
+      <div class="pg-emb-foot"><button class="btn btn-leaf btn-lg" type="submit">Send${icon('arrow')}</button><span class="small">${esc(promiseLine(fn))}</span></div>
     </form>`;
   }
   window.RN.talk = { embed };
@@ -969,7 +1001,10 @@
   // An answered field drops out of the error; the error goes once every field it named has one
   function embAnswered(form, E, el) {
     const row = el.closest('[data-row]');
-    if (row) row.classList.remove('is-missing');
+    if (row) {
+      row.classList.remove('is-missing');
+      RN.$$('[aria-invalid], [aria-describedby]', row).forEach((x) => { x.removeAttribute('aria-invalid'); if (x.getAttribute('aria-describedby') === embId(form.dataset.fn, 'err')) x.removeAttribute('aria-describedby'); });
+    }
     E.missing = E.missing.filter((k) => k !== el.name);
     if (E.err && !E.missing.length) { E.err = ''; const err = form.querySelector('[data-err]'); if (err) err.hidden = true; }
   }
@@ -1002,17 +1037,27 @@
     ['fn', 'companyType', 'revenueBand', 'seat', 'timing'].forEach((k) => { if (data[k] !== undefined) E.ans[k] = data[k]; });
     E.name = trim(data.name); E.email = trim(data.email); E.problem = trim(data.problem).slice(0, PROBLEM_MAX); E.decides = trim(data.decides);
     const missing = [];
-    if (fn === 'cost' && !E.ans.fn) missing.push('fn');
-    ['companyType', 'revenueBand', 'seat', 'timing'].forEach((k) => { if (!E.ans[k]) missing.push(k); });
+    EMB_PICKS(fn).forEach((k) => { if (!E.ans[k]) missing.push(k); });
     if (!E.problem) missing.push('problem');
     if (!E.name) missing.push('name');
-    if (!EMAIL_RE.test(E.email)) missing.push('email');
+    const personal = EMAIL_RE.test(E.email) && personalEmail(E.email);
+    if (!EMAIL_RE.test(E.email) || personal) missing.push('email');
     E.missing = missing;
     const errEl = form.querySelector('[data-err]');
+    const errId = embId(fn, 'err');
     if (missing.length) {
-      E.err = needErr(missing);
+      E.err = missing.length === 1 && personal ? WORK_EMAIL_ERR : needErr(missing);
       RN.$$('.is-missing', form).forEach((x) => x.classList.remove('is-missing'));
-      missing.forEach((k) => { const box = form.querySelector(`[data-row="${k}"]`); if (box) box.classList.add('is-missing'); });
+      RN.$$('[aria-invalid]', form).forEach((x) => { x.removeAttribute('aria-invalid'); x.removeAttribute('aria-describedby'); });
+      missing.forEach((k) => {
+        const box = form.querySelector(`[data-row="${k}"]`);
+        if (!box) return;
+        box.classList.add('is-missing');
+        const input = box.querySelector('.input');
+        if (input) { input.setAttribute('aria-invalid', 'true'); input.setAttribute('aria-describedby', errId); }
+        const group = box.querySelector('.chipset');
+        if (group) { group.setAttribute('aria-invalid', 'true'); group.setAttribute('aria-describedby', errId); }
+      });
       if (errEl) { errEl.hidden = false; errEl.querySelector('span').textContent = E.err; }
       const first = form.querySelector(`[data-row="${missing[0]}"] .chip, [data-row="${missing[0]}"] .input`);
       if (first) first.focus();
@@ -1030,7 +1075,7 @@
     send();
     delete EMB[fn];
     RN.go('talk');
-    RN.ui.toast(SENT_TOAST, { icon: 'send' });
+    RN.ui.toast(sentToast(), { icon: 'send' });
   };
 
   /* ---------- Book a call: 6 upcoming weekday slots from the simulated clock ---------- */
@@ -1101,8 +1146,13 @@
     if (!T.name) T.name = k.name;
     if (!T.email) T.email = k.email;
     save();
-    const from = curView() || 'site';
-    RN.mail(TEAM, `Call booked: ${label}`, `${k.name} <${k.email}>${k.company ? ', ' + k.company : ''} booked a 30-minute call from the ${from} page.${T.done ? '\n\nTalk to us answers:\n' + recap({ text: true }).join('\n') : ''}`, 'call');
+    // The page in plain words for the team (its title), and one event source for both Talk to us routes
+    const cur = RN.currentRoute && RN.currentRoute();
+    const vname = curView();
+    const onTalkPage = vname === 'talk' || vname === 'talk-need';
+    const page = onTalkPage ? 'Talk to us' : cur && cur.view && typeof cur.view.title === 'function' ? cur.view.title(cur.params || {}) : 'site';
+    const from = onTalkPage ? 'talk' : vname || 'site';
+    RN.mail(TEAM, `Call booked: ${label}`, `${k.name} <${k.email}>${k.company ? ', ' + k.company : ''} booked a 30-minute call from the ${page} page.${T.done ? '\n\nTalk to us answers:\n' + recap({ text: true }).join('\n') : ''}`, 'call');
     RN.mail(k.email, `Your call with Revenue Nomad: ${label}`, `Thanks, ${RN.fmt.first(k.name)}. You are booked for ${label}, 30 minutes. A calendar invite with the video link is on its way.\n\nNeed another time? Reply to this email or call ${PHONE}.`, 'call');
     RN.track('contact_submit', { kind: 'call', source: from });
     RN.ui.closeModal();

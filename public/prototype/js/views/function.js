@@ -3,11 +3,13 @@
    template: hero, who would I get, what it costs, what happens first, who like me has done this, how we vet, FAQ,
    form block. Prefix fn- for classes and actions.
    Copy is transcribed as written. A [GAP: what, owner] in the document renders as a pending chip (RN.fn.gap) and is
-   never filled with a guess. Companies pay no fees (founder decision D1), so the full-time conversion answers read
-   "Yes." and the Terms row defers the conversion terms to Matt; operator fees are explained only on operator pages.
+   never filled with a guess. Companies pay no fees (founder decision D1, Sep 25, 2026), so the full-time conversion
+   answers read "Yes.", the Terms row defers the conversion terms to Matt, and the Terms table states D1 once ("Fees
+   for companies: None"), which answers the Content Bank's open platform-fee question. Operator fees are explained
+   only on operator pages.
    Shared with other views:
      RN.fn.logoStrip({ label, network, pending, scale, bare, className })
-                                                       the nine cleared client logos as one row (files for four, wordmarks for five);
+                                                       the nine cleared client logos as one row (files for three, wordmarks for six);
                                                        network adds the 350+ figure, pending the Goldenbird chip, scale resizes the
                                                        marks (1 = 20px cap height), bare drops the top rule and margin
      RN.fn.gap(what, owner)                            the pending chip
@@ -41,8 +43,9 @@
   }
 
   /* ---------- The cleared client logos ----------
-     Only these nine may appear (content playbook, Oct 10, 2026). Files exist for four; the other five are wordmarks
-     in the display face. Heights are set by eye so each mark reads at the same cap height. Every image is flattened
+     Only these nine may appear (content playbook, Oct 10, 2026). Ferry, Skaled and BuildingLink render from their
+     files; the other six are wordmarks in the display face (Trialbee's file is a stacked mark whose name is unreadable at strip height, so it is a
+     wordmark too). Heights are set by eye so each mark reads at the same cap height. Every image is flattened
      to one ink by a filter (--fn-logo-filter in function.css), which also keeps the light-grey Skaled file visible
      on paper and turns every mark white on .night and in the dark theme. */
   FN.LOGOS = [
@@ -51,7 +54,7 @@
     ['skaled', 'Skaled', 'skaled', 13],
     ['claruscare', 'ClarusCare', null, 0],
     ['buildinglink', 'BuildingLink', 'buildinglink', 19],
-    ['trialbee', 'Trialbee', 'trialbee', 40],
+    ['trialbee', 'Trialbee', null, 0],
     ['csi', 'CSI Pharmacy', null, 0],
     ['angellist', 'AngelList', null, 0],
     ['lockthreat', 'LockThreat', null, 0],
@@ -60,12 +63,12 @@
     o = o || {};
     const L = RN.data.logos || {};
     const items = FN.LOGOS.map(([key, name, img, h]) => {
-      const src = img && typeof L[img] === 'string' ? L[img] : (typeof L[key] === 'string' ? L[key] : '');
+      const src = img && typeof L[img] === 'string' ? L[img] : '';
       const px = Math.round((h || 20) * (o.scale || 1));
       return `<li>${src ? `<img src="${src}" alt="${esc(name)}" style="--h:${px}px" loading="lazy">` : `<span class="fn-wm">${esc(name)}</span>`}</li>`;
     }).join('');
     return `<div class="fn-logos${o.bare ? ' fn-logos-bare' : ''}${o.className ? ' ' + esc(o.className) : ''}">
-      <div class="fn-logos-l"><span class="label">${esc(o.label || 'Trusted by teams at')}</span>${o.pending ? FN.gap('logo files for the other five', 'Goldenbird') : ''}</div>
+      <div class="fn-logos-l"><span class="label">${esc(o.label || 'Trusted by teams at')}</span>${o.pending ? FN.gap('logo files', 'Goldenbird') : ''}</div>
       <ul aria-label="Client logos">${items}${o.network ? `<li class="fn-logos-net"><b>${esc(NET())}</b><span>operators</span></li>` : ''}</ul>
     </div>`;
   };
@@ -323,7 +326,6 @@
       ],
     },
     riSeats: ['Sales manager', 'Director of sales', 'VP of Sales', 'CRO', 'RevOps lead', 'Fractional CMO'],
-    riCats: [['sales_leadership', 'Sales leadership'], ['revenue_operations', 'RevOps'], ['marketing', 'Marketing']],
     outside: 'For outside reference, Go Fractional puts the average fractional hourly rate at $161 as of July 23 2026, across all functions. Fractional VP of Sales arrangements are commonly cited at $8,000 to $20,000 a month (a secondary source).',
     moves: {
       items: [
@@ -347,7 +349,7 @@
     total: {
       cols: ['Seat', 'Full-time', 'Fractional, from our 2026 engagements'], blankFirst: true,
       rows: [
-        ['VP of Sales', 'About $334K average total comp a year, average tenure about 19 months (secondary source)', '$48,000 to $120,000 a year for a director or VP at 20 to 40 hours a month'],
+        ['VP of Sales', 'About $334K average total comp a year, average tenure about 19 months (secondary)', '$48,000 to $120,000 a year for a director or VP at 20 to 40 hours a month'],
         ['CRO, ~$55M company', 'Client benchmarked up to about $800K all in', '$27,500 assessment plus 12 months at $23,200, about $306,000'],
         ['RevOps assessment, enterprise SaaS', 'Large consultancy quoted about $230K for 6 weeks', '$27,000 a month for a senior architect at about 2.5 days a week'],
         ['Replacing a sales leader', 'Can cost 1.5x salary, with 3+ months of ramp', 'Swap the operator, then 30 days notice after the initial term'],
@@ -367,7 +369,7 @@
         ['Overage', 'Hours tracked and flagged before an overage happens. Small overages, e.g. up to 15%, may be agreed in the contract without extra consent'],
         ['Swap-out', 'If the fit is wrong, you can swap the operator'],
         ['Full-time conversion', 'You can hire the operator full time. The terms for that are being confirmed. [[gap:conversion terms|Matt]]'],
-        ['Platform fee', 'You pay the operator’s rate. [[gap:confirm no platform or matching fee separate from the operator rate|Matt]]'],
+        ['Fees for companies', 'None. You pay the operator’s rate.'],
       ],
     },
     faq: [
@@ -399,7 +401,7 @@
   /* A figure in the hero stat block: "350+" gets a unit span, "2 to 3" a quieter "to" */
   function figure(v) {
     if (v === 'net') v = NET();
-    return esc(v).replace(/ to /g, '<span class="fn-to">to</span>').replace(/\+$/, '<span class="fn-u">+</span>');
+    return esc(v).replace(/ to /g, '<span class="fn-to"> to </span>').replace(/\+$/, '<span class="fn-u">+</span>');
   }
   function stats(d) {
     return `<dl class="fn-stats" aria-label="${esc(d.eyebrow)} at a glance">${d.stats.map(([v, l]) => `<div class="fn-stat"><dt class="fn-stat-l">${esc(l)}</dt><dd class="fn-stat-v">${figure(v)}</dd></div>`).join('')}</dl>`;
@@ -421,13 +423,29 @@
       .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0) || String(a.name).localeCompare(String(b.name)))
       .slice(0, 3);
   }
+  /* The row each page's card spec adds (Site pages, section 2): revenue bands on sales, engagement type on RevOps,
+     lean on marketing (demand gen or brand, from the operator's own focus areas; both when they list both). */
+  const DEMAND = /demand gen/i;
+  const BRAND = /^(brand\b|founder brand|rebranding|series a\/b brand)/i;
+  function cardRow(d, op) {
+    let l = '', v = '';
+    if (d.fn === 'sales') { l = 'Revenue bands'; v = (op.revenueRanges || []).map((x) => RN.w.label('revenueRange', x)).join(', '); }
+    else if (d.fn === 'revops') { l = 'Engagement type'; v = (op.engagementTypes || []).map((x) => RN.w.label('engagementTypes', x)).join(', '); }
+    else if (d.fn === 'marketing') {
+      l = 'Lean';
+      const t = (op.tags || []).map((x) => x.t);
+      const dg = t.some((x) => DEMAND.test(x)), br = t.some((x) => BRAND.test(x));
+      v = dg && br ? 'Demand gen and brand' : dg ? 'Demand gen' : br ? 'Brand' : '';
+    }
+    return v ? `<p class="fn-card-row"><span class="label">${esc(l)}</span><span>${esc(v)}</span></p>` : '';
+  }
   function who(d) {
     const ops = featured(d.cat);
-    const gaps = [['featured picks', 'Matt'], ['operator OK needed for each named operator', 'Operator']].concat(d.who.gaps || []);
+    const gaps = [['featured operator picks', 'Matt'], ['operator OK needed for each named operator', 'Operator']].concat(d.who.gaps || []);
     return sec('who', true, `${PG.shead('Operators', 'Who would I get', esc(RN.fmt.smart(d.who.lede)))}
       <div class="fn-feat-hd"><h3 class="h4">Featured operators</h3>${gaps.map(([w, o]) => FN.gap(w, o)).join('')}</div>
       <p class="fn-feat-note small muted">Shown by Reputation Index until the featured picks are confirmed. Every profile is open, no login needed.</p>
-      ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(op, { cta: 'profile' })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
+      ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(op, { cta: 'profile', meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
       <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(RN.fields.catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>`);
   }
 
@@ -474,17 +492,24 @@
       ${rows.map(([f, w]) => `<div class="fn-score-r" role="row"><span class="fn-score-f" role="cell">${esc(f)}</span><span class="fn-score-bar" aria-hidden="true"><i style="--w:${Math.round((w / max) * 100)}%"></i></span><b class="fn-score-w num" role="cell">${esc(w)}%</b></div>`).join('')}
     </div>`;
   }
-  function story(parts) {
-    return `<article class="fn-story">${parts.map((p) => {
+  function story(parts, wide) {
+    const part = (p) => {
       if (p.table) return scorecard(p.table);
       const l = p[0], t = p[1];
       return `<div class="fn-story-p">${l ? `<span class="fn-story-l">${esc(l)}</span>` : ''}<p>${rich(t)}</p></div>`;
-    }).join('')}</article>`;
+    };
+    // Full width: the narrative in one column, the scorecard beside it
+    const sc = wide && parts.find((p) => p && p.table);
+    if (sc) return `<article class="fn-story fn-story-split"><div class="fn-story-col">${parts.filter((p) => !p.table).map(part).join('')}</div><div class="fn-story-col">${scorecard(sc.table)}</div></article>`;
+    return `<article class="fn-story">${parts.map(part).join('')}</article>`;
   }
   function stories(d) {
     const n = d.stories.length;
+    // The marketing scorecard makes one story far taller than the other, so those stories run full width in two
+    // columns (the scorecard beside the narrative) instead of leaving a void beside a short card
+    const wide = d.stories.some((st) => st.some((p) => p && p.table));
     return sec('proof', false, `${PG.shead('Proof', 'Who like me has done this', d.storiesLede ? esc(RN.fmt.smart(d.storiesLede)) : '')}
-      <div class="grid g-${n > 2 ? 3 : 2} fn-stories">${d.stories.map(story).join('')}</div>
+      <div class="grid ${wide ? 'fn-stories-wide' : `g-${n > 2 ? 3 : 2}`} fn-stories">${d.stories.map((st) => story(st, wide)).join('')}</div>
       ${FN.logoStrip({ network: true, pending: true })}`);
   }
 
@@ -511,8 +536,8 @@
     return `<div class="fn-form-card">
       <div class="fn-form-card-hd"><span class="label">The form asks</span>${FN.gap('form ships Oct 30', 'Rapid Neuron')}</div>
       <ol class="fn-form-q">${d.form.fields.map(([l, p]) => `<li><b>${esc(l)}</b><span>${esc(p)}</span></li>`).join('')}</ol>
-      <div class="fn-form-cta"><a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pg-book">${icon('calendar')}Book a call</button></div>
-      <p class="fn-form-fine small">Every answer goes to a person. A real reply within one business day.</p>
+      <div class="fn-form-cta"><a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pg-book">${icon('calendar')}Book your discovery call</button></div>
+      <p class="fn-form-fine small">Every answer goes to a person.</p>
     </div>`;
   }
   function formBlock(d) {
@@ -525,7 +550,7 @@
         <span class="eyebrow">Talk to us</span>
         <h2 class="h2">${esc(d.form.h)}</h2>
         <p class="lede">${esc(RN.fmt.smart(d.form.lede))}</p>
-        <p class="fn-form-alt">Rather talk now? <button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call</button></p>
+        <p class="fn-form-alt">Rather talk now? <button type="button" class="act" data-act="pg-book">${icon('calendar')}Book your discovery call</button></p>
       </div>
       <div class="fn-form-r${embed ? ' has-embed' : ''}">${embed || fallback(d)}</div>
     </div></section>`;
@@ -534,23 +559,18 @@
   /* ---------- Cost hub pieces ---------- */
   function rates(d) {
     const ri = { cols: ['Seat', 'Median rate, typical hours and typical monthly'], rows: d.riSeats.map((s) => ({ seat: s, gap: ['2027 survey figure', 'Survey'] })) };
-    const today = d.riCats.map(([k, l]) => {
-      const r = RN.model.rateFor(k), m = RN.model.monthlyRange(k, null, '40');
-      return `<tr style="--k:${RN.fields.catColor(k)}"><th scope="row"><i class="fn-cat" aria-hidden="true"></i>${esc(l)}</th><td class="r num">${esc(RN.fmt.usd(r.p50))}<span class="fn-per">/hr</span></td><td class="r num">${esc(m.label)}</td></tr>`;
-    }).join('');
     return sec('rates', true, `${PG.shead('2026 engagements', 'Rates by seat', esc(d.hero.lede.split('. ')[0] + '.'))}
       ${table(d.rates, { wide: true, cost: true, label: 'Rates by seat, 2026 engagements' })}
       <div class="fn-ri">
         <div class="fn-ri-l">
-          <div class="fn-ri-hd"><h3 class="h4">Rate Index by seat</h3>${FN.gap('2027 survey figures, six seats', 'Survey')}</div>
+          <div class="fn-ri-hd"><h3 class="h4">Rate Index by seat</h3>${FN.gap('2027 survey figure', 'Survey')}</div>
           ${table(ri, { label: 'Rate Index by seat' })}
         </div>
-        <aside class="fn-ri-r">
-          <div class="fn-ri-hd"><h3 class="h4">Rate Index today, by role category</h3>${RN.ui.illus('Illustrative figures')}</div>
-          <div class="fn-tblw"><table class="fn-tbl fn-tbl-ri" aria-label="Rate Index today, by role category">
-            <thead><tr><th scope="col">Role category</th><th scope="col" class="r">Median rate</th><th scope="col" class="r">A month at 40 hours</th></tr></thead>
-            <tbody>${today}</tbody></table></div>
-          <p class="fn-ri-note small">Interim medians from the Rate Index, per role category rather than per seat. The 2027 survey figures replace them in December.</p>
+        <aside class="fn-ri-r" aria-label="Until the survey lands">
+          <span class="fn-ri-ic" aria-hidden="true">${icon('chart')}</span>
+          <h3 class="h4">Until the survey lands</h3>
+          <p class="small">Results from our State of Fractional GTM survey land in early December 2026, and these six seats update then. The Rate Index has hourly medians by role category in the meantime, updated quarterly.</p>
+          <a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a>
         </aside>
       </div>
       <p class="pg-p fn-outside">${rich(d.outside)}</p>`);
@@ -574,10 +594,22 @@
   const homeView = (d) => `<div class="fn-page" data-fn="${esc(d.fn)}">${hero(d)}${who(d)}${cost(d)}${first(d)}${stories(d)}${vet(d)}${faq(d)}${formBlock(d)}</div>`;
   const costView = (d) => `<div class="fn-page fn-page-cost" data-fn="${esc(d.fn)}">${hero(d)}${rates(d)}${moves(d)}${models(d)}${total(d)}${terms(d)}${faq(d)}${formBlock(d)}</div>`;
 
+  /* A wide table scrolls sideways inside its column when the column is narrower than the table. The hint under it
+     shows only then: a ResizeObserver marks each overflowing wrapper with .is-scroll. */
+  let tblObs = null;
+  function mount(root) {
+    unmount();
+    const wraps = RN.$$('.fn-tblw', root);
+    const mark = () => wraps.forEach((w) => w.classList.toggle('is-scroll', w.scrollWidth > w.clientWidth + 1));
+    mark();
+    if (typeof ResizeObserver === 'function') { tblObs = new ResizeObserver(mark); wraps.forEach((w) => tblObs.observe(w)); }
+  }
+  function unmount() { if (tblObs) { tblObs.disconnect(); tblObs = null; } }
+
   [SALES, REVOPS, MARKETING].forEach((d) => {
-    RN.view(d.name, { route: d.name, nav: '', title: () => d.title, render: () => homeView(d) });
+    RN.view(d.name, { route: d.name, nav: '', title: () => d.title, render: () => homeView(d), mount, unmount });
   });
-  RN.view(COST.name, { route: COST.name, nav: '', title: () => COST.title, render: () => costView(COST) });
+  RN.view(COST.name, { route: COST.name, nav: '', title: () => COST.title, render: () => costView(COST), mount, unmount });
 
   /* The hero's Talk to us scrolls to this page's form block and puts focus on its first control */
   RN.actions['fn-talk'] = () => {

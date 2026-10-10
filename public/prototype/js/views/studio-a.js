@@ -32,6 +32,14 @@
   const periodLabel = (d) => (d === 7 ? 'this week' : `the last ${d} days`);
   const prevLabel = (d) => (d === 7 ? 'vs last week' : `vs previous ${d} days`);
   const quote = (s) => `“${esc(s)}”`;
+  /* Talk to us logs the need label as the query ("Fix CRM, data and reporting") and the need itself in meta.
+     Read it as a sentence with its acronyms kept; a client who is not sure yet reads as one. */
+  const talkNeed = (e) => {
+    const q = String(e.q || '');
+    if (!q) return '';
+    if ((e.meta && e.meta.need) === 'not_sure' || q === RN.w.label('need', 'not_sure')) return ' still working out what it needs';
+    return ' who needs to ' + esc(q.charAt(0).toLowerCase() + q.slice(1));
+  };
   const tabHref = (k) => '#studio' + (k === 'overview' ? '' : '.' + k);
 
   function firmo(b) {
@@ -294,7 +302,7 @@
         if (searchSeen[k]) return; searchSeen[k] = 1;
         const where = e.surface === 'homepage_emerging' ? 'You appeared in the homepage Emerging row'
           : e.surface === 'homepage_carousel' || e.source === 'home' ? 'You were featured on the homepage'
-          : e.source === 'talk' ? `You were suggested to a company${e.q ? ' who needs to ' + e.q.toLowerCase() : ''}`
+          : e.source === 'talk' ? `You were suggested to a company${talkNeed(e)}`
           : e.surface === 'related_operators' ? 'You were suggested as a similar operator'
           : e.q ? `You appeared in a company search for ${quote(e.q)}` : (e.tags || []).length ? `You appeared in a company search for ${e.tags.map(quote).join(' + ')}` : e.source === 'category' ? 'You appeared on a category page' : 'You appeared in company search results';
         items.push({ ts: e.ts, ic: e.source === 'home' ? 'home' : 'search', live: true, text: where, meta: [e.buyer ? cap(f.who) : 'A visitor', e.position ? 'position ' + e.position : ''].filter(Boolean).join(' · '), to: 'studio.visibility' });
