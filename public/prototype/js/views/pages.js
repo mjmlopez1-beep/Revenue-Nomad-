@@ -1253,6 +1253,10 @@
     aboutOff = () => { window.removeEventListener('scroll', on); window.removeEventListener('resize', on); if (raf) cancelAnimationFrame(raf); aboutOff = null; };
   }
   function aboutUnmount() { if (aboutOff) aboutOff(); }
+  /* Shared with the function homes and the cost hub (js/views/function.js): the same page head, section head,
+     dark band, FAQ list and CORE copy, so every company page is built from one set of pieces. */
+  PG.hero = hero; PG.shead = shead; PG.band = band; PG.talkActions = talkActions; PG.CORE_COPY = CORE_COPY;
+  PG.faq = (items, o) => `<div class="pg-faq">${items.map(([q, a], i) => `<details${i === 0 && !(o && o.closed) ? ' open' : ''}><summary>${esc(q)}${icon('chev-down')}</summary><p class="pg-p">${esc(a)}</p></details>`).join('')}</div>`;
   RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView, mount: aboutMount, unmount: aboutUnmount });
   RN.view('how', { route: 'how', nav: '', title: () => 'How it works', render: howView });
   RN.view('results', { route: 'results', nav: '', title: () => 'Results', render: resultsView });

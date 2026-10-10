@@ -737,6 +737,14 @@
     mount: (root) => lifecycle(root, reportScroll),
     unmount,
   });
+  // The URL the Content Bank links to for the report (/state-of-fractional); same page as #report
+  RN.view('state-of-fractional', {
+    route: 'state-of-fractional', nav: 'insights', chrome: 'over',
+    title: () => 'The State of Fractional GTM 2027',
+    render: report,
+    mount: (root) => lifecycle(root, reportScroll),
+    unmount,
+  });
 
   /* =====================================================================
      3. RATE INDEX (#rates)
