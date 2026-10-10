@@ -350,6 +350,52 @@
     sales_motion: ['sales_leadership', 'sellers'], pipeline: ['marketing', 'sellers', 'ai_gtm'], team: ['sales_leadership', 'sales_enablement'],
     systems: ['revenue_operations'], ai: ['ai_gtm'], retention: ['customer_success_growth'], partners: ['partnerships'], not_sure: [],
   };
+
+  /* ---------- Talk to us questionnaire (Site pages, section 8 form blocks; Inbound plan) ----------
+     The questions branch by function. On #talk the branch comes from the need; on a function home or the cost hub
+     (RN.talk.embed) it comes from the page. Each branch has its own company type, revenue band and seat lists,
+     its own problem prompt and its own "who else decides" hint. Labels are the founder's copy as written;
+     values are slugs. The generic branch serves the needs no function owns (AI, retention, partners, not sure)
+     and the cost hub's form. */
+  F.talkTiming = { label: 'Timing', type: 'single', options: opts([['this_month', 'This month'], ['1_3_months', '1 to 3 months'], ['exploring', 'Exploring']]) };
+  // The cost hub's first question. It only changes the seat list and the role categories matched.
+  F.talkFunction = { label: 'Function', type: 'single', options: opts([['sales', 'Sales'], ['revops', 'RevOps'], ['marketing', 'Marketing'], ['other', 'Other']]) };
+  F.talkSalesCompanyType = { label: 'Company type', type: 'single', options: opts([['professional_services', 'Professional services'], ['services_led_software', 'Services-led software'], ['agency', 'Agency'], ['other', 'Other']]) };
+  F.talkSalesRevenueBand = { label: 'Revenue band', type: 'single', options: opts([['under_5m', 'Under $5M'], ['5m_20m', '$5M to $20M'], ['20m_75m', '$20M to $75M'], ['75m_plus', '$75M+']]) };
+  F.talkSalesSeat = { label: 'Seat', type: 'single', options: opts([['sales_manager', 'Sales manager'], ['director_sales', 'Director of sales'], ['vp_sales', 'VP of Sales'], ['cro', 'CRO'], ['not_sure', 'Not sure']]) };
+  F.talkRevopsCompanyType = { label: 'Company type', type: 'single', options: opts([['b2b_saas', 'B2B SaaS'], ['services_led_software', 'Services-led software'], ['other', 'Other']]) };
+  F.talkRevopsRevenueBand = { label: 'Revenue band', type: 'single', options: opts([['under_25m', 'Under $25M'], ['25m_100m', '$25M to $100M'], ['100m_plus', '$100M+']]) };
+  F.talkRevopsSeat = { label: 'Seat', type: 'single', options: opts([['revops_assessment', 'RevOps assessment'], ['director_revops', 'Director of RevOps'], ['vp_revops', 'VP RevOps or revenue architect'], ['not_sure', 'Not sure']]) };
+  F.talkMarketingCompanyType = { label: 'Company type', type: 'single', options: opts([['b2b_saas', 'B2B SaaS'], ['home_local_services', 'Home or local services'], ['professional_services', 'Professional services'], ['pe_backed_platform', 'PE-backed platform'], ['other', 'Other']]) };
+  F.talkMarketingRevenueBand = { label: 'Revenue band', type: 'single', options: opts([['under_10m', 'Under $10M'], ['10m_50m', '$10M to $50M'], ['50m_150m', '$50M to $150M'], ['150m_plus', '$150M+']]) };
+  F.talkMarketingSeat = { label: 'Seat', type: 'single', options: opts([['demand_gen', 'Demand gen operator'], ['head_of_growth', 'Head of growth'], ['vp_marketing', 'VP Marketing'], ['fractional_cmo', 'Fractional CMO'], ['not_sure', 'Not sure']]) };
+  F.talkGenericCompanyType = { label: 'Company type', type: 'single', options: opts([['professional_services', 'Professional services'], ['services_led_software', 'Services-led software'], ['b2b_saas', 'B2B SaaS'], ['agency', 'Agency'], ['other', 'Other']]) };
+  F.talkGenericRevenueBand = { label: 'Revenue band', type: 'single', options: opts([['under_5m', 'Under $5M'], ['5m_20m', '$5M to $20M'], ['20m_75m', '$20M to $75M'], ['75m_100m', '$75M to $100M'], ['100m_plus', '$100M+']]) };
+  F.talkGenericSeat = { label: 'Seat', type: 'single', options: opts([['manager', 'Manager'], ['director', 'Director'], ['vp', 'VP'], ['cro_cmo', 'CRO or CMO'], ['not_sure', 'Not sure']]) };
+  // needs: the needs (F.need) that run on the branch. cats: the role categories matched (generic: F.needCats[need]).
+  // noun: the function in running text ("Matched on sales leadership").
+  F.talkBranches = {
+    sales: { label: 'Sales leadership', noun: 'sales leadership', cats: ['sales_leadership'], needs: ['sales_motion', 'team'], companyType: 'talkSalesCompanyType', revenueBand: 'talkSalesRevenueBand', seat: 'talkSalesSeat', problem: 'What is not working in sales right now?', decides: 'Names or roles' },
+    revops: { label: 'RevOps', noun: 'RevOps', cats: ['revenue_operations'], needs: ['systems'], companyType: 'talkRevopsCompanyType', revenueBand: 'talkRevopsRevenueBand', seat: 'talkRevopsSeat', problem: 'What can your team not answer about pipeline or forecast today?', decides: 'e.g. CFO, CEO, board' },
+    marketing: { label: 'Marketing', noun: 'marketing', cats: ['marketing'], needs: ['pipeline'], companyType: 'talkMarketingCompanyType', revenueBand: 'talkMarketingRevenueBand', seat: 'talkMarketingSeat', problem: 'What is happening to lead cost and quality?', decides: 'e.g. CEO, PE operating partner, CRO' },
+    generic: { label: 'Other', noun: 'what you told us', cats: null, needs: ['ai', 'retention', 'partners', 'not_sure'], companyType: 'talkGenericCompanyType', revenueBand: 'talkGenericRevenueBand', seat: 'talkGenericSeat', problem: 'What needs to change?', decides: 'Names or roles' },
+  };
+  F.talkBranchFor = (need) => Object.keys(F.talkBranches).find((k) => k !== 'generic' && F.talkBranches[k].needs.includes(need)) || 'generic';
+  // The cost hub's Function pick as a need (F.need), so its requests track and prefill like every other
+  F.talkFunctionNeed = { sales: 'sales_motion', revops: 'systems', marketing: 'pipeline', other: 'not_sure' };
+  /* Revenue band -> operator revenue range slugs (F.revenueRange) for matching. Deliberately loose: the bands the
+     founder asks companies for do not line up with the ranges operators pick, so a band maps to every operator
+     range it overlaps, and the first slug stands in for the band on an intro request. */
+  F.talkBandRanges = {
+    under_5m: ['pre_revenue', 'under_1m', '1m_5m'], '5m_20m': ['5m_20m'], '20m_75m': ['20m_50m', '50m_plus'], '75m_plus': ['50m_plus'],
+    '75m_100m': ['50m_plus'], '100m_plus': ['50m_plus'],
+    under_25m: ['pre_revenue', 'under_1m', '1m_5m', '5m_20m', '20m_50m'], '25m_100m': ['20m_50m', '50m_plus'],
+    under_10m: ['pre_revenue', 'under_1m', '1m_5m', '5m_20m'], '10m_50m': ['5m_20m', '20m_50m'], '50m_150m': ['50m_plus'], '150m_plus': ['50m_plus'],
+  };
+  // Timing -> operator availability. This month wants operators free now or in 2 weeks; the other two take everyone.
+  F.talkTimingAvail = { this_month: ['available_now', 'available_2_weeks'] };
+  // Timing -> the client's start timeline on an intro request (F.startBy slugs)
+  F.talkTimingStart = { this_month: 'available_now', '1_3_months': 'available_2_plus_weeks', exploring: 'available_2_plus_weeks' };
   // Why an operator passes on an intro or engagement, and why a client says "Not a fit" (Engagements prototype)
   // Work sample types (Studio Portfolio, profile filter chips)
   F.sampleType = { label: 'Type', type: 'single', options: opts(['Playbook', 'Framework', 'Program', 'Process map', 'Template', 'Build', 'System']) };

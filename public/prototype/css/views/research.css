@@ -355,12 +355,21 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-art { min-width: 0; max-width: 760px; }
 .rs-art > .eyebrow { display: block; margin-top: var(--s-4); }
 .rs-g-h1 { margin-top: var(--s-3); max-width: 26ch; }
-.rs-byline { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: var(--s-6); }
-.rs-byline > span:nth-child(2) { display: flex; flex-direction: column; line-height: 1.3; }
-.rs-byline b { font-family: var(--f-display); font-size: var(--t-14); }
-.rs-by-ava { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--forest); color: var(--leaf); }
-.rs-by-ava svg { width: 18px; height: 18px; }
-.rs-byline .illus { margin-left: auto; }
+/* Byline (content playbook): avatar, "By Matt Lopez", then updated, read time and the reviewing operator on one line.
+   The reviewer is a sample operator (marked) until Matt picks one; a missing reviewer shows a dashed pending chip. */
+.rs-byline { display: flex; align-items: center; gap: 12px; margin-top: var(--s-6); }
+.rs-byline .rs-by-ava { flex: 0 0 auto; }
+.rs-by-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; line-height: 1.3; }
+.rs-by-who { width: fit-content; font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); }
+.rs-by-who:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.rs-by-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; font-size: var(--t-13); color: var(--mute); }
+.rs-by-rev { display: inline-flex; align-items: center; gap: 6px; }
+.rs-by-rev::before { content: "·"; margin-left: 8px; color: var(--mute-2); }
+.rs-by-rev a { color: var(--ink); font-weight: 600; }
+.rs-by-rev a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.rs-by-rev .illus { height: 20px; }
+.rs-pend { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 2px 9px 2px 7px; border-radius: 11px; border: 1px dashed color-mix(in srgb, var(--mute) 55%, transparent); background: color-mix(in srgb, var(--ink) 3%, transparent); color: var(--mute); font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .02em; line-height: 1.25; white-space: nowrap; }
+.rs-pend svg { width: 12px; height: 12px; flex: 0 0 auto; opacity: .85; }
 .rs-answer { margin-top: var(--s-8); padding: var(--s-6) var(--s-6) var(--s-6) calc(var(--s-6) + 2px); border-radius: 0 var(--r-card) var(--r-card) 0; border-left: 3px solid var(--accent); background: var(--tint); }
 .rs-answer .label { color: var(--accent); }
 .rs-answer p { margin-top: 10px; font-size: var(--t-18); font-weight: 500; line-height: 1.55; color: var(--ink); }
@@ -452,7 +461,9 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 @media (max-width: 640px) {
   .rs-guide { padding-top: var(--s-6); }
   .rs-answer { padding: var(--s-5); }
-  .rs-byline .illus { margin-left: 0; }
+  /* Phones: the reviewer takes its own line under the date, with no separator dot */
+  .rs-by-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .rs-by-rev::before { display: none; }
   .rs-bp { align-items: flex-start; }
 }
 

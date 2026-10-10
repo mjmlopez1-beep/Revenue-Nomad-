@@ -163,7 +163,9 @@
     if (el && el.classList.contains('over')) el.classList.toggle('stuck', window.scrollY > 40);
   }, { passive: true });
 
-  /* ---------- Footer ---------- */
+  /* ---------- Footer ----------
+     The line under the tagline is the one-sentence brand description fixed for every channel (visibility plan, Oct 2026).
+     Hire lists the three function homes and the cost hub first; How it works and the stories sit under Company. */
   shell.renderFooter = function (view) {
     const el = document.getElementById('ftr');
     el.hidden = view && view.footer === false;
@@ -172,12 +174,12 @@
         <div class="stack" style="--gap:16px">
           <a class="logo" href="#home" style="color:#fff"><img src="assets/brand/mark.png" alt=""><span><b>REVENUE</b><span>NOMAD</span></span></a>
           <p class="serif-up" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch;text-wrap:balance">The home of fractional <span class="nowrap">go-to-market</span> leadership.</p>
-          <p class="small" style="color:var(--night-mute);max-width:40ch">Open profiles, verified proof of work, and the market data behind every engagement.</p>
+          <p class="small" style="color:var(--night-mute);max-width:42ch;text-wrap:pretty">Revenue Nomad matches vetted fractional sales, marketing and RevOps leaders with SaaS and professional services companies.</p>
         </div>
-        <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#engagements">Post an engagement</a><a href="#how">How it works</a><a href="#results">Results</a><a href="#talk">Talk to us</a></div>
+        <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#hire-fractional-sales-vp">Hire a fractional VP of Sales</a><a href="#fractional-revops">Fractional RevOps</a><a href="#fractional-marketing-leadership">Fractional marketing leaders</a><a href="#fractional-cost">What it costs</a><a href="#engagements">Post an engagement</a><a href="#talk">Talk to us</a></div>
         <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
-        <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
-        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
+        <div><h2 class="ftr-h">Insights</h2><a href="#state-of-fractional">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
+        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#how">How it works</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;

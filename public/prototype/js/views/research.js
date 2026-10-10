@@ -1726,6 +1726,10 @@
     const stats = g.stats ? g.stats() : [];
     const updated = RN.fmt.date(g.updated + 'T12:00:00');
     const persona = RN.store.state.persona;
+    // Byline (content playbook): Matt is the author. The reviewer is the highest Reputation Index sample operator in the
+    // guide's category, so no real operator is named as a reviewer without their OK; no sample in that category: pending.
+    const matt = RN.model.matt || { name: 'Matt Lopez', slug: '' };
+    const reviewer = g.cat ? RN.model.ops.filter((o) => o.sample && !o.hidden && o.catKey === g.cat).sort((a, b) => b.ris.score - a.ris.score)[0] : null;
 
     const rel = relatedOps(g);
     const bp = blueprintFor(g.cat, g.bp);
@@ -1752,9 +1756,12 @@
         <span class="eyebrow">${esc(grp.l)}</span>
         <h1 class="h1 rs-g-h1" id="rs-g-h1">${esc(g.q)}</h1>
         <div class="rs-byline">
-          <span class="rs-by-ava" aria-hidden="true">${icon('book')}</span>
-          <span><b>Revenue Nomad Research</b><span class="tiny muted">Last updated <time datetime="${esc(g.updated)}">${esc(updated)}</time> · ${g.mins} min read</span></span>
-          ${illus()}
+          ${RN.ui.avatar(matt, 'ava-sm rs-by-ava', { decorative: true })}
+          <span class="rs-by-txt">
+            <a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a>
+            <span class="rs-by-meta"><span>Updated <time datetime="${esc(g.updated)}">${esc(updated)}</time> · ${g.mins} min read</span>
+              ${reviewer ? `<span class="rs-by-rev">Reviewed by <a href="#op.${esc(reviewer.slug)}">${esc(reviewer.name)}</a>${RN.ui.illus('Illustrative', 'A sample operator stands in as the reviewer until Matt picks one for this guide.')}</span>` : `<span class="rs-by-rev"><span class="rs-pend" title="Owner: Matt">${icon('clock')}Reviewed by an operator, pending</span></span>`}</span>
+          </span>
         </div>
         <div class="rs-answer" role="note" aria-label="Short answer">
           <span class="label">The short answer</span>
@@ -1771,7 +1778,7 @@
         ${ans}
         <footer class="rs-gfoot">
           <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. Market and survey figures in this prototype are illustrative. Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
-          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Revenue Nomad Research, dateModified) and BreadcrumbList.')}
+          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Matt Lopez, reviewedBy the reviewing operator, dateModified) and BreadcrumbList.')}
         </footer>
       </article>
       <aside class="rs-rail" aria-label="On this page">

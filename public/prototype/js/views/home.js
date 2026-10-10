@@ -36,7 +36,11 @@
   /* ---------- Module state (kept across re-renders of the same visit) ---------- */
   const S = { q: '', tags: [], played: false, impressed: false, paused: false, timers: [], offs: [], raf: 0 };
   const PH = 'Describe what you need, or search a role or focus area';
-  const TYPE_WORDS = ['VP of Sales', 'RevOps', 'Demand Generation', 'Outbound Motion Build', 'Partnerships', 'HubSpot'];
+  /* Examples typed into the search, one at a time. Clients search their problem first and the category second
+     (inbound plan, Oct 9, 2026), so phrases in the clients' own words alternate with role words. Each phrase was run
+     through RN.model.search and RN.model.understand (Oct 10, 2026) and kept only if it returns three or more operators
+     or reads as a role category; a question-length phrase reaches Browse through RN.browse.fromText as that category. */
+  const TYPE_WORDS = ['founder still running sales', 'VP of Sales', 'why is my forecast wrong', 'RevOps', 'how to vet a fractional CMO', 'Demand Generation', 'should I hire a VP of Sales or a fractional', 'reps with no process', 'HubSpot', 'what does a fractional VP of Sales cost'];
   const PROVEN = 60; // Reputation Index floor above the Emerging row (RN.fields.risUnlocks)
   const TRUSTED = 70; // Reputation Index floor for the Top operators carousel
   const CAR_MS = 5000; // carousel auto-advance interval
@@ -239,6 +243,28 @@
     </section>`;
   }
 
+  /* ---------- Start from the seat ----------
+     The three function homes (site-pages copy, Oct 10, 2026): each card carries the page's hero line, who it is for
+     from the hero paragraph, and the live operator count in that category; the cost hub follows. Plain links, since the
+     pages render in function.js. */
+  const SEATS = [
+    { cat: 'sales_leadership', to: 'hire-fractional-sales-vp', h: 'Fractional sales leadership for founders who are still the sales team', who: 'You carry the number, coach reps and run the company.' },
+    { cat: 'revenue_operations', to: 'fractional-revops', h: 'Fractional RevOps for $25M to $100M SaaS teams that cannot explain their own pipeline', who: 'For CROs, VPs of Sales and CFOs whose forecast leans on a few large deals.' },
+    { cat: 'marketing', to: 'fractional-marketing-leadership', h: 'Fractional marketing leaders who bring lead costs down and hold your agencies to a number', who: 'For presidents, CROs and PE operating partners whose cost per lead keeps rising.' },
+  ];
+  function seats() {
+    return `<nav class="hm-seats" aria-labelledby="hm-seats-t">
+      <div class="hm-seats-hd"><h3 class="hm-seats-h" id="hm-seats-t">Or start from the seat</h3><p class="small muted">One page per function, with who it is for, what it costs and what happens first.</p></div>
+      <div class="hm-ruled hm-seat-row">${SEATS.map((s) => `<a class="hm-seat" href="#${s.to}" style="--hm-cat:${RN.fields.catColor(s.cat)}">
+          <span class="hm-seat-cat">${RN.ui.catDot(s.cat)}${esc(catLabel(s.cat))}</span>
+          <span class="hm-seat-t">${keep(s.h)}</span>
+          <span class="hm-seat-who">${esc(s.who)}</span>
+          <span class="hm-seat-n"><span class="num">${RN.fmt.plural(opsIn([s.cat]), 'operator')}</span><span class="hm-go" aria-hidden="true">${icon('arrow')}</span></span>
+        </a>`).join('')}</div>
+      <p class="hm-seats-cost">${more('What fractional sales, RevOps and marketing leaders cost in 2026', 'href="#fractional-cost"')}</p>
+    </nav>`;
+  }
+
   /* ---------- Start from the problem ---------- */
   function problems() {
     const needs = RN.fields.need.options;
@@ -297,6 +323,7 @@
       <div class="wrap">
         ${head('Start here', 'Start from the problem you have.', '', `Pick what is broken. Browse opens on the role categories that fix it. Counts are the ${esc(RN.fmt.int(liveOps().length))} profiles in this prototype.`)}
         <div class="hm-ruled hm-needs">${cells}</div>
+        ${seats()}
         <nav class="hm-prep" aria-labelledby="hm-prep-t">
           <div class="hm-prep-hd"><h3 id="hm-prep-t">Not ready to hire yet?</h3><p>Start with the numbers, the gap and the plan.</p></div>
           <ul class="hm-prep-list">${prep.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-t"><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><b>${keep(p[1])}</b></span><span class="hm-prep-d">${keep(p[2])}</span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
@@ -905,7 +932,7 @@
       if (document.activeElement === input || input.value) { input.placeholder = PH; ci = 0; dir = 1; later(tick, 700); return; }
       const word = TYPE_WORDS[wi];
       ci += dir;
-      input.placeholder = 'Search ' + word.slice(0, Math.max(0, ci));
+      input.placeholder = word.slice(0, Math.max(0, ci));   // typed as a visitor would type it, no prefix
       if (dir > 0 && ci >= word.length) { dir = -1; later(tick, 1700); return; }
       if (dir < 0 && ci <= 0) { dir = 1; wi = (wi + 1) % TYPE_WORDS.length; later(tick, 320); return; }
       later(tick, dir > 0 ? 78 : 34);
