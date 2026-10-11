@@ -27,7 +27,7 @@ main[data-view="hire-fractional-sales-vp"], main[data-view="fractional-revops"],
 /* Pending chip: a small dashed mark for a [GAP: what, owner] in the copy. Never hidden, wraps when long. */
 .fn-gap { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 2px 9px 2px 7px; border-radius: 11px; border: 1px dashed color-mix(in srgb, var(--mute) 55%, transparent); background: color-mix(in srgb, var(--ink) 3%, transparent); color: var(--mute); font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .02em; line-height: 1.25; text-align: left; vertical-align: middle; text-transform: none; }
 .fn-gap svg { width: 12px; height: 12px; flex: 0 0 auto; opacity: .85; }
-.fn-gap-w { display: inline-flex; align-items: center; max-width: 100%; vertical-align: middle; }
+.fn-gap-w { display: inline-flex; align-items: last baseline; max-width: 100%; vertical-align: middle; }
 .fn-gap-w > .fn-gap { min-width: 0; }
 p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
 .night .fn-gap { border-color: color-mix(in srgb, var(--night-ink) 34%, transparent); background: color-mix(in srgb, var(--night-ink) 6%, transparent); color: var(--night-mute); }
@@ -203,7 +203,7 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
   .fn-tbl-wide { min-width: 640px; }
   .fn-form-in, .fn-ri { grid-template-columns: minmax(0, 1fr); gap: var(--s-8); }
   .fn-story.fn-story-split, .fn-story.fn-story-row { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: var(--s-4); padding: var(--s-6); }
-  .fn-story-split > .fn-story-p, .fn-story-split > .fn-score { grid-column: auto; grid-row: auto; }
+  .fn-story-split > .fn-story-p, .fn-story-split > .fn-score, .fn-story-split > .fn-story-t ~ .fn-score { grid-column: auto; grid-row: auto; }
   .fn-form-l .h2 { max-width: 24ch; }
   .fn-core { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fn-core li:nth-child(3) { padding-left: 0; border-left: 0; }

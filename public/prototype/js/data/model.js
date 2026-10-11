@@ -937,7 +937,7 @@
     }
     if (hLo > hHi) { const t = hLo; hLo = hHi; hHi = t; }
     const lo = Math.max(500, round(rate * hLo)), hi = Math.max(lo, round(rate * hHi));
-    const text = lo === hi ? `About ${k(lo)} a month` : `${k(lo)}–${k(hi)} a month`;
+    const text = lo === hi ? `About ${k(lo)} a month` : `${k(lo)} to ${k(hi)} a month`;
     return { lo, hi, text, hLo, hHi };
   }
   M.opMonthlyRange = opRange;

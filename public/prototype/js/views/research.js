@@ -261,6 +261,8 @@
     try { tags = el.dataset.tags ? JSON.parse(el.dataset.tags) : []; } catch (e) { tags = []; }
     goBrowse({ filters: f, tags, q: el.dataset.q || '', sort: el.dataset.sort || '', source: el.dataset.src });
   };
+  // A real link to the role page (crawlable), with the same hand-off and tracking as the Browse buttons
+  RN.actions['rs-browse-cat'] = (el) => goBrowse({ filters: { roleCategories: [el.dataset.cat] }, source: el.dataset.src });
   const browseBtn = (label, o, cls) => `<button type="button" class="${cls || 'btn'}" data-act="rs-browse" data-src="${esc(o.src || 'research')}" data-f="${jsonAttr(o.filters || {})}" data-tags="${jsonAttr(o.tags || [])}" data-q="${esc(o.q || '')}"${o.sort ? ` data-sort="${esc(o.sort)}"` : ''}>${esc(label)}${icon('arrow')}</button>`;
 
   RN.actions['rs-scroll'] = (el) => {
@@ -1421,9 +1423,17 @@
     .replace(/\[\[net\]\]/g, NETS()).replace(/\*\*/g, '')
     .replace(/\s+([.,;?!])/g, '$1').replace(/\(\s*\)/g, '').replace(/\s{2,}/g, ' ').trim();
   // Body copy with the same tokens as the function pages (RN.fn.rich loads later, so it is looked up at render time)
+  // Headings and titles: typographic quotes, and a hyphenated word never breaks across lines ("full-" / "time")
+  const disp = (t) => esc(RN.fmt.smart(t)).replace(/(\w)-(?=\w)/g, '$1\u2011');
   const prich = (t) => (RN.fn && RN.fn.rich ? RN.fn.rich(t) : esc(plainOf(t)));
   // Post tables read as text in every column; three or more columns stack into labelled rows on phones
-  const ptbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl rs-ptbl${head.length > 2 ? ' rs-tbl-stack' : ''}${cls ? ' ' + cls : ''}"><table class="tbl"><thead><tr>${head.map((x) => `<th>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td data-l="${esc(plainOf(head[i] || ''))}">${prich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const prow = (r, head) => {
+    const cells = [];
+    r.forEach((c, i) => { if (String(c || '').trim() === '' && cells.length && i > 1) cells[cells.length - 1].span++; else cells.push({ c, i, span: 1 }); });
+    return `<tr>${cells.map((x) => `<td data-l="${esc(plainOf(x.span > 1 ? '' : head[x.i] || ''))}"${x.span > 1 ? ` colspan="${x.span}"` : ''}>${prich(x.c)}</td>`).join('')}</tr>`;
+  };
+  // Wide tables (5+ columns) keep readable columns and scroll inside their frame
+  const ptbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl rs-ptbl${head.length > 2 ? ' rs-tbl-stack' : ''}${head.length > 4 ? ' rs-ptbl-wide' : ''}${cls ? ' ' + cls : ''}"><table class="tbl"><thead><tr>${head.map((x) => `<th>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => prow(r, head)).join('')}</tbody></table></div>`;
   function postBlocks(blocks) {
     return (blocks || []).map((b) => {
       if (b.p != null) return `<p>${prich(b.p)}</p>`;
@@ -1454,6 +1464,9 @@
   GUIDES.forEach((g) => { g.id = g.slug; g.title = g.q; g.href = '#guide.' + g.slug; });
   R.guides = GUIDES;
   const guideBy = (slug) => GUIDES.find((g) => g.slug === slug);
+  // Resolves a guide id stored before a post replaced it (answers saved in state, admin review)
+  const guideFor = (id) => guideBy(POST_ALIASES[id] || id);
+  R.guideFor = guideFor;
   const isCost = (g) => g.group === 'costs';
   R.guidesFor = (cat, n) => GUIDES.filter((g) => g.cat === cat).sort((a, b) => (isCost(b) ? 1 : 0) - (isCost(a) ? 1 : 0)).slice(0, n || 2);
   const KIND = {
@@ -1493,7 +1506,7 @@
     return `<a class="card card-link rs-gfeat${g.post ? ' rs-gfeat-post' : ''}" href="#guide.${esc(g.slug)}">
       <div class="rs-gfeat-main">
         <span class="label">${esc(KIND[g.slug] || 'Guide')} · Start here</span>
-        <h3 class="h2">${esc(g.q)}</h3>
+        <h3 class="h2">${disp(g.q)}</h3>
         <p class="rs-gfeat-a">${a.map(esc).join(' ')}</p>
         <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span><span class="act">Read the guide${icon('arrow')}</span></span>
       </div>
@@ -1504,7 +1517,7 @@
     const a = g.answer();
     return `<a class="card card-link rs-gcard" href="#guide.${esc(g.slug)}">
       <span class="label">${esc(KIND[g.slug] || (g.group === 'costs' ? 'Cost' : GROUPS.find((x) => x.k === g.group).l))}</span>
-      <h3 class="h4">${esc(g.q)}</h3>
+      <h3 class="h4">${disp(g.q)}</h3>
       <p class="small muted clamp-3">${esc(a[0])}</p>
       <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span>${icon('arrow')}</span>
     </a>`;
@@ -1513,10 +1526,10 @@
   /* One row in a function group: kind, the question, the first sentence of the answer */
   function qrow(g) {
     const a = g.answer()[0] || '';
-    return `<a class="rs-qrow" href="#guide.${esc(g.slug)}">
-      <span class="rs-qrow-t"><span class="label">${esc(KIND[g.slug] || 'Guide')}</span><b class="rs-qrow-q">${esc(g.q)}</b><span class="small muted clamp-2">${esc(a)}</span><span class="tiny muted">${g.mins} min read</span></span>
+    return `<li><a class="rs-qrow" href="#guide.${esc(g.slug)}">
+      <span class="rs-qrow-t"><span class="label">${esc(KIND[g.slug] || 'Guide')}</span><h3 class="rs-qrow-q">${disp(g.q)}</h3><span class="small muted clamp-2">${esc(a)}</span><span class="tiny muted">${g.mins} min read</span></span>
       ${icon('arrow')}
-    </a>`;
+    </a></li>`;
   }
   const fnGuides = (k) => GUIDES.filter((x) => (x.fn || x.group) === k);
   const OLD_BLOG = 'https://www.revenuenomad.com';
@@ -1556,11 +1569,11 @@
     <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-sales" aria-labelledby="rs-g-sales-t">
       ${grpHd(grp('sales'), homeLink(grp('sales')))}
       ${sales.length ? guideFeature(sales[0]) : ''}
-      <div class="rs-qlist rs-qlist-2">${sales.slice(1).map(qrow).join('')}</div>
+      <ul class="rs-qlist rs-qlist-2">${sales.slice(1).map(qrow).join('')}</ul>
     </section>
     <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['revops', 'marketing'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
       ${grpHd(grp(k), homeLink(grp(k)))}
-      <div class="rs-qlist">${fnGuides(k).map(qrow).join('')}</div>
+      <ul class="rs-qlist">${fnGuides(k).map(qrow).join('')}</ul>
     </section>`).join('')}</div></div>
     <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
       ${grpHd(grp('costs'), `<a class="act rs-ghome" href="#fractional-cost">The cost hub${icon('arrow')}</a>`)}
@@ -1581,7 +1594,7 @@
           <span class="rs-cost-v"><span class="label">${esc(RN.w.label('hoursPerMonth', hh))}</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m'))}</b></span>
           ${icon('arrow')}</a>`;
       }).join('')}</div>
-      <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M–$20M in revenue, illustrative in this prototype. ${esc(NO_FEES)}</span></p>
+      <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue, illustrative in this prototype. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
     </section>
     <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
         ${grpHd(grp(k))}
@@ -1596,7 +1609,9 @@
         ${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}
         ${redirects.length ? devNote('rs-redirects', 'Redirects from the old blog', `For Rapid Neuron: ${redirects.length} old posts fold into ${POSTS.filter((p) => (p.replaces || []).length).length} guides. 301 each one when its guide goes live.`, `
           <p class="small">Search Console figures are the May 2026 export (clicks, impressions, average position). The ${known.length} posts with figures earned ${fmtN(known.reduce((n, x) => n + (x.r.clicks || 0), 0))} clicks on ${fmtN(known.reduce((n, x) => n + (x.r.impressions || 0), 0))} impressions. Posts published after May have no figures yet, and their exact URLs need confirming. The ad landing pages (/hire-fractional-vp-of-sales-in-new-york, -atlanta, -boston and /fractional-vp/vp-new-york) are not on this list. They go to the sales leadership home once the old Google Ads destinations are checked.</p>
-          ${htbl(['Old post', 'New guide', 'What happens', 'Clicks', 'Impressions'], redirects.map(({ r, p }) => [oldUrlCell(r), `<a href="#guide.${esc(p.slug)}" class="mono rs-url">/post/${esc(p.slug)}</a>`, esc(ACTION_L[r.action] || r.action), esc(fmtN(r.clicks)), esc(fmtN(r.impressions))]), 'rs-redir-tbl')}`) : ''}
+          ${htbl(['Old post', 'New guide', 'What happens', 'Clicks', 'Impressions'], redirects.map(({ r, p }) => [oldUrlCell(r), `<a href="#guide.${esc(p.slug)}" class="mono rs-url">/post/${esc(p.slug)}</a>`, esc(ACTION_L[r.action] || r.action), ...(r.impressions == null ? ['<span class="muted">Not in the May export</span>', ''] : [esc(fmtN(r.clicks)), esc(fmtN(r.impressions))])]), 'rs-redir-tbl')}
+          ${(RN.data.posts.candidates || []).length ? `<h3 class="h5">Candidates for Matt to approve</h3><p class="small">Older posts on the same questions, not yet on the map. Each would 301 to the guide named, once that guide answers the old page's query.</p>
+          ${htbl(['Old post', 'Would go to', 'Impressions'], RN.data.posts.candidates.map((c) => [`<span class="mono rs-url">${esc(c.url)}</span>`, `<a href="#guide.${esc(c.to)}" class="mono rs-url">/post/${esc(c.to)}</a>`, esc(fmtN(c.impressions))]), 'rs-redir-tbl')}` : ''}`) : ''}
       </div>
     </section>
     </div>`;
@@ -1620,13 +1635,14 @@
     const bp = blueprintFor(g.cat, g.bp);
     const page = (FN.pages && FN.pages[p.fn]) || { fn: p.fn, need: p.need, form: { h: 'Tell us what you need', lede: '' } };
     const talk = 'talk.' + p.need;
-    const plainFaq = [{ q: p.q, a: plainOf(p.answer) }].concat(p.faq.map((f) => ({ q: f.q, a: plainOf(f.a) })));
+    const plainFaq = (/\?$/.test(p.q) ? [{ q: p.q, a: plainOf(p.answer) }] : []).concat(p.faq.map((f) => ({ q: f.q, a: plainOf(f.a) })));
     const schema = {
       '@context': 'https://schema.org',
       '@graph': [
-        { '@type': 'Article', headline: p.q, description: p.metaDescription, dateModified: p.updated, mainEntityOfPage: `${OLD_BLOG}/post/${p.slug}`,
+        { '@type': 'Article', headline: p.q, description: p.metaDescription, datePublished: p.publish || p.updated, dateModified: p.updated, mainEntityOfPage: `${OLD_BLOG}/post/${p.slug}`,
           author: { '@type': 'Person', name: 'Matt Lopez', url: `${OLD_BLOG}/experts/matt-lopez-35525` },
           publisher: { '@type': 'Organization', name: 'Revenue Nomad', url: OLD_BLOG } },
+        { '@type': 'BreadcrumbList', itemListElement: [['Guides', `${OLD_BLOG}/guides`], [grp.l, `${OLD_BLOG}/${grp.home}`], [p.q, `${OLD_BLOG}/post/${p.slug}`]].map(([name, item], i) => ({ '@type': 'ListItem', position: i + 1, name, item })) },
         { '@type': 'FAQPage', mainEntity: plainFaq.map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })) },
       ],
     };
@@ -1647,7 +1663,7 @@
         <div><dt>Publish</dt><dd>${p.publish ? `Scheduled for ${esc(RN.fmt.date(p.publish + 'T12:00:00'))} in the content calendar` : 'A rebuild of a live post. Publish once its pending items close.'}</dd></div>
         <div><dt>Built from</dt><dd>${esc(p.base)}</dd></div>
       </dl>
-      ${reps.length ? `<h3 class="h5">301s into this page</h3>${htbl(['Old post', 'What happens', 'Clicks', 'Impressions', 'Avg position'], reps.map((r) => [oldUrlCell(r), esc(ACTION_L[r.action] || r.action), esc(fmtN(r.clicks)), esc(fmtN(r.impressions)), esc(r.position == null ? '' : String(r.position))]))}<p class="tiny muted">Search Console, May 2026 export. Blank figures mean the post went up after the export.</p>` : ''}
+      ${reps.length ? `<h3 class="h5">301s into this page</h3>${htbl(['Old post', 'What happens', 'Clicks', 'Impressions', 'Avg position'], reps.map((r) => [oldUrlCell(r), esc(ACTION_L[r.action] || r.action), ...(r.impressions == null ? ['<span class="muted">Not in the May export</span>', '', ''] : [esc(fmtN(r.clicks)), esc(fmtN(r.impressions)), esc(String(r.position))])]))}<p class="tiny muted">Search Console, May 2026 export. Blank figures mean the post went up after the export.</p>` : ''}
       ${(p.gaps || []).length ? `<h3 class="h5">Still pending</h3><ul class="rs-notes-gaps">${p.gaps.map((x) => `<li>${gap(x.what, x.owner)}</li>`).join('')}</ul>` : ''}
       ${(p.flags || []).length ? `<h3 class="h5">For Matt to approve</h3><ul class="rs-notes-flags">${p.flags.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
 
@@ -1655,7 +1671,7 @@
     <div class="wrap rs-guide">
       <article class="rs-art" aria-labelledby="rs-g-h1">
         ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
-        <h1 class="h1 rs-g-h1" id="rs-g-h1">${esc(p.q)}</h1>
+        <h1 class="h1 rs-g-h1" id="rs-g-h1">${disp(p.q)}</h1>
         <div class="rs-byline">
           ${RN.ui.avatar(matt, 'ava-sm rs-by-ava', { decorative: true })}
           <span class="rs-by-txt">
@@ -1672,23 +1688,23 @@
           ${ptbl(['Key number', 'Value', 'Source'], p.keys.map((k) => [k.k, k.v, k.url ? `[[url:${k.url}|${k.src}]]` : k.src]), 'rs-keys-tbl')}
         </figure>
         <div class="prose rs-prose">
-          ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec"><h2>${esc(x.h)}</h2>${x.html}</section>`).join('')}
+          ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec"><h2>${disp(x.h)}</h2>${x.html}</section>`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
-          ${p.faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${esc(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${prich(f.a)}</p></details>`).join('')}
+          ${p.faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${disp(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${prich(f.a)}</p></details>`).join('')}
         </section>
         ${ans}
         <footer class="rs-gfoot">
-          <p class="small muted">Sources: Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. A pending chip marks a figure or quote we do not have yet. Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
+          <p class="small muted">Built from Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. A pending chip marks a figure or quote we do not have yet. Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
           ${devNote('rs-post-notes', 'Publishing notes', 'For Rapid Neuron and Matt: meta fields, the 301s from the old blog, what is still pending', notes)}
-          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: Article and FAQPage JSON-LD. Add reviewedBy once the reviewing operator signs off, and BreadcrumbList.')}
+          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: Article, BreadcrumbList and FAQPage JSON-LD. Add reviewedBy once the reviewing operator signs off, and an image hosted on revenuenomad.com.')}
         </footer>
       </article>
       <aside class="rs-rail" aria-label="On this page">
         <div class="rs-rail-in">
           <div class="rs-toc"><span class="label">On this page</span>
-            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${esc(t.h)}</button></li>`).join('')}</ul>
+            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul>
           </div>
           <div class="card rs-rail-cta">
             <b class="h5">${esc(page.form.h)}</b>
@@ -1699,9 +1715,12 @@
         </div>
       </aside>
     </div>
+    <nav class="wrap rs-next rs-pnext" aria-label="More guides">
+      <span class="label">Keep reading</span>
+      <div class="grid g-3">${others.map(guideCard).join('')}</div>
+    </nav>
     <section class="section night fn-sec fn-form rs-ptalk" id="rs-s-talk" aria-labelledby="rs-ptalk-t"><div class="wrap fn-form-in">
       <div class="fn-form-l">
-        <span class="eyebrow">Talk to us</span>
         <h2 class="h2" id="rs-ptalk-t">${esc(page.form.h)}</h2>
         <p class="lede">${prich(p.talk)}</p>
       </div>
@@ -1709,8 +1728,8 @@
     </div></section>
     <div class="wrap rs-guide-after">
       <section id="rs-s-operators" class="rs-rel rs-prel" aria-labelledby="rs-rel-t">
-        <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${esc(F.catLabel(g.cat))} operators who do this work</h2></div>
-        ${browseBtn(`Browse ${F.catLabel(g.cat)}`, { filters: { roleCategories: [g.cat] }, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
+        <div class="row between" style="align-items:flex-end"><h2 class="h3" id="rs-rel-t">${esc(F.catLabel(g.cat))} operators who do this work</h2>
+        <a class="btn btn-line btn-sm" href="#browse.${esc(g.cat)}" data-act="rs-browse-cat" data-cat="${esc(g.cat)}" data-src="guide_${esc(g.slug)}">Browse ${esc(F.catLabel(g.cat))}${icon('arrow')}</a></div>
         <div class="grid g-3 rs-rel-ops">
           ${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}
           <div class="rs-prel-links">
@@ -1727,10 +1746,6 @@
           </div>
         </div>
       </section>
-      <nav class="rs-next" aria-label="More guides">
-        <span class="label">Keep reading</span>
-        <div class="grid g-3">${others.map(guideCard).join('')}</div>
-      </nav>
     </div>
     </div>`;
   }
@@ -1740,7 +1755,7 @@
      { id, guideId, opId, text, engagementId, engagement: {company, role}, status: 'in_review' | 'approved', createdAt }; the team approves them.
      Approved answers show with a byline and profile link. They earn placement here, never Reputation Index points. */
   const ANS_MAX = 600;
-  const answersFor = (id) => (RN.store.state.answers || []).filter((a) => a.guideId === id);
+  const answersFor = (id) => (RN.store.state.answers || []).filter((a) => (POST_ALIASES[a.guideId] || a.guideId) === id);
   const engKey = (e) => e.id || `${e.company}|${e.start || ''}`;
   function answersBlock(g) {
     const me = RN.myOp();
@@ -1815,7 +1830,8 @@
     if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: f, sort: 'ris' }).filter((x) => !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
     return rel;
   }
-  R.relatedOps = (g) => relatedOps(typeof g === 'string' ? guideBy(g) || {} : g);
+  // Same count the page shows: answer posts end on 2 operator cards (playbook template), older guides show 3
+  R.relatedOps = (g) => { const x = typeof g === 'string' ? guideFor(g) || {} : g; return relatedOps(x).slice(0, x.post ? 2 : 3); };
 
   function renderGuide(slug) {
     chartFns = {};
@@ -1889,7 +1905,7 @@
       <aside class="rs-rail" aria-label="On this page">
         <div class="rs-rail-in">
           <div class="rs-toc"><span class="label">On this page</span>
-            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${esc(t.h)}</button></li>`).join('')}</ul>
+            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul>
           </div>
           <div class="card rs-rail-cta">
             <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : g.group === 'methods' ? 'See it on a profile' : 'Ready to hire?')}</b>
@@ -1957,7 +1973,7 @@
   RN.view('guide', {
     route: 'guide.:slug', nav: 'insights',
     samples: { slug: GUIDES[0].slug, extra: GUIDES.slice(1).map((g) => 'guide.' + g.slug) },
-    title: (p) => { const g = guideBy(p.slug); return g ? g.q : 'Guide'; },
+    title: (p) => { const g = guideBy(p.slug); return g ? (g.post ? g.post.metaTitle : g.q) : 'Guide'; },
     render: (p) => renderGuide(p.slug),
     mount: (root) => { mountCommon(root); },
     unmount: unmountCommon,

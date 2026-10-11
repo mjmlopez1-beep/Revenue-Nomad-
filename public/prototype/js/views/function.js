@@ -41,14 +41,27 @@
        **text**             a bold lead-in
        [[net]]              the network size from RN.data.market
      Shared with the guides (RN.fn.rich), which render the answer posts with the same tokens. */
+  // Tokens are cut out first, so typographic quotes never touch a route or URL; text and labels get quotes and escaping
+  const txt = (s) => esc(RN.fmt.smart(s)).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
   function rich(t) {
-    return esc(RN.fmt.smart(t))
-      // Punctuation right after a chip stays on its line (otherwise a phone wraps ", 19 meetings" onto the next line)
-      .replace(/\[\[gap:([^\]|]+)\|([^\]]+)\]\]([,.;!?)]*)/g, (m, what, owner, punct) => (punct ? `<span class="fn-gap-w">${gapRaw(what.trim(), owner.trim())}${punct}</span>` : gapRaw(what.trim(), owner.trim())))
-      .replace(/\[\[link:([^\]|]+)\|([^\]]+)\]\]/g, (m, to, label) => `<a class="link" href="#${to.trim()}">${label}</a>`)
-      .replace(/\[\[url:(https:\/\/[^\]|\s]+)\|([^\]]+)\]\]/g, (m, url, label) => `<a class="link" href="${url}" target="_blank" rel="noopener">${label}</a>`)
-      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
-      .replace(/\[\[net\]\]/g, esc(NET()));
+    const parts = String(t == null ? '' : t).split(/(\[\[[^\]]*\]\][,.;!?)]*)/);
+    return parts.map((p, i) => {
+      if (!(i % 2)) return txt(p);
+      const m = p.match(/^\[\[([a-z]+):?([^\]]*)\]\]([,.;!?)]*)$/);
+      if (!m) return txt(p);
+      const [, kind, body, punct] = m;
+      const bar = body.indexOf('|');
+      const a = bar < 0 ? body : body.slice(0, bar), b = bar < 0 ? '' : body.slice(bar + 1);
+      let html;
+      if (kind === 'gap' && b) html = gapRaw(txt(a.trim()), esc(b.trim()));
+      else if (kind === 'link' && b) html = `<a class="link" href="#${esc(a.trim())}">${txt(b)}</a>`;
+      else if (kind === 'url' && b && /^https:\/\/\S+$/.test(a.trim())) html = `<a class="link" href="${esc(a.trim())}" target="_blank" rel="noopener">${txt(b)}</a>`;
+      else if (kind === 'net' && !body) html = esc(NET());
+      else { console.warn('Unknown token', p); return txt(p.replace(/\[\[|\]\]/g, '')); }
+      // Punctuation right after a chip stays on its line (a phone would otherwise wrap ", 19 meetings" onto the next line)
+      if (!punct) return html;
+      return kind === 'gap' ? `<span class="fn-gap-w">${html}${esc(punct)}</span>` : html + esc(punct);
+    }).join('');
   }
   FN.rich = rich;
 
@@ -525,7 +538,7 @@
     const starts = RN.fields.startBy.options.map((o) => o.l);
     const startList = [starts[0]].concat(starts.slice(1).map(lcFirst)).join(', ').replace(/, ([^,]*)$/, ' or $1');
     const qs = [
-      ['What do you need help with?', d.need ? `Picked for you: ${RN.w.label('need', d.need)}` : 'Pick the closest match'],
+      ['What do you need help with?', d.need ? `${RN.w.label('need', d.need)}, picked for you` : 'Pick the closest match'],
       ['How big is the business today?', 'Revenue and headcount'],
       ['When do you need them to start?', startList],
       ['Where should we reply?', 'Your name and work email. Company and title are optional.'],

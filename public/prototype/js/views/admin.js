@@ -832,7 +832,7 @@
     return `<section class="card adm-sec">${cardHead('Guide answers to review', 'Approved answers appear on the guide with the operator’s byline and a link to their profile. They earn placement, never Reputation Index points.')}
       <ul class="adm-decided">${list.map((a) => {
         const op = RN.model.byId(a.opId);
-        const g = guides.find((x) => x.id === a.guideId);
+        const g = (RN.research.guideFor && RN.research.guideFor(a.guideId)) || guides.find((x) => x.id === a.guideId);
         return `<li>${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><b>${esc(op.name)}</b><span class="tiny muted">${esc(g ? g.title : a.guideId)}${a.engagement ? ' · Proof: ' + esc(a.engagement.company) : ''}</span><p class="small" style="margin-top:6px">${esc(a.text)}</p></div>
           <button type="button" class="btn btn-sm" data-act="adm-ans" data-id="${esc(a.id)}" data-ok="1">Approve</button><button type="button" class="btn btn-sm btn-line" data-act="adm-ans" data-id="${esc(a.id)}" data-ok="0">Decline</button></li>`;
       }).join('')}</ul></section>`;
@@ -842,7 +842,7 @@
     const a = (RN.store.state.answers || []).find((x) => x.id === el.dataset.id);
     if (!a) return;
     const op = RN.model.byId(a.opId);
-    const g = ((RN.research && RN.research.guides) || []).find((x) => x.id === a.guideId);
+    const g = (RN.research && RN.research.guideFor && RN.research.guideFor(a.guideId)) || ((RN.research && RN.research.guides) || []).find((x) => x.id === a.guideId);
     RN.store.update((s) => { const x = s.answers.find((y) => y.id === a.id); x.status = ok ? 'approved' : 'declined'; x.decidedAt = RN.now().toISOString(); }, 'answers');
     if (op) RN.mail(op.name, ok ? 'Your guide answer is live' : 'About your guide answer', ok ? `Your answer to "${g ? g.title : 'the guide'}" is live with your byline.${g ? `\n\nSee it: #guide.${g.id}` : ''}` : `Thanks for answering "${g ? g.title : 'the guide'}". We did not publish this one. Answers need a concrete example from your own engagements.`, 'admin');
     RN.ui.toast(ok ? `Approved. ${esc(op ? op.first : 'The')} answer is live on the guide.` : 'Declined. The operator was emailed.');

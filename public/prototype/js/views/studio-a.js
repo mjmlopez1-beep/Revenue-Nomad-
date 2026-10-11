@@ -1437,7 +1437,7 @@
     return `<section class="card sa-card">
       ${cardHd('Topic pages you appear on', `Pages on Revenue Nomad that list or link to your profile. ${PERIOD}.`, illus('Illustrative impressions'))}
       <ul class="sa-topics">${pages.map((p) => `<li><a href="#${esc(p.to)}"><span class="sa-feed-ic">${icon(p.ic)}</span><span class="grow"><b>${esc(p.t)}</b><span class="tiny muted">${esc(p.m)}</span></span><span class="sa-topics-n"><b class="num">${fmt.int(p.n)}</b><span class="tiny muted">impressions</span></span></a></li>`).join('')}
-        ${missed ? `<li class="is-next"><a href="#guide.${esc(missed.slug)}"><span class="sa-feed-ic">${icon('book')}</span><span class="grow"><b>${esc(missed.q)}</b><span class="tiny muted">Not listed yet. This guide shows the top 3 ${esc(cat)} operators for “${esc(missed.opsQ || cat)}”, then by Reputation Index.</span></span></a></li>` : ''}
+        ${missed ? `<li class="is-next"><a href="#guide.${esc(missed.slug)}"><span class="sa-feed-ic">${icon('book')}</span><span class="grow"><b>${esc(missed.q)}</b><span class="tiny muted">Not listed yet. This guide shows the top ${missed.post ? 2 : 3} ${esc(cat)} operators for “${esc(missed.opsQ || cat)}”, then by Reputation Index.</span></span></a></li>` : ''}
         ${unlock ? `<li class="is-next"><a href="#levels"><span class="sa-feed-ic">${icon('lock')}</span><span class="grow"><b>Unlocks at ${esc(b.next.l)} (${esc(b.next.min)})</b><span class="tiny muted">${esc(unlock)}. ${plural(b.toNext, 'point')} to go.</span></span></a></li>` : ''}
       </ul>
       <p class="tiny muted" style="margin-top:12px">Placement follows published evidence rules. It cannot be bought.</p>

@@ -375,7 +375,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-gstats .stat-v { font-size: var(--t-24); }
 @media (max-width: 640px) { .rs-gstats { grid-template-columns: minmax(0, 1fr); } .rs-gstats > * { padding-block: 14px; } }
 .rs-prose { max-width: none; margin-top: var(--s-4); }
-.rs-gsec { scroll-margin-top: calc(var(--nav-h) + 16px); }
+.rs-gsec { scroll-margin-top: 4px; }
 .rs-gsec > * + * { margin-top: 1em; }
 .rs-gsec > h2 + * { margin-top: .55em; }
 .rs-gsec li + li { margin-top: .45em; }
@@ -418,7 +418,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-dl dd { margin: 4px 0 0; font-size: var(--t-15); color: var(--ink-2); }
 .rs-core-l { width: 26px; height: 26px; border-radius: 8px; display: inline-grid; place-items: center; background: var(--forest); color: var(--leaf); font-size: var(--t-13); }
 .rs-core-q { font-family: var(--f-serif); color: var(--ink); }
-.rs-faq { margin-top: var(--s-12); scroll-margin-top: calc(var(--nav-h) + 16px); }
+.rs-faq { margin-top: var(--s-12); scroll-margin-top: 4px; }
 .rs-faq .h3 { margin-bottom: var(--s-3); }
 .rs-faq-i { border-bottom: 1px solid var(--line); }
 .rs-faq-i:first-of-type { border-top: 1px solid var(--line); }
@@ -427,7 +427,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-faq-i summary:hover span { color: var(--accent); }
 .rs-faq-i p { padding: 0 0 18px; font-size: var(--t-15); color: var(--ink-2); line-height: 1.6; max-width: 64ch; }
 .rs-guide-after { padding-bottom: var(--s-8); }
-.rs-rel { padding-top: var(--s-10); border-top: 1px solid var(--line); scroll-margin-top: calc(var(--nav-h) + 16px); }
+.rs-rel { padding-top: var(--s-10); border-top: 1px solid var(--line); scroll-margin-top: 4px; }
 .rs-rel-ops { margin-top: var(--s-5); --gap: 16px; }
 .rs-glinks { margin-top: var(--s-5); --gap: 16px; }
 .rs-bp { display: flex; align-items: center; gap: 16px; color: var(--ink); }
@@ -495,7 +495,7 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 }
 
 /* Guide page: operators who answered */
-.rs-answers { margin-top: var(--s-12); scroll-margin-top: calc(var(--nav-h) + 16px); display: flex; flex-direction: column; gap: var(--s-4); }
+.rs-answers { margin-top: var(--s-12); scroll-margin-top: 4px; display: flex; flex-direction: column; gap: var(--s-4); }
 .rs-ans-list { display: flex; flex-direction: column; gap: var(--s-4); }
 .rs-ans { padding: var(--s-5); border: 1px solid var(--line-2); border-radius: var(--r-card); background: var(--card); }
 .rs-ans-by { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; }
@@ -564,3 +564,22 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-url { font-size: var(--t-12); overflow-wrap: anywhere; }
 .rs-redir-tbl .tbl td:nth-child(4), .rs-redir-tbl .tbl td:nth-child(5) { font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 640px) { .rs-notes-dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+
+/* Review fixes: lists, tables, rail, the post's end */
+ul.rs-qlist { list-style: none; margin: 0; padding: 0; }
+.rs-qlist > li { display: block; min-width: 0; }
+.rs-qrow-q { margin: 0; }
+.rs-qlist-2 > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.rs-ptbl-wide .tbl { min-width: 860px; }
+.rs-ptbl .tbl td[colspan] { color: var(--mute); }
+.rs-post-pg .rs-toc ul { max-height: calc(100vh - var(--nav-h) - 360px); min-height: 140px; overflow: auto; }
+.rs-pnext { margin-top: var(--s-4); margin-bottom: var(--s-12); }
+.rs-ptalk { margin-top: 0; }
+.rs-ptalk .fn-form-l .h2 { margin-top: 0; }
+.rs-prel { padding-top: var(--s-10); }
+@media (max-width: 1080px) { .rs-post-pg .rs-rail { display: none; } }
+@media (max-width: 640px) {
+  .rs-ptbl-wide .tbl { min-width: 0; }
+  .rs-ptbl.rs-tbl-stack .tbl td[colspan] { display: block; }
+  .rs-ptbl.rs-tbl-stack .tbl td:not(:first-child):empty { display: none; }
+}
