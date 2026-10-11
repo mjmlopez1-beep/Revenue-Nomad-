@@ -468,8 +468,35 @@
   /* One note for any grid of Blueprint prices: the figures are illustrative, and the rate is the price */
   const bpPriceNote = () => `<p class="tiny muted pj-bp-note">${RN.ui.illus('Rate Index figures are illustrative')}<span>From rates are the lower quartile of hourly rates on the Rate Index${clientRev() ? ` for ${esc(W().label('companyRevenue', clientRev()))} revenue companies` : ''}.</span></p>`;
   function miniOp(op, right) {
-    return `<div class="pj-mini">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="pj-mini-n" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a><span class="tiny muted">Fractional ${esc(op.role)}</span></div>${right || ''}</div>`;
+    return `<div class="pj-mini">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="pj-mini-n" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a><span class="tiny muted pj-mini-r">Fractional ${esc(op.role)}</span></div>${right || ''}</div>`;
   }
+  /* The closing tile of a Blueprint grid: fills the empty cells of the last row (span set per breakpoint in CSS) */
+  function bpHelpTile(n) {
+    return `<article class="pj-bp-help night" data-r3="${(3 - (n % 3)) % 3}" data-r2="${n % 2}">
+      <span class="pj-bp-help-ico" aria-hidden="true">${icon('message')}</span>
+      <div class="pj-bp-help-b">
+        <h3 class="h4">Not sure which one fits?</h3>
+        <p class="small">Tell us what is broken. A person on our team reads it and points you to the seat, or to the operators who fit, within one business day.</p>
+      </div>
+      <div class="pj-bp-help-ft">
+        <a class="btn btn-leaf btn-sm" href="#talk">Talk to us</a><a class="act pj-bp-help-a" href="#engagement.new">Post without a Blueprint${icon('arrow')}</a>
+      </div>
+    </article>`;
+  }
+  /* Score chip for compact rows: the number, coloured by tier, with the label for screen readers and on hover */
+  const scorePill = (fit) => `<span class="pj-sc ${fit.pct >= 75 ? 'is-strong' : fit.pct >= 50 ? 'is-good' : ''}" title="${esc(fit.label)}"><span class="sr-only">${esc(fit.label)} </span>${fit.pct}</span>`;
+  /* Strong / good / other split of everyone scored, as one stacked bar with a key */
+  function splitBar(c, o) {
+    const t = Math.max(1, c.total);
+    const rest = Math.max(0, c.total - c.strong - c.good);
+    const w = (n) => (n ? Math.max(1.5, (n / t) * 100).toFixed(1) : 0);
+    return `<div class="pj-split${c.total ? '' : ' is-empty'}">
+      <div class="pj-split-bar" role="img" aria-label="${esc(c.total ? `${c.strong} strong, ${c.good} good and ${rest} other matches of ${c.total} scored` : 'Nothing scored yet')}"><i class="s" style="width:${w(c.strong)}%"></i><i class="g" style="width:${w(c.good)}%"></i></div>
+      ${o && o.key === false ? '' : `<div class="pj-split-k"><span><i class="s"></i>Strong ${c.strong}</span><span><i class="g"></i>Good ${c.good}</span><span><i></i>Other ${rest}</span></div>`}
+    </div>`;
+  }
+  /* Placeholder rows: the shape of a ranked list before there is anything to rank */
+  const ghostRows = (n, cls) => Array.from({ length: n }, (_, i) => `<div class="pj-ghost ${cls || ''}" style="--i:${i}" aria-hidden="true"><i class="pj-ghost-a"></i><span class="pj-ghost-l"><i></i><i></i></span><i class="pj-ghost-p"></i></div>`).join('');
 
   /* =====================================================================
      #engagements: client list, or the posting landing for everyone else
@@ -506,7 +533,8 @@
     const act = draft ? `<button type="button" class="${btn}" data-act="pj-finish" data-id="${esc(p.id)}">Finish and post${icon('arrow')}</button>`
       : live && interested.length ? `<button type="button" class="${btn}" data-act="pj-open" data-id="${esc(p.id)}" data-t="responses">Review responses${icon('arrow')}</button>` : '';
     const faces = interested.map((r) => RN.model.byId(r.opId)).filter(Boolean).slice(0, 4);
-    const stat = (v, l, hi) => `<div class="pj-cs${hi ? ' hi' : ''}"><b class="num">${esc(v)}</b><span>${esc(l)}</span></div>`;
+    const stat = (v, l, hi, art) => `<div class="pj-cs${hi ? ' hi' : ''}${v === 0 && hi ? ' is-zero' : ''}"><b class="num">${v === 0 && hi ? 'None yet' : esc(v)}</b><span>${esc(l)}</span>${art ? `<div class="pj-cs-art">${art}</div>` : ''}</div>`;
+    const slots = draft ? '' : `<span class="pj-slots" aria-hidden="true">${Array.from({ length: MAX_INVITES }, (_, i) => `<i class="${i < clientInvites(p) ? 'on' : ''}"></i>`).join('')}</span>`;
     const line = draft ? ((p.picked || []).length ? `${RN.fmt.plural(p.picked.length, 'operator')} picked to invite` : '')
       : [`${clientInvites(p)} of ${MAX_INVITES} invited`, RN.fmt.plural(interested.length, 'response'), `${c.strong} strong matches`].join(' · ');
     return `<article class="card card-link pj-card${o.compact ? ' is-compact' : ''}" data-go="engagement.${esc(p.id)}">
@@ -515,7 +543,7 @@
       <p class="small muted">${esc(scopeLine(f, { budget: true }) || 'Brief not started')}</p>
       ${o.brief && p.brief ? `<p class="small pj-card-brief clamp-2">${esc(p.brief)}</p>` : ''}
       ${draft || o.compact ? `<div class="row pj-card-acts">${act}${line ? `<span class="tiny muted">${esc(line)}</span>` : ''}${faces.length ? `<span class="ava-stack">${faces.map((x) => RN.ui.avatar(x, 'ava-xs')).join('')}</span>` : ''}</div>`
-        : `<div class="pj-card-stats">${stat(`${clientInvites(p)} of ${MAX_INVITES}`, 'Invited')}${stat(interested.length, 'Responses')}${stat(c.strong, 'Strong matches')}${stat(intros, 'Intros requested', true)}</div>${act ? `<div class="row pj-card-acts">${act}${faces.length ? `<span class="ava-stack">${faces.map((x) => RN.ui.avatar(x, 'ava-xs')).join('')}</span>` : ''}</div>` : ''}`}
+        : `<div class="pj-card-stats">${stat(`${clientInvites(p)} of ${MAX_INVITES}`, 'Invited', false, slots)}${stat(interested.length, interested.length === 1 ? 'Response' : 'Responses', false, faces.length ? `<span class="ava-stack">${faces.map((x) => RN.ui.avatar(x, 'ava-xs', { decorative: true })).join('')}</span>` : '')}${stat(c.strong, 'Strong matches', false, splitBar(c, { key: false }))}${stat(intros, 'Intros requested', true)}</div>${act ? `<div class="row pj-card-acts">${act}</div>` : ''}`}
       ${!o.compact && isQuiet(p) ? `<p class="note pj-card-note">${icon('clock')}<span>No responses in 72 hours. Invite more operators from the ranked matches.</span></p>` : ''}
     </article>`;
   };
@@ -575,19 +603,20 @@
           <div class="pj-demo-hd"><span class="label">Sample brief</span><span class="pill pill-accent">${icon('target')}Ranked from live profiles</span></div>
           <h3 class="h4">Fractional VP of Sales</h3>
           <p class="small muted">${esc(scopeLine(sample))} · ${esc(W().label('industries', 'Health Care'))} · ${esc(W().label('companyRevenue', '20m_50m'))} revenue</p>
-          <div class="pj-demo-list">${top.map((r, i) => `<div class="pj-demo-row"><span class="pj-rank num">${i + 1}</span>${miniOp(r.op, fitPill(r.fit))}</div>`).join('')}</div>
-          <p class="tiny muted">Ranked from ${pool} Sales Leadership profiles with the same Match Signals companies see on every profile.</p>
+          <div class="pj-demo-scan" aria-hidden="true"><span class="pj-demo-dot"></span><span>Scoring <b class="num" data-pj-count="${pool}">${pool}</b> Sales Leadership profiles</span></div>
+          <div class="pj-demo-list">${top.map((r, i) => `<div class="pj-demo-row" style="--i:${i}"><span class="pj-rank num">${i + 1}</span>${miniOp(r.op, `<span class="pj-demo-fit">${fitPill(r.fit)}<i class="pj-demo-bar"><b style="width:${r.fit.pct}%"></b></i></span>`)}</div>`).join('')}</div>
+          <p class="tiny muted">Ranked with the same Match Signals companies see on every profile.</p>
         </div>
       </div>
     </section>
     <section class="wrap section-sm">
       <span class="eyebrow">How posting works</span>
-      <ol class="grid g-3 pj-steps4">${steps.map((s, i) => `<li class="pj-step4"><span class="pj-step4-i">${icon(s[0])}</span><span class="label">Step ${i + 1}</span><h3 class="h4">${esc(s[1])}</h3><p class="small muted">${esc(s[2])}</p></li>`).join('')}</ol>
+      <ol class="pj-flow">${steps.map((s, i) => `<li class="pj-flow-i" style="--i:${i}"><span class="pj-flow-n"><b>${i + 1}</b></span><span class="pj-flow-ic">${icon(s[0])}</span><h3 class="h4">${esc(s[1])}</h3><p class="small muted">${esc(s[2])}</p></li>`).join('')}</ol>
     </section>
-    <section class="wrap section-sm">
-      <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h2" style="margin-top:8px">Start from the problem you have</h2></div><a class="act" href="#blueprints">What a Blueprint includes${icon('arrow')}</a></div>
-      <div class="grid pj-bps pj-bps-4">${BP.map(bpCard).join('')}</div>
-      ${bpPriceNote()}
+    <section class="wrap section-sm pj-landing-bps">
+      <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h2" style="margin-top:8px">Start from the problem you have</h2></div><a class="act" href="#blueprints">See all ${BP.length} Blueprints${icon('arrow')}</a></div>
+      <div class="grid pj-bps pj-bps-3">${BP.slice(0, 3).map(bpCard).join('')}</div>
+      <div class="pj-bp-more">${bpPriceNote()}<a class="btn btn-line" href="#blueprints">See all ${BP.length} Blueprints${icon('arrow')}</a></div>
     </section>
     <section class="wrap section-sm">
       <div class="panel-night night pj-band">
@@ -722,56 +751,72 @@
     const suggest = buf ? buf.suggest : draft ? draft.suggest !== false : true;
     const open = draft ? draft.visibility !== 'invite_only' : true;
     const view = draft ? Object.assign({}, draft, buf ? { title: buf.title, brief: buf.brief, fields: buf.f, client: buf.client, suggest: buf.suggest } : {}) : null;
-    const bpLink = bp ? `<a href="#blueprint.${esc(bp.id)}">${esc(bp.title)} Blueprint</a>` : '';
+    const bpLink = bp ? `<a href="#blueprint.${esc(bp.id)}">${esc(bp.title)}</a>` : '';
+    // A draft opened again after a while: say where the client left off and what is already done
+    const resumed = draft && !posted && !auto && !draft.copiedFrom && RN.now() - new Date(draft.updatedAt || draft.createdAt) > 30 * 6e4;
+    const origin = (ic, kicker, body, extra, cls) => `<div class="pj-origin ${cls || ''}"${bp && !cls ? ` style="--cat:${RN.fields.catColor(bp.cat)}"` : ''}><span class="pj-origin-ic" aria-hidden="true">${ic}</span><span class="pj-origin-b"><span class="pj-origin-k">${kicker}</span><span class="pj-origin-t">${body}</span></span>${extra || ''}</div>`;
+    const done = STEPS.slice(0, step - 1);
     const fromNote = posted ? ''
-      : draft && draft.copiedFrom ? `<div class="note info pj-from">${icon('copy')}<span>Copied from ${esc(draft.copiedFrom)}. Check the brief, then post.</span></div>`
-      : bp && draft && draft.auto ? `<div class="note info pj-from">${icon('layers')}<span>Filled in from the ${bpLink}${bpTerms[bp.id] ? ', the terms you set' : ''} and your company profile. Change anything, then post.</span></div>`
-      : bp && !draft ? `<div class="note info pj-from">${icon('layers')}<span>${step === 1 ? `Filled in from the ${bpLink}. Change anything, then continue.` : `Role and scope are filled in from the ${bpLink}. Add your company basics.`} <a href="#engagement.new">Start blank</a></span></div>`
+      : resumed ? origin(icon('clock'), `Welcome back · saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`, `Picking up at <b>${esc(STEPS[step - 1])}</b>${done.length ? `. ${esc(done.join(' and '))} ${done.length > 1 ? 'are' : 'is'} done.` : '.'}`, `<span class="pj-origin-dots" aria-hidden="true">${STEPS.map((x, i) => `<i class="${i < step - 1 ? 'on' : i === step - 1 ? 'now' : ''}"></i>`).join('')}</span>`, 'is-back')
+      : draft && draft.copiedFrom ? origin(icon('copy'), 'Copied', `From ${esc(draft.copiedFrom)}. Check the brief, then post.`)
+      : bp && draft && draft.auto ? origin(catIcon(bp.cat), 'Filled in from a Blueprint', `${bpLink}${bpTerms[bp.id] ? ', the terms you set' : ''} and your company profile. Change anything, then post.`)
+      : bp && !draft ? origin(catIcon(bp.cat), 'Filled in from a Blueprint', `${bpLink}. ${step === 1 ? 'Change anything, then continue.' : 'Role and scope are done. Add your company basics.'}`, '<a class="act muted pj-origin-x" href="#engagement.new">Start blank</a>')
       : '';
+    const N = RN.model.ops.filter((o) => !o.hidden).length;
 
     return `<section class="wrap pj-new" data-pj-new>
       ${crumbs([['Engagements', 'engagements'], [posted ? 'Edit brief' : 'Post an engagement', '']])}
       <div class="pj-new-grid">
         <form id="pj-form" class="pj-form" data-submit="pj-post" novalidate>
           <div class="pj-form-hd">
-            <div class="row between"><span class="step-count">Step ${step} of 3 · ${esc(STEPS[step - 1])}</span><span class="tiny muted pj-saved" data-pj-saved>${draft ? (posted ? `Posted ${esc(RN.fmt.ago(draft.postedAt))}` : `Draft saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`) : 'Saves as you go'}</span></div>
+            <div class="row between pj-form-meta"><span class="step-count">Step ${step} of 3 · ${esc(STEPS[step - 1])}</span><span class="row pj-form-meta-r"><span class="tiny muted pj-saved" data-pj-saved>${draft ? (posted ? `Posted ${esc(RN.fmt.ago(draft.postedAt))}` : `Draft saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`) : 'Saves as you go'}</span>${form.id && !posted ? `<details class="pj-more"><summary aria-label="More draft actions" title="More">${icon('dots')}</summary><div class="pj-more-m" role="menu"><button type="button" role="menuitem" data-act="pj-discard">${icon('x')}Discard draft</button></div></details>` : ''}</span></div>
             <div class="stepper" aria-hidden="true">${[1, 2, 3].map((i) => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div>
             <h1 class="h2">${posted ? 'Edit the brief' : 'Post an engagement'}</h1>
             ${fromNote}
-            ${!bp && !draft && step === 1 ? `<div class="pj-pickbp"><span class="label">Start from a Blueprint</span><div class="chipset">${BP.map((b) => `<a class="chip chip-sm" href="#engagement.new.${esc(b.id)}">${RN.ui.catDot(b.cat)}${esc(b.role)}</a>`).join('')}</div></div>` : ''}
+            ${!bp && !draft && step === 1 ? `<div class="pj-pickbp">
+              <div class="pj-pickbp-hd"><div><span class="label">Start from a Blueprint</span><p class="small muted">The brief fills itself from the plan, the scope and the focus areas.</p></div>
+                <span class="row pj-pickbp-nav"><button type="button" class="pj-nav-b" data-act="pj-bprow" data-d="-1" aria-label="Scroll Blueprints back">${icon('chev-left')}</button><button type="button" class="pj-nav-b" data-act="pj-bprow" data-d="1" aria-label="Scroll Blueprints forward">${icon('chev-right')}</button></span></div>
+              <div class="pj-bprow" data-pj-bprow>${BP.map((b) => `<a class="pj-bpmini" href="#engagement.new.${esc(b.id)}" style="--cat:${RN.fields.catColor(b.cat)}"><span class="pj-bpmini-hd"><span class="pj-bp-ico">${catIcon(b.cat)}</span><span class="pj-bpmini-c">${esc(RN.fields.catLabel(b.cat))}</span></span><span class="pj-bpmini-t">${esc(b.problem)}</span><span class="pj-bpmini-r">${esc(b.role)} · ${esc(bpTime(b))}</span></a>`).join('')}</div>
+              <div class="pj-or"><span>or describe the seat yourself</span></div>
+            </div>` : ''}
           </div>
 
           <div class="pj-step stack" data-step="1" ${step !== 1 ? 'hidden' : ''}>
-            <h2 class="h4 pj-step-t">Role and scope</h2>
+            <h2 class="sr-only">Role and scope</h2>
+            <div class="pj-grp"><span class="pj-grp-k"><i>1</i>The seat</span>
             ${W().field('roleCategory', f.roleCategory, { name: 'roleCategory', help: 'The discipline this engagement needs. Matching starts here.' })}
-            <div class="field" data-field="role" data-pj-role>${roleControl(f.roleCategory, f.role)}</div>
+            <div class="field" data-field="role" data-pj-role ${(RN.fields.rolesByCat[f.roleCategory] || []).length ? '' : 'hidden'}>${roleControl(f.roleCategory, f.role)}</div>
             <div class="field" data-field="title"><label for="pj-title">Engagement title</label>
               <input class="input" id="pj-title" name="title" value="${esc(title)}" maxlength="90" placeholder="Fractional VP of Sales" autocomplete="off">
-              <p class="help">Operators see this first. We fill it in from the role.</p></div>
+              <p class="help">Operators see this first. We fill it in from the role.</p></div></div>
+            <div class="pj-grp"><span class="pj-grp-k"><i>2</i>Scope and budget</span>
             ${W().field('engagementType', f.engagementType, { name: 'engagementType' })}
             <div class="grid g-2 pj-g">
               <div data-pj-hours ${project ? 'hidden' : ''}>${W().field('hoursPerMonth', f.hoursPerMonth, { name: 'hoursPerMonth', label: 'Available time needed', help: 'Hours per month. Operators set the same scale on their profile.' })}</div>
               <div data-pj-rate ${project ? 'hidden' : ''}>${W().field('rateMax', f.rateMax || '', { name: 'rateMax', label: 'Budget per hour', help: rateHelp(f.rateMax), placeholder: 'e.g. 275' })}</div>
               <div data-pj-budget ${project ? '' : 'hidden'}>${W().field('projectBudget', f.projectBudget || '', { name: 'projectBudget', label: 'Project budget', help: budgetHelp(f.projectBudget), placeholder: 'e.g. 15000' })}</div>
-            </div>
+            </div></div>
+            <div class="pj-grp"><span class="pj-grp-k"><i>3</i>Timing and outcome</span>
             <div class="grid g-2 pj-g">
               ${W().field('term', f.term, { name: 'term' })}
               ${W().field('startBy', f.startBy, { name: 'startBy' })}
             </div>
             <div class="field" data-field="brief"><label for="pj-brief">What does success look like in 90 days?</label>
-              <textarea class="textarea" id="pj-brief" name="brief" maxlength="900" placeholder="The result you want by day 90, in plain words. Operators read this first.">${esc(brief)}</textarea></div>
+              <textarea class="textarea" id="pj-brief" name="brief" maxlength="900" placeholder="The result you want by day 90, in plain words. Operators read this first.">${esc(brief)}</textarea></div></div>
           </div>
 
           <div class="pj-step stack" data-step="2" ${step !== 2 ? 'hidden' : ''}>
-            <h2 class="h4 pj-step-t">Company and needs</h2>
-            ${signedIn ? companyCard(client, f) : visitorFields(client, f)}
+            <h2 class="sr-only">Company and needs</h2>
+            <div class="pj-grp"><span class="pj-grp-k"><i>1</i>Your company</span>
+            ${signedIn ? companyCard(client, f) : visitorFields(client, f)}</div>
+            <div class="pj-grp"><span class="pj-grp-k"><i>2</i>What the role needs</span>
             ${W().field('industries', f.industries, { name: 'industries', max: 3, help: 'Pick up to 3. Operators with experience here rank higher.' })}
             ${W().field('salesMotions', f.salesMotions, { name: 'salesMotions', help: 'The motion you run today or want to build.' })}
-            ${W().field('fitTags', f.tags, { name: 'tags', max: 8, client: true, noCustom: true, cat: f.roleCategory, label: 'Focus areas the role needs', help: 'From the Fit Tag Library. Operators with these verified by a company review rank first.' })}
+            ${W().field('fitTags', f.tags, { name: 'tags', max: 8, client: true, noCustom: true, cat: f.roleCategory, label: 'Focus areas the role needs', help: 'From the Fit Tag Library. Operators with these verified by a company review rank first.' })}</div>
           </div>
 
           <div class="pj-step stack" data-step="3" ${step !== 3 ? 'hidden' : ''}>
-            <h2 class="h4 pj-step-t">Review and post</h2>
+            <h2 class="sr-only">Review and post</h2>
             <div data-pj-review>${step === 3 ? reviewHtml(view) : ''}</div>
             <div class="pj-switches stack" style="--gap:14px">
               <label class="switch"><input type="checkbox" name="open" value="1" ${open ? 'checked' : ''} ${posted ? 'disabled' : ''}><i></i><span><b>Send a role alert to matching operators</b><span class="small muted">Off means invite only: just the operators you invite${suggest ? ' and our suggestions' : ''} can respond.</span></span></label>
@@ -780,16 +825,17 @@
             <p class="small muted pj-fee">${icon('info')}<span>${esc(PJ.NO_FEES)} Posting, intros and hiring are free.</span></p>
           </div>
 
+          <div class="pj-live-m" data-pj-livem aria-live="polite">${liveMini(f, N)}</div>
           <div class="pj-form-ft">${footHtml(step, posted)}</div>
         </form>
-        <aside class="pj-rail" data-pj-rail>${railHtml(f)}</aside>
+        <aside class="pj-rail" data-pj-rail>${railHtml(f, step)}</aside>
       </div>
     </section>`;
   }
 
   function footHtml(step, posted) {
     const back = step > 1 ? `<button type="button" class="btn btn-line" data-act="pj-step" data-to="${step - 1}">${icon('arrow-left')}Back</button>` : '';
-    const leave = posted ? '<button type="button" class="act muted" data-act="pj-edit-cancel">Cancel</button>' : form.id ? '<button type="button" class="act muted" data-act="pj-discard">Discard draft</button>' : '';
+    const leave = posted ? '<button type="button" class="act muted" data-act="pj-edit-cancel">Cancel</button>' : '';
     const save = posted ? '' : '<button type="button" class="btn btn-ghost" data-act="pj-save">Save draft</button>';
     const next = step < 3 ? `<button type="button" class="btn" data-act="pj-step" data-to="${step + 1}">Continue${icon('arrow')}</button>` : `<button type="submit" class="btn">${posted ? 'Save changes' : 'Post engagement'}${icon('arrow')}</button>`;
     return `<div class="row pj-foot-l">${back}${leave}</div><div class="row pj-foot-r">${save}${next}</div>`;
@@ -797,7 +843,7 @@
   function roleControl(cat, val) {
     const roles = cat ? RN.fields.rolesByCat[cat] || [] : [];
     const lbl = RN.fields.role.label;
-    if (!roles.length) return `<label>${esc(lbl)}</label><p class="help">Pick a role category first.</p><input type="hidden" name="role" value="">`;
+    if (!roles.length) return `<input type="hidden" name="role" value="">`;
     const v = roles.includes(val) ? val : '';
     return `<label for="f-role">${esc(lbl)}</label><div class="chipset" role="group" aria-label="${esc(lbl)}" id="f-role">${roles.map((r) => `<button type="button" class="chip" aria-pressed="${r === v}" data-act="w-chip" data-name="role" data-v="${esc(r)}" data-multi="" data-max="">${esc(r)}</button>`).join('')}<input type="hidden" name="role" value="${esc(v)}"></div>`;
   }
@@ -820,9 +866,9 @@
   }
   function visitorFields(client, f) {
     const c = client.company;
-    return `<fieldset class="card-flat stack pj-co" style="--gap:16px">
-      <legend class="label">About your company</legend>
-      <p class="small muted">Asked once. Operators see your company’s industry and size, not your name, until you request an intro. Sample company details are filled in for the prototype.</p>
+    return `<fieldset class="pj-co-v">
+      <legend class="sr-only">About your company</legend>
+      <p class="small muted pj-co-note">${icon('eye-off')}<span>Asked once. Operators see your company’s industry and size, not your name, until you request an intro.<span data-proto> Sample company details are filled in for the prototype.</span></span></p>
       <div class="grid g-2 pj-g">${W().field('fullName', client.name, { name: 'name', compact: true })}${W().field('email', client.email, { name: 'email', compact: true })}</div>
       <div class="grid g-2 pj-g"><div class="field" data-field="company"><label for="pj-co">Company</label><input class="input" id="pj-co" name="company" value="${esc(c.name || '')}" autocomplete="organization"></div>
       ${W().field('industry', c.industry, { name: 'industry', compact: true })}</div>
@@ -831,20 +877,40 @@
     </fieldset>`;
   }
 
-  function railHtml(f) {
+  /* Live match rail: everyone in the role category scored against the brief as it is filled in.
+     Before a category is picked it shows the shape of the result: ghosted rows and a 0-of-N counter. */
+  const networkSize = () => RN.model.ops.filter((o) => !o.hidden).length;
+  function railHtml(f, step) {
     const next = `<div class="card-flat pj-next"><span class="label">What happens next</span><ol>
-      <li><b>Post free.</b> The operators you picked get an invite; matching operators get a role alert.</li>
-      <li><b>Responses within 72 hours,</b> each with a note, a rate and the same Match Signals.</li>
-      <li><b>Request an intro</b> to the ones you like. We set up the call.</li></ol></div>`;
-    if (!f.roleCategory) return `<div class="card pj-live"><span class="pj-live-l"><i class="dot dot-now"></i>Live match</span><h3 class="h4">Pick a role category</h3><p class="small muted">Then every operator in it is scored against your brief as you fill it in.</p></div>${next}`;
+      <li class="${step === 3 ? 'is-now' : ''}"><i>1</i><span><b>Post free.</b> The operators you picked get an invite; matching operators get a role alert.</span></li>
+      <li><i>2</i><span><b>Responses within 72 hours,</b> each with a note, a rate and the same Match Signals.</span></li>
+      <li><i>3</i><span><b>Request an intro</b> to the ones you like. We set up the call.</span></li></ol></div>`;
+    if (!f.roleCategory) {
+      const n = networkSize();
+      return `<div class="card pj-live is-empty">
+        <span class="pj-live-l"><i class="dot dot-now"></i>Live match</span>
+        <p class="pj-live-n"><b class="num">0</b> of ${RN.fmt.int(n)} operators scored</p>
+        ${splitBar({ strong: 0, good: 0, total: 0 }, { key: false })}
+        <div class="pj-live-top">${ghostRows(3)}</div>
+        <p class="small muted">Pick a role category and every operator in it is scored against your brief as you fill it in.</p>
+      </div>${next}`;
+    }
     const c = counts(f);
     const top = matches(f, 3);
     return `<div class="card pj-live">
       <span class="pj-live-l"><i class="dot dot-now"></i>Live match</span>
       <p class="pj-live-n"><b class="num">${c.strong}</b> strong and <b class="num">${c.good}</b> good matches</p>
-      <p class="small muted">From ${RN.fmt.plural(c.total, 'operator')} in ${esc(RN.fields.catLabel(f.roleCategory))}. Strong match 75+, Good match 50+.</p>
-      <div class="pj-live-top">${top.map((r) => miniOp(r.op, fitPill(r.fit))).join('') || '<p class="small muted">No operators in this category yet.</p>'}</div>
+      ${splitBar(c)}
+      <p class="tiny muted">${RN.fmt.plural(c.total, 'operator')} in ${esc(RN.fields.catLabel(f.roleCategory))} scored. Strong 75+, good 50+.</p>
+      <div class="pj-live-top">${top.map((r) => miniOp(r.op, scorePill(r.fit))).join('') || '<p class="small muted">No operators in this category yet.</p>'}</div>
     </div>${next}`;
+  }
+  /* The same result, compact, inside the form on phones and tablets: it sits right above Continue */
+  function liveMini(f, n) {
+    if (!f.roleCategory) return `<span class="pj-live-l"><i class="dot dot-now"></i>Live match</span><span class="pj-live-m-n"><b class="num">0</b> of ${RN.fmt.int(n || networkSize())} scored</span><span class="pj-live-m-faces" aria-hidden="true"><i></i><i></i><i></i></span>${splitBar({ strong: 0, good: 0, total: 0 }, { key: false })}`;
+    const c = counts(f);
+    const top = matches(f, 3);
+    return `<span class="pj-live-l"><i class="dot dot-now"></i>Live match</span><span class="pj-live-m-n"><b class="num">${c.strong}</b> strong · <b class="num">${c.good}</b> good</span><span class="ava-stack pj-live-m-faces" aria-hidden="true">${top.map((r) => RN.ui.avatar(r.op, 'ava-xs', { decorative: true })).join('')}</span>${splitBar(c, { key: false })}`;
   }
 
   /* The review step reads an engagement record (or a posted brief with its unsaved edits applied).
@@ -1142,18 +1208,48 @@
         const cur = form.id ? PJ.get(form.id) : null;
         if (!cur || cur.status === 'draft') save(formEl, { touched: true });
         else editBuf[cur.id] = collect(formEl);
+        const fx = collect(formEl).f;
         const rail = root.querySelector('[data-pj-rail]');
-        if (rail) rail.innerHTML = railHtml(collect(formEl).f);
+        if (rail) rail.innerHTML = railHtml(fx, form.step);
+        const lm = formEl.querySelector('[data-pj-livem]');
+        if (lm) lm.innerHTML = liveMini(fx);
       }, e.type === 'input' ? 350 : 60);
     };
     formEl.addEventListener('change', handler);
     formEl.addEventListener('input', handler);
+    // Search-first pickers: a few suggestions under the search field; the full library behind "Browse all"
+    RN.$$('.tagpick', formEl).forEach((box) => {
+      const foot = box.querySelector('.tagpick-foot');
+      const src = RN.fields[box.dataset.src || 'fitTags'];
+      const n = ((src && src.options) || []).length;
+      if (!foot || foot.querySelector('.pj-tp-all') || n < 12) return;
+      box.classList.add('pj-tp');
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'act pj-tp-all'; b.dataset.act = 'pj-tp-all';
+      b.setAttribute('aria-expanded', 'false');
+      b.innerHTML = `Browse all ${RN.fmt.int(n)}${icon('chev-down')}`;
+      foot.insertBefore(b, foot.children[1] || null);
+    });
+    const more = formEl.querySelector('.pj-more');
+    if (more) document.addEventListener('click', function close(e) { if (!document.body.contains(more)) { document.removeEventListener('click', close); return; } if (!more.contains(e.target)) more.open = false; });
   }
+  RN.actions['pj-tp-all'] = (el) => {
+    const box = el.closest('.tagpick');
+    if (!box) return;
+    const on = box.classList.toggle('is-all');
+    el.setAttribute('aria-expanded', String(on));
+    el.innerHTML = `${on ? 'Show suggestions' : `Browse all ${RN.fmt.int(((RN.fields[box.dataset.src || 'fitTags'] || {}).options || []).length)}`}${icon(on ? 'chev-up' : 'chev-down')}`;
+  };
+  RN.actions['pj-bprow'] = (el) => {
+    const row = document.querySelector('[data-pj-bprow]');
+    if (row) row.scrollBy({ left: (+el.dataset.d || 1) * Math.max(220, row.clientWidth * 0.8), behavior: 'smooth' });
+  };
   function onCategory(formEl, cat) {
     const box = formEl.querySelector('[data-pj-role]');
     const curRole = (formEl.querySelector('input[name="role"]') || {}).value;
     box.innerHTML = roleControl(cat, curRole);
     const roles = RN.fields.rolesByCat[cat] || [];
+    box.hidden = !roles.length;
     if (roles.length === 1) { const b = box.querySelector('.chip'); if (b) RN.actions['w-chip'](b); }
     const tp = formEl.querySelector('[data-tagpick="tags"]');
     if (tp) { tp.dataset.cat = cat || ''; const s = tp.querySelector('input[type=search]'); if (s && RN.inputs['w-tag-search']) RN.inputs['w-tag-search'](s); }
@@ -1187,7 +1283,7 @@
         <p class="lede" style="margin:14px auto 0">${inv ? `Your stage: ${esc(PJ.stage(p, me).l)}. Respond from your Studio inbox: interested with your rate, or a pass with a reason.` : 'Engagement invites and role alerts land in your Studio inbox.'}</p>
         <div class="row" style="justify-content:center;margin-top:24px"><a class="btn" href="#studio.inbox">Open Studio inbox</a><button type="button" class="btn btn-line" data-act="persona" data-p="buyer" data-to="engagement.${esc(params.id)}">View as the company</button></div></div></section>`;
     }
-    if (persona !== 'buyer') return RN.ui.gate('buyer');
+    if (persona !== 'buyer') return gateGhost();
     if (!p) return notFound('That engagement does not exist', 'Back to engagements', 'engagements');
     syncSuggestions(p);
     const q = PJ.get(p.id);
@@ -1202,8 +1298,6 @@
     flash = null;
     const sel = q.selectedOpId && RN.model.byId(q.selectedOpId);
     const intros = resp.filter((r) => r.introId).length;
-    const stat = (v, l, sub) => `<div class="stat"><span class="stat-v">${v}</span><span class="stat-l">${esc(l)}${sub ? `<span class="faint"> · ${esc(sub)}</span>` : ''}</span></div>`;
-
     return `<section class="wrap pj-page" data-pid="${esc(q.id)}">
       ${crumbs([['Engagements', 'engagements'], [q.title || 'Untitled engagement', '']])}
       <header class="pj-head">
@@ -1224,7 +1318,7 @@
       </div>` : ''}
       ${q.status === 'closed' ? `<div class="note pj-flash">${icon('info')}<span>${q.selectedOpId && sel ? `Closed after hiring ${esc(sel.name)}${q.closedReason === 'auto' ? `, automatically after ${AUTO_CLOSE_DAYS} days with no new activity,` : ''} on ${esc(RN.fmt.date(q.closedAt || RN.now()))}.` : `Closed without a hire on ${esc(RN.fmt.date(q.closedAt || RN.now()))}. Everyone who responded got one close email.`}</span></div>` : ''}
       ${isQuiet(q) ? `<div class="note pj-flash">${icon('clock')}<span>No responses in 72 hours. Invite a few more of the ranked matches below${q.suggest === false ? ', or turn on Revenue Nomad suggestions' : ''}.</span></div>` : ''}
-      ${draft ? '' : `<div class="stats-row pj-stats" style="--cols:4">${stat(`${clientInvites(q)}<span class="pj-of">/${MAX_INVITES}</span>`, 'Invited', (q.suggested || []).length ? `+${q.suggested.length} suggested` : '')}${stat(interested.length, 'Responses', resp.length - interested.length ? `${resp.length - interested.length} declined` : '')}${stat(c.strong, 'Strong matches', `${c.good} good`)}${stat(intros, 'Intros requested')}</div>`}
+      ${draft ? '' : kpis(q, c, interested, resp, intros)}
       ${draft || done ? '' : suggestNote(q)}
       <div class="tabs pj-tabs" role="tablist">
         ${[['matches', 'Matches', c.strong + c.good], ['responses', 'Responses', interested.length], ['brief', 'Brief', 0]].map((t) => `<button type="button" class="tab" role="tab" aria-selected="${tab === t[0]}" data-act="pj-tab" data-t="${t[0]}">${esc(t[1])}${t[2] ? `<span class="nav-count">${t[2]}</span>` : ''}</button>`).join('')}
@@ -1233,13 +1327,43 @@
     </section>`;
   }
 
+  /* The engagement's four numbers, each with the picture it stands for: invite slots, the faces who replied,
+     the strong / good split, and the intros (an empty count reads as a next step, not a big zero) */
+  function kpis(q, c, interested, resp, intros) {
+    const mine = clientInvites(q);
+    const sugg = (q.suggested || []).length;
+    const slots = Array.from({ length: MAX_INVITES }, (_, i) => `<i class="${i < mine ? 'on' : ''}"></i>`).join('');
+    const faces = interested.map((r) => RN.model.byId(r.opId)).filter(Boolean).slice(0, 5);
+    const waiting = (q.invited || []).filter((id) => !respOf(q, id)).length;
+    const declined = resp.length - interested.length;
+    const cell = (cls, v, l, art, sub) => `<div class="pj-kpi ${cls}"><div class="pj-kpi-v">${v}</div><span class="pj-kpi-l">${esc(l)}</span><div class="pj-kpi-art">${art}</div>${sub ? `<span class="pj-kpi-s">${sub}</span>` : ''}</div>`;
+    return `<div class="pj-kpis">
+      ${cell('', `<b class="num">${mine}</b><span class="pj-of">of ${MAX_INVITES}</span>`, 'Invited by you', `<span class="pj-slots" role="img" aria-label="${mine} of ${MAX_INVITES} invite slots used">${slots}</span>`, sugg ? `+${sugg} suggested by Revenue Nomad` : `${MAX_INVITES - mine} invites left`)}
+      ${cell('', `<b class="num">${interested.length}</b>`, interested.length === 1 ? 'Response' : 'Responses', faces.length ? `<span class="ava-stack">${faces.map((o) => RN.ui.avatar(o, 'ava-sm')).join('')}</span>` : `<span class="pj-kpi-wait">${ghostRows(1, 'is-dot')}</span>`, [waiting && `${waiting} awaiting a reply`, declined && `${declined} declined`].filter(Boolean).join(' · '))}
+      ${cell('', `<b class="num">${c.strong}</b><span class="pj-of">strong</span>`, 'Matches', splitBar(c, { key: false }), `${c.good} good of ${c.total} scored`)}
+      ${cell(intros ? '' : 'is-zero', intros ? `<b class="num">${intros}</b>` : '<b class="pj-kpi-none">None yet</b>', 'Intros requested', intros ? '' : interested.length ? `<button type="button" class="act" data-act="pj-tab" data-t="responses">Meet someone who replied${icon('arrow')}</button>` : `<button type="button" class="act" data-act="pj-tab" data-t="matches">Invite from your matches${icon('arrow')}</button>`, '')}
+    </div>`;
+  }
+  /* Visitors: the sign-in card over a ghosted engagement page, so the gate shows what is behind it */
+  function gateGhost() {
+    return `<section class="wrap pj-gatewrap">
+      <div class="pj-gate-ghost" aria-hidden="true">
+        <i class="g-pill"></i><i class="g-pill w2"></i><i class="g-h1"></i><i class="g-line"></i>
+        <div class="g-kpis">${'<span><i></i><i></i><i></i></span>'.repeat(4)}</div>
+        <div class="g-tabs"><i></i><i></i><i></i></div>
+        <div class="g-rows">${ghostRows(3, 'is-big')}</div>
+      </div>
+      <div class="pj-gate-card">${RN.ui.gate('buyer')}</div>
+    </section>`;
+  }
+
   function suggestNote(p) {
     if (p.suggest === false) return `<div class="pj-sugg">${icon('seal')}<span>Revenue Nomad suggestions are off for this engagement.</span><button type="button" class="act" data-act="pj-suggest-on">Turn on suggestions</button></div>`;
     if (p.suggestedAt) {
       const ops = (p.suggested || []).map(RN.model.byId).filter(Boolean);
-      return `<div class="pj-sugg on">${icon('seal')}<span><b>Suggested by Revenue Nomad</b> on ${esc(RN.fmt.dateShort(p.suggestedAt))}: ${ops.length ? ops.map((o) => esc(o.name)).join(', ') + '. We invited them for you.' : 'no one new fit well enough, so we held back.'}</span></div>`;
+      return `<div class="pj-sugg on">${ops.length ? `<span class="ava-stack">${ops.map((o) => RN.ui.avatar(o, 'ava-sm')).join('')}</span>` : icon('seal')}<span><b>Suggested by Revenue Nomad</b> on ${esc(RN.fmt.dateShort(p.suggestedAt))}: ${ops.length ? ops.map((o) => `<a href="#op.${esc(o.slug)}" data-track-view="${esc(o.id)}">${esc(o.name)}</a>`).join(', ') + '. We invited them for you.' : 'no one new fit well enough, so we held back.'}</span></div>`;
     }
-    return `<div class="pj-sugg">${icon('seal')}<span>Revenue Nomad adds up to 3 suggested operators within 72 hours, by ${esc(RN.fmt.dateShort(suggestDue(p)))}. They show as Suggested by Revenue Nomad.</span><button type="button" class="act" data-act="pj-suggest-now">Add them now (prototype)</button></div>`;
+    return `<div class="pj-sugg">${icon('seal')}<span>Revenue Nomad adds up to 3 suggested operators within 72 hours, by ${esc(RN.fmt.dateShort(suggestDue(p)))}. They show as Suggested by Revenue Nomad.</span><button type="button" class="act" data-act="pj-suggest-now" data-proto>Add them now (prototype)</button></div>`;
   }
 
   function matchesTab(p) {
@@ -1284,16 +1408,19 @@
     open.sort((a, b) => (b.r.decision === 'selected') - (a.r.decision === 'selected') || score(b) - score(a));
     const waiting = (p.invited || []).filter((id) => !respOf(p, id));
     const live = LIVE.includes(p.status);
-    const tool = live && waiting.length ? `<div class="pj-proto"><span class="pill pill-line">${icon('bolt')}Prototype tool</span><span class="small muted">Operators reply from their Studio inbox. To see it here without switching persona, simulate a reply.</span><button type="button" class="act" data-act="pj-simulate">Simulate a reply from ${esc(RN.model.byId(waiting[0]).first)}</button></div>` : '';
+    const awaiting = live && waiting.length ? `<section class="pj-await"><div class="pj-await-hd"><span class="label">Awaiting a reply</span><span class="tiny muted">${RN.fmt.plural(waiting.length, 'operator')} · 72 hours to reply from their invite</span></div>
+      <div class="pj-await-list">${waiting.map(RN.model.byId).filter(Boolean).map((op) => { const m = (p.inviteMeta || {})[op.id]; return `<div class="pj-await-row">${miniOp(op, `<span class="pj-await-r">${srcOf(p, op.id) === 'rn' ? '<span class="pill pill-gold">Suggested</span>' : ''}<span class="tiny muted">Invited ${esc(RN.fmt.ago((m && m.ts) || p.postedAt))}</span></span>`)}</div>`; }).join('')}</div></section>` : '';
+    const tool = live && waiting.length ? `<div class="pj-proto" data-proto><span class="pill pill-line">${icon('bolt')}Prototype tool</span><span class="small muted">Operators reply from their Studio inbox. To see it here without switching persona, simulate a reply.</span><button type="button" class="act" data-act="pj-simulate">Simulate a reply from ${esc(RN.model.byId(waiting[0]).first)}</button></div>` : '';
     if (!resp.length) {
       const body = p.status === 'draft' ? 'Post the engagement and invited operators reply here within 72 hours.'
         : p.visibility === 'invite_only' ? (waiting.length ? `Your invites went out to ${RN.fmt.plural(waiting.length, 'operator')}. Replies land here within 72 hours.` : 'This engagement is invite only and nobody is invited yet. Invite operators from Matches.')
         : `Matching operators got a role alert${waiting.length ? ` and ${RN.fmt.plural(waiting.length, 'invite')} went out` : ''}. Replies land here within 72 hours.`;
-      return `${RN.ui.empty({ icon: 'inbox', title: 'No responses yet', body, cta: `<button type="button" class="btn btn-line" data-act="pj-tab" data-t="matches">See ranked matches</button>` })}${tool}`;
+      return `${RN.ui.empty({ icon: 'inbox', title: 'No responses yet', body, cta: `<button type="button" class="btn btn-line" data-act="pj-tab" data-t="matches">See ranked matches</button>` })}${awaiting}${tool}`;
     }
     return `<div class="pj-toolbar"><p class="small muted">${RN.fmt.plural(open.length, 'active response')}${closed.length ? ` · ${closed.length} closed` : ''}${waiting.length && live ? ` · ${RN.fmt.plural(waiting.length, 'invited operator')} still to reply` : ''}. Sorted by match.</p>
       <span class="small muted pj-rate-note">${icon('info')}The rate shown is what you pay. No fees for companies.</span></div>
       <div class="stack pj-resps" style="--gap:14px">${open.map((x) => respCard(p, f, x.r, x.op)).join('')}</div>
+      ${awaiting}
       ${closed.length ? `<h3 class="label pj-closed-h">Closed</h3><div class="stack pj-resps" style="--gap:10px">${closed.map((x) => respCard(p, f, x.r, x.op)).join('')}</div>` : ''}
       ${tool}`;
   }
@@ -1696,26 +1823,65 @@
   RN.inputs['pj-bp-cat'] = (el) => { bpCat = el.value || ''; RN.rerender(); };
   RN.actions['pj-bp-all'] = () => { bpCat = ''; RN.rerender(); };
 
+  /* The hero sheet on #blueprints: one real Blueprint drawn small, with its plan, its Rate Index band and the
+     operators who rank first for it. Every figure comes from the Blueprint, RN.model.rank and the Rate Index. */
+  function bpSheet(bp) {
+    const pr = PJ.price(bp, clientRev(), {});
+    const top = RN.model.rank({ roleCategory: bp.cat, tags: bp.tags }, { limit: 4 });
+    const lo = pr.rate.lo * 0.8, hi = pr.rate.hi * 1.15;
+    const at = (v) => RN.clamp(((v - lo) / (hi - lo)) * 100, 0, 100).toFixed(1);
+    return `<div class="pj-bph-art" aria-hidden="true">
+      <i class="pj-sheet-back"></i><i class="pj-sheet-back b2"></i>
+      <div class="pj-sheet" style="--cat:${RN.fields.catColor(bp.cat)}">
+        <div class="pj-sheet-hd"><span class="pj-bp-ico">${catIcon(bp.cat)}</span><span class="pj-sheet-k">Blueprint · ${esc(RN.fields.catLabel(bp.cat))}</span></div>
+        <b class="pj-sheet-t">${esc(bp.problem)}</b>
+        <span class="pj-sheet-s">${esc(bp.title)} · ${esc(bpTime(bp))}</span>
+        <ol class="pj-sheet-tl">${bp.milestones.map((m, i) => `<li style="--i:${i}"><span class="pj-bp-day">Day ${(i + 1) * 30}</span><span>${esc(m)}</span></li>`).join('')}</ol>
+        <div class="pj-sheet-rate">
+          <span class="pj-sheet-lbl">Rate Index ${RN.ui.illus()}</span>
+          <div class="pj-range"><i class="pj-range-band" style="left:${at(pr.rate.lo)}%;right:${(100 - at(pr.rate.hi)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${at(pr.rate.mid)}%"></i></div>
+          <span class="pj-sheet-rv num">${usd(pr.rate.lo)} - ${usd(pr.rate.hi)}/hr</span>
+        </div>
+        ${top.length ? `<div class="pj-sheet-ops"><span class="ava-stack">${top.map((r) => RN.ui.avatar(r.op, 'ava-sm', { decorative: true })).join('')}</span><span class="tiny">Ranked first for this Blueprint</span></div>` : ''}
+      </div>
+    </div>`;
+  }
+
   function renderBlueprints() {
     const list = BP.filter((b) => !bpCat || b.cat === bpCat);
+    const parts = ['The problem', 'The seat', 'Typical scope', 'A 30/60/90-day plan', 'Rate Index pricing', 'First-call questions'];
+    const std = BP[0];
+    const bands = ['sales_leadership', 'marketing', 'revenue_operations', 'customer_success_growth'].map((c) => ({ c, r: rateIdx(c, clientRev()) }));
+    const bMin = Math.min(...bands.map((b) => b.r.p25)) * 0.85, bMax = Math.max(...bands.map((b) => b.r.p75)) * 1.08;
+    const bx = (v) => (((v - bMin) / (bMax - bMin)) * 100).toFixed(1);
+    const flow = ['Blueprint', 'Your terms', 'Review', 'Live'];
     return `<section class="wrap phead pj-bph">
       ${crumbs([['Post an engagement', 'engagements'], ['Engagement Blueprints', '']])}
-      <span class="eyebrow">Engagement Blueprints</span>
-      <h1 class="h1">Start from the problem <span class="serif">you need solved.</span></h1>
-      <p class="lede">Ten Blueprints written by the Revenue Nomad team for the engagements companies ask for most. Each one names the problem, the fractional seat that solves it, the typical scope, a 30/60/90-day plan, the rates on the Rate Index, and the questions to ask in the first call.</p>
+      <div class="pj-bph-grid">
+        <div class="pj-bph-copy">
+          <span class="eyebrow">Engagement Blueprints</span>
+          <h1 class="h1">Start from the problem <span class="serif">you need solved.</span></h1>
+          <p class="lede">The ten engagements companies ask for most, each written by our team as the problem it fixes and the seat that fixes it.</p>
+          <ul class="pj-bph-parts" aria-label="Every Blueprint includes">${parts.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul>
+        </div>
+        ${bpSheet(BP[0])}
+      </div>
     </section>
-    <section class="wrap">
-      <div class="pj-bp-filter"><span class="label">${esc(RN.fields.roleCategory.label)}</span><div data-deselect>${W().control('roleCategory', bpCat, { name: 'bpCat', change: 'pj-bp-cat' })}</div>
-        <p class="small muted">${RN.fmt.plural(list.length, 'Blueprint')}${bpCat ? ` in ${esc(RN.fields.catLabel(bpCat))} · <button type="button" class="act" data-act="pj-bp-all">Show all</button>` : ''}</p></div>
-      <div class="grid pj-bps pj-bps-3">${list.map(bpCard).join('')}</div>
+    <section class="wrap pj-bpx">
+      <div class="pj-bp-filter"><div class="pj-bp-filter-hd"><span class="label">${esc(RN.fields.roleCategory.label)}</span><p class="small muted">${RN.fmt.plural(list.length, 'Blueprint')}${bpCat ? ` in ${esc(RN.fields.catLabel(bpCat))} · <button type="button" class="act" data-act="pj-bp-all">Show all</button>` : ''}</p></div><div data-deselect class="pj-bp-cats">${W().control('roleCategory', bpCat, { name: 'bpCat', change: 'pj-bp-cat' })}</div></div>
+      <div class="grid pj-bps pj-bps-3">${list.map(bpCard).join('')}${bpHelpTile(list.length)}</div>
       ${bpPriceNote()}
     </section>
     <section class="wrap section-sm">
-      <div class="grid g-3 pj-how">
-        <div><span class="pj-step4-i">${icon('layers')}</span><h3 class="h4">Built on standard fields</h3><p class="small muted">Engagement type, available time, term and focus areas use the same lists operators fill in, so a Blueprint matches profiles with no translation.</p></div>
-        <div><span class="pj-step4-i">${icon('chart')}</span><h3 class="h4">Priced from the Rate Index</h3><p class="small muted">Rates are the p25 to p75 hourly rates operators list in each role category. The rate is what you pay: there are no fees for companies. Market figures are illustrative in this prototype.</p></div>
-        <div><span class="pj-step4-i">${icon('send')}</span><h3 class="h4">Adjust, then post</h3><p class="small muted">Set the engagement type, time, term and start on the Blueprint. Post this engagement fills the brief from it and your company profile, with the top 3 ranked matches picked to invite. Or customize every detail first.</p></div>
-      </div>
+      <span class="eyebrow">How a Blueprint works</span>
+      <ol class="grid g-3 pj-how">
+        <li><div class="pj-how-art" aria-hidden="true"><span class="pj-how-chips">${[W().label('engagementType', std.engagementType), W().label('hoursPerMonth', std.hoursPerMonth), W().label('term', std.term), W().label('startBy', std.startBy)].map((x) => `<span>${esc(x)}</span>`).join('')}</span><span class="pj-how-eq">${icon('user')}Same lists as every operator profile</span></div>
+          <h3 class="h4">Built on standard fields</h3><p class="small muted">Engagement type, available time, term and focus areas use the lists operators fill in, so a Blueprint matches profiles with no translation.</p></li>
+        <li><div class="pj-how-art" aria-hidden="true"><div class="pj-how-bands">${bands.map((b) => `<div><span>${esc(RN.fields.catLabel(b.c))}</span><i style="--cat:${RN.fields.catColor(b.c)}"><b style="left:${bx(b.r.p25)}%;right:${(100 - bx(b.r.p75)).toFixed(1)}%"></b></i></div>`).join('')}</div></div>
+          <h3 class="h4">Priced from the Rate Index ${RN.ui.illus()}</h3><p class="small muted">Rates are the p25 to p75 hourly rates operators list in each role category. The rate is what you pay. There are no fees for companies.</p></li>
+        <li><div class="pj-how-art" aria-hidden="true"><ol class="pj-how-flow">${flow.map((x, i) => `<li style="--i:${i}"><i>${i + 1}</i><span>${esc(x)}</span></li>`).join('')}</ol></div>
+          <h3 class="h4">Adjust, then post</h3><p class="small muted">Set the type, time, term and start on the Blueprint. Posting fills the brief from it and your company profile, with the top 3 ranked matches picked to invite.</p></li>
+      </ol>
     </section>`;
   }
 
@@ -1800,7 +1966,6 @@
     const rev = clientRev();
     const t = termsOf(bp);
     const pr = PJ.price(bp, rev, t);
-    const project = bp.engagementType === 'project';
     const cat = RN.fields.catLabel(bp.cat);
     const stageName = (((RN.data.framework || {}).stages || []).find((s) => s.id === bp.stage) || {}).name || '';
     const related = BP.filter((b) => b.id !== bp.id && b.cat === bp.cat).concat(BP.filter((b) => b.id !== bp.id && b.cat !== bp.cat)).slice(0, 3);
@@ -1813,41 +1978,31 @@
     const me = RN.myOp();
     const mine = !!(me && (me.offers || []).includes(bp.id));
     const listLink = `<a class="act" href="#framework">${esc(bp.area)}${stageName ? ` × ${esc(stageName)}` : ''}</a>`;
+    const people = offer.concat(fits.map((x) => x.op)).slice(0, 5);
     return `<section class="wrap pj-bpd-top">
       ${crumbs([['Post an engagement', 'engagements'], ['Blueprints', 'blueprints'], [bp.role, '']])}
       <div class="panel-night night pj-bpd-hero" style="--cat:${RN.fields.catColor(bp.cat)}">
-        <span class="eyebrow">Engagement Blueprint · ${esc(cat)}</span>
+        <div class="pj-bpd-hero-l">
+        <div class="pj-bpd-hero-hd"><span class="pj-bp-ico" aria-hidden="true">${catIcon(bp.cat)}</span><span class="eyebrow">Blueprint · ${esc(cat)}</span></div>
         <h1 class="h1">${esc(bp.problem)}</h1>
         <p class="lede">The seat that fixes it: <span class="serif">${esc(bp.title)}.</span> ${esc(bp.blurb)}</p>
-        <ol class="pj-bpd-ms" aria-label="30/60/90-day plan at a glance">${bp.milestones.map((m, i) => `<li><span class="pj-bpd-day">Day ${(i + 1) * 30}</span><span>${esc(m)}</span></li>`).join('')}</ol>
-        <button type="button" class="act pj-bpd-ops" data-act="pj-scroll" data-to="pj-top-ops">Operators who offer this${icon('arrow')}</button>
+        <ol class="pj-bpd-ms" aria-label="30/60/90-day plan at a glance">${bp.milestones.map((m, i) => `<li style="--i:${i}"><span class="pj-bpd-day">Day ${(i + 1) * 30}</span><span>${esc(m)}</span></li>`).join('')}</ol>
+        </div>
+        ${people.length ? `<aside class="pj-bpd-who" aria-label="Who runs this engagement">
+          <span class="pj-bpd-who-k">Who runs it</span>
+          <ul>${people.slice(0, 4).map((o) => { const fx = RN.model.fit(o, { roleCategory: bp.cat, tags: bp.tags }); return `<li>${RN.ui.avatar(o, 'ava-sm', { decorative: true })}<span class="pj-bpd-who-n"><b>${esc(o.name)}</b><span>${offer.includes(o) ? 'Offers this Blueprint' : `Fractional ${esc(o.role)}`}</span></span>${scorePill(fx)}</li>`; }).join('')}</ul>
+          <button type="button" class="pj-bpd-ops" data-act="pj-scroll" data-to="pj-top-ops">See their profiles${icon('arrow')}</button>
+        </aside>` : ''}
       </div>
       ${termsHtml(bp, rev)}
     </section>
     <section class="wrap pj-bpd">
       <div class="pj-bpd-grid">
         <div class="pj-bpd-main">
-          <section class="pj-bpd-sec"><h2 class="h3">Signs you have this problem</h2><ul class="pj-checks">${bp.when.map((w) => `<li>${icon('check')}<span>${esc(w)}</span></li>`).join('')}</ul>
+          <section class="pj-bpd-sec"><h2 class="h3">Signs you have this problem</h2><ul class="pj-signs">${bp.when.map((w, i) => `<li><span class="pj-signs-n">${String(i + 1).padStart(2, '0')}</span><span>${esc(w)}</span></li>`).join('')}</ul>
             <p class="small muted pj-bpd-map">${icon('grid')}<span>On the GTM Framework: ${listLink} · ${esc(RN.fields.need ? W().label('need', bp.need) : '')}</span></p></section>
-          <section class="pj-bpd-sec"><h2 class="h3">What you get by day 90</h2><p class="pj-bpd-success">${esc(bp.success)}</p></section>
-          <section class="pj-bpd-sec"><h2 class="h3">Typical scope</h2>
-            <dl class="pj-dl">
-              <div><dt>${esc(RN.fields.roleCategory.label)}</dt><dd>${esc(cat)}</dd></div>
-              <div><dt>${esc(RN.fields.role.label)}</dt><dd>${esc(bp.role)}</dd></div>
-              <div><dt>${esc(RN.fields.engagementType.label)}</dt><dd>${esc(W().label('engagementType', bp.engagementType))}</dd></div>
-              ${project ? `<div><dt>Typical size</dt><dd>About ${bp.projectHours} hours over the term</dd></div>` : `<div><dt>Available time needed</dt><dd>${esc(W().label('hoursPerMonth', bp.hoursPerMonth))}</dd></div>`}
-              <div><dt>${esc(RN.fields.term.label)}</dt><dd>${esc(W().label('term', bp.term))}</dd></div>
-              <div><dt>${esc(RN.fields.startBy.label)}</dt><dd>${esc(W().label('startBy', bp.startBy))}</dd></div>
-            </dl>
-            <p class="small muted" style="margin-top:12px">${esc(W().opt('engagementType', bp.engagementType).d || '')} Change any of it in Your terms above.</p></section>
-          <section class="pj-bpd-sec"><h2 class="h3">The 30/60/90-day plan</h2>
-            <ol class="pj-plan">${bp.plan.map((ph, i) => `<li><span class="label">${PLAN_D[i]}</span><h3 class="h4">${esc(ph.t)}</h3><ul>${ph.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul></li>`).join('')}</ol></section>
-          <section class="pj-bpd-sec"><h2 class="h3">Focus areas to look for</h2>
-            <p class="small muted">From the Fit Tag Library. Operators with these verified by a company review rank first when you post.</p>
-            <ul class="pj-fas">${bp.tags.map((tg) => { const x = supply(tg); const info = RN.model.tagInfo(tg) || {}; return `<li><span class="ftag claimed" title="${esc(info.d || '')}">${esc(tg)}</span><span class="tiny muted">${x.all ? `${x.all} on the network${x.ver ? `, ${x.ver} company-verified` : ''}` : 'New in the library'}</span></li>`; }).join('')}</ul>
-            <a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></section>
-          <section class="pj-bpd-sec"><h2 class="h3">Outcomes to measure</h2><ul class="pj-list-plain">${bp.outcomes.map((o) => `<li>${icon('target')}<span>${esc(o)}</span></li>`).join('')}</ul></section>
-          <section class="pj-bpd-sec"><h2 class="h3">Questions to ask in the first call</h2><ul class="pj-list-plain pj-qs">${bp.questions.map((q) => `<li>${icon('message')}<span>${esc(q)}</span></li>`).join('')}</ul></section>
+          <section class="pj-bpd-sec pj-bpd-win"><span class="label">What you get by day 90</span><p class="pj-bpd-success">${esc(bp.success)}</p>
+            <p class="small muted">${esc(W().opt('engagementType', bp.engagementType).d || '')}</p></section>
         </div>
         <aside class="pj-bpd-side">
           <div class="card pj-rate">
@@ -1861,28 +2016,53 @@
               <p class="pj-spend num">${esc(pr.total.label)}</p>
               <p class="tiny muted">${esc(sizeLine(pr, t))}, rounded to $500.</p>
             </div>
-            <button type="button" class="btn btn-line btn-block" data-act="pj-bp-post" data-id="${esc(bp.id)}" style="margin-top:6px">Post this engagement</button>
+            <button type="button" class="btn btn-block" data-act="pj-bp-post" data-id="${esc(bp.id)}" style="margin-top:6px">Post this engagement${icon('arrow')}</button>
             <a class="act" href="#rates" style="margin-top:8px">See the Rate Index${icon('arrow')}</a>
           </div>
         </aside>
       </div>
     </section>
-    <section class="wrap section-sm pj-offer" id="pj-top-ops">
-      <div class="row between pj-sec-hd"><div><span class="eyebrow">Operators who offer this</span><h2 class="h3" style="margin-top:6px">Who runs this engagement</h2></div><a class="act" href="#browse.${esc(bp.cat)}">Browse all ${esc(cat)}${icon('arrow')}</a></div>
-      <div class="pj-offer-grp">
-        <div class="pj-offer-hd"><h3 class="h4">Offer this Blueprint</h3><span class="pill">${offer.length}</span></div>
-        <p class="small muted">They list it on their profile as a packaged engagement.</p>
-        ${offer.length ? `<div class="grid g-3">${offer.map((o) => RN.ui.opCard(o)).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet.</p>'}
-        ${me ? `<div class="pj-offer-me">${mine ? `<span class="small">${icon('check-circle')}You offer this Blueprint. Companies see you in this list.</span><button type="button" class="act" data-act="pj-offer" data-id="${esc(bp.id)}">Remove it</button>`
-          : `<span class="small">Do you run this engagement? Offer it as a packaged engagement and companies see you here.</span><button type="button" class="btn btn-line btn-sm" data-act="pj-offer" data-id="${esc(bp.id)}">I offer this Blueprint</button>`}</div>` : ''}
-      </div>
-      <div class="pj-offer-grp">
-        <div class="pj-offer-hd"><h3 class="h4">Strong fits</h3><span class="pill">${fits.length}</span></div>
-        <p class="small muted">Ranked on the focus areas above. They have not packaged this Blueprint.</p>
-        <div class="grid g-3">${fits.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the engagement and our team will source candidates.', cta: '' })}</div>
+    <section class="wrap section-sm pj-bpd-plan">
+      <div class="pj-sec-hd"><span class="eyebrow">The plan</span><h2 class="h3" style="margin-top:6px">The 30/60/90-day plan</h2></div>
+      <ol class="pj-tl" style="--cat:${RN.fields.catColor(bp.cat)}">
+        ${bp.plan.map((ph, i) => `<li class="pj-tl-ph" style="--i:${i}">
+          <div class="pj-tl-hd"><span class="pj-tl-node"><b>${(i + 1) * 30}</b></span><span class="pj-tl-d">${PLAN_D[i]}</span></div>
+          <h3 class="h4">${esc(ph.t)}</h3>
+          <ul>${ph.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul>
+          <p class="pj-tl-ms">${icon('flag')}<span>${esc(bp.milestones[i] || '')}</span></p>
+        </li>`).join('')}
+      </ol>
+    </section>
+    <section class="wrap section-sm">
+      <div class="pj-bpd-two">
+        <section class="pj-bpd-sec"><h2 class="h3">Outcomes to measure</h2>
+          <ul class="pj-outs">${bp.outcomes.map((o) => `<li>${icon('trend-up')}<span>${esc(o)}</span></li>`).join('')}</ul></section>
+        <section class="pj-bpd-sec"><h2 class="h3">Focus areas to look for</h2>
+          <p class="small muted">From the Fit Tag Library. Operators with these verified by a company review rank first when you post. The number is how many profiles list each one.</p>
+          <ul class="pj-fas">${bp.tags.map((tg) => { const x = supply(tg); const info = RN.model.tagInfo(tg) || {}; return `<li title="${esc(info.d || '')}"><span>${esc(tg)}</span>${x.all ? `<b class="num" aria-label="${esc(`${x.all} on the network${x.ver ? `, ${x.ver} company-verified` : ''}`)}">${x.all}${x.ver ? `<i>${icon('check')}${x.ver}</i>` : ''}</b>` : '<b class="is-new">New</b>'}</li>`; }).join('')}</ul>
+          <a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></section>
       </div>
     </section>
     <section class="wrap section-sm">
+      <div class="pj-sec-hd"><span class="eyebrow">First call</span><h2 class="h3" style="margin-top:6px">Questions to ask in the first call</h2></div>
+      <ol class="pj-qs">${bp.questions.map((q, i) => `<li><span class="pj-qs-n"><b>${i + 1}</b></span><p>${esc(q)}</p></li>`).join('')}</ol>
+    </section>
+    <section class="wrap section-sm pj-offer" id="pj-top-ops">
+      <div class="row between pj-sec-hd"><div><span class="eyebrow">Operators who offer this</span><h2 class="h3" style="margin-top:6px">Who runs this engagement</h2></div><a class="act" href="#browse.${esc(bp.cat)}">Browse all ${esc(cat)}${icon('arrow')}</a></div>
+      <div class="pj-offer-row${offer.length > 1 ? ' is-many' : ''}">
+        <div class="pj-offer-grp">
+          <div class="pj-offer-hd"><span class="pj-offer-tag is-offer">${icon('seal')}Offer this Blueprint</span><span class="tiny muted">${offer.length ? 'Listed on their profile as a packaged engagement' : 'No one lists it yet'}</span></div>
+          ${offer.length ? `<div class="pj-offer-cards">${offer.map((o) => RN.ui.opCard(o)).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet. The strong fits run this kind of engagement today.</p>'}
+        </div>
+        <div class="pj-offer-grp">
+          <div class="pj-offer-hd"><span class="pj-offer-tag">${icon('target')}Strong fits</span><span class="tiny muted">Ranked on the focus areas above</span></div>
+          <div class="pj-offer-cards">${fits.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the engagement and our team will source candidates.', cta: '' })}</div>
+        </div>
+      </div>
+      ${me ? `<div class="pj-offer-me">${mine ? `<span class="small">${icon('check-circle')}You offer this Blueprint. Companies see you in this list.</span><button type="button" class="act" data-act="pj-offer" data-id="${esc(bp.id)}">Remove it</button>`
+        : `<span class="small">Do you run this engagement? Offer it as a packaged engagement and companies see you here.</span><button type="button" class="btn btn-line btn-sm" data-act="pj-offer" data-id="${esc(bp.id)}">I offer this Blueprint</button>`}</div>` : ''}
+    </section>
+    <section class="wrap section-sm pj-bpd-rel">
       <div class="row between pj-sec-hd"><h2 class="h3">Related Blueprints</h2><a class="act" href="#blueprints">All Blueprints${icon('arrow')}</a></div>
       <div class="grid pj-bps pj-bps-3">${related.map(bpCard).join('')}</div>
       ${bpPriceNote()}
@@ -1908,7 +2088,16 @@
   /* Canonical routes are engagement.*; the router's alias map sends old #projects and #project.* links here.
      View names and the header nav key stay 'projects' / 'project*' (internal). The extra samples keep the old
      links in the route check. */
-  RN.view('projects', { route: 'engagements', nav: 'projects', samples: { extra: ['projects'] }, title: () => (S().persona === 'buyer' ? 'Engagements' : 'Post an engagement'), render: renderProjects });
+  /* The landing's sample card counts up the profiles it scores (once, and not with reduced motion) */
+  function mountProjects(root) {
+    const el = root.querySelector('[data-pj-count]');
+    if (!el || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    const n = +el.dataset.pjCount || 0, t0 = performance.now(), dur = 900;
+    const tick = (t) => { const k = Math.min(1, (t - t0) / dur); el.textContent = Math.round(n * (1 - Math.pow(1 - k, 3))); if (k < 1 && document.body.contains(el)) requestAnimationFrame(tick); };
+    el.textContent = '0';
+    requestAnimationFrame(tick);
+  }
+  RN.view('projects', { route: 'engagements', nav: 'projects', samples: { extra: ['projects'] }, title: () => (S().persona === 'buyer' ? 'Engagements' : 'Post an engagement'), render: renderProjects, mount: (root) => mountProjects(root) });
   RN.view('project-new', { route: 'engagement.new', nav: 'projects', footer: false, samples: { extra: ['project.new'] }, title: () => 'Post an engagement', render: () => renderNew({}), mount: (root) => mountNew(root) });
   const newTitle = (p) => { const d = PJ.get(p.from); return d && d.status !== 'draft' ? 'Edit brief' : 'Post an engagement'; };
   RN.view('project-new-from', {
