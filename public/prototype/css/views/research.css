@@ -506,3 +506,61 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-ans-mine { align-items: center; flex-wrap: wrap; }
 .rs-ans-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: var(--s-5); border: 1px dashed var(--line); border-radius: var(--r-card); }
 .rs-ans-cta .small { color: var(--ink-2); max-width: 62ch; }
+
+/* ---------- Answer posts (content playbook template) ---------- */
+/* Guides index: one row per question, in a function group */
+.rs-qlist { display: grid; grid-template-columns: minmax(0, 1fr); border-top: 1px solid var(--line-2); }
+.rs-qlist-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s-10); margin-top: var(--s-6); }
+.rs-qrow { display: grid; grid-template-columns: minmax(0, 1fr) 16px; align-items: center; gap: var(--s-4); padding: 16px 0; border-bottom: 1px solid var(--line-2); color: var(--ink); }
+.rs-qrow-t { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rs-qrow-t .label { color: var(--accent); }
+.rs-qrow-q { font-family: var(--f-display); font-size: var(--t-16); font-weight: 700; line-height: 1.3; text-wrap: balance; }
+.rs-qrow > svg { width: 16px; height: 16px; color: var(--accent); transition: transform var(--dur) var(--ease); }
+.rs-qrow:hover .rs-qrow-q { color: var(--accent); }
+.rs-qrow:hover > svg { transform: translateX(3px); }
+.rs-ghome { font-size: var(--t-14); white-space: nowrap; }
+.rs-gfeat-post .rs-gfeat-kl { margin-bottom: 6px; }
+.rs-gfeat-post .rs-gfeat-stats .stat-v { font-size: var(--t-18); line-height: 1.3; }
+.rs-gfeat-post .rs-gfeat-stats .stat-l { margin-top: 4px; }
+@media (max-width: 860px) { .rs-qlist-2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* Post page: key numbers, text tables, quotes */
+.rs-post-pg .rs-g-h1 { margin-top: var(--s-4); }
+.rs-keys { margin: var(--s-8) 0 0; }
+.rs-keys .rs-tbl { margin: 0; }
+.rs-ptbl .tbl th, .rs-ptbl .tbl td { text-align: left; white-space: normal; vertical-align: top; }
+.rs-ptbl .tbl td:first-child { color: var(--ink); font-weight: 600; }
+.rs-keys-tbl .tbl td:nth-child(2) { font-family: var(--f-display); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rs-keys-tbl .tbl td:first-child { font-weight: 500; color: var(--ink-2); }
+.rs-keys-tbl .tbl td:last-child { font-size: var(--t-13); color: var(--mute); }
+.rs-prose .rs-ptbl .tbl { font-size: var(--t-14); }
+.rs-pq { margin: 1.4em 0; padding: 2px 0 2px var(--s-5); border-left: 3px solid var(--accent); }
+.rs-pq p { margin: 0; font-family: var(--f-serif); font-size: var(--t-18); line-height: 1.5; color: var(--ink); }
+.rs-pq cite { display: block; margin-top: 8px; font-size: var(--t-13); font-style: normal; color: var(--mute); }
+.rs-post-pg .rs-faq-i p .fn-gap { margin-top: 4px; }
+@media (max-width: 640px) {
+  .rs-ptbl.rs-tbl-stack .tbl td:not(:first-child) { display: grid; grid-template-columns: minmax(0, 38%) minmax(0, 1fr); gap: 12px; text-align: left; }
+  .rs-ptbl.rs-tbl-stack .tbl td:not(:first-child)::before { max-width: none; }
+  .rs-ptbl.rs-tbl-stack .tbl td:first-child:empty { display: none; }
+}
+
+/* Post page: Talk to us band, then two operators beside the function home and Blueprint links */
+.rs-ptalk { margin-top: var(--s-4); }
+.rs-ptalk .fn-form-l .lede .link { color: var(--leaf); }
+.rs-prel { border-top: 0; }
+.rs-prel-links { display: flex; flex-direction: column; gap: 16px; }
+.rs-prel-links .rs-bp { flex: 1 1 auto; }
+
+/* Dev notes: meta fields, 301s, what is still pending */
+.rs-notes-bd { gap: 14px; }
+.rs-notes-dl { display: grid; gap: 8px; margin: 0; }
+.rs-notes-dl > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; font-size: var(--t-14); line-height: 1.45; }
+.rs-notes-dl dt { color: var(--mute); }
+.rs-notes-dl dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.rs-notes .h5 { margin-top: 6px; }
+.rs-notes .rs-tbl { margin: 0; }
+.rs-notes-gaps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.rs-notes-flags { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: var(--t-14); color: var(--ink-2); }
+.rs-url { font-size: var(--t-12); overflow-wrap: anywhere; }
+.rs-redir-tbl .tbl td:nth-child(4), .rs-redir-tbl .tbl td:nth-child(5) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 640px) { .rs-notes-dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

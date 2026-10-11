@@ -401,7 +401,7 @@
   function catGuides(cat) {
     const all = (RN.research && RN.research.guides) || [];
     const own = all.filter((g) => g.cat === cat);
-    const general = all.filter((g) => !g.cat && g.group === 'clients');
+    const general = all.filter((g) => !g.cat && g.group !== 'operators');
     return own.concat(general).slice(0, 2);
   }
   const guideRoute = () => Object.values(RN.views || {}).some((v) => v.tokens && v.tokens.length === 2 && v.tokens[0] === 'guide');

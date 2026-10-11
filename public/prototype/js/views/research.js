@@ -1136,86 +1136,21 @@
   const chartGo = (label, o) => `<p class="rs-chart-go">${browseBtn(label, o, 'act')}</p>`;
   const L = (to, t) => `<a href="#${esc(to)}">${esc(t)}</a>`;
 
+  // Client guides are grouped by function, the way the function homes and the content playbook split the work
   const GROUPS = [
-    { k: 'clients', l: 'For companies', d: 'Hiring a fractional go-to-market leader: cost, scope, timing and how to judge proof.' },
-    { k: 'costs', l: 'What each role costs', d: 'Rate Index medians and a typical month for every role category.' },
+    { k: 'sales', l: 'Sales leadership', d: 'Hiring, cost and the first 90 days with a fractional VP of Sales, sales director or CRO.', home: 'hire-fractional-sales-vp', cat: 'sales_leadership' },
+    { k: 'revops', l: 'RevOps', d: 'When a SaaS company needs RevOps, what a fractional RevOps leader fixes and why forecasts miss.', home: 'fractional-revops', cat: 'revenue_operations' },
+    { k: 'marketing', l: 'Marketing', d: 'Vetting a fractional CMO, what one costs and how it compares with an agency or a full-time hire.', home: 'fractional-marketing-leadership', cat: 'marketing' },
+    { k: 'costs', l: 'What each role costs', d: 'Rates for every role category, from our 2026 engagements where we have them and the Rate Index for the rest.' },
     { k: 'operators', l: 'For operators', d: 'Pricing your work and winning companies, with or without a marketplace intro.' },
-    { k: 'methods', l: 'About our methods', d: 'How Revenue Nomad measures reputation and collects company reviews.' },
+    { k: 'methods', l: 'About our methods', d: 'How Revenue Nomad measures reputation, collects company reviews and how to read the proof on a profile.' },
   ];
+  const CLIENT_GROUPS = ['sales', 'revops', 'marketing', 'costs'];
+  R.isClientGuide = (g) => !!g && CLIENT_GROUPS.includes(g.group);
 
   const GUIDES = [
     {
-      slug: 'fractional-vp-of-sales-cost', bp: 'vp-sales', group: 'clients', updated: '2026-09-18', mins: 6, cat: 'sales_leadership', opsQ: 'VP of Sales',
-      q: 'How much does a fractional VP of Sales cost?',
-      answer: () => { const b = RIX().byCat.sales_leadership; return [`A fractional VP of Sales costs a median of ${hr(b.p50)} an hour on the Revenue Nomad Rate Index, and the middle half of operators charge between ${hr(b.p25)} and ${hr(b.p75)}.`, `At 40 hours a month, the most common engagement size, that is a typical range of ${monthRange('sales_leadership', '40', '5m_20m')} for a company with $5M–$20M in revenue.`]; },
-      stats: () => { const b = RIX().byCat.sales_leadership; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Sales Leadership' }, { v: monthRange('sales_leadership', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: plural(b.n, 'rate'), l: 'In the index for this role' }]; },
-      sections: () => {
-        const b = RIX().byCat.sales_leadership;
-        const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b.p50 * mult(o.v)), hi: o.v === '5m_20m' }));
-        const hrs = ['20', '40', '60', '80'];
-        const ff = REP().fracVsFull || [];
-        return [
-          { id: 'drivers', h: 'What sets the price', html: `<p>Four things move the number: how many hours a month you buy, the size of your company, the scope of the seat and how much proof the operator has. Hours matter most. Most engagements on the network run between 20 and 59 hours a month (${hoursRows().filter((r) => r.code === '20' || r.code === '40').reduce((a, r) => a + r.v, 0)}% of engagements in our survey).</p>
-            <p>Company size shifts the hourly rate. Operators serving larger companies charge more because the work carries more risk: bigger teams, longer cycles and a board that expects a forecast.</p>
-            ${chartSlot('g1-rev', (w) => bars(revRows, { fmt: (n) => '$' + n + '/hr', label: 'Median hourly rate for Sales Leadership by company revenue' }, w))}
-            ${src(`Median hourly rate for Sales Leadership by company revenue range. Rate Index, ${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'Q3 26')}. Illustrative.`)}
-            ${chartGo('Browse Sales Leadership operators who work with $5M–$20M companies', { filters: { roleCategories: ['sales_leadership'], revenueRange: ['5m_20m'] }, src: 'guide_chart_rate_revenue' })}` },
-          { id: 'monthly', h: 'What a month costs at each size', html: `<p>Multiply the hourly range by the hours you need. For a $5M–$20M company:</p>
-            ${monthTable('sales_leadership', hrs)}
-            <p>Twenty hours buys a leader who sets the plan, runs the weekly pipeline review and coaches the team. Forty hours adds hands-on work: hiring, building the playbook and joining key deals. Sixty or more usually means the operator is also managing reps day to day.</p>` },
-          { id: 'vs-full-time', h: 'How it compares with a full-time hire', html: `<p>A full-time VP of Sales costs more than twice as much per month once base, commission, benefits and equity are counted, and takes three to four months to hire.</p>
-            ${ff.length ? tbl(['Option', 'Monthly cost', 'Time to start'], ff.map((r) => [esc(r[0]), esc(r[1]), esc(r[2])])) : ''}
-            <p>The trade is time. A fractional leader gives you part of a week from an operator who has built the same seat before. Read ${L('guide.fractional-vs-full-time-vp-of-sales', 'Fractional vs full-time VP of Sales')} for when each makes sense.</p>` },
-          { id: 'spend-less', h: 'How to get more for the same budget', html: `<ul>
-            <li><b>Scope one outcome.</b> "Two reps hired and ramping, a written sales process and a forecast the board trusts" is easier to price than "own sales".</li>
-            <li><b>Start at 20 to 40 hours</b> for the first 90 days, then adjust. Scaling hours up is easier than paying for hours you do not use.</li>
-            <li><b>Pay for proof.</b> Operators with company-verified focus areas in the work you need cost about the same per hour and waste fewer of them.</li>
-            <li><b>Start from a Blueprint.</b> An ${L('blueprints', 'Engagement Blueprint')} gives you the hours, term and a 30/60/90-day plan before you talk to anyone.</li></ul>` },
-        ];
-      },
-      faq: () => { const b = RIX().byCat.sales_leadership; return [
-        { q: 'Is a fractional CRO more expensive than a fractional VP of Sales?', a: `Usually, by 10% to 20% an hour, because a CRO also owns marketing and customer success. Both roles sit in the Sales Leadership category of the Rate Index, where the median is ${hr(b.p50)} an hour.` },
-        { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
-        { q: 'Do fractional sales leaders take commission or equity?', a: 'Some do, on top of a lower base rate. On Revenue Nomad rates are listed per hour; any variable pay is agreed between you and the operator.' },
-        { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in companies see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
-        { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. You pay the operator's rate, nothing more: at the Sales Leadership median of ${hr(b.p50)} an hour, 40 hours a month is ${usd(b.p50 * 40)}.` },
-      ]; },
-      cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
-    },
-    {
-      slug: 'fractional-vs-full-time-vp-of-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-12', mins: 7, cat: 'sales_leadership', opsQ: 'sales team hiring',
-      q: 'Fractional vs full-time VP of Sales: which should your first sales leader be?',
-      answer: () => [`Hire fractional first when you still need someone to build the sales motion, and hire full-time once there is a proven process and a team to run every day.`, `In our survey, ${sumStat(/first sales leadership hire/i, '31%')} of first-time companies made a fractional leader their first sales leadership hire, and ${(REP().outcomes || []).find((o) => /full time/i.test(o.l)) ? REP().outcomes.find((o) => /full time/i.test(o.l)).v : '22%'} of fractional engagements later converted to a full-time role.`],
-      stats: () => [{ v: sumStat(/first sales leadership hire/i, '31%'), l: 'Chose fractional for their first sales leader' }, { v: (REP().outcomes || [])[1] ? REP().outcomes[1].v : '22%', l: 'Of engagements converted to full time' }, { v: sumStat(/pipeline change/i, '67 days'), l: 'Median time to a measurable pipeline change' }],
-      sections: () => {
-        const ff = REP().fracVsFull || [];
-        return [
-          { id: 'cost', h: 'The cost difference', html: `${ff.length ? tbl(['Option', 'Monthly cost', 'Time to start', 'Cost to exit'], ff.map((r) => r.map(esc))) : ''}
-            <p>The full-time number includes base, on-target commission, benefits and equity. The exit column matters as much as the monthly cost: a mis-hired full-time leader typically costs severance plus four to six months of lost pipeline.</p>` },
-          { id: 'fractional-first', h: 'When fractional is the better first hire', html: `<ul>
-            <li>The founder still closes most deals and there is no written process yet.</li>
-            <li>You have fewer than five reps, so a full-time leader would spend most of the week selling.</li>
-            <li>You need someone within weeks. Fractional leaders on the network start in two to three weeks.</li>
-            <li>You are not sure yet what kind of leader the company needs next. A fractional engagement answers that question with data.</li></ul>` },
-          { id: 'full-time', h: 'When to hire full-time', html: `<ul>
-            <li>There is a repeatable process that new reps ramp on without the founder.</li>
-            <li>The team is large enough (usually eight or more quota carriers) to need daily management.</li>
-            <li>The board wants a named executive who will be there for several years.</li></ul>
-            <p>Many companies do both in sequence: a fractional leader builds the playbook, hires the first reps, then helps interview the full-time leader who inherits a working machine.</p>` },
-          { id: 'risks', h: 'Risks on each side', html: `<p>With a full-time hire, the risk is the wrong person for your stage. With fractional, the risk is attention: the operator has other companies. In our survey, companies rated communication cadence as a hiring factor far more in hindsight than at the time of hiring.</p>
-            ${(REP().hindsight || []).length ? tbl(['What companies weighed', 'At hire', 'In hindsight'], REP().hindsight.map((r) => [esc(r[0]), esc(r[1]), `<b>${esc(r[2])}</b>`])) : ''}
-            <p>Ask how the operator reports progress, how many companies they carry and which hours are yours. ${L('guide.evaluate-fractional-operator-track-record', 'How to evaluate a fractional operator')} covers the rest.</p>` },
-        ];
-      },
-      faq: () => [
-        { q: 'Can a fractional VP of Sales manage my reps day to day?', a: 'At 40 hours a month or more, yes: they run one-on-ones, the weekly pipeline review and deal coaching. Below that, they coach a player-coach or the founder who manages the reps.' },
-        { q: 'Can the fractional leader become our full-time VP of Sales?', a: `Sometimes. ${(REP().outcomes || [])[1] ? REP().outcomes[1].v : '22%'} of engagements in our survey converted to a full-time hire. Agree up front whether that is on the table.` },
-        { q: 'How long should the first fractional engagement run?', a: 'Six to twelve months is common for a first sales leader. The median engagement lasts 6.4 months and about half are extended.' },
-      ],
-      cta: { label: 'Browse Sales Leadership', filters: { roleCategories: ['sales_leadership'] } },
-    },
-    {
-      slug: 'how-to-scope-a-fractional-sales-engagement', bp: 'vp-sales', group: 'clients', updated: '2026-09-05', mins: 6, cat: 'sales_leadership', opsQ: 'sales playbook',
+      slug: 'how-to-scope-a-fractional-sales-engagement', bp: 'vp-sales', group: 'sales', updated: '2026-09-05', mins: 6, cat: 'sales_leadership', opsQ: 'sales playbook',
       q: 'How do you scope a fractional sales engagement?',
       answer: () => ['Scope a fractional sales engagement around one measurable outcome, a fixed number of hours a month and an initial term, usually three to six months.', 'Before day one, write down the 90-day deliverables, who the operator reports to and how progress is reviewed.'],
       stats: () => { const hrsTop = hoursRows().slice().sort((a, b) => b.v - a.v)[0]; const term = REP().term || []; const tTop = term.slice().sort((a, b) => b.v - a.v)[0]; return [{ v: RN.w.label('hoursPerMonth', hrsTop.code), l: `Most common size (${hrsTop.v}% of engagements)` }, { v: tTop ? tTop.l : '3 to 6 mo', l: `Most common initial term (${tTop ? tTop.v : 38}%)` }, { v: sumStat(/Median engagement length/i, '6.4 mo'), l: 'Median engagement length' }]; },
@@ -1253,7 +1188,7 @@
       cta: { label: 'Post an engagement', to: 'engagement.new' },
     },
     {
-      slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'clients', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
+      slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'revops', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
       answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
       stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
@@ -1283,31 +1218,7 @@
       cta: { label: 'Browse Revenue Operations', filters: { roleCategories: ['revenue_operations'] } },
     },
     {
-      slug: 'fractional-cmo-vs-marketing-agency', bp: 'cmo', group: 'clients', updated: '2026-08-22', mins: 5, cat: 'marketing', opsQ: 'CMO',
-      q: 'Fractional CMO vs marketing agency: which one do you need?',
-      answer: () => ['A fractional CMO owns your marketing strategy, budget and team, and decides what to do; an agency executes defined work such as ads, content or design.', 'If nobody at the company owns marketing yet, start with a fractional CMO who sets the plan, then hire agencies for the execution they choose.'],
-      stats: () => { const b = RIX().byCat.marketing; const ag = (REP().fracVsFull || []).find((r) => /agency/i.test(r[0])); return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Marketing' }, { v: monthRange('marketing', '40', '5m_20m').replace('/mo', ''), l: 'Fractional CMO at 40 hrs a month' }, { v: ag ? ag[1] : '$15,000+', l: 'Typical agency retainer a month' }]; },
-      sections: () => [
-        { id: 'difference', h: 'What each one does', html: tbl(['', 'Fractional CMO', 'Agency'], [
-          ['Owns', 'Strategy, budget, positioning, the plan', 'A defined scope of execution'],
-          ['Accountable for', 'Pipeline and the marketing number', 'Deliverables and channel metrics'],
-          ['Typical cost', esc(monthRange('marketing', '40', '5m_20m')),esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[1] || '$15,000+') + '/mo'],
-          ['Time to start', '2 to 3 weeks', esc(((REP().fracVsFull || []).find((r) => /agency/i.test(r[0])) || [])[2] || '4 to 6 weeks')],
-          ['Best when', 'Nobody owns marketing or the plan is unclear', 'The plan is clear and you need hands'],
-        ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + src('Monthly costs from the Rate Index (Marketing, $5M–$20M company, 40 hrs a month) and the State of Fractional GTM 2027 survey. Illustrative.') },
-        { id: 'agency', h: 'When an agency is enough', html: `<ul><li>You already know your ICP, positioning and the channels that work.</li><li>Someone in-house can brief the agency and judge its work.</li><li>You need output fast in one channel: paid search, content production, design.</li></ul>` },
-        { id: 'cmo', h: 'When you need a fractional CMO', html: `<ul><li>Marketing activity is busy but pipeline does not move.</li><li>Positioning is unclear, so every campaign says something different.</li><li>You are about to spend on agencies and have nobody to choose or manage them.</li><li>Sales and marketing disagree about what a qualified lead is.</li></ul>` },
-        { id: 'both', h: 'Using both', html: `<p>The most common setup on the network is a fractional CMO at 20 to 40 hours a month directing one or two agencies. The CMO writes the brief, sets the targets and reviews the work; the agencies execute. Browse the ${L('library', 'Fit Tag Library')} for focus areas like Demand Generation and Brand Strategy.</p>` },
-      ],
-      faq: () => [
-        { q: 'Can a fractional CMO also do the execution?', a: 'Some do, especially at 40 hours a month or more. Most prefer to direct execution and keep their hours for strategy, positioning and the team.' },
-        { q: 'Is a fractional CMO cheaper than an agency?', a: `Often similar per month. The Rate Index median for Marketing is ${hr(RIX().byCat.marketing.p50)} an hour; a 40-hour month for a $5M–$20M company is ${monthRange('marketing', '40', '5m_20m')}.` },
-        { q: 'How do I measure a fractional CMO?', a: 'On pipeline sourced or influenced by marketing, cost per qualified opportunity and progress against the 90-day plan.' },
-      ],
-      cta: { label: 'Browse Marketing', filters: { roleCategories: ['marketing'] } },
-    },
-    {
-      slug: 'evaluate-fractional-operator-track-record', group: 'clients', updated: '2026-09-15', mins: 7, cat: null, opsQ: '', opsSort: 'ris',
+      slug: 'evaluate-fractional-operator-track-record', group: 'methods', updated: '2026-09-15', mins: 7, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do you evaluate a fractional operator\'s track record?',
       answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the companies they did it for.', 'On Revenue Nomad that proof is company-verified focus areas, CORE review scores, Engagement History and the Reputation Index, built mostly from company evidence rather than self-description.'],
       stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of companies say stage fit mattered most, in hindsight' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
@@ -1334,33 +1245,6 @@
         { q: 'Should I ask for references if a profile has verified reviews?', a: 'Yes, for the engagement most like yours. Verified reviews tell you the work happened; a call tells you how it would go at your company.' },
       ],
       cta: { label: 'Browse operators, highest Reputation Index first', sort: 'ris' },
-    },
-    {
-      slug: 'transition-out-of-founder-led-sales', bp: 'vp-sales', group: 'clients', updated: '2026-09-09', mins: 7, cat: 'sales_leadership', opsQ: 'founder-led',
-      q: 'How do you transition out of founder-led sales?',
-      answer: () => ['Write down how the founder actually wins deals, turn it into a repeatable process, then hand deals over in stages while the founder stays in the room for the largest ones.', `Most companies bring in a fractional sales leader to run this: founders stepping out of sales was the second most common reason companies gave for hiring one, at ${trig(/Founder/i) || 24}%.`],
-      stats: () => [{ v: (trig(/Founder/i) || 24) + '%', l: 'Hired fractional to move sales off the founder' }, { v: '6 months', l: 'Typical handover, from shadowing to full ownership' }, { v: String(((RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t)) || { demand: 155 }).demand), l: 'Company searches a month for Founder-Led Sales Exit' }],
-      sections: () => {
-        const mk = (RN.model.market().tags || []).find((t) => /founder-led/i.test(t.t));
-        return [
-          { id: 'signs', h: 'Signs it is time', html: `<ul><li>The founder is on every late-stage call and pipeline stalls when they travel.</li><li>You have passed roughly $1M in annual revenue and want to double it.</li><li>Your first reps are struggling to close without the founder.</li><li>The board is asking who owns the number.</li></ul>` },
-          { id: 'capture', h: 'Step 1: capture what works', html: `<p>Record the founder's next ten sales calls. Map the questions they ask, the objections they hear and how they price. Look at the last 20 closed-won and closed-lost deals for patterns in company size, trigger and the title of the person who signed. That is your first ICP and discovery guide.</p>` },
-          { id: 'playbook', h: 'Step 2: build the playbook', html: `<p>Turn the notes into stages with exit criteria, a discovery guide, a pricing and discount policy, and a short list of case stories. Keep it to a few pages the team will actually use. Focus areas to look for: ${L('library', 'Sales Playbook')}, Sales Process Design, Discovery Framework.</p>` },
-          { id: 'handover', h: 'Step 3: hand over deals in stages', html: tbl(['Months', 'Who leads', 'Founder\'s role'], [
-            ['1 to 2', 'Founder', 'Runs calls; the rep or sales leader shadows and takes notes'],
-            ['3 to 4', 'Rep', 'Joins late-stage calls and the largest deals only'],
-            ['5 to 6', 'Rep, with the sales leader coaching', 'Executive sponsor on strategic accounts'],
-          ].map((r) => [`<b>${r[0]}</b>`, r[1], r[2]])) + `<p>Measure win rate and sales cycle by who led the deal. When rep-led deals close at a similar rate, the handover is done.</p>` },
-          { id: 'who', h: 'Who to hire for it', html: `<p>A fractional VP of Sales who has done this before, usually at 40 hours a month for six months, at a typical ${monthRange('sales_leadership', '40', '1m_5m')} for a $1M–$5M company.</p>
-            ${mk ? `<p>Companies search for the Founder-Led Sales Exit focus area about ${RN.fmt.int(mk.demand)} times a month, and only ${mk.verified} ${mk.verified === 1 ? 'operator holds' : 'operators hold'} it company-verified today (${mk.supply} claim it). Ask candidates for the company they did it with.</p>` : ''}` },
-        ];
-      },
-      faq: () => [
-        { q: 'Should the first hire be a rep or a sales leader?', a: 'Usually a sales leader first, even part time. Reps hired into a founder-led motion with no process tend to fail, and the founder ends up selling again.' },
-        { q: 'How long does the transition take?', a: 'About six months from the first shadowed call to reps closing on their own, longer for enterprise deals with long cycles.' },
-        { q: 'Does the founder stop selling completely?', a: 'Rarely. Most founders stay involved in the largest deals and key renewals as an executive sponsor.' },
-      ],
-      cta: { label: 'Find founder-led sales experts', tags: ['Founder-Led Sales Exit'] },
     },
     {
       slug: 'how-much-should-a-fractional-operator-charge', group: 'operators', updated: '2026-09-20', mins: 6, cat: null, opsQ: '', opsSort: 'ris',
@@ -1475,8 +1359,6 @@
   /* Cost guides for every other role category (value: each Browse category page links to its own guide).
      Built from one template on the Rate Index, so the numbers match #rates, Blueprints and the category pages. */
   const COST = {
-    marketing: { slug: 'fractional-cmo-cost', noun: 'CMO', bp: 'cmo', opsQ: 'CMO', hours: '40',
-      buys: 'Twenty hours buys a marketing leader who sets positioning, the plan and the budget, and directs agencies. Forty hours adds running demand generation and managing a small team. Sixty or more usually means hands-on campaign work as well.' },
     revenue_operations: { slug: 'fractional-revops-cost', noun: 'RevOps leader', bp: 'vp-revops', opsQ: 'RevOps', hours: '40',
       buys: 'Twenty hours covers CRM administration, reporting and the data behind the weekly forecast. Forty hours adds a rebuild: stages, routing, data cleanup and dashboards. Sixty or more usually means a CRM migration or a new tool rollout.' },
     sales_enablement: { slug: 'fractional-sales-enablement-cost', noun: 'sales enablement leader', bp: 'enablement-director', opsQ: 'enablement', hours: '40',
@@ -1523,21 +1405,66 @@
     };
   }
   Object.keys(COST).forEach((cat) => GUIDES.push(costGuide(cat, COST[cat])));
+
+  /* ---------- Answer posts (content playbook, Oct 10, 2026), from RN.data.posts (js/data/posts.js) ----------
+     The playbook's ten refresh-list posts rebuilt into eight guides (the sixteen sales city pages fold into the
+     hiring guide) and five drafted Content Bank posts (post 2 also takes the two marketing city pages). Copy is the
+     Content Bank draft, or rebuilt from the Content Bank, Site pages and plan data where no draft exists; nothing is
+     invented, and [[gap:what|Owner]] tokens render as pending chips. Posts lead GUIDES, so Browse category pages,
+     the guide samples and Keep reading start with them. They replace the prototype guides they cover. */
+  const POSTS = (RN.data.posts && RN.data.posts.list) || [];
+  const NETS = () => String((MK() && MK().network && MK().network.operators) || '350+');
+  // Plain text for cards, titles and JSON-LD: a pending figure drops out, a link keeps its label
+  const plainOf = (t) => String(t == null ? '' : t)
+    .replace(/\s*\[\[gap:[^\]]*\]\]/g, '')
+    .replace(/\[\[(?:link|url):[^\]|]+\|([^\]]+)\]\]/g, '$1')
+    .replace(/\[\[net\]\]/g, NETS()).replace(/\*\*/g, '')
+    .replace(/\s+([.,;?!])/g, '$1').replace(/\(\s*\)/g, '').replace(/\s{2,}/g, ' ').trim();
+  // Body copy with the same tokens as the function pages (RN.fn.rich loads later, so it is looked up at render time)
+  const prich = (t) => (RN.fn && RN.fn.rich ? RN.fn.rich(t) : esc(plainOf(t)));
+  // Post tables read as text in every column; three or more columns stack into labelled rows on phones
+  const ptbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl rs-ptbl${head.length > 2 ? ' rs-tbl-stack' : ''}${cls ? ' ' + cls : ''}"><table class="tbl"><thead><tr>${head.map((x) => `<th>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td data-l="${esc(plainOf(head[i] || ''))}">${prich(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  function postBlocks(blocks) {
+    return (blocks || []).map((b) => {
+      if (b.p != null) return `<p>${prich(b.p)}</p>`;
+      if (b.ul) return `<ul>${b.ul.map((x) => `<li>${prich(x)}</li>`).join('')}</ul>`;
+      if (b.ol) return `<ol>${b.ol.map((x) => `<li>${prich(x)}</li>`).join('')}</ol>`;
+      if (b.table) return ptbl(b.table.head || [], b.table.rows || []);
+      if (b.quote != null) return `<blockquote class="rs-pq"><p>${prich(b.quote)}</p>${b.by ? `<cite>${prich(b.by)}</cite>` : ''}</blockquote>`;
+      return '';
+    }).join('');
+  }
+  const POST_BP = { sales_leadership: 'vp-sales', revenue_operations: 'vp-revops', marketing: 'cmo' };
+  function postGuide(p) {
+    return {
+      slug: p.slug, post: p, fn: p.fn, group: p.template === 'cost' ? 'costs' : p.fn, cat: p.cat, bp: p.bp || POST_BP[p.cat], opsQ: p.opsQ || '',
+      updated: p.updated, mins: Math.max(4, Math.round((p.words || 1400) / 230)),
+      q: p.q,
+      answer: () => [plainOf(p.answer)],
+      sections: () => p.sections.map((x) => ({ id: x.id, h: x.h, html: postBlocks(x.blocks) })),
+      faq: () => p.faq.map((f) => ({ q: f.q, a: plainOf(f.a) })),
+      cta: { label: `Browse ${F.catLabel(p.cat)}`, filters: { roleCategories: [p.cat] } },
+    };
+  }
+  GUIDES.unshift(...POSTS.map(postGuide));
+  // A prototype guide a post replaced keeps its link: #guide.<old> is rewritten to the post (router path aliases)
+  const POST_ALIASES = (RN.data.posts && RN.data.posts.aliases) || {};
+  Object.keys(POST_ALIASES).forEach((old) => { if (POSTS.some((p) => p.slug === POST_ALIASES[old])) RN.pathAliases['guide.' + old] = 'guide.' + POST_ALIASES[old]; });
   // Public shape for other surfaces: { id, title, cat, group, href } (slug and q stay for older callers)
   GUIDES.forEach((g) => { g.id = g.slug; g.title = g.q; g.href = '#guide.' + g.slug; });
   R.guides = GUIDES;
   const guideBy = (slug) => GUIDES.find((g) => g.slug === slug);
-  const isCost = (g) => g.group === 'costs' || g.slug === 'fractional-vp-of-sales-cost';
+  const isCost = (g) => g.group === 'costs';
   R.guidesFor = (cat, n) => GUIDES.filter((g) => g.cat === cat).sort((a, b) => (isCost(b) ? 1 : 0) - (isCost(a) ? 1 : 0)).slice(0, n || 2);
   const KIND = {
-    'fractional-vp-of-sales-cost': 'Cost', 'fractional-vs-full-time-vp-of-sales': 'Hiring decision', 'how-to-scope-a-fractional-sales-engagement': 'Scoping',
-    'fractional-revops-first-90-days': 'First 90 days', 'fractional-cmo-vs-marketing-agency': 'Comparison', 'evaluate-fractional-operator-track-record': 'Due diligence',
-    'transition-out-of-founder-led-sales': 'Playbook', 'how-much-should-a-fractional-operator-charge': 'Pricing', 'how-fractional-operators-win-direct-deals': 'Winning work',
+    'how-to-scope-a-fractional-sales-engagement': 'Scoping', 'fractional-revops-first-90-days': 'First 90 days', 'evaluate-fractional-operator-track-record': 'Due diligence',
+    'how-much-should-a-fractional-operator-charge': 'Pricing', 'how-fractional-operators-win-direct-deals': 'Winning work',
     'what-is-the-reputation-index': 'Methodology', 'what-is-core': 'Methodology',
   };
+  POSTS.forEach((p) => { if (p.kindL) KIND[p.slug] = p.kindL; });
 
   const GLOSSARY = [
-    { t: 'Fractional', d: () => `${F.engagementTypes.options.find((o) => o.v === 'fractional').d} Usually 20 to 80 hours a month.`, to: 'guide.fractional-vs-full-time-vp-of-sales' },
+    { t: 'Fractional', d: () => `${F.engagementTypes.options.find((o) => o.v === 'fractional').d} Usually 20 to 80 hours a month.`, to: 'guide.interim-vs-fractional-vs-full-time-sales-leader' },
     { t: 'Interim', d: () => F.engagementTypes.options.find((o) => o.v === 'interim').d + ' Closer to full time for a defined period.' },
     { t: 'Advisory', d: () => F.engagementTypes.options.find((o) => o.v === 'advisory').d },
     { t: 'Project engagement', d: () => F.engagementTypes.options.find((o) => o.v === 'project').d, to: 'blueprints' },
@@ -1562,15 +1489,15 @@
 
   function guideFeature(g) {
     const a = g.answer();
-    const st = g.stats ? g.stats() : [];
-    return `<a class="card card-link rs-gfeat" href="#guide.${esc(g.slug)}">
+    const st = g.post ? (g.post.feature || g.post.keys.slice(0, 3)).map((k) => ({ v: plainOf(k.v), l: plainOf(k.k) })) : (g.stats ? g.stats() : []);
+    return `<a class="card card-link rs-gfeat${g.post ? ' rs-gfeat-post' : ''}" href="#guide.${esc(g.slug)}">
       <div class="rs-gfeat-main">
         <span class="label">${esc(KIND[g.slug] || 'Guide')} · Start here</span>
         <h3 class="h2">${esc(g.q)}</h3>
         <p class="rs-gfeat-a">${a.map(esc).join(' ')}</p>
         <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span><span class="act">Read the guide${icon('arrow')}</span></span>
       </div>
-      <div class="rs-gfeat-stats"><span class="rs-gfeat-il">${illus()}</span>${st.map((x) => `<div class="stat"><span class="stat-v">${esc(x.v)}</span><span class="stat-l">${esc(x.l)}</span></div>`).join('')}</div>
+      <div class="rs-gfeat-stats">${g.post ? '<span class="label rs-gfeat-kl">Key numbers</span>' : `<span class="rs-gfeat-il">${illus()}</span>`}${st.map((x) => `<div class="stat"><span class="stat-v">${esc(x.v)}</span><span class="stat-l">${esc(x.l)}</span></div>`).join('')}</div>
     </a>`;
   }
   function guideCard(g) {
@@ -1583,51 +1510,228 @@
     </a>`;
   }
 
+  /* One row in a function group: kind, the question, the first sentence of the answer */
+  function qrow(g) {
+    const a = g.answer()[0] || '';
+    return `<a class="rs-qrow" href="#guide.${esc(g.slug)}">
+      <span class="rs-qrow-t"><span class="label">${esc(KIND[g.slug] || 'Guide')}</span><b class="rs-qrow-q">${esc(g.q)}</b><span class="small muted clamp-2">${esc(a)}</span><span class="tiny muted">${g.mins} min read</span></span>
+      ${icon('arrow')}
+    </a>`;
+  }
+  const fnGuides = (k) => GUIDES.filter((x) => (x.fn || x.group) === k);
+  const OLD_BLOG = 'https://www.revenuenomad.com';
+  const ACTION_L = { merge: 'Merged in', rebuild: 'Rebuilt here', city: 'City page, merged in' };
+  const fmtN = (n) => (n == null ? '' : Number(n).toLocaleString('en-US'));
+  // HTML-cell table for the dev notes (cells are already escaped)
+  const htbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl rs-ptbl rs-tbl-stack${cls ? ' ' + cls : ''}"><table class="tbl"><thead><tr>${head.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td data-l="${esc(head[i] || '')}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const oldUrlCell = (r) => (r.url ? `<span class="mono rs-url">${esc(r.url)}</span>` : `<span class="rs-url-t">${esc(r.title)}</span> ${RN.fn && RN.fn.gap ? RN.fn.gap('exact URL', 'Rapid Neuron') : ''}`);
+  // A collapsible dev note in the same shell as the structured-data block
+  const devNote = (id, title, note, body) => `<details class="rs-schema rs-notes" id="${esc(id)}">
+      <summary>${icon('doc')}<span><b>${esc(title)}</b><span class="tiny muted">${esc(note)}</span></span>${icon('chev-down', 'rs-chev')}</summary>
+      <div class="rs-schema-bd rs-notes-bd">${body}</div>
+    </details>`;
+
   function renderGuides() {
     chartFns = {};
     const schema = {
       '@context': 'https://schema.org', '@type': 'DefinedTermSet', name: 'Fractional GTM glossary', url: 'https://revenuenomad.com/guides#glossary',
       hasDefinedTerm: GLOSSARY.map((x) => ({ '@type': 'DefinedTerm', name: x.t, description: x.d() })),
     };
+    const grp = (k) => GROUPS.find((x) => x.k === k);
+    const count = (k) => (['sales', 'revops', 'marketing'].includes(k) ? fnGuides(k) : GUIDES.filter((x) => x.group === k)).length;
+    const grpHd = (g, extra) => `<div class="rs-ggrp-hd"><div class="row between" style="--gap:12px"><h2 class="h3" id="rs-g-${g.k}-t">${esc(g.l)}</h2>${extra || ''}</div><p class="small muted">${esc(g.d)}</p></div>`;
+    const homeLink = (g) => (g.home ? `<a class="act rs-ghome" href="#${esc(g.home)}">${esc(g.l)} home${icon('arrow')}</a>` : '');
+    const sales = fnGuides('sales');
+    const costs = F.roleCategory.options.map((o) => ({ o, g: GUIDES.find((x) => x.cat === o.v && isCost(x)) })).filter((x) => x.g && (x.g.post || RIX().byCat[x.o.v]));
+    const redirects = POSTS.flatMap((p) => (p.replaces || []).map((r) => ({ r, p })));
+    const known = redirects.filter((x) => x.r.impressions != null);
     return `<div class="rs rs-guides">
     <header class="wrap phead rs-head">
       ${crumbs([{ l: 'Guides' }])}
       <span class="eyebrow">Guides</span>
       <h1 class="h1">Straight answers on <span class="serif">fractional go-to-market.</span></h1>
-      <p class="lede">Each guide answers one question in two sentences, then shows the numbers behind it from the Rate Index, the State of Fractional GTM survey and live profiles on the network. Written by Revenue Nomad Research.</p>
-      <div class="row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${GUIDES.filter((x) => x.group === g.k).length}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div>
+      <p class="lede">Each guide answers one question a client asks before hiring, in the first few lines, then shows the numbers behind it from Revenue Nomad's own engagements. Written by Matt Lopez.</p>
+      <div class="row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${count(g.k)}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div>
     </header>
-    ${(() => {
-      const cl = GUIDES.filter((x) => x.group === 'clients');
-      const grpHd = (g, extra) => `<div class="rs-ggrp-hd"><div class="row between" style="--gap:12px"><h2 class="h3" id="rs-g-${g.k}-t">${esc(g.l)}</h2>${extra || ''}</div><p class="small muted">${esc(g.d)}</p></div>`;
-      const gc = GROUPS.find((x) => x.k === 'costs');
-      const costs = F.roleCategory.options.map((o) => ({ o, g: GUIDES.find((x) => x.cat === o.v && isCost(x)) })).filter((x) => x.g && RIX().byCat[x.o.v]);
-      return `<section class="wrap rs-sec-sm rs-ggrp" id="rs-g-clients" aria-labelledby="rs-g-clients-t">
-        ${grpHd(GROUPS[0])}
-        ${guideFeature(cl[0])}
-        <div class="grid g-3" style="margin-top:24px">${cl.slice(1).map(guideCard).join('')}</div>
-      </section>
-      <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
-        ${grpHd(gc, illus())}
-        <div class="card rs-costs">${costs.map(({ o, g }) => { const b = RIX().byCat[o.v]; const h = (COST[o.v] && COST[o.v].hours) || '40'; return `<a class="rs-cost" href="#guide.${esc(g.id)}">
-          <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)}</span></span></span>
+    <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-sales" aria-labelledby="rs-g-sales-t">
+      ${grpHd(grp('sales'), homeLink(grp('sales')))}
+      ${sales.length ? guideFeature(sales[0]) : ''}
+      <div class="rs-qlist rs-qlist-2">${sales.slice(1).map(qrow).join('')}</div>
+    </section>
+    <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['revops', 'marketing'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
+      ${grpHd(grp(k), homeLink(grp(k)))}
+      <div class="rs-qlist">${fnGuides(k).map(qrow).join('')}</div>
+    </section>`).join('')}</div></div>
+    <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
+      ${grpHd(grp('costs'), `<a class="act rs-ghome" href="#fractional-cost">The cost hub${icon('arrow')}</a>`)}
+      <div class="card rs-costs">${costs.map(({ o, g }) => {
+        const p = g.post;
+        if (p && p.headline) {
+          const h = p.headline;
+          return `<a class="rs-cost rs-cost-real" href="#guide.${esc(g.id)}">
+          <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · ${esc(h.basis)}</span></span></span>
+          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(h.rate)}</b></span>
+          <span class="rs-cost-v"><span class="label">${esc(h.monthL)}</span><b class="tnum">${esc(h.month)}</b></span>
+          ${icon('arrow')}</a>`;
+        }
+        const b = RIX().byCat[o.v]; const hh = (COST[o.v] && COST[o.v].hours) || '40';
+        return `<a class="rs-cost" href="#guide.${esc(g.id)}">
+          <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · Rate Index</span></span></span>
           <span class="rs-cost-v"><span class="label">Median</span><b class="tnum">${hr(b.p50)}/hr</b></span>
-          <span class="rs-cost-v"><span class="label">${esc(RN.w.label('hoursPerMonth', h))}</span><b class="tnum">${esc(monthRange(o.v, h, '5m_20m'))}</b></span>
-          ${icon('arrow')}</a>`; }).join('')}</div>
-        <p class="rs-src" style="margin-top:12px">${icon('info')}<span>Rates from the Rate Index: the median per hour and a typical month for a company with $5M–$20M in revenue. ${esc(NO_FEES)}</span></p>
-      </section>
-      <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${GROUPS.filter((g) => g.k === 'operators' || g.k === 'methods').map((g) => `<section class="rs-ggrp" id="rs-g-${g.k}" aria-labelledby="rs-g-${g.k}-t">
-        ${grpHd(g)}
-        <div class="grid g-2 rs-gpair-in">${GUIDES.filter((x) => x.group === g.k).map(guideCard).join('')}</div>
-      </section>`).join('')}</div></div>`;
-    })()}
+          <span class="rs-cost-v"><span class="label">${esc(RN.w.label('hoursPerMonth', hh))}</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m'))}</b></span>
+          ${icon('arrow')}</a>`;
+      }).join('')}</div>
+      <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M–$20M in revenue, illustrative in this prototype. ${esc(NO_FEES)}</span></p>
+    </section>
+    <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
+        ${grpHd(grp(k))}
+        <div class="grid g-2 rs-gpair-in">${GUIDES.filter((x) => x.group === k).map(guideCard).join('')}</div>
+      </section>`).join('')}</div></div>
     <section class="wrap rs-sec-sm" id="rs-glossary" aria-labelledby="rs-gl-t">
       <div class="rs-gloss card">
         <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, defined once</h2><p class="small muted">The same terms appear on every profile, posted engagement, review and report on Revenue Nomad.</p></div>
         <dl class="rs-gl">${GLOSSARY.map((x) => `<div class="rs-gl-i" id="rs-term-${esc(RN.slug(x.t))}"><dt>${esc(x.t)}</dt><dd>${esc(x.d())}${x.to ? ` <a class="rs-gl-a" href="#${esc(x.to)}" aria-label="More on ${esc(x.t)}">More${icon('arrow')}</a>` : ''}</dd></div>`).join('')}</dl>
       </div>
-      <div style="margin-top:20px">${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}</div>
+      <div class="stack" style="--gap:12px;margin-top:20px">
+        ${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}
+        ${redirects.length ? devNote('rs-redirects', 'Redirects from the old blog', `For Rapid Neuron: ${redirects.length} old posts fold into ${POSTS.filter((p) => (p.replaces || []).length).length} guides. 301 each one when its guide goes live.`, `
+          <p class="small">Search Console figures are the May 2026 export (clicks, impressions, average position). The ${known.length} posts with figures earned ${fmtN(known.reduce((n, x) => n + (x.r.clicks || 0), 0))} clicks on ${fmtN(known.reduce((n, x) => n + (x.r.impressions || 0), 0))} impressions. Posts published after May have no figures yet, and their exact URLs need confirming. The ad landing pages (/hire-fractional-vp-of-sales-in-new-york, -atlanta, -boston and /fractional-vp/vp-new-york) are not on this list. They go to the sales leadership home once the old Google Ads destinations are checked.</p>
+          ${htbl(['Old post', 'New guide', 'What happens', 'Clicks', 'Impressions'], redirects.map(({ r, p }) => [oldUrlCell(r), `<a href="#guide.${esc(p.slug)}" class="mono rs-url">/post/${esc(p.slug)}</a>`, esc(ACTION_L[r.action] || r.action), esc(fmtN(r.clicks)), esc(fmtN(r.impressions))]), 'rs-redir-tbl')}`) : ''}
+      </div>
     </section>
+    </div>`;
+  }
+
+  /* ---------- One answer post (content playbook template) ----------
+     The client's question, "Updated · By Matt Lopez · Reviewed by", the direct answer, key numbers with sources,
+     H2s phrased as questions, the FAQ, then the function's Talk to us block and two operators. No eyebrow above the
+     headline (playbook, Voice and style). The dev notes carry the meta fields, the 301s from the old blog with their
+     Search Console numbers, the open gaps and the calculated numbers Matt still has to approve. */
+  function renderPost(g) {
+    const p = g.post;
+    const grp = GROUPS.find((x) => x.k === p.fn);
+    const FN = RN.fn || {};
+    const gap = (w, o) => (FN.gap ? FN.gap(w, o) : esc(w));
+    const persona = RN.store.state.persona;
+    const matt = RN.model.matt || { name: 'Matt Lopez', slug: '' };
+    const updated = RN.fmt.date(p.updated + 'T12:00:00');
+    const secs = g.sections();
+    const rel = relatedOps(g).slice(0, 2);
+    const bp = blueprintFor(g.cat, g.bp);
+    const page = (FN.pages && FN.pages[p.fn]) || { fn: p.fn, need: p.need, form: { h: 'Tell us what you need', lede: '' } };
+    const talk = 'talk.' + p.need;
+    const plainFaq = [{ q: p.q, a: plainOf(p.answer) }].concat(p.faq.map((f) => ({ q: f.q, a: plainOf(f.a) })));
+    const schema = {
+      '@context': 'https://schema.org',
+      '@graph': [
+        { '@type': 'Article', headline: p.q, description: p.metaDescription, dateModified: p.updated, mainEntityOfPage: `${OLD_BLOG}/post/${p.slug}`,
+          author: { '@type': 'Person', name: 'Matt Lopez', url: `${OLD_BLOG}/experts/matt-lopez-35525` },
+          publisher: { '@type': 'Organization', name: 'Revenue Nomad', url: OLD_BLOG } },
+        { '@type': 'FAQPage', mainEntity: plainFaq.map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })) },
+      ],
+    };
+    const others = (p.related || []).map(guideBy).filter(Boolean)
+      .concat(GUIDES.filter((x) => x.post && x.fn === p.fn && x.slug !== p.slug && !(p.related || []).includes(x.slug)))
+      .concat(GUIDES.filter((x) => x.post && x.slug !== p.slug))
+      .filter((x, i, a) => a.indexOf(x) === i && x.slug !== p.slug).slice(0, 3);
+    const ans = answersBlock(g);
+    const toc = secs.map((x) => ({ id: x.id, h: x.h })).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'talk', h: 'Talk to us' }]);
+    const reps = p.replaces || [];
+    const notes = `<dl class="rs-notes-dl">
+        <div><dt>URL</dt><dd class="mono">/post/${esc(p.slug)}</dd></div>
+        <div><dt>Meta title</dt><dd>${esc(p.metaTitle)} <span class="tiny muted">${p.metaTitle.length} characters</span></dd></div>
+        <div><dt>Meta description</dt><dd>${esc(p.metaDescription)} <span class="tiny muted">${p.metaDescription.length} characters</span></dd></div>
+        <div><dt>Search term</dt><dd>${esc(p.term)}</dd></div>
+        <div><dt>AI prompt to track</dt><dd>${esc(p.prompt)}</dd></div>
+        <div><dt>Persona</dt><dd>${esc(p.persona)}</dd></div>
+        <div><dt>Publish</dt><dd>${p.publish ? `Scheduled for ${esc(RN.fmt.date(p.publish + 'T12:00:00'))} in the content calendar` : 'A rebuild of a live post. Publish once its pending items close.'}</dd></div>
+        <div><dt>Built from</dt><dd>${esc(p.base)}</dd></div>
+      </dl>
+      ${reps.length ? `<h3 class="h5">301s into this page</h3>${htbl(['Old post', 'What happens', 'Clicks', 'Impressions', 'Avg position'], reps.map((r) => [oldUrlCell(r), esc(ACTION_L[r.action] || r.action), esc(fmtN(r.clicks)), esc(fmtN(r.impressions)), esc(r.position == null ? '' : String(r.position))]))}<p class="tiny muted">Search Console, May 2026 export. Blank figures mean the post went up after the export.</p>` : ''}
+      ${(p.gaps || []).length ? `<h3 class="h5">Still pending</h3><ul class="rs-notes-gaps">${p.gaps.map((x) => `<li>${gap(x.what, x.owner)}</li>`).join('')}</ul>` : ''}
+      ${(p.flags || []).length ? `<h3 class="h5">For Matt to approve</h3><ul class="rs-notes-flags">${p.flags.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}`;
+
+    return `<div class="rs rs-guide-pg rs-post-pg">
+    <div class="wrap rs-guide">
+      <article class="rs-art" aria-labelledby="rs-g-h1">
+        ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
+        <h1 class="h1 rs-g-h1" id="rs-g-h1">${esc(p.q)}</h1>
+        <div class="rs-byline">
+          ${RN.ui.avatar(matt, 'ava-sm rs-by-ava', { decorative: true })}
+          <span class="rs-by-txt">
+            <a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a>
+            <span class="rs-by-meta"><span>Updated <time datetime="${esc(p.updated)}">${esc(updated)}</time> · ${g.mins} min read</span>
+              <span class="rs-by-rev">Reviewed by ${gap('reviewing operator', 'Matt')}</span></span>
+          </span>
+        </div>
+        <div class="rs-answer" role="note" aria-label="Short answer">
+          <span class="label">The short answer</span>
+          <p>${prich(p.answer)}</p>
+        </div>
+        <figure class="rs-keys" aria-labelledby="rs-keys-t"><figcaption class="sr-only" id="rs-keys-t">Key numbers</figcaption>
+          ${ptbl(['Key number', 'Value', 'Source'], p.keys.map((k) => [k.k, k.v, k.url ? `[[url:${k.url}|${k.src}]]` : k.src]), 'rs-keys-tbl')}
+        </figure>
+        <div class="prose rs-prose">
+          ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec"><h2>${esc(x.h)}</h2>${x.html}</section>`).join('')}
+        </div>
+        <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
+          <h2 class="h3" id="rs-faq-t">Common questions</h2>
+          ${p.faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${esc(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${prich(f.a)}</p></details>`).join('')}
+        </section>
+        ${ans}
+        <footer class="rs-gfoot">
+          <p class="small muted">Sources: Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. A pending chip marks a figure or quote we do not have yet. Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
+          ${devNote('rs-post-notes', 'Publishing notes', 'For Rapid Neuron and Matt: meta fields, the 301s from the old blog, what is still pending', notes)}
+          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: Article and FAQPage JSON-LD. Add reviewedBy once the reviewing operator signs off, and BreadcrumbList.')}
+        </footer>
+      </article>
+      <aside class="rs-rail" aria-label="On this page">
+        <div class="rs-rail-in">
+          <div class="rs-toc"><span class="label">On this page</span>
+            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${esc(t.h)}</button></li>`).join('')}</ul>
+          </div>
+          <div class="card rs-rail-cta">
+            <b class="h5">${esc(page.form.h)}</b>
+            <p class="small muted">Four short questions. Only your name and email are required.</p>
+            <a class="btn btn-block" href="#${esc(talk)}">Talk to us${icon('arrow')}</a>
+            <a class="btn btn-line btn-block" href="#fractional-cost">What it costs</a>
+          </div>
+        </div>
+      </aside>
+    </div>
+    <section class="section night fn-sec fn-form rs-ptalk" id="rs-s-talk" aria-labelledby="rs-ptalk-t"><div class="wrap fn-form-in">
+      <div class="fn-form-l">
+        <span class="eyebrow">Talk to us</span>
+        <h2 class="h2" id="rs-ptalk-t">${esc(page.form.h)}</h2>
+        <p class="lede">${prich(p.talk)}</p>
+      </div>
+      <div class="fn-form-r">${FN.talkCard ? FN.talkCard(page) : `<a class="btn btn-leaf btn-lg" href="#${esc(talk)}">Talk to us${icon('arrow')}</a>`}</div>
+    </div></section>
+    <div class="wrap rs-guide-after">
+      <section id="rs-s-operators" class="rs-rel rs-prel" aria-labelledby="rs-rel-t">
+        <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${esc(F.catLabel(g.cat))} operators who do this work</h2></div>
+        ${browseBtn(`Browse ${F.catLabel(g.cat)}`, { filters: { roleCategories: [g.cat] }, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
+        <div class="grid g-3 rs-rel-ops">
+          ${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}
+          <div class="rs-prel-links">
+            <a class="rs-bp card card-link" href="#${esc(grp.home)}">
+              <span class="rs-bp-ic">${icon('users')}</span>
+              <span class="grow"><span class="label">${esc(grp.l)}</span><b>How it works, who you get, what it costs</b></span>
+              ${icon('arrow')}
+            </a>
+            <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
+              <span class="rs-bp-ic">${icon('doc')}</span>
+              <span class="grow"><span class="label">Engagement Blueprint</span><b>${esc(bp ? bp.title : 'Scope this work with a Blueprint')}</b></span>
+              ${icon('arrow')}
+            </a>
+          </div>
+        </div>
+      </section>
+      <nav class="rs-next" aria-label="More guides">
+        <span class="label">Keep reading</span>
+        <div class="grid g-3">${others.map(guideCard).join('')}</div>
+      </nav>
+    </div>
     </div>`;
   }
 
@@ -1716,6 +1820,7 @@
   function renderGuide(slug) {
     chartFns = {};
     const g = guideBy(slug);
+    if (g && g.post) return renderPost(g);
     if (!g) {
       return `<section class="wrap-narrow section">${RN.ui.empty({ icon: 'book', title: 'We could not find that guide', body: 'It may have moved. Every guide is listed on the Guides page.', cta: '<a class="btn" href="#guides">See all guides</a>' })}</section>`;
     }
@@ -1790,7 +1895,7 @@
             <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : g.group === 'methods' ? 'See it on a profile' : 'Ready to hire?')}</b>
             <p class="small muted">${esc(g.group === 'operators' ? (persona === 'operator' ? 'Studio shows your numbers next to the benchmarks in this guide.' : 'Join the network to get a Studio with your numbers next to these benchmarks.') : g.group === 'methods' ? 'Every profile shows its Reputation Index, CORE reviews and verified focus areas.' : 'Browse operators with company-verified proof, or estimate the cost first.')}</p>
             ${cta}
-            ${g.group === 'clients' || g.group === 'costs' ? `<a class="btn btn-line btn-block" href="#rates">Estimate the cost</a>` : ''}
+            ${R.isClientGuide(g) ? `<a class="btn btn-line btn-block" href="#rates">Estimate the cost</a>` : ''}
           </div>
         </div>
       </aside>

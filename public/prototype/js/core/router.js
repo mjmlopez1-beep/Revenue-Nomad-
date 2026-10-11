@@ -30,8 +30,12 @@
   const ALIASES = { projects: 'engagements', project: 'engagement', 'state-of-fractional': 'report' };
   const EXACT = { project: 'engagements', engagement: 'engagements' }; // a bare token with no id opens the list
   RN.routeAliases = ALIASES;
+  // Whole-path aliases for a page renamed inside a view, registered by the view's file
+  // (research.js: a guide merged into a rebuilt answer post keeps its old link)
+  const PATHS = (RN.pathAliases = RN.pathAliases || {});
   RN.canonical = function (path) {
     const s = String(path == null ? '' : path).replace(/^#/, '');
+    if (Object.prototype.hasOwnProperty.call(PATHS, s)) return PATHS[s];
     if (Object.prototype.hasOwnProperty.call(EXACT, s)) return EXACT[s];
     const parts = s.split('.');
     if (!Object.prototype.hasOwnProperty.call(ALIASES, parts[0])) return s;

@@ -37,13 +37,19 @@
   /* Body copy: typographic quotes, escaped, then the inline tokens
        [[gap:what|Owner]]   pending chip
        [[link:route|text]]  a link to a route
-       [[net]]              the network size from RN.data.market */
+       [[url:https://…|text]]  an outside source, opened in a new tab
+       **text**             a bold lead-in
+       [[net]]              the network size from RN.data.market
+     Shared with the guides (RN.fn.rich), which render the answer posts with the same tokens. */
   function rich(t) {
     return esc(RN.fmt.smart(t))
       .replace(/\[\[gap:([^\]|]+)\|([^\]]+)\]\]/g, (m, what, owner) => gapRaw(what.trim(), owner.trim()))
       .replace(/\[\[link:([^\]|]+)\|([^\]]+)\]\]/g, (m, to, label) => `<a class="link" href="#${to.trim()}">${label}</a>`)
+      .replace(/\[\[url:(https:\/\/[^\]|\s]+)\|([^\]]+)\]\]/g, (m, url, label) => `<a class="link" href="${url}" target="_blank" rel="noopener">${label}</a>`)
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
       .replace(/\[\[net\]\]/g, esc(NET()));
   }
+  FN.rich = rich;
 
   /* ---------- The cleared client logos ----------
      Only these nine may appear (content playbook, Oct 10, 2026). Ferry, Skaled and BuildingLink render from their
@@ -113,13 +119,13 @@
       closing: 'One named operator owns the result on a fixed weekly cadence.',
     },
     stories: [
-      [['Problem', 'Close rate fell from 30 to 40% into the teens. 2 to 4 new clients a month against a goal of 10+. The founder-CEO wants to reach $15M.'],
+      [{ title: 'Physical therapy marketing agency, ~$9M revenue' }, ['Problem', 'Close rate fell from 30 to 40% into the teens. 2 to 4 new clients a month against a goal of 10+. The founder-CEO wants to reach $15M.'],
         ['What the operator does', 'A fractional VP of Sales sits above the existing director as strategist and process builder, 40 hours a month for 3 months.'],
         ['Starting point', 'Close rate in the teens. Started Sep 2026 [[gap:90-day result|Matt]]']],
-      [['Problem', '8 commission-only reps, about half not performing, no repeatable process.'],
+      [{ title: 'Founder-led healthcare services company' }, ['Problem', '8 commission-only reps, about half not performing, no repeatable process.'],
         ['What the operator does', 'A 90-day build at 20 hours a month for $4,000. Assess reps, document the process, write scripts, train, audit the CRM, make personnel calls.'],
         ['Starting point', '8 reps, about 4 performing. Started Sep 2026 [[gap:90-day result|Matt]]']],
-      [['What happened', 'Matt Lopez served as fractional GTM strategy leader from Feb 2025, signed for 4 months and retained about 18.'],
+      [{ title: 'Ferry, hospitality tip management platform' }, ['What happened', 'Matt Lopez served as fractional GTM strategy leader from Feb 2025, signed for 4 months and retained about 18.'],
         ['Result', 'First 20 inbound leads, 2 deals that doubled the client base, first AE hired and closing within 60 days. [[gap:Ferry revenue band|Matt]] [[gap:client quote with sign-off|Matt]]']],
     ],
     vet: {
@@ -181,12 +187,12 @@
       closing: 'Start with the assessment instead and you get a red, yellow and green scorecard, specifications and a roadmap within 60 days. Your CRM admins run the build, or you extend the operator.',
     },
     stories: [
-      [['Problem', 'Pipeline flat, meeting conversion the lowest the CEO had seen, "no decision" the leading loss reason. Nobody could show the bridge from bookings goal to pipeline.'],
+      [{ title: 'Enterprise billing software company' }, ['Problem', 'Pipeline flat, meeting conversion the lowest the CEO had seen, "no decision" the leading loss reason. Nobody could show the bridge from bookings goal to pipeline.'],
         ['What the operator does', 'A fractional lead revenue architect reporting to the CFO, about 2.5 days a week at $27,000 a month, chosen over a full-time hire and a $230K consultancy assessment.'],
         ['Starting point', 'Forecast needing 3 to 4 deals of about $1M each. Starts Oct 19 2026 [[gap:day-90 result|Matt]]']],
-      [['What the operator does', 'A 60-day fixed-fee reporting assessment, about 40 hours, delivering a scorecard, specs and a roadmap internal CRM admins can run.'],
+      [{ title: 'Transactional SaaS company, 50 to 100 sellers' }, ['What the operator does', 'A 60-day fixed-fee reporting assessment, about 40 hours, delivering a scorecard, specs and a roadmap internal CRM admins can run.'],
         ['Starting point', '[[gap:revenue band and measured starting point|Matt]]']],
-      [[null, 'At about $400M ARR, the President brought in fractional help to stand up a RevOps function from zero. Fractional works well past early stage. [[gap:what was built and a result|Matt]] [[gap:client quote with sign-off|Matt]]']],
+      [{ title: 'Workforce Software' }, [null, 'At about $400M ARR, the President brought in fractional help to stand up a RevOps function from zero. Fractional works well past early stage. [[gap:what was built and a result|Matt]] [[gap:client quote with sign-off|Matt]]']],
     ],
     vet: {
       lead: 'Every RevOps operator is scored on CORE.',
@@ -245,12 +251,12 @@
     },
     storiesLede: 'We have run marketing leadership searches and have no closed marketing placement to report yet. Here is how those searches worked.',
     stories: [
-      [['Problem', 'Lead cost and quality getting worse, heavy reliance on lead aggregators, loosely managed agencies, underused marketing data.'],
+      [{ title: 'PE-backed home services platform, two brands' }, ['Problem', 'Lead cost and quality getting worse, heavy reliance on lead aggregators, loosely managed agencies, underused marketing data.'],
         ['What we did', 'Scored 7 candidates for a 40 to 80 hour a month fractional CMO seat on a weighted 7-factor scorecard.'],
         { table: [['Demand gen operator vs brand CMO', 25], ['Analytical rigor on CPL, attribution and CAC', 20], ['Agency and aggregator accountability', 15], ['Funnel fluency in the vertical', 15], ['Opinionated enough to manage brand marketers', 10], ['Sales enablement straddle, including call center', 10], ['Channel diversification instinct', 5]] },
         ['Disqualified', 'Brand-heavy CMOs, mismatched funnel backgrounds, anyone carrying 3+ engagements, and any self-reported background the public record contradicts.'],
         ['Where it stands', 'The client changed strategy before hiring. [[gap:revenue band|Matt]]']],
-      [['Problem', 'Fragmented products needed one narrative before a sales kickoff.'],
+      [{ title: 'PE-backed public-sector software company repositioning after acquisitions' }, ['Problem', 'Fragmented products needed one narrative before a sales kickoff.'],
         ['What we did', 'Scoped a 60 to 80 hour a month seat, candidates at $220 to $400 an hour. Brand strategy and sales enablement turned out to be different jobs, and the person who asks is not always the person who decides.'],
         ['Where it stands', '[[gap:revenue band and current status cleared for publishing|Matt]]']],
     ],
@@ -308,11 +314,11 @@
     outside: 'For outside reference, Go Fractional puts the average fractional hourly rate at $161 as of July 23 2026, across all functions. Fractional VP of Sales arrangements are commonly cited at $8,000 to $20,000 a month (a secondary source).',
     moves: {
       items: [
-        'A CRO embedded at a $55M company ran $23,200 a month. A director for a 5-rep team ran $4,000.',
-        'Price follows the hour block. 20 hours a month and 50 hours a month are different jobs.',
-        'Venture-backed companies accepted about $300 an hour at around $5M ARR. Bootstrapped peers at the same size paid less.',
-        'CRM admin, revenue leadership and pipeline specialist work are three jobs. Asking one person to cover all three raises the rate or breaks the engagement.',
-        'One founder-led client got quotes of $6,000 to $12,000 a month that were too much for their team. $4,000 for 20 hours fit.',
+        '**Seniority.** A CRO embedded at a $55M company ran $23,200 a month. A director for a 5-rep team ran $4,000.',
+        '**Hours.** Price follows the hour block. 20 hours a month and 50 hours a month are different jobs.',
+        '**Funding.** Venture-backed companies accepted about $300 an hour at around $5M ARR. Bootstrapped peers at the same size paid less.',
+        '**Scope mix.** CRM admin, revenue leadership and pipeline specialist work are three jobs. Asking one person to cover all three raises the rate or breaks the engagement.',
+        '**Team size.** One founder-led client got quotes of $6,000 to $12,000 a month that were too much for their team. $4,000 for 20 hours fit.',
       ],
       closing: 'One client bought 20 hours a month for $3,000 and missed target every month. Match hours to the job.',
     },
@@ -469,6 +475,7 @@
   }
   function story(parts, wide) {
     const part = (p) => {
+      if (p.title) return `<h3 class="fn-story-t">${rich(p.title)}</h3>`;
       if (p.table) return scorecard(p.table);
       const l = p[0], t = p[1];
       return `<div class="fn-story-p">${l ? `<span class="fn-story-l">${esc(l)}</span>` : ''}<p>${rich(t)}</p></div>`;
@@ -476,8 +483,9 @@
     // Full width keeps the document's order in the markup (the reading order when stacked and for screen readers);
     // CSS puts the narrative in the first column with the scorecard beside it, or gives each part its own column
     if (wide) {
+      // Split: the title spans both columns and counts as a row. Row: one column per part, the title above them all
       const sc = parts.some((p) => p && p.table);
-      const n = parts.filter((p) => !(p && p.table)).length;
+      const n = parts.filter((p) => !(p && (p.table || (!sc && p.title)))).length;
       return `<article class="fn-story ${sc ? 'fn-story-split' : 'fn-story-row'}" style="--n:${n}">${parts.map(part).join('')}</article>`;
     }
     return `<article class="fn-story">${parts.map(part).join('')}</article>`;
@@ -528,6 +536,9 @@
       <p class="fn-form-fine small">We show you three operators right away, and a person replies within one business day.</p>
     </div>`;
   }
+  // The answer posts in the Guides end on the same card (content playbook: every post ends at the form)
+  FN.talkCard = talkCard;
+  FN.talkTo = talkTo;
   function formBlock(d) {
     return `<section class="section night fn-sec fn-form" id="fn-form" data-fn="${esc(d.fn)}"><div class="wrap fn-form-in">
       <div class="fn-form-l">

@@ -319,9 +319,9 @@
         <article class="card ins-tool">
           <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('book')}</span><div><h3 class="h4">Guides</h3><p class="small muted">Straight answers to the questions companies ask before they hire.</p></div></div>
           <ul class="ins-q-list">
-            <li><a href="#guide.fractional-vp-of-sales-cost">How much does a fractional VP of Sales cost?${icon('chev-right')}</a></li>
-            <li><a href="#guide.fractional-vs-full-time-vp-of-sales">Should my first sales leader be fractional or full time?${icon('chev-right')}</a></li>
-            <li><a href="#guide.how-to-scope-a-fractional-sales-engagement">How do I scope a fractional sales engagement?${icon('chev-right')}</a></li>
+            <li><a href="#guide.fractional-vp-of-sales-cost">What does a fractional VP of Sales cost in 2026?${icon('chev-right')}</a></li>
+            <li><a href="#guide.how-to-hire-a-fractional-vp-of-sales">How do you hire a fractional VP of Sales in 2026?${icon('chev-right')}</a></li>
+            <li><a href="#guide.interim-vs-fractional-vs-full-time-sales-leader">Interim, fractional or full-time sales leader, which fits?${icon('chev-right')}</a></li>
           </ul>
           <a class="ins-tool-go" href="#guides">All guides${icon('arrow')}</a>
         </article>
