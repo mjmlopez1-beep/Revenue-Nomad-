@@ -43,7 +43,8 @@
      Shared with the guides (RN.fn.rich), which render the answer posts with the same tokens. */
   function rich(t) {
     return esc(RN.fmt.smart(t))
-      .replace(/\[\[gap:([^\]|]+)\|([^\]]+)\]\]/g, (m, what, owner) => gapRaw(what.trim(), owner.trim()))
+      // Punctuation right after a chip stays on its line (otherwise a phone wraps ", 19 meetings" onto the next line)
+      .replace(/\[\[gap:([^\]|]+)\|([^\]]+)\]\]([,.;!?)]*)/g, (m, what, owner, punct) => (punct ? `<span class="fn-gap-w">${gapRaw(what.trim(), owner.trim())}${punct}</span>` : gapRaw(what.trim(), owner.trim())))
       .replace(/\[\[link:([^\]|]+)\|([^\]]+)\]\]/g, (m, to, label) => `<a class="link" href="#${to.trim()}">${label}</a>`)
       .replace(/\[\[url:(https:\/\/[^\]|\s]+)\|([^\]]+)\]\]/g, (m, url, label) => `<a class="link" href="${url}" target="_blank" rel="noopener">${label}</a>`)
       .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
