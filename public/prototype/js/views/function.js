@@ -6,6 +6,11 @@
    never filled with a guess. Pricing (founder, Oct 11, 2026): there is no platform fee for companies, and hiring the
    operator full time carries a conversion fee of 20% of annual salary (the copy said 15 to 20%). Operator fees are
    explained only on operator pages.
+   Every section has a visual drawn only from the page's own copy and RN.model: operator faces from the role category in
+   the hero (the marketing hero carries its weighted scorecard, the cost hub a monthly mix by function), rates as range
+   bars on one scale, the 90 days as a Gantt, a small picture per story and per price driver, CORE as a night band.
+   Copy that is only a pending chip (a table row, a story part, a lead-in sentence) is marked data-proto, so reviewer
+   mode shows it and the default view reads cleanly.
    Talk to us is the four-question flow on #talk (need, company size, start date, where to reply; the founder kept it,
    Oct 11, 2026). The hero button and the form block open it with this page's need already picked (#talk.<need>).
    Shared with other views:
@@ -142,6 +147,12 @@
       [{ title: 'Ferry, hospitality tip management platform' }, ['What happened', 'Matt Lopez served as fractional GTM strategy leader from Feb 2025, signed for 4 months and retained about 18.'],
         ['Result', 'First 20 inbound leads, 2 deals that doubled the client base, first AE hired and closing within 60 days. [[gap:Ferry revenue band|Matt]] [[gap:client quote with sign-off|Matt]]']],
     ],
+    // One small picture per story, drawn only from figures in that story's own copy
+    viz: [
+      { k: 'bars', l: 'New clients a month', rows: [['Now', 2, 4, '2 to 4'], ['Goal', 10, 10, '10+']] },
+      { k: 'people', n: 8, on: 4, l: '8 reps, about 4 performing' },
+      { k: 'bars', l: 'Months with Ferry', rows: [['Signed for', 4, 4, '4'], ['Retained', 18, 18, 'About 18']] },
+    ],
     vet: {
       lead: 'Every sales leader is scored on CORE.',
       core: ['They tell you what is happening before you ask.', 'They treat the number as theirs.', 'Measured by revenue and conversion.', 'Deep experience at your stage and in your kind of sale.'],
@@ -199,6 +210,9 @@
         ['Days 61 to 90', 'Customer-journey redesign, handoff to internal admins', 'Visible impact around day 90'],
       ],
       closing: 'Start with the assessment instead and you get a red, yellow and green scorecard, specifications and a roadmap within 60 days. Your CRM admins run the build, or you extend the operator.',
+      // The scorecard the closing line describes, drawn. Rows are the areas the 90 days above cover; the colours are
+      // an illustration of the format, labelled Illustrative, never a client's result.
+      rag: { h: 'Assessment scorecard', rows: [['Bookings goal to pipeline', 'r'], ['Funnel leaks', 'r'], ['Pipeline coverage', 'y'], ['Forecast method', 'y'], ['KPI framework', 'g'], ['Customer journey', 'y']], out: ['Scorecard', 'Specifications', 'Roadmap'], by: 'Within 60 days' },
     },
     stories: [
       [{ title: 'Enterprise billing software company' }, ['Problem', 'Pipeline flat, meeting conversion the lowest the CEO had seen, "no decision" the leading loss reason. Nobody could show the bridge from bookings goal to pipeline.'],
@@ -207,6 +221,11 @@
       [{ title: 'Transactional SaaS company, 50 to 100 sellers' }, ['What the operator does', 'A 60-day fixed-fee reporting assessment, about 40 hours, delivering a scorecard, specs and a roadmap internal CRM admins can run.'],
         ['Starting point', '[[gap:revenue band and measured starting point|Matt]]']],
       [{ title: 'Workforce Software' }, [null, 'At about $400M ARR, the President brought in fractional help to stand up a RevOps function from zero. Fractional works well past early stage. [[gap:what was built and a result|Matt]] [[gap:client quote with sign-off|Matt]]']],
+    ],
+    viz: [
+      { k: 'deals', n: 4, on: 3, v: '$1M', l: 'Forecast needing 3 to 4 deals of about $1M each' },
+      { k: 'big', v: '60', u: 'days', l: 'Fixed-fee reporting assessment, about 40 hours' },
+      { k: 'big', v: '$400M', u: 'ARR', l: 'Fractional help to stand up a RevOps function from zero' },
     ],
     vet: {
       lead: 'Every RevOps operator is scored on CORE.',
@@ -274,6 +293,11 @@
         ['What we did', 'Scoped a 60 to 80 hour a month seat, candidates at $220 to $400 an hour. Brand strategy and sales enablement turned out to be different jobs, and the person who asks is not always the person who decides.'],
         ['Where it stands', '[[gap:revenue band and current status cleared for publishing|Matt]]']],
     ],
+    // The weighted scorecard (the first story's table) is drawn in the hero, so the stories carry these instead
+    viz: [
+      { k: 'big', v: '7', u: 'candidates', l: 'Scored on a weighted 7-factor scorecard', n: 7 },
+      { k: 'big', v: '$220 to $400', u: 'an hour', l: 'Candidates for a 60 to 80 hour a month seat' },
+    ],
     vet: {
       lead: 'Every marketing operator is scored on CORE.',
       core: ['They report cost per lead and pipeline weekly without being asked.', 'They hold agencies to a cost and pipeline number.', 'Judged on lead cost, lead quality and pipeline.', 'They know your funnel, your channels and your vertical.'],
@@ -335,6 +359,14 @@
         '**Team size.** One founder-led client got quotes of $6,000 to $12,000 a month that were too much for their team. $4,000 for 20 hours fit.',
       ],
       closing: 'One client bought 20 hours a month for $3,000 and missed target every month. Match hours to the job.',
+      // One small picture per driver, from the figures in its own sentence
+      viz: [
+        { k: 'bars', rows: [['Director, 5-rep team', 4000, 4000, '$4,000'], ['CRO, $55M company', 23200, 23200, '$23,200']], u: 'A month' },
+        { k: 'bars', rows: [['20 hours', 20, 20, '20'], ['50 hours', 50, 50, '50']], u: 'Hours a month' },
+        { k: 'big', v: 'About $300', u: 'an hour', l: 'Venture-backed, around $5M ARR' },
+        { k: 'jobs', rows: ['CRM admin', 'Revenue leadership', 'Pipeline specialist'] },
+        { k: 'bars', rows: [['Quoted', 6000, 12000, '$6,000 to $12,000'], ['Fit', 4000, 4000, '$4,000']], u: 'A month' },
+      ],
     },
     models: {
       cols: ['Model', 'How it works', 'When it fits', 'Example from 2026'],
@@ -353,6 +385,8 @@
         ['RevOps assessment, enterprise SaaS', 'Large consultancy quoted about $230K for 6 weeks', '$27,000 a month for a senior architect at about 2.5 days a week'],
         ['Replacing a sales leader', 'Can cost 1.5x salary, with 3+ months of ramp', 'Swap the operator, then 30 days notice after the initial term'],
       ],
+      // Yearly figures from the two rows that state both sides in dollars: [full-time lo, hi], [fractional lo, hi]
+      viz: [[[334000, 334000], [48000, 120000]], [[800000, 800000], [306000, 306000]], null, null],
       after: [
         'The most common mismatch we see is expecting full-time availability at a fractional rate. Fix it upfront with a set hour block and a weekly cadence.',
         'Our 2027 survey comparison of fractional and full-time cost [[gap:2027 survey figure|Survey]].',
@@ -386,10 +420,76 @@
   FN.pages = { sales: SALES, revops: REVOPS, marketing: MARKETING, cost: COST };
 
   /* ---------- Pieces ---------- */
-  const sec = (key, alt, inner) => `<section class="section fn-sec fn-${key}${alt ? ' fn-alt' : ''}"><div class="wrap">${inner}</div></section>`;
-  const paras = (list, cls) => (list && list.length ? `<div class="fn-after${cls ? ' ' + cls : ''}">${list.map((p) => `<p class="pg-p">${rich(p)}</p>`).join('')}</div>` : '');
+  const sec = (key, alt, inner, cls) => `<section class="section fn-sec fn-${key}${alt ? ' fn-alt' : ''}${cls ? ' ' + cls : ''}"><div class="wrap">${inner}</div></section>`;
+  /* A sentence that is a short lead-in plus pending chips ("Market rates [chip].") is a reviewer note as a whole, so
+     with reviewer mode off the paragraph reads cleanly instead of ending in "Market rates ." */
+  const NOTE_SENT = /^[^[\]]{0,40}?(\[\[gap:[^\]]*\]\]\s*)+[.]?$/;
+  const richNotes = (p) => String(p).split(/(?<=\.)\s+(?=\S)/).map((s) => (NOTE_SENT.test(s.trim()) ? `<span data-proto>${rich(s)}</span>` : rich(s))).join(' ');
+  const paras = (list, cls) => (list && list.length ? `<div class="fn-after${cls ? ' ' + cls : ''}">${list.map((p) => `<p class="pg-p"${onlyGapsP(p) ? ' data-proto' : ''}>${richNotes(p)}</p>`).join('')}</div>` : '');
+  const onlyGapsP = (t) => /^[^[\]]*(\[\[gap:[^\]]*\]\][,.;]?\s*)+$/.test(String(t || '')) && !/[.!?]\s/.test(String(t).split('[[')[0]);
+  // Copy that is nothing but pending chips: the whole element is a reviewer-mode note (hidden with them by default)
+  const onlyGaps = (t) => /^\s*(\[\[gap:[^\]]*\]\][,.;]?\s*)+$/.test(String(t || ''));
+  const catLabel = (cat) => RN.fields.catLabel(cat);
+  const catColor = (cat) => RN.fields.catColor(cat) || 'var(--accent)';
 
-  /* A figure in the hero stat block: "350+" gets a unit span, a range ("2 to 3") a quieter "to" between its numbers,
+  /* ---------- Small charts, drawn from the page's own figures ---------- */
+  // Dollar figures in a cell: "$4,000 to $10,000" -> { lo: 4000, hi: 10000 }; "$334K" -> 334000
+  function dollars(s) {
+    const n = [];
+    String(s).replace(/\$(\d[\d,]*(?:\.\d+)?)\s*([KM])?/g, (m, v, u) => { n.push(parseFloat(v.replace(/,/g, '')) * (u === 'K' ? 1e3 : u === 'M' ? 1e6 : 1)); return m; });
+    return n.length ? { lo: Math.min.apply(null, n), hi: Math.max.apply(null, n) } : null;
+  }
+  const kfmt = (v) => (v >= 1e6 ? `$${+(v / 1e6).toFixed(1)}M` : v >= 1000 ? `$${Math.round(v / 1000)}K` : `$${v}`);
+  const pct = (v, max) => +(Math.max(0, Math.min(1, v / (max || 1))) * 100).toFixed(2);
+
+  /* Bars on one scale: rows [label, lo, hi, text]. A range draws solid to its low end and lighter to its high end. */
+  function bars(rows, o) {
+    o = o || {};
+    const max = o.max || Math.max.apply(null, rows.map((r) => r[2])) || 1;
+    return `<div class="fn-bars fn-io${o.cls ? ' ' + o.cls : ''}" role="img" aria-label="${esc((o.l ? o.l + ': ' : '') + rows.map((r) => `${r[0]} ${r[3]}`).join(', '))}">
+      ${o.l ? `<span class="fn-bars-cap" aria-hidden="true">${esc(o.l)}</span>` : ''}
+      ${rows.map(([l, lo, hi, t], i) => `<span class="fn-bars-r" aria-hidden="true" style="--i:${i}">
+        <span class="fn-bars-l">${esc(l)}</span>
+        <span class="fn-bars-t"><i class="fn-grow" style="width:${pct(lo, max)}%"></i>${hi > lo ? `<i class="fn-grow fn-bars-x" style="left:${pct(lo, max)}%;width:${pct(hi - lo, max)}%"></i>` : ''}</span>
+        <b class="fn-bars-v">${esc(t)}</b>
+      </span>`).join('')}
+    </div>`;
+  }
+
+  /* Rates as a table with a range bar in the money column, every row on one scale. On a phone each row stacks into a
+     small card (seat, hours and rate, then the bar), so no column is ever cut off. Rows that hold only a pending chip
+     are reviewer notes. */
+  function chartTable(t, o) {
+    o = o || {};
+    const n = t.cols.length, mi = n - 1;
+    const rows = t.groups ? [].concat.apply([], t.groups.map((g) => g.rows)) : t.rows;
+    const max = Math.max.apply(null, rows.filter(Array.isArray).map((r) => (dollars(r[mi]) || { hi: 0 }).hi)) || 1;
+    const step = 5000, top = Math.ceil(max / step) * step;
+    let fixedAny = false;
+    const ticks = [];
+    for (let v = 0; v <= top; v += 10000) ticks.push(v);
+    const axis = `<span class="fn-rc-axis" aria-hidden="true">${ticks.map((v) => `<i style="left:${pct(v, top)}%">${kfmt(v)}</i>`).join('')}</span>`;
+    const row = (r, i) => {
+      if (r.gap) return `<tr class="fn-rc-gap" data-proto><th scope="row">${esc(r.seat)}</th><td colspan="${n - 1}">${FN.gap(r.gap[0], r.gap[1])}</td></tr>`;
+      const m = dollars(r[mi]);
+      const fixed = /^fixed$/i.test(String(r[2]).trim());
+      if (fixed) fixedAny = true;
+      const bar = m ? `<span class="fn-rc-track" aria-hidden="true">${ticks.slice(1).map((v) => `<b style="left:${pct(v, top)}%"></b>`).join('')}<i class="fn-grow fn-rc-bar${m.lo === m.hi ? ' is-pt' : ''}${fixed ? ' is-fixed' : ''}" style="--i:${i};left:${pct(m.lo, top)}%;width:${m.lo === m.hi ? 0 : pct(m.hi - m.lo, top)}%"></i></span>` : '';
+      return `<tr><th scope="row">${rich(r[0])}</th>${r.slice(1, mi).map((c, j) => `<td class="fn-rc-m"><span class="fn-rc-l" aria-hidden="true">${esc(t.cols[j + 1])}</span>${rich(c)}</td>`).join('')}<td class="fn-rc-v"><span class="fn-rc-n">${rich(r[mi])}</span>${bar}</td></tr>`;
+    };
+    let k = 0;
+    const body = t.groups
+      ? t.groups.map((g) => `<tbody class="fn-grp" style="--k:${catColor(g.cat)}"><tr class="fn-grp-h"><th colspan="${n}" scope="rowgroup"><i aria-hidden="true"></i>${esc(g.l)}</th></tr>${g.rows.map((r) => row(r, k++)).join('')}</tbody>`).join('')
+      : `<tbody>${t.rows.map((r) => row(r, k++)).join('')}</tbody>`;
+    const head = t.cols.map((c, i) => (i === mi ? `<th scope="col" class="fn-rc-vh"><span>${esc(c)}</span>${axis}</th>` : `<th scope="col">${esc(c)}</th>`)).join('');
+    return `<div class="fn-rc fn-io"${o.cat ? ` style="--k:${catColor(o.cat)}"` : ''}>
+      <table class="fn-tbl fn-tbl-chart"${o.label ? ` aria-label="${esc(o.label)}"` : ''}><thead><tr>${head}</tr></thead>${body}</table>
+      ${fixedAny ? `<p class="fn-rc-key" aria-hidden="true"><span><i></i>${esc(o.monthly || 'Monthly retainer')}</span><span><i class="is-fixed"></i>Fixed fee</span></p>` : ''}
+    </div>`;
+  }
+
+  /* ---------- Hero ---------- */
+  /* A figure in the stat strip: "350+" gets a unit span, a range ("2 to 3") a quieter "to" between its numbers,
      and "Up to 7" a small "Up to" before the number */
   function figure(v) {
     if (v === 'net') v = NET();
@@ -398,26 +498,94 @@
       .replace(/(\d[\d.,]*) to (?=\$?\d)/g, '$1<span class="fn-to"> to </span>')
       .replace(/\+$/, '<span class="fn-u">+</span>');
   }
-  function stats(d) {
-    return `<dl class="fn-stats" aria-label="${esc(d.eyebrow)} at a glance">${d.stats.map(([v, l]) => `<div class="fn-stat"><dt class="fn-stat-l">${esc(l)}</dt><dd class="fn-stat-v">${figure(v)}</dd></div>`).join('')}</dl>`;
+  function kpis(d) {
+    return `<dl class="fn-kpis" aria-label="${esc(d.eyebrow)} at a glance">${d.stats.map(([v, l]) => `<div class="fn-kpi"><dt>${esc(l)}</dt><dd>${figure(v)}</dd></div>`).join('')}</dl>`;
+  }
+
+  /* The operators in this page's role category, in the order every list uses: live before sample, then Reputation
+     Index, then name. Featured operators are the first three. */
+  const inCat = (cat) => RN.model.ops.filter((o) => o.catKey === cat && !o.hidden)
+    .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0) || String(a.name).localeCompare(String(b.name)));
+  const featured = (cat) => inCat(cat).slice(0, 3);
+
+  // The bench line under a hero visual: faces, the count, and the way in
+  function bench(d, skip) {
+    const all = inCat(d.cat);
+    const faces = all.filter((o) => o.photo && !(skip || []).includes(o.id)).slice(0, 5);
+    return `<a class="fn-bench" href="#${esc(d.browse)}">
+      <span class="fn-bench-faces" aria-hidden="true">${faces.map((o) => RN.ui.avatar(o, 'ava-sm', { decorative: true })).join('')}</span>
+      <span class="fn-bench-t"><b>${esc(RN.fmt.int(all.length))} ${esc(catLabel(d.cat).toLowerCase())} operators</b><span>Every profile is open, no login needed.</span></span>
+      <span class="fn-bench-go" aria-hidden="true">${icon('arrow')}</span>
+    </a>`;
+  }
+  /* Sales and RevOps: faces from the bench, three portraits beyond the featured three (they have their cards below) */
+  function crew(d) {
+    const feat = featured(d.cat).map((o) => o.id);
+    const pool = inCat(d.cat).filter((o) => o.photo);
+    const tiles = pool.filter((o) => !feat.includes(o.id)).slice(0, 3);
+    const pick = tiles.length === 3 ? tiles : pool.slice(0, 3);
+    if (!pick.length) return '';
+    return `<figure class="fn-crew" aria-label="${esc(catLabel(d.cat))} operators on Revenue Nomad">
+      <div class="fn-crew-tiles">${pick.map((o, i) => `<a class="fn-crew-t" href="#op.${esc(o.slug)}" style="--i:${i}">
+        <img src="${esc(o.photo)}" alt="" loading="eager">
+        <span class="fn-crew-cap"><b>${esc(o.name)}</b><span>Fractional ${esc(o.role)}</span></span>
+      </a>`).join('')}</div>
+      ${bench(d, pick.map((o) => o.id))}
+    </figure>`;
+  }
+  /* Marketing: the weighted scorecard from the home services search answers "hold your agencies to a number" */
+  function scoreRows(rows) {
+    const max = Math.max.apply(null, rows.map((r) => r[1])) || 1;
+    return rows.map(([f, w], i) => `<div class="fn-score-r" role="row" style="--i:${i}"><span class="fn-score-f" role="cell">${esc(f)}</span><span class="fn-score-bar" aria-hidden="true"><i class="fn-grow" style="width:${Math.round((w / max) * 100)}%"></i></span><b class="fn-score-w" role="cell">${esc(w)}%</b></div>`).join('');
+  }
+  function scoreHero(d) {
+    const st = d.stories.find((s) => s.some((p) => p && p.table));
+    const rows = st.find((p) => p && p.table).table;
+    const title = st.find((p) => p && p.title).title;
+    return `<figure class="fn-hcard fn-scorecard">
+      <figcaption class="fn-hcard-hd"><span class="label">Weighted scorecard</span><b>${esc(title)}</b></figcaption>
+      <div class="fn-score" role="table" aria-label="Weighted scorecard">
+        <div class="fn-score-hd" role="row"><span class="label" role="columnheader">Factor</span><span class="label" role="columnheader">Weight</span></div>
+        ${scoreRows(rows)}
+      </div>
+      ${bench(d)}
+    </figure>`;
+  }
+  /* Cost hub: monthly retainers by function, each seat a segment on its function's lane, from the rates below */
+  function mix(d) {
+    const lanes = d.rates.groups.map((g) => {
+      const segs = g.rows.filter((r) => Array.isArray(r) && !/^fixed$/i.test(r[2]) && /a month/.test(r[3])).map((r) => dollars(r[3])).filter(Boolean);
+      return { l: g.l, cat: g.cat, segs, lo: Math.min.apply(null, segs.map((s) => s.lo)), hi: Math.max.apply(null, segs.map((s) => s.hi)) };
+    }).filter((x) => x.segs.length);
+    const top = Math.ceil(Math.max.apply(null, lanes.map((x) => x.hi)) / 10000) * 10000;
+    const ticks = [];
+    for (let v = 0; v <= top; v += 10000) ticks.push(v);
+    return `<figure class="fn-hcard fn-mix fn-io" aria-label="Monthly retainers by function, 2026 engagements">
+      <figcaption class="fn-hcard-hd"><span class="label">2026 engagements</span><b>Monthly retainers by function</b></figcaption>
+      <div class="fn-mix-lanes">${lanes.map((x, i) => `<div class="fn-mix-r" style="--k:${catColor(x.cat)};--i:${i}">
+        <span class="fn-mix-l"><i aria-hidden="true"></i>${esc(x.l)}</span>
+        <b class="fn-mix-v">$${esc(RN.fmt.int(x.lo))} to $${esc(RN.fmt.int(x.hi))}</b>
+        <span class="fn-mix-t" aria-hidden="true">${ticks.slice(1, -1).map((v) => `<u style="left:${pct(v, top)}%"></u>`).join('')}${x.segs.map((s, j) => `<i class="fn-grow${s.lo === s.hi ? ' is-pt' : ''}" style="--i:${i * 2 + j};left:${pct(s.lo, top)}%;width:${s.lo === s.hi ? 0 : pct(s.hi - s.lo, top)}%"></i>`).join('')}</span>
+      </div>`).join('')}</div>
+      <div class="fn-mix-axis" aria-hidden="true">${ticks.map((v) => `<span style="left:${pct(v, top)}%">${kfmt(v)}</span>`).join('')}</div>
+      <a class="act fn-hcard-go" href="#fn-rates">Every seat, with hours and rates${icon('arrow')}</a>
+    </figure>`;
   }
   function hero(d) {
+    const aside = d.fn === 'cost' ? mix(d) : d.fn === 'marketing' ? scoreHero(d) : crew(d);
     return PG.hero({
       eyebrow: d.eyebrow,
       h: d.hero.h,
       lede: `<b class="fn-sub">${esc(d.hero.sub)}</b>${esc(RN.fmt.smart(d.hero.lede))}`,
       actions: `<a class="btn btn-lg" href="#${esc(talkTo(d))}">Talk to us${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#${esc(d.browse)}">Browse operators</a>`,
-      aside: stats(d),
+      aside,
+      foot: kpis(d),
     });
   }
 
-  /* Featured operators: the page's role category, by Reputation Index, live profiles before sample ones.
-     Matt picks the featured three (pending); until then the order is the same rule every list uses. */
-  function featured(cat) {
-    return RN.model.ops.filter((o) => o.catKey === cat && !o.hidden)
-      .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0) || String(a.name).localeCompare(String(b.name)))
-      .slice(0, 3);
-  }
+  /* ---------- Who would I get ----------
+     Featured operators: the page's role category, by Reputation Index, live profiles before sample ones. Matt picks
+     the featured three (pending); until then the order is the same rule every list uses. */
   /* The row each page's card spec adds (Site pages, section 2): revenue bands on sales, engagement type on RevOps,
      lean on marketing (demand gen or brand, from the operator's own focus areas; both when they list both). */
   const DEMAND = /demand gen/i;
@@ -434,97 +602,147 @@
     }
     return v ? `<p class="fn-card-row"><span class="label">${esc(l)}</span><span>${esc(v)}</span></p>` : '';
   }
+  // A card without a headline opens with the first sentence of the operator's own bio, so the three cards match
+  const firstLine = (t) => { const s = String(t || '').replace(/\s+/g, ' ').trim(); const m = s.match(/^.{20,}?[.!?](?=\s|$)/); return m ? m[0] : s; };
+  const withLine = (op) => (op.headline || !op.bio ? op : Object.assign({}, op, { headline: firstLine(op.bio) }));
   function who(d) {
     const ops = featured(d.cat);
     const gaps = [['featured operator picks', 'Matt'], ['operator OK needed for each named operator', 'Operator']].concat(d.who.gaps || []);
     return sec('who', true, `${PG.shead('Operators', 'Who would I get', esc(RN.fmt.smart(d.who.lede)))}
       <div class="fn-feat-hd"><h3 class="h4">Featured operators</h3>${gaps.map(([w, o]) => FN.gap(w, o)).join('')}</div>
       <p class="fn-feat-note small muted">Shown by Reputation Index until the featured picks are confirmed. Every profile is open, no login needed.</p>
-      ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(op, { meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
-      <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(RN.fields.catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>`);
+      ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(withLine(op), { meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
+      <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>`);
   }
 
-  /* Tables. t: { cols, rows | groups, num (indexes of right-aligned columns), blankFirst, label } */
+  /* Plain tables (the cost hub's terms and the pending Rate Index). t: { cols, rows, num, label } */
   function table(t, o) {
     o = o || {};
     const num = t.num || [];
     const n = t.cols.length;
-    const th = (c, i) => `<th scope="col"${num.includes(i) ? ' class="r"' : ''}>${i === 0 && t.blankFirst ? `<span class="sr-only">${esc(c)}</span>` : esc(c)}</th>`;
+    const th = (c, i) => `<th scope="col"${num.includes(i) ? ' class="r"' : ''}>${esc(c)}</th>`;
     const row = (r) => {
       if (r.gap) return `<tr><th scope="row">${esc(r.seat)}</th><td colspan="${n - 1}" class="fn-td-gap">${FN.gap(r.gap[0], r.gap[1])}</td></tr>`;
       return `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${rich(c)}</th>` : `<td${num.includes(i) ? ' class="r"' : ''}>${rich(c)}</td>`)).join('')}</tr>`;
     };
-    const body = t.groups
-      ? t.groups.map((g) => `<tbody class="fn-grp" style="--k:${RN.fields.catColor(g.cat)}"><tr class="fn-grp-h"><th colspan="${n}" scope="rowgroup"><i aria-hidden="true"></i>${esc(g.l)}</th></tr>${g.rows.map(row).join('')}</tbody>`).join('')
-      : `<tbody>${t.rows.map(row).join('')}</tbody>`;
-    return `<div class="fn-tblw${o.className ? ' ' + o.className : ''}"><table class="fn-tbl${o.wide ? ' fn-tbl-wide' : ''}${o.cost ? ' fn-tbl-cost' : ''}"${o.label ? ` aria-label="${esc(o.label)}"` : ''}>
-      <thead><tr>${t.cols.map(th).join('')}</tr></thead>${body}</table></div>${o.wide ? `<p class="fn-tbl-hint tiny" aria-hidden="true">${icon('arrow')}Scroll sideways for the full table</p>` : ''}`;
+    return `<div class="fn-tblw"><table class="fn-tbl"${o.label ? ` aria-label="${esc(o.label)}"` : ''}>
+      <thead><tr>${t.cols.map(th).join('')}</tr></thead><tbody>${t.rows.map(row).join('')}</tbody></table></div>`;
   }
   function cost(d) {
     return sec('cost', false, `${PG.shead('Cost', 'What it costs', esc(d.cost.lede))}
-      ${table(d.cost, { wide: true, cost: true, label: d.cost.lede.replace(/\.$/, '') })}
+      ${chartTable(d.cost, { cat: d.cat, label: d.cost.lede.replace(/\.$/, '') })}
       ${paras(d.cost.after)}`);
   }
 
-  /* What happens first: the When / What happens / What you receive table as a timeline */
+  /* ---------- What happens first: the When / What happens / What you receive table as a 90-day Gantt ----------
+     Two zones on one lane: matching (day 1 to the contract) and the first 90 days in the seat. A one-day step is a
+     milestone; a span is a bar; what you receive sits under its bar. Each row keeps its words in reading order. */
+  const MZ = 24; // the matching zone's share of the lane, in percent
+  function span(w) {
+    let m;
+    if (/^Day 1$/i.test(w)) return { z: 'm', a: 1, b: 1 };
+    if ((m = w.match(/(\d+)\s*hours/i))) return { z: 'm', a: +m[1] / 24, b: +m[1] / 24 };
+    if ((m = w.match(/^Weeks? (\d+) to (\d+)/i))) return { z: 'm', a: (m[1] - 1) * 7, b: m[2] * 7 };
+    if ((m = w.match(/^Days (\d+) to (\d+)/i))) return { z: 's', a: m[1] - 1, b: +m[2] };
+    return null;
+  }
+  function gantt(d) {
+    const rows = d.first.rows.map((r) => ({ r, s: span(r[0]) }));
+    const md = Math.max(14, ...rows.filter((x) => x.s && x.s.z === 'm').map((x) => x.s.b));
+    const pos = (z, v) => +(z === 'm' ? (v / md) * (MZ - 3) : MZ + (v / 90) * (100 - MZ)).toFixed(2);
+    const grid = [[pos('m', md), ''], [pos('s', 30), ''], [pos('s', 60), ''], [pos('s', 90), '']];
+    const lines = `<span class="fn-g-lines" aria-hidden="true">${grid.map(([x]) => `<u style="left:${x}%"></u>`).join('')}<u class="fn-g-split" style="left:${MZ - 1.5}%"></u></span>`;
+    const axis = `<div class="fn-g-r fn-g-hd" aria-hidden="true"><span class="fn-g-when">When</span><span class="fn-g-what">What happens</span>
+      <span class="fn-g-lane fn-g-axis">${lines}
+        <span class="fn-g-zone" style="left:0;width:${MZ - 3}%">Matching</span><span class="fn-g-zone is-seat" style="left:${MZ}%;width:${100 - MZ}%">In the seat</span>
+        <i style="left:${pos('m', md)}%">Week ${md / 7}</i>${[30, 60, 90].map((v) => `<i style="left:${pos('s', v)}%">Day ${v}</i>`).join('')}
+      </span></div>`;
+    const items = rows.map(({ r, s }, i) => {
+      const [w, a, b] = r;
+      let mark = '', out = '';
+      if (s) {
+        const x0 = pos(s.z, s.a), x1 = pos(s.z, s.b), pt = s.a === s.b;
+        mark = pt ? `<i class="fn-g-mile${s.z === 'm' ? ' is-m' : ''}" style="left:${x0}%;--i:${i}"></i>`
+          : `<i class="fn-grow fn-g-bar${s.z === 'm' ? ' is-m' : ''}" style="left:${x0}%;width:${(x1 - x0).toFixed(2)}%;--i:${i}"></i>`;
+        // Under its bar: from the bar's start when the bar sits left of centre, else ending where the bar ends
+        out = x0 < 50 ? `margin-left:${x0}%;max-width:${(100 - x0).toFixed(2)}%` : `margin-left:auto;margin-right:${(100 - x1).toFixed(2)}%;max-width:${Math.max(x1, 46).toFixed(2)}%;text-align:right;justify-content:flex-end`;
+      }
+      return `<li class="fn-g-r">
+        <span class="fn-g-when">${esc(w)}</span>
+        <span class="fn-g-what"><span class="fn-tl-l">What happens</span>${rich(a)}</span>
+        <span class="fn-g-lane">${lines}${mark}<span class="fn-g-out" style="${out}"><span class="fn-tl-l">What you receive</span>${icon('check')}<span>${rich(b)}</span></span></span>
+      </li>`;
+    }).join('');
+    return `<div class="fn-gantt fn-io" style="--mz:${MZ - 3}%">${axis}<ol class="fn-g-rows" aria-label="What happens first">${items}</ol></div>`;
+  }
+  // RevOps: the red, yellow and green scorecard its closing line describes
+  function rag(g) {
+    const L = { r: 'Red', y: 'Yellow', g: 'Green' };
+    return `<figure class="fn-rag fn-io">
+      <figcaption class="fn-rag-hd"><b>${esc(g.h)}</b>${RN.ui.illus('Illustrative', 'The areas come from the 90 days above; the colours show the format, not a client result.')}</figcaption>
+      <div class="fn-rag-key" aria-hidden="true">${Object.keys(L).map((k) => `<span><i class="is-${k}"></i>${L[k]}</span>`).join('')}</div>
+      <ul class="fn-rag-rows">${g.rows.map(([l, k], i) => `<li style="--i:${i}"><span>${esc(l)}</span><span class="fn-rag-dots" role="img" aria-label="${L[k]}">${Object.keys(L).map((x) => `<i class="is-${x}${x === k ? ' on' : ''}"></i>`).join('')}</span></li>`).join('')}</ul>
+      <div class="fn-rag-out">${g.out.map((t) => `<span>${icon('check')}${esc(t)}</span>`).join('')}<b>${icon('clock')}${esc(g.by)}</b></div>
+    </figure>`;
+  }
   function first(d) {
-    const cols = ['When', 'What happens', 'What you receive'];
+    const closing = d.first.closing ? `<p class="fn-lead">${rich(d.first.closing)}</p>` : '';
     return sec('first', true, `${PG.shead('First 90 days', 'What happens first')}
-      <div class="fn-tl-hd" aria-hidden="true">${cols.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
-      <ol class="fn-tl" aria-label="What happens first">${d.first.rows.map(([w, a, b]) => `<li>
-        <span class="fn-tl-w">${esc(w)}</span>
-        <span class="fn-tl-a"><span class="fn-tl-l">${cols[1]}</span>${rich(a)}</span>
-        <span class="fn-tl-b"><span class="fn-tl-l">${cols[2]}</span>${rich(b)}</span>
-      </li>`).join('')}</ol>
-      ${d.first.closing ? `<p class="fn-lead">${rich(d.first.closing)}</p>` : ''}`);
+      ${gantt(d)}
+      ${d.first.rag ? `<div class="fn-first-foot">${closing}${rag(d.first.rag)}</div>` : closing}`);
   }
 
-  /* Stories: each paragraph a card, its inline labels split out; the marketing scorecard as a weighted list */
-  function scorecard(rows) {
-    const max = Math.max.apply(null, rows.map((r) => r[1])) || 1;
-    return `<div class="fn-score" role="table" aria-label="Weighted scorecard">
-      <div class="fn-score-hd" role="row"><span class="label" role="columnheader">Factor</span><span class="label" role="columnheader">Weight</span></div>
-      ${rows.map(([f, w]) => `<div class="fn-score-r" role="row"><span class="fn-score-f" role="cell">${esc(f)}</span><span class="fn-score-bar" aria-hidden="true"><i style="--w:${Math.round((w / max) * 100)}%"></i></span><b class="fn-score-w num" role="cell">${esc(w)}%</b></div>`).join('')}
-    </div>`;
+  /* ---------- Who like me has done this ----------
+     Each story opens on a small picture of its own figures; a part that is only pending chips is a reviewer note */
+  function vignette(v) {
+    if (!v) return '';
+    let inner = '';
+    if (v.k === 'bars') inner = bars(v.rows, { l: v.l || v.u });
+    else if (v.k === 'people' || v.k === 'deals') {
+      inner = `<div class="fn-vg-dots fn-io${v.k === 'deals' ? ' is-deals' : ''}" role="img" aria-label="${esc(v.l)}">${Array.from({ length: v.n }, (_, i) => `<i class="${i < v.on ? 'on' : ''}" style="--i:${i}">${v.k === 'deals' ? esc(v.v) : icon('user')}</i>`).join('')}</div><span class="fn-vg-cap">${esc(v.l)}</span>`;
+    } else if (v.k === 'big') inner = `<span class="fn-vg-big"><b>${figure(v.v)}</b><span>${esc(v.u)}</span></span>${v.n ? `<span class="fn-vg-dots fn-io" aria-hidden="true">${Array.from({ length: v.n }, (_, i) => `<i class="on" style="--i:${i}">${icon('user')}</i>`).join('')}</span>` : ''}${v.l ? `<span class="fn-vg-cap">${esc(v.l)}</span>` : ''}`;
+    else if (v.k === 'jobs') inner = `<span class="fn-vg-jobs" role="img" aria-label="${esc(v.rows.join(', '))}">${v.rows.map((t, i) => `<i style="--i:${i}">${esc(t)}</i>`).join('')}</span>`;
+    return `<div class="fn-vg fn-vg-${v.k}">${inner}</div>`;
   }
-  function story(parts, wide) {
+  function story(parts, v) {
     const part = (p) => {
       if (p.title) return `<h3 class="fn-story-t">${rich(p.title)}</h3>`;
-      if (p.table) return scorecard(p.table);
       const l = p[0], t = p[1];
-      return `<div class="fn-story-p">${l ? `<span class="fn-story-l">${esc(l)}</span>` : ''}<p>${rich(t)}</p></div>`;
+      return `<div class="fn-story-p"${onlyGaps(t) ? ' data-proto' : ''}>${l ? `<span class="fn-story-l">${esc(l)}</span>` : ''}<p>${rich(t)}</p></div>`;
     };
-    // Full width keeps the document's order in the markup (the reading order when stacked and for screen readers);
-    // CSS puts the narrative in the first column with the scorecard beside it, or gives each part its own column
-    if (wide) {
-      // Split: the title spans both columns and counts as a row. Row: one column per part, the title above them all
-      const sc = parts.some((p) => p && p.table);
-      const n = parts.filter((p) => !(p && (p.table || (!sc && p.title)))).length;
-      return `<article class="fn-story ${sc ? 'fn-story-split' : 'fn-story-row'}" style="--n:${n}">${parts.map(part).join('')}</article>`;
-    }
-    return `<article class="fn-story">${parts.map(part).join('')}</article>`;
+    return `<article class="fn-story">${vignette(v)}<div class="fn-story-b">${parts.filter((p) => p && !p.table).map(part).join('')}</div></article>`;
   }
+  /* Three stories: the first runs tall on the left, the other two sit beside it with their picture to one side, so the
+     column heights meet. Two stories: each runs full width, picture left and its parts in two columns. */
   function stories(d) {
     const n = d.stories.length;
-    // The marketing scorecard makes one story far taller than the other, so those stories run full width in two
-    // columns (the scorecard beside the narrative) instead of leaving a void beside a short card
-    const wide = d.stories.some((st) => st.some((p) => p && p.table));
     return sec('proof', false, `${PG.shead('Proof', 'Who like me has done this', d.storiesLede ? esc(RN.fmt.smart(d.storiesLede)) : '')}
-      <div class="grid ${wide ? 'fn-stories-wide' : `g-${n > 2 ? 3 : 2}`} fn-stories">${d.stories.map((st) => story(st, wide)).join('')}</div>
+      <div class="fn-stories is-${n > 2 ? 3 : n}">${d.stories.map((st, i) => story(st, (d.viz || [])[i])).join('')}</div>
       ${FN.logoStrip({ network: true, pending: true })}`);
   }
 
-  /* How we vet: the four bullets map in order to C, O, R, E */
+  /* ---------- How we vet: the four bullets map in order to C, O, R, E (a night band) ---------- */
+  const CORE_IC = ['message', 'shield', 'target', 'compass'];
   function vet(d) {
     const dims = RN.fields.coreDims.options;
-    return sec('vet', true, `${PG.shead('Vetting', 'How we vet', esc(d.vet.lead))}
-      <ul class="fn-core" aria-label="CORE, the four scores">${d.vet.core.map((t, i) => `<li>
-        <span class="fn-core-l" aria-hidden="true">${esc(dims[i].v)}</span>
+    const q = featured(d.cat).find((o) => o.headline && o.photo);
+    const quote = q ? `<figure class="fn-voice">
+        <span class="fn-voice-ic" aria-hidden="true">${icon('quote')}</span>
+        <blockquote>${esc(RN.fmt.smart(q.headline))}</blockquote>
+        <figcaption><img class="ava ava-md" src="${esc(q.photo)}" alt=""><span><a href="#op.${esc(q.slug)}">${esc(q.name)}</a><span>Fractional ${esc(q.role)}</span></span></figcaption>
+      </figure>` : '';
+    return `<section class="section night fn-sec fn-vet"><div class="wrap">
+      ${PG.shead('Vetting', 'How we vet', esc(d.vet.lead))}
+      <ul class="fn-core" aria-label="CORE, the four scores">${d.vet.core.map((t, i) => `<li style="--i:${i}">
+        <span class="fn-core-ic" aria-hidden="true">${icon(CORE_IC[i] || 'check')}<b>${esc(dims[i].v)}</b></span>
         <span class="fn-core-n">${esc(dims[i].l)}</span>
         <p>${rich(t)}</p>
       </li>`).join('')}</ul>
-      ${paras(d.vet.paras, 'fn-vet-p')}
-      <a class="act fn-vet-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a>`);
+      <div class="fn-vet-foot${quote ? '' : ' is-solo'}">
+        <div>${paras(d.vet.paras, 'fn-vet-p')}<a class="act fn-vet-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a></div>
+        ${quote}
+      </div>
+    </div></section>`;
   }
 
   function faq(d) {
@@ -567,32 +785,65 @@
   /* ---------- Cost hub pieces ---------- */
   function rates(d) {
     const ri = { cols: ['Seat', 'Median rate, typical hours and typical monthly'], rows: d.riSeats.map((s) => ({ seat: s, gap: ['2027 survey figure', 'Survey'] })) };
-    return sec('rates', true, `${PG.shead('2026 engagements', 'Rates by seat', esc(d.hero.lede.split('. ')[0] + '.'))}
-      ${table(d.rates, { wide: true, cost: true, label: 'Rates by seat, 2026 engagements' })}
+    return `<section class="section fn-sec fn-rates fn-alt" id="fn-rates"><div class="wrap">${PG.shead('2026 engagements', 'Rates by seat', esc(d.hero.lede.split('. ')[0] + '.'))}
+      ${chartTable(d.rates, { label: 'Rates by seat, 2026 engagements', monthly: 'Monthly' })}
       <div class="fn-ri">
-        <div class="fn-ri-l">
-          <div class="fn-ri-hd"><h3 class="h4">Rate Index by seat</h3>${FN.gap('2027 survey figure', 'Survey')}</div>
-          ${table(ri, { label: 'Rate Index by seat' })}
-        </div>
+        <p class="pg-p fn-outside">${rich(d.outside)}</p>
         <aside class="fn-ri-r" aria-label="Until the survey lands">
           <span class="fn-ri-ic" aria-hidden="true">${icon('chart')}</span>
-          <h3 class="h4">Until the survey lands</h3>
+          <div><h3 class="h4">Until the survey lands</h3>
           <p class="small">Results from our State of Fractional GTM survey land in early December 2026, and these six seats update then. The Rate Index has hourly medians by role category in the meantime, updated quarterly.</p>
-          <a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a>
+          <a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a></div>
         </aside>
       </div>
-      <p class="pg-p fn-outside">${rich(d.outside)}</p>`);
+      <div class="fn-ri-l" data-proto>
+        <div class="fn-ri-hd"><h3 class="h4">Rate Index by seat</h3>${FN.gap('2027 survey figure', 'Survey')}</div>
+        ${table(ri, { label: 'Rate Index by seat' })}
+      </div>
+    </div></section>`;
   }
   function moves(d) {
+    const v = d.moves.viz || [];
     return sec('moves', false, `${PG.shead('Price drivers', 'What moves the price')}
-      <ul class="fn-drivers">${d.moves.items.map((t) => `<li>${rich(t)}</li>`).join('')}</ul>
+      <ol class="fn-drivers">${d.moves.items.map((t, i) => `<li><span class="fn-drv-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><p>${rich(t)}</p>${vignette(v[i])}</li>`).join('')}</ol>
       <p class="fn-lead">${rich(d.moves.closing)}</p>`);
   }
+  /* Engagement models: one card each, with a strip that draws how the hours fall over time */
+  const MODEL_ART = [
+    '<i></i><i></i><i></i><i></i><i></i><i></i>',
+    '<i class="is-one"></i><em></em>',
+    '<i class="is-diag"></i><i></i><i></i><i></i><i></i>',
+  ];
   function models(d) {
-    return sec('models', true, `${PG.shead('Models', 'Engagement models')}${table(d.models, { wide: true, label: 'Engagement models' })}${paras(d.models.after)}`);
+    const c = d.models.cols;
+    return sec('models', true, `${PG.shead('Models', 'Engagement models')}
+      <div class="grid g-3 fn-models">${d.models.rows.map((r, i) => `<article class="fn-model">
+        <span class="fn-model-art fn-io" aria-hidden="true">${MODEL_ART[i] || ''}</span>
+        <h3 class="fn-model-t">${esc(r[0])}</h3>
+        <p class="fn-model-how"><span class="sr-only">${esc(c[1])}: </span>${rich(r[1])}</p>
+        <dl><div><dt>${esc(c[2])}</dt><dd>${rich(r[2])}</dd></div><div><dt>${esc(c[3])}</dt><dd>${rich(r[3])}</dd></div></dl>
+      </article>`).join('')}</div>
+      ${paras(d.models.after)}`);
   }
+  /* Total cost: one card per seat, full-time against fractional, with paired bars where both sides are dollar figures */
   function total(d) {
-    return sec('total', false, `${PG.shead('Comparison', 'Total cost against a full-time hire')}${table(d.total, { wide: true, label: 'Total cost against a full-time hire' })}${paras(d.total.after)}`);
+    const c = d.total.cols, v = d.total.viz || [];
+    return `<section class="section night fn-sec fn-total"><div class="wrap">${PG.shead('Comparison', 'Total cost against a full-time hire')}
+      <div class="grid g-2 fn-vs">${d.total.rows.map((r, i) => {
+        const z = v[i];
+        const max = z ? Math.max(z[0][1], z[1][1]) : 1;
+        const side = (k, label, text, val) => `<div class="fn-vs-s is-${k}">
+          <span class="fn-vs-l">${esc(label)}</span>
+          ${val ? `<span class="fn-vs-bar fn-io" aria-hidden="true"><i class="fn-grow" style="width:${pct(val[0], max)}%"></i>${val[1] > val[0] ? `<i class="fn-grow fn-vs-x" style="left:${pct(val[0], max)}%;width:${pct(val[1] - val[0], max)}%"></i>` : ''}</span>` : ''}
+          <p>${rich(text)}</p>
+        </div>`;
+        return `<article class="fn-vs-c${z ? ' has-bars' : ''}">
+          <h3 class="fn-vs-t">${esc(r[0])}</h3>
+          ${side('ft', c[1], r[1], z && z[0])}${side('fr', c[2], r[2], z && z[1])}
+        </article>`;
+      }).join('')}</div>
+      ${paras(d.total.after)}
+    </div></section>`;
   }
   function terms(d) {
     return sec('terms', true, `${PG.shead('Terms', 'How an engagement runs')}${table(d.terms, { label: 'Terms' })}${FN.logoStrip({ network: true, pending: true })}`);
@@ -602,17 +853,25 @@
   const homeView = (d) => `<div class="fn-page" data-fn="${esc(d.fn)}">${hero(d)}${who(d)}${cost(d)}${first(d)}${stories(d)}${vet(d)}${faq(d)}${formBlock(d)}</div>`;
   const costView = (d) => `<div class="fn-page fn-page-cost" data-fn="${esc(d.fn)}">${hero(d)}${rates(d)}${moves(d)}${models(d)}${total(d)}${terms(d)}${faq(d)}${formBlock(d)}</div>`;
 
-  /* A wide table scrolls sideways inside its column when the column is narrower than the table. The hint under it
-     shows only then: a ResizeObserver marks each overflowing wrapper with .is-scroll. */
-  let tblObs = null;
+  /* Motion: charts below the fold grow in as they scroll into view. Armed on the first scroll (as on home), so a page
+     that is never scrolled, a print or a full-page capture shows every chart drawn. */
+  let offs = [];
   function mount(root) {
     unmount();
-    const wraps = RN.$$('.fn-tblw', root);
-    const mark = () => wraps.forEach((w) => w.classList.toggle('is-scroll', w.scrollWidth > w.clientWidth + 1));
-    mark();
-    if (typeof ResizeObserver === 'function') { tblObs = new ResizeObserver(mark); wraps.forEach((w) => tblObs.observe(w)); }
+    if (!('IntersectionObserver' in window) || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    let io = null, armed = false;
+    const arm = () => {
+      if (armed || !document.body.contains(root)) return;
+      armed = true;
+      const fold = window.innerHeight;
+      io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); } }), { threshold: 0.15 });
+      RN.$$('.fn-io', root).forEach((el) => { if (el.getBoundingClientRect().top > fold) { el.classList.add('fn-wait'); io.observe(el); } });
+    };
+    const evs = ['scroll', 'wheel', 'touchmove', 'keydown'];
+    evs.forEach((t) => window.addEventListener(t, arm, { passive: true }));
+    offs.push(() => { evs.forEach((t) => window.removeEventListener(t, arm)); if (io) io.disconnect(); });
   }
-  function unmount() { if (tblObs) { tblObs.disconnect(); tblObs = null; } }
+  function unmount() { offs.forEach((f) => f()); offs = []; }
 
   [SALES, REVOPS, MARKETING].forEach((d) => {
     RN.view(d.name, { route: d.name, nav: '', title: () => d.title, render: () => homeView(d), mount, unmount });
