@@ -8,7 +8,9 @@
    Type: page heads use .h1 on paper (.phead), sections .h2, one Newsreader italic accent per page (the H1).
    The Talk to us flow is a form, so it has no serif accent.
    Pricing (founder decision D1, Sep 25, 2026): company pages (#about, #how, #results, #talk) never mention a fee,
-   margin or split; companies pay no fees and pay the operator's listed rate. Only the operator pages (#operators,
+   margin or split; companies pay no fees and pay the operator's listed rate. Founder, Oct 11, 2026: there is no platform
+   fee for companies, and hiring an operator full time carries a conversion fee of 20% of annual salary, stated on the
+   function homes' FAQ and the cost hub's terms. Only the operator pages (#operators,
    #levels) explain the fee: a percentage of the operator's billed earnings each month (proposed: 25%).
    No founder callouts (founder decision, Sep 25, 2026): Matt Lopez's operator profile follows the same rules as every
    operator. The About page keeps the company story (founder note and photo).
@@ -16,9 +18,7 @@
    Loops wired here: Talk to us logs a `search` (+ impressions for the suggested operators) for Admin demand
    and Studio "Why you appeared", emails the team and the client, and hands its answers to the intro sheet.
    A zero-result "Tell us what you need" in Browse (search event with meta.tellUs, or seen.talkPrefill)
-   carries its query and revenue filter into the flow.
-   The questionnaire branches by function (RN.fields.talkBranches) and is exported as a one-screen form for the
-   function homes and the cost hub: RN.talk.embed({ fn: 'sales' | 'revops' | 'marketing' | 'cost' }). */
+   carries its query and company-size filters into the flow. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -28,7 +28,7 @@
   const PHONE = '+1 203-200-0482';
   const EMAIL = 'hello@revenuenomad.com';
   const TEAM = 'Revenue Nomad team';
-  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;   // the same shape the intro sheet accepts
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   const AVAIL_RANK = { available_now: 0, available_2_weeks: 1, available_2_plus_weeks: 2 };
   // Operator fee, proposed: a share of the operator's billed earnings. Shown on operator pages only (#operators).
   const FEE_PCT = Math.round(RN.model.FEE * 100);
@@ -88,7 +88,7 @@
       <div class="pg-band-side"><p>${esc(o.text)}</p><div class="pg-actions">${o.actions}</div></div>
     </div></section>`;
   }
-  const talkActions = () => `<a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pg-book">${icon('calendar')}Book your discovery call</button>`;
+  const talkActions = () => `<a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pg-book">${icon('calendar')}Book a call</button>`;
 
   PG.phone = function (o) {
     o = o || {};
@@ -291,7 +291,7 @@
       </div>
     </section>
 
-    ${band({ h: 'Now you know us. Tell us about you.', text: 'Five short questions. A written role profile and 2 to 3 vetted operators, often within 48 hours.', actions: talkActions() })}`;
+    ${band({ h: 'Now you know us. Tell us about you.', text: 'Four questions. A real reply in one business day.', actions: talkActions() })}`;
   }
 
   /* =====================================================================
@@ -337,7 +337,7 @@
         ${col('o', 'For operators', 'Get found, and get value without an intro.', operators, `<a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#operators">Why join</a>`)}
       </div>
     </section>
-    ${band({ h: 'Rather talk it through with a person?', text: 'Five quick questions, then a written role profile and 2 to 3 vetted operators, often within 48 hours.', actions: talkActions() })}`;
+    ${band({ h: 'Rather talk it through with a person?', text: 'Four quick questions and your email, then a real reply from a person within one business day.', actions: talkActions() })}`;
   }
 
   /* =====================================================================
@@ -437,102 +437,43 @@
   }
 
   /* =====================================================================
-     TALK TO US: the questionnaire that branches by function (Site pages form blocks, Inbound plan)
-     Five screens on #talk: need -> company (type and revenue band) -> seat -> timing -> contact. The need sets
-     the branch (sales, revops, marketing or generic, RN.fields.talkBranches) and the branch sets the picklists,
-     and the problem prompt. The same questions sit on the function homes and the
-     cost hub as one-screen forms (RN.talk.embed), which send through the same pipeline and land on this done
-     screen. Companies are never shown a fee anywhere in the flow.
+     TALK TO US: short auto-advancing flow on the standard picklists
      ===================================================================== */
-  const BR = RN.fields.talkBranches;
   const STEPS = [
-    { key: 'need', q: 'What do you need help with?', hint: 'Pick the closest. We match it to the role categories that solve it.' },
-    // One screen, two chip rows: company type, then revenue band. It advances once both are picked.
-    { key: 'company', q: 'Tell us about the company', rows: ['companyType', 'revenueBand'] },
-    { key: 'seat', q: 'Which seat?', hint: 'Pick the level you have in mind. Not sure is a fine answer.' },
-    { key: 'timing', q: 'When do you need them?', hint: 'This month matches operators who can start now or in 2 weeks.' },
+    { key: 'need', q: 'What do you need help with?', cols: 2, hint: 'Pick the closest. We match it to the role categories that solve it.' },
+    // Company size is one screen with two chip rows: revenue, then headcount. It advances once both are picked.
+    { key: 'size', q: 'How big is the business today?', rows: [{ key: 'companyRevenue', cols: 3 }, { key: 'companyEmployees', cols: 3 }] },
+    { key: 'startBy', q: 'When do you need them to start?', cols: 3, hint: 'We match this to each operator’s availability.' },
     { key: 'contact', q: 'Last one. Where should we reply?' },
   ];
-  // The answer keys a step sets (one for a single chip row, two for the company step)
-  const stepKeys = (s) => (s.rows ? s.rows.slice() : [s.key]);
-  const steps = () => STEPS;
-  const TKEY = 'rn-pg-talk-v4';
-  const PROBLEM_MAX = 600;
-  /* fn: the page an embedded form was sent from (sales, revops, marketing, cost), null on #talk.
-     ans: need, fn (the cost hub's Function pick), companyType, revenueBand, seat, timing. */
-  const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, fn: null, name: '', email: '', company: '', title: '', problem: '', err: '', missing: [], focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, revHint: '', bandFrom: '', usedSearch: null });
-  let T = (function () {
-    try {
-      const s = JSON.parse(window.sessionStorage.getItem(TKEY) || 'null');
-      // A stale or edited entry (an unknown page, need or step) starts a fresh request instead of breaking the screen
-      const ok = s && s.ans && typeof s.ans === 'object'
-        && (!s.fn || s.fn === 'cost' || (BR[s.fn] && s.fn !== 'generic'))
-        && (!s.ans.need || RN.fields.need.options.some((o) => o.v === s.ans.need))
-        && (s.step == null || Number.isFinite(+s.step));
-      if (ok) return Object.assign(fresh(), s);
-    } catch (e) { /* ignore */ }
-    return fresh();
-  })();
+  // The answer keys a step sets (one for a single chip row, two for the size step)
+  const stepKeys = (s) => (s.rows ? s.rows.map((r) => r.key) : [s.key]);
+  const TKEY = 'rn-pg-talk-v3';
+  const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, name: '', email: '', company: '', title: '', err: '', focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, note: '', usedSearch: null });
+  let T = (function () { try { const s = JSON.parse(window.sessionStorage.getItem(TKEY) || 'null'); if (s && s.ans) return Object.assign(fresh(), s); } catch (e) { /* ignore */ } return fresh(); })();
   function save() { try { window.sessionStorage.setItem(TKEY, JSON.stringify(T)); } catch (e) { /* in memory only */ } }
   let advTimer = null;
 
-  /* ---------- Branch helpers ----------
-     The branch a request runs on: from the need on #talk, from the page on an embedded form. The cost hub's
-     Function row only changes the seat list and the role categories matched. */
-  const branchOf = (need) => RN.fields.talkBranchFor(need);
-  const branch = () => (T.fn && T.fn !== 'cost' ? T.fn : T.fn === 'cost' ? 'generic' : T.ans.need ? branchOf(T.ans.need) : '');
-  // The function behind a request: the branch, or the cost hub's Function pick (empty for a generic need)
-  const fnOf = () => { const b = branch(); return b && b !== 'generic' ? b : BR[T.ans.fn] ? T.ans.fn : ''; };
-  // Registry key for an answer key, so RN.w.control and RN.w.label render the branch's list
-  const FIXED_KEYS = { need: 'need', timing: 'talkTiming', fn: 'talkFunction' };
-  function keyFor(k) {
-    if (k === 'timing') return T.fn === 'cost' ? 'talkTimingCost' : 'talkTiming';
-    if (FIXED_KEYS[k]) return FIXED_KEYS[k];
-    const b = branch() || 'generic';
-    return k === 'seat' ? BR[fnOf() || b].seat : BR[b][k];
-  }
-  const catsFor = () => { const f = fnOf(); return f ? BR[f].cats.slice() : (RN.fields.needCats[T.ans.need] || []).slice(); };
-  // Tile columns: 3 for three or five options (3 + 2), 2 for four, so no row ends on a lone tile
-  const colsFor = (n) => (n === 4 || n < 3 ? 2 : 3);
-  const needErr = (missing) => {
-    const words = { fn: 'the function', companyType: 'a company type', revenueBand: 'a revenue band', seat: 'the seat', timing: 'the timing', problem: 'the problem in your words', name: 'your name', email: 'a valid work email' };
-    const list = missing.map((k) => words[k]);
-    return `Add ${list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0]} so we can reply.`;
-  };
-  const trim = (v) => String(v || '').trim();
-  /* What the client gets back (RN.fields.talkDeliver), in the words of the page they came from: the cost hub prices
-     the hours, RevOps scopes, marketing scores up to 7 profiles, sales and the generic branch write a role profile. */
-  const deliverFor = (k) => RN.fields.talkDeliver[k] || RN.fields.talkDeliver.generic;
-  const nowKey = () => (T.fn === 'cost' ? 'cost' : branch() || 'generic');
-  const promiseLine = (k) => { const d = deliverFor(k); return `${d.charAt(0).toUpperCase() + d.slice(1)}, often within 48 hours. No sales sequence, and no fees for companies.`; };
-  const sentToast = () => `Sent. You will get ${deliverFor(nowKey())}, often within 48 hours.`;
-  // The same work-email rule as an intro request (RN.intro.isPersonalEmail), so one address works on both
-  const personalEmail = (e) => !!(RN.intro && typeof RN.intro.isPersonalEmail === 'function' && RN.intro.isPersonalEmail(e));
-  const WORK_EMAIL_ERR = 'Use your work email, so we know which company we are matching for.';
-
-  /* ---------- Matching ----------
-     The Browse filters the answers stand for. One source for the live count, the done screen's "See all N in
-     Browse" and the logged search, so the number the client watches is the number they get. Timing: This month
-     wants operators free now or in 2 weeks, the other two take everyone. Revenue band: every operator range the
-     band overlaps (RN.fields.talkBandRanges). */
-  const availFor = (timing) => (RN.fields.talkTimingAvail[timing] || null);
-  const startByFor = (timing) => RN.fields.talkTimingStart[timing] || 'available_2_plus_weeks';
-  // A band stands in for an operator revenue range only where it maps to exactly one (every one of those ranges contains
-  // the band, e.g. $75M+ -> $50M+). A band that spans several ranges is matched as a set and never stored as one range.
-  const soleRange = (band) => { const r = RN.fields.talkBandRanges[band] || []; return r.length === 1 ? r[0] : ''; };
+  // A signed-in client's company size comes from their company profile, so they skip the size step
+  const steps = () => (persona() === 'buyer' ? STEPS.filter((s) => s.key !== 'size') : STEPS);
+  const needCats = (need) => (RN.fields.needCats[need] || []).slice();
+  // Operators available by the start date: "as soon as possible" wants operators free now, "2 weeks" also takes
+  // those free in 2 weeks, "2+ weeks" takes everyone. Same order the done screen ranks on (AVAIL_RANK).
+  const availBy = (startBy) => (AVAIL_RANK[startBy] == null ? [] : Object.keys(AVAIL_RANK).filter((k) => AVAIL_RANK[k] <= AVAIL_RANK[startBy]));
+  /* The Browse filters the answers stand for. One source for the live count, the done screen's
+     "See all N in Browse" and the logged search, so the number the client watches is the number they get. */
   function matchFilters(ans) {
     const filters = {};
-    const cats = catsFor();
+    const cats = needCats(ans.need);
     if (cats.length) filters.roleCategories = cats;
-    const ranges = RN.fields.talkBandRanges[ans.revenueBand];
-    if (ranges) filters.revenueRange = ranges.slice();
-    const av = availFor(ans.timing);
-    if (av) filters.availability = av.slice();
+    if (ans.companyRevenue) filters.revenueRange = [ans.companyRevenue];
+    if (ans.companyEmployees) filters.employeeRange = [ans.companyEmployees];
+    const av = availBy(ans.startBy);
+    if (av.length && av.length < Object.keys(AVAIL_RANK).length) filters.availability = av;
     return filters;
   }
   const liveCount = () => RN.model.search({ filters: matchFilters(T.ans) }).length;
-  const ANS_KEYS = ['need', 'fn', 'companyType', 'revenueBand', 'seat', 'timing'];
-  const answered = () => ANS_KEYS.some((k) => T.ans[k]);
+  const answered = () => ['need', 'companyRevenue', 'companyEmployees', 'startBy'].some((k) => T.ans[k]);
   function liveText(n) {
     if (!answered()) return `<b class="num" data-n="${n}">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'} on the network`;
     return `<b class="num" data-n="${n}">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator matches' : 'operators match'} so far`;
@@ -566,69 +507,44 @@
     nb.textContent = RN.fmt.int(from);
     liveRaf = requestAnimationFrame(tick);
   }
-  // The answers as a match brief (RN.model.fit). Revenue is scored only when the band is one operator range.
   function brief() {
-    const b = { need: T.ans.need, availability: startByFor(T.ans.timing) };
-    const r = soleRange(T.ans.revenueBand);
-    if (r) b.revenueRange = r;
-    return b;
+    return { need: T.ans.need, revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees, availability: T.ans.startBy };
   }
-
-  /* ---------- Prefill ----------
-     A signed-in client's contact details come from their profile. Their company revenue (an operator range slug)
-     becomes the branch's band when exactly one band covers it, and a revenue filter carried over from Browse the
-     same way. Otherwise they answer the question. */
-  function bandFor(b, slug) {
-    if (!b || !slug) return '';
-    const hits = RN.fields[BR[b].revenueBand].options.filter((o) => (RN.fields.talkBandRanges[o.v] || []).includes(slug));
-    return hits.length === 1 ? hits[0].v : '';
+  function prefillPersona() {
+    if (persona() !== 'buyer') return;
+    const b = RN.personas.buyer;
+    T.ans.companyRevenue = T.ans.companyRevenue || b.company.revenueRange;
+    T.ans.companyEmployees = T.ans.companyEmployees || b.company.employeeRange;
+    if (!T.name) T.name = b.name;
+    if (!T.email) T.email = b.email;
+    if (!T.company) T.company = b.company.name;
+    if (!T.title) T.title = b.title || '';
   }
-  function prefill() {
-    const buyer = persona() === 'buyer' ? RN.personas.buyer : null;
-    if (buyer) {
-      if (!T.name) T.name = buyer.name;
-      if (!T.email) T.email = buyer.email;
-      if (!T.company) T.company = buyer.company.name;
-      if (!T.title) T.title = buyer.title || '';
-    }
-    const b = branch();
-    if (!b || T.ans.revenueBand) return;
-    const band = bandFor(b, buyer ? buyer.company.revenueRange : T.revHint);
-    if (band) { T.ans.revenueBand = band; T.bandFrom = buyer ? 'profile' : 'search'; save(); }
-  }
-  /* Recap: one chip per answer on the later screens (jump back to change it), one line per answer in text form
-     (the done screen, the emails and the call booking). An embedded form never asked the need, so its recap
-     opens with the function instead. The text form carries the problem in the client's words. */
-  const RECAP = { need: 'Need', fn: 'Function', companyType: 'Company type', revenueBand: 'Revenue band', seat: 'Seat', timing: 'Timing' };
+  // Short recap labels: the two question-style labels read badly in a chip; range labels stay standard
+  const RECAP = { need: 'Need', startBy: 'Start' };
   function recap(o) {
     o = o || {};
+    const keys = ['need', 'companyRevenue', 'companyEmployees', 'startBy'];
     const st = steps();
-    const keys = (T.fn === 'cost' ? EMB_PICKS('cost') : ANS_KEYS).filter((k) => T.ans[k] && !(k === 'need' && T.fn));
-    const out = keys.map((k) => {
-      const label = RN.w.label(keyFor(k), T.ans[k]);
-      const name = RECAP[k];
-      if (o.text) return `${name}: ${label}`;
+    return keys.filter((k) => T.ans[k]).map((k) => {
       const i = st.findIndex((s) => stepKeys(s).includes(k));
+      const label = RN.w.label(k, T.ans[k]);
+      const name = RECAP[k] || RN.fields[k].label;
+      if (o.text) return `${name}: ${label}`;
       return i >= 0 ? `<button type="button" class="pg-recap-chip" data-act="pg-talk-jump" data-i="${i}" title="Change this answer"><span>${esc(name)}</span>${esc(label)}</button>`
-        : `<span class="pg-recap-chip is-fixed"><span>${esc(name)}</span>${esc(label)}</span>`;
+        : `<span class="pg-recap-chip is-fixed" title="From your company profile"><span>${esc(name)}</span>${esc(label)}</span>`;
     });
-    if (o.text) {
-      if (T.problem) out.push(`Problem: ${T.problem}`);
-    }
-    return out;
   }
-  const timingPhrase = (t) => ({ this_month: 'start this month', '1_3_months': 'start in 1 to 3 months', exploring: 'still exploring timing' }[t] || '');
 
   function suggest() {
     const b = brief();
-    const cats = catsFor();
+    const cats = needCats(b.need);
     let rows = cats.length ? cats.flatMap((c) => RN.model.rank(Object.assign({}, b, { roleCategory: c }), { limit: 6 })) : RN.model.rank(b, { limit: 12 });
     const seen = new Set();
     rows = rows.filter((r) => !seen.has(r.op.id) && seen.add(r.op.id));
-    // This month: operators free now or in 2 weeks come first; the other two timings take everyone as they are
-    const want = T.ans.timing === 'this_month' ? AVAIL_RANK.available_2_weeks : AVAIL_RANK.available_2_plus_weeks;
+    const want = AVAIL_RANK[b.availability] == null ? 2 : AVAIL_RANK[b.availability];
     const late = (op) => ((AVAIL_RANK[op.avail.key] || 0) > want ? 1 : 0);
-    // Available by the timing first, then fit, then Reputation Index
+    // Available by the start date first, then fit, then Reputation Index
     rows.sort((x, y) => late(x.op) - late(y.op) || y.fit.pct - x.fit.pct || y.op.ris.score - x.op.ris.score);
     const filters = matchFilters(T.ans);
     const matches = RN.model.search({ filters }).length;
@@ -656,11 +572,11 @@
     const cats = [].concat(f.roleCategories || [], ctx.cat || []).filter(Boolean);
     const label = [ctx.q, ...(ctx.tags || [])].filter(Boolean).join(', ') || cats.map((c) => RN.fields.catLabel(c)).join(', ');
     T.search = { q: ctx.q || '', label: label || 'your filters' };
-    // A signed-in client's revenue comes from their company profile, not from a Browse filter. The operator range
-    // slug becomes a band once the need (and so the branch) is known.
-    if (persona() !== 'buyer' && first(f.revenueRange)) T.revHint = first(f.revenueRange);
-    const av = first(f.availability);
-    if (av) T.ans.timing = av === 'available_2_plus_weeks' ? '1_3_months' : 'this_month';
+    T.note = label || '';
+    // A signed-in client's company size comes from their company profile, not from a Browse filter
+    if (persona() !== 'buyer' && first(f.revenueRange)) T.ans.companyRevenue = first(f.revenueRange);
+    if (persona() !== 'buyer' && first(f.employeeRange)) T.ans.companyEmployees = first(f.employeeRange);
+    if (first(f.availability)) T.ans.startBy = first(f.availability);
     if (first(f.industries)) T.industry = first(f.industries);
     // Preselect the need only when the searched role categories point to exactly one
     const needs = cats.length ? Object.keys(RN.fields.needCats).filter((n) => cats.some((c) => (RN.fields.needCats[n] || []).includes(c))) : [];
@@ -670,15 +586,12 @@
 
   function talkView(params) {
     const need = params && params.need && RN.fields.need.options.some((o) => o.v === params.need) ? params.need : '';
-    /* An explicit hand-off from Browse ("Tell us what you need", seen.talkPrefill) always starts a new request with that
-       search. The 30-minute event fallback only applies when no request was just sent, so the done screen of a request
-       sent here or from a function page stays on screen. */
     const ctx = searchContext();
-    if (ctx && (ctx.pre || (!T.done && !(T.usedSearch || []).includes(ctx.id)))) {
+    if (ctx && (ctx.pre || !(T.usedSearch || []).includes(ctx.id))) {
       applySearch(ctx);
       if (need) { T.ans.need = need; T.ctx = need; T.step = 1; save(); }
     } else if (need && T.ctx !== need) { T = Object.assign(fresh(need), { usedSearch: T.usedSearch }); save(); }
-    prefill();
+    prefillPersona();
     return T.done ? talkDone() : talkStep();
   }
 
@@ -687,8 +600,6 @@
     const label = done ? 'Request sent' : `Question ${cur + 1} of ${total}`;
     return `<div class="stepper pg-stepper" role="progressbar" aria-label="${esc(label)}" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="${done ? total : cur + 1}">${Array.from({ length: total }, (_, i) => `<i class="${done || i <= cur ? 'on' : ''}"></i>`).join('')}</div>`;
   }
-  // The problem textarea's live length, next to its label
-  const counter = (v) => `<span class="pg-count num" data-count>${String(v || '').length} of ${PROBLEM_MAX}</span>`;
 
   function talkStep() {
     const st = steps();
@@ -696,48 +607,39 @@
     const s = st[T.step];
     save();
     const p = persona();
-    const note = p === 'buyer' ? `<p class="pg-talk-note">${icon('check-circle')}Signed in as ${esc(RN.personas.buyer.name)}, ${esc(RN.personas.buyer.company.name)}. We filled in your contact details${T.bandFrom === 'profile' ? ' and revenue band' : ''}.</p>`
+    const note = p === 'buyer' ? `<p class="pg-talk-note">${icon('check-circle')}Signed in as ${esc(RN.personas.buyer.name)}, ${esc(RN.personas.buyer.company.name)}. We filled in your company size.</p>`
       : p === 'operator' ? `<p class="pg-talk-note">${icon('info')}This form is for companies hiring. For help with your profile, open <a href="#studio">Studio</a> or call ${PHONE}.</p>` : '';
     const searched = T.search ? `<p class="pg-talk-note pg-talk-search">${icon('search')}<span>You searched “${esc(T.search.label)}”. We send it to our team with your answers, so you do not have to describe it again.</span></p>` : '';
     const chips = T.step > 0 ? recap() : [];
-    const B = BR[branch() || 'generic'];
-    const miss = (k) => ((T.missing || []).includes(k) ? ' is-missing' : '');
-    // A missing field says so to a screen reader too, pointing at the error that names it
-    const inv = (k) => ((T.missing || []).includes(k) && T.err ? ' aria-invalid="true" aria-describedby="pg-talk-err"' : '');
     let body = '';
     if (s.key === 'contact') {
       body = `<form class="pg-contact" data-submit="pg-talk-send" novalidate>
           ${chips.length ? `<div class="pg-recap" aria-label="Your answers">${chips.join('')}</div>` : ''}
           <div class="grid g-2 pg-contact-grid">
-            <div class="field${miss('name')}"><label for="pg-name">Your name</label><input class="input" id="pg-name" name="name" value="${esc(T.name)}" placeholder="${esc(RN.fields.fullName.placeholder)}" autocomplete="name" data-input="pg-talk-text"${inv('name')}></div>
-            <div class="field${miss('email')}"><label for="pg-email">${esc(RN.fields.email.label)}</label><input class="input" id="pg-email" name="email" type="email" value="${esc(T.email)}" placeholder="${esc(RN.fields.email.placeholder)}" autocomplete="email" data-input="pg-talk-text"${inv('email')}></div>
+            ${RN.w.field('fullName', T.name, { name: 'name', id: 'pg-name', label: 'Your name' })}
+            ${RN.w.field('email', T.email, { name: 'email', id: 'pg-email' })}
           </div>
           <div class="grid g-2 pg-contact-grid">
-            <div class="field"><label for="pg-co">Company <span class="opt">Optional</span></label><input class="input" id="pg-co" name="company" value="${esc(T.company)}" placeholder="Company name" autocomplete="organization" data-input="pg-talk-text"></div>
-            <div class="field"><label for="pg-title">Title <span class="opt">Optional</span></label><input class="input" id="pg-title" name="title" value="${esc(T.title)}" placeholder="e.g. COO" autocomplete="organization-title" data-input="pg-talk-text"></div>
+            <div class="field"><label for="pg-co">Company <span class="opt">Optional</span></label><input class="input" id="pg-co" name="company" value="${esc(T.company)}" placeholder="Company name" autocomplete="organization"></div>
+            <div class="field"><label for="pg-title">Title <span class="opt">Optional</span></label><input class="input" id="pg-title" name="title" value="${esc(T.title || '')}" placeholder="e.g. COO" autocomplete="organization-title"></div>
           </div>
-          <div class="field${miss('problem')}"><label for="pg-problem"><span>${esc(B.problem)}</span>${counter(T.problem)}</label><textarea class="textarea input" id="pg-problem" name="problem" maxlength="${PROBLEM_MAX}" rows="3" placeholder="The problem in your words" data-input="pg-talk-text"${inv('problem')}>${esc(T.problem)}</textarea></div>
-          ${T.err ? `<p class="pg-err" id="pg-talk-err" role="alert">${icon('info')}<span>${esc(T.err)}</span></p>` : ''}
-          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Show my matches${icon('arrow')}</button><span class="small">${esc(promiseLine(nowKey()))}</span></div>
+          <div class="field"><label for="pg-note">What are you looking for? <span class="opt">Optional</span></label><textarea class="textarea input" id="pg-note" name="note" maxlength="500" rows="2" placeholder="The problem, the timeline, what good looks like in 90 days.">${esc(T.note || '')}</textarea></div>
+          ${T.err ? `<p class="pg-err" role="alert">${icon('info')}${esc(T.err)}</p>` : ''}
+          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Show my matches${icon('arrow')}</button><span class="small">We show you three operators now, and a person replies within one business day. No sales sequence, and no fees for companies.</span></div>
         </form>`;
     } else if (s.rows) {
-      // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row, and only
-      // that row shows its hint (its own option count)
-      const open = s.rows.find((k) => !T.ans[k]) || s.rows[0];
-      body = s.rows.map((k) => {
-        const fk = keyFor(k);
-        const d = RN.fields[fk];
-        const from = k === 'revenueBand' && T.bandFrom ? `<span>${T.bandFrom === 'profile' ? 'From your company profile. Change it if it is off.' : 'From your Browse filters. Change it if it is off.'}</span>` : '';
-        return `<div class="pg-row" data-row="${esc(k)}">
-          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${from}<span class="pg-kbd hide-m" data-kbd${k === open ? '' : ' hidden'}>Press 1 to ${d.options.length}</span></p>
-          <div class="pg-tiles" data-cols="${colsFor(d.options.length)}">${RN.w.control(fk, T.ans[k] || '', { name: k, id: 'pg-t-' + k, change: 'pg-talk-pick' })}</div>
+      // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row
+      body = s.rows.map((r, ri) => {
+        const d = RN.fields[r.key];
+        return `<div class="pg-row" data-row="${esc(r.key)}">
+          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}${ri === 0 ? `<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span>` : ''}</p>
+          <div class="pg-tiles" data-cols="${r.cols || 2}">${RN.w.control(r.key, T.ans[r.key] || '', { name: r.key, id: 'pg-t-' + r.key, change: 'pg-talk-pick' })}</div>
         </div>`;
       }).join('') + (chips.length ? `<div class="pg-recap pg-recap-sm" aria-label="Your answers so far">${chips.join('')}</div>` : '');
     } else {
-      const fk = keyFor(s.key);
-      const d = RN.fields[fk];
-      body = `<p class="pg-q-sub">${s.hint ? `<span>${esc(s.hint)}</span>` : `<span class="label">${esc(d.label)}</span>`}<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span></p>
-        <div class="pg-tiles" data-cols="${s.key === 'need' ? 2 : colsFor(d.options.length)}">${RN.w.control(fk, T.ans[s.key] || '', { name: s.key, id: 'pg-t-' + s.key, change: 'pg-talk-pick' })}</div>
+      const d = RN.fields[s.key];
+      body = `<p class="pg-q-sub">${s.hint ? `<span>${esc(s.hint)}</span>` : `<span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}`}<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span></p>
+        <div class="pg-tiles" data-cols="${s.cols || 2}">${RN.w.control(s.key, T.ans[s.key] || '', { name: s.key, id: 'pg-t-' + s.key, change: 'pg-talk-pick' })}</div>
         ${chips.length ? `<div class="pg-recap pg-recap-sm" aria-label="Your answers so far">${chips.join('')}</div>` : ''}`;
     }
     return `<section class="pg-talk night" data-step="${esc(s.key)}">
@@ -751,7 +653,7 @@
         ${note}${T.step === 0 ? searched : ''}
         <h1 class="h2 pg-q" tabindex="-1">${esc(s.q)}</h1>
         ${body}
-        <p class="pg-talk-alt">Rather talk now? <button type="button" class="act" data-act="pg-book">${icon('calendar')}Book your discovery call</button> or call ${PHONE}</p>
+        <p class="pg-talk-alt">Rather talk now? <button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call</button> or call ${PHONE}</p>
       </div>
     </section>`;
   }
@@ -760,32 +662,27 @@
     const first = RN.fmt.first(T.name) || 'thanks';
     const ops = (T.sugg || []).map((id) => RN.model.byId(id)).filter(Boolean);
     const b = brief();
-    const cats = catsFor();
-    // No operator matches every answer: say so, and show the closest instead of claiming a match
-    const none = !(T.matches || 0);
-    const unsure = !cats.length || none;
-    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : []);
-    // What the suggestions were matched on: the need in the client's words, or the function behind an embedded form
-    const needWords = RN.w.label('need', T.ans.need);
-    const focus = T.fn ? BR[fnOf() || 'generic'].noun : needWords.charAt(0).toLowerCase() + needWords.slice(1);   // keeps CRM, AI
+    const cats = needCats(b.need);
+    const unsure = !cats.length;
+    const lines = recap({ text: true }).concat(T.note ? [`Looking for: ${T.note}`] : T.search ? [`Search: ${T.search.label}`] : []);
     return `<section class="pg-talk pg-talk-done night">
       <div class="pg-talk-in">
         <div class="pg-talk-top"><button type="button" class="pg-back" data-act="pg-talk-reset">${icon('refresh')}Start a new request</button><span class="step-count">Sent</span></div>
         ${progress(steps().length - 1, steps().length, true)}
         <h1 class="h2 pg-q" tabindex="-1">Got it, ${esc(first)}. A person is on it.</h1>
-        <p class="lede pg-done-lede">You will get ${esc(deliverFor(nowKey()))} at ${esc(T.email)}, often within 48 hours. Want to move faster? Book your discovery call now, or request an intro to one of the operators below.</p>
+        <p class="lede pg-done-lede">You will hear from us at ${esc(T.email)} within one business day. Want to move faster? Book a call now, or request an intro to one of the operators below.</p>
         <div class="pg-done-grid">
           <div class="pg-done-card">
-            <span class="label">${icon('calendar')}Book your discovery call</span>
+            <span class="label">${icon('calendar')}Book a call</span>
             ${T.booked ? `<p><b>${esc(T.booked.label)}</b></p><p class="small">30 minutes. The invite is on its way to ${esc(T.booked.email || T.email)}.</p><button type="button" class="act" data-act="pg-book">Change the time</button>`
-              : `<p class="small">30 minutes with Matt Lopez or someone on our team who has sat in your seat. You leave with a written role profile.</p><button type="button" class="btn btn-leaf" data-act="pg-book">Pick a time${icon('arrow')}</button>`}
+              : `<p class="small">30 minutes with Matt Lopez or someone on our team who has sat in your seat.</p><button type="button" class="btn btn-leaf" data-act="pg-book">Pick a time${icon('arrow')}</button>`}
           </div>
           <div class="pg-done-card">
             <span class="label">${icon('message')}Call us</span>
             <p class="small">Weekdays, 9am to 6pm Eastern.</p>
             ${PG.phone({ dark: true })}
           </div>
-          <div class="pg-done-card pg-done-req">
+          <div class="pg-done-card">
             <span class="label">${icon('doc')}Your request</span>
             <ul class="pg-done-list">${lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
           </div>
@@ -795,17 +692,15 @@
     <section class="section-sm pg-sugg-sec">
       <div class="wrap">
         <div class="pg-shead"><div class="pg-shead-l"><span class="eyebrow">${unsure ? 'A few operators to look at while you wait' : 'Operators we would start with'}</span>
-          <h2 class="h3 pg-sugg-h">${none ? 'No operator matches every answer yet. These are the closest.' : !cats.length ? 'Ranked on your revenue band and timing.' : `Matched on ${esc(focus)}, your revenue band and timing.`}</h2></div>
-          <div class="pg-shead-r">${none
-            ? `<button type="button" class="act" data-act="pg-talk-browse" data-loose="1">${cats.length ? `See every operator in ${esc(RN.fields.catLabel(cats[0]))}` : 'Browse every operator'}${icon('arrow')}</button>`
-            : `<button type="button" class="act" data-act="pg-talk-browse">${(T.matches || 0) === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(T.matches || 0, 'matching operator')} in Browse`}${icon('arrow')}</button>`}</div></div>
+          <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your company size and start date.' : `Matched on ${esc(RN.w.label('need', b.need).toLowerCase())}, your company size and start date.`}</h2></div>
+          <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${(T.matches || 0) === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(T.matches || 0, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
         ${ops.length ? `<p class="pg-sugg-note">${icon('check-circle')}<span>Request intro opens with your answers filled in: ${esc(introSummary())}. Check it and send.</span></p>
         <div class="grid g-3 pg-sugg">${ops.map((op, i) => {
           const fit = RN.model.fit(op, b);
           const order = ['expertise', 'revenue', 'employees'];
           const sig = order.map((k) => fit.signals.find((x) => x.k === k && x.state === 'match')).find(Boolean) || fit.signals.find((x) => x.state !== 'low') || fit.signals[0];
           return RN.ui.opCard(op, { why: `${fit.label}${sig ? ': ' + sig.text : ''}`, cta: 'invite', ctaAct: 'pg-intro', ctaLabel: i === 0 ? `Request intro to ${op.first}` : 'Request intro' });
-        }).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No close match on the network yet', body: 'A person on our team will look for you, including operators who are not listed yet.', cta: `<button type="button" class="btn" data-act="pg-book">${icon('calendar')}Book your discovery call</button>` })}
+        }).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No close match on the network yet', body: 'A person on our team will look for you, including operators who are not listed yet.', cta: `<button type="button" class="btn" data-act="pg-book">${icon('calendar')}Book a call</button>` })}
       </div>
     </section>`;
   }
@@ -813,7 +708,7 @@
   function talkMount(root) {
     document.removeEventListener('keydown', onTalkKey);
     document.addEventListener('keydown', onTalkKey);
-    const f = T.focus && document.getElementById(T.focus);
+    const f = T.focus && root.querySelector('#' + T.focus);
     if (f) { f.focus(); T.focus = ''; save(); return; }
     const q = root.querySelector('.pg-q');
     if (q && T.moved) { q.focus({ preventScroll: true }); T.moved = false; }
@@ -836,9 +731,6 @@
 
   RN.inputs['pg-talk-pick'] = (el) => {
     if (!el.value) return;
-    // A new need can move the request to another branch, whose lists differ: the branched answers start over
-    if (el.name === 'need' && branchOf(el.value) !== branch()) { ['companyType', 'revenueBand', 'seat'].forEach((k) => delete T.ans[k]); T.bandFrom = ''; }
-    if (el.name === 'revenueBand') T.bandFrom = '';
     T.ans[el.name] = el.value;
     T.err = '';
     save();
@@ -846,89 +738,58 @@
     clearTimeout(advTimer);
     const st0 = steps();
     const cur = st0.find((x) => stepKeys(x).includes(el.name));
-    // The company step moves on only when both rows are answered; the digits (and their hint) move to the open row
-    if (cur && cur.rows && !stepKeys(cur).every((k) => T.ans[k])) {
-      const open = cur.rows.find((k) => !T.ans[k]);
-      RN.$$('.pg-talk .pg-row').forEach((r) => { const h = r.querySelector('[data-kbd]'); if (h) h.hidden = r.dataset.row !== open; });
-      return;
-    }
+    // The size step moves on only when both rows are answered
+    if (cur && cur.rows && !stepKeys(cur).every((k) => T.ans[k])) return;
     advTimer = setTimeout(() => {
       if (!onTalk()) return;
       const st = steps();
       const i = st.findIndex((x) => stepKeys(x).includes(el.name));
       T.step = Math.min(st.length - 1, (i >= 0 ? i : T.step) + 1);
       T.moved = true;
-      if (st[T.step].key === 'contact') T.focus = T.name ? (T.email ? 'pg-problem' : 'pg-email') : 'pg-name';
+      if (st[T.step].key === 'contact') T.focus = T.name ? (T.email ? '' : 'pg-email') : 'pg-name';
       save();
       RN.render();
     }, 420);
   };
-  // Typed answers are kept as they are typed, so Back and a page reload lose nothing
-  RN.inputs['pg-talk-text'] = (el) => {
-    if (el.name in T) T[el.name] = el.value;
-    const field = el.closest('.field');
-    if (field) field.classList.remove('is-missing');
-    el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby');
-    // The error goes once every field it named has an answer; Send checks them again
-    T.missing = (T.missing || []).filter((k) => k !== el.name);
-    if (T.err && !T.missing.length) { T.err = ''; const err = el.closest('form') && el.closest('form').querySelector('.pg-err'); if (err) err.remove(); }
-    if (el.name === 'problem') { const c = field && field.querySelector('[data-count]'); if (c) c.textContent = `${el.value.length} of ${PROBLEM_MAX}`; }
-    save();
-  };
   RN.actions['pg-talk-back'] = () => { clearTimeout(advTimer); T.step = Math.max(0, T.step - 1); T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-jump'] = (el) => { clearTimeout(advTimer); T.step = +el.dataset.i || 0; T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-reset'] = () => { T = Object.assign(fresh(), { usedSearch: T.usedSearch }); save(); if (curView() === 'talk') RN.render(); else RN.go('talk'); };
-  RN.actions['pg-talk-browse'] = (el) => {
-    const s = suggest();
-    const loose = el && el.dataset && el.dataset.loose;
-    goBrowse({ filters: loose ? (s.filters.roleCategories ? { roleCategories: s.filters.roleCategories.slice() } : {}) : s.filters });
-  };
+  RN.actions['pg-talk-browse'] = () => { const s = suggest(); goBrowse({ filters: s.filters }); };
 
-  /* ---------- Send ----------
-     The same pipeline for #talk and the embedded forms: suggestions, tracking (Admin demand and Studio "Why you
-     appeared", the same event shapes Browse logs), the two emails, then the done screen. */
-  function send() {
+  RN.submits['pg-talk-send'] = (form, data) => {
+    T.name = String(data.name || '').trim();
+    T.email = String(data.email || '').trim();
+    T.company = String(data.company || '').trim();
+    T.title = String(data.title || '').trim();
+    T.note = String(data.note || '').trim();
+    if (!T.name || !EMAIL_RE.test(T.email)) {
+      T.err = 'Add your name and a valid work email so we can reply.';
+      T.focus = !T.name ? 'pg-name' : 'pg-email';
+      save(); RN.rerender(); return;
+    }
     T.err = '';
-    T.missing = [];
     const s = suggest();
     const needLabel = RN.w.label('need', T.ans.need);
-    const f = fnOf();
     T.sugg = s.top.map((r) => r.op.id);
     T.matches = s.matches;
     T.done = true;
     T.moved = true;
     T.sentAt = RN.now().toISOString();
     save();
-    RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { need: T.ans.need, timing: T.ans.timing, fn: T.ans.fn || undefined, embed: T.fn || undefined, searched: T.search ? T.search.q : undefined } });
-    s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk', meta: { need: T.ans.need } }));
-    RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: T.fn ? 'talk-embed' : 'talk' });
-    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : []);
+    // Demand intelligence (Admin) and "Why you appeared" (Studio): same event shapes Browse logs
+    RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { startBy: T.ans.startBy, need: T.ans.need, searched: T.search ? T.search.q : undefined } });
+    s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk' }));
+    RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: 'talk' });
+    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note && !(T.search && T.note === T.search.label) ? [`What they are looking for: ${T.note}`] : []);
     const names = s.top.map((r) => r.op.name);
-    // Company and title are optional on every form; the team researches whatever is blank before the discovery call
+    // Company and title are optional; the team researches whatever is blank before the call
     const who = `${[T.name, T.title].filter(Boolean).join(', ')} <${T.email}>${T.company ? ', ' + T.company : ''}`;
     const blank = [!T.company && 'company name', !T.title && 'title'].filter(Boolean);
-    const todo = blank.length ? `\nTo research before the discovery call: ${blank.join(' and ')}.` : '';
-    RN.mail(TEAM, `Talk to us: ${f ? BR[f].label : needLabel}`, `${who}${todo}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nSend ${deliverFor(nowKey())} within 48 hours.`, 'lead');
-    RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team is on it. You will get ${deliverFor(nowKey())} at this address, often within 48 hours.\n\nYour request\n${lines.join('\n')}\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book your discovery call from the confirmation page.`, 'talk');
-  }
-
-  RN.submits['pg-talk-send'] = (form, data) => {
-    T.name = trim(data.name);
-    T.email = trim(data.email);
-    T.company = trim(data.company);
-    T.problem = trim(data.problem).slice(0, PROBLEM_MAX);
-    T.title = trim(data.title);
-    const personal = EMAIL_RE.test(T.email) && personalEmail(T.email);
-    const missing = [!T.name && 'name', (!EMAIL_RE.test(T.email) || personal) && 'email', !T.problem && 'problem'].filter(Boolean);
-    if (missing.length) {
-      T.err = missing.length === 1 && personal ? WORK_EMAIL_ERR : needErr(missing);
-      T.missing = missing;
-      T.focus = { name: 'pg-name', email: 'pg-email', problem: 'pg-problem' }[missing[0]];
-      save(); RN.rerender(); return;
-    }
-    send();
+    const todo = blank.length ? `\nTo research before the call: ${blank.join(' and ')}.` : '';
+    RN.mail(TEAM, `Talk to us: ${needLabel}`, `${who}${todo}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
+    RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team will reply within one business day.\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book a call from the confirmation page.`, 'talk');
     RN.render();
-    RN.ui.toast(sentToast(), { icon: 'send' });
+    RN.ui.toast(`Sent. A person replies to ${esc(T.email)} within one business day.`, { icon: 'send' });
   };
 
   /* Request intro from a suggestion: open the shared intro sheet with the Talk answers prefilled.
@@ -943,174 +804,24 @@
      engagementType and hoursPerMonth (the flow does not ask them). */
   function introSummary() {
     const parts = [];
-    const f = fnOf();
-    if (T.fn && f) parts.push(BR[f].label);
-    else if (T.ans.need) parts.push(RN.w.label('need', T.ans.need));
-    if (T.ans.companyType) parts.push(RN.w.label(keyFor('companyType'), T.ans.companyType));
-    if (T.ans.revenueBand) parts.push(RN.w.label(keyFor('revenueBand'), T.ans.revenueBand) + ' revenue');
-    if (T.ans.seat) parts.push(RN.w.label(keyFor('seat'), T.ans.seat) + ' seat');
-    if (T.ans.timing) parts.push(timingPhrase(T.ans.timing));
-    return parts.filter(Boolean).join('; ');
+    if (T.ans.need) parts.push(RN.w.label('need', T.ans.need));
+    const size = [T.ans.companyRevenue && RN.w.label('companyRevenue', T.ans.companyRevenue) + ' revenue', T.ans.companyEmployees && RN.w.label('companyEmployees', T.ans.companyEmployees) + ' employees'].filter(Boolean);
+    if (size.length) parts.push(size.join(', '));
+    if (T.ans.startBy) parts.push('start ' + RN.w.label('startBy', T.ans.startBy).toLowerCase());
+    return parts.join('; ');
   }
-  /* The operator reads this note before the introduction, while the company stays anonymous. So it carries the scope
-     and the problem in the client's words, nothing that names the client. The intro sheet shows the note up front as
-     what the operator will read. */
   function introPrefill() {
     const sum = introSummary();
-    const end = (t) => (t && !/[.!?]$/.test(t) ? t + '.' : t);
-    const extra = [end(T.problem), T.search ? `Searched for: ${T.search.label}.` : ''].filter(Boolean).join(' ');
+    const extra = T.note || (T.search ? 'Searched for: ' + T.search.label : '');
     const note = [sum ? `From Talk to us: ${sum}.` : '', extra].filter(Boolean).join(' ').slice(0, 500);
     const pre = {
-      source: 'talk', need: T.ans.need, startBy: T.ans.timing ? startByFor(T.ans.timing) : '', note,
+      source: 'talk', need: T.ans.need, startBy: T.ans.startBy, note,
       name: T.name, email: T.email, company: T.company, title: T.title, industry: T.industry,
-      revenueRange: soleRange(T.ans.revenueBand),
+      revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees,
     };
     Object.keys(pre).forEach((k) => { if (pre[k] == null || pre[k] === '') delete pre[k]; });
     return pre;
   }
-
-  /* ---------- Embedded forms: RN.talk.embed({ fn }) ----------
-     The function homes (fn: sales, revops, marketing) and the cost hub (fn: cost) carry the questionnaire as one
-     screen on a night surface: chip rows, the problem, name and email (required), company and title (optional), Send. Nothing advances
-     or navigates on a pick. The cost hub asks the function first, which swaps the seat list. Picks and text live
-     in EMB[fn], so the page can re-render without losing them. Send runs the same pipeline as #talk and lands on
-     the done screen. The markup is the form alone; the page wraps it in its own section. */
-  const EMB = {};
-  const embState = (fn) => (EMB[fn] = EMB[fn] || { ans: {}, name: '', email: '', company: '', title: '', problem: '', err: '', missing: [] });
-  const EMB_FN = (fn) => (BR[fn] && fn !== 'generic' ? fn : 'cost');
-  function embKeys(fn, pick) {
-    const b = fn === 'cost' ? 'generic' : fn;
-    const seatBy = fn === 'cost' ? (BR[pick] ? pick : 'generic') : b;
-    return { branch: b, companyType: BR[b].companyType, revenueBand: BR[b].revenueBand, seat: BR[seatBy].seat };
-  }
-  const embId = (fn, k) => `pg-emb-${fn}-${k}`;
-  function embRow(fn, E, k, fieldKey) {
-    const d = RN.fields[fieldKey];
-    const missing = E.missing.includes(k);
-    // A missing chip row points a screen reader at the error that names it
-    const ctl = RN.w.control(fieldKey, E.ans[k] || '', { name: k, id: embId(fn, k), change: 'pg-emb-pick' });
-    return `<div class="pg-emb-row${missing ? ' is-missing' : ''}" data-row="${esc(k)}">
-      <span class="pg-emb-l" id="${embId(fn, k)}-l">${esc(d.label)}</span>
-      ${missing && E.err ? ctl.replace('class="chipset"', `class="chipset" aria-invalid="true" aria-describedby="${embId(fn, 'err')}"`) : ctl}
-    </div>`;
-  }
-  // The pick rows in the order each page's form block lists them. The cost hub asks the function first and no company type.
-  const EMB_PICKS = (fn) => (fn === 'cost' ? ['fn', 'seat', 'revenueBand', 'timing'] : ['companyType', 'revenueBand', 'seat', 'timing']);
-  function embed(o) {
-    const fn = EMB_FN(o && o.fn);
-    const E = embState(fn);
-    const K = embKeys(fn, E.ans.fn);
-    const B = BR[K.branch];
-    const buyer = persona() === 'buyer' ? RN.personas.buyer : null;
-    if (buyer && !E.ans.revenueBand) E.ans.revenueBand = bandFor(K.branch, buyer.company.revenueRange);
-    const name = E.name || (buyer ? buyer.name : '');
-    const email = E.email || (buyer ? buyer.email : '');
-    const company = E.company || (buyer ? buyer.company.name : '');
-    const title = E.title || (buyer ? buyer.title || '' : '');
-    const miss = (k) => (E.missing.includes(k) ? ' is-missing' : '');
-    const id = (k) => embId(fn, k);
-    const inv = (k) => (E.missing.includes(k) && E.err ? ` aria-invalid="true" aria-describedby="${id('err')}"` : '');
-    const ROW_KEY = { fn: 'talkFunction', companyType: K.companyType, revenueBand: K.revenueBand, seat: K.seat, timing: fn === 'cost' ? 'talkTimingCost' : 'talkTiming' };
-    const row = (k) => (k === 'seat' ? `<div class="pg-emb-seat" data-seat>${embRow(fn, E, 'seat', K.seat)}</div>` : embRow(fn, E, k, ROW_KEY[k]));
-    return `<form class="pg-emb" data-submit="pg-talk-embed" data-fn="${esc(fn)}" novalidate aria-label="Talk to us">
-      <div class="pg-emb-picks">
-        ${EMB_PICKS(fn).map(row).join('')}
-      </div>
-      <div class="pg-emb-write">
-        <div class="field${miss('problem')}" data-row="problem"><label for="${id('problem')}"><span>${esc(B.problem)}</span>${counter(E.problem)}</label><textarea class="textarea input" id="${id('problem')}" name="problem" maxlength="${PROBLEM_MAX}" rows="3" placeholder="The problem in your words" data-input="pg-emb-text"${inv('problem')}>${esc(E.problem)}</textarea></div>
-        <div class="grid g-2 pg-emb-who">
-          <div class="field${miss('name')}" data-row="name"><label for="${id('name')}">Your name</label><input class="input" id="${id('name')}" name="name" value="${esc(name)}" placeholder="${esc(RN.fields.fullName.placeholder)}" autocomplete="name" data-input="pg-emb-text"${inv('name')}></div>
-          <div class="field${miss('email')}" data-row="email"><label for="${id('email')}">${esc(RN.fields.email.label)}</label><input class="input" id="${id('email')}" name="email" type="email" value="${esc(email)}" placeholder="${esc(RN.fields.email.placeholder)}" autocomplete="email" data-input="pg-emb-text"${inv('email')}></div>
-        </div>
-        <div class="grid g-2 pg-emb-who">
-          <div class="field" data-row="company"><label for="${id('company')}">Company <span class="opt">Optional</span></label><input class="input" id="${id('company')}" name="company" value="${esc(company)}" placeholder="Company name" autocomplete="organization" data-input="pg-emb-text"></div>
-          <div class="field" data-row="title"><label for="${id('title')}">Title <span class="opt">Optional</span></label><input class="input" id="${id('title')}" name="title" value="${esc(title)}" placeholder="e.g. COO" autocomplete="organization-title" data-input="pg-emb-text"></div>
-        </div>
-      </div>
-      <p class="pg-err" id="${id('err')}" role="alert" data-err${E.err ? '' : ' hidden'}>${icon('info')}<span>${esc(E.err)}</span></p>
-      <div class="pg-emb-foot"><button class="btn btn-leaf btn-lg" type="submit">Send${icon('arrow')}</button><span class="small">${esc(promiseLine(fn))}</span></div>
-    </form>`;
-  }
-  window.RN.talk = { embed };
-
-  // An answered field drops out of the error; the error goes once every field it named has one
-  function embAnswered(form, E, el) {
-    const row = el.closest('[data-row]');
-    if (row) {
-      row.classList.remove('is-missing');
-      RN.$$('[aria-invalid], [aria-describedby]', row).forEach((x) => { x.removeAttribute('aria-invalid'); if (x.getAttribute('aria-describedby') === embId(form.dataset.fn, 'err')) x.removeAttribute('aria-describedby'); });
-    }
-    E.missing = E.missing.filter((k) => k !== el.name);
-    if (E.err && !E.missing.length) { E.err = ''; const err = form.querySelector('[data-err]'); if (err) err.hidden = true; }
-  }
-  RN.inputs['pg-emb-pick'] = (el) => {
-    const form = el.closest('form[data-submit="pg-talk-embed"]');
-    if (!form || !el.value) return;
-    const fn = form.dataset.fn;
-    const E = embState(fn);
-    E.ans[el.name] = el.value;
-    embAnswered(form, E, el);
-    if (el.name === 'fn') {
-      // The seat list follows the function picked; a seat that is not on the new list is dropped
-      const K = embKeys(fn, el.value);
-      if (E.ans.seat && !RN.fields[K.seat].options.some((o) => o.v === E.ans.seat)) delete E.ans.seat;
-      const box = form.querySelector('[data-seat]');
-      if (box) box.innerHTML = embRow(fn, E, 'seat', K.seat);
-    }
-  };
-  RN.inputs['pg-emb-text'] = (el) => {
-    const form = el.closest('form[data-submit="pg-talk-embed"]');
-    if (!form) return;
-    const E = embState(form.dataset.fn);
-    if (el.name in E) E[el.name] = el.value;
-    embAnswered(form, E, el);
-    if (el.name === 'problem') { const c = el.closest('.field') && el.closest('.field').querySelector('[data-count]'); if (c) c.textContent = `${el.value.length} of ${PROBLEM_MAX}`; }
-  };
-  RN.submits['pg-talk-embed'] = (form, data) => {
-    const fn = EMB_FN(form.dataset.fn);
-    const E = embState(fn);
-    ['fn', 'companyType', 'revenueBand', 'seat', 'timing'].forEach((k) => { if (data[k] !== undefined) E.ans[k] = data[k]; });
-    E.name = trim(data.name); E.email = trim(data.email); E.company = trim(data.company); E.title = trim(data.title); E.problem = trim(data.problem).slice(0, PROBLEM_MAX);
-    const missing = [];
-    EMB_PICKS(fn).forEach((k) => { if (!E.ans[k]) missing.push(k); });
-    if (!E.problem) missing.push('problem');
-    if (!E.name) missing.push('name');
-    const personal = EMAIL_RE.test(E.email) && personalEmail(E.email);
-    if (!EMAIL_RE.test(E.email) || personal) missing.push('email');
-    E.missing = missing;
-    const errEl = form.querySelector('[data-err]');
-    const errId = embId(fn, 'err');
-    if (missing.length) {
-      E.err = missing.length === 1 && personal ? WORK_EMAIL_ERR : needErr(missing);
-      RN.$$('.is-missing', form).forEach((x) => x.classList.remove('is-missing'));
-      RN.$$('[aria-invalid]', form).forEach((x) => { x.removeAttribute('aria-invalid'); x.removeAttribute('aria-describedby'); });
-      missing.forEach((k) => {
-        const box = form.querySelector(`[data-row="${k}"]`);
-        if (!box) return;
-        box.classList.add('is-missing');
-        const input = box.querySelector('.input');
-        if (input) { input.setAttribute('aria-invalid', 'true'); input.setAttribute('aria-describedby', errId); }
-        const group = box.querySelector('.chipset');
-        if (group) { group.setAttribute('aria-invalid', 'true'); group.setAttribute('aria-describedby', errId); }
-      });
-      if (errEl) { errEl.hidden = false; errEl.querySelector('span').textContent = E.err; }
-      const first = form.querySelector(`[data-row="${missing[0]}"] .chip, [data-row="${missing[0]}"] .input`);
-      if (first) first.focus();
-      return;
-    }
-    E.err = '';
-    if (errEl) errEl.hidden = true;
-    // Hand the answers to the shared state and send through the same pipeline as #talk
-    const pick = fn === 'cost' ? E.ans.fn : fn;
-    T = Object.assign(fresh(), { usedSearch: T.usedSearch });
-    T.fn = fn;
-    T.ans = { need: RN.fields.talkFunctionNeed[pick] || 'not_sure', fn: pick, companyType: E.ans.companyType, revenueBand: E.ans.revenueBand, seat: E.ans.seat, timing: E.ans.timing };
-    T.name = E.name; T.email = E.email; T.company = E.company; T.title = E.title; T.problem = E.problem;
-    send();
-    delete EMB[fn];
-    RN.go('talk');
-    RN.ui.toast(sentToast(), { icon: 'send' });
-  };
 
   /* ---------- Book a call: 6 upcoming weekday slots from the simulated clock ---------- */
   function slots(n) {
@@ -1374,7 +1085,7 @@
     <section class="section-sm pg-faq-sec">
       <div class="wrap-narrow">
         <h2 class="h3">Questions operators ask</h2>
-        ${PG.faq(faq)}
+        <div class="pg-faq">${faq.map(([q, a], i) => `<details${i === 0 ? ' open' : ''}><summary>${esc(q)}${icon('chev-down')}</summary><p class="pg-p">${esc(a)}</p></details>`).join('')}</div>
       </div>
     </section>
 
@@ -1509,7 +1220,7 @@
       ['briefcase', 'Post an engagement', 'Start from a Blueprint', 'engagements'],
       ['chart', 'Insights', 'Research, rates and guides', 'insights'],
       ['users', 'For operators', 'Why join, and Studio', 'operators'],
-      ['message', 'Talk to us', 'Role profile within 48 hours', 'talk'],
+      ['message', 'Talk to us', 'A person replies within one business day', 'talk'],
       ['home', 'Home', 'Start over', 'home'],
     ];
     return `<section class="section pg-404">
@@ -1560,7 +1271,7 @@
   }
   function aboutUnmount() { if (aboutOff) aboutOff(); }
   /* Shared with the function homes and the cost hub (js/views/function.js): the same page head, section head and FAQ
-     list (also used by For operators), so every company page is built from one set of pieces. */
+     list, so every company page is built from one set of pieces. */
   PG.hero = hero; PG.shead = shead;
   PG.faq = (items, o) => `<div class="pg-faq">${items.map(([q, a], i) => `<details${i === 0 && !(o && o.closed) ? ' open' : ''}><summary>${esc(q)}${icon('chev-down')}</summary><p class="pg-p">${esc(a)}</p></details>`).join('')}</div>`;
   RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView, mount: aboutMount, unmount: aboutUnmount });

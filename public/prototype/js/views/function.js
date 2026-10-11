@@ -3,10 +3,11 @@
    template: hero, who would I get, what it costs, what happens first, who like me has done this, how we vet, FAQ,
    form block. Prefix fn- for classes and actions.
    Copy is transcribed as written. A [GAP: what, owner] in the document renders as a pending chip (RN.fn.gap) and is
-   never filled with a guess. Companies pay no fees (founder decision D1, Sep 25, 2026), so the full-time conversion
-   answers read "Yes.", the Terms row defers the conversion terms to Matt, and the Terms table states D1 once ("Fees
-   for companies: None"), which answers the Content Bank's open platform-fee question. Operator fees are explained
-   only on operator pages.
+   never filled with a guess. Pricing (founder, Oct 11, 2026): there is no platform fee for companies, and hiring the
+   operator full time carries a conversion fee of 20% of annual salary (the copy said 15 to 20%). Operator fees are
+   explained only on operator pages.
+   Talk to us is the four-question flow on #talk (need, company size, start date, where to reply; the founder kept it,
+   Oct 11, 2026). The hero button and the form block open it with this page's need already picked (#talk.<need>).
    Shared with other views:
      RN.fn.logoStrip({ label, network, pending, scale, bare, className })
                                                        the nine cleared client logos as one row (files for three, wordmarks for six);
@@ -22,8 +23,10 @@
   const FN = (RN.fn = RN.fn || {});
   const PG = RN.pages;
 
+  // Talk to us with this page's need already picked (the cost hub starts at the first question)
+  const talkTo = (d) => (d.need ? 'talk.' + d.need : 'talk');
   const NET = () => String((RN.data.market && RN.data.market.network && RN.data.market.network.operators) || '350+');
-  const NO_FEES_L = 'In fees for companies. You pay the operator’s rate, nothing more.';
+  const NO_FEES_L = 'Platform fee for companies. You pay the operator’s rate.';
 
   /* ---------- Pending chip: what is still missing and who owns it ---------- */
   function gapRaw(what, owner) {
@@ -76,7 +79,7 @@
   /* ---------- Page copy, section by section, from the Site pages document ---------- */
   const SALES = {
     fn: 'sales', name: 'hire-fractional-sales-vp', title: 'Hire a Fractional VP of Sales or CRO',
-    eyebrow: 'Sales leadership', cat: 'sales_leadership', browse: 'browse.sales_leadership',
+    eyebrow: 'Sales leadership', cat: 'sales_leadership', browse: 'browse.sales_leadership', need: 'sales_motion',
     hero: {
       h: 'Fractional sales leadership for founders who are <span class="serif">still the sales team</span>',
       sub: 'A proven VP of Sales for your $5M to $75M company, 20 to 50 hours a month',
@@ -132,25 +135,18 @@
       ['How does cost compare with a full-time VP of Sales?', 'Average total VP of Sales comp is about $334K, with average tenure about 19 months (Glassdoor 2026 via Stealth Agents, a secondary source). Skaled says replacing a sales leader can cost 1.5x salary. A fractional director for a small team ran $4,000 to $10,000 a month in our 2026 engagements.'],
       ['Will the operator clash with my current sales leader?', 'We set reporting lines before we source. In one engagement the fractional VP sits above an existing director as coach.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
-      ['Can I hire the operator full time later?', 'Yes.'],
+      ['Can I hire the operator full time later?', 'Yes. The conversion fee is 20% of annual salary.'],
       ['How many hours do I need?', '20 to 40 a month is typical for teams under 5 to 8 reps.'],
     ],
     form: {
       h: 'Tell us about your sales team',
       lede: 'Answer a few questions and get a role profile plus 2 to 3 vetted operators, often within 48 hours.',
-      fields: [
-        ['Company type', 'Professional services, services-led software, agency, other'],
-        ['Revenue band', 'Under $5M, $5M to $20M, $20M to $75M, $75M+'],
-        ['Seat', 'Sales manager, director of sales, VP of Sales, CRO, not sure'],
-        ['Problem in your words', 'What is not working in sales right now?'],
-        ['Timing', 'This month, 1 to 3 months, exploring'],
-      ],
     },
   };
 
   const REVOPS = {
     fn: 'revops', name: 'fractional-revops', title: 'Fractional RevOps Leaders for B2B SaaS',
-    eyebrow: 'RevOps', cat: 'revenue_operations', browse: 'browse.revenue_operations',
+    eyebrow: 'RevOps', cat: 'revenue_operations', browse: 'browse.revenue_operations', need: 'systems',
     hero: {
       h: 'Fractional RevOps for $25M to $100M SaaS teams that cannot <span class="serif">explain their own pipeline</span>',
       sub: 'A revenue architect who turns your bookings goal into pipeline math your board believes',
@@ -206,24 +202,17 @@
       ['Will they replace my RevOps admin?', 'No. The operator sets the system and the priorities. Your admins keep building against a roadmap.'],
       ['How fast will we see change?', 'A point of view by day 14 and visible impact around day 90.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
-      ['Can we hire them full time?', 'Yes.'],
+      ['Can we hire them full time?', 'Yes, with a conversion fee of 20% of annual salary.'],
     ],
     form: {
       h: 'Tell us where your revenue system breaks',
       lede: 'Share the problem in your words and get a scope plus 2 to 3 vetted RevOps operators.',
-      fields: [
-        ['Company type', 'B2B SaaS, services-led software, other'],
-        ['Revenue band', 'Under $25M, $25M to $100M, $100M+'],
-        ['Seat', 'RevOps assessment, director of RevOps, VP RevOps or revenue architect, not sure'],
-        ['Problem in your words', 'What can your team not answer about pipeline or forecast today?'],
-        ['Timing', 'This month, 1 to 3 months, exploring'],
-      ],
     },
   };
 
   const MARKETING = {
     fn: 'marketing', name: 'fractional-marketing-leadership', title: 'Fractional CMO and Marketing Leaders',
-    eyebrow: 'Marketing leadership', cat: 'marketing', browse: 'browse.marketing',
+    eyebrow: 'Marketing leadership', cat: 'marketing', browse: 'browse.marketing', need: 'pipeline',
     hero: {
       h: 'Fractional marketing leaders who bring lead costs down and <span class="serif">hold your agencies to a number</span>',
       sub: 'A demand gen operator or fractional CMO for companies paying more for worse leads',
@@ -276,24 +265,17 @@
       ['How many hours does a fractional CMO need?', '40 to 80 a month in our 2026 searches.'],
       ['Can they also support sales?', 'Some can. Sales enablement, including call centers, is a scored factor. Tell us whether you need brand strategy, enablement or both.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
-      ['Can we hire them full time?', 'Yes.'],
+      ['Can we hire them full time?', 'Yes, with a conversion fee of 20% of annual salary.'],
     ],
     form: {
       h: 'Tell us what your marketing is costing you',
       lede: 'Describe the problem and get a scorecard plus vetted marketing operators to meet.',
-      fields: [
-        ['Company type', 'B2B SaaS, home or local services, professional services, PE-backed platform, other'],
-        ['Revenue band', 'Under $10M, $10M to $50M, $50M to $150M, $150M+'],
-        ['Seat', 'Demand gen operator, head of growth, VP Marketing, fractional CMO, not sure'],
-        ['Problem in your words', 'What is happening to lead cost and quality?'],
-        ['Timing', 'This month, 1 to 3 months, exploring'],
-      ],
     },
   };
 
   const COST = {
     fn: 'cost', name: 'fractional-cost', title: 'What Fractional GTM Leaders Cost in 2026',
-    eyebrow: 'Cost', browse: 'browse',
+    eyebrow: 'Cost', browse: 'browse', need: '',
     hero: {
       h: 'What fractional sales, RevOps and marketing leaders <span class="serif">cost in 2026</span>',
       sub: 'Real rates from our 2026 engagements, by seat and by hours',
@@ -365,8 +347,8 @@
         ['After the initial term', 'Month-to-month with 30 days notice'],
         ['Overage', 'Hours tracked and flagged before an overage happens. Small overages, e.g. up to 15%, may be agreed in the contract without extra consent'],
         ['Swap-out', 'If the fit is wrong, you can swap the operator'],
-        ['Full-time conversion', 'You can hire the operator full time. The terms for that are being confirmed. [[gap:conversion terms|Matt]]'],
-        ['Fees for companies', 'None. You pay the operator’s rate.'],
+        ['Full-time conversion', '20% of annual salary'],
+        ['Platform fee', 'None. Companies use Revenue Nomad free and pay the operator’s rate.'],
       ],
     },
     faq: [
@@ -379,13 +361,6 @@
     form: {
       h: 'Get a budget for your seat',
       lede: 'Tell us the seat and the problem and we will price the hours it needs.',
-      fields: [
-        ['Function', 'Sales, RevOps, marketing, other'],
-        ['Seat', 'Manager, director, VP, CRO or CMO, not sure'],
-        ['Revenue band', 'Under $5M, $5M to $20M, $20M to $75M, $75M to $100M, $100M+'],
-        ['Problem in your words', 'What needs to change?'],
-        ['Timing', 'This month, next 1 to 3 months, exploring'],
-      ],
     },
   };
   FN.pages = { sales: SALES, revops: REVOPS, marketing: MARKETING, cost: COST };
@@ -411,7 +386,7 @@
       eyebrow: d.eyebrow,
       h: d.hero.h,
       lede: `<b class="fn-sub">${esc(d.hero.sub)}</b>${esc(RN.fmt.smart(d.hero.lede))}`,
-      actions: `<button type="button" class="btn btn-lg" data-act="fn-talk">Talk to us${icon('arrow')}</button><a class="btn btn-line btn-lg" href="#${esc(d.browse)}">Browse operators</a>`,
+      actions: `<a class="btn btn-lg" href="#${esc(talkTo(d))}">Talk to us${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#${esc(d.browse)}">Browse operators</a>`,
       aside: stats(d),
     });
   }
@@ -534,29 +509,33 @@
     return sec('faq', false, `<div class="fn-faq-in">${PG.shead('FAQ', 'Common questions')}${PG.faq(d.faq)}</div>`);
   }
 
-  /* Form block: the Talk to us form embedded by the Talk builder (RN.talk.embed) with this page's function,
-     otherwise a finished card that shows what the form asks and leads to #talk. */
-  function fallback(d) {
+  /* Form block: Talk to us is the four-question flow on #talk. The card lists its questions, with this page's need
+     already picked, and opens the flow there. */
+  const lcFirst = (t) => t.charAt(0).toLowerCase() + t.slice(1);
+  function talkCard(d) {
+    const starts = RN.fields.startBy.options.map((o) => o.l);
+    const startList = [starts[0]].concat(starts.slice(1).map(lcFirst)).join(', ').replace(/, ([^,]*)$/, ' or $1');
+    const qs = [
+      ['What do you need help with?', d.need ? `Picked for you: ${RN.w.label('need', d.need)}` : 'Pick the closest match'],
+      ['How big is the business today?', 'Revenue and headcount'],
+      ['When do you need them to start?', startList],
+      ['Where should we reply?', 'Your name and work email. Company and title are optional.'],
+    ];
     return `<div class="fn-form-card">
-      <div class="fn-form-card-hd"><span class="label">The form asks</span>${FN.gap('form ships Oct 30', 'Rapid Neuron')}</div>
-      <ol class="fn-form-q">${d.form.fields.map(([l, p]) => `<li><b>${esc(l)}</b><span>${esc(p)}</span></li>`).join('')}</ol>
-      <div class="fn-form-cta"><a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pg-book">${icon('calendar')}Book your discovery call</button></div>
-      <p class="fn-form-fine small">Every answer goes to a person.</p>
+      <div class="fn-form-card-hd"><span class="label">Four quick questions</span>${FN.gap('form ships Oct 30', 'Rapid Neuron')}</div>
+      <ol class="fn-form-q">${qs.map(([q, a]) => `<li><b>${esc(q)}</b><span>${esc(a)}</span></li>`).join('')}</ol>
+      <div class="fn-form-cta"><a class="btn btn-leaf btn-lg" href="#${esc(talkTo(d))}">Talk to us${icon('arrow')}</a><button type="button" class="btn btn-line btn-lg" data-act="pg-book">${icon('calendar')}Book a call</button></div>
+      <p class="fn-form-fine small">We show you three operators right away, and a person replies within one business day.</p>
     </div>`;
   }
   function formBlock(d) {
-    let embed = '';
-    if (RN.talk && typeof RN.talk.embed === 'function') {
-      try { embed = RN.talk.embed({ fn: d.fn }) || ''; } catch (e) { console.warn('RN.talk.embed failed, showing the fallback card', e); embed = ''; }
-    }
     return `<section class="section night fn-sec fn-form" id="fn-form" data-fn="${esc(d.fn)}"><div class="wrap fn-form-in">
       <div class="fn-form-l">
         <span class="eyebrow">Talk to us</span>
         <h2 class="h2">${esc(d.form.h)}</h2>
         <p class="lede">${esc(RN.fmt.smart(d.form.lede))}</p>
-        <p class="fn-form-alt">Rather talk now? <button type="button" class="act" data-act="pg-book">${icon('calendar')}Book your discovery call</button></p>
       </div>
-      <div class="fn-form-r${embed ? ' has-embed' : ''}">${embed || fallback(d)}</div>
+      <div class="fn-form-r">${talkCard(d)}</div>
     </div></section>`;
   }
 
@@ -615,13 +594,4 @@
   });
   RN.view(COST.name, { route: COST.name, nav: '', title: () => COST.title, render: () => costView(COST), mount, unmount });
 
-  /* The hero's Talk to us scrolls to this page's form block and puts focus on its first control */
-  RN.actions['fn-talk'] = () => {
-    const block = document.getElementById('fn-form');
-    if (!block) { RN.go('talk'); return; }
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    block.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
-    const first = block.querySelector('.fn-form-r input:not([type="hidden"]), .fn-form-r textarea, .fn-form-r select, .fn-form-r button, .fn-form-r a');
-    if (first) setTimeout(() => { try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); } }, reduce ? 0 : 420);
-  };
 })();

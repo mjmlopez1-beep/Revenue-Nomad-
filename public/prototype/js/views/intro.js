@@ -96,7 +96,7 @@
     return optOf('startBy', op.avail.key) || 'available_now';
   }
   /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, email, source ('talk': show the note up front),
-     name, title, company, revenueRange, industry,   (what a visitor already told us, e.g. in Talk to us)
+     name, title, company, revenueRange, employeeRange, industry,   (what a visitor already told us, e.g. in Talk to us)
      search: {text, need, match, needs: [{label, status, color}]}}  (search: opened from a ranked search row)
      A visitor's name, company, revenue range and industry ride along as hidden fields and win over what the
      email domain suggests, as long as the email sent is the one they gave. */
@@ -159,7 +159,7 @@
         ${RN.w.field('need', d.need, { name: 'need', compact: true })}
         ${RN.w.field('startBy', d.startBy, { name: 'startBy', compact: true })}
         ${noteUp ? noteField : ''}
-        ${signedIn ? '' : ['name', 'title', 'company', 'revenueRange', 'industry', 'email'].filter((k) => prefill[k]).map((k) => `<input type="hidden" name="pre-${k}" value="${esc(prefill[k])}">`).join('')}
+        ${signedIn ? '' : ['name', 'title', 'company', 'revenueRange', 'employeeRange', 'industry', 'email'].filter((k) => prefill[k]).map((k) => `<input type="hidden" name="pre-${k}" value="${esc(prefill[k])}">`).join('')}
         ${signedIn ? '' : `<div class="in-email">
           ${RN.w.field('email', d.email, { name: 'email', compact: true })}
           <p class="small muted">We name your company from your email. ${esc(op.first)} sees its industry and size, not your name, until you are introduced. <button type="button" class="act in-sample" data-act="intro-sample" data-id="${esc(op.id)}">Use a sample email</button></p>
@@ -205,7 +205,7 @@
     const pre = (k) => String(data['pre-' + k] || '').trim();
     const same = !pre('email') || pre('email').toLowerCase() === email.toLowerCase();
     const told = (k) => (same ? pre(k) : '');
-    const company = signedIn ? me.company : { name: told('company') || intro.companyFromEmail(email) || 'Your company', industry: told('industry'), revenueRange: told('revenueRange'), employeeRange: '' };
+    const company = signedIn ? me.company : { name: told('company') || intro.companyFromEmail(email) || 'Your company', industry: told('industry'), revenueRange: told('revenueRange'), employeeRange: told('employeeRange') };
     const name = signedIn ? me.name : told('name') || intro.nameFromEmail(email, company.name);
     // One open request per client and operator, checked on the email actually submitted
     const dup = openFor(op.id, email);
