@@ -335,13 +335,46 @@
       drawCharts(document.getElementById('main'));
     }, 160);
   }
+  /* Motion: blocks marked data-rs-reveal play their entrance once they scroll into view. They are fully visible
+     without it (no hidden state for a still capture, reduced motion or a browser without IntersectionObserver). */
+  let revealIO = null, spyFn = null;
+  function reveal(root) {
+    if (revealIO) revealIO.disconnect();
+    revealIO = null;
+    const els = RN.$$('[data-rs-reveal]', root || document);
+    if (!els.length || !('IntersectionObserver' in window) || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    revealIO = new IntersectionObserver((ents) => ents.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('is-in'); revealIO.unobserve(e.target); } }), { rootMargin: '0px 0px -12% 0px' });
+    els.forEach((el) => revealIO.observe(el));
+  }
+  // Guide pages: the "On this page" list marks the section being read and fills a progress rule
+  function tocSpy(root) {
+    const btns = RN.$$('.rs-toc button[data-to]', root);
+    const bar = RN.$('.rs-toc-prog i', root);
+    const art = RN.$('.rs-art', root);
+    if (!btns.length || !art) return;
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      let cur = null;
+      btns.forEach((b) => { const s = document.getElementById(b.dataset.to); if (s && s.getBoundingClientRect().top < 160) cur = b; });
+      btns.forEach((b) => b.classList.toggle('on', b === cur));
+      if (bar) { const r = art.getBoundingClientRect(); const f = RN.clamp((window.innerHeight * 0.4 - r.top) / Math.max(1, r.height), 0, 1); bar.style.transform = `scaleY(${f.toFixed(3)})`; }
+    };
+    spyFn = () => { if (!raf) raf = requestAnimationFrame(run); };
+    window.addEventListener('scroll', spyFn, { passive: true });
+    run();
+  }
   function mountCommon(root) {
     lastW = window.innerWidth;
     drawCharts(root);
     window.addEventListener('resize', onResize);
+    reveal(root);
+    tocSpy(root);
   }
   function unmountCommon() {
     window.removeEventListener('resize', onResize);
+    if (spyFn) { window.removeEventListener('scroll', spyFn); spyFn = null; }
+    if (revealIO) { revealIO.disconnect(); revealIO = null; }
     while (RN.ui.modalEl()) RN.ui.closeModal();
   }
 
@@ -391,7 +424,7 @@
     return `<div class="rs-legend" aria-label="Legend">
       <span><span class="rs-ramp" aria-hidden="true">${STEPS.map((p) => `<i class="rs-sw rs-sw-v" style="--rs-p:${p}%"></i>`).join('')}</span>Operators with company-verified proof, fewer to more</span>
       <span><i class="rs-sw rs-sw-c"></i>Self-claimed only</span>
-      <span><i class="rs-sw rs-sw-o"></i>Focus areas mapped, no operators yet</span>
+      <span><i class="rs-sw rs-sw-o"></i>Open, no operators yet</span>
     </div>`;
   }
 
@@ -410,21 +443,22 @@
       return `<button type="button" class="rs-mcell ${f.cls}" style="${f.style}" data-act="rs-fw-open" data-area="${esc(a.name)}" data-stage="${esc(s.name)}" aria-label="${esc(label)}">
         <span class="rs-mcell-sw" aria-hidden="true"></span>
         <span class="rs-mcell-name">${icon(a.icon)}<b>${esc(a.name)}</b></span>
-        <span class="rs-mcell-n">${!x.tags.length ? 'None mapped' : !x.any ? 'No operators yet' : `<b>${x.ver}</b> verified · ${x.any} claim`}</span>
+        <span class="rs-mcell-n">${!x.any ? 'Open' : `<b>${x.ver}</b> verified · ${x.any} claim`}</span>
         ${icon('chev-right')}
       </button>`;
     }
-    return `<button type="button" class="rs-cell ${f.cls}" style="${f.style}" data-act="rs-fw-open" data-area="${esc(a.name)}" data-stage="${esc(s.name)}" aria-label="${esc(label)}">
-      ${!x.tags.length ? '<span class="rs-cell-none">None mapped</span>'
-        : !x.any ? `<span class="rs-cell-c">No operators yet</span><span class="rs-cell-t">${plural(x.tags.length, 'focus area')}</span>`
-        : `<span class="rs-cell-v"><b>${x.ver}</b><span>verified</span></span><span class="rs-cell-c">${x.any} claim</span><span class="rs-cell-t">${plural(x.tags.length, 'focus area')}</span>`}
+    // One number per cell, the verified count; the claim count and focus areas show on hover and in the panel
+    const tip = !x.any ? `${plural(x.tags.length, 'focus area')}, no operators yet` : `${x.ver} verified · ${x.any} claim · ${plural(x.tags.length, 'focus area')}`;
+    return `<button type="button" class="rs-cell ${f.cls}" style="${f.style}" data-act="rs-fw-open" data-area="${esc(a.name)}" data-stage="${esc(s.name)}" aria-label="${esc(label)}" title="${esc(tip)}">
+      ${!x.any ? '<span class="rs-cell-c rs-cell-none">Open</span>'
+        : `<b class="rs-cell-n">${x.ver}</b><span class="rs-cell-c">${x.any} claim</span>`}
     </button>`;
   }
   function grid(ix) {
     const g = gridCells(ix);
     const js = journey();
     const nb = js.filter((s) => s.side === 'before').length;
-    const desktop = `<div class="rs-grid" role="group" aria-label="GTM Framework: areas by stage. Each cell opens a panel.">
+    const desktop = `<div class="rs-grid" data-rs-reveal role="group" aria-label="GTM Framework: areas by stage. Each cell opens a panel.">
       <div class="rs-gh rs-gh-corner" aria-hidden="true"></div>
       <div class="rs-gh rs-gh-side label" style="grid-column: span ${nb}">Before the sale</div>
       <div class="rs-gh rs-gh-side label is-after" style="grid-column: span ${js.length - nb}">After the sale</div>
@@ -434,10 +468,10 @@
       ${js.map((s) => `<button type="button" class="rs-gh rs-gh-stage" data-act="rs-fw-open" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
       <div class="rs-gsp" aria-hidden="true"></div>
       <button type="button" class="rs-gh rs-gh-stage is-all" data-act="rs-fw-open" data-stage="Foundation">Foundation</button>
-      ${g.areas.map((a) => `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}"><span class="rs-ga-ic">${icon(a.icon)}</span><span><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span></span></button>
+      ${g.areas.map((a) => { const t = agg(ix, a.name, null); return `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}" title="${esc(a.def)}"><span class="rs-ga-ic">${icon(a.icon)}</span><span class="rs-ga-tx"><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span><span class="rs-ga-n"><span><b class="tnum">${t.ver}</b> verified</span><span>${t.any} claim</span></span></span></button>
         ${js.map((s) => cellBtn(g, a, s)).join('')}
         <div class="rs-gsp" aria-hidden="true"></div>
-        ${cellBtn(g, a, FOUNDATION)}`).join('')}
+        ${cellBtn(g, a, FOUNDATION)}`; }).join('')}
     </div>`;
     const cur = stageBy(fw.mStage) || journey()[2];
     const mobile = `<div class="rs-mgrid">
@@ -463,15 +497,16 @@
     const stAggs = journey().map((s) => ({ s, a: agg(ix, null, s.name) }));
     const topStage = stAggs.slice().sort((x, y) => y.a.ver - x.a.ver || y.a.any - x.a.any)[0];
     const where = topStage.a.ver === verTotal ? `All of them have it at ${topStage.s.name}.` : `${topStage.a.ver} of them have it at ${topStage.s.name}, more than at any other stage.`;
-    out.push({ v: String(verTotal), l: `${verTotal === 1 ? 'operator on the network has' : 'operators on the network have'} company-verified proof so far. ${where}`, act: `data-act="rs-fw-open" data-stage="${esc(topStage.s.name)}"`, cta: `Open ${topStage.s.name}` });
+    const live = RN.model.ops.filter((o) => !o.hidden).length;
+    out.push({ n: verTotal, d: live, dl: `of ${live} operator profiles`, v: String(verTotal), l: `${verTotal === 1 ? 'operator on the network has' : 'operators on the network have'} company-verified proof so far. ${where}`, act: `data-act="rs-fw-open" data-stage="${esc(topStage.s.name)}"`, cta: `Open ${topStage.s.name}` });
     const afterOps = new Set();
     Object.values(ix.cells).forEach((c) => { const st = stageBy(c.stage); if (st && st.side === 'after') c.ver.forEach((i) => afterOps.add(i)); });
     const afterClaim = new Set();
     Object.values(ix.cells).forEach((c) => { const st = stageBy(c.stage); if (st && st.side === 'after') c.any.forEach((i) => afterClaim.add(i)); });
-    out.push({ v: String(afterOps.size), l: `${afterOps.size === 1 ? 'operator has' : 'operators have'} verified proof after the sale, while ${afterClaim.size} claim onboarding, adoption or expansion work. That is the thinnest proof on the map.`, act: 'data-act="rs-fw-open" data-stage="Adopt"', cta: 'Open Adopt' });
+    out.push({ n: afterOps.size, d: afterClaim.size, dl: `of ${afterClaim.size} who claim it`, v: String(afterOps.size), l: `${afterOps.size === 1 ? 'operator has' : 'operators have'} verified proof after the sale, while ${afterClaim.size} claim onboarding, adoption or expansion work. That is the thinnest proof on the map.`, act: 'data-act="rs-fw-open" data-stage="Adopt"', cta: 'Open Adopt' });
     let best = null;
     areas.forEach((a) => journey().forEach((s) => { const x = agg(ix, a.name, s.name); if (!best || x.any > best.any) best = x; }));
-    if (best) out.push({ v: String(best.any), l: `operators claim ${cellText(best.area + ' work', best.stage)}, the most crowded cell. Companies should ask for verified proof here before they hire.`, act: `data-act="rs-fw-open" data-area="${esc(best.area)}" data-stage="${esc(best.stage)}"`, cta: 'Open the cell' });
+    if (best) out.push({ n: best.ver, d: best.any, dl: `${best.ver} of ${best.any} verified`, claim: true, v: String(best.any), l: `operators claim ${cellText(best.area + ' work', best.stage)}, the most crowded cell. Companies should ask for verified proof here before they hire.`, act: `data-act="rs-fw-open" data-area="${esc(best.area)}" data-stage="${esc(best.stage)}"`, cta: 'Open the cell' });
     return out;
   }
 
@@ -725,18 +760,21 @@
     const ix = netIndex();
     const libN = F.fitTags.options.length;
     const finds = findings(ix);
-    const areas = R.areas();
     return `<div class="rs rs-fw">
     <header class="wrap phead rs-head">
       ${crumbs([{ l: 'GTM Framework' }])}
       <span class="eyebrow">Revenue Nomad GTM Framework</span>
-      <h1 class="h1">Every revenue problem has <span class="serif">an address.</span></h1>
-      <p class="lede">The framework places all go-to-market work on two lenses: the area of work, and the stage of the customer's journey it changes. Every focus area, profile, company review and Engagement Blueprint on Revenue Nomad uses it, so a company's problem and an operator's proof are described in the same words.</p>
-      <div class="stats-row rs-kpis" style="--cols:4">
-        <div class="stat"><span class="stat-v">6</span><span class="stat-l">Areas of work</span></div>
-        <div class="stat"><span class="stat-v">7</span><span class="stat-l">Customer-journey stages</span></div>
-        <div class="stat"><span class="stat-v">${RN.fmt.int(libN)}</span><span class="stat-l">Focus areas mapped</span></div>
-        <div class="stat"><span class="stat-v">${RN.fmt.int(ix.verOps.size)}</span><span class="stat-l">Operators with company-verified proof</span></div>
+      <div class="rs-fw-hero">
+        <div>
+          <h1 class="h1">Every revenue problem has <span class="serif">an address.</span></h1>
+          <p class="lede">The framework places all go-to-market work on two lenses: the area of work, and the stage of the customer's journey it changes. Every focus area, profile, company review and Engagement Blueprint on Revenue Nomad uses it, so a company's problem and an operator's proof are described in the same words.</p>
+        </div>
+        <dl class="rs-fw-kpis">
+          <div><dt>Areas of work</dt><dd class="num">6</dd></div>
+          <div><dt>Customer-journey stages</dt><dd class="num">7</dd></div>
+          <div><dt>Focus areas mapped</dt><dd class="num">${RN.fmt.int(libN)}</dd></div>
+          <div><dt>Operators with company-verified proof</dt><dd class="num">${RN.fmt.int(ix.verOps.size)}</dd></div>
+        </dl>
       </div>
     </header>
 
@@ -752,7 +790,7 @@
     <section class="wrap section-sm rs-sec" aria-labelledby="rs-grid-t">
       <div class="rs-sec-hd">
         <div><span class="eyebrow">The map</span><h2 class="h2" id="rs-grid-t">Six areas across seven stages</h2></div>
-        <p class="body">Each cell counts the operators with company-verified proof there and the operators who claim the work. Select a cell to see what good looks like, the focus areas that live in it and who is strongest. Foundation holds the work every stage runs on.</p>
+        <p class="body">Each number is the operators with company-verified proof in that cell; hover for how many claim the work. Select a cell, a stage or an area to see what good looks like, the focus areas that live there and who is strongest. Foundation holds the work every stage runs on.</p>
       </div>
       <div class="rs-grid-box" data-rs-grid>${grid(ix)}</div>
       ${legend()}
@@ -760,28 +798,22 @@
 
     <section class="wrap section-sm rs-sec rs-find" aria-labelledby="rs-find-t">
       <h2 class="sr-only" id="rs-find-t">What the map shows today</h2>
-      <div class="rs-finds">
-        <div class="rs-finds-hd"><span class="eyebrow">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? ` (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)` : ''}. A focus area counts as verified once a company review rated 4.0 or higher confirms it.</p></div>
-        ${finds.map((f) => `<div class="rs-fnd"><span class="rs-fnd-v num">${esc(f.v)}</span><p>${esc(f.l)}</p><button type="button" class="act" ${f.act}>${esc(f.cta)}${icon('arrow')}</button></div>`).join('')}
-      </div>
-    </section>
-
-    <section class="wrap section-sm rs-sec" aria-labelledby="rs-areas-t">
-      <div class="rs-sec-hd">
-        <div><span class="eyebrow">The areas</span><h2 class="h2" id="rs-areas-t">Six kinds of go-to-market work</h2></div>
-        <p class="body">An operator's profile shows how much company-verified proof they have in each area. The same six areas describe what a company needs and what an Engagement Blueprint delivers.</p>
-      </div>
-      <div class="grid g-3 rs-areas">
-        ${areas.map((a) => { const x = agg(ix, a.name, null); return `<button type="button" class="rs-area card" data-act="rs-fw-open" data-area="${esc(a.name)}">
-          <span class="rs-area-ic">${icon(a.icon)}</span>
-          <h3 class="h4">${esc(a.name)}</h3>
-          <p class="small muted">${esc(a.def)}</p>
-          <span class="rs-area-n"><span><b class="num">${x.ver}</b> verified</span><span><b class="num">${x.any}</b> claim</span><span><b class="num">${x.tags.length}</b> focus areas</span></span>
-        </button>`; }).join('')}
+      <div class="rs-finds" data-rs-reveal>
+        <div class="rs-finds-hd"><span class="eyebrow">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? `<span data-proto> (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)</span>` : ''}. A focus area counts as verified once a company review rated 4.0 or higher confirms it.</p></div>
+        ${finds.map((f, i) => `<div class="rs-fnd" style="--i:${i}"><span class="rs-fnd-v num">${esc(f.v)}</span>
+          ${f.d ? `<span class="rs-fnd-m${f.claim ? ' is-claim' : ''}" role="img" aria-label="${esc(f.dl)}"><span class="rs-fnd-bar"><i style="width:${Math.max(2, Math.round((f.n / f.d) * 100))}%"></i></span><span class="tiny muted tnum">${esc(f.dl)}</span></span>` : ''}
+          <p>${esc(f.l)}</p><button type="button" class="act" ${f.act}>${esc(f.cta)}${icon('arrow')}</button></div>`).join('')}
       </div>
     </section>
 
     <section class="night rs-diag-band" id="rs-diag" aria-labelledby="rs-diag-t">
+      <svg class="rs-diag-bow" viewBox="0 0 720 260" aria-hidden="true" focusable="false">${(() => {
+        // The bowtie's outline: four segments narrowing to the signature, three widening after it
+        const L = [[0, 0, 260], [80, 22, 238], [160, 44, 216], [240, 66, 194], [320, 88, 172]];
+        const R = [[400, 88, 172], [506, 44, 216], [613, 22, 238], [720, 0, 260]];
+        const segs = (pts) => pts.slice(0, -1).map((a, i) => { const b = pts[i + 1]; return `<polygon points="${a[0]},${a[1]} ${b[0]},${b[1]} ${b[0]},${b[2]} ${a[0]},${a[2]}"/>`; }).join('');
+        return segs(L) + segs(R) + '<circle cx="360" cy="130" r="22"/>';
+      })()}</svg>
       <div class="wrap rs-diag">
         <div class="rs-diag-intro">
           <span class="eyebrow">Self-diagnostic for companies</span>
@@ -866,6 +898,7 @@
         : `<button type="button" class="act" data-act="rs-add-tag" data-tag="${esc(r.name)}">${icon('plus')}Add to my profile</button>`;
     }
     return `<article class="rs-tag" id="rs-tag-${esc(RN.slug(r.name))}">
+      <button type="button" class="rs-tag-hit" data-act="rs-browse" data-src="library" data-f="{}" data-tags="${jsonAttr([r.name])}" data-q="" aria-label="Find operators for ${esc(r.name)}"></button>
       <div class="rs-tag-main">
         <h3 class="rs-tag-name">${esc(r.name)}${mine ? `<span class="pill ${mine.tier === 'claimed' ? 'pill-line' : 'pill-good'} rs-tag-mine">${mine.tier === 'claimed' ? 'On your profile' : 'Yours, verified'}</span>` : ''}</h3>
         ${r.def ? `<p class="rs-tag-def">${esc(r.def)}</p>` : ''}
@@ -877,12 +910,12 @@
       </div>
       <div class="rs-tag-stats">
         <div class="rs-tag-n">${r.any ? `<span><b class="num">${r.any}</b> ${r.any === 1 ? 'operator' : 'operators'}</span><span class="${r.ver ? 'accent' : 'muted'}">${r.ver ? icon('check-circle') : ''}<b class="num">${r.ver}</b> company-verified</span>` : '<span class="muted">No operators yet</span>'}</div>
-        ${vShow.length ? `<div class="rs-tag-vops">${vShow.map((op) => `<a href="#op.${esc(op.slug)}" title="${esc(op.name)}, verified">${RN.ui.avatar(op, 'ava-xs')}</a>`).join('')}<span class="tiny muted">verified by companies</span></div>` : ''}
-        ${r.demand ? `<div class="rs-tag-d">${icon('trend-up')}<span><b class="tnum">${RN.fmt.int(r.demand)}</b> company searches / mo</span>${gap ? '<span class="pill pill-warn">Proof is thin</span>' : ''}</div>` : ''}
+        ${vShow.length ? `<div class="rs-tag-vops"><span class="rs-tag-faces">${vShow.map((op) => `<a href="#op.${esc(op.slug)}" title="${esc(op.name)}, verified by a company">${RN.ui.avatar(op, 'ava-sm')}</a>`).join('')}</span><span class="tiny muted">Verified by companies</span></div>` : ''}
+        ${r.demand ? `<div class="rs-tag-d">${icon('trend-up')}<span><b class="tnum">${RN.fmt.int(r.demand)}</b> company searches / mo</span>${gap ? `<span class="rs-thin">${icon('info')}Proof is thin</span>` : ''}</div>` : ''}
       </div>
       <div class="rs-tag-acts">
-        <button type="button" class="btn btn-line btn-sm" data-act="rs-browse" data-src="library" data-f="{}" data-tags="${jsonAttr([r.name])}" data-q="">Find operators${icon('arrow')}</button>
         ${opAct}
+        <span class="rs-tag-go" aria-hidden="true"><span>Find operators</span>${icon('chev-right')}</span>
       </div>
     </article>`;
   }
@@ -907,10 +940,15 @@
         const cr = rows.filter((r) => r.cat === c);
         if (!cr.length) return '';
         const ver = cr.reduce((a, r) => a + r.ver, 0);
+        const faces = [];
+        cr.forEach((r) => r.verOps.forEach((op) => { if (!faces.includes(op)) faces.push(op); }));
+        const used = cr.filter((r) => r.any).length;
         return `<section class="rs-lib-cat">
           <div class="rs-lib-cat-hd">
             <h2 class="h3">${RN.ui.catDot(c)}${esc(F.catLabel(c))}</h2>
             <span class="small muted">${plural(cr.length, 'focus area')} · ${ver} company-verified</span>
+            <span class="rs-lib-use" role="img" aria-label="${used} of ${cr.length} in use on live profiles"><span class="rs-lib-use-bar"><i style="width:${Math.max(2, Math.round((used / cr.length) * 100))}%"></i></span><span class="tiny muted">${used} in use</span></span>
+            ${faces.length ? `<span class="rs-lib-faces" title="Operators with company-verified proof in ${esc(F.catLabel(c))}">${faces.slice(0, 5).map((op) => RN.ui.avatar(op, 'ava-sm', { decorative: true })).join('')}${faces.length > 5 ? `<span class="rs-lib-more">+${faces.length - 5}</span>` : ''}</span>` : ''}
             <button type="button" class="act" data-act="rs-lib-cat-set" data-cat="${esc(c)}">See all ${cr.length}${icon('arrow')}</button>
           </div>
           <div class="rs-tags card">${cr.slice(0, 4).map(tagRow).join('')}</div>
@@ -1079,10 +1117,6 @@
       </div>
     </header>
 
-    <section class="wrap rs-sec-sm">
-      <div class="grid g-2 rs-lib-top">${curveCard()}${gapCard(ix)}</div>
-    </section>
-
     <section class="wrap rs-sec-sm" id="rs-lib-browser" aria-labelledby="rs-lib-t">
       <h2 class="sr-only" id="rs-lib-t">Browse the library</h2>
       <div class="rs-lib-bar">
@@ -1096,6 +1130,10 @@
       </div>
       <div id="rs-lib-guides" class="rs-lib-guides">${libGuides()}</div>
       <div id="rs-lib-results" class="rs-lib-results">${r.html}</div>
+    </section>
+
+    <section class="wrap rs-sec-sm rs-lib-how" aria-label="How proof works">
+      <div class="grid g-2 rs-lib-top">${curveCard()}${gapCard(ix)}</div>
     </section>
 
     <section class="wrap rs-sec-sm">
@@ -1320,7 +1358,7 @@
           { id: 'tiers', h: 'The tiers', html: `${tbl(['Tier', 'Score', 'What it means'], F.risTier.options.map((t) => [`<b>${esc(t.l)}</b>`, `${t.min}–${t.max}`, esc(t.d)]), 'rs-tbl-l')}
             <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a company confirmed: verified focus areas and verified engagements.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
-            ${src(`Live count across ${ops.length} operator profiles in this prototype.`)}
+            ${src(`Live count across ${ops.length} operator profiles<span data-proto> in this prototype</span>.`)}
             ${chartGo('Browse operators, highest Reputation Index first', { filters: {}, sort: 'ris', src: 'guide_chart_tiers' })}
             <p>Most profiles sit at Emerging because the index only moves with company evidence. That is by design: a score that starts high means nothing.</p>` },
           { id: 'not', h: 'What it is not', html: `<ul><li>It is not for sale. No plan, fee or sponsorship changes it.</li><li>It is not a popularity score. Profile views and searches do not count.</li><li>It does not punish operators for engagements that were never reviewed.</li></ul>
@@ -1434,15 +1472,160 @@
   };
   // Wide tables (5+ columns) keep readable columns and scroll inside their frame
   const ptbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl rs-ptbl${head.length > 2 ? ' rs-tbl-stack' : ''}${head.length > 4 ? ' rs-ptbl-wide' : ''}${cls ? ' ' + cls : ''}"><table class="tbl"><thead><tr>${head.map((x) => `<th>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => prow(r, head)).join('')}</tbody></table></div>`;
-  function postBlocks(blocks) {
-    return (blocks || []).map((b) => {
-      if (b.p != null) return `<p>${prich(b.p)}</p>`;
-      if (b.ul) return `<ul>${b.ul.map((x) => `<li>${prich(x)}</li>`).join('')}</ul>`;
-      if (b.ol) return `<ol>${b.ol.map((x) => `<li>${prich(x)}</li>`).join('')}</ol>`;
-      if (b.table) return ptbl(b.table.head || [], b.table.rows || []);
-      if (b.quote != null) return `<blockquote class="rs-pq"><p>${prich(b.quote)}</p>${b.by ? `<cite>${prich(b.by)}</cite>` : ''}</blockquote>`;
-      return '';
-    }).join('');
+  /* Visual blocks drawn from each post's own data (design pass, Oct 2026). Nothing here adds copy: every label,
+     number and step comes from the post's blocks, keys and tables.
+       ol whose items all open with a bold lead     -> a step timeline (time markers in the text become chips)
+       ol of short plain items                      -> a numbered checklist
+       ul whose items all open with a bold lead     -> a two-column ruled list
+       table whose first column is "Days 1 to 30"…  -> a phase timeline
+       table that compares options (blank corner)   -> a comparison table, the fractional column highlighted
+       a column of percentages                      -> inline bars scaled to the column
+       "What this looked like at a real company"    -> a case file with a Before -> After rail
+     A paragraph or quote that is only a pending chip carries data-proto, so it disappears with the chip. */
+  const LEAD_RE = /^\*\*([^*]+?)\*\*\s*([\s\S]*)$/;
+  const leadOf = (t) => { const m = String(t || '').match(LEAD_RE); return m ? { h: m[1].trim().replace(/[.:]$/, ''), t: m[2].trim() } : null; };
+  const gapOnly = (t) => plainOf(t) === '';
+  const protoIf = (t) => (gapOnly(t) ? ' data-proto' : '');
+  // A time marker the step's own text names ("often within 48 hours", "Week 1 to 2", "a 3 to 4 month initial term")
+  function timeMark(t) {
+    const s = plainOf(t);
+    let m = s.match(/within (\d+ (?:hours|days|weeks))/i); if (m) return m[1];
+    m = s.match(/\b(week \d+(?: to \d+)?)\b/i); if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    m = s.match(/\b(\d+ to \d+) month/i); if (m) return m[1] + ' months';
+    return '';
+  }
+  // The rule-out list in the CMO guide opens with bold leads but is not a sequence
+  const NOT_STEPS = { 'how-to-hire-a-fractional-cmo:rule-out-and-interview:0': 1 };
+  function stepsTl(items) {
+    const n = items.length;
+    const cols = n <= 4 ? n : Math.ceil(n / 2);
+    return `<ol class="rs-tl" style="--cols:${cols}" data-rs-reveal>${items.map((x, i) => {
+      const l = leadOf(x) || { h: plainOf(x), t: '' };
+      const tm = timeMark(x);
+      return `<li class="rs-tl-i${i % cols === cols - 1 ? ' is-eor' : ''}" style="--i:${i}"><span class="rs-tl-top"><span class="rs-tl-node" aria-hidden="true"><span class="rs-tl-n">${i + 1}</span></span>${tm ? `<span class="rs-tl-when">${icon('clock')}${esc(tm)}</span>` : ''}</span>
+        <span class="rs-tl-b"><b class="rs-tl-h">${prich(l.h)}</b>${l.t ? `<span class="rs-tl-t">${prich(l.t)}</span>` : ''}</span></li>`;
+    }).join('')}</ol>`;
+  }
+  const numList = (items) => `<ol class="rs-nl">${items.map((x) => `<li>${prich(x)}</li>`).join('')}</ol>`;
+  const leadList = (items, cls) => `<ul class="rs-ll ${cls || ''}">${items.map((x) => { const l = leadOf(x); return `<li>${cls === 'rs-ll-no' ? `<span class="rs-ll-ic" aria-hidden="true">${icon('x')}</span>` : ''}<b>${prich(l.h)}</b><span>${prich(l.t)}</span></li>`; }).join('')}</ul>`;
+  // The older guides write their sections as HTML: an ol whose items all open with <b> becomes the same timeline
+  const olToTl = (html) => String(html || '').replace(/<ol>([\s\S]*?)<\/ol>/g, (m, inner) => {
+    const items = inner.split(/<li>/).slice(1).map((x) => x.replace(/<\/li>\s*$/, '').trim());
+    if (items.length >= 2 && items.every((x) => /^<b>[^<]+<\/b>/.test(x))) {
+      const n = items.length, cols = n <= 4 ? n : Math.ceil(n / 2);
+      return `<ol class="rs-tl" style="--cols:${cols}" data-rs-reveal>${items.map((x, i) => { const mm = x.match(/^<b>([^<]+)<\/b>\s*([\s\S]*)$/); return `<li class="rs-tl-i${i % cols === cols - 1 ? ' is-eor' : ''}" style="--i:${i}"><span class="rs-tl-top"><span class="rs-tl-node" aria-hidden="true"><span class="rs-tl-n">${i + 1}</span></span></span><span class="rs-tl-b"><b class="rs-tl-h">${mm[1].trim().replace(/[.:]$/, '')}</b><span class="rs-tl-t">${mm[2]}</span></span></li>`; }).join('')}</ol>`;
+    }
+    return `<ol class="rs-nl">${inner}</ol>`;
+  });
+  const isPhaseTable = (t) => (t.rows || []).length >= 2 && t.rows.every((r) => /^days? \d/i.test(plainOf(r[0])));
+  function phaseTl(t) {
+    const head = t.head || [];
+    return `<ol class="rs-phase" style="--cols:${t.rows.length}" data-rs-reveal>${t.rows.map((r, i) => `<li class="rs-ph" style="--i:${i}">
+      <span class="rs-ph-hd"><span class="rs-tl-node" aria-hidden="true"><span class="rs-tl-n">${i + 1}</span></span><b>${prich(r[0])}</b></span>
+      <dl>${r.slice(1).map((c, j) => (String(c || '').trim() ? `<div><dt>${prich(head[j + 1] || '')}</dt><dd>${prich(c)}</dd></div>` : '')).join('')}</dl>
+    </li>`).join('')}</ol>`;
+  }
+  // Inline bars for a column of percentages (the CMO scorecard weights)
+  function pctCols(t) {
+    const out = {};
+    (t.head || []).forEach((_, i) => {
+      if (!i) return;
+      const vals = t.rows.map((r) => String(r[i] || '').trim()).filter(Boolean);
+      if (vals.length >= 3 && vals.every((v) => /^\d+%$/.test(v))) out[i] = Math.max(...vals.map((v) => parseInt(v, 10)));
+    });
+    return out;
+  }
+  /* Hourly rates by seat, drawn from the post's own rate table ("About $150", "$200 to $250"): a range bar per seat
+     on one scale. Rows still pending a figure are left out; the table under it shows them. */
+  function money(c) {
+    const m = plainOf(c).match(/\$([\d,]+)(?:\s*to\s*\$([\d,]+))?/);
+    if (!m) return null;
+    const lo = +m[1].replace(/,/g, ''), hi = m[2] ? +m[2].replace(/,/g, '') : lo;
+    return { lo, hi, approx: /^about/i.test(plainOf(c)), txt: plainOf(c) };
+  }
+  function rateChart(t) {
+    const head = t.head || [];
+    const col = head.findIndex((h) => /hourly rate/i.test(plainOf(h)));
+    if (col < 1) return '';
+    const rows = (t.rows || []).map((r) => ({ l: plainOf(r[0]), v: money(r[col]) })).filter((x) => x.v);
+    if (rows.length < 2) return '';
+    const max = Math.ceil(Math.max(...rows.map((x) => x.v.hi)) / 100) * 100;
+    const ticks = []; for (let v = 0; v <= max; v += 100) ticks.push(v);
+    const pct = (v) => (v / max * 100).toFixed(2) + '%';
+    return `<figure class="rs-rate" data-rs-reveal>
+      <figcaption class="label">${esc(plainOf(head[col]))} by ${esc(plainOf(head[0]).toLowerCase())}</figcaption>
+      <div class="rs-rate-rows">${rows.map((x, i) => `<div class="rs-rate-r" style="--i:${i}">
+        <span class="rs-rate-l">${esc(x.l)}</span>
+        <span class="rs-rate-t" aria-hidden="true">${ticks.slice(1, -1).map((v) => `<i class="rs-rate-g" style="left:${pct(v)}"></i>`).join('')}<span class="rs-rate-b${x.v.hi === x.v.lo ? ' is-pt' : ''}" style="left:${pct(x.v.lo)};width:${x.v.hi === x.v.lo ? '0' : pct(x.v.hi - x.v.lo)}"></span></span>
+        <b class="rs-rate-v tnum">${esc(x.v.txt)}</b>
+      </div>`).join('')}</div>
+      <div class="rs-rate-ax" aria-hidden="true"><span></span><span class="rs-rate-ticks">${ticks.map((v) => `<i style="left:${pct(v)}">$${v}</i>`).join('')}</span><span></span></div>
+    </figure>`;
+  }
+  function richTable(t, ctx) {
+    const head = t.head || [], rows = t.rows || [];
+    if (isPhaseTable(t)) return phaseTl(t);
+    const pc = pctCols(t);
+    const byRow = /^option$/i.test(plainOf(head[0]));
+    const cmp = head.length >= 3 && (!plainOf(head[0]) || byRow);
+    const hi = cmp && !byRow ? head.findIndex((h, i) => i && /^fractional/i.test(plainOf(h))) : -1;
+    const hiRow = cmp && byRow ? rows.findIndex((r) => /^fractional/i.test(plainOf(r[0]))) : -1;
+    const cell = (c, i, r) => {
+      if (pc[i] && /^\d+%$/.test(String(c).trim())) return `<span class="rs-pct"><b class="tnum">${esc(String(c).trim())}</b><span class="rs-pct-bar" aria-hidden="true"><i style="width:${Math.round((parseInt(c, 10) / pc[i]) * 100)}%"></i></span></span>`;
+      return prich(c);
+    };
+    const cls = ['tbl-wrap rs-tbl rs-ptbl', head.length > 2 ? 'rs-tbl-stack' : '', head.length > 4 ? 'rs-ptbl-wide' : '', cmp ? 'rs-cmp' : '', head.length === 2 ? 'rs-spec' : '', Object.keys(pc).length ? 'rs-has-pct' : ''].filter(Boolean).join(' ');
+    const rowHtml = (r) => {
+      const cells = [];
+      r.forEach((c, i) => { if (String(c || '').trim() === '' && cells.length && i > 1) cells[cells.length - 1].span++; else cells.push({ c, i, span: 1 }); });
+      const proto = r.slice(1).every((c) => !String(c || '').trim() || gapOnly(c)) && r.slice(1).some((c) => /\[\[gap:/.test(String(c || '')));
+      return `<tr${proto ? ' data-proto' : ''}${rows.indexOf(r) === hiRow ? ' class="rs-hi-row"' : ''}>${cells.map((x) => `<${x.i === 0 && cmp ? 'th scope="row"' : 'td'} data-l="${esc(plainOf(x.span > 1 ? '' : head[x.i] || ''))}"${x.span > 1 ? ` colspan="${x.span}"` : ''}${x.i === hi ? ' class="rs-hi"' : ''}>${cell(x.c, x.i, r)}</${x.i === 0 && cmp ? 'th' : 'td'}>`).join('')}</tr>`;
+    };
+    return `${rateChart(t)}<div class="${cls}"><table class="tbl"><thead><tr>${head.map((x, i) => `<th${i === hi ? ' class="rs-hi"' : ''}>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`;
+  }
+  // "What this looked like at a real company": bold-led paragraphs become a case file with a rail
+  function caseFile(blocks) {
+    const parts = blocks.map((b) => {
+      if (b.p != null && leadOf(b.p)) { const l = leadOf(b.p); return { k: 'step', h: l.h, t: l.t, raw: b.p }; }
+      return { k: 'other', b };
+    });
+    if (parts.filter((x) => x.k === 'step').length < 2) return null;
+    return `<div class="rs-case" data-rs-reveal>${parts.map((x, i) => {
+      if (x.k === 'step') {
+        const proto = gapOnly(x.t) ? ' data-proto' : '';
+        const after = /^after$/i.test(x.h);
+        return `<div class="rs-case-i${after ? ' is-after' : ''}"${proto} style="--i:${i}"><span class="rs-case-dot" aria-hidden="true"></span><span class="label">${prich(x.h)}</span><p>${prich(x.t)}</p></div>`;
+      }
+      return postBlock(x.b, {});
+    }).join('')}</div>`;
+  }
+  // A sentence that lists eight or more places ("Atlanta, Austin, … and Seattle.") becomes a row of place chips
+  const PLACE = '[A-Z][a-z]+(?: [A-Z][a-z]+)*';
+  const PLACES_RE = new RegExp(`\\s*((?:${PLACE}, ){7,}${PLACE},? and ${PLACE})\\.`);
+  function placesPara(t) {
+    const m = String(t).match(PLACES_RE);
+    if (!m || /\[\[/.test(m[1])) return '';
+    const names = m[1].split(/, (?:and )?|,? and /);
+    const rest = String(t).replace(m[0], '');
+    return `<p>${prich(rest)}</p><ul class="rs-places" aria-label="${names.length} places" data-rs-reveal>${names.map((n, i) => `<li style="--i:${i}">${icon('pin')}${esc(n)}</li>`).join('')}</ul>`;
+  }
+  function postBlock(b, ctx, bi) {
+    if (b.p != null) return placesPara(b.p) || `<p${protoIf(b.p)}>${prich(b.p)}</p>`;
+    if (b.ul) return b.ul.length >= 2 && b.ul.every(leadOf) ? leadList(b.ul, ctx.sec === 'not-right' ? 'rs-ll-no' : '') : `<ul>${b.ul.map((x) => `<li${protoIf(x)}>${prich(x)}</li>`).join('')}</ul>`;
+    if (b.ol) {
+      const k = `${ctx.slug}:${ctx.sec}:${ctx.oi = (ctx.oi == null ? 0 : ctx.oi + 1)}`;
+      if (b.ol.length >= 2 && b.ol.every(leadOf) && !NOT_STEPS[k]) return stepsTl(b.ol);
+      if (b.ol.every(leadOf)) return leadList(b.ol, 'rs-ll-num');
+      return numList(b.ol);
+    }
+    if (b.table) return richTable(b.table, ctx);
+    if (b.quote != null) return `<blockquote class="rs-pq"${protoIf(b.quote)}>${icon('quote')}<p>${prich(b.quote)}</p>${b.by ? `<cite>${prich(b.by)}</cite>` : ''}</blockquote>`;
+    return '';
+  }
+  function postBlocks(blocks, ctx) {
+    ctx = ctx || {};
+    if (ctx.sec === 'real-company') { const cf = caseFile(blocks || []); if (cf) return cf; }
+    return (blocks || []).map((b, i) => postBlock(b, ctx, i)).join('');
   }
   const POST_BP = { sales_leadership: 'vp-sales', revenue_operations: 'vp-revops', marketing: 'cmo' };
   function postGuide(p) {
@@ -1451,7 +1634,7 @@
       updated: p.updated, mins: Math.max(4, Math.round((p.words || 1400) / 230)),
       q: p.q,
       answer: () => [plainOf(p.answer)],
-      sections: () => p.sections.map((x) => ({ id: x.id, h: x.h, html: postBlocks(x.blocks) })),
+      sections: () => p.sections.map((x) => ({ id: x.id, h: x.h, html: postBlocks(x.blocks, { slug: p.slug, sec: x.id }) })),
       faq: () => p.faq.map((f) => ({ q: f.q, a: plainOf(f.a) })),
       cta: { label: `Browse ${F.catLabel(p.cat)}`, filters: { roleCategories: [p.cat] } },
     };
@@ -1532,13 +1715,44 @@
     </a></li>`;
   }
   // Index card: kind, the question, one headline number from the guide's own key numbers (or the answer's first line)
-  function pcard(g, lead) {
+  // The first ordered list in a post whose items all open with a bold lead (the steps), for the index's lead card
+  function postSteps(p) {
+    for (const sec of (p.sections || [])) for (const b of sec.blocks) if (b.ol && b.ol.length >= 3 && b.ol.every(leadOf)) return b.ol;
+    return null;
+  }
+  function rateTable(p) {
+    for (const sec of (p.sections || [])) for (const b of sec.blocks) if (b.table && (b.table.head || []).some((h) => /hourly rate/i.test(plainOf(h)))) return b.table;
+    return null;
+  }
+  const mattBy = (g, extra) => { const matt = RN.model.matt || { name: 'Matt Lopez' }; return `<span class="rs-pl-by">${RN.ui.avatar(matt, 'ava-sm', { decorative: true })}<span><b>By ${esc(matt.name)}</b><span class="tiny muted">Founder, Revenue Nomad · ${g.mins} min read</span></span>${extra || ''}</span>`; };
+  // Index card: kind, the question, one headline number from the guide's own key numbers (or the answer's first line)
+  function pcard(g, lead, o) {
+    o = o || {};
     const st = g.post && g.post.stat;
     const a = g.answer()[0] || '';
-    return `<a class="card card-link rs-pcard${lead ? ' rs-pcard-lead' : ''}" href="#guide.${esc(g.slug)}">
-      <span class="label">${esc(KIND[g.slug] || 'Guide')}${lead ? ' · Start here' : ''}</span>
-      <h3 class="${lead ? 'h2' : 'h4'} rs-pcard-q">${disp(g.q)}</h3>
-      ${lead ? `<p class="rs-pcard-a">${esc(RN.fmt.smart(a))}</p>` : st ? `<span class="small muted clamp-3 rs-pcard-s">${esc(RN.fmt.smart(a))}</span>` : ''}
+    if (lead) {
+      const steps = g.post ? postSteps(g.post) : null;
+      return `<a class="card card-link rs-pcard rs-pcard-lead" href="#guide.${esc(g.slug)}">
+        <span class="rs-pl">
+          <span class="rs-pl-main">
+            <span class="label">${esc(KIND[g.slug] || 'Guide')} · Start here</span>
+            <h3 class="h2 rs-pcard-q">${disp(g.q)}</h3>
+            <span class="rs-pcard-a">${esc(RN.fmt.smart(a))}</span>
+            ${st ? `<span class="rs-pcard-n"><b class="tnum">${disp(st.v)}</b><span class="small muted">${esc(RN.fmt.smart(st.l))}</span></span>` : ''}
+          </span>
+          ${steps ? `<span class="rs-pl-side"><span class="label">The ${steps.length} steps</span>
+            <ol class="rs-mtl">${steps.map((x, i) => { const l = leadOf(x); const tm = timeMark(x); return `<li style="--i:${i}"><span class="rs-mtl-n">${i + 1}</span><span class="rs-mtl-h">${esc(RN.fmt.smart(plainOf(l.h)))}</span>${tm ? `<span class="rs-mtl-w">${esc(tm)}</span>` : ''}</li>`; }).join('')}</ol></span>` : ''}
+        </span>
+        ${mattBy(g, `<span class="act rs-pl-go">Read the guide${icon('arrow')}</span>`)}
+      </a>`;
+    }
+    const rt = o.rates && g.post ? rateTable(g.post) : null;
+    const chart = rt ? rateChart(rt) : '';
+    return `<a class="card card-link rs-pcard${chart ? ' rs-pcard-rates' : ''}" href="#guide.${esc(g.slug)}">
+      <span class="label">${esc(KIND[g.slug] || 'Guide')}</span>
+      <h3 class="h4 rs-pcard-q">${disp(g.q)}</h3>
+      ${st ? `<span class="small muted clamp-3 rs-pcard-s">${esc(RN.fmt.smart(a))}</span>` : ''}
+      ${chart ? chart.replace('class="rs-rate"', 'class="rs-rate rs-rate-mini"') : ''}
       ${st ? `<span class="rs-pcard-n"><b class="tnum">${disp(st.v)}</b><span class="small muted">${esc(RN.fmt.smart(st.l))}</span></span>` : `<span class="small muted clamp-3">${esc(RN.fmt.smart(a))}</span>`}
       <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read</span>${icon('arrow')}</span>
     </a>`;
@@ -1569,44 +1783,53 @@
     const sales = fnGuides('sales');
     const costs = F.roleCategory.options.map((o) => ({ o, g: GUIDES.find((x) => x.cat === o.v && isCost(x)) })).filter((x) => x.g && (x.g.post || RIX().byCat[x.o.v]));
     const redirects = POSTS.flatMap((p) => (p.replaces || []).map((r) => ({ r, p })));
+    let costBar = () => '';
     const known = redirects.filter((x) => x.r.impressions != null);
     return `<div class="rs rs-guides">
     <header class="wrap phead rs-head">
       ${crumbs([{ l: 'Guides' }])}
       <span class="eyebrow">Guides</span>
       <h1 class="h1">Straight answers on <span class="serif">fractional go-to-market.</span></h1>
-      <p class="lede">Each guide answers one question a client asks before hiring, in the first few lines, then shows the numbers behind it from Revenue Nomad's own engagements. Written by Matt Lopez.</p>
-      <p class="rs-gnew small">${icon('book')}<span><b>New in October 2026.</b> ${POSTS.length} guides rebuilt from the blog and the content plan, with ${(POSTS.reduce((n, p) => n + (p.replaces || []).length, 0))} older posts merged into them.</span></p>
+      <p class="lede">Each guide answers one question a client asks before hiring, in the first few lines, then shows the numbers behind it from Revenue Nomad's own engagements.</p>
+      ${(() => { const matt = RN.model.matt || { name: 'Matt Lopez', slug: '' }; return `<a class="rs-ghero-by" href="#op.${esc(matt.slug)}">${RN.ui.avatar(matt, 'ava-md', { decorative: true })}<span><span class="label">Written by</span><b>${esc(matt.name)}</b><span class="small muted">Founder, Revenue Nomad</span></span></a>`; })()}
+      <p class="rs-gnew small" data-proto>${icon('book')}<span><b>New in October 2026.</b> ${POSTS.length} guides rebuilt from the blog and the content plan, with ${(POSTS.reduce((n, p) => n + (p.replaces || []).length, 0))} older posts merged into them.</span></p>
     </header>
     <nav class="rs-gjump-bar" aria-label="Guide groups"><div class="wrap row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${count(g.k)}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div></nav>
     <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-sales" aria-labelledby="rs-g-sales-t">
       ${grpHd(grp('sales'), homeLink(grp('sales')))}
-      <div class="rs-pgrid">${sales.map((g, i) => pcard(g, i === 0)).join('')}</div>
+      <div class="rs-pgrid rs-pgrid-top">${pcard(sales[0], true)}${sales[1] ? pcard(sales[1], false, { rates: true }) : ''}</div>
+      <div class="rs-pgrid rs-pgrid-more">${sales.slice(2).map((g) => pcard(g)).join('')}</div>
     </section>
     ${['revops', 'marketing'].map((k) => { const list = fnGuides(k); const G = grp(k); return `<section class="wrap rs-sec-sm rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
       ${grpHd(G, homeLink(G))}
-      <div class="rs-pgrid rs-pgrid-4">${list.map((g) => pcard(g)).join('')}${list.length % 4 ? `<a class="card card-link rs-pcard rs-pcard-home" href="#${esc(G.home)}"><span class="label">${esc(G.l)}</span><h3 class="h4 rs-pcard-q">Who you get, what it costs, what happens first</h3><span class="small muted">Vetted ${esc(F.catLabel(G.cat))} operators and the Talk to us form.</span><span class="rs-gcard-ft"><span class="tiny muted">${esc(G.l)} home</span>${icon('arrow')}</span></a>` : ''}</div>
+      <div class="rs-pgrid rs-pgrid-4 rs-pgrid-more">${list.map((g) => pcard(g)).join('')}${list.length % 4 ? `<a class="card card-link rs-pcard rs-pcard-home" href="#${esc(G.home)}"><span class="label">${esc(G.l)}</span><h3 class="h4 rs-pcard-q">Who you get, what it costs, what happens first</h3><span class="small muted">Vetted ${esc(F.catLabel(G.cat))} operators and the Talk to us form.</span><span class="rs-gcard-ft"><span class="tiny muted">${esc(G.l)} home</span>${icon('arrow')}</span></a>` : ''}</div>
     </section>`; }).join('')}
     <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
       ${grpHd(grp('costs'), `<a class="act rs-ghome" href="#fractional-cost">The cost hub${icon('arrow')}</a>`)}
-      <div class="card rs-costs">${costs.map(({ o, g }) => {
+      <div class="card rs-costs" data-rs-reveal>${(() => {
+        // One hourly scale for every row: a bar for a quoted range, a dot for a median
+        const hourly = costs.map(({ o, g }) => (g.post && g.post.headline ? money(g.post.headline.rate) : RIX().byCat[o.v] ? { lo: RIX().byCat[o.v].p50, hi: RIX().byCat[o.v].p50 } : null));
+        const top = Math.ceil(Math.max(...hourly.filter(Boolean).map((x) => x.hi)) / 50) * 50;
+        costBar = (i) => { const x = hourly[i]; return x ? `<span class="rs-cost-bar" aria-hidden="true"><i class="${x.hi === x.lo ? 'is-pt' : ''}" style="left:${(x.lo / top * 100).toFixed(1)}%;width:${((x.hi - x.lo) / top * 100).toFixed(1)}%"></i></span>` : ''; };
+        return '';
+      })()}${costs.map(({ o, g }, ci) => {
         const p = g.post;
         if (p && p.headline) {
           const h = p.headline;
           return `<a class="rs-cost rs-cost-real" href="#guide.${esc(g.id)}">
           <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · ${esc(h.basis)}</span></span></span>
-          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(h.rate)}</b></span>
+          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(h.rate)}</b>${costBar(ci)}</span>
           <span class="rs-cost-v"><span class="label">${esc(h.monthL)}</span><b class="tnum">${esc(h.month)}</b></span>
           ${icon('arrow')}</a>`;
         }
         const b = RIX().byCat[o.v]; const hh = (COST[o.v] && COST[o.v].hours) || '40';
         return `<a class="rs-cost" href="#guide.${esc(g.id)}">
           <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · Rate Index</span></span></span>
-          <span class="rs-cost-v"><span class="label">An hour, median</span><b class="tnum">${hr(b.p50)}</b></span>
+          <span class="rs-cost-v"><span class="label">An hour, median</span><b class="tnum">${hr(b.p50)}</b>${costBar(ci)}</span>
           <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m').replace('/mo', '').replace(/\s*[-–]\s*/, ' to '))}</b></span>
           ${icon('arrow')}</a>`;
       }).join('')}</div>
-      <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue, illustrative in this prototype. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
+      <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue<span data-proto>, illustrative in this prototype</span>. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
     </section>
     <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
         ${grpHd(grp(k))}
@@ -1637,6 +1860,48 @@
      H2s phrased as questions, the FAQ, then the function's Talk to us block and two operators. No eyebrow above the
      headline (playbook, Voice and style). The dev notes carry the meta fields, the 301s from the old blog with their
      Search Console numbers, the open gaps and the calculated numbers Matt still has to approve. */
+  // Phones and tablets lose the rail, so the contents fold into the article under the key numbers
+  const mtoc = (toc) => `<details class="rs-mtoc"><summary>${icon('list')}<span>On this page</span><span class="tiny muted">${toc.length} sections</span>${icon('chev-down', 'rs-chev')}</summary>
+    <ol>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ol></details>`;
+  /* Byline with Matt's portrait (content playbook: "By Matt Lopez", updated, read time, reviewer) */
+  function postByline(matt, upd, mins, rev) {
+    return `<div class="rs-byline">
+      <a class="rs-by-pic" href="#op.${esc(matt.slug)}" tabindex="-1" aria-hidden="true">${RN.ui.avatar(matt, 'ava-md rs-by-ava', { decorative: true })}</a>
+      <span class="rs-by-txt">
+        <span class="rs-by-l"><a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a><span class="rs-by-role">Founder, Revenue Nomad</span></span>
+        <span class="rs-by-meta"><span>Updated <time datetime="${esc(upd)}">${esc(RN.fmt.date(upd + 'T12:00:00'))}</time> · ${mins} min read</span>${rev || ''}</span>
+      </span>
+    </div>`;
+  }
+  /* Key numbers as a stat band: the value up to its first comma is the number, the rest of the value, the key and
+     its source sit under it. A value that is only a pending figure is a prototype tile (data-proto) and sorts last. */
+  function splitKey(v) {
+    const s = String(v || '');
+    let depth = 0;
+    for (let i = 0; i < s.length - 1; i++) {
+      if (s[i] === '[' && s[i + 1] === '[') depth++;
+      else if (s[i] === ']' && s[i + 1] === ']') depth--;
+      else if (!depth && s[i] === ',' && s[i + 1] === ' ') return { h: s.slice(0, i), t: s.slice(i + 2) };
+    }
+    return { h: s, t: '' };
+  }
+  function keyBand(keys) {
+    const list = (keys || []).map((k) => ({ k, pend: gapOnly(k.v) })).sort((a, b) => a.pend - b.pend);
+    const live = list.filter((x) => !x.pend).length;
+    return `<section class="rs-kb" data-n="${live}" aria-label="Key numbers" data-rs-reveal>
+      <span class="label rs-kb-l">Key numbers</span>
+      <div class="rs-kb-g">${list.map(({ k, pend }, i) => {
+        const v = splitKey(k.v);
+        const srcH = k.url ? `<a class="link" href="${esc(k.url)}" target="_blank" rel="noopener">${esc(k.src)}</a>` : esc(k.src);
+        return `<div class="rs-kb-i" style="--i:${i}"${pend ? ' data-proto' : ''}>
+          <span class="rs-kb-v${plainOf(v.h).length > 26 ? ' is-long' : ''}">${prich(v.h)}</span>
+          <span class="rs-kb-k">${prich(k.k)}${v.t ? `<span class="rs-kb-x">${prich(v.t.charAt(0).toUpperCase() + v.t.slice(1) + (/[.?!]$/.test(v.t) ? '' : '.'))}</span>` : ''}</span>
+          <span class="rs-kb-s">${icon('info')}${srcH}</span>
+        </div>`;
+      }).join('')}</div>
+    </section>`;
+  }
+
   function renderPost(g) {
     const p = g.post;
     const grp = GROUPS.find((x) => x.k === p.fn);
@@ -1687,23 +1952,15 @@
       <article class="rs-art" aria-labelledby="rs-g-h1">
         ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
         <h1 class="h1 rs-g-h1" id="rs-g-h1">${disp(p.q)}</h1>
-        <div class="rs-byline">
-          ${RN.ui.avatar(matt, 'ava-sm rs-by-ava', { decorative: true })}
-          <span class="rs-by-txt">
-            <a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a>
-            <span class="rs-by-meta"><span>Updated <time datetime="${esc(p.updated)}">${esc(updated)}</time> · ${g.mins} min read</span>
-              <span class="rs-by-rev">Reviewed by ${gap('reviewing operator', 'Matt')}</span></span>
-          </span>
-        </div>
+        ${postByline(matt, p.updated, g.mins, `<span class="rs-by-rev" data-proto>Reviewed by ${gap('reviewing operator', 'Matt')}</span>`)}
         <div class="rs-answer" role="note" aria-label="Short answer">
           <span class="label">The short answer</span>
           <p>${prich(p.answer)}</p>
         </div>
-        <figure class="rs-keys" aria-labelledby="rs-keys-t"><figcaption class="sr-only" id="rs-keys-t">Key numbers</figcaption>
-          ${ptbl(['Key number', 'Value', 'Source'], p.keys.map((k) => [k.k, k.v, k.url ? `[[url:${k.url}|${k.src}]]` : k.src]), 'rs-keys-tbl')}
-        </figure>
+        ${keyBand(p.keys)}
+        ${mtoc(toc)}
         <div class="prose rs-prose">
-          ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec"><h2>${disp(x.h)}</h2>${x.html}</section>`).join('')}
+          ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec rs-gsec-${esc(x.id)}"><h2>${disp(x.h)}</h2>${x.html}</section>`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
@@ -1711,7 +1968,7 @@
         </section>
         ${ans}
         <footer class="rs-gfoot">
-          <p class="small muted">Built from Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. A pending chip marks a figure or quote we do not have yet. Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
+          <p class="small muted">Built from Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. <span data-proto>A pending chip marks a figure or quote we do not have yet. </span>Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
           ${devNote('rs-post-notes', 'Publishing notes', 'For Rapid Neuron and Matt: meta fields, the 301s from the old blog, what is still pending', notes)}
           ${schemaBlock('rs-faq-schema', schema, 'For the dev team: Article, BreadcrumbList and FAQPage JSON-LD. Add reviewedBy once the reviewing operator signs off, and an image hosted on revenuenomad.com.')}
         </footer>
@@ -1719,9 +1976,10 @@
       <aside class="rs-rail" aria-label="On this page">
         <div class="rs-rail-in">
           <div class="rs-toc"><span class="label">On this page</span>
-            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul>
+            <div class="rs-toc-list"><span class="rs-toc-prog" aria-hidden="true"><i></i></span><ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul></div>
           </div>
           <div class="card rs-rail-cta">
+            ${p.stat && !gapOnly(p.stat.v) ? `<div class="rs-rail-stat"><span class="label">Key number</span><b>${disp(plainOf(p.stat.v))}</b><span class="small muted">${esc(RN.fmt.smart(plainOf(p.stat.l)))}</span></div>` : ''}
             <b class="h5">${esc(page.form.h)}</b>
             <p class="small muted">Four short questions. Only your name and email are required.</p>
             <a class="btn btn-block" href="#${esc(talk)}">Talk to us${icon('arrow')}</a>
@@ -1732,7 +1990,7 @@
     </div>
     <nav class="wrap rs-next rs-pnext" aria-label="More guides">
       <span class="label">Keep reading</span>
-      <div class="grid g-3">${others.map(guideCard).join('')}</div>
+      <div class="rs-pgrid">${others.map((x) => (x.post ? pcard(x) : guideCard(x))).join('')}</div>
     </nav>
     <section class="section night fn-sec fn-form rs-ptalk" id="rs-s-talk" aria-labelledby="rs-ptalk-t"><div class="wrap fn-form-in">
       <div class="fn-form-l">
@@ -1891,21 +2149,15 @@
         ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
         <span class="eyebrow">${esc(grp.l)}</span>
         <h1 class="h1 rs-g-h1" id="rs-g-h1">${esc(g.q)}</h1>
-        <div class="rs-byline">
-          ${RN.ui.avatar(matt, 'ava-sm rs-by-ava', { decorative: true })}
-          <span class="rs-by-txt">
-            <a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a>
-            <span class="rs-by-meta"><span>Updated <time datetime="${esc(g.updated)}">${esc(updated)}</time> · ${g.mins} min read</span>
-              ${reviewer ? `<span class="rs-by-rev">Reviewed by <a href="#op.${esc(reviewer.slug)}">${esc(reviewer.name)}</a>${RN.ui.illus('Illustrative', 'A sample operator stands in as the reviewer until Matt picks one for this guide.')}</span>` : `<span class="rs-by-rev">Reviewed by ${RN.fn && RN.fn.gap ? RN.fn.gap('reviewing operator', 'Matt') : 'an operator, pending'}</span>`}</span>
-          </span>
-        </div>
+        ${postByline(matt, g.updated, g.mins, reviewer ? `<span class="rs-by-rev" data-proto>Reviewed by <a href="#op.${esc(reviewer.slug)}">${esc(reviewer.name)}</a>${RN.ui.illus('Illustrative', 'A sample operator stands in as the reviewer until Matt picks one for this guide.')}</span>` : `<span class="rs-by-rev" data-proto>Reviewed by ${RN.fn && RN.fn.gap ? RN.fn.gap('reviewing operator', 'Matt') : 'an operator, pending'}</span>`)}
         <div class="rs-answer" role="note" aria-label="Short answer">
           <span class="label">The short answer</span>
           <p>${answer.map(esc).join(' ')}</p>
         </div>
-        ${stats.length ? `<div class="stats-row rs-gstats" style="--cols:${stats.length}">${stats.map((s) => `<div class="stat"><span class="stat-v">${esc(s.v)}</span><span class="stat-l">${esc(s.l)}</span></div>`).join('')}</div>` : ''}
+        ${stats.length ? `<section class="rs-kb" data-n="${stats.length}" aria-label="Key numbers" data-rs-reveal><span class="label rs-kb-l">Key numbers</span><div class="rs-kb-g">${stats.map((s, i) => `<div class="rs-kb-i" style="--i:${i}"><span class="rs-kb-v">${esc(s.v)}</span><span class="rs-kb-k">${esc(s.l)}</span></div>`).join('')}</div></section>` : ''}
+        ${mtoc(toc)}
         <div class="prose rs-prose">
-          ${secs.map((s) => `<section id="rs-s-${esc(s.id)}" class="rs-gsec"><h2>${esc(s.h)}</h2>${s.html}</section>`).join('')}
+          ${secs.map((s) => `<section id="rs-s-${esc(s.id)}" class="rs-gsec"><h2>${esc(s.h)}</h2>${olToTl(s.html)}</section>`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
@@ -1913,14 +2165,14 @@
         </section>
         ${ans}
         <footer class="rs-gfoot">
-          <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. Market and survey figures in this prototype are illustrative. Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
+          <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. <span data-proto>Market and survey figures in this prototype are illustrative. </span>Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
           ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Matt Lopez, reviewedBy the reviewing operator, dateModified) and BreadcrumbList.')}
         </footer>
       </article>
       <aside class="rs-rail" aria-label="On this page">
         <div class="rs-rail-in">
           <div class="rs-toc"><span class="label">On this page</span>
-            <ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul>
+            <div class="rs-toc-list"><span class="rs-toc-prog" aria-hidden="true"><i></i></span><ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul></div>
           </div>
           <div class="card rs-rail-cta">
             <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : g.group === 'methods' ? 'See it on a profile' : 'Ready to hire?')}</b>
