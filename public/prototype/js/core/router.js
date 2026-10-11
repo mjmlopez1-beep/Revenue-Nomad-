@@ -26,7 +26,8 @@
   const order = [];
   let current = null;
 
-  const ALIASES = { projects: 'engagements', project: 'engagement' };
+  // state-of-fractional: the address the Content Bank links to for the report (open decision, Oct 10, 2026); #report stays canonical
+  const ALIASES = { projects: 'engagements', project: 'engagement', 'state-of-fractional': 'report' };
   const EXACT = { project: 'engagements', engagement: 'engagements' }; // a bare token with no id opens the list
   RN.routeAliases = ALIASES;
   RN.canonical = function (path) {

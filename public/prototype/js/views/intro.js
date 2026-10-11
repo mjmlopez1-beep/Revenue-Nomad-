@@ -95,8 +95,8 @@
     if (/\b(next (month|quarter)|in a month|in (three|four|3|4|\d{2,}) weeks)\b/i.test(t)) return 'available_2_plus_weeks';
     return optOf('startBy', op.avail.key) || 'available_now';
   }
-  /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, email,
-     name, company, revenueRange, industry,   (what a visitor already told us, e.g. in Talk to us)
+  /* prefill (optional): {need, engagementType, startBy, hoursPerMonth, note, email, source ('talk': show the note up front),
+     name, title, company, revenueRange, industry,   (what a visitor already told us, e.g. in Talk to us)
      search: {text, need, match, needs: [{label, status, color}]}}  (search: opened from a ranked search row)
      A visitor's name, company, revenue range and industry ride along as hidden fields and win over what the
      email domain suggests, as long as the email sent is the one they gave. */
@@ -137,9 +137,11 @@
       note,
       email: prefill.email || '',
     };
-    // A note from the search is one of the three things the client confirms, so a signed-in client sees it up front
-    const noteUp = signedIn && !!x;
-    const noteField = `<div class="field"><label for="intro-note">${x ? `What ${esc(op.first)} will read` : `Anything ${esc(op.first)} should know?`} <span class="opt">${x ? 'From your search' : 'Optional'}</span></label>
+    // A note from the search is one of the three things the client confirms, so a signed-in client sees it up front.
+    // A note carried from Talk to us is shown up front to everyone, labelled as what the operator reads.
+    const fromTalk = prefill.source === 'talk' && !!d.note;
+    const noteUp = (signedIn && !!x) || fromTalk;
+    const noteField = `<div class="field"><label for="intro-note">${x || fromTalk ? `What ${esc(op.first)} will read` : `Anything ${esc(op.first)} should know?`} <span class="opt">${x ? 'From your search' : fromTalk ? 'From Talk to us' : 'Optional'}</span></label>
           <textarea class="textarea" id="intro-note" name="note" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days." style="min-height:${noteUp ? 110 : 90}px">${esc(d.note)}</textarea></div>`;
     const project = d.engagementType === 'project';
     RN.ui.modal({
@@ -157,7 +159,7 @@
         ${RN.w.field('need', d.need, { name: 'need', compact: true })}
         ${RN.w.field('startBy', d.startBy, { name: 'startBy', compact: true })}
         ${noteUp ? noteField : ''}
-        ${signedIn ? '' : ['name', 'company', 'revenueRange', 'industry', 'email'].filter((k) => prefill[k]).map((k) => `<input type="hidden" name="pre-${k}" value="${esc(prefill[k])}">`).join('')}
+        ${signedIn ? '' : ['name', 'title', 'company', 'revenueRange', 'industry', 'email'].filter((k) => prefill[k]).map((k) => `<input type="hidden" name="pre-${k}" value="${esc(prefill[k])}">`).join('')}
         ${signedIn ? '' : `<div class="in-email">
           ${RN.w.field('email', d.email, { name: 'email', compact: true })}
           <p class="small muted">We name your company from your email. ${esc(op.first)} sees its industry and size, not your name, until you are introduced. <button type="button" class="act in-sample" data-act="intro-sample" data-id="${esc(op.id)}">Use a sample email</button></p>
@@ -211,7 +213,7 @@
     const type = data.engagementType || 'fractional';
     const rec = {
       id: RN.uid('intro'), opId: op.id, status: 'pending', createdAt: RN.now().toISOString(),
-      buyer: { name, title: signedIn ? me.title : '', email, company },
+      buyer: { name, title: signedIn ? me.title : told('title'), email, company },
       need: data.need,
       fields: { need: data.need, engagementType: type, hoursPerMonth: type === 'project' ? '' : data.hoursPerMonth, projectBudget: type === 'project' ? +data.projectBudget || null : null, startBy: data.startBy, roleCategory: op.catKey },
       note: data.note || '',
@@ -219,7 +221,7 @@
     };
     RN.store.update((s) => { s.intros.unshift(rec); }, 'intros');
     // A visitor who asks for an intro becomes their own client (not the demo client) and is signed in
-    if (!signedIn) { RN.shell.setClient({ name, email, title: '', company }); RN.store.set('persona', 'buyer'); }
+    if (!signedIn) { RN.shell.setClient({ name, email, title: told('title'), company }); RN.store.set('persona', 'buyer'); }
     RN.track('intro_request', { opId: op.id, buyer: { name: company.name, industry: company.industry, revenueRange: company.revenueRange, employeeRange: company.employeeRange } });
     const sum = intro.summary(rec, true);
     RN.mail(op.name, `New intro request: ${sum.need || 'Fractional ' + op.role}`, `${sum.who}\n${sum.scope}\n\nReply within 72 hours from your Studio. You will see the company and contact once you are introduced.`, 'intro');

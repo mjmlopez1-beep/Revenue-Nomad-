@@ -144,7 +144,6 @@
         ['Seat', 'Sales manager, director of sales, VP of Sales, CRO, not sure'],
         ['Problem in your words', 'What is not working in sales right now?'],
         ['Timing', 'This month, 1 to 3 months, exploring'],
-        ['Who else decides', 'Names or roles'],
       ],
     },
   };
@@ -218,7 +217,6 @@
         ['Seat', 'RevOps assessment, director of RevOps, VP RevOps or revenue architect, not sure'],
         ['Problem in your words', 'What can your team not answer about pipeline or forecast today?'],
         ['Timing', 'This month, 1 to 3 months, exploring'],
-        ['Who else decides', 'e.g. CFO, CEO, board'],
       ],
     },
   };
@@ -289,7 +287,6 @@
         ['Seat', 'Demand gen operator, head of growth, VP Marketing, fractional CMO, not sure'],
         ['Problem in your words', 'What is happening to lead cost and quality?'],
         ['Timing', 'This month, 1 to 3 months, exploring'],
-        ['Who else decides', 'e.g. CEO, PE operating partner, CRO'],
       ],
     },
   };
@@ -388,7 +385,6 @@
         ['Revenue band', 'Under $5M, $5M to $20M, $20M to $75M, $75M to $100M, $100M+'],
         ['Problem in your words', 'What needs to change?'],
         ['Timing', 'This month, next 1 to 3 months, exploring'],
-        ['Who else decides', 'Names or roles'],
       ],
     },
   };
@@ -398,10 +394,14 @@
   const sec = (key, alt, inner) => `<section class="section fn-sec fn-${key}${alt ? ' fn-alt' : ''}"><div class="wrap">${inner}</div></section>`;
   const paras = (list, cls) => (list && list.length ? `<div class="fn-after${cls ? ' ' + cls : ''}">${list.map((p) => `<p class="pg-p">${rich(p)}</p>`).join('')}</div>` : '');
 
-  /* A figure in the hero stat block: "350+" gets a unit span, "2 to 3" a quieter "to" */
+  /* A figure in the hero stat block: "350+" gets a unit span, a range ("2 to 3") a quieter "to" between its numbers,
+     and "Up to 7" a small "Up to" before the number */
   function figure(v) {
     if (v === 'net') v = NET();
-    return esc(v).replace(/ to /g, '<span class="fn-to"> to </span>').replace(/\+$/, '<span class="fn-u">+</span>');
+    return esc(v)
+      .replace(/^Up to /, '<span class="fn-pre">Up to </span>')
+      .replace(/(\d[\d.,]*) to (?=\$?\d)/g, '$1<span class="fn-to"> to </span>')
+      .replace(/\+$/, '<span class="fn-u">+</span>');
   }
   function stats(d) {
     return `<dl class="fn-stats" aria-label="${esc(d.eyebrow)} at a glance">${d.stats.map(([v, l]) => `<div class="fn-stat"><dt class="fn-stat-l">${esc(l)}</dt><dd class="fn-stat-v">${figure(v)}</dd></div>`).join('')}</dl>`;
@@ -445,7 +445,7 @@
     return sec('who', true, `${PG.shead('Operators', 'Who would I get', esc(RN.fmt.smart(d.who.lede)))}
       <div class="fn-feat-hd"><h3 class="h4">Featured operators</h3>${gaps.map(([w, o]) => FN.gap(w, o)).join('')}</div>
       <p class="fn-feat-note small muted">Shown by Reputation Index until the featured picks are confirmed. Every profile is open, no login needed.</p>
-      ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(op, { cta: 'profile', meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
+      ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(op, { meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
       <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(RN.fields.catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>`);
   }
 
@@ -467,7 +467,7 @@
   }
   function cost(d) {
     return sec('cost', false, `${PG.shead('Cost', 'What it costs', esc(d.cost.lede))}
-      ${table(d.cost, { wide: true, cost: true, label: 'What clients paid in 2026, by seat' })}
+      ${table(d.cost, { wide: true, cost: true, label: d.cost.lede.replace(/\.$/, '') })}
       ${paras(d.cost.after)}`);
   }
 
@@ -478,8 +478,8 @@
       <div class="fn-tl-hd" aria-hidden="true">${cols.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
       <ol class="fn-tl" aria-label="What happens first">${d.first.rows.map(([w, a, b]) => `<li>
         <span class="fn-tl-w">${esc(w)}</span>
-        <span class="fn-tl-a" data-l="${cols[1]}">${rich(a)}</span>
-        <span class="fn-tl-b" data-l="${cols[2]}">${rich(b)}</span>
+        <span class="fn-tl-a"><span class="fn-tl-l">${cols[1]}</span>${rich(a)}</span>
+        <span class="fn-tl-b"><span class="fn-tl-l">${cols[2]}</span>${rich(b)}</span>
       </li>`).join('')}</ol>
       ${d.first.closing ? `<p class="fn-lead">${rich(d.first.closing)}</p>` : ''}`);
   }
@@ -498,9 +498,13 @@
       const l = p[0], t = p[1];
       return `<div class="fn-story-p">${l ? `<span class="fn-story-l">${esc(l)}</span>` : ''}<p>${rich(t)}</p></div>`;
     };
-    // Full width: the narrative in one column, the scorecard beside it
-    const sc = wide && parts.find((p) => p && p.table);
-    if (sc) return `<article class="fn-story fn-story-split"><div class="fn-story-col">${parts.filter((p) => !p.table).map(part).join('')}</div><div class="fn-story-col">${scorecard(sc.table)}</div></article>`;
+    // Full width keeps the document's order in the markup (the reading order when stacked and for screen readers);
+    // CSS puts the narrative in the first column with the scorecard beside it, or gives each part its own column
+    if (wide) {
+      const sc = parts.some((p) => p && p.table);
+      const n = parts.filter((p) => !(p && p.table)).length;
+      return `<article class="fn-story ${sc ? 'fn-story-split' : 'fn-story-row'}" style="--n:${n}">${parts.map(part).join('')}</article>`;
+    }
     return `<article class="fn-story">${parts.map(part).join('')}</article>`;
   }
   function stories(d) {

@@ -368,8 +368,6 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-by-rev a { color: var(--ink); font-weight: 600; }
 .rs-by-rev a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .rs-by-rev .illus { height: 20px; }
-.rs-pend { display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 2px 9px 2px 7px; border-radius: 11px; border: 1px dashed color-mix(in srgb, var(--mute) 55%, transparent); background: color-mix(in srgb, var(--ink) 3%, transparent); color: var(--mute); font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .02em; line-height: 1.25; white-space: nowrap; }
-.rs-pend svg { width: 12px; height: 12px; flex: 0 0 auto; opacity: .85; }
 .rs-answer { margin-top: var(--s-8); padding: var(--s-6) var(--s-6) var(--s-6) calc(var(--s-6) + 2px); border-radius: 0 var(--r-card) var(--r-card) 0; border-left: 3px solid var(--accent); background: var(--tint); }
 .rs-answer .label { color: var(--accent); }
 .rs-answer p { margin-top: 10px; font-size: var(--t-18); font-weight: 500; line-height: 1.55; color: var(--ink); }

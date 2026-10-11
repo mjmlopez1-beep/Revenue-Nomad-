@@ -1760,7 +1760,7 @@
           <span class="rs-by-txt">
             <a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a>
             <span class="rs-by-meta"><span>Updated <time datetime="${esc(g.updated)}">${esc(updated)}</time> · ${g.mins} min read</span>
-              ${reviewer ? `<span class="rs-by-rev">Reviewed by <a href="#op.${esc(reviewer.slug)}">${esc(reviewer.name)}</a>${RN.ui.illus('Illustrative', 'A sample operator stands in as the reviewer until Matt picks one for this guide.')}</span>` : `<span class="rs-by-rev"><span class="rs-pend" title="Owner: Matt">${icon('clock')}Reviewed by an operator, pending</span></span>`}</span>
+              ${reviewer ? `<span class="rs-by-rev">Reviewed by <a href="#op.${esc(reviewer.slug)}">${esc(reviewer.name)}</a>${RN.ui.illus('Illustrative', 'A sample operator stands in as the reviewer until Matt picks one for this guide.')}</span>` : `<span class="rs-by-rev">Reviewed by ${RN.fn && RN.fn.gap ? RN.fn.gap('reviewing operator', 'Matt') : 'an operator, pending'}</span>`}</span>
           </span>
         </div>
         <div class="rs-answer" role="note" aria-label="Short answer">

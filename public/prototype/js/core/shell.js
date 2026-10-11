@@ -178,7 +178,7 @@
         </div>
         <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#hire-fractional-sales-vp">Hire a fractional VP of Sales</a><a href="#fractional-revops">Fractional RevOps</a><a href="#fractional-marketing-leadership">Fractional marketing leaders</a><a href="#fractional-cost">What it costs</a><a href="#engagements">Post an engagement</a><a href="#talk">Talk to us</a></div>
         <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
-        <div><h2 class="ftr-h">Insights</h2><a href="#state-of-fractional">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
+        <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
         <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#how">How it works</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>

@@ -275,7 +275,7 @@
         return `<button type="button" class="hm-need hm-need-talk" data-act="hm-need" data-need="${esc(o.v)}">
           ${ic}<span class="hm-go">${icon('arrow')}</span>
           <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span><span class="hm-need-cats">Talk it through with a person first</span></span>
-          <span class="hm-need-n">Reply within one business day</span>
+          <span class="hm-need-n">Role profile within 48 hours</span>
         </button>`;
       }
       return `<button type="button" class="hm-need" data-act="hm-need" data-need="${esc(o.v)}">
@@ -882,7 +882,7 @@
       <div class="wrap hm-talk-in">
         <h2 class="h1 hm-talk-h">Rather talk it through with a person?</h2>
         <div class="hm-talk-r">
-          <p>Four quick questions, then a reply from a person within one business day. Or call <a href="tel:+12032000482">+1 203-200-0482</a>.</p>
+          <p>Five quick questions, then a written role profile and 2 to 3 vetted operators, often within 48 hours. Or call <a href="tel:+12032000482">+1 203-200-0482</a>.</p>
           <div class="row hm-ctas"><a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#browse" data-act="hm-all">Browse operators</a></div>
         </div>
       </div>

@@ -582,7 +582,7 @@
   /* Seats stack as a ruled list: no hover fill, the category bar stays off, the count row keeps its arrow */
   [data-view="home"] .hm-seat-row { grid-template-columns: minmax(0, 1fr); }
   [data-view="home"] .hm-seat { padding: 20px 0; row-gap: 8px; }
-  [data-view="home"] .hm-seat:hover, [data-view="home"] .hm-seat:active { background: transparent; }
+  [data-view="home"] .hm-seat:hover, [data-view="home"] .hm-seat:active { background: var(--paper); }
   [data-view="home"] .hm-seat::before { display: none; }
   [data-view="home"] .hm-seat-t { font-size: 18px; }
 }
@@ -626,7 +626,13 @@
   [data-view="home"] .hm-head { margin-bottom: var(--s-8); }
   [data-view="home"] .hm-needs { grid-template-columns: minmax(0, 1fr); }
   [data-view="home"] .hm-need { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-rows: auto auto; grid-template-areas: "ic body go" ". n go"; min-height: 0; padding: 20px 0; gap: 6px var(--s-3); }
-  [data-view="home"] .hm-need:hover { background: transparent; }
+  /* Stacked tiles keep their rest look under a finger: the dark hover is for pointers on wider screens */
+  [data-view="home"] .hm-need:not(.hm-need-talk):hover { background: var(--paper); color: var(--ink); }
+  [data-view="home"] .hm-need:not(.hm-need-talk):hover::before { transform: scaleX(0); }
+  [data-view="home"] .hm-need:not(.hm-need-talk):hover .hm-need-cats { color: var(--mute); }
+  [data-view="home"] .hm-need:not(.hm-need-talk):hover .hm-need-n { color: var(--ink-2); }
+  [data-view="home"] .hm-need:not(.hm-need-talk):hover .hm-ic { background: var(--leaf); transform: none; }
+  [data-view="home"] .hm-need:not(.hm-need-talk):hover .hm-go { background: transparent; border-color: var(--line); color: var(--accent); transform: none; }
   /* The dark "Not sure yet" tile keeps an inner margin, so its icon and arrow never touch its edges */
   [data-view="home"] .hm-need-talk, [data-view="home"] .hm-need-talk:hover { padding-inline: 16px; background: var(--forest-deep); }
   [data-view="home"] .hm-need .hm-ic { align-self: start; width: 40px; height: 40px; }

@@ -354,7 +354,7 @@
   /* ---------- Talk to us questionnaire (Site pages, section 8 form blocks; Inbound plan) ----------
      The questions branch by function. On #talk the branch comes from the need; on a function home or the cost hub
      (RN.talk.embed) it comes from the page. Each branch has its own company type, revenue band and seat lists,
-     its own problem prompt and its own "who else decides" hint. Labels are the founder's copy as written;
+     and its own problem prompt. Who decides is asked on the discovery call, never on a form. Labels are the founder's copy as written;
      values are slugs. The generic branch serves the needs no function owns (AI, retention, partners, not sure)
      and the cost hub's form. */
   F.talkTiming = { label: 'Timing', type: 'single', options: opts([['this_month', 'This month'], ['1_3_months', '1 to 3 months'], ['exploring', 'Exploring']]) };
@@ -377,10 +377,10 @@
   // needs: the needs (F.need) that run on the branch. cats: the role categories matched (generic: F.needCats[need]).
   // noun: the function in running text ("Matched on sales leadership").
   F.talkBranches = {
-    sales: { label: 'Sales leadership', noun: 'sales leadership', cats: ['sales_leadership'], needs: ['sales_motion', 'team'], companyType: 'talkSalesCompanyType', revenueBand: 'talkSalesRevenueBand', seat: 'talkSalesSeat', problem: 'What is not working in sales right now?', decides: 'Names or roles' },
-    revops: { label: 'RevOps', noun: 'RevOps', cats: ['revenue_operations'], needs: ['systems'], companyType: 'talkRevopsCompanyType', revenueBand: 'talkRevopsRevenueBand', seat: 'talkRevopsSeat', problem: 'What can your team not answer about pipeline or forecast today?', decides: 'e.g. CFO, CEO, board' },
-    marketing: { label: 'Marketing', noun: 'marketing', cats: ['marketing'], needs: ['pipeline'], companyType: 'talkMarketingCompanyType', revenueBand: 'talkMarketingRevenueBand', seat: 'talkMarketingSeat', problem: 'What is happening to lead cost and quality?', decides: 'e.g. CEO, PE operating partner, CRO' },
-    generic: { label: 'Other', noun: 'what you told us', cats: null, needs: ['ai', 'retention', 'partners', 'not_sure'], companyType: 'talkGenericCompanyType', revenueBand: 'talkGenericRevenueBand', seat: 'talkGenericSeat', problem: 'What needs to change?', decides: 'Names or roles' },
+    sales: { label: 'Sales leadership', noun: 'sales leadership', cats: ['sales_leadership'], needs: ['sales_motion', 'team'], companyType: 'talkSalesCompanyType', revenueBand: 'talkSalesRevenueBand', seat: 'talkSalesSeat', problem: 'What is not working in sales right now?' },
+    revops: { label: 'RevOps', noun: 'RevOps', cats: ['revenue_operations'], needs: ['systems'], companyType: 'talkRevopsCompanyType', revenueBand: 'talkRevopsRevenueBand', seat: 'talkRevopsSeat', problem: 'What can your team not answer about pipeline or forecast today?' },
+    marketing: { label: 'Marketing', noun: 'marketing', cats: ['marketing'], needs: ['pipeline'], companyType: 'talkMarketingCompanyType', revenueBand: 'talkMarketingRevenueBand', seat: 'talkMarketingSeat', problem: 'What is happening to lead cost and quality?' },
+    generic: { label: 'Other', noun: 'what you told us', cats: null, needs: ['ai', 'retention', 'partners', 'not_sure'], companyType: 'talkGenericCompanyType', revenueBand: 'talkGenericRevenueBand', seat: 'talkGenericSeat', problem: 'What needs to change?' },
   };
   F.talkBranchFor = (need) => Object.keys(F.talkBranches).find((k) => k !== 'generic' && F.talkBranches[k].needs.includes(need)) || 'generic';
   // The cost hub's Function pick as a need (F.need), so its requests track and prefill like every other
