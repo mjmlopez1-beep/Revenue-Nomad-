@@ -130,7 +130,7 @@
     const me = RN.myOp ? RN.myOp() : null;
     const U = RN.fields.risUnlocks || {};
     const cols = ['Tier', o.desc ? 'What it means' : '', 'What it unlocks (proposed)', o.counts || o.me ? 'In this prototype' : ''].filter(Boolean);
-    return `<div class="pg-ladder-wrap${o.desc ? ' has-d' : ''}${o.counts || o.me ? ' has-n' : ''}">
+    return `<div class="pg-ladder-wrap${o.desc ? ' has-d' : ''}${o.counts || o.me ? ' has-n' : ''}${o.rail ? ' is-rail' : ''}">
       <div class="pg-ladder-hd" aria-hidden="true">${cols.map((c) => `<span class="label">${esc(c)}</span>`).join('')}</div>
       <ol class="pg-ladder" aria-label="Reputation Index tiers, highest first">${tiersDown().map((t) => {
         const n = counts[t.v] || 0;
@@ -138,7 +138,7 @@
         const mine = o.me && me && me.ris.tier === t.v;
         return `<li class="pg-rung pg-rung-${esc(t.v)} tb-host">
           <div class="pg-rung-id">
-            <span class="pg-seal">${RN.ui.tierBadge(t.v, { size: 48 })}</span>
+            <span class="pg-seal">${RN.ui.tierBadge(t.v, { size: o.rail ? 64 : 48 })}</span>
             <span><b class="pg-rung-name">${esc(t.l)}</b><span class="pg-rung-range">${t.v === 'indexing' ? 'Before approval' : `Score ${t.min} to ${t.max}`}</span></span>
           </div>
           ${o.desc ? `<p class="pg-rung-d">${esc(t.d)}</p>` : ''}
@@ -147,6 +147,27 @@
         </li>`;
       }).join('')}</ol>
     </div>`;
+  }
+
+  /* The ladder as badges, lowest tier first, rising left to right. o.stairs draws it as a staircase (Levels hero):
+     each step's height is its score floor on the 0 to 100 Index. o.me marks the signed-in operator's own tier. */
+  function badgeRow(o) {
+    o = o || {};
+    const counts = tierCounts();
+    const me = o.me && RN.myOp ? RN.myOp() : null;
+    const up = tiersDown().reverse();
+    return `<ol class="pg-brow${o.stairs ? ' is-stairs' : ''}" aria-label="Reputation Index tiers, lowest first">${up.map((t, i) => {
+      const n = counts[t.v] || 0;
+      const mine = me && me.ris.tier === t.v;
+      const h = o.stairs ? Math.max(14, t.v === 'indexing' ? 14 : t.min) : 0;
+      return `<li class="pg-brow-t pg-rung-${esc(t.v)}${mine ? ' is-me' : ''}" style="--i:${i};--h:${h}%">
+        <span class="pg-brow-b">${RN.ui.tierBadge(t.v, { size: o.stairs ? 64 : 56 })}</span>
+        <b>${esc(t.l)}</b>
+        <span class="pg-brow-r">${t.v === 'indexing' ? 'In review' : `${t.min} to ${t.max}`}</span>
+        ${o.stairs ? '<i class="pg-brow-step" aria-hidden="true"></i>' : `<span class="pg-brow-n">${t.v === 'indexing' ? RN.fmt.plural(n, 'application') : RN.fmt.plural(n, 'profile')}</span>`}
+        ${mine ? `<span class="pg-rung-me">${RN.ui.avatar(me, 'ava-xs')}You, ${esc(me.ris.score)}</span>` : ''}
+      </li>`;
+    }).join('')}</ol>`;
   }
 
   /* =====================================================================
@@ -166,8 +187,6 @@
     const fvf = R.fracVsFull;
     const ops = RN.model.ops;
     const lib = RN.fields.fitTags.options.length;
-    const cats = RN.fields.roleCategory.options.length;
-    const trend = market().rateIndex.trend;
     const eng = (matt ? matt.engagements.slice() : []).sort((a, b) => String(a.start).localeCompare(String(b.start)));
     const yr = (e) => { const a = String(e.start).slice(0, 4), b = String(e.end || '').slice(0, 4); return !b || a === b ? a : `${a}–${b}`; };
     const smart = (t) => esc(RN.fmt.smart(t));
@@ -181,12 +200,17 @@
     const times = (num(fitFirst[2]) / num(brand[2])).toFixed(1);
     const fame = ['Big logo on the resume', 'Impressive title', 'A friend’s referral'];
     const fit = ['Same company stage', 'Same deal size', 'Same sales motion', 'Culture fit', 'Proof a company confirmed'];
-    const glance = `<dl class="ab-stats" aria-label="Revenue Nomad at a glance">
-        <div class="ab-stat is-forest"><dt>Operators in the network, each reviewed by our team</dt><dd class="num">350<span class="u-plus">+</span></dd></div>
-        <div class="ab-stat is-leaf"><dt>Fees for companies. You pay the operator’s rate.</dt><dd class="num">$0</dd></div>
-        <div class="ab-stat is-gold"><dt>Typical first reply to an intro request</dt><dd class="num"><span class="u-lt">&lt;</span>2<span class="u">hrs</span></dd></div>
-        <div class="ab-stat is-night"><dt>Founded by operators who still do the work</dt><dd class="num">2023</dd></div>
+    const glance = `<dl class="ab-glance" aria-label="Revenue Nomad at a glance">
+        <div><dt>Operators in the network, each reviewed by our team</dt><dd class="num">350<span class="u-plus">+</span></dd></div>
+        <div><dt>Fees for companies. You pay the operator’s rate.</dt><dd class="num">$0</dd></div>
+        <div><dt>Typical first reply to an intro request</dt><dd class="num"><span class="u-lt">&lt;</span>2<span class="u">hrs</span></dd></div>
+        <div><dt>Founded by operators who still do the work</dt><dd class="num">2023</dd></div>
       </dl>`;
+    // The founder leads the page: his portrait in the arch, signed, with his Reputation Index like every operator
+    const portrait = `<figure class="ab-hero-fig">
+        <div class="pg-arch pg-arch-forest ab-hero-arch"><img src="assets/brand/founder.webp" alt="Matt Lopez, founder of Revenue Nomad"></div>
+        <figcaption class="ab-hero-sign">${matt ? RN.ui.ris(matt) : ''}<span><b>Matt Lopez</b><span>Founder and CEO</span></span></figcaption>
+      </figure>`;
 
     return `
     ${hero({
@@ -194,7 +218,8 @@
       h: 'Built by operators who got tired of watching good companies <span class="serif">hire the wrong person.</span>',
       lede: `The open network for fractional <span class="nowrap">go-to-market</span> leaders, matched on fit and backed by proof a company confirmed.`,
       actions: `<a class="btn btn-lg" href="#browse">Browse operators${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#how">How it works</a>`,
-      aside: glance,
+      aside: portrait,
+      foot: glance,
     })}
 
     <section class="section ab-why">
@@ -211,7 +236,7 @@
           <div class="ab-vs-col is-fit"><span class="ab-vs-h">Hired on fit</span><ul>${fit.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">Results in the first quarter</span></div>
         </div>
       </div>
-      <div class="wrap"><blockquote class="ab-pull">Fractional leaders are specialists. Companies were choosing them <span class="serif">like generalists.</span></blockquote></div>
+      <div class="wrap"><blockquote class="ab-pull"><span class="ab-pull-mark" aria-hidden="true">“</span>Fractional leaders are specialists. Companies were choosing them <span class="serif">like generalists.</span></blockquote></div>
     </section>
 
     <section class="section ab-pov-sec">
@@ -256,38 +281,31 @@
     <section class="section ab-diff-sec">
       <div class="wrap">
         ${shead('How we are different', 'Three things most talent firms won’t do.')}
-        <ul class="ab-diff">
-          <li class="is-forest"><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p class="ab-diff-was">A shortlist, after a sales call</p><p>Every profile is open. No login, no sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
-          <li class="is-leaf"><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p>Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
-          <li class="is-gold"><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p>Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
-        </ul>
+        <ol class="ab-diff">
+          <li><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p class="ab-diff-was">A shortlist, after a sales call</p><p class="ab-diff-now">Every profile is open. No login, no sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
+          <li><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p class="ab-diff-now">Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
+          <li><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p class="ab-diff-now">Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
+        </ol>
       </div>
     </section>
 
     <section class="section pg-founder-sec">
-      <div class="wrap pg-founder">
-        <div class="pg-arch pg-arch-forest"><img src="assets/brand/founder.webp" alt="Matt Lopez, founder of Revenue Nomad"></div>
-        <div class="pg-founder-body">
+      <div class="wrap ab-founder">
+        <div class="ab-founder-q">
           <span class="eyebrow">From our founder</span>
           <blockquote class="pg-founder-q">I still take fractional engagements, scored by the same rules as everyone here.</blockquote>
           <p class="ab-line">You get someone who has sat in your seat before.</p>
-          <div class="pg-sign"><b>Matt Lopez</b><span>Founder and CEO</span>${matt ? `<span class="pg-sign-ris">${RN.ui.ris(matt)}</span>` : ''}</div>
-          ${eng.length ? `<div class="pg-track-wrap"><span class="label">Engagements include</span><ol class="pg-track">${eng.map((e) => `<li><span class="pg-track-y tnum">${esc(yr(e))}</span><b>${esc(e.company)}</b><span>${esc(e.role)}</span></li>`).join('')}</ol></div>` : ''}
+          <div class="pg-sign">${matt ? RN.ui.avatar(matt, 'ava-md') : ''}<span class="ab-sign-t"><b>Matt Lopez</b><span>Founder and CEO</span></span></div>
           <div class="row pg-founder-cta">${matt ? `<a class="act" href="#op.${esc(matt.slug)}">See Matt’s profile${icon('arrow')}</a>` : ''}<button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call with the team</button></div>
         </div>
+        ${eng.length ? `<div class="ab-track"><span class="label">Engagements include</span><ol>${eng.map((e) => `<li><span class="ab-track-y tnum">${esc(yr(e))}</span><span class="ab-track-b"><b>${esc(e.company)}</b><span>${esc(e.role)}</span></span></li>`).join('')}</ol></div>` : ''}
       </div>
     </section>
 
-    <section class="section ab-facts-sec">
-      <div class="wrap">
-        <h2 class="h3 ab-facts-h">The plain facts</h2>
-        <dl class="ab-facts">
-          <div><dt>Launched</dt><dd>Sept 2023<span>Open platform Aug 2026</span></dd></div>
-          <div><dt>Network</dt><dd>350+ operators<span>${cats} GTM disciplines, each reviewed</span></dd></div>
-          <div><dt>Who we serve</dt><dd>B2B companies<span>First sales hire to full transformation</span></dd></div>
-          <div><dt>Median rate</dt><dd class="tnum"><b class="ab-fv">$${esc(trend[trend.length - 1].v)}<small>/hr</small></b><span>Rate Index, ${esc(String(trend[trend.length - 1].l).replace(/ (\d\d)$/, ' 20$1'))} ${illus()}</span></dd></div>
-          <div class="ab-facts-reach"><dt>Reach a person</dt><dd><a class="link" href="mailto:${EMAIL}">${EMAIL}</a><span>Reply within one business day</span>${PG.phone()}</dd></div>
-        </dl>
+    <section class="section-sm ab-reach-sec">
+      <div class="wrap ab-reach">
+        <div><span class="eyebrow">Reach a person</span><h2 class="h3">A real reply within one business day.</h2></div>
+        <div class="ab-reach-r"><a class="link ab-reach-mail" href="mailto:${EMAIL}">${icon('mail')}${EMAIL}</a>${PG.phone()}</div>
       </div>
     </section>
 
@@ -297,48 +315,104 @@
   /* =====================================================================
      HOW IT WORKS
      ===================================================================== */
+  // How it works tab: companies or operators. An operator sees their own side first.
+  let HOWTAB = '';
   function howView() {
     const act = (href, label) => `<a class="act" href="#${href}">${esc(label)}${icon('arrow')}</a>`;
     const clients = [
-      { t: 'Browse free', d: 'Every profile is open. Search by role, focus area, industry and company size. No login and no sales call first.', l: act('browse', 'Browse talent') },
-      { t: 'Shortlist and compare', d: 'Save operators as you go, then put up to four side by side: Reputation Index, CORE ratings, verified focus areas, availability and rate.', l: act('compare', 'Open compare') },
-      { t: 'Request an intro or post an engagement', d: 'Ask to meet one operator by name, or post an engagement from a Blueprint and get ranked matches who reply in their Studio. No fees for companies: you pay the operator’s rate, nothing more.', l: act('engagement.new', 'Post an engagement') + act('blueprints', 'See Blueprints') },
-      { t: 'Introduced within one business day', d: 'The operator replies within 72 hours. Once they say yes, our team confirms the fit and introduces you by email within one business day.', l: asLink('buyer', 'buyer.intros', { mine: `Track your intros${icon('arrow')}`, other: `See a company workspace${icon('arrow')}` }, 'act') },
-      { t: 'Review after the engagement', d: 'When the work wraps, you rate the operator on CORE. Your review verifies the focus areas you saw and moves their Reputation Index.', l: act('levels', 'How reviews count') },
+      { i: 'search', t: 'Browse free', d: 'Every profile is open. Search by role, focus area, industry and company size. No login and no sales call first.', l: act('browse', 'Browse talent') },
+      { i: 'compare', t: 'Shortlist and compare', d: 'Save operators as you go, then put up to four side by side: Reputation Index, CORE ratings, verified focus areas, availability and rate.', l: act('compare', 'Open compare') },
+      { i: 'message', t: 'Request an intro or post an engagement', d: 'Ask to meet one operator by name, or post an engagement from a Blueprint and get ranked matches who reply in their Studio. No fees for companies: you pay the operator’s rate, nothing more.', l: act('engagement.new', 'Post an engagement') + act('blueprints', 'See Blueprints') },
+      { i: 'mail', t: 'Introduced within one business day', d: 'The operator replies within 72 hours. Once they say yes, our team confirms the fit and introduces you by email within one business day.', l: asLink('buyer', 'buyer.intros', { mine: `Track your intros${icon('arrow')}`, other: `See a company workspace${icon('arrow')}` }, 'act') },
+      { i: 'star', t: 'Review after the engagement', d: 'When the work wraps, you rate the operator on CORE. Your review verifies the focus areas you saw and moves their Reputation Index.', l: act('levels', 'How reviews count') },
     ];
     const cred = studioRoute(/cred/i, 'studio');
     const operators = [
-      { t: 'Apply', d: 'One intake with the same fields companies filter on: role, company fit, role details, availability, rate and fit tags.', l: act('join.operator', 'Apply to join') },
-      { t: 'Approved and live at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50.', l: act('levels', 'See the levels') },
-      { t: 'Studio insights from day one', d: 'See the searches you appeared in, the kinds of companies that viewed you, and where your rate sits against the Rate Index.', l: asLink('operator', studioRoute(/visib/i), { mine: `Open Studio${icon('arrow')}`, other: `See Studio as Matt${icon('arrow')}` }, 'act') },
-      { t: 'Verified proof raises your Reputation Index', d: 'Ask past companies for a CORE review from Studio. Each review rated 4.0 or higher verifies the fit tags it confirms and lifts your score.', l: asLink('operator', cred, { mine: `Open review requests${icon('arrow')}`, other: `See review requests as Matt${icon('arrow')}` }, 'act') },
-      { t: 'Direct deals with proof links', d: 'Send a prospect a private proof link with your reviews and engagement history, then see which sections they read.', l: asLink('operator', cred, { mine: `Create a proof link${icon('arrow')}`, other: `See proof links as Matt${icon('arrow')}` }, 'act') },
+      { i: 'doc', t: 'Apply', d: 'One intake with the same fields companies filter on: role, company fit, role details, availability, rate and fit tags.', l: act('join.operator', 'Apply to join') },
+      { i: 'seal', t: 'Approved and live at 50', d: 'Our team checks identity and work history within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50.', l: act('levels', 'See the levels') },
+      { i: 'chart', t: 'Studio insights from day one', d: 'See the searches you appeared in, the kinds of companies that viewed you, and where your rate sits against the Rate Index.', l: asLink('operator', studioRoute(/visib/i), { mine: `Open Studio${icon('arrow')}`, other: `See Studio as Matt${icon('arrow')}` }, 'act') },
+      { i: 'shield', t: 'Verified proof raises your Reputation Index', d: 'Ask past companies for a CORE review from Studio. Each review rated 4.0 or higher verifies the fit tags it confirms and lifts your score.', l: asLink('operator', cred, { mine: `Open review requests${icon('arrow')}`, other: `See review requests as Matt${icon('arrow')}` }, 'act') },
+      { i: 'link', t: 'Direct deals with proof links', d: 'Send a prospect a private proof link with your reviews and engagement history, then see which sections they read.', l: asLink('operator', cred, { mine: `Create a proof link${icon('arrow')}`, other: `See proof links as Matt${icon('arrow')}` }, 'act') },
     ];
-    const col = (key, eyebrow, h, steps, cta) => `<div class="pg-how-col pg-how-${key}">
-        <div class="pg-how-hd"><span class="eyebrow">${esc(eyebrow)}</span><h2 class="h3">${h}</h2></div>
-        <ol class="pg-steps">${steps.map((s, i) => `<li><span class="pg-num">${String(i + 1).padStart(2, '0')}</span><div><h3 class="h4">${esc(s.t)}</h3><p class="pg-p">${esc(s.d)}</p><div class="row pg-step-links">${s.l}</div></div></li>`).join('')}</ol>
+    const tab = HOWTAB || (persona() === 'operator' ? 'o' : 'c');
+    // The same winding path as Home's How it works (js/views/home.js, RN.homePath draws it), five steps a side
+    const path = (key, steps, cta) => `<div class="pg-how-panel" data-how="${key}" role="tabpanel" id="pg-how-${key}" aria-labelledby="pg-how-t-${key}" ${tab === key ? '' : 'hidden'}>
+        <div class="hm-path" data-hm-path>
+          <svg class="hm-path-svg" aria-hidden="true" focusable="false"><path class="hm-path-track" d=""/><path class="hm-path-glow" d=""/><path class="hm-path-line" d=""/><circle class="hm-path-tip" r="7" cx="-20" cy="-20"/></svg>
+          <ol class="hm-psteps">${steps.map((s, i) => `<li class="hm-pstep ${i % 2 ? 'hm-pstep-r' : 'hm-pstep-l'}">
+            <span class="hm-pnode" aria-hidden="true">${icon(s.i)}<b class="hm-pnode-n">${i + 1}</b></span>
+            <div class="hm-pcard"><span class="hm-pcard-k">Step ${i + 1}</span><h3 class="hm-pcard-t">${esc(s.t)}</h3><p>${esc(s.d)}</p><div class="row pg-step-links">${s.l}</div></div>
+          </li>`).join('')}</ol>
+        </div>
         <div class="pg-how-cta">${cta}</div>
       </div>`;
+    // Proof to close on: company reviews with a before-and-after figure, and the faces companies can browse today
+    const proof = allReviews().filter((x) => pullStat(x.r)).slice(0, 2).map((x) => Object.assign({}, x));
+    const faces = RN.model.ops.filter((o) => !o.hidden && o.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 6);
+    const live = RN.model.ops.filter((o) => !o.hidden).length;
+    const matt = RN.model.matt;
     return `
     ${hero({
       eyebrow: 'How it works',
       h: `One network, <span class="serif">two sides that both win.</span>`,
       lede: 'Companies find proven fractional leaders without a retained search. Operators get found, build proof, and get value even in months with no intro.',
-      aside: `<div class="pg-hero-stats">
-        <div><b class="num">$0</b><span>In fees for companies. Browse with no login, and pay the operator’s rate, nothing more.</span></div>
-        <div><b class="num">&lt;2 hrs</b><span>Typical first reply to an intro request. Every request is answered within 72 hours.</span></div>
-        <div><b class="num">1 day</b><span>From an operator’s yes to an email intro, in business days</span></div>
-        <div><b class="num">2 days</b><span>To review an operator application, in business days</span></div>
+      aside: `<div class="pg-flow" aria-label="From an intro request to an introduction">
+        <span class="label">From request to introduction</span>
+        <ol class="pg-flow-l">
+          <li><span class="pg-flow-i">${icon('send')}</span><div><b>You request an intro</b><span>No login to browse, $0 in fees for companies</span></div><em class="num">Day 0</em></li>
+          <li><span class="pg-flow-i is-face">${matt ? RN.ui.avatar(matt, 'ava-sm') : icon('user')}</span><div><b>The operator replies</b><span>Every request is answered within 72 hours</span></div><em class="num">&lt;2 hrs typical</em></li>
+          <li><span class="pg-flow-i">${icon('check-circle')}</span><div><b>They say yes, we confirm the fit</b><span>A person on our team checks scope and timing</span></div><em class="num">Same day</em></li>
+          <li class="is-end"><span class="pg-flow-i">${icon('mail')}</span><div><b>Introduced by email</b><span>In business days, from the operator’s yes</span></div><em class="num">1 day</em></li>
+        </ol>
       </div>`,
     })}
-    <section class="section">
-      <div class="wrap pg-how">
-        ${col('c', 'For companies', 'Hire on fit and proof, in days.', clients, `<a class="btn btn-lg" href="#browse">Browse talent${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#talk">Talk to us</a>`)}
-        ${col('o', 'For operators', 'Get found, and get value without an intro.', operators, `<a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#operators">Why join</a>`)}
+    <section class="section pg-how-sec">
+      <div class="wrap">
+        <div class="pg-how-hd">
+          <div class="pg-seg" role="tablist" aria-label="Who it is for">
+            <button type="button" role="tab" id="pg-how-t-c" aria-controls="pg-how-c" aria-selected="${tab === 'c'}" data-act="pg-how-tab" data-k="c">${icon('building')}For companies</button>
+            <button type="button" role="tab" id="pg-how-t-o" aria-controls="pg-how-o" aria-selected="${tab === 'o'}" data-act="pg-how-tab" data-k="o">${icon('user')}For operators</button>
+          </div>
+          <h2 class="h2 pg-how-h" data-how-h="c" ${tab === 'c' ? '' : 'hidden'}>Hire on fit and proof, in days.</h2>
+          <h2 class="h2 pg-how-h" data-how-h="o" ${tab === 'o' ? '' : 'hidden'}>Get found, and get value without an intro.</h2>
+        </div>
+        ${path('c', clients, `<a class="btn btn-lg" href="#browse">Browse talent${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#talk">Talk to us</a>`)}
+        ${path('o', operators, `<a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#operators">Why join</a><span class="pg-how-note">${icon('clock')}Applications reviewed within 2 business days</span>`)}
+      </div>
+    </section>
+    <section class="section pg-how-proof">
+      <div class="wrap">
+        ${shead('Where it leads', 'What companies wrote afterwards.', 'Figures from company reviews on the network, in the company’s own words.', `<a class="act" href="#results">All company reviews${icon('arrow')}</a>`)}
+        <div class="pg-how-proof-g">
+          ${proof.map((x, i) => revCard(x, i)).join('')}
+          <a class="pg-faces-card" href="#browse">
+            <span class="ava-stack">${faces.map((op) => RN.ui.avatar(op, 'ava-md ava-ring')).join('')}</span>
+            <b>${RN.fmt.int(live)} open profiles</b>
+            <span>Every one readable before you talk to anyone. No login.</span>
+            <span class="pg-faces-go">Browse operators${icon('arrow')}</span>
+          </a>
+        </div>
       </div>
     </section>
     ${band({ h: 'Rather talk it through with a person?', text: 'Four quick questions and your email, then a real reply from a person within one business day.', actions: talkActions() })}`;
   }
+  let howOffs = [];
+  function howUnmount() { howOffs.forEach((f) => f()); howOffs = []; }
+  function howMount(root) {
+    howUnmount();
+    const p = root.querySelector('.pg-how-panel:not([hidden])');
+    if (p && RN.homePath) RN.homePath(p, howOffs);
+  }
+  RN.actions['pg-how-tab'] = (el) => {
+    const k = el.dataset.k === 'o' ? 'o' : 'c';
+    HOWTAB = k;
+    const root = document.querySelector('main[data-view="how"]');
+    if (!root) return;
+    RN.$$('[data-act="pg-how-tab"]', root).forEach((b) => b.setAttribute('aria-selected', String(b.dataset.k === k)));
+    RN.$$('.pg-how-panel', root).forEach((x) => { x.hidden = x.dataset.how !== k; });
+    RN.$$('[data-how-h]', root).forEach((x) => { x.hidden = x.dataset.howH !== k; });
+    howMount(root);
+  };
 
   /* =====================================================================
      RESULTS
@@ -352,6 +426,55 @@
   const reviewText = (r) => r.quote || r.text || r.experience || r.overallExperience || '';
   const reviewScore = (r) => (typeof r.overall === 'number' ? r.overall : typeof r.coreAvg === 'number' ? r.coreAvg : null);
 
+  /* A figure a company wrote into its own review ("Gross retention went from 84% to 92%"), lifted out as a pull stat.
+     Only numeric before-and-after phrases qualify, so nothing is paraphrased. */
+  const STAT_RE = /(?:^|[.!?]\s+)([A-Z][^.!?]{2,48}?)\s+went from (\d[\d.,]*%?|nothing) to (\d[\d.,]*%?)/;
+  function pullStat(r) {
+    const m = STAT_RE.exec(reviewText(r));
+    if (!m) return null;
+    return { label: m[1].trim(), from: m[2] === 'nothing' ? 'Nothing' : m[2], to: m[3] };
+  }
+  // Results wall state: the role filter and whether every review shows. Kept across re-renders of the visit.
+  const W = { cat: 'all', all: false };
+  const WALL_N = 9;
+  /* The review's own rating, drawn large in the arch when there is no reviewer headshot (same treatment as Home) */
+  function rateArch(x) {
+    const sc = reviewScore(x.r);
+    const nTags = (x.r.tags || []).length;
+    return `<div class="pg-arch pg-arch-rate">
+      <div class="pg-rate-in">
+        ${sc != null ? `<span class="pg-rate-n num">${esc(sc.toFixed(1))}</span><span class="pg-rate-stars">${RN.ui.stars(sc)}</span><span class="pg-rate-k">Overall rating</span>` : ''}
+        <ul class="pg-rate-facts">${x.r.hireAgain ? `<li>${icon('check-circle')}Would hire again</li>` : ''}${nTags ? `<li>${icon('seal')}${esc(RN.fmt.plural(nTags, 'focus area'))} verified</li>` : ''}</ul>
+        <span class="pg-rate-logo">${RN.ui.logo(RN.model.reviewLogo(x.op, x.r), { h: 26, name: x.r.company || 'Company' })}</span>
+      </div>
+    </div>`;
+  }
+  const revOp = (op, r) => `<a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span class="pg-rev-op-t"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)} · ${RN.fmt.plural((r.tags || []).length, 'focus area')} verified</span></span>${icon('arrow')}</a>`;
+  const revBy = (r) => `<p class="pg-rev-by"><b>${esc(r.reviewer || 'Company')}</b><span>${esc([r.role, r.company].filter(Boolean).join(', '))}</span></p>`;
+  const revTop = (r) => `<div class="pg-rev-top">${reviewScore(r) ? `<span class="pg-rev-sc">${RN.ui.stars(reviewScore(r))}<b>${reviewScore(r).toFixed(1)}</b></span>` : '<span></span>'}${r.hireAgain ? `<span class="pill pill-good">${icon('check')}Would hire again</span>` : ''}</div>`;
+  function revCard(x, i) {
+    const { op, r } = x;
+    const photo = (RN.data.reviewerPhotos || {})[r.reviewer] || '';
+    const st = pullStat(r);
+    const attrs = `data-cat="${esc(op.catKey)}" data-i="${i}"`;
+    // A face anchors the wide cards: the reviewer's headshot when we have one, otherwise the operator's photo
+    if (x.kind === 'wide') {
+      const face = photo ? `<img class="pg-rev-face${/-cut\./.test(photo) ? ' is-cut' : ''}" src="${esc(photo)}" alt="${esc(r.reviewer)}" onerror="this.remove()">` : `${RN.ui.avatar(op, 'ava-xl pg-rev-ava')}`;
+      return `<article class="pg-rev pg-rev-wide" ${attrs}>
+        <div class="pg-rev-face-w${photo ? ' is-reviewer' : ''}">${face}</div>
+        <div class="pg-rev-body">${revTop(r)}<blockquote class="pg-rev-q">${esc(RN.fmt.smart(RN.model.pullQuote(reviewText(r), 260)))}</blockquote>${revBy(r)}${revOp(op, r)}</div>
+      </article>`;
+    }
+    if (st) {
+      return `<article class="pg-rev pg-rev-stat" ${attrs}>
+        <div class="pg-rev-fig"><span class="num">${esc(st.from)}</span><i aria-hidden="true">${icon('arrow')}</i><span class="num">${esc(st.to)}</span></div>
+        <span class="pg-rev-fl">${esc(st.label)}</span>
+        <blockquote class="pg-rev-q">“${esc(RN.fmt.smart(reviewText(r)))}”</blockquote>${revBy(r)}${revOp(op, r)}
+      </article>`;
+    }
+    return `<article class="pg-rev" ${attrs}>${revTop(r)}<blockquote class="pg-rev-q">“${esc(RN.fmt.smart(reviewText(r)))}”</blockquote>${revBy(r)}${revOp(op, r)}</article>`;
+  }
+
   function resultsView() {
     const all = allReviews();
     const R = market().report;
@@ -363,55 +486,77 @@
     const verified = RN.model.ops.reduce((a, o) => a + o.tags.filter((t) => t.tier !== 'claimed').length, 0);
     const pick = (re) => R.summary.find((s) => re.test(s.l));
     const research = [pick(/rehire/i), pick(/engagement length/i), pick(/pipeline/i), pick(/first sales leadership/i)].filter(Boolean);
+    // The operators behind the reviews, photos first, for the hero's face strip
+    const reviewed = [...new Set(all.map((x) => x.op))].sort((a, b) => (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || b.reviews.length - a.reviews.length);
+    const companies = new Set(all.map((x) => x.r.company).filter(Boolean)).size;
+    // Photos only in the stack (initials read badly overlapped); the rest are a count
+    const faces = reviewed.filter((o) => o.photo).slice(0, 5);
 
-    const wall = all.filter((x) => x !== featured);
+    // The wall: a wide card with a face, then pull-stat cards where a company wrote a before-and-after figure
+    const rest = all.filter((x) => x !== featured).map((x) => Object.assign({}, x));
+    let wides = 0;
+    rest.forEach((x) => { if (wides < 3 && ((RN.data.reviewerPhotos || {})[x.r.reviewer] || x.op.photo)) { x.kind = 'wide'; wides++; } });
+    /* Rhythm on a 3-column grid: a wide card and one card, a row of three, then one card and the next wide card
+       (so the faces alternate sides), with the pull-stat cards spread through the plain ones. */
+    const W3 = rest.filter((x) => x.kind === 'wide');
+    const stats = rest.filter((x) => !x.kind && pullStat(x.r));
+    const plain = rest.filter((x) => !x.kind && !pullStat(x.r));
+    const singles = [];
+    while (stats.length || plain.length) { if (stats.length) singles.push(stats.shift()); for (let k = 0; k < 2 && plain.length; k++) singles.push(plain.shift()); }
+    const wall = [];
+    W3.forEach((w, k) => { if (k % 2) { wall.push(...singles.splice(0, 1), w); } else { wall.push(w, ...singles.splice(0, 1)); } wall.push(...singles.splice(0, 3)); });
+    wall.push(...singles);
+    const cats = RN.fields.roleCategory.options.map((o) => ({ o, n: wall.filter((x) => x.op.catKey === o.v).length })).filter((c) => c.n);
+    if (W.cat !== 'all' && !cats.some((c) => c.o.v === W.cat)) W.cat = 'all';
+    const ha = all.length ? Math.round((again / all.length) * 100) : 0;
     return `
     ${hero({
       eyebrow: 'Results',
       h: `Proof, <span class="serif">in their words.</span>`,
       lede: 'Company reviews of operators on the network, written by the company and published as submitted. Where a figure comes from research instead of a review, we say so.',
-      aside: `<div class="pg-hero-stats">
-        <div><b class="num">${RN.fmt.int(all.length)}</b><span>Company reviews on the network, ${avg ? avg.toFixed(1) : 'no'} average overall</span></div>
-        <div><b class="num">${all.length ? Math.round((again / all.length) * 100) : 0}%</b><span>Of reviewing companies would hire the operator again</span></div>
-        <div><b class="num">${RN.fmt.int(verified)}</b><span>Focus areas verified by those reviews</span></div>
+      aside: `<div class="pg-proof">
+        <div class="pg-proof-faces">
+          <span class="ava-stack">${faces.map((op) => RN.ui.avatar(op, 'ava-md ava-ring')).join('')}${reviewed.length > faces.length ? `<span class="ava ava-md ava-ring pg-proof-more">+${reviewed.length - faces.length}</span>` : ''}</span>
+          <p><b>${RN.fmt.plural(reviewed.length, 'operator')}</b> reviewed by ${RN.fmt.plural(companies, 'company')}</p>
+        </div>
+        <div class="pg-proof-avg"><span class="pg-proof-n num">${avg ? avg.toFixed(1) : '0'}</span><span class="pg-proof-s">${avg ? RN.ui.stars(avg) : ''}<span>Average overall rating, ${RN.fmt.plural(all.length, 'company review')}</span></span></div>
+        <dl class="pg-proof-row">
+          <div><dt>Would hire again</dt><dd class="num">${ha}<small>%</small></dd></div>
+          <div><dt>Focus areas verified</dt><dd class="num">${RN.fmt.int(verified)}</dd></div>
+        </dl>
         <span class="pg-hero-note">${icon('check-circle')}Live network export</span>
       </div>`,
     })}
 
     ${featured ? `<section class="section pg-feature-sec">
       <div class="wrap pg-feature">
-        <div class="pg-arch pg-arch-sage"><div class="arch-logo">${RN.ui.logo(RN.model.reviewLogo(featured.op, featured.r), { h: 46, name: featured.r.company || 'Company' })}</div></div>
+        ${(RN.data.reviewerPhotos || {})[featured.r.reviewer] ? `<div class="pg-arch pg-arch-sage pg-arch-photo"><img src="${esc(RN.data.reviewerPhotos[featured.r.reviewer])}" alt="${esc(featured.r.reviewer)}" onerror="this.closest('.pg-feature').classList.add('is-nophoto')"></div>` : ''}
+        ${rateArch(featured)}
         <figure class="pg-feature-q">
           <span class="pg-qmark" aria-hidden="true">“</span>
           <blockquote>${esc(reviewText(featured.r))}</blockquote>
-          <figcaption><b>${esc(featured.r.reviewer)}</b><span>${esc(featured.r.role)}, ${esc(featured.r.company)}</span></figcaption>
-          <div class="pg-feature-meta">
-            ${reviewScore(featured.r) ? `<span class="row-nw" style="--gap:8px">${RN.ui.stars(reviewScore(featured.r))}<b>${reviewScore(featured.r).toFixed(1)}</b></span>` : ''}
-            ${featured.r.hireAgain ? `<span class="pill pill-good">${icon('check')}Would hire again</span>` : ''}
-            ${featured.r.date ? `<span class="small muted">Reviewed ${esc(RN.fmt.date(featured.r.date + 'T12:00:00'))}</span>` : ''}
-          </div>
+          <figcaption><b>${esc(featured.r.reviewer)}</b><span>${esc(featured.r.role)}, ${esc(featured.r.company)}${featured.r.date ? ` · Reviewed ${esc(RN.fmt.date(featured.r.date + 'T12:00:00'))}` : ''}</span></figcaption>
           ${(featured.r.tags || []).length ? `<div class="pg-feature-tags"><span class="label">Focus areas this review verified for ${esc(featured.op.first)}</span>${RN.ui.ftags((featured.r.tags || []).map((t) => ({ t, tier: 'verified' })))}</div>` : ''}
           <a class="act" href="#op.${esc(featured.op.slug)}">Read the full review on ${esc(featured.op.first)}’s profile${icon('arrow')}</a>
         </figure>
       </div>
     </section>` : ''}
 
-
     ${wall.length ? `<section class="section pg-wall-sec">
       <div class="wrap">
-        ${shead('Company reviews', 'More from their companies.', `${RN.fmt.plural(all.length, 'company review')} on the network so far, and this page shows every one. Reviews publish without a moderation queue.`)}
-        <div class="grid g-3 pg-wall">${wall.map(({ op, r }) => `<article class="card pg-rev">
-            <div class="row between"><span class="row-nw" style="--gap:6px">${reviewScore(r) ? RN.ui.stars(reviewScore(r)) : ''}</span>${r.hireAgain ? `<span class="pill pill-good">${icon('check')}Would hire again</span>` : ''}</div>
-            <blockquote class="pg-rev-q">“${esc(reviewText(r))}”</blockquote>
-            <p class="small"><b>${esc(r.reviewer || 'Company')}</b> <span class="muted">${esc([r.role, r.company].filter(Boolean).join(', '))}</span></p>
-            <a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)} · ${RN.fmt.plural((r.tags || []).length, 'focus area')} verified</span></span>${icon('arrow')}</a>
-          </article>`).join('')}
+        ${shead('Company reviews', 'More from their companies.', `Every company review on the network, ${RN.fmt.int(all.length)} so far. Reviews publish without a moderation queue.`)}
+        <div class="pg-wall-f" role="group" aria-label="Filter reviews by the operator’s role">
+          <button type="button" class="chip${W.cat === 'all' ? ' on' : ''}" data-act="pg-wall-cat" data-cat="all" aria-pressed="${W.cat === 'all'}">All<span class="pg-wall-n">${wall.length}</span></button>
+          ${cats.map(({ o, n }) => `<button type="button" class="chip${W.cat === o.v ? ' on' : ''}" data-act="pg-wall-cat" data-cat="${esc(o.v)}" aria-pressed="${W.cat === o.v}">${RN.ui.catDot(o.v)}${esc(o.l)}<span class="pg-wall-n">${n}</span></button>`).join('')}
+        </div>
+        <div class="pg-wall" data-pg-wall>${wall.map(revCard).join('')}
           <article class="pg-rev pg-rev-how">
             <span class="pg-value-i">${icon('star')}</span>
             <h3 class="h4">Every company gets asked</h3>
             <p class="small">Operators request a review from Studio when an engagement ends. The company answers four CORE questions, rates the outcome and says whether they would hire again. The review publishes the day it lands.</p>
             <a class="act" href="#levels">How reviews move the Reputation Index${icon('arrow')}</a>
           </article></div>
+        <div class="pg-wall-more"><button type="button" class="btn btn-line" data-act="pg-wall-all" data-pg-wall-more>Show all reviews</button></div>
       </div>
     </section>` : ''}
 
@@ -435,6 +580,25 @@
 
     ${band({ h: 'Want an operator with a record like this?', text: 'Tell us what you need and we will put three operators in front of you, matched on the same fields they filled in at signup.', actions: talkActions() })}`;
   }
+  /* Filter and trim the wall in place (no re-render, so the page keeps its scroll position) */
+  function applyWall(root) {
+    const box = (root || document).querySelector('[data-pg-wall]');
+    if (!box) return;
+    const cards = RN.$$('.pg-rev[data-cat]', box);
+    const hit = cards.filter((c) => W.cat === 'all' || c.dataset.cat === W.cat);
+    // A wide card counts as two slots, so the first screen is three even rows
+    let slots = 0;
+    cards.forEach((c) => { c.hidden = true; });
+    hit.forEach((c) => { const w = c.classList.contains('pg-rev-wide') ? 2 : 1; if (W.all || slots + w <= WALL_N) { c.hidden = false; slots += w; } });
+    const shown = hit.filter((c) => !c.hidden).length;
+    const how = box.querySelector('.pg-rev-how');
+    if (how) how.hidden = shown < hit.length;
+    const more = (root || document).querySelector('[data-pg-wall-more]');
+    if (more) { more.hidden = shown >= hit.length; more.textContent = `Show all ${RN.fmt.plural(hit.length, 'review')}`; }
+    RN.$$('[data-act="pg-wall-cat"]', (root || document)).forEach((b) => { const on = b.dataset.cat === W.cat; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  }
+  RN.actions['pg-wall-cat'] = (el) => { W.cat = el.dataset.cat || 'all'; W.all = false; applyWall(); };
+  RN.actions['pg-wall-all'] = () => { W.all = true; applyWall(); };
 
   /* =====================================================================
      TALK TO US: short auto-advancing flow on the standard picklists
@@ -490,6 +654,7 @@
     const b = el.querySelector('b.num');
     const from = b ? +b.dataset.n || 0 : 0;
     const to = liveCount();
+    lastLive = to;
     el.classList.toggle('is-zero', !to);
     el.querySelector('.pg-live-t').innerHTML = liveText(to);
     const nb = el.querySelector('b.num');
@@ -531,7 +696,7 @@
       const label = RN.w.label(k, T.ans[k]);
       const name = RECAP[k] || RN.fields[k].label;
       if (o.text) return `${name}: ${label}`;
-      return i >= 0 ? `<button type="button" class="pg-recap-chip" data-act="pg-talk-jump" data-i="${i}" title="Change this answer"><span>${esc(name)}</span>${esc(label)}</button>`
+      return i >= 0 ? `<button type="button" class="pg-recap-chip" data-act="pg-talk-jump" data-i="${i}" title="Change this answer"><span>${esc(name)}</span>${esc(label)}<i class="pg-recap-ed" aria-hidden="true">${icon('edit')}</i></button>`
         : `<span class="pg-recap-chip is-fixed" title="From your company profile"><span>${esc(name)}</span>${esc(label)}</span>`;
     });
   }
@@ -601,6 +766,20 @@
     return `<div class="stepper pg-stepper" role="progressbar" aria-label="${esc(label)}" aria-valuemin="1" aria-valuemax="${total}" aria-valuenow="${done ? total : cur + 1}">${Array.from({ length: total }, (_, i) => `<i class="${done || i <= cur ? 'on' : ''}"></i>`).join('')}</div>`;
   }
 
+  /* Answer tiles carry a picture of the answer: Home's problem icons on the need step (same map as home.js), and a
+     scale on the size step (bars that grow with revenue, dots that multiply with headcount). */
+  const NEED_IC = { sales_motion: 'target', pipeline: 'trend-up', team: 'users', systems: 'layers', ai: 'ai', retention: 'refresh', partners: 'handshake', not_sure: 'message' };
+  function tileGlyph(key, v) {
+    if (key === 'need') return `<span class="pg-t-ic" aria-hidden="true">${icon(NEED_IC[v] || 'target')}</span>`;
+    const opts = (RN.fields[key] && RN.fields[key].options) || [];
+    const k = opts.findIndex((o) => o.v === v);
+    if (k < 0 || (key !== 'companyRevenue' && key !== 'companyEmployees')) return '';
+    if (key === 'companyRevenue') return `<span class="pg-t-sc is-bars" aria-hidden="true">${opts.map((o, j) => `<i class="${j <= k ? 'on' : ''}" style="--j:${j}"></i>`).join('')}</span>`;
+    return `<span class="pg-t-sc is-dots" aria-hidden="true">${opts.map((o, j) => `<i class="${j <= k ? 'on' : ''}"></i>`).join('')}</span>`;
+  }
+  const decorate = (html, key) => html.replace(/(<button[^>]*data-v="([^"]*)"[^>]*>)/g, (m, open, v) => open + tileGlyph(key, v));
+  let lastLive = null;
+
   function talkStep() {
     const st = steps();
     T.step = RN.clamp(T.step | 0, 0, st.length - 1);
@@ -629,19 +808,23 @@
         </form>`;
     } else if (s.rows) {
       // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row
+      // One numbering across both rows: revenue 1 to 6, headcount 7 to 12 (onTalkKey reads two-digit keys)
       body = s.rows.map((r, ri) => {
         const d = RN.fields[r.key];
+        const k0 = s.rows.slice(0, ri).reduce((a, x) => a + RN.fields[x.key].options.length, 0);
         return `<div class="pg-row" data-row="${esc(r.key)}">
-          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}${ri === 0 ? `<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span>` : ''}</p>
-          <div class="pg-tiles" data-cols="${r.cols || 2}">${RN.w.control(r.key, T.ans[r.key] || '', { name: r.key, id: 'pg-t-' + r.key, change: 'pg-talk-pick' })}</div>
+          <p class="pg-q-sub pg-row-sub"><span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}<span class="pg-kbd hide-m">Press ${k0 + 1} to ${k0 + d.options.length}</span></p>
+          <div class="pg-tiles" data-cols="${r.cols || 2}" data-k0="${k0}" style="--k0:${k0}">${decorate(RN.w.control(r.key, T.ans[r.key] || '', { name: r.key, id: 'pg-t-' + r.key, change: 'pg-talk-pick' }), r.key)}</div>
         </div>`;
-      }).join('') + (chips.length ? `<div class="pg-recap pg-recap-sm" aria-label="Your answers so far">${chips.join('')}</div>` : '');
+      }).join('');
     } else {
       const d = RN.fields[s.key];
       body = `<p class="pg-q-sub">${s.hint ? `<span>${esc(s.hint)}</span>` : `<span class="label">${esc(d.label)}</span>${d.help ? `<span>${esc(d.help)}</span>` : ''}`}<span class="pg-kbd hide-m">Press 1 to ${d.options.length}</span></p>
-        <div class="pg-tiles" data-cols="${s.cols || 2}">${RN.w.control(s.key, T.ans[s.key] || '', { name: s.key, id: 'pg-t-' + s.key, change: 'pg-talk-pick' })}</div>
-        ${chips.length ? `<div class="pg-recap pg-recap-sm" aria-label="Your answers so far">${chips.join('')}</div>` : ''}`;
+        <div class="pg-tiles${s.key === 'need' ? ' has-ic' : ''}" data-cols="${s.cols || 2}">${decorate(RN.w.control(s.key, T.ans[s.key] || '', { name: s.key, id: 'pg-t-' + s.key, change: 'pg-talk-pick' }), s.key)}</div>
+`;
     }
+    // Answers so far ride above the question, each one a button back to its step
+    const crumbs = chips.length && s.key !== 'contact' ? `<div class="pg-recap pg-crumbs" aria-label="Your answers so far">${chips.join('')}</div>` : '';
     return `<section class="pg-talk night" data-step="${esc(s.key)}">
       <div class="pg-talk-in">
         <div class="pg-talk-top">
@@ -651,9 +834,14 @@
         ${progress(T.step, st.length)}
         ${liveBadge()}
         ${note}${T.step === 0 ? searched : ''}
+        ${crumbs}
         <h1 class="h2 pg-q" tabindex="-1">${esc(s.q)}</h1>
         ${body}
-        <p class="pg-talk-alt">Rather talk now? <button type="button" class="act" data-act="pg-book">${icon('calendar')}Book a call</button> or call ${PHONE}</p>
+        <div class="pg-talk-alt">
+          ${RN.model.matt ? RN.ui.avatar(RN.model.matt, 'ava-md') : ''}
+          <p><b>Rather talk now?</b><span>Matt Lopez or someone on our team who has sat in your seat. Weekdays, 9am to 6pm Eastern.</span></p>
+          <div class="pg-talk-alt-a"><button type="button" class="btn btn-leaf btn-sm" data-act="pg-book">${icon('calendar')}Book a call</button><a class="pg-talk-tel" href="tel:+12032000482">${icon('message')}${PHONE}</a></div>
+        </div>
       </div>
     </section>`;
   }
@@ -708,6 +896,13 @@
   function talkMount(root) {
     document.removeEventListener('keydown', onTalkKey);
     document.addEventListener('keydown', onTalkKey);
+    // The match count carries over between questions: count from the last number shown to this step's
+    const nb = root.querySelector('.pg-live b.num');
+    if (nb) {
+      const to = +nb.dataset.n || 0;
+      if (lastLive != null && lastLive !== to) { nb.dataset.n = String(lastLive); nb.textContent = RN.fmt.int(lastLive); updateLive(); }
+      lastLive = to;
+    }
     const f = T.focus && root.querySelector('#' + T.focus);
     if (f) { f.focus(); T.focus = ''; save(); return; }
     const q = root.querySelector('.pg-q');
@@ -715,17 +910,30 @@
   }
   function talkUnmount() {
     document.removeEventListener('keydown', onTalkKey);
+    clearTimeout(keyT); keyBuf = ''; lastLive = null;
     clearTimeout(advTimer);
     cancelAnimationFrame(liveRaf);
   }
+  // Number keys pick a tile. Several rows share one numbering (1 to 6, then 7 to 12), so a 1 waits a moment for a
+  // second digit when a tile 10 or above exists.
+  let keyBuf = '', keyT = 0;
+  function pickNum(n) {
+    const chips = RN.$$('.pg-talk .pg-tiles .chip');
+    const chip = chips[n - 1];
+    if (chip) { chip.focus(); chip.click(); }
+  }
   function onTalkKey(e) {
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !/^[1-9]$/.test(e.key)) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !/^[0-9]$/.test(e.key)) return;
     const tag = ((e.target && e.target.tagName) || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || document.querySelector('.scrim, .menu-sheet')) return;
-    const rows = RN.$$('.pg-talk .pg-tiles');
-    const row = rows.find((r) => !(r.querySelector('input[type=hidden]') || {}).value) || rows[0];
-    const chip = row && RN.$$('.chip', row)[+e.key - 1];
-    if (chip) { e.preventDefault(); chip.focus(); chip.click(); }
+    const total = RN.$$('.pg-talk .pg-tiles .chip').length;
+    if (!total) return;
+    e.preventDefault();
+    clearTimeout(keyT);
+    if (keyBuf) { const n = +(keyBuf + e.key); keyBuf = ''; pickNum(n <= total ? n : +e.key); return; }
+    if (e.key === '0') return;
+    if (e.key === '1' && total >= 10) { keyBuf = '1'; keyT = setTimeout(() => { keyBuf = ''; pickNum(1); }, 650); return; }
+    pickNum(+e.key);
   }
   const onTalk = () => ['talk', 'talk-need'].includes(curView());
 
@@ -970,6 +1178,7 @@
     const total = ops.length || 1;
     // Same rule as Home's featured row (home.js): a live profile with a photo at Proven (60) and above
     const featurable = ops.filter((o) => !o.hidden && o.photo && o.ris && o.ris.score >= 60).length;
+    const faces = ops.filter((o) => !o.hidden && o.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 5);
     const R = market().report;
     const supply = {};
     ops.forEach((o) => { supply[o.catKey] = (supply[o.catKey] || 0) + 1; });
@@ -1004,8 +1213,9 @@
       h: `Get value from the network <span class="serif">even in months with no intro.</span>`,
       lede: 'There are more fractional leaders than open seats, and we will not pretend otherwise. So your profile works for you every week: it shows who looked and why, where you stand on rate, and gives you proof you can take into your own deals.',
       actions: `<a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a>${studioAsMatt('studio')}`,
+      aside: `<div class="op-hero-sp">${studioPreview()}<p class="op-sp-cap">${icon('chart')}<span>Matt Lopez’s Studio. His profile, rate and reviews are live; views and searches are illustrative.</span></p></div>`,
       foot: `<div class="pg-hero-strip">
-        <div><b class="num">${RN.fmt.int(ops.length)}</b><span>Operator profiles in this prototype, from 350+ on the live network</span></div>
+        <div><span class="ava-stack op-faces">${faces.map((o) => RN.ui.avatar(o, 'ava-sm ava-ring')).join('')}</span><b class="num">${RN.fmt.int(ops.length)}</b><span>Operator profiles in this prototype, from 350+ on the live network</span></div>
         <div><b class="num">${topShare}%</b><span>Of them lead ${esc(top.l)}</span></div>
         <div><b class="num">$0</b><span>To join. We charge a share of what you bill companies you meet here (proposed: ${FEE_PCT}%)</span></div>
       </div>`,
@@ -1046,22 +1256,10 @@
       </div>
     </section>
 
-    <section class="section night pg-sp-sec">
-      <div class="wrap pg-sp-wrap">
-        <div class="pg-sp-copy">
-          <span class="eyebrow">A look inside Studio</span>
-          <h2 class="h2">This is Matt’s Monday in Studio.</h2>
-          <p class="lede">Studio shows the searches you appeared in, the companies that viewed you by industry and size, and how your rate compares. This preview uses Matt Lopez’s profile: his profile, rate and reviews are live, and the views and searches are illustrative.</p>
-          <div class="pg-actions">${studioAsMatt('studio', 'btn btn-leaf btn-lg')}</div>
-        </div>
-        ${studioPreview()}
-      </div>
-    </section>
-
     <section class="section pg-ladder-sec">
       <div class="wrap">
-        ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on company evidence: reviews, verified fit tags and engagements. What each tier unlocks is proposed and not final.', `<a class="act" href="#levels">How the Reputation Index works${icon('arrow')}</a>`)}
-        ${ladder({ counts: true, me: true })}
+        ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on company evidence: reviews, verified fit tags and engagements. What each tier unlocks is on the Levels page.', `<a class="act" href="#levels">What each tier unlocks${icon('arrow')}</a>`)}
+        ${badgeRow({ me: true })}
         <div class="pg-principles">
           <div><span class="pg-pr-i">${icon('lock')}</span><h3 class="h5">Nothing is for sale</h3><p class="small muted">No paid rank, no paid badge, no paid access to company engagements. Every tier and every tool on this page is free.</p></div>
           <div><span class="pg-pr-i">${icon('star')}</span><h3 class="h5">How featuring works</h3><p class="small muted">Home features up to three operators with a profile photo at Proven (Reputation Index 60+) and above, ranked by score, then company reviews and engagement history. Emerging operators who can start now get their own row. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} in this prototype qualify for a featured spot today.</p></div>
@@ -1071,7 +1269,7 @@
       </div>
     </section>
 
-    <section class="section pg-samples-sec">
+    <section class="section pg-samples-sec" data-proto>
       <div class="wrap">
         ${shead('What operators tell us', 'The kind of week we are building for.', '', `<span class="pill pill-warn">${icon('info')}Sample quotes, not from real operators</span>`)}
         <div class="grid g-3">${samples.map((s) => `<figure class="card pg-sample">
@@ -1125,12 +1323,13 @@
       h: 'One score. <span class="serif">Earned, never bought.</span>',
       lede: 'The Reputation Index is a 0 to 100 score built from company evidence. Companies and operators see the same number and the same label, everywhere on Revenue Nomad.',
       actions: `<button type="button" class="btn btn-lg" data-act="pg-browse-sort" data-sort="ris">Browse by Reputation Index${icon('arrow')}</button>${studioAsMatt(studioRoute(/cred/i), 'btn btn-line btn-lg', 'See your level in Studio')}`,
+      aside: `<div class="lv-hero-vis"><span class="lv-vis-k">Reputation Index, 0 to 100</span>${badgeRow({ stairs: true, me: true })}</div>`,
     })}
 
     <section class="section pg-ladder-sec">
       <div class="wrap">
         ${shead('The ladder', 'Six tiers, one for every score.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. That is expected on a network that started collecting company reviews this year, and it is why every review moves a profile. What each tier unlocks is proposed and not final.`)}
-        ${ladder({ desc: true, counts: true, me: true })}
+        ${ladder({ desc: true, counts: true, me: true, rail: true })}
       </div>
     </section>
 
@@ -1158,13 +1357,11 @@
           <p class="pg-p">Operators claim up to 25 focus areas (in Studio they are called fit tags). A focus area turns Verified when a company review confirms it, and its score climbs with each confirming review. Only reviews rated 4.0 or higher count. A focus area a company adds in a review joins the profile as Verified.</p>
           <div class="row pg-curve-ex">${RN.ui.ftag({ t: 'Sales Playbook', tier: 'verified' })}${RN.ui.ftag({ t: 'Board Revenue Reporting', tier: 'claimed' })}</div>
           <p class="small muted">Solid with a check is verified by a company. Dashed is claimed by the operator.</p>
-          <div class="pg-curve-chart">${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w: 440, h: 200, fmt: (n) => String(n), label: 'Focus area score by number of confirming company reviews' })}<p class="tiny muted">Score by number of confirming company reviews. Expert from 5.</p></div>
         </div>
-        <div class="tbl-wrap card pg-curve-tbl">
-          <table class="tbl">
-            <thead><tr><th>Company reviews</th><th class="r">Score</th><th>Tier</th></tr></thead>
-            <tbody>${curve.map((c) => `<tr><td>${c.r === 10 ? '10 or more' : c.r === 0 ? '0, self-claimed' : c.r}</td><td class="r num">${c.score || '0'}</td><td>${tierPill(c.tier)}</td></tr>`).join('')}</tbody>
-          </table>
+        <div class="card lv-curve">
+          <div class="card-hd"><div><h3>Focus area score by confirming reviews</h3><p class="sub">Each column is one more company review rated 4.0 or higher</p></div></div>
+          <div class="pg-curve-chart" data-lv-curve>${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w: 520, h: 220, fmt: (n) => String(n), label: 'Focus area score by number of confirming company reviews' })}</div>
+          <div class="lv-bands" aria-label="Tier by number of confirming reviews">${['claimed', 'verified', 'expert'].map((t) => { const rows = curve.filter((c) => c.tier === t); if (!rows.length) return ''; const a = rows[0].r, z = rows[rows.length - 1].r; const txt = z === 0 ? 'No company reviews' : z === 10 ? `${a} or more reviews` : a === z ? RN.fmt.plural(a, 'review') : `${a} to ${z} reviews`; return `<span class="lv-band is-${t}">${tierPill(t)}<small>${esc(txt)}</small></span>`; }).join('')}</div>
         </div>
       </div>
     </section>
@@ -1181,27 +1378,25 @@
       </div>
     </section>
 
-    <section class="section">
+    <section class="section lv-princ-sec">
       <div class="wrap">
         ${shead('The principles', 'Rules that keep the score worth trusting.')}
-        <div class="pg-princ">${principles.map(([i, t, d]) => `<div class="pg-princ-item"><span class="pg-pr-i">${icon(i)}</span><div><h3 class="h5">${esc(t)}</h3><p class="small muted">${esc(d)}</p></div></div>`).join('')}</div>
+        <div class="pg-princ">${principles.map(([i, t, d], k) => `<div class="pg-princ-item"><span class="lv-princ-n">${String(k + 1).padStart(2, '0')}</span><span class="pg-pr-i">${icon(i)}</span><div><h3 class="h5">${esc(t)}</h3><p>${esc(d)}</p></div></div>`).join('')}</div>
       </div>
     </section>
 
-    <section class="section-sm">
-      <div class="wrap grid g-2 pg-uses">
-        <div class="card">
-          <span class="eyebrow">For companies</span>
-          <h3 class="h3" style="margin-top:8px">Start with confirmed records</h3>
-          <p class="small muted" style="margin-top:8px">Sort Browse by Reputation Index, or set a minimum. Counts are profiles in this prototype.</p>
-          <div class="row pg-uses-chips"><button type="button" class="btn btn-sm" data-act="pg-browse-sort" data-sort="ris">Sort by Reputation Index</button>${risOpts.map(({ o, n }) => `<button type="button" class="chip" data-act="pg-browse-ris" data-v="${esc(o.v)}">${icon('filter')}${esc(RN.fields.risMin.label)} ${esc(o.l)} · ${RN.fmt.plural(n, 'profile')}</button>`).join('')}</div>
-        </div>
-        <div class="card">
-          <span class="eyebrow">For operators</span>
-          <h3 class="h3" style="margin-top:8px">Raise your score with company evidence</h3>
-          <p class="small muted" style="margin-top:8px">Request CORE reviews from past companies and see points available for each signal in Studio.</p>
-          <div class="row pg-uses-chips">${studioAsMatt(studioRoute(/cred/i), 'btn btn-sm', 'Open Credibility')}<a class="btn btn-line btn-sm" href="#join.operator">Apply to join</a></div>
-        </div>
+    <section class="lv-uses">
+      <div class="lv-use is-c">
+        <span class="eyebrow">For companies</span>
+        <h3 class="h2">Start with confirmed records.</h3>
+        <p>Sort Browse by Reputation Index, or set a minimum.<span data-proto> Counts are profiles in this prototype.</span></p>
+        <div class="row pg-uses-chips"><button type="button" class="btn btn-leaf" data-act="pg-browse-sort" data-sort="ris">Sort by Reputation Index${icon('arrow')}</button>${risOpts.map(({ o, n }) => `<button type="button" class="chip" data-act="pg-browse-ris" data-v="${esc(o.v)}">${icon('filter')}${esc(RN.fields.risMin.label)} ${esc(o.l)} · ${RN.fmt.plural(n, 'profile')}</button>`).join('')}</div>
+      </div>
+      <div class="lv-use is-o">
+        <span class="eyebrow">For operators</span>
+        <h3 class="h2">Raise your score with company evidence.</h3>
+        <p>Request CORE reviews from past companies and see the points available for each signal in Studio.</p>
+        <div class="row pg-uses-chips">${studioAsMatt(studioRoute(/cred/i), 'btn btn-leaf', 'Open Credibility')}<a class="btn btn-line" href="#join.operator">Apply to join</a></div>
       </div>
     </section>`;
   }
@@ -1221,8 +1416,9 @@
       ['chart', 'Insights', 'Research, rates and guides', 'insights'],
       ['users', 'For operators', 'Why join, and Studio', 'operators'],
       ['message', 'Talk to us', 'A person replies within one business day', 'talk'],
-      ['home', 'Home', 'Start over', 'home'],
     ];
+    // One real face among the links: the top-ranked live operator with a photo, same rule for every operator
+    const face = RN.model.ops.filter((o) => !o.hidden && o.photo).sort((a, b) => b.ris.score - a.ris.score || b.reviews.length - a.reviews.length)[0];
     return `<section class="section pg-404">
       <div class="wrap-narrow">
         <span class="pg-404-code num" aria-hidden="true">404</span>
@@ -1233,8 +1429,9 @@
           <div class="input-wrap grow">${icon('search')}<input class="input" type="search" name="q" value="${esc(words)}" placeholder="Search a role, focus area or industry" aria-label="Search operators"></div>
           <button class="btn" type="submit">Search</button>
         </form>
-        ${guesses.length ? `<div class="pg-404-guess"><span class="label">Did you mean</span>${guesses.map((op) => `<a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>${icon('arrow')}</a>`).join('')}</div>` : ''}
-        <div class="pg-404-grid">${places.map(([i, t, d, to]) => `<a class="card card-link pg-404-card" href="#${to}"><span class="pg-value-i">${icon(i)}</span><span><b>${esc(t)}</b><span>${esc(d)}</span></span>${icon('arrow')}</a>`).join('')}</div>
+        ${guesses.length ? `<div class="pg-404-guess"><span class="label">Did you mean</span>${guesses.map((op) => `<a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span class="pg-rev-op-t"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>${icon('arrow')}</a>`).join('')}</div>` : ''}
+        <div class="pg-404-grid">${places.map(([i, t, d, to]) => `<a class="card card-link pg-404-card" href="#${to}"><span class="pg-value-i">${icon(i)}</span><span><b>${esc(t)}</b><span>${esc(d)}</span></span>${icon('arrow')}</a>`).join('')}
+          ${face ? `<a class="card card-link pg-404-card pg-404-op" href="#op.${esc(face.slug)}">${RN.ui.avatar(face, 'ava-md')}<span><span class="pg-404-k">Maybe you were looking for</span><b>${esc(face.name)}</b><span>Fractional ${esc(face.role)} · ${esc(RN.fmt.plural(face.reviews.length, 'company review'))}</span></span>${icon('arrow')}</a>` : `<a class="card card-link pg-404-card" href="#home"><span class="pg-value-i">${icon('home')}</span><span><b>Home</b><span>Start over</span></span>${icon('arrow')}</a>`}</div>
         <div class="pg-404-cats"><span class="label">Browse by role</span><div class="row" style="--gap:8px">${RN.fields.roleCategory.options.map((o) => `<a class="chip chip-sm" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}</a>`).join('')}</div></div>
       </div>
     </section>`;
@@ -1249,7 +1446,7 @@
   let aboutOff = null;
   function aboutMount() {
     if (aboutOff) aboutOff();   // a re-render mounts again without unmounting
-    const arch = document.querySelector('.pg-founder .pg-arch');
+    const arch = document.querySelector('.ab-hero-arch');
     if (!arch) return;
     try { if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) { return; }
     arch.classList.add('pg-depth');
@@ -1275,8 +1472,8 @@
   PG.hero = hero; PG.shead = shead;
   PG.faq = (items, o) => `<div class="pg-faq">${items.map(([q, a], i) => `<details${i === 0 && !(o && o.closed) ? ' open' : ''}><summary>${esc(q)}${icon('chev-down')}</summary><p class="pg-p">${esc(a)}</p></details>`).join('')}</div>`;
   RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView, mount: aboutMount, unmount: aboutUnmount });
-  RN.view('how', { route: 'how', nav: '', title: () => 'How it works', render: howView });
-  RN.view('results', { route: 'results', nav: '', title: () => 'Results', render: resultsView });
+  RN.view('how', { route: 'how', nav: '', title: () => 'How it works', render: howView, mount: howMount, unmount: howUnmount });
+  RN.view('results', { route: 'results', nav: '', title: () => 'Results', render: resultsView, mount: applyWall, unmount: () => { W.cat = 'all'; W.all = false; } });
   RN.view('talk', { route: 'talk', nav: '', chrome: 'over', footer: false, title: () => 'Talk to us', render: () => talkView(), mount: talkMount, unmount: talkUnmount });
   // Deep link that starts the flow with the need answered (#talk.pipeline): used by need tiles and zero-result states
   RN.view('talk-need', { route: 'talk.:need', nav: '', chrome: 'over', footer: false, samples: { need: 'pipeline' }, title: () => 'Talk to us', render: (p) => talkView(p), mount: talkMount, unmount: talkUnmount });

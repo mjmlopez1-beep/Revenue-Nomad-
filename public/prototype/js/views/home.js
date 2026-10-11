@@ -64,6 +64,7 @@
   const calm = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches || !!navigator.webdriver; } catch (e) { return true; } };
   const later = (fn, ms) => { const t = setTimeout(fn, ms); S.timers.push(t); return t; };
   const on = (target, type, fn, opts) => { target.addEventListener(type, fn, opts); S.offs.push(() => target.removeEventListener(type, fn, opts)); };
+  const onHome = on;
   function teardown() {
     S.timers.forEach(clearTimeout); S.timers = [];
     S.offs.forEach((off) => off()); S.offs = [];
@@ -676,10 +677,19 @@
     // A reviewer's own headshot fills the arch when we have one; the company logo then sits under the quote
     const feature = (x, flip) => {
       const photo = (RN.data.reviewerPhotos || {})[x.r.reviewer] || '';
-      const logo = RN.ui.logo(RN.model.reviewLogo(x.op, x.r), { h: photo ? 30 : 46, name: x.r.company || 'Company' });
+      const logo = RN.ui.logo(RN.model.reviewLogo(x.op, x.r), { h: 30, name: x.r.company || 'Company' });
+      // With no headshot, the arch carries the review's own rating: the overall score, stars, would hire again
+      // and how many focus areas it verified, signed with the company logo
+      const score = typeof x.r.overall === 'number' ? x.r.overall : null;
+      const nTags = (x.r.tags || []).length;
+      const rating = `<div class="hm-arch-rate">
+          ${score != null ? `<span class="hm-rate-n num">${esc(score.toFixed(1))}</span><span class="hm-rate-stars">${RN.ui.stars(score)}</span><span class="hm-rate-k">Overall rating</span>` : ''}
+          <ul class="hm-rate-facts">${x.r.hireAgain ? `<li>${icon('check-circle')}Would hire again</li>` : ''}${nTags ? `<li>${icon('seal')}${esc(RN.fmt.plural(nTags, 'focus area'))} verified</li>` : ''}</ul>
+          <span class="hm-rate-logo">${logo}</span>
+        </div>`;
       return `<div class="hm-q-feature${flip ? ' is-flip' : ''}">
           ${photo ? `<div class="hm-arch hm-arch-photo${/-cut\.(webp|png)$/.test(photo) ? ' hm-arch-cut' : ''}" data-hm-arch><img src="${esc(photo)}" alt="${esc(x.r.reviewer || 'Company')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
-          <div class="hm-arch hm-arch-logo" data-hm-arch><div class="arch-logo">${logo}</div></div>
+          <div class="hm-arch hm-arch-logo" data-hm-arch>${rating}</div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>
             <blockquote class="hm-q-text">${esc(RN.fmt.smart(RN.model.pullQuote(x.r.quote || x.r.text, 180)))}</blockquote>
@@ -796,7 +806,10 @@
   /* The path under How it works: measured from the node positions, drawn with stroke-dashoffset as the section
      scrolls through the lower part of the viewport. Steps light up as the line reaches them. Everything is drawn
      and lit until .is-live is added, which only happens after the visitor scrolls while the path is below the fold. */
-  function stepsPath(root, quiet) {
+  function stepsPath(root, quiet, bag) {
+    // bag: another page's cleanup list (How it works reuses this path); listeners then go there instead of Home's
+    const on = bag ? (t, ty, fn, o) => { t.addEventListener(ty, fn, o); bag.push(() => t.removeEventListener(ty, fn, o)); } : onHome;
+    const offs = bag || S.offs;
     const box = root.querySelector('[data-hm-path]');
     if (!box) return;
     const svg = box.querySelector('.hm-path-svg');
@@ -863,7 +876,7 @@
     on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(layout, 150); });
     // Web fonts can change card heights after mount
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (document.body.contains(box)) layout(); });
-    S.offs.push(() => { clearTimeout(rz); if (raf) cancelAnimationFrame(raf); raf = 0; });
+    offs.push(() => { clearTimeout(rz); if (raf) cancelAnimationFrame(raf); raf = 0; });
     if (quiet) return;
     const arm = () => {
       if (live || !document.body.contains(box)) return;
@@ -1126,6 +1139,9 @@
     RN.ui.toast('Unsubscribed. No more quarterly emails.');
     refreshBrief(false);
   };
+
+  /* The winding How it works path, shared with #how (pages.js). bag collects that page's cleanup functions. */
+  RN.homePath = (root, bag) => stepsPath(root, calm(), bag);
 
   /* ---------- View ---------- */
   RN.view('home', {
