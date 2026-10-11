@@ -1,10 +1,134 @@
-/* Field standards page */
-[data-view="standards"] .std-group { margin-top: var(--s-6); }
+/* Field standards (#standards, admin only): a reference doc for the product and dev team. Scoped to
+   [data-view="standards"]. Tokens only. Labels lead; the stored keys show only with "Show stored keys". */
+[data-view="standards"] .std { padding-top: var(--s-10); padding-bottom: var(--s-16, 96px); }
+
+/* Header: title and lede, with the registry's size as a ruled stat row */
+[data-view="standards"] .std-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 520px); gap: var(--s-6) var(--s-12); align-items: end; padding-bottom: var(--s-8); margin-bottom: var(--s-8); border-bottom: 1px solid var(--line); }
+[data-view="standards"] .std-head .eyebrow { display: block; margin-bottom: var(--s-4); }
+[data-view="standards"] .std-head .lede { margin-top: var(--s-4); max-width: 60ch; }
+[data-view="standards"] .std-stats { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--ink); }
+[data-view="standards"] .std-stats li { display: flex; flex-direction: column; gap: 4px; padding: var(--s-4) var(--s-3) 0 0; }
+[data-view="standards"] .std-stats li + li { padding-left: var(--s-4); border-left: 1px solid var(--line-2); }
+[data-view="standards"] .std-stats b { font-family: var(--f-display); font-size: var(--t-30); font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--ink); }
+[data-view="standards"] .std-stats li:first-child b { color: var(--accent); }
+[data-view="standards"] .std-stats span { font-size: var(--t-13); color: var(--mute); line-height: 1.3; }
+
+/* Two columns: a sticky index on the left, the reference on the right */
+[data-view="standards"] .std-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--s-10); align-items: start; }
+[data-view="standards"] .std-nav { position: sticky; top: calc(var(--nav-h) + 24px); display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - var(--nav-h) - 48px); overflow-y: auto; padding-bottom: 8px; }
+[data-view="standards"] .std-nav .label { display: block; margin: var(--s-5) 0 6px 12px; }
+[data-view="standards"] .std-nav a { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px; border-radius: 10px; font-size: var(--t-14); font-weight: 600; color: var(--ink-2); line-height: 1.3; transition: background var(--dur) ease, color var(--dur) ease; }
+[data-view="standards"] .std-nav a span { font-family: var(--f-display); font-size: 11.5px; font-weight: 700; color: var(--mute-2); font-variant-numeric: tabular-nums; }
+[data-view="standards"] .std-nav a:hover { background: var(--card-2); color: var(--ink); }
+[data-view="standards"] .std-nav a.on { background: var(--card); color: var(--accent); box-shadow: var(--shadow-1); }
+[data-view="standards"] .std-nav a.on span { color: var(--accent); }
+
+/* Show stored keys: a switch */
+[data-view="standards"] .std-keys { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--line-2); }
+[data-view="standards"] .std-keys code { font-family: var(--f-mono); font-size: 11px; }
+[data-view="standards"] .std-switch { display: inline-flex; align-items: center; gap: 10px; min-height: 36px; padding: 0; border: 0; background: none; font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); cursor: pointer; text-align: left; }
+[data-view="standards"] .std-switch i { position: relative; flex: 0 0 auto; width: 36px; height: 22px; border-radius: 99px; background: var(--line); transition: background var(--dur) ease; }
+[data-view="standards"] .std-switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform var(--dur) var(--ease); }
+[data-view="standards"] .std-switch[aria-checked="true"] i { background: var(--accent); }
+[data-view="standards"] .std-switch[aria-checked="true"] i::after { transform: translateX(14px); }
+
+/* Stored keys are hidden until the switch is on */
+[data-view="standards"] .std-key { display: none; font-family: var(--f-mono); font-size: 11px; color: var(--mute); background: var(--sunk); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+[data-view="standards"] .std.show-keys .std-key { display: inline-block; }
+
+/* Field groups */
+[data-view="standards"] .std-body { min-width: 0; }
+[data-view="standards"] .std-body > div[tabindex="-1"], [data-view="standards"] [tabindex="-1"]:focus { outline: none; }
+[data-view="standards"] .std-group { padding: var(--s-6); scroll-margin-top: calc(var(--nav-h) + 20px); }
+[data-view="standards"] .std-group + .std-group { margin-top: var(--s-5); }
+[data-view="standards"] .std-group-hd { display: flex; flex-direction: column; gap: 6px; padding-bottom: var(--s-4); }
+[data-view="standards"] .std-group-hd .small { max-width: 80ch; line-height: 1.5; }
+[data-view="standards"] .std-used { font-family: var(--f-display); font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-right: 8px; }
 [data-view="standards"] .std-note { margin: 0 0 var(--s-4); font-size: var(--t-13); line-height: 1.5; }
-[data-view="standards"] .std-tbl td:first-child { width: 220px; }
-[data-view="standards"] .std-tbl td:nth-child(2) { width: 110px; color: var(--mute); }
+[data-view="standards"] .std-fields { display: flex; flex-direction: column; }
+[data-view="standards"] .std-field { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 8px var(--s-6); padding: 14px 0; border-top: 1px solid var(--line-2); }
+[data-view="standards"] .std-field-hd { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+[data-view="standards"] .std-field-hd b { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-size: var(--t-15); font-weight: 700; line-height: 1.3; color: var(--ink); }
+[data-view="standards"] .std-field-hd .std-key { margin-top: 2px; }
+[data-view="standards"] .std-field-v { min-width: 0; }
 [data-view="standards"] .std-opts { display: flex; flex-wrap: wrap; gap: 6px; }
-[data-view="standards"] .std-opt { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--card-2); font-size: var(--t-13); }
-[data-view="standards"] .std-opt .mono { color: var(--mute-2); font-size: var(--t-11); }
-[data-view="standards"] section[tabindex="-1"]:focus { outline: none; }
-@media (max-width: 640px) { [data-view="standards"] .std-tbl td:first-child { width: auto; } }
+[data-view="standards"] .std-opt { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; max-width: 100%; padding: 4px 10px; border-radius: 8px; background: var(--card-2); border: 1px solid var(--line-2); font-size: var(--t-13); line-height: 1.35; color: var(--ink-2); overflow-wrap: anywhere; }
+[data-view="standards"] .std.show-keys .std-opt { background: var(--card); }
+[data-view="standards"] .std-tags { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
+[data-view="standards"] .std-tags .std-group-hd { flex: 1 1 420px; padding-bottom: 0; }
+
+/* Decisions: numbered cards, conflict on the left, the decision on the right */
+[data-view="standards"] .std-sec { margin-top: var(--s-12); scroll-margin-top: calc(var(--nav-h) + 20px); }
+[data-view="standards"] .std-sec > .small { margin-top: 6px; max-width: 70ch; }
+[data-view="standards"] .std-dec { list-style: none; margin: var(--s-5) 0 0; padding: 4px var(--s-6); display: flex; flex-direction: column; }
+[data-view="standards"] .std-dec li { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.35fr); gap: 6px var(--s-6); align-items: start; padding: 16px 0; border-top: 1px solid var(--line-2); }
+[data-view="standards"] .std-dec li:first-child { border-top: 0; }
+[data-view="standards"] .std-dec li:hover .std-dec-n { background: var(--accent); color: var(--accent-ink); }
+[data-view="standards"] .std-more { display: contents; }
+[data-view="standards"] .std-more > summary { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border-radius: 8px; list-style: none; cursor: pointer; font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--accent); background: var(--tint); }
+[data-view="standards"] .std-more > summary::-webkit-details-marker { display: none; }
+[data-view="standards"] .std-more[open] > summary { display: none; }
+[data-view="standards"] .std-more > .std-opts { display: contents; }
+[data-view="standards"] .std-dec-n { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--tint); color: var(--accent); font-family: var(--f-display); font-size: var(--t-13); font-weight: 800; }
+[data-view="standards"] .std-dec .label { display: block; margin-bottom: 4px; font-size: 10.5px; }
+[data-view="standards"] .std-dec-c p { color: var(--mute); line-height: 1.5; }
+[data-view="standards"] .std-dec-d p { font-size: var(--t-14); line-height: 1.55; color: var(--ink-2); }
+[data-view="standards"] .std-dec-d b { color: var(--ink); font-weight: 700; }
+
+/* Open scope: a ruled list with the sheet ref as a tag */
+[data-view="standards"] .std-scope { list-style: none; margin: var(--s-5) 0 0; padding: 4px var(--s-6); }
+[data-view="standards"] .std-scope li { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 240px); gap: 6px var(--s-5); align-items: start; padding: 14px 0; border-top: 1px solid var(--line-2); }
+[data-view="standards"] .std-scope li:first-child { border-top: 0; }
+[data-view="standards"] .std-ref { justify-self: start; padding: 3px 8px; border-radius: 6px; background: var(--tint); color: var(--accent); font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; white-space: nowrap; }
+[data-view="standards"] .std-scope p { color: var(--ink-2); line-height: 1.5; }
+[data-view="standards"] .std-see { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-13); }
+
+@media (max-width: 1100px) {
+  [data-view="standards"] .std-head { grid-template-columns: minmax(0, 1fr); }
+  [data-view="standards"] .std-layout { grid-template-columns: 200px minmax(0, 1fr); gap: var(--s-6); }
+  [data-view="standards"] .std-dec li { grid-template-columns: 36px minmax(0, 1fr); }
+  [data-view="standards"] .std-dec-d { grid-column: 2; }
+  [data-view="standards"] .std-scope li { grid-template-columns: 110px minmax(0, 1fr); }
+  [data-view="standards"] .std-see { grid-column: 2; flex-direction: row; flex-wrap: wrap; gap: 4px 16px; }
+}
+/* Phones and narrow tablets: the index becomes a sticky row of chips; each field stacks name, then its values */
+@media (max-width: 860px) {
+  [data-view="standards"] .std { padding-top: var(--s-6); }
+  [data-view="standards"] .std-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
+  [data-view="standards"] .std-nav { top: var(--nav-h); z-index: 6; flex-direction: row; align-items: center; gap: 6px; max-height: none; overflow-x: auto; overflow-y: hidden; margin: 0 calc(var(--gutter, 16px) * -1); padding: 10px var(--gutter, 16px); background: color-mix(in srgb, var(--paper) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line-2); scrollbar-width: none; }
+  [data-view="standards"] .std-nav::-webkit-scrollbar { display: none; }
+  [data-view="standards"] .std-nav .label { display: none; }
+  [data-view="standards"] .std-nav a { flex: 0 0 auto; white-space: nowrap; padding: 0 12px; min-height: 36px; border: 1px solid var(--line-2); background: var(--card); border-radius: 99px; font-size: var(--t-13); }
+  [data-view="standards"] .std-nav a.on { border-color: var(--accent); }
+  [data-view="standards"] .std-keys { flex: 0 0 auto; flex-direction: row; padding: 0 12px 0 6px; border-radius: 99px; min-height: 36px; }
+  [data-view="standards"] .std-keys .tiny { display: none; }
+  [data-view="standards"] .std-switch { font-size: var(--t-13); white-space: nowrap; }
+  [data-view="standards"] .std-switch i { width: 30px; height: 18px; }
+  [data-view="standards"] .std-switch i::after { width: 12px; height: 12px; }
+  [data-view="standards"] .std-switch[aria-checked="true"] i::after { transform: translateX(12px); }
+  [data-view="standards"] .std-group, [data-view="standards"] .std-sec { scroll-margin-top: calc(var(--nav-h) + 72px); }
+  [data-view="standards"] .std-field { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  [data-view="standards"] .std-field-hd { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+}
+@media (max-width: 640px) {
+  [data-view="standards"] .std-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-view="standards"] .std-stats li:nth-child(3) { padding-left: 0; border-left: 0; }
+  [data-view="standards"] .std-stats li:nth-child(n+3) { padding-top: var(--s-4); }
+  [data-view="standards"] .std-stats b { font-size: var(--t-24); }
+  [data-view="standards"] .std-group { padding: var(--s-5) var(--s-4); }
+  [data-view="standards"] .std-dec { padding: 4px var(--s-4); }
+  [data-view="standards"] .std-dec li { grid-template-columns: 30px minmax(0, 1fr); gap: 6px 12px; }
+  [data-view="standards"] .std-dec-n { width: 26px; height: 26px; font-size: var(--t-12); }
+  [data-view="standards"] .std-scope { padding: 4px var(--s-4); }
+  [data-view="standards"] .std-scope li { grid-template-columns: minmax(0, 1fr); }
+  [data-view="standards"] .std-see { grid-column: 1; }
+}
+
+/* Free-input fields: compact tiles under the picklists */
+[data-view="standards"] .std-free-w { padding-top: 14px; border-top: 1px solid var(--line-2); }
+[data-view="standards"] .std-free-w .label { display: block; margin-bottom: 10px; }
+[data-view="standards"] .std-free { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+[data-view="standards"] .std-free li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line-2); min-width: 0; }
+[data-view="standards"] .std-free b { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); line-height: 1.3; }
+[data-view="standards"] .std-free .small { margin-top: 2px; color: var(--ink-2); line-height: 1.4; }
+[data-view="standards"] .std-free .std-key { margin-top: 4px; }

@@ -352,3 +352,155 @@
 .adm-lbl-l { display: none; }
 @media (max-width: 720px) { .adm-lbl-s { display: none; } .adm-lbl-l { display: inline; } }
 .adm-picks + p { margin-top: var(--s-4); }
+
+/* ---------- Design pass (Oct 2026): one page note, a butterfly chart, review cards ---------- */
+.adm-page-note { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-top: calc(var(--s-6) * -1 + 10px); line-height: 1.45; }
+.adm-stats .stat-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; }
+.adm-stats .stat-v .delta { font-size: var(--t-13); letter-spacing: 0; }
+
+/* Supply vs demand: supply grows left from the role name, demand grows right. The gap reads at a glance. */
+.adm-sd-wrap { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: var(--s-8); align-items: start; }
+.adm-sd-wrap .adm-callout { margin-bottom: 0; }
+.adm-bf { --bf-name: 176px; display: flex; flex-direction: column; min-width: 0; }
+.adm-bf-hd, .adm-bf-row { display: grid; grid-template-columns: minmax(0, 1fr) var(--bf-name) minmax(0, 1fr); align-items: center; gap: 0 14px; }
+.adm-bf-hd { padding-bottom: 8px; font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.adm-bf-hd > span:first-child { grid-column: 1; justify-self: end; display: inline-flex; align-items: center; gap: 6px; }
+.adm-bf-hd > span:last-child { grid-column: 3; display: inline-flex; align-items: center; gap: 6px; }
+.adm-bf-hd i { width: 10px; height: 10px; border-radius: 3px; }
+.adm-bf-hd i.s, .adm-bf-s .adm-bf-bar i { background: var(--viz-2); }
+.adm-bf-hd i.d, .adm-bf-d .adm-bf-bar i { background: var(--viz-1); }
+.adm-bf-row { padding: 7px 0; border-top: 1px solid var(--line-2); }
+.adm-bf-s, .adm-bf-d { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.adm-bf-s { justify-content: flex-end; }
+.adm-bf-bar { flex: 0 0 auto; display: flex; height: 14px; min-width: 2px; width: calc((100% - 42px) * var(--w, 0)); }
+.adm-bf-s .adm-bf-bar { justify-content: flex-end; }
+.adm-bf-bar i { display: block; width: 100%; height: 100%; min-width: 2px; border-radius: 4px; transform-origin: right; animation: admGrow .9s var(--ease) calc(var(--k) * 50ms + .1s) backwards; }
+.adm-bf-d .adm-bf-bar i { transform-origin: left; }
+@keyframes admGrow { from { transform: scaleX(0); } }
+.adm-bf-s b, .adm-bf-d b { flex: 0 0 34px; font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--ink); }
+.adm-bf-s b { text-align: right; }
+.adm-bf-name { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; line-height: 1.25; }
+.adm-bf-name b { font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--ink); }
+.adm-bf-name .tiny { color: var(--mute); white-space: nowrap; }
+.adm-bf-name em { font-style: normal; font-weight: 700; }
+.adm-bf-row.is-under em { color: var(--accent); }
+.adm-bf-row.is-over em { color: var(--warn); }
+.adm-bf-row:hover { background: var(--card-2); }
+
+.adm-cols-even { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+
+/* Recent reviews: one card per review, the operator's face and the company's own words */
+.adm-rv { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4); }
+.adm-rv li { display: flex; flex-direction: column; gap: 8px; padding: var(--s-4); border-radius: 14px; background: var(--card-2); border: 1px solid var(--line-2); min-width: 0; transition: border-color var(--dur) ease, transform var(--dur) var(--ease); }
+.adm-rv li:hover { border-color: var(--line); transform: translateY(-2px); }
+.adm-rv-op { display: flex; align-items: center; gap: 10px; color: var(--ink); min-width: 0; }
+.adm-rv-op b { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; line-height: 1.25; }
+.adm-rv-op:hover b { color: var(--accent); }
+.adm-rv-q { flex: 1 1 auto; font-family: var(--f-serif); font-size: var(--t-15); line-height: 1.45; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.adm-rv-q::before { content: "\201C"; } .adm-rv-q::after { content: "\201D"; }
+.adm-rv .tiny { line-height: 1.4; }
+
+/* Empty states inside admin cards: a soft panel, not a dashed placeholder */
+.adm .adm-sec .empty { border-style: solid; border-color: var(--line-2); background: var(--card-2); }
+
+@media (max-width: 1180px) {
+  .adm-sd-wrap { grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
+  .adm-cols-even { grid-template-columns: minmax(0, 1fr); }
+  .adm-rv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  /* Phones: the role name sits on its own line, the two bars meet at the centre line under it */
+  .adm-bf-hd, .adm-bf-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 0; }
+  .adm-bf-hd > span:last-child { grid-column: 2; }
+  .adm-bf-hd > span:nth-child(2) { display: none; }
+  .adm-bf-row { padding: 10px 0; }
+  .adm-bf-name { grid-column: 1 / -1; grid-row: 1; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 0 8px; }
+  .adm-bf-s { grid-row: 2; padding-right: 3px; border-right: 1px solid var(--line); }
+  .adm-bf-d { grid-row: 2; padding-left: 3px; }
+  .adm-bf-s b, .adm-bf-d b { flex-basis: 30px; font-size: var(--t-12); }
+  .adm-bf-bar { height: 12px; }
+  .adm-need .btn { grid-column: 1 / -1; justify-self: stretch; justify-content: center; }
+  .adm-rv { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { .adm-bf-bar i { animation: none; } }
+
+/* ---------- Demand: the gap chart that opens the page ---------- */
+.adm-gapcard { border-color: var(--tint-line); box-shadow: var(--shadow-1); }
+.adm-gap-lead { display: flex; flex-direction: column; gap: 6px; padding: 0 0 var(--s-5); margin-bottom: var(--s-2); border-bottom: 1px solid var(--line-2); }
+.adm-gap-big { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 16px; font-family: var(--f-display); font-size: var(--t-20); font-weight: 600; line-height: 1.25; color: var(--ink-2); }
+.adm-gap-big > .num { font-size: clamp(48px, 5vw, 64px); font-weight: 800; letter-spacing: -0.04em; line-height: .9; color: var(--accent); }
+.adm-gap-big span b { color: var(--ink); font-weight: 800; }
+.adm-gapc { --gc: minmax(0, 1.25fr) minmax(0, 1.4fr) minmax(0, 1fr) 150px; display: flex; flex-direction: column; }
+.adm-gapc-hd, .adm-gapc-row { display: grid; grid-template-columns: var(--gc); gap: 0 var(--s-5); align-items: center; }
+.adm-gapc-hd { padding: 10px 0 8px; font-family: var(--f-display); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.adm-gapc-row { padding: 10px 0; border-top: 1px solid var(--line-2); }
+.adm-gapc-n { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.adm-gapc-n b { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); line-height: 1.25; }
+.adm-gapc-n .tiny { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.adm-gapc-d, .adm-gapc-s { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.adm-gapc-bar { flex: 1 1 auto; height: 14px; border-radius: 4px; background: var(--viz-grid); overflow: hidden; }
+.adm-gapc-bar i { display: block; height: 100%; border-radius: 4px; background: var(--viz-2); transform-origin: left; animation: admGrow .9s var(--ease) calc(var(--k) * 50ms + .1s) backwards; }
+.adm-gapc-row.is-lead .adm-gapc-bar i { background: var(--viz-1); }
+.adm-gapc-d b, .adm-gapc-s b { flex: 0 0 38px; font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); text-align: right; }
+.adm-gapc-s b { order: -1; flex-basis: 22px; text-align: left; }
+.adm-pips { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 0; }
+.adm-pips i { width: 9px; height: 9px; border-radius: 50%; background: var(--viz-1); }
+.adm-pips em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--mute); margin-left: 2px; }
+.adm-pips .adm-gap-none { color: var(--bad); margin: 0; }
+.adm-gapc-a { justify-self: end; }
+.adm-gapc-a .btn, .adm-fixw { width: 150px; justify-content: center; }
+.adm-gapc-a .pill { width: 150px; justify-content: center; }
+.adm-gapc-row:hover { background: var(--card-2); }
+.adm-zn { font-family: var(--f-display); font-size: var(--t-16); }
+.adm .adm-fixw { width: 112px; }
+
+/* Companies by source: one share bar, leader in the dark accent, the rest stepping lighter */
+.adm-share { display: flex; gap: 3px; height: 26px; border-radius: 8px; overflow: hidden; margin-bottom: var(--s-5); }
+.adm-share i, .adm-share-l li > i { background: color-mix(in srgb, var(--viz-1) calc(100% - var(--k) * 13%), var(--viz-grid)); }
+.adm-share i { min-width: 3px; transform-origin: left; animation: admGrow .9s var(--ease) calc(var(--k) * 60ms) backwards; }
+.adm-share-l { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.adm-share-l li { display: grid; grid-template-columns: 12px minmax(0, 1fr) 48px 56px; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line-2); font-size: var(--t-14); color: var(--ink-2); }
+.adm-share-l li:first-child { border-top: 0; }
+.adm-share-l li > i { width: 12px; height: 12px; border-radius: 3px; }
+.adm-share-l b { font-family: var(--f-display); font-weight: 700; color: var(--ink); text-align: right; }
+.adm-share-l .tiny { text-align: right; }
+
+/* Filters: ranked chips, darker for more use */
+.adm-rank { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-rank li { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 14px 6px 6px; border-radius: 99px; background: color-mix(in srgb, var(--viz-1) calc(var(--a) * 100%), var(--card)); color: var(--ink); font-size: var(--t-14); max-width: 100%; }
+.adm-rank li:nth-child(-n+3) { color: var(--accent-ink); }
+.adm-rank-n { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--card); color: var(--ink); font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; flex: 0 0 auto; }
+.adm-rank-l { min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
+.adm-rank b { font-family: var(--f-display); font-weight: 800; }
+.adm-grid-even { align-items: stretch; }
+
+/* Who is searching: two histograms side by side */
+.adm-hist2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-8); }
+.adm-hist2 .label { display: block; margin-bottom: 8px; }
+.adm-show-m { display: none; }
+
+@media (max-width: 1180px) {
+  .adm-gapc { --gc: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, .9fr) 132px; }
+  .adm-gapc-a .btn, .adm-gapc-a .pill { width: 132px; }
+}
+@media (max-width: 760px) {
+  .adm-gapc-hd { display: none; }
+  .adm-gapc-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n n" "d d" "s a"; gap: 8px 12px; padding: 14px 0; }
+  .adm-gapc-s::after { content: "verified"; order: 2; font-size: 11px; color: var(--mute); }
+  .adm-gapc-s .adm-pips { order: 3; }
+  .adm-gapc-n { grid-area: n; }
+  .adm-gapc-d { grid-area: d; }
+  .adm-gapc-s { grid-area: s; }
+  .adm-gapc-d::before { content: "Searches"; font-size: 11px; color: var(--mute); }
+  .adm-gapc-a { grid-area: a; justify-self: end; }
+  .adm-gapc-a .btn, .adm-gapc-a .pill { width: auto; min-width: 132px; }
+  .adm-hist2 { grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
+  .adm-show-m { display: block; }
+  .adm-terms th:nth-child(4), .adm-terms td:nth-child(4) { display: none; }
+  .adm-terms td, .adm-terms th { padding-top: 10px; padding-bottom: 10px; }
+  .adm .adm-fixw { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .adm-gapc-bar i, .adm-share i { animation: none; } }
+.adm-ver { display: block; white-space: nowrap; }
+@media (min-width: 761px) { .adm-terms td { padding-top: 12px; padding-bottom: 12px; vertical-align: middle; } .adm-ver { display: inline; margin-left: 6px; } }
+@media (max-width: 640px) { .adm-bf-hd > span:first-child { padding-right: 10px; } .adm-bf-hd > span:last-child { padding-left: 10px; } }

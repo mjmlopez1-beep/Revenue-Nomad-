@@ -67,8 +67,6 @@
     return `<div class="card-hd adm-card-hd"><div class="grow"><h2 class="h4">${title}</h2>${sub ? `<p class="sub">${sub}</p>` : ''}</div>${right ? `<div class="adm-card-r">${right}</div>` : ''}</div>`;
   }
   const illus = (txt) => RN.ui.illus(txt);
-  // One caption for KPI rows that blend an illustrative baseline with live session events
-  const blendNote = () => `<p class="tiny muted adm-stats-note">${illus()}<span>Baseline volumes are illustrative. Live searches, views and intro requests from this session are added on top.</span></p>`;
 
   function render(key) {
     hydrate();
@@ -218,16 +216,6 @@
       <div class="adm-funnel-l"><span>${esc(s.label)}</span><b class="num">${int(s.value)}${i && steps[i - 1].value ? `<span> · ${pct(s.value / steps[i - 1].value, 1)}</span>` : ''}</b></div>
       <span class="adm-funnel-bar"><i style="width:${Math.max(1.5, (s.value / max) * 100).toFixed(1)}%;opacity:${(1 - i * 0.18).toFixed(2)}"></i></span></li>`).join('')}</ol>`;
   }
-  const trunc = (s, n) => (s.length > n ? s.slice(0, Math.max(1, n - 1)) + '…' : s);
-  function barsChart(rows, w, o) {
-    o = o || {};
-    const labelW = Math.round(Math.min(o.labelW || 200, w * (w < 480 ? 0.44 : 0.36)));
-    const max = Math.floor(labelW / 6.6);
-    const opts = { w, labelW, rowH: 32, barH: 16, label: o.label || 'Bar chart' };
-    if (o.fmt) opts.fmt = o.fmt;
-    return RN.chart.bars(rows.map((r) => Object.assign({}, r, { label: trunc(w < 480 && r.short ? r.short : r.label, max) })), opts);
-  }
-
   /* =====================================================================================
      Operator applications: pending -> Approve profile -> Generate score -> live at Emerging 50
      ===================================================================================== */
@@ -465,60 +453,62 @@
     const maxShare = Math.max(...sd.map((x) => Math.max(x.supply, x.demand)), 0.01);
     ctx['cat:' + gap.cat] = { kind: 'cat', cat: gap.cat, title: `${gap.l} operators` };
 
+    const gapTxt = (x) => (!x.demand ? 'No demand data' : x.ratio > 1.25 ? `${x.ratio.toFixed(1)}x over` : x.ratio < 0.8 ? `${(1 / Math.max(0.01, x.ratio)).toFixed(1)}x under` : 'Balanced');
+    const gapCls = (x) => (!x.demand ? '' : x.ratio > 1.25 ? 'is-over' : x.ratio < 0.8 ? 'is-under' : 'is-even');
+    const stat = (v, l, d) => `<div class="stat"><span class="stat-v">${v}${d ? ` ${d}` : ''}</span><span class="stat-l">${l}</span></div>`;
+
     return `${head('Marketplace health', `${esc(RN.fmt.date(RN.now()))} · ${RN.fmt.plural(opsLive, 'operator')} live · ${q.length ? RN.fmt.plural(q.length, 'application') + ' to review' : 'No applications waiting'}`)}
+      <p class="tiny muted adm-page-note">${illus()}<span>Market volumes and company demand on this page are illustrative. Live searches, views and intro requests from this session are added on top.</span></p>
 
       <section class="card adm-sec" aria-labelledby="adm-needs-h">
         ${cardHead('<span id="adm-needs-h">Needs you</span>', 'Work only the team can do, most urgent first.')}
-        ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}"><span class="adm-need-ic">${icon(n.ic)}</span><div class="grow"><b>${esc(n.t)}</b>${n.illus ? illus('Volumes illustrative') : ''}<p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
+        ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}"><span class="adm-need-ic">${icon(n.ic)}</span><div class="grow"><b>${esc(n.t)}</b><p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
         : RN.ui.empty({ icon: 'check-circle', title: 'Nothing needs you right now', body: 'New applications, intros waiting on the team, hires without terms and quiet engagements show up here.' })}
       </section>
 
       <div class="stats-row adm-stats" style="--cols:4">
-        <div class="stat"><span class="stat-v">${int(opsLive)}</span><span class="stat-l">Operators live${added ? ` · <span class="accent">${added} approved this session</span>` : ''}</span></div>
-        <div class="stat"><span class="stat-v">${int(f7.cur.s)}</span><span class="stat-l">Company searches, last 7 days ${RN.ui.delta(f7.cur.s, f7.prev.s)}</span></div>
-        <div class="stat"><span class="stat-v">${int(f7.cur.v)}</span><span class="stat-l">Profile views, last 7 days ${RN.ui.delta(f7.cur.v, f7.prev.v)}</span></div>
-        <div class="stat"><span class="stat-v">${int(intros30)}</span><span class="stat-l">Intro requests, last 30 days</span></div>
+        ${stat(int(opsLive), `Operators live${added ? ` · <span class="accent">${added} approved this session</span>` : ''}`)}
+        ${stat(int(f7.cur.s), 'Company searches, last 7 days', RN.ui.delta(f7.cur.s, f7.prev.s))}
+        ${stat(int(f7.cur.v), 'Profile views, last 7 days', RN.ui.delta(f7.cur.v, f7.prev.v))}
+        ${stat(int(intros30), 'Intro requests, last 30 days')}
       </div>
-      ${blendNote()}
 
-      <div class="adm-cols">
-        <section class="card adm-sec">
-          ${cardHead('Supply vs company demand', 'Share of live operators by role category against the share of company hiring intent.', illus('Demand illustrative'))}
+      <section class="card adm-sec adm-sd-card" aria-labelledby="adm-sd-h">
+        ${cardHead('<span id="adm-sd-h">Supply vs company demand</span>', 'Share of live operators by role category, against the share of company hiring intent.')}
+        <div class="adm-sd-wrap">
           <div class="adm-callout">
-            <p class="adm-callout-t">${esc(top.l)}: <b>${pct(top.supply)}</b> of supply, <b>${pct(top.demand)}</b> of demand.</p>
-            <p class="small muted">${esc(gap.l)} is the widest gap the other way: ${pct(gap.supply)} of operators for ${pct(gap.demand)} of company demand.</p>
+            <span class="label">Widest gap</span>
+            <p class="adm-callout-t">${esc(gap.l)} has <b>${pct(gap.supply)}</b> of operators for <b>${pct(gap.demand)}</b> of company demand.</p>
+            <p class="small muted">${esc(top.l)} holds the most supply: ${pct(top.supply)} of operators against ${pct(top.demand)} of demand.</p>
             <div><button type="button" class="btn btn-sm" data-act="adm-recruit" data-k="cat:${esc(gap.cat)}">${icon('megaphone')}Recruit ${esc(gap.l)} operators</button></div>
           </div>
-          <div class="adm-sd" role="list">
-            <div class="adm-sd-legend legend"><span><i style="background:var(--viz-2)"></i>Supply: share of live operators</span><span><i style="background:var(--viz-1)"></i>Demand: share of company hiring intent</span></div>
-            ${rows.map((x) => `<div class="adm-sd-row" role="listitem">
-              <div class="adm-sd-name"><span class="adm-sd-l">${RN.ui.catDot(x.cat)}<b>${esc(x.l)}</b></span><span class="tiny muted">${RN.fmt.plural(x.n, 'operator')}</span></div>
-              <div class="adm-sd-bars">
-                <div class="adm-sd-bar"><span>Supply</span><span class="adm-sd-track"><i class="s" style="width:${((x.supply / maxShare) * 100).toFixed(1)}%"></i></span><b>${pct(x.supply)}</b></div>
-                <div class="adm-sd-bar"><span>Demand</span><span class="adm-sd-track"><i class="d" style="width:${((x.demand / maxShare) * 100).toFixed(1)}%"></i></span><b>${pct(x.demand)}</b></div>
-              </div>
-              <div class="adm-sd-gap">${gapPill(x)}</div>
+          <div class="adm-bf" role="table" aria-label="Supply and demand share by role category">
+            <div class="adm-bf-hd" role="row"><span role="columnheader">${'<i class="s"></i>'}Supply</span><span role="columnheader" class="sr-only">Role category</span><span role="columnheader">Demand${'<i class="d"></i>'}</span></div>
+            ${rows.map((x, k) => `<div class="adm-bf-row ${gapCls(x)}" role="row" style="--k:${k}">
+              <span class="adm-bf-s" role="cell" aria-label="Supply ${pct(x.supply)}"><b class="num">${pct(x.supply)}</b><span class="adm-bf-bar" style="--w:${(x.supply / maxShare).toFixed(3)}"><i></i></span></span>
+              <span class="adm-bf-name" role="rowheader"><b>${esc(x.l)}</b><span class="tiny">${RN.fmt.plural(x.n, 'operator')} · <em>${esc(gapTxt(x))}</em></span></span>
+              <span class="adm-bf-d" role="cell" aria-label="Demand ${pct(x.demand)}"><span class="adm-bf-bar" style="--w:${(x.demand / maxShare).toFixed(3)}"><i></i></span><b class="num">${pct(x.demand)}</b></span>
             </div>`).join('')}
           </div>
-          <p class="tiny muted adm-foot">Supply counts every live, visible profile. Demand is the hiring-intent split from the State of Fractional GTM survey, cut by the same role categories.</p>
-        </section>
+        </div>
+        <p class="tiny muted adm-foot">Supply counts every live, visible profile. Demand is the hiring-intent split from the State of Fractional GTM survey, cut by the same role categories.</p>
+      </section>
 
-        <div class="adm-stack">
+      <div class="adm-cols adm-cols-even">
         <section class="card adm-sec">
-          ${cardHead('This week’s company funnel', `${int(f7.cur.s)} searches, about ${(f7.cur.i / Math.max(1, f7.cur.s)).toFixed(1)} operator cards shown per search.`, illus())}
+          ${cardHead('This week’s company funnel', `${int(f7.cur.s)} searches, about ${(f7.cur.i / Math.max(1, f7.cur.s)).toFixed(1)} operator cards shown per search.`)}
           ${chartSlot('ov-funnel', (w) => funnelChart(f7.steps, w), 140)}
           <div class="adm-mini-stats">
             <div><span class="label">View rate</span><b class="num">${pct(f7.cur.v / Math.max(1, f7.cur.i), 1)}</b></div>
             <div><span class="label">Intro rate</span><b class="num">${pct(f7.cur.r / Math.max(1, f7.cur.v), 1)}</b></div>
             <div><span class="label">Live events</span><b class="num">${int(f7.liveN)}</b></div>
           </div>
-          <p class="tiny muted adm-foot">Illustrative baseline plus ${RN.fmt.plural(f7.liveN, 'live event')} from this session. Company and visitor activity only: operator and team activity never counts.</p>
+          <p class="tiny muted adm-foot">Company and visitor activity only: operator and team activity never counts.</p>
           <a class="act" href="#admin.demand">See search terms and zero-result searches${icon('arrow')}</a>
         </section>
         <section class="card adm-sec">${activityCard()}</section>
-        <section class="card adm-sec">${reviewsCard()}</section>
-        </div>
-      </div>`;
+      </div>
+      <section class="card adm-sec">${reviewsCard()}</section>`;
   }
 
   function describeEvent(e) {
@@ -564,12 +554,18 @@
   }
   function reviewsCard() {
     const list = recentReviews();
-    return `${cardHead('Recent company reviews', 'Reviews publish the moment a company submits. There is no moderation queue.')}
-      ${list.length ? `<ul class="adm-reviews">${list.map(({ op, r, d }) => {
+    return `${cardHead('Recent company reviews', 'Every review publishes the moment a company submits. There is no moderation queue.', '<a class="act" href="#admin.directory">Directory' + icon('arrow') + '</a>')}
+      ${list.length ? `<ul class="adm-rv">${list.slice(0, 4).map(({ op, r, d }) => {
         const who = typeof r.reviewer === 'string' ? r.reviewer : (r.reviewer && r.reviewer.name) || r.name || 'Company';
         const co = r.company || (r.reviewer && r.reviewer.company) || '';
         const rating = +(r.overall || r.coreAvg || 0);
-        return `<li><div class="grow"><a class="adm-op-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a><span class="tiny muted">${esc(who)}${co ? ', ' + esc(co) : ''} · ${esc(RN.fmt.dateShort(d))}</span></div>${rating ? RN.ui.stars(rating) : ''}${RN.ui.statusPill('review', 'completed', 'Published')}</li>`;
+        const quote = r.quote || r.text || r.body || '';
+        return `<li>
+          <a class="adm-rv-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm', { decorative: true })}<b>${esc(op.name)}</b></a>
+          ${rating ? RN.ui.stars(rating) : ''}
+          ${quote ? `<p class="adm-rv-q">${esc(quote)}</p>` : ''}
+          <span class="tiny muted">${esc(who)}${co ? ', ' + esc(co) : ''} · ${esc(RN.fmt.dateShort(d))}</span>
+        </li>`;
       }).join('')}</ul>` : RN.ui.empty({ icon: 'star', title: 'No reviews yet', body: 'Operators request reviews from Studio. Each one lands here as soon as the company submits.' })}`;
   }
 
@@ -719,105 +715,127 @@
     const seg = `<div class="seg" role="group" aria-label="Date range">${[7, 30, 90].map((d) => `<button type="button" class="${days === d ? 'on' : ''}" aria-pressed="${days === d}" data-act="adm-days" data-d="${d}">${d} days</button>`).join('')}</div>`;
     const shownTerms = ui.termsAll ? terms : terms.slice(0, 10);
 
+    // Searches that found no one: a column whose value is the same on every row says nothing, so it is left out
+    const zLive = zero.some((z) => !z.base);
+    const zStatus = zero.some((z) => recruit[z.key] || (!z.base && z.now));
+    const gMax = Math.max(1, ...gaps.map((g) => g.demand));
+    const lead = gaps[0];
+    const PIPS = 10;
+    const pips = (n) => `${Array.from({ length: Math.min(n, PIPS) }, () => '<i></i>').join('')}${n > PIPS ? `<em>+${n - PIPS}</em>` : ''}${n ? '' : '<em class="adm-gap-none">None</em>'}`;
+    const shortL = (l) => String(l).replace(/^Pre-revenue$/, 'Pre-rev').replace(/^Under /, '<').replace(/M\s*[–-]\s*\$/, '–');
+    const srcTotal = Math.max(1, src.rows.reduce((a, r) => a + r.value, 0));
+    const srcRows = src.rows.slice().sort((a, b) => b.value - a.value);
+    const fl = filterUse(days);
+    const flMax = Math.max(1, ...fl.map((x) => x.value));
+
     return `${head('Demand intelligence', 'What companies search for, what they cannot find, and where supply falls short. Every cut uses the same fields as operator profiles.', seg)}
+      <p class="tiny muted adm-page-note">${illus()}<span>Search volumes, sources and company mix are illustrative baselines scaled to the date range. Live searches, views and intro requests from this session are added on top.</span></p>
 
       <div class="stats-row adm-stats" style="--cols:4">
-        <div class="stat"><span class="stat-v">${int(f.cur.s)}</span><span class="stat-l">Company searches, ${win} ${RN.ui.delta(f.cur.s, f.prev.s)}${savedN ? `<span class="adm-block accent">${RN.fmt.plural(savedN, 'saved search', 'saved searches')} this session</span>` : ''}</span></div>
+        <div class="stat"><span class="stat-v">${int(f.cur.s)} ${RN.ui.delta(f.cur.s, f.prev.s)}</span><span class="stat-l">Company searches, ${win}${savedN ? `<span class="adm-block accent">${RN.fmt.plural(savedN, 'saved search', 'saved searches')} this session</span>` : ''}</span></div>
         <div class="stat"><span class="stat-v">${pct(zeroN / Math.max(1, f.cur.s), 1)}</span><span class="stat-l">Zero-result rate · ${int(zeroN)} searches</span></div>
         <div class="stat"><span class="stat-v">${pct(f.cur.v / Math.max(1, f.cur.i), 1)}</span><span class="stat-l">View rate (views per impression)</span></div>
         <div class="stat"><span class="stat-v">${pct(f.cur.r / Math.max(1, f.cur.v), 1)}</span><span class="stat-l">Intro rate (intros per view)</span></div>
       </div>
-      ${blendNote()}
+
+      <section class="card adm-sec adm-gapcard" aria-labelledby="adm-gap-h">
+        ${cardHead('<span id="adm-gap-h">Where demand outruns supply</span>', 'Monthly company searches for each focus area against the operators a company review has verified for it. Supply is what the Browse focus-area filter returns today.')}
+        ${lead ? `<div class="adm-gap-lead">
+          <p class="adm-gap-big"><b class="num">${int(lead.ratio)}</b><span>searches a month for every verified <b>${esc(lead.t)}</b> operator</span></p>
+          <p class="small muted">${int(lead.demand)} searches a month, ${RN.fmt.plural(lead.supply, 'operator')} in Browse, ${int(lead.verified)} verified by a company review.</p>
+        </div>` : ''}
+        <div class="adm-gapc" role="table" aria-label="Searches and verified operators by focus area">
+          <div class="adm-gapc-hd" role="row"><span role="columnheader">Focus area</span><span role="columnheader">Searches a month</span><span role="columnheader">Verified operators</span><span role="columnheader"><span class="sr-only">Action</span></span></div>
+          ${gaps.map((g, k) => {
+            const tl = g.t.toLowerCase();
+            const claimers = liveOps().filter((o) => o.tags.some((t) => t.t.toLowerCase() === tl && t.tier === 'claimed'));
+            const key = 'tag:' + g.t;
+            ctx[key] = { kind: 'tag', tags: [g.t], cat: g.c, n: g.demand, title: `“${g.t}”` };
+            const nd = nudged[g.t];
+            return `<div class="adm-gapc-row${k ? '' : ' is-lead'}" role="row" style="--k:${k}">
+              <span class="adm-gapc-n" role="rowheader"><b>${esc(g.t)}</b><span class="tiny muted">${g.c ? RN.ui.catDot(g.c) : ''}${esc(g.c ? catLabel(g.c) : 'No role category')} · ${RN.fmt.plural(g.supply, 'in Browse', 'in Browse')}</span></span>
+              <span class="adm-gapc-d" role="cell"><span class="adm-gapc-bar"><i style="width:${Math.max(2, (g.demand / gMax) * 100).toFixed(1)}%"></i></span><b class="num">${int(g.demand)}</b></span>
+              <span class="adm-gapc-s" role="cell" aria-label="${int(g.verified)} verified"><span class="adm-pips">${pips(g.verified)}</span><b class="num">${int(g.verified)}</b></span>
+              <span class="adm-gapc-a" role="cell">${nd ? `<span class="pill pill-good">${icon('check')}${nd.n} nudged</span>`
+                : claimers.length ? `<button type="button" class="btn btn-sm btn-line" data-act="adm-nudge-tag" data-t="${esc(g.t)}" title="Email the ${claimers.length} operators who claim it but have no company review confirming it">Ask ${claimers.length} to verify</button>`
+                : `<button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(key)}">Recruit</button>`}</span>
+            </div>`;
+          }).join('')}
+        </div>
+        <p class="tiny muted adm-foot">Ranked by searches per verified operator. A nudge emails every operator who claims the focus area but has no company review confirming it, and points them to Studio to request one. Studio Positioning uses the same demand figures.</p>
+      </section>
 
       <section class="card adm-sec">
-        ${cardHead('Searches that found no one', `The exact query and filters, ${win}. Each term is re-run against Browse, so it stays here only while it still finds no operator. Recruit for it, or ask close operators to add the focus area.`, `<span class="pill pill-bad">${RN.fmt.plural(zero.length, 'term')}</span>${zero.some((z) => z.base) ? illus('Volumes illustrative') : ''}`)}
+        ${cardHead('Searches that found no one', `The exact query and filters, ${win}. Each term is re-run against Browse, so it stays here only while it still finds no operator. Recruit for it, or ask close operators to add the focus area.`, `<span class="pill pill-bad">${RN.fmt.plural(zero.length, 'term')}</span>`)}
         ${zero.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl adm-zero adm-stacktbl">
-          <thead><tr><th>Query</th><th>Filters applied</th><th class="r">Searches</th><th>Last searched</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
+          <thead><tr><th>Query</th><th>Filters applied</th><th class="r">Searches</th>${zLive ? '<th>Last searched</th>' : ''}${zStatus ? '<th>Status</th>' : ''}<th><span class="sr-only">Action</span></th></tr></thead>
           <tbody>${zero.map((z) => {
             ctx[z.key] = { kind: 'search', q: z.q, n: z.n, filters: z.filters, tags: z.tags, cat: z.cat, title: z.q ? `“${z.q}”` : 'a filter-only search' };
             const rec = recruit[z.key];
             return `<tr>
               <td class="adm-w"><span class="adm-q">${z.q ? '“' + esc(z.q) + '”' : '<span class="muted">No keywords</span>'}</span>${z.base ? '' : `<span class="pill pill-accent adm-live">Live</span>`}</td>
               <td class="adm-w">${filterChips(z.filters, z.base ? [] : z.tags)}</td>
-              <td class="r tnum" data-l="Searches">${int(z.n)}</td>
-              <td class="small" data-l="Last searched">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? (z.who && z.who.name ? `<b>${esc(z.who.name)}</b>${[RN.w.label('industry', z.who.industry), z.who.employeeRange ? RN.w.label('employeeRange', z.who.employeeRange) + ' employees' : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}` : 'Signed-in company') : 'Visitor, not signed in'}</span>${z.saved ? `<span class="tiny accent adm-block">${icon('bookmark')}Saved by the company to run again</span>` : ''}`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>
-              <td data-l="Status">${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : !z.base && z.now ? `<span class="pill pill-info">${RN.fmt.plural(z.now, 'match', 'matches')} now</span>` : '<span class="pill pill-bad">No match</span>'}</td>
-              <td class="r adm-act-cell"><button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(z.key)}" aria-label="${esc((rec ? 'Edit recruiting note for ' : 'Recruit for ') + (z.q ? '“' + z.q + '”' : 'this filter-only search'))}">${rec ? 'Edit note' : 'Recruit'}</button></td>
+              <td class="r tnum" data-l="Searches"><b class="adm-zn">${int(z.n)}</b></td>
+              ${zLive ? `<td class="small" data-l="Last searched">${z.base ? '<span class="muted">Across the period</span>' : `${esc(RN.fmt.ago(z.ts))}<span class="tiny muted adm-block">${z.signedIn ? (z.who && z.who.name ? `<b>${esc(z.who.name)}</b>${[RN.w.label('industry', z.who.industry), z.who.employeeRange ? RN.w.label('employeeRange', z.who.employeeRange) + ' employees' : ''].filter(Boolean).map((x) => ' · ' + esc(x)).join('')}` : 'Signed-in company') : 'Visitor, not signed in'}</span>${z.saved ? `<span class="tiny accent adm-block">${icon('bookmark')}Saved by the company to run again</span>` : ''}`}${!z.base && z.now ? `<span class="tiny accent adm-block">${RN.fmt.plural(z.now, 'operator')} match now</span>` : ''}</td>` : ''}
+              ${zStatus ? `<td data-l="Status">${rec ? `<span class="pill pill-good">${icon('check')}Recruiting${rec.nudged ? ' · ' + rec.nudged + ' nudged' : ''}</span>` : !z.base && z.now ? `<span class="pill pill-info">${RN.fmt.plural(z.now, 'match', 'matches')} now</span>` : '<span class="pill pill-bad">No match</span>'}</td>` : ''}
+              <td class="r adm-act-cell"><button type="button" class="btn btn-sm btn-line adm-fixw" data-act="adm-recruit" data-k="${esc(z.key)}" aria-label="${esc((rec ? 'Edit recruiting note for ' : 'Recruit for ') + (z.q ? '“' + z.q + '”' : 'this filter-only search'))}">${rec ? 'Edit note' : 'Recruit'}</button></td>
             </tr>`;
           }).join('')}</tbody></table></div>
-          <p class="tiny muted adm-foot">Rows marked Live come from searches in this session. The rest are illustrative search terms with 30-day volumes scaled to the date range; each one returns no operator in Browse today.</p>`
+          <p class="tiny muted adm-foot">${zLive ? 'Rows marked Live come from searches in this session. The rest are' : 'These are'} illustrative search terms with 30-day volumes scaled to the date range; each one returns no operator in Browse today.</p>`
         : RN.ui.empty({ icon: 'search', title: 'Every search found someone', body: 'Zero-result searches from Browse land here with the exact query and filters.' })}
       </section>
 
       <section class="card adm-sec">
-        ${cardHead('Search to intro funnel', `Search performed, operator shown, profile opened, intro requested. ${win[0].toUpperCase() + win.slice(1)}.`, illus())}
+        ${cardHead('Search to intro funnel', `Search performed, operator shown, profile opened, intro requested. ${win[0].toUpperCase() + win.slice(1)}.`)}
         ${chartSlot('dm-funnel', (w) => funnelChart(f.steps, w), 140)}
-        <p class="tiny muted adm-foot">${int(f.cur.s)} searches. Illustrative baseline plus ${RN.fmt.plural(f.liveN, 'live event')} from this session. Operator and team activity is excluded.</p>
+        <p class="tiny muted adm-foot">${int(f.cur.s)} searches, plus ${RN.fmt.plural(f.liveN, 'live event')} from this session. Operator and team activity is excluded.</p>
       </section>
 
+      <div class="adm-grid adm-grid-even">
+        <section class="card adm-sec">
+          ${cardHead('Companies by source', `Where company visits to profiles started, ${win}. Proof links and the verified badge are operators bringing companies to the platform.`)}
+          <div class="adm-share" role="img" aria-label="Company visits by source: ${esc(srcRows.map((r) => `${r.label} ${pct(r.value / srcTotal)}`).join(', '))}">${srcRows.map((r, k) => `<i style="flex:${r.value || 0.0001};--k:${k}" title="${esc(r.label)}: ${int(r.value)}"></i>`).join('')}</div>
+          <ol class="adm-share-l">${srcRows.map((r, k) => `<li style="--k:${k}"><i aria-hidden="true"></i><span>${esc(r.label)}</span><b class="num">${pct(r.value / srcTotal)}</b><span class="tiny muted num">${int(r.value)}</span></li>`).join('')}</ol>
+          <p class="tiny muted adm-foot">Includes ${RN.fmt.plural(src.live, 'live visit')} from this session (profile views by source and clicks from research pages into Browse).</p>
+        </section>
+        <section class="card adm-sec">
+          ${cardHead('Filters companies apply most', `Browse filters by type and value, ${win}. Darker means more searches.`)}
+          <ol class="adm-rank">${fl.map((x, k) => `<li style="--a:${(0.12 + 0.88 * (x.value / flMax)).toFixed(2)}"><span class="adm-rank-n">${k + 1}</span><span class="adm-rank-l">${esc(x.label)}</span><b class="num">${int(x.value)}</b></li>`).join('')}</ol>
+        </section>
+      </div>
+
       <section class="card adm-sec">
-        ${cardHead('Top search terms', `Normalized to one term per search (AP-05), so spelling and case variants count once. Results is what Browse returns for the term today. Terms companies saved to run again are marked.`, illus())}
+        ${cardHead('Top search terms', 'Normalized to one term per search (AP-05), so spelling and case variants count once. Results is what Browse returns for the term today. Terms companies saved to run again are marked.')}
         <div class="tbl-wrap"><table class="tbl adm-tbl adm-terms">
-          <thead><tr><th>#</th><th>Search term</th><th class="r">Searches</th><th class="r">Results</th><th class="r adm-hide-m">Impressions</th><th class="r adm-hide-m">Views</th><th class="r">View rate</th><th class="r adm-hide-m">Intros</th><th class="r">Intro rate</th></tr></thead>
+          <thead><tr><th>#</th><th>Search term</th><th class="r">Searches</th><th class="r">Results</th><th class="r adm-hide-m">Impressions</th><th class="r adm-hide-m">Views</th><th class="r adm-hide-m">View rate</th><th class="r adm-hide-m">Intros</th><th class="r adm-hide-m">Intro rate</th></tr></thead>
           <tbody>${shownTerms.map((x, i) => `<tr>
             <td class="tnum muted">${i + 1}</td>
-            <td><span class="adm-term">${esc(x.q)}</span>${x.live ? `<span class="pill pill-accent adm-live">${x.live} live</span>` : ''}${x.saved ? `<span class="tiny accent adm-block">${RN.fmt.plural(x.saved, 'company saved it', 'companies saved it')}</span>` : ''}${x.variants.size > 1 ? `<span class="tiny muted adm-block">${x.variants.size} spellings merged</span>` : ''}</td>
+            <td><span class="adm-term">${esc(x.q)}</span>${x.live ? `<span class="pill pill-accent adm-live">${x.live} live</span>` : ''}${x.saved ? `<span class="tiny accent adm-block">${RN.fmt.plural(x.saved, 'company saved it', 'companies saved it')}</span>` : ''}${x.variants.size > 1 ? `<span class="tiny muted adm-block">${x.variants.size} spellings merged</span>` : ''}<span class="tiny muted adm-block adm-show-m">View ${x.imp ? pct(x.views / x.imp, 1) : 'N/A'} · Intro ${x.views ? pct(x.intros / x.views, 1) : 'N/A'} · ${int(x.supply)} results</span></td>
             <td class="r tnum">${int(x.s)}</td>
-            <td class="r tnum${x.supply ? '' : ' adm-bad'}">${int(x.supply)}${x.verified != null ? `<span class="tiny muted adm-block">${int(x.verified)} verified</span>` : ''}</td>
+            <td class="r tnum${x.supply ? '' : ' adm-bad'}">${int(x.supply)}${x.verified != null ? `<span class="tiny muted adm-ver">${int(x.verified)} verified</span>` : ''}</td>
             <td class="r tnum adm-hide-m">${int(x.imp)}</td>
             <td class="r tnum adm-hide-m">${int(x.views)}</td>
-            <td class="r tnum">${x.imp ? pct(x.views / x.imp, 1) : 'N/A'}</td>
+            <td class="r tnum adm-hide-m">${x.imp ? pct(x.views / x.imp, 1) : 'N/A'}</td>
             <td class="r tnum adm-hide-m">${int(x.intros)}</td>
-            <td class="r tnum">${x.views ? pct(x.intros / x.views, 1) : 'N/A'}</td>
+            <td class="r tnum adm-hide-m">${x.views ? pct(x.intros / x.views, 1) : 'N/A'}</td>
           </tr>`).join('')}</tbody></table></div>
         ${terms.length > 10 ? `<button type="button" class="act adm-more" data-act="adm-terms-all">${ui.termsAll ? 'Show top 10' : `Show all ${terms.length}`}${icon(ui.termsAll ? 'chev-up' : 'chev-down')}</button>` : ''}
       </section>
 
       <section class="card adm-sec">
-        ${cardHead('Unmet demand by focus area', 'Monthly searches per company-verified operator. High numbers mean companies look for this and few operators can prove it. Supply is what the Browse focus-area filter returns today.', illus('Searches illustrative'))}
-        <div class="tbl-wrap"><table class="tbl adm-tbl adm-gaps adm-stacktbl">
-          <thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r">In Browse</th><th class="r">Verified</th><th>Per verified operator</th><th><span class="sr-only">Action</span></th></tr></thead>
-          <tbody>${gaps.map((g) => {
-            const tl = g.t.toLowerCase();
-            const claimers = liveOps().filter((o) => o.tags.some((t) => t.t.toLowerCase() === tl && t.tier === 'claimed'));
-            const key = 'tag:' + g.t;
-            ctx[key] = { kind: 'tag', tags: [g.t], cat: g.c, n: g.demand, title: `“${g.t}”` };
-            const nd = nudged[g.t];
-            const mx = gaps[0].ratio || 1;
-            return `<tr>
-              <td class="adm-w"><b class="adm-term">${esc(g.t)}</b><span class="tiny muted adm-block adm-cat">${g.c ? RN.ui.catDot(g.c) : ''}${esc(g.c ? catLabel(g.c) : 'No role category')}</span></td>
-              <td class="r tnum" data-l="Searches / mo">${int(g.demand)}</td>
-              <td class="r tnum" data-l="In Browse">${int(g.supply)}</td>
-              <td class="r tnum" data-l="Verified">${int(g.verified)}</td>
-              <td class="adm-w" data-l="Per verified operator"><div class="adm-ratio"><span class="meter"><i style="width:${Math.max(3, (g.ratio / mx) * 100).toFixed(1)}%"></i></span><b class="tnum">${int(g.ratio)}</b></div></td>
-              <td class="r adm-act-cell">${nd ? `<span class="pill pill-good">${icon('check')}${nd.n} nudged</span>`
-                : claimers.length ? `<button type="button" class="btn btn-sm btn-line" data-act="adm-nudge-tag" data-t="${esc(g.t)}" title="Email the ${claimers.length} operators who claim it but have no company review confirming it">Ask ${claimers.length} to verify</button>`
-                : `<button type="button" class="btn btn-sm btn-line" data-act="adm-recruit" data-k="${esc(key)}">Recruit</button>`}</td>
-            </tr>`;
-          }).join('')}</tbody></table></div>
-        <p class="tiny muted adm-foot">A nudge emails every operator who claims the focus area but has no company review confirming it, and points them to Studio to request one. Studio Positioning uses the same demand figures.</p>
-      </section>
-
-      <section class="card adm-sec">
-        ${cardHead('Companies by source', `Where company visits to profiles started, ${win}. Proof links and the verified badge are operators bringing companies to the platform.`, illus())}
-        ${chartSlot('dm-src', (w) => barsChart(src.rows, w, { labelW: 180, label: 'Company visits by source' }), 240)}
-        <p class="tiny muted adm-foot">Illustrative baseline plus ${RN.fmt.plural(src.live, 'live visit')} from this session (profile views by source and clicks from research pages into Browse).</p>
-      </section>
-
-      <div class="adm-grid">
-        <section class="card adm-sec">
-          ${cardHead('Filters companies apply most', `Browse filters by type and value, ${win}.`, illus())}
-          ${chartSlot('dm-filters', (w) => barsChart(filterUse(days), w, { label: 'Filters applied' }), 260)}
-        </section>
-        <section class="card adm-sec">
-          ${cardHead('Who is searching', `Company revenue and employee range of signed-in companies, from the same picklists as operator intake (AP-25).`, illus())}
-          <span class="label">Revenue range</span>
-          ${chartSlot('dm-rev', (w) => barsChart(rev.rows, w, { labelW: 110, label: 'Searches by company revenue' }), 200)}
-          <span class="label adm-gap-t">Employee range</span>
-          ${chartSlot('dm-emp', (w) => barsChart(emp.rows, w, { labelW: 110, label: 'Searches by employee range' }), 200)}
-          <p class="tiny muted adm-foot">Based on the ${pct(rev.identified / Math.max(1, rev.total))} of searches from signed-in companies. Companies give company name and revenue range at sign-up; employee range and industry unlock Match Signals.</p>
-        </section>
-      </div>`;
+        ${cardHead('Who is searching', 'Company revenue and employee range of signed-in companies, from the same picklists as operator intake (AP-25). The most common band is darker.')}
+        <div class="adm-hist2">
+          <div><span class="label">Revenue range</span>${chartSlot('dm-rev', (w) => histo(rev.rows, w, shortL, 'Searches by company revenue'), 200)}</div>
+          <div><span class="label">Employee range</span>${chartSlot('dm-emp', (w) => histo(emp.rows, w, shortL, 'Searches by employee range'), 200)}</div>
+        </div>
+        <p class="tiny muted adm-foot">Based on the ${pct(rev.identified / Math.max(1, rev.total))} of searches from signed-in companies. Companies give company name and revenue range at sign-up; employee range and industry unlock Match Signals.</p>
+      </section>`;
+  }
+  // A histogram: one column per band in picklist order, the most common band in the dark accent
+  function histo(rows, w, shortL, label) {
+    const max = Math.max(...rows.map((r) => r.value));
+    const narrow = w / rows.length < 78;
+    return RN.chart.columns(rows.map((r) => ({ label: narrow ? shortL(r.label) : r.label, value: r.value, hi: r.value === max && max > 0 })), { w, h: 200, label });
   }
 
   /* =====================================================================================

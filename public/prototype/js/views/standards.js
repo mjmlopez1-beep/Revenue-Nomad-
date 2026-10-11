@@ -98,49 +98,151 @@
     ['L1-L60 intake items', 'Revenue and employee ranges up to 3, industries up to 10, new company capacity 1–10, location from postal code', [['#join.operator', 'Operator intake']]],
   ];
 
+  // Stored keys (the monospace codes) are for the dev team: hidden by default, one toggle shows them everywhere
+  let showKeys = false;
+  try { showKeys = localStorage.getItem('rn.std.keys') === '1'; } catch (e) { /* storage is a convenience */ }
+  // The decided value leads each decision: bold the opening clause when it is short, the rest stays body text
+  function decisionHtml(t) {
+    const m = String(t).match(/^(.{3,52}?)(: |\. )([\s\S]*)$/);
+    if (m && !/\(([^)]*)$/.test(m[1])) return `<b>${esc(m[1])}</b>${esc(m[2] + m[3])}`;
+    return String(t).length <= 30 ? `<b>${esc(t)}</b>` : esc(t);
+  }
+
   RN.view('standards', {
     route: 'standards', nav: '', requires: 'admin', footer: false,
     title: () => 'Field standards',
     render() {
-      const optList = (d) => (d.options || []).slice(0, 60).map((o) => `<span class="std-opt"><span class="mono">${esc(o.v)}</span><span>${esc(o.l)}</span></span>`).join('');
+      const groups = GROUPS();
+      const decisions = DECISIONS().filter(Boolean);
+      const allKeys = [].concat(...groups.map((g) => g.keys)).filter((k) => F[k]);
+      const nValues = allKeys.reduce((a, k) => a + ((F[k].options || []).length), 0);
+      const chip = (o) => `<span class="std-opt" title="Stored as ${esc(o.v)}"><span>${esc(o.l)}</span><code class="std-key">${esc(o.v)}</code></span>`;
+      // Long picklists show their first 18 values; the rest open in place
+      const optList = (d) => {
+        const o = d.options || [];
+        if (o.length <= 24) return o.map(chip).join('');
+        return `${o.slice(0, 18).map(chip).join('')}<details class="std-more"><summary>Show all ${o.length}</summary><div class="std-opts">${o.slice(18).map(chip).join('')}</div></details>`;
+      };
+      const typeText = (d) => {
+        const t = { single: 'Pick one', select: 'Pick one from a list', multi: 'Pick several', optcards: 'Pick one card', tagsearch: 'Search and pick', tags: 'Tags', date: 'Date', money: 'Amount in USD', email: 'Email', url: 'Link', text: 'Text', textarea: 'Long text', number: 'Number' }[d.type] || (d.type ? d.type[0].toUpperCase() + d.type.slice(1) : 'Value');
+        return [t, d.max ? `up to ${d.max}` : '', d.min != null && d.type === 'number' ? `min ${d.min}` : '', d.unit ? d.unit : '', d.optional ? 'optional' : ''].filter(Boolean).join(' · ');
+      };
       const fieldRow = (key) => {
         const d = F[key];
         if (!d) return '';
-        const limits = [d.max ? `Up to ${d.max}` : '', d.min != null && d.type === 'number' ? `Min ${d.min}` : '', d.unit ? esc(d.unit) : '', d.optional ? 'Optional' : ''].filter(Boolean).join(' · ');
-        return `<tr><td><b>${esc(d.label)}</b><div class="mono tiny faint">${esc(key)}</div></td><td class="tiny">${esc(d.type)}${limits ? `<div class="faint">${limits}</div>` : ''}</td>
-          <td>${d.options && d.options.length ? `<div class="std-opts">${optList(d)}${d.options.length > 60 ? `<span class="tiny muted">+${d.options.length - 60} more</span>` : ''}</div>` : `<span class="small muted">${esc(d.help || 'Free input')}</span>`}</td></tr>`;
+        const n = (d.options || []).length;
+        return `<div class="std-field">
+          <div class="std-field-hd"><b>${esc(d.label)}</b><span class="tiny muted">${esc(typeText(d))}${n ? ` · ${n} ${n === 1 ? 'value' : 'values'}` : ''}</span><code class="std-key">${esc(key)}</code></div>
+          <div class="std-field-v">${n ? `<div class="std-opts">${optList(d)}</div>` : `<span class="small muted">${esc(d.help || 'Free input')}</span>`}</div>
+        </div>`;
       };
-      const links = (arr) => arr.map(([href, l]) => `<a class="link" href="${esc(href)}">${esc(l)}</a>`).join('<br>');
-      return `<section class="wrap phead">
-        <span class="eyebrow">For the product and dev team</span>
-        <h1 class="h1">Field standards</h1>
-        <p class="lede">Every picklist in this prototype renders from one registry (<span class="mono">js/data/fields.js</span>). Operator intake is the source of truth; filters, engagements, intros, reviews, Studio and research reuse the same values, so workflows line up without translation.</p>
-        <div class="row" style="margin-top:20px"><a class="btn btn-sm" data-act="std-jump" data-to="std-fields" href="#std-fields">Fields</a><a class="btn btn-line btn-sm" href="#std-decisions" data-act="std-jump" data-to="std-decisions">Decisions to confirm</a><a class="btn btn-line btn-sm" data-act="std-jump" data-to="std-scope" href="#std-scope">Open scope shown solved</a></div>
-      </section>
-      <section class="wrap" id="std-fields" tabindex="-1">
-        ${GROUPS().map((g) => `<div class="card std-group"><div class="card-hd"><div><h2 class="h4">${esc(g.t)}</h2><p class="sub">Used in: ${esc(g.used)}</p></div></div>
-          ${g.note ? `<p class="note info std-note">${icon('info')}<span>${esc(g.note)}</span></p>` : ''}
-          <div class="tbl-wrap"><table class="tbl std-tbl"><thead><tr><th>Field</th><th>Type</th><th>Values: stored value, then label shown</th></tr></thead><tbody>${g.keys.map(fieldRow).join('')}</tbody></table></div></div>`).join('')}
-        <div class="card std-group"><div class="card-hd"><div><h2 class="h4">Role details by category</h2><p class="sub">Which role-detail fields each category collects in intake and shows on the profile Operating range.</p></div></div>
-          <div class="tbl-wrap"><table class="tbl"><tbody>${Object.keys(F.roleFields).map((k) => `<tr><td><b>${esc(F.catLabel(k))}</b></td><td class="small">${F.roleFields[k].map((f) => esc(F[f] ? F[f].label : f)).join(' · ')}</td></tr>`).join('')}</tbody></table></div></div>
-        <div class="card std-group"><div class="card-hd"><div><h2 class="h4">Fit tag library</h2><p class="sub">${RN.fmt.int(F.fitTags.options.length)} tags in this prototype (the live taxonomy has 1,182). Up to 25 self-claimed per operator. Verified at the first company review rated 4.0+, Expert from the fifth. Companies see them as "${esc(F.fitTags.clientLabel || 'Focus areas')}".</p></div><a class="btn btn-line btn-sm" href="#library">Open the library</a></div></div>
-      </section>
-      <section class="wrap section-sm" id="std-decisions" tabindex="-1">
-        <h2 class="h2">Decisions to confirm</h2>
-        <p class="lede" style="margin-top:10px">Conflicts found across the prototypes, the live data and the Product Feedback sheet, and how this prototype resolves them.</p>
-        <div class="tbl-wrap card" style="margin-top:24px;padding:8px 16px"><table class="tbl"><thead><tr><th>Conflict</th><th>Decision in this prototype</th></tr></thead><tbody>${DECISIONS().filter(Boolean).map((d) => `<tr><td class="small">${esc(d[0])}</td><td class="small"><b>${esc(d[1])}</b></td></tr>`).join('')}</tbody></table></div>
-      </section>
-      <section class="wrap section-sm" id="std-scope" tabindex="-1">
-        <h2 class="h2">Open scope shown solved</h2>
-        <p class="lede" style="margin-top:10px">Items that are open, on hold or reopened in the Product Feedback sheet, and where to see them working here.</p>
-        <div class="tbl-wrap card" style="margin-top:24px;padding:8px 16px"><table class="tbl"><thead><tr><th>Sheet ref</th><th>Item</th><th>See it</th></tr></thead><tbody>${SCOPE.map((s) => `<tr><td class="mono small nowrap">${esc(s[0])}</td><td class="small">${esc(s[1])}</td><td class="small">${links(s[2])}</td></tr>`).join('')}</tbody></table></div>
-      </section>`;
+      const links = (arr) => arr.map(([href, l]) => `<a class="link" href="${esc(href)}">${esc(l)}</a>`).join('');
+      const idx = groups.map((g, i) => ({ id: 'std-g' + i, l: g.t.replace(/ \(.*\)$/, ''), n: g.keys.filter((k) => F[k]).length }))
+        .concat([{ id: 'std-roles', l: 'Role details by category' }, { id: 'std-tags', l: 'Fit tag library' }]);
+      const navLink = (x) => `<a href="#${x.id}" data-act="std-jump" data-to="${x.id}">${esc(x.l)}${x.n != null ? `<span>${x.n}</span>` : ''}</a>`;
+      return `<div class="wrap std${showKeys ? ' show-keys' : ''}" data-std>
+      <header class="std-head">
+        <div class="std-head-t">
+          <span class="eyebrow">Revenue Nomad team · Reference</span>
+          <h1 class="h1">Field standards</h1>
+          <p class="lede">Every picklist in this prototype renders from one registry. Operator intake is the source of truth; filters, engagements, intros, reviews, Studio and research reuse the same values, so workflows line up without translation.</p>
+        </div>
+        <ul class="std-stats">
+          <li><b class="num">${allKeys.length}</b><span>fields</span></li>
+          <li><b class="num">${RN.fmt.int(nValues)}</b><span>picklist values</span></li>
+          <li><b class="num">${decisions.length}</b><span>decisions to confirm</span></li>
+          <li><b class="num">${SCOPE.length}</b><span>open items shown solved</span></li>
+        </ul>
+      </header>
+      <div class="std-layout">
+        <nav class="std-nav" aria-label="On this page">
+          <div class="std-keys">
+            <button type="button" class="std-switch" role="switch" aria-checked="${showKeys}" data-act="std-keys"><i aria-hidden="true"></i>Show stored keys</button>
+            <span class="tiny muted">The codes saved in the data, next to each label. Source <code>js/data/fields.js</code>.</span>
+          </div>
+          <span class="label">Fields</span>
+          ${idx.map(navLink).join('')}
+          <span class="label">Decisions</span>
+          ${navLink({ id: 'std-decisions', l: 'Decisions to confirm', n: decisions.length })}
+          ${navLink({ id: 'std-scope', l: 'Open scope shown solved', n: SCOPE.length })}
+        </nav>
+        <div class="std-body">
+          <div id="std-fields" tabindex="-1">
+          ${groups.map((g, i) => `<section class="card std-group" id="std-g${i}" aria-labelledby="std-g${i}-t">
+            <div class="std-group-hd"><h2 class="h4" id="std-g${i}-t">${esc(g.t)}</h2><p class="small muted"><span class="std-used">Used in</span>${esc(g.used)}</p></div>
+            ${g.note ? `<p class="note info std-note">${icon('info')}<span>${esc(g.note)}</span></p>` : ''}
+            ${(() => {
+              // Picklists get a full row of values; free-input fields sit together as compact tiles
+              const ks = g.keys.filter((k) => F[k]);
+              const pick = ks.filter((k) => (F[k].options || []).length), free = ks.filter((k) => !(F[k].options || []).length);
+              return `${pick.length ? `<div class="std-fields">${pick.map(fieldRow).join('')}</div>` : ''}
+                ${free.length ? `<div class="std-free-w"><span class="label">Free input${pick.length ? '' : ' fields'}</span><ul class="std-free">${free.map((k) => `<li><b>${esc(F[k].label)}</b><span class="tiny muted">${esc(typeText(F[k]))}</span>${F[k].help ? `<span class="small">${esc(F[k].help)}</span>` : ''}<code class="std-key">${esc(k)}</code></li>`).join('')}</ul></div>` : ''}`;
+            })()}
+          </section>`).join('')}
+          <section class="card std-group" id="std-roles" aria-labelledby="std-roles-t">
+            <div class="std-group-hd"><h2 class="h4" id="std-roles-t">Role details by category</h2><p class="small muted">Which role-detail fields each category collects in intake and shows on the profile Operating range.</p></div>
+            <div class="std-fields">${Object.keys(F.roleFields).map((k) => `<div class="std-field"><div class="std-field-hd"><b>${RN.ui.catDot ? RN.ui.catDot(k) : ''}${esc(F.catLabel(k))}</b><span class="tiny muted">${F.roleFields[k].length} fields</span><code class="std-key">${esc(k)}</code></div><div class="std-field-v"><div class="std-opts">${F.roleFields[k].map((f) => `<span class="std-opt"><span>${esc(F[f] ? F[f].label : f)}</span><code class="std-key">${esc(f)}</code></span>`).join('')}</div></div></div>`).join('')}</div>
+          </section>
+          <section class="card std-group std-tags" id="std-tags" aria-labelledby="std-tags-t">
+            <div class="std-group-hd"><h2 class="h4" id="std-tags-t">Fit tag library</h2><p class="small muted">${RN.fmt.int(F.fitTags.options.length)} tags in this prototype (the live taxonomy has 1,182). Up to 25 self-claimed per operator. Verified at the first company review rated 4.0+, Expert from the fifth. Companies see them as “${esc(F.fitTags.clientLabel || 'Focus areas')}”.</p></div>
+            <a class="btn btn-line btn-sm" href="#library">Open the library${icon('arrow')}</a>
+          </section>
+          </div>
+
+          <section class="std-sec" id="std-decisions" tabindex="-1" aria-labelledby="std-decisions-t">
+            <h2 class="h3" id="std-decisions-t">Decisions to confirm</h2>
+            <p class="small muted">Conflicts found across the prototypes, the live data and the Product Feedback sheet, and how this prototype resolves them.</p>
+            <ol class="card std-dec">${decisions.map((d, i) => `<li><span class="std-dec-n num">${i + 1}</span><div class="std-dec-c"><span class="label">Conflict</span><p class="small">${esc(d[0])}</p></div><div class="std-dec-d"><span class="label">Decision</span><p>${decisionHtml(d[1])}</p></div></li>`).join('')}</ol>
+          </section>
+
+          <section class="std-sec" id="std-scope" tabindex="-1" aria-labelledby="std-scope-t">
+            <h2 class="h3" id="std-scope-t">Open scope shown solved</h2>
+            <p class="small muted">Items that are open, on hold or reopened in the Product Feedback sheet, and where to see them working here.</p>
+            <ul class="card std-scope">${SCOPE.map((x) => `<li><span class="std-ref">${esc(x[0])}</span><p class="small">${esc(x[1])}</p><div class="std-see">${links(x[2])}</div></li>`).join('')}</ul>
+          </section>
+        </div>
+      </div>
+      </div>`;
     },
+    mount(root) {
+      // The index marks the section being read: the last one whose top has passed 40% of the viewport
+      const nav = root && root.querySelector('.std-nav');
+      if (!nav) return;
+      const links = [...nav.querySelectorAll('a[data-to]')];
+      const targets = links.map((a) => document.getElementById(a.dataset.to));
+      let last = null, raf = 0;
+      const update = () => {
+        raf = 0;
+        const line = window.innerHeight * 0.4;
+        let k = 0;
+        targets.forEach((t, i) => { if (t && t.getBoundingClientRect().top <= line) k = i; });
+        if (k === last) return;
+        last = k;
+        links.forEach((a, i) => a.classList.toggle('on', i === k));
+        // On phones the index is a row of chips: keep the current one in view
+        if (nav.scrollWidth > nav.clientWidth + 2) nav.scrollTo({ left: k ? Math.max(0, links[k].offsetLeft - 120) : 0, behavior: 'smooth' });
+      };
+      const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      stdOff = () => window.removeEventListener('scroll', onScroll);
+      update();
+    },
+    unmount() { if (stdOff) { stdOff(); stdOff = null; } },
   });
-  RN.actions['std-jump'] = (el) => {
+  let stdOff = null;
+  RN.actions['std-keys'] = (el) => {
+    showKeys = !showKeys;
+    try { localStorage.setItem('rn.std.keys', showKeys ? '1' : '0'); } catch (e) { /* convenience only */ }
+    const box = el.closest('[data-std]');
+    if (box) box.classList.toggle('show-keys', showKeys);
+    el.setAttribute('aria-checked', String(showKeys));
+  };
+  RN.actions['std-jump'] = (el, ev) => {
+    if (ev && ev.preventDefault) ev.preventDefault();
     const t = document.getElementById(el.dataset.to);
     if (!t) return;
-    t.scrollIntoView({ behavior: 'smooth' });
+    t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex', '-1');
     try { t.focus({ preventScroll: true }); } catch (e) { /* focus is a convenience */ }
   };
 })();
