@@ -179,7 +179,7 @@
         <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#hire-fractional-sales-vp">Hire a fractional VP of Sales</a><a href="#fractional-revops">Fractional RevOps</a><a href="#fractional-marketing-leadership">Fractional marketing leaders</a><a href="#fractional-cost">What it costs</a><a href="#engagements">Post an engagement</a><a href="#talk">Talk to us</a></div>
         <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
         <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
-        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#how">How it works</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '<a href="#standards">Field standards</a>' : ''}</div>
+        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#how">How it works</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '' : ''}</div>
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
@@ -217,9 +217,13 @@
           <div class="stack" style="--gap:2px">${JOURNEYS.map((j) => `<button type="button" class="act" style="color:#fff;justify-content:flex-start;padding:6px 0" data-act="journey" data-j="${j.key}">${icon('arrow')}<span>${esc(j.label)}</span></button>`).join('')}</div></div>
         <div class="stack" style="--gap:8px"><span class="label">Clock · ${esc(RN.fmt.date(RN.now()))}</span>
           <div class="dock-row"><button class="btn btn-line btn-sm" data-act="clock" data-d="1">+1 day</button><button class="btn btn-line btn-sm" data-act="clock" data-d="7">+7 days</button><button class="btn btn-ghost btn-sm" data-act="clock" data-d="0" style="color:var(--night-mute)">Today</button></div></div>
+        <div class="stack" style="--gap:8px"><span class="label">Prototype notes</span>
+          <div class="seg">${[[false, 'Hidden'], [true, 'Shown']].map(([v, l]) => `<button type="button" class="${!!st.notes === v ? 'on' : ''}" data-act="notes" data-v="${v ? 1 : 0}" aria-pressed="${!!st.notes === v}">${l}</button>`).join('')}</div>
+          <span class="dock-note" style="margin:0">Pending items, Illustrative labels and the dev-team notes on each page.</span></div>
         <div class="stack" style="--gap:8px"><span class="label">Theme</span>
           <div class="seg">${['system', 'light', 'dark'].map((t) => `<button type="button" class="${st.theme === t ? 'on' : ''}" data-act="theme" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <div class="dock-row"><button class="btn btn-line btn-sm" data-act="outbox">${icon('mail')}Outbox (${mail})</button><button class="btn btn-ghost btn-sm" data-act="reset-demo" style="color:#FFB4A8">Reset demo data</button></div>
+        <a class="act" style="color:var(--leaf);justify-content:flex-start;padding:4px 0" href="#standards">${icon('doc')}<span>Field standards and decisions (admin)</span></a>
         <p class="dock-note">Operators are a 100-profile sample of the live network (350+). Analytics, market figures and company names in Studio and Insights are illustrative.</p>
       </div>` : ''}
       <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}" aria-label="Prototype controls, viewing as ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}">${icon('sliders')}<i class="dock-live" aria-hidden="true"></i><span class="dock-tag">Prototype · ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
@@ -236,6 +240,7 @@
     shell.renderDock(); RN.rerender();
     RN.ui.toast(`Clock set to ${RN.fmt.date(RN.now())}`, { icon: 'clock' });
   };
+  RN.actions['notes'] = (el) => { RN.store.set('notes', el.dataset.v === '1'); shell.applyTheme(); shell.renderDock(); RN.rerender(); };
   RN.actions['theme'] = (el) => { RN.store.set('theme', el.dataset.t); shell.applyTheme(); shell.renderDock(); };
   RN.actions['reset-demo'] = () => {
     RN.ui.modal({
@@ -299,6 +304,8 @@
   // "System" follows the host: a theme the embedding page stamped on <html> (artifact viewer) wins over the OS setting
   const HOST_THEME = document.documentElement.getAttribute('data-theme');
   shell.applyTheme = function () {
+    // Reviewer mode (prototype notes): pending chips, Illustrative labels, dev notes and prototype controls show only when on
+    document.documentElement.classList.toggle('rn-notes', !!RN.store.state.notes);
     const t = RN.store.state.theme;
     if (t !== 'system') document.documentElement.setAttribute('data-theme', t);
     else if (HOST_THEME) document.documentElement.setAttribute('data-theme', HOST_THEME);

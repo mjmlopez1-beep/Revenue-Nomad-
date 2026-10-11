@@ -11,6 +11,7 @@
       v: 1,
       persona: 'visitor',          // visitor | buyer | operator | admin
       theme: 'system',             // system | light | dark
+      notes: false,                // reviewer mode: show pending chips, Illustrative labels and dev notes
       clockOffsetDays: 0,
       browse: { q: '', tags: [], filters: {}, sort: 'best', view: 'grid' },
       shortlist: [],               // operator ids saved by the buyer

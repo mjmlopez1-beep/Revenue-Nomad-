@@ -99,7 +99,7 @@
   ];
 
   RN.view('standards', {
-    route: 'standards', nav: '',
+    route: 'standards', nav: '', requires: 'admin', footer: false,
     title: () => 'Field standards',
     render() {
       const optList = (d) => (d.options || []).slice(0, 60).map((o) => `<span class="std-opt"><span class="mono">${esc(o.v)}</span><span>${esc(o.l)}</span></span>`).join('');

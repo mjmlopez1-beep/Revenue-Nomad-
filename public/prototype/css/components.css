@@ -125,7 +125,7 @@
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .arch-logo img { filter: brightness(0) invert(1); opacity: .9; } }
 
 /* ---------- Avatars ---------- */
-.ava { --sz: 44px; width: var(--sz); height: var(--sz); border-radius: 50%; object-fit: cover; background: var(--leaf); color: var(--forest-deep); display: inline-grid; place-items: center; font-family: var(--f-display); font-weight: 800; font-size: calc(var(--sz) * .36); flex: 0 0 auto; overflow: hidden; }
+.ava { --sz: 44px; width: var(--sz); height: var(--sz); min-width: var(--sz); aspect-ratio: 1; line-height: 1; border-radius: 50%; object-fit: cover; background: var(--leaf); color: var(--forest-deep); display: inline-grid; place-items: center; font-family: var(--f-display); font-weight: 800; font-size: calc(var(--sz) * .36); flex: 0 0 auto; overflow: hidden; }
 .ava-xs { --sz: 24px; } .ava-sm { --sz: 32px; } .ava-md { --sz: 56px; } .ava-lg { --sz: 88px; } .ava-xl { --sz: 128px; }
 .ava-ring { box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--line); }
 .ava-stack { display: flex; }
@@ -478,7 +478,7 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 .dock-row .btn-sm { --h: 32px; }
 .dock-panel .btn-line { color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
 .dock-panel .btn-line:hover { background: rgba(255,255,255,.08); border-color: #fff; }
-@media (max-width: 640px) { .dock { left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); } .dock-btn .dock-tag { display: none; } }
+@media (max-width: 640px) { .dock { left: auto; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); } .dock-panel { right: 0; left: auto; } .dock-btn { width: 34px; height: 34px; opacity: .78; } .dock-btn svg { width: 16px; height: 16px; } .dock-btn .dock-tag { display: none; } }
 
 /* ---------- Charts (SVG, drawn by RN.chart) ---------- */
 .chart { width: 100%; }
@@ -533,3 +533,8 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 @keyframes pulse { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(2.2); opacity: 0; } }
 .view-enter { animation: rise .35s var(--ease); }
 .tray .tray-x { position: static; transform: none; }
+
+/* Reviewer mode off (the default): prototype-only material is hidden. A table cell whose only content is a pending chip reads "To come". */
+html:not(.rn-notes) .fn-gap, html:not(.rn-notes) .illus, html:not(.rn-notes) .rs-schema, html:not(.rn-notes) [data-proto] { display: none !important; }
+html:not(.rn-notes) .fn-gap-w { display: contents; }
+html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after, html:not(.rn-notes) dd:has(> .fn-gap:only-child)::after { content: "To come"; color: var(--mute-2); font-style: italic; }
