@@ -478,8 +478,7 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 .dock-row .btn-sm { --h: 32px; }
 .dock-panel .btn-line { color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
 .dock-panel .btn-line:hover { background: rgba(255,255,255,.08); border-color: #fff; }
-@media (max-width: 640px) { .dock { left: auto; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); } .dock-panel { right: 0; left: auto; } .dock-btn { width: 34px; height: 34px; opacity: .78; } .dock-btn svg { width: 16px; height: 16px; } .dock-btn .dock-tag { display: none; } }
-@media (max-width: 640px) { #ftr:not(:empty)::after { content: ""; display: block; height: 44px; } }
+@media (max-width: 640px) { .dock { left: auto; right: 10px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); } .dock-panel { right: 0; left: auto; } .dock-btn { width: 34px; height: 34px; opacity: .78; } .dock-btn svg { width: 16px; height: 16px; } .dock-btn .dock-tag { display: none; } }
 
 /* ---------- Charts (SVG, drawn by RN.chart) ---------- */
 .chart { width: 100%; }
