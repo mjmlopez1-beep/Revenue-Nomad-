@@ -169,6 +169,14 @@
   }
 
   /* Engagement match appearances: the client's engagement ranked you in its top matches, or invited you (L42 "shortlist appearances") */
+  function matchDates(op, lo, hi) {
+    return RN.store.state.projects.filter((p) => {
+      const when = p.postedAt || p.createdAt;
+      if (!when || !['posted', 'in_progress', 'staffed'].includes(p.status) || !inWin(when, lo, hi)) return false;
+      if ((p.invited || []).includes(op.id)) return true;
+      try { return RN.model.rank(p.fields || {}, { limit: 12 }).some((r) => r.op.id === op.id); } catch (e) { return false; }
+    }).map((p) => p.postedAt || p.createdAt);
+  }
   function matchApps(op, lo, hi) {
     return RN.store.state.projects.filter((p) => {
       const when = p.postedAt || p.createdAt;
@@ -193,10 +201,20 @@
       const prev = { imp: a.prev.impressions, views: a.prev.views, sl: a.prev.shortlists + matchApps(op, d, 2 * d), intros: introsIn(d, 2 * d) + base };
       const bucket = d <= 7 ? 1 : d <= 30 ? 3 : 7;
       const group = (arr) => { const out = []; for (let end = arr.length; end > 0; end -= bucket) out.unshift(arr.slice(Math.max(0, end - bucket), end).reduce((x, y) => x + y, 0)); return out; };
+      /* Each sparkline is drawn from its own daily counts (index 0 is the oldest day of the period):
+         - shortlists: the baseline share of each day's views, counted as whole saves where they fall,
+           plus this session's shortlist saves and engagement match appearances on the day they happened
+         - intros: intro requests on the day they were made, plus the baseline spread as whole requests */
+      const dayIdx = (ts) => { const back = Math.floor((nowMs() - t(ts)) / DAY); return back >= 0 && back < d ? d - 1 - back : -1; };
+      const whole = (weights, rate) => { let cum = 0, prevR = 0; return weights.map((w) => { cum += w * rate; const r = Math.round(cum); const n = r - prevR; prevR = r; return n; }); };
+      const fit = (arr, total) => { const sum = arr.reduce((x, y) => x + y, 0); let diff = total - sum; for (let i = arr.length - 1; i >= 0 && diff !== 0; i--) { const step = diff > 0 ? 1 : -1; if (arr[i] + step >= 0) { arr[i] += step; diff -= step; i++; } } return arr; };
+      const slDaily = whole(a.series.views, 0.09);
+      liveEvents(op, d).filter((e) => e.type === 'shortlist_add').forEach((e) => { const i = dayIdx(e.ts); if (i >= 0) slDaily[i] += 1; });
+      matchDates(op, 0, d).forEach((ts) => { const i = dayIdx(ts); if (i >= 0) slDaily[i] += 1; });
+      const inDaily = op.isMatt ? whole(a.series.views.map(() => 1), base / Math.max(1, d)) : whole(a.series.views, 0.015);
+      st.intros.filter((i) => i.opId === op.id && inWin(i.createdAt, 0, d)).forEach((x) => { const i = dayIdx(x.createdAt); if (i >= 0) inDaily[i] += 1; });
       const imp = group(a.series.impressions), views = group(a.series.views);
-      const vt = views.reduce((x, y) => x + y, 0) || 1;
-      const shape = (total) => views.map((v) => Math.round(((v / vt) * total) * 10) / 10);
-      return { a, cur, prev, series: { imp, views, sl: shape(cur.sl), intros: shape(cur.intros) } };
+      return { a, cur, prev, series: { imp, views, sl: group(fit(slDaily, cur.sl)), intros: group(fit(inDaily, cur.intros)) } };
     });
   }
   SA.metrics = metrics;
@@ -494,18 +512,11 @@
       ${head(`${greet}, ${esc(op.first)}.`, `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
       ${liveNow ? liveStrip(liveNow) : ''}
       ${kpiRow(op, m, d)}
-      <div class="sa-grid sa-grid-a">
-        ${whoSummary(op, a, d)}
-        ${nbaCard(op)}
+      <div class="sa-cols">
+        <div class="sa-col sa-col-main">${whoSummary(op, a, d)}${whyFound(op, a, d)}${activityCard(op, act, since)}</div>
+        <div class="sa-col sa-col-side">${nbaCard(op)}${risCard(op)}${digestCard(op)}</div>
       </div>
-      <div class="sa-grid sa-grid-b">
-        ${whyFound(op, a, d)}
-        ${activityCard(op, act, since)}
-      </div>
-      <div class="sa-grid sa-grid-b">
-        ${demandCard(op)}
-        <div class="sa-col">${risCard(op)}${digestCard(op)}</div>
-      </div>
+      ${demandCard(op)}
       <p class="tiny muted sa-foot">${icon('info')}Numbers combine illustrative history with live activity from this prototype session. Company names are never shown in Studio.</p>
     </div>`;
   }
@@ -635,7 +646,7 @@
           <div class="grow">
             <p class="sa-feed-t">${x.live ? '<span class="pill pill-good sa-pill-live">Live</span>' : ''}${x.text}</p>
             <p class="sa-feed-m">${esc(x.meta || '')}</p>
-            <div class="sa-feed-f">${fitPill(x.fit)}${x.you ? youPill(x.you === 'none' ? null : x.you) : ''}<span class="tiny muted">${esc(fmt.ago(x.ts))}</span>${x.act ? `<span class="sa-feed-a">${actBtn(x.act, 'act')}</span>` : ''}</div>
+            <div class="sa-feed-f">${fitPill(x.fit)}${x.you ? youPill(x.you === 'none' ? null : x.you) : ''}<span class="tiny muted">${esc(cap(fmt.ago(x.ts)))}</span>${x.act ? `<span class="sa-feed-a">${actBtn(x.act, 'act')}</span>` : ''}</div>
           </div>
         </li>`).join('')}</ul>` : RN.ui.empty({ icon: 'search', title: 'No demand in this range yet', body: 'Try another company revenue range, or clear the filter to see everything.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sa-demand-clear">Clear filter</button>` })}
       ${total > 5 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="demand">${showAll.demand ? 'Show fewer' : `Show all ${total}`}${icon(showAll.demand ? 'chev-up' : 'chev-down')}</button>` : ''}
@@ -653,7 +664,7 @@
             <span class="sa-tl-t">${x.text}${x.pill ? ' ' + x.pill : ''}</span>
             ${x.meta ? `<span class="sa-tl-m">${esc(x.meta)}</span>` : ''}
           </a>
-          <time class="sa-tl-when" datetime="${esc(x.ts)}">${x.live && nowMs() - t(x.ts) < 6e4 ? 'Just now' : esc(fmt.ago(x.ts))}</time>
+          <time class="sa-tl-when" datetime="${esc(x.ts)}">${x.live && nowMs() - t(x.ts) < 6e4 ? 'Just now' : esc(cap(fmt.ago(x.ts)))}</time>
         </li>`).join('')}</ol>` : RN.ui.empty({ icon: 'bolt', title: 'Nothing yet', body: 'Views, searches, intro requests and proof link opens show up here as they happen.' })}
       ${items.length > 8 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="activity">${showAll.activity ? 'Show fewer' : `Show all ${Math.min(30, items.length)}`}${icon(showAll.activity ? 'chev-up' : 'chev-down')}</button>` : ''}
     </section>`;
@@ -737,10 +748,13 @@
     const a = m.a;
     return `<div class="sa sa-vis">
       ${head('Who viewed you', `Who looked at your profile, where you showed up and what companies did next, ${esc(periodLabel(d))}. Company names are never shown.`, seg())}
-      <p class="tiny muted sa-foot sa-foot-top">${illus()}<span>Illustrative history plus live activity from this prototype session. Rows marked Live happened in this session.</span></p>
+      <p class="tiny muted sa-foot sa-foot-top" data-proto>${illus()}<span>Illustrative history plus live activity from this prototype session. Rows marked Live happened in this session.</span></p>
+      ${insightBand(op, m, d)}
       ${viewersCard(op, a, d)}
-      ${gapsCard(op, a, d)}
-      ${funnelCard(op, m, d)}
+      <div class="sa-grid sa-grid-2 sa-pair">
+        ${gapsCard(op, a, d)}
+        ${funnelCard(op, m, d)}
+      </div>
       ${trendCard(op, a, d)}
       ${termsCard(op, a, d)}
       <div class="sa-grid sa-grid-2">
@@ -752,6 +766,34 @@
       ${howCard()}
     </div>`;
   }
+
+  /* The week in one band: the headline number with its own trend, how it converts against similar
+     operators, who looked most and the biggest gap. Every figure is read from the same analytics as the cards below. */
+  function insightBand(op, m, d) {
+    const a = m.a;
+    const p = peers(op, d);
+    const vr = m.cur.imp ? m.cur.views / m.cur.imp : 0;
+    const top = whoRows(a)[0];
+    const gap = gaps(op, a)[0];
+    const q = a.queries[0];
+    const ratio = p.vr > 0 && vr > 0 ? vr / p.vr : 0;
+    const cells = [
+      top ? `<button type="button" class="sa-ins-c" data-act="sa-jump" data-to="sa-viewers"><span class="label">Looked most</span><b>${esc(top.group ? top.name : `${top.name} companies`)}</b><span>${top.group ? '' : `${esc(top.meta)}<br>`}${plural(top.n, 'visit')} ${esc(periodLabel(d))}</span></button>` : '',
+      q ? `<button type="button" class="sa-ins-c" data-act="sa-jump" data-to="sa-terms"><span class="label">Top search term</span><b>${quote(q.q)}</b><span>${plural(q.n, 'impression')}</span></button>` : '',
+      gap ? `<button type="button" class="sa-ins-c is-gap" data-act="sa-jump" data-to="sa-gaps"><span class="label">Biggest gap</span><b>${esc(gap.name)}</b><span>${gap.n ? `Only ${plural(gap.n, 'visit')}` : 'No visits'} ${esc(periodLabel(d))}<em>${esc(gap.act.l)}${icon('arrow')}</em></span></button>` : '',
+    ].filter(Boolean);
+    return `<section class="sa-ins" aria-label="This period at a glance">
+      <div class="sa-ins-lead">
+        <span class="label">Profile views, ${esc(periodLabel(d))}</span>
+        <div class="sa-ins-big"><b class="num">${fmt.int(m.cur.views)}</b>${m.prev.views ? RN.ui.delta(m.cur.views, m.prev.views) : ''}</div>
+        ${slot((w) => RN.chart.spark(m.series.views, { w, h: 44, stroke: 'var(--leaf)', label: 'Profile views trend' }), 'sa-ins-spark', 44)}
+        <p>${ratio ? `${pct(vr, 1)} of search impressions became views, <b>${ratio >= 1.05 ? `${ratio.toFixed(1)}x` : ratio <= 0.95 ? `${Math.round(ratio * 100)}% of` : 'level with'}</b> the median of ${plural(p.n, 'similar operator')}.` : `${fmt.int(m.cur.imp)} search impressions ${esc(periodLabel(d))}.`}</p>
+      </div>
+      ${cells.length ? `<div class="sa-ins-cells">${cells.join('')}</div>` : ''}
+    </section>`;
+  }
+
+  RN.actions['sa-jump'] = (el) => { const x = document.getElementById(el.dataset.to); if (x) x.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
   /* Filters that surfaced you: live impression filters (Live) first in weight, plus illustrative rows the operator can satisfy */
   const FILTER_ACT = {
@@ -791,19 +833,23 @@
     const vr = m.cur.imp ? m.cur.views / m.cur.imp : 0;
     const sr = m.cur.views ? m.cur.sl / m.cur.views : 0;
     const rows = [
-      { l: 'View rate', you: pct(vr, 1), peer: pct(p.vr, 1), up: vr >= p.vr, tip: 'Profile views divided by search impressions. Your headline, photo and top fit tags drive it.' },
-      { l: 'Shortlist rate', you: pct(sr, 1), peer: pct(p.sr, 1), up: sr >= p.sr, tip: 'Shortlist appearances divided by profile views. Verified proof drives it.' },
-      { l: 'Profile views', you: fmt.int(m.cur.views), peer: fmt.int(p.views), up: m.cur.views >= p.views },
-      { l: 'Intro requests', you: fmt.int(m.cur.intros), peer: fmt.int(p.intros), up: m.cur.intros >= p.intros },
+      { l: 'View rate', you: pct(vr, 1), peer: pct(p.vr, 1), peerV: p.vr, up: vr >= p.vr, tip: 'Profile views divided by search impressions. Your headline, photo and top fit tags drive it.' },
+      { l: 'Shortlist rate', you: pct(sr, 1), peer: pct(p.sr, 1), peerV: p.sr, up: sr >= p.sr, tip: 'Shortlist appearances divided by profile views. Verified proof drives it.' },
+      { l: 'Profile views', you: fmt.int(m.cur.views), peer: fmt.int(p.views), peerV: p.views, up: m.cur.views >= p.views },
+      { l: 'Intro requests', you: fmt.int(m.cur.intros), peer: fmt.int(p.intros), peerV: p.intros, up: m.cur.intros >= p.intros },
     ];
+    // A median of zero says the peer group is too thin to compare, so that row is left out and named below
+    const shown = rows.filter((r) => r.peerV > 0);
+    const hidden = rows.filter((r) => !(r.peerV > 0));
     return `<section class="card sa-card sa-funnel">
-      ${cardHd('Your funnel', `From search to intro, compared with the median of ${plural(p.n, 'similar operator')} in ${esc(RN.fields.catLabel(op.catKey))}`)}
+      ${cardHd('Your funnel', `From search to intro, against the median of ${plural(p.n, 'similar operator')} in ${esc(RN.fields.catLabel(op.catKey))}`)}
       <div class="sa-funnel-g">
         ${htmlFunnel(steps)}
-        <table class="tbl sa-peer"><thead><tr><th><span class="sr-only">Metric</span></th><th class="r">You</th><th class="r">Median</th></tr></thead><tbody>
-          ${rows.map((r) => `<tr><td>${esc(r.l)}${r.tip ? ' ' + RN.ui.tip(r.tip) : ''}</td><td class="r"><b>${r.you}</b> <span class="sa-arrow ${r.up ? 'up' : 'down'}">${icon(r.up ? 'trend-up' : 'trend-down')}<span class="sr-only">${r.up ? 'at or above' : 'below'} the median</span></span></td><td class="r muted">${r.peer}</td></tr>`).join('')}
-        </tbody></table>
+        ${shown.length ? `<table class="tbl sa-peer"><thead><tr><th><span class="sr-only">Metric</span></th><th class="r">You</th><th class="r">Median</th></tr></thead><tbody>
+          ${shown.map((r) => `<tr><td><span class="sa-peer-l">${esc(r.l)}${r.tip ? ' ' + RN.ui.tip(r.tip) : ''}</span></td><td class="r"><b>${r.you}</b> <span class="sa-arrow ${r.up ? 'up' : 'down'}">${icon(r.up ? 'trend-up' : 'trend-down')}<span class="sr-only">${r.up ? 'at or above' : 'below'} the median</span></span></td><td class="r muted">${r.peer}</td></tr>`).join('')}
+        </tbody></table>` : ''}
       </div>
+      ${hidden.length ? `<p class="tiny muted sa-peer-note">${icon('info')}<span>No median for ${hidden.map((r) => r.l.charAt(0).toLowerCase() + r.l.slice(1)).join(' or ')} yet. Too few similar operators had any ${esc(periodLabel(d))}.</span></p>` : ''}
     </section>`;
   }
   /* Stepped widths (square root, 18% floor) so the small steps stay readable next to thousands of impressions.
@@ -830,12 +876,21 @@
     const ticksFor = (vals) => { const nm = RN.chart.niceMax(Math.max(...vals, 1)); const k = nm / Math.pow(10, Math.floor(Math.log10(nm))); return k === 2 || k === 1 ? 4 : 5; };
     const mk = (vals, name) => (w) => RN.chart.line([{ name, values: vals }], thinLabels(lbl, w), { w, h: w < 420 ? 150 : 170, ticks: ticksFor(vals), label: name + ' per day' });
     return `<section class="card sa-card">
-      ${cardHd('Trend', `Per day, ${esc(periodLabel(d))}. Two charts because the scales differ.`)}
+      ${cardHd('Trend', `Per day, ${esc(periodLabel(d))}. Impressions as a line, profile views as daily counts, because the scales differ.`)}
       <div class="sa-grid sa-grid-2 sa-trend">
         <figure><figcaption><b>Search impressions</b><span class="num">${fmt.int(a.totals.impressions)}</span></figcaption>${slot(mk(a.series.impressions, 'Search impressions'), '', 150)}</figure>
-        <figure><figcaption><b>Profile views</b><span class="num">${fmt.int(a.totals.views)}</span></figcaption>${slot(mk(a.series.views, 'Profile views'), '', 150)}</figure>
+        <figure><figcaption><b>Profile views</b><span class="num">${fmt.int(a.totals.views)}</span></figcaption>${slot((w) => dayCols(a.series.views, thinLabels(lbl, w), 'Profile views per day'), '', 150)}</figure>
       </div>
     </section>`;
+  }
+  /* Small daily counts read better as columns than as a line: each column is one day, its count on top */
+  function dayCols(vals, labels, name) {
+    const max = Math.max(...vals, 1);
+    const few = vals.length <= 14;
+    return `<div class="sa-cols-ch${few ? '' : ' is-dense'}" role="img" aria-label="${esc(name)}: ${vals.join(', ')}">
+      <div class="sa-cols-ch-b">${vals.map((v, i) => `<span style="--h:${((v / max) * 100).toFixed(1)}%;--i:${((i / vals.length) * 12).toFixed(2)}"${v ? '' : ' class="is-zero"'}>${few ? `<b>${v}</b>` : ''}<i></i></span>`).join('')}</div>
+      <div class="sa-cols-ch-x">${labels.map((l) => `<span>${esc(l)}</span>`).join('')}</div>
+    </div>`;
   }
 
   /* Live terms come from the model (with clicks from profile views opened off that search); match them to your tags here */
@@ -853,7 +908,7 @@
     const total = a.queries.reduce((s, q) => s + q.n, 0) || 1;
     const words = ((op.headline || '') + ' ' + op.tags.map((x) => x.t).join(' ')).toLowerCase();
     const mq = (q) => RN.data.market.queries.find((x) => x.q.toLowerCase() === q.toLowerCase());
-    return `<section class="card sa-card">
+    return `<section class="card sa-card" id="sa-terms">
       ${cardHd('Search terms that surfaced you', `What companies typed when your card appeared, ${esc(periodLabel(d))}`)}
       ${a.queries.length ? `<div class="tbl-wrap"><table class="tbl sa-terms sa-stack"><thead><tr><th>Search term</th><th class="r">Impressions</th><th class="sa-hide-s">Share</th><th class="r">Profile views</th><th class="r sa-hide-s">View rate</th><th>On your profile</th></tr></thead><tbody>
         ${a.queries.map((q) => {
@@ -887,8 +942,8 @@
       const what = missRev ? `${lab('revenueRange', x.revenueRange)} revenue` : `${lab('employeeRange', x.employeeRange)} employees`;
       return (missRev || missEmp) && (missRev ? x.revenueRange : x.employeeRange) ? `<button type="button" class="act" data-act="sa-do" data-k="ranges">Add ${esc(what)} to your ranges${icon('arrow')}</button>` : '';
     };
-    return `<section class="card sa-card sa-viewers">
-      ${cardHd('Who viewed you', 'Companies by industry, revenue and size. Groups under 5 visits are combined, never named.', `<div class="seg sa-seg" role="group" aria-label="Show companies">${segBtn('all', 'All')}${segBtn('in', 'In your ranges')}${segBtn('out', 'Outside')}</div>`)}
+    return `<section class="card sa-card sa-viewers" id="sa-viewers">
+      ${cardHd('By company type', 'Companies by industry, revenue and size. Groups under 5 visits are combined, never named.', `<div class="seg sa-seg" role="group" aria-label="Show companies">${segBtn('all', 'All')}${segBtn('in', 'In your ranges')}${segBtn('out', 'Outside')}</div>`)}
       ${shown.length ? `<ul class="sa-segs">${shown.map((x) => {
         const n = x.x;
         const counts = [n.views && `<span><b class="num">${n.views}</b> ${n.views === 1 ? 'view' : 'views'}</span>`, n.shortlists && `<span><b class="num">${n.shortlists}</b> ${n.shortlists === 1 ? 'shortlist' : 'shortlists'}</span>`, n.compares && `<span><b class="num">${n.compares}</b> ${n.compares === 1 ? 'compare' : 'compares'}</span>`].filter(Boolean).join('');
@@ -908,7 +963,7 @@
   /* Who is NOT visiting: industries and ranges you list that few or no clients open your profile from */
   function gapsCard(op, a, d) {
     const list = gaps(op, a).slice(0, 4);
-    return `<section class="card sa-card sa-gaps">
+    return `<section class="card sa-card sa-gaps" id="sa-gaps">
       ${cardHd('Who is not visiting', `Industries and company sizes you list, with few or no visits ${esc(periodLabel(d))}. One fix for each.`)}
       ${list.length ? `<ul class="sa-gap-l">${list.map((g) => `<li>
           <span class="sa-segs-ic">${icon('target')}</span>
@@ -916,8 +971,8 @@
             <b>${esc(g.name)}</b>
             <span class="sa-segs-m">You list it · ${g.n ? plural(g.n, 'visit') : 'no visits'} ${esc(periodLabel(d))}${g.live ? ` · ${plural(g.live, 'live company search', 'live company searches')} used this filter` : ''}${g.searches ? ` · about ${fmt.int(g.searches)} searches a month in ${esc(RN.fields.catLabel(op.catKey))} name it` : ''}</span>
             <p class="small">${esc(g.why)}.</p>
+            <button type="button" class="act sa-gap-act" data-act="sa-do" data-k="${esc(g.act.k)}">${esc(g.act.l)}${icon('arrow')}</button>
           </div>
-          <button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="${esc(g.act.k)}">${esc(g.act.l)}</button>
         </li>`).join('')}</ul>
         <p class="tiny muted sa-gap-foot">Not a focus any more? <button type="button" class="link" data-act="sa-do" data-k="ranges">Remove it in Edit profile</button> so companies see where you are strongest.</p>` : RN.ui.empty({ icon: 'check-circle', title: 'Every industry and range you list is getting views', body: 'When one of them goes quiet, it shows here with one thing to change.' })}
     </section>`;
@@ -930,6 +985,7 @@
       // Industries under 5 visits are combined, like the segments above
       if (field === 'industries') { const top = rows.filter((r) => r.n >= 5).slice(0, 5); const rest = tot - top.reduce((s, r) => s + r.n, 0); list = rest > 0 ? top.concat({ l: top.length ? 'Other industries' : 'All industries, each under 5 visits', n: rest, other: true }) : top; }
       else { const order = RN.fields[field].options.map((o) => o.v); list = rows.slice().sort((x, y) => order.indexOf(x.v) - order.indexOf(y.v)); }
+      if (field === 'industries' && list.length === 1 && list[0].other) return `<div class="sa-mix"><h3 class="label">${esc(title)}</h3><p class="sa-mix-none">${icon('lock')}<span><b>${plural(rows.length, 'industry', 'industries')}, none with 5 visits yet.</b> Industries under 5 visits are combined to protect company privacy.${a.days === 7 ? ' Switch to 30 days for more detail.' : ''}</span></p></div>`;
       return `<div class="sa-mix"><h3 class="label">${esc(title)}</h3><ul class="sa-bars">${list.map((r) => meterRow(`${esc(r.l)}${!r.other && mine && mine.includes(r.v) ? ' <span class="sa-fit-you" title="You list this on your profile">You</span>' : ''}`, pct(r.n / tot), r.n / tot, { muted: r.other })).join('')}</ul></div>`;
     };
     return `<section class="card sa-card">
@@ -961,17 +1017,22 @@
     return `<section class="card sa-card">
       ${cardHd('Compared, not chosen', 'When a company compares you with other operators and picks one of them. Anonymous, batched and shown 7 days after the decision.', live.length < lost.length ? illus('Includes illustrative rows', 'Rows marked Illustrative are invented to show the shape. Rows marked Live come from comparisons in this prototype session.') : '')}
       ${pend ? `<p class="note info sa-lost-pend">${icon('clock')}<span>${plural(pend.n, 'more decision')} from a recent comparison ${pend.n === 1 ? 'shows' : 'show'} here on ${esc(fmt.dateShort(pend.until))}, 7 days after the company decided.</span></p>` : ''}
-      ${lost.length ? `<div class="sa-lost">${lost.map((l) => {
-        const actn = EDGE_ACT(l.edge[0]);
+      ${lost.length ? (() => {
+        const acts = lost.map((l) => EDGE_ACT(l.edge[0]));
+        const same = acts.length > 1 && acts.every((x) => x.l === acts[0].l);
+        const btn = (actn) => (actn.k ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="${actn.k}">${esc(actn.l)}${icon('arrow')}</button>` : `<a class="btn btn-line btn-sm" href="#${actn.to}">${esc(actn.l)}${icon('arrow')}</a>`);
+        return `<div class="sa-lost">${lost.map((l, li) => {
+        const actn = acts[li];
         const rateEdge = l.edge.some((x) => /rate/.test(x));
         return `<article class="sa-lost-c">
           <div class="row-nw" style="--gap:12px"><span class="sa-segs-ic">${icon('user')}</span><div class="grow"><b class="sa-lost-n">${esc(l.who)}</b><span class="tiny muted">${l.live ? `<span class="pill pill-good sa-pill-live">Live</span>${esc(fmt.ago(l.ts))}` : illus()}</span></div></div>
           <p class="small">A company compared you and ${esc(verb(l))}${l.n > 1 ? `, ${plural(l.n, 'time')}` : ''}.</p>
           <div class="sa-lost-e"><span class="label">What they had</span><div class="row" style="--gap:6px">${l.edge.map((e) => `<span class="pill pill-line">${esc(cap(e))}</span>`).join('')}</div></div>
           ${rateEdge ? '<p class="tiny muted">Rate is rarely the only reason. Check where you sit on the Rate Index before changing anything.</p>' : ''}
-          ${actn.k ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="${actn.k}">${esc(actn.l)}${icon('arrow')}</button>` : `<a class="btn btn-line btn-sm" href="#${actn.to}">${esc(actn.l)}${icon('arrow')}</a>`}
+          ${same ? '' : btn(actn)}
         </article>`;
-      }).join('')}</div>` : RN.ui.empty({ icon: 'compare', title: 'No comparisons to learn from yet', body: 'When a company compares you with other operators and picks one of them, the difference shows here.' })}
+      }).join('')}</div>${same ? `<div class="sa-lost-one"><span class="small">The same fix closes ${lost.length === 2 ? 'both' : `all ${lost.length}`}.</span>${btn(acts[0]).replace('btn btn-line btn-sm', 'btn btn-sm')}</div>` : ''}`;
+      })() : RN.ui.empty({ icon: 'compare', title: 'No comparisons to learn from yet', body: 'When a company compares you with other operators and picks one of them, the difference shows here.' })}
     </section>`;
   }
 

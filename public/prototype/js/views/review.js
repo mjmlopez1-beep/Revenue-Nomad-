@@ -171,7 +171,8 @@
     const co = rr.reviewer.company || coName || 'your company';
     const ask = rr.source === 'client' ? `${first ? 'your' : 'Your'} review of ${esc(op.first)}’s work at ${esc(co)} helps the next company hire well.` : `${esc(op.first)} asked for your review of the ${esc(co)} engagement.`;
     return `<header class="rv-hd">
-      <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div><b class="serif-up">${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${coName ? ` at ${esc(coName)}` : ''}${start ? ` · ${esc(monthLabel(start))} to ${end ? esc(monthLabel(end)) : 'now'}` : ''}</span></div></div>
+      <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div class="grow"><b>${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${coName ? ` at ${esc(coName)}` : ''}${start ? ` · ${esc(monthLabel(start))} to ${end ? esc(monthLabel(end)) : 'now'}` : ''}</span></div>
+        <span class="rv-who-ris" title="${esc(op.ris.label)}, Reputation Index ${esc(op.ris.score)}">${RN.ui.tierBadge(op.ris.tier || RN.fields.risTierFor(op.ris.score).v, { size: 44, score: op.ris.score, label: `${op.ris.label}, Reputation Index ${op.ris.score}` })}<span><b>${esc(op.ris.label)}</b><small>Reputation Index</small></span></span></div>
       <span class="eyebrow">CORE company review</span>
       <h1 class="h1">How was working with ${esc(op.first)}?</h1>
       <p class="lede">${first ? `${esc(first)}, ` : ''}${ask} Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
@@ -187,7 +188,8 @@
     const dr = getDraft(rr, op);
     const step = dr.step;
     const body = step === 1 ? step1(rr, op, dr.d) : step === 2 ? step2(rr, op, dr.d) : step3(rr, op, dr.d);
-    return `<div class="rv wrap-narrow">
+    return `<div class="rv wrap rv-shell">
+      <div class="rv-col">
       ${header(rr, op, step)}
       <form class="card rv-form" data-submit="rv-next" data-id="${esc(rr.id)}" data-step="${step}" data-change="rv-live" data-input="rv-typing" novalidate>
         ${body}
@@ -197,6 +199,8 @@
         </div>
       </form>
       <p class="rv-fine small muted">${icon('shield')}<span>Reviews publish right away and Revenue Nomad never edits them. ${esc(op.first)} sees your review, not your spend. Spend is used anonymously in the Rate Index.</span></p>
+      </div>
+      <aside class="rv-side" aria-label="Preview of your review" data-rv-preview>${sideHtml(rr, op, dr.d)}</aside>
     </div>`;
   }
 
@@ -217,7 +221,6 @@
   function step1(rr, op, d) {
     const project = d.engagementType === 'project';
     const now = RN.now();
-    const maxMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const co = esc(d.company || 'your company');
     return `${sec('You', 'Shown on the review as your name, title and company.', `
       <div class="grid g-3 rv-g">
@@ -230,9 +233,9 @@
         <div data-rv-f="roleCategory">${RN.w.field('roleCategory', d.roleCategory, { name: 'roleCategory', label: 'Functional role delivered', help: '' })}</div>
         <div class="field" data-rv-f="opTitle"><label for="rv-title">${esc(op.first)}’s title at the time</label>${titleControl(d.roleCategory, d.opTitle, d.opTitleOther)}</div>
         <div class="rv-dates">
-          <div class="grid g-2 rv-g">
-            <div class="field" data-rv-f="start"><label for="rv-start">Start</label><input class="input" type="month" id="rv-start" name="start" value="${esc(d.start)}" max="${maxMonth}"></div>
-            <div class="field" data-rv-f="end"><label for="rv-end">End</label><input class="input" type="month" id="rv-end" name="end" value="${esc(d.ongoing ? '' : d.end)}" max="${maxMonth}" ${d.ongoing ? 'disabled' : ''}></div>
+          <div class="rv-dates-g">
+            ${monthField('start', 'Start', d.start, false, now)}
+            ${monthField('end', 'End', d.ongoing ? '' : d.end, !!d.ongoing, now)}
           </div>
           <label class="switch rv-ongoing"><input type="checkbox" name="ongoing" value="1" ${d.ongoing ? 'checked' : ''}><i></i>Engagement is ongoing</label>
         </div>
@@ -244,11 +247,30 @@
       </div>`)}`;
   }
 
+  /* Month and year as two styled selects; a hidden input carries the YYYY-MM value the draft stores */
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function monthField(key, label, v, off, now) {
+    const [y, m] = String(v || '').split('-');
+    const years = [];
+    for (let yr = now.getFullYear(); yr >= now.getFullYear() - 15; yr--) years.push(yr);
+    if (y && !years.includes(+y)) years.push(+y);
+    const dis = off ? 'disabled' : '';
+    return `<div class="field" data-rv-f="${key}"><label for="rv-${key}-m">${esc(label)}</label>
+      <div class="rv-ym" data-rv-ym="${key}">
+        <select class="select" id="rv-${key}-m" data-part="m" aria-label="${esc(label)} month" ${dis}><option value="">Month</option>${MONTHS.map((x, i) => { const mm = String(i + 1).padStart(2, '0'); return `<option value="${mm}" ${mm === m ? 'selected' : ''}>${x}</option>`; }).join('')}</select>
+        <select class="select" data-part="y" aria-label="${esc(label)} year" ${dis}><option value="">Year</option>${years.map((yr) => `<option value="${yr}" ${String(yr) === y ? 'selected' : ''}>${yr}</option>`).join('')}</select>
+        <input type="hidden" name="${key}" id="rv-${key}" value="${esc(v || '')}" ${dis}>
+      </div></div>`;
+  }
+
   function stars(k, label, v) {
     return `<fieldset class="rv-stars" data-v="${esc(v || '')}" data-rv-f="core_${esc(k)}">
       <legend class="sr-only">${esc(label)} rating, 1 to 5 stars</legend>
-      ${[1, 2, 3, 4, 5].map((n) => `<label class="rv-star" title="${n} of 5: ${STAR_WORDS[n - 1]}"><input type="radio" class="sr-only" name="core_${esc(k)}" value="${n}" ${+v === n ? 'checked' : ''} data-change="rv-star"><span class="sr-only">${n} star${n > 1 ? 's' : ''}, ${STAR_WORDS[n - 1]}</span>${STAR}</label>`).join('')}
-      <span class="rv-star-l" aria-hidden="true">${v ? `<b>${v} of 5</b> ${STAR_WORDS[v - 1]}` : 'Tap a star'}</span>
+      <div class="rv-stars-g">
+        <div class="rv-stars-row">${[1, 2, 3, 4, 5].map((n) => `<label class="rv-star" title="${n} of 5: ${STAR_WORDS[n - 1]}"><input type="radio" class="sr-only" name="core_${esc(k)}" value="${n}" ${+v === n ? 'checked' : ''} data-change="rv-star"><span class="sr-only">${n} star${n > 1 ? 's' : ''}, ${STAR_WORDS[n - 1]}</span>${STAR}</label>`).join('')}</div>
+        <div class="rv-scale" aria-hidden="true"><span>${STAR_WORDS[0]}</span><span>${STAR_WORDS[4]}</span></div>
+      </div>
+      <span class="rv-star-l" aria-hidden="true">${v ? `<b>${v} of 5</b> ${STAR_WORDS[v - 1]}` : 'Pick a score'}</span>
     </fieldset>`;
   }
 
@@ -267,14 +289,21 @@
       <div class="rv-avg" data-rv-avg>${avgHtml(d)}</div>`)}
     ${sec('Overall', '', `<div class="stack" style="--gap:24px">
       <div data-rv-f="overall">${RN.w.field('overallExperience', d.overall, { name: 'overall', id: 'rv-overall', help: `Shown as your quote on ${esc(op.first)}’s profile. Specifics help: the problem, what changed, how it felt to work together.` })}<span class="tiny faint rv-count" data-rv-count>${(d.overall || '').length} / 1,200</span></div>
-      <div data-rv-f="hireAgain">${RN.w.field('hireAgain', d.hireAgain, { name: 'hireAgain', label: `Would you hire ${op.first} again?` })}</div>
+      <div class="field" data-rv-f="hireAgain"><span class="rv-ha-q" id="rv-ha-q">Would you hire ${esc(op.first)} again?</span>
+        <div class="rv-ha" role="radiogroup" aria-labelledby="rv-ha-q">
+          ${[['yes', 'Yes', `I would hire ${op.first} again`, 'check'], ['no', 'No', `I would not hire ${op.first} again`, 'x']].map(([v, l, sub, ic]) => `<label class="rv-ha-o is-${v}"><input type="radio" class="sr-only" name="hireAgain" value="${v}" ${d.hireAgain === v ? 'checked' : ''}><span class="rv-ha-ic">${icon(ic)}</span><span class="rv-ha-t"><b>${l}</b><small>${esc(sub)}</small></span></label>`).join('')}
+        </div>
+        <p class="help">Shown on the review, next to your scores.</p>
+      </div>
     </div>`)}`;
   }
   function avgHtml(d) {
     const vals = coreVals(d);
     const n = vals.filter(Boolean).length;
     const avg = coreAvg(d);
-    return `<span class="label">CORE average</span><b class="num">${n ? fmt1(avg) : '–'}</b><span class="small muted">${n === 4 ? (avg >= 4 ? 'At 4.0 or higher, each focus area you confirm next becomes verified.' : 'Focus areas you confirm are recorded. They verify on reviews averaging 4.0 or higher.') : `${4 - n} of 4 still to rate`}</span>`;
+    return `<div class="rv-avg-v"><span class="label">CORE average</span><b class="num${n ? '' : ' is-empty'}">${n ? fmt1(avg) : `${n} of 4`}</b></div>
+      <div class="rv-avg-dims" aria-hidden="true">${DIMS().map((x, i) => `<span class="${vals[i] ? 'on' : ''}"><b>${esc(x.v)}</b><i><em style="width:${(vals[i] / 5) * 100}%"></em></i><small>${vals[i] || ''}</small></span>`).join('')}</div>
+      <span class="small muted rv-avg-n">${n === 4 ? (avg >= 4 ? 'At 4.0 or higher, each focus area you confirm next becomes verified.' : 'Focus areas you confirm are recorded. They verify on reviews averaging 4.0 or higher.') : n ? `${4 - n} of 4 still to rate.` : 'Rate all four to see the average.'}</span>`;
   }
 
   function tagChip(t, d, hidden) {
@@ -309,7 +338,7 @@
       <summary>${icon('layers')}Tools ${esc(op.first)} used <span class="opt">Optional</span>${icon('chev-down')}</summary>
       <div class="rv-more-b">${RN.w.field('techStack', d.techStack || [], { name: 'techStack', label: 'Tech stack', help: 'Leave empty if you are not sure.' })}</div>
     </details>
-    <section class="rv-preview" aria-label="Preview" data-rv-preview>${previewHtml(rr, op, d)}</section>`;
+`;
   }
   RN.actions['rv-tags-more'] = (el) => {
     moreOpen[el.dataset.id] = true;
@@ -326,15 +355,28 @@
       : avg >= 4 ? `${icon('info')}<span>None picked yet. Each one you confirm turns a claimed focus area into a verified one.</span>`
       : `${icon('info')}<span>None picked yet. Focus areas you confirm are recorded on the review. They verify on reviews averaging 4.0 or higher.</span>`;
   }
+  /* The review as it will sit on the operator's profile: their header, then this review in the list */
+  function sideHtml(rr, op, d) {
+    const n = (op.reviews || []).length;
+    return `<span class="label">Preview on ${esc(op.first)}’s profile</span>
+      <div class="rv-prof">
+        <div class="rv-prof-hd">${RN.ui.avatar(op, 'ava-sm', { decorative: true })}<div class="grow"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></div>${RN.ui.tierBadge(op.ris.tier || RN.fields.risTierFor(op.ris.score).v, { size: 34, score: op.ris.score, label: `${op.ris.label}, Reputation Index ${op.ris.score}` })}</div>
+        <div class="rv-prof-sub"><span>Company reviews</span><span>${n ? `${RN.fmt.int(n)} published, yours is next` : 'Yours will be the first'}</span></div>
+        ${previewHtml(rr, op, d)}
+      </div>
+      <p class="rv-side-note tiny muted">${icon('check-circle')}<span>Updates as you answer. It publishes with your name, title and company.</span></p>`;
+  }
   function previewHtml(rr, op, d) {
     const avg = coreAvg(d);
     const n = (d.tags || []).length + (d.addTags || []).length;
     const q = (d.overall || '').trim();
-    return `<span class="label">How your review will appear</span>
-      <div class="rv-pv">
-        <div class="rv-pv-hd"><div><b class="serif-up">${esc(d.name || 'Your name')}</b><span class="small muted">${esc([d.title, d.company].filter(Boolean).join(', '))} · ${esc(RN.fmt.date(RN.now()))}</span></div>
-          <div class="rv-pv-score"><b class="num">${avg ? fmt1(avg) : '–'}</b>${RN.ui.stars(Math.round(avg * 10) / 10)}</div></div>
-        ${q ? `<p class="rv-pv-q">“${esc(q.length > 220 ? q.slice(0, 217) + '…' : q)}”</p>` : ''}
+    const vals = coreVals(d);
+    const who = { name: d.name || 'Your name', initials: RN.fmt.initials(d.name || 'Y N') };
+    return `<div class="rv-pv">
+        <div class="rv-pv-hd">${RN.ui.avatar(who, 'ava-sm', { decorative: true })}<div class="grow"><b>${esc(d.name || 'Your name')}</b><span class="small muted">${esc([d.title, d.company].filter(Boolean).join(', ') || 'Your title and company')} · ${esc(RN.fmt.dateShort(RN.now()))}</span></div>
+          <div class="rv-pv-score"><b class="num">${avg ? fmt1(avg) : ''}</b>${RN.ui.stars(Math.round(avg * 10) / 10)}</div></div>
+        ${vals.some(Boolean) ? `<div class="rv-pv-core">${DIMS().map((x, i) => `<span class="${vals[i] ? '' : 'is-off'}"><b>${esc(x.v)}</b>${vals[i] || ''}</span>`).join('')}</div>` : ''}
+        ${q ? `<p class="rv-pv-q">“${esc(q.length > 220 ? q.slice(0, 217) + '…' : q)}”</p>` : '<div class="rv-pv-ghost" aria-hidden="true"><i></i><i></i><i></i></div>'}
         <div class="row" style="--gap:8px">
           <span class="pill pill-good">${icon('check-circle')}Verified company</span>
           ${d.hireAgain === 'yes' ? `<span class="pill pill-accent">${icon('check')}Would hire again</span>` : d.hireAgain === 'no' ? '<span class="pill">Would not hire again</span>' : ''}
@@ -355,8 +397,9 @@
     if (step === '3') {
       const avg = coreAvg(dr.d);
       const tn = form.querySelector('[data-rv-tagnote]'); if (tn) tn.innerHTML = tagNote(d, op, avg);
-      const pv = form.querySelector('[data-rv-preview]'); if (pv) pv.innerHTML = previewHtml(rr, op, Object.assign({}, d, { overall: dr.d.overall, hireAgain: dr.d.hireAgain, name: dr.d.name, title: dr.d.title, company: dr.d.company }));
     }
+    const pv = document.querySelector('[data-rv-preview]');
+    if (pv) pv.innerHTML = sideHtml(rr, op, d);
   }
   RN.inputs['rv-live'] = (form, ev) => {
     const t = ev && ev.target;
@@ -373,10 +416,14 @@
       o.hidden = t.value !== '__other';
       if (!o.hidden) o.focus();
     }
+    if (t && t.dataset && t.dataset.part) {
+      const box = t.closest('[data-rv-ym]');
+      const mm = box.querySelector('[data-part="m"]').value, yy = box.querySelector('[data-part="y"]').value;
+      box.querySelector('input[type="hidden"]').value = mm && yy ? `${yy}-${mm}` : '';
+    }
     if (name === 'ongoing') {
-      const end = form.querySelector('#rv-end');
-      end.disabled = t.checked;
-      if (t.checked) end.value = '';
+      const box = form.querySelector('[data-rv-ym="end"]');
+      RN.$$('select, input', box).forEach((x) => { x.disabled = t.checked; if (t.checked) x.value = ''; });
     }
     if (name === 'engagementType') {
       const project = t.value === 'project';
@@ -387,11 +434,14 @@
     sync(form);
     updateLive(form);
   };
+  let liveTimer = null;
   RN.inputs['rv-typing'] = (form, ev) => {
     const t = ev && ev.target;
     if (t && t.name === 'overall') { const c = form.querySelector('[data-rv-count]'); if (c) c.textContent = `${RN.fmt.int(t.value.length)} / 1,200`; }
     if (t && t.closest && t.closest('[data-rv-f]')) clearErr(t.closest('[data-rv-f]'));
     sync(form);
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(() => updateLive(form), 150);
   };
   RN.inputs['rv-star'] = (el) => {
     const fs = el.closest('.rv-stars');
@@ -432,6 +482,9 @@
       if (!d.start) e.push({ f: 'start', m: 'Add the start month.' });
       if (!d.ongoing && !d.end) e.push({ f: 'end', m: 'Add the end month, or mark it ongoing.' });
       if (d.start && !d.ongoing && d.end && d.end < d.start) e.push({ f: 'end', m: 'The end month is before the start.' });
+      const nowYm = RN.now().toISOString().slice(0, 7);
+      if (d.start && d.start > nowYm) e.push({ f: 'start', m: 'The start month is in the future.' });
+      if (!d.ongoing && d.end && d.end > nowYm) e.push({ f: 'end', m: 'The end month is in the future. Mark it ongoing instead.' });
       if (!d.engagementType) e.push({ f: 'engagementType', m: 'Pick the engagement type.' });
       if (!d.employeeRange) e.push({ f: 'employeeRange', m: 'Pick the employee range.' });
       if (!d.revenueRange) e.push({ f: 'revenueRange', m: 'Pick the revenue range.' });

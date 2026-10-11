@@ -290,7 +290,7 @@
     return `<div class="jn-top">
       <span class="step-count">${isReview ? 'Last step · Review' : `Step ${s.step} of ${TOTAL}${STEPS[s.step].optional ? ' · Optional' : ''}`}</span>
       <span class="jn-saved" data-jn-saved>${icon('check-circle')}<span>Draft saved</span></span>
-      ${isReview ? `<button type="button" class="act muted" data-act="join-restart">${icon('refresh')}Start over</button>` : `<button type="button" class="act" data-act="join-sample">${icon('bolt')}Fill sample answers</button>`}
+      ${isReview ? `<button type="button" class="act muted" data-act="join-restart">${icon('refresh')}Start over</button>` : `<button type="button" class="act" data-proto data-act="join-sample">${icon('bolt')}Fill sample answers</button>`}
     </div>
     <div class="stepper" aria-hidden="true">${Array.from({ length: TOTAL }, (_, i) => `<i class="${i < Math.min(s.step, TOTAL) ? 'on' : ''}"></i>`).join('')}</div>`;
   }
@@ -309,8 +309,16 @@
   function locBox(d) {
     const loc = locate(d);
     if (!d.country || !loc.code) return `<p class="jn-loc-hint small muted">${icon('pin')}<span>Try 80202, 10001 or 94105 to see your city and time zone fill in.</span></p>`;
-    if (loc.found) return `<div class="jn-loc ok">${icon('pin')}<div><b>${esc(loc.city)}</b><span>${esc(loc.tz)}</span></div><span class="jn-loc-src">From ${esc(d.postalCode.trim().toUpperCase())}</span></div>`;
+    if (loc.found) return `<div class="jn-loc ok">${icon('pin')}<div><b>${esc(loc.city)}</b><span>${esc(loc.tz)}</span></div><span class="jn-loc-src">From postal code ${esc(d.postalCode.trim().toUpperCase())}</span></div>`;
     return `<div class="jn-loc miss">${icon('info')}<div><b>We could not match ${esc(d.postalCode.trim().toUpperCase())} to a city</b><span>${loc.tz ? `Time zone: ${esc(loc.tz)}. ` : ''}Add your city below.</span></div></div>`;
+  }
+  /* After a LinkedIn profile URL is entered: who we think it is, so the applicant can confirm at a glance */
+  function liChip(d) {
+    const m = String(d.linkedin || '').match(/linkedin\.com\/in\/([^/?#\s]+)/i);
+    if (!m) return '';
+    const name = String(d.fullName || '').trim() || nameFromLinkedIn(d.linkedin);
+    const who = { name: name || 'LinkedIn profile', initials: RN.fmt.initials(name || 'L I'), photo: d.photo || '' };
+    return `<div class="jn-li">${RN.ui.avatar(who, 'ava-sm', { decorative: true })}<div><b>${esc(who.name)}</b><span>linkedin.com/in/${esc(m[1].slice(0, 48))}</span></div><span class="jn-li-ok">${icon('check-circle')}Profile link added</span></div>`;
   }
   function counted(key, v, opts) {
     const max = RN.fields[key].maxlength;
@@ -401,7 +409,7 @@
     }
     if (n === 2) {
       const loc = locate(d);
-      return `${f('linkedin', { help: 'We fill in your name from it. The team uses it to check your work history.' })}
+      return `<div class="jn-li-wrap">${f('linkedin', { help: 'We fill in your name from it. The team uses it to check your work history.' })}<div data-jn-li>${liChip(d)}</div></div>
         <div class="jn-2">${f('fullName')}${f('email', { help: 'We send your review status here.' })}</div>
         <div class="jn-group">
           <div class="jn-2">${f('country', { help: '' })}${f('postalCode', { help: '' })}</div>
@@ -540,7 +548,12 @@
           ${foot(s, primary, skip)}
         </form>`;
     }
-    return `<div class="wrap jn-flow">${rail(s)}<section class="jn-main ${s.step === REVIEW ? 'is-review' : ''}" data-jn-step="${s.step}">${main}</section></div>`;
+    const live = s.step === REVIEW ? '' : `<aside class="jn-live" aria-label="Live preview of your card">
+        <span class="label">Your card in search</span>
+        <div data-jn-prev>${previewCard(d)}</div>
+        <p class="tiny muted">${icon('eye')}<span>Fills in as you answer. Companies see it once the team approves your profile.</span></p>
+      </aside>`;
+    return `<div class="wrap jn-flow ${live ? 'has-live' : ''}">${rail(s)}<section class="jn-main ${s.step === REVIEW ? 'is-review' : ''}" data-jn-step="${s.step}">${main}</section>${live}</div>`;
   }
 
   function enhanceCats(root) {
@@ -549,7 +562,7 @@
       if (!info || b.dataset.jnEnh) return;
       b.dataset.jnEnh = '1';
       const label = b.textContent.trim();
-      b.innerHTML = `<span class="jn-cat-ico" style="--cc:${RN.fields.catColor(b.dataset.v)}">${icon(info.i)}</span><span class="jn-cat-l">${esc(label)}</span><span class="jn-cat-d">${esc(info.d)}</span><span class="jn-cat-ok" aria-hidden="true">${icon('check')}</span>`;
+      b.innerHTML = `<span class="jn-cat-ico">${icon(info.i)}</span><span class="jn-cat-l">${esc(label)}</span><span class="jn-cat-d">${esc(info.d)}</span><span class="jn-cat-ok" aria-hidden="true">${icon('check')}</span>`;
     });
   }
 
@@ -610,6 +623,7 @@
         if (inp) inp.value = guess;
       }
     }
+    if (name === 'fullName' || name === 'linkedin') { const li = form.querySelector('[data-jn-li]'); if (li) li.innerHTML = liChip(d); }
     if (name === 'startDate') s.touchedStart = true;
     if (name === 'availability' && !s.touchedStart && d.availability) {
       d.startDate = isoDay(addDays(RN.now(), START_OFFSET[d.availability] || 0));
@@ -618,7 +632,13 @@
     }
     if (name === 'country' || name === 'postalCode' || name === 'city') {
       const loc = locate(d);
-      const lb = form.querySelector('[data-jn-loc]'); if (lb) lb.innerHTML = locBox(d);
+      const lb = form.querySelector('[data-jn-loc]');
+      if (lb) {
+        const had = !!lb.querySelector('.jn-loc');
+        lb.innerHTML = locBox(d);
+        // First match: keep the city card clear of the sticky Back / Continue bar
+        if (!had && lb.querySelector('.jn-loc')) setTimeout(() => { const r = lb.getBoundingClientRect(); if (r.bottom > window.innerHeight - 110) window.scrollBy({ top: r.bottom - window.innerHeight + 130, behavior: 'smooth' }); }, 60);
+      }
       const cb = form.querySelector('[data-jn-city]'); if (cb) cb.hidden = !(d.postalCode && d.country && !loc.found);
       const ub = form.querySelector('[data-jn-ush]'); if (ub) ub.hidden = !(d.country && d.country !== US);
     }
@@ -634,6 +654,8 @@
     RN.store.save();
     const railEl = RN.$('.jn-rail');
     if (railEl) railEl.outerHTML = rail(s);
+    const prev = RN.$('[data-jn-prev]');
+    if (prev) prev.innerHTML = previewCard(d);
     flashSaved();
     if (s.tried[s.step]) showErrors(form, errorsFor(s.step, d));
   };
@@ -885,10 +907,19 @@
     const cont = hasDraft() && s;
     const app = latestApp();
     const persona = RN.store.state.persona;
+    const faces = browseFaces();
     return `<section class="wrap jn-hero">
-        <span class="eyebrow">Join Revenue Nomad</span>
-        <h1 class="h1">Are you hiring, or <span class="serif">are you the hire?</span></h1>
-        <p class="lede">Companies never need an account to browse or post an engagement, and pay no fees. Fractional operators apply once and get a profile companies can trust.</p>
+        <div class="jn-hero-copy">
+          <span class="eyebrow">Join Revenue Nomad</span>
+          <h1 class="h1">Are you hiring, or <span class="serif">are you the hire?</span></h1>
+          <p class="lede">Companies never need an account to browse or post an engagement, and pay no fees. Fractional operators apply once and get a profile companies can trust.</p>
+        </div>
+        <dl class="jn-facts" aria-label="Network facts">
+          <div><dt>Operators on the live network<span data-proto> (${RN.fmt.int(RN.model.ops.length)} in this prototype)</span></dt><dd class="num">${esc(RN.data.market.network.operators)}</dd></div>
+          <div><dt>Role categories, from Sales Leadership to AI GTM</dt><dd class="num">${RN.fields.roleCategory.options.length}</dd></div>
+          <div><dt>Business days to review an application</dt><dd class="num">2</dd></div>
+          <div><dt>In fees for companies to browse, post and hire</dt><dd class="num">$0</dd></div>
+        </dl>
       </section>
       <section class="wrap jn-paths" aria-label="Choose how you use Revenue Nomad">
         <article class="jn-path">
@@ -900,8 +931,14 @@
             <a class="jn-link" href="#engagement.new">${icon('briefcase')}<span><b>Post an engagement</b><small>Start from a scoped Blueprint and get ranked matches</small></span>${icon('arrow')}</a>
             <a class="jn-link" href="#talk">${icon('message')}<span><b>Talk to us</b><small>Tell us what you need and we suggest operators</small></span>${icon('arrow')}</a>
           </div>
-          <p class="jn-hire-note">${icon('clock')}<span>Log in to see rates and Match Signals for your company. Operators answer intro requests within 72 hours.</span></p>
-          <a class="btn btn-lg jn-path-cta" href="#browse">Browse talent${icon('arrow')}</a>
+          ${faces.length ? `<div class="jn-faces">
+            <span class="label">Operators you can browse today</span>
+            <ul>${faces.map((o) => `<li><a href="#op.${esc(o.slug)}">${RN.ui.avatar(o, 'ava-sm', { decorative: true })}<span><b>${esc(o.name)}</b><small>${esc(o.role)}</small></span></a></li>`).join('')}</ul>
+          </div>` : ''}
+          <div class="jn-path-foot">
+            <a class="btn btn-lg jn-path-cta" href="#browse">Browse talent${icon('arrow')}</a>
+            <p class="jn-hire-note">${icon('clock')}<span>Operators answer intro requests within 72 hours. Log in to see rates and Match Signals.</span></p>
+          </div>
         </article>
         <article class="jn-path jn-path-op">
           <div class="jn-path-hd"><span class="jn-path-ico">${icon('user')}</span><span class="label">For fractional operators</span></div>
@@ -912,23 +949,34 @@
             <li>${icon('seal')}<span><b>Reputation Index</b>A 0 to 100 score built from verified company reviews. Every approved profile starts at 50.</span></li>
             <li>${icon('link')}<span><b>Proof links</b>Send a prospect a tracked version of your profile and see which sections they read.</span></li>
           </ul>
-          <p class="jn-honest">${icon('shield')}<span>The network is curated. The team checks the work history on every application within 2 business days before a profile goes live.</span></p>
-          <p class="jn-honest">${icon('clock')}<span>Free to apply.</span></p>
+          ${startStrip()}
+          <p class="jn-honest">${icon('shield')}<span>Curated and free to apply. A person on the team checks the work history on every application within 2 business days, before a profile goes live.</span></p>
           ${app && app.status === 'in_review'
             ? `<div class="jn-path-status"><span>Your application is in review</span><a class="btn btn-leaf btn-lg jn-path-cta" href="#join.done">See status${icon('arrow')}</a><button type="button" class="act" data-act="join-start">Start a new application</button></div>`
             : cont
               ? `<div class="jn-path-status"><span>Draft saved at step ${Math.min(s.step, TOTAL)} of ${TOTAL}</span><button type="button" class="btn btn-leaf btn-lg jn-path-cta" data-act="join-start">Continue application${icon('arrow')}</button></div>`
-              : `<button type="button" class="btn btn-leaf btn-lg jn-path-cta" data-act="join-start">Start application${icon('arrow')}</button>`}
+              : `<div class="jn-path-status"><button type="button" class="btn btn-leaf btn-lg jn-path-cta" data-act="join-start">Start application${icon('arrow')}</button></div>`}
           <a class="jn-why" href="#operators">Why operators join${icon('arrow')}</a>
         </article>
       </section>
-      <section class="wrap" aria-label="Network facts"><div class="jn-facts">
-        <div><b class="num">${esc(RN.data.market.network.operators)}</b><span>operators on the live network (${RN.fmt.int(RN.model.ops.length)} in this prototype)</span></div>
-        <div><b class="num">${RN.fields.roleCategory.options.length}</b><span>role categories, from Sales Leadership to AI GTM</span></div>
-        <div><b class="num">2</b><span>business days to review an application</span></div>
-        <div><b class="num">$0</b><span>in fees for companies to browse, post, request intros and hire</span></div>
-      </div></section>
       <p class="wrap jn-login small muted">${persona === 'operator' ? `Signed in as ${esc(RN.personas.operator.name)}. Your profile is live. <a class="link" href="#studio">Open Studio</a>` : persona === 'buyer' ? `Signed in as ${esc(RN.personas.buyer.name)}. <a class="link" href="#buyer">Open your workspace</a>` : `Already on Revenue Nomad? <button type="button" class="act" data-act="login">Log in</button>`}</p>`;
+  }
+  /* Where a new profile starts on the Reputation Index, and the tiers above it */
+  function startStrip() {
+    const tiers = RN.fields.risTier.options.filter((t) => ['proven', 'trusted', 'elite', 'apex'].includes(t.v)).sort((a, b) => a.min - b.min);
+    return `<div class="jn-start">
+      <span class="jn-start-seal">${RN.ui.tierBadge('emerging', { size: 56, score: 50, label: 'Emerging, Reputation Index 50' })}</span>
+      <div class="jn-start-b">
+        <b>You start at 50, Emerging</b>
+        <ol class="jn-start-rail" aria-label="Tiers above Emerging">${tiers.map((t) => `<li title="${esc(t.l)}, from ${esc(t.min)}">${RN.ui.tierBadge(t.v, { size: 22 })}<small>${esc(t.l)}</small></li>`).join('')}</ol>
+      </div>
+    </div>`;
+  }
+  /* Three operators with photos from different role categories, highest Reputation Index first */
+  function browseFaces() {
+    const seenCat = new Set();
+    return RN.model.ops.filter((o) => !o.hidden && o.photo).slice().sort((a, b) => b.ris.score - a.ris.score)
+      .filter((o) => (seenCat.has(o.catKey) ? false : seenCat.add(o.catKey))).slice(0, 3);
   }
 
   /* ---------- After-submit landing (#join.done, comment H328) ---------- */
@@ -940,32 +988,49 @@
   }
   function ladderBlock() {
     return `<div class="jn-ladder-wrap">
-      <div class="jn-ladder-hd"><h3 class="h4">The Reputation Index ladder</h3>${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')}</div>
-      <p class="small muted">One score, the same for you and for companies. It rises with verified reviews, verified fit tags, a complete profile and recent engagements.</p>
+      <div class="jn-ladder-copy">
+        <span class="eyebrow">Where you start</span>
+        <h3 class="h3 jn-ladder-hd">The Reputation Index ladder ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')}</h3>
+        <p class="small muted">One score, the same for you and for companies. It rises with verified reviews, verified fit tags, a complete profile and recent engagements.</p>
+      </div>
       ${ladder()}
     </div>`;
+  }
+  /* The person who reviews applications: the Revenue Nomad team account (the admin persona) */
+  function reviewer() {
+    const a = RN.personas.admin || {};
+    const op = RN.model.ops.find((o) => o.name === a.name && o.photo) || null;
+    return { name: a.name || 'The Revenue Nomad team', sub: a.sub || 'Revenue Nomad team', first: a.first || '', photo: op ? op.photo : '', initials: RN.fmt.initials(a.name || 'R N') };
   }
   function renderDone() {
     const app = latestApp();
     const gain = RN.model.risGain('review');
     const reached = 50 + gain * 3;
     if (!app) {
-      return `<section class="night jn-done-hero"><div class="wrap">
-          <span class="eyebrow">Operator applications</span>
-          <h1 class="h1">What happens after <span class="serif">you apply</span></h1>
-          <p class="lede">The team reviews every application within 2 business days. Approved profiles go live in the directory at Reputation Index 50, tier Emerging.</p>
-          <div class="row jn-done-actions"><button type="button" class="btn btn-leaf btn-lg" data-act="join-start">${hasDraft() ? 'Continue application' : 'Start application'}${icon('arrow')}</button><a class="btn btn-line btn-lg" href="#operators">Why operators join</a></div>
+      const draftOn = hasDraft();
+      return `<section class="night jn-done-hero"><div class="wrap jn-done-hero-g">
+          <div class="jn-done-copy">
+            <span class="eyebrow">Operator applications</span>
+            <h1 class="h1">What happens after <span class="serif">you apply</span></h1>
+            <p class="lede">The team reviews every application within 2 business days. Approved profiles go live in the directory at Reputation Index 50, tier Emerging.</p>
+            <div class="row jn-done-actions"><button type="button" class="btn btn-leaf btn-lg" data-act="join-start">${draftOn ? 'Continue application' : 'Start application'}${icon('arrow')}</button><a class="btn btn-line btn-lg" href="#operators">Why operators join</a></div>
+          </div>
+          <div class="jn-done-vis" aria-hidden="true">
+            <span class="label">Your card in search, once approved</span>
+            ${previewCard(draftOn ? RN.store.state.signup.data : {})}
+          </div>
         </div></section>
         <section class="wrap jn-done-body"><div class="jn-done-grid">
-          <div class="jn-done-main">${timeline(null, gain, reached)}${ladderBlock()}</div>
+          <div class="jn-done-main">${timeline(null, gain, reached)}</div>
           <aside class="jn-done-side"><div class="card jn-dash">
             <span class="jn-dash-ico">${icon('doc')}</span>
             <h3 class="h4">Apply in about 8 minutes</h3>
-            <ol class="jn-steplist">${STEPS.slice(1, REVIEW).map((st) => `<li>${esc(st.label)}${st.optional ? ' <span class="muted">(optional)</span>' : ''}</li>`).join('')}</ol>
-            <p class="small muted">${TOTAL} short steps, one question group each. Your draft saves as you go.</p>
-            <button type="button" class="btn btn-block" data-act="join-start">${hasDraft() ? 'Continue application' : 'Start application'}${icon('arrow')}</button>
+            <ol class="jn-steplist">${STEPS.slice(1, REVIEW).map((st) => `<li><span>${esc(st.label)}${st.optional ? '<small>Optional</small>' : ''}</span></li>`).join('')}</ol>
+            <p class="small muted">${TOTAL} short steps, one question group each. Your draft saves as you go, so you can stop and come back.</p>
           </div></aside>
-        </div></section>`;
+        </div>
+        ${ladderBlock()}
+        </section>`;
     }
     const p = app.profile;
     const d = Object.assign({}, p, { fullName: p.name, city: p.city });
@@ -974,46 +1039,47 @@
     const st = app.status || 'in_review';
     const statusLabel = { in_review: 'In review', approved: 'Approved, going live', live: 'Live', changes_requested: 'Changes requested', rejected: 'Not approved' }[st] || 'In review';
     const live = st === 'live';
+    const rv = reviewer();
     const missing = [!p.photo && 'photo', !p.video && 'intro video'].filter(Boolean);
     const lede = live ? 'Your profile shows in Browse and search. Studio now tracks who views it.'
       : st === 'changes_requested' ? `The team asked for a change. Check the email sent to <b>${esc(p.email)}</b> for what to fix.`
-        : `A person on the team reviews every application within 2 business days. Expect an email at <b>${esc(p.email)}</b> by ${esc(dayName(reviewBy))}. Your profile stays hidden until it is approved.`;
-    return `<section class="night jn-done-hero"><div class="wrap">
-        <span class="jn-done-seal">${icon('check')}</span>
-        <span class="eyebrow">Application received</span>
-        <h1 class="h1">${live ? `You are live, ${esc(p.first)}.` : `Thanks, ${esc(p.first)}. Your profile is <span class="serif">in review.</span>`}</h1>
-        <p class="lede">${lede}</p>
-        <div class="jn-done-meta">
-          ${RN.ui.statusPill('application', st, statusLabel)}
-          <span>Submitted ${esc(RN.fmt.date(sub))}</span>
-          <span>Reference <span class="mono">${esc(app.id)}</span></span>
+        : `Your application is in. Expect an email at <b>${esc(p.email)}</b> by ${esc(dayName(reviewBy))}. Your profile stays hidden until it is approved.`;
+    return `<section class="night jn-done-hero"><div class="wrap jn-done-hero-g">
+        <div class="jn-done-copy">
+          <span class="jn-done-seal">${icon('check')}</span>
+          <span class="eyebrow">${live ? 'Profile live' : 'Application received'}</span>
+          <h1 class="h1">${live ? `You are live, <span class="serif">${esc(p.first)}.</span>` : `Received, <span class="serif">${esc(p.first)}.</span>`}</h1>
+          <p class="lede">${lede}</p>
+          ${live ? '' : `<div class="jn-reviewer">
+            ${RN.ui.avatar(rv, 'ava-md', { decorative: true })}
+            <div><span class="label">Your reviewer</span><b>${esc(rv.name)}</b><span>${esc(rv.sub)} · reviews it by ${esc(dayName(reviewBy))}</span></div>
+          </div>`}
+          <div class="jn-done-meta">
+            ${RN.ui.statusPill('application', st, statusLabel)}
+            <span>Submitted ${esc(RN.fmt.date(sub))}</span>
+            <span>Reference <span class="jn-ref">${esc(app.id)}</span></span>
+          </div>
+        </div>
+        <div class="jn-done-vis">
+          <span class="label">Your card in search${live ? '' : ', once approved'}</span>
+          ${previewCard(d)}
+          <p class="jn-visible">${icon('eye')}<span>${live ? 'Visible in Browse and search now.' : 'Hidden until approved. Then it shows in Browse and search the same day.'}</span></p>
         </div>
       </div></section>
-      <section class="wrap jn-dash-wrap" aria-label="Your dashboard">
-        <div class="jn-dash-banner">
-          <span class="jn-dash-ico">${icon('chart')}</span>
-          <div class="jn-dash-copy">
-            <h2 class="h4">View your dashboard</h2>
-            <p class="small">${live ? 'Studio shows who viewed you, the searches you appeared in and how your rate compares with the Rate Index.' : 'Studio is where you will see who viewed you, the searches you appeared in and how your rate compares with the Rate Index. Your own numbers start the day your profile goes live.'}</p>
-            <p class="tiny muted">${icon('info')}<span>In this prototype, Studio opens as sample operator Matt Lopez, with his data.</span></p>
-          </div>
-          <button type="button" class="btn" data-act="persona" data-p="operator" data-to="studio">View your dashboard${icon('arrow')}</button>
-        </div>
-      </section>
       <section class="wrap jn-done-body">
         <div class="jn-done-grid">
-          <div class="jn-done-main">
-            ${timeline(app, gain, reached)}
-            ${ladderBlock()}
-          </div>
+          <div class="jn-done-main">${timeline(app, gain, reached, rv)}</div>
           <aside class="jn-done-side">
-            <div class="jn-side-block">
-              <span class="label">Your card in search${live ? '' : ', once approved'}</span>
-              ${previewCard(d)}
-              <p class="small muted jn-visible">${icon('eye')}<span>${live ? 'Visible in Browse and search now.' : 'Hidden until the team approves it. Then it shows in Browse and search the same day.'}</span></p>
+            <div class="card jn-dash">
+              <span class="jn-dash-ico">${icon('chart')}</span>
+              <h2 class="h4">Your dashboard</h2>
+              <p class="small">${live ? 'Studio shows who viewed you, the searches you appeared in and how your rate compares with the Rate Index.' : 'Studio is where you will see who viewed you, the searches you appeared in and how your rate compares with the Rate Index. Your own numbers start the day your profile goes live.'}</p>
+              <p class="tiny muted jn-dash-proto" data-proto>${icon('info')}<span>In this prototype, Studio opens as sample operator Matt Lopez, with his data.</span></p>
+              <button type="button" class="btn btn-line btn-block" data-act="persona" data-p="operator" data-to="studio">Preview Studio${icon('arrow')}</button>
             </div>
           </aside>
         </div>
+        ${ladderBlock()}
         <div class="jn-prep">
           <span class="eyebrow">While you wait</span>
           <div class="jn-prep-grid">
@@ -1024,15 +1090,16 @@
         </div>
       </section>`;
   }
-  function timeline(app, gain, reached) {
+  function timeline(app, gain, reached, rv) {
     const sub = app ? new Date(app.submittedAt) : RN.now();
     const reviewBy = addBiz(sub, 2);
     const status = app ? app.status || 'in_review' : '';
     const reviewed = ['approved', 'live'].includes(status);
     const live = status === 'live';
+    const who = rv && rv.name ? `${rv.name} from the team reviews it` : 'A person on the team reviews it';
     const items = [
-      { st: app ? 'done' : '', ic: 'send', when: app ? `Done · ${RN.fmt.dateShort(sub)}` : 'Day 0', t: app ? 'Profile submitted' : 'You submit your profile', d: 'Your answers are saved with the same fields companies filter by, so nothing needs re-entering.' },
-      { st: reviewed ? 'done' : app ? 'now' : '', ic: 'shield', when: app ? (reviewed ? 'Done' : `By ${dayName(reviewBy)}`) : 'Within 2 business days', t: 'A person on the team reviews it', d: 'We check your LinkedIn and work history against your answers, and may ask for a short call. If something needs a change, we email you what to fix. Your profile stays hidden until it is approved.' },
+      { st: app ? 'done' : '', ic: 'send', when: app ? `Day 0 · Done ${RN.fmt.dateShort(sub)}` : 'Day 0', t: app ? 'Application received' : 'You submit your profile', d: app ? 'Your answers are saved with the same fields companies filter by, and a confirmation is on its way to your inbox.' : 'Your answers are saved with the same fields companies filter by, so nothing needs re-entering.' },
+      { st: reviewed ? 'done' : app ? 'now' : '', ic: 'shield', when: app ? (reviewed ? 'Done' : `In progress · by ${dayName(reviewBy)}`) : 'Within 2 business days', t: app ? who : 'A person on the team reviews it', d: 'We check your LinkedIn and work history against your answers, and may ask for a short call. If something needs a change, we email you what to fix. Your profile stays hidden until it is approved.' },
       { st: live ? 'done' : '', ic: 'eye', when: 'Same day as approval', t: 'Your profile goes live', d: 'You appear in Browse, search and your role category page at Reputation Index 50, tier Emerging.' },
       { st: '', ic: 'star', when: 'First weeks', t: 'Request 3 company reviews to reach Proven', d: `Each completed review adds about ${gain} points and verifies the fit tags the company confirms. Three reviews take a new profile from 50 to about ${reached}, tier Proven.` },
       { st: '', ic: 'chart', when: 'From the day you go live', t: 'Studio shows who viewed you', d: 'See the company size and industry of every visitor, the searches you appeared in, and when you were compared and not chosen.' },

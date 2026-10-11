@@ -425,3 +425,27 @@
   .sb-head-r { width: 100%; }
   .sb-ft-btn { flex: 1 1 0; min-width: 0; height: auto; min-height: 48px; padding: 8px 12px; white-space: normal; line-height: 1.2; text-align: center; }
 }
+
+/* ---------- Engagements, before the first hire ---------- */
+.sb-he { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-8); align-items: center; padding: var(--s-8); }
+.sb-he-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.sb-he-ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--tint); border: 1px solid var(--tint-line); color: var(--accent); }
+.sb-he-ico svg { width: 22px; height: 22px; }
+.sb-he-copy .small { max-width: 46ch; line-height: 1.55; }
+.sb-he-open { font-size: var(--t-14); color: var(--ink-2); padding: 10px 14px; border-radius: 10px; background: var(--good-bg); }
+.sb-he-open b { font-family: var(--f-display); color: var(--accent); }
+.sb-he-ghost { display: flex; flex-direction: column; gap: 10px; }
+.sb-he-card { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: var(--r-card); border: 1.5px dashed var(--line); background: var(--card-2); transform: rotate(1deg); }
+.sb-he-bar { display: block; height: 12px; border-radius: 99px; background: var(--sunk); }
+.sb-he-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.sb-he-facts span, .sb-he-pay span { display: block; margin-bottom: 6px; font-family: var(--f-display); font-size: var(--t-11); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
+.sb-he-facts .sb-he-bar { height: 10px; width: 80%; }
+.sb-he-pay { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 12px; border: 1px solid var(--line-2); overflow: hidden; }
+.sb-he-pay > div { padding: 12px 14px; }
+.sb-he-pay .is-you { background: var(--tint); }
+.sb-he-pay b { font-family: var(--f-display); font-size: var(--t-18); color: var(--ink); }
+.sb-he-pay .is-you b { color: var(--accent); }
+@media (max-width: 900px) {
+  .sb-he { grid-template-columns: minmax(0, 1fr); padding: var(--s-6) var(--s-5); }
+  .sb-he-card { transform: none; }
+}

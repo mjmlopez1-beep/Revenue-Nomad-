@@ -599,8 +599,32 @@
           ${active.length ? `<div class="stack" style="--gap:14px">${active.map(hireItem).join('')}</div>` : `<p class="sb-caught">${icon('check-circle')}No active engagements right now.</p>`}</section>
         ${list.length > active.length ? `<section class="sb-group" aria-labelledby="sb-g-ended"><h2 class="eyebrow sb-group-h" id="sb-g-ended">Ended<span class="sb-count">${list.length - active.length}</span></h2>
           <div class="stack" style="--gap:14px">${list.filter((h) => h.status === 'ended').map(hireItem).join('')}</div></section>` : ''}`
-      : RN.ui.empty({ icon: 'briefcase', title: 'No engagements yet', body: 'When a company hires you, the terms they confirm show here: rate, available time, start date and term, with what you bill and take home each month.', cta: `<div class="row" style="justify-content:center"><a class="btn btn-sm" href="#studio.inbox">Open your inbox</a></div>` })}
+      : emptyHires(op)}
     </div>`;
+  }
+  /* No hires yet: what a confirmed engagement will look like, drawn with the operator's own rate, and the
+     conversations already open in the inbox that could become one */
+  function emptyHires(op) {
+    const open = st().intros.filter((i) => i.opId === op.id && ['pending', 'interested', 'intro_approved', 'introduced'].includes(i.status)).length
+      + st().projects.filter((p) => (p.invited || []).includes(op.id) && ['posted', 'in_progress'].includes(p.status)).length;
+    return `<section class="card sb-he">
+      <div class="sb-he-copy">
+        <span class="sb-he-ico">${icon('briefcase')}</span>
+        <h2 class="h4">No engagements yet</h2>
+        <p class="small muted">When a company hires you, the terms they confirm show here: rate, available time, start date and term, with what you bill and take home each month.</p>
+        ${open ? `<p class="sb-he-open"><b>${open}</b> ${open === 1 ? 'conversation in your inbox could become one.' : 'conversations in your inbox could become one.'}</p>` : ''}
+        <div><a class="btn btn-sm" href="#studio.inbox">Open your inbox${icon('arrow')}</a></div>
+      </div>
+      <div class="sb-he-ghost" aria-hidden="true">
+        <span class="label">How one will look</span>
+        <div class="sb-he-card">
+          <div class="row" style="--gap:8px"><span class="pill pill-line">${icon('handshake')}Engagement</span><span class="pill pill-good">Active</span></div>
+          <i class="sb-he-bar" style="width:46%"></i>
+          <div class="sb-he-facts">${['Start', 'Initial term', 'Available time'].map((k) => `<div><span>${k}</span><i class="sb-he-bar"></i></div>`).join('')}</div>
+          <div class="sb-he-pay"><div><span>Your rate</span><b>${op.rate ? esc(RN.fmt.rate(op.rate)) : 'Your rate'}</b></div><div class="is-you"><span>Your take-home</span><b>${op.rate ? esc(RN.fmt.rate(takeHome(op.rate))) : 'After the fee'}</b></div></div>
+        </div>
+      </div>
+    </section>`;
   }
 
   /* ======================================================================
@@ -791,7 +815,7 @@
         <div class="row sb-proof-acts" style="--gap:8px">
           <button type="button" class="btn btn-line btn-sm" data-act="sb-copy" data-text="${esc(proofUrl(l.id))}" data-msg="Proof link copied">${icon('copy')}Copy link</button>
           <a class="btn btn-ghost btn-sm" href="#proof.${esc(l.id)}" title="See the page as the prospect will">${icon('eye')}Preview</a>
-          <button type="button" class="act" data-act="persona" data-p="visitor" data-to="proof.${esc(l.id)}" title="Prototype: sign out and open the link as the prospect, so the visit is tracked">Open as prospect</button>
+          <button type="button" class="act" data-proto data-act="persona" data-p="visitor" data-to="proof.${esc(l.id)}" title="Prototype: sign out and open the link as the prospect, so the visit is tracked">Open as prospect</button>
         </div>
       </div>
       <div class="sb-proof-stats">
