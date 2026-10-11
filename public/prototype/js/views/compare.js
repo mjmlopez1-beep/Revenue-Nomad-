@@ -84,16 +84,25 @@
   }
   function rateCell(op) {
     if (!op.rate) return NA;
-    if (RN.store.state.persona === 'visitor') { const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null; return `<b class="cmp-v cmp-v-sm">${rg ? esc(rg.text) : '—'}</b>${sub('Typical monthly. <button type="button" class="act" data-act="cmp-login">Exact rate after sign-in</button>')}`; }
+    if (RN.store.state.persona === 'visitor') { const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null; return `<b class="cmp-v cmp-v-sm">${rg ? esc(rg.text) : '—'}</b>${sub('<button type="button" class="act" data-act="cmp-login">Exact hourly rate after sign-in</button>')}`; }
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
     return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}/hr`) : ''}`;
+  }
+  // Registry label, or a readable fallback for stored values the registry does not list (e.g. mid_market)
+  const SEG = { smb: 'SMB', mid_market: 'Mid-market', enterprise: 'Enterprise', plg: 'PLG' };
+  function lab(key, v) {
+    const o = RN.w.opt && RN.w.opt(key, v);
+    if (o) return o.l;
+    const k = String(v == null ? '' : v);
+    if (SEG[k.toLowerCase()]) return SEG[k.toLowerCase()];
+    return /[_]/.test(k) || k === k.toLowerCase() ? k.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()) : k;
   }
   function listCell(key, vals, mine) {
     vals = (vals || []).filter(Boolean);
     if (!vals.length) return NA;
     const sorted = key === 'industries' ? vals.slice().sort((a, b) => (b === mine) - (a === mine)) : sortBy(key, vals);
     const max = key === 'industries' ? 5 : 8;
-    return `<div class="cmp-chips">${sorted.slice(0, max).map((v) => `<span class="cmp-chip${v === mine ? ' on' : ''}"${v === mine ? ' title="Matches your company"' : ''}>${v === mine ? icon('check') : ''}${esc(RN.w.label(key, v))}</span>`).join('')}${sorted.length > max ? `<span class="cmp-chip more">+${sorted.length - max} more</span>` : ''}</div>`;
+    return `<div class="cmp-chips">${sorted.slice(0, max).map((v) => `<span class="cmp-chip${v === mine ? ' on' : ''}"${v === mine ? ' title="Matches your company"' : ''}>${v === mine ? icon('check') : ''}${esc(lab(key, v))}</span>`).join('')}${sorted.length > max ? `<span class="cmp-chip more">+${sorted.length - max} more</span>` : ''}</div>`;
   }
   function fitCell(op) {
     const f = RN.model.fit(op, brief(op));
@@ -184,7 +193,7 @@
     R.push({ sec: 'Availability', l: F.availability.label, cell: (op) => RN.ui.avail(op, { hours: false }), val: (op) => AVAIL_SCORE[op.avail.key] || null, dir: 'max' });
     R.push({ l: F.startDate.label, cell: startCell, val: (op) => { const d = startFor(op); return d ? -d.getTime() : null; }, dir: 'max' });
     R.push({ l: F.hoursPerMonth.label, cell: hoursCell, val: (op) => +(op.avail.hoursCode || 0) || null, dir: 'max' });
-    R.push({ l: F.rate.label, cell: rateCell, val: (op) => (visitor ? null : op.rate || null), dir: 'min' });
+    R.push({ l: visitor ? 'Typical month' : F.rate.label, cell: rateCell, val: (op) => (visitor ? null : op.rate || null), dir: 'min' });
     R.push({ l: F.engagementTypes.label, cell: (op) => listCell('engagementTypes', op.engagementTypes) });
     R.push({ sec: 'Company fit', l: F.revenueRange.clientLabel || 'Company revenue', cell: (op) => listCell('revenueRange', op.revenueRanges, buyer ? co.revenueRange : null), val: buyer ? (op) => (op.revenueRanges.includes(co.revenueRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.employeeRange.label, cell: (op) => listCell('employeeRange', op.employeeRanges, buyer ? co.employeeRange : null), val: buyer ? (op) => (op.employeeRanges.includes(co.employeeRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
@@ -241,8 +250,21 @@
     </div></th>`;
   }
 
+  let showEmpty = false;
   function table(ops) {
-    const rows = rowsFor(ops);
+    const all = rowsFor(ops);
+    // Rows where no column has an answer ("Not added" or "Not asked" everywhere) fold into one disclosure
+    const blank = (h) => /^\s*<span class="cmp-na[^"]*">[^<]*<\/span>(<span class="cmp-src">[^<]*<\/span>)?\s*$/.test(h);
+    all.forEach((r) => { if (!r.lock && ops.length) { r.html = ops.map((op) => r.cell(op)); r.empty = r.html.every(blank); } });
+    const rows = all.filter((r) => !r.empty);
+    const empties = all.filter((r) => r.empty);
+    // A folded row that opened a section hands its heading to the next visible row of that section
+    let carry = null;
+    all.forEach((r) => {
+      if (r.sec) carry = null;
+      if (r.empty && r.sec) { carry = { sec: r.sec, secTip: r.secTip }; return; }
+      if (!r.empty && !r.sec && carry) { r.sec = carry.sec; r.secTip = carry.secTip; carry = null; }
+    });
     const add = ops.length < 4;
     const cols = ops.length + (add ? 1 : 0);
     const sugg = add ? suggestions(ops, Math.min(4, 5 - ops.length)) : [];
@@ -252,26 +274,69 @@
         <span class="cmp-sub">${4 - ops.length} of 4 slots open</span>
         <a class="act" href="#browse">Browse operators${icon('arrow')}</a>
       </div></th>` : '';
-    const addCell = add ? `<td class="cmp-add-cell" rowspan="${rows.length}"><div class="cmp-sugg">
+    const span = rows.length + (empties.length ? 1 : 0);
+    const addCell = add ? `<td class="cmp-add-cell" rowspan="${span}"><div class="cmp-sugg">
         ${sugg.length ? `<span class="label">Suggested</span>${sugg.map(suggItem).join('')}` : `<p class="small muted">Browse to add more operators.</p>`}
       </div></td>` : '';
-    const body = rows.map((r, i) => {
+    const rowHtml = (r, i, extra) => {
       const lab = `<th scope="row" class="cmp-lab">${r.sec ? `<span class="cmp-sec">${r.sec}${r.secTip ? RN.ui.tip(r.secTip, 'About ' + r.sec) : ''}</span>` : ''}<span class="cmp-l">${esc(r.l)}${r.tip ? RN.ui.tip(r.tip, 'About ' + r.l) : ''}</span>${r.note ? `<span class="cmp-sub">${esc(r.note)}</span>` : ''}</th>`;
       let cells;
       if (r.lock) {
         cells = `<td colspan="${ops.length}" class="cmp-lockrow"><div class="cmp-lockbox">${icon('lock')}<span><b>See how each operator fits your company.</b> Sign in as a company and every column is scored on company revenue, employee range, industry and expertise.</span><button type="button" class="act" data-act="cmp-login" data-fit="1">Log in to see fit${icon('arrow')}</button></div></td>`;
       } else {
         const best = bestSet(ops, r);
-        cells = ops.map((op, j) => `<td class="${best.has(j) ? 'cmp-best' : ''}">${r.cell(op)}</td>`).join('');
+        cells = ops.map((op, j) => `<td class="${best.has(j) ? 'cmp-best' : ''}">${r.html ? r.html[j] : r.cell(op)}</td>`).join('');
       }
-      return `<tr class="${r.sec ? 'cmp-sec-start' : ''}">${lab}${cells}${i === 0 ? addCell : ''}</tr>`;
-    }).join('');
+      return `<tr class="${r.sec ? 'cmp-sec-start' : ''}">${lab}${cells}${i === 0 ? addCell : ''}${extra || ''}</tr>`;
+    };
+    const body = rows.map((r, i) => rowHtml(r, i)).join('');
+    const n = empties.length;
+    const fold = n ? `<tr class="cmp-fold-row"><th scope="row" class="cmp-lab"></th><td colspan="${ops.length}">
+        <button type="button" class="cmp-fold" data-act="cmp-empty-toggle" aria-expanded="${showEmpty}" aria-controls="cmp-empty">${icon(showEmpty ? 'chev-up' : 'chev-down')}<span>${showEmpty ? 'Hide' : 'Show'} ${n === 1 ? 'one question' : RN.fmt.int(n) + ' questions'} no one here has answered</span><em>${esc(empties.map((r) => r.l).slice(0, 3).join(', '))}${n > 3 ? ` +${n - 3}` : ''}</em></button>
+      </td></tr>` : '';
+    const emptyBody = n ? `<tbody id="cmp-empty" class="cmp-empty-rows" ${showEmpty ? '' : 'hidden'}>${empties.map((r) => rowHtml(Object.assign({}, r, { sec: '' }), 1, add ? '<td class="cmp-add-cell"></td>' : '')).join('')}</tbody>` : '';
     return `<div class="tbl-wrap cmp-wrap" role="region" aria-label="Operator comparison" tabindex="0">
       <table class="cmp-tbl" style="--cols:${cols}">
         <thead><tr><th scope="col" class="cmp-lab cmp-corner"><span class="cmp-legend"><i></i>Best in row</span></th>${ops.map(colHead).join('')}${addHead}</tr></thead>
-        <tbody>${body}</tbody>
+        <tbody>${body}${fold}</tbody>${emptyBody}
       </table>
     </div>`;
+  }
+  RN.actions['cmp-empty-toggle'] = () => {
+    showEmpty = !showEmpty;
+    const tb = document.getElementById('cmp-empty');
+    const b = document.querySelector('[data-act="cmp-empty-toggle"]');
+    if (!tb || !b) { RN.rerender(); return; }
+    tb.hidden = !showEmpty;
+    b.setAttribute('aria-expanded', showEmpty);
+    b.innerHTML = b.innerHTML.replace(showEmpty ? 'Show' : 'Hide', showEmpty ? 'Hide' : 'Show');
+    const sv = b.querySelector('svg'); if (sv) sv.outerHTML = icon(showEmpty ? 'chev-up' : 'chev-down');
+  };
+
+  /* Empty compare: a ghosted three-column comparison (faces from the network, the real row names) with the
+     next step laid over it, and one-tap adds from the suggestions. Nothing in the ghost is a value. */
+  function emptyState() {
+    const st = RN.store.state;
+    const sugg = suggestions([], 3);
+    const faces = RN.model.ops.filter((op) => !op.hidden && op.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 3);
+    const ROWS = [['Reputation Index', [62, 48, 70]], ['CORE average', [40, 55, 34]], ['Verified focus areas', [78, 52, 64]], [RN.fields.availability.label, [46, 60, 38]], [st.persona === 'visitor' ? 'Typical month' : RN.fields.rate.label, [58, 44, 66]], [RN.fields.industries.label, [70, 36, 52]]];
+    const best = [2, 1, 0, 1, 2, 0];
+    const ghost = `<div class="cmp-ghost" aria-hidden="true">
+        <div class="cmp-gh-row cmp-gh-head"><span></span>${faces.map((op) => `<span class="cmp-gh-col">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<i class="cmp-gh-name"></i><i class="cmp-gh-btn"></i></span>`).join('')}</div>
+        ${ROWS.map(([l, w], i) => `<div class="cmp-gh-row"><b>${esc(l)}</b>${w.map((x, j) => `<span class="${best[i] === j ? 'is-best' : ''}"><i style="width:${x}%"></i>${i % 2 ? '' : `<i class="sm" style="width:${Math.round(x * 0.6)}%"></i>`}</span>`).join('')}</div>`).join('')}
+      </div>`;
+    const slots = `<span class="cmp-slots" aria-label="0 of 4 slots filled">${[0, 1, 2, 3].map(() => '<i></i>').join('')}<span>0 of 4</span></span>`;
+    return `<div class="cmp-empty">
+        ${ghost}
+        <div class="cmp-empty-card">
+          ${slots}
+          <h2 class="h2">Line operators up side by side</h2>
+          <p class="cmp-empty-p">Add up to four from Browse or any profile. Compare puts them on the same standard fields and tints the best value in each row.</p>
+          ${sugg.length ? `<div class="cmp-quick"><span class="label">${st.shortlist.length ? 'From your shortlist' : 'Start with these'}</span>
+            <ul>${sugg.map((x) => `<li>${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span class="grow"><a href="#op.${esc(x.op.slug)}">${esc(x.op.name)}</a><span>Fractional ${esc(x.op.role)}</span></span>${RN.ui.tierBadge(RN.fields.risTierFor(x.op.ris.score).v, { size: 28, score: x.op.ris.score, label: `Reputation Index ${x.op.ris.score}` })}<button type="button" class="btn btn-sm btn-line" data-act="compare-toggle" data-id="${esc(x.op.id)}" aria-label="Add ${esc(x.op.name)} to compare">${icon('plus')}Add</button></li>`).join('')}</ul></div>` : ''}
+          <div class="cmp-empty-act"><a class="btn" href="#browse">Browse operators${icon('arrow')}</a><span class="small muted">Use Compare on any card to add it.</span></div>
+        </div>
+      </div>`;
   }
 
   function render() {
@@ -289,16 +354,7 @@
         ${ops.length ? `<div class="cmp-head-acts"><a class="btn btn-line" href="#browse">${icon('plus')}Add operators</a><button type="button" class="act muted" data-act="cmp-clear">Clear compare</button></div>` : ''}
       </div>
     </header>`;
-    if (!ops.length) {
-      const sugg = suggestions([], 3);
-      const card = (op) => (RN.browse && RN.browse.card ? RN.browse.card(op) : RN.ui.opCard(op));
-      return `<div class="cmp-page" data-view-source="compare">${head}
-        <section class="wrap cmp-body">
-          ${RN.ui.empty({ icon: 'compare', title: 'Nothing to compare yet', body: 'Add up to four operators from Browse or any profile. Compare lines them up on the same fields, so the differences are easy to see.', cta: '<a class="btn" href="#browse">Browse operators</a>' })}
-          ${sugg.length ? `<div class="cmp-start"><h2 class="h4">${st.shortlist.length ? 'Start with your shortlist' : 'Start with these operators'}</h2><p class="small muted">Use Compare on any card to add it.</p>
-            <div class="grid g-3 cmp-start-grid">${sugg.map((s) => card(s.op)).join('')}</div></div>` : ''}
-        </section></div>`;
-    }
+    if (!ops.length) return `<div class="cmp-page cmp-is-empty" data-view-source="compare">${head}<section class="wrap cmp-body">${emptyState()}</section></div>`;
     return `<div class="cmp-page" data-view-source="compare">${head}
       <section class="wrap cmp-body">
         ${new Set(ops.map((op) => op.catKey)).size > 1 ? `<p class="cmp-mixnote">${icon('info')}<span>These operators answered different onboarding questions for their roles. Shared questions and comparable scope sit side by side; the rest is grouped by role.</span></p>` : ''}

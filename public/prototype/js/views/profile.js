@@ -75,6 +75,7 @@
     'Systems & data': 'CRM, reporting, routing, tech stack and automation: the plumbing every stage runs on.',
   };
   const LOGO_WORD = { ferry: 'ferryWordmark' };
+  const AX_KEY = { 'Lead & plan': 'lead', 'Build the team': 'team', 'Generate demand': 'demand', 'Win deals': 'win', 'Retain & expand': 'retain', 'Systems & data': 'systems' };
   const PROOF_SECTIONS = { reviews: 'Company reviews', core: 'CORE ratings', engagements: 'Engagement history', samples: 'Work samples', rate: 'Rate and availability' };
 
   /* ---------- Per-visit state ---------- */
@@ -105,7 +106,7 @@
   const mdy = (d) => (RN.fmt.mdy ? RN.fmt.mdy(d) : `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`);
   // Client-facing name of the operator's revenue range field (the registry label is the operator's "Revenue range")
   const revLabel = () => F.revenueRange.clientLabel || 'Company revenue';
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + 's'}`;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many || (/[^aeiou]y$/i.test(one) ? one.slice(0, -1) + 'ies' : one + 's')}`;
   const jumpBtn = (to, html, cls) => `<button type="button" class="${cls || 'act'}" data-act="pf-jump" data-to="${esc(to)}">${html}</button>`;
   const catLabel = (c) => F.catLabel(c);
   function bandSlug(str) {
@@ -417,7 +418,7 @@
       ${subnav(c, secs)}
       <div class="wrap pf-body">
         <div class="pf-main">${secs.map((s) => s.html).join('')}</div>
-        <aside class="pf-rail" aria-label="Engage ${esc(op.first)}">${engageCard(c)}${matchCard(c)}${risCard(c)}${talkCard(c)}</aside>
+        <aside class="pf-rail" aria-label="Engage ${esc(op.first)}">${engageCard(c)}${matchCard(c)}${risCard(c)}${talkCard(c)}${miniEngage(c)}</aside>
       </div>
       ${similar(c)}
       ${mobileBar(c)}
@@ -679,6 +680,9 @@
 
   /* ---------- Ways to work with {first}: packaged engagements built on Engagement Blueprints ---------- */
   // A representative company revenue band for pricing: the middle of the operator's own ranges
+  // "$9k to $13.5k a month", the way monthly ranges read everywhere else on the site
+  const kAmt = (n) => '$' + (n >= 1000 ? (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k' : Math.round(n));
+  const kRange = (m) => (m && m.lo && m.hi ? `${kAmt(m.lo)} to ${kAmt(m.hi)} a month` : (m && m.label) || '');
   function repRev(op) { const o = ordered('revenueRange', op.revenueRanges); return o.length ? o[Math.floor((o.length - 1) / 2)] : '5m_20m'; }
   function offersFor(op) {
     const PJ = RN.projects || {};
@@ -701,7 +705,7 @@
         <h3 class="h4">${esc(b.title)}</h3>
         <p class="pf-offer-blurb">${esc(b.blurb || '')}</p>
         ${(b.when || [])[0] ? `<p class="pf-offer-when"><b>The problem it solves</b>${esc(b.when[0])}</p>` : ''}
-        <div class="pf-offer-m"><span>Typical month</span><b class="num">${esc(m.label)}</b></div>
+        <div class="pf-offer-m"><span>Typical month</span><b class="num">${esc(kRange(m))}</b></div>
         <div class="pf-offer-f">
           ${v.owner ? '' : `<button type="button" class="btn btn-sm" data-act="${v.preview ? 'pf-preview-cta' : 'pf-offer'}" data-id="${esc(op.id)}" data-bp="${esc(b.id)}">Request this</button>`}
           <a class="act" href="#blueprint.${esc(b.id)}">See the 90-day plan${icon('arrow')}</a>
@@ -757,7 +761,7 @@
     if (!left && !inds && !range) return '';
     const facts = c.engs.length ? `<h3 class="h5 pf-h3 pf-facts-h">Engagements</h3><dl class="pf-facts">
         <div class="pf-facts-stack"><dt>Roles held</dt><dd class="pf-chips">${[...new Set(c.engs.map((e) => e.role).filter(Boolean))].slice(0, 4).map((r) => `<span class="pf-chip sm">${esc(r)}</span>`).join('')}</dd></div>
-        <div><dt>Engagement length</dt><dd>${esc((() => { const m = c.engs.map((e) => e.months || 0).filter(Boolean); return m.length ? (Math.min(...m) === Math.max(...m) ? plural(m[0], 'month') : `${Math.min(...m)} – ${Math.max(...m)} months`) : '—'; })())}</dd></div>
+        <div><dt>Engagement length</dt><dd>${esc((() => { const m = c.engs.map((e) => e.months || 0).filter(Boolean); return m.length ? (Math.min(...m) === Math.max(...m) ? plural(m[0], 'month') : `${Math.min(...m)} to ${Math.max(...m)} months`) : '—'; })())}</dd></div>
         <div><dt>Company-verified</dt><dd>${Math.round((c.engs.filter((e) => e.verified).length / c.engs.length) * 100)}%</dd></div>
       </dl>` : '';
     return sec(c, 'fit', `Fit · ${esc(catLabel(op.catKey))}`, `Who ${esc(op.first)} is right for`,
@@ -845,6 +849,10 @@
       const arr = peers.map((o) => { const g = agg(o.tags.filter((t) => t.axis === a)); return g ? g.pct : 0; }).sort((x, y) => x - y);
       return arr.length ? arr[Math.floor(arr.length / 2)] / 100 : 0;
     });
+    // Outer ring = the next 20% step above the strongest value (shown under the chart), so the shape is readable
+    const top = Math.max(0.2, ...vals, ...typical);
+    const outer = Math.min(1, Math.ceil((top + 0.001) * 5) / 5);
+    const sv = vals.map((v) => v / outer), st = typical.map((v) => v / outer);
     const sel = S.focus && S.focus.kind === 'axis' ? S.focus.key : null;
     const r = size / 2 - 54;
     const labels = c.axes.map((a, i) => {
@@ -854,20 +862,23 @@
       const g = c.axAgg[a];
       return `<button type="button" class="pf-ax pf-ax-${side} ${sel === a ? 'on' : ''} ${g && g.claimedOnly ? 'claimed' : ''}" style="left:${((x / size) * 100).toFixed(2)}%;top:${((y / size) * 100).toFixed(2)}%" data-act="pf-focus" data-kind="axis" data-key="${esc(a)}" aria-pressed="${sel === a}">${esc(a)}<b>${g ? g.pct + '%' : '—'}</b></button>`;
     }).join('');
-    return `<div class="pf-radar-plot">${RN.chart.radar(c.axes, vals, { size, labels: false, compare: typical, label: `${op.first}'s capability map across six areas` })}${labels}</div>
-      <div class="legend pf-radar-legend"><span><i style="background:var(--viz-1)"></i>${esc(op.first)}</span><span><i class="pf-lg-line"></i>Typical ${esc(catLabel(op.catKey))} operator on the network</span></div>`;
+    return `<div class="pf-radar-plot">${RN.chart.radar(c.axes, sv, { size, labels: false, compare: st, label: `${op.first}'s capability map across six areas` })}${labels}</div>
+      <div class="legend pf-radar-legend"><span><i style="background:var(--viz-1)"></i>${esc(op.first)}</span><span><i class="pf-lg-line"></i>Typical ${esc(catLabel(op.catKey))} operator</span>${outer < 1 ? `<span class="pf-radar-scale">Outer ring ${Math.round(outer * 100)}%</span>` : ''}</div>`;
   }
   function focusPanel(c) {
     const op = c.op;
     const f = S.focus;
     if (!f) {
       // Just the explanation, no larger than the capability map beside it (founder, Oct 6, 2026)
+      const ranked = c.axes.map((a) => ({ a, g: c.axAgg[a] })).sort((x, y) => (y.g ? y.g.pct : -1) - (x.g ? x.g.pct : -1));
       return `<div class="pf-how">
-        <h3 class="pf-how-h">How scores work</h3>
+        <h3 class="pf-how-h">Proof by area</h3>
+        <ul class="pf-axbars">${ranked.map((x) => `<li><button type="button" data-act="pf-focus" data-kind="axis" data-key="${esc(x.a)}" data-ax="${esc(AX_KEY[x.a] || '')}"><span>${esc(x.a)}</span><b>${x.g ? (x.g.claimedOnly ? 'Claimed' : x.g.pct + '%') : '–'}</b><i><em style="width:${x.g ? Math.max(3, x.g.pct) : 0}%"></em></i></button></li>`).join('')}</ul>
+        <h3 class="pf-how-h pf-how-h2">How scores work</h3>
         <ul class="pf-how-list">
           <li>Each focus area earns points from proof: <b>10</b> if self-claimed, <b>50</b> with one company review, up to <b>100</b> with more.</li>
           <li>A stage or area scores its <b>best three</b> focus areas, out of 300.</li>
-          <li>Tap any stage or area to see which three count.</li>
+          <li>Tap an area or a stage to see which three count.</li>
         </ul>
       </div>`;
     }
@@ -905,7 +916,7 @@
     if (f) tags = tags.filter((t) => (f.kind === 'stage' ? t.stage === f.key : t.axis === f.key));
     const ver = tags.filter((t) => t.tier !== 'claimed');
     const cl = tags.filter((t) => t.tier === 'claimed');
-    const LIMIT = 7;
+    const LIMIT = 3;
     const showVer = S.tagsAll ? ver : ver.slice(0, LIMIT);
     const showCl = S.tagsAll ? cl : cl.slice(0, Math.max(0, LIMIT - showVer.length));
     const row = (t) => {
@@ -913,9 +924,10 @@
       return `<li class="pf-tag">
         <div class="pf-tag-top"><button type="button" class="pf-tagname" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>
           <span class="pf-badge ${t.tier}">${t.tier === 'expert' ? 'Expert' : 'Verified'}</span>
-          <b class="pf-tag-score">${t.score}</b></div>
-        <div class="pf-bar"><i style="width:${t.score}%"></i></div>
-        <p class="pf-tag-ev">Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a company'} · ${esc(plural(t.r || by.length || 1, 'company review'))} · ${esc(CONTRIB[t.c] || '')}</p>
+          ${t.axis ? `<span class="pf-tag-ax" data-ax="${esc(AX_KEY[t.axis] || '')}">${esc(t.axis)}</span>` : ''}
+          <b class="pf-tag-score">${t.score}<small>/100</small></b></div>
+        <div class="pf-bar" data-ax="${esc(AX_KEY[t.axis] || '')}"><i style="width:${t.score}%"></i></div>
+        <p class="pf-tag-ev">Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a company'} · ${esc(plural(t.r || by.length || 1, 'company review'))}${t.stage && t.stage !== 'foundation' ? ` · ${esc(t.stage)} stage` : ''}</p>
       </li>`;
     };
     const title = f ? `Focus areas in ${esc(f.key)}` : ver.length ? 'Top verified focus areas' : 'Focus areas';
@@ -925,7 +937,7 @@
       ${showCl.length ? `<div class="pf-claimed">${ver.length ? `<p class="pf-claimed-hd"><b>Also claims ${plural(cl.length, 'focus area')}</b> not yet verified by a company</p>` : `<p class="pf-claimed-hd">Self-claimed by ${esc(op.first)}. Each one turns verified when a company confirms it in a review.</p>`}
         <div class="pf-chips">${showCl.map((t) => `<button type="button" class="pf-chip dashed" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>`).join('')}</div></div>` : ''}
       ${!tags.length ? `<p class="pf-focus-empty">No focus areas here yet.</p>` : ''}
-      ${tags.length > LIMIT ? `<button type="button" class="pf-showall" data-act="pf-tags-all">${S.tagsAll ? 'Show top 7' : `Show all ${tags.length} focus areas`}${icon(S.tagsAll ? 'chev-up' : 'chev-down')}</button>` : ''}`;
+      ${tags.length > LIMIT ? `<button type="button" class="pf-showall" data-act="pf-tags-all">${S.tagsAll ? 'Show top 3' : `Show all ${tags.length} focus areas`}${icon(S.tagsAll ? 'chev-up' : 'chev-down')}</button>` : ''}`;
   }
 
   /* ---------- Tech stack: grouped by the four standard proficiency levels ---------- */
@@ -1079,7 +1091,8 @@
       ${hasDetail ? `<div class="pf-eng-bd" ${open ? '' : 'hidden'}>
         ${e.outcome ? `<div class="pf-outcome"><span class="label pf-lab">Outcome</span><p>${esc(e.outcome)}</p></div>` : ''}
         ${e.context ? `<div class="pf-eng-ctx"><span class="label pf-lab">What ${esc(c.first)} did</span><p>${esc(e.context)}</p></div>` : ''}
-        ${r ? `<blockquote class="pf-eng-q"><p>“${esc(r.quote)}”</p><footer><span><b>${esc(r.reviewer)}</b>${r.role ? `, ${esc(r.role)}` : ''}${e.logo ? '' : ` · ${esc(e.company)}`}</span>${e.logo ? `<span class="pf-mini-logo">${logoHtml(e.logo, e.company, 14)}</span>` : ''}${RN.ui.stars(r.overall || 5)}</footer></blockquote>` : ''}
+        ${r && hasReviews ? `<button type="button" class="pf-eng-rv" data-act="pf-review" data-i="${c.reviews.indexOf(r)}"><span class="pf-rv-ava">${esc(RN.fmt.initials(r.reviewer))}</span><span class="grow"><b>${esc(r.reviewer)}</b>${r.role ? `, ${esc(r.role)}` : ''} reviewed this engagement</span>${RN.ui.stars(r.overall || 5)}<span class="pf-eng-rv-go">Read review${icon('arrow')}</span></button>` : ''}
+        ${r && !hasReviews ? `<blockquote class="pf-eng-q"><p>“${esc(r.quote)}”</p><footer><span><b>${esc(r.reviewer)}</b>${r.role ? `, ${esc(r.role)}` : ''}${e.logo ? '' : ` · ${esc(e.company)}`}</span>${e.logo ? `<span class="pf-mini-logo">${logoHtml(e.logo, e.company, 14)}</span>` : ''}${RN.ui.stars(r.overall || 5)}</footer></blockquote>` : ''}
         ${cr ? `<div class="pf-eng-core"><span class="label pf-lab">CORE ratings</span><div class="pf-core-mini">${F.coreDims.options.map((d, i) => `<span title="${esc(d.l)}${cr.notes && cr.notes[i] ? ': ' + esc(cr.notes[i]) : ''}"><b>${esc(d.v)}</b>${cr.scores[i].toFixed(1)}</span>`).join('')}</div></div>` : ''}
         ${tags.length ? `<div><span class="label pf-lab">Focus areas this engagement verified</span><div class="pf-chips">${tags.map((t) => `<span class="pf-chip line">${icon('check')}${esc(t)}</span>`).join('')}</div></div>` : ''}
         ${e.samples.length ? `<div><span class="label pf-lab">Work samples from this engagement</span><div class="pf-eng-samples">${e.samples.map((s) => `<button type="button" class="pf-eng-sample" data-act="pf-sample" data-id="${esc(s.id)}"><span class="pf-ftype">${esc(s.type)}</span><span>${esc(s.title)}</span>${icon('chev-right')}</button>`).join('')}</div></div>` : ''}
@@ -1252,6 +1265,21 @@
       </div>
     </section>`;
   }
+  /* The Engage card, compact, pinned in the rail for the rest of the page */
+  function miniEngage(c) {
+    const op = c.op, v = c.v;
+    const mr = RN.model.monthlyRange(op);
+    const intro = myIntro(op);
+    const cta = v.owner ? `<a class="btn btn-block btn-sm" href="#studio.profile">${icon('edit')}Edit in Studio</a>`
+      : intro ? `<a class="btn btn-block btn-sm btn-line" href="#buyer.intros">Track your intro${icon('arrow')}</a>`
+      : `<button type="button" class="btn btn-block" data-act="${v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>`;
+    return `<section class="pf-card pf-rail-mini" aria-label="Request an intro to ${esc(op.first)}">
+      <div class="pf-mini-id">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<div><b>${esc(op.name)}</b><span><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div></div>
+      ${mr ? `<p class="pf-mini-range"><span>Typically</span><b>${esc(mr.text)}</b></p>` : ''}
+      ${cta}
+      ${v.owner ? '' : `<button type="button" class="act pf-mini-2" data-act="pf-jump" data-to="${c.reviews.length ? 'pf-reviews' : 'pf-expertise'}">${icon('star')}${c.reviews.length ? `Read ${plural(c.reviews.length, 'company review')}` : 'See the proof'}</button>`}
+    </section>`;
+  }
   function matchCard(c) {
     const op = c.op, v = c.v;
     if (v.owner) {
@@ -1377,7 +1405,7 @@
     }
     // Phone action bar: hidden while the hero or Engage buttons are on screen
     const bar = root.querySelector('[data-pf-mbar]');
-    const targets = [cta, root.querySelector('.pf-engage-act')].filter(Boolean);
+    const targets = [root.querySelector('.pf-band') || cta, root.querySelector('.pf-engage-act'), root.querySelector('.pf-rail-mini')].filter(Boolean);
     if (bar && targets.length && 'IntersectionObserver' in window) {
       const seen = new Set();
       const o3 = new IntersectionObserver((ents) => {
@@ -1417,6 +1445,8 @@
     if (getComputedStyle(rail).display === 'contents') { rail.style.top = ''; return; }
     const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 76;
     const top = navH + 57;
+    const mini = rail.querySelector('.pf-rail-mini');
+    if (mini) { rail.style.top = ''; mini.style.top = top + 'px'; return; }
     rail.style.top = Math.min(top, window.innerHeight - rail.offsetHeight - 12) + 'px';
   }
   window.addEventListener('resize', () => { if (S.railFit) S.railFit(); }, { passive: true });
@@ -1472,7 +1502,7 @@
     const hdr = document.querySelector('.hdr');
     const hb = hdr ? hdr.getBoundingClientRect().bottom : 0;
     const navH = hb > 0 ? hb : parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 76;
-    const sub = document.querySelector('.pf-subnav');
+    const sub = document.querySelector('.pf-subnav') || document.querySelector('.pf-pl-toc');
     return navH + (sub ? sub.offsetHeight : 0) + 12;
   }
   function jumpY(t) {
@@ -1628,12 +1658,12 @@
       if (html) shown.push(k);
       return html;
     }).filter(Boolean);
+    const why = proofWhy(c, who);
     return `<div class="pf pf-proofpage">
       <div class="wrap pf-pl-top">
         <div class="pf-pl-banner">
           <span class="pf-pl-k">${icon('shield')}Private proof link</span>
-          <p class="h2 serif-up pf-pl-for">Prepared for ${esc(who.contact || 'you')}${who.company ? `, ${esc(who.company)}` : ''}</p>
-          <p class="pf-pl-notice">${icon('eye')}<span><b>${esc(op.first)} sees when this page is opened, which sections are read and for how long,</b> and whether someone new at your company opens it. Nothing else is shared, and nothing else you browse is tracked.</span></p>
+          <h2 class="pf-pl-for">Prepared for ${esc(who.contact || 'you')}${who.company ? `<span>${esc(who.company)}${who.title ? ` · ${esc(who.title)}` : ''}</span>` : ''}</h2>
         </div>
         ${own ? `<p class="note info pf-pl-own">${icon('info')}<span>You are previewing your proof link the way ${esc(who.contact || 'the prospect')} sees it. Your own visits are not counted as views in <a class="link" href="#studio.credibility">Studio, Credibility</a>.</span></p>` : ''}
         <section class="pf-pl-id night">
@@ -1655,16 +1685,64 @@
             <span><b class="serif-up">${c.verified.length}</b>Verified focus areas</span>
           </div>
         </section>
-        <nav class="pf-pl-toc" aria-label="Sections in this link"><span class="label">In this link</span>${shown.map((k) => `<button type="button" class="chip chip-sm" data-act="pf-jump" data-to="pf-${k === 'samples' ? 'portfolio' : k}">${esc(PROOF_SECTIONS[k])}</button>`).join('')}</nav>
+        <p class="pf-pl-notice">${icon('eye')}<span>${esc(op.first)} sees when this page is opened, which sections are read and for how long, and whether someone new at your company opens it. Nothing else you browse is tracked.</span></p>
       </div>
-      <div class="wrap pf-pl-body">${secs.join('')}
+      <nav class="pf-pl-toc" aria-label="Sections in this link"><div class="wrap pf-pl-toc-in"><span class="label">In this link</span>${why ? `<button type="button" class="chip chip-sm" data-act="pf-jump" data-to="pf-why">Why ${esc(op.first)}</button>` : ''}${shown.map((k) => `<button type="button" class="chip chip-sm" data-act="pf-jump" data-to="pf-${k === 'samples' ? 'portfolio' : k}">${esc(PROOF_SECTIONS[k])}</button>`).join('')}</div></nav>
+      <div class="wrap pf-pl-body">${why}${secs.join('')}
         <section class="pf-pl-end" id="pf-pl-end">
           <div><span class="eyebrow">Next step</span><h2 class="h2 pf-h2">Talk to ${esc(op.first)} this week</h2><p class="pf-sec-sub">A 30-minute call to walk through your goals. ${esc(op.first)} replies by email with times.</p></div>
           <div class="pf-pl-cta" data-pl-slot="end">${proofCtas(rec, op, 'end', false)}</div>
         </section>
-        <p class="pf-pl-foot">${icon('shield')}<span>Shared through Revenue Nomad. Reviews and engagements marked verified were confirmed by the company. <a class="link" href="#op.${esc(op.slug)}" data-view-source="proof">View ${esc(op.first)}’s public profile</a> · Hiring for other GTM roles? <a class="link" href="#rates">See typical rates by role</a></span></p>
       </div>
+      <footer class="pf-pl-brand">
+        <div class="wrap pf-pl-brand-in">
+          <a class="logo pf-pl-logo" href="#home" aria-label="Revenue Nomad home"><img src="assets/brand/mark.png" alt=""><span><b>REVENUE</b><span>NOMAD</span></span></a>
+          <p>Shared through Revenue Nomad. Reviews and engagements marked verified were confirmed by the company.</p>
+          <nav class="pf-pl-brand-links" aria-label="More from Revenue Nomad"><a href="#op.${esc(op.slug)}" data-view-source="proof">${esc(op.first)}’s public profile</a><a href="#rates">Typical rates by role</a><a href="#how">How it works</a></nav>
+        </div>
+      </footer>
     </div>`;
+  }
+  /* Why {first} for {company}: leads with the engagement closest to the prospect (an industry named in the
+     prospect's company or record), then the proof that carries over. Built only from the profile's own data. */
+  function proofWhy(c, who) {
+    const op = c.op;
+    const co = who.company || '';
+    if (!co) return '';
+    const words = (t) => String(t || '').toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 5);
+    const coWords = words(co);
+    const indOf = (v) => RN.w.label('industries', v);
+    const rel = (v) => { if (!v) return false; const pi = ((RN.store.state.proofLinks || []).find((x) => x.prospect && x.prospect.company === co) || {}).prospect || {}; if (pi.industry && (pi.industry === v || indOf(pi.industry) === indOf(v))) return true; return words(indOf(v)).some((w) => coWords.includes(w)); };
+    const lead = c.engs.find((e) => rel(e.industry)) || null;
+    const ind = lead ? lead.industry : op.industries.find(rel);
+    const ver = c.engs.filter((e) => e.verified);
+    const again = c.reviews.length ? Math.round((c.reviews.filter((r) => r.hireAgain !== false).length / c.reviews.length) * 100) : null;
+    const leadCard = lead ? `<article class="pf-why-lead">
+        <span class="pf-why-k">${icon('target')}Closest to ${esc(co)}</span>
+        <div class="pf-why-co">${lead.logo ? `<span class="pf-why-logo">${logoHtml(lead.logo, lead.company, 30)}</span>` : `<b class="pf-why-logo txt">${esc(lead.company)}</b>`}
+          <span class="pf-why-when">${esc(mon(lead.start))} – ${esc(mon(lead.end))}<em>${esc(plural(lead.months || 0, 'month'))}</em></span></div>
+        <h3 class="h3">${esc(lead.role || 'Engagement')} at ${esc(lead.company)}</h3>
+        <ul class="pf-why-facts">
+          ${lead.industry ? `<li><span>Industry</span><b>${esc(indOf(lead.industry))}</b></li>` : ''}
+          ${lead.revenueRange ? `<li><span>Company revenue</span><b>${esc(RN.w.label('revenueRange', lead.revenueRange))}</b></li>` : ''}
+          ${lead.employeeRange ? `<li><span>Employees</span><b>${esc(RN.w.label('employeeRange', lead.employeeRange))}</b></li>` : ''}
+        </ul>
+        <p class="pf-why-st">${lead.verified ? `${icon('check-circle')}Verified by ${esc(lead.company)}` : `${icon('info')}Self-reported by ${esc(op.first)}. Ask about it on the call, or request a reference.`}</p>
+      </article>` : '';
+    const pts = [];
+    if (ind && !lead) pts.push({ i: 'briefcase', b: `Works in ${esc(indOf(ind))}`, t: `One of ${plural(op.industries.length, 'industry', 'industries')} on ${esc(op.first)}’s profile.` });
+    if (ver.length) pts.push({ i: 'seal', b: `${plural(ver.length, 'engagement')} verified by the company`, t: `${esc(ver.map((e) => e.company).join(' and '))}${again != null ? `, ${again}% would hire again` : ''}.`, logos: ver.filter((e) => e.logo) });
+    if (c.verified.length) pts.push({ i: 'check-circle', b: `${plural(c.verified.length, 'focus area')} confirmed in reviews`, chips: c.verified.slice(0, 3).map((t) => t.t) });
+    const longest = c.engs.slice().sort((a, b) => (b.months || 0) - (a.months || 0))[0];
+    if (longest && longest.months) pts.push({ i: 'clock', b: `Engagements run ${Math.min(...c.engs.map((e) => e.months || 0).filter(Boolean))} to ${longest.months} months`, t: `Across ${plural(c.engs.length, 'company', 'companies')}, most recently ${esc(c.engs[0].company)}.` });
+    if (!leadCard && !pts.length) return '';
+    return `<section class="pf-sec pf-why" id="pf-why" data-sec="why" aria-labelledby="pf-why-h">
+      <header class="pf-sec-hd"><div class="grow"><span class="eyebrow">For ${esc(co)}</span><h2 class="h2 pf-h2" id="pf-why-h">Why ${esc(op.first)} for ${esc(co.split(' ')[0])}</h2></div></header>
+      <div class="pf-why-grid${leadCard ? '' : ' no-lead'}">
+        ${leadCard}
+        <ul class="pf-why-pts">${pts.slice(0, 3).map((x) => `<li><span class="pf-why-i">${icon(x.i)}</span><div><b>${x.b}</b>${x.t ? `<span>${x.t}</span>` : ''}${x.logos && x.logos.length ? `<span class="pf-why-logos">${x.logos.map((e) => `<span class="pf-why-lg">${logoHtml(e.logo, e.company, 16)}</span>`).join('')}</span>` : ''}${x.chips ? `<span class="pf-why-chips">${x.chips.map((t) => `<span class="ftag">${icon('check-circle')}${esc(t)}</span>`).join('')}</span>` : ''}</div></li>`).join('')}</ul>
+      </div>
+    </section>`;
   }
   /* Book a call / Request a reference: one tap opens a short inline form (work email), then shows what happens next */
   function proofCtas(rec, op, slot, dark) {
@@ -1697,21 +1775,21 @@
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
     const hrs = RN.model.hoursNum ? RN.model.hoursNum(op.avail.hoursCode) : +op.avail.hoursCode || 0;
     const monthly = op.rate && hrs ? op.rate * hrs : 0;
-    const lo = op.rate ? op.rate * 20 : 0, hi = op.rate ? op.rate * 60 : 0;
+    const mr = RN.model.monthlyRange(op);
     return `<section class="pf-sec" id="pf-rate" data-sec="rate" aria-labelledby="pf-rate-h">
       <header class="pf-sec-hd"><div class="grow"><span class="eyebrow">Rate and availability</span><h2 class="h2 pf-h2" id="pf-rate-h">What working with ${esc(op.first)} costs</h2></div></header>
       <div class="pf-rate">
         <div class="pf-rate-main">
           ${op.rate ? `<div class="pf-rate-big"><span class="label pf-lab">${esc(F.rate.label)}</span><b class="serif-up">${esc(RN.fmt.usd(op.rate))}<small>/ hr</small></b></div>
             ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.usd(monthly))}<small>/ mo</small></b></div>` : ''}
-            <p class="pf-rate-range">Typical engagement range: <b>${esc(RN.fmt.usd(lo))} - ${esc(RN.fmt.usd(hi))}/mo</b> (20 to 60 hrs / month). No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
+            <p class="pf-rate-range">${mr ? `Typically <b>${esc(mr.text)}</b>${mr.hLo && mr.hHi ? ` (${esc(mr.hLo)} to ${esc(mr.hHi)} hrs a month)` : ''}. ` : ''}No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
           : `<p class="pf-rate-range">${esc(op.first)} quotes a rate on the first call.</p>`}
         </div>
         <dl class="pf-facts">
           <div><dt>${esc(F.availability.label)}</dt><dd>${esc(op.avail.label)}</dd></div>
           <div><dt>${esc(F.startDate.label)}</dt><dd>${esc(mdy(nextStart(op)))}</dd></div>
           ${op.avail.hoursCode ? `<div><dt>${esc(F.hoursPerMonth.label)}</dt><dd>${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</dd></div>` : ''}
-          ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))}</dt><dd>${esc(RN.fmt.usd(idx.p25))}–${esc(RN.fmt.usd(idx.p75))}/hr · median ${esc(RN.fmt.usd(idx.p50))}</dd></div>` : ''}
+          ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))}</dt><dd>${esc(RN.fmt.usd(idx.p25))} to ${esc(RN.fmt.usd(idx.p75))} / hr · median ${esc(RN.fmt.usd(idx.p50))}</dd></div>` : ''}
         </dl>
       </div>
       ${idx ? `<p class="pf-note">${RN.ui.illus()} Rate Index figures are invented to show the benchmark. <a class="link" href="#rates">See the Rate Index</a></p>` : ''}
@@ -1865,32 +1943,71 @@
     const tier = F.risTierFor(op.ris.score);
     const gold = tier.v === 'elite' || tier.v === 'apex';
     const verifiedTags = op.tags.filter((t) => t.tier !== 'claimed').length;
-    const reviews = (op.reviews || []).length;
+    const revs = (op.reviews || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    const engs = engagements(op);
+    const verEngs = engs.filter((e) => e.verified).length;
     const asOf = RN.fmt.date(RN.now());
+    // The 0 to 100 scale with each tier's band, the score marked on it
+    const tiers = F.risTier.options.slice().reverse();
+    const bands = tiers.map((t) => {
+      const lo = t.v === 'indexing' ? 0 : t.min, hi = t.v === 'indexing' ? 49 : t.max;
+      const on = t.v === tier.v;
+      return `<span class="pf-vb-band t-${esc(t.v)}${on ? ' on' : ''}${F.risTierFor(op.ris.score).min > lo ? ' past' : ''}" style="flex:${hi - lo + 1}" title="${esc(t.l)}, ${t.v === 'indexing' ? 'under 50' : `${lo} to ${hi}`}"><em>${esc(t.l)}</em></span>`;
+    }).join('');
+    const scale = `<div class="pf-vb" role="img" aria-label="Reputation Index ${esc(op.ris.score)} of 100, ${esc(tier.l)} tier">
+        <div class="pf-vb-track">${bands}<i class="pf-vb-mark" style="left:${RN.clamp(op.ris.score, 0, 100)}%"><b>${esc(op.ris.score)}</b></i></div>
+        <div class="pf-vb-ticks" aria-hidden="true"><span>0</span><span style="left:50%">50</span><span style="left:70%">70</span><span style="left:90%">90</span><span style="left:100%">100</span></div>
+      </div>`;
+    const by = revs.map((r) => {
+      const e = engs.find((x) => lc(x.company) === lc(r.company));
+      return `<li>${e && e.logo ? `<span class="pf-vby-logo">${logoHtml(e.logo, r.company, 22)}</span>` : `<span class="pf-vby-logo txt">${esc(r.company)}</span>`}
+        <span class="pf-vby-who"><b>${esc(r.reviewer)}</b><span>${esc([r.role, r.company].filter(Boolean).join(', '))}</span></span>
+        <span class="pf-vby-when">${RN.ui.stars(r.overall || 5)}<span>${esc(r.date ? RN.fmt.date(r.date + 'T12:00:00') : '')}</span></span></li>`;
+    }).join('');
     return `<div class="pf pf-verify">
-      <section class="wrap-narrow pf-vf">
-        <article class="pf-vf-card">
-          <header class="pf-vf-top night">
-            <div class="pf-band-bg" aria-hidden="true">${hexLattice()}</div>
-            <span class="eyebrow pf-vf-k">${icon('shield')}Revenue Nomad verification</span>
-            <div class="pf-vf-id">
-              <span class="pf-vf-seal">${RN.ui.hexSeal(tier.l, { size: 72, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</span>
-              <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
+      <section class="wrap pf-vf">
+        <div class="pf-vf-grid">
+          <article class="pf-vf-card">
+            <header class="pf-vf-top night">
+              <div class="pf-band-bg" aria-hidden="true">${hexLattice()}</div>
+              <span class="eyebrow pf-vf-k">${icon('shield')}Revenue Nomad verification</span>
+              <div class="pf-vf-id">
+                <div class="pf-photo pf-vf-photo">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}
+                  <span class="pf-photo-seal">${RN.ui.hexSeal(tier.l, { size: 40, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</span></div>
+                <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
+              </div>
+              <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> <span class="pf-nw">as of ${esc(asOf)}</span></span></p>
+            </header>
+            <div class="pf-vf-score">
+              <div class="pf-vf-score-hd"><span class="label">Reputation Index</span><p><b class="serif-up">${esc(op.ris.score)}</b><small>of 100</small><span class="pf-vf-tier ${gold ? 'gold' : ''}">${RN.ui.hexSeal(tier.l, { size: 20 })}${esc(tier.l)}</span></p></div>
+              ${scale}
             </div>
-            <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> · as of ${esc(asOf)}</span></p>
-          </header>
-          <dl class="pf-vf-facts">
-            <div><dt>Reputation Index tier</dt><dd class="${gold ? 'gold' : ''}">${esc(tier.l)}</dd></div>
-            <div><dt>Reputation Index</dt><dd>${esc(op.ris.score)}<small> of 100</small></dd></div>
-            <div><dt>Company-verified reviews</dt><dd>${reviews}</dd></div>
-            <div><dt>Verified focus areas</dt><dd>${verifiedTags}</dd></div>
-          </dl>
-          <div class="pf-vf-body">
-            <p class="pf-vf-d"><b>${esc(tier.l)}</b> ${esc(tier.d)}</p>
-            <p class="small muted">Reviews are submitted by the company on Revenue Nomad and publish as submitted. A focus area is verified when a company confirms it in a review. The score is recalculated whenever a review arrives, so this page always shows the current tier.</p>
-            <div class="row pf-vf-act"><a class="btn" href="#op.${esc(op.slug)}" data-view-source="badge">View ${esc(op.first)}’s full profile${icon('arrow')}</a><a class="act" href="#levels">How the Reputation Index works</a></div>
-          </div>
-        </article>
+            <dl class="pf-vf-facts">
+              <div><dt>Company-verified reviews</dt><dd>${revs.length}</dd></div>
+              <div><dt>Verified engagements</dt><dd>${verEngs}<small> of ${engs.length}</small></dd></div>
+              <div><dt>Verified focus areas</dt><dd>${verifiedTags}</dd></div>
+            </dl>
+            ${by ? `<div class="pf-vby"><span class="label">Verified by</span><ul>${by}</ul></div>` : ''}
+            <div class="pf-vf-body">
+              <div class="row pf-vf-act"><a class="btn" href="#op.${esc(op.slug)}" data-view-source="badge">View ${esc(op.first)}’s full profile${icon('arrow')}</a><a class="act" href="#levels">How the Reputation Index works${icon('arrow')}</a></div>
+            </div>
+          </article>
+          <aside class="pf-vf-side">
+            <section class="pf-card">
+              <span class="eyebrow">What ${esc(tier.l)} means</span>
+              <p class="pf-vf-d">${esc(tier.d)}</p>
+              ${RN.ui.tierLadder(tier.v, { score: op.ris.score })}
+            </section>
+            <section class="pf-card pf-vf-how">
+              <span class="eyebrow">How this is checked</span>
+              <ol>
+                <li><b>The company writes the review</b><span>Reviews are submitted by the company on Revenue Nomad and publish as submitted.</span></li>
+                <li><b>It confirms focus areas</b><span>A focus area is verified when a company confirms it in a review.</span></li>
+                <li><b>The score updates</b><span>The Reputation Index is recalculated whenever a review arrives, so this page always shows the current tier.</span></li>
+              </ol>
+            </section>
+          </aside>
+        </div>
         <p class="pf-vf-foot">Hiring? <a class="link" href="#browse">Browse operators with company-verified proof</a></p>
       </section>
     </div>`;

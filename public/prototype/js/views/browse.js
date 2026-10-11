@@ -19,7 +19,8 @@
   const esc = RN.esc, icon = RN.icon;
   const BR = (RN.browse = RN.browse || {});
 
-  const PAGE = 24;
+  // 24 per page; 12 on phones, where each card is a full screen tall
+  const pageSize = () => (window.matchMedia && window.matchMedia('(max-width: 640px)').matches ? 12 : 24);
   const FILTER_KEYS = ['verifiedProof', 'roleCategories', 'availability', 'hoursPerMonth', 'locations', 'timeZones', 'usHours', 'revenueRange', 'employeeRange', 'industries', 'salesMotions', 'engagementTypes', 'rateMax', 'risMin'];
   // Chip colour by field type (L222): role, focus area, industry, availability, location, company, engagement, rate, reputation, proof
   const TYPE = { q: 'q', tags: 'focus', roleCategories: 'role', availability: 'avail', hoursPerMonth: 'avail', locations: 'location', timeZones: 'location', usHours: 'location', revenueRange: 'company', employeeRange: 'company', industries: 'industry', engagementTypes: 'engage', salesMotions: 'motion', rateMax: 'rate', risMin: 'ris', verifiedProof: 'proof' };
@@ -71,7 +72,7 @@
   const hasCrit = (c) => !!(c.q || c.tags.length || Object.keys(c.filters).length);
   const critKey = (c) => JSON.stringify([c.q.toLowerCase(), c.tags.slice().sort(), Object.keys(c.filters).sort().map((k) => [k, c.filters[k]])]);
 
-  let limit = PAGE;
+  let limit = pageSize();
   let lastAdded = null;      // the criterion added most recently (zero-result relax picks it first)
   let tagsOpen = false;      // Focus areas popover
   let landedCat = null;      // category landing currently applied
@@ -147,7 +148,7 @@
     after.tags.filter((t) => !before.tags.includes(t)).forEach((t) => added.push({ k: 'tags', v: t }));
     Object.keys(after.filters).forEach((k) => { if (JSON.stringify(after.filters[k]) !== JSON.stringify(before.filters[k]) && (!before.filters[k] || (Array.isArray(after.filters[k]) && after.filters[k].length > (before.filters[k] || []).length) || !Array.isArray(after.filters[k]))) added.push({ k }); });
     if (added.length) lastAdded = added[added.length - 1];
-    limit = PAGE;
+    limit = pageSize();
     // A category landing stays a landing only while its category is the one role filter
     const cur = RN.currentRoute();
     if (cur && cur.view.name === 'browse-cat') {
@@ -244,22 +245,29 @@
     }
     return out.slice(0, 2).join(' · ');
   }
+  const firstLine = (t) => { const m = String(t || '').replace(/\s+/g, ' ').trim().match(/^.{20,180}?[.!?](\s|$)/); return m ? m[0].trim() : ''; };
   BR.card = function (op, opts) {
     opts = opts || {};
     const visitor = RN.store.state.persona === 'visitor';
-    let html = RN.ui.opCard(visitor ? Object.assign({}, op, { rate: null }) : op, { why: opts.why || '' });
-    // Replace the card's 3 tags with 4, verified first. Expert tags (5+ reviews) are client-verified too,
-    // but RN.ui.ftag only styles tier === 'verified', so normalize them here.
+    // No tagline yet: the first sentence of the operator's own bio, so the card never reads as a stub
+    const shown = Object.assign({}, op, visitor ? { rate: null } : {}, !op.headline && op.bio ? { headline: firstLine(op.bio) } : {});
+    let html = RN.ui.opCard(shown, { why: opts.why || '' });
+    // Replace the card's 3 tags with 4, verified first (2 on phones, with the rest counted). Expert tags (5+ reviews)
+    // are company-verified too, but RN.ui.ftag only styles tier === 'verified', so normalize them here.
     const vFirst = (a, b) => (a.tier === 'verified' ? -1 : 1) - (b.tier === 'verified' ? -1 : 1);
     const three = RN.ui.ftags((op.tags || []).slice().sort(vFirst), 3);
-    const four = RN.ui.ftags((op.tags || []).map((t) => (t.tier === 'claimed' ? t : Object.assign({}, t, { tier: 'verified' }))).sort(vFirst), 4);
+    const all = (op.tags || []).map((t) => (t.tier === 'claimed' ? t : Object.assign({}, t, { tier: 'verified' }))).sort(vFirst);
+    const n = all.length;
+    const four = `<div class="opc-tags">${all.slice(0, 4).map((t, i) => (i >= 2 ? RN.ui.ftag(t).replace('class="ftag', 'class="ftag br-t-x') : RN.ui.ftag(t))).join('')}${n > 4 ? `<span class="ftag more br-t-d">+${n - 4} more</span>` : ''}${n > 2 ? `<span class="ftag more br-t-m">+${n - 2}</span>` : ''}</div>`;
     if (html.includes(three)) html = html.replace(three, () => four);
+    const a = `<span>${RN.ui.avail(op)}</span>`;
+    const put = (x) => { html = html.includes(a) ? html.replace(a, () => a + x) : html.replace('<div class="opc-meta">', () => '<div class="opc-meta">' + x); };
     if (visitor && op.rate) {
       // Visitors see what it typically costs a month; the exact hourly rate stays for signed-in companies
       const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null;
-      const lock = rg ? `<span class="br-range" title="Typical monthly cost. The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.text)}</span>` : '';
-      const a = `<span>${RN.ui.avail(op)}</span>`;
-      html = html.includes(a) ? html.replace(a, () => a + lock) : html.replace('<div class="opc-meta">', () => '<div class="opc-meta">' + lock);
+      if (rg) put(`<span class="br-range" title="Typical monthly cost. The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.text)}</span>`);
+    } else if (!op.rate) {
+      put(`<span class="br-norate" title="${esc(op.first || op.name)} quotes a rate on the first call.">${icon('clock')}Rate on request</span>`);
     }
     return html;
   };
@@ -295,7 +303,7 @@
     if (cat && landedCat !== cat) {
       landedCat = cat;
       const f = Object.assign({}, b.filters, { roleCategories: [cat] });
-      b.filters = cleanFilters(f); limit = PAGE; lastAdded = null;
+      b.filters = cleanFilters(f); limit = pageSize(); lastAdded = null;
       RN.store.save();
     }
     const c = crit();
@@ -326,11 +334,41 @@
     </div>`;
   }
 
+  /* Operators with a photo who can start now, one per role category first, strongest Reputation Index first */
+  function featured(n) {
+    const pool = RN.model.ops.filter((op) => !op.hidden && op.photo && op.avail && op.avail.key === 'available_now')
+      .sort((a, b) => b.ris.score - a.ris.score || (b.reviews || []).length - (a.reviews || []).length || (b.completeness || 0) - (a.completeness || 0));
+    const out = [], seen = new Set();
+    pool.forEach((op) => { if (out.length < n && !seen.has(op.catKey)) { seen.add(op.catKey); out.push(op); } });
+    pool.forEach((op) => { if (out.length < n && !out.includes(op)) out.push(op); });
+    return out;
+  }
   function genHead() {
-    return `<header class="wrap br-head">
-      <span class="eyebrow">Direct access to talent</span>
-      <h1 class="h1">Browse <span class="serif">operators</span></h1>
-      <p class="lede">Open profiles. Reviews and focus areas a company confirmed are marked Verified. No login needed to browse.</p>
+    const live = RN.model.ops.filter((op) => !op.hidden);
+    const now = live.filter((op) => op.avail && op.avail.key === 'available_now').length;
+    const proof = live.filter(hasProof).length;
+    const feat = featured(5);
+    const visitor = RN.store.state.persona === 'visitor';
+    const price = (op) => { if (!op.rate) return 'Rate on request'; if (!visitor) return RN.fmt.rate(op.rate); const r = RN.model.opMonthlyRange && RN.model.opMonthlyRange(op); return r ? r.text : ''; };
+    return `<header class="wrap br-head br-head-gen">
+      <div class="br-head-copy">
+        <span class="eyebrow">Direct access to talent</span>
+        <h1 class="h1">Browse <span class="serif">operators</span></h1>
+        <p class="lede">Open profiles. Reviews and focus areas a company confirmed are marked Verified. No login needed to browse.</p>
+        <dl class="br-head-stats">
+          <div><dt>Operators</dt><dd>${RN.fmt.int(live.length)}</dd></div>
+          <div><dt>Available now</dt><dd>${RN.fmt.int(now)}</dd></div>
+          <div><dt>With company-verified proof</dt><dd>${RN.fmt.int(proof)}</dd></div>
+        </dl>
+      </div>
+      ${feat.length ? `<aside class="br-feat" aria-labelledby="br-feat-h">
+        <div class="br-feat-hd"><span class="br-feat-live"><i class="dot dot-now"></i></span><h2 class="h5" id="br-feat-h">Available now</h2><span class="small muted">${RN.fmt.int(now)} can start this week</span></div>
+        <ul class="br-feat-list">${feat.map((op, i) => `<li style="--i:${i}"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">
+          ${RN.ui.avatar(op, 'ava-md', { decorative: true })}
+          <span class="br-feat-who"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>
+          <span class="br-feat-meta">${RN.ui.tierPill(RN.fields.risTierFor(op.ris.score).v, op.ris.score)}<span>${esc(price(op))}</span></span>
+        </a></li>`).join('')}</ul>
+      </aside>` : ''}
     </header>`;
   }
 
@@ -348,6 +386,10 @@
     return list.slice(0, 6);
   }
 
+  // "$7.5k to $11.5k a month", the way monthly ranges read on cards and profiles
+  const kAmt = (n) => '$' + (n >= 1000 ? (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k' : Math.round(n));
+  const kMonth = (m) => (m && m.lo && m.hi ? `${kAmt(m.lo)} to ${kAmt(m.hi)} a month` : (m && m.label) || '');
+  RN.actions['br-lede'] = (el) => { const box = el.closest('.br-cat-intro'); if (!box) return; const open = !box.classList.contains('is-open'); box.classList.toggle('is-open', open); el.setAttribute('aria-expanded', open); el.innerHTML = (open ? 'Show less' : 'Read more') + icon(open ? 'chev-up' : 'chev-down'); };
   function catHead(cat) {
     const label = RN.fields.catLabel(cat);
     const copy = CAT[cat];
@@ -363,7 +405,7 @@
         <div class="br-cat-copy">
           <span class="eyebrow br-cat-eyebrow">${RN.ui.catDot(cat)}Role category</span>
           <h1 class="h1">Fractional <span class="serif">${esc(label)}</span></h1>
-          <p class="lede">${esc(copy.body)}</p>
+          <div class="br-cat-intro"><p class="lede" id="br-cat-lede">${esc(copy.body)}</p><button type="button" class="act br-lede-more" data-act="br-lede" aria-controls="br-cat-lede" aria-expanded="false">Read more${icon('chev-down')}</button></div>
           ${titles ? `<p class="small br-titles"><span class="label">Common titles</span>${esc(titles)}</p>` : ''}
           ${tags.length ? `<div class="br-cat-tags"><span class="label">Most searched focus areas</span>
             <div class="row" style="--gap:8px">${tags.map((t) => `<button type="button" class="chip chip-sm" data-act="br-tag-toggle" data-t="${esc(t)}" aria-pressed="${sel.includes(t.toLowerCase())}">${icon('plus', 'br-i-off')}${icon('check', 'br-i-on')}${esc(t)}</button>`).join('')}</div></div>` : ''}
@@ -371,9 +413,9 @@
         ${idx ? `<aside class="card br-rate-card" aria-label="Rate Index for ${esc(label)}">
           <span class="label">Rate Index · ${esc(label)}</span>
           <div class="br-rate-big"><span class="num">$${esc(idx.p50)}</span><span class="small muted">median per hour</span></div>
-          <p class="small">Typical range <b>$${esc(idx.p25)}–$${esc(idx.p75)} / hr</b> (middle half of ${esc(idx.n)} profiles).</p>
+          <p class="small">Typical range <b>$${esc(idx.p25)} to $${esc(idx.p75)} / hr</b> (middle half of ${esc(idx.n)} profiles).</p>
           ${mr ? `<dl class="br-rate-mo">
-            <div><dt>Typical month at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(mr.label)}</dd></div>
+            <div><dt>Typical month at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(kMonth(mr))}</dd></div>
           </dl>
           <p class="small muted br-rate-free">No fees for companies. You pay the operator’s rate, nothing more.</p>` : ''}
           <div class="br-rate-chart" data-br-chart="${esc(cat)}" aria-label="Median hourly rate by role category"></div>
@@ -413,7 +455,7 @@
     const perGuide = guideRoute();
     const link = (href, text) => `<li><a class="act" href="${href}">${esc(text)}${icon('arrow')}</a></li>`;
     return `<section class="wrap br-plan" aria-labelledby="br-plan-h">
-      <h2 class="h3" id="br-plan-h">Plan a fractional ${esc(noun)} engagement</h2>
+      <div class="br-plan-hd"><span class="eyebrow">Plan it</span><h2 class="h3" id="br-plan-h">Plan a fractional ${esc(noun)} engagement</h2></div>
       <div class="grid g-3" style="--gap:16px">
         <a class="card card-link br-plan-card" href="#rates">${icon('chart')}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
         <div class="card br-plan-card">${icon('layers')}<h3 class="h4">Scope it from a Blueprint</h3>
@@ -456,9 +498,11 @@
   }
 
   function rolesNav(cat) {
+    const counts = {};
+    RN.model.ops.forEach((op) => { if (!op.hidden) counts[op.catKey] = (counts[op.catKey] || 0) + 1; });
     return `<nav class="wrap br-roles" aria-label="Browse by role category">
       <span class="label">${cat ? 'Other role categories' : 'Browse by role'}</span>
-      <div class="br-roles-list">${RN.fields.roleCategory.options.filter((o) => o.v !== cat).map((o) => `<a href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}Fractional ${esc(o.l)}</a>`).join('')}</div>
+      <div class="br-roles-list">${RN.fields.roleCategory.options.filter((o) => o.v !== cat).map((o) => `<a class="br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}Fractional ${esc(o.l)}${counts[o.v] ? `<b>${counts[o.v]}</b>` : ''}</a>`).join('')}</div>
     </nav>`;
   }
 
@@ -603,6 +647,24 @@
     </div>`;
   }
 
+  function moreHtml(n, total) {
+    if (total <= n) return '';
+    return `<div class="br-more"><span class="br-more-meter" aria-hidden="true"><i style="width:${Math.round((n / total) * 100)}%"></i></span>
+      <span class="br-more-n">Showing <b>${RN.fmt.int(n)}</b> of ${RN.fmt.int(total)}</span>
+      <button type="button" class="btn btn-line br-more-btn" data-act="br-more">Show ${Math.min(pageSize(), total - n)} more${icon('chev-down')}</button></div>`;
+  }
+  /* One break in the grid after the third row: the role categories with live counts, on a dark band */
+  function gridBreak(c) {
+    if (hasCrit(c) || landedCat) return '';
+    const counts = {};
+    RN.model.ops.forEach((op) => { if (!op.hidden) counts[op.catKey] = (counts[op.catKey] || 0) + 1; });
+    return `<aside class="br-break night" aria-label="Browse by role">
+      <div class="br-break-l"><span class="eyebrow">Narrow it down</span><h2 class="h3">Start from the seat you need to fill</h2></div>
+      <div class="br-break-pills">${RN.fields.roleCategory.options.filter((o) => counts[o.v]).map((o) => `<a class="br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}<b>${counts[o.v]}</b></a>`).join('')}</div>
+    </aside>`;
+  }
+  const withBreak = (cards, c) => { const at = 9; if (cards.length <= at) return cards.join(''); return cards.slice(0, at).join('') + gridBreak(c) + cards.slice(at).join(''); };
+
   function resultsHtml(res, c) {
     if (searchText()) {
       const pool = rankPool();
@@ -612,15 +674,17 @@
         const rows = RN.rank.rows(searchText(), pool);
         const shown = rows.slice(0, limit), more = rows.length - shown.length;
         return `<div class="grid g-3 br-grid">${shown.map((r) => BR.card(r.op, { why: RN.rank.why(r) })).join('')}</div>
-          ${more > 0 ? `<div class="br-more"><button type="button" class="btn btn-line" data-act="br-more">Show ${Math.min(PAGE, more)} more</button><span class="small muted">Showing ${shown.length} of ${rows.length}</span></div>` : ''}`;
+          ${moreHtml(shown.length, rows.length)}`;
       }
     }
     if (!res.length) return zeroHtml(c);
     const shown = res.slice(0, limit);
     const more = res.length - shown.length;
-    return `<div class="grid g-3 br-grid">${shown.map((r) => BR.card(r.op, { why: whyFor(r, c) })).join('')}</div>
-      ${more > 0 ? `<div class="br-more"><button type="button" class="btn btn-line" data-act="br-more">Show ${Math.min(PAGE, more)} more</button><span class="small muted">Showing ${shown.length} of ${res.length}</span></div>` : ''}
-      ${landedCat && catCount(landedCat) < THIN ? thinNote(landedCat) : `<p class="br-tell">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`}`;
+    // A last row with one gap closes on a dark "tell us" tile (wide screens only; the line below covers phones)
+    const closer = more <= 0 && shown.length % 3 === 2 && !(landedCat && catCount(landedCat) < THIN);
+    return `<div class="grid g-3 br-grid">${withBreak(shown.map((r) => BR.card(r.op, { why: whyFor(r, c) })), c)}${closer ? `<aside class="br-closer night"><span class="br-zero-ic">${icon('message')}</span><h3 class="h4">Not seeing the right fit?</h3><p>Tell us what you need and our team will shortlist operators for you. Your search comes with you.</p><button type="button" class="btn btn-leaf" data-act="br-tell" data-zero="">Tell us what you need</button></aside>` : ''}</div>
+      ${moreHtml(shown.length, res.length)}
+      ${landedCat && catCount(landedCat) < THIN ? thinNote(landedCat) : `<p class="br-tell${closer ? ' br-tell-alt' : ''}">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`}`;
   }
 
   /* ---------- Zero results: never a dead end ---------- */
@@ -985,9 +1049,9 @@
     const i = document.getElementById('br-q'); if (i) i.value = c.q;
     setCrit({ q: c.q, tags: c.tags, filters: c.filters }, { trackNow: true });
   };
-  RN.actions['br-sort'] = (el) => { RN.store.update((s) => { s.browse.sort = el.dataset.s; }, 'browse'); limit = PAGE; refresh({ noTrack: true }); const sel = document.querySelector('.br-sort-sel select'); if (sel) sel.value = el.dataset.s; };
-  RN.inputs['br-sort-sel'] = (el) => { RN.store.update((s) => { s.browse.sort = el.value; }, 'browse'); limit = PAGE; refresh({ noTrack: true }); };
-  RN.actions['br-more'] = () => { limit += PAGE; refresh({ noTrack: true }); };
+  RN.actions['br-sort'] = (el) => { RN.store.update((s) => { s.browse.sort = el.dataset.s; }, 'browse'); limit = pageSize(); refresh({ noTrack: true }); const sel = document.querySelector('.br-sort-sel select'); if (sel) sel.value = el.dataset.s; };
+  RN.inputs['br-sort-sel'] = (el) => { RN.store.update((s) => { s.browse.sort = el.value; }, 'browse'); limit = pageSize(); refresh({ noTrack: true }); };
+  RN.actions['br-more'] = () => { limit += pageSize(); refresh({ noTrack: true }); };
   RN.actions['br-tell'] = (el) => {
     // The unmet need reaches Admin as a search event (results 0 from the zero state). If this exact search was
     // already logged, mark it (meta.tellUs) instead of logging it twice, so Admin's zero-result list does not double count.
@@ -1055,7 +1119,7 @@
   function unmount() {
     clearTimeout(trackTimer);
     RN.rank.reset();
-    lastKey = null; mountedAt = 0; landedCat = null; tagsOpen = false; compact = false; limit = PAGE;
+    lastKey = null; mountedAt = 0; landedCat = null; tagsOpen = false; compact = false; limit = pageSize();
   }
 
   /* ---------- Views ---------- */
