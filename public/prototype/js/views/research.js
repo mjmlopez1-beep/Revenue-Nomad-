@@ -1531,6 +1531,18 @@
       ${icon('arrow')}
     </a></li>`;
   }
+  // Index card: kind, the question, one headline number from the guide's own key numbers (or the answer's first line)
+  function pcard(g, lead) {
+    const st = g.post && g.post.stat;
+    const a = g.answer()[0] || '';
+    return `<a class="card card-link rs-pcard${lead ? ' rs-pcard-lead' : ''}" href="#guide.${esc(g.slug)}">
+      <span class="label">${esc(KIND[g.slug] || 'Guide')}${lead ? ' · Start here' : ''}</span>
+      <h3 class="${lead ? 'h2' : 'h4'} rs-pcard-q">${disp(g.q)}</h3>
+      ${lead ? `<p class="rs-pcard-a">${esc(RN.fmt.smart(a))}</p>` : st ? `<span class="small muted clamp-3 rs-pcard-s">${esc(RN.fmt.smart(a))}</span>` : ''}
+      ${st ? `<span class="rs-pcard-n"><b class="tnum">${disp(st.v)}</b><span class="small muted">${esc(RN.fmt.smart(st.l))}</span></span>` : `<span class="small muted clamp-3">${esc(RN.fmt.smart(a))}</span>`}
+      <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read</span>${icon('arrow')}</span>
+    </a>`;
+  }
   const fnGuides = (k) => GUIDES.filter((x) => (x.fn || x.group) === k);
   const OLD_BLOG = 'https://www.revenuenomad.com';
   const ACTION_L = { merge: 'Merged in', rebuild: 'Rebuilt here', city: 'City page, merged in' };
@@ -1564,17 +1576,17 @@
       <span class="eyebrow">Guides</span>
       <h1 class="h1">Straight answers on <span class="serif">fractional go-to-market.</span></h1>
       <p class="lede">Each guide answers one question a client asks before hiring, in the first few lines, then shows the numbers behind it from Revenue Nomad's own engagements. Written by Matt Lopez.</p>
-      <div class="row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${count(g.k)}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div>
+      <p class="rs-gnew small">${icon('book')}<span><b>New in October 2026.</b> ${POSTS.length} guides rebuilt from the blog and the content plan, with ${(POSTS.reduce((n, p) => n + (p.replaces || []).length, 0))} older posts merged into them.</span></p>
     </header>
+    <nav class="rs-gjump-bar" aria-label="Guide groups"><div class="wrap row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${count(g.k)}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div></nav>
     <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-sales" aria-labelledby="rs-g-sales-t">
       ${grpHd(grp('sales'), homeLink(grp('sales')))}
-      ${sales.length ? guideFeature(sales[0]) : ''}
-      <ul class="rs-qlist rs-qlist-2">${sales.slice(1).map(qrow).join('')}</ul>
+      <div class="rs-pgrid">${sales.map((g, i) => pcard(g, i === 0)).join('')}</div>
     </section>
-    <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['revops', 'marketing'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
-      ${grpHd(grp(k), homeLink(grp(k)))}
-      <ul class="rs-qlist">${fnGuides(k).map(qrow).join('')}</ul>
-    </section>`).join('')}</div></div>
+    ${['revops', 'marketing'].map((k) => { const list = fnGuides(k); const G = grp(k); return `<section class="wrap rs-sec-sm rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
+      ${grpHd(G, homeLink(G))}
+      <div class="rs-pgrid rs-pgrid-4">${list.map((g) => pcard(g)).join('')}${list.length % 4 ? `<a class="card card-link rs-pcard rs-pcard-home" href="#${esc(G.home)}"><span class="label">${esc(G.l)}</span><h3 class="h4 rs-pcard-q">Who you get, what it costs, what happens first</h3><span class="small muted">Vetted ${esc(F.catLabel(G.cat))} operators and the Talk to us form.</span><span class="rs-gcard-ft"><span class="tiny muted">${esc(G.l)} home</span>${icon('arrow')}</span></a>` : ''}</div>
+    </section>`; }).join('')}
     <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
       ${grpHd(grp('costs'), `<a class="act rs-ghome" href="#fractional-cost">The cost hub${icon('arrow')}</a>`)}
       <div class="card rs-costs">${costs.map(({ o, g }) => {
@@ -1590,20 +1602,23 @@
         const b = RIX().byCat[o.v]; const hh = (COST[o.v] && COST[o.v].hours) || '40';
         return `<a class="rs-cost" href="#guide.${esc(g.id)}">
           <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · Rate Index</span></span></span>
-          <span class="rs-cost-v"><span class="label">Median</span><b class="tnum">${hr(b.p50)}/hr</b></span>
-          <span class="rs-cost-v"><span class="label">${esc(RN.w.label('hoursPerMonth', hh))}</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m'))}</b></span>
+          <span class="rs-cost-v"><span class="label">An hour, median</span><b class="tnum">${hr(b.p50)}</b></span>
+          <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m').replace('/mo', '').replace(/\s*[-–]\s*/, ' to '))}</b></span>
           ${icon('arrow')}</a>`;
       }).join('')}</div>
       <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue, illustrative in this prototype. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
     </section>
     <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
         ${grpHd(grp(k))}
-        <div class="grid g-2 rs-gpair-in">${GUIDES.filter((x) => x.group === k).map(guideCard).join('')}</div>
+        <ul class="rs-qlist">${GUIDES.filter((x) => x.group === k).map(qrow).join('')}</ul>
       </section>`).join('')}</div></div>
     <section class="wrap rs-sec-sm" id="rs-glossary" aria-labelledby="rs-gl-t">
       <div class="rs-gloss card">
         <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, defined once</h2><p class="small muted">The same terms appear on every profile, posted engagement, review and report on Revenue Nomad.</p></div>
-        <dl class="rs-gl">${GLOSSARY.map((x) => `<div class="rs-gl-i" id="rs-term-${esc(RN.slug(x.t))}"><dt>${esc(x.t)}</dt><dd>${esc(x.d())}${x.to ? ` <a class="rs-gl-a" href="#${esc(x.to)}" aria-label="More on ${esc(x.t)}">More${icon('arrow')}</a>` : ''}</dd></div>`).join('')}</dl>
+        ${(() => { const term = (x) => `<div class="rs-gl-i" id="rs-term-${esc(RN.slug(x.t))}"><dt>${esc(x.t)}</dt><dd>${esc(x.d())}${x.to ? ` <a class="rs-gl-a" href="#${esc(x.to)}" aria-label="More on ${esc(x.t)}">More${icon('arrow')}</a>` : ''}</dd></div>`;
+          return `<dl class="rs-gl">${GLOSSARY.slice(0, 8).map(term).join('')}</dl>
+          <details class="rs-gl-more"><summary><span>Show all ${GLOSSARY.length} terms</span>${icon('chev-down', 'rs-chev')}</summary><dl class="rs-gl">${GLOSSARY.slice(8).map(term).join('')}</dl></details>`; })()}
+
       </div>
       <div class="stack" style="--gap:12px;margin-top:20px">
         ${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}

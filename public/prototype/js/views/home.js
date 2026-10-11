@@ -678,7 +678,7 @@
       const photo = (RN.data.reviewerPhotos || {})[x.r.reviewer] || '';
       const logo = RN.ui.logo(RN.model.reviewLogo(x.op, x.r), { h: photo ? 30 : 46, name: x.r.company || 'Company' });
       return `<div class="hm-q-feature${flip ? ' is-flip' : ''}">
-          ${photo ? `<div class="hm-arch hm-arch-photo" data-hm-arch><img src="${esc(photo)}" alt="${esc(x.r.reviewer || 'Company')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
+          ${photo ? `<div class="hm-arch hm-arch-photo${/-cut\.(webp|png)$/.test(photo) ? ' hm-arch-cut' : ''}" data-hm-arch><img src="${esc(photo)}" alt="${esc(x.r.reviewer || 'Company')}" onerror="this.closest('.hm-q-feature').classList.add('hm-q-nophoto')"></div>` : ''}
           <div class="hm-arch hm-arch-logo" data-hm-arch><div class="arch-logo">${logo}</div></div>
           <figure class="hm-q">
             <span class="hm-q-mark" aria-hidden="true">“</span>

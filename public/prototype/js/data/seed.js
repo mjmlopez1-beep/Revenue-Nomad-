@@ -2,7 +2,7 @@
    Company names, messages and figures here are illustrative. */
 /* Reviewers' own headshots, shown with their quote on Home (founder request, Sep 25, 2026). A missing file falls back to the company logo. */
 window.RN = window.RN || {}; RN.data = RN.data || {};
-RN.data.reviewerPhotos = { 'Eric Barbalace': 'assets/brand/reviewer-eric-barbalace.jpg', 'Trista Kempa': 'assets/brand/reviewer-trista-kempa.jpg' };
+RN.data.reviewerPhotos = { 'Eric Barbalace': 'assets/brand/reviewer-eric-barbalace.jpg', 'Trista Kempa': 'assets/brand/reviewer-trista-kempa-cut.webp' };
 (function () {
   'use strict';
   const RN = window.RN;

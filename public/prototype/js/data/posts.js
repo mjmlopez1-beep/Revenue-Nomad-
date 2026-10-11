@@ -121,6 +121,10 @@
         "base": "No draft exists. This is the visibility plan's #9 (How to Hire a Fractional VP of Sales in 2026, step by step, absorbs the city pages) and the playbook's rebuild of /post/how-to-select-a-fractional-vp-of-sales for P1 and P2",
         "words": 1718,
         "opsQ": "VP of Sales",
+        "stat": {
+          "v": "48 hours",
+          "l": "Often, to a role profile and 2 to 3 vetted operators"
+        },
         "related": [
           "fractional-vp-of-sales-cost",
           "fractional-vp-of-sales-first-90-days"
@@ -605,6 +609,10 @@
           "monthL": "A month, 20 to 40 hrs",
           "basis": "2026 engagements, teams under 5 to 8 reps"
         },
+        "stat": {
+          "v": "$200 to $250",
+          "l": "An hour for a director or VP, teams under 5 to 8 reps"
+        },
         "related": [
           "interim-vs-fractional-vs-full-time-sales-leader",
           "how-to-hire-a-fractional-vp-of-sales"
@@ -961,6 +969,10 @@
         "base": "No draft exists. The playbook's rebuild of /post/what-your-first-90-days-with-a-fractional-vp-of-sales-should-look-like for P2, answering the question bank's 'What should a fractional leader deliver in 90 days, and how do I measure it?'",
         "words": 1316,
         "opsQ": "sales process",
+        "stat": {
+          "v": "3 to 4 months",
+          "l": "Initial term, then month to month with 30 days notice"
+        },
         "related": [
           "how-to-hire-a-fractional-vp-of-sales",
           "how-to-stop-running-sales-as-a-founder"
@@ -1242,6 +1254,10 @@
         "base": "No draft exists. The playbook's comparison rebuild of /post/interim-sales-leadership-vs-fractional-sales-leadership, widened to the visibility plan's #3 decision framework (fractional vs interim vs consultant vs full-time)",
         "words": 1697,
         "opsQ": "interim",
+        "stat": {
+          "v": "Up to about $800K",
+          "l": "One client's full-time CRO benchmark, all in"
+        },
         "related": [
           "fractional-vp-of-sales-cost",
           "fractional-cro-vs-full-time-cro"
@@ -1570,6 +1586,10 @@
         "base": "Content Bank Post 3 (bank-nov.md), the playbook's merge target for /post/founder-led-sales-vs-fractional-vp-of-inside-sales",
         "words": 1350,
         "opsQ": "founder-led",
+        "stat": {
+          "v": "$4,000",
+          "l": "A month for 20 hours with a founder-led team"
+        },
         "related": [
           "sales-meetings-not-converting",
           "fractional-vp-of-sales-first-90-days"
@@ -1857,6 +1877,10 @@
         "base": "Content Bank Post 1 (bank-nov.md)",
         "words": 1433,
         "opsQ": "sales process",
+        "stat": {
+          "v": "19 booked, 0 closed",
+          "l": "One month at one agency"
+        },
         "related": [
           "how-to-stop-running-sales-as-a-founder",
           "fractional-vp-of-sales-cost"
@@ -2129,6 +2153,10 @@
         "words": 1576,
         "opsQ": "CRO",
         "bp": "cro",
+        "stat": {
+          "v": "$23,200",
+          "l": "A month for an embedded fractional CRO, 50 hours"
+        },
         "related": [
           "interim-vs-fractional-vs-full-time-sales-leader",
           "fractional-vp-of-sales-cost"
@@ -2408,6 +2436,10 @@
         "base": "No draft exists. The playbook's comparison rebuild of /post/fractional-revenue-ops-vs-sales-ops-scope-differences, which also absorbs the near-duplicate /post/revops-vs-sales-ops-how-each-impacts-pipeline-conversion-and-retention",
         "words": 1672,
         "opsQ": "RevOps",
+        "stat": {
+          "v": "$150 to $175",
+          "l": "An hour for execution-level RevOps help"
+        },
         "related": [
           "fractional-revops-consultant",
           "how-to-fix-sales-forecast-accuracy"
@@ -2728,6 +2760,10 @@
         "base": "Content Bank Post 4 (bank-nov.md). Its working title runs past 65 characters, so the H1 is shortened and the answer still covers whether it should be fractional",
         "words": 1261,
         "opsQ": "RevOps",
+        "stat": {
+          "v": "$6,000 to $7,500",
+          "l": "Fixed fee for a 60-day RevOps assessment"
+        },
         "related": [
           "revops-vs-sales-ops",
           "how-to-fix-sales-forecast-accuracy"
@@ -2992,6 +3028,10 @@
         "base": "Content Bank Post 7 (bank-dec.md)",
         "words": 1280,
         "opsQ": "forecast",
+        "stat": {
+          "v": "Day 14",
+          "l": "Point of view due in a 30-day diagnostic"
+        },
         "related": [
           "revops-vs-sales-ops",
           "fractional-revops-consultant"
@@ -3218,6 +3258,10 @@
         "base": "Content Bank Post 2 (bank-nov.md). It is also the merge target for the two marketing city pages and the part-time CMO hiring guide, because its URL already owns 'how to hire a fractional CMO'",
         "words": 1376,
         "opsQ": "CMO",
+        "stat": {
+          "v": "60%",
+          "l": "Scorecard weight on demand gen, analytics and agency accountability"
+        },
         "related": [
           "fractional-cmo-cost",
           "fractional-cmo-vs-agency"
@@ -3552,6 +3596,10 @@
           "monthL": "A month, 40 to 80 hrs",
           "basis": "2026 CMO search, quoted rates"
         },
+        "stat": {
+          "v": "$200 to $250",
+          "l": "An hour, quoted in a 2026 CMO search"
+        },
         "related": [
           "fractional-cmo-vs-agency",
           "how-to-hire-a-fractional-cmo"
@@ -3848,6 +3896,10 @@
         "base": "Content Bank Post 8 (bank-dec.md), the playbook's merge target for /post/hiring-a-fractional-cmo-vs-marketing-agency-which-delivers-better-roi",
         "words": 1243,
         "opsQ": "CMO",
+        "stat": {
+          "v": "25%",
+          "l": "Largest scorecard weight, demand gen operator vs brand CMO"
+        },
         "related": [
           "fractional-cmo-cost",
           "how-to-hire-a-fractional-cmo"

@@ -463,6 +463,8 @@
 /* Reviewer headshot in the arch; the company logo moves under the quote. With no photo file, the logo arch shows instead */
 [data-view="home"] .hm-arch-photo img { left: 0; right: 0; width: 100%; height: 84%; max-width: 100%; transform: none; object-fit: cover; object-position: center 30%; border-radius: 999px 999px 0 0; }
 [data-view="home"] .hm-q-feature:has(.hm-arch-photo) .hm-arch-logo { display: none; }
+/* A cut-out headshot stands in the arch and its head rises over the curve */
+[data-view="home"] .hm-arch-cut img { left: 50%; right: auto; bottom: 0; width: 96%; height: auto; max-height: 100%; object-fit: contain; object-position: center bottom; border-radius: 0; transform: translateX(-50%); }
 [data-view="home"] .hm-q-feature.hm-q-nophoto .hm-arch-photo, [data-view="home"] .hm-q-feature.hm-q-nophoto .hm-q-co { display: none; }
 [data-view="home"] .hm-q-feature.hm-q-nophoto .hm-arch-logo { display: block; }
 [data-view="home"] .hm-q-co { margin-top: var(--s-4); display: flex; align-items: center; }
@@ -713,3 +715,6 @@
 
 /* Moving hero pieces (parallax) can poke a few px past the edge on phones; clip without making a scroll container */
 main[data-view="home"] { overflow-x: clip; }
+
+/* Phones stack the two quotes, so the arch-to-arch line would run through the quote text */
+@media (max-width: 860px) { [data-view="home"] .hm-qlink { display: none; } }
