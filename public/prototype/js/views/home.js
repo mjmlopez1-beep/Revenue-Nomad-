@@ -82,6 +82,7 @@
     </header>`;
   const seeded = (id) => /-seed-/.test(String(id || ''));
   // Display typesetting. keep: a hyphenated compound never breaks across lines ("30/60/90-day", "company-confirmed").
+  const unit = (v) => esc(v).replace(/^([$€£]?[\d.,]+)\s*(x|×|%|[a-z]+)$/i, (m, n, u) => /^[x×]$/i.test(u) ? `${n}<span class="u u-x">×</span>` : `${n}<span class="u${u === '%' ? ' u-sym' : ''}">${u}</span>`);
   const keep = (s) => esc(s).replace(/[^\s<>]+-[^\s<>]+/g, (w) => `<span class="nowrap">${w}</span>`);
   const sentence = (s) => String(s || '').replace(/^\s*\S/, (c) => c.toUpperCase());
 
@@ -611,6 +612,7 @@
           <span class="eyebrow">New research · Free to read</span>
           <h2 class="h2 hm-h2">${esc(r.title)} ${esc(r.year)}. Where GTM leadership is going.</h2>
           <p class="lede">${esc(String(r.lede).split('. ')[0].replace(/\.$/, ''))}. Read it on the web, chapter by chapter. Every chart opens the matching operators in Browse.</p>
+          <dl class="hm-rep-stats">${[r.summary[0], r.summary[2], r.summary[3]].filter(Boolean).map((s) => `<div><dt class="num">${unit(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
           <div class="row hm-ctas"><a class="btn" href="#report">Read the report${icon('arrow')}</a></div>
           <p class="hm-rep-fine tiny muted"><span>Open to read, no email needed.</span>${RN.ui.illus('Illustrative figures')}</p>
           ${briefSec()}
