@@ -593,6 +593,12 @@ html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after,
 .ico-txt { font-family: var(--f-display); font-weight: 700; font-size: calc(var(--ico-sz) * .4); line-height: 1; letter-spacing: -0.01em; }
 :is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) { box-shadow: inset 0 0 0 1px var(--ink); }
 :is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) > svg { transform: translateY(-1px); }
+/* Vermilion on hover only (founder, Oct 12, 2026): icons rest in ink; the hovered card's icon lines turn vermilion */
+:is(a, button, .card-link, .ico-host):is(:hover, :focus-visible) .ico:not(.ico-still):not(.ico-solid) { color: var(--vermilion); }
+:is(.night, .panel-night) :is(a, button, .card-link, .ico-host):is(:hover, :focus-visible) .ico:not(.ico-still):not(.ico-solid),
+:is(a, button, .card-link, .ico-host):is(:hover, :focus-visible) .ico-night:not(.ico-still) { color: var(--vermilion-night); }
+[data-theme="dark"] :is(a, button, .card-link, .ico-host):is(:hover, :focus-visible) .ico:not(.ico-still):not(.ico-solid) { color: var(--vermilion-night); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(a, button, .card-link, .ico-host):is(:hover, :focus-visible) .ico:not(.ico-still):not(.ico-solid) { color: var(--vermilion-night); } }
 .ico-soft { background: var(--sunk); box-shadow: none; color: var(--ink-2); }
 .ico-solid { background: var(--forest-deep); color: var(--leaf); box-shadow: none; }
 .ico-night, .night .ico, .panel-night .ico { background: transparent; color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
