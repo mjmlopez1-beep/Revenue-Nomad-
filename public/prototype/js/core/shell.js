@@ -14,7 +14,7 @@
       company: { name: 'Northwind Health', industry: 'Health Care', revenueRange: '20m_50m', employeeRange: '51_200', website: 'northwindhealth.com', hq: 'Boston, MA' },
     },
     operator: { key: 'operator', name: 'Matt Lopez', sub: 'Fractional VP of Sales', first: 'Matt', opId: '89623cd5-5362-4859-86f0-3f2e03f6b6ba', email: 'matt@revenuenomad.com' },
-    admin: { key: 'admin', name: 'Matt Lopez', sub: 'Revenue Nomad team', first: 'Matt', email: 'matt@revenuenomad.com' },
+    admin: { key: 'admin', name: 'Revenue Nomad team', sub: 'Admin', first: 'Team', email: 'team@revenuenomad.com' },
   };
   RN.me = () => RN.personas[RN.store.state.persona];
 
