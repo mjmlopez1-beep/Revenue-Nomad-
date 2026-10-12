@@ -1299,7 +1299,7 @@
         ${shead('The ladder', 'Five tiers, from the day you are approved.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. What each tier unlocks is proposed and not final.`)}
         ${ladder({ desc: true, counts: true, me: true, rail: true })}
         <div class="pg-ladder-notes">
-          <p>${icon('seal')}<span>Cards show the tier from Proven up; Emerging profiles show Vetted. Every profile page shows the full tier and score.</span></p>
+          <p>${icon('seal')}<span>Cards show a badge from Proven up. Every profile page shows the full tier and score.</span></p>
           <p>${icon('clock')}<span>Applications are reviewed within 2 business days, and a profile has no tier until it is approved.${pending ? `<span data-proto> ${esc(RN.fmt.plural(pending, 'application'))} in review in this prototype.</span>` : ''}</span></p>
         </div>
       </div>

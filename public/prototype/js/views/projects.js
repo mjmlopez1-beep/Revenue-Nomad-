@@ -44,8 +44,8 @@
   PJ.overBudget = (rate, rateMax) => (rate && rateMax ? Math.max(0, Math.round(+rate) - rateMax) : 0);
   /* Monthly and project totals round to $500, the Rate Index estimator's rule (RN.model.monthlyRange) */
   const r500 = (n) => Math.round((+n || 0) / 500) * 500;
-  // An operator's standing in a list line, by the card rule: Proven up the tier and score, Emerging "Vetted", no tier nothing
-  const standing = (op) => { const t = RN.fields.risTierFor(op.ris && op.ris.score); return !t ? '' : RN.ui.tierShown(t.v) ? ` · ${esc(t.l)} ${esc(op.ris.score)} Reputation Index` : ' · Vetted'; };
+  // An operator's standing in a list line, by the card rule: Proven up the tier and score, below that nothing
+  const standing = (op) => { const t = RN.fields.risTierFor(op.ris && op.ris.score); return !t ? '' : RN.ui.tierShown(t.v) ? ` · ${esc(t.l)} ${esc(op.ris.score)} Reputation Index` : ''; };
 
   /* ---------- Engagement Blueprints (public IP) ----------
      Each Blueprint is framed as the problem it solves (problem), keyed to the `need` picklist and a

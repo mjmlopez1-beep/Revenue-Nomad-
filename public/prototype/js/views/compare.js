@@ -225,11 +225,11 @@
     RN.model.ops.slice().sort((a, b) => b.ris.score - a.ris.score || b.completeness - a.completeness).slice(0, 8).forEach((x) => push(x, 'High Reputation Index'));
     return out.slice(0, n || 3);
   }
-  /* The card rule in a text sub-line: Proven up the score and tier, Emerging "Vetted", no tier nothing */
+  /* The card rule in a text sub-line: Proven up the score and tier, below that nothing */
   function suggStanding(op) {
     const t = RN.fields.risTierFor(op.ris && op.ris.score);
     if (!t) return '';
-    return RN.ui.tierShown(t.v) ? ` · ${esc(op.ris.score)} ${esc(t.l)}` : ' · Vetted';
+    return RN.ui.tierShown(t.v) ? ` · ${esc(op.ris.score)} ${esc(t.l)}` : '';
   }
   function suggItem(s) {
     const op = s.op;

@@ -841,7 +841,7 @@
     const base = 'https://revenuenomad.com';
     const t = RN.fields.risTierFor(op.ris.score);
     // Same text as the verification page's snippet (js/views/profile.js badgeSnippet), so both copy the same code
-    const alt = `${op.name}, ${t ? t.l : 'Vetted'}, Reputation Index ${op.ris.score}. Verified by Revenue Nomad as of ${RN.fmt.date(RN.now())}`;
+    const alt = `${op.name}, ${t ? t.l : 'Revenue Nomad operator'}, Reputation Index ${op.ris.score}. Verified by Revenue Nomad as of ${RN.fmt.date(RN.now())}`;
     return `<a href="${base}/verify/${op.slug}" title="Verify ${op.name} on Revenue Nomad">\n  <img src="${base}/badge/${op.slug}.svg" width="220" height="60" alt="${alt}">\n</a>`;
   }
   function badgeSection(op) {

@@ -85,7 +85,7 @@
      bevelled rim, Apex black stone set in a bevelled gold rim. Elite and Apex carry one light sheen; no glow.
      Colours are --tb-* tokens (css/tokens.css), so light, dark and the night band switch by token.
      The card rule: cards and lists show a tier mark only from Proven up (tierShown). Emerging, where every
-     approved profile starts, shows the plain "Vetted" mark with no score. Profiles show the tier and score for
+     approved profile starts, shows no mark on cards and lists. Profiles show the tier and score for
      every tier (ris with {full: true}, or tierBadge directly).
        RN.ui.tierBadge(v, {size = 40, score, label, className})  one inline SVG; '' for an unknown tier
        RN.ui.tierPill(v, score)                                   20px badge + tier + score, for running text; '' for an unknown tier
@@ -230,12 +230,12 @@
      score) or, with o.pill, the pill, in a mark that shows tierWhy on hover and keyboard focus. o.text adds the
      tier name and the "Reputation Index" explainer beside the badge (the card footer layout; o.viewer passes on).
      o.inLink: the mark sits inside a link, so it carries a plain title instead of a focusable tip.
-     Emerging: RN.ui.vetted(o). No tier: ''. */
+     Emerging and no tier: '' (founder, Oct 12, 2026: no mark at all below the first badge). */
   ui.cardTier = function (op, o) {
     o = o || {};
     const t = opTier(op);
     if (!t) return '';
-    if (!ui.tierShown(t.v)) return ui.vetted(o);
+    if (!ui.tierShown(t.v)) return '';
     const score = op.ris && op.ris.score != null && op.ris.score !== '' ? op.ris.score : null;
     const mark = o.pill ? ui.tierPill(t.v, score) : ui.tierBadge(t.v, { size: +o.size || 40, score });
     const why = ui.tierWhy(op);
@@ -288,7 +288,7 @@
 
   /* Reputation Index on cards and rails. op.ris = {score, label, tier}.
      Default (cards, rails): the card rule. Proven up shows the seal with the score, the tier name and the
-     "Reputation Index" explainer, and hovering the seal shows what earned it; Emerging shows the Vetted mark.
+     "Reputation Index" explainer, and hovering the seal shows what earned it; below Proven it shows nothing.
      o.full (profiles): the seal, score and tier name for every tier. No tier: ''. */
   ui.ris = function (op, o) {
     o = o || {};

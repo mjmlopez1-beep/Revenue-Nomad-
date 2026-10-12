@@ -1357,7 +1357,7 @@
             <p>Weights are published so operators know exactly what moves the score and companies know what it measures.</p>` },
           { id: 'tiers', h: 'The tiers', html: `${tbl(['Tier', 'Score', 'What it means'], F.risTier.options.map((t) => [`<b>${esc(t.l)}</b>`, `${t.min} to ${t.max}`, esc(t.d)]), 'rs-tbl-l')}
             <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a company confirmed: verified focus areas and verified engagements.</p>
-            <p>Cards and lists show the tier from Proven up; Emerging profiles show Vetted there. Every profile page shows the full tier and score.</p>` },
+            <p>Cards and lists show a badge from Proven up and no mark below it. Every profile page shows the full tier and score.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
             ${src(`Live count across ${ops.length} operator profiles<span data-proto> in this prototype</span>.`)}
             ${chartGo('Browse operators, highest Reputation Index first', { filters: {}, sort: 'ris', src: 'guide_chart_tiers' })}
