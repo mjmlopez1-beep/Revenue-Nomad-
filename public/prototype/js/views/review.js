@@ -24,6 +24,8 @@
   ];
   const lc = (x) => String(x == null ? '' : x).toLowerCase().trim();
   const ym = (v) => (v ? String(v).slice(0, 7) : '');
+  /* The operator's tier: the stored one, else the one the score gives; null before approval (no badge) */
+  const tierOf = (op) => { const r = (op && op.ris) || {}; return RN.fields.risTier.options.find((t) => t.v === r.tier) || RN.fields.risTierFor(r.score); };
   const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8L12 3Z"/></svg>';
 
   const drafts = {};   // requestId -> {step, max, d}
@@ -172,7 +174,7 @@
     const ask = rr.source === 'client' ? `${first ? 'your' : 'Your'} review of ${esc(op.first)}’s work at ${esc(co)} helps the next company hire well.` : `${esc(op.first)} asked for your review of the ${esc(co)} engagement.`;
     return `<header class="rv-hd">
       <div class="rv-who">${RN.ui.avatar(op, 'ava-md')}<div class="grow"><b>${esc(op.name)}</b><span class="small muted">Fractional ${esc(op.role)}${coName ? ` at ${esc(coName)}` : ''}${start ? ` · ${esc(monthLabel(start))} to ${end ? esc(monthLabel(end)) : 'now'}` : ''}</span></div>
-        <span class="rv-who-ris" title="${esc(op.ris.label)}, Reputation Index ${esc(op.ris.score)}">${RN.ui.tierBadge(op.ris.tier || RN.fields.risTierFor(op.ris.score).v, { size: 44, score: op.ris.score, label: `${op.ris.label}, Reputation Index ${op.ris.score}` })}<span><b>${esc(op.ris.label)}</b><small>Reputation Index</small></span></span></div>
+        ${tierOf(op) ? `<span class="rv-who-ris" title="${esc(tierOf(op).l)}, Reputation Index ${esc(op.ris.score)}">${RN.ui.tierBadge(tierOf(op).v, { size: 44, score: op.ris.score, label: `${tierOf(op).l}, Reputation Index ${op.ris.score}` })}<span><b>${esc(tierOf(op).l)}</b><small>Reputation Index</small></span></span>` : ''}</div>
       <span class="eyebrow">CORE company review</span>
       <h1 class="h1">How was working with ${esc(op.first)}?</h1>
       <p class="lede">${first ? `${esc(first)}, ` : ''}${ask} Three short steps, about four minutes. It publishes on ${esc(op.first)}’s profile with your name, title and company.</p>
@@ -360,7 +362,7 @@
     const n = (op.reviews || []).length;
     return `<span class="label">Preview on ${esc(op.first)}’s profile</span>
       <div class="rv-prof">
-        <div class="rv-prof-hd">${RN.ui.avatar(op, 'ava-sm', { decorative: true })}<div class="grow"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></div>${RN.ui.tierBadge(op.ris.tier || RN.fields.risTierFor(op.ris.score).v, { size: 34, score: op.ris.score, label: `${op.ris.label}, Reputation Index ${op.ris.score}` })}</div>
+        <div class="rv-prof-hd">${RN.ui.avatar(op, 'ava-sm', { decorative: true })}<div class="grow"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></div>${tierOf(op) ? RN.ui.tierBadge(tierOf(op).v, { size: 34, score: op.ris.score, label: `${tierOf(op).l}, Reputation Index ${op.ris.score}` }) : ''}</div>
         <div class="rv-prof-sub"><span>Company reviews</span><span>${n ? `${RN.fmt.int(n)} published, yours is next` : 'Yours will be the first'}</span></div>
         ${previewHtml(rr, op, d)}
       </div>

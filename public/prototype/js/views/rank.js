@@ -43,7 +43,7 @@
     const client = RN.store.state.persona === 'buyer';
     const rate = !op.rate ? '' : client ? `<span class="rk-rate">${esc(RN.fmt.rate(op.rate))}</span>`
       : RN.store.state.persona === 'visitor' ? `<button type="button" class="rk-rate is-locked" data-act="fm-rates">${icon('lock')}Rate</button>` : '';
-    return `<span class="rk-ris">${RN.ui.tierPill(op.ris.tier, op.ris.score)}${rate}</span>`;
+    return `<span class="rk-ris">${RN.ui.cardTier(op, { pill: true })}${rate}</span>`;
   }
   function acts(op) {
     const saved = RN.store.state.shortlist.includes(op.id);

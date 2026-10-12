@@ -1127,7 +1127,8 @@
   const appLive = (id) => { const a = appById(id); return !!a && statusOf(a) === 'live'; };
   const inDir = (o) => !o.admin || appLive(o.admin.appId);
   const editedBy = (o) => { const e = (st().edits || {})[o.id]; return e && e._log && e._log.length ? e._log[e._log.length - 1] : null; };
-  const tierPill = (op) => { const l = op.ris.label; return `<span class="pill ${l === 'Apex' || l === 'Elite' ? 'pill-gold' : l === 'Trusted' || l === 'Proven' ? 'pill-good' : l === 'Emerging' ? 'pill-accent' : ''}">${esc(l)}</span>`; };
+  // Admin is internal, so every tier shows with its score (the shared pill); no tier yet reads as not scored
+  const tierPill = (op) => RN.ui.tierPill((RN.fields.risTierFor(op.ris && op.ris.score) || {}).v, op.ris && op.ris.score) || '<span class="tiny muted">Not scored</span>';
   function dirRows() {
     const q = ui.dirQ.trim().toLowerCase();
     let ops = RN.model.ops.filter(inDir);
@@ -1154,7 +1155,7 @@
         return `<tr class="${o.hidden ? 'is-hidden' : ''}">
           <td class="adm-w"><div class="adm-op">${RN.ui.avatar(o, 'ava-sm')}<div class="grow"><a class="adm-op-n" href="#op.${esc(o.slug)}">${esc(o.name)}</a><span class="tiny muted">${esc(o.role)} · ${esc(o.cat)}</span>
             <span class="adm-op-pills">${o.hidden ? `<span class="pill pill-bad">${icon('eye-off')}Hidden from search</span>` : ''}${o.admin ? '<span class="pill pill-accent">New</span>' : ''}${ed ? `<span class="pill pill-info" title="${esc(ed.fields.join(', '))}">Edited by team ${esc(RN.fmt.dateShort(ed.ts))}</span>` : ''}</span></div></div></td>
-          <td class="r" data-l="Reputation"><span class="adm-ris"><b class="num">${esc(o.ris.score)}</b>${tierPill(o)}</span></td>
+          <td class="r" data-l="Reputation"><span class="adm-ris">${tierPill(o)}</span></td>
           <td data-l="Profile strength"><div class="adm-ratio adm-cmp"><span class="meter"><i style="width:${o.completeness}%"></i></span><b class="tnum">${o.completeness}%</b></div></td>
           <td class="r tnum adm-hide-m">${v}<span class="muted"> / ${o.tags.length}</span></td>
           <td class="small adm-hide-m adm-av">${RN.ui.avail(o, { hours: false })}<span class="tiny muted adm-block">${o.rate ? esc(RN.fmt.rate(o.rate)) : 'No rate listed'}</span></td>

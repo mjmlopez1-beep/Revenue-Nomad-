@@ -989,7 +989,7 @@
       <div class="jn-ladder-copy">
         <span class="eyebrow">Where you start</span>
         <h3 class="h3 jn-ladder-hd">The Reputation Index ladder ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')}</h3>
-        <p class="small muted">One score, the same for you and for companies. It rises with verified reviews, verified fit tags, a complete profile and recent engagements.</p>
+        <p class="small muted">One score, the same for you and for companies. It rises with verified reviews, verified fit tags, a complete profile and recent engagements. Cards show your tier from Proven up; until then they show Vetted.</p>
       </div>
       ${ladder()}
     </div>`;

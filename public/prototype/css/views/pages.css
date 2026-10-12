@@ -876,7 +876,7 @@ main[data-view="operators"] .pg-head .h1 { max-width: 16ch; }
 .op-faces .ava-ring { box-shadow: 0 0 0 2px var(--paper); }
 .pg-hero-strip > div:first-child { position: relative; }
 
-.pg-brow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid var(--ink); }
+.pg-brow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--ink); }
 .pg-brow-t { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: var(--s-6) var(--s-2) var(--s-5); text-align: center; transition: background var(--dur) ease; }
 .pg-brow-t + .pg-brow-t { border-left: 1px solid var(--line-2); }
 .pg-brow-t:hover { background: var(--sunk); }
@@ -889,6 +889,10 @@ main[data-view="operators"] .pg-head .h1 { max-width: 16ch; }
 .pg-brow-t.is-me { background: var(--tint); }
 .pg-brow .pg-rung-me { margin-top: 6px; }
 .pg-ladder-sec .pg-brow + .pg-principles { margin-top: var(--s-12); }
+/* Levels: the card rule and the review window, under the ladder (not a tier) */
+.pg-ladder-notes { display: grid; gap: var(--s-2); margin-top: var(--s-5); }
+.pg-ladder-notes p { display: flex; align-items: flex-start; gap: var(--s-2); margin: 0; font-size: var(--t-14); line-height: 1.5; color: var(--mute); }
+.pg-ladder-notes svg { flex: none; width: 16px; height: 16px; margin-top: 3px; color: var(--accent); }
 .pg-principles > div { border-top: 0; padding-top: 0; }
 .pg-principles .small { font-size: var(--t-14); line-height: 1.55; }
 .pg-principles .h5 { font-size: var(--t-17, 17px); }
@@ -904,6 +908,7 @@ main[data-view="operators"] .pg-head .h1 { max-width: 16ch; }
   .pg-brow-t:nth-child(n) { border-left: 0; border-top: 1px solid var(--line-2); }
   .pg-brow-t:nth-child(even) { border-left: 1px solid var(--line-2); }
   .pg-brow-t:nth-child(-n+2) { border-top: 0; }
+  .pg-brow-t:last-child:nth-child(odd) { grid-column: 1 / -1; border-left: 0; }
   .op-hero-sp::before { inset: 6% -2% -3% 6%; }
 }
 .op-hero-sp::before { inset: -16px -16px 72px 48px; transform: rotate(2deg); }

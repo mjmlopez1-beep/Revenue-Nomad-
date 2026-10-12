@@ -734,7 +734,7 @@
     const more = (it.people || []).slice(1);
     return `<aside class="bw-spot" aria-label="${esc(op.name)}">
       <a class="bw-spot-ph" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}" tabindex="-1" aria-hidden="true">${op.photo ? `<img src="${esc(op.photo)}" alt="" loading="lazy">` : `<span class="bw-spot-in">${esc(op.initials || RN.fmt.initials(op.name))}</span>`}
-        ${op.ris && op.ris.score ? `<span class="bw-spot-ris"><b class="num">${esc(op.ris.score)}</b>${esc(op.ris.label || 'RIS')}</span>` : ''}</a>
+        ${(() => { const m = RN.ui.cardTier(op, { pill: true, inLink: true }); return m ? `<span class="bw-spot-ris">${m}</span>` : ''; })()}</a>
       <div class="bw-spot-id">
         <a class="serif-up" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a>
         <span class="small muted">Fractional ${esc(op.role)}</span>

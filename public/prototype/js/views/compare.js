@@ -52,8 +52,9 @@
   /* ---------- Cells ---------- */
   const sub = (t) => `<span class="cmp-sub">${t}</span>`;
   function risCell(op) {
-    const t = RN.fields.risTierFor(op.ris.score);
-    return `<span class="ris t-${esc(t.v)}">${RN.ui.tierBadge(t.v, { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}<span class="ris-txt"><b>${esc(op.ris.label)}</b><span>${esc(t.min)}–${esc(t.max)} tier</span></span></span>`;
+    const t = RN.fields.risTierFor(op.ris && op.ris.score);
+    if (!t) return none('Not scored yet');
+    return `<span class="ris t-${esc(t.v)}">${RN.ui.tierBadge(t.v, { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span>${esc(t.min)} to ${esc(t.max)} tier</span></span></span>`;
   }
   function coreCell(op) {
     const c = coreAvg(op);
@@ -224,12 +225,18 @@
     RN.model.ops.slice().sort((a, b) => b.ris.score - a.ris.score || b.completeness - a.completeness).slice(0, 8).forEach((x) => push(x, 'High Reputation Index'));
     return out.slice(0, n || 3);
   }
+  /* The card rule in a text sub-line: Proven up the score and tier, Emerging "Vetted", no tier nothing */
+  function suggStanding(op) {
+    const t = RN.fields.risTierFor(op.ris && op.ris.score);
+    if (!t) return '';
+    return RN.ui.tierShown(t.v) ? ` · ${esc(op.ris.score)} ${esc(t.l)}` : ' · Vetted';
+  }
   function suggItem(s) {
     const op = s.op;
     return `<div class="cmp-sug">
       ${RN.ui.avatar(op, 'ava-sm')}
       <div class="grow"><a class="cmp-sug-n" href="#op.${esc(op.slug)}">${esc(op.name)}</a>
-        <span class="cmp-sub">Fractional ${esc(op.role)} · ${esc(op.ris.score)} ${esc(op.ris.label)}</span>
+        <span class="cmp-sub">Fractional ${esc(op.role)}${suggStanding(op)}</span>
         <span class="cmp-sug-why">${esc(s.why)}</span></div>
       <button type="button" class="btn btn-line btn-sm cmp-sug-add" data-act="compare-toggle" data-id="${esc(op.id)}" aria-label="Add ${esc(op.name)} to compare">${icon('plus')}Add</button>
     </div>`;
@@ -333,7 +340,7 @@
           <h2 class="h2">Line operators up side by side</h2>
           <p class="cmp-empty-p">Add up to four from Browse or any profile. Compare puts them on the same standard fields and tints the best value in each row.</p>
           ${sugg.length ? `<div class="cmp-quick"><span class="label">${st.shortlist.length ? 'From your shortlist' : 'Start with these'}</span>
-            <ul>${sugg.map((x) => `<li>${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span class="grow"><a href="#op.${esc(x.op.slug)}">${esc(x.op.name)}</a><span>Fractional ${esc(x.op.role)}</span></span>${RN.ui.tierBadge(RN.fields.risTierFor(x.op.ris.score).v, { size: 28, score: x.op.ris.score, label: `Reputation Index ${x.op.ris.score}` })}<button type="button" class="btn btn-sm btn-line" data-act="compare-toggle" data-id="${esc(x.op.id)}" aria-label="Add ${esc(x.op.name)} to compare">${icon('plus')}Add</button></li>`).join('')}</ul></div>` : ''}
+            <ul>${sugg.map((x) => `<li>${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span class="grow"><a href="#op.${esc(x.op.slug)}">${esc(x.op.name)}</a><span>Fractional ${esc(x.op.role)}</span></span>${RN.ui.cardTier(x.op, { size: 28 })}<button type="button" class="btn btn-sm btn-line" data-act="compare-toggle" data-id="${esc(x.op.id)}" aria-label="Add ${esc(x.op.name)} to compare">${icon('plus')}Add</button></li>`).join('')}</ul></div>` : ''}
           <div class="cmp-empty-act"><a class="btn" href="#browse">Browse operators${icon('arrow')}</a><span class="small muted">Use Compare on any card to add it.</span></div>
         </div>
       </div>`;

@@ -120,7 +120,6 @@
   function tierCounts() {
     const c = {};
     RN.model.ops.forEach((o) => { c[o.ris.tier] = (c[o.ris.tier] || 0) + 1; });
-    c.indexing = (RN.store.state.pending || []).length;
     return c;
   }
   /* The ladder, top rung first. Tiers and ranges from RN.fields.risTier, unlocks from RN.fields.risUnlocks
@@ -136,12 +135,12 @@
       <div class="pg-ladder-hd" aria-hidden="true">${cols.map((c) => `<span class="label">${esc(c)}</span>`).join('')}</div>
       <ol class="pg-ladder" aria-label="Reputation Index tiers, highest first">${tiersDown().map((t) => {
         const n = counts[t.v] || 0;
-        const count = t.v === 'indexing' ? `${RN.fmt.int(n)} ${n === 1 ? 'application' : 'applications'} in review` : RN.fmt.plural(n, 'profile');
+        const count = RN.fmt.plural(n, 'profile');
         const mine = o.me && me && me.ris.tier === t.v;
         return `<li class="pg-rung pg-rung-${esc(t.v)} tb-host">
           <div class="pg-rung-id">
             <span class="pg-seal">${RN.ui.tierBadge(t.v, { size: o.rail ? 64 : 48 })}</span>
-            <span><b class="pg-rung-name">${esc(t.l)}</b><span class="pg-rung-range">${t.v === 'indexing' ? 'Before approval' : `Score ${t.min} to ${t.max}`}</span></span>
+            <span><b class="pg-rung-name">${esc(t.l)}</b><span class="pg-rung-range">Score ${t.min} to ${t.max}</span></span>
           </div>
           ${o.desc ? `<p class="pg-rung-d">${esc(t.d)}</p>` : ''}
           <div class="pg-rung-u"><span class="label pg-rung-ul">Unlocks, proposed</span><ul>${(U[t.v] || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
@@ -161,12 +160,12 @@
     return `<ol class="pg-brow${o.stairs ? ' is-stairs' : ''}" aria-label="Reputation Index tiers, lowest first">${up.map((t, i) => {
       const n = counts[t.v] || 0;
       const mine = me && me.ris.tier === t.v;
-      const h = o.stairs ? Math.max(14, t.v === 'indexing' ? 14 : t.min) : 0;
+      const h = o.stairs ? t.min : 0;
       return `<li class="pg-brow-t pg-rung-${esc(t.v)}${mine ? ' is-me' : ''}" style="--i:${i};--h:${h}%">
         <span class="pg-brow-b">${RN.ui.tierBadge(t.v, { size: o.stairs ? 64 : 56 })}</span>
         <b>${esc(t.l)}</b>
-        <span class="pg-brow-r">${t.v === 'indexing' ? 'In review' : `${t.min} to ${t.max}`}</span>
-        ${o.stairs ? '<i class="pg-brow-step" aria-hidden="true"></i>' : `<span class="pg-brow-n">${t.v === 'indexing' ? RN.fmt.plural(n, 'application') : RN.fmt.plural(n, 'profile')}</span>`}
+        <span class="pg-brow-r">${t.min} to ${t.max}</span>
+        ${o.stairs ? '<i class="pg-brow-step" aria-hidden="true"></i>' : `<span class="pg-brow-n">${RN.fmt.plural(n, 'profile')}</span>`}
         ${mine ? `<span class="pg-rung-me">${RN.ui.avatar(me, 'ava-xs')}You, ${esc(me.ris.score)}</span>` : ''}
       </li>`;
     }).join('')}</ol>`;
@@ -1270,6 +1269,7 @@
   function levelsView() {
     const counts = tierCounts();
     const emerging = counts.emerging || 0;
+    const pending = (RN.store.state.pending || []).length;
     const total = RN.model.ops.length;
     const factors = RN.fields.risFactors.options;
     const maxW = Math.max(...factors.map((f) => f.w || 0), 0.01);
@@ -1280,7 +1280,7 @@
     const principles = [
       ['lock', 'No pay-to-win', 'Nothing you can buy moves a score, a label or a place in search. The inputs are company evidence and a complete profile.'],
       ['send', 'Reviews auto-publish', 'There is no moderation queue and no hand-picking. Every review counts the day it lands, good or bad.'],
-      ['users', 'One label for companies and operators', 'The label comes from the score, and the score is the same on cards, profiles, compare and in Studio.'],
+      ['users', 'One label for companies and operators', 'The label comes from the score, and companies see the same score and label on a profile that the operator sees in Studio.'],
       ['seal', 'Team-checked is not company-verified','Emerging means our team checked identity and work history. Verified is kept for what a company confirmed: focus areas and engagements.'],
     ];
     // Only offer minimums that at least one profile in this prototype meets
@@ -1289,15 +1289,19 @@
     ${hero({
       eyebrow: 'Levels and the Reputation Index',
       h: 'One score. <span class="serif">Earned, never bought.</span>',
-      lede: 'The Reputation Index is a 0 to 100 score built from company evidence. Companies and operators see the same number and the same label, everywhere on Revenue Nomad.',
+      lede: 'The Reputation Index is a 0 to 100 score built from company evidence. Companies and operators see the same number and the same label.',
       actions: `<button type="button" class="btn btn-lg" data-act="pg-browse-sort" data-sort="ris">Browse by Reputation Index${icon('arrow')}</button>${studioSample(studioRoute(/cred/i), 'btn btn-line btn-lg', 'See your level in Studio')}`,
       aside: `<div class="lv-hero-vis"><span class="lv-vis-k">Reputation Index, 0 to 100</span>${badgeRow({ stairs: true, me: true })}</div>`,
     })}
 
     <section class="section pg-ladder-sec">
       <div class="wrap">
-        ${shead('The ladder', 'Six tiers, one for every score.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. What each tier unlocks is proposed and not final.`)}
+        ${shead('The ladder', 'Five tiers, from the day you are approved.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. What each tier unlocks is proposed and not final.`)}
         ${ladder({ desc: true, counts: true, me: true, rail: true })}
+        <div class="pg-ladder-notes">
+          <p>${icon('seal')}<span>Cards show the tier from Proven up; Emerging profiles show Vetted. Every profile page shows the full tier and score.</span></p>
+          <p>${icon('clock')}<span>Applications are reviewed within 2 business days, and a profile has no tier until it is approved.${pending ? `<span data-proto> ${esc(RN.fmt.plural(pending, 'application'))} in review in this prototype.</span>` : ''}</span></p>
+        </div>
       </div>
     </section>
 

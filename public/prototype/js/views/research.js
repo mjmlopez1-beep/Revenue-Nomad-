@@ -1350,13 +1350,14 @@
       stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from company evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
       sections: () => {
         const ops = RN.model.ops.filter((o) => !o.hidden);
-        const tiers = F.risTier.options.filter((t) => t.v !== 'indexing').slice().reverse();
-        const tierRows = tiers.map((t) => ({ label: `${t.l} (${t.min}–${t.max})`, value: ops.filter((o) => o.ris.tier === t.v).length }));
+        const tiers = F.risTier.options.slice().reverse();
+        const tierRows = tiers.map((t) => ({ label: `${t.l} (${t.min} to ${t.max})`, value: ops.filter((o) => o.ris.tier === t.v).length }));
         return [
           { id: 'factors', h: 'The five factors', html: `<dl class="rs-dl rs-dl-w">${F.risFactors.options.map((o) => `<div><dt>${esc(o.l)}<span class="tnum">${Math.round((o.w || 0) * 100)}%</span></dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>
             <p>Weights are published so operators know exactly what moves the score and companies know what it measures.</p>` },
-          { id: 'tiers', h: 'The tiers', html: `${tbl(['Tier', 'Score', 'What it means'], F.risTier.options.map((t) => [`<b>${esc(t.l)}</b>`, `${t.min}–${t.max}`, esc(t.d)]), 'rs-tbl-l')}
-            <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a company confirmed: verified focus areas and verified engagements.</p>` },
+          { id: 'tiers', h: 'The tiers', html: `${tbl(['Tier', 'Score', 'What it means'], F.risTier.options.map((t) => [`<b>${esc(t.l)}</b>`, `${t.min} to ${t.max}`, esc(t.d)]), 'rs-tbl-l')}
+            <p>"Emerging" means the Revenue Nomad team checked identity and work history. "Verified" is reserved for proof a company confirmed: verified focus areas and verified engagements.</p>
+            <p>Cards and lists show the tier from Proven up; Emerging profiles show Vetted there. Every profile page shows the full tier and score.</p>` },
           { id: 'network', h: 'Where the network sits today', html: `${chartSlot('g10-tiers', (w) => bars(tierRows, { label: 'Operators by Reputation Index tier' }, w))}
             ${src(`Live count across ${ops.length} operator profiles<span data-proto> in this prototype</span>.`)}
             ${chartGo('Browse operators, highest Reputation Index first', { filters: {}, sort: 'ris', src: 'guide_chart_tiers' })}
@@ -2002,7 +2003,7 @@
         <div class="row between" style="align-items:flex-end"><h2 class="h3" id="rs-rel-t">${esc(F.catLabel(g.cat))} operators who do this work</h2>
         <a class="btn btn-line btn-sm" href="#browse.${esc(g.cat)}" data-act="rs-browse-cat" data-cat="${esc(g.cat)}" data-src="guide_${esc(g.slug)}">Browse ${esc(F.catLabel(g.cat))}${icon('arrow')}</a></div>
         <div class="grid g-2 rs-rel-ops">
-          ${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}
+          ${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: relWhy(x) })).join('')}
         </div>
       </section>
     </div>
@@ -2083,6 +2084,8 @@
 
   /* The guide's "From the network" module: search results for the guide's topic in its role category, then the
      highest Reputation Index. Every operator is ranked by the same rules. Returns RN.model.search rows {op, why}. */
+  /* A related operator card's reason line: the match reason, else the score from Proven up (the card rule: no score for Emerging) */
+  const relWhy = (x) => (x.why && x.why[0]) || (RN.ui.tierShown((RN.fields.risTierFor(x.op.ris && x.op.ris.score) || {}).v) ? `Reputation Index ${x.op.ris.score}` : '');
   function relatedOps(g) {
     const f = g.cat ? { roleCategories: [g.cat] } : {};
     // The founder's own operator listing is never the one a company-voice guide singles out (founder decision Oct 12, 2026)
@@ -2174,7 +2177,7 @@
         <section id="rs-s-operators" class="rs-rel" aria-labelledby="rs-rel-t">
           <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most company evidence'}</h2></div>
           ${browseBtn(g.cat ? `Browse ${F.catLabel(g.cat)}` : 'Browse all', { filters: g.cat ? { roleCategories: [g.cat] } : {}, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
-          <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}</div>
+          <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: relWhy(x) })).join('')}</div>
           <div class="grid g-2 rs-glinks">
           <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
             ${RN.ui.icoTile('doc', { cat: g.cat, cls: 'rs-bp-ic' })}

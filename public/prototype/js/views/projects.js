@@ -44,6 +44,8 @@
   PJ.overBudget = (rate, rateMax) => (rate && rateMax ? Math.max(0, Math.round(+rate) - rateMax) : 0);
   /* Monthly and project totals round to $500, the Rate Index estimator's rule (RN.model.monthlyRange) */
   const r500 = (n) => Math.round((+n || 0) / 500) * 500;
+  // An operator's standing in a list line, by the card rule: Proven up the tier and score, Emerging "Vetted", no tier nothing
+  const standing = (op) => { const t = RN.fields.risTierFor(op.ris && op.ris.score); return !t ? '' : RN.ui.tierShown(t.v) ? ` · ${esc(t.l)} ${esc(op.ris.score)} Reputation Index` : ' · Vetted'; };
 
   /* ---------- Engagement Blueprints (public IP) ----------
      Each Blueprint is framed as the problem it solves (problem), keyed to the `need` picklist and a
@@ -1448,7 +1450,7 @@
         ${RN.ui.avatar(op, 'ava-md')}
         <div class="grow">
           <div class="row pj-resp-name"><a class="serif-up" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a>${srcPill(p, op.id)}<span class="pill ${declined ? 'pill-bad' : 'pill-good'}">${declined ? 'Declined' : 'Interested'}</span>${dec ? `<span class="pill ${dec[1]}">${esc(dec[0])}</span>` : ''}</div>
-          <p class="small muted">Fractional ${esc(op.role)} · ${esc(op.ris.label)} ${esc(op.ris.score)} Reputation Index · ${esc(declined ? 'Passed' : 'Responded')} ${esc(RN.fmt.ago(r.ts || p.postedAt))}${r.simulated ? ' · Simulated' : ''}</p>
+          <p class="small muted">Fractional ${esc(op.role)}${standing(op)} · ${esc(declined ? 'Passed' : 'Responded')} ${esc(RN.fmt.ago(r.ts || p.postedAt))}${r.simulated ? ' · Simulated' : ''}</p>
         </div>
         <div class="pj-resp-fit">${fitPill(fit)}</div>
       </div>
