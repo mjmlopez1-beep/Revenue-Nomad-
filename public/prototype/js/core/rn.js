@@ -73,12 +73,14 @@
     // spaced hyphen stands in for a dash. Run it on raw text, before RN.esc.
     smart: (s) => String(s == null ? '' : s)
       .replace(/\.\.\./g, '…')
-      .replace(/(\d)\s+-\s+(?=[$€£]?\d)/g, '$1–')
+      .replace(/(\d[kKM]?)\s+-\s+(?=[$€£]?\d)/g, '$1 \uE000 ')
       .replace(/\s-{1,2}\s/g, ' – ')
       .replace(/(^|[\s([{–—])'/g, '$1‘')
       .replace(/'/g, '’')
       .replace(/(^|[\s([{–—])"/g, '$1“')
-      .replace(/"/g, '”'),
+      .replace(/"/g, '”')
+      // Number and money ranges keep a spaced hyphen ("$2.2k - $3.4k/month", founder decision Oct 12, 2026)
+      .replace(/\uE000/g, '-'),
   };
 
   /* ---------- Time: the prototype runs on a simulated clock (Prototype dock can advance it) ---------- */

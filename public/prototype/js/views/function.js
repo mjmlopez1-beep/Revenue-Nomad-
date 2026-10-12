@@ -144,7 +144,7 @@
       [{ title: 'Founder-led healthcare services company' }, ['Problem', '8 commission-only reps, about half not performing, no repeatable process.'],
         ['What the operator does', 'A 90-day build at 20 hours a month for $4,000. Assess reps, document the process, write scripts, train, audit the CRM, make personnel calls.'],
         ['Starting point', '8 reps, about 4 performing. Started Sep 2026 [[gap:90-day result|Matt]]']],
-      [{ title: 'Ferry, hospitality tip management platform' }, ['What happened', 'Matt Lopez served as fractional GTM strategy leader from Feb 2025, signed for 4 months and retained about 18.'],
+      [{ title: 'Ferry, hospitality tip management platform' }, ['What happened', 'A Revenue Nomad operator served as fractional GTM strategy leader from Feb 2025, signed for 4 months and retained about 18.'],
         ['Result', 'First 20 inbound leads, 2 deals that doubled the client base, first AE hired and closing within 60 days. [[gap:Ferry revenue band|Matt]] [[gap:client quote with sign-off|Matt]]']],
     ],
     // One small picture per story, drawn only from figures in that story's own copy
@@ -167,7 +167,6 @@
       ['Will the operator clash with my current sales leader?', 'We set reporting lines before we source. In one engagement the fractional VP sits above an existing director as coach.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
       ['Can I hire the operator full time later?', 'Yes. The conversion fee is 20% of annual salary.'],
-      ['How many hours do I need?', '20 to 40 a month is typical for teams under 5 to 8 reps.'],
     ],
     form: {
       h: 'Tell us about your sales team',
@@ -197,7 +196,7 @@
       ],
       after: [
         'Assessments and projects are fixed fees. Ongoing work is a monthly retainer billed upfront for a set block of hours, with overages flagged before they happen. Retainers have a contract with a 3 to 4 month initial term, then month-to-month with 30 days notice.',
-        'A large consultancy quoted one enterprise SaaS client about $230K for a 6-week assessment. That client chose the $27,000 a month architect. More on [[link:fractional-cost|/fractional-cost]]. Market rates [[gap:2027 survey figure|Survey]].',
+        'More on [[link:fractional-cost|/fractional-cost]]. Market rates [[gap:2027 survey figure|Survey]].',
       ],
     },
     first: {
@@ -210,9 +209,6 @@
         ['Days 61 to 90', 'Customer-journey redesign, handoff to internal admins', 'Visible impact around day 90'],
       ],
       closing: 'Start with the assessment instead and you get a red, yellow and green scorecard, specifications and a roadmap within 60 days. Your CRM admins run the build, or you extend the operator.',
-      // The scorecard the closing line describes, drawn. Rows are the areas the 90 days above cover; the colours are
-      // an illustration of the format, labelled Illustrative, never a client's result.
-      rag: { h: 'Assessment scorecard', rows: [['Bookings goal to pipeline', 'r'], ['Funnel leaks', 'r'], ['Pipeline coverage', 'y'], ['Forecast method', 'y'], ['KPI framework', 'g'], ['Customer journey', 'y']], out: ['Scorecard', 'Specifications', 'Roadmap'], by: 'Within 60 days' },
     },
     stories: [
       [{ title: 'Enterprise billing software company' }, ['Problem', 'Pipeline flat, meeting conversion the lowest the CEO had seen, "no decision" the leading loss reason. Nobody could show the bridge from bookings goal to pipeline.'],
@@ -239,7 +235,6 @@
       ['Do I need an assessment first?', 'If you already know the problem, go straight to an embedded operator. If you need a ranked list your team can run, the $6,000 to $7,500 assessment is the faster start.'],
       ['Who should the operator report to?', 'Whoever owns the number and the budget. In our enterprise billing engagement that is the CFO.'],
       ['Will they replace my RevOps admin?', 'No. The operator sets the system and the priorities. Your admins keep building against a roadmap.'],
-      ['How fast will we see change?', 'A point of view by day 14 and visible impact around day 90.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
       ['Can we hire them full time?', 'Yes, with a conversion fee of 20% of annual salary.'],
     ],
@@ -296,7 +291,7 @@
     // The weighted scorecard (the first story's table) is drawn in the hero, so the stories carry these instead
     viz: [
       { k: 'big', v: '7', u: 'candidates', l: 'Scored on a weighted 7-factor scorecard', n: 7 },
-      { k: 'big', v: '$220 to $400', u: 'an hour', l: 'Candidates for a 60 to 80 hour a month seat' },
+      { k: 'big', v: '$220 - $400/hr', u: '', l: 'Candidates for a 60 to 80 hour a month seat' },
     ],
     vet: {
       lead: 'Every marketing operator is scored on CORE.',
@@ -306,7 +301,6 @@
     faq: [
       ['Do I need a fractional CMO or a demand gen operator?', 'If leads cost too much and agencies run unchecked, start with a demand gen operator with analytical rigor. Brand-heavy CMOs were a disqualifier in our home services search for that reason.'],
       ['Will they manage my agencies?', 'Yes, if it is in scope. Agency and aggregator accountability carries 15% of our scorecard weight.'],
-      ['How many hours does a fractional CMO need?', '40 to 80 a month in our 2026 searches.'],
       ['Can they also support sales?', 'Some can. Sales enablement, including call centers, is a scored factor. Tell us whether you need brand strategy, enablement or both.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
       ['Can we hire them full time?', 'Yes, with a conversion fee of 20% of annual salary.'],
@@ -325,7 +319,7 @@
       sub: 'Real rates from our 2026 engagements, by seat and by hours',
       lede: 'What clients paid or were quoted across Revenue Nomad engagements in 2026. Use it to size a budget before you talk to anyone.',
     },
-    stats: [['net', 'Operators in the network'], ['$4,000', 'A month, where a director-level sales retainer starts'], ['$6,000', 'Where a RevOps assessment starts, as a fixed fee'], ['$0', NO_FEES_L]],
+    stats: [['net', 'Operators in the network'], ['$4k/month', 'Where a director-level sales retainer starts'], ['$6k', 'Where a RevOps assessment starts, as a fixed fee'], ['$0', NO_FEES_L]],
     rates: {
       cols: ['Seat or scope', 'Hours', 'Rate', 'Monthly or fixed'], num: [1, 2, 3],
       groups: [
@@ -361,11 +355,11 @@
       closing: 'One client bought 20 hours a month for $3,000 and missed target every month. Match hours to the job.',
       // One small picture per driver, from the figures in its own sentence
       viz: [
-        { k: 'bars', rows: [['Director, 5-rep team', 4000, 4000, '$4,000'], ['CRO, $55M company', 23200, 23200, '$23,200']], u: 'A month' },
+        { k: 'bars', rows: [['Director, 5-rep team', 4000, 4000, '$4k'], ['CRO, $55M company', 23200, 23200, '$23.2k']], u: 'A month' },
         { k: 'bars', rows: [['20 hours', 20, 20, '20'], ['50 hours', 50, 50, '50']], u: 'Hours a month' },
-        { k: 'big', v: 'About $300', u: 'an hour', l: 'Venture-backed, around $5M ARR' },
+        { k: 'big', v: 'About $300/hr', u: '', l: 'Venture-backed, around $5M ARR' },
         { k: 'jobs', rows: ['CRM admin', 'Revenue leadership', 'Pipeline specialist'] },
-        { k: 'bars', rows: [['Quoted', 6000, 12000, '$6,000 to $12,000'], ['Fit', 4000, 4000, '$4,000']], u: 'A month' },
+        { k: 'bars', rows: [['Quoted', 6000, 12000, '$6k - $12k'], ['Fit', 4000, 4000, '$4k']], u: 'A month' },
       ],
     },
     models: {
@@ -375,7 +369,6 @@
         ['Fixed project', 'Defined deliverable, fixed fee', 'One problem with a clear end', '30-day RevOps project, about $7,000 to $8,000'],
         ['Assessment then retainer', 'Fixed-fee diagnosis, then the operator executes', 'You need a diagnosis before you commit', '45-day assessment at $27,500, then a CRO at $23,200 a month'],
       ],
-      after: ['Assessments lead into execution. You get a scorecard and roadmap, then the option to keep the same operator to deliver it.'],
     },
     total: {
       cols: ['Seat', 'Full-time', 'Fractional, from our 2026 engagements'], blankFirst: true,
@@ -408,9 +401,7 @@
     faq: [
       ['Why do your ranges differ from other published averages?', 'Ours come from 2026 Revenue Nomad engagements in GTM leadership seats only. Broader averages include tactical and non-GTM work.'],
       ['Is hourly or monthly better?', 'Monthly. A fixed block with a weekly cadence sets clear expectations on both sides.'],
-      ['Can I start small?', 'Yes. A RevOps assessment starts at $6,000 and a director-level sales retainer at $4,000 a month.'],
       ['What happens if we go over hours?', 'The operator flags it before it happens. You decide whether to extend.'],
-      ['When will the 2027 Rate Index be published?', 'Results from our State of Fractional GTM survey land in early December 2026. This page updates then.'],
     ],
     form: {
       h: 'Get a budget for your seat',
@@ -418,6 +409,20 @@
     },
   };
   FN.pages = { sales: SALES, revops: REVOPS, marketing: MARKETING, cost: COST };
+
+  /* ---------- Money in tables, cards and chart labels (founder, Oct 12, 2026) ----------
+     Ranges read "$2.2k - $3.4k/month" and "$220 - $340/hr", single values "$7.5k/month" and "$300/hr". Prose from the
+     Site pages document keeps its wording; only figures rendered as a cell, card or label go through cellMoney. The
+     charts parse the copy's own figures before this runs. */
+  const kNum = (v) => { const n = parseFloat(String(v).replace(/,/g, '')); return n >= 1000 ? RN.fmt.k(n) : '$' + v; };
+  const cellMoney = (t) => String(t == null ? '' : t)
+    .replace(/\$(\d{1,3}(?:,\d{3})+)/g, (m, v) => kNum(v))
+    .replace(/(\$[\d.]+k?)\s+to\s+(?=\$)/g, '$1\u00a7')
+    .replace(/(\$[\d.]+k?)\s+a month\b/g, '$1/month')
+    .replace(/(\$[\d.]+k?)\s+an hour\b/g, '$1/hr')
+    .replace(/(\$[\d.]+k?)\s+a year\b/g, '$1/year');
+  // The range hyphen is held as a placeholder through rich(), whose typography would turn " - " into a dash
+  const M = (t) => rich(cellMoney(t)).replace(/\u00a7/g, ' - ');
 
   /* ---------- Pieces ---------- */
   const sec = (key, alt, inner, cls) => `<section class="section fn-sec fn-${key}${alt ? ' fn-alt' : ''}${cls ? ' ' + cls : ''}"><div class="wrap">${inner}</div></section>`;
@@ -439,7 +444,7 @@
     String(s).replace(/\$(\d[\d,]*(?:\.\d+)?)\s*([KM])?/g, (m, v, u) => { n.push(parseFloat(v.replace(/,/g, '')) * (u === 'K' ? 1e3 : u === 'M' ? 1e6 : 1)); return m; });
     return n.length ? { lo: Math.min.apply(null, n), hi: Math.max.apply(null, n) } : null;
   }
-  const kfmt = (v) => (v >= 1e6 ? `$${+(v / 1e6).toFixed(1)}M` : v >= 1000 ? `$${Math.round(v / 1000)}K` : `$${v}`);
+  const kfmt = (v) => (v >= 1e6 ? `$${+(v / 1e6).toFixed(1)}M` : RN.fmt.k(v));
   const pct = (v, max) => +(Math.max(0, Math.min(1, v / (max || 1))) * 100).toFixed(2);
 
   /* Bars on one scale: rows [label, lo, hi, text]. A range draws solid to its low end and lighter to its high end. */
@@ -457,36 +462,51 @@
   }
 
   /* Rates as a table with a range bar in the money column, every row on one scale. On a phone each row stacks into a
-     small card (seat, hours and rate, then the bar), so no column is ever cut off. Rows that hold only a pending chip
-     are reviewer notes. */
+     small card (seat, hours and rate, then the bar), so no column is ever cut off, and a long table shows its first
+     rows (o.phone per group, or per table) with "Show all N". Rows that hold only a pending chip are reviewer notes. */
   function chartTable(t, o) {
     o = o || {};
     const n = t.cols.length, mi = n - 1;
     const rows = t.groups ? [].concat.apply([], t.groups.map((g) => g.rows)) : t.rows;
+    const real = rows.filter(Array.isArray).length;
     const max = Math.max.apply(null, rows.filter(Array.isArray).map((r) => (dollars(r[mi]) || { hi: 0 }).hi)) || 1;
     const step = 5000, top = Math.ceil(max / step) * step;
-    let fixedAny = false;
+    // A "Monthly" column states figures without a unit; the cell reads "$4k - $10k/month", so the header says Price
+    const unitless = /^monthly$/i.test(t.cols[mi]);
+    let fixedAny = false, folded = 0;
     const ticks = [];
     for (let v = 0; v <= top; v += 10000) ticks.push(v);
     const axis = `<span class="fn-rc-axis" aria-hidden="true">${ticks.map((v) => `<i style="left:${pct(v, top)}%">${kfmt(v)}</i>`).join('')}</span>`;
-    const row = (r, i) => {
+    const row = (r, i, j) => {
       if (r.gap) return `<tr class="fn-rc-gap" data-proto><th scope="row">${esc(r.seat)}</th><td colspan="${n - 1}">${FN.gap(r.gap[0], r.gap[1])}</td></tr>`;
       const m = dollars(r[mi]);
       const fixed = /^fixed$/i.test(String(r[2]).trim());
       if (fixed) fixedAny = true;
+      const more = o.phone && j >= o.phone;
+      if (more) folded++;
+      const v = unitless && !/a month|fixed/i.test(r[mi]) ? r[mi] + ' a month' : r[mi];
       const bar = m ? `<span class="fn-rc-track" aria-hidden="true">${ticks.slice(1).map((v) => `<b style="left:${pct(v, top)}%"></b>`).join('')}<i class="fn-grow fn-rc-bar${m.lo === m.hi ? ' is-pt' : ''}${fixed ? ' is-fixed' : ''}" style="--i:${i};left:${pct(m.lo, top)}%;width:${m.lo === m.hi ? 0 : pct(m.hi - m.lo, top)}%"></i></span>` : '';
-      return `<tr><th scope="row">${rich(r[0])}</th>${r.slice(1, mi).map((c, j) => `<td class="fn-rc-m"><span class="fn-rc-l" aria-hidden="true">${esc(t.cols[j + 1])}</span>${rich(c)}</td>`).join('')}<td class="fn-rc-v"><span class="fn-rc-n">${rich(r[mi])}</span>${bar}</td></tr>`;
+      return `<tr${more ? ' class="fn-x"' : ''}><th scope="row">${rich(r[0])}</th>${r.slice(1, mi).map((c, j) => `<td class="fn-rc-m"><span class="fn-rc-l" aria-hidden="true">${esc(t.cols[j + 1])}</span>${M(c)}</td>`).join('')}<td class="fn-rc-v"><span class="fn-rc-n">${M(v)}</span>${bar}</td></tr>`;
     };
     let k = 0;
+    const grpRows = (list) => { let j = 0; return list.map((r) => row(r, k++, Array.isArray(r) ? j++ : -1)).join(''); };
     const body = t.groups
-      ? t.groups.map((g) => `<tbody class="fn-grp" style="--k:${catColor(g.cat)}"><tr class="fn-grp-h"><th colspan="${n}" scope="rowgroup"><i aria-hidden="true"></i>${esc(g.l)}</th></tr>${g.rows.map((r) => row(r, k++)).join('')}</tbody>`).join('')
-      : `<tbody>${t.rows.map((r) => row(r, k++)).join('')}</tbody>`;
-    const head = t.cols.map((c, i) => (i === mi ? `<th scope="col" class="fn-rc-vh"><span>${esc(c)}</span>${axis}</th>` : `<th scope="col">${esc(c)}</th>`)).join('');
-    return `<div class="fn-rc fn-io"${o.cat ? ` style="--k:${catColor(o.cat)}"` : ''}>
+      ? t.groups.map((g) => `<tbody class="fn-grp" style="--k:${catColor(g.cat)}"><tr class="fn-grp-h"><th colspan="${n}" scope="rowgroup"><i aria-hidden="true"></i>${esc(g.l)}</th></tr>${grpRows(g.rows)}</tbody>`).join('')
+      : `<tbody>${grpRows(t.rows)}</tbody>`;
+    const head = t.cols.map((c, i) => (i === mi ? `<th scope="col" class="fn-rc-vh"><span>${esc(unitless ? 'Price' : c)}</span>${axis}</th>` : `<th scope="col">${esc(c)}</th>`)).join('');
+    return `<div class="fn-rc fn-io"${folded ? ' data-fold' : ''}${o.cat ? ` style="--k:${catColor(o.cat)}"` : ''}>
       <table class="fn-tbl fn-tbl-chart"${o.label ? ` aria-label="${esc(o.label)}"` : ''}><thead><tr>${head}</tr></thead>${body}</table>
+      ${folded ? moreBtn(`Show all ${real} ${o.noun || 'rates'}`, true) : ''}
       ${fixedAny ? `<p class="fn-rc-key" aria-hidden="true"><span><i></i>${esc(o.monthly || 'Monthly retainer')}</span><span><i class="is-fixed"></i>Fixed fee</span></p>` : ''}
     </div>`;
   }
+  const moreBtn = (label, phoneOnly) => `<button type="button" class="act fn-more${phoneOnly ? ' fn-more-m' : ''}" data-act="fn-more">${esc(label)}${icon('chev-down')}</button>`;
+  // "Show all N": opens the fold the button sits in, then the button goes
+  RN.actions['fn-more'] = (el) => {
+    const f = el.closest('[data-fold]');
+    if (f) f.classList.add('is-open');
+    el.hidden = true;
+  };
 
   /* ---------- Hero ---------- */
   /* A figure in the stat strip: "350+" gets a unit span, a range ("2 to 3") a quieter "to" between its numbers,
@@ -506,7 +526,8 @@
      Index, then name. Featured operators are the first three. */
   const inCat = (cat) => RN.model.ops.filter((o) => o.catKey === cat && !o.hidden)
     .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0) || String(a.name).localeCompare(String(b.name)));
-  const featured = (cat) => inCat(cat).slice(0, 3);
+  // Company-voice picks never single out the founder's own listing (founder decision Oct 12, 2026)
+  const featured = (cat) => inCat(cat).filter((o) => !o.isMatt).slice(0, 3);
 
   // The bench line under a hero visual: faces, the count, and the way in
   function bench(d, skip) {
@@ -564,7 +585,7 @@
       <figcaption class="fn-hcard-hd"><span class="label">2026 engagements</span><b>Monthly retainers by function</b></figcaption>
       <div class="fn-mix-lanes">${lanes.map((x, i) => `<div class="fn-mix-r" style="--k:${catColor(x.cat)};--i:${i}">
         <span class="fn-mix-l"><i aria-hidden="true"></i>${esc(x.l)}</span>
-        <b class="fn-mix-v">$${esc(RN.fmt.int(x.lo))} to $${esc(RN.fmt.int(x.hi))}</b>
+        <b class="fn-mix-v">${esc(RN.fmt.moRange(x.lo, x.hi))}</b>
         <span class="fn-mix-t" aria-hidden="true">${ticks.slice(1, -1).map((v) => `<u style="left:${pct(v, top)}%"></u>`).join('')}${x.segs.map((s, j) => `<i class="fn-grow${s.lo === s.hi ? ' is-pt' : ''}" style="--i:${i * 2 + j};left:${pct(s.lo, top)}%;width:${s.lo === s.hi ? 0 : pct(s.hi - s.lo, top)}%"></i>`).join('')}</span>
       </div>`).join('')}</div>
       <div class="fn-mix-axis" aria-hidden="true">${ticks.map((v) => `<span style="left:${pct(v, top)}%">${kfmt(v)}</span>`).join('')}</div>
@@ -609,10 +630,11 @@
     const ops = featured(d.cat);
     const gaps = [['featured operator picks', 'Matt'], ['operator OK needed for each named operator', 'Operator']].concat(d.who.gaps || []);
     return sec('who', true, `${PG.shead('Operators', 'Who would I get', esc(RN.fmt.smart(d.who.lede)))}
-      <div class="fn-feat-hd"><h3 class="h4">Featured operators</h3>${gaps.map(([w, o]) => FN.gap(w, o)).join('')}</div>
-      <p class="fn-feat-note small muted">Shown by Reputation Index until the featured picks are confirmed. Every profile is open, no login needed.</p>
+      <div class="fn-feat-hd" data-proto><h3 class="h4">Featured operators</h3>${gaps.map(([w, o]) => FN.gap(w, o)).join('')}</div>
+      <p class="fn-feat-note small muted" data-proto>Shown by Reputation Index until the featured picks are confirmed. Every profile is open, no login needed.</p>
       ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(withLine(op), { meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
-      <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>`);
+      <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>
+      ${vet(d)}`);
   }
 
   /* Plain tables (the cost hub's terms and the pending Rate Index). t: { cols, rows, num, label } */
@@ -621,16 +643,19 @@
     const num = t.num || [];
     const n = t.cols.length;
     const th = (c, i) => `<th scope="col"${num.includes(i) ? ' class="r"' : ''}>${esc(c)}</th>`;
-    const row = (r) => {
-      if (r.gap) return `<tr><th scope="row">${esc(r.seat)}</th><td colspan="${n - 1}" class="fn-td-gap">${FN.gap(r.gap[0], r.gap[1])}</td></tr>`;
-      return `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${rich(c)}</th>` : `<td${num.includes(i) ? ' class="r"' : ''}>${rich(c)}</td>`)).join('')}</tr>`;
+    const more = (i) => (o.phone && i >= o.phone ? ' class="fn-x"' : '');
+    const row = (r, i) => {
+      if (r.gap) return `<tr${more(i)}><th scope="row">${esc(r.seat)}</th><td colspan="${n - 1}" class="fn-td-gap">${FN.gap(r.gap[0], r.gap[1])}</td></tr>`;
+      return `<tr${more(i)}>${r.map((c, i) => (i === 0 ? `<th scope="row">${rich(c)}</th>` : `<td${num.includes(i) ? ' class="r"' : ''}>${M(c)}</td>`)).join('')}</tr>`;
     };
-    return `<div class="fn-tblw"><table class="fn-tbl"${o.label ? ` aria-label="${esc(o.label)}"` : ''}>
-      <thead><tr>${t.cols.map(th).join('')}</tr></thead><tbody>${t.rows.map(row).join('')}</tbody></table></div>`;
+    const fold = o.phone && t.rows.length > o.phone;
+    return `<div class="fn-tblw"${fold ? ' data-fold' : ''}><table class="fn-tbl"${o.label ? ` aria-label="${esc(o.label)}"` : ''}>
+      <thead><tr>${t.cols.map(th).join('')}</tr></thead><tbody>${t.rows.map(row).join('')}</tbody></table>
+      ${fold ? moreBtn(`Show all ${t.rows.length} ${o.noun || 'rows'}`, true) : ''}</div>`;
   }
   function cost(d) {
     return sec('cost', false, `${PG.shead('Cost', 'What it costs', esc(d.cost.lede))}
-      ${chartTable(d.cost, { cat: d.cat, label: d.cost.lede.replace(/\.$/, '') })}
+      ${chartTable(d.cost, { cat: d.cat, label: d.cost.lede.replace(/\.$/, ''), phone: 3 })}
       ${paras(d.cost.after)}`);
   }
 
@@ -675,21 +700,10 @@
     }).join('');
     return `<div class="fn-gantt fn-io" style="--mz:${MZ - 3}%">${axis}<ol class="fn-g-rows" aria-label="What happens first">${items}</ol></div>`;
   }
-  // RevOps: the red, yellow and green scorecard its closing line describes
-  function rag(g) {
-    const L = { r: 'Red', y: 'Yellow', g: 'Green' };
-    return `<figure class="fn-rag fn-io">
-      <figcaption class="fn-rag-hd"><b>${esc(g.h)}</b>${RN.ui.illus('Illustrative', 'The areas come from the 90 days above; the colours show the format, not a client result.')}</figcaption>
-      <div class="fn-rag-key" aria-hidden="true">${Object.keys(L).map((k) => `<span><i class="is-${k}"></i>${L[k]}</span>`).join('')}</div>
-      <ul class="fn-rag-rows">${g.rows.map(([l, k], i) => `<li style="--i:${i}"><span>${esc(l)}</span><span class="fn-rag-dots" role="img" aria-label="${L[k]}">${Object.keys(L).map((x) => `<i class="is-${x}${x === k ? ' on' : ''}"></i>`).join('')}</span></li>`).join('')}</ul>
-      <div class="fn-rag-out">${g.out.map((t) => `<span>${icon('check')}${esc(t)}</span>`).join('')}<b>${icon('clock')}${esc(g.by)}</b></div>
-    </figure>`;
-  }
   function first(d) {
-    const closing = d.first.closing ? `<p class="fn-lead">${rich(d.first.closing)}</p>` : '';
-    return sec('first', true, `${PG.shead('First 90 days', 'What happens first')}
-      ${gantt(d)}
-      ${d.first.rag ? `<div class="fn-first-foot">${closing}${rag(d.first.rag)}</div>` : closing}`);
+    // The closing line reads as the section's lede, so it sits under the heading instead of a block of its own
+    return sec('first', true, `${PG.shead('First 90 days', 'What happens first', d.first.closing ? rich(d.first.closing) : '')}
+      ${gantt(d)}`);
   }
 
   /* ---------- Who like me has done this ----------
@@ -700,8 +714,8 @@
     if (v.k === 'bars') inner = bars(v.rows, { l: v.l || v.u });
     else if (v.k === 'people' || v.k === 'deals') {
       inner = `<div class="fn-vg-dots fn-io${v.k === 'deals' ? ' is-deals' : ''}" role="img" aria-label="${esc(v.l)}">${Array.from({ length: v.n }, (_, i) => `<i class="${i < v.on ? 'on' : ''}" style="--i:${i}">${v.k === 'deals' ? esc(v.v) : icon('user')}</i>`).join('')}</div><span class="fn-vg-cap">${esc(v.l)}</span>`;
-    } else if (v.k === 'big') inner = `<span class="fn-vg-big"><b>${figure(v.v)}</b><span>${esc(v.u)}</span></span>${v.n ? `<span class="fn-vg-dots fn-io" aria-hidden="true">${Array.from({ length: v.n }, (_, i) => `<i class="on" style="--i:${i}">${icon('user')}</i>`).join('')}</span>` : ''}${v.l ? `<span class="fn-vg-cap">${esc(v.l)}</span>` : ''}`;
-    else if (v.k === 'jobs') inner = `<span class="fn-vg-jobs" role="img" aria-label="${esc(v.rows.join(', '))}">${v.rows.map((t, i) => `<i style="--i:${i}">${esc(t)}</i>`).join('')}</span>`;
+    } else if (v.k === 'big') inner = `<span class="fn-vg-big"><b>${figure(v.v)}</b>${v.u ? `<span>${esc(v.u)}</span>` : ''}</span>${v.n ? `<span class="fn-vg-dots fn-io" aria-hidden="true">${Array.from({ length: v.n }, (_, i) => `<i class="on" style="--i:${i}">${icon('user')}</i>`).join('')}</span>` : ''}${v.l ? `<span class="fn-vg-cap">${esc(v.l)}</span>` : ''}`;
+    else if (v.k === 'jobs') inner = `<span class="fn-vg-jobs" role="img" aria-label="${esc(v.rows.join(', '))}">${v.rows.map((t, i) => `<i class="ftag" style="--i:${i}">${esc(t)}</i>`).join('')}</span>`;
     return `<div class="fn-vg fn-vg-${v.k}">${inner}</div>`;
   }
   function story(parts, v) {
@@ -718,35 +732,37 @@
     const n = d.stories.length;
     return sec('proof', false, `${PG.shead('Proof', 'Who like me has done this', d.storiesLede ? esc(RN.fmt.smart(d.storiesLede)) : '')}
       <div class="fn-stories is-${n > 2 ? 3 : n}">${d.stories.map((st, i) => story(st, (d.viz || [])[i])).join('')}</div>
-      ${FN.logoStrip({ network: true, pending: true })}`);
+      ${FN.logoStrip({ pending: true })}`);
   }
 
-  /* ---------- How we vet: the four bullets map in order to C, O, R, E (a night band) ---------- */
+  /* ---------- How we vet: a night panel closing Who would I get. The four bullets map in order to C, O, R, E. ----------
+     The policy line ("We place only dedicated fractional operators") repeats the section lede, so only the page's own
+     second paragraph stays. */
   const CORE_IC = ['message', 'shield', 'target', 'compass'];
+  const SAME_AS_LEDE = /^We place only dedicated fractional operators\./;
   function vet(d) {
     const dims = RN.fields.coreDims.options;
-    const q = featured(d.cat).find((o) => o.headline && o.photo);
-    const quote = q ? `<figure class="fn-voice">
-        <span class="fn-voice-ic" aria-hidden="true">${icon('quote')}</span>
-        <blockquote>${esc(RN.fmt.smart(q.headline))}</blockquote>
-        <figcaption><img class="ava ava-md" src="${esc(q.photo)}" alt=""><span><a href="#op.${esc(q.slug)}">${esc(q.name)}</a><span>Fractional ${esc(q.role)}</span></span></figcaption>
-      </figure>` : '';
-    return `<section class="section night fn-sec fn-vet"><div class="wrap">
-      ${PG.shead('Vetting', 'How we vet', esc(d.vet.lead))}
+    const rest = (d.vet.paras || []).filter((p) => !SAME_AS_LEDE.test(p));
+    return `<div class="panel-night fn-vetp" id="fn-vet">
+      <div class="fn-vetp-hd"><span class="eyebrow">Vetting</span><h3 class="h3">How we vet</h3><p class="lede">${esc(d.vet.lead)}</p></div>
       <ul class="fn-core" aria-label="CORE, the four scores">${d.vet.core.map((t, i) => `<li style="--i:${i}">
         <span class="fn-core-ic" aria-hidden="true">${icon(CORE_IC[i] || 'check')}<b>${esc(dims[i].v)}</b></span>
         <span class="fn-core-n">${esc(dims[i].l)}</span>
         <p>${rich(t)}</p>
       </li>`).join('')}</ul>
-      <div class="fn-vet-foot${quote ? '' : ' is-solo'}">
-        <div>${paras(d.vet.paras, 'fn-vet-p')}<a class="act fn-vet-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a></div>
-        ${quote}
-      </div>
-    </div></section>`;
+      <div class="fn-vetp-foot">${paras(rest, 'fn-vet-p')}<a class="act fn-vet-link" href="#levels">How CORE feeds the Reputation Index${icon('arrow')}</a></div>
+    </div>`;
   }
 
+  /* FAQ: the first four, the rest behind "Show all N" */
+  function faqList(items) {
+    const SHOW = 4;
+    if (items.length <= SHOW) return PG.faq(items);
+    return `<div class="fn-faqf" data-fold>${PG.faq(items.slice(0, SHOW))}<div class="fn-fold">${PG.faq(items.slice(SHOW), { closed: true })}</div>
+      ${moreBtn(`Show all ${items.length} questions`)}</div>`;
+  }
   function faq(d) {
-    return sec('faq', false, `<div class="fn-faq-in">${PG.shead('FAQ', 'Common questions')}${PG.faq(d.faq)}</div>`);
+    return sec('faq', false, `<div class="fn-faq-in">${PG.shead('FAQ', 'Common questions')}${faqList(d.faq)}</div>`);
   }
 
   /* Form block: Talk to us is the four-question flow on #talk. The card lists its questions, with this page's need
@@ -785,8 +801,8 @@
   /* ---------- Cost hub pieces ---------- */
   function rates(d) {
     const ri = { cols: ['Seat', 'Median rate, typical hours and typical monthly'], rows: d.riSeats.map((s) => ({ seat: s, gap: ['2027 survey figure', 'Survey'] })) };
-    return `<section class="section fn-sec fn-rates fn-alt" id="fn-rates"><div class="wrap">${PG.shead('2026 engagements', 'Rates by seat', esc(d.hero.lede.split('. ')[0] + '.'))}
-      ${chartTable(d.rates, { label: 'Rates by seat, 2026 engagements', monthly: 'Monthly' })}
+    return `<section class="section fn-sec fn-rates fn-alt" id="fn-rates"><div class="wrap">${PG.shead('2026 engagements', 'Rates by seat')}
+      ${chartTable(d.rates, { label: 'Rates by seat, 2026 engagements', monthly: 'Monthly', phone: 1, noun: 'seats' })}
       <div class="fn-ri">
         <p class="pg-p fn-outside">${rich(d.outside)}</p>
         <aside class="fn-ri-r" aria-label="Until the survey lands">
@@ -805,53 +821,53 @@
   function moves(d) {
     const v = d.moves.viz || [];
     return sec('moves', false, `${PG.shead('Price drivers', 'What moves the price')}
-      <ol class="fn-drivers">${d.moves.items.map((t, i) => `<li><span class="fn-drv-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><p>${rich(t)}</p>${vignette(v[i])}</li>`).join('')}</ol>
-      <p class="fn-lead">${rich(d.moves.closing)}</p>`);
+      <div class="fn-drv-grid"><ol class="fn-drivers">${d.moves.items.map((t, i) => `<li><span class="fn-drv-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><p>${rich(t)}</p>${vignette(v[i])}</li>`).join('')}</ol>
+      <p class="fn-lead">${rich(d.moves.closing)}</p></div>
+      ${models(d)}`);
   }
-  /* Engagement models: one card each, with a strip that draws how the hours fall over time */
-  const MODEL_ART = [
-    '<i></i><i></i><i></i><i></i><i></i><i></i>',
-    '<i class="is-one"></i><em></em>',
-    '<i class="is-diag"></i><i></i><i></i><i></i><i></i>',
-  ];
+  /* Engagement models: one card each */
   function models(d) {
     const c = d.models.cols;
-    return sec('models', true, `${PG.shead('Models', 'Engagement models')}
+    // Part of What moves the price: how the hours are bought is the last thing that moves it
+    return `<div class="fn-models-in"><h3 class="h3 fn-models-h">Engagement models</h3>
       <div class="grid g-3 fn-models">${d.models.rows.map((r, i) => `<article class="fn-model">
-        <span class="fn-model-art fn-io" aria-hidden="true">${MODEL_ART[i] || ''}</span>
         <h3 class="fn-model-t">${esc(r[0])}</h3>
         <p class="fn-model-how"><span class="sr-only">${esc(c[1])}: </span>${rich(r[1])}</p>
-        <dl><div><dt>${esc(c[2])}</dt><dd>${rich(r[2])}</dd></div><div><dt>${esc(c[3])}</dt><dd>${rich(r[3])}</dd></div></dl>
+        <dl><div><dt>${esc(c[2])}</dt><dd>${rich(r[2])}</dd></div><div><dt>${esc(c[3])}</dt><dd>${M(r[3])}</dd></div></dl>
       </article>`).join('')}</div>
-      ${paras(d.models.after)}`);
+      ${paras(d.models.after)}</div>`;
   }
   /* Total cost: one card per seat, full-time against fractional, with paired bars where both sides are dollar figures */
   function total(d) {
     const c = d.total.cols, v = d.total.viz || [];
     return `<section class="section night fn-sec fn-total"><div class="wrap">${PG.shead('Comparison', 'Total cost against a full-time hire')}
-      <div class="grid g-2 fn-vs">${d.total.rows.map((r, i) => {
+      <div data-fold><div class="grid g-2 fn-vs">${d.total.rows.map((r, i) => {
         const z = v[i];
         const max = z ? Math.max(z[0][1], z[1][1]) : 1;
         const side = (k, label, text, val) => `<div class="fn-vs-s is-${k}">
           <span class="fn-vs-l">${esc(label)}</span>
           ${val ? `<span class="fn-vs-bar fn-io" aria-hidden="true"><i class="fn-grow" style="width:${pct(val[0], max)}%"></i>${val[1] > val[0] ? `<i class="fn-grow fn-vs-x" style="left:${pct(val[0], max)}%;width:${pct(val[1] - val[0], max)}%"></i>` : ''}</span>` : ''}
-          <p>${rich(text)}</p>
+          <p>${M(text)}</p>
         </div>`;
-        return `<article class="fn-vs-c${z ? ' has-bars' : ''}">
+        return `<article class="fn-vs-c${z ? ' has-bars' : ''}${i >= 2 ? ' fn-x' : ''}">
           <h3 class="fn-vs-t">${esc(r[0])}</h3>
           ${side('ft', c[1], r[1], z && z[0])}${side('fr', c[2], r[2], z && z[1])}
         </article>`;
-      }).join('')}</div>
+      }).join('')}</div>${d.total.rows.length > 2 ? moreBtn(`Show all ${d.total.rows.length} comparisons`, true) : ''}</div>
       ${paras(d.total.after)}
     </div></section>`;
   }
+  /* Terms and the FAQ answer the same question (how an engagement runs), so they share a section */
   function terms(d) {
-    return sec('terms', true, `${PG.shead('Terms', 'How an engagement runs')}${table(d.terms, { label: 'Terms' })}${FN.logoStrip({ network: true, pending: true })}`);
+    return sec('terms', true, `<div class="fn-terms-in">
+      <div class="fn-terms-t">${PG.shead('Terms', 'How an engagement runs')}${table(d.terms, { label: 'Terms', phone: 4, noun: 'terms' })}</div>
+      <div class="fn-terms-q">${PG.shead('FAQ', 'Common questions')}${faqList(d.faq)}</div>
+    </div>${FN.logoStrip({ pending: true })}`);
   }
 
   /* ---------- Views ---------- */
-  const homeView = (d) => `<div class="fn-page" data-fn="${esc(d.fn)}">${hero(d)}${who(d)}${cost(d)}${first(d)}${stories(d)}${vet(d)}${faq(d)}${formBlock(d)}</div>`;
-  const costView = (d) => `<div class="fn-page fn-page-cost" data-fn="${esc(d.fn)}">${hero(d)}${rates(d)}${moves(d)}${models(d)}${total(d)}${terms(d)}${faq(d)}${formBlock(d)}</div>`;
+  const homeView = (d) => `<div class="fn-page" data-fn="${esc(d.fn)}">${hero(d)}${who(d)}${cost(d)}${first(d)}${stories(d)}${faq(d)}${formBlock(d)}</div>`;
+  const costView = (d) => `<div class="fn-page fn-page-cost" data-fn="${esc(d.fn)}">${hero(d)}${rates(d)}${moves(d)}${total(d)}${terms(d)}${formBlock(d)}</div>`;
 
   /* Motion: charts below the fold grow in as they scroll into view. Armed on the first scroll (as on home), so a page
      that is never scrolled, a print or a full-page capture shows every chart drawn. */
