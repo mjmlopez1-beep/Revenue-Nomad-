@@ -1613,7 +1613,7 @@
             "url": ""
           },
           {
-            "k": "Days for the first AE Matt hired at Ferry to close a deal",
+            "k": "Days for the first AE hired at Ferry to close a deal",
             "v": "Within 60 days",
             "src": "Matt Lopez at Ferry, Revenue Nomad network",
             "url": ""
