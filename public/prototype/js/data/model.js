@@ -111,7 +111,7 @@
       tags,
       reviews: p.reviews || [],
       core: p.core || null,
-      ris: { score, label: F.risTierFor(score).l, tier: F.risTierFor(score).v },
+      ris: ((t) => ({ score, label: t ? t.l : '', tier: t ? t.v : null }))(F.risTierFor(score)),
       wouldHireAgain: pp.wouldHireAgain != null ? pp.wouldHireAgain : null,
       engagements,
       // Blueprints this operator offers as a packaged engagement ("Ways to work with me"); set in Studio
@@ -346,7 +346,7 @@
       });
       // A 5.0 review adds the full gain, 4.0 half, 3.0 or lower nothing
       op.ris.score = Math.min(99, op.ris.score + Math.round(M.risGain('review') * RN.clamp(((rv.coreAvg || rv.overall || 5) - 3) / 2, 0, 1)));
-      const t = F.risTierFor(op.ris.score); op.ris.label = t.l; op.ris.tier = t.v;
+      const t = F.risTierFor(op.ris.score); op.ris.label = t ? t.l : ''; op.ris.tier = t ? t.v : null;
       op.completeness = completeness(op);
     });
   };
@@ -628,7 +628,7 @@
     const other = p.industries.find((i) => !op.industries.includes(i));
     if (edge.length < 2 && other && !edge.some((e) => /^experience in/.test(e))) edge.push('experience in ' + RN.w.label('industries', other));
     if (!edge.length) edge.push('a closer stage fit');
-    return { who: `An operator in ${F.catLabel(p.catKey)}, ${p.ris.label} tier`, cat: p.catKey, tier: p.ris.label, edge: edge.slice(0, 3) };
+    return { who: `An operator in ${F.catLabel(p.catKey)}${p.ris.label ? `, ${p.ris.label} tier` : ''}`, cat: p.catKey, tier: p.ris.label, edge: edge.slice(0, 3) };
   }
   /* Loop 3: a client compared this operator with others (compare_view, meta.with) and then, within 14 days, asked
      to meet, selected or shortlisted one of the others and not this operator. Released 7 days after the decision. */

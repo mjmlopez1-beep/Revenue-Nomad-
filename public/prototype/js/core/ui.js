@@ -75,19 +75,39 @@
     return `<span class="row-nw" style="--gap:1px" role="img" aria-label="${esc(n)} out of 5 stars">${s}</span>`;
   };
 
-  /* ---------- Reputation Index tier badges (D11, founder decision Sep 25, 2026) ----------
+  /* ---------- Reputation Index tier badges (D11, founder decisions Sep 25 and Oct 12, 2026) ----------
      One component for every tier mark. Never hand-draw a tier hexagon: call these helpers.
+     Five tiers, from RN.fields.risTier (Apex first): Emerging 50 to 59, Proven 60 to 69, Trusted 70 to 79,
+     Elite 80 to 89, Apex 90 to 100. A profile that is not approved and scored yet has no tier and no badge
+     (RN.fields.risTierFor returns null below 50), and a score is never drawn without a tier.
      Rarity reads from material, not colour alone, so the order survives grayscale and colour-blind viewing:
-     Indexing dashed outline, Emerging single line, Proven solid forest, Trusted forest with an inner ring,
-     Elite bevelled brushed gold, Apex black stone set in a gold rim. Tiers come from RN.fields.risTier
-     (Apex first). Colours are --tb-* tokens (css/tokens.css), so light, dark and the night band switch by token.
-       RN.ui.tierBadge(v, {size = 40, score, label, className})  one inline SVG
-       RN.ui.tierPill(v, score)                                   20px badge + tier + score, for running text
-       RN.ui.tierLadder(v, {score, showNext, orientation, compact, showRanges, only, notes})  the six tiers */
-  const TIER_RANK = { indexing: 0, emerging: 1, proven: 2, trusted: 3, elite: 4, apex: 5 };
+     Emerging single line, Proven solid forest, Trusted forest with a bold inner leaf ring, Elite flat gold in a
+     bevelled rim, Apex black stone set in a bevelled gold rim. Elite and Apex carry one light sheen; no glow.
+     Colours are --tb-* tokens (css/tokens.css), so light, dark and the night band switch by token.
+     The card rule: cards and lists show a tier mark only from Proven up (tierShown). Emerging, where every
+     approved profile starts, shows the plain "Vetted" mark with no score. Profiles show the tier and score for
+     every tier (ris with {full: true}, or tierBadge directly).
+       RN.ui.tierBadge(v, {size = 40, score, label, className})  one inline SVG; '' for an unknown tier
+       RN.ui.tierPill(v, score)                                   20px badge + tier + score, for running text; '' for an unknown tier
+       RN.ui.tierLadder(v, {score, showNext, orientation, compact, showRanges, only, notes})  the five tiers
+       RN.ui.tierRank(v)       emerging 0 ... apex 4, unknown -1
+       RN.ui.tierShown(v)      true from Proven up: the tiers cards and lists may show
+       RN.ui.vetted(o)         the plain "Vetted" check mark ({night: true} on a dark band)
+       RN.ui.tierWhy(op)       what earned the tier, from the operator's own record
+       RN.ui.cardTier(op, o)   the one tier mark for cards and lists: Proven up a badge (o.size, 40) or o.pill,
+                               with tierWhy on hover and focus; o.text adds the tier name; o.inLink for a mark
+                               inside a link (title only); Emerging the Vetted mark; no tier ''
+       RN.ui.ris(op, o)        cards and rails follow the card rule; {full: true} (profiles) shows any tier */
+  const TIER_RANK = { emerging: 0, proven: 1, trusted: 2, elite: 3, apex: 4 };
   const tierOpts = () => RN.fields.risTier.options;
-  const tierOpt = (v) => tierOpts().find((t) => t.v === v) || tierOpts().find((t) => t.v === 'indexing');
-  ui.tierRank = (v) => (v in TIER_RANK ? TIER_RANK[v] : 0);
+  const tierOpt = (v) => (v && v in TIER_RANK && tierOpts().find((t) => t.v === v)) || null;
+  ui.tierRank = (v) => (v && v in TIER_RANK ? TIER_RANK[v] : -1);
+  ui.tierShown = (v) => ui.tierRank(v) >= TIER_RANK.proven;
+  /* The tier option for an operator: the stored tier, else the one its score gives, else null */
+  const opTier = (op) => {
+    const r = (op && op.ris) || {};
+    return tierOpt(r.tier) || (RN.fields.risTierFor ? RN.fields.risTierFor(r.score) : null);
+  };
   let tbSeq = 0;
   const HEX_R = 48;
   const f2 = (n) => +(+n).toFixed(2);
@@ -111,6 +131,7 @@
   ui.tierBadge = function (v, o) {
     o = o || {};
     const t = tierOpt(v);
+    if (!t) return ''; // no tier (not approved and scored yet, or an unknown value): no badge, never a bare score
     v = t.v;
     const size = +o.size || 40;
     const id = 'tb' + (++tbSeq);
@@ -125,12 +146,7 @@
     const line = Math.max(1.25, size * 0.03); // outline weight in px
     const R = HEX_R;
     let body = '', defs = '';
-    if (v === 'indexing') {
-      // Not scored yet: a dashed outline, nearly empty
-      const sw = px(line), r = R - sw / 2;
-      const n = size < 32 ? 2 : 3, per = r / n, dash = per * 0.55, gap = per - dash;
-      body = `<path d="${hexD(r)}" style="fill:var(--tb-idx-fill);stroke:var(--tb-idx-line);stroke-width:${sw};stroke-dasharray:${f2(dash)} ${f2(gap)};stroke-dashoffset:${f2(dash / 2)};stroke-linejoin:round"/>` + text('var(--tb-idx-ink)', 700);
-    } else if (v === 'emerging') {
+    if (v === 'emerging') {
       // One solid line on a pale leaf fill
       const sw = px(line), r = R - sw / 2;
       body = `<path d="${hexD(r)}" style="fill:var(--tb-emg-fill);stroke:var(--tb-emg-line);stroke-width:${sw};stroke-linejoin:round"/>` + text('var(--tb-emg-ink)', 800);
@@ -139,35 +155,31 @@
       const sw = px(1), r = R - sw / 2;
       body = `<path d="${hexD(r)}" style="fill:var(--tb-prv-fill);stroke:var(--tb-prv-edge);stroke-width:${sw};stroke-linejoin:round"/>` + text('var(--tb-prv-ink)', 800);
     } else if (v === 'trusted') {
-      // Deeper lit forest plus an inner leaf ring
-      const inset = px(Math.max(2.5, size * 0.085)), ring = px(Math.max(1.1, size * 0.024));
+      // Deeper lit forest plus an inner leaf ring. Under 32px the ring is drawn bold and set further in, so
+      // Trusted never reads as Proven at pill and list sizes.
+      const small = size < 32;
+      const inset = px(small ? Math.max(3.3, size * 0.17) : Math.max(2.5, size * 0.085));
+      const ring = px(small ? Math.max(1.8, size * 0.09) : Math.max(1.4, size * 0.03));
       defs = `<linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--tb-tru-1)"/><stop offset="1" style="stop-color:var(--tb-tru-2)"/></linearGradient>`;
       body = `<path d="${hexD(R)}" fill="url(#${id}g)"/>`
         + `<path d="${hexD(R - inset)}" style="fill:none;stroke:var(--tb-tru-ring);stroke-width:${ring};stroke-linejoin:round"/>` + text('var(--tb-tru-ink)', 800);
     } else if (v === 'elite') {
-      // Brushed gold with a bevelled rim
+      // Flat refined gold in a bevelled rim, with the sheen
       const bw = px(Math.max(2.4, size * 0.1)), ri = R - bw;
       defs = `<linearGradient id="${id}f" x1=".1" y1="0" x2=".9" y2="1"><stop offset="0" style="stop-color:var(--tb-eli-face-1)"/><stop offset=".5" style="stop-color:var(--tb-eli-face-2)"/><stop offset="1" style="stop-color:var(--tb-eli-face-3)"/></linearGradient>`
-        + `<clipPath id="${id}c"><path d="${hexD(ri)}"/></clipPath><clipPath id="${id}o"><path d="${hexD(R)}"/></clipPath>`;
-      let brush = '';
-      if (size >= 40) { // hairline brushing, only where it can resolve
-        const step = px(1.6);
-        for (let y = 4; y < 96; y += step) { const odd = Math.round(y / step) % 2; brush += `<line x1="0" x2="100" y1="${f2(y)}" y2="${f2(y)}" style="stroke:${odd ? '#fff' : '#6B4C08'};stroke-opacity:${odd ? 0.22 : 0.07};stroke-width:${px(0.6)}"/>`; }
-      }
+        + `<clipPath id="${id}o"><path d="${hexD(R)}"/></clipPath>`;
       body = bevel(R, ri)
         + `<path d="${hexD(ri)}" fill="url(#${id}f)"/>`
-        + (brush ? `<g clip-path="url(#${id}c)">${brush}</g>` : '')
         + `<path d="${hexD(R - px(0.5))}" style="fill:none;stroke:var(--tb-au-edge);stroke-width:${px(1)};stroke-linejoin:round;stroke-opacity:.9"/>`
         + (size >= 32 ? `<g clip-path="url(#${id}o)"><path class="tb-sheen" d="M-30 110L0 -10L22 -10L-8 110Z" style="fill:#fff;fill-opacity:.35"/></g>` : '')
         + text('var(--tb-eli-ink)', 900);
     } else {
-      // Apex: black stone set in a bevelled gold rim, warm inner glow, gold numerals
+      // Apex: black stone set in a bevelled gold rim, gold numerals, the sheen
       const bw = px(Math.max(2.6, size * 0.095)), ri = R - bw;
       defs = `<radialGradient id="${id}s" cx=".5" cy=".4" r=".62"><stop offset="0" style="stop-color:var(--tb-apx-1)"/><stop offset="1" style="stop-color:var(--tb-apx-2)"/></radialGradient>`
-        + `<radialGradient id="${id}w" cx=".5" cy=".55" r=".5"><stop offset="0" style="stop-color:var(--tb-apx-glow);stop-opacity:.34"/><stop offset=".55" style="stop-color:var(--tb-apx-glow);stop-opacity:.08"/><stop offset="1" style="stop-color:var(--tb-apx-glow);stop-opacity:0"/></radialGradient>`
         + `<clipPath id="${id}o"><path d="${hexD(R)}"/></clipPath>`;
       body = bevel(R, ri)
-        + `<path d="${hexD(ri)}" fill="url(#${id}s)"/><path d="${hexD(ri)}" fill="url(#${id}w)"/>`
+        + `<path d="${hexD(ri)}" fill="url(#${id}s)"/>`
         + (size >= 32 ? `<path d="${hexD(ri - px(1.6))}" style="fill:none;stroke:var(--tb-au-3);stroke-opacity:.45;stroke-width:${px(0.75)};stroke-linejoin:round"/>` : '')
         + `<path d="${hexD(R - px(0.5))}" style="fill:none;stroke:var(--tb-au-edge);stroke-width:${px(1)};stroke-linejoin:round"/>`
         + (size >= 56 ? spark(50, ri > 40 ? 22.5 : 24, 4.2, 'var(--tb-apx-ink)') : '')
@@ -178,28 +190,81 @@
     const a11y = label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true" focusable="false"';
     return `<svg class="tb t-${v} tb-${tsz}${o.className ? ' ' + esc(o.className) : ''}" width="${size}" height="${size}" viewBox="0 0 100 100" ${a11y}>${defs ? `<defs>${defs}</defs>` : ''}${body}</svg>`;
   };
-  /* Inline pill for running text: 20px badge, tier name, score beside it */
+  /* Inline pill for running text: 20px badge, tier name, score beside it. '' for an unknown tier. */
   ui.tierPill = function (v, score) {
     const t = tierOpt(v);
+    if (!t) return '';
     const has = score != null && score !== '';
     return `<span class="tb-pill t-${t.v}" title="${has ? `Reputation Index ${esc(score)}, ${esc(t.l)} tier` : `${esc(t.l)} tier`}">${ui.tierBadge(t.v, { size: 20 })}<span>${esc(t.l)}</span>${has ? `<span class="tb-pill-n">${esc(score)}</span>` : ''}</span>`;
+  };
+  /* The plain mark Emerging operators carry on cards and lists: a check and "Vetted", no score, no tier.
+     o.night for a dark band (also automatic inside .night and .panel-night); o.className adds classes. */
+  const VETTED_TITLE = 'Identity and work history checked by the Revenue Nomad team';
+  ui.vetted = function (o) {
+    o = o || {};
+    return `<span class="vetted${o.night ? ' vetted-night' : ''}${o.className ? ' ' + esc(o.className) : ''}" title="${VETTED_TITLE}">${icon('check')}<span>Vetted</span></span>`;
+  };
+  /* What earned the tier, from the operator's own record only: company-verified engagements, the average
+     review rating and verified focus areas. Parts with nothing to count are left out. '' when there is no tier. */
+  ui.tierWhy = function (op) {
+    const t = opTier(op);
+    if (!t) return '';
+    const r = op.ris || {};
+    const pl = (n, w) => `${n} ${n === 1 ? w : w + 's'}`;
+    const parts = [];
+    const eng = (op.engagements || []).filter((e) => e && e.clientVerified).length;
+    if (eng) parts.push(`${pl(eng, 'company-verified engagement')}`);
+    const revs = op.reviews || [];
+    const rated = revs.map((x) => +(x.overall || x.coreAvg || 0)).filter((n) => n > 0);
+    const avg = op.core && op.core.overall ? +op.core.overall : rated.length ? rated.reduce((s, n) => s + n, 0) / rated.length : 0;
+    if (revs.length && avg > 0) parts.push(`${avg.toFixed(1)} average across ${pl(revs.length, 'review')}`);
+    else if (revs.length) parts.push(pl(revs.length, 'company review'));
+    const tags = (op.tags || []).filter((x) => x && typeof x === 'object' && x.tier && x.tier !== 'claimed').length;
+    if (tags) parts.push(`${pl(tags, 'verified focus area')}`);
+    const head = `${t.l}${r.score != null && r.score !== '' ? `, Reputation Index ${r.score}` : ''}.`;
+    const body = parts.length ? parts.join(' · ') : String(t.d || '').split(/(?<=\.)\s/)[0];
+    return `<b>${esc(head)}</b> ${esc(body)}`;
+  };
+  const plain = (html) => String(html).replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  /* The one tier mark for cards and lists (the card rule). Proven up: the badge (o.size, default 40, with the
+     score) or, with o.pill, the pill, in a mark that shows tierWhy on hover and keyboard focus. o.text adds the
+     tier name and the "Reputation Index" explainer beside the badge (the card footer layout; o.viewer passes on).
+     o.inLink: the mark sits inside a link, so it carries a plain title instead of a focusable tip.
+     Emerging: RN.ui.vetted(o). No tier: ''. */
+  ui.cardTier = function (op, o) {
+    o = o || {};
+    const t = opTier(op);
+    if (!t) return '';
+    if (!ui.tierShown(t.v)) return ui.vetted(o);
+    const score = op.ris && op.ris.score != null && op.ris.score !== '' ? op.ris.score : null;
+    const mark = o.pill ? ui.tierPill(t.v, score) : ui.tierBadge(t.v, { size: +o.size || 40, score });
+    const why = ui.tierWhy(op);
+    const cls = `tier-mark t-${t.v}${o.pill ? ' tier-mark-pill' : ''}${o.className ? ' ' + esc(o.className) : ''}`;
+    const el = o.inLink
+      ? `<span class="${cls}" title="${esc(plain(why))}">${mark}</span>`
+      : `<button type="button" class="${cls}" data-tip="${esc(why)}" aria-label="${esc(plain(why))}">${mark}</button>`;
+    if (!o.text || o.pill) return el;
+    const tip = ui.tip(ui.risExplainer(o.viewer === 'operator'), 'How score is calculated');
+    return `<span class="ris t-${t.v}">${el}<span class="ris-txt"><b>${esc(t.l)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${o.inLink ? '' : tip}</span></span></span>`;
   };
   /* The tier ladder. Column (default): Apex on top, the current row raised, rails solid up to the current tier
      and dashed above it. o.score shows inside the current badge; o.showNext (operator-facing, Studio) adds
      "N points to <next tier>" on the row above. o.orientation 'row' runs lowest to highest, left to right
      (a column again on phones); o.compact keeps badges and names only; o.showRanges false hides the ranges;
-     o.only limits the tiers; o.notes {tier: text} replaces a row's description. */
+     o.only limits the tiers; o.notes {tier: text} replaces a row's description. With no current tier (v
+     unknown or null) every rung reads as not reached and no score is drawn. */
   ui.tierLadder = function (v, o) {
     o = o || {};
-    const cur = tierOpt(v).v, at = ui.tierRank(cur);
+    const curT = tierOpt(v);
+    const cur = curT ? curT.v : null, at = ui.tierRank(cur);
     const row = o.orientation === 'row', compact = !!o.compact;
-    const score = o.score == null || o.score === '' ? null : o.score;
+    const score = !curT || o.score == null || o.score === '' ? null : o.score;
     let list = tierOpts().filter((t) => !o.only || o.only.includes(t.v));
     if (row) list = list.slice().reverse();
     const next = tierOpts().find((t) => ui.tierRank(t.v) === at + 1);
     const showNext = o.showNext && next && score != null;
     const ranges = o.showRanges !== false;
-    const range = (t) => (t.v === 'indexing' ? 'Under 50' : `${t.min} to ${t.max}`);
+    const range = (t) => `${t.min} to ${t.max}`;
     const first = (d) => String(d || '').split(/(?<=\.)\s/)[0]; // the ladder shows the first sentence; the title has it all
     const items = list.map((t, i) => {
       const on = t.v === cur, above = ui.tierRank(t.v) > at;
@@ -221,18 +286,26 @@
     return `<ol class="tb-ladder${row ? ' tb-row' : ''}${compact ? ' tb-compact' : ''}" aria-label="${esc(o.label || 'Reputation Index tiers')}">${items}</ol>`;
   };
 
-  /* Reputation Index on cards and rails. op.ris = {score, label, tier} */
+  /* Reputation Index on cards and rails. op.ris = {score, label, tier}.
+     Default (cards, rails): the card rule. Proven up shows the seal with the score, the tier name and the
+     "Reputation Index" explainer, and hovering the seal shows what earned it; Emerging shows the Vetted mark.
+     o.full (profiles): the seal, score and tier name for every tier. No tier: ''. */
   ui.ris = function (op, o) {
-    const r = op.ris || { score: 0 };
-    const tipHtml = ui.risExplainer(o && o.viewer === 'operator');
-    const t = tierOpt(r.tier || RN.fields.risTierFor(r.score).v);
-    // Every tier, Emerging included, uses the same seal layout on cards and rails
-    return `<span class="ris t-${t.v}">${ui.tierBadge(t.v, { size: 40, score: r.score, label: `${t.l}, Reputation Index ${r.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
+    o = o || {};
+    op = op || {};
+    if (!o.full) return ui.cardTier(op, { text: true, viewer: o.viewer, size: o.size, night: o.night });
+    const t = opTier(op);
+    if (!t) return '';
+    const r = op.ris || {};
+    const tipHtml = ui.risExplainer(o.viewer === 'operator');
+    return `<span class="ris t-${t.v}">${ui.tierBadge(t.v, { size: +o.size || 40, score: r.score, label: `${t.l}, Reputation Index ${r.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span class="row-nw" style="--gap:4px">Reputation Index ${ui.tip(tipHtml)}</span></span></span>`;
   };
-  /* Legacy entry point: a tier label ("Elite") to its badge. Never draws a hexagon itself. */
+  /* Legacy entry point: a tier label ("Elite") or value ("elite") to its badge, for profiles (any tier).
+     Unknown labels, "Indexing" included, draw nothing. Never draws a hexagon itself. */
   ui.hexSeal = function (label, o) {
     o = o || {};
-    const t = tierOpts().find((x) => x.l === label) || tierOpt('indexing');
+    const t = tierOpts().find((x) => x.l === label || x.v === label);
+    if (!t) return '';
     return ui.tierBadge(t.v, { size: o.size || 20, score: o.score, label: o.label });
   };
   /* One explainer for operators and clients (scope: reuse the operator "i" tooltip, drop "your",
@@ -329,7 +402,7 @@
       </div>
       ${opts.meta || ''}
       <div class="opc-foot">
-        ${ui.ris(op)}
+        ${ui.cardTier(op, { text: true })}
         <div class="row" style="--gap:8px">
           <button type="button" class="act ${inCompare ? '' : 'muted'}" data-act="compare-toggle" data-id="${esc(op.id)}">${icon('compare')}${inCompare ? 'In compare' : 'Compare'}</button>
           ${opts.cta === 'invite' ? `<button type="button" class="btn btn-sm" data-act="${esc(opts.ctaAct || 'project-invite')}" data-id="${esc(op.id)}">${esc(opts.ctaLabel || 'Invite')}</button>` : ''}

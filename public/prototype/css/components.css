@@ -173,7 +173,7 @@
 .opc-meta span { display: inline-flex; align-items: center; gap: 6px; }
 .opc-meta svg { width: 14px; height: 14px; }
 .opc-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: auto; padding-top: var(--s-4); border-top: 1px solid var(--line-2); }
-.opc-foot .btn, .opc-foot .act, .opc .ris, .opc-save { position: relative; z-index: 2; }
+.opc-foot .btn, .opc-foot .act, .opc .ris, .opc .tier-mark, .opc .vetted, .opc-save { position: relative; z-index: 2; }
 .opc-save { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--card); display: grid; place-items: center; color: var(--mute); cursor: pointer; }
 .opc-save:hover { color: var(--accent); border-color: var(--line); }
 .opc-save.on { color: var(--accent); background: var(--tint); border-color: var(--tint-line); }
@@ -188,27 +188,12 @@
 .ris-txt span { font-size: var(--t-12); color: var(--mute); }
 .ris.t-elite .ris-txt b, .ris.t-apex .ris-txt b { color: var(--gold); }
 
-/* ---------- Tier badges (RN.ui.tierBadge, tierPill, tierLadder; D11) ----------
-   Rarity reads from material and depth, never colour alone. Only Elite and Apex glow, and only they move. */
+/* ---------- Tier badges (RN.ui.tierBadge, tierPill, tierLadder, cardTier, vetted; D11) ----------
+   Five tiers. Rarity reads from material and depth, never colour alone. No tier glows: Elite and Apex are flat
+   gold and black stone in a bevelled rim, and only they move (one sheen). */
 .tb { display: inline-block; vertical-align: middle; flex: none; overflow: visible; }
 .tb text { font-family: var(--f-display); font-variant-numeric: tabular-nums lining-nums; letter-spacing: -.02em; }
 .tb.t-trusted.tb-md, .tb.t-trusted.tb-lg { filter: drop-shadow(0 1px 1px rgba(11, 61, 44, .22)); }
-.tb.t-elite.tb-md, .tb.t-elite.tb-lg { filter: drop-shadow(0 1px 1px rgba(80, 55, 5, .28)) drop-shadow(0 0 7px rgba(237, 195, 78, .45)); }
-.tb.t-apex.tb-md, .tb.t-apex.tb-lg { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .35)) drop-shadow(0 0 10px rgba(237, 191, 63, .55)); }
-.tb.t-elite.tb-sm { filter: drop-shadow(0 0 2px rgba(237, 195, 78, .55)); }
-.tb.t-apex.tb-sm { filter: drop-shadow(0 0 2.5px rgba(237, 191, 63, .7)); }
-:root[data-theme="dark"] .tb.t-elite.tb-md, :root[data-theme="dark"] .tb.t-elite.tb-lg,
-.night .tb.t-elite.tb-md, .night .tb.t-elite.tb-lg, .panel-night .tb.t-elite.tb-md, .panel-night .tb.t-elite.tb-lg { filter: drop-shadow(0 0 8px rgba(227, 195, 90, .28)); }
-:root[data-theme="dark"] .tb.t-apex.tb-md, :root[data-theme="dark"] .tb.t-apex.tb-lg,
-.night .tb.t-apex.tb-md, .night .tb.t-apex.tb-lg, .panel-night .tb.t-apex.tb-md, .panel-night .tb.t-apex.tb-lg { filter: drop-shadow(0 0 12px rgba(227, 195, 90, .42)); }
-:root[data-theme="dark"] .tb.t-elite.tb-sm, .night .tb.t-elite.tb-sm, .panel-night .tb.t-elite.tb-sm { filter: drop-shadow(0 0 2px rgba(227, 195, 90, .40)); }
-:root[data-theme="dark"] .tb.t-apex.tb-sm, .night .tb.t-apex.tb-sm, .panel-night .tb.t-apex.tb-sm { filter: drop-shadow(0 0 2.5px rgba(227, 195, 90, .55)); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .tb.t-elite.tb-md, :root:not([data-theme="light"]) .tb.t-elite.tb-lg { filter: drop-shadow(0 0 8px rgba(227, 195, 90, .28)); }
-  :root:not([data-theme="light"]) .tb.t-apex.tb-md, :root:not([data-theme="light"]) .tb.t-apex.tb-lg { filter: drop-shadow(0 0 12px rgba(227, 195, 90, .42)); }
-  :root:not([data-theme="light"]) .tb.t-elite.tb-sm { filter: drop-shadow(0 0 2px rgba(227, 195, 90, .40)); }
-  :root:not([data-theme="light"]) .tb.t-apex.tb-sm { filter: drop-shadow(0 0 2.5px rgba(227, 195, 90, .55)); }
-}
 /* Motion: one light sweep. Apex once after it renders, Elite and Apex again on hover (the badge, or a
    .tb-host card around it). Two identical keyframes so hover can restart the sweep. No loops. */
 .tb-sheen { transform: translateX(-60px); opacity: 0; }
@@ -223,22 +208,33 @@
 .tb-pill { padding: 0 10px 0 3px; border-color: var(--tb-pill-line); background: var(--tb-pill-bg); color: var(--tb-pill-ink); }
 .tb-pill .tb { flex: 0 0 auto; }
 .tb-pill .tb-pill-n { opacity: .72; }
-.tb-pill.t-indexing { border-color: var(--chip-line); background: transparent; color: var(--tb-idx-ink); }
 .tb-pill.t-emerging { color: var(--forest); }
 .tb-pill.t-proven, .tb-pill.t-trusted { background: #E6EEDF; border-color: #C9D9BF; color: #0B3D2C; }
 .tb-pill.t-elite { background: #FAF1D8; border-color: #E2C77E; color: #5C4108; }
-.tb-pill.t-apex { background: linear-gradient(180deg, #1B2520, #0B100D); border-color: #B8912F; color: #F6E09A; box-shadow: 0 0 0 2px rgba(227, 195, 90, .18); }
+.tb-pill.t-apex { background: linear-gradient(180deg, #1B2520, #0B100D); border-color: #B8912F; color: #F6E09A; }
 :root[data-theme="dark"] .tb-pill.t-emerging, .night .tb-pill.t-emerging, .panel-night .tb-pill.t-emerging { color: var(--leaf); }
 :root[data-theme="dark"] .tb-pill.t-proven, :root[data-theme="dark"] .tb-pill.t-trusted,
 .night .tb-pill.t-proven, .night .tb-pill.t-trusted, .panel-night .tb-pill.t-proven, .panel-night .tb-pill.t-trusted { background: #16271F; border-color: #264A3A; color: #C2E7B0; }
 :root[data-theme="dark"] .tb-pill.t-elite, .night .tb-pill.t-elite, .panel-night .tb-pill.t-elite { background: #2A2413; border-color: #6B5320; color: #F0D57E; }
-:root[data-theme="dark"] .tb-pill.t-apex, .night .tb-pill.t-apex, .panel-night .tb-pill.t-apex { background: linear-gradient(180deg, #1B2520, #050806); border-color: #C9A445; box-shadow: 0 0 0 2px rgba(227, 195, 90, .14), 0 0 12px rgba(227, 195, 90, .22); }
+:root[data-theme="dark"] .tb-pill.t-apex, .night .tb-pill.t-apex, .panel-night .tb-pill.t-apex { background: linear-gradient(180deg, #1B2520, #050806); border-color: #C9A445; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .tb-pill.t-emerging { color: var(--leaf); }
   :root:not([data-theme="light"]) .tb-pill.t-proven, :root:not([data-theme="light"]) .tb-pill.t-trusted { background: #16271F; border-color: #264A3A; color: #C2E7B0; }
   :root:not([data-theme="light"]) .tb-pill.t-elite { background: #2A2413; border-color: #6B5320; color: #F0D57E; }
-  :root:not([data-theme="light"]) .tb-pill.t-apex { background: linear-gradient(180deg, #1B2520, #050806); border-color: #C9A445; box-shadow: 0 0 0 2px rgba(227, 195, 90, .14), 0 0 12px rgba(227, 195, 90, .22); }
+  :root:not([data-theme="light"]) .tb-pill.t-apex { background: linear-gradient(180deg, #1B2520, #050806); border-color: #C9A445; }
 }
+
+/* The card and list tier mark (RN.ui.cardTier): a bare button around the badge or pill; hover and focus show
+   what earned it (the shared data-tip popover) */
+.tier-mark { appearance: none; display: inline-flex; align-items: center; flex: none; margin: 0; padding: 0; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; line-height: 0; cursor: help; }
+.tier-mark.tier-mark-pill { line-height: inherit; border-radius: var(--chip-r); }
+.tier-mark:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+/* Vetted: the plain mark Emerging operators carry on cards and lists, no score */
+.vetted { display: inline-flex; align-items: center; gap: 5px; flex: none; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 1.2; color: var(--mute); cursor: default; }
+.vetted svg { width: 14px; height: 14px; flex: none; color: var(--accent); stroke-width: 2.6; }
+.opc-foot .vetted { min-height: 40px; } /* the same footer height as a card with a 40px badge */
+.vetted.vetted-night, .night .vetted, .panel-night .vetted { color: var(--night-mute); }
+.vetted.vetted-night svg, .night .vetted svg, .panel-night .vetted svg { color: var(--leaf); }
 
 /* Ladder: Apex on top, the current row raised, rails solid up to it and dashed above */
 .tb-ladder { --tb-rail: var(--forest); --tb-rail-dir: 180deg; --tb-next: var(--forest); list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; position: relative; }

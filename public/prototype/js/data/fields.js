@@ -275,7 +275,9 @@
      Decision: the explorer ladder, derived from the score everywhere (operator view == client view),
      consistent with the floor of 50 (L381). The entry tier is named "Emerging" (founder decision, Sep 25, 2026),
      not "Verified": 78 of 100 live profiles sit at 50 with no client evidence, so "Verified" is reserved for
-     client-confirmed proof (verified fit tags, verified engagements). */
+     client-confirmed proof (verified fit tags, verified engagements).
+     Five tiers (founder decision, Oct 12, 2026): the Indexing tier is gone. A profile that is not approved and
+     scored yet has no tier at all, so risTierFor returns null below 50 and callers show no badge. */
   F.risTier = {
     label: 'Reputation Index tier', type: 'single',
     options: [
@@ -284,19 +286,22 @@
       { v: 'trusted', l: 'Trusted', min: 70, max: 79, d: 'Repeat engagements and consistently strong company reviews.' },
       { v: 'proven', l: 'Proven', min: 60, max: 69, d: 'Verified engagements, company reviews and published proof of work.' },
       { v: 'emerging', l: 'Emerging', min: 50, max: 59, d: 'Identity and work history checked by the Revenue Nomad team. Every approved profile starts at 50.' },
-      { v: 'indexing', l: 'Indexing', min: 0, max: 49, d: 'New to the network. Shown until the profile is approved and scored.' },
     ],
   };
   // What each tier unlocks (proposal). Tiers move only on client evidence; nothing on the ladder is paid.
   F.risUnlocks = {
-    indexing: ['Your profile is reviewed by the team within 2 business days', 'Studio setup checklist while you wait'],
     emerging: ['Listed and searchable in Browse', 'Studio insights: who viewed you, why you appeared, positioning, search and AI visibility', 'Proof links for your direct deals (5 a month)', 'Fractional roles and predictive prospects in Opportunities'],
     proven: ['Unlimited proof links', 'Embeddable verified badge with a dated verification page'],
     trusted: ['Priority placement on role category pages', 'Eligible for the curated shortlists the team sends to companies'],
     elite: ['First in line for homepage features', 'Invited to State of Fractional GTM research panels'],
     apex: ['Invited to the State of Fractional GTM advisory panel', 'First look at new Studio tools'],
   };
-  F.risTierFor = (score) => (score == null ? F.risTier.options[5] : F.risTier.options.find((t) => score >= t.min) || F.risTier.options[5]);
+  // The tier option for a score, or null for no score or a score under 50 (not approved and scored yet: no tier, no badge)
+  F.risTierFor = (score) => {
+    const n = score == null || score === '' ? NaN : +score;
+    if (!(n >= 50)) return null;
+    return F.risTier.options.find((t) => n >= t.min) || null;
+  };
   // Client-facing explainer factors (comment E418)
   F.risFactors = {
     label: 'How score is calculated', type: 'single',
