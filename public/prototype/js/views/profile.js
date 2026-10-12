@@ -80,7 +80,7 @@
 
   /* ---------- Per-visit state ---------- */
   let S = fresh();
-  function fresh() { return { key: null, focus: null, tagsAll: false, engOpen: null, pf: 'all', stackQ: '', viewAs: 'owner', coreIdx: {}, tracked: false, timer: null, unsub: null, obs: [], ctx: null, coreHover: false, plForm: null }; }
+  function fresh() { return { key: null, focus: null, tagsAll: false, engOpen: null, engAll: false, revAll: false, pfAll: false, indAll: false, pf: 'all', stackQ: '', viewAs: 'owner', tracked: false, timer: null, unsub: null, obs: [], ctx: null, plForm: null }; }
   function visit(key) { if (S.key !== key) { cleanup(true); S = fresh(); S.key = key; } }
   function cleanup(all) {
     clearInterval(S.timer); S.timer = null;
@@ -348,7 +348,7 @@
     }
     if (rv.kind === 'flag') return `<div class="pf-rv"><span class="pf-flag">${icon('check-circle')}${esc(rv.value)}</span></div>`;
     const labels = rv.value.map((x) => (rv.raw ? x : RN.w.label(key, x)));
-    return `<div class="pf-rv"><span class="pf-rv-l">${esc(d.label)}</span><div class="pf-chips">${labels.map((l) => `<span class="pf-chip ${rv.gold ? 'gold' : ''}">${esc(l)}</span>`).join('')}</div>${rv.note ? `<span class="pf-rv-note">${esc(rv.note)}</span>` : ''}</div>`;
+    return `<div class="pf-rv"><span class="pf-rv-l">${esc(d.label)}</span><div class="pf-chips">${labels.map((l) => `<span class="pill ${rv.gold ? 'pill-gold' : ''}">${esc(l)}</span>`).join('')}</div>${rv.note ? `<span class="pf-rv-note">${esc(rv.note)}</span>` : ''}</div>`;
   }
 
   /* Shared with compare and admin: one reading of role details everywhere */
@@ -418,7 +418,7 @@
       ${subnav(c, secs)}
       <div class="wrap pf-body">
         <div class="pf-main">${secs.map((s) => s.html).join('')}</div>
-        <aside class="pf-rail" aria-label="Engage ${esc(op.first)}">${engageCard(c)}${matchCard(c)}${risCard(c)}${talkCard(c)}${miniEngage(c)}</aside>
+        <aside class="pf-rail" aria-label="Engage ${esc(op.first)}">${engageCard(c)}${matchCard(c)}${miniEngage(c)}</aside>
       </div>
       ${similar(c)}
       ${mobileBar(c)}
@@ -429,16 +429,15 @@
     const out = [];
     const add = (key, label, html) => { if (html) out.push({ key, label, html }); };
     const hasReviews = c.reviews.length > 0;
+    // Company questions first: who, proof (reviews and CORE in one place), fit, ways to engage, then the detail
     add('about', 'About', secAbout(c));
-    add('offers', 'Ways to work', secOffers(c));
-    if (!hasReviews) add('engagements', 'Engagements', secEngagements(c));
+    if (hasReviews) add('reviews', 'Reviews', secReviews(c, true));
+    else add('engagements', 'Engagements', secEngagements(c));
     add('fit', 'Fit', secFit(c));
+    add('offers', 'Ways to work', secOffers(c));
     add('expertise', 'Expertise', secExpertise(c));
-    if (c.stack) add('stack', 'Stack', secStack(c));
-    if (c.samples.length) add('portfolio', 'Portfolio', secPortfolio(c));
     if (hasReviews) add('engagements', 'Track record', secEngagements(c));
-    if (hasReviews) add('reviews', 'Reviews', secReviews(c));
-    if (c.coreRevs.length) add('core', 'CORE', secCore(c));
+    if (c.samples.length) add('portfolio', 'Portfolio', secPortfolio(c));
     return out;
   }
 
@@ -479,8 +478,8 @@
                 ${op.ris.score >= 50 ? `<span class="pf-photo-seal" title="${esc(tier.l)} · Reputation Index ${esc(op.ris.score)}">${RN.ui.hexSeal(tier.l, { size: 40, score: op.ris.score })}</span>` : ''}</div>
               <div class="pf-id-main">
                 <div class="pf-pills">
-                  <button type="button" class="pf-pill pf-pill-tier ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}" data-tip="${esc(tierTip)}"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)}</button>
-                  <span class="pf-pill"><i class="dot ${availDot(op)}"></i>${esc(availTxt + hrs)}</span>
+                  <button type="button" class="pill pf-pill pf-pill-tier ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}" data-tip="${esc(tierTip)}"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)}</button>
+                  <span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(availTxt + hrs)}</span>
                 </div>
                 <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
                 <p class="pf-role">Fractional ${esc(op.role)}</p>
@@ -488,7 +487,7 @@
             </div>
             ${headline ? `<p class="pf-headline hl-${hlCls}" title="${esc(smart(headline))}">${esc(smart(headline))}</p>` : ''}
             <div class="pf-herotags">
-              ${heroTags.map((t) => `<button type="button" class="pf-gtag ${t.tier === 'claimed' ? 'claimed' : ''}" data-tip="${esc(tagTip(op, t))}">${t.tier !== 'claimed' ? icon('check-circle') : ''}${esc(t.t)}</button>`).join('')}
+              ${heroTags.map((t) => `<button type="button" class="ftag ${t.tier === 'claimed' ? 'claimed' : ''}" data-tip="${esc(tagTip(op, t))}">${t.tier !== 'claimed' ? icon('check-circle') : ''}${esc(t.t)}</button>`).join('')}
               ${moreVerified > 0 ? jumpBtn('pf-expertise', `+${moreVerified} verified`, 'pf-more') : !c.verified.length && c.tags.length > 3 ? jumpBtn('pf-expertise', `+${c.tags.length - 3} focus areas`, 'pf-more') : ''}
             </div>
             <div class="pf-meta">
@@ -551,8 +550,8 @@
   /* At a glance: firmographic and availability facts only. Role details live once, in the Fit section's Operating range. */
   function heroTiles(c) {
     const op = c.op;
-    const chips = (key, vals, max) => { const o = ordered(key, vals); const lab = (x) => RN.w.label(key === 'industries' ? 'industries' : key, x); return `<span class="pf-tile-chips">${o.slice(0, max).map((x) => `<span>${esc(lab(x))}</span>`).join('')}${o.length > max ? `<span class="more">+${o.length - max}</span>` : ''}</span>`; };
-    const inds = op.industries.slice(0, 2).map((i) => `<span>${esc(RN.w.label('industries', i))}</span>`).join('') + (op.industries.length > 2 ? `<span class="more">+${op.industries.length - 2}</span>` : '');
+    const chips = (key, vals, max) => { const o = ordered(key, vals); const lab = (x) => RN.w.label(key === 'industries' ? 'industries' : key, x); return `<span class="pf-tile-chips">${o.slice(0, max).map((x) => `<span class="pill">${esc(lab(x))}</span>`).join('')}${o.length > max ? `<span class="pill pill-line">+${o.length - max}</span>` : ''}</span>`; };
+    const inds = op.industries.slice(0, 2).map((i) => `<span class="pill">${esc(RN.w.label('industries', i))}</span>`).join('') + (op.industries.length > 2 ? `<span class="pill pill-line">+${op.industries.length - 2}</span>` : '');
     const tiles = [
       op.revenueRanges.length && `<div class="pf-tile"><span class="pf-tile-l">${esc(revLabel())}</span>${chips('revenueRange', op.revenueRanges, 3)}</div>`,
       op.employeeRanges.length && `<div class="pf-tile"><span class="pf-tile-l">${esc(F.employeeRange.label)}</span>${chips('employeeRange', op.employeeRanges, 3)}</div>`,
@@ -612,7 +611,7 @@
         <div class="pf-bell">${RN.chart.bell({ w: 230, h: 64, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
         <div class="pf-bell-foot"><span>Median ${PEER.mean} ${RN.ui.illus('Illustrative peers')}</span><b>${ordinal(pctile)} percentile</b></div>
       </div>
-      <div class="pf-rep-x"><b class="${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${esc(tier.l)} · ${esc(op.ris.score)} of 100</b><p>${esc(tier.d)}</p><span>One score for every company, built from review volume, verified focus areas, ratings, profile completeness and engagement recency.</span></div>
+      <div class="pf-rep-x"><b class="${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${esc(tier.l)} · ${esc(op.ris.score)} of 100</b><p>${esc(tier.d)}</p></div>
     </article>`;
     // How long clients stay
     const median = medianMonths();
@@ -666,7 +665,8 @@
     const op = c.op;
     const text = op.bio || op.headline;
     if (!text) return '';
-    const paras = String(text).split(/\n+/).filter(Boolean);
+    // An operator listing never speaks for Revenue Nomad: drop any sentence that places them on our team
+    const paras = String(text).split(/\n+/).map((p) => p.replace(/[^.!?]*\bRevenue Nomad\b[^.!?]*[.!?]\s*/g, '').trim()).filter(Boolean);
     // Each data point once: CRM and methodologies show here only when the Fit section's Operating range does not carry them
     const inRange = (k) => (F.roleFields[op.catKey] || []).includes(k) && !!roleVal(op, k);
     const methods = op.methodologies.filter((m) => m !== 'Other');
@@ -680,9 +680,8 @@
 
   /* ---------- Ways to work with {first}: packaged engagements built on Engagement Blueprints ---------- */
   // A representative company revenue band for pricing: the middle of the operator's own ranges
-  // "$9k to $13.5k a month", the way monthly ranges read everywhere else on the site
-  const kAmt = (n) => '$' + (n >= 1000 ? (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k' : Math.round(n));
-  const kRange = (m) => (m && m.lo && m.hi ? `${kAmt(m.lo)} to ${kAmt(m.hi)} a month` : (m && m.label) || '');
+  // "$9k - $13.5k/month", the way monthly ranges read everywhere else on the site (RN.fmt.moRange)
+  const kRange = (m) => (m && m.lo && m.hi ? RN.fmt.moRange(m.lo, m.hi) : (m && m.label) || '');
   function repRev(op) { const o = ordered('revenueRange', op.revenueRanges); return o.length ? o[Math.floor((o.length - 1) / 2)] : '5m_20m'; }
   function offersFor(op) {
     const PJ = RN.projects || {};
@@ -712,8 +711,8 @@
         </div>
       </article>`).join('');
     return sec(c, 'offers', 'Ways to work', `Ways to work with ${esc(op.first)}`, `<div class="pf-offers">${cards}</div>
-      <p class="pf-note">${RN.ui.illus()} Typical months use the Rate Index for ${esc(catLabel(op.catKey))} at ${esc(RN.w.label('hoursPerMonth', hrs))} for a ${esc(RN.w.label('revenueRange', rev))} company.</p>`,
-    { sub: `Packaged engagements ${esc(op.first)} runs, each built on a Revenue Nomad <a class="link" href="#blueprints">Engagement Blueprint</a>.`, edit: 'studio.profile', editLabel: 'Edit offers' });
+      <p class="pf-note" data-proto>${RN.ui.illus()} Typical months use the Rate Index for ${esc(catLabel(op.catKey))} at ${esc(RN.w.label('hoursPerMonth', hrs))} for a ${esc(RN.w.label('revenueRange', rev))} company.</p>`,
+    { edit: 'studio.profile', editLabel: 'Edit offers' });
   }
 
   /* ---------- Fit: who {first} is right for ---------- */
@@ -724,27 +723,31 @@
     const nEng = c.engs.filter((e) => e.revenueRange || e.employeeRange).length;
     // With engagement history: bar charts of engagements per company size, as in the original explorer.
     // Without it: the operator's stated ranges on a segmented scale. Both use the registry picklists.
-    const bars = (key, counts, title, note) => {
-      const max = Math.max(1, ...F[key].options.map((o) => counts[o.v] || 0));
+    // Only the sizes with engagements: the full picklist with empty rows added length, not information
+    const bars = (key, counts, title) => {
+      const opts = F[key].options.filter((o) => counts[o.v]);
+      if (!opts.length) return '';
+      const max = Math.max(1, ...opts.map((o) => counts[o.v]));
       return `<div class="pf-bb-w"><h3 class="h5 pf-h3">${esc(title)}</h3>
-        <div class="pf-bb" role="list">${F[key].options.map((o) => { const n = counts[o.v] || 0;
-          return `<div class="pf-bb-row" role="listitem" aria-label="${esc(o.l)}: ${n ? plural(n, 'engagement') : 'no engagements'}"><span class="pf-bb-l">${esc(o.l)}</span><span class="pf-bb-track"><span class="pf-bb-fill" style="width:${(n / max) * 100}%"></span></span><span class="pf-bb-n">${n || '–'}</span></div>`; }).join('')}</div>
-        <p class="pf-note">${esc(note)}</p></div>`;
+        <div class="pf-bb" role="list">${opts.map((o) => { const n = counts[o.v];
+          return `<div class="pf-bb-row" role="listitem" aria-label="${esc(o.l)}: ${plural(n, 'engagement')}"><span class="pf-bb-l">${esc(o.l)}</span><span class="pf-bb-track"><span class="pf-bb-fill" style="width:${(n / max) * 100}%"></span></span><span class="pf-bb-n">${n}</span></div>`; }).join('')}</div></div>`;
     };
     const scale = (key, sel, label) => `<div class="pf-strip-w"><span class="label pf-lab">${esc(label)}</span>
       <div class="pf-strip" role="list">${F[key].options.map((o) => `<span role="listitem" class="pf-cell ${sel.includes(o.v) ? 'on' : ''}" aria-label="${esc(o.l)}${sel.includes(o.v) ? ', selected' : ''}"><span>${esc(o.l)}</span></span>`).join('')}</div></div>`;
     const left = nEng ? `<div class="pf-fit-size">
-        ${bars('revenueRange', engRev, 'Company size worked with', `Annual revenue at the start of each of ${plural(nEng, 'engagement')}.`)}
-        ${bars('employeeRange', engEmp, 'Employee count', `Company headcount at each of ${plural(nEng, 'engagement')}.`)}
+        ${bars('revenueRange', engRev, 'Company revenue worked with')}
+        ${bars('employeeRange', engEmp, 'Employee count')}
+        <p class="pf-note">At the start of each of ${plural(nEng, 'engagement')}.</p>
       </div>`
       : (op.revenueRanges.length || op.employeeRanges.length) ? `<div class="pf-fit-size">
         <h3 class="h5 pf-h3">Company size</h3>
         ${op.revenueRanges.length ? scale('revenueRange', op.revenueRanges, 'Annual revenue') : ''}
         ${op.employeeRanges.length ? scale('employeeRange', op.employeeRanges, 'Employee count') : ''}
-        <p class="pf-note">Company sizes ${esc(op.first)} works with.</p>
       </div>` : '';
+    const IND_MAX = op.industries.length > 8 ? 6 : 8;
+    const indShown = S.indAll ? op.industries : op.industries.slice(0, IND_MAX);
     const inds = op.industries.length ? `<div class="pf-fit-ind"><h3 class="h5 pf-h3">${esc(F.industries.label)} <span class="pf-count">${op.industries.length}</span></h3>
-      <div class="pf-chips">${op.industries.map((i) => `<span class="pf-chip">${esc(RN.w.label('industries', i))}</span>`).join('')}</div></div>` : '';
+      <div class="pf-chips">${indShown.map((i) => `<span class="pill">${esc(RN.w.label('industries', i))}</span>`).join('')}${op.industries.length > IND_MAX ? `<button type="button" class="act pf-chips-more" data-act="pf-ind-all">${S.indAll ? 'Show fewer' : `Show all ${op.industries.length}`}</button>` : ''}</div></div>` : '';
     const keys = F.roleFields[op.catKey] || [];
     const vals = keys.map((k) => ({ k, rv: roleVal(op, k) })).filter((x) => x.rv);
     const bigs = vals.filter((x) => x.rv.kind === 'big');
@@ -758,16 +761,13 @@
         ${rows.length ? `<div class="pf-range-bigs">${rows.map((r) => `<div class="pf-range-row${r.some((x) => String(x.rv.value).length > 6) ? ' is-long' : ''}">${r.map((x) => roleValHtml(x.k, x.rv)).join('')}</div>`).join('')}</div>` : ''}
         ${rest.map((x) => roleValHtml(x.k, x.rv)).join('')}
       </div>` : '';
-    if (!left && !inds && !range) return '';
-    const facts = c.engs.length ? `<h3 class="h5 pf-h3 pf-facts-h">Engagements</h3><dl class="pf-facts">
-        <div class="pf-facts-stack"><dt>Roles held</dt><dd class="pf-chips">${[...new Set(c.engs.map((e) => e.role).filter(Boolean))].slice(0, 4).map((r) => `<span class="pf-chip sm">${esc(r)}</span>`).join('')}</dd></div>
-        <div><dt>Engagement length</dt><dd>${esc((() => { const m = c.engs.map((e) => e.months || 0).filter(Boolean); return m.length ? (Math.min(...m) === Math.max(...m) ? plural(m[0], 'month') : `${Math.min(...m)} to ${Math.max(...m)} months`) : '—'; })())}</dd></div>
-        <div><dt>Company-verified</dt><dd>${Math.round((c.engs.filter((e) => e.verified).length / c.engs.length) * 100)}%</dd></div>
-      </dl>` : '';
+    const stack = c.stack ? stackBlock(c) : '';
+    if (!left && !inds && !range && !stack) return '';
+    // Engagement roles, lengths and the verified share live once, in the Track record and the proof strip
     return sec(c, 'fit', `Fit · ${esc(catLabel(op.catKey))}`, `Who ${esc(op.first)} is right for`,
       `<div class="pf-fit">
-        <div class="pf-fit-l">${left}${facts}${inds}</div>
-        ${range ? `<div class="pf-fit-r">${range}</div>` : ''}
+        <div class="pf-fit-l">${left}${inds}</div>
+        ${range || stack ? `<div class="pf-fit-r">${range}${stack}</div>` : ''}
       </div>`, { edit: 'studio.profile' });
   }
 
@@ -776,7 +776,7 @@
     const op = c.op;
     if (!c.tags.length) return '';
     return sec(c, 'expertise', 'Expertise · GTM Framework', 'Where the proof is', expertiseBody(c), {
-      sub: `${plural(c.verified.length, 'focus area')} verified by companies, ${c.tags.length - c.verified.length} self-claimed. Mapped onto the ${jumpBtnLink('framework', 'GTM Framework')}.`,
+      sub: `${plural(c.verified.length, 'focus area')} verified by companies, ${c.tags.length - c.verified.length} self-claimed, on the ${jumpBtnLink('framework', 'GTM Framework')}.`,
       edit: 'studio.profile', editLabel: 'Edit fit tags',
     });
   }
@@ -787,10 +787,9 @@
         <div class="legend pf-legend"><span><i class="pf-lg-ramp"></i>Stronger company-verified proof</span><span><i class="pf-lg-claimed"></i>Self-claimed only</span><span><i class="pf-lg-empty"></i>Nothing tagged</span></div>
       </div>
       <div class="pf-exp-grid">
-        <div class="pf-radar">${radar(c)}</div>
         <div class="pf-focus" aria-live="polite">${focusPanel(c)}</div>
-      </div>
-      <div class="pf-taglist">${tagList(c)}</div>`;
+        <div class="pf-taglist">${tagList(c)}</div>
+      </div>`;
   }
   function shadeFor(a) {
     if (!a) return { fill: 'var(--card)', stroke: 'var(--line)', dash: '4 4', ink: 'var(--mute-2)', t: 0 };
@@ -840,31 +839,6 @@
       <text x="160" y="12" text-anchor="middle" class="pf-bow-cap">Before the sale</text>
       <text x="160" y="${22 + 4 * (h + gap) + 12}" text-anchor="middle" class="pf-bow-cap">Signed · after the sale</text>${body}</svg>`;
   }
-  function radar(c) {
-    const op = c.op;
-    const size = 420; // larger viewBox so the polygon fills more of the plot (radar keeps a fixed 54-unit label margin)
-    const vals = c.axes.map((a) => (c.axAgg[a] ? c.axAgg[a].pct / 100 : 0));
-    const peers = RN.model.ops.filter((o) => o.catKey === op.catKey && o.id !== op.id);
-    const typical = c.axes.map((a) => {
-      const arr = peers.map((o) => { const g = agg(o.tags.filter((t) => t.axis === a)); return g ? g.pct : 0; }).sort((x, y) => x - y);
-      return arr.length ? arr[Math.floor(arr.length / 2)] / 100 : 0;
-    });
-    // Outer ring = the next 20% step above the strongest value (shown under the chart), so the shape is readable
-    const top = Math.max(0.2, ...vals, ...typical);
-    const outer = Math.min(1, Math.ceil((top + 0.001) * 5) / 5);
-    const sv = vals.map((v) => v / outer), st = typical.map((v) => v / outer);
-    const sel = S.focus && S.focus.kind === 'axis' ? S.focus.key : null;
-    const r = size / 2 - 54;
-    const labels = c.axes.map((a, i) => {
-      const ang = -Math.PI / 2 + (i * 2 * Math.PI) / c.axes.length;
-      const x = size / 2 + Math.cos(ang) * r * 1.2, y = size / 2 + Math.sin(ang) * r * 1.2;
-      const side = Math.abs(x - size / 2) < 8 ? (y < size / 2 ? 'top' : 'bot') : x > size / 2 ? 'right' : 'left';
-      const g = c.axAgg[a];
-      return `<button type="button" class="pf-ax pf-ax-${side} ${sel === a ? 'on' : ''} ${g && g.claimedOnly ? 'claimed' : ''}" style="left:${((x / size) * 100).toFixed(2)}%;top:${((y / size) * 100).toFixed(2)}%" data-act="pf-focus" data-kind="axis" data-key="${esc(a)}" aria-pressed="${sel === a}">${esc(a)}<b>${g ? g.pct + '%' : '—'}</b></button>`;
-    }).join('');
-    return `<div class="pf-radar-plot">${RN.chart.radar(c.axes, sv, { size, labels: false, compare: st, label: `${op.first}'s capability map across six areas` })}${labels}</div>
-      <div class="legend pf-radar-legend"><span><i style="background:var(--viz-1)"></i>${esc(op.first)}</span><span><i class="pf-lg-line"></i>Typical ${esc(catLabel(op.catKey))} operator</span>${outer < 1 ? `<span class="pf-radar-scale">Outer ring ${Math.round(outer * 100)}%</span>` : ''}</div>`;
-  }
   function focusPanel(c) {
     const op = c.op;
     const f = S.focus;
@@ -874,12 +848,12 @@
       return `<div class="pf-how">
         <h3 class="pf-how-h">Proof by area</h3>
         <ul class="pf-axbars">${ranked.map((x) => `<li><button type="button" data-act="pf-focus" data-kind="axis" data-key="${esc(x.a)}" data-ax="${esc(AX_KEY[x.a] || '')}"><span>${esc(x.a)}</span><b>${x.g ? (x.g.claimedOnly ? 'Claimed' : x.g.pct + '%') : '–'}</b><i><em style="width:${x.g ? Math.max(3, x.g.pct) : 0}%"></em></i></button></li>`).join('')}</ul>
-        <h3 class="pf-how-h pf-how-h2">How scores work</h3>
+        <details class="pf-fold"><summary>${icon('chev-right')}How scores work</summary>
         <ul class="pf-how-list">
           <li>Each focus area earns points from proof: <b>10</b> if self-claimed, <b>50</b> with one company review, up to <b>100</b> with more.</li>
           <li>A stage or area scores its <b>best three</b> focus areas, out of 300.</li>
           <li>Tap an area or a stage to see which three count.</li>
-        </ul>
+        </ul></details>
       </div>`;
     }
     const isStage = f.kind === 'stage';
@@ -899,7 +873,7 @@
         <ol class="pf-slots">${slots}</ol>
         <p class="pf-slots-foot"><span>${a.sum} of 300 points</span><b>${a.pct}%</b></p>
         <span class="label pf-lab">How ${esc(op.first)} contributes here</span>
-        <div class="pf-contrib">${CONTRIB_ORDER.filter((k) => groups[k]).map((k) => `<div><b>${esc(k)}</b><span>${groups[k].slice(0, 6).map((t) => `<span class="${t.tier === 'claimed' ? 'cl' : 'v'}">${t.tier !== 'claimed' ? icon('check') : ''}${esc(t.t)}</span>`).join('')}</span></div>`).join('')}</div>`
+        <div class="pf-contrib">${CONTRIB_ORDER.filter((k) => groups[k]).map((k) => `<div><b>${esc(k)}</b><span>${groups[k].slice(0, 6).map((t) => `<span class="ftag ${t.tier === 'claimed' ? 'claimed' : ''}">${t.tier !== 'claimed' ? icon('check-circle') : ''}${esc(t.t)}</span>`).join('')}</span></div>`).join('')}</div>`
         : `<p class="pf-focus-empty">No focus areas tagged ${isStage ? 'in this stage' : 'in this area'} yet.</p>`}`;
   }
   function tagTip(op, t) {
@@ -923,8 +897,8 @@
       const by = confirmers(op, t);
       return `<li class="pf-tag">
         <div class="pf-tag-top"><button type="button" class="pf-tagname" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>
-          <span class="pf-badge ${t.tier}">${t.tier === 'expert' ? 'Expert' : 'Verified'}</span>
-          ${t.axis ? `<span class="pf-tag-ax" data-ax="${esc(AX_KEY[t.axis] || '')}">${esc(t.axis)}</span>` : ''}
+          <span class="pill ${t.tier === 'expert' ? 'pill-good' : 'pill-accent'}">${t.tier === 'expert' ? 'Expert' : 'Verified'}</span>
+          ${t.axis ? `<span class="pill pf-tag-ax" data-ax="${esc(AX_KEY[t.axis] || '')}">${esc(t.axis)}</span>` : ''}
           <b class="pf-tag-score">${t.score}<small>/100</small></b></div>
         <div class="pf-bar" data-ax="${esc(AX_KEY[t.axis] || '')}"><i style="width:${t.score}%"></i></div>
         <p class="pf-tag-ev">Confirmed by ${by.map((co) => jumpBtn('pf-review-' + RN.slug(co), esc(co), 'pf-evlink')).join(', ') || 'a company'} · ${esc(plural(t.r || by.length || 1, 'company review'))}${t.stage && t.stage !== 'foundation' ? ` · ${esc(t.stage)} stage` : ''}</p>
@@ -933,15 +907,15 @@
     const title = f ? `Focus areas in ${esc(f.key)}` : ver.length ? 'Top verified focus areas' : 'Focus areas';
     return `<div class="pf-taglist-hd"><h3 class="h5 pf-h3">${title}</h3>
         ${f ? `<button type="button" class="act" data-act="pf-focus-clear">Show all expertise</button>` : ''}</div>
-      ${showVer.length ? `<ul class="pf-tags">${showVer.map(row).join('')}</ul>` : ''}
+      ${showVer.length ? `<ul class="pf-tags${S.tagsAll ? ' all' : ''}">${showVer.map(row).join('')}</ul>` : ''}
       ${showCl.length ? `<div class="pf-claimed">${ver.length ? `<p class="pf-claimed-hd"><b>Also claims ${plural(cl.length, 'focus area')}</b> not yet verified by a company</p>` : `<p class="pf-claimed-hd">Self-claimed by ${esc(op.first)}. Each one turns verified when a company confirms it in a review.</p>`}
-        <div class="pf-chips">${showCl.map((t) => `<button type="button" class="pf-chip dashed" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>`).join('')}</div></div>` : ''}
+        <div class="pf-chips">${showCl.map((t) => `<button type="button" class="ftag claimed" data-tip="${esc(tagTip(op, t))}">${esc(t.t)}</button>`).join('')}</div></div>` : ''}
       ${!tags.length ? `<p class="pf-focus-empty">No focus areas here yet.</p>` : ''}
       ${tags.length > LIMIT ? `<button type="button" class="pf-showall" data-act="pf-tags-all">${S.tagsAll ? 'Show top 3' : `Show all ${tags.length} focus areas`}${icon(S.tagsAll ? 'chev-up' : 'chev-down')}</button>` : ''}`;
   }
 
-  /* ---------- Tech stack: grouped by the four standard proficiency levels ---------- */
-  function secStack(c) {
+  /* ---------- Tech stack, inside Fit: the strongest tools as a line, the full levelled list folded ---------- */
+  function stackBlock(c) {
     const op = c.op, st = c.stack;
     const P = F.stackProficiency.options;
     const meter = (lvl) => `<span class="pf-pm" aria-hidden="true">${[1, 2, 3, 4].map((i) => `<i class="${i <= lvl ? 'on' : ''} ${lvl === 4 ? 'dev' : ''}"></i>`).join('')}</span>`;
@@ -949,16 +923,23 @@
     const groups = P.slice().reverse().map((o) => ({ l: o.l, d: o.d, lvl: o.level, tools: st.tools.filter((t) => t.lvl === o.level) }))
       .concat([{ l: 'Level not set', d: 'Named by the operator or confirmed by a company, without a proficiency level.', lvl: 0, tools: st.tools.filter((t) => !t.lvl) }])
       .filter((g) => g.tools.length);
-    return sec(c, 'stack', 'Tech stack', `Tools ${esc(op.first)} works in`, `
-      <label class="pf-search">${icon('search')}<input type="search" placeholder="Search ${st.tools.length} tools, e.g. Salesforce" data-input="pf-stack-q" value="${esc(S.stackQ)}" aria-label="Search ${esc(op.first)}’s tools"></label>
-      <p class="pf-stack-res" aria-live="polite" data-pf-stack-res></p>
-      <div class="pf-stack-grid">${groups.map((g) => `<div class="pf-stack-cat ${g.lvl >= 3 ? 'core' : ''}" data-cat>
-          <div class="pf-stack-cat-hd"><span class="row-nw" style="--gap:8px">${g.lvl ? meter(g.lvl) : ''}<b>${esc(g.l)}</b></span><span class="pf-count">${g.tools.length}</span></div>
-          <p class="pf-stack-d">${esc(g.d)}</p>
-          <ul>${g.tools.slice().sort((a, b) => a.name.localeCompare(b.name)).map((t) => `<li class="pf-tool" data-name="${esc(lc(t.name))}" data-lvl="${t.lvl}" data-by="${esc(t.by)}">
-            ${mark(t.name)}<span class="pf-tool-n"><b>${esc(t.name)}</b>${t.by ? `<button type="button" class="pf-tool-v" data-act="pf-jump" data-to="pf-review-${RN.slug(t.by)}">${icon('check-circle')}Confirmed by ${esc(t.by)}</button>` : ''}</span></li>`).join('')}</ul>
-        </div>`).join('')}</div>
-      <p class="pf-note">${st.illus ? `${RN.ui.illus('Illustrative levels')} ` : ''}Proficiency uses the four standard levels from operator intake. “Confirmed by” means a company named the tool in a review.</p>`, { edit: 'studio.profile' });
+    const top = st.tools.slice().sort((a, b) => b.lvl - a.lvl || (b.by ? 1 : 0) - (a.by ? 1 : 0) || a.name.localeCompare(b.name));
+    const SHOW = 6;
+    return `<div class="pf-stack" id="pf-stack">
+      <h3 class="h5 pf-h3">Tech stack <span class="pf-count">${st.tools.length}</span></h3>
+      <div class="pf-chips">${top.slice(0, SHOW).map((t) => `<span class="pill">${t.by ? icon('check-circle') : ''}${esc(t.name)}</span>`).join('')}</div>
+      <details class="pf-fold"${S.stackQ ? ' open' : ''}><summary>${icon('chev-right')}${st.tools.length > SHOW ? `Show all ${st.tools.length} tools by proficiency` : 'Proficiency levels'}</summary>
+        <label class="pf-search">${icon('search')}<input type="search" placeholder="Search ${st.tools.length} tools, e.g. Salesforce" data-input="pf-stack-q" value="${esc(S.stackQ)}" aria-label="Search ${esc(op.first)}’s tools"></label>
+        <p class="pf-stack-res" aria-live="polite" data-pf-stack-res></p>
+        <div class="pf-stack-grid">${groups.map((g) => `<div class="pf-stack-cat ${g.lvl >= 3 ? 'core' : ''}" data-cat>
+            <div class="pf-stack-cat-hd"><span class="row-nw" style="--gap:8px">${g.lvl ? meter(g.lvl) : ''}<b>${esc(g.l)}</b></span><span class="pf-count">${g.tools.length}</span></div>
+            <p class="pf-stack-d">${esc(g.d)}</p>
+            <ul>${g.tools.slice().sort((a, b) => a.name.localeCompare(b.name)).map((t) => `<li class="pf-tool" data-name="${esc(lc(t.name))}" data-lvl="${t.lvl}" data-by="${esc(t.by)}">
+              ${mark(t.name)}<span class="pf-tool-n"><b>${esc(t.name)}</b>${t.by ? `<button type="button" class="pf-tool-v" data-act="pf-jump" data-to="pf-review-${RN.slug(t.by)}">${icon('check-circle')}Confirmed by ${esc(t.by)}</button>` : ''}</span></li>`).join('')}</ul>
+          </div>`).join('')}</div>
+        ${st.illus ? `<p class="pf-note" data-proto>${RN.ui.illus('Illustrative levels')}</p>` : ''}
+      </details>
+    </div>`;
   }
   function applyStackFilter(root) {
     const box = root.querySelector('#pf-stack');
@@ -988,8 +969,9 @@
     const items = c.samples.filter((s) => S.pf === 'all' || (PF_GROUP[s.type] || 'builds') === S.pf);
     return sec(c, 'portfolio', 'Portfolio · Work samples', 'Playbooks, frameworks and systems', `
       <div class="pf-pf-filters chipset" role="group" aria-label="Filter work samples">${PF_FILTERS.filter(([k]) => k === 'all' || counts[k]).map(([k, l]) => `<button type="button" class="chip chip-sm" aria-pressed="${S.pf === k}" data-act="pf-pf-filter" data-v="${k}">${esc(l)}<span class="pf-chip-n">${k === 'all' ? c.samples.length : counts[k]}</span></button>`).join('')}</div>
-      <div class="pf-samples ${S.pf === 'all' ? 'bento' : ''}">${items.map((s, i) => sampleCard(c, s, S.pf === 'all' && i === 0 && s.feature)).join('')}</div>
-      <p class="pf-note">${RN.ui.illus('Illustrative previews')} ${op.isMatt ? `Titles and the engagements they came from are ${esc(op.first)}’s. ` : ''}Page previews are placeholders until the files are uploaded.</p>`,
+      <div class="pf-samples">${(S.pfAll ? items : items.slice(0, 3)).map((s) => sampleCard(c, s, false)).join('')}</div>
+      ${items.length > 3 ? `<button type="button" class="pf-showall" data-act="pf-pf-all">${S.pfAll ? 'Show fewer' : `Show all ${items.length} work samples`}${icon(S.pfAll ? 'chev-up' : 'chev-down')}</button>` : ''}
+      <p class="pf-note" data-proto>${RN.ui.illus('Illustrative previews')} ${op.isMatt ? `Titles and the engagements they came from are ${esc(op.first)}’s. ` : ''}Page previews are placeholders until the files are uploaded.</p>`,
     { edit: 'studio.profile', editLabel: 'Add a work sample' });
   }
   function downloads(op, s) { const r = RN.rng(op.id + s.id); return 6 + Math.floor(r() * 34); }
@@ -998,7 +980,7 @@
     const e = c.engs.find((x) => lc(x.company) === lc(s.at));
     return `<article class="pf-sample ${feature ? 'feature' : ''}">
       <button type="button" class="pf-cover tone-${esc(s.tone || 'paper')}" data-act="pf-sample" data-id="${esc(s.id)}" aria-label="Open ${esc(s.title)}">
-        <span class="pf-cover-pills"><span>${esc(s.type)}</span>${s.pages ? `<span>${s.pages} pages</span>` : ''}</span>
+        <span class="pf-cover-pills"><span class="pill">${esc(s.type)}</span>${s.pages ? `<span class="pill">${s.pages} pages</span>` : ''}</span>
         ${docPages(s, op)}
       </button>
       <div class="pf-sample-meta">
@@ -1040,7 +1022,7 @@
       body: `<div class="pf-lb">${Array.from({ length: pages }, (_, i) => i < pages - 1 ? `<figure class="pf-lb-page"><span class="pf-doc front big"><span class="pf-doc-rule"></span><span class="pf-doc-hd"><span>${esc(lc(s.at || op.first).toUpperCase())} · ${esc(s.type.toUpperCase())}</span><span>CONFIDENTIAL</span></span>
             <b>${esc(toc[i % toc.length])}</b><i></i><i class="w8"></i><i></i><i class="w6"></i><i class="w8"></i><i></i><i class="w6"></i><span class="pf-doc-ft"><span>Prepared by ${esc(op.name)}</span><span>${i + 1}</span></span></span><figcaption>Page ${i + 1}</figcaption></figure>`
           : `<figure class="pf-lb-page locked"><span class="pf-doc front big"><span class="pf-doc-rule"></span><i></i><i class="w8"></i><i></i><i class="w6"></i></span><span class="pf-lb-lock">${icon('lock')}<b>${Math.max(1, (s.pages || pages) - (pages - 1))} more pages</b><span>Shared after an intro</span></span><figcaption>Page ${i + 1}</figcaption></figure>`).join('')}</div>
-        <div class="pf-lb-prov">${e && e.verified ? icon('check-circle') : icon('info')}<span>${s.at ? `Used at <b>${esc(s.at)}</b>${e && e.verified ? ', a company-verified engagement' : ''}` : 'Work sample'}${s.skills.length ? ` · confirms ${s.skills.map((k) => `<span class="pf-chip sm">${esc(k)}</span>`).join(' ')}` : ''}</span></div>
+        <div class="pf-lb-prov">${e && e.verified ? icon('check-circle') : icon('info')}<span>${s.at ? `Used at <b>${esc(s.at)}</b>${e && e.verified ? ', a company-verified engagement' : ''}` : 'Work sample'}${s.skills.length ? ` · confirms ${s.skills.map((k) => `<span class="ftag">${esc(k)}</span>`).join(' ')}` : ''}</span></div>
         ${c.v.owner ? `<p class="small muted pf-lb-note">${icon('upload')} ${downloads(op, s)} downloads this quarter, 4 by companies in Health Care. Companies see page previews; the full file is shared after an intro. ${RN.ui.illus()}</p>` : ''}
         <p class="tiny faint pf-lb-note">${RN.ui.illus('Illustrative previews')} Page previews are placeholders until the file is uploaded.</p>`,
       foot: c.v.owner ? `<button class="btn btn-line" data-act="modal-close">Close</button><a class="btn" href="#studio.profile" data-act="modal-close">Manage samples in Studio</a>`
@@ -1058,21 +1040,17 @@
       return sec(c, 'engagements', 'Engagements', 'Past engagements', RN.ui.empty({ icon: 'briefcase', title: 'No engagements or company reviews yet', body: c.v.owner ? 'Add engagement history in Studio, then ask each company for a review. Reviews verify your focus areas and lift your Reputation Index.' : `${op.first} has not added engagement history yet. Ask about recent work when you request an intro.`,
         cta: c.v.owner ? '<a class="btn btn-sm" href="#studio.profile">Add engagement history</a>' : `<button class="btn btn-sm" data-act="${c.v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>` }));
     }
-    if (S.engOpen == null) S.engOpen = { [c.engs[0].key]: true };
-    let lastYear = null;
-    const items = c.engs.map((e) => {
-      const y = String(e.end || e.start || '').slice(0, 4) || String(RN.now().getFullYear());
-      const yr = y !== lastYear ? `<span class="pf-tl-year">${esc(y)}</span>` : '';
-      lastYear = y;
-      return yr + engItem(c, e, hasReviews);
-    }).join('');
+    if (S.engOpen == null) S.engOpen = {};
+    const ENG_MAX = 3;
+    const shownEngs = S.engAll ? c.engs : c.engs.slice(0, ENG_MAX);
+    // Each row carries its own dates, so no separate year markers
+    const items = shownEngs.map((e) => engItem(c, e, hasReviews)).join('');
     return sec(c, 'engagements', hasReviews ? 'Track record' : 'Engagements · Self-reported', hasReviews ? 'Engagement history' : 'Past engagements',
-      `<div class="pf-tl">${items}</div>`, { sub: hasReviews ? `${plural(c.engs.length, 'engagement')}, ${c.engs.filter((e) => e.verified).length} verified by the company.` : 'Self-reported by the operator. Each one turns verified when that company leaves a review.', edit: 'studio.profile' });
+      `<div class="pf-tl${S.engAll ? ' all' : ''}">${items}</div>${c.engs.length > ENG_MAX ? `<button type="button" class="pf-showall" data-act="pf-eng-all">${S.engAll ? 'Show fewer' : `Show all ${c.engs.length} engagements`}${icon(S.engAll ? 'chev-up' : 'chev-down')}</button>` : ''}`, { sub: hasReviews ? `${plural(c.engs.length, 'engagement')}, ${c.engs.filter((e) => e.verified).length} verified by the company.` : 'Self-reported by the operator. Each one turns verified when that company leaves a review.', edit: 'studio.profile' });
   }
   function engItem(c, e, hasReviews) {
     const open = !!(S.engOpen && S.engOpen[e.key]);
     const r = e.review;
-    const cr = r ? coreOf(r) : null;
     const tags = r ? (r.tags || []) : [];
     const hasDetail = !!(e.outcome || e.context || r || e.samples.length);
     const meta = [e.revenueRange && `${RN.w.label('revenueRange', e.revenueRange)} revenue`, e.employeeRange && `${RN.w.label('employeeRange', e.employeeRange)} employees`].filter(Boolean);
@@ -1083,7 +1061,7 @@
         <span class="pf-eng-main">
           <b class="pf-eng-role">${esc(e.role || 'Engagement')}</b>
           <span class="pf-eng-co">${esc(e.company)}${meta.length ? ` · ${esc(meta.join(' · '))}` : ''}</span>
-          <span class="pf-eng-tags">${e.industry ? `<span class="pf-ind">${esc(RN.w.label('industries', e.industry))}</span>` : ''}${e.verified ? `<span class="pf-verified">${icon('check-circle')}Company verified</span>` : `<span class="pf-self">${hasReviews ? 'Self-reported' : `Awaiting a review from ${esc(e.company)}`}</span>`}</span>
+          <span class="pf-eng-tags">${e.industry ? `<span class="pill pill-accent">${esc(RN.w.label('industries', e.industry))}</span>` : ''}${e.verified ? `<span class="pf-verified">${icon('check-circle')}Company verified</span>` : `<span class="pf-self">${hasReviews ? 'Self-reported' : `Awaiting a review from ${esc(e.company)}`}</span>`}</span>
         </span>
         <span class="pf-eng-when"><b>${esc(mon(e.start))} – ${esc(mon(e.end))}</b><span>${esc(plural(e.months || 0, 'mo', 'mo'))}${r ? ` · ${RN.ui.stars(r.overall || 5)}` : ''}</span></span>
         ${hasDetail ? `<span class="pf-eng-chev">${icon('chev-down')}</span>` : ''}
@@ -1093,20 +1071,25 @@
         ${e.context ? `<div class="pf-eng-ctx"><span class="label pf-lab">What ${esc(c.first)} did</span><p>${esc(e.context)}</p></div>` : ''}
         ${r && hasReviews ? `<button type="button" class="pf-eng-rv" data-act="pf-review" data-i="${c.reviews.indexOf(r)}"><span class="pf-rv-ava">${esc(RN.fmt.initials(r.reviewer))}</span><span class="grow"><b>${esc(r.reviewer)}</b>${r.role ? `, ${esc(r.role)}` : ''} reviewed this engagement</span>${RN.ui.stars(r.overall || 5)}<span class="pf-eng-rv-go">Read review${icon('arrow')}</span></button>` : ''}
         ${r && !hasReviews ? `<blockquote class="pf-eng-q"><p>“${esc(r.quote)}”</p><footer><span><b>${esc(r.reviewer)}</b>${r.role ? `, ${esc(r.role)}` : ''}${e.logo ? '' : ` · ${esc(e.company)}`}</span>${e.logo ? `<span class="pf-mini-logo">${logoHtml(e.logo, e.company, 14)}</span>` : ''}${RN.ui.stars(r.overall || 5)}</footer></blockquote>` : ''}
-        ${cr ? `<div class="pf-eng-core"><span class="label pf-lab">CORE ratings</span><div class="pf-core-mini">${F.coreDims.options.map((d, i) => `<span title="${esc(d.l)}${cr.notes && cr.notes[i] ? ': ' + esc(cr.notes[i]) : ''}"><b>${esc(d.v)}</b>${cr.scores[i].toFixed(1)}</span>`).join('')}</div></div>` : ''}
-        ${tags.length ? `<div><span class="label pf-lab">Focus areas this engagement verified</span><div class="pf-chips">${tags.map((t) => `<span class="pf-chip line">${icon('check')}${esc(t)}</span>`).join('')}</div></div>` : ''}
-        ${e.samples.length ? `<div><span class="label pf-lab">Work samples from this engagement</span><div class="pf-eng-samples">${e.samples.map((s) => `<button type="button" class="pf-eng-sample" data-act="pf-sample" data-id="${esc(s.id)}"><span class="pf-ftype">${esc(s.type)}</span><span>${esc(s.title)}</span>${icon('chev-right')}</button>`).join('')}</div></div>` : ''}
+        ${tags.length ? `<div><span class="label pf-lab">Focus areas this engagement verified</span><div class="pf-chips">${tags.map((t) => `<span class="ftag">${icon('check-circle')}${esc(t)}</span>`).join('')}</div></div>` : ''}
+        ${e.samples.length ? `<div><span class="label pf-lab">Work samples from this engagement</span><div class="pf-eng-samples">${e.samples.map((s) => `<button type="button" class="pf-eng-sample" data-act="pf-sample" data-id="${esc(s.id)}"><span class="pill pill-accent">${esc(s.type)}</span><span>${esc(s.title)}</span>${icon('chev-right')}</button>`).join('')}</div></div>` : ''}
       </div>` : ''}
     </article>`;
   }
 
   /* ---------- Client reviews ---------- */
-  function secReviews(c) {
+  /* Reviews and CORE ratings in one place: the quotes, then one compact row of the four ratings.
+     Each company's CORE notes stay one tap away in Read full review. */
+  function secReviews(c, withCore) {
     const op = c.op;
     if (!c.reviews.length) return '';
     const avg = mean(c.reviews.map((r) => +r.overall || 5));
-    return sec(c, 'reviews', 'Company reviews', 'What companies say', `<div class="pf-reviews">${c.reviews.map((r, i) => reviewCard(c, r, i)).join('')}</div>`, {
-      sub: `${avg.toFixed(1)} average from ${plural(c.reviews.length, 'verified company')}. Reviews publish as submitted and verify the focus areas each company confirms.`,
+    const MAX = 4;
+    const shown = S.revAll ? c.reviews : c.reviews.slice(0, MAX);
+    return sec(c, 'reviews', 'Company reviews', 'What companies say', `<div class="pf-reviews">${shown.map((r) => reviewCard(c, r, c.reviews.indexOf(r))).join('')}</div>
+      ${c.reviews.length > MAX ? `<button type="button" class="pf-showall" data-act="pf-rev-all">${S.revAll ? 'Show fewer' : `Show all ${c.reviews.length} reviews`}${icon(S.revAll ? 'chev-up' : 'chev-down')}</button>` : ''}
+      ${withCore && c.coreRevs.length ? `<div class="pf-core-w" id="pf-core">${coreBody(c)}</div>` : ''}`, {
+      sub: `${avg.toFixed(1)} average from ${plural(c.reviews.length, 'verified company')}.`,
       side: c.v.owner ? `<a class="act pf-edit" href="#studio.credibility">${icon('send')}Request a review</a>` : c.v.client && !c.v.preview && reviewIntro(op) ? `<button type="button" class="btn btn-line btn-sm" data-act="bw-review-start" data-id="${esc(reviewIntro(op).id)}">${icon('star')}Leave a review</button>` : '',
     });
   }
@@ -1141,7 +1124,7 @@
             <p class="pf-rvm-ask">${esc(d.q)}</p>${cr.notes && cr.notes[k] ? `<p class="pf-rvm-note">“${esc(cr.notes[k])}”</p>` : ''}</div></div>`).join('')}</div>
             ${cr.notes && cr.notes.some(Boolean) ? '' : `<p class="small muted">This company scored each dimension without a written note.</p>`}`
         : `<p class="small muted">This company left a star rating and written review without CORE ratings.</p>`}
-        ${(r.tags || []).length ? `<span class="label pf-lab">Focus areas this company verified</span><div class="pf-chips">${r.tags.map((t) => `<span class="pf-chip v">${icon('check-circle')}${esc(t)}</span>`).join('')}</div>` : ''}
+        ${(r.tags || []).length ? `<span class="label pf-lab">Focus areas this company verified</span><div class="pf-chips">${r.tags.map((t) => `<span class="ftag">${icon('check-circle')}${esc(t)}</span>`).join('')}</div>` : ''}
         ${e ? `<span class="label pf-lab">Engagement</span><dl class="pf-facts">
           <div><dt>Operator title at engagement</dt><dd>${esc(e.role || det.title || '')}</dd></div>
           <div><dt>Engagement dates</dt><dd>${esc(mon(e.start))} – ${esc(mon(e.end))} · ${esc(plural(e.months || 0, 'mo', 'mo'))}</dd></div>
@@ -1170,57 +1153,33 @@
     return { dims, comp, bench, compPct: Math.min(99, Math.round(ncdf((comp - bench) / 0.38) * 100)), n: revs.length };
   }
   function secCore(c) {
+    return sec(c, 'core', 'CORE · Company ratings', `How companies rate working with ${esc(c.op.first)}`, coreBody(c));
+  }
+  function coreBody(c) {
     const op = c.op;
     const st = coreStats(c);
     const X = (v) => (((v - 1) / 4) * 100).toFixed(1) + '%';
-    return sec(c, 'core', 'CORE · Company ratings', `How companies rate working with ${esc(op.first)}`, `
-      <div class="pf-core">
+    return `<div class="pf-core">
         <div class="pf-core-panel">
           <span class="eyebrow pf-core-k">CORE score</span>
           <p class="pf-core-big serif-up">${st.comp.toFixed(1)}<small>/5</small></p>
           <p class="pf-core-vs"><b>${st.comp >= st.bench ? '+' : ''}${(st.comp - st.bench).toFixed(1)}</b> vs platform average ${st.bench.toFixed(1)}</p>
-          <p class="pf-core-vs">Higher than <b>${st.compPct}%</b> of operators</p>
-          <dl class="pf-core-defs">${F.coreDims.options.map((d) => `<div><dt>${esc(d.v)}</dt><dd><b>${esc(d.l)}.</b> ${esc(d.d)}</dd></div>`).join('')}</dl>
-          <p class="pf-core-foot">From ${plural(st.n, 'company rating')}. Each company scores four behaviours from 1 to 5 and can add a note to each score.</p>
+          <p class="pf-core-vs">From ${plural(st.n, 'company rating')}</p>
         </div>
         <div class="pf-core-rows">
-          <div class="legend pf-core-legend"><span><i class="pf-lg-you"></i>${esc(op.first)}</span><span><i class="pf-lg-bench"></i>Platform average</span></div>
-          ${st.dims.map((x) => {
-            const qi = (S.coreIdx[x.i] != null ? S.coreIdx[x.i] : x.i) % Math.max(1, x.quotes.length);
-            return `<div class="pf-core-row" data-dim="${x.i}">
+          ${st.dims.map((x) => `<div class="pf-core-row" data-dim="${x.i}">
               <div class="pf-core-top"><span class="pf-core-l">${esc(x.d.v)}</span><b class="pf-core-name">${esc(x.d.l)}</b><span class="pf-core-avg serif-up">${x.avg.toFixed(1)}</span>
-                <span class="pf-delta ${x.delta >= 0 ? 'up' : 'down'}">${x.delta >= 0 ? '+' : ''}${x.delta.toFixed(1)} vs avg</span><span class="pf-core-topn">Top ${x.top}%</span></div>
+                <span class="pf-delta ${x.delta >= 0 ? 'up' : 'down'}">${x.delta >= 0 ? '+' : ''}${x.delta.toFixed(1)} vs avg</span></div>
               <div class="pf-core-track" role="img" aria-label="${esc(x.d.l)}: ${x.avg.toFixed(1)} out of 5, platform average ${x.bench.toFixed(1)}">
-                <i class="pf-core-fill" style="width:${X(x.avg)}"></i><i class="pf-core-bench" style="left:${X(x.bench)}"><span>${x.bench.toFixed(1)}</span></i><i class="pf-core-you" style="left:${X(x.avg)}"></i></div>
-              <div class="pf-core-scale" aria-hidden="true">${[1, 2, 3, 4, 5].map((n) => `<span>${n}</span>`).join('')}</div>
-              <div class="pf-core-ev">
-                <div class="pf-core-chips">${x.chips.slice(0, 4).map((ch) => { const e = c.engs.find((y) => lc(y.company) === lc(ch.r.company)); return `<span class="pf-core-chip" title="${esc(ch.r.reviewer)}, ${esc(ch.r.company)}">${e && e.logo ? logoHtml(e.logo, ch.r.company, 13) : `<em>${esc(RN.fmt.initials(ch.r.company || ch.r.reviewer))}</em>`}<b>${ch.s.toFixed(1)}</b></span>`; }).join('')}${x.chips.length > 4 ? `<span class="pf-core-chip">+${x.chips.length - 4}</span>` : ''}</div>
-                ${x.quotes.length ? `<figure class="pf-core-q" data-pf-q="${x.i}">${coreQuote(x.quotes[qi])}</figure>
-                  ${x.quotes.length > 1 ? `<div class="pf-pager"><button type="button" data-act="pf-core-q" data-dim="${x.i}" data-dir="-1" aria-label="Previous quote">${icon('chev-left')}</button><span data-pf-qn="${x.i}">${qi + 1} / ${x.quotes.length}</span><button type="button" data-act="pf-core-q" data-dim="${x.i}" data-dir="1" aria-label="Next quote">${icon('chev-right')}</button></div>` : ''}` : ''}
-              </div>
-            </div>`;
-          }).join('')}
-          <p class="pf-note">${RN.ui.illus()} Platform averages and percentiles are invented to show the comparison.</p>
+                <i class="pf-core-fill" style="width:${X(x.avg)}"></i><i class="pf-core-bench" style="left:${X(x.bench)}"></i><i class="pf-core-you" style="left:${X(x.avg)}"></i></div>
+            </div>`).join('')}
+          <details class="pf-fold"><summary>${icon('chev-right')}What CORE measures</summary>
+            <dl class="pf-core-defs">${F.coreDims.options.map((d) => `<div><dt>${esc(d.v)}</dt><dd><b>${esc(d.l)}.</b> ${esc(d.d)}</dd></div>`).join('')}</dl>
+            <p class="pf-note">Each company scores four behaviours from 1 to 5 and can add a note to each score. The grey mark is the platform average.</p>
+          </details>
+          <p class="pf-note" data-proto>${RN.ui.illus()} Platform averages are invented to show the comparison.</p>
         </div>
-      </div>`);
-  }
-  function coreQuote(q) {
-    if (!q) return '';
-    return `<blockquote>“${esc(q.q)}”</blockquote><figcaption>${esc(q.r.reviewer)}${q.r.company ? ', ' + esc(q.r.company) : ''}</figcaption>`;
-  }
-  function stepCore(dim, dir) {
-    const c = S.ctx;
-    if (!c) return;
-    const st = coreStats(c);
-    const x = st.dims[dim];
-    if (!x || x.quotes.length < 2) return;
-    const cur = S.coreIdx[dim] != null ? S.coreIdx[dim] : dim;
-    const n = (((cur + dir) % x.quotes.length) + x.quotes.length) % x.quotes.length;
-    S.coreIdx[dim] = n;
-    const fig = document.querySelector(`[data-pf-q="${dim}"]`);
-    const num = document.querySelector(`[data-pf-qn="${dim}"]`);
-    if (fig) { fig.innerHTML = coreQuote(x.quotes[n]); fig.classList.remove('pf-fade'); void fig.offsetWidth; fig.classList.add('pf-fade'); }
-    if (num) num.textContent = `${n + 1} / ${x.quotes.length}`;
+      </div>`;
   }
 
   /* ---------- Right rail ---------- */
@@ -1236,7 +1195,7 @@
     // Visitors see a monthly range (ungated); the exact hourly rate stays behind login. Companies see both.
     const mr = RN.model.monthlyRange(op);
     const rate = !op.rate ? '' : v.rate
-      ? `<div><dt>${esc(F.rate.label)}</dt><dd class="num">${esc(RN.fmt.usd(op.rate))} <span class="muted pf-dd-u">/ hr</span>${mr ? `<span class="pf-dd-range">Typically ${esc(mr.text)}</span>` : ''}</dd></div>`
+      ? `<div><dt>${esc(F.rate.label)}</dt><dd class="num">${esc(RN.fmt.usd(op.rate))}<span class="muted pf-dd-u">/hr</span>${mr ? `<span class="pf-dd-range">Typically ${esc(mr.text)}</span>` : ''}</dd></div>`
       : mr ? `<div class="pf-fact-range"><dt>Typical monthly</dt><dd><b class="num">${esc(mr.text)}</b><button type="button" class="pf-rate-hint" data-act="login">${icon('lock')}Exact rate after you sign in</button></dd></div>` : '';
     return `<section class="pf-card pf-engage" aria-label="Engage ${esc(op.first)}">
       <span class="eyebrow">Engage ${esc(op.first)}</span>
@@ -1246,7 +1205,6 @@
         ${op.avail.hoursCode ? `<div><dt>${esc(F.hoursPerMonth.label)}</dt><dd>${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</dd></div>` : ''}
         ${types.length ? `<div><dt>${esc(F.engagementTypes.label)}</dt><dd>${esc(RN.w.labels('engagementTypes', types))}</dd></div>` : ''}
         ${cap ? `<div><dt>${esc(F.newClientCapacity.label)}</dt><dd>${esc(plural(cap, 'client'))}</dd></div>` : ''}
-        ${op.timezone ? `<div><dt>Time zone</dt><dd>${esc(tzLabel(op.timezone))}</dd></div>` : ''}
         ${op.usHours && F.usHours ? `<div><dt>${esc(F.usHours.label)}</dt><dd>${esc(RN.w.label('usHours', op.usHours))}</dd></div>` : ''}
         ${rate}
       </dl>
@@ -1311,33 +1269,12 @@
       <p class="pf-fine">${v.preview ? 'Scored against a sample company profile.' : 'Scored against your company profile. Your preferences follow you to every profile.'}</p>
     </section>`;
   }
-  function risCard(c) {
-    const op = c.op;
-    const tier = F.risTierFor(op.ris.score);
-    const gold = tier.v === 'elite' || tier.v === 'apex';
-    return `<section class="pf-card pf-ris">
-      <span class="eyebrow">Reputation Index</span>
-      <div class="pf-ris-hd tb-host"><span class="pf-ris-seal">${RN.ui.hexSeal(tier.l, { size: 60, score: op.ris.score })}</span><div><b class="pf-ris-tier ${gold ? 'gold' : ''}">${esc(tier.l)}</b><span>Reputation Index ${esc(op.ris.score)} of 100</span></div></div>
-      <p class="pf-ris-d">${esc(tier.d)}</p>
-      ${RN.ui.tierLadder(tier.v, { score: op.ris.score })}
-      <details class="pf-ris-how"><summary>${icon('chev-right')}How score is calculated</summary><div class="pf-ris-exp">${RN.ui.risExplainer()}</div><a class="act" href="#levels">See every tier and what it unlocks${icon('arrow')}</a></details>
-    </section>`;
-  }
-  function talkCard(c) {
-    return `<section class="pf-card pf-talk night">
-      <span class="eyebrow pf-talk-k">Revenue Nomad team</span>
-      <h3 class="h4">Rather have us find the right operator?</h3>
-      <p>Share what you need and we’ll shortlist operators who fit and set up the intros.</p>
-      <a class="btn btn-leaf btn-block" href="#talk">Talk to us</a>
-      <a class="pf-talk-phone" href="tel:+12032000482">${icon('message')}+1 203-200-0482</a>
-    </section>`;
-  }
   function similar(c) {
     const op = c.op;
     const sims = RN.model.similar(op, 3);
     if (!sims.length) return '';
     return `<section class="wrap pf-similar" aria-labelledby="pf-sim-h">
-      <div class="pf-sec-hd"><div class="grow"><span class="eyebrow">Keep looking</span><h2 class="h2 pf-h2" id="pf-sim-h">Operators like ${esc(op.first)}</h2><p class="pf-sec-sub">Same role category and overlapping focus areas. Add two to compare them side by side.</p></div>
+      <div class="pf-sec-hd"><div class="grow"><span class="eyebrow">Keep looking</span><h2 class="h2 pf-h2" id="pf-sim-h">Operators like ${esc(op.first)}</h2></div>
         <a class="btn btn-line btn-sm" href="#browse.${esc(op.catKey)}">Browse ${esc(catLabel(op.catKey))}${icon('arrow')}</a></div>
       <div class="grid g-3">${sims.map((o) => RN.ui.opCard(o, { why: sharedWhy(op, o) })).join('')}</div>
     </section>`;
@@ -1432,7 +1369,6 @@
       vid.src = op.video;
     }
     applyStackFilter(root);
-    startCoreRotation(root);
     S.railFit = () => fitRail(root);
     fitRail(root);
     setTimeout(() => fitRail(root), 400);
@@ -1459,19 +1395,8 @@
         const g = e.target.closest && e.target.closest('g[data-act]');
         if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); const fn = RN.actions[g.dataset.act]; if (fn) fn(g, e); }
       });
-      root.addEventListener('mouseover', (e) => { if (e.target.closest && e.target.closest('.pf-core-rows')) S.coreHover = true; });
-      root.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('.pf-core-rows') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.pf-core-rows'))) S.coreHover = false; });
     }
   }
-  function startCoreRotation(root) {
-    clearInterval(S.timer);
-    if (!root.querySelector('[data-pf-q]') || reduced()) return;
-    S.timer = setInterval(() => {
-      if (document.hidden || S.coreHover || document.querySelector('.scrim')) return;
-      RN.$$('[data-pf-qn]').forEach((el) => stepCore(+el.dataset.pfQn, 1));
-    }, 6500);
-  }
-
   /* ---------- Actions ---------- */
   function refreshSection(key) {
     const c = S.ctx;
@@ -1479,7 +1404,7 @@
     c.v = viewer(c.op);
     const el = document.getElementById('pf-' + key);
     if (!el) return;
-    const html = { expertise: secExpertise, portfolio: secPortfolio, stack: secStack }[key](c);
+    const html = { expertise: secExpertise, portfolio: secPortfolio, fit: secFit, reviews: (x) => secReviews(x, !x.v.proof), engagements: secEngagements }[key](c);
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     el.replaceWith(tmp.firstElementChild);
@@ -1570,7 +1495,10 @@
   RN.actions['pf-sample'] = (el) => openSample(el.dataset.id);
   RN.actions['pf-sample-request'] = (el) => { RN.ui.closeModal(); RN.intro.open(el.dataset.id); };
   RN.actions['pf-review'] = (el) => openReview(+el.dataset.i);
-  RN.actions['pf-core-q'] = (el) => stepCore(+el.dataset.dim, +el.dataset.dir);
+  RN.actions['pf-eng-all'] = () => { S.engAll = !S.engAll; refreshSection('engagements'); };
+  RN.actions['pf-rev-all'] = () => { S.revAll = !S.revAll; refreshSection('reviews'); };
+  RN.actions['pf-pf-all'] = () => { S.pfAll = !S.pfAll; refreshSection('portfolio'); };
+  RN.actions['pf-ind-all'] = () => { S.indAll = !S.indAll; refreshSection('fit'); applyStackFilter(document.getElementById('main')); };
   RN.actions['pf-viewas'] = (el) => {
     S.viewAs = el.dataset.v;
     RN.rerender();
@@ -1671,7 +1599,7 @@
           <div class="pf-pl-id-in">
             <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}<span class="pf-photo-seal">${RN.ui.hexSeal(tier.l, { size: 32, score: op.ris.score })}</span></div>
             <div class="grow">
-              <div class="pf-pills"><span class="pf-pill pf-pill-tier"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)} · ${esc(op.ris.score)}</span><span class="pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
+              <div class="pf-pills"><span class="pill pf-pill pf-pill-tier"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)} · ${esc(op.ris.score)}</span><span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
               <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
               <p class="pf-role">Fractional ${esc(op.role)}</p>
               ${op.headline ? `<p class="pf-headline hl-m">${esc(smart(op.headline))}</p>` : ''}
@@ -1780,19 +1708,19 @@
       <header class="pf-sec-hd"><div class="grow"><span class="eyebrow">Rate and availability</span><h2 class="h2 pf-h2" id="pf-rate-h">What working with ${esc(op.first)} costs</h2></div></header>
       <div class="pf-rate">
         <div class="pf-rate-main">
-          ${op.rate ? `<div class="pf-rate-big"><span class="label pf-lab">${esc(F.rate.label)}</span><b class="serif-up">${esc(RN.fmt.usd(op.rate))}<small>/ hr</small></b></div>
-            ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.k(monthly))}<small> a month</small></b></div>` : ''}
-            <p class="pf-rate-range">${mr ? `Typically <b>${esc(mr.text)}</b>${mr.hLo && mr.hHi ? ` (${esc(mr.hLo)} to ${esc(mr.hHi)} hrs a month)` : ''}. ` : ''}No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
+          ${op.rate ? `<div class="pf-rate-big"><span class="label pf-lab">${esc(F.rate.label)}</span><b class="serif-up">${esc(RN.fmt.usd(op.rate))}<small>/hr</small></b></div>
+            ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.k(monthly))}<small>/month</small></b></div>` : ''}
+            <p class="pf-rate-range">${mr ? `Typically <b>${esc(mr.text)}</b>${mr.hLo && mr.hHi ? ` (${esc(mr.hLo)} - ${esc(mr.hHi)} hrs/month)` : ''}. ` : ''}No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
           : `<p class="pf-rate-range">${esc(op.first)} quotes a rate on the first call.</p>`}
         </div>
         <dl class="pf-facts">
           <div><dt>${esc(F.availability.label)}</dt><dd>${esc(op.avail.label)}</dd></div>
           <div><dt>${esc(F.startDate.label)}</dt><dd>${esc(mdy(nextStart(op)))}</dd></div>
           ${op.avail.hoursCode ? `<div><dt>${esc(F.hoursPerMonth.label)}</dt><dd>${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</dd></div>` : ''}
-          ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))}</dt><dd>${esc(RN.fmt.usd(idx.p25))} to ${esc(RN.fmt.usd(idx.p75))} / hr · median ${esc(RN.fmt.usd(idx.p50))}</dd></div>` : ''}
+          ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))}</dt><dd>${esc(RN.fmt.hrRange(idx.p25, idx.p75))} · median ${esc(RN.fmt.rate(idx.p50))}</dd></div>` : ''}
         </dl>
       </div>
-      ${idx ? `<p class="pf-note">${RN.ui.illus()} Rate Index figures are invented to show the benchmark. <a class="link" href="#rates">See the Rate Index</a></p>` : ''}
+      ${idx ? `<p class="pf-note" data-proto>${RN.ui.illus()} Rate Index figures are invented to show the benchmark. <a class="link" href="#rates">See the Rate Index</a></p>` : ''}
     </section>`;
   }
   function mountProof(root, p) {
@@ -1815,7 +1743,6 @@
       }
       delete RN.store.state._viewSource;
     }
-    startCoreRotation(root);
   }
   // Re-render one CTA slot in place (keeps the reader's scroll position and focus)
   function redrawSlot(rec, slot, focusSel) {
@@ -1979,7 +1906,7 @@
               <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> <span class="pf-nw">as of ${esc(asOf)}</span></span></p>
             </header>
             <div class="pf-vf-score">
-              <div class="pf-vf-score-hd"><span class="label">Reputation Index</span><p><b class="serif-up">${esc(op.ris.score)}</b><small>of 100</small><span class="pf-vf-tier ${gold ? 'gold' : ''}">${RN.ui.hexSeal(tier.l, { size: 20 })}${esc(tier.l)}</span></p></div>
+              <div class="pf-vf-score-hd"><span class="label">Reputation Index</span><p><b class="serif-up">${esc(op.ris.score)}</b><small>of 100</small><span class="pill ${gold ? 'pill-gold' : 'pill-accent'} pf-vf-tier">${RN.ui.hexSeal(tier.l, { size: 16 })}${esc(tier.l)}</span></p></div>
               ${scale}
             </div>
             <dl class="pf-vf-facts">
@@ -1998,14 +1925,14 @@
               <p class="pf-vf-d">${esc(tier.d)}</p>
               ${RN.ui.tierLadder(tier.v, { score: op.ris.score })}
             </section>
-            <section class="pf-card pf-vf-how">
-              <span class="eyebrow">How this is checked</span>
+            <details class="pf-card pf-vf-how pf-fold">
+              <summary>${icon('chev-right')}How this is checked</summary>
               <ol>
                 <li><b>The company writes the review</b><span>Reviews are submitted by the company on Revenue Nomad and publish as submitted.</span></li>
                 <li><b>It confirms focus areas</b><span>A focus area is verified when a company confirms it in a review.</span></li>
                 <li><b>The score updates</b><span>The Reputation Index is recalculated whenever a review arrives, so this page always shows the current tier.</span></li>
               </ol>
-            </section>
+            </details>
           </aside>
         </div>
         <p class="pf-vf-foot">Hiring? <a class="link" href="#browse">Browse operators with company-verified proof</a></p>
