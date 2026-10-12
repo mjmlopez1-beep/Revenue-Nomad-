@@ -882,7 +882,7 @@
   };
 
   /* Rate Index maths, shared by Home, Rates, Blueprints, Browse category pages and Studio.
-     hoursCode '19' (<20) counts as 15 hours. Monthly range rounds to $500 and reads "$7.5k to $11.5k a month". */
+     hoursCode '19' (<20) counts as 15 hours. Monthly range rounds to $500 and reads "$7.5k - $11.5k/month". */
   M.rateFor = function (cat, rev) {
     const RI = RN.data.market.rateIndex;
     const b = RI.byCat[cat] || RI.byCat.sales_leadership;
@@ -937,7 +937,7 @@
     }
     if (hLo > hHi) { const t = hLo; hLo = hHi; hHi = t; }
     const lo = Math.max(500, round(rate * hLo)), hi = Math.max(lo, round(rate * hHi));
-    const text = lo === hi ? `About ${k(lo)} a month` : `${k(lo)} to ${k(hi)} a month`;
+    const text = RN.fmt.moRange(lo, hi);
     return { lo, hi, text, hLo, hHi };
   }
   M.opMonthlyRange = opRange;
