@@ -25,7 +25,7 @@
     { t: 'Company fit', keys: ['revenueRange', 'employeeRange', 'companyRevenue', 'companyEmployees', 'industries'], used: 'Operator intake (up to 3 ranges, 10 industries), company profile (one each), Browse filters, intro request, engagement posting, match signals, Studio who-viewed segments, report cuts' },
     { t: 'GTM approach', keys: ['salesMotions', 'methodologies', 'crm'], used: 'Intake, profile, compare (GTM motion), match signals, company match preferences' },
     { t: 'Role details', keys: roleDetailKeys(), used: 'Intake step 4 for the chosen role category, the profile Operating range and the Operating range rows in compare. Bar scales use a bold label and grey help (comment E397).', note: scopeNote() },
-    { t: 'Tech stack (on hold in the live build)', keys: ['techStack', 'stackProficiency'], used: 'Profile Tech stack section (Matt Lopez) and the review request. Not asked in intake yet (L83 on hold).' },
+    { t: 'Tech stack (on hold in the live build)', keys: ['techStack', 'stackProficiency'], used: 'Profile Tech stack section and the review request. Not asked in intake yet (L83 on hold).' },
     { t: 'Reputation and reviews', keys: ['risTier', 'risFactors', 'coreDims', 'overallExperience', 'hireAgain', 'reviewStatus', 'outcomeRating', 'risMin'], used: `Profile, cards, Studio credibility, review page, Levels, Browse filter (${risMinText()})` },
     { t: 'Intros and engagements', keys: ['need', 'introStatus', 'projectStatus'], used: 'Intro sheet, company workspace, Studio inbox, Admin intro lifecycle, engagement pages' },
     { t: 'Identity and location', keys: ['fullName', 'email', 'linkedin', 'headline', 'bio', 'country', 'postalCode', 'usHours'], used: 'Intake, Studio profile, intro sheet for visitors' },
@@ -69,7 +69,7 @@
     ['The Fractional GTM Pulse sent every Monday', 'Quarterly: one email a quarter, on the first day of each calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1), with the Rate Index by role category, the Demand Index and new research. Home and Insights share one list (founder decision, Sep 25, 2026).'],
     ['Operator content on Home (the For operators band, how featuring works, operator steps)', 'Home is for companies looking to hire, and shows company steps only. The Studio preview and how featuring works live on For operators (#operators). The header link and the footer stay (founder decision, Sep 25, 2026).'],
     ['Who a visitor becomes after requesting an intro', 'Visitors who request an intro become their own company account, signed in with the details they gave. Jordan Ellis (Northwind Health) is the demo company and can be restored from the prototype dock.'],
-    ['Placeholder reviewer at Trialbee', 'Matt Lopez\'s Trialbee review request uses a placeholder contact ("Trialbee sponsor"). The founder should supply the real contact before the request is shown to anyone.'],
+    ['Placeholder reviewer at Trialbee', 'A sample operator\'s Trialbee review request uses a placeholder contact ("Trialbee sponsor"). Supply the real contact before the request is shown to anyone.'],
     ['Leads from a proof page', 'A request from a proof page (#proof.<id>) creates an intro with source \'proof\', so the operator, Admin and the company workspace see where it came from.'],
     ['Where saved searches live', 'Saved searches are created in Browse and live in the company\'s workspace (Overview), next to the shortlist.'],
   ];
@@ -99,6 +99,7 @@
   ];
 
   // Stored keys (the monospace codes) are for the dev team: hidden by default, one toggle shows them everywhere
+  const SHOW = 5; // decisions and scope items shown before "Show all"
   let showKeys = false;
   try { showKeys = localStorage.getItem('rn.std.keys') === '1'; } catch (e) { /* storage is a convenience */ }
   // The decided value leads each decision: bold the opening clause when it is short, the rest stays body text
@@ -116,7 +117,7 @@
       const decisions = DECISIONS().filter(Boolean);
       const allKeys = [].concat(...groups.map((g) => g.keys)).filter((k) => F[k]);
       const nValues = allKeys.reduce((a, k) => a + ((F[k].options || []).length), 0);
-      const chip = (o) => `<span class="std-opt" title="Stored as ${esc(o.v)}"><span>${esc(o.l)}</span><code class="std-key">${esc(o.v)}</code></span>`;
+      const chip = (o) => `<span class="chip chip-sm std-opt" title="Stored as ${esc(o.v)}"><span>${esc(o.l)}</span><code class="std-key">${esc(o.v)}</code></span>`;
       // Long picklists show their first 18 values; the rest open in place
       const optList = (d) => {
         const o = d.options || [];
@@ -168,21 +169,27 @@
         </nav>
         <div class="std-body">
           <div id="std-fields" tabindex="-1">
-          ${groups.map((g, i) => `<section class="card std-group" id="std-g${i}" aria-labelledby="std-g${i}-t">
-            <div class="std-group-hd"><h2 class="h4" id="std-g${i}-t">${esc(g.t)}</h2><p class="small muted"><span class="std-used">Used in</span>${esc(g.used)}</p></div>
+          ${groups.map((g, i) => {
+            // Each group folds to its name and field count; the index opens the one it jumps to
+            const ks = g.keys.filter((k) => F[k]);
+            const pick = ks.filter((k) => (F[k].options || []).length), free = ks.filter((k) => !(F[k].options || []).length);
+            return `<details class="card std-group" id="std-g${i}">
+            <summary class="std-sum"><h2 class="h4">${esc(g.t)}</h2><span class="std-count">${RN.fmt.plural(ks.length, 'field')}</span>${icon('chev-down')}</summary>
+            <div class="std-group-b">
+            <p class="small muted std-usedp"><span class="std-used">Used in</span>${esc(g.used)}</p>
             ${g.note ? `<p class="note info std-note">${icon('info')}<span>${esc(g.note)}</span></p>` : ''}
-            ${(() => {
-              // Picklists get a full row of values; free-input fields sit together as compact tiles
-              const ks = g.keys.filter((k) => F[k]);
-              const pick = ks.filter((k) => (F[k].options || []).length), free = ks.filter((k) => !(F[k].options || []).length);
-              return `${pick.length ? `<div class="std-fields">${pick.map(fieldRow).join('')}</div>` : ''}
-                ${free.length ? `<div class="std-free-w"><span class="label">Free input${pick.length ? '' : ' fields'}</span><ul class="std-free">${free.map((k) => `<li><b>${esc(F[k].label)}</b><span class="tiny muted">${esc(typeText(F[k]))}</span>${F[k].help ? `<span class="small">${esc(F[k].help)}</span>` : ''}<code class="std-key">${esc(k)}</code></li>`).join('')}</ul></div>` : ''}`;
-            })()}
-          </section>`).join('')}
-          <section class="card std-group" id="std-roles" aria-labelledby="std-roles-t">
-            <div class="std-group-hd"><h2 class="h4" id="std-roles-t">Role details by category</h2><p class="small muted">Which role-detail fields each category collects in intake and shows on the profile Operating range.</p></div>
-            <div class="std-fields">${Object.keys(F.roleFields).map((k) => `<div class="std-field"><div class="std-field-hd"><b>${RN.ui.catDot ? RN.ui.catDot(k) : ''}${esc(F.catLabel(k))}</b><span class="tiny muted">${F.roleFields[k].length} fields</span><code class="std-key">${esc(k)}</code></div><div class="std-field-v"><div class="std-opts">${F.roleFields[k].map((f) => `<span class="std-opt"><span>${esc(F[f] ? F[f].label : f)}</span><code class="std-key">${esc(f)}</code></span>`).join('')}</div></div></div>`).join('')}</div>
-          </section>
+            ${pick.length ? `<div class="std-fields">${pick.map(fieldRow).join('')}</div>` : ''}
+            ${free.length ? `<div class="std-free-w"><span class="label">Free input${pick.length ? '' : ' fields'}</span><ul class="std-free">${free.map((k) => `<li><b>${esc(F[k].label)}</b><span class="tiny muted">${esc(typeText(F[k]))}</span>${F[k].help ? `<span class="small">${esc(F[k].help)}</span>` : ''}<code class="std-key">${esc(k)}</code></li>`).join('')}</ul></div>` : ''}
+            </div>
+          </details>`;
+          }).join('')}
+          <details class="card std-group" id="std-roles">
+            <summary class="std-sum"><h2 class="h4">Role details by category</h2><span class="std-count">${RN.fmt.plural(Object.keys(F.roleFields).length, 'category', 'categories')}</span>${icon('chev-down')}</summary>
+            <div class="std-group-b">
+            <p class="small muted std-usedp">Which role-detail fields each category collects in intake and shows on the profile Operating range.</p>
+            <div class="std-fields">${Object.keys(F.roleFields).map((k) => `<div class="std-field"><div class="std-field-hd"><b>${RN.ui.catDot ? RN.ui.catDot(k) : ''}${esc(F.catLabel(k))}</b><span class="tiny muted">${F.roleFields[k].length} fields</span><code class="std-key">${esc(k)}</code></div><div class="std-field-v"><div class="std-opts">${F.roleFields[k].map((f) => `<span class="chip chip-sm std-opt"><span>${esc(F[f] ? F[f].label : f)}</span><code class="std-key">${esc(f)}</code></span>`).join('')}</div></div></div>`).join('')}</div>
+            </div>
+          </details>
           <section class="card std-group std-tags" id="std-tags" aria-labelledby="std-tags-t">
             <div class="std-group-hd"><h2 class="h4" id="std-tags-t">Fit tag library</h2><p class="small muted">${RN.fmt.int(F.fitTags.options.length)} tags in this prototype (the live taxonomy has 1,182). Up to 25 self-claimed per operator. Verified at the first company review rated 4.0+, Expert from the fifth. Companies see them as “${esc(F.fitTags.clientLabel || 'Focus areas')}”.</p></div>
             <a class="btn btn-line btn-sm" href="#library">Open the library${icon('arrow')}</a>
@@ -192,13 +199,19 @@
           <section class="std-sec" id="std-decisions" tabindex="-1" aria-labelledby="std-decisions-t">
             <h2 class="h3" id="std-decisions-t">Decisions to confirm</h2>
             <p class="small muted">Conflicts found across the prototypes, the live data and the Product Feedback sheet, and how this prototype resolves them.</p>
-            <ol class="card std-dec">${decisions.map((d, i) => `<li><span class="std-dec-n num">${i + 1}</span><div class="std-dec-c"><span class="label">Conflict</span><p class="small">${esc(d[0])}</p></div><div class="std-dec-d"><span class="label">Decision</span><p>${decisionHtml(d[1])}</p></div></li>`).join('')}</ol>
+            ${(() => {
+              const li = (d, i) => `<li><span class="std-dec-n num">${i + 1}</span><div class="std-dec-c"><span class="label">Conflict</span><p class="small">${esc(d[0])}</p></div><div class="std-dec-d"><span class="label">Decision</span><p>${decisionHtml(d[1])}</p></div></li>`;
+              return `<div class="card std-dec-w"><ol class="std-dec">${decisions.slice(0, SHOW).map(li).join('')}</ol>${decisions.length > SHOW ? `<details class="std-all"><summary>Show all ${decisions.length}${icon('chev-down')}</summary><ol class="std-dec" start="${SHOW + 1}">${decisions.slice(SHOW).map((d, j) => li(d, j + SHOW)).join('')}</ol></details>` : ''}</div>`;
+            })()}
           </section>
 
           <section class="std-sec" id="std-scope" tabindex="-1" aria-labelledby="std-scope-t">
             <h2 class="h3" id="std-scope-t">Open scope shown solved</h2>
             <p class="small muted">Items that are open, on hold or reopened in the Product Feedback sheet, and where to see them working here.</p>
-            <ul class="card std-scope">${SCOPE.map((x) => `<li><span class="std-ref">${esc(x[0])}</span><p class="small">${esc(x[1])}</p><div class="std-see">${links(x[2])}</div></li>`).join('')}</ul>
+            ${(() => {
+              const li = (x) => `<li><span class="pill pill-accent std-ref">${esc(x[0])}</span><p class="small">${esc(x[1])}</p><div class="std-see">${links(x[2])}</div></li>`;
+              return `<div class="card std-scope-w"><ul class="std-scope">${SCOPE.slice(0, SHOW).map(li).join('')}</ul>${SCOPE.length > SHOW ? `<details class="std-all"><summary>Show all ${SCOPE.length}${icon('chev-down')}</summary><ul class="std-scope">${SCOPE.slice(SHOW).map(li).join('')}</ul></details>` : ''}</div>`;
+            })()}
           </section>
         </div>
       </div>
@@ -241,6 +254,7 @@
     if (ev && ev.preventDefault) ev.preventDefault();
     const t = document.getElementById(el.dataset.to);
     if (!t) return;
+    if (t.tagName === 'DETAILS') t.open = true;
     t.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (!t.hasAttribute('tabindex')) t.setAttribute('tabindex', '-1');
     try { t.focus({ preventScroll: true }); } catch (e) { /* focus is a convenience */ }

@@ -89,10 +89,15 @@
   [data-view="join"] .jn-facts dd { font-size: 28px; }
   [data-view="join"] .jn-facts dt { font-size: var(--t-12); }
   [data-view="join"] .jn-path-cta { align-self: stretch; }
-  [data-view="join"] .jn-faces ul { grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--line-2); }
-  [data-view="join"] .jn-faces a { flex-direction: row; align-items: center; padding: 12px 0; border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; background: none; }
+  /* Phones: three compact faces in one row, name only */
+  [data-view="join"] .jn-faces ul { gap: var(--s-2); }
+  [data-view="join"] .jn-faces a { align-items: center; text-align: center; gap: 6px; padding: 10px 6px; }
   [data-view="join"] .jn-faces a:hover { transform: none; box-shadow: none; }
   [data-view="join"] .jn-faces .ava { --sz: 40px; }
+  [data-view="join"] .jn-faces b { font-size: var(--t-13); }
+  [data-view="join"] .jn-faces small { display: none; }
+  /* The start strip repeats the Reputation Index line above it ("starts at 50") */
+  [data-view="join"] .jn-start { display: none; }
 }
 
 /* =========================================================================================
@@ -151,8 +156,6 @@
 [data-view^="join-operator"] .jn-form .field { gap: 10px; }
 [data-view^="join-operator"] .jn-form .field > label { font-size: var(--t-16); }
 [data-view^="join-operator"] .jn-form .field > .chipset { gap: 10px; }
-[data-view^="join-operator"] .jn-form .field > .chipset > .chip { height: 46px; padding: 0 18px; font-size: var(--t-15); border-radius: var(--r-pill); }
-[data-view^="join-operator"] .jn-form .field > .chipset > .chip[aria-pressed="true"]::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .7; margin-right: 2px; }
 [data-view^="join-operator"] .jn-form .input, [data-view^="join-operator"] .jn-form .select { min-height: 52px; font-size: var(--t-16); }
 [data-view^="join-operator"] .jn-form .input-affix .affix { font-size: var(--t-15); white-space: nowrap; flex: 0 0 auto; }
 [data-view^="join-operator"] .jn-form .optcards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -209,7 +212,7 @@
 [data-view^="join-operator"] .jn-loc-hint svg { width: 15px; height: 15px; flex: 0 0 auto; }
 
 /* Step 4: role details */
-[data-view^="join-operator"] .jn-cat-tag { display: inline-flex; align-self: flex-start; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border-radius: var(--r-pill); background: var(--card); border: 1px solid var(--line-2); font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; margin-bottom: calc(var(--s-4) * -1); }
+[data-view^="join-operator"] .jn-cat-tag { align-self: flex-start; margin-bottom: calc(var(--s-4) * -1); }
 [data-view^="join-operator"] .jn-other { margin-top: calc(var(--s-5) * -1); padding: var(--s-4); border-radius: var(--r-input); background: var(--card-2); border: 1px dashed var(--line); }
 
 /* Step 5: rate index hint */
@@ -237,8 +240,6 @@
 [data-view^="join-operator"] .jn-demand-hd .label svg { width: 14px; height: 14px; }
 [data-view^="join-operator"] .jn-demand-src { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 [data-view^="join-operator"] .jn-demand .chipset { gap: 8px; }
-[data-view^="join-operator"] .jn-demand .chip { height: 34px; border-style: dashed; }
-[data-view^="join-operator"] .jn-demand .chip:hover { border-style: solid; border-color: var(--accent); }
 [data-view^="join-operator"] .jn-demand-n { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; color: var(--accent); padding-left: 4px; border-left: 1px solid var(--line); margin-left: 2px; }
 [data-view^="join-operator"] .jn-tagmeter { display: flex; align-items: center; gap: var(--s-4); margin-top: calc(var(--s-5) * -1); }
 [data-view^="join-operator"] .jn-tagmeter .meter { flex: 0 0 120px; height: 6px; }
@@ -327,7 +328,6 @@
   [data-view^="join-operator"] .field[data-field="roleCategory"] > .chipset > .chip { min-height: 128px; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
   [data-view^="join-operator"] .jn-cat-ico { margin-bottom: 6px; width: 34px; height: 34px; }
   [data-view^="join-operator"] .jn-cat-ok { top: 10px; right: 10px; }
-  [data-view^="join-operator"] .jn-form .field > .chipset > .chip { padding: 0 16px; }
   [data-view^="join-operator"] .jn-form .field[data-field="roleCategory"] > .chipset > .chip { padding: 16px 14px 18px; padding-right: 36px; }
   [data-view^="join-operator"] .jn-li-ok { display: none; }
   /* Room under the last answers, so the sticky bar never sits on them */
@@ -459,6 +459,8 @@
 @media (max-width: 640px) {
   [data-view="join-done"] .jn-done-hero { padding-block: var(--s-10) var(--s-10); }
   [data-view="join-done"] .jn-done-vis .opc { transform: none; }
+  /* Before applying, the sample card is decoration; phones skip it */
+  [data-view="join-done"] .jn-done-vis[aria-hidden="true"] { display: none; }
   [data-view="join-done"] .jn-reviewer { display: flex; border-radius: var(--r-card); padding: 12px; }
   [data-view="join-done"] .jn-reviewer .ava { --sz: 44px; }
   [data-view="join-done"] .jn-done-body { padding-top: var(--s-10); }

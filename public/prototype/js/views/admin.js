@@ -25,7 +25,7 @@
   const toast = (m, o) => RN.ui.toast(m, o);
 
   /* View state that should survive a re-render (not persisted) */
-  const ui = { days: 30, dirQ: '', dirCat: '', dirSeg: 'all', dirSort: 'ris', dirLimit: 25, termsAll: false, mailSeg: 'all' };
+  const ui = { days: 30, dirQ: '', dirCat: '', dirSeg: 'all', dirSort: 'ris', dirLimit: 25, termsAll: false, gapsAll: false, mailSeg: 'all' };
   let charts = {};   // chart builders for this render, drawn at each slot's real width in mount()
   let ctx = {};      // recruit contexts for this render (zero-result rows, categories, focus areas)
 
@@ -50,7 +50,7 @@
     const groups = {};
     TABS.forEach((x) => { (groups[x.group] = groups[x.group] || []).push(x); });
     return `<nav class="side" aria-label="Admin">
-      <div class="side-id">${RN.ui.avatar({ name: 'Matt Lopez', initials: 'ML' }, 'ava-md')}<div><b>Revenue Nomad team</b><span>Matt Lopez · Admin</span></div></div>
+      <div class="side-id">${RN.ui.teamAva('ava-md')}<div><b>Revenue Nomad team</b><span>Admin</span></div></div>
       ${Object.keys(groups).map((g, gi) => `${gi ? '<div class="side-sep"></div>' : ''}<span class="label side-label">${esc(g)}</span>
         ${groups[g].map((x) => { const n = x.badge ? x.badge() : 0; return `<a href="#admin${x.key === 'overview' ? '' : '.' + x.key}" class="${cur === x.key ? 'on' : ''}"${cur === x.key ? ' aria-current="page"' : ''}>${icon(x.icon)}${esc(x.label)}${n ? `<span class="nav-count">${n}</span>` : ''}</a>`; }).join('')}`).join('')}
       <div class="side-sep"></div>
@@ -364,7 +364,7 @@
     if (p.rate && idx) {
       if (p.rate > idx.p75) out.push(['warn', `Rate ${RN.fmt.rate(p.rate)} is above the Rate Index p75 for ${catLabel(p.roleCategory)} (${RN.fmt.rate(idx.p75)}).`]);
       else if (p.rate < idx.p25) out.push(['warn', `Rate ${RN.fmt.rate(p.rate)} is below the p25 (${RN.fmt.rate(idx.p25)}). Check it is not a typo.`]);
-      else out.push(['good', `Rate sits inside the Rate Index range for ${catLabel(p.roleCategory)} (${RN.fmt.rate(idx.p25)} to ${RN.fmt.rate(idx.p75)}).`]);
+      else out.push(['good', `Rate sits inside the Rate Index range for ${catLabel(p.roleCategory)} (${RN.fmt.hrRange(idx.p25, idx.p75)}).`]);
     } else if (!p.rate) out.push(['warn', 'No hourly rate. Companies who filter by budget will not see this profile.']);
     const dup = RN.model.ops.find((o) => !o.admin && o.name.toLowerCase() === p.name.toLowerCase());
     out.push(dup ? ['bad', `An operator named ${dup.name} is already on the network. Check for a duplicate.`] : ['good', 'No existing profile with this name.']);
@@ -713,7 +713,7 @@
     const savedN = liveEv('saved_search', days).length;
     const win = `last ${days} days`;
     const seg = `<div class="seg" role="group" aria-label="Date range">${[7, 30, 90].map((d) => `<button type="button" class="${days === d ? 'on' : ''}" aria-pressed="${days === d}" data-act="adm-days" data-d="${d}">${d} days</button>`).join('')}</div>`;
-    const shownTerms = ui.termsAll ? terms : terms.slice(0, 10);
+    const shownTerms = ui.termsAll ? terms : terms.slice(0, 5);
 
     // Searches that found no one: a column whose value is the same on every row says nothing, so it is left out
     const zLive = zero.some((z) => !z.base);
@@ -742,11 +742,10 @@
         ${cardHead('<span id="adm-gap-h">Where demand outruns supply</span>', 'Monthly company searches for each focus area against the operators a company review has verified for it. Supply is what the Browse focus-area filter returns today.')}
         ${lead ? `<div class="adm-gap-lead">
           <p class="adm-gap-big"><b class="num">${int(lead.ratio)}</b><span>searches a month for every verified <b>${esc(lead.t)}</b> operator</span></p>
-          <p class="small muted">${int(lead.demand)} searches a month, ${RN.fmt.plural(lead.supply, 'operator')} in Browse, ${int(lead.verified)} verified by a company review.</p>
         </div>` : ''}
         <div class="adm-gapc" role="table" aria-label="Searches and verified operators by focus area">
           <div class="adm-gapc-hd" role="row"><span role="columnheader">Focus area</span><span role="columnheader">Searches a month</span><span role="columnheader">Verified operators</span><span role="columnheader"><span class="sr-only">Action</span></span></div>
-          ${gaps.map((g, k) => {
+          ${(ui.gapsAll ? gaps : gaps.slice(0, 5)).map((g, k) => {
             const tl = g.t.toLowerCase();
             const claimers = liveOps().filter((o) => o.tags.some((t) => t.t.toLowerCase() === tl && t.tier === 'claimed'));
             const key = 'tag:' + g.t;
@@ -762,6 +761,7 @@
             </div>`;
           }).join('')}
         </div>
+        ${gaps.length > 5 ? `<button type="button" class="act adm-more" data-act="adm-gaps-all">${ui.gapsAll ? 'Show top 5' : `Show all ${gaps.length}`}${icon(ui.gapsAll ? 'chev-up' : 'chev-down')}</button>` : ''}
         <p class="tiny muted adm-foot">Ranked by searches per verified operator. A nudge emails every operator who claims the focus area but has no company review confirming it, and points them to Studio to request one. Studio Positioning uses the same demand figures.</p>
       </section>
 
@@ -819,7 +819,7 @@
             <td class="r tnum adm-hide-m">${int(x.intros)}</td>
             <td class="r tnum adm-hide-m">${x.views ? pct(x.intros / x.views, 1) : 'N/A'}</td>
           </tr>`).join('')}</tbody></table></div>
-        ${terms.length > 10 ? `<button type="button" class="act adm-more" data-act="adm-terms-all">${ui.termsAll ? 'Show top 10' : `Show all ${terms.length}`}${icon(ui.termsAll ? 'chev-up' : 'chev-down')}</button>` : ''}
+        ${terms.length > 5 ? `<button type="button" class="act adm-more" data-act="adm-terms-all">${ui.termsAll ? 'Show top 5' : `Show all ${terms.length}`}${icon(ui.termsAll ? 'chev-up' : 'chev-down')}</button>` : ''}
       </section>
 
       <section class="card adm-sec">
@@ -1287,6 +1287,7 @@
      ===================================================================================== */
   RN.actions['adm-days'] = (el) => { ui.days = +el.dataset.d || 30; RN.rerender(); };
   RN.actions['adm-terms-all'] = () => { ui.termsAll = !ui.termsAll; RN.rerender(); };
+  RN.actions['adm-gaps-all'] = () => { ui.gapsAll = !ui.gapsAll; RN.rerender(); };
   RN.actions['adm-mail-seg'] = (el) => { ui.mailSeg = el.dataset.s; RN.rerender(); };
   RN.actions['adm-dir-seg'] = (el) => { ui.dirSeg = el.dataset.s; ui.dirLimit = 25; RN.rerender(); };
   RN.actions['adm-dir-more'] = () => { ui.dirLimit += 25; refreshDir(); };
@@ -1339,7 +1340,7 @@
     if (!a) return;
     const p = prof(a);
     const miss = RN.model.checklist(buildOp(a)).filter((x) => !x.done && ['photo', 'headline', 'bio', 'rate', 'ranges', 'industries', 'tags', 'role', 'video'].includes(x.k));
-    const note = `Hi ${p.first},\n\nThanks for applying to Revenue Nomad. Before your profile goes live, please add:\n${miss.map((x) => '- ' + x.l).join('\n') || '- (add what you need from them)'}\n\nEach one raises your starting profile strength, which companies see in search. Update your application and we will review it within one business day.\n\nMatt Lopez\nRevenue Nomad`;
+    const note = `Hi ${p.first},\n\nThanks for applying to Revenue Nomad. Before your profile goes live, please add:\n${miss.map((x) => '- ' + x.l).join('\n') || '- (add what you need from them)'}\n\nEach one raises your starting profile strength, which companies see in search. Update your application and we will review it within one business day.\n\nThe Revenue Nomad team`;
     RN.ui.modal({
       width: 600, title: `Request changes from ${esc(p.first)}`, sub: `We email ${esc(p.email || p.name)}. The application stays in your queue.`,
       body: `<form id="adm-changes-form" data-submit="adm-changes-send" data-id="${esc(a.id)}" class="stack"><div class="field"><label for="adm-ch-note">Email to ${esc(p.first)}</label><textarea class="textarea adm-note" id="adm-ch-note" name="note" required>${esc(note)}</textarea><p class="help">Prefilled from what is missing on the application. Edit before sending.</p></div></form>`,
@@ -1360,7 +1361,7 @@
     const a = appById(el.dataset.id);
     if (!a) return;
     const p = prof(a);
-    const note = `Hi ${p.first},\n\nThanks for applying to Revenue Nomad. We can't approve your profile yet because we could not confirm your recent fractional work from the details provided.\n\nIf you add your LinkedIn URL and two recent engagements, reply to this email and we will look again.\n\nMatt Lopez\nRevenue Nomad`;
+    const note = `Hi ${p.first},\n\nThanks for applying to Revenue Nomad. We can't approve your profile yet because we could not confirm your recent fractional work from the details provided.\n\nIf you add your LinkedIn URL and two recent engagements, reply to this email and we will look again.\n\nThe Revenue Nomad team`;
     RN.ui.modal({
       width: 600, title: `Reject ${esc(p.name)}’s application?`, sub: 'The applicant gets this email. You can reopen the application later.',
       body: `<form id="adm-reject-form" data-submit="adm-reject-send" data-id="${esc(a.id)}" class="stack"><div class="field"><label for="adm-rj-note">Reason, in the email to ${esc(p.first)}</label><textarea class="textarea adm-note" id="adm-rj-note" name="note" required>${esc(note)}</textarea></div></form>`,
@@ -1691,7 +1692,7 @@
       ? `Company demand for ${catLabel(c.cat)} is growing faster than the network. We are adding a small number of experienced operators this quarter.`
       : c.kind === 'tag' ? `Companies on Revenue Nomad searched for ${c.tags[0]} ${vol}, and few operators can show a company review that confirms it.`
       : `Companies on Revenue Nomad searched for ${what} ${vol}${fl.length ? ` (${fl.join(', ')})` : ''} and found no operator who fits.`;
-    return `Subject: Companies are looking for ${c.kind === 'search' ? 'your kind of work' : what}\n\nHi {first name},\n\n${line} If this is work you have done, we would like you on the network.\n\nApplying takes about 10 minutes at revenuenomad.com/join. We review every profile within 2 business days, and approved profiles go live at Emerging 50 with a Studio that shows who viewed you and why.\n\nMatt Lopez\nRevenue Nomad`;
+    return `Subject: Companies are looking for ${c.kind === 'search' ? 'your kind of work' : what}\n\nHi {first name},\n\n${line} If this is work you have done, we would like you on the network.\n\nApplying takes about 10 minutes at revenuenomad.com/join. We review every profile within 2 business days, and approved profiles go live at Emerging 50 with a Studio that shows who viewed you and why.\n\nThe Revenue Nomad team`;
   }
   function closeOps(c) {
     const tags = (c.tags || []).map((x) => x.toLowerCase());

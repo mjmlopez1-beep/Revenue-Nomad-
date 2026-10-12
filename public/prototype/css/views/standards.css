@@ -52,15 +52,16 @@
 [data-view="standards"] .std-field-hd .std-key { margin-top: 2px; }
 [data-view="standards"] .std-field-v { min-width: 0; }
 [data-view="standards"] .std-opts { display: flex; flex-wrap: wrap; gap: 6px; }
-[data-view="standards"] .std-opt { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; max-width: 100%; padding: 4px 10px; border-radius: 8px; background: var(--card-2); border: 1px solid var(--line-2); font-size: var(--t-13); line-height: 1.35; color: var(--ink-2); overflow-wrap: anywhere; }
-[data-view="standards"] .std.show-keys .std-opt { background: var(--card); }
+[data-view="standards"] .std-opt { max-width: 100%; cursor: default; }
+[data-view="standards"] .std-opt > span { overflow: hidden; text-overflow: ellipsis; }
 [data-view="standards"] .std-tags { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
 [data-view="standards"] .std-tags .std-group-hd { flex: 1 1 420px; padding-bottom: 0; }
 
 /* Decisions: numbered cards, conflict on the left, the decision on the right */
 [data-view="standards"] .std-sec { margin-top: var(--s-12); scroll-margin-top: calc(var(--nav-h) + 20px); }
 [data-view="standards"] .std-sec > .small { margin-top: 6px; max-width: 70ch; }
-[data-view="standards"] .std-dec { list-style: none; margin: var(--s-5) 0 0; padding: 4px var(--s-6); display: flex; flex-direction: column; }
+[data-view="standards"] .std-dec-w, [data-view="standards"] .std-scope-w { margin-top: var(--s-5); padding: 4px var(--s-6); }
+[data-view="standards"] .std-dec { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 [data-view="standards"] .std-dec li { display: grid; grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1.35fr); gap: 6px var(--s-6); align-items: start; padding: 16px 0; border-top: 1px solid var(--line-2); }
 [data-view="standards"] .std-dec li:first-child { border-top: 0; }
 [data-view="standards"] .std-dec li:hover .std-dec-n { background: var(--accent); color: var(--accent-ink); }
@@ -76,10 +77,10 @@
 [data-view="standards"] .std-dec-d b { color: var(--ink); font-weight: 700; }
 
 /* Open scope: a ruled list with the sheet ref as a tag */
-[data-view="standards"] .std-scope { list-style: none; margin: var(--s-5) 0 0; padding: 4px var(--s-6); }
+[data-view="standards"] .std-scope { list-style: none; margin: 0; padding: 0; }
 [data-view="standards"] .std-scope li { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 240px); gap: 6px var(--s-5); align-items: start; padding: 14px 0; border-top: 1px solid var(--line-2); }
 [data-view="standards"] .std-scope li:first-child { border-top: 0; }
-[data-view="standards"] .std-ref { justify-self: start; padding: 3px 8px; border-radius: 6px; background: var(--tint); color: var(--accent); font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; white-space: nowrap; }
+[data-view="standards"] .std-ref { justify-self: start; }
 [data-view="standards"] .std-scope p { color: var(--ink-2); line-height: 1.5; }
 [data-view="standards"] .std-see { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-13); }
 
@@ -116,10 +117,9 @@
   [data-view="standards"] .std-stats li:nth-child(n+3) { padding-top: var(--s-4); }
   [data-view="standards"] .std-stats b { font-size: var(--t-24); }
   [data-view="standards"] .std-group { padding: var(--s-5) var(--s-4); }
-  [data-view="standards"] .std-dec { padding: 4px var(--s-4); }
+  [data-view="standards"] .std-dec-w, [data-view="standards"] .std-scope-w { padding: 4px var(--s-4); }
   [data-view="standards"] .std-dec li { grid-template-columns: 30px minmax(0, 1fr); gap: 6px 12px; }
   [data-view="standards"] .std-dec-n { width: 26px; height: 26px; font-size: var(--t-12); }
-  [data-view="standards"] .std-scope { padding: 4px var(--s-4); }
   [data-view="standards"] .std-scope li { grid-template-columns: minmax(0, 1fr); }
   [data-view="standards"] .std-see { grid-column: 1; }
 }
@@ -132,3 +132,28 @@
 [data-view="standards"] .std-free b { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); line-height: 1.3; }
 [data-view="standards"] .std-free .small { margin-top: 2px; color: var(--ink-2); line-height: 1.4; }
 [data-view="standards"] .std-free .std-key { margin-top: 4px; }
+
+/* Folded field groups: the summary shows the group name and its field count */
+[data-view="standards"] details.std-group { padding: 0; }
+[data-view="standards"] .std-group + .std-group { margin-top: var(--s-3); }
+[data-view="standards"] .std-sum { display: flex; align-items: center; gap: var(--s-3); min-height: 56px; padding: 12px var(--s-6); list-style: none; cursor: pointer; }
+[data-view="standards"] .std-sum::-webkit-details-marker { display: none; }
+[data-view="standards"] .std-sum h2 { flex: 1 1 auto; min-width: 0; }
+[data-view="standards"] .std-count { font-size: var(--t-13); color: var(--mute); white-space: nowrap; font-variant-numeric: tabular-nums; }
+[data-view="standards"] .std-sum svg { flex: 0 0 auto; width: 16px; height: 16px; color: var(--mute); transition: transform var(--dur) ease; }
+[data-view="standards"] details[open] > .std-sum svg { transform: rotate(180deg); }
+[data-view="standards"] .std-sum:hover h2 { color: var(--accent); }
+[data-view="standards"] .std-group-b { padding: 0 var(--s-6) var(--s-6); }
+[data-view="standards"] .std-usedp { max-width: 80ch; line-height: 1.5; padding-bottom: var(--s-4); }
+[data-view="standards"] .std-tags { margin-top: var(--s-3); }
+/* Show all: the rest of a long list opens in place */
+[data-view="standards"] .std-all > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0; list-style: none; cursor: pointer; font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--accent); border-top: 1px solid var(--line-2); width: 100%; }
+[data-view="standards"] .std-all > summary::-webkit-details-marker { display: none; }
+[data-view="standards"] .std-all > summary svg { width: 14px; height: 14px; }
+[data-view="standards"] .std-all[open] > summary { display: none; }
+[data-view="standards"] .std-all .std-dec li:first-child, [data-view="standards"] .std-all .std-scope li:first-child { border-top: 1px solid var(--line-2); }
+@media (max-width: 640px) {
+  [data-view="standards"] details.std-group { padding: 0; }
+  [data-view="standards"] .std-sum { padding: 10px var(--s-4); }
+  [data-view="standards"] .std-group-b { padding: 0 var(--s-4) var(--s-5); }
+}

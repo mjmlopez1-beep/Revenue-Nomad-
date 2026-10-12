@@ -336,12 +336,12 @@
     const take = (n) => RN.model.takeHome(n) || 0;
     return `<div class="jn-rate">
       <div class="jn-rate-hd"><span class="label">Rate Index · ${esc(cat)}</span>${RN.ui.illus()}</div>
-      <div class="jn-rbar" role="img" aria-label="Middle half of rates ${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}, median ${RN.fmt.usd(idx.p50)}">
+      <div class="jn-rbar" role="img" aria-label="Middle half of rates ${RN.fmt.hrRange(idx.p25, idx.p75)}, median ${RN.fmt.usd(idx.p50)}">
         <i class="band" style="left:${pct(idx.p25)};right:calc(100% - ${pct(idx.p75)})"></i>
         <i class="med" style="left:${pct(idx.p50)}"></i>
         ${rate ? `<i class="you" style="left:${pct(rate)}"></i>` : ''}
       </div>
-      <p class="small">Middle half <b>${RN.fmt.usd(idx.p25)} to ${RN.fmt.usd(idx.p75)}/hr</b>, median <b>${RN.fmt.usd(idx.p50)}/hr</b>.${rate ? ` Your ${esc(RN.fmt.rate(rate))} sits ${where}.` : ''}${billed ? ` At ${esc(RN.w.label('hoursPerMonth', d.hoursPerMonth))} a company pays you about ${RN.fmt.usd(billed)} a month, and you take home about ${RN.fmt.usd(Math.round(take(billed) / 100) * 100)}.` : ''}</p>
+      <p class="small">Middle half <b>${RN.fmt.hrRange(idx.p25, idx.p75)}</b>, median <b>${RN.fmt.usd(idx.p50)}/hr</b>.${rate ? ` Your ${esc(RN.fmt.rate(rate))} sits ${where}.` : ''}${billed ? ` At ${esc(RN.w.label('hoursPerMonth', d.hoursPerMonth))} a company pays you about ${RN.fmt.usd(billed)} a month, and you take home about ${RN.fmt.usd(Math.round(take(billed) / 100) * 100)}.` : ''}</p>
       <p class="tiny muted jn-rate-fee">Companies pay your listed rate and no fees. Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${RN.model.feePct()})${rate ? `, so your take-home at ${esc(RN.fmt.rate(rate))} is ${esc(RN.fmt.rate(take(rate)))}` : ''}.</p>
     </div>`;
   }
@@ -430,7 +430,7 @@
     if (n === OPTIONAL_STEP) {
       if (!d.roleCategory) return RN.ui.empty({ icon: 'user', title: 'Pick your role first', body: 'Role details depend on the discipline you lead.', cta: '<button type="button" class="btn btn-line btn-sm" data-act="join-goto" data-step="1">Go to Role</button>' });
       const methods = [].concat(d.methodologies || []);
-      return `<div class="jn-cat-tag">${RN.ui.catDot(d.roleCategory)}<span>${esc(catLabel(d.roleCategory))}${d.role ? ' · ' + esc(d.role) : ''}</span></div>
+      return `<div class="pill pill-line jn-cat-tag">${RN.ui.catDot(d.roleCategory)}<span>${esc(catLabel(d.roleCategory))}${d.role ? ' · ' + esc(d.role) : ''}</span></div>
         ${detailKeys(d.roleCategory, d).map((k) => k === 'methodologies'
           ? `${f(k)}<div class="field jn-other" data-field="methodologyOther" data-jn-other ${methods.includes('Other') ? '' : 'hidden'}>
               <label for="f-methodologyOther">Which other methodology? <span class="opt">Optional</span></label>
@@ -917,8 +917,6 @@
         <dl class="jn-facts" aria-label="Network facts">
           <div><dt>Operators on the live network<span data-proto> (${RN.fmt.int(RN.model.ops.length)} in this prototype)</span></dt><dd class="num">${esc(RN.data.market.network.operators)}</dd></div>
           <div><dt>Role categories, from Sales Leadership to AI GTM</dt><dd class="num">${RN.fields.roleCategory.options.length}</dd></div>
-          <div><dt>Business days to review an application</dt><dd class="num">2</dd></div>
-          <div><dt>In fees for companies to browse, post and hire</dt><dd class="num">$0</dd></div>
         </dl>
       </section>
       <section class="wrap jn-paths" aria-label="Choose how you use Revenue Nomad">
@@ -996,11 +994,9 @@
       ${ladder()}
     </div>`;
   }
-  /* The person who reviews applications: the Revenue Nomad team account (the admin persona) */
+  /* Applications are reviewed by the company, shown with the brand mark */
   function reviewer() {
-    const a = RN.personas.admin || {};
-    const op = RN.model.ops.find((o) => o.name === a.name && o.photo) || null;
-    return { name: a.name || 'The Revenue Nomad team', sub: a.sub || 'Revenue Nomad team', first: a.first || '', photo: op ? op.photo : '', initials: RN.fmt.initials(a.name || 'R N') };
+    return { name: 'The Revenue Nomad team' };
   }
   function renderDone() {
     const app = latestApp();
@@ -1051,8 +1047,8 @@
           <h1 class="h1">${live ? `You are live, <span class="serif">${esc(p.first)}.</span>` : `Received, <span class="serif">${esc(p.first)}.</span>`}</h1>
           <p class="lede">${lede}</p>
           ${live ? '' : `<div class="jn-reviewer">
-            ${RN.ui.avatar(rv, 'ava-md', { decorative: true })}
-            <div><span class="label">Your reviewer</span><b>${esc(rv.name)}</b><span>${esc(rv.sub)} · reviews it by ${esc(dayName(reviewBy))}</span></div>
+            ${RN.ui.teamAva('ava-md')}
+            <div><span class="label">Reviewed by</span><b>${esc(rv.name)}</b><span>By ${esc(dayName(reviewBy))}</span></div>
           </div>`}
           <div class="jn-done-meta">
             ${RN.ui.statusPill('application', st, statusLabel)}
@@ -1063,7 +1059,7 @@
         <div class="jn-done-vis">
           <span class="label">Your card in search${live ? '' : ', once approved'}</span>
           ${previewCard(d)}
-          <p class="jn-visible">${icon('eye')}<span>${live ? 'Visible in Browse and search now.' : 'Hidden until approved. Then it shows in Browse and search the same day.'}</span></p>
+          ${live ? `<p class="jn-visible">${icon('eye')}<span>Visible in Browse and search now.</span></p>` : ''}
         </div>
       </div></section>
       <section class="wrap jn-done-body">
@@ -1074,7 +1070,7 @@
               <span class="jn-dash-ico">${icon('chart')}</span>
               <h2 class="h4">Your dashboard</h2>
               <p class="small">${live ? 'Studio shows who viewed you, the searches you appeared in and how your rate compares with the Rate Index.' : 'Studio is where you will see who viewed you, the searches you appeared in and how your rate compares with the Rate Index. Your own numbers start the day your profile goes live.'}</p>
-              <p class="tiny muted jn-dash-proto" data-proto>${icon('info')}<span>In this prototype, Studio opens as sample operator Matt Lopez, with his data.</span></p>
+              <p class="tiny muted jn-dash-proto" data-proto>${icon('info')}<span>In this prototype, Studio opens with a sample operator's data.</span></p>
               <button type="button" class="btn btn-line btn-block" data-act="persona" data-p="operator" data-to="studio">Preview Studio${icon('arrow')}</button>
             </div>
           </aside>
@@ -1096,7 +1092,7 @@
     const status = app ? app.status || 'in_review' : '';
     const reviewed = ['approved', 'live'].includes(status);
     const live = status === 'live';
-    const who = rv && rv.name ? `${rv.name} from the team reviews it` : 'A person on the team reviews it';
+    const who = rv && rv.name ? `${rv.name} reviews it` : 'A person on the team reviews it';
     const items = [
       { st: app ? 'done' : '', ic: 'send', when: app ? `Day 0 · Done ${RN.fmt.dateShort(sub)}` : 'Day 0', t: app ? 'Application received' : 'You submit your profile', d: app ? 'Your answers are saved with the same fields companies filter by, and a confirmation is on its way to your inbox.' : 'Your answers are saved with the same fields companies filter by, so nothing needs re-entering.' },
       { st: reviewed ? 'done' : app ? 'now' : '', ic: 'shield', when: app ? (reviewed ? 'Done' : `In progress · by ${dayName(reviewBy)}`) : 'Within 2 business days', t: app ? who : 'A person on the team reviews it', d: 'We check your LinkedIn and work history against your answers, and may ask for a short call. If something needs a change, we email you what to fix. Your profile stays hidden until it is approved.' },

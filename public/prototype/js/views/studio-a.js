@@ -126,7 +126,7 @@
     const verified = r0 && (r0.coreAvg || r0.overall || 5) >= 4 ? (r0.tags || []).length : 0;
     return { up, base, since: first, cause: r0 ? `${r0.reviewer || 'A company'}’s review${verified ? ` verified ${plural(verified, 'focus area')}` : ' was added'}` : '' };
   }
-  const risePill = (r) => `<span class="sa-rise" title="Reputation Index ${r.base} before this session">${icon('trend-up')}+${r.up} since ${esc(fmt.dateShort(r.since))}</span>`;
+  const risePill = (r) => `<span class="pill pill-good sa-rise" title="Reputation Index ${r.base} before this session">${icon('trend-up')}+${r.up} since ${esc(fmt.dateShort(r.since))}</span>`;
 
   /* ---------- Chart slots: drawn after mount at the rendered width ---------- */
   let slots = {}, slotSeq = 0;
@@ -477,7 +477,7 @@
   function youPill(tier) {
     if (tier === 'verified' || tier === 'expert') return `<span class="pill pill-good">${icon('check-circle')}${tier === 'expert' ? 'Expert' : 'Verified'}</span>`;
     if (tier === 'claimed') return `<span class="pill pill-line">Claimed</span>`;
-    return `<span class="pill sa-pill-none">Not on profile</span>`;
+    return `<span class="pill pill-line">Not on profile</span>`;
   }
   function fitPill(fit) {
     if (!fit) return '';
@@ -494,7 +494,7 @@
   /* =====================================================================
      OVERVIEW
      ===================================================================== */
-  const showAll = { demand: false, activity: false };
+  const showAll = { demand: false, activity: false, terms: false, gaps: false };
 
   function renderOverview(op) {
     resetSlots();
@@ -625,7 +625,7 @@
           <div class="meter"><i style="width:${(RN.clamp(r.p, 0, 1) * 100).toFixed(1)}%"></i></div>
           <span class="sa-mrow-n">${esc(r.txt)}${r.pts && r === b.weakest ? ` · ${r.action.to === 'studio.credibility' ? `<button type="button" class="link" data-act="sa-do" data-k="${r.k === 'verification' ? 'verified' : 'reviews'}">${esc(r.action.l)}</button>` : `<a class="link" href="#${r.action.to}">${esc(r.action.l)}</a>`}` : ''}</span>
         </li>`).join('')}</ul>
-      <p class="tiny muted">Every approved profile starts at 50. Up to ${b.avail} points are within reach from the actions above. Points are estimates for planning.</p>
+      <p class="tiny muted">Up to ${b.avail} points are within reach from the actions above. Points are estimates for planning.</p>
     </section>`;
   }
 
@@ -634,14 +634,14 @@
     const rev = seen().saDemandRev || '';
     let list = dm.items.filter((x) => !rev || x.rev === rev);
     const total = list.length;
-    if (!showAll.demand) list = list.slice(0, 5);
+    if (!showAll.demand) list = list.slice(0, 4);
     return `<section class="card sa-card sa-demand">
       ${cardHd('What companies are looking for', `Anonymized demand in ${esc(RN.fields.catLabel(op.catKey))} and your focus areas, this week. ${fmt.int(dm.catWeek)} searches, ${fmt.int(dm.supply)} operators.`, illus('Illustrative volumes', 'Search volumes and company counts are illustrative. Rows marked Live happened in this prototype session.'))}
       <div class="sa-demand-seg" data-deselect>
         <span class="label">Company revenue</span>
         ${RN.w.control('companyRevenue', rev, { name: 'saDemandRev', id: 'sa-demand-rev', change: 'sa-demand-rev' })}
       </div>
-      ${list.length ? `<ul class="sa-feed">${list.map((x) => `<li class="${x.live ? 'is-live' : ''}">
+      ${list.length ? `<ul class="sa-feed${showAll.demand ? ' is-all' : ''}">${list.map((x) => `<li class="${x.live ? 'is-live' : ''}">
           <span class="sa-feed-ic">${icon(x.ic)}</span>
           <div class="grow">
             <p class="sa-feed-t">${x.live ? '<span class="pill pill-good sa-pill-live">Live</span>' : ''}${x.text}</p>
@@ -649,16 +649,16 @@
             <div class="sa-feed-f">${fitPill(x.fit)}${x.you ? youPill(x.you === 'none' ? null : x.you) : ''}<span class="tiny muted">${esc(cap(fmt.ago(x.ts)))}</span>${x.act ? `<span class="sa-feed-a">${actBtn(x.act, 'act')}</span>` : ''}</div>
           </div>
         </li>`).join('')}</ul>` : RN.ui.empty({ icon: 'search', title: 'No demand in this range yet', body: 'Try another company revenue range, or clear the filter to see everything.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sa-demand-clear">Clear filter</button>` })}
-      ${total > 5 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="demand">${showAll.demand ? 'Show fewer' : `Show all ${total}`}${icon(showAll.demand ? 'chev-up' : 'chev-down')}</button>` : ''}
+      ${total > 4 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="demand">${showAll.demand ? 'Show fewer' : `Show all ${total}`}${icon(showAll.demand ? 'chev-up' : 'chev-down')}</button>` : ''}
     </section>`;
   }
 
   function activityCard(op, items, since) {
     const fresh = items.filter((x) => !x.quiet && t(x.ts) > t(since)).length;
-    const list = showAll.activity ? items.slice(0, 30) : items.slice(0, 8);
+    const list = showAll.activity ? items.slice(0, 30) : items.slice(0, 5);
     return `<section class="card sa-card sa-activity">
       ${cardHd('Recent activity', fresh ? `${plural(fresh, 'new update')} since you last checked` : 'You are all caught up', `${illus('Includes illustrative history', 'Daily search and view counts are illustrative. Everything else happened in this prototype session.')}${fresh ? `<button type="button" class="act" data-act="sa-read">${icon('check')}Mark all read</button>` : ''}`)}
-      ${list.length ? `<ol class="sa-tl">${list.map((x) => `<li class="${t(x.ts) > t(since) && !x.quiet ? 'is-new' : ''}">
+      ${list.length ? `<ol class="sa-tl${showAll.activity ? ' is-all' : ''}">${list.map((x) => `<li class="${t(x.ts) > t(since) && !x.quiet ? 'is-new' : ''}">
           <span class="sa-tl-ic">${icon(x.ic)}</span>
           <a class="sa-tl-b" href="#${esc(x.to)}">
             <span class="sa-tl-t">${x.text}${x.pill ? ' ' + x.pill : ''}</span>
@@ -666,7 +666,7 @@
           </a>
           <time class="sa-tl-when" datetime="${esc(x.ts)}">${x.live && nowMs() - t(x.ts) < 6e4 ? 'Just now' : esc(cap(fmt.ago(x.ts)))}</time>
         </li>`).join('')}</ol>` : RN.ui.empty({ icon: 'bolt', title: 'Nothing yet', body: 'Views, searches, intro requests and proof link opens show up here as they happen.' })}
-      ${items.length > 8 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="activity">${showAll.activity ? 'Show fewer' : `Show all ${Math.min(30, items.length)}`}${icon(showAll.activity ? 'chev-up' : 'chev-down')}</button>` : ''}
+      ${items.length > 5 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="activity">${showAll.activity ? 'Show fewer' : `Show all ${Math.min(30, items.length)}`}${icon(showAll.activity ? 'chev-up' : 'chev-down')}</button>` : ''}
     </section>`;
   }
 
@@ -711,14 +711,14 @@
     const next = new Date(RN.now()); next.setDate(next.getDate() + ((8 - next.getDay()) % 7 || 7)); next.setHours(8, 0, 0, 0);
     return `<section class="card sa-card sa-digest">
       ${cardHd('Your weekly digest', off ? 'Paused. Turn it back on any time.' : `Next email ${esc(RN.fmt.dateShort(next))}, 8am your time`, `<label class="switch"><input type="checkbox" data-change="sa-digest-toggle" ${off ? '' : 'checked'}><i></i><span class="sr-only">Email me every Monday</span></label>`)}
-      ${g.empty ? RN.ui.empty({ icon: 'mail', title: 'Nothing new this week', body: 'We skip the email when nothing changed. You will hear from us when something does.' }) : `<article class="sa-mail${off ? ' is-off' : ''}" aria-label="Email preview">
+      ${g.empty ? RN.ui.empty({ icon: 'mail', title: 'Nothing new this week', body: 'We skip the email when nothing changed. You will hear from us when something does.' }) : `<details class="sa-mail-fold"><summary class="act">${esc(g.subject)}${icon('chev-down')}</summary><article class="sa-mail${off ? ' is-off' : ''}" aria-label="Email preview">
         <div class="sa-mail-hd"><span class="sa-mail-from"><img src="assets/brand/mark.png" alt="">Revenue Nomad</span><span class="tiny muted">to ${esc(RN.personas.operator.email)}</span></div>
         <h3 class="sa-mail-s">${esc(g.subject)}</h3>
         ${g.personal ? `<ul class="sa-mail-l">${g.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : '<p class="small muted">No personal activity this week, so this email carries the market pulse only.</p>'}
         ${g.action ? `<div class="sa-mail-a"><span class="label">One thing to do</span><p class="small"><b>${esc(HEADING[g.action.k] || g.action.l)}.</b> ${esc(g.action.gain)}.</p></div>` : ''}
         <div class="sa-mail-p"><span class="label">Market pulse</span>${g.pulse.map((p) => `<p class="small">${esc(p)}</p>`).join('')}</div>
         <div class="sa-mail-p"><span class="label">Worth reading</span><p class="small"><a class="link" href="#${esc(g.guide.to)}">${esc(g.guide.t)}</a></p></div>
-      </article>`}
+      </article></details>`}
       <div class="row" style="--gap:12px;margin-top:16px">
         <button type="button" class="btn btn-line btn-sm" data-act="sa-digest-send" ${g.empty ? 'disabled' : ''}>${icon('send')}Send me this now</button>
         <span class="tiny muted">One email a week. We skip it when nothing is new.</span>
@@ -876,7 +876,7 @@
     const ticksFor = (vals) => { const nm = RN.chart.niceMax(Math.max(...vals, 1)); const k = nm / Math.pow(10, Math.floor(Math.log10(nm))); return k === 2 || k === 1 ? 4 : 5; };
     const mk = (vals, name) => (w) => RN.chart.line([{ name, values: vals }], thinLabels(lbl, w), { w, h: w < 420 ? 150 : 170, ticks: ticksFor(vals), label: name + ' per day' });
     return `<section class="card sa-card">
-      ${cardHd('Trend', `Per day, ${esc(periodLabel(d))}. Impressions as a line, profile views as daily counts, because the scales differ.`)}
+      ${cardHd('Trend', `Per day, ${esc(periodLabel(d))}`)}
       <div class="sa-grid sa-grid-2 sa-trend">
         <figure><figcaption><b>Search impressions</b><span class="num">${fmt.int(a.totals.impressions)}</span></figcaption>${slot(mk(a.series.impressions, 'Search impressions'), '', 150)}</figure>
         <figure><figcaption><b>Profile views</b><span class="num">${fmt.int(a.totals.views)}</span></figcaption>${slot((w) => dayCols(a.series.views, thinLabels(lbl, w), 'Profile views per day'), '', 150)}</figure>
@@ -911,7 +911,7 @@
     return `<section class="card sa-card" id="sa-terms">
       ${cardHd('Search terms that surfaced you', `What companies typed when your card appeared, ${esc(periodLabel(d))}`)}
       ${a.queries.length ? `<div class="tbl-wrap"><table class="tbl sa-terms sa-stack"><thead><tr><th>Search term</th><th class="r">Impressions</th><th class="sa-hide-s">Share</th><th class="r">Profile views</th><th class="r sa-hide-s">View rate</th><th>On your profile</th></tr></thead><tbody>
-        ${a.queries.map((q) => {
+        ${(showAll.terms ? a.queries : a.queries.slice(0, 5)).map((q) => {
           const inProfile = q.tags.length > 0 || words.includes(q.q.toLowerCase());
           const m = mq(q.q);
           const addTag = !inProfile && m && m.tags[0];
@@ -921,10 +921,10 @@
             <td class="sa-hide-s"><div class="sa-share"><div class="meter"><i style="width:${((q.n / total) * 100).toFixed(1)}%"></i></div><span class="tiny muted">${pct(q.n / total)}</span></div></td>
             <td class="r" data-u="${q.clicks === 1 ? 'profile view' : 'profile views'}">${fmt.int(q.clicks)}</td>
             <td class="r sa-hide-s">${pct(q.n ? q.clicks / q.n : 0, 1)}</td>
-            <td>${inProfile ? `<span class="pill pill-good">${icon('check')}In your ${q.tags.length ? 'tags' : 'headline'}</span>` : addTag ? `<button type="button" class="act" data-act="sa-tag-sheet" data-t="${esc(addTag)}">${icon('plus')}Add ${esc(addTag)}</button>` : '<span class="pill sa-pill-none">Not in your tags</span>'}</td>
+            <td>${inProfile ? `<span class="pill pill-good">${icon('check')}In your ${q.tags.length ? 'tags' : 'headline'}</span>` : addTag ? `<button type="button" class="act" data-act="sa-tag-sheet" data-t="${esc(addTag)}">${icon('plus')}Add ${esc(addTag)}</button>` : '<span class="pill pill-line">Not in your tags</span>'}</td>
           </tr>`;
         }).join('')}
-      </tbody></table></div>` : RN.ui.empty({ icon: 'search', title: 'No search terms yet', body: 'Terms appear once companies search and your card shows in the results.' })}
+      </tbody></table></div>${a.queries.length > 5 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="terms">${showAll.terms ? 'Show fewer' : `Show all ${a.queries.length}`}${icon(showAll.terms ? 'chev-up' : 'chev-down')}</button>` : ''}` : RN.ui.empty({ icon: 'search', title: 'No search terms yet', body: 'Terms appear once companies search and your card shows in the results.' })}
     </section>`;
   }
 
@@ -956,13 +956,13 @@
         </li>`;
       }).join('')}</ul>` : `<div class="note info">${icon('lock')}<span>${filt === 'all' ? `No group reached 5 visits ${esc(periodLabel(d))}, so every visit is combined below.${d === 7 ? ' Switch to 30 days for more detail.' : ''}` : 'No group of 5 or more visits matches this filter.'}</span></div>`}
       ${other ? `<div class="sa-segs-other">${icon('users')}<div class="grow"><b>Other companies</b><span class="sa-segs-m">${plural(other, 'visit')} from groups under 5, combined to protect company privacy</span></div></div>` : ''}
-      <p class="sa-privacy">${icon('lock')}<span>Company and person names are never shown to operators. A company is named only after you are introduced, or when they open a proof link you sent them.</span></p>
     </section>`;
   }
 
   /* Who is NOT visiting: industries and ranges you list that few or no clients open your profile from */
   function gapsCard(op, a, d) {
-    const list = gaps(op, a).slice(0, 4);
+    const all = gaps(op, a).slice(0, 4);
+    const list = showAll.gaps ? all : all.slice(0, 2);
     return `<section class="card sa-card sa-gaps" id="sa-gaps">
       ${cardHd('Who is not visiting', `Industries and company sizes you list, with few or no visits ${esc(periodLabel(d))}. One fix for each.`)}
       ${list.length ? `<ul class="sa-gap-l">${list.map((g) => `<li>
@@ -974,6 +974,7 @@
             <button type="button" class="act sa-gap-act" data-act="sa-do" data-k="${esc(g.act.k)}">${esc(g.act.l)}${icon('arrow')}</button>
           </div>
         </li>`).join('')}</ul>
+        ${all.length > 2 ? `<button type="button" class="act sa-more" data-act="sa-more" data-k="gaps">${showAll.gaps ? 'Show fewer' : `Show all ${all.length}`}${icon(showAll.gaps ? 'chev-up' : 'chev-down')}</button>` : ''}
         <p class="tiny muted sa-gap-foot">Not a focus any more? <button type="button" class="link" data-act="sa-do" data-k="ranges">Remove it in Edit profile</button> so companies see where you are strongest.</p>` : RN.ui.empty({ icon: 'check-circle', title: 'Every industry and range you list is getting views', body: 'When one of them goes quiet, it shows here with one thing to change.' })}
     </section>`;
   }
@@ -1044,7 +1045,7 @@
         <div><dt>Profile view</dt><dd>Someone opened your profile. Repeat opens by the same person within 30 minutes count once.</dd></div>
         <div><dt>Shortlist appearance</dt><dd>A company saved you to a shortlist, or a company engagement ranked you in its top matches.</dd></div>
         <div><dt>What is excluded</dt><dd>Bots, the Revenue Nomad team, other operators and your own visits.</dd></div>
-        <div><dt>Privacy</dt><dd>Viewers are shown by industry, company revenue and employee range, using the same picklists as your profile. Groups under 5 visits are combined. Company names are never shown.</dd></div>
+        <div><dt>Privacy</dt><dd>Viewers are shown by industry, company revenue and employee range, using the same picklists as your profile. Groups under 5 visits are combined. Company and person names are never shown. A company is named only after you are introduced, or when they open a proof link you sent them.</dd></div>
       </dl>
     </details>`;
   }

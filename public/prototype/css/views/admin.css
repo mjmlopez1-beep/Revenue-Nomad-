@@ -199,7 +199,6 @@
 .adm-clock i { display: block; height: 100%; background: var(--warn); border-radius: inherit; }
 .adm-icard.is-late .adm-clock i { background: var(--bad); }
 .adm-icard-meta { gap: 6px; }
-.adm-icard-meta .pill { height: auto; min-height: 24px; white-space: normal; padding-block: 3px; line-height: 1.25; }
 .adm-icard-act { justify-content: space-between; }
 .adm-icard-act .btn { padding: 0 12px; }
 @media (max-width: 1320px) and (min-width: 721px) {
@@ -244,16 +243,13 @@
 .adm-seg { flex-wrap: wrap; }
 .adm-sort .select { min-height: 40px; height: 40px; padding-block: 0; font-size: var(--t-14); width: auto; }
 .adm-dir-cats .chipset { gap: 6px; }
-.adm-dir-cats .chip { height: 32px; font-size: var(--t-13); padding: 0 12px; }
 .adm-dir-count { margin-bottom: 4px; }
 .adm-op { display: flex; gap: 10px; align-items: flex-start; min-width: 220px; }
 .adm-op .grow { display: flex; flex-direction: column; gap: 1px; }
 .adm-op-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .adm-op-pills:empty { display: none; }
-.adm-op-pills .pill { height: 20px; font-size: 11px; padding: 0 8px; }
 .adm-ris { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .adm-ris b { font-size: var(--t-18); line-height: 1; }
-.adm-ris .pill { height: 20px; font-size: 11px; padding: 0 8px; }
 .adm-cmp { min-width: 110px; }
 .adm-dir td, .adm-dir th { padding-left: 10px; padding-right: 10px; }
 .adm-rowact { display: flex; gap: 14px; justify-content: flex-end; white-space: nowrap; }
@@ -504,3 +500,5 @@
 .adm-ver { display: block; white-space: nowrap; }
 @media (min-width: 761px) { .adm-terms td { padding-top: 12px; padding-bottom: 12px; vertical-align: middle; } .adm-ver { display: inline; margin-left: 6px; } }
 @media (max-width: 640px) { .adm-bf-hd > span:first-child { padding-right: 10px; } .adm-bf-hd > span:last-child { padding-left: 10px; } }
+/* Phones: the two newest reviews; the rest are in the Directory the card links to */
+@media (max-width: 640px) { .adm-rv > li:nth-child(n+3) { display: none; } }

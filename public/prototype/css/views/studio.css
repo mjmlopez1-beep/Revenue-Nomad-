@@ -14,7 +14,6 @@
 .sa-col { display: flex; flex-direction: column; gap: var(--s-6); min-width: 0; }
 .sa .meter { height: 6px; }
 .sa .meter > i { transition: width .5s var(--ease); }
-.sa .pill svg { width: 12px; height: 12px; }
 .sa-card { min-width: 0; }
 .sa-slot { width: 100%; min-width: 0; }
 .sa-slot .chart svg { overflow: visible; }
@@ -22,8 +21,7 @@
 .sa-foot svg { width: 14px; height: 14px; color: var(--mute-2); }
 .sa-foot-top { margin-top: calc(var(--s-3) * -1); flex-wrap: wrap; }
 .sa-card-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.sa-pill-live { height: 20px; padding: 0 8px; margin-right: 6px; font-size: 11px; vertical-align: 1px; }
-.sa-pill-none { background: transparent; border: 1px dashed var(--line); color: var(--mute); font-weight: 600; }
+.sa-pill-live { margin-right: 6px; vertical-align: 1px; }
 .sa-rank { width: 28px; height: 28px; border-radius: 50%; background: var(--tint); color: var(--accent); display: grid; place-items: center; font-size: 13px; font-weight: 800; flex: 0 0 auto; }
 
 /* Layout grids (container queries so the side nav and phone widths both work) */
@@ -53,8 +51,7 @@
 .sa-live-go svg { width: 14px; height: 14px; }
 .sa-live:hover .sa-live-go { text-decoration: underline; text-underline-offset: 3px; }
 
-.sa-rise { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-pill); background: var(--good-bg); color: var(--good); font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; white-space: nowrap; vertical-align: 1px; }
-.sa-rise svg { width: 13px; height: 13px; }
+.sa-rise { vertical-align: 1px; }
 .sa-rise-note { display: flex; gap: 10px; align-items: flex-start; margin: -4px 0 16px; padding: 10px 12px; border-radius: 10px; background: var(--good-bg); color: var(--ink-2); font-size: var(--t-14); line-height: 1.45; }
 .sa-rise-note svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 2px; color: var(--good); }
 .sa-rise-note b { color: var(--ink); }
@@ -102,7 +99,6 @@
 
 .sa-demand-seg { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; padding-bottom: 14px; border-bottom: 1px solid var(--line-2); }
 .sa-demand-seg .chipset { gap: 6px; }
-.sa-demand-seg .chip { height: 30px; padding: 0 11px; font-size: var(--t-13); }
 .sa-feed { list-style: none; margin: 0; padding: 0; }
 .sa-feed li { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 12px 14px; align-items: start; padding: 16px 0; border-bottom: 1px solid var(--line-2); }
 .sa-feed li:last-child { border-bottom: 0; }
@@ -125,7 +121,7 @@
 .sa-tl li.is-new .sa-tl-ic { background: var(--tint); border-color: var(--tint-line); color: var(--accent); }
 .sa-tl-b { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-top: 5px; }
 .sa-tl-t { font-size: var(--t-14); font-weight: 600; color: var(--ink); line-height: 1.4; }
-.sa-tl-t .pill { height: 20px; padding: 0 8px; font-size: 11px; margin-left: 2px; vertical-align: 1px; }
+.sa-tl-t .pill { margin-left: 2px; vertical-align: 1px; }
 .sa-tl-b:hover .sa-tl-t { color: var(--accent); }
 .sa-tl-m { font-size: var(--t-13); color: var(--mute); line-height: 1.4; }
 .sa-tl-when { padding-top: 7px; font-size: var(--t-12); color: var(--mute-2); white-space: nowrap; }
@@ -373,6 +369,12 @@
   .sa-kpis { padding: 0; }
   .sa-kpi { padding: 16px 16px 12px; }
   .sa-kpi-v { font-size: 28px; }
+  /* Phones: the change line carries the trend; the sparkline is left out */
+  .sa-kpi-spark { display: none; }
+  /* The tier name and points to the next tier stand in for the ladder row */
+  .sa-ris .sa-ladder { display: none; }
+  /* Phones list three demand signals and four activity items before Show all */
+  .sa-demand .sa-feed:not(.is-all) > li:nth-child(n+4), .sa-activity .sa-tl:not(.is-all) > li:nth-child(n+5) { display: none; }
   .sa-unmet li { grid-template-columns: 36px minmax(0, 1fr); }
   .sa-unmet li > .btn { grid-column: 2; justify-self: start; }
   .sa-feed-a { margin-left: 0; flex-basis: 100%; }
@@ -491,3 +493,10 @@
 .sa-ins-c.is-gap > span:last-child { color: var(--night-mute); font-weight: 400; }
 .sa-ins-c.is-gap:hover em svg { transform: translateX(3px); }
 .sa-ins::after { left: auto; right: -140px; bottom: auto; top: -170px; }
+
+/* Weekly digest: the email preview opens from its subject line */
+.sa-mail-fold > summary { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; list-style: none; cursor: pointer; }
+.sa-mail-fold > summary::-webkit-details-marker { display: none; }
+.sa-mail-fold > summary svg { width: 14px; height: 14px; transition: transform var(--dur) ease; }
+.sa-mail-fold[open] > summary svg { transform: rotate(180deg); }
+.sa-mail-fold > .sa-mail { margin-top: 8px; }
