@@ -279,16 +279,16 @@
       const ic = RN.ui.icoTile(NEED_IC[o.v] || 'target', { tone: cats.length ? RN.ui.icoTone(cats[0]) : '', night: !cats.length, cls: 'hm-ic' });
       if (!cats.length) {
         return `<button type="button" class="hm-need hm-need-talk" data-act="hm-need" data-need="${esc(o.v)}">
-          ${ic}<span class="hm-go">${icon('arrow')}</span>
+          ${ic}
           <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span><span class="hm-need-cats">Talk it through with a person first</span></span>
-          <span class="hm-need-n">Reply within one business day</span>
+          <span class="hm-need-n">Talk to us${icon('arrow')}</span>
         </button>`;
       }
       return `<button type="button" class="hm-need" data-act="hm-need" data-need="${esc(o.v)}">
-        ${ic}<span class="hm-go">${icon('arrow')}</span>
+        ${ic}
         <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span>
           <span class="hm-need-cats">${cats.map((c) => `<span>${RN.ui.catDot(c)}${esc(catLabel(c))}</span>`).join('')}</span></span>
-        <span class="hm-need-n">${RN.fmt.plural(opsIn(cats), 'operator')}</span>
+        <span class="hm-need-n">See ${RN.fmt.plural(opsIn(cats), 'operator')}${icon('arrow')}</span>
       </button>`;
     }).join('');
     return `<section class="hm-sec section">

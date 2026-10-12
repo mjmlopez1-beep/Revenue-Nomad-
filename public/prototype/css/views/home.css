@@ -705,3 +705,20 @@ main[data-view="home"] { overflow-x: clip; }
   [data-view="home"] .hm-fw-sec .hm-ruled > :last-child { border-bottom: 0; }
   [data-view="home"] .hm-fw-sec .hm-area:hover { background: transparent; }
 }
+
+/* Problem tiles read as cards you can click (founder comment, Oct 12, 2026): separate raised cards with a hairline,
+   a lift and firmer edge on hover, and an explicit "See N operators" link line with an arrow that slides. */
+[data-view="home"] .hm-ruled.hm-needs { gap: 12px; background: none; border: 0; }
+[data-view="home"] .hm-needs > .hm-need { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 1px 2px rgba(10, 30, 20, .05); cursor: pointer; text-align: left;
+  transition: transform .25s var(--ease), box-shadow .25s ease, border-color .25s ease, background-color .25s ease; }
+[data-view="home"] .hm-needs > .hm-need::before { display: none; }
+[data-view="home"] .hm-needs > .hm-need:hover, [data-view="home"] .hm-needs > .hm-need:focus-visible { background: var(--card); color: inherit; border-color: var(--ink); transform: translateY(-3px); box-shadow: 0 14px 30px -14px rgba(10, 30, 20, .28); }
+[data-view="home"] .hm-needs > .hm-need:hover .hm-need-cats, [data-view="home"] .hm-needs > .hm-need:focus-visible .hm-need-cats { color: var(--mute); }
+[data-view="home"] .hm-needs > .hm-need .hm-need-n, [data-view="home"] .hm-needs > .hm-need:hover .hm-need-n { color: var(--accent); align-items: center; gap: 6px; }
+[data-view="home"] .hm-needs > .hm-need .hm-need-n svg { width: 15px; height: 15px; transition: transform .25s var(--ease); }
+[data-view="home"] .hm-needs > .hm-need:hover .hm-need-n svg { transform: translateX(4px); }
+[data-view="home"] .hm-needs > .hm-need:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 14px; }
+[data-view="home"] .hm-needs > .hm-need-talk, [data-view="home"] .hm-needs > .hm-need-talk:hover { background: var(--forest-deep); color: var(--night-ink); border-color: var(--forest-deep); }
+[data-view="home"] .hm-needs > .hm-need-talk .hm-need-n, [data-view="home"] .hm-needs > .hm-need-talk:hover .hm-need-n { color: var(--leaf); }
+[data-view="home"] .hm-needs > .hm-need-talk .hm-need-cats { color: var(--night-mute); }
+@media (prefers-reduced-motion: reduce) { [data-view="home"] .hm-needs > .hm-need, [data-view="home"] .hm-needs > .hm-need .hm-need-n svg { transition: none; transform: none; } }
