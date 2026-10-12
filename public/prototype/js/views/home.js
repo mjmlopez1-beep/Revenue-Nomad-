@@ -774,11 +774,54 @@
   ];
   const stepsRow = () => `<div class="hm-how">
       <div class="hm-how-hd"><h3 class="label">How it works · Three steps, no retained search</h3><a class="hm-more" href="#how">Every step, in detail${icon('arrow')}</a></div>
-      <ol class="hm-steps">${STEPS.map((s, i) => `<li class="hm-step">
+      <ol class="hm-steps" data-hm-steps><li class="hm-steps-track" aria-hidden="true"><i class="hm-steps-fill"></i></li>${STEPS.map((s, i) => `<li class="hm-step">
         ${RN.ui.icoTile(s[0], { cls: 'hm-ic' })}
         <span class="hm-step-k">Step ${i + 1}</span><h4 class="hm-step-t">${esc(s[1])}</h4><p>${esc(s[2])}</p>
       </li>`).join('')}</ol>
     </div>`;
+
+
+  /* The three steps are joined by a line that fills as the band scrolls up the viewport (founder comment, Oct 12, 2026):
+     each step lights when the line reaches its icon. Horizontal when the steps sit in a row, vertical when they stack.
+     Reduced motion (or no scroll yet): the line is full and every step is lit. */
+  function stepsLink(root, quiet) {
+    const ol = root.querySelector('[data-hm-steps]');
+    if (!ol) return;
+    const track = ol.querySelector('.hm-steps-track'), fill = track.querySelector('.hm-steps-fill');
+    const steps = [...ol.querySelectorAll('.hm-step')];
+    let pts = [], vertical = false, raf = 0;
+    function layout() {
+      const o = ol.getBoundingClientRect();
+      pts = steps.map((li) => { const r = (li.querySelector('.ico') || li).getBoundingClientRect(); return { x: r.left + r.width / 2 - o.left, y: r.top + r.height / 2 - o.top }; });
+      if (pts.length < 2) return;
+      vertical = Math.abs(pts[1].y - pts[0].y) > Math.abs(pts[1].x - pts[0].x);
+      const a = pts[0], z = pts[pts.length - 1];
+      track.classList.toggle('is-v', vertical);
+      Object.assign(track.style, vertical
+        ? { left: a.x + 'px', top: a.y + 'px', width: '', height: (z.y - a.y) + 'px' }
+        : { left: a.x + 'px', top: a.y + 'px', height: '', width: (z.x - a.x) + 'px' });
+    }
+    function paint(p) {
+      p = Math.max(0, Math.min(1, p));
+      fill.style.transform = vertical ? `scaleY(${p})` : `scaleX(${p})`;
+      const n = steps.length - 1;
+      steps.forEach((li, i) => li.classList.toggle('on', p >= (n ? i / n : 0) - 0.001));
+    }
+    function progress() {
+      const r = ol.getBoundingClientRect(), vh = window.innerHeight || 800;
+      // 0 when the steps' top reaches 85% of the viewport, 1 when their bottom passes 70% (so the last step lights
+      // well before the page ends, footer or not)
+      return (vh * 0.85 - r.top) / Math.max(1, r.height + vh * 0.15);
+    }
+    layout();
+    if (quiet) { ol.classList.add('is-done'); paint(1); return; }
+    ol.classList.add('is-live');
+    const tick = () => { raf = 0; paint(progress()); };
+    const ask = () => { if (!raf) raf = requestAnimationFrame(tick); };
+    onHome(window, 'scroll', ask, { passive: true });
+    onHome(window, 'resize', () => { layout(); ask(); });
+    tick();
+  }
 
   /* The path under How it works: measured from the node positions, drawn with stroke-dashoffset as the section
      scrolls through the lower part of the viewport. Steps light up as the line reaches them. Everything is drawn
@@ -1141,6 +1184,7 @@
       const quiet = calm();
       carouselRun(root);
       quoteLink(root, quiet);
+      stepsLink(root, quiet);
       if (!quiet) {
         if (first) root.querySelectorAll('.hm-stats [data-count]').forEach(countUp);
         startTyping(root.querySelector('#hm-q'));

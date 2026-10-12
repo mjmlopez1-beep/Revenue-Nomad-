@@ -826,3 +826,19 @@ main[data-view="home"] { overflow-x: clip; }
   [data-view="home"] .hm-rep-stats dt { font-size: 28px; }
   [data-view="home"] .hm-book { max-width: 260px; margin-inline: auto; }
 }
+
+/* How it works: the line that joins the three steps fills as you scroll, and each step lights when it arrives */
+[data-view="home"] .hm-steps { position: relative; }
+[data-view="home"] .hm-steps-track { position: absolute; height: 2px; border-radius: 2px; background: rgba(255, 255, 255, .12); pointer-events: none; z-index: 0; list-style: none; }
+[data-view="home"] .hm-steps-track.is-v { width: 2px; }
+[data-view="home"] .hm-steps-fill { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(90deg, #C2E7B0, #6FCF97); box-shadow: 0 0 12px rgba(194, 231, 176, .55); transform-origin: left center; transform: scaleX(0); }
+[data-view="home"] .hm-steps-track.is-v .hm-steps-fill { background: linear-gradient(180deg, #C2E7B0, #6FCF97); transform-origin: center top; }
+[data-view="home"] .hm-step { position: relative; z-index: 1; }
+[data-view="home"] .hm-step .ico { background: var(--night-2, #14201a); transition: box-shadow .4s ease, color .4s ease, background-color .4s ease, transform .4s var(--ease); }
+[data-view="home"] .hm-step.on .ico { color: #0B3D2C; background: #C2E7B0; box-shadow: 0 0 0 4px rgba(194, 231, 176, .16), 0 0 18px rgba(194, 231, 176, .35); }
+[data-view="home"] .hm-steps.is-live .hm-step.on .ico { transform: scale(1.06); }
+[data-view="home"] .hm-step .hm-step-k { transition: color .4s ease; }
+[data-view="home"] .hm-step.on .hm-step-k { color: #C2E7B0; }
+[data-view="home"] .hm-steps.is-live .hm-step:not(.on) .hm-step-t, [data-view="home"] .hm-steps.is-live .hm-step:not(.on) p { opacity: .55; transition: opacity .4s ease; }
+[data-view="home"] .hm-steps.is-live .hm-step.on .hm-step-t, [data-view="home"] .hm-steps.is-live .hm-step.on p { opacity: 1; transition: opacity .4s ease; }
+@media (prefers-reduced-motion: reduce) { [data-view="home"] .hm-step .ico, [data-view="home"] .hm-step-k { transition: none; } }
