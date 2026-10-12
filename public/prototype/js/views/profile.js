@@ -453,9 +453,25 @@
   const availDot = (op) => (op.avail.key === 'available_now' ? 'dot-now' : op.avail.key === 'available_2_weeks' ? 'dot-soon' : 'dot-later');
   // Registry order, not pick order, so chips read low to high
   const ordered = (key, vals) => F[key].options.map((o) => o.v).filter((v) => (vals || []).includes(v));
+  /* The score on profile pages: one representation, the shared tier badge with the score inside. Profiles show
+     the full tier for every tier, Emerging included; a profile with no tier yet (not approved and scored) shows
+     nothing tier-related. */
+  const tierOf = (op) => F.risTierFor(op && op.ris ? op.ris.score : null);
+  // The badge on the photo
+  function tierSeal(op, size) {
+    const t = tierOf(op);
+    return t ? `<span class="pf-photo-seal">${RN.ui.tierBadge(t.v, { size, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}</span>` : '';
+  }
+  // The tier name beside it: the shared pill (no second score), with what earned the tier on hover and focus
+  function tierPillTip(op) {
+    const t = tierOf(op);
+    if (!t) return '';
+    const why = RN.ui.tierWhy(op);
+    const plainWhy = String(why).replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    return `<button type="button" class="tier-mark tier-mark-pill pf-tier" data-tip="${esc(why)}" aria-label="${esc(plainWhy)}">${RN.ui.tierPill(t.v)}</button>`;
+  }
   function hero(c) {
     const op = c.op, v = c.v;
-    const tier = F.risTierFor(op.ris.score);
     const start = nextStart(op);
     const availTxt = op.avail.key === 'available_now' ? 'Available now' : `Available ${RN.fmt.dateShort(start)}`;
     // Available time sits in the At a glance tiles when they show; with a video it rides on the availability pill
@@ -464,7 +480,6 @@
     const moreVerified = c.verified.length - 3;
     const engs = c.engs.slice().sort((a, b) => (b.verified ? 1 : 0) - (a.verified ? 1 : 0));
     const logos = engs.slice(0, 5);
-    const tierTip = `<b>${esc(tier.l)}</b> · Reputation Index ${esc(op.ris.score)}<br>${esc(tier.d)}`;
     const headline = op.headline || '';
     const hlCls = headline.length > 140 ? 'l' : headline.length > 80 ? 'm' : 's';
     return `<section class="pf-band night" aria-label="${esc(op.name)}">
@@ -475,10 +490,10 @@
           <div class="pf-id">
             <div class="pf-id-top">
               <div class="pf-photo">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}
-                ${op.ris.score >= 50 ? `<span class="pf-photo-seal" title="${esc(tier.l)} · Reputation Index ${esc(op.ris.score)}">${RN.ui.hexSeal(tier.l, { size: 40, score: op.ris.score })}</span>` : ''}</div>
+                ${tierSeal(op, 40)}</div>
               <div class="pf-id-main">
                 <div class="pf-pills">
-                  <button type="button" class="pill pf-pill pf-pill-tier ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}" data-tip="${esc(tierTip)}"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)}</button>
+                  ${tierPillTip(op)}
                   <span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(availTxt + hrs)}</span>
                 </div>
                 <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
@@ -602,16 +617,24 @@
   /* ---------- Proof strip: 3 cards overlapping the band ---------- */
   function proofCards(c) {
     const op = c.op;
-    const tier = F.risTierFor(op.ris.score);
-    const pctile = RN.clamp(Math.round(ncdf((op.ris.score - PEER.mean) / PEER.sd) * 100), 1, 99);
-    const rep = `<article class="pf-proof pf-proof-rep">
-      <div class="pf-ring">${RN.chart.ring(op.ris.score, { size: 88, stroke: 8, label: 'Reputation Index ' + op.ris.score })}<b class="serif-up">${esc(op.ris.score)}</b></div>
+    const tier = tierOf(op);
+    const explain = RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated');
+    // Not approved and scored yet: no tier, no badge, no curve
+    const pctile = tier ? RN.clamp(Math.round(ncdf((op.ris.score - PEER.mean) / PEER.sd) * 100), 1, 99) : 0;
+    const rep = !tier ? `<article class="pf-proof pf-proof-rep is-pending">
       <div class="pf-rep-r">
-        <div class="pf-proof-hd"><span>Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated')}</span><span class="pf-tierchip ${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${RN.ui.hexSeal(tier.l, { size: 20 })}${esc(tier.l)}</span></div>
+        <div class="pf-proof-hd"><span>Reputation Index ${explain}</span></div>
+        <p class="pf-proof-empty">Pending review</p>
+        <p class="pf-proof-note">The tier and score appear once the Revenue Nomad team approves and scores this profile.</p>
+      </div>
+    </article>` : `<article class="pf-proof pf-proof-rep t-${esc(tier.v)}">
+      <div class="pf-rep-seal">${RN.ui.tierBadge(tier.v, { size: 72, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</div>
+      <div class="pf-rep-r">
+        <div class="pf-proof-hd"><span>Reputation Index ${explain}</span><b class="pf-rep-tier">${esc(tier.l)}</b></div>
         <div class="pf-bell">${RN.chart.bell({ w: 230, h: 64, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
         <div class="pf-bell-foot"><span>Median ${PEER.mean} ${RN.ui.illus('Illustrative peers')}</span><b>${ordinal(pctile)} percentile</b></div>
       </div>
-      <div class="pf-rep-x"><b class="${tier.v === 'elite' || tier.v === 'apex' ? 'gold' : ''}">${esc(tier.l)} · ${esc(op.ris.score)} of 100</b><p>${esc(tier.d)}</p></div>
+      <div class="pf-rep-x"><b class="pf-rep-tier">${esc(tier.l)} · ${esc(tier.min)} to ${esc(tier.max)}</b><p>${esc(tier.d)}</p></div>
     </article>`;
     // How long clients stay
     const median = medianMonths();
@@ -1537,7 +1560,7 @@
 
   RN.view('profile', {
     route: 'op.:slug', nav: 'browse', chrome: 'over',
-    samples: { slug: 'matt-lopez', extra: ['op.anne-zavorskas', 'op.mike-hanauer'] },
+    samples: { slug: 'matt-lopez', extra: ['op.anne-zavorskas', 'op.mike-hanauer', 'op.imogen-thackeray'] },
     title: (p) => { const op = RN.model.bySlug(p.slug); return op ? `${op.name}, Fractional ${op.role}` : 'Operator not found'; },
     render: renderProfile,
     mount: mountProfile,
@@ -1573,7 +1596,6 @@
     c.v = Object.assign({}, c.v, { owner: false, preview: false, client: true, rate: true, proof: true, proofId: rec.id });
     S.ctx = c;
     const who = prospectOf(rec);
-    const tier = F.risTierFor(op.ris.score);
     const own = isOwnOp(op);
     const shown = [];
     const secs = (rec.sections || []).map((k) => {
@@ -1597,9 +1619,9 @@
         <section class="pf-pl-id night">
           <div class="pf-band-bg" aria-hidden="true">${hexLattice()}</div>
           <div class="pf-pl-id-in">
-            <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}<span class="pf-photo-seal">${RN.ui.hexSeal(tier.l, { size: 32, score: op.ris.score })}</span></div>
+            <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}</div>
             <div class="grow">
-              <div class="pf-pills"><span class="pill pf-pill pf-pill-tier"><span class="pf-pill-hex">${RN.ui.hexSeal(tier.l, { size: 20 })}</span>${esc(tier.l)} · ${esc(op.ris.score)}</span><span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
+              <div class="pf-pills"><span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
               <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
               <p class="pf-role">Fractional ${esc(op.role)}</p>
               ${op.headline ? `<p class="pf-headline hl-m">${esc(smart(op.headline))}</p>` : ''}
@@ -1607,7 +1629,7 @@
             <div class="pf-pl-cta" data-pl-slot="top">${proofCtas(rec, op, 'top', true)}</div>
           </div>
           <div class="pf-pl-stats">
-            <span><b class="serif-up">${esc(op.ris.score)}</b>Reputation Index</span>
+            ${tierOf(op) ? `<div class="pf-pl-ris">${RN.ui.ris(op, { full: true, size: 48 })}</div>` : `<span><b class="pf-pl-pending">Pending review</b>Reputation Index</span>`}
             <span><b class="serif-up">${c.reviews.length}</b>${c.reviews.length === 1 ? 'Company review' : 'Company reviews'}</span>
             <span><b class="serif-up">${c.engs.filter((e) => e.verified).length}</b>Verified engagements</span>
             <span><b class="serif-up">${c.verified.length}</b>Verified focus areas</span>
@@ -1854,6 +1876,49 @@
      Badge verification (#verify.<slug>): where the embeddable badge links. A dated, public confirmation of
      the operator's Reputation Index, for direct deals.
      ================================================================================================ */
+  /* Use this badge (the Proven unlock; shown to the operator on their own page and to the team): a preview of the badge as it sits on the operator's site, and the HTML
+     to paste. Below Proven, one line with the points to go. */
+  const BADGE_BASE = 'https://revenuenomad.com';
+  function badgeSnippet(op, tier, asOf) {
+    const alt = `${op.name}, ${tier.l}, Reputation Index ${op.ris.score}. Verified by Revenue Nomad as of ${asOf}`;
+    return `<a href="${BADGE_BASE}/verify/${op.slug}" title="Verify ${op.name} on Revenue Nomad">\n  <img src="${BADGE_BASE}/badge/${op.slug}.svg" width="220" height="60" alt="${alt}">\n</a>`;
+  }
+  function badgeEmbed(op, tier, asOf) {
+    const proven = F.risTier.options.find((t) => t.v === 'proven');
+    if (!tier || !RN.ui.tierShown(tier.v)) {
+      const left = tier ? proven.min - op.ris.score : null;
+      return `<p class="pf-vf-emb-lock">${icon('lock')}<span>The embeddable badge unlocks at Proven${left > 0 ? `, ${esc(plural(left, 'point'))} to go` : ` (${proven.min})`}.</span></p>`;
+    }
+    return `<section class="pf-card pf-vf-emb" aria-labelledby="pf-emb-h">
+      <div class="pf-vf-emb-hd"><span class="eyebrow" id="pf-emb-h">Use this badge</span><span>For a website, proposal or email signature. It links to this page.</span></div>
+      <a class="pf-emb t-${esc(tier.v)}" href="#verify.${esc(op.slug)}" title="Opens this verification page">
+        <span class="pf-emb-seal">${RN.ui.tierBadge(tier.v, { size: 44, score: op.ris.score })}</span>
+        <span class="pf-emb-t"><b>${esc(op.name)}</b><span>${esc(tier.l)} · Verified by Revenue Nomad</span><em>As of ${esc(asOf)}</em></span>
+      </a>
+      <div class="pf-emb-code">
+        <label class="sr-only" for="pf-emb-ta">Badge HTML</label>
+        <textarea id="pf-emb-ta" class="mono" rows="6" readonly spellcheck="false">${esc(badgeSnippet(op, tier, asOf))}</textarea>
+        <button type="button" class="btn btn-sm btn-line pf-emb-copy" data-act="pf-badge-copy">${icon('copy')}<span>Copy HTML</span></button>
+      </div>
+    </section>`;
+  }
+  RN.actions['pf-badge-copy'] = (el) => {
+    const box = el.closest('.pf-vf-emb');
+    const ta = box && box.querySelector('textarea');
+    if (!ta) return;
+    const done = () => RN.ui.toast('Badge HTML copied. Paste it into your site.', { icon: 'copy' });
+    // Clipboard refused or missing (file://, permissions): select the code so a keyboard copy works
+    const fallback = () => {
+      ta.focus(); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      if (ok) done(); else RN.ui.toast('The code is selected. Press Ctrl+C or Cmd+C to copy it.', { icon: 'info' });
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done).catch(fallback);
+      else fallback();
+    } catch (e) { fallback(); }
+  };
   function renderVerify(p) {
     RN.model.applyEdits();
     const op = RN.model.bySlug(p.slug);
@@ -1867,24 +1932,26 @@
         </div></section>`;
     }
     visit('verify:' + op.slug);
-    const tier = F.risTierFor(op.ris.score);
-    const gold = tier.v === 'elite' || tier.v === 'apex';
+    const tier = tierOf(op); // null: not approved and scored yet, so no tier, no badge
+    const score = tier ? op.ris.score : null;
     const verifiedTags = op.tags.filter((t) => t.tier !== 'claimed').length;
     const revs = (op.reviews || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
     const engs = engagements(op);
     const verEngs = engs.filter((e) => e.verified).length;
     const asOf = RN.fmt.date(RN.now());
-    // The 0 to 100 scale with each tier's band, the score marked on it
+    // The 50 to 100 scale, one equal band per tier, the score marked inside its band
     const tiers = F.risTier.options.slice().reverse();
-    const bands = tiers.map((t) => {
-      const lo = t.v === 'indexing' ? 0 : t.min, hi = t.v === 'indexing' ? 49 : t.max;
-      const on = t.v === tier.v;
-      return `<span class="pf-vb-band t-${esc(t.v)}${on ? ' on' : ''}${F.risTierFor(op.ris.score).min > lo ? ' past' : ''}" style="flex:${hi - lo + 1}" title="${esc(t.l)}, ${t.v === 'indexing' ? 'under 50' : `${lo} to ${hi}`}"><em>${esc(t.l)}</em></span>`;
-    }).join('');
-    const scale = `<div class="pf-vb" role="img" aria-label="Reputation Index ${esc(op.ris.score)} of 100, ${esc(tier.l)} tier">
-        <div class="pf-vb-track">${bands}<i class="pf-vb-mark" style="left:${RN.clamp(op.ris.score, 0, 100)}%"><b>${esc(op.ris.score)}</b></i></div>
-        <div class="pf-vb-ticks" aria-hidden="true"><span>0</span><span style="left:50%">50</span><span style="left:70%">70</span><span style="left:90%">90</span><span style="left:100%">100</span></div>
-      </div>`;
+    const at = tier ? tiers.findIndex((t) => t.v === tier.v) : -1;
+    const bands = tiers.map((t, i) => `<span class="pf-vb-band t-${esc(t.v)}${i === at ? ' on' : ''}${i < at ? ' past' : ''}" title="${esc(t.l)}, ${t.min} to ${t.max}"><em>${esc(t.l)}</em></span>`).join('');
+    const markAt = tier ? ((at + RN.clamp((score - tier.min) / (tier.max - tier.min + 1), 0, 1)) / tiers.length) * 100 : 0;
+    const scale = tier ? `<div class="pf-vb" role="img" aria-label="Reputation Index ${esc(score)}, ${esc(tier.l)} tier, ${tier.min} to ${tier.max}">
+        <div class="pf-vb-track">${bands}<i class="pf-vb-mark" style="left:${markAt.toFixed(2)}%"></i></div>
+        <div class="pf-vb-ticks" aria-hidden="true">${tiers.map((t, i) => `<span style="left:${(i / tiers.length) * 100}%">${t.min}</span>`).join('')}<span style="left:100%">100</span></div>
+      </div>` : '';
+    const scoreBlock = tier ? `<div class="pf-vf-score-hd t-${esc(tier.v)}">
+          <span class="pf-vf-badge">${RN.ui.tierBadge(tier.v, { size: 64, score, label: `${tier.l}, Reputation Index ${score}` })}</span>
+          <span class="pf-vf-score-t"><span class="label">Reputation Index</span><b>${esc(tier.l)}</b><small>${tier.min} to ${tier.max} on a 100-point scale</small></span>
+        </div>` : `<div class="pf-vf-score-hd"><span class="pf-vf-score-t"><span class="label">Reputation Index</span><b>Pending review</b><small>The tier and score appear once the Revenue Nomad team approves and scores this profile.</small></span></div>`;
     const by = revs.map((r) => {
       const e = engs.find((x) => lc(x.company) === lc(r.company));
       return `<li>${e && e.logo ? `<span class="pf-vby-logo">${logoHtml(e.logo, r.company, 22)}</span>` : `<span class="pf-vby-logo txt">${esc(r.company)}</span>`}
@@ -1899,14 +1966,13 @@
               <div class="pf-band-bg" aria-hidden="true">${hexLattice()}</div>
               <span class="eyebrow pf-vf-k">${icon('shield')}Revenue Nomad verification</span>
               <div class="pf-vf-id">
-                <div class="pf-photo pf-vf-photo">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}
-                  <span class="pf-photo-seal">${RN.ui.hexSeal(tier.l, { size: 40, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</span></div>
+                <div class="pf-photo pf-vf-photo">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}</div>
                 <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
               </div>
               <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> <span class="pf-nw">as of ${esc(asOf)}</span></span></p>
             </header>
             <div class="pf-vf-score">
-              <div class="pf-vf-score-hd"><span class="label">Reputation Index</span><p><b class="serif-up">${esc(op.ris.score)}</b><small>of 100</small><span class="pill ${gold ? 'pill-gold' : 'pill-accent'} pf-vf-tier">${RN.ui.hexSeal(tier.l, { size: 16 })}${esc(tier.l)}</span></p></div>
+              ${scoreBlock}
               ${scale}
             </div>
             <dl class="pf-vf-facts">
@@ -1921,10 +1987,12 @@
           </article>
           <aside class="pf-vf-side">
             <section class="pf-card">
-              <span class="eyebrow">What ${esc(tier.l)} means</span>
-              <p class="pf-vf-d">${esc(tier.d)}</p>
-              ${RN.ui.tierLadder(tier.v, { score: op.ris.score })}
+              ${tier ? `<span class="eyebrow">What ${esc(tier.l)} means</span>
+              <p class="pf-vf-d">${esc(tier.d)}</p>` : `<span class="eyebrow">How tiers work</span>
+              <p class="pf-vf-d">Every approved profile starts at Emerging, 50, and moves up only on company-verified evidence.</p>`}
+              ${RN.ui.tierLadder(tier ? tier.v : null)}
             </section>
+            ${isOwnOp(op) || RN.store.state.persona === 'admin' ? badgeEmbed(op, tier, asOf) : ''}
             <details class="pf-card pf-vf-how pf-fold">
               <summary>${icon('chev-right')}How this is checked</summary>
               <ol>
@@ -1943,10 +2011,13 @@
     const op = RN.model.bySlug(p.slug);
     if (!op || !root) return;
     if (!S.tracked) { S.tracked = true; if (!isOwnOp(op)) RN.track('badge_view', { opId: op.id, source: 'badge' }); }
+    // The badge HTML shows in full: grow the box to its content
+    const ta = root.querySelector('#pf-emb-ta');
+    if (ta) { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
   }
   RN.view('verify', {
     route: 'verify.:slug', nav: '', chrome: 'solid',
-    samples: { slug: 'matt-lopez', extra: ['verify.unknown-operator'] },
+    samples: { slug: 'matt-lopez', extra: ['verify.unknown-operator', 'verify.mike-hanauer', 'verify.imogen-thackeray'] },
     title: (p) => { const op = RN.model.bySlug(p.slug); return op ? `Verify ${op.name}` : 'Badge not found'; },
     render: renderVerify,
     mount: mountVerify,

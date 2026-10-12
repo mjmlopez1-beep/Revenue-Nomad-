@@ -221,7 +221,8 @@
     o = o || {};
     const t = TITLES[reason] || TITLES.matches;
     const m = me();
-    const known = KEYS.filter((k) => m[k]).map((k) => esc(lab(k, m[k])));
+    const known = KEYS.filter((k) => m[k]).map((k) => esc(lab(k, m[k])))
+      .concat(m.need ? [esc(RN.w.label('need', m.need))] : []); // what they need, from Browse's Rank these for your company
     RN.ui.modal({
       width: 460,
       title: t[0],

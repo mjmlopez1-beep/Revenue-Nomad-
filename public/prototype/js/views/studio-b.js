@@ -11,7 +11,7 @@
   const st = () => RN.store.state;
 
   /* UI state that does not need to persist */
-  const S = { jobMore: false, inboxFilter: 'all', passOpen: {}, respOpen: {}, jobCat: '', jobEng: '', jobStatus: 'board', prosStatus: 'review', badgeFmt: 'web', dirty: false, focusSec: '', newProof: '', addEng: false, removedEng: new Set(), leaveTo: null };
+  const S = { jobMore: false, inboxFilter: 'all', passOpen: {}, respOpen: {}, jobCat: '', jobEng: '', jobStatus: 'board', prosStatus: 'review', dirty: false, focusSec: '', newProof: '', addEng: false, removedEng: new Set(), leaveTo: null };
 
   /* ======================================================================
      Shared helpers
@@ -632,8 +632,9 @@
      ====================================================================== */
   // What each tier unlocks. Nothing on the ladder is paid: tiers move only with client evidence.
   const UNLOCKS = RN.fields.risUnlocks; // one source, shared with For operators and Levels
-  const tierRank = (v) => ['indexing', 'emerging', 'proven', 'trusted', 'elite', 'apex'].indexOf(v);
-  const tierOf = (op) => RN.fields.risTierFor(op.ris.score).v;
+  const tierRank = (v) => RN.ui.tierRank(v); // emerging 0 .. apex 4, no tier -1
+  // The tier the score gives, or null before the profile is approved and scored
+  const tierOf = (op) => { const t = RN.fields.risTierFor(op && op.ris ? op.ris.score : null); return t ? t.v : null; };
   // RN.fields.risUnlocks: proof links from Emerging (5 a month), unlimited links and the badge from Proven
   const badgeUnlocked = (op) => tierRank(tierOf(op)) >= tierRank('proven');
   const PROOF_MONTHLY = 5;
@@ -671,7 +672,7 @@
 
   function renderCredibility(op) {
     applyExtras(op);
-    const tier = RN.fields.risTierFor(op.ris.score);
+    const tier = RN.fields.risTierFor(op.ris.score); // null before approval: no tier, no badge
     const tiers = RN.fields.risTier.options;
     const next = tiers.filter((t) => t.min > op.ris.score).sort((a, b) => a.min - b.min)[0];
     const rows = factorRows(op);
@@ -679,7 +680,7 @@
     const gap = next ? next.min - op.ris.score : 0;
     const reviewsToNext = next ? Math.ceil(gap / RN.model.risGain('review')) : 0;
     return `<div class="sb sb-cred">
-      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. Proposed: Revenue Nomad takes no share of deals you bring yourself, including deals you win with a proof link.')}
+      ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. Proposed: Revenue Nomad takes no share of deals you bring yourself, including deals you win with a proof link.', tier ? `<button type="button" class="btn btn-ghost btn-sm" data-proto data-act="st-tierup-preview" title="Prototype: see the tier-up moment without changing any data">${icon('eye')}Preview tier-up</button>` : '')}
       <nav class="sb-jump" aria-label="On this page">
         ${[['sb-c-ri', 'Reputation Index'], ['sb-c-rev', 'Reviews'], ['sb-c-tags', 'Verified tags'], ['sb-c-proof', 'Proof links'], ['sb-c-badge', 'Badge']].map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}
       </nav>
@@ -687,12 +688,13 @@
       <section class="card sb-ri" id="sb-c-ri" aria-labelledby="sb-ri-h">
         <div class="sb-ri-top">
           <div class="sb-ri-score">
-            <div class="sb-ring">${RN.chart.ring(op.ris.score, { size: 116, stroke: 9, label: `Reputation Index ${op.ris.score} of 100` })}<b class="num">${esc(op.ris.score)}</b></div>
+            ${tier ? `<span class="sb-ri-seal">${RN.ui.tierBadge(tier.v, { size: 104, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</span>` : ''}
             <div>
               <span class="eyebrow">Reputation Index</span>
-              <h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(tier.l)} <span class="muted" style="font-weight:500">· ${tier.min}–${tier.max}</span></h2>
-              <p class="small muted" style="margin-top:6px;max-width:54ch">${esc(tier.d)}</p>
-              ${next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more company ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : '<p class="sb-next-tier">You are at the top of the ladder.</p>'}
+              ${tier ? `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(tier.l)} <span class="muted" style="font-weight:500">· ${tier.min} to ${tier.max}</span></h2>
+              <p class="small muted" style="margin-top:6px;max-width:54ch">${esc(tier.d)}</p>` : `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">Not scored yet</h2>
+              <p class="small muted" style="margin-top:6px;max-width:54ch">Your tier and score appear once the Revenue Nomad team approves your profile. Every approved profile starts at 50, Emerging.</p>`}
+              ${!tier ? '' : next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more company ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : '<p class="sb-next-tier">You are at the top of the ladder.</p>'}
             </div>
           </div>
           <div class="sb-ri-avail"><span class="stat-v">+${avail}</span><span class="stat-l">estimated points available ${RN.ui.tip('Estimates from the published factor weights. Company evidence moves most of the score: reviews, verified tags and recent engagements. A complete profile adds a few points. Nothing here can be bought.', 'About these estimates')}</span></div>
@@ -711,12 +713,12 @@
         <div class="card-hd"><div><h3 id="sb-lad-h">Tiers and what each one unlocks</h3><p class="sub">Tiers move on company evidence. Profile completeness is the one factor you control alone. Nothing on this ladder can be bought.</p></div><a class="act" href="#levels">How levels work${icon('arrow')}</a></div>
         <ol class="sb-tiers">
           ${tiers.map((t) => {
-            const here = t.v === tier.v;
-            const got = tierRank(t.v) <= tierRank(tier.v);
+            const here = !!tier && t.v === tier.v;
+            const got = tierRank(t.v) <= tierRank(tier && tier.v);
             return `<li class="${here ? 'is-here' : got ? 'is-got' : ''}">
               <span class="sb-seal">${RN.ui.tierBadge(t.v, here ? { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` } : { size: 32 })}</span>
               <div class="sb-tier-b">
-                <div class="row" style="--gap:8px"><b class="sb-tier-n">${esc(t.l)}</b><span class="tiny muted tnum">${t.min}–${t.max}</span>${here ? '<span class="pill pill-accent">You are here</span>' : t.v === 'indexing' ? '<span class="pill">Before approval</span>' : got ? `<span class="pill pill-good">${icon('check')}Included</span>` : `<span class="pill">${icon('lock')}${t.min - op.ris.score} pts away</span>`}</div>
+                <div class="row" style="--gap:8px"><b class="sb-tier-n">${esc(t.l)}</b><span class="tiny muted tnum">${t.min} to ${t.max}</span>${here ? '<span class="pill pill-accent">You are here</span>' : got ? `<span class="pill pill-good">${icon('check')}Included</span>` : `<span class="pill">${icon('lock')}${t.min - op.ris.score} pts away</span>`}</div>
                 <ul>${(UNLOCKS[t.v] || []).map((u) => `<li>${esc(u)}</li>`).join('')}</ul>
               </div>
             </li>`;
@@ -833,42 +835,59 @@
     </article>`;
   }
 
-  function badgeSnippet(op, fmt) {
-    const base = 'https://www.revenuenomad.com';
-    const alt = `${op.name}, ${op.ris.label}, Reputation Index ${op.ris.score}, verified on Revenue Nomad, ${RN.fmt.monthYear(RN.now())}`;
-    return fmt === 'email'
-      ? `<a href="${base}/verify/${op.slug}"><img src="${base}/badge/${op.slug}.png?style=signature" width="180" height="40" alt="${alt}"></a>`
-      : `<a href="${base}/verify/${op.slug}" title="Verify ${op.name} on Revenue Nomad">\n  <img src="${base}/badge/${op.slug}.svg" width="240" height="72"\n       alt="${alt}">\n</a>`;
+  /* The embeddable badge: the same snippet the public verification page (#verify.<slug>) offers. A link to the
+     dated verification page wrapping a small badge image with the operator's name and tier. Unlocks at Proven. */
+  function badgeSnippet(op) {
+    const base = 'https://revenuenomad.com';
+    const t = RN.fields.risTierFor(op.ris.score);
+    // Same text as the verification page's snippet (js/views/profile.js badgeSnippet), so both copy the same code
+    const alt = `${op.name}, ${t ? t.l : 'Vetted'}, Reputation Index ${op.ris.score}. Verified by Revenue Nomad as of ${RN.fmt.date(RN.now())}`;
+    return `<a href="${base}/verify/${op.slug}" title="Verify ${op.name} on Revenue Nomad">\n  <img src="${base}/badge/${op.slug}.svg" width="220" height="60" alt="${alt}">\n</a>`;
   }
-  // The badge lands on a dated verification page when the prototype has one (#verify.<slug>), else the profile
-  const verifyHref = (op) => (Object.values(RN.views).some((v) => v.tokens && v.tokens[0] === 'verify' && v.tokens.length === 2) ? '#verify.' : '#op.') + op.slug;
   function badgeSection(op) {
-    const unlocked = badgeUnlocked(op);
-    const code = badgeSnippet(op, S.badgeFmt);
-    return `<section class="card" id="sb-c-badge" aria-labelledby="sb-badge-h">
-      <div class="card-hd"><div><h3 id="sb-badge-h">Embeddable verified badge</h3><p class="sub">For your website, proposals and email signature. It links to a dated verification page and updates itself if your tier changes.</p></div></div>
-      <div class="sb-badge-wrap ${unlocked ? '' : 'is-locked'}">
-        <div class="sb-badge-stage">
-          <a class="sb-badge ${S.badgeFmt === 'email' ? 'is-sig' : ''}" href="${esc(verifyHref(op))}" title="Opens the verification page">
-            <span class="sb-seal">${RN.ui.tierBadge(tierOf(op), { size: 48, score: op.ris.score })}</span>
-            <span class="sb-badge-t"><b>${esc(op.ris.label)} · Reputation Index</b><span>Verified on Revenue Nomad</span><em>${esc(op.name)} · ${esc(RN.fmt.monthYear(RN.now()))}</em></span>
-          </a>
+    const t = RN.fields.risTierFor(op.ris.score);
+    const proven = RN.fields.risTier.options.find((x) => x.v === 'proven');
+    if (!badgeUnlocked(op)) {
+      const toGo = Math.max(0, proven.min - op.ris.score);
+      return `<section class="card sb-mybadge is-locked" id="sb-c-badge" aria-labelledby="sb-badge-h">
+        <p class="sb-locked">${icon('lock')}<span><b id="sb-badge-h">Your badge</b> unlocks at Proven (${proven.min}).${t ? ` ${toGo} ${toGo === 1 ? 'point' : 'points'} to go.` : ''} Company reviews are the fastest way there.</span></p>
+      </section>`;
+    }
+    const code = badgeSnippet(op);
+    return `<section class="card sb-mybadge" id="sb-c-badge" aria-labelledby="sb-badge-h">
+      <div class="card-hd" style="margin-bottom:0"><div><h3 id="sb-badge-h">Your badge</h3><p class="sub">For your website, proposals and email signature. It links to your dated verification page and updates itself when your tier changes.</p></div></div>
+      <div class="sb-mybadge-row">
+        <a class="sb-badge" href="#verify.${esc(op.slug)}" title="Open your public verification page">
+          <span class="sb-seal">${RN.ui.tierBadge(t.v, { size: 44, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}</span>
+          <span class="sb-badge-t"><b>${esc(op.name)}</b><span>${esc(t.l)} · Verified on Revenue Nomad</span></span>
+        </a>
+        <div class="row sb-mybadge-acts" style="--gap:10px 16px">
+          <button type="button" class="btn btn-line btn-sm" data-act="sb-badge-copy">${icon('code')}Copy snippet</button>
+          <a class="act" href="#verify.${esc(op.slug)}">Your public verification page${icon('arrow')}</a>
         </div>
-        <div class="sb-badge-code">
-          <div class="row between"><div class="seg" role="group" aria-label="Format">${[['web', 'Website'], ['email', 'Email signature']].map(([k, l]) => `<button type="button" aria-pressed="${S.badgeFmt === k}" data-act="sb-badge-fmt" data-f="${k}">${l}</button>`).join('')}</div>
-            <button type="button" class="btn btn-line btn-sm" data-act="sb-badge-copy" ${unlocked ? '' : 'disabled'}>${icon('code')}Copy code</button></div>
-          <pre class="mono sb-code"><code>${esc(code)}</code></pre>
-          <p class="tiny muted">The badge is rendered live, so a copied image can’t outlive your tier. A removed badge shows “No longer current”.</p>
-        </div>
-        ${unlocked ? '' : `<p class="sb-locked">${icon('lock')}The badge unlocks at Proven (60). Company reviews are the fastest way there.</p>`}
       </div>
+      <details class="sb-mybadge-code"><summary>${icon('chev-down')}Show the code</summary>
+        <textarea class="mono sb-code" readonly rows="4" aria-label="Badge snippet" spellcheck="false">${esc(code)}</textarea>
+      </details>
     </section>`;
   }
-  RN.actions['sb-badge-fmt'] = (el) => { S.badgeFmt = el.dataset.f; RN.rerender(); };
-  RN.actions['sb-badge-copy'] = () => {
+  /* Clipboard write happens inside the click; if it is refused, open the code and select it to copy by hand */
+  RN.actions['sb-badge-copy'] = (el) => {
     const op = RN.myOp();
-    const ok = copyText(badgeSnippet(op, S.badgeFmt));
-    RN.ui.toast(ok ? 'Badge code copied. Paste it into your site or signature.' : 'Copy did not work in this browser. Select the code and copy it.', { icon: ok ? 'code' : 'info' });
+    const code = badgeSnippet(op);
+    const sec = el.closest('.sb-mybadge');
+    const manual = () => {
+      const d = sec && sec.querySelector('details');
+      const ta = sec && sec.querySelector('textarea');
+      if (d) d.open = true;
+      if (ta) { ta.focus(); ta.select(); }
+      RN.ui.toast('Copy is blocked in this browser. The code is selected, so press Ctrl+C or Cmd+C.', { icon: 'info' });
+    };
+    const done = () => RN.ui.toast('Badge snippet copied. Paste it into your site or signature.', { icon: 'code' });
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(code).then(done, manual); return; }
+    } catch (e) { /* fall through */ }
+    manual();
   };
 
   RN.actions['sb-rr-remind'] = (el) => {

@@ -494,3 +494,40 @@
 .sa-mail-fold > summary svg { width: 14px; height: 14px; transition: transform var(--dur) ease; }
 .sa-mail-fold[open] > summary svg { transform: rotate(180deg); }
 .sa-mail-fold > .sa-mail { margin-top: 8px; }
+
+/* ---------- Tier-up moment (studio.js): a short reveal when the Reputation Index crosses into a higher tier ---------- */
+.st-tu .modal-hd { position: relative; justify-content: center; text-align: center; padding-top: var(--s-6); padding-bottom: 0; }
+.st-tu .modal-hd > div { flex: 1 1 auto; padding: 0 28px; }
+.st-tu .modal-hd .x-btn { position: absolute; top: 14px; right: 14px; }
+.st-tu .modal-hd h2 { font-size: var(--t-24); letter-spacing: -0.02em; }
+.st-tu .modal-ft { justify-content: center; border-top: 0; padding-top: 0; padding-bottom: var(--s-6); }
+.st-tu-body { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; padding-top: 8px; }
+.st-tu-prev { align-self: center; }
+.st-tu-stage { position: relative; width: 136px; height: 136px; display: grid; place-items: center; margin: -4px 0 -10px; }
+.st-tu-badge { position: relative; z-index: 1; display: grid; place-items: center; animation: st-tu-in .62s cubic-bezier(.2, .9, .3, 1.25) .12s both; }
+.st-tu-badge svg { width: 112px; height: 112px; }
+/* Proven and Trusted (and Emerging): one soft pulse of the tier's own colour behind the badge */
+.st-tu-ring { position: absolute; inset: 14px; clip-path: polygon(50% 0, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%); background: var(--tb-tru-1); opacity: 0; }
+.st-tu-stage.t-proven .st-tu-ring { background: var(--tb-prv-fill); }
+.st-tu-stage.t-emerging .st-tu-ring { background: var(--tb-emg-line); }
+.st-tu-stage.is-pulse .st-tu-ring { animation: st-tu-pulse 1.5s ease-out .5s 2 both; }
+/* Elite and Apex: the badge's own sheen sweeps once as it lands (keyframes from css/components.css) */
+.st-tu-stage.is-gold .st-tu-ring { display: none; }
+.st-tu-stage.is-gold .tb .tb-sheen { animation: tb-sheen-in 1.2s ease-in-out .6s 1 both; }
+.st-tu-score { margin: 0; font-size: var(--t-16); line-height: 1.4; }
+.st-tu-score b { font-weight: 800; }
+.st-tu-score span { display: block; font-size: var(--t-13); color: var(--mute); }
+.st-tu-unlocks { width: 100%; text-align: left; padding: 14px 16px; border-radius: var(--r-input); background: var(--tint); }
+.st-tu-unlocks .label { display: block; margin-bottom: 8px; }
+.st-tu-unlocks ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.st-tu-unlocks li { display: flex; align-items: flex-start; gap: 8px; font-size: var(--t-14); line-height: 1.45; }
+.st-tu-unlocks li svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; color: var(--accent); }
+.st-tu-try { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.st-tu-try .row { flex-wrap: wrap; justify-content: center; }
+@keyframes st-tu-in { 0% { transform: scale(.55); opacity: 0; } 60% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes st-tu-pulse { 0% { transform: scale(.92); opacity: .32; } 100% { transform: scale(1.38); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .st-tu-badge, .st-tu-stage .st-tu-ring, .st-tu-stage .tb .tb-sheen { animation: none !important; }
+  .st-tu-ring { opacity: 0; }
+  .modal.st-tu { animation: none; }
+}

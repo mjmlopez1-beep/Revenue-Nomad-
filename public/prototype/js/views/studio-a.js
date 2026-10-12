@@ -509,7 +509,7 @@
     const liveNow = liveEvents(op, 1).filter((e) => nowMs() - t(e.ts) < 2 * 36e5 && ['profile_view', 'shortlist_add', 'compare_add'].includes(e.type))[0];
     const r = rise(op);
     return `<div class="sa sa-overview">
-      ${head(`${greet}, ${esc(op.first)}.`, `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
+      ${head(`${greet}, ${esc(op.first)}.`, `${op.ris.label ? `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}` : 'Reputation Index not scored yet'}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
       ${liveNow ? liveStrip(liveNow) : ''}
       ${kpiRow(op, m, d)}
       <div class="sa-cols">
@@ -614,10 +614,10 @@
       ${cardHd('Reputation Index', 'The five published factors and the points still available', `<a class="act" href="#studio.credibility">Credibility${icon('arrow')}</a>`)}
       ${r ? `<p class="sa-rise-note">${icon('trend-up')}<span><b>${esc(r.base)} → ${esc(b.score)}</b> since ${esc(fmt.dateShort(r.since))}${r.cause ? `. ${esc(r.cause)}.` : '.'}</span></p>` : ''}
       <div class="sa-ris-top">
-        <span class="sa-ris-seal">${RN.ui.tierBadge(b.tier.v, { size: 64, score: b.score, label: `${b.tier.l}, Reputation Index ${b.score}` })}</span>
+        ${b.tier ? `<span class="sa-ris-seal">${RN.ui.tierBadge(b.tier.v, { size: 64, score: b.score, label: `${b.tier.l}, Reputation Index ${b.score}` })}</span>` : ''}
         <div class="grow">
-          <div class="sa-ris-tier"><b>${esc(b.tier.l)}</b><span class="small muted">${b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
-          <div class="sa-ladder">${RN.ui.tierLadder(b.tier.v, { orientation: 'row', compact: true, only: tiers.map((x) => x.v), label: 'Tier ladder' })}</div>
+          <div class="sa-ris-tier"><b>${b.tier ? esc(b.tier.l) : 'Not scored yet'}</b><span class="small muted">${!b.tier ? 'Your tier appears once your profile is approved' : b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
+          <div class="sa-ladder">${RN.ui.tierLadder(b.tier ? b.tier.v : null, { orientation: 'row', compact: true, only: tiers.map((x) => x.v), label: 'Tier ladder' })}</div>
         </div>
       </div>
       <ul class="sa-factors">${b.rows.map((r) => `<li>
