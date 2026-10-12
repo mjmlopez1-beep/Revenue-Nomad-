@@ -27,7 +27,7 @@
   const r500 = (n) => Math.round(n / 500) * 500;
   const usd = (n) => RN.fmt.usd(n);
   const hr = (n) => '$' + Math.round(n);
-  // Monthly range format: "$7.5k to $11.5k a month"
+  // Monthly range format: "$7.5k - $11.5k/month"
   ins.fmtRange = (lo, hi) => RN.fmt.moRange(r500(lo), r500(hi));
   /* The Rate Index is the price: a client pays the operator's listed rate and no fees (founder
      decision D1, Sep 25, 2026). Nothing on these client-facing pages mentions a fee, margin or split. */
@@ -89,7 +89,8 @@
   function bars(rows, o, w) {
     o = o || {};
     const fmt = o.fmt || ((n) => RN.fmt.int(n));
-    if (w >= 460) {
+    // Inline labels from 400px (half of the report's reading column); narrower charts stack the label above the bar
+    if (w >= 400) {
       const longest = Math.max(...rows.map((r) => String(r.label).length));
       const labelW = Math.round(RN.clamp(longest * 6.6 + 18, 110, w * 0.46));
       return RN.chart.bars(rows, { w: Math.round(w), labelW, fmt, max: o.max, label: o.label, rowH: 36, barH: 16 });
@@ -167,7 +168,7 @@
     if (!el) return;
     const nav = document.querySelector('.ins-chapnav');
     const hdr = document.getElementById('hdr');
-    const off = (hdr && !hdr.hidden ? hdr.offsetHeight : 0) + (nav ? nav.offsetHeight : 0) + 12;
+    const off = (hdr && !hdr.hidden ? hdr.offsetHeight : 0) + (nav && !railMode() ? nav.offsetHeight : 0) + 16;
     window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - off), behavior: smooth === false ? 'auto' : 'smooth' });
   }
   RN.actions['ins-jump'] = (el) => jump(el.dataset.to);
@@ -299,18 +300,13 @@
           ${faces(ops.filter((o) => o.photo), 5, { size: 'ava-sm', noMore: true })}
           <p class="small muted">Built from ${esc(netText())} and the searches companies run every week. Rate Index as of ${esc(RN.fmt.date(asOfDate()))}.</p>
         </div>
-        <p class="ins-hero-illus">${illus('Illustrative figures')}</p>
+        <p class="ins-hero-illus" data-proto>${illus('Illustrative figures')}</p>
       </div>
       <a class="ins-book night" href="#report" aria-label="Read The State of Fractional GTM 2027, prototype edition with illustrative figures">
         <span class="ins-rings" aria-hidden="true"><i></i><i></i></span>
         <span class="ins-book-top"><span class="eyebrow">Revenue Nomad Research</span></span>
         <span class="ins-book-yr">2027</span>
         <span class="ins-book-t">The State of Fractional GTM</span>
-        <span class="ins-book-stats">
-          <span><b>${esc(sum[0].v)}</b>median hourly rate</span>
-          <span><b>${esc(sum[2].v)}</b>median engagement</span>
-          <span><b>${esc(sum[3].v)}</b>rehire rate with 3+ reviews</span>
-        </span>
         <span class="ins-book-foot"><span>6 chapters · ${RN.fmt.int(R.sample.operators + R.sample.companies)} respondents</span>${icon('arrow')}</span>
       </a>
     </section>
@@ -366,27 +362,26 @@
       <div class="ins-sec-hd">
         <div><span class="eyebrow">This week in fractional GTM</span><h2 class="h2">Week of ${esc(RN.fmt.dateShort(week))}. What companies looked for.</h2></div>
       </div>
-      <div class="stats-row ins-kpis" style="--cols:4">
+      <div class="stats-row ins-kpis" style="--cols:3">
         <div class="stat"><span class="stat-l">Demand index, ${esc(cur.l)}</span><span class="stat-v">${RN.fmt.int(cur.v)}</span><span class="row-nw" style="--gap:8px">${RN.ui.delta(cur.v, prevY.v)}<span class="tiny muted">vs ${esc(prevY.l)}. 2023 = 100</span></span></div>
-        <div class="stat"><span class="stat-l">Rate Index median</span><span class="stat-v">${hr(last.v)}<small class="ins-unit">/hr</small></span><span class="row-nw" style="--gap:8px">${RN.ui.delta(last.v, prev.v)}<span class="tiny muted">vs ${esc(prev.l)}</span></span></div>
         <div class="stat"><span class="stat-l">New operator applications</span><span class="stat-v">${RN.fmt.int(newApps)}</span><span class="tiny muted">This week. Network: ${esc(netText())}</span></div>
         <div class="stat"><span class="stat-l">Searches with no match</span><span class="stat-v">${RN.fmt.int(zero.length)}</span><span class="tiny muted">Companies searched and nobody fit</span></div>
       </div>
       <div class="grid g-2 ins-pulse-grid">
         <div class="card">
           <div class="card-hd"><div><h3>Most searched focus areas</h3><p class="sub">Company searches in the last 7 days, and the operators who claim each one</p></div></div>
-          <ol class="ins-trows">${topDemand.map((t, i) => { const cl = claimers(t.t); return `<li><button type="button" class="ins-trow" data-act="ins-browse" data-src="hub_top_searched" data-tags="${jsonAttr([t.t])}" data-f="{}">
+          ${(() => { const row = (t, i) => { const cl = claimers(t.t); return `<li><button type="button" class="ins-trow" data-act="ins-browse" data-src="hub_top_searched" data-tags="${jsonAttr([t.t])}" data-f="{}">
               <span class="ins-trow-n num">${i + 1}</span>
               <span class="ins-trow-b"><span class="ins-trow-t"><b>${esc(t.t)}</b><span class="tiny muted">${esc(catLabel(t.c))}</span></span>
                 <span class="meter"><i style="width:${((t.demand / maxDemand) * 100).toFixed(1)}%"></i></span>
                 <span class="tiny muted">${RN.fmt.int(t.demand)} searches · ${RN.fmt.int(t.supply)} claim it · ${t.verified ? `${RN.fmt.int(t.verified)} company-verified` : 'none verified yet'}</span></span>
               ${cl.length ? faces(cl, 3, { noMore: true }) : '<span></span>'}
-              ${icon('chev-right')}</button></li>`; }).join('')}</ol>
+              ${icon('chev-right')}</button></li>`; }; return `<ol class="ins-trows">${topDemand.slice(0, 3).map(row).join('')}</ol>${topDemand.length > 3 ? `<details class="ins-more"><summary>Show all ${topDemand.length}</summary><ol class="ins-trows" start="4">${topDemand.slice(3).map((t, i) => row(t, i + 3)).join('')}</ol></details>` : ''}`; })()}
+          <div class="card-hd ins-unmet-hd"><div><h3>What companies typed</h3><p class="sub">Top searches in the last 7 days. Select one to run it</p></div></div>
+          <ul class="ins-qs">${topQ.map((q) => `<li><button type="button" class="chip chip-sm" data-act="ins-browse" data-src="hub_top_query" data-q="${esc(q.q)}" data-f="{}">${icon('search')}${esc(q.q)}<span class="ins-qs-n">${RN.fmt.int(q.vol)}</span></button></li>`).join('')}</ul>
         </div>
         <div class="card ins-unmet">
-          <div class="card-hd"><div><h3>What companies typed</h3><p class="sub">Top searches in the last 7 days. Select one to run it</p></div></div>
-          <ul class="ins-qs">${topQ.map((q) => `<li><button type="button" class="chip chip-sm" data-act="ins-browse" data-src="hub_top_query" data-q="${esc(q.q)}" data-f="{}">${icon('search')}${esc(q.q)}<span class="ins-qs-n">${RN.fmt.int(q.vol)}</span></button></li>`).join('')}</ul>
-          <div class="card-hd ins-unmet-hd"><div><h3>Searches that found no one</h3><p class="sub">Company needs the network cannot fill yet</p></div></div>
+          <div class="card-hd"><div><h3>Searches that found no one</h3><p class="sub">Company needs the network cannot fill yet</p></div></div>
           ${zero.length ? `<ul class="ins-zero">${zero.slice(0, 3).map((z) => `<li><span class="ins-zero-q">“${esc(z.q)}”</span><span class="tiny muted">${esc([z.cat ? catLabel(z.cat) : '', z.industry ? RN.w.label('industries', z.industry) : '', z.live ? 'searched today' : RN.fmt.plural(z.vol, 'search', 'searches') + ' this week'].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>` : RN.ui.empty({ icon: 'search', title: 'Every search found a match this week', body: 'When a company search finds no one, it shows up here.' })}
           <div class="ins-unmet-ft">
             <a class="act" href="#studio.positioning">${icon('target')}Operators: add or verify these focus areas</a>
@@ -506,8 +501,13 @@
   DRAW.sources = (w) => bars(REP().sources.map((r) => ({ label: r.l, value: r.v, hi: /Marketplace/.test(r.l) })), { fmt: (n) => n + '%', max: 50, label: 'Where the last engagement came from' }, w);
   DRAW.concurrent = (w) => cols(REP().concurrent.map((r, i) => ({ label: r.l, value: r.v, hi: i === 1 })), { fmt: (n) => n + '%', label: 'Concurrent companies per operator', h: w < 460 ? 250 : 220 }, w);
 
-  function chapterHead(ch, eyebrow, title, lede, label) {
-    return `<header class="ins-ch-hd"><div class="ins-ch-top"><span class="eyebrow">${esc(eyebrow)}</span></div><h2 class="h2">${title}</h2>${lede ? `<p class="lede">${esc(lede)}</p>` : ''}</header>`;
+  /* Chapter opener: chapter number and title on the left, the chapter's headline number on the right */
+  function chapterHead(n, title, o) {
+    o = o || {};
+    return `<header class="ins-ch-hd">
+      <div class="ins-ch-ttl">${n ? `<span class="ins-ch-n" aria-hidden="true">${esc(n)}</span>` : ''}<div><span class="eyebrow">${esc(o.eyebrow || 'Chapter ' + n)}</span><h2 class="h2">${title}</h2>${o.lede ? `<p class="lede">${esc(o.lede)}</p>` : ''}</div></div>
+      ${o.v ? `<div class="ins-ch-stat"><span class="ins-ch-v">${esc(o.v)}</span><span class="ins-ch-l">${esc(o.l)}</span>${o.more ? `<span class="ins-ch-more">${o.more}</span>` : ''}</div>` : ''}
+    </header>`;
   }
   function figure(o) {
     return `<figure class="card ins-fig ${o.cls || ''}">
@@ -519,16 +519,18 @@
       ${o.foot || ''}
     </figure>`;
   }
-  /* Citation block (report and Rate Index): suggested text, copy button, methodology link, one honest note */
+  /* Citation block (report and Rate Index): suggested text, copy button, one note.
+     The "[Prototype edition, illustrative figures]" tag and the note are reviewer-only (data-proto). */
+  const citeHtml = (t) => esc(t).replace(/ \[Prototype edition, illustrative figures\]/, '<span data-proto> [Prototype edition, illustrative figures]</span>');
   function citeBlock(o) {
     return `<div class="ins-cite" id="${esc(o.id)}">
       <div class="ins-cite-hd"><span class="label">${esc(o.label)}</span></div>
-      <p class="ins-cite-t" id="${esc(o.id)}-text" ${o.attr || ''}>${esc(o.text)}</p>
+      <p class="ins-cite-t" id="${esc(o.id)}-text" ${o.attr || ''}>${citeHtml(o.text)}</p>
       <div class="row ins-cite-a">
         <button type="button" class="btn btn-sm" data-act="ins-copy" data-target="${esc(o.id)}-text" data-src="${esc(o.src)}">${icon('copy')}Copy citation</button>
         ${o.link || ''}
       </div>
-      <p class="tiny muted">${esc(o.note)}</p>
+      <p class="tiny muted" data-proto>${esc(o.note)}</p>
     </div>`;
   }
   function chLink(o) {
@@ -541,11 +543,18 @@
     const f = { roleCategories: [rep.cat], revenueRange: rep.rev ? [rep.rev] : [] };
     return browseBtn('See operators', f, 'report_ch2', 'btn', 'data-ins-ch2-go');
   }
+  const ch3Link = () => browseBtn('See operators', { hoursPerMonth: [rep.hours] }, 'report_ch3', 'act', 'data-ins-ch3-go');
   function catSelect(value, change) {
     return `<select class="select ins-inline-select" aria-label="${esc(F.roleCategory.label)}" data-change="${esc(change)}">${F.roleCategory.options.map((o) => `<option value="${esc(o.v)}" ${o.v === value ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select>`;
   }
   const ch2RevText = () => (rep.rev ? `for ${revLabel(rep.rev)} companies` : 'for companies of any revenue');
   const ch2Adj = () => (rep.rev ? `Adjusted for ${revLabel(rep.rev)} companies with the Rate Index multiplier (×${ins.mult(rep.rev).toFixed(2)}).` : 'All revenue ranges. Pick one to adjust with the Rate Index multiplier.');
+  // "$27,000+" in the stored table reads "$27k+", the house money format
+  const kStr = (s) => String(s).replace(/\$([\d,]{4,})/g, (m, d) => RN.fmt.k(+d.replace(/,/g, '')));
+  // Sentences that only say the figures are illustrative are reviewer-only
+  const protoSentences = (p) => esc(p).replace(/([^.]*\billustrative\b[^.]*\.)/gi, '<span data-proto>$1</span>');
+  // Wide screens read the report with a chapter rail on the left
+  const railMode = () => window.matchMedia('(min-width: 1100px)').matches;
 
   function report() {
     repDefaults();
@@ -560,13 +569,16 @@
     const mk = RN.model.market();
     const net = liveOps();
     const netN = net.length || 1;
-    const availNow = net.filter((o) => o.avail && o.avail.key === 'available_now');
     const dsMax = Math.max(...R.intent.map((r) => Math.max(r.v, ((mk.catSupply[r.cat] || 0) / netN) * 100)), 1);
     const outcomes = R.outcomes;
+    const di = R.demandIndex;
+    const topHours = ins.hoursRows().slice().sort((a, b) => b.v - a.v)[0];
+    const revOps = R.intent.find((r) => r.cat === 'revenue_operations') || R.intent[0];
+    const src0 = R.sources[0];
     // Fractional row priced from the Rate Index (Sales Leadership median at 40 hrs / month), shown as the
     // rate itself (the price a client pays), so it matches #rates, Blueprints and the guides
     const vp = ins.range('sales_leadership', null, '40');
-    const fvf = R.fracVsFull.map((r, i) => (i === 0 ? [`Fractional VP of Sales, ${hoursLabel('40')}`, usd(vp.mid), r[2], r[3]] : r));
+    const fvf = R.fracVsFull.map((r, i) => (i === 0 ? [`Fractional VP of Sales, ${hoursLabel('40')}`, RN.fmt.k(vp.mid), r[2], r[3]] : [r[0], kStr(r[1]), r[2], r[3]]));
     // One fieldwork line, read from the methodology so the cover, citation and method never disagree
     const fieldwork = ((R.methodology[0] || '').match(/fielded (.+?\d{4})/) || [])[1] || R.fieldwork;
     const citation = `Revenue Nomad Research. (${asOfDate().getFullYear()}). The State of Fractional GTM ${R.year} [Prototype edition, illustrative figures]. Survey of ${R.sample.operators} fractional GTM operators and ${R.sample.companies} hiring companies, fieldwork ${fieldwork}. https://www.revenuenomad.com/research/state-of-fractional-gtm-${R.year}`;
@@ -576,145 +588,155 @@
       <span class="ins-rings" aria-hidden="true"><i></i><i></i></span>
       <div class="wrap ins-cover-in">
         <div class="ins-cover-main">
-          <div class="ins-cover-top"><span class="eyebrow">Revenue Nomad Research · Prototype edition</span>${illus()}</div>
+          <div class="ins-cover-top"><span class="eyebrow">Revenue Nomad Research</span>${illus('Prototype edition, illustrative figures')}</div>
           <h1 class="h-hero ins-cover-h">${esc(R.title)} <span class="serif">${esc(R.year)}</span></h1>
           <p class="ins-cover-lede">${esc(R.lede)}</p>
           <div class="row ins-cover-cta">
-            <button type="button" class="btn btn-leaf btn-lg" data-act="ins-jump" data-to="ins-sum">Read the summary${icon('arrow')}</button>
+            <button type="button" class="btn btn-leaf btn-lg" data-act="ins-jump" data-to="ins-sum">Read the key findings${icon('arrow')}</button>
             <button type="button" class="btn btn-line btn-lg" data-act="ins-jump" data-to="ins-cite">${icon('quote')}Cite this report</button>
           </div>
+          <dl class="ins-meta">
+            <div><dt>Operators surveyed</dt><dd>${RN.fmt.int(R.sample.operators)}</dd></div>
+            <div><dt>Hiring companies surveyed</dt><dd>${RN.fmt.int(R.sample.companies)}</dd></div>
+            <div><dt>Operator profiles</dt><dd>${esc(MK().network.operators)} <small>(${RN.fmt.int(netN)} in this prototype)</small></dd></div>
+            <div><dt>Fieldwork</dt><dd>${esc(R.fieldwork)}</dd></div>
+          </dl>
         </div>
-        <button type="button" class="ins-cbook" data-act="ins-jump" data-to="ins-sum" aria-label="Start reading at the summary">
+        <button type="button" class="ins-cbook" data-act="ins-jump" data-to="ins-sum" aria-label="Start reading at the key findings">
           <span class="ins-cbook-sheet" aria-hidden="true"></span>
           <span class="ins-cbook-cover" aria-hidden="true">
             <span class="ins-cbook-k">Revenue Nomad Research</span>
-            <span class="ins-cbook-cols">${R.demandIndex.map((d, i) => `<i class="${/proj/i.test(d.l) ? 'p' : ''}" style="--h:${((d.v / Math.max(...R.demandIndex.map((x) => x.v))) * 100).toFixed(1)}%;--d:${i * 0.07}s"></i>`).join('')}</span>
+            <span class="ins-cbook-cols">${di.map((d, i) => `<i class="${/proj/i.test(d.l) ? 'p' : ''}" style="--h:${((d.v / Math.max(...di.map((x) => x.v))) * 100).toFixed(1)}%;--d:${i * 0.07}s"></i>`).join('')}</span>
             <span class="ins-cbook-y">${esc(R.year)}</span>
             <span class="ins-cbook-t">${esc(R.title)}</span>
             <span class="ins-cbook-m">${esc(R.sample.operators)} operators · ${esc(R.sample.companies)} companies surveyed</span>
           </span>
         </button>
-        <dl class="ins-meta">
-          <div><dt>Operators surveyed</dt><dd>${RN.fmt.int(R.sample.operators)}</dd></div>
-          <div><dt>Hiring companies surveyed</dt><dd>${RN.fmt.int(R.sample.companies)}</dd></div>
-          <div><dt>Operator profiles</dt><dd>${esc(MK().network.operators)} <small>(${RN.fmt.int(netN)} in this prototype)</small></dd></div>
-          <div><dt>Fieldwork</dt><dd>${esc(R.fieldwork)}</dd></div>
-        </dl>
-        <p class="ins-cover-note">${icon('info')}<span>Survey fieldwork ${esc(fieldwork)}. <span data-proto>Prototype edition: every figure is illustrative, invented to show the shape of the published report. </span><button type="button" class="act" data-act="ins-jump" data-to="ins-method">Methodology and citation</button></span></p>
       </div>
     </header>
 
+    <div class="wrap ins-read">
     <nav class="ins-chapnav" aria-label="Report chapters">
-      <div class="wrap ins-chapnav-in">
-        ${CHAPTERS.map((c, i) => `<button type="button" class="ins-chap ${i === 0 ? 'on' : ''}" data-act="ins-jump" data-to="${c.id}" data-chap="${c.id}">${c.n && c.n !== 'Summary' ? `<span class="num">${esc(c.n)}</span>` : ''}${esc(c.t)}</button>`).join('')}
+      <div class="ins-chapnav-in">
+        <span class="ins-rail-k label">Contents</span>
+        ${CHAPTERS.map((c, i) => `<button type="button" class="ins-chap ${i === 0 ? 'on' : ''}" data-act="ins-jump" data-to="${c.id}" data-chap="${c.id}">${c.n && c.n !== 'Summary' ? `<span class="num">${esc(c.n)}</span>` : '<span class="num ins-chap-dot" aria-hidden="true"></span>'}<span class="ins-chap-t">${esc(c.t)}</span></button>`).join('')}
       </div>
       <span class="ins-prog" aria-hidden="true"><i></i></span>
+      <div class="ins-rail-ft">
+        <button type="button" class="act" data-act="ins-jump" data-to="ins-cite">${icon('quote')}Cite this report</button>
+        <button type="button" class="act" data-act="ins-copy-link" data-path="report">${icon('link')}Copy link</button>
+      </div>
     </nav>
 
-    <section class="wrap-narrow ins-ch" id="ins-sum">
-      ${chapterHead('sum', 'Executive summary', 'Companies now plan fractional hires on purpose.', 'Six findings that matter if you are deciding whether to hire a fractional leader, or deciding what to charge as one.', true)}
-      <div class="stats-row ins-sumstats" style="--cols:3">
-        ${sum.map((s) => `<button type="button" class="stat ins-sumstat" data-act="ins-jump" data-to="${s.to}"><span class="stat-v">${esc(s.v)}</span><span class="stat-l">${esc(s.l)}</span><span class="ins-sumgo">See the chart${icon('arrow')}</span></button>`).join('')}
+    <div class="ins-main">
+    <section class="ins-ch ins-sum" id="ins-sum">
+      ${chapterHead('', 'Companies now plan fractional hires on purpose.', { eyebrow: 'Key findings' })}
+      <ol class="ins-sumgrid">
+        ${sum.map((s) => `<li><button type="button" class="ins-sumstat" data-act="ins-jump" data-to="${s.to}"><span class="ins-sum-v">${esc(s.v)}</span><span class="ins-sum-l">${esc(s.l)}</span><span class="ins-sumgo">Chapter ${esc(s.to.replace('ins-ch', ''))}${icon('arrow')}</span></button></li>`).join('')}
+      </ol>
+    </section>
+
+    <section class="ins-ch" id="ins-ch1">
+      ${chapterHead('1', 'Who is hiring, and what triggered it', { v: `${(di[3].v / 100).toFixed(1)}x`, l: `Fractional GTM demand in ${di[3].l} against 2023, up ${pctChange(di[3].v, di[2].v)}% on ${di[2].l}` })}
+      <div class="ins-grid2">
+        ${figure({ title: 'Why companies bring in a fractional leader', sub: 'Share of hiring companies, primary trigger', chart: 'triggers', hi: 'Top trigger', take: 'The biggest trigger is a founder deciding <em>they should no longer be the sales leader.</em>',
+          foot: `<p class="ins-fig-go">${browseBtn('Browse Sales Leadership', { roleCategories: ['sales_leadership'] }, 'report_ch1', 'act')}</p>` })}
+        ${figure({ title: 'Growth in fractional GTM demand', sub: 'Indexed, 2023 = 100. Job post scan plus stated hiring intent', chart: 'demand',
+          body: `<div class="ins-est-legend tiny ins-fig-legend"><span><i class="m sq"></i>Measured</span><span><i class="b sq"></i>2027 projection</span></div>` })}
       </div>
     </section>
 
-    <section class="wrap-narrow ins-ch" id="ins-ch1">
-      ${chapterHead('1', 'Chapter 1', 'Who is hiring, and what triggered it')}
-      ${figure({ title: 'Why companies bring in a fractional leader', sub: 'Share of hiring companies, primary trigger', chart: 'triggers', hi: 'Top trigger', take: 'The biggest trigger is a founder deciding <em>they should no longer be the sales leader.</em>',
-        foot: `<p class="ins-fig-more ins-fig-go"><span>The most common trigger is the first sales leadership hire. Start with operators who have built that seat before.</span>${browseBtn('Browse Sales Leadership', { roleCategories: ['sales_leadership'] }, 'report_ch1', 'act')}</p>` })}
-      ${figure({ title: 'Growth in fractional GTM demand', sub: 'Indexed, 2023 = 100. Job post scan plus stated hiring intent', chart: 'demand', cls: 'ins-fig-bleed',
-        body: `<div class="ins-est-legend tiny ins-fig-legend"><span><i class="m sq"></i>Measured</span><span><i class="b sq"></i>2027 projection</span><span>Up ${pctChange(R.demandIndex[3].v, R.demandIndex[2].v)}% in 2026, ${(R.demandIndex[3].v / 100).toFixed(1)}x the 2023 level</span></div>` })}
-    </section>
-
-    <section class="wrap-narrow ins-ch" id="ins-ch2">
-      ${chapterHead('2', 'Chapter 2', 'What it costs', 'The question every hiring company asks first and every operator asks quietly.')}
-      ${figure({ title: 'Median hourly rate by role category', sub: 'Rate Index medians, the hourly rates operators list',
-        controls: `<div class="ins-ctl"><span class="label">${esc(F.companyRevenue.label)}</span><div data-deselect>${RN.w.control('companyRevenue', rep.rev || '', { name: 'ins-rep-rev', id: 'ins-rep-rev', change: 'ins-rep-rev' })}</div><p class="tiny muted" data-ins-adj>${esc(ch2Adj())}</p></div>`,
-        chart: 'rateCat', hi: 'Picked role category',
-        body: pos && pos.rate ? `<p class="note info ins-you-note">${icon('user')}<span>Your rate of <b>${hr(pos.rate)}/hr</b> sits at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}. <a href="#studio.positioning">See your positioning in Studio</a></span></p>`
-          : co ? `<p class="note info ins-you-note" data-ins-co-note ${rep.rev === co.revenueRange ? '' : 'hidden'}>${icon('building')}<span>Filtered to ${esc(co.name)}’s revenue range. Tap it again to see all revenue ranges.</span></p>` : '' })}
-      ${figure({ title: 'Median hourly rate by company revenue range', sub: 'Same role mix. Larger companies pay more and scope more hours', chart: 'rateRev', hi: 'Your revenue range',
-        take: `Companies at ${esc(revLabel(hi.range))} pay ${stagePremium}% more per hour than companies ${esc(revLabel(lo.range).replace(/^Under/, 'under'))} for the same role. <em>Company stage sets the rate more than the title does.</em>` })}
-      ${figure({ title: 'Fractional vs full time, monthly cost', sub: 'For a VP of Sales. The fractional row uses the Rate Index median',
+    <section class="ins-ch" id="ins-ch2">
+      ${chapterHead('2', 'What it costs', { v: `${stagePremium}%`, l: `More per hour at ${revLabel(hi.range)} than ${revLabel(lo.range).replace(/^Under/, 'under')}, for the same role` })}
+      <div class="ins-grid2">
+        ${figure({ title: 'Median hourly rate by role category', sub: 'Rate Index medians, the hourly rates operators list',
+          controls: `<div class="ins-ctl"><span class="label">${esc(F.companyRevenue.label)}</span><div data-deselect>${RN.w.control('companyRevenue', rep.rev || '', { name: 'ins-rep-rev', id: 'ins-rep-rev', change: 'ins-rep-rev' })}</div><p class="tiny muted" data-ins-adj>${esc(ch2Adj())}</p></div>`,
+          chart: 'rateCat', hi: 'Picked role category',
+          body: pos && pos.rate ? `<p class="note info ins-you-note">${icon('user')}<span>Your rate of <b>${hr(pos.rate)}/hr</b> sits at about the ${esc(ordinal(pos.pctile))} percentile for ${esc(catLabel(pos.op.catKey))}. <a href="#studio.positioning">See your positioning in Studio</a></span></p>`
+            : co ? `<p class="note info ins-you-note" data-ins-co-note ${rep.rev === co.revenueRange ? '' : 'hidden'}>${icon('building')}<span>Filtered to ${esc(co.name)}’s revenue range. Tap it again to see all revenue ranges.</span></p>` : '' })}
+        <div class="ins-stack">
+          ${figure({ title: 'Median hourly rate by company revenue range', sub: 'Same role mix. Larger companies pay more and scope more hours', chart: 'rateRev', hi: 'Your revenue range',
+          take: '<em>Company stage sets the rate more than the title does.</em>' })}
+        ${chLink({ cls: 'ins-chlink-tint', label: 'Your shortlist', text: `Browse ${catSelect(rep.cat, 'ins-rep-cat')} operators <span data-ins-ch2-rev>${esc(ch2RevText())}</span>.`, primary: ch2Link(),
+        secondary: `<a class="act" href="#rates">${icon('sliders')}Price it in the Rate Index</a>` })}
+        </div>
+      </div>
+      ${figure({ cls: 'ins-fig-wide', title: 'Fractional vs full time, monthly cost', sub: 'For a VP of Sales. The fractional row uses the Rate Index median rate',
         body: `<div class="tbl-wrap"><table class="tbl ins-tbl ins-tbl-stack"><thead><tr><th>Option</th><th class="r">Monthly cost</th><th>Time to start</th><th>Exit cost</th></tr></thead>
-          <tbody>${fvf.map((r, i) => `<tr class="${i === 0 ? 'ins-tr-hi' : ''}"><td class="ins-td-h">${esc(r[0])}</td><td class="r num" data-l="Monthly cost"><b>${esc(r[1])}</b></td><td data-l="Time to start">${esc(r[2])}</td><td data-l="Exit cost">${esc(r[3])}</td></tr>`).join('')}</tbody></table></div>
-          <p class="tiny muted ins-fig-foot">The fractional row is the Rate Index median rate at ${esc(hoursLabel('40'))}.</p>
-          <p class="ins-fig-more"><a class="act" href="#rates">${icon('sliders')}Run the numbers for your company in the Rate Index</a></p>` })}
-      ${chLink({ cls: 'ins-chlink-tint', label: 'Your shortlist', text: `Browse ${catSelect(rep.cat, 'ins-rep-cat')} operators <span data-ins-ch2-rev>${esc(ch2RevText())}</span>.`, primary: ch2Link() })}
+          <tbody>${fvf.map((r, i) => `<tr class="${i === 0 ? 'ins-tr-hi' : ''}"><td class="ins-td-h">${esc(r[0])}</td><td class="r num" data-l="Monthly cost"><b>${esc(r[1])}</b></td><td data-l="Time to start">${esc(r[2])}</td><td data-l="Exit cost">${esc(r[3])}</td></tr>`).join('')}</tbody></table></div>` })}
     </section>
 
     <section class="night ins-band ins-ch" id="ins-ch3">
-      <div class="wrap-narrow">
-        ${chapterHead('3', 'Chapter 3', 'How engagements are scoped')}
-        ${figure({ title: F.hoursPerMonth.label, sub: `Share of engagements by hours a month, cut by the ${F.hoursPerMonth.label} field operators fill in`, chart: 'hours', cls: 'ins-fig-night', hi: 'Selected shape',
+      ${chapterHead('3', 'How engagements are scoped', { v: `${topHours.v}%`, l: `Of engagements run at ${hoursLabel(topHours.code)}, the most common shape` })}
+      <div class="ins-grid-3">
+        ${figure({ title: F.hoursPerMonth.label, sub: 'Share of engagements by hours a month', chart: 'hours', cls: 'ins-fig-night ins-g3-a', hi: 'Selected shape',
           controls: `<div class="ins-ctl"><span class="label">Highlight a shape</span>${RN.w.control('hoursPerMonth', rep.hours, { name: 'ins-rep-hours', id: 'ins-rep-hours', change: 'ins-rep-hours' })}</div>`,
-          take: `${esc(String(summaryStats()[1].v))} of engagements are scoped under ${esc(hoursLabel('40'))}. <em>Most companies buy a senior leader in slices.</em>` })}
-        <div class="ins-two">
-          ${figure({ title: 'Initial term length', sub: 'Share of engagements, by the Initial term field', chart: 'term', cls: 'ins-fig-night' })}
-          ${figure({ title: 'How the first term ends', sub: 'Share of engagements', cls: 'ins-fig-night',
-            body: `<ul class="ins-outcomes">${outcomes.map((o) => `<li><span class="ins-outcome-v">${esc(o.v)}</span><span>${esc(o.l)}</span></li>`).join('')}</ul>` })}
-        </div>
-        ${chLink({ label: 'Find this shape', text: `Browse operators with at least <b data-ins-ch3-h>${esc(hoursLabel(rep.hours))}</b> available.`, primary: browseBtn('See operators', { hoursPerMonth: [rep.hours] }, 'report_ch3', 'btn btn-leaf', 'data-ins-ch3-go') })}
+          take: '<em>Most companies buy a senior leader in slices.</em>',
+          foot: `<p class="ins-fig-go"><span>Operators with at least <b data-ins-ch3-h>${esc(hoursLabel(rep.hours))}</b> available</span>${ch3Link()}</p>` })}
+        ${figure({ title: 'Initial term length', sub: 'Share of engagements', chart: 'term', cls: 'ins-fig-night' })}
+        ${figure({ title: 'How the first term ends', sub: 'Share of engagements', cls: 'ins-fig-night',
+          body: `<ul class="ins-outcomes">${outcomes.map((o) => `<li><span class="ins-outcome-v">${esc(o.v)}</span><span>${esc(o.l)}</span></li>`).join('')}</ul>` })}
       </div>
     </section>
 
-    <section class="wrap-narrow ins-ch" id="ins-ch4">
-      ${chapterHead('4', 'Chapter 4', 'Which roles are in demand')}
-      ${figure({ title: 'Hiring intent by role category, next 12 months', sub: 'Share of hiring companies. Sellers were not part of this question', chart: 'intent', hi: 'Fastest riser',
-        take: 'Sales leadership still leads, but Revenue Operations is the fastest riser. Companies are hiring <em>the systems person before the second sales leader.</em>' })}
-      ${figure({ cls: 'ins-fig-bleed', title: 'Demand vs supply on Revenue Nomad', sub: `Hiring intent next to each role’s share of the network: ${netText()}`,
+    <section class="ins-ch" id="ins-ch4">
+      ${chapterHead('4', 'Which roles are in demand', { v: `${revOps.v}%`, l: `Of hiring companies plan to hire ${catLabel(revOps.cat)} in the next 12 months, the biggest gap against who is on the network` })}
+      <div class="ins-grid2 ins-grid-aside">
+        ${figure({ title: 'Hiring intent by role category, next 12 months', sub: 'Share of hiring companies. Sellers were not part of this question', chart: 'intent', hi: 'Fastest riser',
+          take: 'Sales leadership still leads, but Revenue Operations is the fastest riser. Companies are hiring <em>the systems person before the second sales leader.</em>' })}
+        <blockquote class="ins-quote"><span class="ins-quote-ic" aria-hidden="true">${icon('quote')}</span><p>“${esc(R.quote.text)}”</p><footer class="ins-quote-by"><span class="ins-quote-mark" aria-hidden="true">${icon('building')}</span><span class="ins-quote-who"><cite>${esc(R.quote.by.split(',')[0])}</cite><span>${esc(R.quote.by.split(',').slice(1).join(',').trim())}</span></span>${illus('Sample quote')}</footer></blockquote>
+      </div>
+      ${figure({ cls: 'ins-fig-wide', title: 'Demand vs supply on Revenue Nomad', sub: `Hiring intent next to each role’s share of the network: ${netText()}`,
         body: `<div class="tbl-wrap"><table class="tbl ins-tbl ins-ds"><thead><tr><th>${esc(F.roleCategory.label)}</th><th>Hiring intent</th><th>Share of operators</th><th><span class="sr-only">Browse</span></th></tr></thead><tbody>
           ${R.intent.map((r) => { const s = (mk.catSupply[r.cat] || 0) / netN * 100; const gap = r.v - s >= 4; return `<tr>
-            <td><div class="ins-ds-name"><span class="row-nw" style="--gap:8px">${RN.ui.catDot(r.cat)}${esc(catLabel(r.cat))}</span>${gap ? '<span class="pill pill-warn ins-gap">Undersupplied</span>' : ''}</div></td>
+            <td><div class="ins-ds-name"><span class="row-nw" style="--gap:8px">${RN.ui.catDot(r.cat)}${esc(catLabel(r.cat))}</span>${gap ? '<span class="pill pill-warn">Undersupplied</span>' : ''}</div></td>
             <td><span class="ins-cellbar"><span class="meter"><i style="width:${Math.min(100, (r.v / dsMax) * 100).toFixed(1)}%"></i></span><b class="num">${r.v}%</b></span></td>
             <td><span class="ins-cellbar"><span class="meter ins-meter-mu"><i style="width:${Math.min(100, (s / dsMax) * 100).toFixed(1)}%"></i></span><span class="num">${Math.round(s)}%</span></span></td>
             <td class="r"><button type="button" class="act" data-act="ins-browse" data-src="report_ch4_table" data-f="${jsonAttr({ roleCategories: [r.cat] })}" aria-label="Browse ${esc(catLabel(r.cat))} operators"><span class="ins-hide-s">Browse</span>${icon('chev-right')}</button></td></tr>`; }).join('')}
-          </tbody></table></div>
-          <p class="ins-fig-more ins-fig-go"><span>Revenue Operations has the biggest gap between what companies plan to hire and who is on the network.</span><span class="row-nw" style="--gap:18px"><a class="act" href="#library">Fit Tag Library</a>${browseBtn('Browse Revenue Operations', { roleCategories: ['revenue_operations'] }, 'report_ch4', 'act')}</span></p>` })}
-      <blockquote class="ins-quote"><span class="ins-quote-ic" aria-hidden="true">${icon('quote')}</span><p>“${esc(R.quote.text)}”</p><footer class="ins-quote-by"><span class="ins-quote-mark" aria-hidden="true">${icon('building')}</span><span class="ins-quote-who"><cite>${esc(R.quote.by.split(',')[0])}</cite><span>${esc(R.quote.by.split(',').slice(1).join(',').trim())}</span></span>${illus('Sample quote')}</footer></blockquote>
+          </tbody></table></div>` })}
     </section>
 
-    <section class="wrap-narrow ins-ch" id="ins-ch5">
-      ${chapterHead('5', 'Chapter 5', 'What separates the operators who get rehired', '', true)}
-      <div class="stats-row" style="--cols:3">
-        <div class="stat"><span class="stat-v">${esc(sum[3].v)}</span><span class="stat-l">Rehire rate with 3+ verified company reviews</span></div>
-        <div class="stat"><span class="stat-v">${esc(R.hindsight[0][2])}</span><span class="stat-l">Of hiring companies put stage and deal-size experience in their top three</span></div>
-        <div class="stat"><span class="stat-v">3 of 4</span><span class="stat-l">Top-rated operators had solved the same problem at the same stage before</span></div>
-      </div>
-      ${figure({ title: 'What hiring companies say mattered most in hindsight', sub: 'Share of hiring companies',
-        body: `<div class="tbl-wrap"><table class="tbl ins-tbl ins-tbl-stack ins-hind"><thead><tr><th>Factor</th><th class="r">Ranked first</th><th class="r">In top three</th></tr></thead><tbody>
-          ${R.hindsight.map((r) => `<tr><td class="ins-td-h">${esc(r[0])}</td><td class="r num" data-l="Ranked first">${esc(r[1])}</td><td class="r num" data-l="In top three"><span class="ins-cellbar ins-cellbar-r"><span class="meter"><i style="width:${parseFloat(r[2]) || 0}%"></i></span><b>${esc(r[2])}</b></span></td></tr>`).join('')}</tbody></table></div>`,
-        take: 'Big logos ranked last. <em>Fit and proof beat fame.</em>' })}
-      <div class="ins-proof">
-        ${faces(net, 5, { size: 'ava-md', noMore: true, cls: 'ins-proof-faces' })}
-        <div class="ins-proof-t"><span class="label">Proof, not logos</span><p>The Reputation Index measures what companies said mattered: company reviews, verified focus areas and repeat engagements.</p></div>
-        <div class="row ins-proof-a"><a class="btn btn-line" href="#levels">How the score works</a>${browseBtn('Top by Reputation Index', {}, 'report_ch5', 'btn', 'data-sort="ris"')}</div>
+    <section class="ins-ch" id="ins-ch5">
+      ${chapterHead('5', 'What separates the operators who get rehired', { v: R.hindsight[0][2], l: 'Of hiring companies put stage and deal-size experience in their top three', more: '<b>3 of 4</b> top-rated operators had solved the same problem at the same stage before' })}
+      <div class="ins-grid2 ins-grid-aside ins-grid-top">
+        ${figure({ title: 'What hiring companies say mattered most in hindsight', sub: 'Share of hiring companies',
+          body: `<div class="tbl-wrap"><table class="tbl ins-tbl ins-tbl-stack ins-hind"><thead><tr><th>Factor</th><th class="r">Ranked first</th><th class="r">In top three</th></tr></thead><tbody>
+            ${R.hindsight.map((r) => `<tr><td class="ins-td-h">${esc(r[0])}</td><td class="r num" data-l="Ranked first">${esc(r[1])}</td><td class="r num" data-l="In top three"><span class="ins-cellbar ins-cellbar-r"><span class="meter"><i style="width:${parseFloat(r[2]) || 0}%"></i></span><b>${esc(r[2])}</b></span></td></tr>`).join('')}</tbody></table></div>`,
+          take: 'Big logos ranked last. <em>Fit and proof beat fame.</em>' })}
+        <aside class="ins-proof">
+          <span class="label">Proof, not logos</span>
+          <p>The Reputation Index measures what companies said mattered: company reviews, verified focus areas and repeat engagements.</p>
+          <div class="ins-proof-a">${browseBtn('Top by Reputation Index', {}, 'report_ch5', 'btn btn-sm', 'data-sort="ris"')}<a class="act" href="#levels">How the score works</a></div>
+        </aside>
       </div>
     </section>
 
-    <section class="wrap-narrow ins-ch" id="ins-ch6">
-      ${chapterHead('6', 'Chapter 6', 'The operator side', 'How fractional leaders find work, and how full their plate is.')}
-      <div class="ins-two">
+    <section class="ins-ch" id="ins-ch6">
+      ${chapterHead('6', 'The operator side', { v: `${src0.v}%`, l: `Of operators’ last engagements came from “${src0.l}”, the most common source` })}
+      <div class="ins-grid2">
         ${figure({ title: 'Where the last engagement came from', sub: 'Operators', chart: 'sources', hi: 'Revenue Nomad' })}
         ${figure({ title: 'Concurrent companies', sub: 'Operators, today', chart: 'concurrent', hi: 'Most common' })}
       </div>
       <p class="ins-take ins-take-solo">Two thirds of work still comes through personal networks. <em>The market is large, fragmented and hard to see into,</em> which is why rate and demand data has been guesswork until now.</p>
-      <p class="ins-op-line">${icon('user')}<span>Operators get found here without a referral too: open profiles, verified proof and a Studio that shows who viewed you and why. <a class="act" href="#operators">For operators${icon('arrow')}</a></span></p>
     </section>
 
-    <section class="wrap-narrow ins-ch ins-method" id="ins-method">
-      ${chapterHead('m', 'Methodology', 'How this was built')}
-      <div class="prose">${R.methodology.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
-      <div class="card-flat ins-fields">
-        <span class="label">Every cut uses the platform’s own fields</span>
-        <ul>${['roleCategory', 'companyRevenue', 'companyEmployees', 'hoursPerMonth', 'term', 'industry'].map((k) => `<li><b>${esc(RN.w.def(k).label)}</b><span>${RN.w.def(k).options ? esc(RN.w.def(k).options.length + ' options, the same as operator signup') : ''}</span></li>`).join('')}</ul>
+    <section class="ins-ch ins-method" id="ins-method">
+      ${chapterHead('', 'How this was built', { eyebrow: 'Methodology' })}
+      <div class="ins-grid2">
+        <div class="prose">${R.methodology.map((p) => `<p>${protoSentences(p)}</p>`).join('')}</div>
+        <div>
+          <div class="card-flat ins-fields">
+            <span class="label">Every cut uses the platform’s own fields</span>
+            <ul>${['roleCategory', 'companyRevenue', 'companyEmployees', 'hoursPerMonth', 'term', 'industry'].map((k) => `<li><b>${esc(RN.w.def(k).label)}</b><span>${RN.w.def(k).options ? esc(RN.w.def(k).options.length + ' options, the same as operator signup') : ''}</span></li>`).join('')}</ul>
+          </div>
+          ${citeBlock({ id: 'ins-cite', label: 'Cite this report', text: citation, src: 'report',
+            link: `<button type="button" class="btn btn-line btn-sm" data-act="ins-copy-link" data-path="report">${icon('link')}Copy link</button>`,
+            note: 'This shows how the published edition will be cited. The figures in this prototype edition are illustrative.' })}
+        </div>
       </div>
-      ${citeBlock({ id: 'ins-cite', label: 'Cite this report', text: citation, src: 'report',
-        link: `<button type="button" class="btn btn-line btn-sm" data-act="ins-copy-link" data-path="report">${icon('link')}Copy link</button>`,
-        note: 'This shows how the published edition will be cited. The figures in this prototype edition are illustrative.' })}
     </section>
 
-    <section class="wrap-narrow ins-end">
+    <section class="ins-end">
       <div class="panel-night ins-news">
         <div>
           <span class="eyebrow">Get the next edition</span>
@@ -722,11 +744,9 @@
         </div>
         ${newsSlot('report')}
       </div>
-      <div class="ins-end-row">
-        <div class="ins-end-who">${faces(availNow, 5, { size: 'ava-sm' })}<p class="body">See who is available now. Every profile is open, no login required.</p></div>
-        ${browseBtn('Browse available now', { availability: ['available_now'] }, 'report_end', 'btn btn-line')}
-      </div>
     </section>
+    </div>
+    </div>
     </article>`;
   }
 
@@ -748,7 +768,7 @@
     rep.hours = el.value || '40';
     redraw('hours');
     const t = RN.$('[data-ins-ch3-h]'); if (t) t.textContent = hoursLabel(rep.hours);
-    const go = RN.$('[data-ins-ch3-go]'); if (go) go.outerHTML = browseBtn('See operators', { hoursPerMonth: [rep.hours] }, 'report_ch3', 'btn btn-leaf', 'data-ins-ch3-go');
+    const go = RN.$('[data-ins-ch3-go]'); if (go) go.outerHTML = ch3Link();
   };
   // Copy a citation: navigator.clipboard.writeText inside the click, falling back to selecting the text
   RN.actions['ins-copy'] = (el) => {
@@ -766,18 +786,17 @@
   function reportScroll(root) {
     let raf = 0;
     const nav = RN.$('.ins-chapnav', root);
-    const bar = RN.$('.ins-prog i', root);
     const links = RN.$$('.ins-chap', root);
     let active = '';
     const update = () => {
       raf = 0;
       if (!nav || !document.body.contains(nav)) return;
-      const off = (document.getElementById('hdr') || { offsetHeight: 0 }).offsetHeight + nav.offsetHeight + 40;
+      const off = (document.getElementById('hdr') || { offsetHeight: 0 }).offsetHeight + (railMode() ? 0 : nav.offsetHeight) + 40;
       let cur = CHAPTERS[0].id;
       CHAPTERS.forEach((c) => { const s = document.getElementById(c.id); if (s && s.getBoundingClientRect().top - off <= 0) cur = c.id; });
       const art = RN.$('.ins-report', root);
       const max = art ? art.offsetHeight - window.innerHeight : document.documentElement.scrollHeight - window.innerHeight;
-      if (bar) bar.style.transform = `scaleX(${RN.clamp(window.scrollY / Math.max(1, max), 0, 1).toFixed(4)})`;
+      nav.style.setProperty('--p', RN.clamp(window.scrollY / Math.max(1, max), 0, 1).toFixed(4));
       if (cur !== active) {
         active = cur;
         links.forEach((l) => { const on = l.dataset.chap === cur; l.classList.toggle('on', on); if (on) l.setAttribute('aria-current', 'true'); else l.removeAttribute('aria-current'); });
@@ -860,13 +879,13 @@
     const maxX = ins.range(est.cat, '50m_plus', est.hours).mid || 1;
     return `<span class="label">Typical Engagement Range</span>
       <div class="ins-est-big num">${esc(g.label)}</div>
-      <p class="ins-est-mid">Median <b>${RN.fmt.k(g.mid)} a month</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
+      <p class="ins-est-mid">Median <b>${RN.fmt.k(g.mid)}/month</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
       <p class="ins-est-nofee">${icon('check-circle')}<span>${esc(NO_FEES)}</span></p>
       <div class="ins-est-scale">${rangeBar(r.p25, r.p50, r.p75, 450, { labels: true, cls: 'ins-rtrack-night' })}
         <div class="ins-est-legend tiny"><span><i class="b"></i>Middle 50% of rates (p25 to p75)</span><span><i class="m"></i>Median</span></div></div>
       <div class="ins-est-sizes"><span class="label">Median by company revenue</span>
-        <ul>${F.companyRevenue.options.map((o) => { const x = ins.range(est.cat, o.v, est.hours); return `<li class="${o.v === est.rev ? 'on' : ''}"><button type="button" data-act="ins-est-size" data-v="${esc(o.v)}" aria-pressed="${o.v === est.rev}"><span>${esc(o.l)}</span><span class="ins-est-sbar"><i style="width:${((x.mid / maxX) * 100).toFixed(1)}%"></i></span><b class="num">${usd(x.mid)}</b></button></li>`; }).join('')}</ul></div>
-      <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${usd(r500(g.mid * 3))} to ${usd(r500(g.mid * 6))}</b> for the first term.</p>
+        <ul>${F.companyRevenue.options.map((o) => { const x = ins.range(est.cat, o.v, est.hours); return `<li class="${o.v === est.rev ? 'on' : ''}"><button type="button" data-act="ins-est-size" data-v="${esc(o.v)}" aria-pressed="${o.v === est.rev}"><span>${esc(o.l)}</span><span class="ins-est-sbar"><i style="width:${((x.mid / maxX) * 100).toFixed(1)}%"></i></span><b class="num">${RN.fmt.k(x.mid)}</b></button></li>`; }).join('')}</ul></div>
+      <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${RN.fmt.k(r500(g.mid * 3))} - ${RN.fmt.k(r500(g.mid * 6))}</b> for the first term.</p>
       <p class="ins-est-basis small">Based on ${RN.fmt.int(r.n)} ${esc(catLabel(est.cat))} rates, adjusted for ${esc(revLabel(est.rev))} companies (×${r.m.toFixed(2)}).${low ? ` <span class="ins-low">${icon('info')}${esc(low)}</span>` : ''}</p>
       <div class="row ins-est-cta">
         <button type="button" class="btn btn-leaf" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(hand.f)}">${esc(hand.label)}${icon('arrow')}</button>
@@ -887,7 +906,7 @@
         return `<div class="ins-rrow ${routeCat === r.k ? 'on' : ''}" id="ins-rate-${esc(r.k)}" style="--cat:${F.catColor(r.k)}">
           <div class="ins-rrow-l">${RN.ui.catDot(r.k)}<span><a class="ins-rrow-name" href="#rates.${esc(r.k)}" aria-label="${esc(r.l)} rates">${esc(r.l)}</a><span class="tiny muted">n=${r.v.n}${low ? ' · directional' : ''}${routeCat === r.k ? ' · <b class="ins-pin">Pinned</b>' : ''}</span></span></div>
           <div class="ins-rrow-bar">${rangeBar(x.p25, x.p50, x.p75, max)}</div>
-          <div class="ins-rrow-v"><b class="num">${hr(x.p50)}</b><span class="tiny muted">${hr(x.p25)} to ${hr(x.p75)}</span></div>
+          <div class="ins-rrow-v"><b class="num">${hr(x.p50)}</b><span class="tiny muted">${RN.fmt.hrRange(Math.round(x.p25), Math.round(x.p75))}</span></div>
           <button type="button" class="act ins-rrow-go" data-act="ins-browse" data-src="rates_index" data-f="${jsonAttr(f)}" aria-label="See ${esc(r.l)} operators"><span class="ins-hide-s">See operators</span>${icon('chev-right')}</button>
         </div>`;
       }).join('')}`;
@@ -905,7 +924,7 @@
   const varValue = () => (varCustom && calc.variable !== '' ? Math.max(0, +calc.variable || 0) : varDefault());
   function varHelp() {
     const pct = varPct(est.cat);
-    return `<span>Illustrative default: ${pct}% of base, typical for ${esc(catLabel(est.cat))}.${varCustom ? ` <button type="button" class="act" data-act="ins-calc-var-reset">Reset to ${esc(usd(varDefault()))}</button>` : ' Type your own to change it.'}</span>`;
+    return `<span>Default: ${pct}% of base, typical for ${esc(catLabel(est.cat))}.${varCustom ? ` <button type="button" class="act" data-act="ins-calc-var-reset">Reset to ${esc(usd(varDefault()))}</button>` : ' Type your own to change it.'}</span>`;
   }
   // Keep the variable-pay default in step with the estimate's role and the base, unless the user typed their own
   function syncVar() {
@@ -938,7 +957,7 @@
     return bars([
       { label: `Fractional, ${hoursLabel(est.hours)}`, value: Math.round(c.frac), hi: true },
       { label: 'Full-time hire', value: Math.round(c.ft), muted: false },
-    ], { fmt: (n) => RN.fmt.usdK(n), label: 'Monthly cost, fractional vs full time' }, w);
+    ], { fmt: (n) => RN.fmt.k(r500(n)) + '/month', label: 'Monthly cost, fractional vs full time' }, w);
   };
   function calcOut() {
     const c = calcNums();
@@ -946,16 +965,16 @@
     const share = c.ft ? Math.round((c.frac / c.ft) * 100) : 0;
     return `<div class="ins-chart" data-ins-chart="calc"></div>
       <div class="ins-calc-sum">
-        <p class="body">${diff >= 0 ? `A fractional leader costs <b>${usd(r500(diff))} less per month</b>, about ${share}% of a full-time hire.` : `At these inputs a fractional leader costs <b>${usd(r500(-diff))} more per month</b> than a full-time hire.`}</p>
+        <p class="body">${diff >= 0 ? `A fractional leader costs <b>${RN.fmt.k(r500(diff))}/month less</b>, about ${share}% of a full-time hire.` : `At these inputs a fractional leader costs <b>${RN.fmt.k(r500(-diff))}/month more</b> than a full-time hire.`}</p>
         <div class="stats-row" style="--cols:2">
-          <div class="stat"><span class="stat-l">Next 12 months, fractional</span><span class="stat-v">${RN.fmt.usdK(r500(c.fracYear))}</span><span class="tiny muted">In the seat within 2 to 3 weeks</span></div>
-          <div class="stat"><span class="stat-l">Next 12 months, full time</span><span class="stat-v">${RN.fmt.usdK(r500(c.ftYear))}</span><span class="tiny muted">${c.months ? `Seat empty for ${RN.fmt.plural(c.months, 'month')} while you hire` : 'Starts right away'}</span></div>
+          <div class="stat"><span class="stat-l">Next 12 months, fractional</span><span class="stat-v">${RN.fmt.k(r500(c.fracYear))}</span><span class="tiny muted">In the seat within 2 to 3 weeks</span></div>
+          <div class="stat"><span class="stat-l">Next 12 months, full time</span><span class="stat-v">${RN.fmt.k(r500(c.ftYear))}</span><span class="tiny muted">${c.months ? `Seat empty for ${RN.fmt.plural(c.months, 'month')} while you hire` : 'Starts right away'}</span></div>
         </div>
         <dl class="ins-calc-break small">
-          <div><dt>Base plus benefits and taxes</dt><dd>${RN.fmt.k(r500(c.ftBase))} a month</dd></div>
-          <div><dt>Commission and bonus</dt><dd>${RN.fmt.k(r500(c.ftVar))} a month</dd></div>
-          <div><dt>Recruiting fee, spread over year one</dt><dd>${RN.fmt.k(r500(c.ftFee))} a month</dd></div>
-          <div><dt>Fractional, typical monthly rate</dt><dd>${RN.fmt.k(c.frac)} a month</dd></div>
+          <div><dt>Base plus benefits and taxes</dt><dd>${RN.fmt.k(r500(c.ftBase))}/month</dd></div>
+          <div><dt>Commission and bonus</dt><dd>${RN.fmt.k(r500(c.ftVar))}/month</dd></div>
+          <div><dt>Recruiting fee, spread over year one</dt><dd>${RN.fmt.k(r500(c.ftFee))}/month</dd></div>
+          <div><dt>Fractional, typical monthly rate</dt><dd>${RN.fmt.k(c.frac)}/month</dd></div>
         </dl>
         <p class="tiny muted">A fractional leader works ${esc(hoursLabel(est.hours))}. A full-time leader works about 170 hours a month. Compare the outcomes you need in those hours.</p>
       </div>`;
@@ -990,7 +1009,7 @@
           ${eyebrow}
           <h1 class="h1">What fractional ${esc(roleH(routeCat))} <span class="serif">charge by the hour.</span></h1>
           <p class="lede">The ${esc(catLabel(routeCat))} median and range on Revenue Nomad, adjusted for company revenue. Price the engagement below, then see who fits.</p>
-          <p class="ins-rates-illus">${illus('Illustrative figures')}</p>
+          <p class="ins-rates-illus" data-proto>${illus('Illustrative figures')}</p>
         </div>
         <div class="ins-rcard night" style="--cat:${F.catColor(routeCat)}">
           <span class="ins-rings" aria-hidden="true"><i></i><i></i></span>
@@ -1001,9 +1020,8 @@
           <div class="ins-est-legend tiny"><span><i class="b"></i>Middle 50% of rates</span><span><i class="m"></i>Median</span></div>
         </div>
       </div>
-      <div class="stats-row ins-rates-kpis" style="--cols:4">
-        <div class="stat"><span class="stat-l">Typical month at ${esc(hoursLabel('40'))}</span><span class="stat-v ins-stat-sm">${esc(g.label.replace(/ a month$/, ''))}</span><span class="tiny muted">${esc(revLabel('5m_20m'))} companies, the baseline</span></div>
-        <div class="stat"><span class="stat-l">Middle 50% of rates</span><span class="stat-v ins-stat-sm">${hr(c.p25)} to ${hr(c.p75)}</span><span class="tiny muted">p25 to p75 an hour</span></div>
+      <div class="stats-row ins-rates-kpis" style="--cols:3">
+        <div class="stat"><span class="stat-l">Typical month at ${esc(hoursLabel('40'))}</span><span class="stat-v ins-stat-sm">${esc(g.label.replace(/\/month$/, ''))}</span><span class="tiny muted">${esc(revLabel('5m_20m'))} companies, the baseline</span></div>
         <div class="stat"><span class="stat-l">Rates in this category</span><span class="stat-v">${RN.fmt.int(c.n)}</span><span class="tiny muted">${c.n < MIN_CELL ? `Under ${MIN_CELL}, read as directional` : `Of ${RN.fmt.int(nTotal)} in the index`}</span></div>
         <div class="stat"><span class="stat-l">Operators on the network</span><span class="stat-v">${RN.fmt.int(n)}</span><span class="tiny muted">${esc(catLabel(routeCat))}, in this prototype</span></div>
       </div>`;
@@ -1014,7 +1032,7 @@
           ${eyebrow}
           <h1 class="h1">What fractional GTM leaders <span class="serif">charge by the hour.</span></h1>
           <p class="lede">Medians and ranges for every role category on Revenue Nomad, adjusted for company revenue. Price an engagement before you post it, or check where your own rate sits.</p>
-          <p class="ins-rates-illus">${illus('Illustrative figures')}</p>
+          <p class="ins-rates-illus" data-proto>${illus('Illustrative figures')}</p>
         </div>
         <div class="ins-rcard night">
           <span class="ins-rings" aria-hidden="true"><i></i><i></i></span>
@@ -1024,8 +1042,7 @@
           <div class="ins-ri-cols ins-rcard-cols" role="img" aria-label="All-category median by quarter, ${esc(first.l)} ${hr(first.v)} to ${esc(last.l)} ${hr(last.v)}">${tr.map((t, i) => `<span class="${i === tr.length - 1 ? 'on' : ''}" style="--h:${Math.round(((t.v - first.v * 0.8) / (last.v - first.v * 0.8)) * 100)}%"><b>${hr(t.v)}</b><i></i><em>${esc(t.l)}</em></span>`).join('')}</div>
         </div>
       </div>
-      <div class="stats-row ins-rates-kpis" style="--cols:4">
-        <div class="stat"><span class="stat-l">Since ${esc(first.l)}</span><span class="stat-v">+${pctChange(last.v, first.v)}%</span><span class="tiny muted">${hr(first.v)} to ${hr(last.v)} an hour</span></div>
+      <div class="stats-row ins-rates-kpis" style="--cols:3">
         <div class="stat"><span class="stat-l">Rates in the index</span><span class="stat-v">${RN.fmt.int(nTotal)}</span><span class="tiny muted">Across ${F.roleCategory.options.length} role categories</span></div>
         <div class="stat"><span class="stat-l">Highest median</span><span class="stat-v">${hr(topCat.v.p50)}<small class="ins-unit">/hr</small></span><span class="tiny muted">${esc(catLabel(topCat.k))}</span></div>
         <div class="stat"><span class="stat-l">Lowest median</span><span class="stat-v">${hr(lowCat.v.p50)}<small class="ins-unit">/hr</small></span><span class="tiny muted">${esc(catLabel(lowCat.k))}</span></div>
@@ -1035,7 +1052,6 @@
   function rates() {
     estDefaults();
     const ri = RI();
-    const tr = ri.trend;
     const me = opMe();
     const pos = me ? RN.model.positioning(me.id) : null;
     const lowCats = Object.keys(ri.byCat).filter((k) => ri.byCat[k].n < MIN_CELL);
@@ -1056,7 +1072,7 @@
     </section>
 
     <section class="wrap ins-idx" id="ins-idx">
-      <div class="ins-sec-hd"><div><span class="eyebrow">The index</span><h2 class="h2">Hourly rates by role category</h2></div>${routeCat ? `<p class="small muted ins-pin-note"><span data-ins-pin-note>${esc(catLabel(routeCat))} is pinned to the top</span></p>` : ''}</div>
+      <div class="ins-sec-hd"><div><span class="eyebrow">The index</span><h2 class="h2">Hourly rates by role category</h2></div>${routeCat ? `<span class="pill pill-accent" data-ins-pin-note>${esc(catLabel(routeCat))} is pinned to the top</span>` : ''}</div>
       <div class="card ins-idx-card">
         <div class="ins-ctl"><span class="label">${esc(F.companyRevenue.label)}</span><div data-deselect>${RN.w.control('companyRevenue', idxRev || '', { name: 'ins-idx-rev', id: 'ins-idx-rev', change: 'ins-idx-rev' })}</div><p class="tiny muted" data-ins-idx-cap>${esc(idxCaption())}</p></div>
         <div class="ins-rrows" data-ins-idx>${idxRows()}</div>
@@ -1068,15 +1084,9 @@
     </section>
 
     <section class="wrap ins-rates-2">
-      <div class="grid g-2">
-        <figure class="card ins-fig">
-          <figcaption class="ins-fig-hd"><div><h3 class="h4">All-category median by quarter</h3><p class="sub">Hourly, every role category blended</p></div></figcaption>
-          <div class="ins-chart" data-ins-chart="trend"></div>
-          <div class="ins-qoq"><span class="label">Quarter over quarter</span>
-            <ul>${tr.slice(1).map((t, i) => `<li><span>${esc(tr[i].l)} to ${esc(t.l)}</span>${RN.ui.delta(t.v, tr[i].v)}<b class="num">+${hr(t.v - tr[i].v)}</b></li>`).join('')}</ul></div>
-        </figure>
-        <div class="card ins-how" id="ins-rates-method">
-          <h3 class="h4">How the Rate Index works</h3>
+      <div class="ins-rates-ref">
+        <details class="card ins-how" id="ins-rates-method">
+          <summary><h2 class="h4">How the Rate Index works</h2><span class="tiny muted">Sources, ranges and the company revenue multipliers</span>${icon('chev-down')}</summary>
           <ul class="ins-how-list">
             <li><b>Sources.</b> Hourly rates operators list on their profiles (claimed), rates from company-verified engagements (verified), and the State of Fractional GTM survey (survey).</li>
             <li><b>Median and range.</b> The median is the middle rate. The range covers the middle half of rates, from the 25th to the 75th percentile.</li>
@@ -1088,11 +1098,11 @@
             ${F.companyRevenue.options.map((o) => `<tr class="${o.v === '5m_20m' ? 'ins-tr-hi' : ''}"><td>${esc(o.l)}${o.v === '5m_20m' ? ' <span class="tiny muted">baseline</span>' : ''}</td><td class="r num">×${ins.mult(o.v).toFixed(2)}</td></tr>`).join('')}
           </tbody></table></div>
           <button type="button" class="act ins-how-more" data-act="ins-report-ch" data-ch="ins-method">Survey methodology in the 2027 report${icon('arrow')}</button>
-        </div>
+        </details>
+        ${citeBlock({ id: 'ins-rcite', label: 'Cite the Rate Index', text: rateCitation(), src: 'rates', attr: 'data-ins-rcite',
+          link: `<button type="button" class="btn btn-line btn-sm" data-act="ins-copy-link" data-path="${routeCat ? 'rates.' + esc(routeCat) : 'rates'}">${icon('link')}Copy link</button>`,
+          note: 'This shows how the published Rate Index will be cited. The figures in this prototype are illustrative.' })}
       </div>
-      ${citeBlock({ id: 'ins-rcite', label: 'Cite the Rate Index', text: rateCitation(), src: 'rates', attr: 'data-ins-rcite',
-        link: `<button type="button" class="btn btn-line btn-sm" data-act="ins-jump" data-to="ins-rates-method">${icon('book')}Methodology</button>`,
-        note: 'This shows how the published Rate Index will be cited. The figures in this prototype are illustrative.' })}
     </section>
 
     <section class="wrap ins-calc" id="ins-calc">
@@ -1122,7 +1132,7 @@
             : 'Studio compares your rate with the Rate Index for your role category and shows which focus areas companies searched for. Your rate stays on your profile; the index only uses it in aggregate.'}</p>
         </div>
         ${pos && pos.rate ? `<div class="ins-opband-bar"><div class="ins-opband-track"><span class="ins-you-mark" style="left:${RN.clamp((pos.rate / 450) * 100, 0, 100).toFixed(1)}%">You ${hr(pos.rate)}</span>${rangeBar(pos.idx.p25, pos.idx.p50, pos.idx.p75, 450, { cls: 'ins-rtrack-night' })}</div>
-          <p class="tiny ins-opband-cap">${esc(catLabel(pos.op.catKey))} median ${hr(pos.idx.p50)} · middle 50% ${hr(pos.idx.p25)} to ${hr(pos.idx.p75)} an hour</p></div>` : ''}
+          <p class="tiny ins-opband-cap">${esc(catLabel(pos.op.catKey))} median ${hr(pos.idx.p50)}/hr · middle 50% ${RN.fmt.hrRange(Math.round(pos.idx.p25), Math.round(pos.idx.p75))}</p></div>` : ''}
         <a class="btn btn-leaf" href="#studio.positioning">Open Positioning in Studio${icon('arrow')}</a>
       </div>
     </section>
@@ -1157,10 +1167,6 @@
     };
   }
 
-  DRAW.trend = (w) => {
-    const tr = RI().trend;
-    return cols(tr.map((t, i) => ({ label: t.l, value: t.v, hi: i === tr.length - 1 })), { fmt: (n) => '$' + Math.round(n), label: 'Rate Index all-category median by quarter', h: w < 460 ? 200 : 230 }, w);
-  };
 
   RN.submits['ins-est-noop'] = () => {};
   let estTrack = null;
@@ -1176,7 +1182,7 @@
       const hd = RN.$('[data-ins-rhead]'); if (hd) hd.innerHTML = ratesHead();
       const pn = RN.$('[data-ins-pin-note]'); if (pn) pn.textContent = `${catLabel(est.cat)} is pinned to the top`;
       const box = RN.$('[data-ins-idx]'); if (box) box.innerHTML = idxRows();
-      const ct = RN.$('[data-ins-rcite]'); if (ct) ct.textContent = rateCitation();
+      const ct = RN.$('[data-ins-rcite]'); if (ct) ct.innerHTML = citeHtml(rateCitation());
     }
     const out = document.getElementById('ins-est-out'); if (out) out.innerHTML = estOut();
     const uses = RN.$('[data-ins-calc-uses]'); if (uses) uses.textContent = `${catLabel(est.cat)}, ${revLabel(est.rev)}, ${hoursLabel(est.hours)}`;
