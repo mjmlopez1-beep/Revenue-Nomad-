@@ -882,7 +882,7 @@
   };
 
   /* Rate Index maths, shared by Home, Rates, Blueprints, Browse category pages and Studio.
-     hoursCode '19' (<20) counts as 15 hours. Monthly range rounds to $500 in the L58 format. */
+     hoursCode '19' (<20) counts as 15 hours. Monthly range rounds to $500 and reads "$7.5k to $11.5k a month". */
   M.rateFor = function (cat, rev) {
     const RI = RN.data.market.rateIndex;
     const b = RI.byCat[cat] || RI.byCat.sales_leadership;
@@ -893,7 +893,7 @@
   M.monthlyRange = function (cat, rev, hoursCode) {
     const r = M.rateFor(cat, rev), h = M.hoursNum(hoursCode);
     const r500 = (n) => Math.round(n / 500) * 500;
-    return { lo: r500(r.p25 * h), mid: r500(r.p50 * h), hi: r500(r.p75 * h), h, r, label: `${RN.fmt.usd(r500(r.p25 * h))} - ${RN.fmt.usd(r500(r.p75 * h))}/mo` };
+    return { lo: r500(r.p25 * h), mid: r500(r.p50 * h), hi: r500(r.p75 * h), h, r, label: RN.fmt.moRange(r500(r.p25 * h), r500(r.p75 * h)) };
   };
 
   /* Taxonomy curation (Revenue Nomad Research, taxonomy v1): moves tags to the journey stage they change and

@@ -250,7 +250,7 @@
     return {
       project, h, rev: rev || null, n: r.n,
       rate: { lo: Math.round(r.p25), mid: Math.round(r.p50), hi: Math.round(r.p75) },
-      total: { lo, hi, label: `${usd(lo)} - ${usd(hi)}${project ? '' : '/mo'}` },
+      total: { lo, hi, label: project ? `${RN.fmt.k(lo)} to ${RN.fmt.k(hi)}` : RN.fmt.moRange(lo, hi) },
     };
   };
   /* Default budget from a Blueprint: the median rate per hour, or the median rate times the project hours */
@@ -1840,7 +1840,7 @@
         <div class="pj-sheet-rate">
           <span class="pj-sheet-lbl">Rate Index ${RN.ui.illus()}</span>
           <div class="pj-range"><i class="pj-range-band" style="left:${at(pr.rate.lo)}%;right:${(100 - at(pr.rate.hi)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${at(pr.rate.mid)}%"></i></div>
-          <span class="pj-sheet-rv num">${usd(pr.rate.lo)} - ${usd(pr.rate.hi)}/hr</span>
+          <span class="pj-sheet-rv num">${usd(pr.rate.lo)} to ${usd(pr.rate.hi)} / hr</span>
         </div>
         ${top.length ? `<div class="pj-sheet-ops"><span class="ava-stack">${top.map((r) => RN.ui.avatar(r.op, 'ava-sm', { decorative: true })).join('')}</span><span class="tiny">Ranked first for this Blueprint</span></div>` : ''}
       </div>
@@ -1897,7 +1897,7 @@
   const sizeLine = (pr, t) => (pr.project ? `About ${pr.h} hours over the term` : `At ${W().label('hoursPerMonth', t.hoursPerMonth)}`);
   function estHtml(bp, rev, t) {
     const pr = PJ.price(bp, rev, t);
-    return `<div class="pj-est"><span class="label">Rate</span><b class="num">${usd(pr.rate.lo)} - ${usd(pr.rate.hi)}/hr</b><span class="tiny muted">Rate Index, p25 to p75</span></div>
+    return `<div class="pj-est"><span class="label">Rate</span><b class="num">${usd(pr.rate.lo)} to ${usd(pr.rate.hi)} / hr</b><span class="tiny muted">Rate Index, p25 to p75</span></div>
       <div class="pj-est"><span class="label">${pr.project ? 'Typical project' : 'Typical month'}</span><b class="num">${esc(pr.total.label)}</b><span class="tiny muted">${esc(sizeLine(pr, t))}</span></div>`;
   }
   function termsHtml(bp, rev) {

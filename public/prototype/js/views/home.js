@@ -544,9 +544,9 @@
     const usd = RN.fmt.usd;
     const ft = (RN.data.market.report.fracVsFull || [])[1];
     return `<dl class="hm-typ">
-      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}</dt><dd class="num">${esc(usd(m.lo))}<span class="rng">–</span>${esc(usd(m.hi))}<small>/mo</small></dd>
+      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}</dt><dd class="num">${esc(RN.fmt.k(m.lo))}<span class="rng"> to </span>${esc(RN.fmt.k(m.hi))}<small> a month</small></dd>
         <dd class="hm-typ-sub">Typical monthly rate. No fees for companies: you pay the operator’s rate, nothing more.</dd></div>
-      ${ft ? `<div><dt>Full-time VP of Sales, fully loaded</dt><dd class="num">${esc(ft[1])}<small>/mo</small></dd><dd class="hm-typ-sub">Base, OTE, benefits and equity</dd></div>` : ''}
+      ${ft ? `<div><dt>Full-time VP of Sales, fully loaded</dt><dd class="num">${esc(ft[1])}<small> a month</small></dd><dd class="hm-typ-sub">Base, OTE, benefits and equity</dd></div>` : ''}
     </dl>`;
   }
   function pulseSec() {

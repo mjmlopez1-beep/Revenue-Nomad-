@@ -1059,7 +1059,7 @@
               <td data-l="Person"><a class="bw-who" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<span><b class="serif-up">${esc(op.name)}</b><span class="tiny muted">Fractional ${esc(op.role)}</span>${catTag(catOf(h))}</span></a></td>
               <td data-l="Status"><span class="bw-cell">${RN.hire.statusPill(h)}<span class="tiny muted">${esc(RN.hire.timeInSeat(h, act ? 'short' : 'past'))}</span></span></td>
               <td data-l="Next"><span class="bw-cell">${hireNext(h, L)}</span></td>
-              <td data-l="Spend" class="bw-num"><span class="bw-cell">${act ? `<b class="num">${esc(usd(RN.hire.monthly(h)))}/mo</b><span class="tiny muted">${esc(usd(RN.hire.spent(h)))} to date</span>` : `<b class="num">${esc(usd(RN.hire.spent(h)))}</b><span class="tiny muted">total</span>`}</span></td>
+              <td data-l="Spend" class="bw-num"><span class="bw-cell">${act ? `<b class="num">${esc(RN.fmt.k(RN.hire.monthly(h)))} a month</b><span class="tiny muted">${esc(usd(RN.hire.spent(h)))} to date</span>` : `<b class="num">${esc(usd(RN.hire.spent(h)))}</b><span class="tiny muted">total</span>`}</span></td>
             </tr>`;
           }).join('')}</tbody>
         </table>

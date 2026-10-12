@@ -256,7 +256,7 @@
     const bud = (facts.find((f) => f.k === '_budgetMonth') || {}).v;
     if (bud && hrs && !facts.some((f) => f.k === 'rateMax')) {
       const cap = Math.round(bud / hrs / 5) * 5;
-      if (cap >= 50) add('rateMax', cap, `Up to $${cap}/hr (from ${RN.fmt.usd(Math.round(bud))}/mo at ${hrs} hrs)`, '');
+      if (cap >= 50) add('rateMax', cap, `Up to $${cap}/hr (from ${RN.fmt.k(Math.round(bud))} a month at ${hrs} hrs)`, '');
     }
 
     // Location (D9): where the operator is based, their time zone, and US hours

@@ -127,6 +127,8 @@
 /* ---------- Avatars ---------- */
 .ava { --sz: 44px; width: var(--sz); height: var(--sz); min-width: var(--sz); aspect-ratio: 1; line-height: 1; border-radius: 50%; object-fit: cover; background: var(--leaf); color: var(--forest-deep); display: inline-grid; place-items: center; font-family: var(--f-display); font-weight: 800; font-size: calc(var(--sz) * .36); flex: 0 0 auto; overflow: hidden; }
 .ava-xs { --sz: 24px; } .ava-sm { --sz: 32px; } .ava-md { --sz: 56px; } .ava-lg { --sz: 88px; } .ava-xl { --sz: 128px; }
+.ava-team { background: var(--forest-deep); }
+.ava-team img { width: 52%; height: 52%; object-fit: contain; }
 .ava-ring { box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--line); }
 .ava-stack { display: flex; }
 .ava-stack > * + * { margin-left: -10px; }

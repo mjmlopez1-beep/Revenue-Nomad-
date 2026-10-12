@@ -1158,7 +1158,7 @@
     if (RN.model.monthlyRange) return RN.model.monthlyRange(cat, rev, hours).label;
     const b = RIX().byCat[cat] || RIX().byCat.sales_leadership;
     const h = hoursNum(hours), m = mult(rev);
-    return `${usd(r500(b.p25 * m * h))} - ${usd(r500(b.p75 * m * h))}/mo`;
+    return RN.fmt.moRange(r500(b.p25 * m * h), r500(b.p75 * m * h));
   }
     const rateNote = () => `<p class="rs-src">${icon('info')}<span>Rates come from the Rate Index: the middle half of hourly rates for the role, times the hours. ${esc(NO_FEES)} Illustrative.</span></p>`;
   // Monthly table for a role category at a $5M–$20M company. The rate is the price (no fees for companies).
@@ -1231,7 +1231,7 @@
       slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'revops', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
       answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
-      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace('/mo', ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
+      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace(/ a month$/, ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
       sections: () => [
         { id: 'audit', h: 'Days 1 to 30: audit', html: `<p>The first month is diagnosis. Expect a written audit that covers:</p><ul>
           <li><b>The CRM.</b> Duplicates, stale records, fields nobody uses, stages that mean different things to different reps. See ${L('library', 'CRM cleanup')} in the library.</li>
@@ -1421,7 +1421,7 @@
       slug: c.slug, bp: c.bp, group: 'costs', updated: '2026-09-22', mins: 4, cat, opsQ: c.opsQ,
       q: `How much does a fractional ${c.noun} cost?`,
       answer: () => [`A fractional ${c.noun} costs a median of ${hr(b().p50)} an hour on the Revenue Nomad Rate Index, and the middle half of ${catL} operators charge between ${hr(b().p25)} and ${hr(b().p75)}.`, `At ${hrsL.replace(' / ', ' a ')}, that is a typical range of ${monthRange(cat, c.hours, '5m_20m')} for a company with $5M–$20M in revenue.`],
-      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}` }, { v: monthRange(cat, c.hours, '5m_20m').replace('/mo', ''), l: `Typical month at ${hrsL}` }, { v: plural(b().n, 'rate'), l: 'In the index for this role category' }],
+      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}` }, { v: monthRange(cat, c.hours, '5m_20m').replace(/ a month$/, ''), l: `Typical month at ${hrsL}` }, { v: plural(b().n, 'rate'), l: 'In the index for this role category' }],
       sections: () => {
         const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b().p50 * mult(o.v)), hi: o.v === '5m_20m' }));
         const bp = bpOf();
@@ -1724,7 +1724,7 @@
     for (const sec of (p.sections || [])) for (const b of sec.blocks) if (b.table && (b.table.head || []).some((h) => /hourly rate/i.test(plainOf(h)))) return b.table;
     return null;
   }
-  const mattBy = (g, extra) => { const matt = RN.model.matt || { name: 'Matt Lopez' }; return `<span class="rs-pl-by">${RN.ui.avatar(matt, 'ava-sm', { decorative: true })}<span><b>By ${esc(matt.name)}</b><span class="tiny muted">Founder, Revenue Nomad · ${g.mins} min read</span></span>${extra || ''}</span>`; };
+  const mattBy = (g, extra) => `<span class="rs-pl-by">${RN.ui.teamAva('ava-sm')}<span><b>By Revenue Nomad Research</b><span class="tiny muted">${g.mins} min read</span></span>${extra || ''}</span>`;
   // Index card: kind, the question, one headline number from the guide's own key numbers (or the answer's first line)
   function pcard(g, lead, o) {
     o = o || {};
@@ -1791,7 +1791,7 @@
       <span class="eyebrow">Guides</span>
       <h1 class="h1">Straight answers on <span class="serif">fractional go-to-market.</span></h1>
       <p class="lede">Each guide answers one question a client asks before hiring, in the first few lines, then shows the numbers behind it from Revenue Nomad's own engagements.</p>
-      ${(() => { const matt = RN.model.matt || { name: 'Matt Lopez', slug: '' }; return `<a class="rs-ghero-by" href="#op.${esc(matt.slug)}">${RN.ui.avatar(matt, 'ava-md', { decorative: true })}<span><span class="label">Written by</span><b>${esc(matt.name)}</b><span class="small muted">Founder, Revenue Nomad</span></span></a>`; })()}
+      <a class="rs-ghero-by" href="#report">${RN.ui.teamAva('ava-md')}<span><span class="label">Written by</span><b>Revenue Nomad Research</b><span class="small muted">From our engagements and the Rate Index</span></span></a>
       <p class="rs-gnew small" data-proto>${icon('book')}<span><b>New in October 2026.</b> ${POSTS.length} guides rebuilt from the blog and the content plan, with ${(POSTS.reduce((n, p) => n + (p.replaces || []).length, 0))} older posts merged into them.</span></p>
     </header>
     <nav class="rs-gjump-bar" aria-label="Guide groups"><div class="wrap row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${count(g.k)}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div></nav>
@@ -1826,7 +1826,7 @@
         return `<a class="rs-cost" href="#guide.${esc(g.id)}">
           <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · Rate Index</span></span></span>
           <span class="rs-cost-v"><span class="label">An hour, median</span><b class="tnum">${hr(b.p50)}</b>${costBar(ci)}</span>
-          <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m').replace('/mo', '').replace(/\s*[-–]\s*/, ' to '))}</b></span>
+          <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m').replace(/ a month$/, ''))}</b></span>
           ${icon('arrow')}</a>`;
       }).join('')}</div>
       <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue<span data-proto>, illustrative in this prototype</span>. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
@@ -1863,12 +1863,12 @@
   // Phones and tablets lose the rail, so the contents fold into the article under the key numbers
   const mtoc = (toc) => `<details class="rs-mtoc"><summary>${icon('list')}<span>On this page</span><span class="tiny muted">${toc.length} sections</span>${icon('chev-down', 'rs-chev')}</summary>
     <ol>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ol></details>`;
-  /* Byline with Matt's portrait (content playbook: "By Matt Lopez", updated, read time, reviewer) */
+  /* Byline: the company is the author (founder decision Oct 12, 2026), then updated, read time, reviewer */
   function postByline(matt, upd, mins, rev) {
     return `<div class="rs-byline">
-      <a class="rs-by-pic" href="#op.${esc(matt.slug)}" tabindex="-1" aria-hidden="true">${RN.ui.avatar(matt, 'ava-md rs-by-ava', { decorative: true })}</a>
+      <a class="rs-by-pic" href="#about" tabindex="-1" aria-hidden="true">${RN.ui.teamAva('ava-md rs-by-ava')}</a>
       <span class="rs-by-txt">
-        <span class="rs-by-l"><a class="rs-by-who" href="#op.${esc(matt.slug)}">By ${esc(matt.name)}</a><span class="rs-by-role">Founder, Revenue Nomad</span></span>
+        <span class="rs-by-l"><a class="rs-by-who" href="#about">By Revenue Nomad Research</a></span>
         <span class="rs-by-meta"><span>Updated <time datetime="${esc(upd)}">${esc(RN.fmt.date(upd + 'T12:00:00'))}</time> · ${mins} min read</span>${rev || ''}</span>
       </span>
     </div>`;
@@ -1920,7 +1920,7 @@
       '@context': 'https://schema.org',
       '@graph': [
         { '@type': 'Article', headline: p.q, description: p.metaDescription, datePublished: p.publish || p.updated, dateModified: p.updated, mainEntityOfPage: `${OLD_BLOG}/post/${p.slug}`,
-          author: { '@type': 'Person', name: 'Matt Lopez', url: `${OLD_BLOG}/experts/matt-lopez-35525` },
+          author: { '@type': 'Organization', name: 'Revenue Nomad', url: OLD_BLOG },
           publisher: { '@type': 'Organization', name: 'Revenue Nomad', url: OLD_BLOG } },
         { '@type': 'BreadcrumbList', itemListElement: [['Guides', `${OLD_BLOG}/guides`], [grp.l, `${OLD_BLOG}/${grp.home}`], [p.q, `${OLD_BLOG}/post/${p.slug}`]].map(([name, item], i) => ({ '@type': 'ListItem', position: i + 1, name, item })) },
         { '@type': 'FAQPage', mainEntity: plainFaq.map((x) => ({ '@type': 'Question', name: x.q, acceptedAnswer: { '@type': 'Answer', text: x.a } })) },
@@ -2166,7 +2166,7 @@
         ${ans}
         <footer class="rs-gfoot">
           <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. <span data-proto>Market and survey figures in this prototype are illustrative. </span>Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
-          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Matt Lopez, reviewedBy the reviewing operator, dateModified) and BreadcrumbList.')}
+          ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Revenue Nomad as an Organization, reviewedBy the reviewing operator, dateModified) and BreadcrumbList.')}
         </footer>
       </article>
       <aside class="rs-rail" aria-label="On this page">

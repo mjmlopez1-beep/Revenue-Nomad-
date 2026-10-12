@@ -43,6 +43,9 @@
     return `<div class="opc-tags">${shown.map((t) => ui.ftag(t)).join('')}${more > 0 ? `<span class="ftag more">+${more} more</span>` : ''}</div>`;
   };
 
+  /* The company as author or sender: the brand mark in an avatar circle (founder decision Oct 12, 2026: we are a company, no named founder) */
+  ui.teamAva = (cls) => `<span class="ava ava-team ${cls || ''}" aria-hidden="true"><img src="assets/brand/mark.png" alt=""></span>`;
+
   ui.stars = function (n, o) {
     const full = Math.round(n || 0);
     let s = '';

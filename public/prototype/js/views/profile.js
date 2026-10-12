@@ -1781,7 +1781,7 @@
       <div class="pf-rate">
         <div class="pf-rate-main">
           ${op.rate ? `<div class="pf-rate-big"><span class="label pf-lab">${esc(F.rate.label)}</span><b class="serif-up">${esc(RN.fmt.usd(op.rate))}<small>/ hr</small></b></div>
-            ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.usd(monthly))}<small>/ mo</small></b></div>` : ''}
+            ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.k(monthly))}<small> a month</small></b></div>` : ''}
             <p class="pf-rate-range">${mr ? `Typically <b>${esc(mr.text)}</b>${mr.hLo && mr.hHi ? ` (${esc(mr.hLo)} to ${esc(mr.hHi)} hrs a month)` : ''}. ` : ''}No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
           : `<p class="pf-rate-range">${esc(op.first)} quotes a rate on the first call.</p>`}
         </div>

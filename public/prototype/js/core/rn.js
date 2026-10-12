@@ -41,6 +41,9 @@
       return String(Math.round(n));
     },
     usd: (n) => '$' + Math.round(n || 0).toLocaleString('en-US'),
+    // $7,500 -> $7.5k, $12,000 -> $12k (the monthly range format, founder decision Oct 12, 2026)
+    k: (n) => { n = Math.round(+n || 0); return n < 1000 ? '$' + n : '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k'; },
+    moRange: (lo, hi, unit) => (lo === hi ? `About ${RN.fmt.k(lo)}` : `${RN.fmt.k(lo)} to ${RN.fmt.k(hi)}`) + (unit === false ? '' : ' a month'),
     usdK: (n) => (n >= 1e6 ? '$' + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'K' : '$' + n),
     rate: (n) => (n ? '$' + Math.round(n) + '/hr' : 'Rate on request'),
     pct: (n, d = 0) => (n * 100).toFixed(d) + '%',

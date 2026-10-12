@@ -382,7 +382,7 @@
     const p50 = (idx.byCat[cat] || idx.byCat.sales_leadership).p50 * (idx.byRevenue[rev] || 1);
     const hrs = +hoursCode || 40;
     const lo = Math.round((p50 * hrs * 0.85) / 1000) * 1000, hi = Math.round((p50 * hrs * 1.2) / 1000) * 1000;
-    return `${fmt.usdK(lo)}–${fmt.usdK(hi)}/mo`;
+    return fmt.moRange(lo, hi);
   }
   function demand(op) {
     return memo('demand|' + op.id, () => {

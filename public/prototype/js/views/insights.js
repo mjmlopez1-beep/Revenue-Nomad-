@@ -27,8 +27,8 @@
   const r500 = (n) => Math.round(n / 500) * 500;
   const usd = (n) => RN.fmt.usd(n);
   const hr = (n) => '$' + Math.round(n);
-  // L58 format: "$10,000 - $30,000/mo"
-  ins.fmtRange = (lo, hi) => `${usd(r500(lo))} - ${usd(r500(hi))}/mo`;
+  // Monthly range format: "$7.5k to $11.5k a month"
+  ins.fmtRange = (lo, hi) => RN.fmt.moRange(r500(lo), r500(hi));
   /* The Rate Index is the price: a client pays the operator's listed rate and no fees (founder
      decision D1, Sep 25, 2026). Nothing on these client-facing pages mentions a fee, margin or split. */
   const NO_FEES = 'No fees for companies. You pay the operator’s rate, nothing more.';
@@ -860,7 +860,7 @@
     const maxX = ins.range(est.cat, '50m_plus', est.hours).mid || 1;
     return `<span class="label">Typical Engagement Range</span>
       <div class="ins-est-big num">${esc(g.label)}</div>
-      <p class="ins-est-mid">Median <b>${usd(g.mid)}/mo</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
+      <p class="ins-est-mid">Median <b>${RN.fmt.k(g.mid)} a month</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
       <p class="ins-est-nofee">${icon('check-circle')}<span>${esc(NO_FEES)}</span></p>
       <div class="ins-est-scale">${rangeBar(r.p25, r.p50, r.p75, 450, { labels: true, cls: 'ins-rtrack-night' })}
         <div class="ins-est-legend tiny"><span><i class="b"></i>Middle 50% of rates (p25 to p75)</span><span><i class="m"></i>Median</span></div></div>
@@ -952,10 +952,10 @@
           <div class="stat"><span class="stat-l">Next 12 months, full time</span><span class="stat-v">${RN.fmt.usdK(r500(c.ftYear))}</span><span class="tiny muted">${c.months ? `Seat empty for ${RN.fmt.plural(c.months, 'month')} while you hire` : 'Starts right away'}</span></div>
         </div>
         <dl class="ins-calc-break small">
-          <div><dt>Base plus benefits and taxes</dt><dd>${usd(r500(c.ftBase))}/mo</dd></div>
-          <div><dt>Commission and bonus</dt><dd>${usd(r500(c.ftVar))}/mo</dd></div>
-          <div><dt>Recruiting fee, spread over year one</dt><dd>${usd(r500(c.ftFee))}/mo</dd></div>
-          <div><dt>Fractional, typical monthly rate</dt><dd>${usd(c.frac)}/mo</dd></div>
+          <div><dt>Base plus benefits and taxes</dt><dd>${RN.fmt.k(r500(c.ftBase))} a month</dd></div>
+          <div><dt>Commission and bonus</dt><dd>${RN.fmt.k(r500(c.ftVar))} a month</dd></div>
+          <div><dt>Recruiting fee, spread over year one</dt><dd>${RN.fmt.k(r500(c.ftFee))} a month</dd></div>
+          <div><dt>Fractional, typical monthly rate</dt><dd>${RN.fmt.k(c.frac)} a month</dd></div>
         </dl>
         <p class="tiny muted">A fractional leader works ${esc(hoursLabel(est.hours))}. A full-time leader works about 170 hours a month. Compare the outcomes you need in those hours.</p>
       </div>`;
@@ -1002,7 +1002,7 @@
         </div>
       </div>
       <div class="stats-row ins-rates-kpis" style="--cols:4">
-        <div class="stat"><span class="stat-l">Typical month at ${esc(hoursLabel('40'))}</span><span class="stat-v ins-stat-sm">${esc(g.label.replace('/mo', ''))}</span><span class="tiny muted">${esc(revLabel('5m_20m'))} companies, the baseline</span></div>
+        <div class="stat"><span class="stat-l">Typical month at ${esc(hoursLabel('40'))}</span><span class="stat-v ins-stat-sm">${esc(g.label.replace(/ a month$/, ''))}</span><span class="tiny muted">${esc(revLabel('5m_20m'))} companies, the baseline</span></div>
         <div class="stat"><span class="stat-l">Middle 50% of rates</span><span class="stat-v ins-stat-sm">${hr(c.p25)} to ${hr(c.p75)}</span><span class="tiny muted">p25 to p75 an hour</span></div>
         <div class="stat"><span class="stat-l">Rates in this category</span><span class="stat-v">${RN.fmt.int(c.n)}</span><span class="tiny muted">${c.n < MIN_CELL ? `Under ${MIN_CELL}, read as directional` : `Of ${RN.fmt.int(nTotal)} in the index`}</span></div>
         <div class="stat"><span class="stat-l">Operators on the network</span><span class="stat-v">${RN.fmt.int(n)}</span><span class="tiny muted">${esc(catLabel(routeCat))}, in this prototype</span></div>
