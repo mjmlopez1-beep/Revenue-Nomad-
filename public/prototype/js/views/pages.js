@@ -685,7 +685,7 @@
     const st = steps();
     return keys.filter((k) => T.ans[k]).map((k) => {
       const i = st.findIndex((s) => stepKeys(s).includes(k));
-      const label = RN.w.label(k, T.ans[k]);
+      const label = k === 'need' ? needL(T.ans[k]) : RN.w.label(k, T.ans[k]);
       const name = RECAP[k] || RN.fields[k].label;
       if (o.text) return `${name}: ${label}`;
       return i >= 0 ? `<button type="button" class="pg-recap-chip" data-act="pg-talk-jump" data-i="${i}" title="Change this answer"><span>${esc(name)}</span>${esc(label)}<i class="pg-recap-ed" aria-hidden="true">${icon('edit')}</i></button>`
@@ -769,7 +769,10 @@
     if (key === 'companyRevenue') return `<span class="pg-t-sc is-bars" aria-hidden="true">${opts.map((o, j) => `<i class="${j <= k ? 'on' : ''}" style="--j:${j}"></i>`).join('')}</span>`;
     return `<span class="pg-t-sc is-dots" aria-hidden="true">${opts.map((o, j) => `<i class="${j <= k ? 'on' : ''}"></i>`).join('')}</span>`;
   }
-  const decorate = (html, key) => html.replace(/(<button[^>]*data-v="([^"]*)"[^>]*>)/g, (m, open, v) => open + tileGlyph(key, v));
+  // On Talk to us the catch-all need reads "Other" (founder comment, Oct 12, 2026); Home keeps its "Not sure yet" card
+  const needL = (v) => (v === 'not_sure' ? 'Other' : RN.w.label('need', v));
+  const decorate = (html, key) => html.replace(/(<button[^>]*data-v="([^"]*)"[^>]*>)/g, (m, open, v) => open + tileGlyph(key, v))
+    .replace(/(data-v="not_sure"[^>]*>(?:(?!<\/button>)[\s\S])*?)Not sure yet/, '$1Other');
   let lastLive = null;
 
   function talkStep() {
@@ -969,7 +972,7 @@
     }
     T.err = '';
     const s = suggest();
-    const needLabel = RN.w.label('need', T.ans.need);
+    const needLabel = needL(T.ans.need);
     T.sugg = s.top.map((r) => r.op.id);
     T.matches = s.matches;
     T.done = true;
@@ -1004,7 +1007,7 @@
      engagementType and hoursPerMonth (the flow does not ask them). */
   function introSummary() {
     const parts = [];
-    if (T.ans.need) parts.push(RN.w.label('need', T.ans.need));
+    if (T.ans.need) parts.push(needL(T.ans.need));
     const size = [T.ans.companyRevenue && RN.w.label('companyRevenue', T.ans.companyRevenue) + ' revenue', T.ans.companyEmployees && RN.w.label('companyEmployees', T.ans.companyEmployees) + ' employees'].filter(Boolean);
     if (size.length) parts.push(size.join(', '));
     if (T.ans.startBy) parts.push('start ' + RN.w.label('startBy', T.ans.startBy).toLowerCase());
