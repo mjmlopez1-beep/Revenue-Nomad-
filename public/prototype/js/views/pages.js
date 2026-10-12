@@ -799,7 +799,7 @@
           </div>
           <div class="field"><label for="pg-note">What are you looking for? <span class="opt">Optional</span></label><textarea class="textarea input" id="pg-note" name="note" maxlength="500" rows="2" placeholder="The problem, the timeline, what good looks like in 90 days.">${esc(T.note || '')}</textarea></div>
           ${T.err ? `<p class="pg-err" role="alert">${icon('info')}${esc(T.err)}</p>` : ''}
-          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Show my matches${icon('arrow')}</button><span class="small">We show you three operators now, and a person replies within one business day. No sales sequence, and no fees for companies.</span></div>
+          <div class="pg-contact-foot"><button class="btn btn-leaf btn-lg" type="submit">Submit${icon('arrow')}</button><span class="small">We show you three operators now, and a person replies within one business day. No sales sequence, and no fees for companies.</span></div>
         </form>`;
     } else if (s.rows) {
       // Two chip rows on one screen, each with its own label; numbers 1 to N answer the first open row
