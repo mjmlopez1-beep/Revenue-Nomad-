@@ -746,7 +746,7 @@
       </div>` : '';
     const IND_MAX = op.industries.length > 8 ? 6 : 8;
     const indShown = S.indAll ? op.industries : op.industries.slice(0, IND_MAX);
-    const inds = op.industries.length ? `<div class="pf-fit-ind"><h3 class="h5 pf-h3">${esc(F.industries.label)} <span class="pf-count">${op.industries.length}</span></h3>
+    const inds = op.industries.length ? `<div class="pf-fit-ind"><h3 class="h5 pf-h3">${esc(F.industries.label)} <span class="pill pf-count">${op.industries.length}</span></h3>
       <div class="pf-chips">${indShown.map((i) => `<span class="pill">${esc(RN.w.label('industries', i))}</span>`).join('')}${op.industries.length > IND_MAX ? `<button type="button" class="act pf-chips-more" data-act="pf-ind-all">${S.indAll ? 'Show fewer' : `Show all ${op.industries.length}`}</button>` : ''}</div></div>` : '';
     const keys = F.roleFields[op.catKey] || [];
     const vals = keys.map((k) => ({ k, rv: roleVal(op, k) })).filter((x) => x.rv);
@@ -926,13 +926,13 @@
     const top = st.tools.slice().sort((a, b) => b.lvl - a.lvl || (b.by ? 1 : 0) - (a.by ? 1 : 0) || a.name.localeCompare(b.name));
     const SHOW = 6;
     return `<div class="pf-stack" id="pf-stack">
-      <h3 class="h5 pf-h3">Tech stack <span class="pf-count">${st.tools.length}</span></h3>
+      <h3 class="h5 pf-h3">Tech stack <span class="pill pf-count">${st.tools.length}</span></h3>
       <div class="pf-chips">${top.slice(0, SHOW).map((t) => `<span class="pill">${t.by ? icon('check-circle') : ''}${esc(t.name)}</span>`).join('')}</div>
       <details class="pf-fold"${S.stackQ ? ' open' : ''}><summary>${icon('chev-right')}${st.tools.length > SHOW ? `Show all ${st.tools.length} tools by proficiency` : 'Proficiency levels'}</summary>
         <label class="pf-search">${icon('search')}<input type="search" placeholder="Search ${st.tools.length} tools, e.g. Salesforce" data-input="pf-stack-q" value="${esc(S.stackQ)}" aria-label="Search ${esc(op.first)}’s tools"></label>
         <p class="pf-stack-res" aria-live="polite" data-pf-stack-res></p>
         <div class="pf-stack-grid">${groups.map((g) => `<div class="pf-stack-cat ${g.lvl >= 3 ? 'core' : ''}" data-cat>
-            <div class="pf-stack-cat-hd"><span class="row-nw" style="--gap:8px">${g.lvl ? meter(g.lvl) : ''}<b>${esc(g.l)}</b></span><span class="pf-count">${g.tools.length}</span></div>
+            <div class="pf-stack-cat-hd"><span class="row-nw" style="--gap:8px">${g.lvl ? meter(g.lvl) : ''}<b>${esc(g.l)}</b></span><span class="pill pf-count">${g.tools.length}</span></div>
             <p class="pf-stack-d">${esc(g.d)}</p>
             <ul>${g.tools.slice().sort((a, b) => a.name.localeCompare(b.name)).map((t) => `<li class="pf-tool" data-name="${esc(lc(t.name))}" data-lvl="${t.lvl}" data-by="${esc(t.by)}">
               ${mark(t.name)}<span class="pf-tool-n"><b>${esc(t.name)}</b>${t.by ? `<button type="button" class="pf-tool-v" data-act="pf-jump" data-to="pf-review-${RN.slug(t.by)}">${icon('check-circle')}Confirmed by ${esc(t.by)}</button>` : ''}</span></li>`).join('')}</ul>
@@ -1169,7 +1169,7 @@
         <div class="pf-core-rows">
           ${st.dims.map((x) => `<div class="pf-core-row" data-dim="${x.i}">
               <div class="pf-core-top"><span class="pf-core-l">${esc(x.d.v)}</span><b class="pf-core-name">${esc(x.d.l)}</b><span class="pf-core-avg serif-up">${x.avg.toFixed(1)}</span>
-                <span class="pf-delta ${x.delta >= 0 ? 'up' : 'down'}">${x.delta >= 0 ? '+' : ''}${x.delta.toFixed(1)} vs avg</span></div>
+                <span class="pill ${x.delta >= 0 ? 'pill-good' : 'pill-warn'} pf-delta">${x.delta >= 0 ? '+' : ''}${x.delta.toFixed(1)} vs avg</span></div>
               <div class="pf-core-track" role="img" aria-label="${esc(x.d.l)}: ${x.avg.toFixed(1)} out of 5, platform average ${x.bench.toFixed(1)}">
                 <i class="pf-core-fill" style="width:${X(x.avg)}"></i><i class="pf-core-bench" style="left:${X(x.bench)}"></i><i class="pf-core-you" style="left:${X(x.avg)}"></i></div>
             </div>`).join('')}
@@ -1559,7 +1559,7 @@
     if (!rec || !op) {
       return `<section class="wrap-narrow section pf-expired">
         <div class="pf-expired-card">
-          <span class="pf-expired-i">${icon('link')}</span>
+          ${RN.ui.icoTile('link', { size: 'xl', round: true, cls: 'pf-expired-i' })}
           <span class="eyebrow">Private proof link</span>
           <h1 class="h2">This link has expired</h1>
           <p class="lede">Proof links are private and the operator can turn them off at any time. Every profile on Revenue Nomad is also open to browse, with company reviews and verified engagements.</p>
@@ -1668,7 +1668,7 @@
       <header class="pf-sec-hd"><div class="grow"><span class="eyebrow">For ${esc(co)}</span><h2 class="h2 pf-h2" id="pf-why-h">Why ${esc(op.first)} for ${esc(co.split(' ')[0])}</h2></div></header>
       <div class="pf-why-grid${leadCard ? '' : ' no-lead'}">
         ${leadCard}
-        <ul class="pf-why-pts">${pts.slice(0, 3).map((x) => `<li><span class="pf-why-i">${icon(x.i)}</span><div><b>${x.b}</b>${x.t ? `<span>${x.t}</span>` : ''}${x.logos && x.logos.length ? `<span class="pf-why-logos">${x.logos.map((e) => `<span class="pf-why-lg">${logoHtml(e.logo, e.company, 16)}</span>`).join('')}</span>` : ''}${x.chips ? `<span class="pf-why-chips">${x.chips.map((t) => `<span class="ftag">${icon('check-circle')}${esc(t)}</span>`).join('')}</span>` : ''}</div></li>`).join('')}</ul>
+        <ul class="pf-why-pts">${pts.slice(0, 3).map((x) => `<li>${RN.ui.icoTile(x.i, { round: true, cat: op.catKey, cls: 'pf-why-i' })}<div><b>${x.b}</b>${x.t ? `<span>${x.t}</span>` : ''}${x.logos && x.logos.length ? `<span class="pf-why-logos">${x.logos.map((e) => `<span class="pf-why-lg">${logoHtml(e.logo, e.company, 16)}</span>`).join('')}</span>` : ''}${x.chips ? `<span class="pf-why-chips">${x.chips.map((t) => `<span class="ftag">${icon('check-circle')}${esc(t)}</span>`).join('')}</span>` : ''}</div></li>`).join('')}</ul>
       </div>
     </section>`;
   }
@@ -1859,7 +1859,7 @@
     const op = RN.model.bySlug(p.slug);
     if (!op || op.hidden) {
       return `<section class="wrap-narrow section pf-expired"><div class="pf-expired-card">
-          <span class="pf-expired-i">${icon('shield')}</span>
+          ${RN.ui.icoTile('shield', { size: 'xl', round: true, cls: 'pf-expired-i' })}
           <span class="eyebrow">Revenue Nomad verification</span>
           <h1 class="h2">We could not verify this badge</h1>
           <p class="lede">No live profile matches this badge. It may be out of date, or the profile may be hidden.</p>

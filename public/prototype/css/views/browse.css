@@ -141,7 +141,7 @@
 /* ---------- Category landing: plan + role links ---------- */
 .br-plan { padding-top: var(--s-16); display: flex; flex-direction: column; gap: var(--s-5); }
 .br-plan-card { display: flex; flex-direction: column; gap: var(--s-2); color: inherit; }
-.br-plan-card > svg { width: 22px; height: 22px; color: var(--accent); margin-bottom: var(--s-1); }
+.br-plan-card > .ico { margin-bottom: var(--s-1); }
 .br-plan-card > .act { margin-top: auto; padding-top: var(--s-2); }
 .br-plan-links { list-style: none; margin: auto 0 0; padding: var(--s-2) 0 0; display: flex; flex-direction: column; gap: 10px; }
 .br-plan-links .act { font-size: var(--t-14); line-height: 1.35; text-align: left; }
@@ -275,7 +275,6 @@
 .br-plan-hd { display: flex; flex-direction: column; gap: 8px; }
 .br-plan .grid { align-items: stretch; }
 .br-plan-card { min-height: 100%; transition: border-color var(--dur) ease, transform var(--dur) var(--ease), box-shadow var(--dur) ease; }
-.br-plan-card > svg { width: 40px; height: 40px; padding: 9px; border-radius: 12px; background: var(--tint); }
 
 @media (max-width: 1080px) {
   .br-head-gen { grid-template-columns: minmax(0, 1fr); align-items: start; }

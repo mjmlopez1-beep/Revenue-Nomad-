@@ -203,7 +203,6 @@
 .pf-flash { animation: pfFlash 1.6s ease; }
 @keyframes pfFlash { 0%, 35% { box-shadow: 0 0 0 3px var(--focus); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .pf-card-box, .pf-bow-wrap, .pf-focus, .pf-taglist, .pf-range, .pf-rate { background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-card); }
-.pf-count { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 7px; border-radius: 99px; background: var(--sunk); font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; color: var(--mute); }
 
 /* Chips used inside sections */
 .pf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -589,8 +588,7 @@
 .pf-core-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pf-core-name { font-family: var(--f-display); font-size: var(--t-16); }
 .pf-core-avg { font-size: var(--t-24); color: var(--accent); font-weight: 500; line-height: 1; }
-.pf-delta { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; padding: 3px 9px; border-radius: 99px; background: var(--tint); color: var(--accent); white-space: nowrap; }
-.pf-delta.down { background: var(--warn-bg); color: var(--warn); }
+.pf-delta { white-space: nowrap; }
 .pf-core-track { position: relative; height: 14px; border-radius: 99px; background: var(--sunk); margin-top: 24px; }
 .pf-core-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: linear-gradient(90deg, var(--viz-3), var(--viz-2)); transform-origin: left; animation: pfGrow 1s var(--ease) both; }
 .pf-core-bench { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; background: var(--mute-2); }
@@ -742,8 +740,7 @@
 .pf-vf-foot { margin-top: 22px; text-align: center; font-size: var(--t-14); color: var(--mute); }
 
 .pf-expired-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; padding: 56px 32px; border-radius: 22px; background: var(--card); border: 1px solid var(--line-2); }
-.pf-expired-i { width: 58px; height: 58px; border-radius: 50%; background: var(--tint); color: var(--accent); display: grid; place-items: center; margin-bottom: 4px; }
-.pf-expired-i svg { width: 24px; height: 24px; }
+.pf-expired-i { margin-bottom: 4px; }
 .pf-expired-card .lede { margin: 0 auto; font-size: var(--t-16); }
 
 /* ============================ Container queries (section width) ============================ */
@@ -1076,14 +1073,11 @@
 .pf-why-pts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: 22px; border: 1px solid var(--line-2); background: var(--card); }
 .pf-why-pts li { display: flex; gap: 14px; padding: 20px 22px; border-bottom: 1px solid var(--line-2); flex: 1 1 auto; }
 .pf-why-pts li:last-child { border-bottom: 0; }
-.pf-why-i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--tint); color: var(--accent); flex: 0 0 auto; }
-.pf-why-i svg { width: 17px; height: 17px; }
 .pf-why-pts li > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .pf-why-pts b { font-family: var(--f-display); font-size: var(--t-16); color: var(--ink); line-height: 1.3; }
 .pf-why-pts li > div > span { font-size: var(--t-14); line-height: 1.5; color: var(--mute); }
 .pf-why-logos { display: flex !important; align-items: center; gap: 14px; margin-top: 4px; }
 .pf-why-chips { display: flex !important; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.pf-why-chips .ftag { font-size: var(--t-12); }
 /* Closing band: the page lands instead of trailing off */
 .pf-pl-brand { margin-top: 56px; padding-block: 36px 44px; background: var(--night); color: var(--night-ink); }
 .pf-pl-brand-in { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px 32px; max-width: calc(1040px + var(--gutter) * 2); }

@@ -34,9 +34,6 @@
 .adm-need { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: var(--s-4); align-items: center; padding: var(--s-4) 0; border-top: 1px solid var(--line-2); }
 .adm-need:first-child { border-top: 0; padding-top: 0; }
 .adm-need:last-child { padding-bottom: 0; }
-.adm-need-ic { width: 42px; height: 42px; border-radius: 12px; background: var(--tint); color: var(--accent); display: grid; place-items: center; flex: 0 0 auto; }
-.adm-need-ic svg { width: 20px; height: 20px; }
-.adm-need.is-late .adm-need-ic { background: var(--bad-bg); color: var(--bad); }
 .adm-need b { font-family: var(--f-display); font-size: var(--t-15); display: block; line-height: 1.3; }
 .adm-need .illus { margin-top: 6px; }
 .adm-need p { font-size: var(--t-13); color: var(--mute); margin-top: 3px; line-height: 1.45; }
@@ -88,8 +85,6 @@
 .adm-feed li:last-child, .adm-reviews li:last-child, .adm-decided li:last-child, .adm-alerts li:last-child, .adm-picks li:last-child { padding-bottom: 0; }
 .adm-feed b, .adm-decided b, .adm-alerts b { display: block; font-family: var(--f-display); font-size: var(--t-14); line-height: 1.3; }
 .adm-feed .tiny, .adm-decided .tiny, .adm-reviews .tiny { display: block; margin-top: 2px; }
-.adm-feed-ic { width: 32px; height: 32px; border-radius: 10px; background: var(--sunk); color: var(--accent); display: grid; place-items: center; flex: 0 0 auto; }
-.adm-feed-ic svg { width: 16px; height: 16px; }
 .adm-reviews .pill { flex: 0 0 auto; }
 .adm-op-n { font-family: var(--f-display); font-weight: 700; font-size: var(--t-14); color: var(--ink); line-height: 1.25; }
 .adm-op-n:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
@@ -109,7 +104,6 @@
 .adm-term { font-weight: 600; color: var(--ink); }
 .adm-live { height: 20px; font-size: 11px; margin-left: 8px; vertical-align: 2px; }
 .adm-fchips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 320px; }
-.adm-fchip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; background: var(--sunk); font-size: var(--t-12); color: var(--ink-2); line-height: 1.35; white-space: nowrap; }
 .adm-zero td:nth-child(2) { min-width: 190px; }
 .adm-fchip span { color: var(--mute); }
 .adm-zero td:first-child { min-width: 170px; max-width: 280px; }

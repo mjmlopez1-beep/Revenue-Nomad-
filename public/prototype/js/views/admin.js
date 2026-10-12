@@ -170,7 +170,7 @@
   }
   const filterChips = (filters, tags) => {
     const l = filterList(filters, tags);
-    return l.length ? `<span class="adm-fchips">${l.map((f) => `<span class="adm-fchip">${f.flag ? '' : `<span>${esc(f.l)}</span>`}${esc(f.vl)}</span>`).join('')}</span>` : '<span class="tiny muted">No filters</span>';
+    return l.length ? `<span class="adm-fchips">${l.map((f) => `<span class="pill adm-fchip">${f.flag ? '' : `<span>${esc(f.l)}</span>`}${esc(f.vl)}</span>`).join('')}</span>` : '<span class="tiny muted">No filters</span>';
   };
 
   /* Supply share (live operators) vs client demand share (hiring intent, State of Fractional GTM) */
@@ -462,7 +462,7 @@
 
       <section class="card adm-sec" aria-labelledby="adm-needs-h">
         ${cardHead('<span id="adm-needs-h">Needs you</span>', 'Work only the team can do, most urgent first.')}
-        ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}"><span class="adm-need-ic">${icon(n.ic)}</span><div class="grow"><b>${esc(n.t)}</b><p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
+        ${needs.length ? `<div class="adm-needs">${needs.map((n) => `<div class="adm-need${n.late ? ' is-late' : ''}">${RN.ui.icoTile(n.ic, n.late ? { color: '#A3321F', cls: 'adm-need-ic' } : { cls: 'adm-need-ic' })}<div class="grow"><b>${esc(n.t)}</b><p>${esc(n.sub)}</p></div><a class="btn btn-sm btn-line" href="#${n.to}">${esc(n.cta)}${icon('arrow')}</a></div>`).join('')}</div>`
         : RN.ui.empty({ icon: 'check-circle', title: 'Nothing needs you right now', body: 'New applications, intros waiting on the team, hires without terms and quiet engagements show up here.' })}
       </section>
 
@@ -543,7 +543,7 @@
   function activityCard() {
     const list = (st().events || []).filter((e) => e.type !== 'impression' && e.persona !== 'admin').slice(0, 7);
     return `${cardHead('Live activity', 'What people did in this session, newest first. Impressions are left out.')}
-      ${list.length ? `<ol class="adm-feed">${list.map((e) => { const d = describeEvent(e); return `<li><span class="adm-feed-ic">${icon(d.ic)}</span><div class="grow"><b>${esc(d.t)}</b><span class="tiny muted">${esc(actor(e))}${d.sub ? ' · ' + esc(d.sub) : ''}</span></div><span class="tiny muted nowrap">${esc(RN.fmt.ago(e.ts))}</span></li>`; }).join('')}</ol>`
+      ${list.length ? `<ol class="adm-feed">${list.map((e) => { const d = describeEvent(e); return `<li>${RN.ui.icoTile(d.ic, { size: 'sm', soft: true, cls: 'adm-feed-ic' })}<div class="grow"><b>${esc(d.t)}</b><span class="tiny muted">${esc(actor(e))}${d.sub ? ' · ' + esc(d.sub) : ''}</span></div><span class="tiny muted nowrap">${esc(RN.fmt.ago(e.ts))}</span></li>`; }).join('')}</ol>`
       : RN.ui.empty({ icon: 'bolt', title: 'No activity yet this session', body: 'Search, open profiles or request an intro as a company and each action appears here and in Demand.', cta: `<button type="button" class="btn btn-sm" data-act="persona" data-p="buyer" data-to="browse">Browse as ${esc(RN.personas.buyer.first)} (company)</button>` })}`;
   }
   function recentReviews() {
@@ -1272,7 +1272,7 @@
 
       <section class="card adm-sec">
         ${cardHead('Team alerts', `Plain-text emails to ${TEAM} the moment something needs the team.`)}
-        <ul class="adm-alerts">${ALERTS.map((x) => { const n = mails.filter((m) => m.to === TEAM && String(m.subject).startsWith(x.pre)).length; return `<li><span class="adm-need-ic">${icon(x.k === 'app' ? 'user' : x.k === 'intro' ? 'handshake' : 'star')}</span><div class="grow"><b>${esc(x.t)}${x.ap ? ` <span class="adm-code">${x.ap}</span>` : ''}</b><span class="small muted">${esc(x.d)}</span></div><span class="pill ${n ? 'pill-accent' : ''}">${RN.fmt.plural(n, 'alert')} this session</span></li>`; }).join('')}</ul>
+        <ul class="adm-alerts">${ALERTS.map((x) => { const n = mails.filter((m) => m.to === TEAM && String(m.subject).startsWith(x.pre)).length; return `<li>${RN.ui.icoTile(x.k === 'app' ? 'user' : x.k === 'intro' ? 'handshake' : 'star', { soft: true, tone: x.k === 'app' ? 'forest' : x.k === 'intro' ? 'partner' : 'gold', cls: 'adm-need-ic' })}<div class="grow"><b>${esc(x.t)}${x.ap ? ` <span class="adm-code">${x.ap}</span>` : ''}</b><span class="small muted">${esc(x.d)}</span></div><span class="pill ${n ? 'pill-accent' : ''}">${RN.fmt.plural(n, 'alert')} this session</span></li>`; }).join('')}</ul>
       </section>
 
       <section class="card adm-sec">

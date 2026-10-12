@@ -530,7 +530,7 @@
     return `<section class="card sa-card sa-who">
       ${cardHd('Who viewed you', `By company type, ${esc(periodLabel(d))}. Groups under 5 visits are combined.`, `${illus()}<a class="act" href="#studio.visibility">See all${icon('arrow')}</a>`)}
       ${top.length ? `<ul class="sa-who-l">${top.map((x) => `<li>
-          <span class="sa-segs-ic">${icon(x.group ? 'users' : 'building')}</span>
+          ${RN.ui.icoTile(x.group ? 'users' : 'building', { soft: true, cls: 'sa-segs-ic' })}
           <div class="grow"><b>${esc(x.name)}</b>${x.live ? ` <span class="pill pill-good sa-pill-live" title="${esc(liveTip)}">Live</span>` : ''}<span class="sa-segs-m">${esc(x.meta)}</span></div>
           <span class="sa-who-n"><b class="num">${fmt.int(x.n)}</b> ${x.n === 1 ? 'visit' : 'visits'}</span>
         </li>`).join('')}</ul>` : `<p class="small muted">No group reached 5 visits ${esc(periodLabel(d))}, so every visit is combined below.${d === 7 ? ' Switch to 30 days for more detail.' : ''}</p>`}
@@ -642,7 +642,7 @@
         ${RN.w.control('companyRevenue', rev, { name: 'saDemandRev', id: 'sa-demand-rev', change: 'sa-demand-rev' })}
       </div>
       ${list.length ? `<ul class="sa-feed${showAll.demand ? ' is-all' : ''}">${list.map((x) => `<li class="${x.live ? 'is-live' : ''}">
-          <span class="sa-feed-ic">${icon(x.ic)}</span>
+          ${RN.ui.icoTile(x.ic, x.live ? { soft: true, color: 'var(--good)', cls: 'sa-feed-ic' } : { soft: true, cls: 'sa-feed-ic' })}
           <div class="grow">
             <p class="sa-feed-t">${x.live ? '<span class="pill pill-good sa-pill-live">Live</span>' : ''}${x.text}</p>
             <p class="sa-feed-m">${esc(x.meta || '')}</p>
@@ -949,7 +949,7 @@
         const counts = [n.views && `<span><b class="num">${n.views}</b> ${n.views === 1 ? 'view' : 'views'}</span>`, n.shortlists && `<span><b class="num">${n.shortlists}</b> ${n.shortlists === 1 ? 'shortlist' : 'shortlists'}</span>`, n.compares && `<span><b class="num">${n.compares}</b> ${n.compares === 1 ? 'compare' : 'compares'}</span>`].filter(Boolean).join('');
         const tag = x.seg ? (inRanges(op, x.seg) ? '<span class="pill pill-accent">In your ranges</span>' : `<span class="pill pill-line">Outside your ranges</span>${rangeAct(x.seg)}`) : '<span class="pill pill-line">Grouped</span>';
         return `<li>
-          <span class="sa-segs-ic">${icon(x.group ? 'users' : 'building')}</span>
+          ${RN.ui.icoTile(x.group ? 'users' : 'building', { soft: true, cls: 'sa-segs-ic' })}
           <div class="grow"><b>${esc(x.name)}</b>${x.live ? ` <span class="pill pill-good sa-pill-live" title="${esc(liveTip)}">Live</span>` : ''}<span class="sa-segs-m">${esc(x.meta)}</span></div>
           <div class="sa-segs-n">${counts}</div>
           <div class="sa-segs-r">${tag}<span class="tiny muted">${esc(fmt.ago(n.last))}</span></div>
@@ -966,7 +966,7 @@
     return `<section class="card sa-card sa-gaps" id="sa-gaps">
       ${cardHd('Who is not visiting', `Industries and company sizes you list, with few or no visits ${esc(periodLabel(d))}. One fix for each.`)}
       ${list.length ? `<ul class="sa-gap-l">${list.map((g) => `<li>
-          <span class="sa-segs-ic">${icon('target')}</span>
+          ${RN.ui.icoTile('target', { soft: true, cls: 'sa-segs-ic' })}
           <div class="grow">
             <b>${esc(g.name)}</b>
             <span class="sa-segs-m">You list it · ${g.n ? plural(g.n, 'visit') : 'no visits'} ${esc(periodLabel(d))}${g.live ? ` · ${plural(g.live, 'live company search', 'live company searches')} used this filter` : ''}${g.searches ? ` · about ${fmt.int(g.searches)} searches a month in ${esc(RN.fields.catLabel(op.catKey))} name it` : ''}</span>
@@ -1026,7 +1026,7 @@
         const actn = acts[li];
         const rateEdge = l.edge.some((x) => /rate/.test(x));
         return `<article class="sa-lost-c">
-          <div class="row-nw" style="--gap:12px"><span class="sa-segs-ic">${icon('user')}</span><div class="grow"><b class="sa-lost-n">${esc(l.who)}</b><span class="tiny muted">${l.live ? `<span class="pill pill-good sa-pill-live">Live</span>${esc(fmt.ago(l.ts))}` : illus()}</span></div></div>
+          <div class="row-nw" style="--gap:12px">${RN.ui.icoTile('user', { soft: true, cls: 'sa-segs-ic' })}<div class="grow"><b class="sa-lost-n">${esc(l.who)}</b><span class="tiny muted">${l.live ? `<span class="pill pill-good sa-pill-live">Live</span>${esc(fmt.ago(l.ts))}` : illus()}</span></div></div>
           <p class="small">A company compared you and ${esc(verb(l))}${l.n > 1 ? `, ${plural(l.n, 'time')}` : ''}.</p>
           <div class="sa-lost-e"><span class="label">What they had</span><div class="row" style="--gap:6px">${l.edge.map((e) => `<span class="pill pill-line">${esc(cap(e))}</span>`).join('')}</div></div>
           ${rateEdge ? '<p class="tiny muted">Rate is rarely the only reason. Check where you sit on the Rate Index before changing anything.</p>' : ''}
@@ -1159,7 +1159,7 @@
         const inCat = z.cat === op.catKey;
         const hint = inCat && mineInd ? `You list ${ind(z.industry)}. Name it in your headline so this search finds you.` : inCat ? 'In your category. If you have done this work, add the matching tag.' : `Outside ${RN.fields.catLabel(op.catKey)}. Shown so you can see where demand is going.`;
         return `<li class="${inCat ? '' : 'is-muted'}">
-          <span class="sa-feed-ic">${icon('flag')}</span>
+          ${RN.ui.icoTile('flag', { soft: true, cls: 'sa-feed-ic' })}
           <div class="grow"><b>${quote(z.q)}</b>${z.live ? ' <span class="pill pill-good sa-pill-live">Live</span>' : ''}
             <span class="sa-terms-m">${z.cat ? esc(RN.fields.catLabel(z.cat)) + ' · ' : ''}${z.live ? 'Searched just now' : plural(z.vol, 'search', 'searches') + ' this month'}</span>
             <p class="small">${esc(hint)}</p></div>
@@ -1498,9 +1498,9 @@
     const missed = guides.filter((g) => !onGuides.includes(g))[0];
     return `<section class="card sa-card">
       ${cardHd('Topic pages you appear on', `Pages on Revenue Nomad that list or link to your profile. ${PERIOD}.`, illus('Illustrative impressions'))}
-      <ul class="sa-topics">${pages.map((p) => `<li><a href="#${esc(p.to)}"><span class="sa-feed-ic">${icon(p.ic)}</span><span class="grow"><b>${esc(p.t)}</b><span class="tiny muted">${esc(p.m)}</span></span><span class="sa-topics-n"><b class="num">${fmt.int(p.n)}</b><span class="tiny muted">impressions</span></span></a></li>`).join('')}
-        ${missed ? `<li class="is-next"><a href="#guide.${esc(missed.slug)}"><span class="sa-feed-ic">${icon('book')}</span><span class="grow"><b>${esc(missed.q)}</b><span class="tiny muted">Not listed yet. This guide shows the top ${missed.post ? 2 : 3} ${esc(cat)} operators for “${esc(missed.opsQ || cat)}”, then by Reputation Index.</span></span></a></li>` : ''}
-        ${unlock ? `<li class="is-next"><a href="#levels"><span class="sa-feed-ic">${icon('lock')}</span><span class="grow"><b>Unlocks at ${esc(b.next.l)} (${esc(b.next.min)})</b><span class="tiny muted">${esc(unlock)}. ${plural(b.toNext, 'point')} to go.</span></span></a></li>` : ''}
+      <ul class="sa-topics">${pages.map((p) => `<li><a href="#${esc(p.to)}">${RN.ui.icoTile(p.ic, { soft: true, cls: 'sa-feed-ic' })}<span class="grow"><b>${esc(p.t)}</b><span class="tiny muted">${esc(p.m)}</span></span><span class="sa-topics-n"><b class="num">${fmt.int(p.n)}</b><span class="tiny muted">impressions</span></span></a></li>`).join('')}
+        ${missed ? `<li class="is-next"><a href="#guide.${esc(missed.slug)}">${RN.ui.icoTile('book', { soft: true, color: 'var(--mute)', cls: 'sa-feed-ic' })}<span class="grow"><b>${esc(missed.q)}</b><span class="tiny muted">Not listed yet. This guide shows the top ${missed.post ? 2 : 3} ${esc(cat)} operators for “${esc(missed.opsQ || cat)}”, then by Reputation Index.</span></span></a></li>` : ''}
+        ${unlock ? `<li class="is-next"><a href="#levels">${RN.ui.icoTile('lock', { soft: true, color: 'var(--mute)', cls: 'sa-feed-ic' })}<span class="grow"><b>Unlocks at ${esc(b.next.l)} (${esc(b.next.min)})</b><span class="tiny muted">${esc(unlock)}. ${plural(b.toNext, 'point')} to go.</span></span></a></li>` : ''}
       </ul>
       <p class="tiny muted" style="margin-top:12px">Placement follows published evidence rules. It cannot be bought.</p>
     </section>`;

@@ -51,7 +51,7 @@
 .ins-faces { flex: 0 0 auto; align-items: center; }
 .ins-faces .ava { box-shadow: 0 0 0 2px var(--card); }
 .ins-faces.ava-stack > * + * { margin-left: -8px; }
-.ins-faces-more { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 99px; background: var(--sunk); color: var(--mute); font-family: var(--f-display); font-size: 11px; font-weight: 700; box-shadow: 0 0 0 2px var(--card); }
+.ins-faces-more { box-shadow: 0 0 0 2px var(--card); }
 .night .ins-faces .ava { box-shadow: 0 0 0 2px var(--night); }
 
 .ins-book { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-8); min-height: 380px; border-radius: var(--r-lg); background: var(--night); color: var(--night-ink); border: 1px solid var(--night-line); box-shadow: var(--shadow-2); transition: transform .35s var(--ease), box-shadow .35s ease; }
@@ -75,15 +75,12 @@
 .ins-tool-hd { display: flex; gap: var(--s-4); align-items: flex-start; }
 .ins-tool-hd .h4 { margin-bottom: 4px; }
 .ins-tool-hd .h4 a:hover { color: var(--accent); }
-.ins-tool-ic { width: 40px; height: 40px; border-radius: 12px; background: var(--tint); color: var(--accent); display: grid; place-items: center; flex: 0 0 auto; }
-.ins-tool-ic svg { width: 20px; height: 20px; }
 .ins-tool-go { margin-top: auto; display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-weight: 700; font-size: var(--t-13); color: var(--accent); align-self: flex-start; }
 .ins-tool-go svg { width: 15px; height: 15px; transition: transform .2s var(--ease); }
 .ins-tool:hover .ins-tool-go svg { transform: translateX(3px); }
 
 .ins-tool-night { border-radius: var(--r-card); padding: var(--s-8); border: 1px solid var(--night-line); overflow: hidden; --viz-1: var(--leaf); }
 .ins-tool-night:hover { border-color: var(--night-line); box-shadow: var(--shadow-3); }
-.ins-tool-night .ins-tool-ic { background: color-mix(in srgb, var(--leaf) 14%, transparent); color: var(--leaf); }
 .ins-tool-night .h4 { color: var(--night-ink); }
 .ins-tool-night .ins-tool-hd .h4 a:hover { color: var(--leaf); }
 .ins-tool-night p, .ins-tool-night .tiny { color: var(--night-mute); }
@@ -359,8 +356,6 @@
 .ins-quote p { font-family: var(--f-serif); font-size: clamp(22px, 2.2vw, 28px); line-height: 1.28; letter-spacing: -.015em; color: var(--ink); max-width: 30ch; }
 .ins-quote-by { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: var(--s-5); }
 .ins-quote cite { font-style: normal; font-family: var(--f-display); font-weight: 700; font-size: var(--t-14); color: var(--ink); }
-.ins-quote-mark { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--tint); color: var(--accent); border: 1px solid var(--tint-line); }
-.ins-quote-mark svg { width: 18px; height: 18px; }
 .ins-quote-who { display: flex; flex-direction: column; gap: 2px; font-size: var(--t-13); color: var(--mute); }
 
 .ins-chlink { display: flex; justify-content: space-between; align-items: center; gap: var(--s-5); flex-wrap: wrap; margin-top: var(--s-8); padding: var(--s-5) 0; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); }

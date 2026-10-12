@@ -64,9 +64,8 @@
   };
   /* Role category icons, the same set the operator intake uses */
   const CAT_ICON = { sales_leadership: 'trend-up', marketing: 'megaphone', revenue_operations: 'gear', sales_enablement: 'book', customer_success_growth: 'heart', ai_gtm: 'ai', partnerships: 'handshake', sellers: 'briefcase' };
-  const catIcon = (cat) => icon(CAT_ICON[RN.fields.catKey(cat)] || 'layers');
   // Blueprint tile: the shared duotone icon tile in the card's category hue (--cat is set on the card)
-  const catTile = (cat, o) => RN.ui.icoTile(CAT_ICON[RN.fields.catKey(cat)] || 'layers', Object.assign({ color: 'var(--cat, var(--accent))', cls: 'pj-bp-ico' }, o || {}));
+  const catTile = (cat, o) => RN.ui.icoTile(CAT_ICON[RN.fields.catKey(cat)] || 'layers', Object.assign({ color: 'var(--cat, var(--forest))', cls: 'pj-bp-ico' }, o || {}));
   const BP = [
     {
       id: 'vp-sales', cat: 'sales_leadership', role: 'VP of Sales', blurb: 'Build the sales process and hire the first team.',
@@ -475,7 +474,7 @@
   /* The closing tile of a Blueprint grid: fills the empty cells of the last row (span set per breakpoint in CSS) */
   function bpHelpTile(n) {
     return `<article class="pj-bp-help night" data-r3="${(3 - (n % 3)) % 3}" data-r2="${n % 2}">
-      <span class="pj-bp-help-ico" aria-hidden="true">${icon('message')}</span>
+      ${RN.ui.icoTile('message', { size: 'lg', night: true, cls: 'pj-bp-help-ico' })}
       <div class="pj-bp-help-b">
         <h3 class="h4">Not sure which one fits?</h3>
         <p class="small">Tell us what is broken. A person on our team reads it and points you to the seat, or to the operators who fit, within one business day.</p>
@@ -756,13 +755,13 @@
     const bpLink = bp ? `<a href="#blueprint.${esc(bp.id)}">${esc(bp.title)}</a>` : '';
     // A draft opened again after a while: say where the client left off and what is already done
     const resumed = draft && !posted && !auto && !draft.copiedFrom && RN.now() - new Date(draft.updatedAt || draft.createdAt) > 30 * 6e4;
-    const origin = (ic, kicker, body, extra, cls) => `<div class="pj-origin ${cls || ''}"${bp && !cls ? ` style="--cat:${RN.fields.catColor(bp.cat)}"` : ''}><span class="pj-origin-ic" aria-hidden="true">${ic}</span><span class="pj-origin-b"><span class="pj-origin-k">${kicker}</span><span class="pj-origin-t">${body}</span></span>${extra || ''}</div>`;
+    const origin = (ic, kicker, body, extra, cls) => `<div class="pj-origin ${cls || ''}"${bp && !cls ? ` style="--cat:${RN.fields.catColor(bp.cat)}"` : ''}>${RN.ui.icoTile(ic, bp && !cls ? { cat: bp.cat, size: 'sm', cls: 'pj-origin-ic' } : { size: 'sm', cls: 'pj-origin-ic' })}<span class="pj-origin-b"><span class="pj-origin-k">${kicker}</span><span class="pj-origin-t">${body}</span></span>${extra || ''}</div>`;
     const done = STEPS.slice(0, step - 1);
     const fromNote = posted ? ''
-      : resumed ? origin(icon('clock'), `Welcome back · saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`, `Picking up at <b>${esc(STEPS[step - 1])}</b>${done.length ? `. ${esc(done.join(' and '))} ${done.length > 1 ? 'are' : 'is'} done.` : '.'}`, `<span class="pj-origin-dots" aria-hidden="true">${STEPS.map((x, i) => `<i class="${i < step - 1 ? 'on' : i === step - 1 ? 'now' : ''}"></i>`).join('')}</span>`, 'is-back')
-      : draft && draft.copiedFrom ? origin(icon('copy'), 'Copied', `From ${esc(draft.copiedFrom)}. Check the brief, then post.`)
-      : bp && draft && draft.auto ? origin(catIcon(bp.cat), 'Filled in from a Blueprint', `${bpLink}${bpTerms[bp.id] ? ', the terms you set' : ''} and your company profile. Change anything, then post.`)
-      : bp && !draft ? origin(catIcon(bp.cat), 'Filled in from a Blueprint', `${bpLink}. ${step === 1 ? 'Change anything, then continue.' : 'Role and scope are done. Add your company basics.'}`, '<a class="act muted pj-origin-x" href="#engagement.new">Start blank</a>')
+      : resumed ? origin('clock', `Welcome back · saved ${esc(RN.fmt.ago(draft.updatedAt || draft.createdAt))}`, `Picking up at <b>${esc(STEPS[step - 1])}</b>${done.length ? `. ${esc(done.join(' and '))} ${done.length > 1 ? 'are' : 'is'} done.` : '.'}`, `<span class="pj-origin-dots" aria-hidden="true">${STEPS.map((x, i) => `<i class="${i < step - 1 ? 'on' : i === step - 1 ? 'now' : ''}"></i>`).join('')}</span>`, 'is-back')
+      : draft && draft.copiedFrom ? origin('copy', 'Copied', `From ${esc(draft.copiedFrom)}. Check the brief, then post.`)
+      : bp && draft && draft.auto ? origin(CAT_ICON[RN.fields.catKey(bp.cat)] || 'layers', 'Filled in from a Blueprint', `${bpLink}${bpTerms[bp.id] ? ', the terms you set' : ''} and your company profile. Change anything, then post.`)
+      : bp && !draft ? origin(CAT_ICON[RN.fields.catKey(bp.cat)] || 'layers', 'Filled in from a Blueprint', `${bpLink}. ${step === 1 ? 'Change anything, then continue.' : 'Role and scope are done. Add your company basics.'}`, '<a class="act muted pj-origin-x" href="#engagement.new">Start blank</a>')
       : '';
     const N = RN.model.ops.filter((o) => !o.hidden).length;
 

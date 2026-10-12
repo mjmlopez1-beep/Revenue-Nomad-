@@ -468,7 +468,7 @@
       ${js.map((s) => `<button type="button" class="rs-gh rs-gh-stage" data-act="rs-fw-open" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
       <div class="rs-gsp" aria-hidden="true"></div>
       <button type="button" class="rs-gh rs-gh-stage is-all" data-act="rs-fw-open" data-stage="Foundation">Foundation</button>
-      ${g.areas.map((a) => { const t = agg(ix, a.name, null); return `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}" title="${esc(a.def)}"><span class="rs-ga-ic">${icon(a.icon)}</span><span class="rs-ga-tx"><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span><span class="rs-ga-n"><span><b class="tnum">${t.ver}</b> verified</span><span>${t.any} claim</span></span></span></button>
+      ${g.areas.map((a) => { const t = agg(ix, a.name, null); return `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}" title="${esc(a.def)}">${RN.ui.icoTile(a.icon, { size: 'sm', cat: a.cat, cls: 'rs-ga-ic' })}<span class="rs-ga-tx"><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span><span class="rs-ga-n"><span><b class="tnum">${t.ver}</b> verified</span><span>${t.any} claim</span></span></span></button>
         ${js.map((s) => cellBtn(g, a, s)).join('')}
         <div class="rs-gsp" aria-hidden="true"></div>
         ${cellBtn(g, a, FOUNDATION)}`; }).join('')}
@@ -2177,16 +2177,16 @@
           <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: x.why && x.why[0] ? x.why[0] : `Reputation Index ${x.op.ris.score}` })).join('')}</div>
           <div class="grid g-2 rs-glinks">
           <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
-            <span class="rs-bp-ic">${icon('doc')}</span>
+            ${RN.ui.icoTile('doc', { cat: g.cat, cls: 'rs-bp-ic' })}
             <span class="grow"><span class="label">Engagement Blueprint</span><b>${esc(bp ? bp.title : `Scope this work${g.cat ? ` with a ${F.catLabel(g.cat)} Blueprint` : ' with a Blueprint'}`)}</b><span class="small muted">${esc(bp && bp.sub ? bp.sub : 'Typical hours, term, a 30/60/90-day plan and a rate range from the Rate Index, ready to post as an engagement.')}</span></span>
             ${icon('arrow')}
           </a>
           ${g.cat && RIX().byCat[g.cat] ? `<a class="rs-bp card card-link" href="#rates">
-            <span class="rs-bp-ic">${icon('chart')}</span>
+            ${RN.ui.icoTile('chart', { tone: 'gold', cls: 'rs-bp-ic' })}
             <span class="grow"><span class="label">Rate Index</span><b>${esc(F.catLabel(g.cat))}: median ${esc(RN.fmt.rate(RIX().byCat[g.cat].p50))}</b><span class="small muted">Middle half ${esc(RN.fmt.hrRange(RIX().byCat[g.cat].p25, RIX().byCat[g.cat].p75))}. Estimate a month for your company size.</span></span>
             ${icon('arrow')}
           </a>` : `<a class="rs-bp card card-link" href="#framework">
-            <span class="rs-bp-ic">${icon('grid')}</span>
+            ${RN.ui.icoTile('grid', { cls: 'rs-bp-ic' })}
             <span class="grow"><span class="label">GTM Framework</span><b>Where operators have company-verified proof</b><span class="small muted">Six areas across seven stages of the customer journey, counted from live profiles.</span></span>
             ${icon('arrow')}
           </a>`}

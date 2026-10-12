@@ -36,17 +36,26 @@
     const verified = !!t.tier && t.tier !== 'claimed';
     return `<span class="ftag ${verified ? '' : 'claimed'}" title="${t.tier === 'expert' ? 'Expert: verified by 5 or more company reviews' : verified ? 'Verified by a company review' : 'Claimed by the operator'}">${verified ? icon('check-circle') : ''}${esc(t.t)}</span>`;
   };
-  /* Icon tile: one shared duotone treatment (components.css .ico).
-     RN.ui.icoTile('search', { size: 'sm'|'md'|'lg', tone: 'forest'|'sales'|'mkt'|'revops'|'enable'|'cs'|'ai'|'partner'|'sellers'|'gold'|'info',
-       cat: 'sales_leadership' (tone from the role category), color: 'var(--x)' (any CSS colour), night: true, round: true,
-       still: true (no hover motion), cls: 'extra classes', label: 'accessible name' (otherwise decorative) }) */
-  const ICO_TONES = ['sales', 'mkt', 'revops', 'enable', 'cs', 'ai', 'partner', 'sellers', 'gold', 'info'];
+  /* Icon tile: one shared jewel treatment (components.css .ico).
+     RN.ui.icoTile('search', { size: 'sm'|'md'|'lg'|'xl', tone: 'forest'|'sales'|'mkt'|'revops'|'enable'|'cs'|'ai'|'partner'|'sellers'|'gold'|'info',
+       cat: 'sales_leadership' (tone from the role category), color: 'var(--x)' (any CSS colour), soft: true (quiet pale tile for dense lists),
+       night: true (glassy tile for dark bands), round: true, still: true (no hover motion), text: 'A' (a letter or mark instead of a glyph),
+       cls: 'extra classes', label: 'accessible name' (otherwise decorative) }) */
+  const ICO_TONES = ['forest', 'sales', 'mkt', 'revops', 'enable', 'cs', 'ai', 'partner', 'sellers', 'gold', 'info'];
   ui.icoTile = function (name, o) {
     o = o || {};
-    const color = o.color || (o.cat && RN.fields && RN.fields.catColor ? RN.fields.catColor(o.cat) : '');
-    const cls = ['ico', 'ico-' + (o.size === 'sm' || o.size === 'lg' ? o.size : 'md'), ICO_TONES.includes(o.tone) ? 'ico-t-' + o.tone : '', o.night ? 'ico-night' : '', o.round ? 'ico-round' : '', o.still ? 'ico-still' : '', o.cls || ''].filter(Boolean).join(' ');
+    let color = o.color || (o.cat && RN.fields && RN.fields.catColor ? RN.fields.catColor(o.cat) : '');
+    if (/^var\(--(accent|forest)\)$/.test(color)) color = '';
+    const size = ['sm', 'lg', 'xl'].includes(o.size) ? o.size : 'md';
+    const txt = o.text != null && o.text !== '';
+    const cls = ['ico', 'ico-' + size, ICO_TONES.includes(o.tone) ? 'ico-t-' + o.tone : '', o.soft ? 'ico-soft' : '', o.night ? 'ico-night' : '', o.round ? 'ico-round' : '', o.still ? 'ico-still' : '', txt ? 'ico-txt' : '', o.cls || ''].filter(Boolean).join(' ');
     const a11y = o.label ? `role="img" aria-label="${esc(o.label)}"` : 'aria-hidden="true"';
-    return `<span class="${cls}" ${a11y}${color ? ` style="--ico-tone:${esc(color)}"` : ''}>${icon(name, 'ico-bk')}${icon(name, 'ico-fg')}</span>`;
+    return `<span class="${cls}" ${a11y}${color ? ` style="--ico-tone:${esc(color)}"` : ''}>${txt ? esc(o.text) : icon(name, 'ico-bk') + icon(name, 'ico-fg')}</span>`;
+  };
+  /* Tone name for a role category key or label (sales, mkt, revops, ...) */
+  ui.icoTone = function (cat) {
+    const k = RN.fields && RN.fields.catKey ? RN.fields.catKey(cat) : cat;
+    return ({ sales_leadership: 'sales', marketing: 'mkt', revenue_operations: 'revops', sales_enablement: 'enable', customer_success_growth: 'cs', ai_gtm: 'ai', partnerships: 'partner', sellers: 'sellers' })[k] || '';
   };
 
   ui.ftags = function (tags, max, o) {

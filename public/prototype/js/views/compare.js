@@ -269,7 +269,7 @@
     const cols = ops.length + (add ? 1 : 0);
     const sugg = add ? suggestions(ops, Math.min(4, 5 - ops.length)) : [];
     const addHead = add ? `<th scope="col" class="cmp-col cmp-col-add"><div class="cmp-add-hd">
-        <span class="cmp-add-ic">${icon('plus')}</span>
+        ${RN.ui.icoTile('plus', { size: 'sm', round: true, soft: true, cls: 'cmp-add-ic' })}
         <b>${ops.length < 2 ? 'Add one more to compare' : 'Add an operator'}</b>
         <span class="cmp-sub">${4 - ops.length} of 4 slots open</span>
         <a class="act" href="#browse">Browse operators${icon('arrow')}</a>

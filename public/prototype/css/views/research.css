@@ -103,8 +103,6 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-gsp { width: 10px; }
 .rs-ga { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 0; border: 0; border-top: 1px solid var(--line-2); background: none; text-align: left; cursor: pointer; color: var(--ink); }
 .rs-ga:hover b { color: var(--accent); }
-.rs-ga-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--tint); color: var(--accent); flex: 0 0 auto; }
-.rs-ga-ic svg { width: 17px; height: 17px; }
 .rs-ga b { font-family: var(--f-display); font-size: var(--t-15); display: block; line-height: 1.2; }
 .rs-ga-d { display: block; font-size: var(--t-12); color: var(--mute); line-height: 1.35; margin-top: 2px; }
 .rs-cell { position: relative; min-height: 88px; display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 2px; padding: 10px 11px; border: 1px solid transparent; border-radius: 12px; background: var(--card); color: var(--ink); text-align: left; cursor: pointer; transition: transform var(--dur) var(--ease), box-shadow var(--dur) ease, border-color var(--dur) ease; }
@@ -151,8 +149,6 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 /* Area cards */
 .rs-area { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; text-align: left; color: var(--ink); cursor: pointer; font: inherit; transition: transform var(--dur) var(--ease), box-shadow var(--dur) ease, border-color var(--dur) ease; }
 .rs-area:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--line); }
-.rs-area-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--tint); color: var(--accent); }
-.rs-area-ic svg { width: 20px; height: 20px; }
 .rs-area .small { line-height: 1.5; }
 .rs-area-n { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line-2); width: 100%; font-size: var(--t-13); color: var(--mute); }
 .rs-area-n b { color: var(--ink); font-size: var(--t-15); }
@@ -282,7 +278,6 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-tag-def { margin-top: 5px; font-size: var(--t-14); color: var(--ink-2); line-height: 1.5; max-width: 62ch; }
 .rs-tag-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 10px; }
 .rs-tag-cat { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-12); color: var(--mute); margin-right: 4px; }
-.rs-chip-b:not(.pill-line) { border: 0; }
 .rs-chip-b:hover { text-decoration: underline; text-underline-offset: 2px; }
 .rs-tag-stats { display: flex; flex-direction: column; gap: 8px; font-size: var(--t-13); }
 .rs-tag-n { display: flex; flex-wrap: wrap; gap: 4px 14px; }
@@ -426,8 +421,6 @@ details[open] > summary .rs-chev { transform: rotate(180deg); }
 .rs-rel-ops { margin-top: var(--s-5); --gap: 16px; }
 .rs-glinks { margin-top: var(--s-5); --gap: 16px; }
 .rs-bp { display: flex; align-items: center; gap: 16px; color: var(--ink); }
-.rs-bp-ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--tint); color: var(--accent); flex: 0 0 auto; }
-.rs-bp-ic svg { width: 20px; height: 20px; }
 .rs-bp .grow { display: flex; flex-direction: column; gap: 3px; }
 .rs-bp b { font-family: var(--f-display); font-size: var(--t-16); }
 .rs-bp > svg:last-child { width: 18px; height: 18px; color: var(--accent); flex: 0 0 auto; }

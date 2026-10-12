@@ -281,9 +281,9 @@
       <div class="wrap">
         ${shead('How we are different', 'Three things most talent firms won’t do.')}
         <ol class="ab-diff">
-          <li><span class="ab-diff-i" aria-hidden="true">${icon('eye')}</span><h3 class="h4">Open profiles</h3><p class="ab-diff-was">A shortlist, after a sales call</p><p class="ab-diff-now">Every profile is open. No login, no sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
-          <li><span class="ab-diff-i" aria-hidden="true">${icon('seal')}</span><h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p class="ab-diff-now">Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
-          <li><span class="ab-diff-i" aria-hidden="true">${icon('chart')}</span><h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p class="ab-diff-now">Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
+          <li>${RN.ui.icoTile('eye', { size: 'lg', cls: 'ab-diff-i' })}<h3 class="h4">Open profiles</h3><p class="ab-diff-was">A shortlist, after a sales call</p><p class="ab-diff-now">Every profile is open. No login, no sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
+          <li>${RN.ui.icoTile('seal', { size: 'lg', tone: 'gold', cls: 'ab-diff-i' })}<h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p class="ab-diff-now">Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
+          <li>${RN.ui.icoTile('chart', { size: 'lg', tone: 'info', cls: 'ab-diff-i' })}<h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p class="ab-diff-now">Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
         </ol>
       </div>
     </section>
@@ -347,10 +347,10 @@
       aside: `<div class="pg-flow" aria-label="From an intro request to an introduction">
         <span class="label">From request to introduction</span>
         <ol class="pg-flow-l">
-          <li><span class="pg-flow-i">${icon('send')}</span><div><b>You request an intro</b><span>No login to browse, $0 in fees for companies</span></div><em class="num">Day 0</em></li>
-          <li><span class="pg-flow-i">${icon('message')}</span><div><b>The operator replies</b><span>Every request is answered within 72 hours</span></div><em class="num">&lt;2 hrs typical</em></li>
-          <li><span class="pg-flow-i">${icon('check-circle')}</span><div><b>They say yes, we confirm the fit</b><span>A person on our team checks scope and timing</span></div><em class="num">Same day</em></li>
-          <li class="is-end"><span class="pg-flow-i">${icon('mail')}</span><div><b>Introduced by email</b><span>In business days, from the operator’s yes</span></div><em class="num">1 day</em></li>
+          <li>${RN.ui.icoTile('send', { round: true, cls: 'pg-flow-i' })}<div><b>You request an intro</b><span>No login to browse, $0 in fees for companies</span></div><em class="num">Day 0</em></li>
+          <li>${RN.ui.icoTile('message', { round: true, cls: 'pg-flow-i' })}<div><b>The operator replies</b><span>Every request is answered within 72 hours</span></div><em class="num">&lt;2 hrs typical</em></li>
+          <li>${RN.ui.icoTile('check-circle', { round: true, cls: 'pg-flow-i' })}<div><b>They say yes, we confirm the fit</b><span>A person on our team checks scope and timing</span></div><em class="num">Same day</em></li>
+          <li class="is-end">${RN.ui.icoTile('mail', { round: true, tone: 'gold', cls: 'pg-flow-i' })}<div><b>Introduced by email</b><span>In business days, from the operator’s yes</span></div><em class="num">1 day</em></li>
         </ol>
       </div>`,
     })}
@@ -540,7 +540,7 @@
         </div>
         <div class="pg-wall" data-pg-wall>${wall.map(revCard).join('')}
           <article class="pg-rev pg-rev-how">
-            <span class="pg-value-i">${icon('star')}</span>
+            ${RN.ui.icoTile('star', { size: 'lg', tone: 'gold', cls: 'pg-value-i' })}
             <h3 class="h4">Every company gets asked</h3>
             <p class="small">Operators request a review from Studio when an engagement ends. The company answers four CORE questions, rates the outcome and says whether they would hire again. The review publishes the day it lands.</p>
             <a class="act" href="#levels">How reviews move the Reputation Index${icon('arrow')}</a>
@@ -762,7 +762,7 @@
      scale on the size step (bars that grow with revenue, dots that multiply with headcount). */
   const NEED_IC = { sales_motion: 'target', pipeline: 'trend-up', team: 'users', systems: 'layers', ai: 'ai', retention: 'refresh', partners: 'handshake', not_sure: 'message' };
   function tileGlyph(key, v) {
-    if (key === 'need') return `<span class="pg-t-ic" aria-hidden="true">${icon(NEED_IC[v] || 'target')}</span>`;
+    if (key === 'need') { const cats = (RN.fields.needCats && RN.fields.needCats[v]) || []; return RN.ui.icoTile(NEED_IC[v] || 'target', { tone: cats.length ? RN.ui.icoTone(cats[0]) : '', cls: 'pg-t-ic' }); }
     const opts = (RN.fields[key] && RN.fields[key].options) || [];
     const k = opts.findIndex((o) => o.v === v);
     if (k < 0 || (key !== 'companyRevenue' && key !== 'companyEmployees')) return '';
@@ -1218,7 +1218,7 @@
       <div class="wrap">
         ${shead('What you get even when no intro happens', 'Five things your profile does every week.', 'All of it lives in your Studio from the day you are approved.')}
         <div class="pg-values">${values.map((v, i) => `<article class="pg-value${i === 0 ? ' is-wide' : ''}">
-            <span class="pg-value-i">${icon(v.i)}</span>
+            ${RN.ui.icoTile(v.i, { size: 'lg', night: i === 0, cls: 'pg-value-i' })}
             <h3 class="h4">${esc(v.t)}</h3>
             <p class="pg-p">${esc(v.d)}</p>
             ${asLink('operator', v.to, { mine: `Open in Studio${icon('arrow')}`, other: `See it in a sample Studio${icon('arrow')}` }, 'act')}
@@ -1231,7 +1231,7 @@
         ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on company evidence: reviews, verified fit tags and engagements. What each tier unlocks is on the Levels page.', `<a class="act" href="#levels">What each tier unlocks${icon('arrow')}</a>`)}
         ${badgeRow({ me: true })}
         <div class="pg-principles">
-          <div><span class="pg-pr-i">${icon('star')}</span><h3 class="h5">How featuring works</h3><p class="small muted">Home features every operator at Trusted (Reputation Index 70+) and above, ranked by score, then a profile photo, video, company reviews and engagement history. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} in this prototype qualify for a featured spot today.</p></div>
+          <div>${RN.ui.icoTile('star', { tone: 'gold', cls: 'pg-pr-i' })}<h3 class="h5">How featuring works</h3><p class="small muted">Home features every operator at Trusted (Reputation Index 70+) and above, ranked by score, then a profile photo, video, company reviews and engagement history. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} in this prototype qualify for a featured spot today.</p></div>
         </div>
       </div>
     </section>
@@ -1327,7 +1327,7 @@
             <p class="pg-core-q"><span>The question</span>${esc(d.q)}</p>
           </article>`).join('')}</div>
         <h3 class="label lv-princ-h">Rules that keep the score worth trusting</h3>
-        <div class="pg-princ">${principles.map(([i, t, d], k) => `<div class="pg-princ-item"><span class="lv-princ-n">${String(k + 1).padStart(2, '0')}</span><span class="pg-pr-i">${icon(i)}</span><div><h3 class="h5">${esc(t)}</h3><p>${esc(d)}</p></div></div>`).join('')}</div>
+        <div class="pg-princ">${principles.map(([i, t, d], k) => `<div class="pg-princ-item"><span class="lv-princ-n">${String(k + 1).padStart(2, '0')}</span>${RN.ui.icoTile(i, { cls: 'pg-pr-i' })}<div><h3 class="h5">${esc(t)}</h3><p>${esc(d)}</p></div></div>`).join('')}</div>
       </div>
     </section>
 
@@ -1376,7 +1376,7 @@
           <button class="btn" type="submit">Search</button>
         </form>
         ${guesses.length ? `<div class="pg-404-guess"><span class="label">Did you mean</span>${guesses.map((op) => `<a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span class="pg-rev-op-t"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>${icon('arrow')}</a>`).join('')}</div>` : ''}
-        <div class="pg-404-grid">${places.map(([i, t, d, to]) => `<a class="card card-link pg-404-card" href="#${to}"><span class="pg-value-i">${icon(i)}</span><span><b>${esc(t)}</b><span>${esc(d)}</span></span>${icon('arrow')}</a>`).join('')}
+        <div class="pg-404-grid">${places.map(([i, t, d, to]) => `<a class="card card-link pg-404-card" href="#${to}">${RN.ui.icoTile(i, { cls: 'pg-value-i' })}<span><b>${esc(t)}</b><span>${esc(d)}</span></span>${icon('arrow')}</a>`).join('')}
           ${face ? `<a class="card card-link pg-404-card pg-404-op" href="#op.${esc(face.slug)}">${RN.ui.avatar(face, 'ava-md')}<span><span class="pg-404-k">Maybe you were looking for</span><b>${esc(face.name)}</b><span>Fractional ${esc(face.role)} · ${esc(RN.fmt.plural(face.reviews.length, 'company review'))}</span></span>${icon('arrow')}</a>` : `<a class="card card-link pg-404-card" href="#home"><span class="pg-value-i">${icon('home')}</span><span><b>Home</b><span>Start over</span></span>${icon('arrow')}</a>`}</div>
         <div class="pg-404-cats"><span class="label">Browse by role</span><div class="row" style="--gap:8px">${RN.fields.roleCategory.options.map((o) => `<a class="chip chip-sm" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}</a>`).join('')}</div></div>
       </div>

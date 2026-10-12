@@ -746,7 +746,7 @@
     return `<div class="panel-night fn-vetp" id="fn-vet">
       <div class="fn-vetp-hd"><span class="eyebrow">Vetting</span><h3 class="h3">How we vet</h3><p class="lede">${esc(d.vet.lead)}</p></div>
       <ul class="fn-core" aria-label="CORE, the four scores">${d.vet.core.map((t, i) => `<li style="--i:${i}">
-        <span class="fn-core-ic" aria-hidden="true">${icon(CORE_IC[i] || 'check')}<b>${esc(dims[i].v)}</b></span>
+        <span class="fn-core-ic" aria-hidden="true">${RN.ui.icoTile(CORE_IC[i] || 'check', { cat: d.cat })}<b>${esc(dims[i].v)}</b></span>
         <span class="fn-core-n">${esc(dims[i].l)}</span>
         <p>${rich(t)}</p>
       </li>`).join('')}</ul>
@@ -806,7 +806,7 @@
       <div class="fn-ri">
         <p class="pg-p fn-outside">${rich(d.outside)}</p>
         <aside class="fn-ri-r" aria-label="Until the survey lands">
-          <span class="fn-ri-ic" aria-hidden="true">${icon('chart')}</span>
+          ${RN.ui.icoTile('chart', { tone: 'gold', cls: 'fn-ri-ic' })}
           <div><h3 class="h4">Until the survey lands</h3>
           <p class="small">Results from our State of Fractional GTM survey land in early December 2026, and these six seats update then. The Rate Index has hourly medians by role category in the meantime, updated quarterly.</p>
           <a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a></div>

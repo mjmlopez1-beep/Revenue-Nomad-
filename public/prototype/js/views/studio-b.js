@@ -277,7 +277,7 @@
         const list = shown.filter((x) => x.group === g.k);
         if (!list.length && g.k !== 'reply') return '';
         return `<section class="sb-group" aria-labelledby="sb-g-${g.k}">
-          <h2 class="eyebrow sb-group-h" id="sb-g-${g.k}">${esc(g.l)}<span class="sb-count">${list.length}</span></h2>
+          <h2 class="eyebrow sb-group-h" id="sb-g-${g.k}">${esc(g.l)}<span class="pill sb-count">${list.length}</span></h2>
           ${list.length ? `<div class="stack" style="--gap:14px">${list.map((x) => (x.kind === 'intro' ? introCard(x.rec, op) : projectCard(x.rec, op, x.stage))).join('')}</div>` : `<p class="sb-caught">${icon('check-circle')}${esc(g.empty)}</p>`}
         </section>`;
       }).join('') : RN.ui.empty({ icon: 'inbox', title: 'No requests yet', body: 'When a company asks to meet you or invites you to an engagement, it lands here. Proof links and reviews help companies pick you first.', cta: `<div class="row" style="justify-content:center"><a class="btn btn-sm" href="#studio.credibility">Build credibility</a><a class="btn btn-line btn-sm" href="#studio.profile">Edit profile</a></div>` })}
@@ -595,9 +595,9 @@
           <div class="stat"><span class="stat-v">${esc(RN.fmt.usd(take))}</span><span class="stat-l">Your take-home a month ${RN.ui.tip(FEE_LINE, 'How take-home is calculated')}</span></div>
         </div>
         <p class="tiny muted">${esc(FEE_LINE)}</p>
-        <section class="sb-group" aria-labelledby="sb-g-active"><h2 class="eyebrow sb-group-h" id="sb-g-active">Active engagements<span class="sb-count">${active.length}</span></h2>
+        <section class="sb-group" aria-labelledby="sb-g-active"><h2 class="eyebrow sb-group-h" id="sb-g-active">Active engagements<span class="pill sb-count">${active.length}</span></h2>
           ${active.length ? `<div class="stack" style="--gap:14px">${active.map(hireItem).join('')}</div>` : `<p class="sb-caught">${icon('check-circle')}No active engagements right now.</p>`}</section>
-        ${list.length > active.length ? `<section class="sb-group" aria-labelledby="sb-g-ended"><h2 class="eyebrow sb-group-h" id="sb-g-ended">Ended<span class="sb-count">${list.length - active.length}</span></h2>
+        ${list.length > active.length ? `<section class="sb-group" aria-labelledby="sb-g-ended"><h2 class="eyebrow sb-group-h" id="sb-g-ended">Ended<span class="pill sb-count">${list.length - active.length}</span></h2>
           <div class="stack" style="--gap:14px">${list.filter((h) => h.status === 'ended').map(hireItem).join('')}</div></section>` : ''}`
       : emptyHires(op)}
     </div>`;
@@ -609,7 +609,7 @@
       + st().projects.filter((p) => (p.invited || []).includes(op.id) && ['posted', 'in_progress'].includes(p.status)).length;
     return `<section class="card sb-he">
       <div class="sb-he-copy">
-        <span class="sb-he-ico">${icon('briefcase')}</span>
+        ${RN.ui.icoTile('briefcase', { size: 'lg', cat: op.catKey, cls: 'sb-he-ico' })}
         <h2 class="h4">No engagements yet</h2>
         <p class="small muted">When a company hires you, the terms they confirm show here: rate, available time, start date and term, with what you bill and take home each month.</p>
         ${open ? `<p class="sb-he-open"><b>${open}</b> ${open === 1 ? 'conversation in your inbox could become one.' : 'conversations in your inbox could become one.'}</p>` : ''}
@@ -1360,8 +1360,8 @@
         <label class="sb-sel"><span class="sr-only">${esc(RN.fields.engagementTypes.label)}</span><select class="select" data-change="sb-job-eng" aria-label="${esc(RN.fields.engagementTypes.label)}"><option value="">All engagement types</option>${RN.fields.engagementTypes.options.map((o) => `<option value="${esc(o.v)}" ${S.jobEng === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></label>
       </div>
       ${list.length ? (showSplit
-        ? `<h2 class="eyebrow sb-group-h">In ${esc(RN.fields.catLabel(op.catKey))}<span class="sb-count">${mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => j.mine).map((j) => jobCard(j, stOf(j))).join('')}</div>
-           <h2 class="eyebrow sb-group-h">Other role categories<span class="sb-count">${list.length - mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => !j.mine).slice(0, S.jobMore ? 99 : 3).map((j) => jobCard(j, stOf(j))).join('')}</div>
+        ? `<h2 class="eyebrow sb-group-h">In ${esc(RN.fields.catLabel(op.catKey))}<span class="pill sb-count">${mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => j.mine).map((j) => jobCard(j, stOf(j))).join('')}</div>
+           <h2 class="eyebrow sb-group-h">Other role categories<span class="pill sb-count">${list.length - mineN}</span></h2><div class="stack" style="--gap:12px">${list.filter((j) => !j.mine).slice(0, S.jobMore ? 99 : 3).map((j) => jobCard(j, stOf(j))).join('')}</div>
            ${!S.jobMore && list.length - mineN > 3 ? `<button type="button" class="btn btn-line sb-more" data-act="sb-job-more">${icon('chev-down')}Show ${list.length - mineN - 3} more roles in other categories</button>` : ''}`
         : `<div class="stack" style="--gap:12px;margin-top:8px">${list.map((j) => jobCard(j, stOf(j))).join('')}</div>`)
         : RN.ui.empty({ icon: 'briefcase', title: S.jobStatus === 'board' ? 'No roles match these filters' : `Nothing ${S.jobStatus} yet`, body: S.jobStatus === 'board' ? 'Clear a filter to see every open fractional role.' : 'Save roles from the board to keep a shortlist here.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sb-job-reset">Show the full board</button>` })}`;

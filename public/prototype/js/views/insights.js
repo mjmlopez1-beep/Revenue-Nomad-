@@ -236,7 +236,7 @@
     o = o || {};
     const pick = ops.slice().sort(byRis).slice(0, n);
     const more = (o.total != null ? o.total : ops.length) - pick.length;
-    return `<span class="ava-stack ins-faces ${o.cls || ''}" aria-hidden="true">${pick.map((op) => RN.ui.avatar(op, o.size || 'ava-xs', { decorative: true })).join('')}${more > 0 && !o.noMore ? `<span class="ins-faces-more">+${RN.fmt.int(more)}</span>` : ''}</span>`;
+    return `<span class="ava-stack ins-faces ${o.cls || ''}" aria-hidden="true">${pick.map((op) => RN.ui.avatar(op, o.size || 'ava-xs', { decorative: true })).join('')}${more > 0 && !o.noMore ? `<span class="pill ins-faces-more">+${RN.fmt.int(more)}</span>` : ''}</span>`;
   }
 
   /* Small rising line for the findings strip: y runs from just under the lowest value, so a 9% rise reads as a rise */
@@ -315,7 +315,7 @@
       <div class="ins-sec-hd"><div><span class="eyebrow">Tools and research</span><h2 class="h2">Our own data, open to everyone.</h2></div></div>
       <div class="ins-tools">
         <article class="ins-tool ins-tool-wide ins-tool-night night">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('chart')}</span><div><h3 class="h4"><a href="#rates" class="ins-stretch">Rate Index</a></h3><p class="small">Hourly medians and ranges for every role category, updated quarterly.</p></div></div>
+          <div class="ins-tool-hd">${RN.ui.icoTile('chart', { tone: 'gold', cls: 'ins-tool-ic' })}<div><h3 class="h4"><a href="#rates" class="ins-stretch">Rate Index</a></h3><p class="small">Hourly medians and ranges for every role category, updated quarterly.</p></div></div>
           <div class="ins-ri">
             <div class="ins-ri-now">
               <span class="label">All-category median, ${esc(last.l)}</span>
@@ -328,12 +328,12 @@
           <span class="ins-tool-go">Open the Rate Index${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('grid')}</span><div><h3 class="h4"><a href="#framework" class="ins-stretch">GTM Framework</a></h3><p class="small muted">6 areas across 7 stages of the company journey. See what good looks like in each cell and who is strong there.</p></div></div>
+          <div class="ins-tool-hd">${RN.ui.icoTile('grid', { tone: 'forest', cls: 'ins-tool-ic' })}<div><h3 class="h4"><a href="#framework" class="ins-stretch">GTM Framework</a></h3><p class="small muted">6 areas across 7 stages of the company journey. See what good looks like in each cell and who is strong there.</p></div></div>
           <div class="ins-fw" aria-hidden="true">${Array.from({ length: 42 }, (_, i) => `<i class="${[3, 9, 10, 16, 17, 24, 30, 31, 38].includes(i) ? 'on' : [2, 4, 11, 23, 25, 37].includes(i) ? 'mid' : ''}"></i>`).join('')}</div>
           <span class="ins-tool-go">Explore the framework${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('layers')}</span><div><h3 class="h4"><a href="#library" class="ins-stretch">Fit Tag Library</a></h3><p class="small muted">${RN.fmt.int(libCount)} focus areas with definitions, company demand and verified supply.</p></div></div>
+          <div class="ins-tool-hd">${RN.ui.icoTile('layers', { tone: 'cs', cls: 'ins-tool-ic' })}<div><h3 class="h4"><a href="#library" class="ins-stretch">Fit Tag Library</a></h3><p class="small muted">${RN.fmt.int(libCount)} focus areas with definitions, company demand and verified supply.</p></div></div>
           <ul class="ins-lib" aria-label="Most searched focus areas, company searches next to operators who claim each">${libRows.map((t) => `<li><span class="ins-lib-t"><b>${esc(t.t)}</b><span class="tiny muted">${RN.fmt.int(t.demand)} · ${RN.fmt.int(t.supply)}</span></span>
             <span class="ins-lib-b"><i class="d" style="width:${((t.demand / libMax) * 100).toFixed(1)}%"></i><i class="s" style="width:${Math.max(1.5, (t.supply / libMax) * 100).toFixed(1)}%"></i></span></li>`).join('')}</ul>
           <p class="ins-est-legend tiny"><span><i class="ins-lib-k d"></i>Company searches</span><span><i class="ins-lib-k s"></i>Operators who claim it</span></p>
@@ -341,13 +341,13 @@
           <span class="ins-tool-go">Search the library${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('doc')}</span><div><h3 class="h4"><a href="#blueprints" class="ins-stretch">Engagement Blueprints</a></h3><p class="small muted">Scoped engagements with the hours, term and 30/60/90-day plan they need, priced from the Rate Index.</p></div></div>
+          <div class="ins-tool-hd">${RN.ui.icoTile('doc', { tone: 'info', cls: 'ins-tool-ic' })}<div><h3 class="h4"><a href="#blueprints" class="ins-stretch">Engagement Blueprints</a></h3><p class="small muted">Scoped engagements with the hours, term and 30/60/90-day plan they need, priced from the Rate Index.</p></div></div>
           ${bpList.length ? `<ul class="ins-mini-list">${bpList.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
           <ol class="ins-plan" aria-label="Every Blueprint has a 30, 60 and 90-day plan"><li><b>30</b><span>days</span></li><li><b>60</b><span>days</span></li><li><b>90</b><span>days</span></li></ol>
           <span class="ins-tool-go">Browse Blueprints${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
-          <div class="ins-tool-hd"><span class="ins-tool-ic">${icon('book')}</span><div><h3 class="h4">Guides</h3><p class="small muted">Straight answers to the questions companies ask before they hire.</p></div></div>
+          <div class="ins-tool-hd">${RN.ui.icoTile('book', { tone: 'enable', cls: 'ins-tool-ic' })}<div><h3 class="h4">Guides</h3><p class="small muted">Straight answers to the questions companies ask before they hire.</p></div></div>
           <ul class="ins-q-list">
             <li><a href="#guide.fractional-vp-of-sales-cost">What does a fractional VP of Sales cost in 2026?${icon('chev-right')}</a></li>
             <li><a href="#guide.how-to-hire-a-fractional-vp-of-sales">How do you hire a fractional VP of Sales in 2026?${icon('chev-right')}</a></li>
@@ -684,7 +684,7 @@
       <div class="ins-grid2 ins-grid-aside">
         ${figure({ title: 'Hiring intent by role category, next 12 months', sub: 'Share of hiring companies. Sellers were not part of this question', chart: 'intent', hi: 'Fastest riser',
           take: 'Sales leadership still leads, but Revenue Operations is the fastest riser. Companies are hiring <em>the systems person before the second sales leader.</em>' })}
-        <blockquote class="ins-quote"><span class="ins-quote-ic" aria-hidden="true">${icon('quote')}</span><p>“${esc(R.quote.text)}”</p><footer class="ins-quote-by"><span class="ins-quote-mark" aria-hidden="true">${icon('building')}</span><span class="ins-quote-who"><cite>${esc(R.quote.by.split(',')[0])}</cite><span>${esc(R.quote.by.split(',').slice(1).join(',').trim())}</span></span>${illus('Sample quote')}</footer></blockquote>
+        <blockquote class="ins-quote"><span class="ins-quote-ic" aria-hidden="true">${icon('quote')}</span><p>“${esc(R.quote.text)}”</p><footer class="ins-quote-by">${RN.ui.icoTile('building', { soft: true, round: true, cls: 'ins-quote-mark' })}<span class="ins-quote-who"><cite>${esc(R.quote.by.split(',')[0])}</cite><span>${esc(R.quote.by.split(',').slice(1).join(',').trim())}</span></span>${illus('Sample quote')}</footer></blockquote>
       </div>
       ${figure({ cls: 'ins-fig-wide', title: 'Demand vs supply on Revenue Nomad', sub: `Hiring intent next to each role’s share of the network: ${netText()}`,
         body: `<div class="tbl-wrap"><table class="tbl ins-tbl ins-ds"><thead><tr><th>${esc(F.roleCategory.label)}</th><th>Hiring intent</th><th>Share of operators</th><th><span class="sr-only">Browse</span></th></tr></thead><tbody>

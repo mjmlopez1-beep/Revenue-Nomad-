@@ -282,7 +282,7 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
 .fn-core li { display: grid; grid-template-rows: auto auto 1fr; gap: 12px; padding: var(--s-6); min-width: 0; border-radius: var(--r-card); background: rgba(255, 255, 255, .04); border: 1px solid var(--night-line); transition: background var(--dur) ease, transform var(--dur) var(--ease); }
 .fn-core li:hover { background: rgba(255, 255, 255, .07); transform: translateY(-3px); }
 .fn-core-ic { display: flex; align-items: center; justify-content: space-between; }
-.fn-core-ic svg { box-sizing: content-box; width: 22px; height: 22px; padding: 12px; border-radius: 12px; background: var(--leaf); color: var(--forest-deep); }
+.fn-core-ic .ico { --ico-sz: 46px; --ico-g: 23px; --ico-r: 13px; }
 .fn-core-ic b { font-family: var(--f-serif); font-size: 34px; font-weight: 400; line-height: 1; color: color-mix(in srgb, var(--leaf) 55%, transparent); }
 .fn-core-n { font-family: var(--f-display); font-weight: 700; font-size: var(--t-18); letter-spacing: -0.01em; color: var(--night-ink); }
 .fn-core p { margin: 0; font-size: var(--t-15); line-height: 1.5; color: var(--night-mute); text-wrap: pretty; }
@@ -304,7 +304,7 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
 .fn-vetp .fn-core-ic b { grid-column: 3; grid-row: 1; }
 .fn-vetp .fn-core-n { grid-column: 2; grid-row: 1; }
 .fn-vetp .fn-core p { grid-column: 1 / -1; align-self: start; }
-.fn-vetp .fn-core-ic svg { width: 18px; height: 18px; padding: 9px; border-radius: 10px; }
+.fn-vetp .fn-core-ic .ico { --ico-sz: 36px; --ico-g: 19px; --ico-r: 11px; }
 .fn-vetp .fn-core-ic b { font-size: 28px; }
 .fn-vetp .fn-core-n { font-size: var(--t-16); }
 .fn-vetp .fn-core p { font-size: var(--t-14); }
@@ -351,8 +351,6 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
 .fn-ri-hd { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px var(--s-4); margin-bottom: var(--s-3); }
 .fn-ri-r { display: flex; align-items: flex-start; gap: var(--s-4); padding: var(--s-6); border-radius: var(--r-card); background: var(--tint); border: 1px solid var(--tint-line); }
 .fn-ri-r > div { display: grid; gap: var(--s-2); justify-items: start; }
-.fn-ri-ic { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 auto; border-radius: 12px; background: var(--card); color: var(--accent); }
-.fn-ri-ic svg { width: 19px; height: 19px; }
 .fn-ri-r p { margin: 0; color: var(--ink-2); line-height: 1.55; text-wrap: pretty; }
 .fn-ri-r .act { margin-top: var(--s-1); }
 .fn-outside { margin: 0; max-width: 60ch; }

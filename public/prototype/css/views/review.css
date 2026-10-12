@@ -58,9 +58,8 @@
 /* ---------- CORE ---------- */
 .rv-core-list { display: flex; flex-direction: column; }
 .rv-core { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 18px; padding: var(--s-6) 0; border-top: 1px solid var(--line-2); }
+.rv-letter { --ico-sz: 48px; --ico-r: 14px; }
 .rv-core:first-child { border-top: 0; padding-top: 4px; }
-.rv-letter { width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center; background: var(--tint); border: 1px solid var(--tint-line); color: var(--accent); font-family: var(--f-display); font-size: 22px; font-weight: 800; transition: background .3s ease, color .3s ease, border-color .3s ease; }
-.rv-core:has(.rv-stars:not([data-v=""])) .rv-letter { background: var(--forest); border-color: var(--forest); color: var(--night-ink); }
 .rv-core-hd { display: flex; flex-direction: column; gap: 2px; }
 .rv-core-hd h3 { font-size: var(--t-16); }
 .rv-q { font-family: var(--f-serif); font-size: 21px; line-height: 1.35; letter-spacing: -0.01em; color: var(--ink); margin: 10px 0 14px; max-width: 46ch; }
@@ -172,9 +171,7 @@
 .rv-done-hd, .rv-expired { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
 .rv-done-hd .lede, .rv-expired .lede { margin-inline: auto; }
 .rv-expired { margin-top: var(--s-6); padding: var(--s-12) var(--s-8); }
-.rv-seal { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--tint); border: 1px solid var(--tint-line); color: var(--accent); margin-bottom: 6px; animation: rise .5s var(--ease); }
-.rv-seal svg { width: 38px; height: 38px; }
-.rv-seal.is-muted { background: var(--sunk); border-color: var(--line-2); color: var(--mute); }
+.rv-seal { margin-bottom: 6px; animation: rise .5s var(--ease); }
 .rv-cta { justify-content: center; gap: 10px; margin-top: var(--s-4); }
 .rv-impact { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin: var(--s-10) 0 var(--s-6); }
 .rv-gain { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
@@ -184,8 +181,6 @@
 .rv-gain-l { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--mute); font-variant-numeric: tabular-nums; }
 .rv-gain-l span:nth-child(2) { color: var(--accent); font-weight: 700; }
 .rv-imp { display: flex; flex-direction: column; gap: 10px; }
-.rv-imp-ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; background: var(--tint); color: var(--accent); }
-.rv-imp-ic svg { width: 20px; height: 20px; }
 .rv-imp .num { font-size: 46px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
 .rv-imp-l { font-family: var(--f-display); font-size: var(--t-15); font-weight: 700; line-height: 1.25; margin-top: -2px; }
 .rv-bars { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
@@ -214,7 +209,7 @@
   .rv-sec + .rv-sec, .rv-more + .rv-preview { padding-top: var(--s-6); }
   .rv-prog { margin-top: var(--s-6); }
   .rv-core { grid-template-columns: 38px minmax(0, 1fr); gap: 12px; }
-  .rv-letter { width: 38px; height: 38px; font-size: 18px; border-radius: 10px; }
+  .rv-letter { --ico-sz: 38px; --ico-r: 11px; }
   .rv-q { font-size: 18px; }
   .rv-star svg { width: 32px; height: 32px; }
   .rv-star-l { flex-basis: 100%; padding: 2px 0 0 3px; }

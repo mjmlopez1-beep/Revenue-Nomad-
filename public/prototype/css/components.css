@@ -568,48 +568,89 @@ html:not(.rn-notes) .fn-gap-w { display: contents; }
 html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after, html:not(.rn-notes) dd:has(> .fn-gap:only-child)::after { content: "To come"; color: var(--mute-2); font-style: italic; }
 
 /* ---------- Icon tile (RN.ui.icoTile), one shared treatment ----------
-   A duotone glyph on a layered surface. The glyph is drawn twice: a soft, wide underlay stroke in the tone
-   (the "ink bleed") and the crisp 1.75 line on top, nudged apart by a pixel. The surface is a faint tonal
-   gradient with a hairline, an inner top highlight and a small orb of light in one corner.
-   On hover inside a link, button or .ico-host the tile lifts and the two glyph layers separate a little more.
-   Sizes: ico-sm 32px, ico-md 40px (default), ico-lg 52px. Tones: forest (default), sales, mkt, revops, enable,
-   cs, ai, partner, sellers, gold, info, or any colour through --ico-tone. ico-night for dark bands (automatic
-   inside .night and .panel-night). ico-round for a circle. */
+   Default (rich): a jewel tile in the tone. A deep tonal gradient (lifted top-left, deepened bottom-right), a soft sheen,
+   a crisp inner ring with a top highlight, and a soft shadow in the tone. The glyph is light (leaf on forest, the tone
+   lifted almost to white elsewhere) and drawn twice: the underlay fills the glyph's closed shapes and adds a faint glow,
+   the crisp line sits on top. Hover (inside a link, button, .card-link or .ico-host) lifts the tile and brightens the fill.
+   ico-soft: the quiet version for dense lists, a pale tonal tile with a tone-ink glyph. ico-night: a glassy tile for
+   dark bands (soft tiles switch to it automatically inside .night / .panel-night).
+   Sizes: ico-sm 32, ico-md 40 (default), ico-lg 52, ico-xl 68. ico-round for a circle. ico-txt holds a letter or mark.
+   Tones: forest (default), sales, mkt, revops, enable, cs, ai, partner, sellers, gold, info, or any colour via --ico-tone. */
 .ico {
-  --ico-tone: var(--ico-forest); --ico-sz: 40px; --ico-g: 20px; --ico-r: 12px;
-  --ico-ink: color-mix(in srgb, var(--ico-tone) var(--ico-ink-mix), var(--ico-pole));
+  --ico-tone: var(--forest); --ico-sz: 40px; --ico-g: 21px; --ico-r: 12px;
+  --ico-glyph: color-mix(in srgb, var(--ico-tone) 14%, #FFFFFF);
+  --ico-hi: color-mix(in srgb, var(--ico-tone) 78%, #FFFFFF);
+  --ico-lo: color-mix(in srgb, var(--ico-tone) 58%, #03100A);
   position: relative; flex: 0 0 auto; display: inline-grid; place-items: center; width: var(--ico-sz); height: var(--ico-sz);
-  border-radius: var(--ico-r); isolation: isolate; overflow: hidden; color: var(--ico-ink);
+  border-radius: var(--ico-r); isolation: isolate; overflow: hidden; color: var(--ico-glyph);
+  background:
+    radial-gradient(120% 85% at 18% 0%, rgba(255, 255, 255, .24) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(150deg, var(--ico-hi) 0%, var(--ico-tone) 48%, var(--ico-lo) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .10), inset 0 1px 0 rgba(255, 255, 255, .32), inset 0 -3px 6px -2px rgba(0, 0, 0, .22),
+    0 0 0 1px color-mix(in srgb, var(--ico-lo) 55%, transparent), 0 1px 1px rgba(0, 0, 0, .06),
+    0 7px 16px -8px color-mix(in srgb, var(--ico-tone) 80%, transparent);
+  transition: transform .35s var(--ease), box-shadow .35s ease;
+}
+.ico.ico-t-forest, .ico:not([class*="ico-t-"]):not([style*="--ico-tone"]) { --ico-glyph: var(--leaf); --ico-hi: var(--forest-hi); --ico-lo: var(--forest-deep); }
+.ico > svg { grid-area: 1 / 1; width: var(--ico-g); height: var(--ico-g); transition: transform .35s var(--ease), opacity .35s ease; }
+.ico > .ico-bk { stroke-width: 4; opacity: .26; }
+.ico > .ico-bk :is(circle, rect, ellipse, polygon, path[d$="Z"], path[d$="z"]) { fill: currentColor; }
+.ico > .ico-fg { stroke-width: 1.9; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .18)); }
+.ico-sm { --ico-sz: 32px; --ico-g: 17px; --ico-r: 10px; }
+.ico-sm > .ico-bk { stroke-width: 3.5; }
+.ico-lg { --ico-sz: 52px; --ico-g: 26px; --ico-r: 15px; }
+.ico-xl { --ico-sz: 68px; --ico-g: 30px; --ico-r: 20px; }
+.ico-round { --ico-r: 50%; }
+.ico-txt { font-family: var(--f-display); font-weight: 800; font-size: calc(var(--ico-sz) * .44); line-height: 1; letter-spacing: -0.02em; text-shadow: 0 1px 0 rgba(0, 0, 0, .18); }
+:is(a, button, .card-link, .ico-host):hover > .ico, :is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .4), inset 0 -3px 6px -2px rgba(0, 0, 0, .22),
+    0 0 0 1px color-mix(in srgb, var(--ico-lo) 55%, transparent), 0 1px 1px rgba(0, 0, 0, .06),
+    0 12px 22px -10px color-mix(in srgb, var(--ico-tone) 90%, transparent);
+}
+:is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) > .ico-bk { opacity: .34; }
+:is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) > .ico-fg { transform: scale(1.06); }
+@media (prefers-reduced-motion: reduce) {
+  .ico, .ico > svg { transition: none; }
+  :is(a, button, .card-link, .ico-host):hover .ico, :is(a, button, .card-link, .ico-host):hover .ico > svg { transform: none; }
+}
+.ico-t-sales { --ico-tone: var(--cat-sales); } .ico-t-mkt { --ico-tone: var(--cat-mkt); } .ico-t-revops { --ico-tone: var(--cat-revops); }
+.ico-t-enable { --ico-tone: var(--cat-enable); } .ico-t-cs { --ico-tone: var(--cat-cs); } .ico-t-ai { --ico-tone: var(--cat-ai); }
+.ico-t-partner { --ico-tone: var(--cat-partner); } .ico-t-sellers { --ico-tone: var(--cat-sellers); }
+.ico-t-gold { --ico-tone: #9A6D0E; } .ico-t-info { --ico-tone: #22518F; }
+
+/* Soft: a pale tonal tile, tone-ink glyph. For dense lists and secondary rows. */
+.ico-soft {
+  --ico-ink: color-mix(in srgb, var(--ico-tone) var(--ico-ink-mix), var(--ico-pole));
+  color: var(--ico-ink);
   background:
     radial-gradient(120% 90% at 85% 100%, color-mix(in srgb, var(--ico-tone) 20%, transparent) 0%, transparent 60%),
     linear-gradient(160deg, color-mix(in srgb, var(--ico-tone) 4%, var(--card)) 0%, color-mix(in srgb, var(--ico-tone) 13%, var(--card)) 100%);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ico-tone) 24%, transparent), inset 0 1px 0 var(--ico-hl), 0 1px 2px color-mix(in srgb, var(--ico-tone) 14%, transparent);
-  transition: transform .35s var(--ease), box-shadow .35s ease;
 }
-.ico > svg { grid-area: 1 / 1; width: var(--ico-g); height: var(--ico-g); transition: transform .35s var(--ease), opacity .35s ease; }
-.ico > .ico-bk { stroke-width: 4.5; color: var(--ico-tone); opacity: .2; transform: translate(1px, 1.25px); }
-.ico > .ico-fg { stroke-width: 1.85; }
-.ico-sm { --ico-sz: 32px; --ico-g: 16px; --ico-r: 10px; }
-.ico-sm > .ico-bk { stroke-width: 4; }
-.ico-lg { --ico-sz: 52px; --ico-g: 24px; --ico-r: 15px; }
-.ico-round { --ico-r: 50%; }
-:is(a, button, .card-link, .ico-host):hover > .ico, :is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) {
-  transform: translateY(-2px);
+.ico-soft:not([class*="ico-t-"]):not([style*="--ico-tone"]) { --ico-tone: var(--ico-forest); }
+.ico-soft > .ico-bk { color: var(--ico-tone); opacity: .22; }
+.ico-soft > .ico-fg { filter: none; }
+.ico-soft.ico-txt { text-shadow: none; }
+:is(a, button, .card-link, .ico-host):hover .ico-soft:not(.ico-still) {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ico-tone) 36%, transparent), inset 0 1px 0 var(--ico-hl), 0 6px 14px -4px color-mix(in srgb, var(--ico-tone) 32%, transparent);
 }
-:is(a, button, .card-link, .ico-host):hover .ico > .ico-bk { transform: translate(2px, 2.5px); opacity: .28; }
-:is(a, button, .card-link, .ico-host):hover .ico > .ico-fg { transform: translate(-.5px, -.5px); }
-@media (prefers-reduced-motion: reduce) { .ico, .ico > svg { transition: none; } :is(a, button, .card-link, .ico-host):hover .ico, :is(a, button, .card-link, .ico-host):hover .ico > svg { transform: none; } }
-.ico-t-sales { --ico-tone: var(--cat-sales); } .ico-t-mkt { --ico-tone: var(--cat-mkt); } .ico-t-revops { --ico-tone: var(--cat-revops); }
-.ico-t-enable { --ico-tone: var(--cat-enable); } .ico-t-cs { --ico-tone: var(--cat-cs); } .ico-t-ai { --ico-tone: var(--cat-ai); }
-.ico-t-partner { --ico-tone: var(--cat-partner); } .ico-t-sellers { --ico-tone: var(--cat-sellers); }
-.ico-t-gold { --ico-tone: var(--gold); } .ico-t-info { --ico-tone: var(--info); }
-/* Dark bands: glassy surface, leaf glyph (or the tone lifted toward white) */
-.ico-night, .night .ico, .panel-night .ico {
+/* Dark bands: a glassy tile with a leaf (or lifted tone) glyph. Explicit with ico-night; automatic for soft tiles on night. */
+.ico-night, .night .ico-soft, .panel-night .ico-soft {
   --ico-pole: #FFFFFF; --ico-ink-mix: 40%; --ico-forest: var(--leaf);
+  color: color-mix(in srgb, var(--ico-tone) 40%, #FFFFFF);
   background:
-    radial-gradient(120% 90% at 85% 100%, color-mix(in srgb, var(--ico-tone) 26%, transparent) 0%, transparent 62%),
-    linear-gradient(160deg, rgba(255, 255, 255, .10) 0%, rgba(255, 255, 255, .03) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .10);
+    radial-gradient(120% 90% at 85% 100%, color-mix(in srgb, var(--ico-tone) 30%, transparent) 0%, transparent 62%),
+    linear-gradient(160deg, rgba(255, 255, 255, .12) 0%, rgba(255, 255, 255, .03) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 18px -10px color-mix(in srgb, var(--ico-tone) 70%, transparent);
 }
-.ico-night > .ico-bk, .night .ico > .ico-bk, .panel-night .ico > .ico-bk { opacity: .3; }
+.ico-night:not([class*="ico-t-"]):not([style*="--ico-tone"]), .night .ico-soft:not([class*="ico-t-"]):not([style*="--ico-tone"]), .panel-night .ico-soft:not([class*="ico-t-"]):not([style*="--ico-tone"]) { --ico-tone: var(--leaf); color: var(--leaf); }
+.ico-night > .ico-bk, .night .ico-soft > .ico-bk, .panel-night .ico-soft > .ico-bk { color: currentColor; opacity: .26; }
+/* Rich tiles on night bands: a leaf rim so the deep tile reads against the dark */
+:is(.night, .panel-night) .ico:not(.ico-soft):not(.ico-night) {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .34), inset 0 -3px 6px -2px rgba(0, 0, 0, .25),
+    0 0 0 1px color-mix(in srgb, var(--ico-glyph) 22%, transparent), 0 8px 20px -8px color-mix(in srgb, var(--ico-tone) 90%, transparent);
+}

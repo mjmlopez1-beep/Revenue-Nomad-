@@ -47,6 +47,8 @@
 
   // Icons for the problem picklist (RN.fields.need) and the GTM Framework areas (same map as research.js)
   const NEED_IC = { sales_motion: 'target', pipeline: 'trend-up', team: 'users', systems: 'layers', ai: 'ai', retention: 'refresh', partners: 'handshake', not_sure: 'message' };
+  /* Framework areas take the tone of the function that owns most of that work */
+  const AREA_TONE = { 'Lead & plan': 'forest', 'Build the team': 'enable', 'Generate demand': 'mkt', 'Win deals': 'sales', 'Retain & expand': 'cs', 'Systems & data': 'revops' };
   const AREA_IC = { 'Lead & plan': 'compass', 'Build the team': 'users', 'Generate demand': 'megaphone', 'Win deals': 'handshake', 'Retain & expand': 'refresh', 'Systems & data': 'layers' };
 
   // GTM Framework area definitions (Operator Profile Explorer AXIS_DEF, verbatim)
@@ -150,7 +152,7 @@
           <h1 class="h-hero hm-h1" id="hm-h1">
             <span class="hm-ln"><span>Meet the operators</span></span>
             <span class="hm-ln"><span>who already solved</span></span>
-            <span class="hm-ln"><span class="serif">your revenue problem.</span></span>
+            <span class="hm-ln"><span class="serif">your revenue problem<span class="vm">.</span></span></span>
           </h1>
           <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse and no fees for companies.')}</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
@@ -274,7 +276,7 @@
     const needs = RN.fields.need.options;
     const cells = needs.map((o) => {
       const cats = RN.fields.needCats[o.v] || [];
-      const ic = `<span class="hm-ic" aria-hidden="true">${icon(NEED_IC[o.v] || 'target')}</span>`;
+      const ic = RN.ui.icoTile(NEED_IC[o.v] || 'target', { tone: cats.length ? RN.ui.icoTone(cats[0]) : '', night: !cats.length, cls: 'hm-ic' });
       if (!cats.length) {
         return `<button type="button" class="hm-need hm-need-talk" data-act="hm-need" data-need="${esc(o.v)}">
           ${ic}<span class="hm-go">${icon('arrow')}</span>
@@ -291,7 +293,7 @@
     }).join('');
     return `<section class="hm-sec section">
       <div class="wrap">
-        ${head('Start here', 'Start from the problem you have.', '', `Pick what is broken. Browse opens on the role categories that fix it. Counts are the ${esc(RN.fmt.int(liveOps().length))} profiles in this prototype.`)}
+        ${head('Start here', 'Start from the problem you have<span class="vm">.</span>', '', `Pick what is broken. Browse opens on the role categories that fix it. Counts are the ${esc(RN.fmt.int(liveOps().length))} profiles in this prototype.`)}
         <div class="hm-ruled hm-needs">${cells}</div>
         ${seats()}
       </div>
@@ -463,7 +465,7 @@
       const nOps = ops.filter((o) => o.tags.some((t) => t.axis === axis)).length;
       const where = base && per.every((c) => c === base) ? 'every stage' : stages.filter((st, k) => per[k] > 0).join(', ');
       return `<a class="hm-area" href="#framework" title="${esc(AREA_DEF[axis] || '')}">
-        <span class="hm-ic" aria-hidden="true">${icon(AREA_IC[axis] || 'grid')}</span><span class="hm-go">${icon('arrow')}</span>
+        ${RN.ui.icoTile(AREA_IC[axis] || 'grid', { tone: AREA_TONE[axis], cls: 'hm-ic' })}<span class="hm-go">${icon('arrow')}</span>
         <span class="hm-area-body"><span class="hm-area-t">${esc(axis)}</span></span>
         <span class="hm-stages" role="img" aria-label="${esc(axis)} focus areas sit in: ${esc(where || 'no stage yet')}">${per.map((c, k) => `<i title="${esc(stages[k])}: ${c}"><b style="opacity:${c ? (0.28 + 0.72 * (c / max)).toFixed(2) : 0}"></b></i>`).join('')}</span>
         <span class="hm-area-meta">${RN.fmt.plural(tags.length, 'focus area')} · ${RN.fmt.plural(nOps, 'operator')}</span>
@@ -474,7 +476,7 @@
       <div class="wrap hm-fw">
         <div class="hm-fw-intro">
           <span class="eyebrow">The GTM Framework</span>
-          <h2 class="h2 hm-h2">One shared map of go-to-market work.</h2>
+          <h2 class="h2 hm-h2">One shared map of go-to-market work<span class="vm">.</span></h2>
           <p class="lede">Every focus area on Revenue Nomad maps to an area of go-to-market work and the stage of the company journey it moves. Operators are scored against it. Companies use it to find the gap.</p>
           <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Stages of the customer journey</dd></div><div><dt class="num">${RN.fmt.int(lib.length)}</dt><dd>Focus areas</dd></div></dl>
           ${more('Explore the framework', 'href="#framework"')}
@@ -736,7 +738,7 @@
   const stepsRow = () => `<div class="hm-how">
       <div class="hm-how-hd"><h3 class="label">How it works · Three steps, no retained search</h3><a class="hm-more" href="#how">Every step, in detail${icon('arrow')}</a></div>
       <ol class="hm-steps">${STEPS.map((s, i) => `<li class="hm-step">
-        <span class="hm-ic" aria-hidden="true">${icon(s[0])}</span>
+        ${RN.ui.icoTile(s[0], { cls: 'hm-ic' })}
         <span class="hm-step-k">Step ${i + 1}</span><h4 class="hm-step-t">${esc(s[1])}</h4><p>${esc(s[2])}</p>
       </li>`).join('')}</ol>
     </div>`;

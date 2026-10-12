@@ -562,7 +562,7 @@
       if (!info || b.dataset.jnEnh) return;
       b.dataset.jnEnh = '1';
       const label = b.textContent.trim();
-      b.innerHTML = `<span class="jn-cat-ico">${icon(info.i)}</span><span class="jn-cat-l">${esc(label)}</span><span class="jn-cat-d">${esc(info.d)}</span><span class="jn-cat-ok" aria-hidden="true">${icon('check')}</span>`;
+      b.innerHTML = `${RN.ui.icoTile(info.i, { cat: b.dataset.v, cls: 'jn-cat-ico' })}<span class="jn-cat-l">${esc(label)}</span><span class="jn-cat-d">${esc(info.d)}</span><span class="jn-cat-ok" aria-hidden="true">${icon('check')}</span>`;
     });
   }
 
@@ -921,7 +921,7 @@
       </section>
       <section class="wrap jn-paths" aria-label="Choose how you use Revenue Nomad">
         <article class="jn-path">
-          <div class="jn-path-hd"><span class="jn-path-ico">${icon('building')}</span><span class="label">For companies</span></div>
+          <div class="jn-path-hd">${RN.ui.icoTile('building', { size: 'lg', cls: 'jn-path-ico' })}<span class="label">For companies</span></div>
           <h2 class="h2">I’m hiring</h2>
           <p class="jn-path-lede">No account needed. Open profiles with company reviews, rates and availability.</p>
           <div class="jn-links">
@@ -939,7 +939,7 @@
           </div>
         </article>
         <article class="jn-path jn-path-op">
-          <div class="jn-path-hd"><span class="jn-path-ico">${icon('user')}</span><span class="label">For fractional operators</span></div>
+          <div class="jn-path-hd">${RN.ui.icoTile('user', { size: 'lg', night: true, cls: 'jn-path-ico' })}<span class="label">For fractional operators</span></div>
           <h2 class="h2">I’m a fractional operator</h2>
           <p class="jn-path-lede">Apply in about 8 minutes. ${TOTAL} short steps, one of them optional, saved as you go.</p>
           <ul class="jn-gets">
@@ -1019,7 +1019,7 @@
         <section class="wrap jn-done-body"><div class="jn-done-grid">
           <div class="jn-done-main">${timeline(null, gain, reached)}</div>
           <aside class="jn-done-side"><div class="card jn-dash">
-            <span class="jn-dash-ico">${icon('doc')}</span>
+            ${RN.ui.icoTile('doc', { cls: 'jn-dash-ico' })}
             <h3 class="h4">Apply in about 8 minutes</h3>
             <ol class="jn-steplist">${STEPS.slice(1, REVIEW).map((st) => `<li><span>${esc(st.label)}${st.optional ? '<small>Optional</small>' : ''}</span></li>`).join('')}</ol>
             <p class="small muted">${TOTAL} short steps, one question group each. Your draft saves as you go, so you can stop and come back.</p>
@@ -1067,7 +1067,7 @@
           <div class="jn-done-main">${timeline(app, gain, reached, rv)}</div>
           <aside class="jn-done-side">
             <div class="card jn-dash">
-              <span class="jn-dash-ico">${icon('chart')}</span>
+              ${RN.ui.icoTile('chart', { tone: 'info', cls: 'jn-dash-ico' })}
               <h2 class="h4">Your dashboard</h2>
               <p class="small">${live ? 'Studio shows who viewed you, the searches you appeared in and how your rate compares with the Rate Index.' : 'Studio is where you will see who viewed you, the searches you appeared in and how your rate compares with the Rate Index. Your own numbers start the day your profile goes live.'}</p>
               <p class="tiny muted jn-dash-proto" data-proto>${icon('info')}<span>In this prototype, Studio opens with a sample operator's data.</span></p>

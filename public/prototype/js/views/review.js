@@ -150,7 +150,7 @@
   function expired() {
     return `<div class="rv wrap-narrow">
       <div class="rv-expired card">
-        <span class="rv-seal is-muted">${icon('link')}</span>
+        ${RN.ui.icoTile('link', { size: 'xl', round: true, soft: true, color: 'var(--mute)', cls: 'rv-seal' })}
         <span class="eyebrow">Company review</span>
         <h1 class="h2">This review link is no longer active</h1>
         <p class="lede">Review links work once and expire after 30 days. Ask the operator who sent it for a new link, or tell our team and we will send one.</p>
@@ -277,7 +277,7 @@
   function step2(rr, op, d) {
     return `${sec('CORE ratings', `CORE is how Revenue Nomad measures operators: four behaviours, rated 1 to 5 by the companies who worked with them. Say why if you can. Your reasons are the most useful part for the next company.`, `
       <div class="rv-core-list">${DIMS().map((x) => `<div class="rv-core">
-        <span class="rv-letter" aria-hidden="true">${esc(x.v)}</span>
+        ${RN.ui.icoTile(null, { text: x.v, size: 'lg', soft: !d['core_' + x.v], still: true, cls: 'rv-letter' })}
         <div class="rv-core-b">
           <div class="rv-core-hd"><h3 class="h5">${esc(x.l)}</h3><span class="tiny muted">${esc(x.d)}</span></div>
           <p class="rv-q">${esc(x.q)}</p>
@@ -447,6 +447,8 @@
     const fs = el.closest('.rv-stars');
     const v = +el.value;
     fs.dataset.v = v;
+    const letter = fs.closest('.rv-core') && fs.closest('.rv-core').querySelector('.rv-letter');
+    if (letter) letter.classList.toggle('ico-soft', !v); // the CORE letter lights up once rated
     fs.querySelector('.rv-star-l').innerHTML = `<b>${v} of 5</b> ${STAR_WORDS[v - 1]}`;
     clearErr(fs);
     const form = el.closest('form');
@@ -583,7 +585,7 @@
     const dims = DIMS();
     if (!res) {
       return `<div class="rv wrap-narrow rv-done">
-        <div class="rv-done-hd"><span class="rv-seal">${icon('check-circle')}</span>
+        <div class="rv-done-hd">${RN.ui.icoTile('check-circle', { size: 'xl', round: true, cls: 'rv-seal' })}
           <span class="eyebrow">Review completed</span>
           <h1 class="h2">You already reviewed <span class="serif">${esc(op.first)}</span>. Thank you.</h1>
           <p class="lede">${rv ? `Submitted ${esc(RN.fmt.date(rr.completedAt))}. It is live on ${esc(op.first)}’s profile.` : `This review was submitted${rr.completedAt ? ' on ' + esc(RN.fmt.date(rr.completedAt)) : ''}. Review links work once.`}</p>
@@ -596,27 +598,27 @@
     const shownTags = res.tags;
     const fresh = res.newlyVerified.length;
     return `<div class="rv wrap-narrow rv-done">
-      <div class="rv-done-hd"><span class="rv-seal">${icon('check-circle')}</span>
+      <div class="rv-done-hd">${RN.ui.icoTile('check-circle', { size: 'xl', round: true, cls: 'rv-seal' })}
         <span class="eyebrow">Review published</span>
         <h1 class="h1">Thank you, <span class="serif">${esc(first || 'there')}</span>.</h1>
         <p class="lede">Your review is live on ${esc(op.first)}’s profile. Here is what it changed.</p>
       </div>
       <div class="rv-impact">
         <section class="card rv-imp">
-          <span class="rv-imp-ic">${icon('seal')}</span>
+          ${RN.ui.icoTile('seal', { tone: 'gold', cls: 'rv-imp-ic' })}
           <b class="num">${res.tags.length}</b>
           <span class="rv-imp-l">${res.good ? `focus area${res.tags.length === 1 ? '' : 's'} verified by you` : `focus area${res.tags.length === 1 ? '' : 's'} recorded`}</span>
           ${shownTags.length ? `<div class="opc-tags">${shownTags.slice(0, 8).map((t) => RN.ui.ftag({ t, tier: res.good ? 'verified' : 'claimed' })).join('')}${shownTags.length > 8 ? `<span class="ftag more">+${shownTags.length - 8} more</span>` : ''}</div>` : ''}
           <p class="small muted">${!res.tags.length ? 'No focus areas confirmed. Your ratings and quote still count toward CORE.' : res.good ? `${fresh ? `${fresh} ${fresh === 1 ? 'was' : 'were'} only claimed until now. ` : ''}Each one now carries one more company verification, and verified focus areas rank first in search.` : 'Focus areas verify on reviews with a CORE average of 4.0 or higher.'}</p>
         </section>
         <section class="card rv-imp">
-          <span class="rv-imp-ic">${icon('radar')}</span>
+          ${RN.ui.icoTile('radar', { cat: op.catKey, cls: 'rv-imp-ic' })}
           <b class="num">${fmt1(res.avg)}</b>
           <span class="rv-imp-l">added to ${esc(op.first)}’s CORE score</span>
           <div class="rv-bars">${dims.map((x, i) => `<div class="rv-bar"><span class="rv-bar-k">${esc(x.v)}</span><span class="rv-bar-l">${esc(x.l)}</span><span class="meter"><i style="width:${((res.core[i] - 1) / 4) * 100}%"></i></span><b>${res.core[i]}</b></div>`).join('')}</div>
         </section>
         <section class="card rv-imp">
-          <span class="rv-imp-ic">${icon('trend-up')}</span>
+          ${RN.ui.icoTile('trend-up', { cls: 'rv-imp-ic' })}
           <b class="num">${res.after.score}</b>
           <span class="rv-imp-l">Reputation Index, ${esc(res.after.label)}</span>
           ${gainMeter(res)}

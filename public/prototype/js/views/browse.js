@@ -456,11 +456,11 @@
     return `<section class="wrap br-plan" aria-labelledby="br-plan-h">
       <div class="br-plan-hd"><span class="eyebrow">Plan it</span><h2 class="h3" id="br-plan-h">Plan a fractional ${esc(noun)} engagement</h2></div>
       <div class="grid g-3" style="--gap:16px">
-        <a class="card card-link br-plan-card" href="#rates">${icon('chart')}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
-        <div class="card br-plan-card">${icon('layers')}<h3 class="h4">Scope it from a Blueprint</h3>
+        <a class="card card-link br-plan-card" href="#rates">${RN.ui.icoTile('chart', { tone: 'gold' })}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
+        <div class="card br-plan-card">${RN.ui.icoTile('layers', { tone: 'info' })}<h3 class="h4">Scope it from a Blueprint</h3>
           <p class="small muted">${bps.length ? esc(bps[0].blurb) + ' ' : ''}Hours, term and a 30/60/90-day plan. Post it as an engagement in minutes.</p>
           <ul class="br-plan-links">${bps.length ? bps.map((b) => link('#blueprint.' + esc(b.id), `${b.role} Blueprint`)).join('') : link('#blueprints', 'Browse Blueprints')}</ul></div>
-        <div class="card br-plan-card">${icon('book')}<h3 class="h4">Hiring guides</h3>
+        <div class="card br-plan-card">${RN.ui.icoTile('book', { tone: 'enable' })}<h3 class="h4">Hiring guides</h3>
           <p class="small muted">Plain answers on scoping, pricing and managing a fractional ${esc(noun)}.</p>
           <ul class="br-plan-links">${perGuide ? guides.map((g) => link('#guide.' + esc(g.slug), g.q)).join('') : ''}${link('#guides', perGuide && guides.length ? 'All guides' : 'Read the guides')}</ul></div>
       </div>

@@ -776,7 +776,7 @@
   function rowHtml(it) {
     const sec = (it.secondary || []).map((a) => actBtn(a, a.line ? 'btn btn-line btn-sm' : a.muted ? 'act muted' : 'act')).join('');
     return `<li class="bw-row" data-kind="${esc(it.kind)}">
-      <span class="bw-row-ic" aria-hidden="true">${icon(it.icon || 'dots')}</span>
+      ${RN.ui.icoTile(it.icon || 'dots', { soft: true, cls: 'bw-row-ic' })}
       <div class="bw-row-main">
         <b class="bw-row-t">${esc(it.title)}</b>
         ${it.pill || it.ctx ? `<div class="bw-row-meta">${pillHtml(it.pill)}${it.ctx ? `<span class="bw-ctx tiny">${it.ctx}</span>` : ''}</div>` : ''}
@@ -1260,7 +1260,7 @@
           <span class="eyebrow">${icon('bookmark')}Your talent</span>
           <h2 class="h3" id="bw-start-t">${esc(title)}</h2>
           <p class="small muted">Everything you save, ask for and open shows up on this tab.</p>
-          <ul class="bw-ss-todo">${empty.map((e) => `<li id="${esc(e.id)}">${RN.ui.icoTile(e.icon, { size: 'sm', cls: 'bw-ss-todo-ic' })}<span><b>${esc(e.l)}</b><span class="tiny muted">${esc(e.d)}</span></span></li>`).join('')}</ul>
+          <ul class="bw-ss-todo">${empty.map((e) => `<li id="${esc(e.id)}">${RN.ui.icoTile(e.icon, { size: 'sm', soft: true, cls: 'bw-ss-todo-ic' })}<span><b>${esc(e.l)}</b><span class="tiny muted">${esc(e.d)}</span></span></li>`).join('')}</ul>
           <a class="btn ${none ? '' : 'btn-line'}" href="#browse">${icon('search')}Browse talent</a>
         </div>
         ${sug.length ? `<div class="bw-ss-panel-r">
@@ -2163,7 +2163,7 @@
       ${KINDS.length > 2 ? `<div class="chipset bw-filter" role="group" aria-label="Filter the log">${KINDS.map(([k, l]) => `<button type="button" class="chip chip-sm" data-act="bw-hist-filter" data-f="${k}" aria-pressed="${hf === k}">${esc(l)} <span class="muted">${k === 'all' ? ev.length : ev.filter((e) => e.kind === k).length}</span></button>`).join('')}</div>` : ''}
       ${shown.length ? `<ol class="bw-log">${months.map((g) => `<li class="bw-log-m"><h3 class="label">${esc(g.k)}</h3><ol>${g.items.map((e) => `<li class="bw-log-i" data-kind="${esc(e.kind)}">
           <span class="bw-log-d">${esc(RN.fmt.dateShort(e.ts))}</span>
-          <span class="bw-log-ic" aria-hidden="true">${icon(e.icon)}</span>
+          ${RN.ui.icoTile(e.icon, { size: 'sm', soft: true, cls: 'bw-log-ic' })}
           <div class="grow"><b>${esc(e.text)}</b>${e.sub ? `<span class="tiny muted">${esc(e.sub)}</span>` : ''}</div>
         </li>`).join('')}</ol></li>`).join('')}</ol>` : '<p class="small muted">Nothing of this kind yet.</p>'}
       ${list.length > shown.length ? `<button type="button" class="btn btn-line btn-sm bw-log-more" data-act="bw-hist-more">Show more <span class="muted">${list.length - shown.length}</span></button>` : ''}
