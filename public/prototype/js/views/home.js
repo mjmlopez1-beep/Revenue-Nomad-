@@ -261,7 +261,7 @@
       <g class="tag"><rect x="108" y="6" width="58" height="18" rx="9"/><text x="137" y="18.5">$240/hr</text></g>
       <text class="tick" x="10" y="84">$150</text><text class="tick" x="100" y="84" text-anchor="middle">median</text><text class="tick" x="190" y="84" text-anchor="end">$350</text></svg>`,
     // Five questions: a track that fills, checks on the answered ones, the gap found on the fourth
-    `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6FCF97"/><stop offset="1" stop-color="#E9A63D"/></linearGradient></defs>
+    `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6FCF97"/><stop offset="1" stop-color="#FF6A4F"/></linearGradient></defs>
       <line class="track" x1="22" y1="40" x2="178" y2="40"/><line class="track-on" x1="22" y1="40" x2="139" y2="40" stroke="url(#hpG)"/>
       ${[22, 61, 100, 139, 178].map((x, i) => i < 3 ? `<g class="q-on" style="--i:${i}"><circle cx="${x}" cy="40" r="9"/><path d="M${x - 4} 40 l3 3 l5 -6"/></g>` : i === 3 ? `<circle class="gap-ring" cx="${x}" cy="40" r="13"/><circle class="gap" cx="${x}" cy="40" r="9"/><text class="gap-n" x="${x}" y="43.5">4</text>` : `<circle class="q" cx="${x}" cy="40" r="9"/><text class="q-n" x="${x}" y="43.5">5</text>`).join('')}
       <g class="tag tag-gap"><rect x="104" y="60" width="70" height="18" rx="9"/><text x="139" y="72.5">Gap: pipeline</text></g></svg>`,

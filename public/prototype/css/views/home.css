@@ -723,7 +723,7 @@ main[data-view="home"] { overflow-x: clip; }
 /* Not ready to hire yet: a dark panel of four glass tiles, each with a small living graphic of where it leads.
    The panel is dark in both themes, so its colors are fixed rather than theme tokens. */
 [data-view="home"] .hm-prep { --focus-ring: var(--leaf); position: relative; overflow: hidden; margin-top: var(--s-12, 48px); padding: clamp(24px, 3vw, 40px); border-radius: var(--r-card); color: #fff;
-  background: var(--hm-grain), radial-gradient(70% 120% at 100% 0%, rgba(233, 166, 61, .18), transparent 55%), radial-gradient(60% 120% at 0% 100%, rgba(31, 122, 77, .45), transparent 60%), #0B1A13; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 1px 0 rgba(255, 255, 255, .06); }
+  background: var(--hm-grain), radial-gradient(70% 120% at 100% 0%, rgba(194, 231, 176, .10), transparent 55%), radial-gradient(60% 120% at 0% 100%, rgba(31, 122, 77, .45), transparent 60%), #0B1A13; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06), inset 0 1px 0 rgba(255, 255, 255, .06); }
 [data-view="home"] .hm-prep-hd { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 20px; margin-bottom: var(--s-5); }
 [data-view="home"] .hm-prep-hd h3 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: clamp(22px, 2.4vw, 30px); letter-spacing: -.02em; color: #fff; }
 [data-view="home"] .hm-prep-hd p { margin: 0; color: rgba(255, 255, 255, .7); font-size: var(--t-15, 15px); }
@@ -736,7 +736,7 @@ main[data-view="home"] { overflow-x: clip; }
 [data-view="home"] .hm-prep-art svg { display: block; width: 100%; height: 100%; overflow: visible; }
 /* The index number rides with its title, so a one-line title never leaves its number stranded above it */
 [data-view="home"] .hm-prep-t { display: grid; align-content: end; gap: 10px; min-width: 0; }
-[data-view="home"] .hm-prep-n { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .1em; color: #E9A63D; }
+[data-view="home"] .hm-prep-n { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .1em; color: #C2E7B0; }
 [data-view="home"] .hm-prep-t b { font-family: var(--f-display); font-size: clamp(17px, 1.4vw, 20px); font-weight: 700; line-height: 1.2; letter-spacing: -.01em; text-wrap: balance; color: #fff; }
 [data-view="home"] .hm-prep-d { margin-top: -6px; font-size: var(--t-14); line-height: 1.45; color: rgba(255, 255, 255, .68); text-wrap: pretty; }
 [data-view="home"] .hm-prep-go { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .22); color: #fff; transition: background var(--dur) ease, border-color var(--dur) ease, color var(--dur) ease, transform var(--dur) var(--ease); }
@@ -748,13 +748,13 @@ main[data-view="home"] { overflow-x: clip; }
 [data-view="home"] .hm-prep-art .axis { stroke: rgba(255, 255, 255, .25); stroke-width: 1; }
 [data-view="home"] .hm-prep-art text { font-family: var(--f-display); fill: #fff; }
 [data-view="home"] .hm-prep-art .tick { font-size: 8px; font-weight: 600; fill: rgba(255, 255, 255, .5); letter-spacing: .02em; }
-[data-view="home"] .hm-prep-art .tag rect { fill: #E9A63D; }
-[data-view="home"] .hm-prep-art .tag text { font-size: 9px; font-weight: 800; fill: #2A1A02; text-anchor: middle; }
+[data-view="home"] .hm-prep-art .tag rect { fill: var(--vermilion-night); }
+[data-view="home"] .hm-prep-art .tag text { font-size: 9px; font-weight: 800; fill: #fff; text-anchor: middle; }
 /* 1 · rate spread */
 [data-view="home"] .hm-prep-art .dist-band { fill: rgba(111, 207, 151, .28); }
 [data-view="home"] .hm-prep-art .dist-line { fill: none; stroke: #6FCF97; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 260; stroke-dashoffset: 0; animation: hmDraw 1.4s var(--ease) both; }
-[data-view="home"] .hm-prep-art .med { stroke: #E9A63D; stroke-width: 1.5; stroke-dasharray: 2 3; }
-[data-view="home"] .hm-prep-art .med-dot { fill: #E9A63D; stroke: #0B1A13; stroke-width: 2; }
+[data-view="home"] .hm-prep-art .med { stroke: var(--vermilion-night); stroke-width: 1.5; stroke-dasharray: 2 3; }
+[data-view="home"] .hm-prep-art .med-dot { fill: var(--vermilion-night); stroke: #0B1A13; stroke-width: 2; }
 [data-view="home"] .hm-prep-a:hover .med-dot { animation: hmPulse 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 /* 2 · five questions */
 [data-view="home"] .hm-prep-art .track { stroke: rgba(255, 255, 255, .12); stroke-width: 3; stroke-linecap: round; }
@@ -765,14 +765,14 @@ main[data-view="home"] { overflow-x: clip; }
 [data-view="home"] .hm-prep-art .q { fill: #0B1A13; stroke: rgba(255, 255, 255, .3); stroke-width: 1.5; }
 [data-view="home"] .hm-prep-art .q-n, [data-view="home"] .hm-prep-art .gap-n { font-size: 9px; font-weight: 800; text-anchor: middle; }
 [data-view="home"] .hm-prep-art .q-n { fill: rgba(255, 255, 255, .5); }
-[data-view="home"] .hm-prep-art .gap { fill: #E9A63D; }
-[data-view="home"] .hm-prep-art .gap-n { fill: #2A1A02; }
-[data-view="home"] .hm-prep-art .gap-ring { fill: none; stroke: #E9A63D; stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: hmRing 2.4s ease-out infinite; }
+[data-view="home"] .hm-prep-art .gap { fill: var(--vermilion-night); }
+[data-view="home"] .hm-prep-art .gap-n { fill: #fff; }
+[data-view="home"] .hm-prep-art .gap-ring { fill: none; stroke: var(--vermilion-night); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: hmRing 2.4s ease-out infinite; }
 /* 3 · 30/60/90 gantt */
 [data-view="home"] .hm-prep-art .gantt-bg { fill: rgba(255, 255, 255, .06); }
 [data-view="home"] .hm-prep-art .gantt { fill: #6FCF97; transform-box: fill-box; transform-origin: left; animation: hmFill .9s var(--ease) both; animation-delay: calc(var(--i) * 220ms + 150ms); }
 [data-view="home"] .hm-prep-art .gantt-l { font-size: 7.5px; font-weight: 800; fill: #0B3D2C; }
-[data-view="home"] .hm-prep-art .mile { fill: #E9A63D; transform-box: fill-box; transform-origin: center; animation: hmPop .5s var(--ease) .9s both; }
+[data-view="home"] .hm-prep-art .mile { fill: var(--vermilion-night); transform-box: fill-box; transform-origin: center; animation: hmPop .5s var(--ease) .9s both; }
 /* 4 · question and answer */
 [data-view="home"] .hm-prep-art .msg-q rect:first-child { fill: rgba(255, 255, 255, .06); stroke: rgba(255, 255, 255, .18); stroke-width: 1; }
 [data-view="home"] .hm-prep-art .msg-q circle { fill: rgba(255, 255, 255, .25); }
