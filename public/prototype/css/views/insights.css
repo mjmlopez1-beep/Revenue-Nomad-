@@ -716,8 +716,14 @@
   .ins-rates-ref { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
-  .ins-book, .ins-fw, .ins-plan, .ins-find-viz, .ins-trow > .ins-faces, .ins-hero-people .ins-faces { display: none; }
+  .ins-fw, .ins-plan, .ins-find-viz, .ins-trow > .ins-faces, .ins-hero-people .ins-faces { display: none; }
   .ins-trow { grid-template-columns: 22px minmax(0, 1fr) 16px; }
   .ins-find { gap: 6px; }
   .ins-find-v { font-size: var(--t-40); }
 }
+
+/* The report book: its three headline figures and the book on phones are back (founder comment, Oct 12, 2026) */
+.ins-book-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin-top: auto; padding-top: var(--s-5); border-top: 1px solid var(--night-line); }
+.ins-book-stats span { display: flex; flex-direction: column; gap: 4px; font-size: var(--t-12); color: var(--night-mute); line-height: 1.35; }
+.ins-book-stats b { font-family: var(--f-display); font-size: var(--t-24); font-weight: 700; color: var(--night-ink); letter-spacing: -.02em; line-height: 1; }
+@media (max-width: 640px) { .ins-book-stats b { font-size: var(--t-20); } .ins-book { margin-top: var(--s-6); } }

@@ -307,6 +307,11 @@
         <span class="ins-book-top"><span class="eyebrow">Revenue Nomad Research</span></span>
         <span class="ins-book-yr">2027</span>
         <span class="ins-book-t">The State of Fractional GTM</span>
+        ${(() => { const sum = (R.summary || []); return sum[3] ? `<span class="ins-book-stats">
+          <span><b>${esc(sum[0].v)}</b>median hourly rate</span>
+          <span><b>${esc(sum[2].v)}</b>median engagement</span>
+          <span><b>${esc(sum[3].v)}</b>rehire rate with 3+ reviews</span>
+        </span>` : ''; })()}
         <span class="ins-book-foot"><span>6 chapters · ${RN.fmt.int(R.sample.operators + R.sample.companies)} respondents</span>${icon('arrow')}</span>
       </a>
     </section>
