@@ -339,3 +339,49 @@
 .br-closer .btn { margin-top: var(--s-2); }
 @media (min-width: 1081px) { .br-tell-alt { display: none; } }
 @media (max-width: 1080px) { .br-closer { display: none; } }
+
+/* ---------- Rank these for your company (visitors), and the summary that leads a fit-ranked grid ---------- */
+.br-fit { grid-column: 1 / -1; position: relative; display: grid; gap: var(--s-4); padding: var(--s-5) var(--s-6); border: 1px solid var(--tint-line); border-radius: var(--r-card); background: linear-gradient(180deg, var(--tint), var(--card) 70%); box-shadow: var(--shadow-1); animation: rise .35s var(--ease) both; }
+.br-fit-hd { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--s-3) var(--s-4); }
+.br-fit-tt .h5 { margin: 0; }
+.br-fit-tt p { margin: 2px 0 0; }
+.br-fit-n { display: inline-flex; gap: 4px; }
+.br-fit-n i { width: 22px; height: 4px; border-radius: 99px; background: var(--line); transition: background var(--dur) ease; }
+.br-fit-n i.on { background: var(--accent); }
+.br-fit-n i.cur:not(.on) { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.br-fit-x { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--mute); cursor: pointer; }
+.br-fit-x:hover { background: var(--sunk); color: var(--ink); }
+.br-fit-x svg { width: 16px; height: 16px; }
+.br-fit-q { display: grid; grid-template-columns: minmax(0, 240px) minmax(0, 1fr); align-items: start; gap: var(--s-3) var(--s-6); }
+.br-fit-l { display: flex; flex-direction: column; gap: 4px; margin: 0; font-family: var(--f-display); font-size: var(--t-15); font-weight: 700; line-height: 1.35; color: var(--ink); }
+.br-fit-l .label { color: var(--mute); }
+.br-fit-q .chipset { gap: 8px; }
+.br-fit-back { position: absolute; left: var(--s-6); bottom: var(--s-5); font-size: var(--t-13); }
+.br-fit-back svg { width: 14px; height: 14px; }
+.br-fit-q:has(+ .br-fit-back) { padding-bottom: var(--s-6); }
+/* Done: one slim line, the answers as tokens, then the step that keeps them */
+.br-fit.is-done { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--s-3) var(--s-5); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-5); background: var(--card); border-color: var(--line-2); box-shadow: none; }
+.br-fit-sum { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: 0; min-width: 0; font-size: var(--t-14); color: var(--ink-2); }
+.br-fit-sum > svg { width: 18px; height: 18px; color: var(--good); flex: 0 0 auto; }
+.br-fit-sum b { color: var(--ink); }
+.br-fit-tok { display: inline-flex; align-items: center; min-height: 26px; padding: 0 10px; border-radius: var(--r-pill); background: var(--tint); border: 1px solid var(--tint-line); font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--accent); white-space: nowrap; }
+.br-fit-sum .act { font-size: var(--t-13); margin-left: 2px; }
+.br-fit-save svg { width: 15px; height: 15px; }
+/* The fit each card earned (RN.model.fit: Strong 75+, Good 50+) */
+.br-fitwhy { align-items: center; }
+.br-fitmark { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; min-height: 22px; padding: 0 8px; border-radius: var(--r-pill); font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; white-space: nowrap; }
+.br-fitmark b { font-variant-numeric: tabular-nums; font-weight: 800; }
+.br-fitmark.is-strong { background: color-mix(in srgb, var(--good) 14%, var(--card)); color: var(--good); }
+.br-fitmark.is-good { background: var(--sunk); color: var(--ink-2); }
+@media (max-width: 640px) {
+  .br-fit { padding: var(--s-4); gap: var(--s-3); }
+  .br-fit-hd { grid-template-columns: minmax(0, 1fr) auto; }
+  .br-fit-hd .br-fit-ic { display: none; }
+  .br-fit-tt p { display: none; }
+  .br-fit-n { grid-column: 1 / -1; grid-row: 2; }
+  .br-fit-x { grid-column: 2; grid-row: 1; margin: -6px -6px -6px 0; }
+  .br-fit-q { grid-template-columns: minmax(0, 1fr); }
+  .br-fit-back { left: var(--s-4); bottom: var(--s-4); }
+  .br-fit.is-done { padding: var(--s-4); }
+  .br-fit-save { width: 100%; }
+}

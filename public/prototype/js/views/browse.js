@@ -227,6 +227,127 @@
   }
   const filterCount = (c) => Object.keys(c.filters).reduce((a, k) => a + (Array.isArray(c.filters[k]) ? c.filters[k].length : 1), 0);
 
+  /* ---------- Rank for your company ----------
+     Signed-out visitors answer three registry fields in a card a few rows into the grid (after card 6, card 4 on
+     phones): companyRevenue, companyEmployees and need. Once all three are in, the default grid ("Best match", no
+     search text) is re-ranked by RN.model.fit, the same match signals buyers see, and each card shows its fit.
+     Answers live in seen.searchMe {revenueRange, employeeRange, need}: the visitor profile RN.fitme and the ranked
+     view already read, so "Save my company and shortlist" opens RN.fitme's company sign-up, which creates the
+     company with that revenue and headcount. need is copied into seen.companyPrefs when the account is created.
+     Signed-in companies with a revenue or headcount on file are ranked by RN.clientBrief(), with no card. */
+  const FIT_Q = [
+    { k: 'revenueRange', field: 'companyRevenue', q: 'How much revenue does your company make a year?' },
+    { k: 'employeeRange', field: 'companyEmployees', q: 'How many people work there?' },
+    { k: 'need', field: 'need', q: 'What do you need help with first?' },
+  ];
+  const FIT = { step: -1, editing: false, dismissed: false, justDone: false, saving: false };
+  const fitAnswers = () => (RN.store.state.seen || {}).searchMe || {};
+  const fitComplete = (m) => FIT_Q.every((x) => !!m[x.k]);
+  const toRange = (t) => String(t || '').replace(/\s*[–—]\s*/g, ' to ');
+  function fitBrief() {
+    const p = RN.store.state.persona;
+    if (p === 'visitor') {
+      const m = fitAnswers();
+      if (!fitComplete(m)) return null;
+      return { revenueRange: m.revenueRange, employeeRange: m.employeeRange, need: m.need === 'not_sure' ? '' : m.need };
+    }
+    if (p === 'buyer' && RN.clientBrief) {
+      const co = RN.personas.buyer.company || {};
+      return co.revenueRange || co.employeeRange ? RN.clientBrief() : null;
+    }
+    return null;
+  }
+  // Fit ranking applies to the default order only: a chosen sort or a written search keeps its own order
+  const fitRanked = () => (!searchText() && st().sort === 'best' ? fitBrief() : null);
+  // The most telling matched signal on the card (as on the buyer's cards): expertise and industry first
+  const SIG_ORDER = ['expertise', 'industry', 'motion', 'revenue', 'employees', 'role'];
+  function fitSignal(f, op) {
+    const by = (a, b) => SIG_ORDER.indexOf(a.k) - SIG_ORDER.indexOf(b.k);
+    const hit = f.signals.filter((x) => x.state === 'match').sort(by)[0] || f.signals.filter((x) => x.state === 'partial').sort(by)[0];
+    return hit ? hit.text : 'Fractional ' + op.role;
+  }
+  // Strong (75+) and Good (50+) on the model's one scale; a lower fit shows its best signal only
+  function fitMark(f) {
+    const n = f.signals.length;
+    if (f.pct < 50) return icon('target');
+    return `<span class="br-fitmark ${f.pct >= 75 ? 'is-strong' : 'is-good'}" title="${esc(`${f.count} of ${n} match signals`)}">${esc(f.label)}<b>${esc(f.pct)}%</b></span>`;
+  }
+
+  function fitTokens(m) {
+    const out = [];
+    if (m.industry) out.push(RN.w.label('industry', m.industry));
+    if (m.revenueRange) { const l = toRange(RN.w.label('companyRevenue', m.revenueRange)); out.push(m.revenueRange === 'pre_revenue' ? l : l + ' revenue'); }
+    if (m.employeeRange) out.push(toRange(RN.w.label('companyEmployees', m.employeeRange)) + ' people');
+    if (m.need && m.need !== 'not_sure') out.push(RN.w.label('need', m.need));
+    return out;
+  }
+  function fitCard(o) {
+    const persona = RN.store.state.persona;
+    if (persona === 'buyer') {
+      if (o.at !== 'top' || !fitBrief()) return '';
+      const co = RN.personas.buyer.company || {};
+      const toks = fitTokens({ industry: co.industry, revenueRange: co.revenueRange, employeeRange: co.employeeRange, need: (BR.prefsNeed && BR.prefsNeed()) || '' });
+      return `<aside class="br-fit is-done" aria-label="How these are ranked">
+        <p class="br-fit-sum">${icon('target')}<span>Ranked for <b>${esc(co.name || 'your company')}</b></span>${toks.map((t) => `<span class="br-fit-tok">${esc(t)}</span>`).join('')}<a class="act" href="#buyer.company">Edit</a></p>
+      </aside>`;
+    }
+    if (persona !== 'visitor' || FIT.dismissed) return '';
+    const m = fitAnswers();
+    const done = fitComplete(m) && !FIT.editing;
+    // The finished summary sits where it was answered; on a later visit it leads the grid
+    const where = done && !FIT.justDone ? 'top' : 'slot';
+    if (o.at !== where) return '';
+    if (done) {
+      return `<aside class="br-fit is-done" aria-label="How these are ranked">
+        <p class="br-fit-sum">${icon('check-circle')}<span>Ranked for</span>${fitTokens(m).map((t) => `<span class="br-fit-tok">${esc(t)}</span>`).join('')}<button type="button" class="act" data-act="br-fit-edit">Edit</button></p>
+        <button type="button" class="btn btn-sm br-fit-save" data-act="br-fit-save">${icon('bookmark')}Save my company and shortlist</button>
+      </aside>`;
+    }
+    let i = FIT.step;
+    if (i < 0 || i >= FIT_Q.length) { i = FIT_Q.findIndex((x) => !m[x.k]); if (i < 0) i = 0; }
+    FIT.step = i;
+    const q = FIT_Q[i];
+    return `<aside class="br-fit" aria-labelledby="br-fit-h">
+      <div class="br-fit-hd">
+        ${RN.ui.icoTile('target', { round: true, cls: 'br-fit-ic' })}
+        <div class="br-fit-tt"><h2 class="h5" id="br-fit-h">Rank these for your company</h2><p class="small muted">Three quick answers and every card is re-ranked by fit.</p></div>
+        <span class="br-fit-n" aria-hidden="true">${FIT_Q.map((x, j) => `<i class="${m[x.k] ? 'on' : ''}${j === i ? ' cur' : ''}"></i>`).join('')}</span>
+        <button type="button" class="br-fit-x" data-act="br-fit-x" aria-label="Hide this for now">${icon('x')}</button>
+      </div>
+      <div class="br-fit-q">
+        <p class="br-fit-l" id="br-fit-q"><span class="label">${i + 1} of ${FIT_Q.length}</span>${esc(q.q)}</p>
+        ${RN.w.control(q.field, m[q.k] || '', { name: q.k, id: 'br-fit-c', change: 'br-fit' })}
+      </div>
+      ${i > 0 ? `<button type="button" class="act muted br-fit-back" data-act="br-fit-back">${icon('chev-left')}Back</button>` : ''}
+    </aside>`;
+  }
+  const fitAt = () => (window.matchMedia && window.matchMedia('(max-width: 640px)').matches ? 4 : 6);
+  RN.inputs['br-fit'] = (el) => {
+    const k = el.name, v = el.value;
+    if (!FIT_Q.some((x) => x.k === k) || !v) return;
+    RN.store.update((s) => { s.seen = Object.assign({}, s.seen, { searchMe: Object.assign({}, (s.seen || {}).searchMe, { [k]: v }) }); }, 'seen');
+    RN.track('search_profile_answer', { meta: { k, v, source: 'browse' } });
+    const m = fitAnswers();
+    const next = FIT_Q.findIndex((x, j) => j > FIT.step && (FIT.editing || !m[x.k]));
+    if (next >= 0) FIT.step = next;
+    else { FIT.step = -1; FIT.editing = false; FIT.justDone = true; }
+    refresh({ noTrack: true });
+    const box = document.querySelector('.br-fit');
+    const f = box && (box.querySelector('.chip[aria-pressed="true"]') || box.querySelector('.chip, .br-fit-save'));
+    if (f) f.focus({ preventScroll: true });
+  };
+  RN.actions['br-fit-back'] = () => { FIT.step = Math.max(0, FIT.step - 1); refresh({ noTrack: true }); const c = document.querySelector('.br-fit .chip'); if (c) c.focus({ preventScroll: true }); };
+  RN.actions['br-fit-edit'] = () => { FIT.editing = true; FIT.step = 0; FIT.justDone = true; refresh({ noTrack: true }); const c = document.querySelector('.br-fit .chip[aria-pressed="true"], .br-fit .chip'); if (c) c.focus(); };
+  RN.actions['br-fit-x'] = () => { FIT.dismissed = true; FIT.editing = false; refresh({ noTrack: true }); };
+  RN.actions['br-fit-save'] = () => {
+    FIT.saving = true;
+    RN.track('search_profile_save', { meta: { source: 'browse' } });
+    // RN.fitme's sign-up: one work email, and the company is created with the answers above
+    if (RN.fitme) RN.fitme.ask('shortlist');
+    else BR.loginPrompt({ title: 'Save your company and shortlist', sub: 'Signed-in companies keep their shortlist and see every card ranked for them.' });
+  };
+  BR.prefsNeed = () => { const p = (RN.store.state.seen || {}).companyPrefs; return p && p.need && p.need !== 'not_sure' ? p.need : ''; };
+
   /* ---------- Card: RN.ui.opCard with 4 focus areas (Scope L318) and the rate gated for visitors ---------- */
   function whyFor(r, c) {
     const out = (r.why || []).slice();
@@ -237,7 +358,9 @@
     if (rev) out.push(`Works with ${RN.w.label('revenueRange', rev)} companies`);
     const emp = !rev && f.employeeRange && f.employeeRange.find((x) => op.employeeRanges.includes(x));
     if (emp) out.push(`Works with ${RN.w.label('employeeRange', emp)} employee companies`);
-    if (f.risMin) out.push(`Reputation Index ${op.ris.score}`);
+    // The card's tier mark already shows the score; the reason names the tier (risMin options start at Proven)
+    const tier = f.risMin && op.ris ? RN.fields.risTierFor(op.ris.score) : null;
+    if (tier) out.push(`${tier.l} tier on the Reputation Index`);
     if ((f.locations || f.timeZones || f.usHours) && !out.some((x) => /^Based in /.test(x))) {
       const p = placeOf(op);
       const where = [p.city, p.state || p.country].filter(Boolean).join(', ') || op.location;
@@ -251,7 +374,9 @@
     const visitor = RN.store.state.persona === 'visitor';
     // No tagline yet: the first sentence of the operator's own bio, so the card never reads as a stub
     const shown = Object.assign({}, op, visitor ? { rate: null } : {}, !op.headline && op.bio ? { headline: firstLine(op.bio) } : {});
-    let html = RN.ui.opCard(shown, { why: opts.why || '' });
+    const fit = opts.fit && opts.fit.signals.length ? opts.fit : null;
+    let html = RN.ui.opCard(shown, { why: fit ? fitSignal(fit, op) : opts.why || '' });
+    if (fit) html = html.replace(`<div class="opc-why">${icon('target')}`, () => `<div class="opc-why br-fitwhy">${fitMark(fit)}`);
     // Replace the card's 3 tags with 4, verified first (2 on phones, with the rest counted). Expert tags (5+ reviews)
     // are company-verified too, but RN.ui.ftag only styles tier === 'verified', so normalize them here.
     const vFirst = (a, b) => (a.tier === 'verified' ? -1 : 1) - (b.tier === 'verified' ? -1 : 1);
@@ -335,9 +460,10 @@
   }
 
   /* Operators with a photo who can start now, one per role category first, strongest Reputation Index first */
+  const risOf = (op) => (op.ris && +op.ris.score) || 0;
   function featured(n) {
     const pool = RN.model.ops.filter((op) => !op.hidden && op.photo && op.avail && op.avail.key === 'available_now')
-      .sort((a, b) => b.ris.score - a.ris.score || (b.reviews || []).length - (a.reviews || []).length || (b.completeness || 0) - (a.completeness || 0));
+      .sort((a, b) => risOf(b) - risOf(a) || (b.reviews || []).length - (a.reviews || []).length || (b.completeness || 0) - (a.completeness || 0));
     const out = [], seen = new Set();
     pool.forEach((op) => { if (out.length < n && !seen.has(op.catKey)) { seen.add(op.catKey); out.push(op); } });
     pool.forEach((op) => { if (out.length < n && !out.includes(op)) out.push(op); });
@@ -366,7 +492,7 @@
         <ul class="br-feat-list">${feat.map((op, i) => `<li style="--i:${i}"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">
           ${RN.ui.avatar(op, 'ava-md', { decorative: true })}
           <span class="br-feat-who"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>
-          <span class="br-feat-meta">${RN.ui.tierPill(RN.fields.risTierFor(op.ris.score).v, op.ris.score)}<span>${esc(price(op))}</span></span>
+          <span class="br-feat-meta">${RN.ui.cardTier(op, { pill: true, inLink: true })}<span>${esc(price(op))}</span></span>
         </a></li>`).join('')}</ul>
       </aside>` : ''}
     </header>`;
@@ -487,7 +613,7 @@
     const near = RN.model.ops.filter((op) => !op.hidden && op.catKey !== cat)
       .map((op) => { const t = (op.tags || []).filter((x) => x.c === cat).sort((a, b) => (a.tier === 'claimed') - (b.tier === 'claimed')); return { op, t, v: t.filter((x) => x.tier !== 'claimed').length }; })
       .filter((x) => x.t.length)
-      .sort((a, b) => b.v - a.v || b.t.length - a.t.length || b.op.ris.score - a.op.ris.score)
+      .sort((a, b) => b.v - a.v || b.t.length - a.t.length || risOf(b.op) - risOf(a.op))
       .slice(0, 3);
     if (!near.length) return '';
     return `<section class="wrap br-near" aria-labelledby="br-near-h" data-view-source="search">
@@ -662,7 +788,24 @@
       <div class="br-break-pills">${RN.fields.roleCategory.options.filter((o) => counts[o.v]).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}<b class="chip-n">${counts[o.v]}</b></a>`).join('')}</div>
     </aside>`;
   }
-  const withBreak = (cards, c) => { const at = 9; if (cards.length <= at) return cards.join(''); return cards.slice(0, at).join('') + gridBreak(c) + cards.slice(at).join(''); };
+  // The rank card goes in a few rows down (or after the last card when there are fewer); its summary can lead the grid
+  function withFit(cards) {
+    const top = fitCard({ at: 'top' }), slot = fitCard({ at: 'slot' });
+    const out = cards.slice();
+    if (slot) out.splice(Math.min(fitAt(), out.length), 0, slot);
+    if (top) out.unshift(top);
+    return { list: out, extra: (top ? 1 : 0) + (slot ? 1 : 0), slotAt: slot ? Math.min(fitAt(), cards.length) : -1, top: !!top };
+  }
+  const withBreak = (cards, c) => {
+    if (cards && cards.list) {
+      // The dark band still follows the 9th operator card, counted without the rank card
+      const at = 9 + (cards.top ? 1 : 0) + (cards.slotAt >= 0 && cards.slotAt <= 9 ? 1 : 0);
+      const l = cards.list;
+      if (l.length - cards.extra <= 9) return l.join('');
+      return l.slice(0, at).join('') + gridBreak(c) + l.slice(at).join('');
+    }
+    const at = 9; if (cards.length <= at) return cards.join(''); return cards.slice(0, at).join('') + gridBreak(c) + cards.slice(at).join('');
+  };
 
   function resultsHtml(res, c) {
     if (searchText()) {
@@ -677,11 +820,19 @@
       }
     }
     if (!res.length) return zeroHtml(c);
+    const brief = fitRanked();
+    let fits = null;
+    if (brief) {
+      // Stable: equal fits keep the search order
+      const rows = res.map((r, i) => ({ r, i, f: RN.model.fit(r.op, brief) })).sort((a, b) => b.f.pct - a.f.pct || a.i - b.i);
+      res = rows.map((x) => x.r); fits = new Map(rows.map((x) => [x.r.op.id, x.f]));
+    }
     const shown = res.slice(0, limit);
     const more = res.length - shown.length;
     // A last row with one gap closes on a dark "tell us" tile (wide screens only; the line below covers phones)
     const closer = more <= 0 && shown.length % 3 === 2 && !(landedCat && catCount(landedCat) < THIN);
-    return `<div class="grid g-3 br-grid">${withBreak(shown.map((r) => BR.card(r.op, { why: whyFor(r, c) })), c)}${closer ? `<aside class="br-closer night">${RN.ui.icoTile('message', { round: true, cls: 'br-zero-ic' })}<h3 class="h4">Not seeing the right fit?</h3><p>Tell us what you need and our team will shortlist operators for you. Your search comes with you.</p><button type="button" class="btn btn-leaf" data-act="br-tell" data-zero="">Tell us what you need</button></aside>` : ''}</div>
+    const cards = withFit(shown.map((r) => BR.card(r.op, { why: whyFor(r, c), fit: fits && fits.get(r.op.id) })));
+    return `<div class="grid g-3 br-grid">${withBreak(cards, c)}${closer ? `<aside class="br-closer night">${RN.ui.icoTile('message', { round: true, cls: 'br-zero-ic' })}<h3 class="h4">Not seeing the right fit?</h3><p>Tell us what you need and our team will shortlist operators for you. Your search comes with you.</p><button type="button" class="btn btn-leaf" data-act="br-tell" data-zero="">Tell us what you need</button></aside>` : ''}</div>
       ${moreHtml(shown.length, res.length)}
       ${landedCat && catCount(landedCat) < THIN ? thinNote(landedCat) : `<p class="br-tell${closer ? ' br-tell-alt' : ''}">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`}`;
   }
@@ -911,6 +1062,13 @@
     if (key !== 'persona') return;
     const box = document.querySelector('#br-ff [data-br-rate]');
     if (box) box.outerHTML = rateField(st().filters.rateMax);
+    // A visitor who saved from the rank card: the new company account keeps what they said they need
+    if (FIT.saving && isClient()) {
+      FIT.saving = false;
+      const need = fitAnswers().need;
+      if (need) RN.store.update((s) => { s.seen = Object.assign({}, s.seen, { companyPrefs: Object.assign({}, (s.seen || {}).companyPrefs, { need, savedAt: RN.now().toISOString() }) }); }, 'seen');
+    }
+    if (document.querySelector('.br-page')) setTimeout(() => refresh({ noTrack: true }), 0);
     if (pendingSave && isClient()) {
       pendingSave = false;
       setTimeout(() => { if (document.querySelector('.br-page') && isClient()) RN.actions['br-save'](); }, 80);
@@ -1119,6 +1277,7 @@
     clearTimeout(trackTimer);
     RN.rank.reset();
     lastKey = null; mountedAt = 0; landedCat = null; tagsOpen = false; compact = false; limit = pageSize();
+    FIT.justDone = false; FIT.editing = false; FIT.step = -1;
   }
 
   /* ---------- Views ---------- */
