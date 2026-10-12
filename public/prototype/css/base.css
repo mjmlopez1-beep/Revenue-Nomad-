@@ -111,3 +111,8 @@ h1 .serif, h2 .serif, .h-hero .serif { font-size: 1.04em; color: var(--accent); 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+
+/* The 1% accent: a vermilion full stop on a sentence that makes the point. Used two or three times a page at most. */
+.vm { color: var(--vermilion); font-style: normal; }
+.night .vm, .panel-night .vm, [data-theme="dark"] .vm { color: var(--vermilion-night); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vm { color: var(--vermilion-night); } }

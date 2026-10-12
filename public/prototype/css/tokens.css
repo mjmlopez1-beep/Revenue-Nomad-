@@ -35,6 +35,9 @@
   --forest-hi: #0B7352;
   --forest-deep: #0B3D2C;
   --leaf: #C2E7B0;
+  /* Vermilion: the 1% accent (founder, Oct 12, 2026). Only the full stop on a sentence that makes the point. Never fills, never buttons. */
+  --vermilion: #E0402A;
+  --vermilion-night: #FF6A4F;
   --leaf-hi: #D5F0C7;
   --tint: #E6EEDF;
   --tint-line: #C9D9BF;
