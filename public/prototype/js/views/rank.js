@@ -98,7 +98,7 @@
         <span class="rk-need-n">${proven} can do it</span>
       </li>`;
     }).join('');
-    const facts = res.facts.map((f) => `<span class="rk-fchip">${icon(FACT_IC[f.k] || 'check')}${esc(f.label)}</span>`).join('');
+    const facts = res.facts.map((f) => `<span class="pill">${icon(FACT_IC[f.k] || 'check')}${esc(f.label)}</span>`).join('');
     return `<div class="rk-head">
       ${RN.fitme ? RN.fitme.headHtml(res, text) : ''}
       <div class="rk-head-top"><span class="label">What you need</span></div>

@@ -64,43 +64,70 @@
 .act svg { width: 15px; height: 15px; }
 .act.muted { color: var(--mute); }
 
-/* ---------- Chips and pills ---------- */
-.chip { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--card); color: var(--ink); font-family: var(--f-text); font-size: var(--t-14); font-weight: 500; white-space: nowrap; cursor: pointer; transition: background var(--dur) ease, border-color var(--dur) ease, color var(--dur) ease; }
-.chip:hover { border-color: var(--ink); }
-.chip:active { transform: scale(.97); }
-.chip.on, .chip[aria-pressed="true"] { background: var(--forest); border-color: var(--forest); color: #fff; }
-:root[data-theme="dark"] .chip.on, :root[data-theme="dark"] .chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip.on, :root:not([data-theme="light"]) .chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); } }
-.chip svg { width: 14px; height: 14px; }
-.chip .x { opacity: .7; }
-.chip-sm { height: 28px; padding: 0 10px; font-size: var(--t-13); }
-.night .chip { background: transparent; border-color: rgba(255,255,255,.28); color: #fff; }
-.night .chip:hover, .night .chip.on { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); }
+/* ---------- Chips: one family (chip system, Oct 12 2026) ----------
+   Three sizes, one height each, one radius, one type setting, 1px hairlines, never dashed.
+     .chip         34px  filters, choices, toggles (interactive)
+     .chip-sm      28px  compact choices, removable picks; .ftag (focus areas) and .tb-pill share this size
+     .pill         22px  read-only status and labels; colour variants pill-good/warn/bad/info/accent/gold/line
+   Type 13px / 500 Red Hat Text. Icons 14px (12px in a pill), 6px gap. Selected = filled with the accent.
+   Verified vs claimed focus areas read by fill and a check icon, not by border style.
+   On touch screens interactive chips get an invisible hit box of 44px; nothing moves on the page.
+   Views: do not restyle shape, height, radius, font or border here; layout rules (gap, wrap, scroll rows) only. */
+.chip, .pill, .ftag, .tb-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--chip-gap); flex-shrink: 0; max-width: 100%;
+  min-height: var(--chip-h); padding: 0 var(--chip-px); border: 1px solid transparent; border-radius: var(--chip-r);
+  font-family: var(--f-text); font-size: var(--chip-fs); font-weight: var(--chip-fw); line-height: 1.15; letter-spacing: 0;
+  text-transform: none; white-space: nowrap; vertical-align: middle; font-variant-numeric: tabular-nums;
+}
+.chip { --chip-h: var(--chip-h-md); --chip-px: 12px; background: var(--chip-bg); border-color: var(--chip-line); color: var(--chip-ink); cursor: default; transition: background var(--dur) ease, border-color var(--dur) ease, color var(--dur) ease, box-shadow var(--dur) ease; }
+.chip-sm, .ftag, .tb-pill { --chip-h: var(--chip-h-sm); --chip-px: 10px; }
+.pill { --chip-h: var(--chip-h-xs); --chip-px: 8px; --chip-gap: 4px; }
+.chip svg, .ftag svg { width: var(--chip-ic); height: var(--chip-ic); flex: 0 0 auto; }
+.pill svg { width: 12px; height: 12px; flex: 0 0 auto; }
+.chip:is(button, a, label, [data-act]) { cursor: pointer; }
+.chip:is(button, a, label, [data-act]):hover { border-color: var(--chip-line-hi); background: var(--chip-bg-hi); color: var(--ink); text-decoration: none; }
+.chip:is(button, a, label, [data-act]):active { transform: scale(.97); transition-duration: .08s; }
+.chip:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.chip.on, .chip[aria-pressed="true"], .chip[aria-selected="true"], .chip:has(> input:checked),
+.chip.on:hover, .chip[aria-pressed="true"]:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.chip[disabled], .chip[aria-disabled="true"] { opacity: .5; cursor: default; pointer-events: none; }
+.chip .x { display: inline-flex; margin-right: -3px; opacity: .7; }
+.chip .x svg { width: 12px; height: 12px; }
+/* Count inside a chip ("Sales Leadership 66"): a quiet bubble that follows the chip's state */
+.chip-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-right: -6px; border-radius: var(--chip-r); background: var(--sunk); color: var(--ink-2); font-size: 12px; font-weight: var(--chip-fw); font-variant-numeric: tabular-nums; }
+.chip-sm .chip-n { min-width: 18px; height: 18px; margin-right: -4px; }
+.chip.on .chip-n, .chip[aria-pressed="true"] .chip-n { background: color-mix(in srgb, currentColor 18%, transparent); color: inherit; }
+.night .chip-n, .panel-night .chip-n { background: rgba(255,255,255,.12); color: inherit; }
+.night .chip, .panel-night .chip { background: transparent; border-color: var(--night-line); color: var(--night-ink); }
+.night .chip:is(button, a, label, [data-act]):hover, .panel-night .chip:is(button, a, label, [data-act]):hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.4); color: #fff; }
+.night .chip.on, .night .chip[aria-pressed="true"], .panel-night .chip.on, .panel-night .chip[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); }
 
-.pill { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: var(--r-pill); background: var(--sunk); color: var(--ink-2); font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
-.pill svg { width: 13px; height: 13px; }
-.pill-good { background: var(--good-bg); color: var(--good); }
-.pill-warn { background: var(--warn-bg); color: var(--warn); }
-.pill-bad { background: var(--bad-bg); color: var(--bad); }
-.pill-info { background: var(--info-bg); color: var(--info); }
-.pill-accent { background: var(--tint); color: var(--accent); }
-.pill-gold { background: var(--gold-bg); color: var(--gold); }
-.pill-line { background: transparent; border: 1px solid var(--line); }
-.night .pill { background: rgba(255,255,255,.08); color: #fff; }
+/* Status pills: tinted fill, hairline in the same hue */
+.pill { background: var(--sunk); border-color: var(--chip-line-soft); color: var(--ink-2); }
+.pill-good { background: var(--good-bg); color: var(--good); border-color: color-mix(in srgb, var(--good) 22%, transparent); }
+.pill-warn { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 22%, transparent); }
+.pill-bad { background: var(--bad-bg); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 22%, transparent); }
+.pill-info { background: var(--info-bg); color: var(--info); border-color: color-mix(in srgb, var(--info) 22%, transparent); }
+.pill-accent { background: var(--tint); color: var(--accent); border-color: var(--tint-line); }
+.pill-gold { background: var(--gold-bg); color: var(--gold); border-color: color-mix(in srgb, var(--gold) 24%, transparent); }
+.pill-line { background: transparent; border-color: var(--chip-line); color: var(--ink-2); }
+.night .pill, .panel-night .pill { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); color: #fff; }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mute-2); flex: 0 0 auto; }
 .dot-now { background: #2C9A66; box-shadow: 0 0 0 3px rgba(44,154,102,.18); }
 .dot-soon { background: #C9A227; }
 .dot-later { background: var(--mute-2); }
 
-/* Fit tags: verified (solid check) vs claimed (outline) */
-.ftag { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 12px; border-radius: var(--r-pill); background: var(--tint); border: 1px solid var(--tint-line); color: var(--ink); font-size: var(--t-13); font-weight: 600; line-height: 1.2; }
-.ftag svg { width: 14px; height: 14px; color: var(--accent); flex: 0 0 auto; }
-.ftag.claimed { background: transparent; border: 1px dashed var(--line); color: var(--ink-2); font-weight: 500; }
+/* Focus areas (fit tags), RN.ui.ftag. Verified: tinted fill + check icon. Claimed: no fill, plain hairline, no icon. */
+.ftag { background: var(--tint); border-color: var(--tint-line); color: var(--ink); }
+.ftag svg { color: var(--accent); margin-left: -2px; }
+.ftag.claimed { background: transparent; border-color: var(--chip-line); color: var(--ink-2); }
 .ftag.claimed svg { color: var(--mute-2); }
-.ftag.more { background: transparent; border-color: transparent; color: var(--accent); font-weight: 700; padding-inline: 6px; }
-.night .ftag { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.18); color: #fff; }
-.night .ftag svg { color: var(--leaf); }
+.ftag.more { background: transparent; border-color: transparent; color: var(--accent); padding-inline: 4px; }
+.night .ftag, .panel-night .ftag { background: rgba(194, 231, 176, .12); border-color: rgba(194, 231, 176, .26); color: #fff; }
+.night .ftag svg, .panel-night .ftag svg { color: var(--leaf); }
+.night .ftag.claimed, .panel-night .ftag.claimed { background: transparent; border-color: rgba(255, 255, 255, .2); color: rgba(255, 255, 255, .86); }
+.night .ftag.more, .panel-night .ftag.more { background: transparent; border-color: transparent; color: var(--leaf); }
 
 /* ---------- Cards and surfaces ---------- */
 .card { background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-card); padding: var(--s-6); }
@@ -137,7 +164,7 @@
 .opc { position: relative; display: flex; flex-direction: column; gap: var(--s-4); background: var(--card); border: 1px solid var(--line-2); border-radius: var(--r-card); padding: var(--s-5); transition: border-color var(--dur) ease, transform var(--dur) var(--ease), box-shadow var(--dur) ease; }
 .opc:hover { border-color: var(--line); box-shadow: var(--shadow-2); transform: translateY(-2px); }
 .opc-top { display: flex; gap: var(--s-4); align-items: flex-start; }
-.opc-name { font-family: var(--f-serif); font-size: 22px; line-height: 1.1; letter-spacing: -0.015em; font-weight: 500; }
+.opc-name { font-family: var(--f-display); font-size: 19px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 700; }
 .opc-name a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .opc-role { font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--accent); margin-top: 3px; }
 .opc-head { font-size: var(--t-14); color: var(--ink-2); line-height: 1.45; }
@@ -193,9 +220,10 @@
 @media (prefers-reduced-motion: reduce) { .tb-sheen { animation: none !important; opacity: 0 !important; } }
 
 /* Inline pill: 20px badge, tier, score */
-.tb-pill { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 4px; border-radius: 999px; border: 1px solid var(--tb-pill-line); background: var(--tb-pill-bg); color: var(--tb-pill-ink); font-family: var(--f-display); font-size: 13px; font-weight: 700; line-height: 1; white-space: nowrap; vertical-align: middle; }
-.tb-pill .tb-pill-n { font-weight: 800; font-variant-numeric: tabular-nums; }
-.tb-pill.t-indexing { border-style: dashed; border-color: var(--tb-idx-line); background: transparent; color: var(--tb-idx-ink); }
+.tb-pill { padding: 0 10px 0 3px; border-color: var(--tb-pill-line); background: var(--tb-pill-bg); color: var(--tb-pill-ink); }
+.tb-pill .tb { flex: 0 0 auto; }
+.tb-pill .tb-pill-n { opacity: .72; }
+.tb-pill.t-indexing { border-color: var(--chip-line); background: transparent; color: var(--tb-idx-ink); }
 .tb-pill.t-emerging { color: var(--forest); }
 .tb-pill.t-proven, .tb-pill.t-trusted { background: #E6EEDF; border-color: #C9D9BF; color: #0B3D2C; }
 .tb-pill.t-elite { background: #FAF1D8; border-color: #E2C77E; color: #5C4108; }
@@ -282,7 +310,6 @@
 
 /* Chip select (single or multi) */
 .chipset { display: flex; flex-wrap: wrap; gap: 8px; }
-.chipset .chip { height: 38px; }
 .chipset-count { font-size: var(--t-12); color: var(--mute); }
 
 /* Option cards: bold label + grey description help text (founder spec) */
@@ -306,7 +333,6 @@
 .tagpick-search input:focus { outline: none; border-color: var(--accent); }
 .tagpick-list { max-height: 260px; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 12px; }
 .tagpick-group .label { margin-bottom: 6px; display: block; }
-.tagpick-group .chipset .chip { height: 32px; font-size: var(--t-13); }
 .tagpick-foot { padding: 8px 12px; font-size: var(--t-12); color: var(--mute); border-top: 1px solid var(--line-2); display: flex; justify-content: space-between; }
 
 /* Toggle switch */
@@ -540,3 +566,50 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 html:not(.rn-notes) .fn-gap, html:not(.rn-notes) .illus, html:not(.rn-notes) .rs-schema, html:not(.rn-notes) [data-proto] { display: none !important; }
 html:not(.rn-notes) .fn-gap-w { display: contents; }
 html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after, html:not(.rn-notes) dd:has(> .fn-gap:only-child)::after { content: "To come"; color: var(--mute-2); font-style: italic; }
+
+/* ---------- Icon tile (RN.ui.icoTile), one shared treatment ----------
+   A duotone glyph on a layered surface. The glyph is drawn twice: a soft, wide underlay stroke in the tone
+   (the "ink bleed") and the crisp 1.75 line on top, nudged apart by a pixel. The surface is a faint tonal
+   gradient with a hairline, an inner top highlight and a small orb of light in one corner.
+   On hover inside a link, button or .ico-host the tile lifts and the two glyph layers separate a little more.
+   Sizes: ico-sm 32px, ico-md 40px (default), ico-lg 52px. Tones: forest (default), sales, mkt, revops, enable,
+   cs, ai, partner, sellers, gold, info, or any colour through --ico-tone. ico-night for dark bands (automatic
+   inside .night and .panel-night). ico-round for a circle. */
+.ico {
+  --ico-tone: var(--ico-forest); --ico-sz: 40px; --ico-g: 20px; --ico-r: 12px;
+  --ico-ink: color-mix(in srgb, var(--ico-tone) var(--ico-ink-mix), var(--ico-pole));
+  position: relative; flex: 0 0 auto; display: inline-grid; place-items: center; width: var(--ico-sz); height: var(--ico-sz);
+  border-radius: var(--ico-r); isolation: isolate; overflow: hidden; color: var(--ico-ink);
+  background:
+    radial-gradient(120% 90% at 85% 100%, color-mix(in srgb, var(--ico-tone) 20%, transparent) 0%, transparent 60%),
+    linear-gradient(160deg, color-mix(in srgb, var(--ico-tone) 4%, var(--card)) 0%, color-mix(in srgb, var(--ico-tone) 13%, var(--card)) 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ico-tone) 24%, transparent), inset 0 1px 0 var(--ico-hl), 0 1px 2px color-mix(in srgb, var(--ico-tone) 14%, transparent);
+  transition: transform .35s var(--ease), box-shadow .35s ease;
+}
+.ico > svg { grid-area: 1 / 1; width: var(--ico-g); height: var(--ico-g); transition: transform .35s var(--ease), opacity .35s ease; }
+.ico > .ico-bk { stroke-width: 4.5; color: var(--ico-tone); opacity: .2; transform: translate(1px, 1.25px); }
+.ico > .ico-fg { stroke-width: 1.85; }
+.ico-sm { --ico-sz: 32px; --ico-g: 16px; --ico-r: 10px; }
+.ico-sm > .ico-bk { stroke-width: 4; }
+.ico-lg { --ico-sz: 52px; --ico-g: 24px; --ico-r: 15px; }
+.ico-round { --ico-r: 50%; }
+:is(a, button, .card-link, .ico-host):hover > .ico, :is(a, button, .card-link, .ico-host):hover .ico:not(.ico-still) {
+  transform: translateY(-2px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ico-tone) 36%, transparent), inset 0 1px 0 var(--ico-hl), 0 6px 14px -4px color-mix(in srgb, var(--ico-tone) 32%, transparent);
+}
+:is(a, button, .card-link, .ico-host):hover .ico > .ico-bk { transform: translate(2px, 2.5px); opacity: .28; }
+:is(a, button, .card-link, .ico-host):hover .ico > .ico-fg { transform: translate(-.5px, -.5px); }
+@media (prefers-reduced-motion: reduce) { .ico, .ico > svg { transition: none; } :is(a, button, .card-link, .ico-host):hover .ico, :is(a, button, .card-link, .ico-host):hover .ico > svg { transform: none; } }
+.ico-t-sales { --ico-tone: var(--cat-sales); } .ico-t-mkt { --ico-tone: var(--cat-mkt); } .ico-t-revops { --ico-tone: var(--cat-revops); }
+.ico-t-enable { --ico-tone: var(--cat-enable); } .ico-t-cs { --ico-tone: var(--cat-cs); } .ico-t-ai { --ico-tone: var(--cat-ai); }
+.ico-t-partner { --ico-tone: var(--cat-partner); } .ico-t-sellers { --ico-tone: var(--cat-sellers); }
+.ico-t-gold { --ico-tone: var(--gold); } .ico-t-info { --ico-tone: var(--info); }
+/* Dark bands: glassy surface, leaf glyph (or the tone lifted toward white) */
+.ico-night, .night .ico, .panel-night .ico {
+  --ico-pole: #FFFFFF; --ico-ink-mix: 40%; --ico-forest: var(--leaf);
+  background:
+    radial-gradient(120% 90% at 85% 100%, color-mix(in srgb, var(--ico-tone) 26%, transparent) 0%, transparent 62%),
+    linear-gradient(160deg, rgba(255, 255, 255, .10) 0%, rgba(255, 255, 255, .03) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14), inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+.ico-night > .ico-bk, .night .ico > .ico-bk, .panel-night .ico > .ico-bk { opacity: .3; }

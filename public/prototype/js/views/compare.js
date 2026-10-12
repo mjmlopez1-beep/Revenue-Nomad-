@@ -102,7 +102,7 @@
     if (!vals.length) return NA;
     const sorted = key === 'industries' ? vals.slice().sort((a, b) => (b === mine) - (a === mine)) : sortBy(key, vals);
     const max = key === 'industries' ? 5 : 8;
-    return `<div class="cmp-chips">${sorted.slice(0, max).map((v) => `<span class="cmp-chip${v === mine ? ' on' : ''}"${v === mine ? ' title="Matches your company"' : ''}>${v === mine ? icon('check') : ''}${esc(lab(key, v))}</span>`).join('')}${sorted.length > max ? `<span class="cmp-chip more">+${sorted.length - max} more</span>` : ''}</div>`;
+    return `<div class="cmp-chips">${sorted.slice(0, max).map((v) => `<span class="pill ${v === mine ? 'pill-accent' : 'pill-line'}"${v === mine ? ' title="Matches your company"' : ''}>${v === mine ? icon('check') : ''}${esc(lab(key, v))}</span>`).join('')}${sorted.length > max ? `<span class="pill">+${sorted.length - max} more</span>` : ''}</div>`;
   }
   function fitCell(op) {
     const f = RN.model.fit(op, brief(op));

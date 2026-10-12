@@ -13,11 +13,9 @@
 .mg-row-co b { font-family: var(--f-display); font-weight: 800; font-size: var(--t-16); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mg-row-co span, .mg-row-n span { font-size: var(--t-13); color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mg-row-src { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.mg-row-src .pill { font-size: 11px; }
 .mg-row-n { display: grid; min-width: 0; }
 .mg-row-n b { font-family: var(--f-display); font-weight: 800; font-size: var(--t-18); }
 .mg-row-due { justify-self: end; }
-.mg-row-due .pill svg { width: 13px; height: 13px; }
 
 /* Stage stepper: dots on a line; the small one rides in each list row */
 .mg-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -103,9 +101,10 @@
 .mg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .mg-chip { position: relative; }
 .mg-chip input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
-.mg-chip span { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); font-family: var(--f-display); font-weight: 700; font-size: var(--t-13); color: var(--ink); }
-.mg-chip input:checked + span { background: var(--btn); border-color: var(--btn); color: var(--btn-ink); }
-.mg-chip input:focus-visible + span { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.mg-chip span { display: inline-flex; align-items: center; min-height: var(--chip-h-md); padding: 0 12px; border-radius: var(--chip-r); border: 1px solid var(--chip-line); background: var(--chip-bg); font-family: var(--f-text); font-weight: var(--chip-fw); font-size: var(--chip-fs); color: var(--chip-ink); cursor: pointer; transition: background var(--dur) ease, border-color var(--dur) ease; } /* mirrors the shared .chip; markup could move to <label class="chip"> */
+.mg-chip:hover span { border-color: var(--chip-line-hi); background: var(--chip-bg-hi); color: var(--ink); }
+.mg-chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.mg-chip input:focus-visible + span { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .mg-picks { list-style: none; margin: 0; padding: 0; display: grid; }
 .mg-picks label { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line-2); cursor: pointer; }
 .mg-picks input { width: 18px; height: 18px; accent-color: var(--accent); }

@@ -1059,7 +1059,7 @@
               <td data-l="Person"><a class="bw-who" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<span><b class="serif-up">${esc(op.name)}</b><span class="tiny muted">Fractional ${esc(op.role)}</span>${catTag(catOf(h))}</span></a></td>
               <td data-l="Status"><span class="bw-cell">${RN.hire.statusPill(h)}<span class="tiny muted">${esc(RN.hire.timeInSeat(h, act ? 'short' : 'past'))}</span></span></td>
               <td data-l="Next"><span class="bw-cell">${hireNext(h, L)}</span></td>
-              <td data-l="Spend" class="bw-num"><span class="bw-cell">${act ? `<b class="num">${esc(RN.fmt.k(RN.hire.monthly(h)))} a month</b><span class="tiny muted">${esc(usd(RN.hire.spent(h)))} to date</span>` : `<b class="num">${esc(usd(RN.hire.spent(h)))}</b><span class="tiny muted">total</span>`}</span></td>
+              <td data-l="Spend" class="bw-num"><span class="bw-cell">${act ? `<b class="num">${esc(RN.fmt.k(RN.hire.monthly(h)))}/month</b><span class="tiny muted">${esc(usd(RN.hire.spent(h)))} to date</span>` : `<b class="num">${esc(usd(RN.hire.spent(h)))}</b><span class="tiny muted">total</span>`}</span></td>
             </tr>`;
           }).join('')}</tbody>
         </table>
@@ -1260,7 +1260,7 @@
           <span class="eyebrow">${icon('bookmark')}Your talent</span>
           <h2 class="h3" id="bw-start-t">${esc(title)}</h2>
           <p class="small muted">Everything you save, ask for and open shows up on this tab.</p>
-          <ul class="bw-ss-todo">${empty.map((e) => `<li id="${esc(e.id)}"><span class="bw-ss-todo-ic" aria-hidden="true">${icon(e.icon)}</span><span><b>${esc(e.l)}</b><span class="tiny muted">${esc(e.d)}</span></span></li>`).join('')}</ul>
+          <ul class="bw-ss-todo">${empty.map((e) => `<li id="${esc(e.id)}">${RN.ui.icoTile(e.icon, { size: 'sm', cls: 'bw-ss-todo-ic' })}<span><b>${esc(e.l)}</b><span class="tiny muted">${esc(e.d)}</span></span></li>`).join('')}</ul>
           <a class="btn ${none ? '' : 'btn-line'}" href="#browse">${icon('search')}Browse talent</a>
         </div>
         ${sug.length ? `<div class="bw-ss-panel-r">
@@ -1293,7 +1293,7 @@
       case 'hoursPerMonth': return v === '19' ? 'Any available time' : 'At least ' + RN.w.label('hoursPerMonth', v);
       case 'revenueRange': return RN.w.label('revenueRange', v) + ' revenue';
       case 'employeeRange': return RN.w.label('employeeRange', v) + ' employees';
-      case 'rateMax': return +v >= RN.fields.rateMax.max ? '' : 'Up to $' + Math.round(+v) + ' / hr';
+      case 'rateMax': return +v >= RN.fields.rateMax.max ? '' : 'Up to $' + Math.round(+v) + '/hr';
       case 'risMin': return 'Reputation Index ' + RN.w.label('risMin', v);
       default: return RN.fields[k] ? RN.w.label(k, v) : String(v);
     }
@@ -1316,7 +1316,7 @@
         const name = ss.name || line || 'Saved search';
         const fresh = ssFresh(ss).length;
         return `<li class="bw-ss-i">
-          <span class="bw-ss-ic" aria-hidden="true">${icon('search')}</span>
+          ${RN.ui.icoTile('search', { size: 'sm', cls: 'bw-ss-ic' })}
           <div class="grow"><b>${esc(name)}</b><span class="tiny muted">${esc([line !== name ? line : '', ss.createdAt ? 'Saved ' + RN.fmt.ago(ss.createdAt) : ''].filter(Boolean).join(' · ') || 'All operators')}</span>
             ${fresh ? `<span class="pill pill-info">${fresh} new since ${esc(dmd(ss.lastRunAt || ss.createdAt))}</span>` : ''}</div>
           <div class="bw-ss-a">
@@ -1749,7 +1749,7 @@
     const m = RN.hire.monthly(h);
     const line = t.engagementType === 'project'
       ? `${t.projectBudget ? usd(t.projectBudget) + ' project budget over the term' : 'Project budget not recorded'}.`
-      : `${m ? usd(m) + ' a month: ' : ''}${t.rate ? RN.fmt.rate(t.rate) : 'rate not recorded'} × ${RN.hire.hours(t.hoursPerMonth)} hrs.`;
+      : `${m ? usd(m) + '/month: ' : ''}${t.rate ? RN.fmt.rate(t.rate) : 'rate not recorded'} × ${RN.hire.hours(t.hoursPerMonth)} hrs.`;
     return `<div class="bw-hire-cost">
       <span class="label">Time in seat</span><b class="bw-cost-tis">${esc(RN.hire.timeInSeat(h, 'long'))}</b>
       <span class="label">Spend to date, estimated</span><b class="num">${esc(usd(RN.hire.spent(h)))}</b>
@@ -2313,7 +2313,7 @@
       <span class="label">What this changes</span>
       <div class="bw-prev-n"><span class="num">${RN.fmt.int(good)}</span><span>operators are a good or strong match for ${esc(name || 'your company')}</span></div>
       <p class="small muted">Match signals compare your answers with each operator’s own profile, field by field. The more you set, the fewer and closer the matches.</p>
-      <ul class="bw-checks">${checks.map((c) => `<li class="${c.on ? 'on' : ''}">${icon(c.on ? 'check-circle' : 'minus')}${esc(c.l)}</li>`).join('')}</ul>
+      <ul class="bw-checks">${checks.map((c) => `<li class="pill ${c.on ? 'pill-accent on' : 'pill-line'}">${icon(c.on ? 'check-circle' : 'minus')}${esc(c.l)}</li>`).join('')}</ul>
       <div class="bw-prev-top">
         <span class="label">Top matches right now</span>
         ${top.map((r) => `<a class="bw-prev-op" href="#op.${esc(r.op.slug)}" data-track-view="${esc(r.op.id)}">

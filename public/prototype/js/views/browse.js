@@ -192,7 +192,7 @@
   };
 
   /* ---------- Labels ---------- */
-  const rateText = (v) => (+v >= RN.fields.rateMax.max ? 'Any rate' : '$' + Math.round(+v) + ' / hr');
+  const rateText = (v) => (+v >= RN.fields.rateMax.max ? 'Any rate' : '$' + Math.round(+v) + '/hr');
   function chipText(k, v) {
     switch (k) {
       case 'q': return `“${v}”`;
@@ -200,7 +200,7 @@
       case 'hoursPerMonth': return v === '19' ? 'Any available time' : 'At least ' + RN.w.label('hoursPerMonth', v);
       case 'revenueRange': return RN.w.label('revenueRange', v) + ' revenue';
       case 'employeeRange': return RN.w.label('employeeRange', v) + ' employees';
-      case 'rateMax': return 'Up to $' + Math.round(+v) + ' / hr';
+      case 'rateMax': return 'Up to $' + Math.round(+v) + '/hr';
       case 'risMin': return 'Reputation Index ' + RN.w.label('risMin', v);
       case 'verifiedProof': return PROOF;
       case 'usHours': return US_HOURS;
@@ -386,9 +386,8 @@
     return list.slice(0, 6);
   }
 
-  // "$7.5k to $11.5k a month", the way monthly ranges read on cards and profiles
-  const kAmt = (n) => '$' + (n >= 1000 ? (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k' : Math.round(n));
-  const kMonth = (m) => (m && m.lo && m.hi ? `${kAmt(m.lo)} to ${kAmt(m.hi)} a month` : (m && m.label) || '');
+  // "$7.5k - $11.5k/month", the way monthly ranges read on cards and profiles (RN.fmt.moRange)
+  const kMonth = (m) => (m && m.lo && m.hi ? RN.fmt.moRange(m.lo, m.hi) : (m && m.label) || '');
   RN.actions['br-lede'] = (el) => { const box = el.closest('.br-cat-intro'); if (!box) return; const open = !box.classList.contains('is-open'); box.classList.toggle('is-open', open); el.setAttribute('aria-expanded', open); el.innerHTML = (open ? 'Show less' : 'Read more') + icon(open ? 'chev-up' : 'chev-down'); };
   function catHead(cat) {
     const label = RN.fields.catLabel(cat);
@@ -413,7 +412,7 @@
         ${idx ? `<aside class="card br-rate-card" aria-label="Rate Index for ${esc(label)}">
           <span class="label">Rate Index · ${esc(label)}</span>
           <div class="br-rate-big"><span class="num">$${esc(idx.p50)}</span><span class="small muted">median per hour</span></div>
-          <p class="small">Typical range <b>$${esc(idx.p25)} to $${esc(idx.p75)} / hr</b> (middle half of ${esc(idx.n)} profiles).</p>
+          <p class="small">Typical range <b>${esc(RN.fmt.hrRange(idx.p25, idx.p75))}</b> (middle half of ${esc(idx.n)} profiles).</p>
           ${mr ? `<dl class="br-rate-mo">
             <div><dt>Typical month at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(kMonth(mr))}</dd></div>
           </dl>
@@ -474,7 +473,7 @@
     const n = catCount(cat);
     const label = RN.fields.catLabel(cat);
     return `<div class="br-thin-note">
-      <span class="br-zero-ic">${icon('users')}</span>
+      ${RN.ui.icoTile('users', { round: true, cls: 'br-zero-ic' })}
       <div class="grow stack" style="--gap:4px">
         <h2 class="h4">${n === 1 ? `One ${esc(label)} operator is live today` : `${esc(RN.fmt.int(n))} ${esc(label)} operators are live today`}</h2>
         <p class="small muted">Tell us what you need and our team will find more ${esc(CAT[cat].noun)}s for you. Your search comes with you.</p>
@@ -502,7 +501,7 @@
     RN.model.ops.forEach((op) => { if (!op.hidden) counts[op.catKey] = (counts[op.catKey] || 0) + 1; });
     return `<nav class="wrap br-roles" aria-label="Browse by role category">
       <span class="label">${cat ? 'Other role categories' : 'Browse by role'}</span>
-      <div class="br-roles-list">${RN.fields.roleCategory.options.filter((o) => o.v !== cat).map((o) => `<a class="br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}Fractional ${esc(o.l)}${counts[o.v] ? `<b>${counts[o.v]}</b>` : ''}</a>`).join('')}</div>
+      <div class="br-roles-list">${RN.fields.roleCategory.options.filter((o) => o.v !== cat).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}Fractional ${esc(o.l)}${counts[o.v] ? `<b class="chip-n">${counts[o.v]}</b>` : ''}</a>`).join('')}</div>
     </nav>`;
   }
 
@@ -561,7 +560,7 @@
     if (rk && !chips.length) return '';
     if (chips.length) {
       return `${rk ? '' : saidNote()}<div class="br-chips" role="list" aria-label="Active filters">
-        ${chips.map((x) => `<span role="listitem"><button type="button" class="br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${CHIP_ICON[x.k] ? icon(CHIP_ICON[x.k]) : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
+        ${chips.map((x) => `<span role="listitem"><button type="button" class="chip chip-sm br-fchip" data-type="${esc(TYPE[x.k] || 'other')}" data-act="br-chip-x" data-k="${esc(x.k)}" data-v="${esc(x.v)}" title="${esc(typeName(x.k))}" aria-label="${esc(chipAria(x.k, x.v))}">${CHIP_ICON[x.k] ? icon(CHIP_ICON[x.k]) : '<i></i>'}<span>${esc(chipText(x.k, x.v))}</span>${icon('x')}</button></span>`).join('')}
         ${chips.length > 1 ? `<span role="listitem"><button type="button" class="act muted br-clear" data-act="br-clear">Clear all</button></span>` : ''}
       </div>`;
     }
@@ -660,7 +659,7 @@
     RN.model.ops.forEach((op) => { if (!op.hidden) counts[op.catKey] = (counts[op.catKey] || 0) + 1; });
     return `<aside class="br-break night" aria-label="Browse by role">
       <div class="br-break-l"><span class="eyebrow">Narrow it down</span><h2 class="h3">Start from the seat you need to fill</h2></div>
-      <div class="br-break-pills">${RN.fields.roleCategory.options.filter((o) => counts[o.v]).map((o) => `<a class="br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}<b>${counts[o.v]}</b></a>`).join('')}</div>
+      <div class="br-break-pills">${RN.fields.roleCategory.options.filter((o) => counts[o.v]).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}<b class="chip-n">${counts[o.v]}</b></a>`).join('')}</div>
     </aside>`;
   }
   const withBreak = (cards, c) => { const at = 9; if (cards.length <= at) return cards.join(''); return cards.slice(0, at).join('') + gridBreak(c) + cards.slice(at).join(''); };
@@ -682,7 +681,7 @@
     const more = res.length - shown.length;
     // A last row with one gap closes on a dark "tell us" tile (wide screens only; the line below covers phones)
     const closer = more <= 0 && shown.length % 3 === 2 && !(landedCat && catCount(landedCat) < THIN);
-    return `<div class="grid g-3 br-grid">${withBreak(shown.map((r) => BR.card(r.op, { why: whyFor(r, c) })), c)}${closer ? `<aside class="br-closer night"><span class="br-zero-ic">${icon('message')}</span><h3 class="h4">Not seeing the right fit?</h3><p>Tell us what you need and our team will shortlist operators for you. Your search comes with you.</p><button type="button" class="btn btn-leaf" data-act="br-tell" data-zero="">Tell us what you need</button></aside>` : ''}</div>
+    return `<div class="grid g-3 br-grid">${withBreak(shown.map((r) => BR.card(r.op, { why: whyFor(r, c) })), c)}${closer ? `<aside class="br-closer night">${RN.ui.icoTile('message', { round: true, cls: 'br-zero-ic' })}<h3 class="h4">Not seeing the right fit?</h3><p>Tell us what you need and our team will shortlist operators for you. Your search comes with you.</p><button type="button" class="btn btn-leaf" data-act="br-tell" data-zero="">Tell us what you need</button></aside>` : ''}</div>
       ${moreHtml(shown.length, res.length)}
       ${landedCat && catCount(landedCat) < THIN ? thinNote(landedCat) : `<p class="br-tell${closer ? ' br-tell-alt' : ''}">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`}`;
   }
@@ -721,7 +720,7 @@
     const multi = candidates(c).length > 1;
     return `<div class="br-zero">
       <div class="br-zero-hd">
-        <span class="br-zero-ic">${icon('search')}</span>
+        ${RN.ui.icoTile('search', { round: true, cls: 'br-zero-ic' })}
         <div class="stack" style="--gap:6px">
           <h2 class="h3">No exact matches</h2>
           <p class="muted">${multi ? 'No operator matches every filter you picked.' : c.q && !c.tags.length && !Object.keys(c.filters).length ? `No operator profile mentions <b>${esc(c.q)}</b> yet.` : 'No operator matches this filter yet.'} ${alt.n ? (multi ? `The closest matches drop <b>${esc(x.label)}</b>.` : 'Here are the closest matches.') : ''}</p>

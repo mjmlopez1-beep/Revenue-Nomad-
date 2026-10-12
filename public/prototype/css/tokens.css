@@ -81,6 +81,16 @@
   --tb-apx-1: #26332C; --tb-apx-2: #070B09; --tb-apx-glow: #E8C766; --tb-apx-ink: #F6E09A;
   --tb-pill-bg: #FFFFFF; --tb-pill-line: #D8D7CC; --tb-pill-ink: #0E1411;
 
+  /* Chips (one family, components.css): sizes, type, hairlines */
+  --chip-h-md: 34px; --chip-h-sm: 28px; --chip-h-xs: 22px;
+  --chip-r: 999px; --chip-fs: 13px; --chip-fw: 500; --chip-ic: 14px; --chip-gap: 6px;
+  --chip-bg: var(--card); --chip-bg-hi: var(--card-2);
+  --chip-line: #D3D2C6; --chip-line-hi: #8C958F; --chip-line-soft: rgba(14, 20, 17, .06);
+  --chip-ink: var(--ink-2);
+
+  /* Icon tiles (RN.ui.icoTile): the glyph mixes the tone toward this pole for contrast */
+  --ico-forest: var(--forest); --ico-pole: #0E1411; --ico-ink-mix: 82%; --ico-hl: rgba(255, 255, 255, .75);
+
   /* Role category hues (tiles, small markers only; never large fills) */
   --cat-sales: #0F7A55;
   --cat-mkt: #B3265E;
@@ -188,6 +198,8 @@
     --tb-au-edge: #8A6512;
     --tb-apx-1: #22302A; --tb-apx-2: #040705;
     --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
+    --chip-line: #34403A; --chip-line-hi: #66726B; --chip-line-soft: rgba(255, 255, 255, .06); --chip-bg-hi: #1B2520;
+    --ico-forest: var(--leaf); --ico-pole: #FFFFFF; --ico-ink-mix: 55%; --ico-hl: rgba(255, 255, 255, .06);
   }
 }
 
@@ -241,6 +253,8 @@
   --tb-au-edge: #8A6512;
   --tb-apx-1: #22302A; --tb-apx-2: #040705;
   --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
+  --chip-line: #34403A; --chip-line-hi: #66726B; --chip-line-soft: rgba(255, 255, 255, .06); --chip-bg-hi: #1B2520;
+  --ico-forest: var(--leaf); --ico-pole: #FFFFFF; --ico-ink-mix: 55%; --ico-hl: rgba(255, 255, 255, .06);
 }
 
 /* The night band is dark in both themes, so tier badges on it take the dark set */

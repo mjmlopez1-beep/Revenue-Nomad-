@@ -132,7 +132,6 @@
 .rv .rv-reason .textarea { min-height: 64px; max-height: 260px; }
 
 /* ---------- Focus areas ---------- */
-.rv-tags .chip { height: 36px; }
 .rv-tags .rv-tags-l { flex-basis: 100%; margin: 6px 0 2px; }
 .rv-tags .rv-tags-l:first-child { margin-top: 0; }
 .rv-tags .rv-tags-l[hidden], .rv-tags .chip[hidden] { display: none; }
@@ -165,7 +164,6 @@
 .rv-pv-ghost { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; }
 .rv-pv-ghost i { display: block; height: 8px; border-radius: 99px; background: var(--sunk); }
 .rv-pv-ghost i:nth-child(2) { width: 88%; } .rv-pv-ghost i:nth-child(3) { width: 56%; }
-.rv-pv .row .pill { font-size: var(--t-12); }
 .rv-pv-score { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; }
 .rv-pv-score .num { font-size: var(--t-18); font-weight: 700; line-height: 1; }
 .rv-pv-q { font-family: var(--f-serif); font-style: italic; font-size: 16px; line-height: 1.45; color: var(--ink-2); }

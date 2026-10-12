@@ -16,8 +16,7 @@
 .rk-empty-needs { margin: 0; color: var(--mute); font-size: var(--t-14); }
 .rk-fchips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rk-fchips .label { margin-right: 4px; }
-.rk-fchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: var(--paper-2); font-size: var(--t-13); color: var(--ink-2); }
-.rk-fchip svg { width: 14px; height: 14px; color: var(--mute); }
+.rk-fchips .pill svg { color: var(--mute); }
 .rk-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: var(--t-12); color: var(--mute); }
 .rk-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .rk-legend .rk-dot { width: 14px; height: 14px; animation: none; }
@@ -125,10 +124,9 @@
 .fm-q .fm-hl { color: #F2C77E; font-weight: 800; }
 .fm-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .fm-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.fm-chip { height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--night-line); background: rgba(255, 255, 255, .05); color: var(--night-ink); font-family: var(--f-display); font-weight: 600; font-size: var(--t-14); cursor: pointer; backdrop-filter: blur(6px); transition: background var(--dur) ease, border-color var(--dur) ease, transform var(--dur) ease; }
-.fm-chip:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .32); }
-.fm-chip:active { transform: scale(.97); }
-.fm-chip[aria-pressed="true"] { background: #fff; border-color: #fff; color: #0E1411; }
+.fm-chip { background: rgba(255, 255, 255, .05); border-color: var(--night-line); color: var(--night-ink); backdrop-filter: blur(6px); }
+.fm-chip:hover { background: rgba(255, 255, 255, .12); border-color: rgba(255, 255, 255, .32); color: var(--night-ink); }
+.fm-chip[aria-pressed="true"], .fm-chip[aria-pressed="true"]:hover { background: var(--leaf); border-color: var(--leaf); color: var(--forest-deep); }
 .fm-other .select { height: 40px; border-radius: 10px; background-color: rgba(255, 255, 255, .05); border-color: var(--night-line); color: var(--night-ink); }
 .fm-other .select option { color: #0E1411; }
 .fm-card .btn { --h: 40px; padding: 0 18px; border-radius: 10px; background: #fff; color: #0E1411; border-color: #fff; letter-spacing: .02em; text-transform: none; font-weight: 700; font-size: var(--t-14); }

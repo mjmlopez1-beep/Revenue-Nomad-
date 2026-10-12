@@ -138,7 +138,7 @@
       other = `<label class="fm-other"><span class="sr-only">Other industry</span><select class="select select-sm" data-change="fm-pick-sel" data-k="industry"><option value="">Other…</option>${opts.map((o) => `<option value="${esc(o.v)}">${esc(o.l)}</option>`).join('')}</select></label>`;
       opts = top.filter(Boolean);
     }
-    return `<div class="fm-chips" role="group" aria-label="${esc(ASK[k])}">${opts.map((o) => `<button type="button" class="fm-chip" data-act="fm-pick" data-k="${k}" data-v="${esc(o.v)}" aria-pressed="${cur === o.v}">${esc(o.l)}</button>`).join('')}${other}</div>`;
+    return `<div class="fm-chips" role="group" aria-label="${esc(ASK[k])}">${opts.map((o) => `<button type="button" class="chip fm-chip" data-act="fm-pick" data-k="${k}" data-v="${esc(o.v)}" aria-pressed="${cur === o.v}">${esc(o.l)}</button>`).join('')}${other}</div>`;
   }
   FM.cardHtml = function (text) {
     const s = nextStep(text);

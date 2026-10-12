@@ -51,14 +51,8 @@
 .cmp-mixnote > svg { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; color: var(--accent); }
 .cmp-core { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cmp-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.cmp-tags .ftag { font-size: var(--t-12); min-height: 26px; padding: 3px 10px; }
 .cmp-tags .cmp-tag-hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .cmp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cmp-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--card); font-size: var(--t-12); font-weight: 600; color: var(--ink-2); line-height: 1.2; }
-.cmp-chip svg { width: 12px; height: 12px; }
-.cmp-chip.on { border-color: var(--accent); background: var(--tint); color: var(--ink); }
-.cmp-chip.on svg { color: var(--accent); }
-.cmp-chip.more { border-style: dashed; color: var(--mute); }
 
 /* Best value in a row: a light tint and a small dot, never shouted */
 .cmp-tbl td.cmp-best { position: relative; background: color-mix(in srgb, var(--tint) 62%, transparent); }

@@ -36,6 +36,19 @@
     const verified = !!t.tier && t.tier !== 'claimed';
     return `<span class="ftag ${verified ? '' : 'claimed'}" title="${t.tier === 'expert' ? 'Expert: verified by 5 or more company reviews' : verified ? 'Verified by a company review' : 'Claimed by the operator'}">${verified ? icon('check-circle') : ''}${esc(t.t)}</span>`;
   };
+  /* Icon tile: one shared duotone treatment (components.css .ico).
+     RN.ui.icoTile('search', { size: 'sm'|'md'|'lg', tone: 'forest'|'sales'|'mkt'|'revops'|'enable'|'cs'|'ai'|'partner'|'sellers'|'gold'|'info',
+       cat: 'sales_leadership' (tone from the role category), color: 'var(--x)' (any CSS colour), night: true, round: true,
+       still: true (no hover motion), cls: 'extra classes', label: 'accessible name' (otherwise decorative) }) */
+  const ICO_TONES = ['sales', 'mkt', 'revops', 'enable', 'cs', 'ai', 'partner', 'sellers', 'gold', 'info'];
+  ui.icoTile = function (name, o) {
+    o = o || {};
+    const color = o.color || (o.cat && RN.fields && RN.fields.catColor ? RN.fields.catColor(o.cat) : '');
+    const cls = ['ico', 'ico-' + (o.size === 'sm' || o.size === 'lg' ? o.size : 'md'), ICO_TONES.includes(o.tone) ? 'ico-t-' + o.tone : '', o.night ? 'ico-night' : '', o.round ? 'ico-round' : '', o.still ? 'ico-still' : '', o.cls || ''].filter(Boolean).join(' ');
+    const a11y = o.label ? `role="img" aria-label="${esc(o.label)}"` : 'aria-hidden="true"';
+    return `<span class="${cls}" ${a11y}${color ? ` style="--ico-tone:${esc(color)}"` : ''}>${icon(name, 'ico-bk')}${icon(name, 'ico-fg')}</span>`;
+  };
+
   ui.ftags = function (tags, max, o) {
     tags = tags || [];
     const shown = tags.slice(0, max || tags.length);

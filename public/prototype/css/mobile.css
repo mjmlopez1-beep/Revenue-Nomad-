@@ -21,6 +21,13 @@
 @media (max-width: 640px) {
   /* !important: several views set these at 10-11px with more specific selectors */
   .mono { font-size: max(12px, .92em) !important; }
-  .pj-bp-day, .tb-l-name, .nav-count, .hm-book-k, .hm-book-m, .mg-funnel span:last-child, .pill, .label, .n { font-size: 12px !important; }
+  .pj-bp-day, .tb-l-name, .nav-count, .hm-book-k, .hm-book-m, .mg-funnel span:last-child, .label, .n { font-size: 12px !important; }
   [data-view] .pf-ax b { font-size: 12px !important; }
+}
+
+/* Chips: an invisible 44px hit box on touch screens (chip system, components.css) */
+@media (pointer: coarse), (max-width: 640px) {
+  .chip:is(button, a, label, [data-act]) { position: relative; }
+  .chip:is(button, a, label, [data-act])::after { content: ""; position: absolute; inset: -5px -3px; }
+  .chip-sm:is(button, a, label, [data-act])::after { inset: -8px -3px; }
 }

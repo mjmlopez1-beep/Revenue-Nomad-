@@ -65,6 +65,8 @@
   /* Role category icons, the same set the operator intake uses */
   const CAT_ICON = { sales_leadership: 'trend-up', marketing: 'megaphone', revenue_operations: 'gear', sales_enablement: 'book', customer_success_growth: 'heart', ai_gtm: 'ai', partnerships: 'handshake', sellers: 'briefcase' };
   const catIcon = (cat) => icon(CAT_ICON[RN.fields.catKey(cat)] || 'layers');
+  // Blueprint tile: the shared duotone icon tile in the card's category hue (--cat is set on the card)
+  const catTile = (cat, o) => RN.ui.icoTile(CAT_ICON[RN.fields.catKey(cat)] || 'layers', Object.assign({ color: 'var(--cat, var(--accent))', cls: 'pj-bp-ico' }, o || {}));
   const BP = [
     {
       id: 'vp-sales', cat: 'sales_leadership', role: 'VP of Sales', blurb: 'Build the sales process and hire the first team.',
@@ -250,7 +252,7 @@
     return {
       project, h, rev: rev || null, n: r.n,
       rate: { lo: Math.round(r.p25), mid: Math.round(r.p50), hi: Math.round(r.p75) },
-      total: { lo, hi, label: project ? `${RN.fmt.k(lo)} to ${RN.fmt.k(hi)}` : RN.fmt.moRange(lo, hi) },
+      total: { lo, hi, label: project ? RN.fmt.moRange(lo, hi, false) : RN.fmt.moRange(lo, hi) },
     };
   };
   /* Default budget from a Blueprint: the median rate per hour, or the median rate times the project hours */
@@ -447,7 +449,7 @@
     const ms = bp.milestones.slice(0, 3);
     return `<article class="card card-link pj-bp" data-go="blueprint.${id}" style="--cat:${RN.fields.catColor(bp.cat)}">
       <div class="pj-bp-hd">
-        <span class="pj-bp-ico" aria-hidden="true">${catIcon(bp.cat)}</span>
+        ${catTile(bp.cat)}
         <span class="pj-bp-who"><span class="pj-bp-cat">${esc(RN.fields.catLabel(bp.cat))}</span><span class="pj-bp-seat">${esc(bp.role)} · ${esc(W().label('engagementType', bp.engagementType))}</span></span>
       </div>
       <h3 class="h4 pj-bp-t"><a href="#blueprint.${id}">${esc(bp.problem)}</a></h3>
@@ -455,8 +457,8 @@
       <div class="pj-bp-foot">
         <ol class="pj-bp-tl" aria-label="30/60/90-day plan">${ms.map((m, i) => `<li><span class="pj-bp-day">Day ${(i + 1) * 30}</span><span class="pj-bp-ms">${esc(m)}</span></li>`).join('')}</ol>
         <ul class="pj-bp-meta" aria-label="Typical terms">
-          <li>${icon('clock')}${esc(bpTime(bp))}</li>
-          <li>${icon('calendar')}${esc(W().label('term', bp.term))}</li>
+          <li class="pill pill-line">${icon('clock')}${esc(bpTime(bp))}</li>
+          <li class="pill pill-line">${icon('calendar')}${esc(W().label('term', bp.term))}</li>
         </ul>
         <div class="pj-bp-act">
           <button type="button" class="pj-bp-go" data-act="pj-bp-start" data-id="${id}" aria-label="${esc(`Start from this Blueprint: ${bp.problem}`)}">Start from this${icon('arrow')}</button>
@@ -484,7 +486,7 @@
     </article>`;
   }
   /* Score chip for compact rows: the number, coloured by tier, with the label for screen readers and on hover */
-  const scorePill = (fit) => `<span class="pj-sc ${fit.pct >= 75 ? 'is-strong' : fit.pct >= 50 ? 'is-good' : ''}" title="${esc(fit.label)}"><span class="sr-only">${esc(fit.label)} </span>${fit.pct}</span>`;
+  const scorePill = (fit) => `<span class="pill pj-sc ${fit.pct >= 75 ? 'pill-good is-strong' : fit.pct >= 50 ? 'pill-accent is-good' : ''}" title="${esc(fit.label)}"><span class="sr-only">${esc(fit.label)} </span>${fit.pct}</span>`;
   /* Strong / good / other split of everyone scored, as one stacked bar with a key */
   function splitBar(c, o) {
     const t = Math.max(1, c.total);
@@ -776,7 +778,7 @@
             ${!bp && !draft && step === 1 ? `<div class="pj-pickbp">
               <div class="pj-pickbp-hd"><div><span class="label">Start from a Blueprint</span><p class="small muted">The brief fills itself from the plan, the scope and the focus areas.</p></div>
                 <span class="row pj-pickbp-nav"><button type="button" class="pj-nav-b" data-act="pj-bprow" data-d="-1" aria-label="Scroll Blueprints back">${icon('chev-left')}</button><button type="button" class="pj-nav-b" data-act="pj-bprow" data-d="1" aria-label="Scroll Blueprints forward">${icon('chev-right')}</button></span></div>
-              <div class="pj-bprow" data-pj-bprow>${BP.map((b) => `<a class="pj-bpmini" href="#engagement.new.${esc(b.id)}" style="--cat:${RN.fields.catColor(b.cat)}"><span class="pj-bpmini-hd"><span class="pj-bp-ico">${catIcon(b.cat)}</span><span class="pj-bpmini-c">${esc(RN.fields.catLabel(b.cat))}</span></span><span class="pj-bpmini-t">${esc(b.problem)}</span><span class="pj-bpmini-r">${esc(b.role)} · ${esc(bpTime(b))}</span></a>`).join('')}</div>
+              <div class="pj-bprow" data-pj-bprow>${BP.map((b) => `<a class="pj-bpmini" href="#engagement.new.${esc(b.id)}" style="--cat:${RN.fields.catColor(b.cat)}"><span class="pj-bpmini-hd">${catTile(b.cat, { size: 'sm' })}<span class="pj-bpmini-c">${esc(RN.fields.catLabel(b.cat))}</span></span><span class="pj-bpmini-t">${esc(b.problem)}</span><span class="pj-bpmini-r">${esc(b.role)} · ${esc(bpTime(b))}</span></a>`).join('')}</div>
               <div class="pj-or"><span>or describe the seat yourself</span></div>
             </div>` : ''}
           </div>
@@ -1833,14 +1835,14 @@
     return `<div class="pj-bph-art" aria-hidden="true">
       <i class="pj-sheet-back"></i><i class="pj-sheet-back b2"></i>
       <div class="pj-sheet" style="--cat:${RN.fields.catColor(bp.cat)}">
-        <div class="pj-sheet-hd"><span class="pj-bp-ico">${catIcon(bp.cat)}</span><span class="pj-sheet-k">Blueprint · ${esc(RN.fields.catLabel(bp.cat))}</span></div>
+        <div class="pj-sheet-hd">${catTile(bp.cat, { size: 'sm' })}<span class="pj-sheet-k">Blueprint · ${esc(RN.fields.catLabel(bp.cat))}</span></div>
         <b class="pj-sheet-t">${esc(bp.problem)}</b>
         <span class="pj-sheet-s">${esc(bp.title)} · ${esc(bpTime(bp))}</span>
         <ol class="pj-sheet-tl">${bp.milestones.map((m, i) => `<li style="--i:${i}"><span class="pj-bp-day">Day ${(i + 1) * 30}</span><span>${esc(m)}</span></li>`).join('')}</ol>
         <div class="pj-sheet-rate">
           <span class="pj-sheet-lbl">Rate Index ${RN.ui.illus()}</span>
           <div class="pj-range"><i class="pj-range-band" style="left:${at(pr.rate.lo)}%;right:${(100 - at(pr.rate.hi)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${at(pr.rate.mid)}%"></i></div>
-          <span class="pj-sheet-rv num">${usd(pr.rate.lo)} to ${usd(pr.rate.hi)} / hr</span>
+          <span class="pj-sheet-rv num">${esc(RN.fmt.hrRange(pr.rate.lo, pr.rate.hi))}</span>
         </div>
         ${top.length ? `<div class="pj-sheet-ops"><span class="ava-stack">${top.map((r) => RN.ui.avatar(r.op, 'ava-sm', { decorative: true })).join('')}</span><span class="tiny">Ranked first for this Blueprint</span></div>` : ''}
       </div>
@@ -1875,7 +1877,7 @@
     <section class="wrap section-sm">
       <span class="eyebrow">How a Blueprint works</span>
       <ol class="grid g-3 pj-how">
-        <li><div class="pj-how-art" aria-hidden="true"><span class="pj-how-chips">${[W().label('engagementType', std.engagementType), W().label('hoursPerMonth', std.hoursPerMonth), W().label('term', std.term), W().label('startBy', std.startBy)].map((x) => `<span>${esc(x)}</span>`).join('')}</span><span class="pj-how-eq">${icon('user')}Same lists as every operator profile</span></div>
+        <li><div class="pj-how-art" aria-hidden="true"><span class="pj-how-chips">${[W().label('engagementType', std.engagementType), W().label('hoursPerMonth', std.hoursPerMonth), W().label('term', std.term), W().label('startBy', std.startBy)].map((x) => `<span class="pill pill-accent">${esc(x)}</span>`).join('')}</span><span class="pj-how-eq">${icon('user')}Same lists as every operator profile</span></div>
           <h3 class="h4">Built on standard fields</h3><p class="small muted">Engagement type, available time, term and focus areas use the lists operators fill in, so a Blueprint matches profiles with no translation.</p></li>
         <li><div class="pj-how-art" aria-hidden="true"><div class="pj-how-bands">${bands.map((b) => `<div><span>${esc(RN.fields.catLabel(b.c))}</span><i style="--cat:${RN.fields.catColor(b.c)}"><b style="left:${bx(b.r.p25)}%;right:${(100 - bx(b.r.p75)).toFixed(1)}%"></b></i></div>`).join('')}</div></div>
           <h3 class="h4">Priced from the Rate Index ${RN.ui.illus()}</h3><p class="small muted">Rates are the p25 to p75 hourly rates operators list in each role category. The rate is what you pay. There are no fees for companies.</p></li>
@@ -1897,7 +1899,7 @@
   const sizeLine = (pr, t) => (pr.project ? `About ${pr.h} hours over the term` : `At ${W().label('hoursPerMonth', t.hoursPerMonth)}`);
   function estHtml(bp, rev, t) {
     const pr = PJ.price(bp, rev, t);
-    return `<div class="pj-est"><span class="label">Rate</span><b class="num">${usd(pr.rate.lo)} to ${usd(pr.rate.hi)} / hr</b><span class="tiny muted">Rate Index, p25 to p75</span></div>
+    return `<div class="pj-est"><span class="label">Rate</span><b class="num">${esc(RN.fmt.hrRange(pr.rate.lo, pr.rate.hi))}</b><span class="tiny muted">Rate Index, p25 to p75</span></div>
       <div class="pj-est"><span class="label">${pr.project ? 'Typical project' : 'Typical month'}</span><b class="num">${esc(pr.total.label)}</b><span class="tiny muted">${esc(sizeLine(pr, t))}</span></div>`;
   }
   function termsHtml(bp, rev) {
@@ -1983,7 +1985,7 @@
       ${crumbs([['Post an engagement', 'engagements'], ['Blueprints', 'blueprints'], [bp.role, '']])}
       <div class="panel-night night pj-bpd-hero" style="--cat:${RN.fields.catColor(bp.cat)}">
         <div class="pj-bpd-hero-l">
-        <div class="pj-bpd-hero-hd"><span class="pj-bp-ico" aria-hidden="true">${catIcon(bp.cat)}</span><span class="eyebrow">Blueprint · ${esc(cat)}</span></div>
+        <div class="pj-bpd-hero-hd">${catTile(bp.cat, { size: 'sm', night: true })}<span class="eyebrow">Blueprint · ${esc(cat)}</span></div>
         <h1 class="h1">${esc(bp.problem)}</h1>
         <p class="lede">The seat that fixes it: <span class="serif">${esc(bp.title)}.</span> ${esc(bp.blurb)}</p>
         <ol class="pj-bpd-ms" aria-label="30/60/90-day plan at a glance">${bp.milestones.map((m, i) => `<li style="--i:${i}"><span class="pj-bpd-day">Day ${(i + 1) * 30}</span><span>${esc(m)}</span></li>`).join('')}</ol>
@@ -2026,10 +2028,10 @@
       <div class="pj-sec-hd"><span class="eyebrow">The plan</span><h2 class="h3" style="margin-top:6px">The 30/60/90-day plan</h2></div>
       <ol class="pj-tl" style="--cat:${RN.fields.catColor(bp.cat)}">
         ${bp.plan.map((ph, i) => `<li class="pj-tl-ph" style="--i:${i}">
-          <div class="pj-tl-hd"><span class="pj-tl-node"><b>${(i + 1) * 30}</b></span><span class="pj-tl-d">${PLAN_D[i]}</span></div>
+          <div class="pj-tl-hd"><span class="pj-tl-node"><b>${(i + 1) * 30}</b></span><span class="pill pj-tl-d">${PLAN_D[i]}</span></div>
           <h3 class="h4">${esc(ph.t)}</h3>
           <ul>${ph.items.map((it) => `<li>${esc(it)}</li>`).join('')}</ul>
-          <p class="pj-tl-ms">${icon('flag')}<span>${esc(bp.milestones[i] || '')}</span></p>
+          <p class="chip chip-sm pj-tl-ms">${icon('flag')}<span>${esc(bp.milestones[i] || '')}</span></p>
         </li>`).join('')}
       </ol>
     </section>
@@ -2039,7 +2041,7 @@
           <ul class="pj-outs">${bp.outcomes.map((o) => `<li>${icon('trend-up')}<span>${esc(o)}</span></li>`).join('')}</ul></section>
         <section class="pj-bpd-sec"><h2 class="h3">Focus areas to look for</h2>
           <p class="small muted">From the Fit Tag Library. Operators with these verified by a company review rank first when you post. The number is how many profiles list each one.</p>
-          <ul class="pj-fas">${bp.tags.map((tg) => { const x = supply(tg); const info = RN.model.tagInfo(tg) || {}; return `<li title="${esc(info.d || '')}"><span>${esc(tg)}</span>${x.all ? `<b class="num" aria-label="${esc(`${x.all} on the network${x.ver ? `, ${x.ver} company-verified` : ''}`)}">${x.all}${x.ver ? `<i>${icon('check')}${x.ver}</i>` : ''}</b>` : '<b class="is-new">New</b>'}</li>`; }).join('')}</ul>
+          <ul class="pj-fas">${bp.tags.map((tg) => { const x = supply(tg); const info = RN.model.tagInfo(tg) || {}; return `<li class="chip chip-sm" title="${esc(info.d || '')}"><span>${esc(tg)}</span>${x.all ? `<b class="chip-n num" aria-label="${esc(`${x.all} on the network${x.ver ? `, ${x.ver} company-verified` : ''}`)}">${x.all}${x.ver ? `<i>${icon('check')}${x.ver}</i>` : ''}</b>` : '<b class="chip-n is-new">New</b>'}</li>`; }).join('')}</ul>
           <a class="act" href="#library">Open the Fit Tag Library${icon('arrow')}</a></section>
       </div>
     </section>
@@ -2051,11 +2053,11 @@
       <div class="row between pj-sec-hd"><div><span class="eyebrow">Operators who offer this</span><h2 class="h3" style="margin-top:6px">Who runs this engagement</h2></div><a class="act" href="#browse.${esc(bp.cat)}">Browse all ${esc(cat)}${icon('arrow')}</a></div>
       <div class="pj-offer-row${offer.length > 1 ? ' is-many' : ''}">
         <div class="pj-offer-grp">
-          <div class="pj-offer-hd"><span class="pj-offer-tag is-offer">${icon('seal')}Offer this Blueprint</span><span class="tiny muted">${offer.length ? 'Listed on their profile as a packaged engagement' : 'No one lists it yet'}</span></div>
+          <div class="pj-offer-hd"><span class="pill pill-gold pj-offer-tag">${icon('seal')}Offer this Blueprint</span><span class="tiny muted">${offer.length ? 'Listed on their profile as a packaged engagement' : 'No one lists it yet'}</span></div>
           ${offer.length ? `<div class="pj-offer-cards">${offer.map((o) => RN.ui.opCard(o)).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet. The strong fits run this kind of engagement today.</p>'}
         </div>
         <div class="pj-offer-grp">
-          <div class="pj-offer-hd"><span class="pj-offer-tag">${icon('target')}Strong fits</span><span class="tiny muted">Ranked on the focus areas above</span></div>
+          <div class="pj-offer-hd"><span class="pill pj-offer-tag">${icon('target')}Strong fits</span><span class="tiny muted">Ranked on the focus areas above</span></div>
           <div class="pj-offer-cards">${fits.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the engagement and our team will source candidates.', cta: '' })}</div>
         </div>
       </div>
