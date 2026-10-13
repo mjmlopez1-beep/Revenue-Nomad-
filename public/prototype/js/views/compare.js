@@ -53,7 +53,7 @@
   const sub = (t) => `<span class="cmp-sub">${t}</span>`;
   function risCell(op) {
     const t = RN.fields.risTierFor(op.ris && op.ris.score);
-    if (!t) return none('Not scored yet');
+    if (!t) return RN.fields.risBelow.is(op.ris && op.ris.score) ? none(RN.fields.risBelow.l) + sub(`Reputation Index ${esc(op.ris.score)}`) : none('Not scored yet');
     return `<span class="ris t-${esc(t.v)}">${RN.ui.tierBadge(t.v, { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span>${esc(t.min)} to ${esc(t.max)} tier</span></span></span>`;
   }
   function coreCell(op) {
@@ -84,8 +84,9 @@
     return c ? `<span class="cmp-txt">${esc(RN.w.label('hoursPerMonth', c))}</span>` : NA;
   }
   function rateCell(op) {
-    if (!op.rate) return NA;
-    if (RN.store.state.persona === 'visitor') { const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null; return `<b class="cmp-v cmp-v-sm">${rg ? esc(rg.text) : '—'}</b>${sub('<button type="button" class="act" data-act="cmp-login">Exact hourly rate after sign-in</button>')}`; }
+    // The Browse wording for an operator who has not listed a rate
+    if (!op.rate) return none(RN.fmt.rate(null));
+    if (RN.store.state.persona === 'visitor') { const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null; return `<b class="cmp-v cmp-v-sm" ${rg ? `title="${esc(rg.note)}"` : ''}>${rg ? esc(rg.text) : '—'}</b>${rg ? sub(rg.retainer ? 'Listed retainer' : 'Estimate from the hourly rate') : ''}${sub('<button type="button" class="act" data-act="cmp-login">Exact hourly rate after sign-in</button>')}`; }
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
     return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}/hr`) : ''}`;
   }
@@ -194,7 +195,7 @@
     R.push({ sec: 'Availability', l: F.availability.label, cell: (op) => RN.ui.avail(op, { hours: false }), val: (op) => AVAIL_SCORE[op.avail.key] || null, dir: 'max' });
     R.push({ l: F.startDate.label, cell: startCell, val: (op) => { const d = startFor(op); return d ? -d.getTime() : null; }, dir: 'max' });
     R.push({ l: F.hoursPerMonth.label, cell: hoursCell, val: (op) => +(op.avail.hoursCode || 0) || null, dir: 'max' });
-    R.push({ l: visitor ? 'Typical month' : F.rate.label, cell: rateCell, val: (op) => (visitor ? null : op.rate || null), dir: 'min' });
+    R.push({ l: visitor ? 'Monthly cost' : F.rate.label, cell: rateCell, val: (op) => (visitor ? null : op.rate || null), dir: 'min' });
     R.push({ l: F.engagementTypes.label, cell: (op) => listCell('engagementTypes', op.engagementTypes) });
     R.push({ sec: 'Company fit', l: F.revenueRange.clientLabel || 'Company revenue', cell: (op) => listCell('revenueRange', op.revenueRanges, buyer ? co.revenueRange : null), val: buyer ? (op) => (op.revenueRanges.includes(co.revenueRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
     R.push({ l: F.employeeRange.label, cell: (op) => listCell('employeeRange', op.employeeRanges, buyer ? co.employeeRange : null), val: buyer ? (op) => (op.employeeRanges.includes(co.employeeRange) ? 1 : 0) : null, dir: buyer ? 'max' : null });
@@ -325,8 +326,8 @@
   function emptyState() {
     const st = RN.store.state;
     const sugg = suggestions([], 3);
-    const faces = RN.model.ops.filter((op) => !op.hidden && op.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 3);
-    const ROWS = [['Reputation Index', [62, 48, 70]], ['CORE average', [40, 55, 34]], ['Verified focus areas', [78, 52, 64]], [RN.fields.availability.label, [46, 60, 38]], [st.persona === 'visitor' ? 'Typical month' : RN.fields.rate.label, [58, 44, 66]], [RN.fields.industries.label, [70, 36, 52]]];
+    const faces = RN.model.ops.filter((op) => !op.hidden && op.photo && !op.isMatt).sort((a, b) => b.ris.score - a.ris.score).slice(0, 3);
+    const ROWS = [['Reputation Index', [62, 48, 70]], ['CORE average', [40, 55, 34]], ['Verified focus areas', [78, 52, 64]], [RN.fields.availability.label, [46, 60, 38]], [st.persona === 'visitor' ? 'Monthly cost' : RN.fields.rate.label, [58, 44, 66]], [RN.fields.industries.label, [70, 36, 52]]];
     const best = [2, 1, 0, 1, 2, 0];
     const ghost = `<div class="cmp-ghost" aria-hidden="true">
         <div class="cmp-gh-row cmp-gh-head"><span></span>${faces.map((op) => `<span class="cmp-gh-col">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<i class="cmp-gh-name"></i><i class="cmp-gh-btn"></i></span>`).join('')}</div>

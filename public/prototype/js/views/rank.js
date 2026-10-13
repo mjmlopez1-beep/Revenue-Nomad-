@@ -28,8 +28,12 @@
     const pop = `<b>${esc(m.need.label)}</b><br>${esc(WORD[m.status])}. ${esc(MEANS[m.status])}${m.status !== 'missing' && m.via ? `<br><span class="muted">From: ${esc(m.via)}</span>` : ''}`;
     return `<span class="rk-dot" data-s="${m.status}" style="--k:${COLORS[i % COLORS.length]};--d:${i}" data-tip="${esc(pop)}"><span class="sr-only">${esc(tip)}</span>${m.status === 'proven' ? icon('check') : m.status === 'missing' ? '' : ''}</span>`;
   }
+  // ok: true (yes), false (no), null (unknown: the operator has not listed it, e.g. no rate means "Rate on request")
+  const UNKNOWN_T = { rateMax: 'Rate on request', hoursPerMonth: 'Available time not listed' };
   function fact(c) {
-    return `<span class="rk-fact${c.ok ? ' is-ok' : ''}" data-tip="${esc(`<b>${esc(c.label)}</b><br>${c.ok ? 'Yes, this matches.' : 'No, this doesn’t match.'}`)}">${icon(FACT_IC[c.k] || 'check')}<i aria-hidden="true">${c.ok ? '✓' : '✕'}</i><span class="sr-only">${esc(c.label)}: ${c.ok ? 'yes' : 'no'}</span></span>`;
+    const unk = c.ok === null;
+    const say = unk ? UNKNOWN_T[c.k] || 'Not listed' : c.ok ? 'yes' : 'no';
+    return `<span class="rk-fact${c.ok ? ' is-ok' : unk ? ' is-unknown' : ''}" data-tip="${esc(`<b>${esc(c.label)}</b><br>${unk ? esc(say) + '. Not a mismatch: ask on the intro call.' : c.ok ? 'Yes, this matches.' : 'No, this doesn’t match.'}`)}">${icon(FACT_IC[c.k] || 'check')}<i aria-hidden="true">${unk ? '?' : c.ok ? '✓' : '✕'}</i><span class="sr-only">${esc(c.label)}: ${esc(say)}</span></span>`;
   }
   // Worked with companies like yours: one segment per profile fact (industry, revenue, size)
   function like(r) {

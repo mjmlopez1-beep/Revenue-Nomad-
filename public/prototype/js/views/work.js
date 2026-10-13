@@ -363,8 +363,17 @@
       return Object.assign({ s }, p);
     });
   }
+  // The packing search is pure for a given cover order, column count and options, and can take a second for the
+  // full gallery: remember each answer so a re-render (tab switch, persona change, Back) does not search again
+  const packMemo = new Map();
   function pack(cands, cols, n, o) {
     o = o || {};
+    const key = cands.map((s) => s.id).join(',') + '|' + cols + '|' + n + '|' + !!o.features + '|' + !!o.ragged;
+    if (!packMemo.has(key)) { if (packMemo.size > 200) packMemo.clear(); packMemo.set(key, packNow(cands, cols, n, o)); }
+    const cur = new Map(cands.map((s) => [s.id, s]));
+    return packMemo.get(key).map((p) => Object.assign({}, p, { s: cur.get(p.s.id) || p.s }));
+  }
+  function packNow(cands, cols, n, o) {
     n = Math.min(n, cands.length);
     const small = n <= 6;
     // Richest first: two features, then one, then none; exactly n tiles before one fewer or one more

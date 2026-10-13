@@ -168,7 +168,7 @@
         ${o.stairs ? '<i class="pg-brow-step" aria-hidden="true"></i>' : `<span class="pg-brow-n">${RN.fmt.plural(n, 'profile')}</span>`}
         ${mine ? `<span class="pg-rung-me">${RN.ui.avatar(me, 'ava-xs')}You, ${esc(me.ris.score)}</span>` : ''}
       </li>`;
-    }).join('')}</ol>`;
+    }).join('')}</ol>${!o.stairs && counts.null ? `<p class="small muted pg-brow-below">${RN.fmt.plural(counts.null, 'approved profile')} score under 50 and sit below Emerging, the first tier.</p>` : ''}`;
   }
 
   /* =====================================================================
@@ -336,7 +336,7 @@
       </div>`;
     // Proof to close on: company reviews with a before-and-after figure, and the faces companies can browse today
     const proof = allReviews().filter((x) => pullStat(x.r)).slice(0, 2).map((x) => Object.assign({}, x));
-    const faces = RN.model.ops.filter((o) => !o.hidden && o.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 6);
+    const faces = RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).sort((a, b) => b.ris.score - a.ris.score).slice(0, 6);
     const live = RN.model.ops.filter((o) => !o.hidden).length;
     return `
     ${hero({
@@ -1307,10 +1307,10 @@
 
     <section class="section pg-factors-sec">
       <div class="wrap">
-        ${shead('How score is calculated', 'Five signals, one number.', 'The Reputation Index blends five signals into one 0 to 100 score. Every approved profile starts at a floor of 50.')}
+        ${shead('How score is calculated', 'Five signals, one number.', 'The Reputation Index blends five signals into one 0 to 100 score. Tiers start at 50, Emerging.')}
         <div class="pg-factors">
         <div class="card pg-factors-r">
-          <div class="card-hd"><div><h3>Weight of each signal</h3><p class="sub">Share of the score above the floor of 50</p></div><span class="pill pill-warn">Proposed weights</span></div>
+          <div class="card-hd"><div><h3>Weight of each signal</h3><p class="sub">Share of the score above 50</p></div><span class="pill pill-warn">Proposed weights</span></div>
           <div class="pg-meters">${factors.map((f) => `<div class="pg-mrow"><span>${esc(factorLabel(f))}<small class="pg-mrow-d">${esc(factorDesc(f))}</small></span><div class="meter"><i style="width:${Math.round((f.w / maxW) * 100)}%"></i></div><b>${Math.round((f.w || 0) * 100)}%</b></div>`).join('')}</div>
           <p class="small muted pg-factors-note">Profile completeness is the only signal an operator controls alone. Everything else needs a company.</p>
         </div>

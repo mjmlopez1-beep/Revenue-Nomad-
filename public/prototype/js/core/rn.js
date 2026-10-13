@@ -47,7 +47,8 @@
     // Hourly ranges read "$220 - $340/hr"
     hrRange: (lo, hi) => `${RN.fmt.usd(lo)} - ${RN.fmt.usd(hi)}/hr`,
     usdK: (n) => (n >= 1e6 ? '$' + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'K' : '$' + n),
-    rate: (n) => (n ? '$' + Math.round(n) + '/hr' : 'Rate on request'),
+    // $300/hr; four figures read the house way, $1,000 -> $1k/hr (RN.fmt.k)
+    rate: (n) => (n ? (Math.round(n) > 999 ? RN.fmt.k(n) : '$' + Math.round(n)) + '/hr' : 'Rate on request'),
     pct: (n, d = 0) => (n * 100).toFixed(d) + '%',
     // company -> companies, but day -> days
     plural: (n, one, many) => `${RN.fmt.int(n)} ${n === 1 ? one : many || (/[^aeiou]y$/.test(one) ? one.slice(0, -1) + 'ies' : /(s|x|ch|sh)$/.test(one) ? one + 'es' : one + 's')}`,

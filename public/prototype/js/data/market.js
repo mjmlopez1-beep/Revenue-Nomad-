@@ -6,12 +6,15 @@
   'use strict';
   const RN = window.RN;
   RN.data = RN.data || {};
+  // Profiles loaded in this prototype (model.js runs first), so the "(N in this prototype)" notes stay live
+  const liveN = ((RN.model && RN.model.ops) || RN.data.rawOps || []).filter((o) => !o.hidden).length;
 
   RN.data.market = {
     illustrative: true,
     asOf: '2026-09-24',
-    // Live network size for marketing copy. The prototype loads a 100-profile sample of the live export.
-    network: { operators: '350+', sample: 100, disciplines: 8 },
+    // Live network size for marketing copy. The prototype loads every approved, searchable profile from the
+    // admin export plus a few sample profiles; sample is that live count.
+    network: { operators: '350+', sample: liveN, disciplines: 8 },
 
     /* ---------- State of Fractional GTM 2027 ---------- */
     report: {
@@ -19,7 +22,7 @@
       year: 2027,
       fieldwork: 'Jul to Aug 2026',
       sample: { operators: 212, companies: 96, profiles: '350+' },
-      lede: 'What companies pay, how they scope the work, which roles they hire first, and what separates the operators who get rehired. Built from a survey of operators and hiring companies, plus anonymized profile data from 350+ operators (100 in this prototype).',
+      lede: 'What companies pay, how they scope the work, which roles they hire first, and what separates the operators who get rehired. Built from a survey of operators and hiring companies, plus anonymized profile data from 350+ operators (' + liveN + ' in this prototype).',
       summary: [
         { v: '$240', l: 'Median hourly rate for a fractional GTM leader, up 9% year over year' },
         { v: '41%', l: 'Of engagements scoped under 40 hours a month. 40 hours is the single most common shape' },
@@ -95,7 +98,7 @@
       ],
       quote: { text: 'I did not need a closer. I needed someone to build the machine and then hand me the keys.', by: 'CEO, $5M–$20M B2B services company' },
       methodology: [
-        'Survey fielded July 1 to August 15, 2026 to fractional GTM operators (n=212) and companies that hired one in the last 18 months (n=96). Rate and scope figures are medians of self-reported data. Demand growth combines a monthly scan of public fractional GTM job posts with stated hiring intent. Profile analysis uses anonymized, aggregated data from 350+ operators on the Revenue Nomad network (100 in this prototype). Segments with fewer than 20 responses are marked directional.',
+        'Survey fielded July 1 to August 15, 2026 to fractional GTM operators (n=212) and companies that hired one in the last 18 months (n=96). Rate and scope figures are medians of self-reported data. Demand growth combines a monthly scan of public fractional GTM job posts with stated hiring intent. Profile analysis uses anonymized, aggregated data from 350+ operators on the Revenue Nomad network (' + liveN + ' in this prototype). Segments with fewer than 20 responses are marked directional.',
         'Every segment in this report uses the same fields operators and companies fill in on Revenue Nomad: role category, revenue range, employee range, available time and industry. That is why a number here can be compared directly with any profile or brief on the platform.',
         'Revenue Nomad is a marketplace for fractional go-to-market leadership, so it has a commercial interest in this market growing. In this prototype edition every figure is illustrative, invented to show the shape of the published report.',
       ],

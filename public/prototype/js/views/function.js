@@ -524,8 +524,14 @@
 
   /* The operators in this page's role category, in the order every list uses: live before sample, then Reputation
      Index, then name. Featured operators are the first three. */
+  // Most profiles share a score of 50, so ties go to the fuller record: completeness, company-verified engagements,
+  // focus areas and a listed rate, and only then the name
   const inCat = (cat) => RN.model.ops.filter((o) => o.catKey === cat && !o.hidden)
-    .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0) || String(a.name).localeCompare(String(b.name)));
+    .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0)
+      || (b.completeness || 0) - (a.completeness || 0)
+      || (b.engagements || []).filter((e) => e.clientVerified).length - (a.engagements || []).filter((e) => e.clientVerified).length
+      || (b.tags || []).length - (a.tags || []).length || (b.rate ? 1 : 0) - (a.rate ? 1 : 0)
+      || String(a.name).localeCompare(String(b.name)));
   // Company-voice picks never single out the founder's own listing (founder decision Oct 12, 2026)
   const featured = (cat) => inCat(cat).filter((o) => !o.isMatt).slice(0, 3);
 
@@ -631,7 +637,7 @@
     const gaps = [['featured operator picks', 'Matt'], ['operator OK needed for each named operator', 'Operator']].concat(d.who.gaps || []);
     return sec('who', true, `${PG.shead('Operators', 'Who would I get', esc(RN.fmt.smart(d.who.lede)))}
       <div class="fn-feat-hd" data-proto><h3 class="h4">Featured operators</h3>${gaps.map(([w, o]) => FN.gap(w, o)).join('')}</div>
-      <p class="fn-feat-note small muted" data-proto>Shown by Reputation Index until the featured picks are confirmed. Every profile is open, no login needed.</p>
+      <p class="fn-feat-note small muted" data-proto>Shown by Reputation Index, then the fullest profile, until the featured picks are confirmed. Every profile is open, no login needed.</p>
       ${ops.length ? `<div class="grid g-3 fn-feat">${ops.map((op) => RN.ui.opCard(withLine(op), { meta: cardRow(d, op) })).join('')}</div>` : RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Featured operators appear here once the bench has live profiles.' })}
       <div class="fn-feat-more"><a class="act" href="#${esc(d.browse)}">Browse every ${esc(catLabel(d.cat).toLowerCase())} operator${icon('arrow')}</a></div>
       ${vet(d)}`);

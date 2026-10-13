@@ -633,7 +633,7 @@
   // What each tier unlocks. Nothing on the ladder is paid: tiers move only with client evidence.
   const UNLOCKS = RN.fields.risUnlocks; // one source, shared with For operators and Levels
   const tierRank = (v) => RN.ui.tierRank(v); // emerging 0 .. apex 4, no tier -1
-  // The tier the score gives, or null before the profile is approved and scored
+  // The tier the score gives, or null under 50 (Below Emerging)
   const tierOf = (op) => { const t = RN.fields.risTierFor(op && op.ris ? op.ris.score : null); return t ? t.v : null; };
   // RN.fields.risUnlocks: proof links from Emerging (5 a month), unlimited links and the badge from Proven
   const badgeUnlocked = (op) => tierRank(tierOf(op)) >= tierRank('proven');
@@ -647,7 +647,7 @@
     return { unlocked, unlimited, used, left, canCreate: unlocked && left > 0 };
   }
   const nextMonth = () => { const n = RN.now(); return RN.fmt.dateShort(new Date(n.getFullYear(), n.getMonth() + 1, 1)); };
-  const quotaText = (q) => (!q.unlocked ? 'Proof links unlock when your profile is approved at Emerging.'
+  const quotaText = (q) => (!q.unlocked ? 'Proof links unlock at Emerging, a Reputation Index of 50.'
     : q.unlimited ? 'Unlimited proof links at your tier.'
     : q.left ? `${q.left} of ${PROOF_MONTHLY} proof links left this month · Unlimited at Proven`
     : `All ${PROOF_MONTHLY} proof links used this month. More on ${nextMonth()}, or unlimited at Proven.`);
@@ -672,7 +672,7 @@
 
   function renderCredibility(op) {
     applyExtras(op);
-    const tier = RN.fields.risTierFor(op.ris.score); // null before approval: no tier, no badge
+    const tier = RN.fields.risTierFor(op.ris.score); // null under 50 (Below Emerging): no tier, no badge
     const tiers = RN.fields.risTier.options;
     const next = tiers.filter((t) => t.min > op.ris.score).sort((a, b) => a.min - b.min)[0];
     const rows = factorRows(op);
@@ -692,9 +692,9 @@
             <div>
               <span class="eyebrow">Reputation Index</span>
               ${tier ? `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(tier.l)} <span class="muted" style="font-weight:500">· ${tier.min} to ${tier.max}</span></h2>
-              <p class="small muted" style="margin-top:6px;max-width:54ch">${esc(tier.d)}</p>` : `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">Not scored yet</h2>
-              <p class="small muted" style="margin-top:6px;max-width:54ch">Your tier and score appear once the Revenue Nomad team approves your profile. Every approved profile starts at 50, Emerging.</p>`}
-              ${!tier ? '' : next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more company ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : '<p class="sb-next-tier">You are at the top of the ladder.</p>'}
+              <p class="small muted" style="margin-top:6px;max-width:54ch">${esc(tier.d)}</p>` : `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(RN.fields.risBelow.l)} <span class="muted" style="font-weight:500">· Reputation Index ${esc(op.ris.score)}</span></h2>
+              <p class="small muted" style="margin-top:6px;max-width:54ch">Your profile is approved and live in search. Tiers start at 50, Emerging, and company evidence moves the score: reviews, verified tags and recent engagements.</p>`}
+              ${next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more company ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : '<p class="sb-next-tier">You are at the top of the ladder.</p>'}
             </div>
           </div>
           <div class="sb-ri-avail"><span class="stat-v">+${avail}</span><span class="stat-l">estimated points available ${RN.ui.tip('Estimates from the published factor weights. Company evidence moves most of the score: reviews, verified tags and recent engagements. A complete profile adds a few points. Nothing here can be bought.', 'About these estimates')}</span></div>
@@ -706,7 +706,7 @@
             <div class="sb-factor-r">${r.pts ? `<span class="pill pill-accent">+${r.pts} pts</span>` : `<span class="pill pill-good">${icon('check')}Strong</span>`}${r.act}</div>
           </div>`).join('')}
         </div>
-        <p class="tiny muted">${esc(RN.fields.risFactors.label)}: ${RN.fields.risFactors.options.map((f) => esc(f.l.toLowerCase())).join(', ')}. Every approved profile starts at 50. Points are estimates for planning.</p>
+        <p class="tiny muted">${esc(RN.fields.risFactors.label)}: ${RN.fields.risFactors.options.map((f) => esc(f.l.toLowerCase())).join(', ')}. Tiers start at 50. Points are estimates for planning.</p>
       </section>
 
       <section class="card sb-ladder" aria-labelledby="sb-lad-h">
@@ -803,7 +803,7 @@
       <div class="card-hd"><div><h3 id="sb-proof-h">Proof links</h3><p class="sub">A private page for one prospect with the proof you choose. You see who read what; they see a notice that you can.</p>
         <p class="sb-quota ${q.unlimited ? '' : q.left ? 'is-count' : 'is-out'}"><span class="sb-quota-t">${icon(q.unlimited ? 'check-circle' : 'link')}${esc(quotaText(q))}</span>${leads ? `<a class="act" href="#studio.inbox">${leads} ${leads === 1 ? 'request' : 'requests'} in your Inbox</a>` : ''}</p></div>
         ${action}</div>
-      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: q.unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock when your profile is approved at Emerging (5 a month). Unlimited from Proven.', cta: q.canCreate ? '<button type="button" class="btn btn-line btn-sm" data-act="sb-proof-new">Create your first proof link</button>' : '' })}
+      ${links.length ? `<div class="stack" style="--gap:14px">${links.map((l) => proofCard(l)).join('')}</div>` : RN.ui.empty({ icon: 'link', title: 'No proof links yet', body: q.unlocked ? 'Send one with your next proposal. You will see when it is opened, which sections were read and whether it was forwarded.' : 'Proof links unlock at Emerging, a Reputation Index of 50 (5 a month). Unlimited from Proven.', cta: q.canCreate ? '<button type="button" class="btn btn-line btn-sm" data-act="sb-proof-new">Create your first proof link</button>' : '' })}
     </section>`;
   }
   function proofCard(l) {
@@ -1594,7 +1594,7 @@
     const rd = op.roleDetails || {};
     switch (k) {
       case 'largestTeamManaged': { const n = +(rd.largest_team_managed || rd.salespeople_managed || 0); return !n ? '' : n < 5 ? '<5' : n <= 10 ? '5-10' : n <= 25 ? '10-25' : n <= 50 ? '25-50' : '50+'; }
-      case 'largestTeamQuota': { const q = +(rd.largest_team_quota_managed || rd.largest_team_quota_usd || 0) / 1e6; return !q ? '' : q < 5 ? '1_5m' : q < 10 ? '5_10m' : q < 25 ? '10_25m' : q < 50 ? '25_50m' : q < 100 ? '50_100m' : '100m_plus'; }
+      case 'largestTeamQuota': { const q = +(rd.largest_annual_quota_managed_usd || rd.largest_team_quota_managed || rd.largest_team_quota_usd || 0) / 1e6; return !q ? '' : q < 5 ? '1_5m' : q < 10 ? '5_10m' : q < 25 ? '10_25m' : q < 50 ? '25_50m' : q < 100 ? '50_100m' : '100m_plus'; }
       case 'salesCycle': { const x = +(rd.avg_sales_cycle_days || 0); return !x ? [] : [x < 5 ? '<5 days' : x <= 30 ? '5 - 30 days' : x <= 90 ? '30 - 90 days' : x <= 180 ? '3 - 6 months' : x <= 365 ? '6 - 12 months' : '12+ months']; }
       default: {
         const snake = k.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());

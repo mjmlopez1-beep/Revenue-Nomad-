@@ -9,7 +9,13 @@
 
   /* ---------- Fit tag library ---------- */
   F.fitTags.options = (RN.data.tagLibrary || []).map((t) => ({ v: t.v, l: t.l, c: t.c, g: t.g, d: t.d, axis: t.axis, stage: t.stage, n: t.n }));
-  M.tagInfo = (name) => F.fitTags.options.find((o) => o.v.toLowerCase() === String(name).toLowerCase());
+  // Looked up by lower-case name (a Map, rebuilt when the option list changes: market and search views call this per tag)
+  let tagIx = null, tagIxOf = null, tagIxLen = -1;
+  M.tagInfo = (name) => {
+    const opts = F.fitTags.options;
+    if (tagIxOf !== opts || tagIxLen !== opts.length) { tagIx = new Map(); for (let i = opts.length - 1; i >= 0; i--) tagIx.set(opts[i].v.toLowerCase(), opts[i]); tagIxOf = opts; tagIxLen = opts.length; }
+    return tagIx.get(String(name).toLowerCase());
+  };
   // Tag score curve (Fit Tags System spec): 0 reviews self-claimed, 1 verifies at 50, 5+ is Expert
   const CURVE = [0, 50, 60, 70, 80, 85, 88, 91, 94, 97, 100];
   M.tagScore = (r) => CURVE[Math.min(10, Math.max(0, r | 0))];
@@ -70,7 +76,8 @@
     const methods = [].concat(rd.methodologies || d.snapshot && d.snapshot.methodologies || []).flatMap((m) => String(m).split(',')).map((s) => s.trim()).filter(Boolean);
     const avail = (d.availability || {});
     const hours = avail.hoursPerMonth || std.hours || null;
-    const score = Math.max(50, pp.reputationIndex || 50);
+    // The exported Reputation Index as is: under 50 is an approved profile below the first tier (no tier, no badge, "Below Emerging")
+    const score = pp.reputationIndex != null && pp.reputationIndex !== '' && !isNaN(+pp.reputationIndex) ? +pp.reputationIndex : 50;
     // Stable ids (company + start, -2, -3 on a clash) so Studio edits and review requests can point at one engagement
     const usedEng = new Set();
     const engagements = (d.engagements || []).map((e) => {
@@ -80,7 +87,9 @@
       usedEng.add(id);
       return Object.assign({}, e, { id, logo: LOGO_KEY[String(e.company).toLowerCase()] || null });
     });
-    const offered = ['fractional'].concat(ENG_TYPES.slice(1).filter(() => rand() > 0.55));
+    // Engagement types and capacity come from the admin export (tools/import-admin.js); the fictional sample
+    // profiles, which have neither, keep an illustrative set
+    const offered = Array.isArray(raw.engagementTypes) ? raw.engagementTypes.filter((t) => ENG_TYPES.includes(t)) : ['fractional'].concat(ENG_TYPES.slice(1).filter(() => rand() > 0.55));
     const op = {
       id: raw.id,
       name,
@@ -96,11 +105,14 @@
       timezone: d.timezone && d.timezone !== 'Not provided' ? d.timezone : '',
       rate: raw.rate || null,
       avail: { key: AVAIL[avail.status] || 'available_now', label: avail.status || 'Available now', startDate: avail.startDate || null, hours: hours, hoursCode: hours ? F.hoursCode(hours) : null },
-      engagementTypes: offered,          // illustrative: not in the live export
-      newClientCapacity: native ? 1 + Math.floor(rand() * 3) : null,
+      engagementTypes: offered,
+      newClientCapacity: raw.capacity != null ? +raw.capacity || null : raw.engagementTypes ? null : native ? 1 + Math.floor(rand() * 3) : null,
+      // Monthly retainer range the operator listed ({min, max}, either may be null); never used as an hourly rate
+      retainer: raw.retainer && (raw.retainer.min || raw.retainer.max) ? { min: raw.retainer.min || null, max: raw.retainer.max || null } : null,
       industries: std.industries || d.industries || [],
-      revenueRanges: revSlugs(std.revRange),
-      employeeRanges: empSlugs(std.empRange),
+      // The exact buckets the operator picked when the record carries them (admin export), else the span string
+      revenueRanges: Array.isArray(std.revenueBuckets) ? std.revenueBuckets.filter((k) => F.revenueRange.options.some((o) => o.v === k)) : revSlugs(std.revRange),
+      employeeRanges: Array.isArray(std.employeeBuckets) ? std.employeeBuckets.filter((k) => F.employeeRange.options.some((o) => o.v === k)) : empSlugs(std.empRange),
       crm: std.crm || '',
       methodologies: [...new Set(methods)],
       motions: [].concat((d.snapshot && d.snapshot.motions) || [], rd.motion_focus || [], rd.gtm_motion_experience || []).filter((m, i, a) => m && a.indexOf(m) === i),
@@ -203,12 +215,12 @@
     canada: 'Canada', ireland: 'Ireland', spain: 'Spain', portugal: 'Portugal', france: 'France', germany: 'Germany', netherlands: 'Netherlands', 'the netherlands': 'Netherlands', holland: 'Netherlands',
     belgium: 'Belgium', switzerland: 'Switzerland', ch: 'Switzerland', austria: 'Austria', italy: 'Italy', poland: 'Poland', romania: 'Romania', 'czech republic': 'Czech Republic', czechia: 'Czech Republic',
     sweden: 'Sweden', denmark: 'Denmark', norway: 'Norway', finland: 'Finland', greece: 'Greece', hungary: 'Hungary', estonia: 'Estonia', ukraine: 'Ukraine', israel: 'Israel',
-    australia: 'Australia', 'new zealand': 'New Zealand', singapore: 'Singapore', india: 'India', kenya: 'Kenya', nigeria: 'Nigeria', 'south africa': 'South Africa', thailand: 'Thailand', philippines: 'Philippines',
+    australia: 'Australia', 'new zealand': 'New Zealand', singapore: 'Singapore', india: 'India', kenya: 'Kenya', nigeria: 'Nigeria', 'south africa': 'South Africa', thailand: 'Thailand', th: 'Thailand', philippines: 'Philippines', malaysia: 'Malaysia', armenia: 'Armenia', slovenia: 'Slovenia',
     mexico: 'Mexico', brazil: 'Brazil', argentina: 'Argentina', colombia: 'Colombia', japan: 'Japan', 'united arab emirates': 'United Arab Emirates', uae: 'United Arab Emirates',
   };
-  const EUROPE = new Set(['United Kingdom', 'Ireland', 'Spain', 'Portugal', 'France', 'Germany', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Italy', 'Poland', 'Romania', 'Czech Republic', 'Sweden', 'Denmark', 'Norway', 'Finland', 'Greece', 'Hungary', 'Estonia', 'Ukraine']);
+  const EUROPE = new Set(['United Kingdom', 'Ireland', 'Spain', 'Portugal', 'France', 'Germany', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Italy', 'Poland', 'Romania', 'Czech Republic', 'Sweden', 'Denmark', 'Norway', 'Finland', 'Greece', 'Hungary', 'Estonia', 'Ukraine', 'Slovenia']);
   // Cities written without a country ("London, Prague", "Dublin & Malaga") and UK counties
-  const CITY_COUNTRY = { london: 'United Kingdom', manchester: 'United Kingdom', edinburgh: 'United Kingdom', prague: 'Czech Republic', dublin: 'Ireland', malaga: 'Spain', 'málaga': 'Spain', madrid: 'Spain', barcelona: 'Spain', lisbon: 'Portugal', paris: 'France', berlin: 'Germany', munich: 'Germany', amsterdam: 'Netherlands', zurich: 'Switzerland', lugano: 'Switzerland', geneva: 'Switzerland', bucharest: 'Romania', toronto: 'Canada', vancouver: 'Canada', montreal: 'Canada', sydney: 'Australia', melbourne: 'Australia', nairobi: 'Kenya', bengaluru: 'India', bangalore: 'India', phuket: 'Thailand' };
+  const CITY_COUNTRY = { london: 'United Kingdom', manchester: 'United Kingdom', edinburgh: 'United Kingdom', prague: 'Czech Republic', dublin: 'Ireland', malaga: 'Spain', 'málaga': 'Spain', madrid: 'Spain', barcelona: 'Spain', lisbon: 'Portugal', paris: 'France', berlin: 'Germany', munich: 'Germany', amsterdam: 'Netherlands', zurich: 'Switzerland', lugano: 'Switzerland', geneva: 'Switzerland', bucharest: 'Romania', cluj: 'Romania', kyiv: 'Ukraine', ljubljana: 'Slovenia', bangkok: 'Thailand', 'kuala lumpur': 'Malaysia', toronto: 'Canada', vancouver: 'Canada', montreal: 'Canada', sydney: 'Australia', melbourne: 'Australia', nairobi: 'Kenya', bengaluru: 'India', bangalore: 'India', phuket: 'Thailand' };
   const COUNTRY_TZ = { Canada: 'eastern' };
   // Time zone text (IANA ids from the live export, intake labels such as "Eastern Time (ET)") -> F.timeZones value
   function tzOf(s) {
@@ -410,6 +422,14 @@
   };
   // Back-compat: flat list of all alternatives
   M.expand = (q) => [...new Set(M.parseQuery(q).flat())];
+  // Short words (cro, cmo, sdr, matt) match whole words only; one compiled pattern per word (search runs per market query)
+  const wordRe = new Map();
+  const inc = (h, t) => {
+    if (t.length > 4) return h.includes(t);
+    let re = wordRe.get(t);
+    if (!re) { re = new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])'); wordRe.set(t, re); }
+    return h.indexOf(t) >= 0 && re.test(h);
+  };
   M.search = function (o) {
     o = o || {};
     const f = o.filters || {};
@@ -448,16 +468,15 @@
       const matchedTags = [];
       if (groups.length) {
         const hay = { name: op.name.toLowerCase(), role: (op.role + ' ' + op.cat).toLowerCase(), head: (op.headline + ' ' + op.bio).toLowerCase() };
-        // short words (cro, cmo, sdr, matt) match whole words only
-        const inc = (h, t) => (t.length <= 4 ? new RegExp('(^|[^a-z0-9])' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])').test(h) : h.includes(t));
+        const tagsL = opTags, indL = op.industries.map((x) => x.toLowerCase());
         let hit = 0;
         for (const alts of groups) {
           let g = 0;
           for (const t of alts) {
             if (inc(hay.name, t)) g = Math.max(g, 40);
             if (inc(hay.role, t)) { g = Math.max(g, 18); if (!why.includes('role')) why.push('role'); }
-            op.tags.forEach((x) => { const tl = x.t.toLowerCase(); if (inc(tl, t) || (t.length > 5 && t.includes(tl))) { g = Math.max(g, x.tier === 'claimed' ? 10 : 18); if (!matchedTags.includes(x.t)) matchedTags.push(x.t); } });
-            const indHit = op.industries.filter((x) => inc(x.toLowerCase(), t));
+            op.tags.forEach((x, xi) => { const tl = tagsL[xi]; if (inc(tl, t) || (t.length > 5 && t.includes(tl))) { g = Math.max(g, x.tier === 'claimed' ? 10 : 18); if (!matchedTags.includes(x.t)) matchedTags.push(x.t); } });
+            const indHit = op.industries.filter((x, xi) => inc(indL[xi], t));
             if (indHit.length) { g = Math.max(g, 12); if (!why.includes('ind:' + indHit[0])) why.push('ind:' + indHit[0]); }
             if (inc(hay.head, t)) g = Math.max(g, 6);
           }
@@ -475,6 +494,8 @@
       why.filter((w) => w.startsWith('ind:')).forEach((w) => reasons.push('Works in ' + RN.w.label('industries', w.slice(4))));
       if (!reasons.length && why.includes('role')) reasons.push(`${op.role}`);
       out.push({ op, score, why: reasons, matched: { tags: matchedTags } });
+      // o.any: the caller only asks whether anything matches (zero-result checks), so stop at the first hit
+      if (o.any) return out;
     }
     const sort = o.sort || 'best';
     out.sort((a, b) => {
@@ -499,13 +520,21 @@
       const adj = !same && op.tags.some((t) => t.tier !== 'claimed' && t.c === brief.roleCategory);
       sig.push({ k: 'role', l: 'Role', state: same ? 'match' : adj ? 'partial' : 'low', text: same ? `Works in ${F.catLabel(op.catKey)}` : adj ? `Client-verified ${F.catLabel(brief.roleCategory)} work, but works in ${F.catLabel(op.catKey)}` : `You need ${F.catLabel(brief.roleCategory)}; ${op.first} works in ${F.catLabel(op.catKey)}` });
     }
+    // Revenue and employee range: when the operator has listed neither ranges nor engagement sizes, the signal stays
+    // in the count as half (partial, "not listed"), so missing data never scores higher than a partial match
     const rev = brief.revenueRange;
+    if (rev && !(op.revenueRanges.length || op.engagements.some((e) => e.revenueBand || e.revenueRange))) {
+      sig.push({ k: 'revenue', l: 'Company revenue', state: 'partial', unknown: true, text: `Revenue range not listed` });
+    }
     if (rev && (op.revenueRanges.length || op.engagements.some((e) => e.revenueBand || e.revenueRange))) {
       // Engagement history (live export revenueBand, or registry revenueRange from Studio and client reviews)
       const engaged = op.engagements.some((e) => e.revenueBand === rev || e.revenueRange === rev);
       sig.push({ k: 'revenue', l: 'Company revenue', state: engaged ? 'match' : op.revenueRanges.includes(rev) ? 'partial' : 'low', text: engaged ? `Has worked with ${RN.w.label('revenueRange', rev)} companies` : op.revenueRanges.includes(rev) ? `Targets ${RN.w.label('revenueRange', rev)} companies` : `No experience listed at ${RN.w.label('revenueRange', rev)}` });
     }
     const emp = brief.employeeRange;
+    if (emp && !(op.employeeRanges.length || op.engagements.some((e) => e.employeeRange))) {
+      sig.push({ k: 'employees', l: 'Employee range', state: 'partial', unknown: true, text: `Employee range not listed` });
+    }
     if (emp && (op.employeeRanges.length || op.engagements.some((e) => e.employeeRange))) {
       const engagedEmp = op.engagements.some((e) => e.employeeRange === emp);
       const targets = op.employeeRanges.includes(emp);
@@ -819,7 +848,7 @@
     const catSupply = {};
     M.ops.forEach((op) => { catSupply[op.catKey] = (catSupply[op.catKey] || 0) + 1; });
     // Only searches that truly return no operators today count as unmet demand
-    const zero = Q.filter((q) => M.search({ q: q.q }).length === 0).map((q) => ({ q: q.q, vol: q.vol, cat: q.cat, industry: q.industry }));
+    const zero = Q.filter((q) => M.search({ q: q.q, any: true }).length === 0).map((q) => ({ q: q.q, vol: q.vol, cat: q.cat, industry: q.industry }));
     ((RN.store && RN.store.state.events) || []).filter((e) => e.type === 'search' && e.results === 0 && e.q).forEach((e) => zero.unshift({ q: e.q, vol: 1, cat: '', live: true, ts: e.ts }));
     return { tags, catSupply, zero, queries: Q };
   };
@@ -911,8 +940,10 @@
   };
 })();
 
-/* Operator monthly range: RN.model.monthlyRange(op) -> {lo, hi, text, hLo, hHi} or null (no rate).
+/* Operator monthly range: RN.model.monthlyRange(op) -> {lo, hi, text, hLo, hHi, retainer, lead} or null (no rate).
    Shown to everyone, including logged-out visitors; the exact hourly rate stays behind login.
+   When the operator listed a monthly retainer, that is the range (retainer: true, lead "Listed retainer"; only a
+   minimum reads "From $15k/month"). Otherwise it is an estimate from the hourly rate (retainer: false, lead "Estimated").
    Hours: the engagements' hours per month when they carry them, else the typical 20 to 40 hours, with
    op.avail.hours (or its hoursCode) as a ceiling under 40 (floor = half of it, min 10). lo = rate x hLo, hi = rate x hHi,
    rounded to the nearest $500 under $10k and the nearest $1k from $10k up. Text: "$6k–$9k a month".
@@ -923,6 +954,13 @@
   const round = (n) => (n < 10000 ? Math.round(n / 500) * 500 : Math.round(n / 1000) * 1000);
   const k = (n) => (n < 1000 ? '$' + n : '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k');
   function opRange(op) {
+    // The retainer the operator listed comes first: it is their own monthly price, never replaced by an estimate
+    const ret = op && op.retainer;
+    if (ret && (ret.min || ret.max)) {
+      const lo = +ret.min || 0, hi = +ret.max || 0;
+      const text = lo && hi ? RN.fmt.moRange(Math.min(lo, hi), Math.max(lo, hi)) : lo ? `From ${RN.fmt.k(lo)}/month` : `Up to ${RN.fmt.k(hi)}/month`;
+      return { lo: lo || null, hi: hi || null, text, retainer: true, lead: 'Listed retainer', short: 'Retainer', note: 'The monthly retainer this operator listed.', hLo: 0, hHi: 0 };
+    }
     const rate = +(op && op.rate) || 0;
     if (!rate) return null;
     let hLo = 0, hHi = 0;
@@ -938,7 +976,7 @@
     if (hLo > hHi) { const t = hLo; hLo = hHi; hHi = t; }
     const lo = Math.max(500, round(rate * hLo)), hi = Math.max(lo, round(rate * hHi));
     const text = RN.fmt.moRange(lo, hi);
-    return { lo, hi, text, hLo, hHi };
+    return { lo, hi, text, hLo, hHi, retainer: false, lead: 'Estimated', short: 'Est.', note: `An estimate: the hourly rate at ${hLo} to ${hHi} hours a month. No retainer listed.` };
   }
   M.opMonthlyRange = opRange;
   M.monthlyRange = function (a) {

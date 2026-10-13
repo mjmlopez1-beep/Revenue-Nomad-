@@ -22,7 +22,7 @@ Use the **Prototype** button (bottom left) to switch persona (Visitor, Client Jo
 ## How it stays one system
 
 - **One field registry** (`js/data/fields.js`). Every picklist renders from it through `RN.w.field`. Operator intake is the source of truth; filters, engagements, intros, hires, reviews, Studio and research reuse the same stored values.
-- **One data model** (`js/data/model.js`). 100 operators from the live-data export, normalized once; search, match signals, analytics and market intelligence all read it.
+- **One data model** (`js/data/model.js`). All 297 approved, searchable operators from the admin portal export (Oct 13, 2026; `node tools/import-admin.js <export.json>` writes `js/data/operators.js` and `js/data/ops_extra.js`) plus 10 labelled sample operators (`js/data/ops_sample.js`), normalized once; search, match signals, analytics and market intelligence all read it.
 - **One event log** (`RN.track`). A client's search, profile view, shortlist or intro request shows up in the operator's Studio and the Admin demand view.
 - **One pricing rule.** Companies pay no fees; a client pays the operator's listed rate. Revenue Nomad charges operators a percentage of their billed earnings each month (proposed: 25%), which only operator-facing and Admin screens mention (`SPEC.md` §1, `DESIGN.md` Money and pricing copy).
 - **One design system** (`css/tokens.css`, `css/components.css`): the live brand palette, Red Hat Display and Red Hat Text for UI and reading, Newsreader for the editorial voice, Red Hat Mono for data.
@@ -31,7 +31,7 @@ See `DESIGN.md` (build contract), `SPEC.md` (routes, loops, surface briefs, deci
 
 ## Data
 
-- Operators, photos, client logos, fit tags and the GTM Framework copy come from the live-data export behind the Operator Profile Explorer (`tools/build-data.js`, `tools/build-taxonomy.js`).
+- Operators come from the admin portal export (`tools/import-admin.js`; it carries local photos forward from the previous `operators.js` and refuses to write contact details). Photos, client logos, fit tags and the GTM Framework copy came from the earlier live-data export behind the Operator Profile Explorer (`tools/build-data.js`, `tools/build-taxonomy.js`). After an import, rebuild the vector search index: `node tools/export-search-corpus.js corpus.json`, then `../../nomad-match/.venv/bin/python tools/build_vectors.py corpus.json`.
 - Analytics history, market figures, companies in "who viewed" segments, jobs and prospects are **illustrative**, labelled as such in the UI.
 
 ## Tools

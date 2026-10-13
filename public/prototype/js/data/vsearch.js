@@ -10,8 +10,11 @@
       it: "proven" when that focus area is client-verified, "claimed" when self-reported, "close" when only
       nearby, "missing" when nothing is.
    3. Facts from the request (company size, industry, start date, rate, role) are checks, not filters: nobody
-      disappears, the gap shows instead.
-   4. Match % = 50% needs met + 20% overall closeness (request vs whole profile) + 15% facts + 15% Reputation Index. */
+      disappears, the gap shows instead. A check is yes, no, or unknown when the operator has not listed the
+      value (no rate: "Rate on request"; no available time). Unknown counts half, never as a no and never as a yes.
+   4. Match % = 50% needs met + 20% overall closeness (request vs whole profile) + 15% facts + 15% Reputation Index.
+      When the request names a role (an account executive, a CMO), that role weighs a quarter of the match: the
+      other parts are scaled to 75%, so operators in the named role rank ahead and the others still show, with the gap. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -44,6 +47,9 @@
   document.addEventListener('focusin', (e) => { if (e.target && e.target.matches && e.target.matches('input[type="search"], #hm-q, #br-q')) VS.ready(); });
   const NEAR = 0.8, CLOSE = 0.62; // focus-area cosine thresholds: meets the need / is nearby
   const W = { needs: 0.5, sem: 0.2, facts: 0.15, ris: 0.15 };
+  const ROLE_W = 0.25; // share of the match the named role takes when the request names one
+  // Facts the operator may not have listed: unknown (null) for them, not a cross
+  const UNKNOWN = { rateMax: (op) => !op.rate, hoursPerMonth: (op) => !(op.avail && op.avail.hoursCode) };
 
   // ---------- decode int8 blobs ----------
   function unpack(b64, n) {
@@ -220,14 +226,16 @@
       const credit = { proven: 1, claimed: 0.7, close: 0.35, missing: 0 };
       const needScore = meets.length ? meets.reduce((s, m) => s + credit[m.status] * (0.75 + 0.25 * m.sim), 0) / meets.length : 0;
       const semN = hi > lo ? (sem.get(op.id) - lo) / (hi - lo) : 1;
-      const checks = facts.map((f) => ({ k: f.k, label: f.label, ok: f.pass.has(op.id) }));
+      const checks = facts.map((f) => ({ k: f.k, label: f.label, ok: UNKNOWN[f.k] && UNKNOWN[f.k](op) ? null : f.pass.has(op.id) }));
       const like = likeKeys.map((k) => ({ k, label: RN.w.label(PROFILE_FIELD[k], prof[k][0]), ok: (op[PROFILE_OP[k]] || []).some((v) => prof[k].includes(v)) }));
       const all = checks.concat(like);
-      const factScore = all.length ? all.filter((c) => c.ok).length / all.length : 1;
+      const factScore = all.length ? all.reduce((s, c) => s + (c.ok === null ? 0.5 : c.ok ? 1 : 0), 0) / all.length : 1;
       const ris = (op.ris && op.ris.score || 50) / 100;
       const w = meets.length ? W : { needs: 0, sem: 0.6, facts: 0.2, ris: 0.2 };
-      const score = w.needs * needScore + w.sem * semN + w.facts * factScore + w.ris * ris;
-      return { op, score, match: Math.round(100 * score), meets, checks, like, parts: { needs: needScore, sem: semN, facts: factScore, ris } };
+      const base = w.needs * needScore + w.sem * semN + w.facts * factScore + w.ris * ris;
+      const role = cats.length ? (cats.includes(op.catKey) ? 1 : 0) : null;
+      const score = role === null ? base : (1 - ROLE_W) * base + ROLE_W * role;
+      return { op, score, match: Math.round(100 * score), meets, checks, like, parts: { needs: needScore, sem: semN, facts: factScore, ris, role } };
     }).sort((a, b) => b.score - a.score);
     return { text, needs: needs.map(({ tag, label }) => ({ tag, label })), facts: facts.map(({ k, label }) => ({ k, label })), like: likeKeys, conflict, rows };
   };

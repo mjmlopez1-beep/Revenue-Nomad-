@@ -164,7 +164,7 @@
   R.defSource = (name) => { const info = RN.model.tagInfo(name); return info && info.d ? 'library' : DEFS[name] ? 'research' : ''; };
 
   /* Network index: which operators list each tag, claimed vs client-verified, placed on the curated map.
-     Recomputed per render (100 operators, under a millisecond) so Studio edits and reviews show up at once. */
+     Recomputed per render (about 300 operators, a few milliseconds) so Studio edits and reviews show up at once. */
   function netIndex() {
     try { RN.model.applyEdits(); } catch (e) { /* model not ready */ }
     const cells = {};
@@ -1411,7 +1411,7 @@
           <li>Can I speak with the company from that engagement?</li></ol>` },
       ],
       faq: () => [
-        { q: 'What is a good Reputation Index score?', a: 'Every approved profile starts at 50 (Emerging). Scores of 70 and above (Trusted) mean repeat engagements and consistently strong company reviews.' },
+        { q: 'What is a good Reputation Index score?', a: 'Tiers start at 50 (Emerging). Scores of 70 and above (Trusted) mean repeat engagements and consistently strong company reviews.' },
         { q: 'Can an operator pay to raise their score or verify a focus area?', a: 'No. Only company reviews, verified engagements and a complete profile move the score, and only reviews rated 4.0 or higher verify a focus area.' },
         { q: 'Should I ask for references if a profile has verified reviews?', a: 'Yes, for the engagement most like yours. Verified reviews tell you the work happened; a call tells you how it would go at your company.' },
       ],
@@ -1477,8 +1477,8 @@
     {
       slug: 'what-is-the-reputation-index', group: 'methods', updated: '2026-09-01', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is the Revenue Nomad Reputation Index?',
-      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much company evidence stands behind an operator\'s profile.', 'Every approved profile starts at 50 (Emerging), and the score rises only with company reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
-      stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Starting score for every approved profile' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from company evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
+      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much company evidence stands behind an operator\'s profile.', 'Most approved profiles sit at 50, the start of Emerging, and the score rises only with company reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
+      stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Where the first tier, Emerging, starts' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from company evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
       sections: () => {
         const ops = RN.model.ops.filter((o) => !o.hidden);
         const tiers = F.risTier.options.slice().reverse();
@@ -1498,7 +1498,7 @@
         ];
       },
       faq: () => [
-        { q: 'Why do most operators have a score of 50?', a: 'Every approved profile starts at 50 and rises only with company evidence. New operators have not collected reviews on the platform yet.' },
+        { q: 'Why do most operators have a score of 50?', a: 'Most approved profiles sit at 50, the start of Emerging, and rise only with company evidence. New operators have not collected reviews on the platform yet. A few score under 50 and show as Below Emerging.' },
         { q: 'How quickly does the score update?', a: 'Immediately. A submitted review, a verified engagement or a completed profile recalculates the score the same day.' },
         { q: 'Can a bad review lower the score?', a: 'Low CORE ratings reduce the Strong ratings factor, and reviews rated under 4.0 do not verify focus areas. Reviews publish automatically; there is no moderation queue to hide them.' },
       ],
@@ -1803,7 +1803,7 @@
     { t: 'Self-claimed', d: () => 'A focus area the operator added that no company review has confirmed yet. Shown with a dashed outline.', to: 'library' },
     { t: 'Client-verified', d: () => 'A focus area confirmed by at least one company review rated 4.0 or higher. One review verifies it at a score of 50.', to: 'library' },
     { t: 'Expert', d: () => 'A focus area confirmed by five or more company reviews rated 4.0 or higher, scored 85 to 100.', to: 'library' },
-    { t: 'Reputation Index', d: () => 'A 0 to 100 score of the company evidence behind a profile, from five published factors. Every approved profile starts at 50.', to: 'guide.what-is-the-reputation-index' },
+    { t: 'Reputation Index', d: () => 'A 0 to 100 score of the company evidence behind a profile, from five published factors. Tiers start at 50.', to: 'guide.what-is-the-reputation-index' },
     { t: 'Emerging', d: () => F.risTier.options.find((t) => t.v === 'emerging').d, to: 'levels' },
     { t: 'CORE', d: () => 'Revenue Nomad\'s company review: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5, plus "Would you hire this operator again?"', to: 'guide.what-is-core' },
     { t: 'Engagement History', d: () => 'The company engagements on an operator\'s profile, with dates, scope and company size, marked verified when the company confirmed them.' },

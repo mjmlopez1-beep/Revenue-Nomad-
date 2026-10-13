@@ -944,7 +944,7 @@
           <p class="jn-path-lede">Apply in about 8 minutes. ${TOTAL} short steps, one of them optional, saved as you go.</p>
           <ul class="jn-gets">
             <li>${icon('chart')}<span><b>Studio insights</b>Who viewed you by company size and industry, the searches you appeared in, and why a company picked someone else.</span></li>
-            <li>${icon('seal')}<span><b>Reputation Index</b>A 0 to 100 score built from verified company reviews. Every approved profile starts at 50.</span></li>
+            <li>${icon('seal')}<span><b>Reputation Index</b>A 0 to 100 score built from verified company reviews. Tiers start at 50, Emerging.</span></li>
             <li>${icon('link')}<span><b>Proof links</b>Send a prospect a tracked version of your profile and see which sections they read.</span></li>
           </ul>
           ${startStrip()}

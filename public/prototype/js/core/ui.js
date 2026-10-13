@@ -312,7 +312,7 @@
      rename "improve your score" to "how score is calculated"). */
   ui.risExplainer = function () {
     const f = (RN.fields && RN.fields.risFactors && RN.fields.risFactors.options) || [];
-    return `<b>How score is calculated</b><br>The Reputation Index blends five signals into one 0 to 100 score. Every profile starts at a floor of 50.<ul>${f.map((x) => `<li><b>${esc(x.l)}</b>: ${esc(x.d)}</li>`).join('')}</ul>`;
+    return `<b>How score is calculated</b><br>The Reputation Index blends five signals into one 0 to 100 score. Tiers start at 50, Emerging.<ul>${f.map((x) => `<li><b>${esc(x.l)}</b>: ${esc(x.d)}</li>`).join('')}</ul>`;
   };
 
   ui.tip = function (html, label) {
@@ -397,7 +397,7 @@
       ${ui.ftags(tags, opts.compact ? 2 : 3)}
       <div class="opc-meta">
         <span>${ui.avail(op)}</span>
-        ${op.rate ? (RN.store.state.persona === 'visitor' ? ((r) => (r ? `<span title="Typical monthly cost. The exact hourly rate shows after you sign in.">${icon('clock')}${esc(r.text)}</span>` : ''))(RN.model.opMonthlyRange && RN.model.opMonthlyRange(op)) : `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>`) : ''}
+        ${op.rate ? (RN.store.state.persona === 'visitor' ? ((r) => (r ? `<span title="${esc(r.note)} The exact hourly rate shows after you sign in.">${icon('clock')}${esc(r.short + ' ' + r.text)}</span>` : ''))(RN.model.opMonthlyRange && RN.model.opMonthlyRange(op)) : `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>`) : ''}
         ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
       </div>
       ${opts.meta || ''}

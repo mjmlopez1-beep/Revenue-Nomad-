@@ -206,8 +206,9 @@
     IND_ALIASES.forEach(([v, re]) => { if (has(t, re) && !inds.includes(v) && F.industries.options.some((o) => o.v === v)) inds.push(v); });
     if (inds.length) add('industries', inds.slice(0, 3), inds.slice(0, 3).map((v) => RN.w.label('industries', v)).join(' or '));
 
-    // Money, headcount and time: read each number with the words around it
-    const re = /(\$)?\s?(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|mm|m|mil|million|bn|b|billion)?(?![a-z0-9])/g;
+    // Money, headcount and time: read each number with the words around it. A number glued to a letter before
+    // it is a word, not an amount ("b2b", "b2c", "g2" are never "$2B")
+    const re = /(?<![a-z0-9])(\$)?\s?(\d[\d,]*(?:\.\d+)?)\s*(k|thousand|mm|m|mil|million|bn|b|billion)?(?![a-z0-9])/g;
     let m;
     while ((m = re.exec(t))) {
       const dollar = !!m[1];

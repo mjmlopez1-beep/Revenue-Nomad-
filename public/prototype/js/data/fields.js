@@ -29,14 +29,15 @@
   // Browse filter uses the same categories; roles are OR, everything else AND (L210); up to 5 roles (L201)
   F.roleCategories = Object.assign({}, F.roleCategory, { type: 'multi', max: 5, label: 'Role category', help: 'Pick up to 5. Operators matching any selected role are shown.' });
 
-  // Titles per category. Sellers add SDR and Account Manager (L371); CS&G drops Director CS/Growth (L372); AI GTM Architect exists (L347)
+  // Titles per category. Sellers add SDR and Account Manager (L371); CS&G drops Director CS/Growth (L372); AI GTM Architect exists (L347).
+  // Product Marketing Manager, Chief Customer Officer and VP AI GTM Strategy are titles live operators hold in the Oct 13 admin export.
   F.rolesByCat = {
     sales_leadership: ['Chief Revenue Officer', 'VP of Sales', 'Sales Manager'],
-    marketing: ['Chief Marketing Officer', 'VP of Marketing', 'Marketing Operations'],
+    marketing: ['Chief Marketing Officer', 'VP of Marketing', 'Marketing Operations', 'Product Marketing Manager'],
     revenue_operations: ['VP of Revenue Operations', 'RevOps Manager', 'Sales Operations'],
     sales_enablement: ['VP of Sales Enablement', 'Director of Enablement', 'Sales Trainer'],
-    customer_success_growth: ['VP of Customer Success', 'VP of Growth'],
-    ai_gtm: ['AI GTM Architect', 'AI GTM Engineer'],
+    customer_success_growth: ['VP of Customer Success', 'VP of Growth', 'Chief Customer Officer'],
+    ai_gtm: ['AI GTM Architect', 'AI GTM Engineer', 'VP AI GTM Strategy'],
     partnerships: ['VP of Partnerships'],
     sellers: ['Account Executive', 'SDR', 'Account Manager'],
   };
@@ -113,7 +114,7 @@
   F.companyRevenue = Object.assign({}, F.revenueRange, { type: 'single', max: null, label: 'Company revenue', help: 'Your company’s annual revenue.' });
   F.companyEmployees = Object.assign({}, F.employeeRange, { type: 'single', max: null, label: 'Company employees', help: 'Your company’s headcount.' });
 
-  // Stored values are the live strings; labels fix casing (L352: IoT, B2C...). The live masterlist has 97; this export uses 56.
+  // Stored values are the live strings; labels fix casing (L352: IoT, B2C...). The live masterlist has 97; the Oct 13 export uses 75.
   const IND = [
     ['Saas', 'SaaS'], ['Enterprise Software', 'Enterprise Software'], ['SMB Software', 'SMB Software'], ['Developer Tools', 'Developer Tools'], ['Data & Analytics', 'Data & Analytics'],
     ['Cybersecurity', 'Cybersecurity'], ['Deep Tech / AI', 'Deep Tech / AI'], ['Fintech', 'Fintech'], ['Marketplace', 'Marketplace'], ['It Services', 'IT Services'],
@@ -127,10 +128,20 @@
     ['Property Management', 'Property Management'], ['General Contractors & Builders', 'General Contractors & Builders'], ['Home Services', 'Home Services'],
     ['Industrial Manufacturing', 'Industrial Manufacturing'], ['Precision & Contract Manufacturing', 'Precision & Contract Manufacturing'], ['Industrial Distribution', 'Industrial Distribution'],
     ['Freight & Trucking', 'Freight & Trucking'], ['Oil & Gas', 'Oil & Gas'], ['Farming & Agribusiness', 'Farming & Agribusiness'], ['Brick & Mortar Retail', 'Brick & Mortar Retail'],
-    ['E Commerce', 'E-commerce'], ['E Commerce & D2c', 'E-commerce & D2C'], ['Consumer Goods & Cpg (non Food)', 'Consumer Goods & CPG (non-Food)'], ['Food & Beverage Cpg', 'Food & Beverage CPG'],
+    ['E Commerce', 'E-Commerce'], ['E Commerce & D2c', 'E-Commerce & D2C'], ['Consumer Goods & Cpg (non Food)', 'Consumer Goods & CPG (Non-Food)'], ['Food & Beverage Cpg', 'Food & Beverage CPG'],
     ['Luxury & Premium Brands', 'Luxury & Premium Brands'], ['Education', 'Education'], ['Higher Education', 'Higher Education'], ['Edtech', 'EdTech'],
     ['Corporate Learning & Training', 'Corporate Learning & Training'], ['Nonprofit & Associations', 'Nonprofit & Associations'], ['State & Local Government', 'State & Local Government'],
     ['Federal Government', 'Federal Government'],
+    // Added with the Oct 13, 2026 admin export (297 operators), which uses 75 industries
+    ['Accounting & Tax', 'Accounting & Tax'], ['Aerospace & Defense', 'Aerospace & Defense'], ['Airlines & Aviation Services', 'Airlines & Aviation Services'],
+    ['Auto Dealerships', 'Auto Dealerships'], ['Automotive', 'Automotive'], ['Climate / Clean Tech', 'Climate / Clean Tech'],
+    ['Coworking & Flexible Workspace', 'Coworking & Flexible Workspace'], ['Environmental Services', 'Environmental Services'], ['Equipment Rental & Leasing', 'Equipment Rental & Leasing'],
+    ['Franchise Systems & Multi Unit Operators', 'Franchise Systems & Multi-Unit Operators'], ['Healthcare Providers & Health Systems', 'Healthcare Providers & Health Systems'],
+    ['Home Care & Aging Services', 'Home Care & Aging Services'], ['Payments & Fintech Infrastructure', 'Payments & Fintech Infrastructure'],
+    ['Print, Signage & Promotional Products', 'Print, Signage & Promotional Products'], ['Research, Data & Information Services', 'Research, Data & Information Services'],
+    ['Residential Real Estate', 'Residential Real Estate'], ['Senior Living & Assisted Living', 'Senior Living & Assisted Living'],
+    ['Specialty Trades & Subcontractors', 'Specialty Trades & Subcontractors'], ['Telecommunications & Connectivity', 'Telecommunications & Connectivity'],
+    ['Vacation Rentals & Short Term Rental', 'Vacation Rentals & Short-Term Rental'],
   ];
   // Operators pick up to 10 (Sheet3 #2, corrected from 7)
   F.industries = { label: 'Industries', type: 'tagsearch', max: 10, help: 'Search the industry list. Pick up to 10.', options: opts(IND) };
@@ -276,8 +287,10 @@
      consistent with the floor of 50 (L381). The entry tier is named "Emerging" (founder decision, Sep 25, 2026),
      not "Verified": 78 of 100 live profiles sit at 50 with no client evidence, so "Verified" is reserved for
      client-confirmed proof (verified fit tags, verified engagements).
-     Five tiers (founder decision, Oct 12, 2026): the Indexing tier is gone. A profile that is not approved and
-     scored yet has no tier at all, so risTierFor returns null below 50 and callers show no badge. */
+     Five tiers (founder decision, Oct 12, 2026): the Indexing tier is gone. A score under 50 has no tier at all,
+     so risTierFor returns null below 50 and callers show no badge. The Oct 13 admin export has approved, live
+     profiles scored under 50 (9 to 40): they read "Below Emerging" with their score (F.risBelow), never as
+     waiting for approval. */
   F.risTier = {
     label: 'Reputation Index tier', type: 'single',
     options: [
@@ -285,7 +298,7 @@
       { v: 'elite', l: 'Elite', min: 80, max: 89, d: 'A deep record of reviewed outcomes across multiple companies.' },
       { v: 'trusted', l: 'Trusted', min: 70, max: 79, d: 'Repeat engagements and consistently strong company reviews.' },
       { v: 'proven', l: 'Proven', min: 60, max: 69, d: 'Verified engagements, company reviews and published proof of work.' },
-      { v: 'emerging', l: 'Emerging', min: 50, max: 59, d: 'Identity and work history checked by the Revenue Nomad team. Every approved profile starts at 50.' },
+      { v: 'emerging', l: 'Emerging', min: 50, max: 59, d: 'Identity and work history checked by the Revenue Nomad team. The first tier, from a score of 50.' },
     ],
   };
   // What each tier unlocks (proposal). Tiers move only on client evidence; nothing on the ladder is paid.
@@ -296,11 +309,17 @@
     elite: ['First in line for homepage features', 'Invited to State of Fractional GTM research panels'],
     apex: ['Invited to the State of Fractional GTM advisory panel', 'First look at new Studio tools'],
   };
-  // The tier option for a score, or null for no score or a score under 50 (not approved and scored yet: no tier, no badge)
+  // The tier option for a score, or null for no score or a score under 50 (no tier, no badge)
   F.risTierFor = (score) => {
     const n = score == null || score === '' ? NaN : +score;
     if (!(n >= 50)) return null;
     return F.risTier.options.find((t) => n >= t.min) || null;
+  };
+  // An approved profile scored under 50: below the first tier. F.risBelow.is(score), .l the label, .d(score) the note
+  F.risBelow = {
+    l: 'Below Emerging',
+    is: (score) => score != null && score !== '' && !isNaN(+score) && +score < 50,
+    d: (score) => `Approved profile with a Reputation Index of ${Math.round(+score)}. Tiers start at 50, Emerging.`,
   };
   // Client-facing explainer factors (comment E418)
   F.risFactors = {

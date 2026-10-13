@@ -116,7 +116,7 @@
   function rise(op) {
     const raw = op.raw && op.raw.profile && op.raw.profile.profile;
     if (!raw) return null;
-    const base = Math.max(50, raw.reputationIndex || 50);
+    const base = raw.reputationIndex != null && !isNaN(+raw.reputationIndex) ? +raw.reputationIndex : 50;
     const up = op.ris.score - base;
     if (up <= 0) return null;
     const revs = RN.store.state.reviews.filter((r) => r.opId === op.id);
@@ -254,7 +254,7 @@
     if ((k === 'reviews' || k === 'verified' || k === 'confirm-eng') && B.openReviewRequest) { B.openReviewRequest({ verify: k === 'verified' || !!o.verify, tags: o.tags }); return; }
     if (k === 'proof' && B.openProofModal) {
       const q = B.proofQuota ? B.proofQuota(RN.myOp()) : { canCreate: true };
-      if (!q.canCreate) { RN.go('studio.credibility'); RN.ui.toast(q.unlocked ? 'You have used this month’s proof links. Unlimited links unlock at Proven.' : 'Proof links unlock when your profile is approved.', { icon: 'info' }); return; }
+      if (!q.canCreate) { RN.go('studio.credibility'); RN.ui.toast(q.unlocked ? 'You have used this month’s proof links. Unlimited links unlock at Proven.' : 'Proof links unlock at Emerging, a Reputation Index of 50.', { icon: 'info' }); return; }
       B.openProofModal(o.company ? { company: o.company } : undefined); return;
     }
     if (k === 'headline-ideas') { goTo('studio.positioning', ['sa-headlines']); return; }
@@ -509,7 +509,7 @@
     const liveNow = liveEvents(op, 1).filter((e) => nowMs() - t(e.ts) < 2 * 36e5 && ['profile_view', 'shortlist_add', 'compare_add'].includes(e.type))[0];
     const r = rise(op);
     return `<div class="sa sa-overview">
-      ${head(`${greet}, ${esc(op.first)}.`, `${op.ris.label ? `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}` : 'Reputation Index not scored yet'}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
+      ${head(`${greet}, ${esc(op.first)}.`, `${op.ris.label ? `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}` : RN.fields.risBelow.is(op.ris.score) ? `${esc(RN.fields.risBelow.l)} · Reputation Index ${esc(op.ris.score)}` : 'Reputation Index not scored yet'}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
       ${liveNow ? liveStrip(liveNow) : ''}
       ${kpiRow(op, m, d)}
       <div class="sa-cols">
@@ -616,7 +616,7 @@
       <div class="sa-ris-top">
         ${b.tier ? `<span class="sa-ris-seal">${RN.ui.tierBadge(b.tier.v, { size: 64, score: b.score, label: `${b.tier.l}, Reputation Index ${b.score}` })}</span>` : ''}
         <div class="grow">
-          <div class="sa-ris-tier"><b>${b.tier ? esc(b.tier.l) : 'Not scored yet'}</b><span class="small muted">${!b.tier ? 'Your tier appears once your profile is approved' : b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
+          <div class="sa-ris-tier"><b>${b.tier ? esc(b.tier.l) : RN.fields.risBelow.is(b.score) ? esc(RN.fields.risBelow.l) : 'Not scored yet'}</b><span class="small muted">${!b.tier ? (RN.fields.risBelow.is(b.score) ? `Reputation Index ${esc(b.score)} · ${plural(50 - b.score, 'point')} to Emerging` : 'Your tier appears once your profile is scored') : b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
           <div class="sa-ladder">${RN.ui.tierLadder(b.tier ? b.tier.v : null, { orientation: 'row', compact: true, only: tiers.map((x) => x.v), label: 'Tier ladder' })}</div>
         </div>
       </div>

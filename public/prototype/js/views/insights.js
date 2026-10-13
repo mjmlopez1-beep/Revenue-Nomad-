@@ -268,7 +268,7 @@
     const mk = RN.model.market();
     const ops = liveOps();
     // A "search that found no one" must still find no one when run today (operators add focus areas)
-    const zero = mk.zero.filter((z) => !RN.model.search({ q: z.q }).length);
+    const zero = mk.zero.filter((z) => !RN.model.search({ q: z.q, any: true }).length);
     const weekAgo = RN.now().getTime() - 7 * 864e5;
     const newApps = (st.pending || []).filter((a) => !a.submittedAt || new Date(a.submittedAt).getTime() >= weekAgo).length;
     const topDemand = mk.tags.slice().sort((a, b) => b.demand - a.demand).slice(0, 6);

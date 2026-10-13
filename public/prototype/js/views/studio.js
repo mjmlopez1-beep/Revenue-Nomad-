@@ -9,10 +9,10 @@
   studio.tab = function (key, def) { def.key = key; studio.tabs[key] = def; return def; };
   studio.list = () => Object.values(studio.tabs).sort((a, b) => (a.order || 99) - (b.order || 99));
 
-  // The operator's own Studio shows the full tier and score at every tier; before approval there is no tier
+  // The operator's own Studio shows the full tier and score at every tier; under 50 is Below Emerging, with the score
   function sideTier(op) {
     const t = RN.fields.risTierFor(op.ris && op.ris.score);
-    return t ? `${esc(t.l)} · Reputation Index ${esc(op.ris.score)}` : 'Reputation Index not scored yet';
+    return t ? `${esc(t.l)} · Reputation Index ${esc(op.ris.score)}` : RN.fields.risBelow.is(op.ris && op.ris.score) ? `${esc(RN.fields.risBelow.l)} · Reputation Index ${esc(op.ris.score)}` : 'Reputation Index not scored yet';
   }
   function side(op, cur) {
     const groups = {};

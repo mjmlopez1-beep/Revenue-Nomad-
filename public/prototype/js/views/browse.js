@@ -263,7 +263,7 @@
   const SIG_ORDER = ['expertise', 'industry', 'motion', 'revenue', 'employees', 'role'];
   function fitSignal(f, op) {
     const by = (a, b) => SIG_ORDER.indexOf(a.k) - SIG_ORDER.indexOf(b.k);
-    const hit = f.signals.filter((x) => x.state === 'match').sort(by)[0] || f.signals.filter((x) => x.state === 'partial').sort(by)[0];
+    const hit = f.signals.filter((x) => x.state === 'match').sort(by)[0] || f.signals.filter((x) => x.state === 'partial' && !x.unknown).sort(by)[0];
     return hit ? hit.text : 'Fractional ' + op.role;
   }
   // Strong (75+) and Good (50+) on the model's one scale; a lower fit shows its best signal only
@@ -390,7 +390,7 @@
     if (visitor && op.rate) {
       // Visitors see what it typically costs a month; the exact hourly rate stays for signed-in companies
       const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null;
-      if (rg) put(`<span class="br-range" title="Typical monthly cost. The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.text)}</span>`);
+      if (rg) put(`<span class="br-range" title="${esc(rg.note)} The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.short + ' ' + rg.text)}</span>`);
     } else if (!op.rate) {
       put(`<span class="br-norate" title="${esc(op.first || op.name)} quotes a rate on the first call.">${icon('clock')}Rate on request</span>`);
     }
@@ -462,7 +462,7 @@
   /* Operators with a photo who can start now, one per role category first, strongest Reputation Index first */
   const risOf = (op) => (op.ris && +op.ris.score) || 0;
   function featured(n) {
-    const pool = RN.model.ops.filter((op) => !op.hidden && op.photo && op.avail && op.avail.key === 'available_now')
+    const pool = RN.model.ops.filter((op) => !op.hidden && !op.isMatt && op.photo && op.avail && op.avail.key === 'available_now')
       .sort((a, b) => risOf(b) - risOf(a) || (b.reviews || []).length - (a.reviews || []).length || (b.completeness || 0) - (a.completeness || 0));
     const out = [], seen = new Set();
     pool.forEach((op) => { if (out.length < n && !seen.has(op.catKey)) { seen.add(op.catKey); out.push(op); } });
@@ -475,7 +475,7 @@
     const proof = live.filter(hasProof).length;
     const feat = featured(5);
     const visitor = RN.store.state.persona === 'visitor';
-    const price = (op) => { if (!op.rate) return 'Rate on request'; if (!visitor) return RN.fmt.rate(op.rate); const r = RN.model.opMonthlyRange && RN.model.opMonthlyRange(op); return r ? r.text : ''; };
+    const price = (op) => { if (!op.rate) return 'Rate on request'; if (!visitor) return RN.fmt.rate(op.rate); const r = RN.model.opMonthlyRange && RN.model.opMonthlyRange(op); return r ? r.short + ' ' + r.text : ''; };
     return `<header class="wrap br-head br-head-gen">
       <div class="br-head-copy">
         <span class="eyebrow">Direct access to talent</span>
@@ -984,7 +984,7 @@
       ${RN.w.field('salesMotions', f.salesMotions || [], { name: 'salesMotions', help: 'Operators with experience in any selected motion.' + (RN.model.ops.filter((op) => !op.hidden && (op.motions || []).length).length < 10 ? ' Few profiles list it yet.' : '') })}
       ${RN.w.field('engagementTypes', f.engagementTypes || [], { name: 'engagementTypes', help: 'Operators who offer any selected type.' })}
       ${rateField(f.rateMax)}
-      <div data-deselect>${RN.w.field('risMin', f.risMin || '', { name: 'risMin', help: 'Minimum score. Every approved profile starts at 50.' })}</div>`;
+      <div data-deselect>${RN.w.field('risMin', f.risMin || '', { name: 'risMin', help: 'Minimum score. Tiers start at 50, Emerging.' })}</div>`;
   }
   /* Location, Time zone and Works US hours: the registry fields (tag search and chips) and one switch */
   function locationFields(f) {

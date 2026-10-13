@@ -611,7 +611,7 @@
     const k = days / 30;
     // Every illustrative search term that Browse answers with no operator today, whether or not the market data
     // flagged it as a zero-result term (RN.model.market only re-checks the flagged ones)
-    const base = RN.data.market.queries.filter((q) => RN.model.search({ q: q.q }).length === 0).map((q) => (
+    const base = RN.data.market.queries.filter((q) => RN.model.search({ q: q.q, any: true }).length === 0).map((q) => (
       { key: 'z:' + normQ(q.q), q: q.q, n: Math.max(1, Math.round(q.vol * k)), filters: { roleCategories: q.cat ? [q.cat] : [], industries: q.industry ? [q.industry] : [] }, tags: q.tags || [], cat: q.cat, base: true }));
     const since = nowMs() - days * DAY;
     const groups = new Map();
@@ -1306,8 +1306,8 @@
   const appLive = (id) => { const a = appById(id); return !!a && statusOf(a) === 'live'; };
   const inDir = (o) => !o.admin || appLive(o.admin.appId);
   const editedBy = (o) => { const e = (st().edits || {})[o.id]; return e && e._log && e._log.length ? e._log[e._log.length - 1] : null; };
-  // Admin is internal, so every tier shows with its score (the shared pill); no tier yet reads as not scored
-  const tierPill = (op) => RN.ui.tierPill((RN.fields.risTierFor(op.ris && op.ris.score) || {}).v, op.ris && op.ris.score) || '<span class="tiny muted">Not scored</span>';
+  // Admin is internal, so every tier shows with its score (the shared pill); under 50 reads Below Emerging with the score
+  const tierPill = (op) => RN.ui.tierPill((RN.fields.risTierFor(op.ris && op.ris.score) || {}).v, op.ris && op.ris.score) || (RN.fields.risBelow.is(op.ris && op.ris.score) ? `<span class="tiny muted">${esc(RN.fields.risBelow.l)} · ${esc(op.ris.score)}</span>` : '<span class="tiny muted">Not scored</span>');
   function dirRows() {
     const q = ui.dirQ.trim().toLowerCase();
     let ops = RN.model.ops.filter(inDir);

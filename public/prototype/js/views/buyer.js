@@ -86,7 +86,7 @@
   const ORDER = ['expertise', 'industry', 'motion', 'revenue', 'employees'];
   function bestSignal(f, op) {
     const hits = f.signals.filter((s) => s.state === 'match').sort((a, b) => ORDER.indexOf(a.k) - ORDER.indexOf(b.k));
-    return (hits[0] || f.signals.find((s) => s.state === 'partial') || { text: 'Fractional ' + op.role }).text;
+    return (hits[0] || f.signals.find((s) => s.state === 'partial' && !s.unknown) || { text: 'Fractional ' + op.role }).text;
   }
 
   /* ---------- Records that belong to this client (matched on the client's email) ---------- */
