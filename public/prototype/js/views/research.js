@@ -57,6 +57,10 @@
     skilled: 'Operators strong here build the machinery the whole revenue team runs on, from the CRM data model to the program that gets new reps selling on their own.',
   };
   const journey = () => RN.data.framework.stages;
+  // Three phases of the revenue journey (owner, Oct 13, 2026): Pre-sale, New business, Post-sale
+  const PHASES = [['Pre-sale', ['Awareness', 'Engage']], ['New business', ['Qualify', 'Commit']], ['Post-sale', ['Onboard', 'Adopt', 'Expand']]];
+  const phaseOf = (name) => { const f = PHASES.find((x) => x[1].includes(name)); return f ? f[0] : 'Every stage'; };
+  const phaseRuns = (stages) => { const out = []; stages.forEach((s) => { const k = phaseOf(s.name), last = out[out.length - 1]; if (last && last.k === k) last.n++; else out.push({ k, n: 1 }); }); return out; };
   const allStages = () => journey().concat([FOUNDATION]);
   const stageBy = (name) => allStages().find((s) => s.name === name || s.id === name);
   // "Win deals at Qualify", but "Lead & plan across every stage" for Foundation
@@ -411,12 +415,11 @@
     const before = st.filter((s) => s.side === 'before');
     const after = st.filter((s) => s.side !== 'before');
     return `<div class="rs-bow-wrap">
-      <div class="rs-bow-sides" aria-hidden="true"><span class="label" style="flex:${before.length}">Before the sale</span><span class="rs-bow-sides-k"></span><span class="label" style="flex:${after.length}">After the sale</span></div>
+      <div class="rs-bow-sides" aria-hidden="true">${phaseRuns(before).map((r) => `<span class="label" style="flex:${r.n}">${esc(r.k)}</span>`).join('')}<span class="rs-bow-sides-k"></span>${phaseRuns(after).map((r) => `<span class="label" style="flex:${r.n}">${esc(r.k)}</span>`).join('')}</div>
       <div class="rs-bow">
-        <span class="rs-bow-m label">Before the sale</span>
-        ${before.map((s) => seg(s, aggs[st.indexOf(s)])).join('')}
+        ${before.map((s, i) => (i === 0 || phaseOf(s.name) !== phaseOf(before[i - 1].name) ? `<span class="rs-bow-m label">${esc(phaseOf(s.name))}</span>` : '') + seg(s, aggs[st.indexOf(s)])).join('')}
         <div class="rs-knot" aria-hidden="true"><span class="rs-knot-dot">${icon('seal')}</span><span class="label">Signed</span></div>
-        <span class="rs-bow-m label">After the sale</span>
+        <span class="rs-bow-m label">Post-sale</span>
         ${after.map((s) => seg(s, aggs[st.indexOf(s)])).join('')}
       </div>
     </div>`;
@@ -459,11 +462,9 @@
   function grid(ix) {
     const g = gridCells(ix);
     const js = journey();
-    const nb = js.filter((s) => s.side === 'before').length;
     const desktop = `<div class="rs-grid" data-rs-reveal role="group" aria-label="GTM Framework: areas by stage. Each cell opens a panel.">
       <div class="rs-gh rs-gh-corner" aria-hidden="true"></div>
-      <div class="rs-gh rs-gh-side label" style="grid-column: span ${nb}">Before the sale</div>
-      <div class="rs-gh rs-gh-side label is-after" style="grid-column: span ${js.length - nb}">After the sale</div>
+      ${phaseRuns(js).map((r, i) => `<div class="rs-gh rs-gh-side label${i ? ' is-after' : ''}" style="grid-column: span ${r.n}">${esc(r.k)}</div>`).join('')}
       <div class="rs-gsp" aria-hidden="true"></div>
       <div class="rs-gh rs-gh-side label is-all">Every stage</div>
       <div class="rs-gh rs-gh-corner"><span class="label">Area</span></div>
@@ -480,7 +481,7 @@
       <div class="rs-mstages" role="tablist" aria-label="Stage">
         ${allStages().map((s) => `<button type="button" class="chip chip-sm ${s.name === cur.name ? 'on' : ''}" role="tab" aria-selected="${s.name === cur.name}" data-act="rs-fw-mstage" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
       </div>
-      <div class="rs-mhead"><span class="label">${esc(cur.side === 'before' ? 'Before the sale' : cur.side === 'after' ? 'After the sale' : 'Every stage')}</span><p class="small muted">${esc(cur.what)}</p></div>
+      <div class="rs-mhead"><span class="label">${esc(phaseOf(cur.name))}</span><p class="small muted">${esc(cur.what)}</p></div>
       <div class="rs-mrows">${g.areas.map((a) => cellBtn(g, a, cur, true)).join('')}</div>
     </div>`;
     return desktop + mobile;
