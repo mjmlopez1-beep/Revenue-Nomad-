@@ -66,7 +66,12 @@
      CSS overlay. Portrait for documents (preview under the title), landscape for slides (preview beside it).
      Preview colours read the cover tone variables, so every tone works in light and dark. Text inside the preview
      drops out on small covers (container query in work.css) so cards stay calm. */
-  const T = (x, y, s, c, fs, a) => `<text x="${x}" y="${y}" class="${c || 'm'}" font-size="${fs || 5.5}"${a ? ` text-anchor="${a}"` : ''}>${esc(s)}</text>`;
+  // Each label carries a greeked bar that stands in for it when a small cover drops preview text
+  const T = (x, y, s, c, fs, a) => {
+    fs = fs || 5.5;
+    const w = Math.min(60, String(s).length * fs * .5), gx = a === 'middle' ? x - w / 2 : a === 'end' ? x - w : x;
+    return `<text x="${x}" y="${y}" class="${c || 'm'}" font-size="${fs}"${a ? ` text-anchor="${a}"` : ''}>${esc(s)}</text><rect class="tg" x="${gx.toFixed(1)}" y="${(y - fs * .62).toFixed(1)}" width="${w.toFixed(1)}" height="${(fs * .5).toFixed(1)}" rx="${(fs * .25).toFixed(1)}"/>`;
+  };
   const Ln = (x, y, w, c) => `<rect class="${c || 'tx'}" x="${x}" y="${y}" width="${w}" height="2.6" rx="1.3"/>`;
   const R = (x, y, w, h, c, r) => `<rect class="${c}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${r == null ? 2 : r}"/>`;
   const svg = (inner, cls) => `<svg class="wk-v${cls ? ' ' + cls : ''}" viewBox="0 0 160 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false">${inner}</svg>`;

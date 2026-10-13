@@ -478,24 +478,32 @@
   .pj-demo-row .pj-demo-fit { flex: 1 1 100%; flex-direction: row; align-items: center; padding-left: 42px; }
   .pj-demo-row .pj-demo-bar { flex: 1 1 auto; }
 }
-/* How posting works: numbered nodes on one line */
+/* How posting works: numbered nodes joined by a line that fills on scroll (JS measures the track between the
+   first and last node, flowLink in projects.js). Without .is-live the line is full and every node is lit. */
 .pj-flow { list-style: none; margin: var(--s-6) 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-8); position: relative; }
-.pj-flow::before { content: ""; position: absolute; left: 22px; right: calc((100% - 2 * var(--s-8)) / 3 - 22px); top: 21px; height: 2px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 25%, var(--line))); transform-origin: left; animation: pj-grow 1.1s .2s cubic-bezier(.2, .8, .2, 1) both; }
-.pj-flow-i { position: relative; display: flex; flex-direction: column; gap: 8px; }
-.pj-flow-n { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--paper); border: 2px solid var(--accent); margin-bottom: 10px; animation: pj-rise .5s ease both; animation-delay: calc(.3s + var(--i) * .25s); }
-.pj-flow-n b { font-family: var(--f-display); font-size: var(--t-16); font-weight: 800; color: var(--accent); }
-.pj-flow-i:last-child .pj-flow-n { background: var(--accent); }
-.pj-flow-i:last-child .pj-flow-n b { color: var(--accent-ink, #fff); }
-.pj-flow-ic { position: absolute; top: 12px; left: 56px; color: var(--mute-2); }
-.pj-flow-ic svg { width: 20px; height: 20px; }
+.pj-flow-track { position: absolute; z-index: 0; height: 2px; margin-top: -1px; background: var(--line); border-radius: 2px; pointer-events: none; }
+.pj-flow-track.is-v { width: 2px; margin: 0 0 0 -1px; }
+.pj-flow-track i { position: absolute; inset: 0; border-radius: inherit; background: var(--accent); transform-origin: left center; }
+.pj-flow-track.is-v i { transform-origin: center top; }
+.pj-flow.is-live .pj-flow-track i { transform: scaleX(0); transition: transform .12s linear; }
+.pj-flow.is-live .pj-flow-track.is-v i { transform: scaleY(0); }
+.pj-flow-i { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 8px; }
+.pj-flow-n { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--paper); border: 2px solid var(--accent); margin-bottom: 10px; transition: background-color .35s ease, border-color .35s ease, transform .35s var(--ease); }
+.pj-flow-n b { font-family: var(--f-display); font-size: var(--t-16); font-weight: 800; color: var(--accent); transition: color .35s ease; }
+.pj-flow.is-live .pj-flow-i:not(.on) .pj-flow-n { border-color: var(--line-2); }
+.pj-flow.is-live .pj-flow-i:not(.on) .pj-flow-n b { color: var(--mute-2); }
+.pj-flow:not(.is-live) .pj-flow-i .pj-flow-n, .pj-flow-i.on .pj-flow-n { background: var(--accent); border-color: var(--accent); }
+.pj-flow:not(.is-live) .pj-flow-i .pj-flow-n b, .pj-flow-i.on .pj-flow-n b { color: var(--accent-ink, #fff); }
+.pj-flow.is-live .pj-flow-i.on .pj-flow-n { transform: scale(1.06); }
+.pj-flow-t { display: flex; align-items: center; gap: 8px; }
+.pj-flow-ic { display: inline-flex; color: var(--mute-2); }
+.pj-flow-ic svg { width: 18px; height: 18px; }
 .pj-flow-i p { max-width: 38ch; }
-@media (prefers-reduced-motion: reduce) { .pj-flow::before, .pj-flow-n { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pj-flow-n, .pj-flow-n b, .pj-flow-track i { transition: none; } }
 @media (max-width: 760px) {
   .pj-flow { grid-template-columns: minmax(0, 1fr); gap: var(--s-6); }
-  .pj-flow::before { left: 21px; right: auto; top: 22px; bottom: 22px; width: 2px; height: auto; background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 25%, var(--line))); transform-origin: top; }
   .pj-flow-i { padding-left: 64px; min-height: 44px; }
   .pj-flow-n { position: absolute; left: 0; top: 0; margin: 0; }
-  .pj-flow-ic { display: none; }
 }
 .pj-bp-more { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; margin-top: var(--s-5); }
 .pj-bp-more .pj-bp-note { margin: 0; }

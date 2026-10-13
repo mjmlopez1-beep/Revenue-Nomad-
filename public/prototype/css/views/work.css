@@ -82,8 +82,9 @@
 .wk-v .dh { fill: none; stroke: var(--wk-mute); stroke-width: .7; stroke-dasharray: 2 1.6; }
 .wk-v .cn { fill: none; stroke: color-mix(in srgb, var(--wk-fg) 70%, transparent); stroke-width: .8; stroke-linejoin: round; }
 /* Small covers: keep the structure, drop the words */
-@container (max-width: 200px) { .wk-cover .wk-v text { display: none; } }
-@container (max-width: 420px) { .wk-cover.land .wk-v text { display: none; } }
+.wk-v .tg { display: none; fill: color-mix(in srgb, var(--wk-ink) 22%, transparent); }
+@container (max-width: 200px) { .wk-cover .wk-v text { display: none; } .wk-cover .wk-v .tg { display: inline; } }
+@container (max-width: 420px) { .wk-cover.land .wk-v text { display: none; } .wk-cover.land .wk-v .tg { display: inline; } }
 
 /* ---------- Card ---------- */
 :is([data-view="work"], [data-view="work-item"], .wk-strip, .wk-show) .wk-card { min-width: 0; }

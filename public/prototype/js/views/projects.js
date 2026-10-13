@@ -614,7 +614,7 @@
     </section>
     <section class="wrap section-sm">
       <span class="eyebrow">How posting works</span>
-      <ol class="pj-flow">${steps.map((s, i) => `<li class="pj-flow-i" style="--i:${i}"><span class="pj-flow-n"><b>${i + 1}</b></span><span class="pj-flow-ic">${icon(s[0])}</span><h3 class="h4">${esc(s[1])}</h3><p class="small muted">${esc(s[2])}</p></li>`).join('')}</ol>
+      <ol class="pj-flow" data-pj-flow><li class="pj-flow-track" aria-hidden="true"><i></i></li>${steps.map((s, i) => `<li class="pj-flow-i" style="--i:${i}"><span class="pj-flow-n"><b>${i + 1}</b></span><h3 class="h4 pj-flow-t"><span class="pj-flow-ic">${icon(s[0])}</span>${esc(s[1])}</h3><p class="small muted">${esc(s[2])}</p></li>`).join('')}</ol>
     </section>
     <section class="wrap section-sm pj-landing-bps">
       <div class="row between pj-sec-hd"><div><span class="eyebrow">Engagement Blueprints</span><h2 class="h2" style="margin-top:8px">Start from the problem you have</h2></div><a class="act" href="#blueprints">See all ${BP.length} Blueprints${icon('arrow')}</a></div>
@@ -2092,7 +2092,48 @@
      View names and the header nav key stay 'projects' / 'project*' (internal). The extra samples keep the old
      links in the route check. */
   /* The landing's sample card counts up the profiles it scores (once, and not with reduced motion) */
+  /* How posting works: a line joins the numbered steps and fills as the list scrolls up the viewport; each number
+     lights when the line reaches it (founder comment, Oct 13, 2026). Reduced motion: drawn full, every step lit. */
+  let flowOff = null;
+  function flowLink(root) {
+    if (flowOff) { flowOff(); flowOff = null; }
+    const ol = root.querySelector('[data-pj-flow]');
+    if (!ol) return;
+    const track = ol.querySelector('.pj-flow-track'), fill = track.querySelector('i');
+    const steps = [...ol.querySelectorAll('.pj-flow-i')];
+    let vertical = false, raf = 0;
+    function layout() {
+      const o = ol.getBoundingClientRect();
+      const pts = steps.map((li) => { const r = li.querySelector('.pj-flow-n').getBoundingClientRect(); return { x: r.left + r.width / 2 - o.left, y: r.top + r.height / 2 - o.top }; });
+      if (pts.length < 2) return;
+      vertical = Math.abs(pts[1].y - pts[0].y) > Math.abs(pts[1].x - pts[0].x);
+      const a = pts[0], z = pts[pts.length - 1];
+      track.classList.toggle('is-v', vertical);
+      Object.assign(track.style, vertical
+        ? { left: a.x + 'px', top: a.y + 'px', width: '', height: (z.y - a.y) + 'px' }
+        : { left: a.x + 'px', top: a.y + 'px', height: '', width: (z.x - a.x) + 'px' });
+    }
+    function paint(p) {
+      p = Math.max(0, Math.min(1, p));
+      fill.style.transform = vertical ? `scaleY(${p})` : `scaleX(${p})`;
+      const n = steps.length - 1;
+      steps.forEach((li, i) => li.classList.toggle('on', p >= i / n - 0.001));
+    }
+    const progress = () => { const r = ol.getBoundingClientRect(), vh = window.innerHeight || 800; return (vh * 0.85 - r.top) / Math.max(1, r.height + vh * 0.25); };
+    layout();
+    const calm = (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) || navigator.webdriver;
+    if (calm) { paint(1); return; }
+    ol.classList.add('is-live');
+    const tick = () => { raf = 0; if (!document.body.contains(ol)) { flowOff && flowOff(); return; } paint(progress()); };
+    const ask = () => { if (!raf) raf = requestAnimationFrame(tick); };
+    const rs = () => { layout(); ask(); };
+    window.addEventListener('scroll', ask, { passive: true });
+    window.addEventListener('resize', rs);
+    flowOff = () => { window.removeEventListener('scroll', ask); window.removeEventListener('resize', rs); };
+    tick();
+  }
   function mountProjects(root) {
+    flowLink(root);
     const el = root.querySelector('[data-pj-count]');
     if (!el || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
     const n = +el.dataset.pjCount || 0, t0 = performance.now(), dur = 900;
