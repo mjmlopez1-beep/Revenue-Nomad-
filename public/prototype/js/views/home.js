@@ -300,9 +300,6 @@
           <span class="hm-seat-n"><span class="num">${RN.fmt.plural(opsIn([s.cat]), 'operator')}</span><span class="hm-go" aria-hidden="true">${icon('arrow')}</span></span>
         </a>`).join('')}</div>
     </nav>
-    ${RN.work ? `<nav class="hm-deliv" aria-labelledby="hm-deliv-t"><h3 class="hm-seats-h" id="hm-deliv-t">Or start from a deliverable</h3>
-      <div class="chipset">${RN.work.types.filter((t) => RN.work.all().some((x) => x.type === t)).map((t) => `<button type="button" class="chip" data-act="wk-go" data-v="${esc(t)}">${esc(t)}<span class="chip-n">${RN.work.all().filter((x) => x.type === t).length}</span></button>`).join('')}<a class="hm-more" href="#work">See all the work${icon('arrow')}</a></div>
-    </nav>` : ''}
     <nav class="hm-prep" aria-labelledby="hm-prep-t">
       <div class="hm-prep-hd"><div><span class="hm-prep-k">Revenue Nomad Research</span><h3 id="hm-prep-t">Not ready to hire yet?</h3></div><p>Start with the numbers, the gap and the plan.</p></div>
       <ul class="hm-prep-list">${PREP.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-t"><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><b>${keep(p[1])}</b></span><span class="hm-prep-d">${keep(p[2])}</span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
@@ -311,13 +308,17 @@
   }
 
 
-  /* ---------- See the work (founder, Oct 13, 2026: the Behance lesson, work as a second way in) ---------- */
+  /* ---------- The work (founder, Oct 13, 2026: "featured and highly visual, think Behance homepage") ----------
+     The one deliverable entry point on Home: type tabs that filter in place and a dense grid of covers
+     (RN.work.showcase, shared with the gallery), then the way into #work on the chosen type. */
   function workSec() {
-    if (!RN.work) return '';
-    return `<section class="hm-sec section hm-work">
-      <div class="wrap">
-        ${head('The work', 'See the work behind the operators.', more('All work samples', 'href="#work"'), 'Playbooks, comp plans, dashboards and 30/60/90 plans operators built for companies like yours. Find one you need, then meet who built it.')}
-        ${RN.work.strip({ title: '', link: false, source: 'home' })}
+    if (!RN.work || !RN.work.showcase) return '';
+    return `<section class="hm-sec section hm-work" aria-labelledby="hm-work-t">
+      <div class="wrap hm-work-in">
+        <header class="hm-head">
+          <div class="hm-head-l"><span class="eyebrow">The work</span><h2 class="h2 hm-h2" id="hm-work-t">Start from the work you need<span class="vm">.</span></h2><p class="lede hm-head-sub">Playbooks, comp plans, dashboards and 30/60/90 plans operators built for companies like yours. Find the one you need, then meet who built it.</p></div>
+        </header>
+        ${RN.work.showcase({ source: 'home' })}
       </div>
     </section>`;
   }
@@ -1043,6 +1044,14 @@
           else targets.push([c, 0]);
         });
       });
+      // The work showcase: tiles rise in a quick stagger along each row, tabs and the footer with them
+      root.querySelectorAll('.wk-show').forEach((sh) => {
+        const tabs = sh.querySelector('.wk-show-tabs');
+        if (tabs) targets.push([tabs, 0]);
+        sh.querySelectorAll('.wk-show-grid > .wk-tile').forEach((x, i) => targets.push([x, (i % 6) * 70]));
+        const foot = sh.querySelector('.wk-show-foot');
+        if (foot) targets.push([foot, 0]);
+      });
       const rise = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('hm-rv-in'); rise.unobserve(e.target); } }), { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
       targets.forEach(([el, delay]) => { if (!below(el)) return; el.style.setProperty('--rv-d', delay + 'ms'); el.classList.add('hm-rv'); rise.observe(el); });
       const count = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { countIn(e.target); count.unobserve(e.target); } }), { threshold: 0.6 });
@@ -1196,7 +1205,7 @@
     title: () => 'Revenue Nomad · Fractional GTM leaders, research and rates',
     render: () => {
       const anim = !S.played && !calm();
-      return [hero(anim), strip(), problems(), featuredSec(), workSec(), frameworkSec(), pulseSec(), reportSec(), quotesSec(), talkSec()].join('');
+      return [hero(anim), strip(), problems(), workSec(), featuredSec(), frameworkSec(), pulseSec(), reportSec(), quotesSec(), talkSec()].join('');
     },
     mount: (root) => {
       teardown();
