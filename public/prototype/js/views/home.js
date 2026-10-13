@@ -155,7 +155,7 @@
             <span class="hm-ln"><span>who already solved</span></span>
             <span class="hm-ln"><span class="serif">your revenue problem<span class="vm">.</span></span></span>
           </h1>
-          <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by our team. Open profiles, company-confirmed proof marked Verified, no login to browse and no fees for companies.')}</p>
+          <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by the companies that hired them. Open profiles, no login to browse and no fees for companies.')}</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>

@@ -208,7 +208,7 @@
     const faces = live.filter((o) => o.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 7);
     const network = `<figure class="ab-net">
         <a class="ab-net-faces" href="#browse" aria-label="Browse ${esc(RN.fmt.plural(live.length, 'open profile'))}"><span class="ava-stack">${faces.map((op) => RN.ui.avatar(op, 'ava-md ava-ring', { decorative: true })).join('')}</span></a>
-        <figcaption class="ab-net-n"><b class="num">350<span class="u-plus">+</span></b><span>Operators in our network, each reviewed by our team. ${esc(RN.fmt.int(live.length))} open profiles in this prototype.</span></figcaption>
+        <figcaption class="ab-net-n"><b class="num">350<span class="u-plus">+</span></b><span>Operators in our network, each reviewed by the companies that hired them. ${esc(RN.fmt.int(live.length))} open profiles in this prototype.</span></figcaption>
         ${RN.fn && RN.fn.logoStrip ? RN.fn.logoStrip({ bare: true, scale: 0.9, className: 'ab-net-logos' }) : ''}
       </figure>`;
 
@@ -1179,7 +1179,7 @@
     ];
     const faq = [
       ['Does it cost anything to join?', 'No. Joining, your profile, Studio and every tool on this page are free. Our only charge is a share of what you bill companies you meet here (next question). Rank, labels and badges will never be for sale.'],
-      ['How does Revenue Nomad charge operators?', `Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${FEE_PCT}%) on engagements with companies you meet here. Companies pay your listed rate and no fees, so the rate on your profile is the price they see. At a $200 hourly rate, you take home ${RN.fmt.usd(200 * (1 - FEE_PCT / 100))}/hr. Proposed: no fee on deals you bring yourself, including deals you win with a proof link. We are confirming both, and we will say so plainly before anything changes.`],
+      ['How does Revenue Nomad charge operators?', `Revenue Nomad charges a percentage of your billed earnings each month (proposed: ${FEE_PCT}%) on engagements with companies you meet here. Companies pay your listed rate and no fees, so the rate on your profile is the price they see. At a $200 hourly rate, you take home ${RN.fmt.usd(200 * (1 - FEE_PCT / 100))}/hr. Proposed: no fee on deals you bring yourself, including deals you win with a proof link.`],
       ['How long does approval take?', 'We review applications within 2 business days. Approved profiles go live at Emerging, a Reputation Index of 50, and Studio opens the same day.'],
       ['I have no reviews yet. Will companies find me?', 'Yes. Search ranks on fit first: role, focus areas, company size and industry. A complete profile ranks higher, and Studio shows which searches you appear in so you can close the gaps.'],
       ['Can I see which companies viewed me?', 'You see the type of company: industry, revenue range and employee range. Never the name. Companies browse more when they know that, which means more views for you.'],
