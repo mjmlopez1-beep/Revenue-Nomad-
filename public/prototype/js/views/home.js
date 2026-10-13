@@ -102,12 +102,12 @@
 
   // Founder's curation order (L466): photo, then Reputation Index, video, reviews, engagements, completeness.
   // Every operator is ranked by the same rules (no founder exclusion, founder decision Sep 25, 2026).
-  const curate = (a, b) => b.ris.score - a.ris.score || (b.video ? 1 : 0) - (a.video ? 1 : 0) || b.reviews.length - a.reviews.length || b.engagements.length - a.engagements.length || b.completeness - a.completeness;
+  const curate = (a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || (b.video ? 1 : 0) - (a.video ? 1 : 0) || b.reviews.length - a.reviews.length || b.engagements.length - a.engagements.length || b.completeness - a.completeness;
   // Top operators carousel: Trusted and above. Operators without a photo are included; within an equal
   // Reputation Index the ones with a photo come first, then the curation order.
   function featured() {
     return liveOps().filter((o) => o.ris.score >= TRUSTED)
-      .sort((a, b) => b.ris.score - a.ris.score || (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || curate(a, b));
+      .sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || curate(a, b));
   }
 
   function guessCat(q) {
@@ -230,8 +230,8 @@
     const items = networkItems();
     const mine = items.filter((it) => it.mine).length;
     const note = mine
-      ? `Sample activity, except the ${RN.fmt.plural(mine, 'item')} marked Your session, which came from what you did in this prototype.`
-      : 'Sample activity that shows how the strip works. It is not live network data. Anything you do in this prototype (an intro request, an engagement) shows up here marked Your session.';
+      ? `Sample activity, except the ${RN.fmt.plural(mine, 'item')} marked Your session, which are things you did here.`
+      : 'Sample activity that shows how the strip works. It is not live network data. Anything you do here (an intro request, an engagement) shows up on the strip marked Your session.';
     const row = (hidden) => `<ul class="hm-strip-list" ${hidden ? 'aria-hidden="true"' : ''}>${items.map((it) => `<li class="hm-tick"><span>${esc(it.text)}</span><small>${esc(it.meta)}</small>${it.mine ? '<span class="pill pill-good hm-mine">Your session</span>' : ''}</li>`).join('')}</ul>`;
     return `<section class="hm-strip night ${S.paused ? 'is-paused' : ''}" aria-labelledby="hm-strip-t">
       <div class="hm-strip-tag"><span id="hm-strip-t">Network activity</span>${RN.ui.illus('Illustrative', note)}<span class="sr-only">${esc(note)}</span>${pauseBtn()}</div>
@@ -496,7 +496,7 @@
     const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and company reviews.</span></p>`;
     return `<section class="hm-sec section hm-band">
       <div class="wrap">
-        ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles in this prototype`, 'href="#browse" data-act="hm-all"'))}
+        ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles`, 'href="#browse" data-act="hm-all"'))}
         ${feat.length ? carousel(feat, trust) : ''}
       </div>
     </section>`;

@@ -48,9 +48,9 @@
   // One "Illustrative" label for every invented figure (RN.ui.illus)
   const illus = (text) => RN.ui.illus(text);
   const jsonAttr = (o) => esc(JSON.stringify(o || {}));
-  // Network size, worded the same everywhere: "350+ operators (100 in this prototype)"
+  // Network size, worded the same everywhere: "350+ operators (294 profiles)"
   const liveOps = () => RN.model.ops.filter((o) => !o.hidden);
-  const netText = () => `${MK().network.operators} operators (${RN.fmt.int(liveOps().length)} in this prototype)`;
+  const netText = () => `${MK().network.operators} operators (${RN.fmt.int(liveOps().length)} profiles)`;
   // Rate Index as-of date (market.asOf, read as a local date)
   const asOfDate = () => { const p = String(MK().asOf || '').split('-').map(Number); return p.length === 3 ? new Date(p[0], p[1] - 1, p[2]) : RN.now(); };
   const longDate = (d) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -240,7 +240,7 @@
   }
 
   /* People drawn from the live sample network: operators with a photo first, highest Reputation Index first */
-  const byRis = (a, b) => (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || ((b.ris && b.ris.score) || 0) - ((a.ris && a.ris.score) || 0);
+  const byRis = (a, b) => (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || RN.fields.risRank(b) - RN.fields.risRank(a);
   const claimers = (tag) => liveOps().filter((o) => o.tags.some((t) => t.t === tag));
   function faces(ops, n, o) {
     o = o || {};
@@ -312,7 +312,7 @@
         </div>
         <p class="ins-hero-illus" data-proto>${illus('Illustrative figures')}</p>
       </div>
-      <a class="ins-book night" href="#report" aria-label="Read The State of Fractional GTM 2027, prototype edition with illustrative figures">
+      <a class="ins-book night" href="#report" aria-label="Read The State of Fractional GTM 2027">
         <span class="ins-rings" aria-hidden="true"><i></i><i></i></span>
         <span class="ins-book-top"><span class="eyebrow">Revenue Nomad Research</span></span>
         <span class="ins-book-yr">2027</span>
@@ -352,7 +352,7 @@
           <ul class="ins-lib" aria-label="Most searched focus areas, company searches next to operators who claim each">${libRows.map((t) => `<li><span class="ins-lib-t"><b>${esc(t.t)}</b><span class="tiny muted">${RN.fmt.int(t.demand)} · ${RN.fmt.int(t.supply)}</span></span>
             <span class="ins-lib-b"><i class="d" style="width:${((t.demand / libMax) * 100).toFixed(1)}%"></i><i class="s" style="width:${Math.max(1.5, (t.supply / libMax) * 100).toFixed(1)}%"></i></span></li>`).join('')}</ul>
           <p class="ins-est-legend tiny"><span><i class="ins-lib-k d"></i>Company searches</span><span><i class="ins-lib-k s"></i>Operators who claim it</span></p>
-          <p class="tiny muted">${RN.fmt.int(verifiedTags.size)} focus areas are company-verified across the ${RN.fmt.int(ops.length)} profiles in this prototype.</p>
+          <p class="tiny muted">${RN.fmt.int(verifiedTags.size)} focus areas are company-verified across ${RN.fmt.int(ops.length)} open profiles.</p>
           <span class="ins-tool-go">Search the library${icon('arrow')}</span>
         </article>
         <article class="card ins-tool">
@@ -629,7 +629,7 @@
           <dl class="ins-meta">
             <div><dt>Operators surveyed</dt><dd>${RN.fmt.int(R.sample.operators)}</dd></div>
             <div><dt>Hiring companies surveyed</dt><dd>${RN.fmt.int(R.sample.companies)}</dd></div>
-            <div><dt>Operator profiles</dt><dd>${esc(MK().network.operators)} <small>(${RN.fmt.int(netN)} in this prototype)</small></dd></div>
+            <div><dt>Operator profiles</dt><dd>${esc(MK().network.operators)} <small>(${RN.fmt.int(netN)} profiles)</small></dd></div>
             <div><dt>Fieldwork</dt><dd>${esc(R.fieldwork)}</dd></div>
           </dl>
         </div>
@@ -819,7 +819,9 @@
   // Copy a citation: navigator.clipboard.writeText inside the click, falling back to selecting the text
   RN.actions['ins-copy'] = (el) => {
     const t = document.getElementById(el.dataset.target);
-    copyText(t ? t.textContent.trim() : '', t, 'Citation copied');
+    let txt = '';
+    if (t) { const c = t.cloneNode(true); if (!RN.store.state.notes) c.querySelectorAll('[data-proto]').forEach((n) => n.remove()); txt = c.textContent.replace(/\s+/g, ' ').trim(); }
+    copyText(txt, t, 'Citation copied');
     RN.track('research_share', { source: el.dataset.src || 'report', meta: { kind: 'citation' } });
   };
   RN.actions['ins-copy-link'] = (el) => {
@@ -1091,7 +1093,7 @@
       <div class="stats-row ins-rates-kpis" style="--cols:3">
         <div class="stat"><span class="stat-l">Typical month at ${esc(hoursLabel('40'))}</span><span class="stat-v ins-stat-sm">${esc(g.label.replace(/\/month$/, ''))}</span><span class="tiny muted">${esc(revLabel('5m_20m'))} companies, the baseline</span></div>
         <div class="stat"><span class="stat-l">Rates in this category</span><span class="stat-v">${RN.fmt.int(c.n)}</span><span class="tiny muted">${c.n < MIN_CELL ? `Under ${MIN_CELL}, read as directional` : `Of ${RN.fmt.int(nTotal)} in the index`}</span></div>
-        <div class="stat"><span class="stat-l">Operators on the network</span><span class="stat-v">${RN.fmt.int(n)}</span><span class="tiny muted">${esc(catLabel(routeCat))}, in this prototype</span></div>
+        <div class="stat"><span class="stat-l">Operators on the network</span><span class="stat-v">${RN.fmt.int(n)}</span><span class="tiny muted">${esc(catLabel(routeCat))} profiles you can browse</span></div>
       </div>`;
     }
     return `${crumbs}
@@ -1231,7 +1233,7 @@
     return {
       '@context': 'https://schema.org', '@type': 'Dataset',
       name: 'Revenue Nomad Rate Index' + (routeCat ? `: ${catLabel(routeCat)}` : ''),
-      description: 'Median and p25 to p75 hourly rates for fractional go-to-market leaders, by role category and company revenue range. Updated quarterly. Prototype edition with illustrative figures.',
+      description: 'Median and p25 to p75 hourly rates for fractional go-to-market leaders, by role category and company revenue range. Updated quarterly. Figures in this edition are illustrative.',
       url: rateUrl(),
       creator: { '@type': 'Organization', name: 'Revenue Nomad', url: RN.share.url('home') },
       temporalCoverage: `${iso(qStart)}/${iso(d)}`,

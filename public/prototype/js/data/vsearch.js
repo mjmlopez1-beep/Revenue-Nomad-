@@ -232,7 +232,7 @@
       const like = likeKeys.map((k) => ({ k, label: RN.w.label(PROFILE_FIELD[k], prof[k][0]), ok: (op[PROFILE_OP[k]] || []).some((v) => prof[k].includes(v)) }));
       const all = checks.concat(like);
       const factScore = all.length ? all.reduce((s, c) => s + (c.ok === null ? 0.5 : c.ok ? 1 : 0), 0) / all.length : 1;
-      const ris = (op.ris && op.ris.score || 50) / 100;
+      const ris = RN.fields.risRank(op) / 100; // no score yet: the neutral 50
       const w = meets.length ? W : { needs: 0, sem: 0.6, facts: 0.2, ris: 0.2 };
       const base = w.needs * needScore + w.sem * semN + w.facts * factScore + w.ris * ris;
       const role = cats.length ? (cats.includes(op.catKey) ? 1 : 0) : null;

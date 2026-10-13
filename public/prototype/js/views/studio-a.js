@@ -65,7 +65,7 @@
     return rows.sort((p, q) => (q.live ? 1 : 0) - (p.live ? 1 : 0) || q.n - p.n);
   }
   const inRanges = (op, x) => op.revenueRanges.includes(x.revenueRange) && op.employeeRanges.includes(x.employeeRange);
-  const liveTip = 'Live: this happened in your prototype session. In production a segment under 5 visits joins Other companies.';
+  const liveTip = 'Live: a visit made in this browser session, shown here so you can see it arrive. Any other segment under 5 visits joins Other companies.';
 
   /* ---------- Who is NOT visiting: what the operator lists (industries, ranges) but few clients from it open ----------
      A listed value is a gap when it has no visits, or under 40% of an even share of the visits to listed values. */
@@ -116,7 +116,9 @@
   function rise(op) {
     const raw = op.raw && op.raw.profile && op.raw.profile.profile;
     if (!raw) return null;
-    const base = raw.reputationIndex != null && !isNaN(+raw.reputationIndex) ? +raw.reputationIndex : 50;
+    // An unscored record (null, or under 50) starts from the neutral 50 the model ranks it at
+    const base = raw.reputationIndex != null && !isNaN(+raw.reputationIndex) && +raw.reputationIndex >= 50 ? +raw.reputationIndex : RN.fields.RIS_NEUTRAL;
+    if (op.ris.score == null) return null;
     const up = op.ris.score - base;
     if (up <= 0) return null;
     const revs = RN.store.state.reviews.filter((r) => r.opId === op.id);
@@ -509,7 +511,7 @@
     const liveNow = liveEvents(op, 1).filter((e) => nowMs() - t(e.ts) < 2 * 36e5 && ['profile_view', 'shortlist_add', 'compare_add'].includes(e.type))[0];
     const r = rise(op);
     return `<div class="sa sa-overview">
-      ${head(`${greet}, ${esc(op.first)}.`, `${op.ris.label ? `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}` : RN.fields.risBelow.is(op.ris.score) ? `${esc(RN.fields.risBelow.l)} · Reputation Index ${esc(op.ris.score)}` : 'Reputation Index not scored yet'}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
+      ${head(`${greet}, ${esc(op.first)}.`, `${op.ris.label ? `${esc(op.ris.label)} · Reputation Index ${esc(op.ris.score)}` : `Reputation Index · ${esc(RN.fields.risNone.l)}`}${r ? ' ' + risePill(r) : ''} · Profile ${esc(op.completeness)}% complete${fresh.length ? ` · <b>${plural(fresh.length, 'new update')}</b> since your last visit` : ''}`, seg())}
       ${liveNow ? liveStrip(liveNow) : ''}
       ${kpiRow(op, m, d)}
       <div class="sa-cols">
@@ -517,7 +519,7 @@
         <div class="sa-col sa-col-side">${nbaCard(op)}${RN.studio.cx ? RN.studio.cx.checkin(op) : ''}${risCard(op)}${digestCard(op)}</div>
       </div>
       ${demandCard(op)}
-      <p class="tiny muted sa-foot">${icon('info')}Numbers combine illustrative history with live activity from this prototype session. Company names are never shown in Studio.</p>
+      <p class="tiny muted sa-foot">${icon('info')}Numbers combine illustrative history with live activity from this session. Company names are never shown in Studio.</p>
     </div>`;
   }
 
@@ -616,7 +618,7 @@
       <div class="sa-ris-top">
         ${b.tier ? `<span class="sa-ris-seal">${RN.ui.tierBadge(b.tier.v, { size: 64, score: b.score, label: `${b.tier.l}, Reputation Index ${b.score}` })}</span>` : ''}
         <div class="grow">
-          <div class="sa-ris-tier"><b>${b.tier ? esc(b.tier.l) : RN.fields.risBelow.is(b.score) ? esc(RN.fields.risBelow.l) : 'Not scored yet'}</b><span class="small muted">${!b.tier ? (RN.fields.risBelow.is(b.score) ? `Reputation Index ${esc(b.score)} · ${plural(50 - b.score, 'point')} to Emerging` : 'Your tier appears once your profile is scored') : b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
+          <div class="sa-ris-tier"><b>${b.tier ? esc(b.tier.l) : esc(RN.fields.risNone.l)}</b><span class="small muted">${!b.tier ? 'Your tier appears once your profile is scored' : b.next ? `${plural(b.toNext, 'point')} to ${esc(b.next.l)}` : 'Top tier'}</span></div>
           <div class="sa-ladder">${RN.ui.tierLadder(b.tier ? b.tier.v : null, { orientation: 'row', compact: true, only: tiers.map((x) => x.v), label: 'Tier ladder' })}</div>
         </div>
       </div>
@@ -1266,7 +1268,7 @@
     const inds = op.industries.slice(0, 2).map((i) => ind(i).toLowerCase());
     const verified = op.tags.filter((x) => x.tier !== 'claimed').map((x) => x.t.toLowerCase());
     // Profiles with little evidence rank lower and get fewer impressions
-    const k = 0.3 + Math.min(0.7, (op.ris.score - 50) / 40 + op.reviews.length * 0.08);
+    const k = 0.3 + Math.min(0.7, (RN.fields.risRank(op) - 50) / 40 + op.reviews.length * 0.08);
     const rows = [
       [op.name.toLowerCase(), 1.1, 150, 0.34],
       [`${op.name.toLowerCase()} ${role}`, 1.3, 55, 0.4],
@@ -1313,7 +1315,7 @@
       const engines = RN.data.market.aiEngines;
       const prompts = RN.data.market.aiPrompts.filter((p) => p.cat === op.catKey);
       const ev = evidenceOf(op);
-      const strength = ev.any ? 0.05 + (op.ris.score - 50) / 150 + op.completeness / 800 + Math.min(0.08, op.reviews.length * 0.03) : 0;
+      const strength = ev.any ? 0.05 + (RN.fields.risRank(op) - 50) / 150 + op.completeness / 800 + Math.min(0.08, op.reviews.length * 0.03) : 0;
       const bias = [1, 1.15, 0.8, 0.95, 0.75];
       const acts = aeoActions(op);
       const used = new Set();
@@ -1368,7 +1370,7 @@
     const inds = op.industries.slice(0, 2).map(ind);
     const title = `${op.name}: Fractional ${op.role}${inds.length ? ' for ' + inds.join(' and ') : ''} | Revenue Nomad`;
     const verifiedN = op.tags.filter((x) => x.tier !== 'claimed').length;
-    const desc = `${op.headline ? op.headline + ' ' : ''}${verifiedN} company-verified focus areas. Reputation Index ${op.ris.score}. ${op.avail.label}.`;
+    const desc = `${op.headline ? op.headline + ' ' : ''}${verifiedN} company-verified focus areas.${op.ris.score != null ? ` Reputation Index ${op.ris.score}.` : ''} ${op.avail.label}.`;
     const weekly = (() => { const r = RN.rng('gsc-w-' + op.id); return Array.from({ length: 4 }, (_, i) => Math.round((gc / 4) * (0.8 + i * 0.07 + r() * 0.2))); })();
     const cat = RN.fields.catLabel(op.catKey);
     return `<div class="sa sa-seo">

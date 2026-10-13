@@ -460,7 +460,7 @@
   // Registry order, not pick order, so chips read low to high
   const ordered = (key, vals) => F[key].options.map((o) => o.v).filter((v) => (vals || []).includes(v));
   /* The score on profile pages: one representation, the shared tier badge with the score inside. Profiles show
-     the full tier for every tier, Emerging included; a profile with no tier yet (not approved and scored) shows
+     the full tier for every tier, Emerging included; a profile with no tier yet (not scored yet) shows
      nothing tier-related. */
   const tierOf = (op) => F.risTierFor(op && op.ris ? op.ris.score : null);
   // The badge on the photo
@@ -519,7 +519,7 @@
               ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
               ${op.timezone ? `<span>${icon('clock')}${esc(tzLabel(op.timezone))}</span>` : ''}
               <span>${icon('briefcase')}${esc(catLabel(op.catKey))}</span>
-              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
+              ${op.sample ? RN.ui.illus('Sample profile, not a real operator', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
             </div>
             ${clientsBlock(c, logos)}
           </div>
@@ -630,13 +630,13 @@
     const op = c.op;
     const tier = tierOf(op);
     const explain = RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated');
-    // Scored under 50 (approved, below the first tier): no tier, no badge, no curve
+    // Not scored yet: no tier, no badge, no number, no curve
     const pctile = tier ? RN.clamp(Math.round(ncdf((op.ris.score - PEER.mean) / PEER.sd) * 100), 1, 99) : 0;
     const rep = !tier ? `<article class="pf-proof pf-proof-rep is-pending">
       <div class="pf-rep-r">
         <div class="pf-proof-hd"><span>Reputation Index ${explain}</span></div>
-        <p class="pf-proof-empty">${esc(F.risBelow.l)}</p>
-        <p class="pf-proof-note">${esc(F.risBelow.d(op.ris.score))}</p>
+        <p class="pf-proof-empty">${esc(F.risNone.l)}</p>
+        <p class="pf-proof-note">${esc(F.risNone.d)}</p>
       </div>
     </article>` : `<article class="pf-proof pf-proof-rep t-${esc(tier.v)}">
       <div class="pf-rep-seal">${RN.ui.tierBadge(tier.v, { size: 72, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</div>
@@ -1640,7 +1640,7 @@
             <div class="pf-pl-cta" data-pl-slot="top">${proofCtas(rec, op, 'top', true)}</div>
           </div>
           <div class="pf-pl-stats">
-            ${tierOf(op) ? `<div class="pf-pl-ris">${RN.ui.ris(op, { full: true, size: 48 })}</div>` : `<span><b class="serif-up">${esc(op.ris.score)}</b>Reputation Index, below Emerging</span>`}
+            ${tierOf(op) ? `<div class="pf-pl-ris">${RN.ui.ris(op, { full: true, size: 48 })}</div>` : `<span class="pf-pl-none"><b class="serif-up">${esc(F.risNone.l)}</b>Reputation Index</span>`}
             <span><b class="serif-up">${c.reviews.length}</b>${c.reviews.length === 1 ? 'Company review' : 'Company reviews'}</span>
             <span><b class="serif-up">${c.engs.filter((e) => e.verified).length}</b>Verified engagements</span>
             <span><b class="serif-up">${c.verified.length}</b>Verified focus areas</span>
@@ -1943,7 +1943,7 @@
         </div></section>`;
     }
     visit('verify:' + op.slug);
-    const tier = tierOf(op); // null: not approved and scored yet, so no tier, no badge
+    const tier = tierOf(op); // null: not scored yet, so no tier, no badge, no number
     const score = tier ? op.ris.score : null;
     const verifiedTags = op.tags.filter((t) => t.tier !== 'claimed').length;
     const revs = (op.reviews || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -1962,7 +1962,7 @@
     const scoreBlock = tier ? `<div class="pf-vf-score-hd t-${esc(tier.v)}">
           <span class="pf-vf-badge">${RN.ui.tierBadge(tier.v, { size: 64, score, label: `${tier.l}, Reputation Index ${score}` })}</span>
           <span class="pf-vf-score-t"><span class="label">Reputation Index</span><b>${esc(tier.l)}</b><small>${tier.min} to ${tier.max} on a 100-point scale</small></span>
-        </div>` : `<div class="pf-vf-score-hd"><span class="pf-vf-score-t"><span class="label">Reputation Index</span><b>${esc(F.risBelow.l)}</b><small>${esc(F.risBelow.d(score))}</small></span></div>`;
+        </div>` : `<div class="pf-vf-score-hd"><span class="pf-vf-score-t"><span class="label">Reputation Index</span><b>${esc(F.risNone.l)}</b><small>${esc(F.risNone.d)}</small></span></div>`;
     const by = revs.map((r) => {
       const e = engs.find((x) => lc(x.company) === lc(r.company));
       return `<li>${e && e.logo ? `<span class="pf-vby-logo">${logoHtml(e.logo, r.company, 22)}</span>` : `<span class="pf-vby-logo txt">${esc(r.company)}</span>`}
@@ -1981,7 +1981,7 @@
                 <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
               </div>
               <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> <span class="pf-nw">as of ${esc(asOf)}</span></span></p>
-              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
+              ${op.sample ? RN.ui.illus('Sample profile, not a real operator', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
             </header>
             <div class="pf-vf-score">
               ${scoreBlock}

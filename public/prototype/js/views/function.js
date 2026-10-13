@@ -527,7 +527,7 @@
   // Most profiles share a score of 50, so ties go to the fuller record: completeness, company-verified engagements,
   // focus areas and a listed rate, and only then the name
   const inCat = (cat) => RN.model.ops.filter((o) => o.catKey === cat && !o.hidden)
-    .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || (b.ris.score || 0) - (a.ris.score || 0)
+    .sort((a, b) => (a.sample ? 1 : 0) - (b.sample ? 1 : 0) || RN.fields.risRank(b) - RN.fields.risRank(a)
       || (b.completeness || 0) - (a.completeness || 0)
       || (b.engagements || []).filter((e) => e.clientVerified).length - (a.engagements || []).filter((e) => e.clientVerified).length
       || (b.tags || []).length - (a.tags || []).length || (b.rate ? 1 : 0) - (a.rate ? 1 : 0)

@@ -1339,7 +1339,7 @@
   function suggestOps(n) {
     const taken = new Set(st().shortlist.concat(myIntros().map((i) => i.opId)));
     return RN.model.ops.filter((o) => !o.hidden && o.photo && !taken.has(o.id))
-      .map((o) => ({ o, f: fitFor(o) })).sort((a, b) => b.f.pct - a.f.pct || ((b.o.ris || {}).score || 0) - ((a.o.ris || {}).score || 0))
+      .map((o) => ({ o, f: fitFor(o) })).sort((a, b) => b.f.pct - a.f.pct || RN.fields.risRank(b.o) - RN.fields.risRank(a.o))
       .slice(0, n).map((x) => x);
   }
   // One designed panel for every empty part of the tab: what lands here, and faces to start from
@@ -1610,7 +1610,7 @@
         : `<a class="btn btn-line btn-sm" href="#buyer.team">${icon('users')}See terms in Team</a>${reviewed ? `<a class="btn btn-line btn-sm" href="#op.${esc(op.slug)}">See the review on ${esc(op.first)}’s profile</a>` : `<button type="button" class="btn btn-line btn-sm" data-act="bw-review-start" data-id="${esc(i.id)}">${icon('star')}Leave a CORE review</button>`}`;
     } else if (closed) {
       const alts = RN.model.similar(op, 12).filter((o) => !myIntros().some((x) => x.opId === o.id && x.status !== 'declined'))
-        .map((o) => ({ o, pct: fitFor(o).pct })).sort((a, b) => b.pct - a.pct || b.o.ris.score - a.o.ris.score).slice(0, 2).map((x) => x.o);
+        .map((o) => ({ o, pct: fitFor(o).pct })).sort((a, b) => b.pct - a.pct || RN.fields.risRank(b.o) - RN.fields.risRank(a.o)).slice(0, 2).map((x) => x.o);
       next = i.withdrawn ? `You withdrew this request. You can ask ${esc(op.first)} again any time.` : i.closedBy === 'client' ? `You marked ${esc(op.first)} as not a fit. Here are two operators with a similar fit.` : `<b>${esc(op.first)} can’t take this one.</b> Here are two operators with the same fit.`;
       actions = alts.length && !i.withdrawn ? `<div class="bw-alts">${alts.map((o) => miniRowStatic(o)).join('')}</div>` : '';
     }
@@ -2396,7 +2396,7 @@
   function preview(brief, name) {
     const rows = RN.model.ops.filter((o) => !o.hidden).map((op) => ({ op, fit: RN.model.fit(op, brief) }));
     const good = rows.filter((r) => r.fit.pct >= 50).length;
-    const top = rows.slice().sort((a, b) => b.fit.pct - a.fit.pct || b.op.ris.score - a.op.ris.score).slice(0, 4);
+    const top = rows.slice().sort((a, b) => b.fit.pct - a.fit.pct || RN.fields.risRank(b.op) - RN.fields.risRank(a.op)).slice(0, 4);
     const checks = [
       { l: 'Company revenue', on: !!brief.revenueRange },
       { l: 'Employee range', on: !!brief.employeeRange },

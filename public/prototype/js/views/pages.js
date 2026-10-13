@@ -122,6 +122,8 @@
     RN.model.ops.forEach((o) => { c[o.ris.tier] = (c[o.ris.tier] || 0) + 1; });
     return c;
   }
+  // Profiles with no Reputation Index yet (counts.null): the one line that explains why the rungs do not add up
+  const unscoredLine = (n) => `${RN.fmt.plural(n, 'profile')} ${n === 1 ? 'is' : 'are'} ${RN.fields.risNone.l.toLowerCase()}, so ${n === 1 ? 'it has' : 'they have'} no tier.`;
   /* The ladder, top rung first. Tiers and ranges from RN.fields.risTier, unlocks from RN.fields.risUnlocks
      (labelled proposed). o.desc adds what each tier means, o.counts the profiles at each tier in this prototype.
      o.me marks the signed-in operator's own tier ("You"). No operator is singled out for anyone else. */
@@ -130,7 +132,7 @@
     const counts = tierCounts();
     const me = RN.myOp ? RN.myOp() : null;
     const U = RN.fields.risUnlocks || {};
-    const cols = ['Tier', o.desc ? 'What it means' : '', 'What it unlocks (proposed)', o.counts || o.me ? 'In this prototype' : ''].filter(Boolean);
+    const cols = ['Tier', o.desc ? 'What it means' : '', 'What it unlocks (proposed)', o.counts || o.me ? 'Profiles' : ''].filter(Boolean);
     return `<div class="pg-ladder-wrap${o.desc ? ' has-d' : ''}${o.counts || o.me ? ' has-n' : ''}${o.rail ? ' is-rail' : ''}">
       <div class="pg-ladder-hd" aria-hidden="true">${cols.map((c) => `<span class="label">${esc(c)}</span>`).join('')}</div>
       <ol class="pg-ladder" aria-label="Reputation Index tiers, highest first">${tiersDown().map((t) => {
@@ -168,7 +170,7 @@
         ${o.stairs ? '<i class="pg-brow-step" aria-hidden="true"></i>' : `<span class="pg-brow-n">${RN.fmt.plural(n, 'profile')}</span>`}
         ${mine ? `<span class="pg-rung-me">${RN.ui.avatar(me, 'ava-xs')}You, ${esc(me.ris.score)}</span>` : ''}
       </li>`;
-    }).join('')}</ol>${!o.stairs && counts.null ? `<p class="small muted pg-brow-below">${RN.fmt.plural(counts.null, 'approved profile')} score under 50 and sit below Emerging, the first tier.</p>` : ''}`;
+    }).join('')}</ol>${!o.stairs && counts.null ? `<p class="small muted pg-brow-below">${esc(unscoredLine(counts.null))}</p>` : ''}`;
   }
 
   /* =====================================================================
@@ -205,10 +207,10 @@
       </dl>`;
     // The company leads the page: the network's faces, its size and the cleared client logos (no founder portrait)
     const live = ops.filter((o) => !o.hidden);
-    const faces = live.filter((o) => o.photo).sort((a, b) => b.ris.score - a.ris.score).slice(0, 7);
+    const faces = live.filter((o) => o.photo).sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a)).slice(0, 7);
     const network = `<figure class="ab-net">
         <a class="ab-net-faces" href="#browse" aria-label="Browse ${esc(RN.fmt.plural(live.length, 'open profile'))}"><span class="ava-stack">${faces.map((op) => RN.ui.avatar(op, 'ava-md ava-ring', { decorative: true })).join('')}</span></a>
-        <figcaption class="ab-net-n"><b class="num">350<span class="u-plus">+</span></b><span>Operators in our network, each reviewed by the companies that hired them. ${esc(RN.fmt.int(live.length))} open profiles in this prototype.</span></figcaption>
+        <figcaption class="ab-net-n"><b class="num">350<span class="u-plus">+</span></b><span>Operators in our network, each reviewed by the companies that hired them. ${esc(RN.fmt.int(live.length))} profiles to browse today.</span></figcaption>
         ${RN.fn && RN.fn.logoStrip ? RN.fn.logoStrip({ bare: true, scale: 0.9, className: 'ab-net-logos' }) : ''}
       </figure>`;
 
@@ -336,7 +338,7 @@
       </div>`;
     // Proof to close on: company reviews with a before-and-after figure, and the faces companies can browse today
     const proof = allReviews().filter((x) => pullStat(x.r)).slice(0, 2).map((x) => Object.assign({}, x));
-    const faces = RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).sort((a, b) => b.ris.score - a.ris.score).slice(0, 6);
+    const faces = RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a)).slice(0, 6);
     const live = RN.model.ops.filter((o) => !o.hidden).length;
     return `
     ${hero({
@@ -701,7 +703,7 @@
     const want = AVAIL_RANK[b.availability] == null ? 2 : AVAIL_RANK[b.availability];
     const late = (op) => ((AVAIL_RANK[op.avail.key] || 0) > want ? 1 : 0);
     // Available by the start date first, then fit, then Reputation Index
-    rows.sort((x, y) => late(x.op) - late(y.op) || y.fit.pct - x.fit.pct || y.op.ris.score - x.op.ris.score);
+    rows.sort((x, y) => late(x.op) - late(y.op) || y.fit.pct - x.fit.pct || RN.fields.risRank(y.op) - RN.fields.risRank(x.op));
     const filters = matchFilters(T.ans);
     const matches = RN.model.search({ filters }).length;
     return { top: rows.slice(0, 3), matches, filters };
@@ -1203,13 +1205,13 @@
         <div class="pg-honest-l">
           <span class="eyebrow">The honest part</span>
           <h2 class="h2">Supply is crowded. Proof is how you stand out.</h2>
-          <p class="pg-p">${topShare}% of the ${RN.fmt.int(ops.length)} profiles in this prototype lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of company hiring intent sits there (illustrative survey data). Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
+          <p class="pg-p">${topShare}% of the ${RN.fmt.int(ops.length)} open profiles lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of company hiring intent sits there (illustrative survey data). Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
           <p class="pg-p">Categories where company intent runs ahead of supply are where a verified record pays off fastest.</p>
           <a class="act" href="#library">See demand vs verified supply by focus area${icon('arrow')}</a>
         </div>
         <div class="card pg-honest-r">
           <div class="card-hd"><div><h3>Where operators are vs where companies are hiring</h3><p class="sub">Share by role category</p></div></div>
-          <div class="legend"><span><i style="background:var(--viz-muted)"></i>Operators in this prototype ${livePill()}</span><span><i style="background:var(--viz-1)"></i>Company hiring intent ${illus()}</span></div>
+          <div class="legend"><span><i style="background:var(--viz-muted)"></i>Open profiles ${livePill()}</span><span><i style="background:var(--viz-1)"></i>Company hiring intent ${illus()}</span></div>
           <div class="pg-sd">${RN.fields.roleCategory.options.map((o) => {
             const s = Math.round(((supply[o.v] || 0) / total) * 100);
             const d = intent[o.v];
@@ -1237,7 +1239,7 @@
         ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on company evidence: reviews, verified fit tags and engagements. What each tier unlocks is on the Levels page.', `<a class="act" href="#levels">What each tier unlocks${icon('arrow')}</a>`)}
         ${badgeRow({ me: true })}
         <div class="pg-principles">
-          <div>${RN.ui.icoTile('star', { tone: 'gold', cls: 'pg-pr-i' })}<h3 class="h5">How featuring works</h3><p class="small muted">Home features every operator at Trusted (Reputation Index 70+) and above, ranked by score, then a profile photo, video, company reviews and engagement history. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} in this prototype qualify for a featured spot today.</p></div>
+          <div>${RN.ui.icoTile('star', { tone: 'gold', cls: 'pg-pr-i' })}<h3 class="h5">How featuring works</h3><p class="small muted">Home features every operator at Trusted (Reputation Index 70+) and above, ranked by score, then a profile photo, video, company reviews and engagement history. The same rules apply to every operator, and placement is never paid.</p><p class="small pg-pr-n">${RN.fmt.plural(featurable, 'profile')} ${featurable === 1 ? 'qualifies' : 'qualify'} for a featured spot today.</p></div>
         </div>
       </div>
     </section>
@@ -1300,10 +1302,11 @@
 
     <section class="section pg-ladder-sec">
       <div class="wrap">
-        ${shead('The ladder', 'Five tiers, from the day you are approved.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles in this prototype sit at Emerging today. What each tier unlocks is proposed and not final.`)}
+        ${shead('The ladder', 'Five tiers, from the day you are approved.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles sit at Emerging today. What each tier unlocks is proposed and not final.`)}
         ${ladder({ desc: true, counts: true, me: true, rail: true })}
         <div class="pg-ladder-notes">
           <p>${icon('seal')}<span>Cards show a badge from Proven up. Every profile page shows the full tier and score.</span></p>
+          ${counts.null ? `<p>${icon('info')}<span>${esc(unscoredLine(counts.null))}</span></p>` : ''}
           <p>${icon('clock')}<span>Applications are reviewed within 2 business days, and a profile has no tier until it is approved.${pending ? `<span data-proto> ${esc(RN.fmt.plural(pending, 'application'))} in review in this prototype.</span>` : ''}</span></p>
         </div>
       </div>
@@ -1375,7 +1378,7 @@
       ['message', 'Talk to us', 'A person replies within one business day', 'talk'],
     ];
     // One real face among the links: the top-ranked live operator with a photo, same rule for every operator
-    const face = RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).sort((a, b) => b.ris.score - a.ris.score || b.reviews.length - a.reviews.length)[0];
+    const face = RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || b.reviews.length - a.reviews.length)[0];
     return `<section class="section pg-404">
       <div class="wrap-narrow">
         <span class="pg-404-code num" aria-hidden="true">404</span>

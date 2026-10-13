@@ -633,7 +633,7 @@
   // What each tier unlocks. Nothing on the ladder is paid: tiers move only with client evidence.
   const UNLOCKS = RN.fields.risUnlocks; // one source, shared with For operators and Levels
   const tierRank = (v) => RN.ui.tierRank(v); // emerging 0 .. apex 4, no tier -1
-  // The tier the score gives, or null under 50 (Below Emerging)
+  // The tier the score gives, or null when not scored yet
   const tierOf = (op) => { const t = RN.fields.risTierFor(op && op.ris ? op.ris.score : null); return t ? t.v : null; };
   // RN.fields.risUnlocks: proof links from Emerging (5 a month), unlimited links and the badge from Proven
   const badgeUnlocked = (op) => tierRank(tierOf(op)) >= tierRank('proven');
@@ -672,9 +672,9 @@
 
   function renderCredibility(op) {
     applyExtras(op);
-    const tier = RN.fields.risTierFor(op.ris.score); // null under 50 (Below Emerging): no tier, no badge
+    const tier = RN.fields.risTierFor(op.ris.score); // null: not scored yet, no tier, no badge, no number
     const tiers = RN.fields.risTier.options;
-    const next = tiers.filter((t) => t.min > op.ris.score).sort((a, b) => a.min - b.min)[0];
+    const next = tier ? tiers.filter((t) => t.min > op.ris.score).sort((a, b) => a.min - b.min)[0] : null;
     const rows = factorRows(op);
     const avail = rows.reduce((a, r) => a + r.pts, 0);
     const gap = next ? next.min - op.ris.score : 0;
@@ -692,9 +692,9 @@
             <div>
               <span class="eyebrow">Reputation Index</span>
               ${tier ? `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(tier.l)} <span class="muted" style="font-weight:500">· ${tier.min} to ${tier.max}</span></h2>
-              <p class="small muted" style="margin-top:6px;max-width:54ch">${esc(tier.d)}</p>` : `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(RN.fields.risBelow.l)} <span class="muted" style="font-weight:500">· Reputation Index ${esc(op.ris.score)}</span></h2>
+              <p class="small muted" style="margin-top:6px;max-width:54ch">${esc(tier.d)}</p>` : `<h2 class="h3" id="sb-ri-h" style="margin-top:6px">${esc(RN.fields.risNone.l)}</h2>
               <p class="small muted" style="margin-top:6px;max-width:54ch">Your profile is approved and live in search. Tiers start at 50, Emerging, and company evidence moves the score: reviews, verified tags and recent engagements.</p>`}
-              ${next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more company ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : '<p class="sb-next-tier">You are at the top of the ladder.</p>'}
+              ${next ? `<p class="sb-next-tier">${icon('trend-up')}<span><b>${gap} points to ${esc(next.l)}.</b> About ${reviewsToNext} more company ${reviewsToNext === 1 ? 'review' : 'reviews'} would get you there (estimated).</span></p>` : tier ? '<p class="sb-next-tier">You are at the top of the ladder.</p>' : ''}
             </div>
           </div>
           <div class="sb-ri-avail"><span class="stat-v">+${avail}</span><span class="stat-l">estimated points available ${RN.ui.tip('Estimates from the published factor weights. Company evidence moves most of the score: reviews, verified tags and recent engagements. A complete profile adds a few points. Nothing here can be bought.', 'About these estimates')}</span></div>
@@ -849,7 +849,7 @@
     const t = RN.fields.risTierFor(op.ris.score);
     const proven = RN.fields.risTier.options.find((x) => x.v === 'proven');
     if (!badgeUnlocked(op)) {
-      const toGo = Math.max(0, proven.min - op.ris.score);
+      const toGo = t ? Math.max(0, proven.min - op.ris.score) : 0;
       return `<section class="card sb-mybadge is-locked" id="sb-c-badge" aria-labelledby="sb-badge-h">
         <p class="sb-locked">${icon('lock')}<span><b id="sb-badge-h">Your badge</b> unlocks at Proven (${proven.min}).${t ? ` ${toGo} ${toGo === 1 ? 'point' : 'points'} to go.` : ''} Company reviews are the fastest way there.</span></p>
       </section>`;

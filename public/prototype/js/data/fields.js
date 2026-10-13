@@ -288,9 +288,12 @@
      not "Verified": 78 of 100 live profiles sit at 50 with no client evidence, so "Verified" is reserved for
      client-confirmed proof (verified fit tags, verified engagements).
      Five tiers (founder decision, Oct 12, 2026): the Indexing tier is gone. A score under 50 has no tier at all,
-     so risTierFor returns null below 50 and callers show no badge. The Oct 13 admin export has approved, live
-     profiles scored under 50 (9 to 40): they read "Below Emerging" with their score (F.risBelow), never as
-     waiting for approval. */
+     so risTierFor returns null below 50 and callers show no badge.
+     No score yet (owner decision, Oct 13, 2026): an exported score under 50 counts as no score at all.
+     tools/import-admin.js writes it as null, so the profile has no tier, no badge and no number anywhere, and
+     reads F.risNone.l ("Not scored yet"), the one wording for that state. Ranking and matching read F.risRank(op):
+     an operator with no score sits at F.RIS_NEUTRAL (50), the value the model has always given a profile with no
+     score, so it is neither penalised for a low export score nor lifted above scored profiles. */
   F.risTier = {
     label: 'Reputation Index tier', type: 'single',
     options: [
@@ -315,11 +318,18 @@
     if (!(n >= 50)) return null;
     return F.risTier.options.find((t) => n >= t.min) || null;
   };
-  // An approved profile scored under 50: below the first tier. F.risBelow.is(score), .l the label, .d(score) the note
-  F.risBelow = {
-    l: 'Below Emerging',
-    is: (score) => score != null && score !== '' && !isNaN(+score) && +score < 50,
-    d: (score) => `Approved profile with a Reputation Index of ${Math.round(+score)}. Tiers start at 50, Emerging.`,
+  // No Reputation Index yet (a null score; the importer turns an exported score under 50 into null). The one
+  // wording for the state: F.risNone.l. F.risNone.is(score) is true for any value that gives no tier.
+  F.risNone = {
+    l: 'Not scored yet',
+    is: (score) => !F.risTierFor(score),
+    d: 'No Reputation Index yet. Tiers start at 50, Emerging.',
+  };
+  // The score ranking and matching use: the operator's own score, or the neutral 50 when it has none
+  F.RIS_NEUTRAL = 50;
+  F.risRank = (op) => {
+    const s = op && op.ris ? op.ris.score : null;
+    return s == null || s === '' || isNaN(+s) ? F.RIS_NEUTRAL : +s;
   };
   // Client-facing explainer factors (comment E418)
   F.risFactors = {

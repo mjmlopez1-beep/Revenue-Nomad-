@@ -53,7 +53,7 @@
   const sub = (t) => `<span class="cmp-sub">${t}</span>`;
   function risCell(op) {
     const t = RN.fields.risTierFor(op.ris && op.ris.score);
-    if (!t) return RN.fields.risBelow.is(op.ris && op.ris.score) ? none(RN.fields.risBelow.l) + sub(`Reputation Index ${esc(op.ris.score)}`) : none('Not scored yet');
+    if (!t) return none(RN.fields.risNone.l); // not scored yet: no tier, no number
     return `<span class="ris t-${esc(t.v)}">${RN.ui.tierBadge(t.v, { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span>${esc(t.min)} to ${esc(t.max)} tier</span></span></span>`;
   }
   function coreCell(op) {
@@ -223,7 +223,7 @@
     const push = (op, why) => { if (RN.model.listed(op) && !inCmp.has(op.id) && !seen.has(op.id)) { seen.add(op.id); out.push({ op, why }); } };
     st.shortlist.map(RN.model.byId).forEach((op) => push(op, 'On your shortlist'));
     ops.forEach((op) => RN.model.similar(op, 4).forEach((x) => push(x, `Similar to ${op.first}`)));
-    RN.model.ops.slice().sort((a, b) => b.ris.score - a.ris.score || b.completeness - a.completeness).slice(0, 8).forEach((x) => push(x, 'High Reputation Index'));
+    RN.model.ops.slice().sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || b.completeness - a.completeness).slice(0, 8).forEach((x) => push(x, 'High Reputation Index'));
     return out.slice(0, n || 3);
   }
   /* The card rule in a text sub-line: Proven up the score and tier, below that nothing */
@@ -326,7 +326,7 @@
   function emptyState() {
     const st = RN.store.state;
     const sugg = suggestions([], 3);
-    const faces = RN.model.ops.filter((op) => !op.hidden && op.photo && !op.isMatt).sort((a, b) => b.ris.score - a.ris.score).slice(0, 3);
+    const faces = RN.model.ops.filter((op) => !op.hidden && op.photo && !op.isMatt).sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a)).slice(0, 3);
     const ROWS = [['Reputation Index', [62, 48, 70]], ['CORE average', [40, 55, 34]], ['Verified focus areas', [78, 52, 64]], [RN.fields.availability.label, [46, 60, 38]], [st.persona === 'visitor' ? 'Monthly cost' : RN.fields.rate.label, [58, 44, 66]], [RN.fields.industries.label, [70, 36, 52]]];
     const best = [2, 1, 0, 1, 2, 0];
     const ghost = `<div class="cmp-ghost" aria-hidden="true">

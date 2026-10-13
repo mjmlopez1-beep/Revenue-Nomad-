@@ -407,7 +407,7 @@
       title: esc(o.title || 'Log in to see rates'),
       sub: esc(o.sub || 'Hourly rates and match signals are shown to signed-in companies. Browsing stays open to everyone.'),
       body: `<div class="stack" style="--gap:12px">
-        <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>Prototype company account. You stay on this page.</span></button>
+        <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>Company account. You stay on this page.</span></button>
         <button type="button" class="act" data-act="br-login-all" style="align-self:flex-start">${icon('user')}Log in as an operator or the team</button>
       </div>`,
     });
@@ -460,7 +460,7 @@
   }
 
   /* Operators with a photo who can start now, one per role category first, strongest Reputation Index first */
-  const risOf = (op) => (op.ris && +op.ris.score) || 0;
+  const risOf = (op) => RN.fields.risRank(op); // no score yet: the neutral 50
   function featured(n) {
     const pool = RN.model.ops.filter((op) => !op.hidden && !op.isMatt && op.photo && op.avail && op.avail.key === 'available_now')
       .sort((a, b) => risOf(b) - risOf(a) || (b.reviews || []).length - (a.reviews || []).length || (b.completeness || 0) - (a.completeness || 0));

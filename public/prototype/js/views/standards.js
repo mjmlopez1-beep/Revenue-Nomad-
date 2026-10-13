@@ -48,27 +48,27 @@
   }
 
   const DECISIONS = () => [
-    ['Three Reputation Index ladders and different labels for operators and companies (sheet L247, explorer, live data, comment H390)', 'One ladder of five tiers derived from the score everywhere: Emerging 50 to 59, Proven 60 to 69, Trusted 70 to 79, Elite 80 to 89, Apex 90 to 100. A profile that is not approved and scored yet has no tier and no badge. What each tier unlocks is proposed (RN.fields.risUnlocks).'],
+    ['Three Reputation Index ladders and different labels for operators and companies (sheet L247, explorer, live data, comment H390)', 'One ladder of five tiers derived from the score everywhere: Emerging 50 to 59, Proven 60 to 69, Trusted 70 to 79, Elite 80 to 89, Apex 90 to 100. A profile that is not scored yet has no tier and no badge. What each tier unlocks is proposed (RN.fields.risUnlocks).'],
     ['L483 (live, Sep 4): show Indexing until a real score exists, because a default 50 "makes the data look fake"', `Decided by the founder (Oct 12, 2026): Indexing removed; cards show tiers from Proven up, Emerging shows no mark on cards. So a starting 50 never shows as a number on a card or list; profiles show the full tier and score (${emergingCount()} at Emerging today).`],
     ['"Verified" shown at score 50 on 78 of 100 live profiles with no company evidence', 'Confirmed by the founder (Sep 25, 2026): the entry tier is named "Emerging". "Verified" is reserved for company-confirmed proof: verified fit tags and verified engagements.'],
     ['Intro start timeline ASAP / 2 Weeks / 1+ Month vs availability chips', 'The company\'s start timeline uses the availability values, so requests match availability with no translation.'],
     ['Review form Project / Retainer and LinkedIn company size bands', 'Review form uses the four engagement types and the standard employee ranges.'],
     ['Hours stored as raw numbers (legacy 5, 10, 15, 30)', 'Stored as chip codes: 19 (<20), 20, 40, 60, 80, 100, 160 hrs / month.'],
-    ['Three hours presets in the Projects prototype', 'Engagements use the same Available time chips as operators.'],
+    ['Three hours presets in the earlier Projects build', 'Engagements use the same Available time chips as operators.'],
     ['Tool proficiency "Builder" vs "Power User"', 'Power User, as in intake and comment E397.'],
     ['Focus area filter OR vs AND', 'AND for focus areas (up to 5). OR within role categories (up to 5) and industries (up to 3). AND across filters.'],
     ['GTM motion with or without "Direct"', 'Four options: PLG, Channel, Inside Sales, Enterprise Sales. "Direct" was never confirmed.'],
-    ['Three "strong fit" thresholds in the Projects prototype', 'One fit system (5 match signals): Strong match 75+, Good match 50+, everywhere.'],
+    ['Three "strong fit" thresholds in the earlier Projects build', 'One fit system (5 match signals): Strong match 75+, Good match 50+, everywhere.'],
     ['Who viewed your profile', 'Firmographic segments only (industry, company revenue, employee range). Segments under 5 visits are grouped. No company or person names.'],
     ['Buyer vs company wording', 'Company or company in every screen (L168). Companies see fit tags as "Focus areas" (L131); operator screens keep "fit tags".'],
     ['Full-time conversion: "15 to 20% of annual salary" in the Site pages copy (Oct 10, 2026), against D1 (companies pay no fees)', 'Founder decision (Oct 11, 2026): no platform fee for companies, and a conversion fee of 20% of annual salary when a company hires the operator full time. Stated on the function homes\' FAQ and the cost hub\'s terms.'],
     // Internal: the operator fee is stated only to Admin (and to operators on their own screens), never to clients
-    RN.store.state.persona === 'admin' && ['Proposed 25% platform fee, shown to companies as an all-in rate in the Projects prototype', 'Platform fee: a share operators pay from their listed rate (proposed 25%). Companies see and pay the listed rate; the fee is never shown as a company cost (founder decision, Sep 25, 2026). Companies pay no fees of any kind. Only operator screens (Studio, For operators, Levels, the operator intake and operator emails) and Admin mention the fee; operators may see their take-home (rate × 0.75). Proposed: no fee on deals operators bring themselves.'],
+    RN.store.state.persona === 'admin' && ['Proposed 25% platform fee, shown to companies as an all-in rate in the earlier Projects build', 'Platform fee: a share operators pay from their listed rate (proposed 25%). Companies see and pay the listed rate; the fee is never shown as a company cost (founder decision, Sep 25, 2026). Companies pay no fees of any kind. Only operator screens (Studio, For operators, Levels, the operator intake and operator emails) and Admin mention the fee; operators may see their take-home (rate × 0.75). Proposed: no fee on deals operators bring themselves.'],
     ['"Project" for what a company posts, although many postings are fractional roles', 'The company posting is an Engagement: "Post an engagement", the Engagements tab and #engagement routes. "Project" stays only as the engagement type value (fixed scope and price). Old #project links redirect (founder decision, Sep 25, 2026).'],
     ['Founder disclosure on his operator profile, cards, Home reviews, Studio previews and engagement invites', 'No founder callouts; the founder\'s operator profile follows the same rules as every operator (founder decision, Sep 25, 2026). He is ranked, featured and matched like everyone else. The About page keeps the company story.'],
     ['The Fractional GTM Pulse sent every Monday', 'Quarterly: one email a quarter, on the first day of each calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1), with the Rate Index by role category, the Demand Index and new research. Home and Insights share one list (founder decision, Sep 25, 2026).'],
     ['Operator content on Home (the For operators band, how featuring works, operator steps)', 'Home is for companies looking to hire, and shows company steps only. The Studio preview and how featuring works live on For operators (#operators). The header link and the footer stay (founder decision, Sep 25, 2026).'],
-    ['Who a visitor becomes after requesting an intro', 'Visitors who request an intro become their own company account, signed in with the details they gave. Jordan Ellis (Northwind Health) is the demo company and can be restored from the prototype dock.'],
+    ['Who a visitor becomes after requesting an intro', 'Visitors who request an intro become their own company account, signed in with the details they gave. Jordan Ellis (Northwind Health) is the demo company and can be restored from the reviewer tools.'],
     ['Placeholder reviewer at Trialbee', 'A sample operator\'s Trialbee review request uses a placeholder contact ("Trialbee sponsor"). Supply the real contact before the request is shown to anyone.'],
     ['Leads from a proof page', 'A request from a proof page (#proof.<id>) creates an intro with source \'proof\', so the operator, Admin and the company workspace see where it came from.'],
     ['Where saved searches live', 'Saved searches are created in Browse and live in the company\'s workspace (Overview), next to the shortlist.'],
@@ -146,7 +146,7 @@
         <div class="std-head-t">
           <span class="eyebrow">Revenue Nomad team · Reference</span>
           <h1 class="h1">Field standards</h1>
-          <p class="lede">Every picklist in this prototype renders from one registry. Operator intake is the source of truth; filters, engagements, intros, reviews, Studio and research reuse the same values, so workflows line up without translation.</p>
+          <p class="lede">Every picklist on these pages renders from one registry. Operator intake is the source of truth; filters, engagements, intros, reviews, Studio and research reuse the same values, so workflows line up without translation.</p>
         </div>
         <ul class="std-stats">
           <li><b class="num">${allKeys.length}</b><span>fields</span></li>
@@ -191,14 +191,14 @@
             </div>
           </details>
           <section class="card std-group std-tags" id="std-tags" aria-labelledby="std-tags-t">
-            <div class="std-group-hd"><h2 class="h4" id="std-tags-t">Fit tag library</h2><p class="small muted">${RN.fmt.int(F.fitTags.options.length)} tags in this prototype (the live taxonomy has 1,182). Up to 25 self-claimed per operator. Verified at the first company review rated 4.0+, Expert from the fifth. Companies see them as “${esc(F.fitTags.clientLabel || 'Focus areas')}”.</p></div>
+            <div class="std-group-hd"><h2 class="h4" id="std-tags-t">Fit tag library</h2><p class="small muted">${RN.fmt.int(F.fitTags.options.length)} of the 1,182 tags in the full taxonomy are listed here. Up to 25 self-claimed per operator. Verified at the first company review rated 4.0+, Expert from the fifth. Companies see them as “${esc(F.fitTags.clientLabel || 'Focus areas')}”.</p></div>
             <a class="btn btn-line btn-sm" href="#library">Open the library${icon('arrow')}</a>
           </section>
           </div>
 
           <section class="std-sec" id="std-decisions" tabindex="-1" aria-labelledby="std-decisions-t">
             <h2 class="h3" id="std-decisions-t">Decisions to confirm</h2>
-            <p class="small muted">Conflicts found across the prototypes, the live data and the Product Feedback sheet, and how this prototype resolves them.</p>
+            <p class="small muted">Conflicts found across the earlier builds, the live data and the Product Feedback sheet, and how each one is resolved.</p>
             ${(() => {
               const li = (d, i) => `<li><span class="std-dec-n num">${i + 1}</span><div class="std-dec-c"><span class="label">Conflict</span><p class="small">${esc(d[0])}</p></div><div class="std-dec-d"><span class="label">Decision</span><p>${decisionHtml(d[1])}</p></div></li>`;
               return `<div class="card std-dec-w"><ol class="std-dec">${decisions.slice(0, SHOW).map(li).join('')}</ol>${decisions.length > SHOW ? `<details class="std-all"><summary>Show all ${decisions.length}${icon('chev-down')}</summary><ol class="std-dec" start="${SHOW + 1}">${decisions.slice(SHOW).map((d, j) => li(d, j + SHOW)).join('')}</ol></details>` : ''}</div>`;

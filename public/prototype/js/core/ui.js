@@ -78,7 +78,7 @@
   /* ---------- Reputation Index tier badges (D11, founder decisions Sep 25 and Oct 12, 2026) ----------
      One component for every tier mark. Never hand-draw a tier hexagon: call these helpers.
      Five tiers, from RN.fields.risTier (Apex first): Emerging 50 to 59, Proven 60 to 69, Trusted 70 to 79,
-     Elite 80 to 89, Apex 90 to 100. A profile that is not approved and scored yet has no tier and no badge
+     Elite 80 to 89, Apex 90 to 100. A profile that is not scored yet has no tier and no badge
      (RN.fields.risTierFor returns null below 50), and a score is never drawn without a tier.
      Rarity reads from material, not colour alone, so the order survives grayscale and colour-blind viewing:
      Emerging single line, Proven solid forest, Trusted forest with a bold inner leaf ring, Elite flat gold in a
@@ -131,7 +131,7 @@
   ui.tierBadge = function (v, o) {
     o = o || {};
     const t = tierOpt(v);
-    if (!t) return ''; // no tier (not approved and scored yet, or an unknown value): no badge, never a bare score
+    if (!t) return ''; // no tier (not scored yet, or an unknown value): no badge, never a bare score
     v = t.v;
     const size = +o.size || 40;
     const id = 'tb' + (++tbSeq);
@@ -418,7 +418,7 @@
     return `<section class="wrap-narrow section"><div class="card" style="padding:40px;text-align:center">
       <div class="eyebrow">Sign in required</div>
       <h1 class="h2" style="margin-top:10px">This view is for ${esc(who)}.</h1>
-      <p class="lede" style="margin:14px auto 0">In the prototype you can switch persona in one click. Your place in the flow is kept.</p>
+      <p class="lede" style="margin:14px auto 0">Sign in to continue. Your place in the flow is kept.</p>
       <div class="row" style="justify-content:center;margin-top:24px">
         ${p ? `<button class="btn" data-act="persona" data-p="${esc(role)}">Continue as ${esc(p.name)}</button>` : ''}
         ${role === 'operator' ? '<a class="btn btn-line" href="#join">Apply to join</a>' : '<a class="btn btn-line" href="#home">Back to home</a>'}

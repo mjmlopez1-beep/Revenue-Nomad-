@@ -215,7 +215,7 @@
         return (!area || ax === area) && (!stage || R.stageOf({ t: t.t, stage: t.stage || info.stage || '' }) === stage);
       });
       const v = hits.filter((t) => t.tier !== 'claimed');
-      return { op, hits, v, s: v.length * 100 + Math.min(hits.length, 6) * 8 + op.ris.score * 0.5 + (op.photo ? 4 : 0) };
+      return { op, hits, v, s: v.length * 100 + Math.min(hits.length, 6) * 8 + RN.fields.risRank(op) * 0.5 + (op.photo ? 4 : 0) };
     }).filter((x) => x.hits.length).sort((a, b) => b.s - a.s).slice(0, n || 3);
   }
   const whyLine = (x) => x.v.length ? `Company-verified in ${x.v[0].t}${x.v.length > 1 ? ` and ${x.v.length - 1} more here` : ''}` : `Claims ${x.hits.slice(0, 2).map((t) => t.t).join(' and ')}`;
@@ -1483,6 +1483,9 @@
         const ops = RN.model.ops.filter((o) => !o.hidden);
         const tiers = F.risTier.options.slice().reverse();
         const tierRows = tiers.map((t) => ({ label: `${t.l} (${t.min} to ${t.max})`, value: ops.filter((o) => o.ris.tier === t.v).length }));
+        // Profiles with no score yet, so the bars add up to the count below
+        const unscored = ops.filter((o) => !o.ris.tier).length;
+        if (unscored) tierRows.push({ label: F.risNone.l, value: unscored });
         return [
           { id: 'factors', h: 'The five factors', html: `<dl class="rs-dl rs-dl-w">${F.risFactors.options.map((o) => `<div><dt>${esc(o.l)}<span class="tnum">${Math.round((o.w || 0) * 100)}%</span></dt><dd>${esc(o.d)}</dd></div>`).join('')}</dl>
             <p>Weights are published so operators know exactly what moves the score and companies know what it measures.</p>` },
@@ -1498,7 +1501,7 @@
         ];
       },
       faq: () => [
-        { q: 'Why do most operators have a score of 50?', a: 'Most approved profiles sit at 50, the start of Emerging, and rise only with company evidence. New operators have not collected reviews on the platform yet. A few score under 50 and show as Below Emerging.' },
+        { q: 'Why do most operators have a score of 50?', a: 'Most approved profiles sit at 50, the start of Emerging, and rise only with company evidence. New operators have not collected reviews on the platform yet. Some profiles are not scored yet and show no tier.' },
         { q: 'How quickly does the score update?', a: 'Immediately. A submitted review, a verified engagement or a completed profile recalculates the score the same day.' },
         { q: 'Can a bad review lower the score?', a: 'Low CORE ratings reduce the Strong ratings factor, and reviews rated under 4.0 do not verify focus areas. Reviews publish automatically; there is no moderation queue to hide them.' },
       ],
@@ -2261,7 +2264,7 @@
     const persona = RN.store.state.persona;
     // Byline: Revenue Nomad Research is the author. The reviewer is the highest Reputation Index sample operator in the
     // guide's category, so no real operator is named as a reviewer without their OK; no sample in that category: pending.
-    const reviewer = g.cat ? RN.model.ops.filter((o) => o.sample && !o.hidden && o.catKey === g.cat).sort((a, b) => b.ris.score - a.ris.score)[0] : null;
+    const reviewer = g.cat ? RN.model.ops.filter((o) => o.sample && !o.hidden && o.catKey === g.cat).sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a))[0] : null;
 
     const rel = relatedOps(g);
     const bp = blueprintFor(g.cat, g.bp);

@@ -24,7 +24,11 @@
    - availability.startDate: "Available now" reads the from date when it is on or before the prototype's today
      (RN.BASE_NOW in js/core/rn.js), else that today, so "Available now" never shows a later start; later
      starts keep available_from_date.
-   - reputationIndex: summary.reputation_score rounded, as exported (no floor). reputationLabel: tier_label.
+   - reputationIndex: summary.reputation_score rounded. A raw score under 50 (checked before rounding, so 49.6 counts
+     as under 50) is written as null,
+     no score yet, with an empty reputationLabel (owner decision, Oct 13, 2026): the site shows "Not scored yet" and
+     ranks the profile at the neutral value it gives any profile with no score (RN.fields.risRank). Else
+     reputationLabel: tier_label.
    - tags: verification_tier "verified" -> tier verified, everything else claimed; r = verified_review_count;
      score = expertise_score. Axis, stage and group: the earlier record's values for that tag name, then the fit
      tag library (taxonomy.js), then the category's axis.
@@ -32,7 +36,18 @@
      copy wins). clientVerified = buyer corroborated or co-signed. Currently active ones have no end ("Present").
    - reviews: only moderation_status approved and is_displayed. The export has no review text, so quote, role and
      tags come from the earlier record for the same reviewer and company (empty for a review not seen before).
-   - engagementTypes, capacity (slots_available) and retainer are read by RN.model instead of being made up. */
+   - engagementTypes, capacity (slots_available) and retainer are read by RN.model instead of being made up.
+
+   Record rules (owner decision, Oct 13, 2026), applied after the approved and searchable scope, each logged with
+   the id it drops:
+   - Not a person: a record whose first and last name are the same text (the export's way of storing a listing or
+     a company name, such as "Fractional Inside Sales Talent" in both fields), or whose name holds a word that
+     names a business rather than a person (NOT_PERSON_WORDS: talent, agency, services, solutions, staffing, llc,
+     inc and the like) is left out.
+   - Listed twice: records with the same normalised name (case, accents, punctuation and spacing ignored) are one
+     person; the most recently updated record (updated_at, then approved_at, then created_at) is kept and the
+     others are left out. Their ids must not appear anywhere else in the prototype (work samples, reviews, managed
+     searches, store seeds, vectors). */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -179,7 +194,7 @@ function startDate(x) {
 
 /* ---------- One operator ---------- */
 const photoFile = (id) => path.join(ROOT, 'assets', 'photos', id + '.jpg');
-const stats = { reviewsCarried: 0, reviewsNew: 0, engDeduped: 0, engAnon: 0 };
+const stats = { reviewsCarried: 0, reviewsNew: 0, engDeduped: 0, engAnon: 0, unscored: 0 };
 function convert(rec) {
   const x = rec.operator || {};
   const s = rec.summary || {};
@@ -253,6 +268,9 @@ function convert(rec) {
   const methods = rd.methodologies != null ? rd.methodologies : [];
   const tz = str(x.timezone);
   const repRaw = num(s.reputation_score != null ? s.reputation_score : x.reputation_score);
+  // Under 50 (below the first tier): no score yet (owner decision, Oct 13, 2026)
+  const rep = repRaw == null || repRaw < 50 ? null : Math.round(repRaw); // compare before rounding: 49.6 stays unscored
+  if (repRaw != null && rep == null) stats.unscored++;
   const out = {
     standard,
     id,
@@ -273,8 +291,8 @@ function convert(rec) {
       sample: false,
       core: { n: reviews.length, v: [null, null, null, null], overall: reviews.length ? avg || null : null },
       profile: {
-        reputationIndex: repRaw == null ? null : Math.round(repRaw),
-        reputationLabel: str(x.tier_label),
+        reputationIndex: rep,
+        reputationLabel: rep == null ? '' : str(x.tier_label),
         engagements: engagements.length,
         wouldHireAgain: hire.length ? Math.round((hire.filter((r) => r.hireAgain).length / hire.length) * 100) / 100 : null,
         totalTags: tags.length,
@@ -307,7 +325,29 @@ function convert(rec) {
 }
 
 /* ---------- Run ---------- */
-const recs = EXP.operators.filter((r) => r && r.operator && r.operator.id && r.operator.status === 'approved' && r.operator.is_searchable !== false && !r.operator.deleted_at);
+const inScope = EXP.operators.filter((r) => r && r.operator && r.operator.id && r.operator.status === 'approved' && r.operator.is_searchable !== false && !r.operator.deleted_at);
+// Record rules (see the header): leave out records that are not a person, then keep one record per person
+const NOT_PERSON_WORDS = /\b(?:talent|agency|services|solutions|staffing|recruiting|recruitment|consulting|consultancy|group|partners|team|llc|inc|ltd|limited|gmbh|corp|corporation|company)\b/i;
+const recName = (r) => [str(r.operator.first_name), str(r.operator.last_name)].filter(Boolean).join(' ');
+const normName = (s) => String(s || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const notPerson = (r) => {
+  const f = normName(r.operator.first_name), l = normName(r.operator.last_name);
+  if (f && l && f === l) return 'first and last name are the same text';
+  if (NOT_PERSON_WORDS.test(normName(recName(r)))) return 'the name names a business, not a person';
+  return '';
+};
+const droppedRecs = [];
+const people = inScope.filter((r) => { const why = notPerson(r); if (why) droppedRecs.push({ id: r.operator.id, name: recName(r), why: 'not a person (' + why + ')' }); return !why; });
+const recency = (r) => [r.operator.updated_at, r.operator.approved_at, r.operator.created_at].map((v) => String(v || ''));
+const byName = new Map();
+for (const r of people) { const k = normName(recName(r)); if (!byName.has(k)) byName.set(k, []); byName.get(k).push(r); }
+const keep = new Set();
+for (const list of byName.values()) {
+  const sorted = list.slice().sort((a, b) => { const ra = recency(a), rb = recency(b); for (let i = 0; i < ra.length; i++) { const c = rb[i].localeCompare(ra[i]); if (c) return c; } return String(a.operator.id).localeCompare(String(b.operator.id)); });
+  keep.add(sorted[0]);
+  for (const r of sorted.slice(1)) droppedRecs.push({ id: r.operator.id, name: recName(r), why: `listed twice: kept ${sorted[0].operator.id} (updated ${recency(sorted[0])[0].slice(0, 10)}), dropped this one (updated ${recency(r)[0].slice(0, 10)})` });
+}
+const recs = people.filter((r) => keep.has(r));
 const ops = recs.map(convert);
 // Matt first (existing views read M.ops order in places), then the earlier order, then new operators by approval date
 const prevIdx = new Map(prevOps.map((o, i) => [o.id, i]));
@@ -333,7 +373,8 @@ fs.writeFileSync(path.join(outDir, 'ops_extra.js'), `/* Generated by tools/impor
 
 const overlap = ops.filter((o) => prevById.has(o.id)).length;
 const dropped = prevOps.filter((o) => !ops.some((n) => n.id === o.id)).map((o) => o.name);
-console.log(`operators ${ops.length} (export count ${EXP.count}), carried from previous ${overlap}, new ${ops.length - overlap}, removed ${dropped.length}${dropped.length ? ' (' + dropped.join(', ') + ')' : ''}`);
+for (const d of droppedRecs) console.log(`left out ${d.id} ${d.name}: ${d.why}`);
+console.log(`operators ${ops.length} (export count ${EXP.count}, in scope ${inScope.length}, left out ${droppedRecs.length}), not scored yet ${stats.unscored} (export score under 50), carried from previous ${overlap}, new ${ops.length - overlap}, removed ${dropped.length}${dropped.length ? ' (' + dropped.join(', ') + ')' : ''}`);
 console.log(`with photo ${ops.filter((o) => o.photo).length}, with rate ${ops.filter((o) => o.rate).length}, with reviews ${ops.filter((o) => o.profile.reviews.length).length}, reviews carried ${stats.reviewsCarried} new ${stats.reviewsNew}, engagements ${ops.reduce((a, o) => a + o.profile.details.engagements.length, 0)} (deduped ${stats.engDeduped}, anonymous ${stats.engAnon})`);
 if (unknownInd.size) console.log(`industries not in RN.fields.industries (${unknownInd.size}): ${[...unknownInd.keys()].sort().join('; ')}`);
 if (unknownTags.size) console.log(`tags not in the fit tag library or earlier records (${unknownTags.size}): ${[...unknownTags].sort().join('; ')}`);

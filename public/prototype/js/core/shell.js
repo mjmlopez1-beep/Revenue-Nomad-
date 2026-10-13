@@ -79,7 +79,7 @@
     const stay = !!(el && el.closest && el.closest('main, .modal'));
     RN.ui.modal({
       title: 'Log in to Revenue Nomad',
-      sub: 'Prototype sign-in. Pick who you are to see that side of the system.',
+      sub: 'Pick who you are to see that side of the system.',
       body: `<div class="stack" style="--gap:10px">
         ${['buyer', 'operator', 'admin'].map((k) => {
           const p = RN.personas[k];
@@ -181,7 +181,7 @@
         <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
         <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#how">How it works</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '' : ''}</div>
       </div>
-      <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures in this prototype are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
+      <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
   };
 
@@ -208,8 +208,8 @@
     const p = st.persona;
     const mail = st.outbox.length;
     el.className = 'dock';
-    el.innerHTML = `${dockOpen ? `<div class="dock-panel" role="dialog" aria-label="Prototype controls">
-        <div class="row between"><span class="eyebrow" style="color:var(--leaf)">Prototype controls</span><button class="x-btn" data-act="dock" aria-label="Close" style="width:32px;height:32px;background:transparent;color:#fff;border-color:rgba(255,255,255,.25)">${icon('x')}</button></div>
+    el.innerHTML = `${dockOpen ? `<div class="dock-panel" role="dialog" aria-label="Reviewer tools">
+        <div class="row between"><span class="eyebrow" style="color:var(--leaf)">Reviewer tools</span><button class="x-btn" data-act="dock" aria-label="Close" style="width:32px;height:32px;background:transparent;color:#fff;border-color:rgba(255,255,255,.25)">${icon('x')}</button></div>
         <div class="stack" style="--gap:8px"><span class="label">View the system as</span>
           <div class="dock-persona">${['visitor', 'buyer', 'operator', 'admin'].map((k) => `<button type="button" class="${p === k ? 'on' : ''}" data-act="persona" data-p="${k}" data-stay="1" aria-pressed="${p === k}"><b>${esc(k === 'visitor' ? 'Visitor' : RN.personas[k].name)}</b><span>${esc(k === 'visitor' ? 'Logged out' : RN.personas[k].sub)}</span></button>`).join('')}</div>
           ${RN.personas.buyer.demo ? '' : `<button type="button" class="act" style="color:var(--leaf);justify-content:flex-start;padding:4px 0" data-act="client-demo">${icon('refresh')}<span>Switch company to the demo company (${esc(DEMO_CLIENT.name)})</span></button>`}</div>
@@ -217,16 +217,16 @@
           <div class="stack" style="--gap:2px">${JOURNEYS.map((j) => `<button type="button" class="act" style="color:#fff;justify-content:flex-start;padding:6px 0" data-act="journey" data-j="${j.key}">${icon('arrow')}<span>${esc(j.label)}</span></button>`).join('')}</div></div>
         <div class="stack" style="--gap:8px"><span class="label">Clock · ${esc(RN.fmt.date(RN.now()))}</span>
           <div class="dock-row"><button class="btn btn-line btn-sm" data-act="clock" data-d="1">+1 day</button><button class="btn btn-line btn-sm" data-act="clock" data-d="7">+7 days</button><button class="btn btn-ghost btn-sm" data-act="clock" data-d="0" style="color:var(--night-mute)">Today</button></div></div>
-        <div class="stack" style="--gap:8px"><span class="label">Prototype notes</span>
+        <div class="stack" style="--gap:8px"><span class="label">Reviewer notes</span>
           <div class="seg">${[[false, 'Hidden'], [true, 'Shown']].map(([v, l]) => `<button type="button" class="${!!st.notes === v ? 'on' : ''}" data-act="notes" data-v="${v ? 1 : 0}" aria-pressed="${!!st.notes === v}">${l}</button>`).join('')}</div>
           <span class="dock-note" style="margin:0">Pending items, Illustrative labels, the dev-team notes on each page and the sample profiles in search and counts.</span></div>
         <div class="stack" style="--gap:8px"><span class="label">Theme</span>
           <div class="seg">${['system', 'light', 'dark'].map((t) => `<button type="button" class="${st.theme === t ? 'on' : ''}" data-act="theme" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <div class="dock-row"><button class="btn btn-line btn-sm" data-act="outbox">${icon('mail')}Outbox (${mail})</button><button class="btn btn-ghost btn-sm" data-act="reset-demo" style="color:#FFB4A8">Reset demo data</button></div>
         <a class="act" style="color:var(--leaf);justify-content:flex-start;padding:4px 0" href="#standards">${icon('doc')}<span>Field standards and decisions (admin)</span></a>
-        <p class="dock-note">Operators are the ${RN.fmt.int(RN.model.allOps.filter((o) => !o.sample && !o.admin).length)} approved, searchable profiles from the admin export (Oct 13, 2026), plus ${RN.fmt.int(RN.model.allOps.filter((o) => o.sample).length)} labelled sample profiles, which show in search, lists and counts only while prototype notes are shown. Analytics, market figures and company names in Studio and Insights are illustrative.</p>
+        <p class="dock-note">Operators are the ${RN.fmt.int(RN.model.allOps.filter((o) => !o.sample && !o.admin).length)} approved, searchable profiles from the admin export (Oct 13, 2026), plus ${RN.fmt.int(RN.model.allOps.filter((o) => o.sample).length)} labelled sample profiles, which show in search, lists and counts only while reviewer notes are shown. Analytics, market figures and company names in Studio and Insights are illustrative.</p>
       </div>` : ''}
-      <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}" aria-label="Prototype controls, viewing as ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}">${icon('sliders')}<i class="dock-live" aria-hidden="true"></i><span class="dock-tag">Prototype · ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
+      <button type="button" class="dock-btn" data-act="dock" aria-expanded="${dockOpen}" aria-label="Reviewer tools, viewing as ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}">${icon('sliders')}<i class="dock-live" aria-hidden="true"></i><span class="dock-tag">Viewing as ${esc(p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''))}</span></button>`;
   };
   // Keep keyboard focus: open moves it to the panel's close button, close returns it to the dock button
   RN.actions['dock'] = () => {

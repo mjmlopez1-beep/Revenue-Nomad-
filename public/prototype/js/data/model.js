@@ -76,8 +76,11 @@
     const methods = [].concat(rd.methodologies || d.snapshot && d.snapshot.methodologies || []).flatMap((m) => String(m).split(',')).map((s) => s.trim()).filter(Boolean);
     const avail = (d.availability || {});
     const hours = avail.hoursPerMonth || std.hours || null;
-    // The exported Reputation Index as is: under 50 is an approved profile below the first tier (no tier, no badge, "Below Emerging")
-    const score = pp.reputationIndex != null && pp.reputationIndex !== '' && !isNaN(+pp.reputationIndex) ? +pp.reputationIndex : 50;
+    // The exported Reputation Index, or null: not scored yet (no tier, no badge, no number, F.risNone). The importer
+    // already writes an export score under 50 as null (owner decision, Oct 13, 2026); a stray one here is read the
+    // same way. Ranking and matching read F.risRank(op), the neutral 50 for an operator with no score.
+    const rep = pp.reputationIndex != null && pp.reputationIndex !== '' && !isNaN(+pp.reputationIndex) ? +pp.reputationIndex : null;
+    const score = rep != null && rep >= 50 ? rep : null;
     // Stable ids (company + start, -2, -3 on a clash) so Studio edits and review requests can point at one engagement
     const usedEng = new Set();
     const engagements = (d.engagements || []).map((e) => {
@@ -371,7 +374,9 @@
         if (good) { tag.r += 1; tag.tier = M.tagTier(tag.r); tag.score = M.tagScore(tag.r); }
       });
       // A 5.0 review adds the full gain, 4.0 half, 3.0 or lower nothing
-      op.ris.score = Math.min(99, op.ris.score + Math.round(M.risGain('review') * RN.clamp(((rv.coreAvg || rv.overall || 5) - 3) / 2, 0, 1)));
+      // A profile with no score yet starts from the neutral 50, and only gets a score when the review adds points
+      const gain = Math.round(M.risGain('review') * RN.clamp(((rv.coreAvg || rv.overall || 5) - 3) / 2, 0, 1));
+      if (op.ris.score != null || gain > 0) op.ris.score = Math.min(99, F.risRank(op) + gain);
       const t = F.risTierFor(op.ris.score); op.ris.label = t ? t.l : ''; op.ris.tier = t ? t.v : null;
       op.completeness = completeness(op);
     });
@@ -401,7 +406,8 @@
     };
     const rows = F.risFactors.options.map((f) => Object.assign({ k: f.v, l: f.l, d: f.d, w: f.w, f }, val[f.v]));
     const tier = F.risTierFor(op.ris.score);
-    const next = F.risTier.options.filter((x) => x.min > op.ris.score).sort((x, y) => x.min - y.min)[0];
+    // Not scored yet: no tier and no next tier (no number to count points from)
+    const next = op.ris.score == null ? null : F.risTier.options.filter((x) => x.min > op.ris.score).sort((x, y) => x.min - y.min)[0];
     return { rows, score: op.ris.score, tier, next, toNext: next ? next.min - op.ris.score : 0, avail: rows.reduce((s, r) => s + r.pts, 0), weakest: rows.slice().sort((x, y) => y.pts - x.pts)[0] };
   };
 
@@ -466,7 +472,7 @@
       if (f.hoursPerMonth && f.hoursPerMonth.length && !(op.avail.hoursCode && f.hoursPerMonth.some((h) => +op.avail.hoursCode >= +h))) continue;
       // A rate filter drops operators with no rate (Studio tells operators this)
       if (f.rateMax && (!op.rate || op.rate > +f.rateMax)) continue;
-      if (f.risMin && op.ris.score < +f.risMin) continue;
+      if (f.risMin && F.risRank(op) < +f.risMin) continue;
       // Location (D9): a country or US state (OR), a time zone (OR), and US hours ('yes': based in the US or said yes)
       if (locs.length || tzs.length || ush) {
         const p = M.place(op);
@@ -501,7 +507,7 @@
       }
       // Quality: verified proof, Reputation Index, completeness (search ranking boost)
       const verified = op.tags.filter((t) => t.tier !== 'claimed').length;
-      score += op.ris.score * 0.3 + op.completeness * 0.15 + verified * 1.5 + (op.avail.key === 'available_now' ? 3 : 0);
+      score += F.risRank(op) * 0.3 + op.completeness * 0.15 + verified * 1.5 + (op.avail.key === 'available_now' ? 3 : 0);
       const reasons = [];
       if (matchedTags.length) reasons.push(`Matches ${matchedTags.slice(0, 2).map((t) => '“' + t + '”').join(' and ')}`);
       tags.forEach((t) => { const x = op.tags.find((y) => y.t.toLowerCase() === t); if (x && !matchedTags.includes(x.t)) reasons.push(`${x.tier === 'claimed' ? 'Claims' : 'Client-verified in'} ${x.t}`); });
@@ -513,7 +519,7 @@
     }
     const sort = o.sort || 'best';
     out.sort((a, b) => {
-      if (sort === 'ris') return b.op.ris.score - a.op.ris.score || b.score - a.score;
+      if (sort === 'ris') return F.risRank(b.op) - F.risRank(a.op) || b.score - a.score;
       if (sort === 'rate') return (a.op.rate || 9999) - (b.op.rate || 9999);
       if (sort === 'available') return (a.op.avail.key === 'available_now' ? 0 : 1) - (b.op.avail.key === 'available_now' ? 0 : 1) || b.score - a.score;
       return b.score - a.score;
@@ -587,7 +593,7 @@
     o = o || {};
     const f = { roleCategories: brief.roleCategory ? [brief.roleCategory] : [] };
     return M.search({ filters: f }).map((r) => Object.assign(r, { fit: M.fit(r.op, brief) }))
-      .sort((a, b) => b.fit.pct - a.fit.pct || b.op.ris.score - a.op.ris.score || b.score - a.score)
+      .sort((a, b) => b.fit.pct - a.fit.pct || F.risRank(b.op) - F.risRank(a.op) || b.score - a.score)
       .slice(0, o.limit || 12);
   };
 
@@ -599,7 +605,7 @@
   function baseline(op, days) {
     const rand = RN.rng('an-' + op.id);
     const catDemand = { sales_leadership: 1.2, revenue_operations: 1.1, marketing: 0.9, ai_gtm: 1.05, sales_enablement: 0.7, customer_success_growth: 0.75, partnerships: 0.5, sellers: 0.6 }[op.catKey] || 0.8;
-    const quality = 0.45 + op.completeness / 100 + (op.ris.score - 50) / 40 + op.tags.filter((t) => t.tier !== 'claimed').length * 0.03;
+    const quality = 0.45 + op.completeness / 100 + (F.risRank(op) - 50) / 40 + op.tags.filter((t) => t.tier !== 'claimed').length * 0.03;
     const perDay = 7 * catDemand * quality;
     const ctr = 0.035 + (op.headline ? 0.02 : 0) + (op.photo ? 0.012 : 0) + (op.video ? 0.01 : 0);
     const series = [];
@@ -770,7 +776,7 @@
       const hrs = F.hoursPerMonth.options.map((x) => x.v).filter((h) => +h >= 20 && +h <= 40 && +op.avail.hoursCode >= +h).pop();
       if (hrs) addF('hoursPerMonth', hrs, Math.round(baseImp * 0.12));
     }
-    const risT = F.risMin.options.map((x) => x.v).filter((v) => op.ris.score >= +v).pop();
+    const risT = F.risMin.options.map((x) => x.v).filter((v) => F.risRank(op) >= +v).pop();
     if (risT) addF('risMin', risT, Math.round(baseImp * 0.06));
     ev.filter((e) => e.type === 'impression' && e.filters).forEach((e) => Object.keys(e.filters).forEach((k) => [].concat(e.filters[k]).filter((v) => v !== '' && v != null).forEach((v) => addF(k, v, 1, true))));
     const filters = Object.values(fl).sort((a, b) => b.n - a.n).map((x) => Object.assign(x, { live: x.liveN > 0 }));
@@ -949,7 +955,7 @@
   /* Similar operators (after an intro, on profiles, in compare suggestions) */
   M.similar = function (op, n) {
     return M.ops.filter((x) => x.id !== op.id && !x.hidden && x.catKey === op.catKey)
-      .map((x) => ({ x, s: x.tags.filter((t) => op.tags.some((y) => y.t === t.t)).length * 3 + x.industries.filter((i) => op.industries.includes(i)).length + x.ris.score / 20 }))
+      .map((x) => ({ x, s: x.tags.filter((t) => op.tags.some((y) => y.t === t.t)).length * 3 + x.industries.filter((i) => op.industries.includes(i)).length + F.risRank(x) / 20 }))
       .sort((a, b) => b.s - a.s).slice(0, n || 3).map((r) => r.x);
   };
 })();

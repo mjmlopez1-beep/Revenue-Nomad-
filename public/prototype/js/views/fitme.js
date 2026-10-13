@@ -87,7 +87,7 @@
     const co = esc((lc.company && lc.company.name) || 'your company');
     if (S.linkSent) {
       return `<div class="fm-hello is-sent">${icon('message')}<p>We sent a sign-in link to <b>${esc(S.linkSent)}</b>. Your matches will use ${co}’s profile once you open it.</p>
-        <button type="button" class="btn btn-sm" data-act="fm-open-link" data-email="${esc(S.linkSent)}">Open the link <span class="fm-proto">prototype</span></button></div>`;
+        <button type="button" class="btn btn-sm" data-act="fm-open-link" data-email="${esc(S.linkSent)}">Open the link <span class="fm-proto" data-proto>prototype</span></button></div>`;
     }
     return `<div class="fm-hello">${RN.ui.avatar({ name: lc.name, initials: initials(lc.name) }, 'ava-sm', { decorative: true })}
       <p><b>Welcome back, ${esc(String(lc.name || '').split(' ')[0] || 'there')}.</b> Continue as ${co}?</p>
@@ -267,7 +267,7 @@
       title: reason === 'login' ? 'Check your email' : 'You already have an account',
       sub: `We sent a sign-in link to ${esc(email)}.`,
       body: `<p class="muted">Open it on this device and you’re back in, with everything from this search: your answers, shortlist and saved matches.</p>`,
-      foot: `<button class="btn btn-line" data-act="modal-close">Close</button><button class="btn" data-act="fm-open-link" data-email="${esc(email)}">Open the link <span class="fm-proto">prototype</span></button>`,
+      foot: `<button class="btn btn-line" data-act="modal-close">Close</button><button class="btn" data-act="fm-open-link" data-email="${esc(email)}">Open the link <span class="fm-proto" data-proto>prototype</span></button>`,
     });
     RN.track('signin_link_sent', { meta: { reason } });
     rerank();

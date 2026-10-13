@@ -11,6 +11,8 @@
   'use strict';
   const RN = window.RN;
   const esc = RN.esc, icon = RN.icon;
+  // Tier and score for internal text, or the not scored yet wording (RN.fields.risNone) when there is no score
+  const riStanding = (op) => (op.ris && op.ris.score != null ? `${op.ris.label} ${op.ris.score}` : RN.fields.risNone.l);
   const DAY = 864e5, HOUR = 36e5;
   const TEAM = 'hello@revenuenomad.com';
   const st = () => RN.store.state;
@@ -885,7 +887,7 @@
           const p = prof(a);
           const op = statusOf(a) === 'live' ? RN.model.byId(a.opId) : null;
           return `<li>${RN.ui.avatar({ name: p.name, initials: RN.fmt.initials(p.name) }, 'ava-sm')}<div class="grow"><b>${esc(p.name)}</b><span class="tiny muted">${esc(p.role)} · ${esc(catLabel(p.roleCategory))}</span></div>
-            ${op ? `${RN.ui.statusPill('application', 'live', `Live at ${op.ris.label} ${op.ris.score}`)}<span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.liveAt))}</span><a class="btn btn-sm btn-line" href="#op.${esc(op.slug)}">View profile</a>`
+            ${op ? `${RN.ui.statusPill('application', 'live', op.ris.score != null ? `Live at ${op.ris.label} ${op.ris.score}` : `Live, ${RN.fields.risNone.l.toLowerCase()}`)}<span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.liveAt))}</span><a class="btn btn-sm btn-line" href="#op.${esc(op.slug)}">View profile</a>`
             : `${RN.ui.statusPill('application', 'rejected')}<span class="tiny muted nowrap adm-hide-m">${esc(RN.fmt.ago(a.decidedAt || a.submittedAt))}</span><button type="button" class="btn btn-sm btn-line" data-act="adm-reopen" data-id="${esc(a.id)}">Reopen</button>`}
           </li>`;
         }).join('')}</ul></section>` : ''}`;
@@ -1196,7 +1198,7 @@
       <div class="tbl-wrap"><table class="tbl adm-tbl adm-stacktbl adm-res-tbl">
         <thead><tr><th>Role category</th><th class="r">Published n, ${esc(C.indexLabel())}</th><th class="r">Operators</th><th class="r">Companies</th><th>Toward ${T.rateIndex.perCategory}</th><th>Status</th></tr></thead>
         <tbody>${riRows}</tbody></table></div>
-      <p class="tiny muted adm-foot">Published n is the sample behind the ${esc(C.indexLabel())} (RN.data.market, illustrative in this prototype). Operators and Companies count contributions made in this browser for ${esc(P.label)}.</p>
+      <p class="tiny muted adm-foot">Published n is the sample behind the ${esc(C.indexLabel())} (RN.data.market, illustrative). Operators and Companies count contributions made in this browser for ${esc(P.label)}.</p>
     </section>`;
 
     // ---- 2028 report by role category and side ----
@@ -1307,8 +1309,8 @@
   const appLive = (id) => { const a = appById(id); return !!a && statusOf(a) === 'live'; };
   const inDir = (o) => !o.admin || appLive(o.admin.appId);
   const editedBy = (o) => { const e = (st().edits || {})[o.id]; return e && e._log && e._log.length ? e._log[e._log.length - 1] : null; };
-  // Admin is internal, so every tier shows with its score (the shared pill); under 50 reads Below Emerging with the score
-  const tierPill = (op) => RN.ui.tierPill((RN.fields.risTierFor(op.ris && op.ris.score) || {}).v, op.ris && op.ris.score) || (RN.fields.risBelow.is(op.ris && op.ris.score) ? `<span class="tiny muted">${esc(RN.fields.risBelow.l)} · ${esc(op.ris.score)}</span>` : '<span class="tiny muted">Not scored</span>');
+  // Admin is internal, so every tier shows with its score (the shared pill); no score yet reads RN.fields.risNone
+  const tierPill = (op) => RN.ui.tierPill((RN.fields.risTierFor(op.ris && op.ris.score) || {}).v, op.ris && op.ris.score) || `<span class="tiny muted">${esc(RN.fields.risNone.l)}</span>`;
   function dirRows() {
     const q = ui.dirQ.trim().toLowerCase();
     let ops = RN.model.ops.filter(inDir);
@@ -1317,7 +1319,7 @@
     else if (ui.dirSeg === 'edited') ops = ops.filter((o) => editedBy(o));
     if (ui.dirCat) ops = ops.filter((o) => o.catKey === ui.dirCat);
     if (q) ops = ops.filter((o) => [o.name, o.role, o.cat, o.location, o.headline, o.tags.map((t) => t.t).join(' ')].join(' ').toLowerCase().includes(q));
-    const by = { ris: (a, b) => b.ris.score - a.ris.score || a.name.localeCompare(b.name), complete: (a, b) => a.completeness - b.completeness || a.name.localeCompare(b.name), name: (a, b) => a.name.localeCompare(b.name), recent: (a, b) => (b.admin ? 1 : 0) - (a.admin ? 1 : 0) || b.ris.score - a.ris.score }[ui.dirSort];
+    const by = { ris: (a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || a.name.localeCompare(b.name), complete: (a, b) => a.completeness - b.completeness || a.name.localeCompare(b.name), name: (a, b) => a.name.localeCompare(b.name), recent: (a, b) => (b.admin ? 1 : 0) - (a.admin ? 1 : 0) || RN.fields.risRank(b) - RN.fields.risRank(a) }[ui.dirSort];
     ops.sort(by);
     if (q) ops.sort((a, b) => (a.name.toLowerCase().includes(q) ? 0 : 1) - (b.name.toLowerCase().includes(q) ? 0 : 1));
     return ops;
@@ -1390,7 +1392,7 @@
       case 'A5': {
         const an = RN.model.analytics(op.id, { days: 30 });
         const q = an && an.queries[0];
-        return `Hi ${f},\n\nYour first 30 days: ${int(an ? an.totals.impressions : 0)} search impressions and ${int(an ? an.totals.views : 0)} profile views.${q ? ` The search that found you most: “${q.q}”.` : ''}\n\nReputation Index: ${op.ris.score} (${op.ris.label}). Next best step: ${miss ? miss.l.toLowerCase() : 'ask for one more review'}.`;
+        return `Hi ${f},\n\nYour first 30 days: ${int(an ? an.totals.impressions : 0)} search impressions and ${int(an ? an.totals.views : 0)} profile views.${q ? ` The search that found you most: “${q.q}”.` : ''}\n\nReputation Index: ${op.ris.score != null ? `${op.ris.score} (${op.ris.label})` : RN.fields.risNone.l.toLowerCase()}. Next best step: ${miss ? miss.l.toLowerCase() : 'ask for one more review'}.`;
       }
       default: return '';
     }
@@ -1444,7 +1446,7 @@
       </section>
 
       <section class="card adm-sec">
-        ${cardHead('Drip queue', 'Operators approved in this session. Advance the prototype clock to see later emails come due.', due.length ? `<button type="button" class="btn btn-sm" data-act="adm-drip-send">${icon('send')}Send ${RN.fmt.plural(due.length, 'due email')}</button>` : '')}
+        ${cardHead('Drip queue', 'Operators approved in this session. Advance the clock in the reviewer tools to see later emails come due.', due.length ? `<button type="button" class="btn btn-sm" data-act="adm-drip-send">${icon('send')}Send ${RN.fmt.plural(due.length, 'due email')}</button>` : '')}
         ${qd.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl"><thead><tr><th>Operator</th><th>Email</th><th>Send date</th><th>Status</th></tr></thead><tbody>
           ${qd.map((x) => `<tr><td><a class="adm-op-n" href="#op.${esc(x.op.slug)}">${esc(x.op.name)}</a></td><td><span class="adm-code">${x.d.k}</span><span class="small">${esc(x.d.subj)}</span></td><td class="small nowrap">${esc(RN.fmt.dateShort(x.sent || x.at))}</td><td>${pill[x.status]}</td></tr>`).join('')}
         </tbody></table></div>`
@@ -1688,7 +1690,7 @@
     RN.ui.modal({
       width: 600, title: `Suggest operators for ${esc(p.title || 'this engagement')}`,
       sub: `Ranked by Match Signals against the engagement brief. ${esc(c.company || c.name)} sees them as “Suggested by Revenue Nomad”.`,
-      body: picks.length ? `<ul class="adm-picks">${picks.map((r) => `<li>${RN.ui.avatar(r.op, 'ava-md')}<div class="grow"><a class="adm-op-n" href="#op.${esc(r.op.slug)}" data-act="go" data-to="op.${esc(r.op.slug)}">${esc(r.op.name)}</a><span class="tiny muted">${esc(r.op.role)} · ${esc(r.op.ris.label)} ${esc(r.op.ris.score)} · ${esc(r.op.avail.label)}</span>
+      body: picks.length ? `<ul class="adm-picks">${picks.map((r) => `<li>${RN.ui.avatar(r.op, 'ava-md')}<div class="grow"><a class="adm-op-n" href="#op.${esc(r.op.slug)}" data-act="go" data-to="op.${esc(r.op.slug)}">${esc(r.op.name)}</a><span class="tiny muted">${esc(r.op.role)} · ${esc(riStanding(r.op))} · ${esc(r.op.avail.label)}</span>
           <span class="small adm-pick-why">${esc(r.fit.signals.filter((s) => s.state === 'match').map((s) => s.text).slice(0, 2).join('. ') || 'Closest available fit in the role category')}</span></div>${fitPill(r.fit)}</li>`).join('')}</ul>
           <p class="small muted">Each operator gets an invite in their Studio inbox. The company is emailed.</p>`
         : RN.ui.empty({ icon: 'users', title: 'No more operators to suggest', body: 'Everyone who fits this brief is already invited.' }),
@@ -1709,7 +1711,7 @@
     const c = projClient(p);
     const ops = ids.map((o) => RN.model.byId(o)).filter(Boolean);
     const catL = p.fields && p.fields.roleCategory ? catLabel(p.fields.roleCategory) : 'fractional';
-    RN.mail(c.email, `Revenue Nomad suggested ${RN.fmt.plural(ops.length, 'operator')}`, `Hi ${RN.fmt.first(c.name)},\n\nWe picked ${ops.length === 1 ? 'an operator' : ops.length + ' operators'} for “${p.title}” based on your brief:\n${ops.map((o) => `- ${o.name}, ${o.role} (${o.ris.label} ${o.ris.score})`).join('\n')}\n\nThey are invited now. Responses land on your engagement page as they come in.`, 'project');
+    RN.mail(c.email, `Revenue Nomad suggested ${RN.fmt.plural(ops.length, 'operator')}`, `Hi ${RN.fmt.first(c.name)},\n\nWe picked ${ops.length === 1 ? 'an operator' : ops.length + ' operators'} for “${p.title}” based on your brief:\n${ops.map((o) => `- ${o.name}, ${o.role} (${riStanding(o)})`).join('\n')}\n\nThey are invited now. Responses land on your engagement page as they come in.`, 'project');
     ops.forEach((o) => {
       RN.mail(o.name, `Revenue Nomad invited you to an engagement: ${p.title}`, `Hi ${o.first},\n\nRevenue Nomad suggested you for a ${catL} engagement from a ${RN.w.label('companyRevenue', (p.fields || {}).revenueRange) || ''} company.\n${[(p.fields || {}).engagementType && RN.w.label('engagementType', p.fields.engagementType), (p.fields || {}).hoursPerMonth && RN.w.label('hoursPerMonth', p.fields.hoursPerMonth)].filter(Boolean).join(' · ')}\n\nIt is in your Studio inbox. Responding takes about two minutes.`, 'project');
       RN.track('project_invite', { opId: o.id, source: 'rn_suggested', meta: { projectId: id } });
@@ -1881,7 +1883,7 @@
     const tags = (c.tags || []).map((x) => x.toLowerCase());
     const inds = arr((c.filters || {}).industries);
     return liveOps().filter((o) => (!c.cat || o.catKey === c.cat) && (!tags.length || !tags.every((tg) => o.tags.some((x) => x.t.toLowerCase() === tg && x.tier !== 'claimed'))))
-      .map((o) => ({ o, s: inds.filter((i) => o.industries.includes(i)).length * 10 + tags.filter((tg) => o.tags.some((x) => x.t.toLowerCase() === tg)).length * 6 + o.ris.score / 10 + o.completeness / 20 }))
+      .map((o) => ({ o, s: inds.filter((i) => o.industries.includes(i)).length * 10 + tags.filter((tg) => o.tags.some((x) => x.t.toLowerCase() === tg)).length * 6 + RN.fields.risRank(o) / 10 + o.completeness / 20 }))
       .sort((a, b) => b.s - a.s).slice(0, 3).map((x) => x.o);
   }
   RN.actions['adm-recruit'] = (el) => {
@@ -1897,7 +1899,7 @@
       body: `<form id="adm-recruit-form" data-submit="adm-recruit-save" data-k="${esc(k)}" class="stack" style="--gap:20px">
         <div class="field"><label for="adm-rc-note">Outreach note</label><textarea class="textarea adm-note" id="adm-rc-note" name="note">${esc(prev ? prev.note : recruitNote(c))}</textarea><p class="help">Drafted from the search. Copy it into LinkedIn or a referral email, or save it to the team’s recruiting list.</p></div>
         ${cands.length ? `<fieldset class="adm-cands"><legend class="label">Also ask close operators${tagName ? ` to add or verify “${esc(tagName)}”` : ' to add the focus area'}</legend>
-          ${cands.map((o) => `<label class="adm-cand"><input type="checkbox" name="ops" value="${esc(o.id)}" checked><span class="adm-cand-box">${icon('check')}</span>${RN.ui.avatar(o, 'ava-sm')}<span class="grow"><b>${esc(o.name)}</b><span class="tiny muted">${esc(o.role)} · ${esc(o.ris.label)} ${esc(o.ris.score)}${o.industries.length ? ' · ' + esc(RN.w.labels('industries', o.industries.slice(0, 2))) : ''}</span></span></label>`).join('')}
+          ${cands.map((o) => `<label class="adm-cand"><input type="checkbox" name="ops" value="${esc(o.id)}" checked><span class="adm-cand-box">${icon('check')}</span>${RN.ui.avatar(o, 'ava-sm')}<span class="grow"><b>${esc(o.name)}</b><span class="tiny muted">${esc(o.role)} · ${esc(riStanding(o))}${o.industries.length ? ' · ' + esc(RN.w.labels('industries', o.industries.slice(0, 2))) : ''}</span></span></label>`).join('')}
         </fieldset>` : ''}
       </form>`,
       foot: `<button type="button" class="btn btn-line" data-act="adm-copy" data-src="adm-rc-note">${icon('copy')}Copy note</button><button class="btn" type="submit" form="adm-recruit-form">${icon('check')}Save to recruiting list</button>`,

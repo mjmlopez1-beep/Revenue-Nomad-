@@ -2,7 +2,7 @@
    top of the network, the Home carousel, Compare and the Browse filters have realistic depth (owner request, Sep 25, 2026).
    Every person, client company, review and number here is invented. Records follow the live-export shape in
    operators.js; `sample: true` (top level and profile.sample) marks them, model.js carries it through as op.sample,
-   and profiles show a quiet "Sample profile for this prototype" note. Cards stay unmarked.
+   and profiles show a quiet "Sample profile, not a real operator" note. Cards stay unmarked.
    No photos: cards and profiles show the initials avatar. `location` stands in for RN.data.opLocations (ops_extra.js).
    Generated once from a script; edit by hand from here on. */
 window.RN = window.RN || {}; RN.data = RN.data || {};

@@ -973,7 +973,7 @@
   /* Three operators with photos from different role categories, highest Reputation Index first */
   function browseFaces() {
     const seenCat = new Set();
-    return RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).slice().sort((a, b) => b.ris.score - a.ris.score)
+    return RN.model.ops.filter((o) => !o.hidden && o.photo && !o.isMatt).slice().sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a))
       .filter((o) => (seenCat.has(o.catKey) ? false : seenCat.add(o.catKey))).slice(0, 3);
   }
 

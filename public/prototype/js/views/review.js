@@ -569,7 +569,7 @@
     RN.mail(op.name, `${review.reviewer} completed your review`,
       `${review.reviewer}, ${review.role} at ${review.company}, rated you ${fmt1(avg)} on CORE (${coreLine}) and ${review.hireAgain ? 'would hire you again' : 'would not hire you again'}.\n` +
       `${good && tags.length ? `Verified focus areas: ${tags.join(', ')}.\n` : tags.length ? `Confirmed focus areas: ${tags.join(', ')}.\n` : ''}` +
-      `It is live on your profile now. Reputation Index: ${before.score} to ${op.ris.score}.`, 'review');
+      `It is live on your profile now. Reputation Index: ${riTxt(before.score)} to ${riTxt(op.ris.score)}.`, 'review');
     RN.mail(rr.reviewer.email, `Thank you for reviewing ${op.first}`,
       `Your review of ${op.name} is live on ${op.first}’s profile. ${good && tags.length ? `It verified ${tags.length} focus area${tags.length === 1 ? '' : 's'} and adds` : 'It adds'} to ${op.first}’s CORE score, which helps the next company hire with confidence.\n\nHiring again? Every profile on Revenue Nomad is open, with verified reviews like yours.`, 'review');
     // The thank-you page lives at the request's plain link
@@ -647,7 +647,7 @@
         ${similarHtml(op, similar)}
       </div>`;
     }
-    const delta = res.after.score - res.before.score;
+    const delta = res.after.score == null ? 0 : res.after.score - RN.fields.risRank({ ris: res.before });
     const shownTags = res.tags;
     const fresh = res.newlyVerified.length;
     return `<div class="rv wrap-narrow rv-done">
@@ -672,10 +672,11 @@
         </section>
         <section class="card rv-imp">
           ${RN.ui.icoTile('trend-up', { cls: 'rv-imp-ic' })}
-          <b class="num">${res.after.score}</b>
-          <span class="rv-imp-l">Reputation Index, ${esc(res.after.label)}</span>
+          ${res.after.score != null ? `<b class="num">${res.after.score}</b>
+          <span class="rv-imp-l">Reputation Index, ${esc(res.after.label)}</span>` : `<b>${esc(RN.fields.risNone.l)}</b>
+          <span class="rv-imp-l">Reputation Index</span>`}
           ${gainMeter(res)}
-          <p class="small muted">${delta > 0 ? `Up ${delta} from ${res.before.score}. Review volume and strong ratings are two of the five factors.` : 'Review volume and strong ratings are two of the five factors in the score.'}</p>
+          <p class="small muted">${delta > 0 ? `${res.before.score == null ? `This review gave ${esc(op.first)} a first Reputation Index of ${res.after.score}.` : `Up ${delta} from ${res.before.score}.`} Review volume and strong ratings are two of the five factors.` : 'Review volume and strong ratings are two of the five factors in the score.'}</p>
         </section>
       </div>
       <div class="row rv-cta"><a class="btn" href="#op.${esc(op.slug)}">See ${esc(op.first)}’s profile${icon('arrow')}</a>${isBuyer ? '<a class="btn btn-line" href="#buyer">Back to your workspace</a>' : '<a class="btn btn-line" href="#browse">Browse operators</a>'}</div>
@@ -683,10 +684,13 @@
       ${similarHtml(op, similar)}
     </div>`;
   }
+  // A Reputation Index in running text: the number, or the not scored yet wording
+  const riTxt = (v) => (v == null ? RN.fields.risNone.l.toLowerCase() : String(v));
   // Reputation Index on its 50 to 100 range: the earlier score, this review's gain, and the next tier.
   function gainMeter(res) {
     const pos = (v) => RN.clamp((v - 50) / 50, 0, 1) * 100;
-    const b = pos(res.before.score), a = pos(res.after.score);
+    if (res.after.score == null) return ''; // not scored yet: no number to place on the range
+    const b = pos(RN.fields.risRank({ ris: res.before })), a = pos(res.after.score);
     const next = RN.fields.risTier.options.slice().reverse().find((t) => t.min > res.after.score);
     return `<div class="rv-gain" aria-hidden="true"><span class="rv-gain-bar"><i style="width:${b.toFixed(1)}%"></i><i class="is-gain" style="left:${b.toFixed(1)}%;width:${Math.max(0, a - b).toFixed(1)}%"></i></span>
       <span class="rv-gain-l"><span>50</span><span>${next ? `${next.min - res.after.score} to ${esc(next.l)}` : 'Top tier'}</span><span>100</span></span></div>`;
