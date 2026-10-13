@@ -391,9 +391,11 @@
      ===================================================================== */
   const fw = { mStage: 'Qualify' };
 
+  // Bowtie heights per stage, [left edge, right edge] as a share of full height: narrowing to the signature, widening after
+  const BOW_H = { awareness: [1, 0.82], engage: [0.82, 0.65], qualify: [0.65, 0.49], commit: [0.49, 0.34], onboard: [0.34, 0.55], adopt: [0.55, 0.78], expand: [0.78, 1] };
   function bowtie(ix) {
     const st = journey();
-    const H = { awareness: [1, 0.82], engage: [0.82, 0.65], qualify: [0.65, 0.49], commit: [0.49, 0.34], onboard: [0.34, 0.55], adopt: [0.55, 0.78], expand: [0.78, 1] };
+    const H = BOW_H;
     const aggs = st.map((s) => agg(ix, null, s.name));
     const maxV = Math.max(1, ...aggs.map((a) => a.ver));
     const inset = (x) => (((1 - x) / 2) * 100).toFixed(1) + '%';
@@ -618,7 +620,7 @@
     const top = ranked[0] || null;
     let cat = Object.keys(cats).sort((a, b) => cats[b] - cats[a])[0] || null;
     if (top) { const topCat = DIAG[top.first].o[diag.ans[top.first]].cat; if (cats[topCat] === cats[cat]) cat = topCat; }
-    return { top, second: ranked[1] || null, cat };
+    return { top, second: ranked[1] || null, ranked, cat };
   }
 
   function diagQuestion() {
@@ -632,6 +634,132 @@
         ${q.o.map((o, k) => `<button type="button" class="rs-dq-opt" role="radio" aria-checked="${diag.ans[i] === k}" data-act="rs-dg-pick" data-i="${k}"><span class="rs-dq-radio" aria-hidden="true"></span><span>${esc(o.l)}</span></button>`).join('')}
       </div>
     </div>`;
+  }
+
+  /* The result's bowtie: the 7 stages as the bowtie, the 6 areas as lanes running through it. The leak cell is solid,
+     its lane is tinted, stages before it fade as upstream and stages after it are hatched as downstream impact.
+     Other cells the answers point to show as small hollow markers. Two drawings of the same model: horizontal for a
+     wide card, vertical (stages top to bottom) when the card is narrow; CSS shows one. */
+  const listAnd = (xs) => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
+  const firstItem = (what) => { const t = String(what || '').split(/,\s*/)[0].replace(/\.$/, ''); return t.charAt(0).toLowerCase() + t.slice(1); };
+  function diagImpact(r) {
+    const st = journey();
+    if (r.top.stage === 'Foundation') return `${r.top.area} work at Foundation serves every stage at once, so this gap shows up in all ${st.length}, from ${st[0].name} to ${st[st.length - 1].name}.`;
+    const i = st.findIndex((s) => s.name === r.top.stage);
+    const down = st.slice(i + 1);
+    if (!down.length) {
+      const parts = String(st[i].what || '').replace(/\.$/, '').split(/,\s*/);
+      return `${st[i].name} is the last stage and it feeds the first, so a gap here costs the ${parts[parts.length - 1]} that bring the next companies in at ${st[0].name}.`;
+    }
+    const n = down[0];
+    const rest = down.slice(1).map((s) => s.name);
+    const cross = st[i].side === 'before' && down.some((s) => s.side !== 'before') && n.side === 'before' ? ', past the signature' : '';
+    return `What leaks at ${st[i].name} never reaches ${n.name}, where the work is ${firstItem(n.what)}${rest.length ? `, and ${listAnd(rest)} inherit${rest.length === 1 ? 's' : ''} the gap${cross}` : ''}.`;
+  }
+  function diagBow(r) {
+    const st = journey();
+    const areas = R.areas().map((a) => a.name);
+    const NA = areas.length;
+    const ai = Math.max(0, areas.indexOf(r.top.area));
+    const fnd = r.top.stage === 'Foundation';
+    const li = fnd ? -1 : st.findIndex((s) => s.name === r.top.stage);
+    const others = (r.ranked || []).slice(1).filter((c) => areas.includes(c.area));
+    const role = (si) => (fnd ? 'is-all' : si < li ? 'is-up' : si === li ? 'is-leak' : 'is-down');
+    const P = (pts) => pts.map((p) => p.map((v) => +v.toFixed(1)).join(',')).join(' ');
+    const mid = (pts) => [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+
+    // geometry(o) returns, per stage, its 4 corners and a cell(k) function for area lane k
+    function draw(o) {
+      const V = o === 'v';
+      const segs = st.map((s, si) => {
+        const h = BOW_H[s.id] || [1, 1];
+        if (!V) {
+          const X0 = 116, K = 22, W = (636 - X0 - K) / st.length, cy = 95, R0 = 64;
+          const x0 = X0 + si * W + (s.side === 'before' ? 0 : K), x1 = x0 + W;
+          const t0 = cy - h[0] * R0, t1 = cy - h[1] * R0, b0 = cy + h[0] * R0, b1 = cy + h[1] * R0;
+          return { s, si, x0, x1, c: (x0 + x1) / 2, box: [[x0, t0], [x1, t1], [x1, b1], [x0, b0]],
+            cell: (k) => [[x0, t0 + (k * (b0 - t0)) / NA], [x1, t1 + (k * (b1 - t1)) / NA], [x1, t1 + ((k + 1) * (b1 - t1)) / NA], [x0, t0 + ((k + 1) * (b0 - t0)) / NA]] };
+        }
+        const Y0 = 26, K = 14, Hh = 27, cx = 200, R0 = 114;
+        const y0 = Y0 + si * Hh + (s.side === 'before' ? 0 : K), y1 = y0 + Hh;
+        const l0 = cx - h[0] * R0, l1 = cx - h[1] * R0, q0 = cx + h[0] * R0, q1 = cx + h[1] * R0;
+        return { s, si, y0, y1, c: (y0 + y1) / 2, box: [[l0, y0], [q0, y0], [q1, y1], [l1, y1]],
+          cell: (k) => [[l0 + (k * (q0 - l0)) / NA, y0], [l0 + ((k + 1) * (q0 - l0)) / NA, y0], [l1 + ((k + 1) * (q1 - l1)) / NA, y1], [l1 + (k * (q1 - l1)) / NA, y1]] };
+      });
+      const pid = 'rs-dbh-' + o;
+      const leakSeg = li >= 0 ? segs[li] : null;
+      const leakPt = leakSeg ? mid(leakSeg.cell(ai)) : null;
+      // Foundation: the marker sits on the lane at the signature
+      const knotPt = (() => {
+        const a = segs[3].cell(ai), b = segs[4].cell(ai);
+        return V ? [(a[2][0] + a[3][0]) / 2, (a[2][1] + b[0][1]) / 2] : [(a[1][0] + b[0][0]) / 2, (a[1][1] + a[2][1]) / 2];
+      })();
+      const pin = leakPt || knotPt;
+      const lanes = segs.map((g) => `<g class="rs-dbow-seg ${role(g.si)}">
+        ${areas.map((_, k) => `<polygon class="rs-dbow-cell${k === ai ? ' is-lane' : ''}${k === ai && g.si === li ? ' is-hit' : ''}" points="${P(g.cell(k))}"/>`).join('')}
+        ${role(g.si) === 'is-down' ? `<polygon class="rs-dbow-hatch" points="${P(g.box)}" fill="url(#${pid})"/>` : ''}
+        <polygon class="rs-dbow-edge${g.si === li ? ' is-leak' : ''}" points="${P(g.box)}"/>
+      </g>`).join('');
+      const sec = others.map((c) => {
+        const k = areas.indexOf(c.area);
+        if (c.stage === 'Foundation') return `<g class="rs-dbow-sig is-lane">${segs.map((g) => `<polygon points="${P(g.cell(k))}"/>`).join('')}</g>`;
+        const si = st.findIndex((s) => s.name === c.stage);
+        if (si < 0) return '';
+        const p = mid(segs[si].cell(k));
+        return `<circle class="rs-dbow-sig" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${V ? 3.6 : 3.8}"/>`;
+      }).join('');
+      const marker = `<g class="rs-dbow-pin" transform="translate(${pin[0].toFixed(1)} ${pin[1].toFixed(1)})"><circle class="rs-dbow-ring" r="7"/><circle class="rs-dbow-ring rs-dbow-ring-2" r="7"/><circle class="rs-dbow-halo" r="7"/><circle class="rs-dbow-dot" r="3.2"/></g>`;
+      const knot = V ? `<circle class="rs-dbow-knot" cx="${200}" cy="${(segs[3].y1 + segs[4].y0) / 2}" r="3"/>`
+        : `<circle class="rs-dbow-knot" cx="${((segs[3].x1 + segs[4].x0) / 2).toFixed(1)}" cy="95" r="3"/>`;
+      let labels;
+      if (!V) {
+        // Area lanes, named where they enter the bowtie; stage names below; upstream, leak and downstream brackets above
+        const a0 = segs[0];
+        const lanesTx = areas.map((a, k) => { const c = a0.cell(k); return `<text class="rs-dbow-area${k === ai ? ' is-on' : ''}" x="108" y="${((c[0][1] + c[3][1]) / 2 + 4).toFixed(1)}" text-anchor="end">${esc(a)}</text>`; }).join('');
+        const stTx = segs.map((g) => `<text class="rs-dbow-st ${role(g.si)}" x="${g.c.toFixed(1)}" y="176" text-anchor="middle">${esc(g.s.name)}</text>`).join('')
+          + `<text class="rs-dbow-sgn" x="${((segs[3].x1 + segs[4].x0) / 2).toFixed(1)}" y="189" text-anchor="middle">Signed</text>`;
+        const br = (x0, x1, t, cls) => `<g class="rs-dbow-br ${cls}"><path d="M${(x0 + 2).toFixed(1)} 22 V16 H${(x1 - 2).toFixed(1)} V22"/><text x="${((x0 + x1) / 2).toFixed(1)}" y="10" text-anchor="middle">${t}</text></g>`;
+        let brs;
+        if (fnd) brs = br(segs[0].x0, segs[st.length - 1].x1, `${esc(r.top.area)} across every stage`, 'is-leak');
+        else {
+          brs = (li > 0 ? br(segs[0].x0, segs[li - 1].x1, 'Upstream', 'is-up') : '')
+            + br(segs[li].x0, segs[li].x1, 'Leak', 'is-leak')
+            + (li < st.length - 1 ? br(segs[li + 1].x0, segs[st.length - 1].x1, li === st.length - 2 ? 'Impact' : 'Downstream impact', 'is-down') : '');
+        }
+        labels = lanesTx + stTx + brs;
+      } else {
+        const stTx = segs.map((g) => `<text class="rs-dbow-st ${role(g.si)}" x="72" y="${(g.c + 4.5).toFixed(1)}" text-anchor="end">${esc(g.s.name)}</text>`).join('')
+          + `<text class="rs-dbow-sgn" x="70" y="${((segs[3].y1 + segs[4].y0) / 2 + 3).toFixed(1)}" text-anchor="end">Signed</text>`;
+        const c = segs[0].cell(ai);
+        const ax = Math.min(316 - 30, Math.max(84 + 30, (c[0][0] + c[1][0]) / 2));
+        labels = stTx + `<text class="rs-dbow-area is-on" x="${ax.toFixed(1)}" y="14" text-anchor="middle">${esc(r.top.area)}</text><path class="rs-dbow-tick" d="M${((c[0][0] + c[1][0]) / 2).toFixed(1)} 18 V24"/>`;
+      }
+      const vb = V ? '0 0 320 240' : '0 0 640 193';
+      return `<svg class="rs-dbow-svg rs-dbow-${o}" viewBox="${vb}" role="img" aria-label="${esc(aria)}" focusable="false">
+        <defs><pattern id="${pid}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6"/></pattern></defs>
+        ${lanes}${knot}${sec}${labels}${marker}
+      </svg>`;
+    }
+    // Other signals grouped by stage: "Lead & plan and Systems & data across every stage; Retain & expand at Adopt"
+    const groups = [];
+    others.forEach((c) => { const g = groups.find((x) => x.stage === c.stage); if (g) g.areas.push(c.area); else groups.push({ stage: c.stage, areas: [c.area] }); });
+    const othersTx = groups.map((g) => cellText(listAnd(g.areas), g.stage)).join('; ');
+    const up = fnd ? [] : st.slice(0, li).map((s) => s.name);
+    const dn = fnd ? [] : st.slice(li + 1).map((s) => s.name);
+    const aria = `Bowtie of the ${st.length} customer-journey stages with the ${NA} areas as lanes. ` + (fnd
+      ? `The leak sits in the ${r.top.area} lane across every stage.`
+      : `The leak sits at ${r.top.stage}, in the ${r.top.area} lane.${up.length ? ` Upstream: ${listAnd(up)}.` : ''}${dn.length ? ` Downstream impact: ${listAnd(dn)}.` : ''}`)
+      + (others.length ? ` Other signals: ${othersTx}.` : '');
+    return `<figure class="rs-dbow">
+      ${draw('h')}${draw('v')}
+      <figcaption class="rs-dbow-cap">
+        <span class="rs-dbow-key" aria-hidden="true">
+          ${fnd ? '<span class="rs-dbow-k-v"><i class="rs-dbow-sw is-leak"></i>Leak, every stage</span>' : `${li > 0 ? '<span class="rs-dbow-k-v"><i class="rs-dbow-sw is-up"></i>Upstream</span>' : ''}<span class="rs-dbow-k-v"><i class="rs-dbow-sw is-leak"></i>Leak</span>${li < st.length - 1 ? '<span class="rs-dbow-k-v"><i class="rs-dbow-sw is-down"></i>Downstream impact</span>' : ''}`}
+          ${others.length ? `<span class="rs-dbow-k-s"><i class="rs-dbow-sw is-sig"></i>Also in your answers: ${esc(othersTx)}</span>` : ''}
+        </span>
+        <span class="rs-dbow-impact"><b>${fnd ? 'Across the journey' : 'Downstream impact'}</b> ${esc(diagImpact(r))}</span>
+      </figcaption>
+    </figure>`;
   }
 
   function diagResult() {
@@ -654,8 +782,8 @@
     return `<div class="rs-dr">
       <span class="eyebrow">Your result</span>
       <h3 class="h3 rs-dr-t">Your biggest leak: ${esc(cellText(r.top.area, r.top.stage))}.</h3>
+      ${diagBow(r)}
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
-      ${r.second ? `<p class="small rs-dr-also">Also worth a look: ${esc(cellText(r.second.area, r.second.stage))}.</p>` : ''}
       <div class="rs-dr-grid">
         <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)}.` : '.'}</span></div>
         <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as an engagement.</span></div>

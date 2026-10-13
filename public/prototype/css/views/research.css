@@ -1078,3 +1078,82 @@ ul.rs-qlist { list-style: none; margin: 0; padding: 0; }
 
 /* Guides index: the Rate Index band under the cost table */
 .rs-gcontrib { margin-top: 16px; }
+
+/* ---------- Diagnostic result: the bowtie that pinpoints the leak ----------
+   Stages run as the bowtie, areas as lanes through it. Leak cell solid leaf with a pulsing ring, its lane tinted,
+   upstream faded, downstream hatched. Horizontal on a wide card, vertical when the card is narrow. */
+.rs-diag-flow { container-type: inline-size; container-name: rs-diag; }
+.rs-dbow { margin: var(--s-4) 0 0; padding: 12px 14px; border-radius: 14px; background: var(--night-2); border: 1px solid var(--night-line); }
+.rs-dbow-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.rs-dbow-v { display: none; max-width: 360px; margin-inline: auto; }
+@container rs-diag (max-width: 540px) {
+  .rs-dbow-h { display: none; }
+  .rs-dbow-v { display: block; }
+}
+.rs-dbow-cell { fill: rgba(255, 255, 255, .07); stroke: var(--night-2); stroke-width: 1.2; }
+.rs-dbow-cell.is-lane { fill: color-mix(in srgb, var(--leaf) 24%, transparent); }
+.rs-dbow-seg.is-leak .rs-dbow-cell { fill: color-mix(in srgb, var(--leaf) 16%, transparent); }
+.rs-dbow-seg.is-leak .rs-dbow-cell.is-lane { fill: color-mix(in srgb, var(--leaf) 30%, transparent); }
+.rs-dbow-cell.is-hit, .rs-dbow-seg.is-leak .rs-dbow-cell.is-hit { fill: var(--leaf); }
+.rs-dbow-seg.is-all .rs-dbow-cell.is-lane { fill: color-mix(in srgb, var(--leaf) 78%, transparent); }
+.rs-dbow-seg.is-up { opacity: .38; }
+.rs-dbow-hatch { pointer-events: none; }
+.rs-dbow-svg pattern line { stroke: color-mix(in srgb, var(--leaf) 30%, transparent); stroke-width: 1.4; }
+.rs-dbow-edge { fill: none; stroke: none; }
+.rs-dbow-edge.is-leak { stroke: var(--leaf); stroke-width: 1.5; stroke-linejoin: round; }
+.rs-dbow-knot { fill: var(--night-mute); }
+.rs-dbow-sig { fill: var(--night-2); stroke: var(--leaf); stroke-width: 1.6; }
+g.rs-dbow-sig polygon { fill: none; stroke: var(--leaf); stroke-width: 1; stroke-dasharray: 3 2; }
+.rs-dbow-area { font: 600 12px/1 var(--f-text); fill: var(--night-mute); }
+.rs-dbow-area.is-on { fill: var(--leaf); font-weight: 800; }
+.rs-dbow-v .rs-dbow-area { font-size: 12px; }
+.rs-dbow-v .rs-dbow-st { font-size: 12.5px; }
+.rs-dbow-tick { stroke: var(--leaf); stroke-width: 1.5; }
+.rs-dbow-st { font: 600 12.5px/1 var(--f-text); fill: var(--night-mute); }
+.rs-dbow-st.is-up { opacity: .55; }
+.rs-dbow-st.is-leak { fill: var(--leaf); font-weight: 800; }
+.rs-dbow-st.is-down { fill: var(--night-ink); }
+.rs-dbow-sgn { font: italic 500 10.5px/1 var(--f-text); fill: var(--night-mute); opacity: .8; }
+.rs-dbow-br path { fill: none; stroke: var(--night-line); stroke-width: 1.2; }
+.rs-dbow-br text { font: 700 11.5px/1 var(--f-text); letter-spacing: .02em; fill: var(--night-mute); }
+.rs-dbow-br.is-up { opacity: .6; }
+.rs-dbow-br.is-leak path { stroke: var(--leaf); }
+.rs-dbow-br.is-leak text { fill: var(--leaf); }
+.rs-dbow-br.is-down text { fill: var(--night-ink); }
+.rs-dbow-dot { fill: var(--forest-deep); }
+.rs-dbow-halo { fill: none; stroke: var(--forest-deep); stroke-width: 2; }
+.rs-dbow-ring { fill: none; stroke: var(--leaf); stroke-width: 1.6; transform-box: fill-box; transform-origin: center; animation: rs-dbow-pulse 2.4s cubic-bezier(.2, .6, .3, 1) infinite; }
+.rs-dbow-ring-2 { animation-delay: 1.2s; }
+@keyframes rs-dbow-pulse { 0% { transform: scale(1); opacity: .95; } 100% { transform: scale(2.6); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .rs-dbow-ring { animation: none; transform: scale(1.7); opacity: .55; }
+  .rs-dbow-ring-2 { display: none; }
+}
+.rs-dbow-cap { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--night-line); }
+.rs-dbow-key { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--t-12); color: var(--night-mute); }
+.rs-dbow-key > span { display: inline-flex; align-items: center; gap: 7px; }
+.rs-dbow-key .rs-dbow-k-v { display: none; }
+@container rs-diag (max-width: 540px) { .rs-dbow-key .rs-dbow-k-v { display: inline-flex; } }
+.rs-dbow-key .rs-dbow-k-s { align-items: flex-start; }
+.rs-dbow-key .rs-dbow-k-s .rs-dbow-sw { margin-top: 3px; }
+.rs-dbow-sw { width: 14px; height: 10px; border-radius: 3px; flex: 0 0 auto; background: rgba(255, 255, 255, .07); }
+.rs-dbow-sw.is-up { opacity: .45; }
+.rs-dbow-sw.is-leak { background: var(--leaf); }
+.rs-dbow-sw.is-down { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--leaf) 34%, transparent) 0 1.4px, rgba(255, 255, 255, .07) 1.4px 4.2px); }
+.rs-dbow-sw.is-sig { width: 10px; height: 10px; border-radius: 50%; background: none; border: 1.6px solid var(--leaf); }
+.rs-dbow-impact { font-size: var(--t-14); line-height: 1.5; color: var(--night-ink); }
+.rs-dbow-impact b { color: var(--leaf); font-weight: 700; margin-right: 4px; }
+/* Keep the result to one screen on desktop now that it carries the bowtie */
+.rs-dr .rs-dr-p { margin-top: var(--s-4); font-size: var(--t-15); line-height: 1.5; }
+.rs-dr .rs-dr-grid { margin-top: var(--s-4); }
+.rs-dr .rs-dr-box { padding: 14px 16px; gap: 4px; }
+.rs-dr .rs-dr-acts { margin-top: var(--s-5); gap: 8px; }
+.rs-dr .rs-dr-acts .btn { --h: 42px; padding: 0 12px; gap: 6px; font-size: var(--t-12); letter-spacing: .02em; }
+.rs-diag-flow:has(> .rs-dr) { padding-block: var(--s-5) var(--s-6); }
+.rs-dr .rs-dr-acts .btn { white-space: normal; height: auto; min-height: var(--h); padding-block: 8px; text-align: center; line-height: 1.25; }
+.rs-dr .rs-dr-note { margin-top: var(--s-3); }
+@container rs-diag (min-width: 541px) {
+  .rs-dr .rs-dr-acts { flex-wrap: nowrap; }
+  .rs-dr .rs-dr-acts .btn { flex: 0 0 auto; }
+  .rs-dr .rs-dr-acts .btn:first-child { flex: 0 1 auto; min-width: 0; }
+}
