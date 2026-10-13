@@ -250,6 +250,7 @@
     return `<span class="wk-cover tone-${esc(s.tone || 'paper')} ${isLand(s) ? 'land' : 'port'}${o.big ? ' big' : ''}" aria-hidden="true">
       <span class="wk-cv-top"><span>${esc(s.type)}</span><span>${esc(fmtLen(s))}</span></span>
       <span class="wk-cv-title">${esc(s.title)}</span>
+      ${o.out ? `<span class="wk-cv-sum">${s.outcome ? `<span class="wk-cv-out">${esc(s.outcome)}</span>` : ''}${(s.toc || []).length ? `<span class="wk-cv-toc">${s.toc.slice(0, 4).map((t, i) => `<span><b>${String(i + 1).padStart(2, '0')}</b>${esc(t)}</span>`).join('')}</span>` : ''}</span>` : ''}
       <span class="wk-cv-fig">${preview(s)}</span>
       <span class="wk-cv-foot"><span>${esc(PROB_SHORT[s.problem] || '')}${op ? ` · ${esc(op.initials || RN.fmt.initials(op.name))}` : ''}</span><span>No. ${no}</span></span>
     </span>`;
@@ -405,7 +406,7 @@
     });
     if (!inn.length) return '';
     return `<article class="wk-tile ${isLand(s) ? 'land' : 'port'}" data-in="${inn.join(' ')}"${big.length ? ` data-big="${big.join(' ')}"` : ''} style="${vars.join(';')};--i:${i}">
-      <a class="wk-tile-cv" href="${href}" tabindex="-1" aria-hidden="true">${W.cover(s)}</a>
+      <a class="wk-tile-cv" href="${href}" tabindex="-1" aria-hidden="true">${W.cover(s, { out: big.length > 0 })}</a>
       <div class="wk-tile-info">
         <span class="wk-tile-k">${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
         <h3 class="wk-tile-t"><a href="${href}">${esc(s.title)}</a></h3>

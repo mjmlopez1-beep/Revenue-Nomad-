@@ -292,13 +292,11 @@
   .wk-tile[data-big~="6"] .wk-tile-info { left: 14px; right: auto; bottom: 14px; width: min(360px, calc(100% - 28px)); padding: 14px 16px 15px; }
   .wk-tile[data-big~="6"] .wk-tile-t { font-size: 17px; }
   .wk-tile[data-big~="6"] .wk-by { flex-wrap: nowrap; }
-  .wk-tile[data-big~="6"] .wk-tile-out { display: -webkit-box; }
 }
 @media (min-width: 720px) and (max-width: 1099.98px) and (hover: hover) {
   .wk-tile[data-big~="4"] .wk-tile-info { left: 14px; right: auto; bottom: 14px; width: min(360px, calc(100% - 28px)); padding: 14px 16px 15px; }
   .wk-tile[data-big~="4"] .wk-tile-t { font-size: 17px; }
   .wk-tile[data-big~="4"] .wk-by { flex-wrap: nowrap; }
-  .wk-tile[data-big~="4"] .wk-tile-out { display: -webkit-box; }
 }
 /* One horizontal plane per row (founder, Oct 13, 2026): every cover in a row shares its height (grid rows) and its
    type is set from the column width, not the tile width, so the top rule, the title's first line and the footer sit
@@ -332,3 +330,18 @@
   .wk-tile-info, .wk-show .wk-tile .wk-cover { transition: none; }
   .wk-tile:is(:hover, :focus-within) .wk-cover { transform: none; }
 }
+
+/* Feature tiles fill their space (founder, Oct 13, 2026): the outcome and the sample's contents sit under the title
+   on the cover, and a landscape feature gives the preview the larger column, from the title line to the footer. */
+.wk-cv-sum { display: none; }
+@media (min-width: 1100px) { .wk-show .wk-tile[data-big~="6"] .wk-cv-sum { display: grid; } }
+@media (min-width: 720px) and (max-width: 1099.98px) { .wk-show .wk-tile[data-big~="4"] .wk-cv-sum { display: grid; } }
+.wk-show .wk-tile .wk-cv-sum { flex: 0 0 auto; align-content: start; gap: calc(var(--p) * .07); margin-top: calc(var(--p) * .06); }
+.wk-show .wk-tile .wk-cv-out { max-width: 34ch; font-size: max(12px, calc(var(--p) * .055)); line-height: 1.45; color: var(--wk-mute); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wk-show .wk-tile .wk-cv-toc { display: grid; border-top: 1px solid var(--wk-line); }
+.wk-show .wk-tile .wk-cv-toc > span { display: flex; gap: 10px; align-items: baseline; padding-block: calc(var(--p) * .03); border-bottom: 1px solid var(--wk-line); font-size: max(11px, calc(var(--p) * .05)); line-height: 1.35; color: var(--wk-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-show .wk-tile .wk-cv-toc b { flex: 0 0 auto; font-family: var(--f-display); font-size: .82em; font-weight: 800; letter-spacing: .06em; color: var(--wk-mute); font-variant-numeric: tabular-nums; }
+.wk-show .wk-tile .wk-cover.land { grid-template-columns: minmax(0, .74fr) minmax(0, 1.26fr); grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.wk-show .wk-tile .wk-cover.land .wk-cv-sum { grid-column: 1; grid-row: 3; }
+.wk-show .wk-tile .wk-cover.land .wk-cv-fig { grid-row: 2 / 4; align-items: center; }
+.wk-show .wk-tile .wk-cover.land .wk-cv-foot { grid-row: 4; }
