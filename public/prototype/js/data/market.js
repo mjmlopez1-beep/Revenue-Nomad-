@@ -6,14 +6,15 @@
   'use strict';
   const RN = window.RN;
   RN.data = RN.data || {};
-  // Profiles loaded in this prototype (model.js runs first), so the "(N in this prototype)" notes stay live
-  const liveN = ((RN.model && RN.model.ops) || RN.data.rawOps || []).filter((o) => !o.hidden).length;
+  // Real profiles loaded in this prototype (model.js runs first), so the "(N in this prototype)" notes stay live.
+  // The fictional sample profiles never count here
+  const liveN = ((RN.model && RN.model.allOps) || RN.data.rawOps || []).filter((o) => !o.hidden && !o.sample).length;
 
   RN.data.market = {
     illustrative: true,
     asOf: '2026-09-24',
     // Live network size for marketing copy. The prototype loads every approved, searchable profile from the
-    // admin export plus a few sample profiles; sample is that live count.
+    // admin export plus a few sample profiles; sample is the live count of the real ones.
     network: { operators: '350+', sample: liveN, disciplines: 8 },
 
     /* ---------- State of Fractional GTM 2027 ---------- */

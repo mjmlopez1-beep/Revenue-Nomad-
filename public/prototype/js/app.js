@@ -3,6 +3,8 @@
   'use strict';
   const RN = window.RN;
   RN.store.load();
+  // A saved reviewer mode decides whether the sample profiles count (RN.model.ops), so the location picker follows it
+  if (RN.model.refreshLocations) RN.model.refreshLocations();
   // The client identity (demo client, or a visitor who became a client), then workspace company edits on top
   RN.shell.applyClient();
   try { const c = RN.store.state.seen && RN.store.state.seen.company; if (c) Object.assign(RN.personas.buyer.company, c); } catch (e) { /* ignore */ }

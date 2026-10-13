@@ -220,7 +220,7 @@
     const inCmp = new Set(st.compare);
     const seen = new Set();
     const out = [];
-    const push = (op, why) => { if (op && !inCmp.has(op.id) && !seen.has(op.id) && !op.hidden) { seen.add(op.id); out.push({ op, why }); } };
+    const push = (op, why) => { if (RN.model.listed(op) && !inCmp.has(op.id) && !seen.has(op.id)) { seen.add(op.id); out.push({ op, why }); } };
     st.shortlist.map(RN.model.byId).forEach((op) => push(op, 'On your shortlist'));
     ops.forEach((op) => RN.model.similar(op, 4).forEach((x) => push(x, `Similar to ${op.first}`)));
     RN.model.ops.slice().sort((a, b) => b.ris.score - a.ris.score || b.completeness - a.completeness).slice(0, 8).forEach((x) => push(x, 'High Reputation Index'));

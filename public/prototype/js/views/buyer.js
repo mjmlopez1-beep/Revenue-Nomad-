@@ -1292,7 +1292,7 @@
       if (e.type !== 'profile_view' || e.persona !== 'buyer' || !e.opId || seenIds.has(e.opId)) return;
       if (e.buyer && e.buyer.name && lc(e.buyer.name) !== co) return;   // another client's views
       const op = RN.model.byId(e.opId);
-      if (!op) return;
+      if (!RN.model.listed(op)) return;   // sample operators show only in reviewer mode
       seenIds.add(e.opId);
       out.push({ op, ts: e.ts });
     });

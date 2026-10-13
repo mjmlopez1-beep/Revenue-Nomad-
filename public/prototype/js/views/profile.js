@@ -519,7 +519,7 @@
               ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
               ${op.timezone ? `<span>${icon('clock')}${esc(tzLabel(op.timezone))}</span>` : ''}
               <span>${icon('briefcase')}${esc(catLabel(op.catKey))}</span>
-              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.') : ''}
+              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
             </div>
             ${clientsBlock(c, logos)}
           </div>
@@ -1981,6 +1981,7 @@
                 <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
               </div>
               <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> <span class="pf-nw">as of ${esc(asOf)}</span></span></p>
+              ${op.sample ? RN.ui.illus('Sample profile for this prototype', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
             </header>
             <div class="pf-vf-score">
               ${scoreBlock}

@@ -37,7 +37,10 @@
   const usd = (n) => (n ? '$' + RN.fmt.int(Math.round(n)) : '');
 
   let openId = null, docTab = 'pitch', introPick = '';
-  const list = () => (st().managed || []);
+  // Candidates who are sample operators show only in reviewer mode (a record seeded with reviewer mode on, or before
+  // samples were limited to it, keeps their ids in the store). Records are filtered views; writes go through update()
+  const shownCand = (c) => { const op = RN.model.byId(c.opId); return !(op && op.sample) || RN.model.showSamples(); };
+  const list = () => (st().managed || []).map((m) => ((m.candidates || []).every(shownCand) ? m : Object.assign({}, m, { candidates: m.candidates.filter(shownCand) })));
   const get = (id) => list().find((x) => x.id === id);
   const update = (id, fn) => RN.store.update((s) => { const x = (s.managed || []).find((y) => y.id === id); if (x) { fn(x); x.updatedAt = nowIso(); } }, 'managed');
   AM.dueCount = () => list().filter((m) => m.stage !== 'closed' && overdue(m)).length;
@@ -47,7 +50,8 @@
   function seed() {
     if (Array.isArray(st().managed)) return;
     const ago = (d) => new Date(RN.now().getTime() - d * DAY).toISOString();
-    // Fictional sample operators first, then the rest of the category, so every sample has a full bench
+    // Fictional sample operators first (reviewer mode only: RN.model.ops leaves them out otherwise), then the rest of
+    // the category, so every sample has a full bench
     const pool = RN.model.ops.filter((o) => !o.hidden && !o.isMatt).sort((a, b) => (b.sample ? 1 : 0) - (a.sample ? 1 : 0));
     const pick = (cat, n, skip) => pool.filter((o) => o.catKey === cat).slice(skip || 0, (skip || 0) + n).map((o) => o.id);
     const sl = pick('sales_leadership', 4), ro = pick('revenue_operations', 3), en = pick('sales_enablement', 1).concat(pick('sales_leadership', 1, 4));

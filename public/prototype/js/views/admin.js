@@ -343,7 +343,8 @@
     const list = apps();
     list.forEach((a) => { if (statusOf(a) === 'live') goLive(a, true); });
     const hid = seen().hidden || [];
-    RN.model.ops.forEach((o) => {
+    // Every profile, samples included (RN.model.ops leaves the samples out unless reviewer mode is on)
+    RN.model.allOps.forEach((o) => {
       if (o.admin) { const a = list.find((x) => x.id === o.admin.appId); o.hidden = !a || statusOf(a) !== 'live' || hid.includes(o.id); }
       else o.hidden = hid.includes(o.id);
     });
@@ -367,7 +368,7 @@
       else if (p.rate < idx.p25) out.push(['warn', `Rate ${RN.fmt.rate(p.rate)} is below the p25 (${RN.fmt.rate(idx.p25)}). Check it is not a typo.`]);
       else out.push(['good', `Rate sits inside the Rate Index range for ${catLabel(p.roleCategory)} (${RN.fmt.hrRange(idx.p25, idx.p75)}).`]);
     } else if (!p.rate) out.push(['warn', 'No hourly rate. Companies who filter by budget will not see this profile.']);
-    const dup = RN.model.ops.find((o) => !o.admin && o.name.toLowerCase() === p.name.toLowerCase());
+    const dup = RN.model.allOps.find((o) => !o.admin && o.name.toLowerCase() === p.name.toLowerCase());
     out.push(dup ? ['bad', `An operator named ${dup.name} is already on the network. Check for a duplicate.`] : ['good', 'No existing profile with this name.']);
     const dom = (p.email.split('@')[1] || '').toLowerCase();
     if (dom) out.push(/^(gmail|yahoo|outlook|hotmail|icloud|aol|proton|protonmail)\./.test(dom) ? ['warn', 'Personal email address. Confirm identity on LinkedIn.'] : ['good', `Work email domain: ${dom}`]);

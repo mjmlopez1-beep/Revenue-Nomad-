@@ -560,6 +560,8 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 
 /* Reviewer mode off (the default): prototype-only material is hidden. A table cell whose only content is a pending chip reads "To come". */
 html:not(.rn-notes) .fn-gap, html:not(.rn-notes) .illus, html:not(.rn-notes) .rs-schema, html:not(.rn-notes) [data-proto] { display: none !important; }
+/* A sample profile (op.sample) is reachable from the placeholder work samples with reviewer mode off, so its note always shows */
+html:not(.rn-notes) .illus.illus-sample { display: inline-flex !important; }
 html:not(.rn-notes) .fn-gap-w { display: contents; }
 html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after, html:not(.rn-notes) dd:has(> .fn-gap:only-child)::after { content: "To come"; color: var(--mute-2); font-style: italic; }
 

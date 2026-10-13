@@ -212,7 +212,9 @@
     const likeKeys = prof ? Object.keys(PROFILE_OP).filter((k) => prof[k] && prof[k].length && !facts.some((f) => f.k === k)) : [];
     const cats = (facts.find((f) => f.k === 'roleCategories') ? RN.model.understand(text).filters.roleCategories : []) || [];
     const q = normed([].concat(needs.map((n) => [n.vec, 1 / Math.max(1, needs.length)]), [[wordVector(queryWords(text)), 0.5]], cats.map((c) => [ix.cat.get(c), 0.3])));
-    const pool = opts.pool || RN.model.ops.filter((o) => !o.hidden);
+    // Sample profiles (op.sample) never rank outside reviewer mode, even when the vector index or a caller's pool holds them
+    const showSamples = RN.model.showSamples ? RN.model.showSamples() : true;
+    const pool = (opts.pool || RN.model.ops.filter((o) => !o.hidden)).filter((o) => showSamples || !o.sample);
     const sem = new Map(pool.map((op) => [op.id, ix.op.get(op.id) ? dot(q, ix.op.get(op.id)) : 0]));
     const vals = [...sem.values()], lo = Math.min(...vals), hi = Math.max(...vals);
     const rows = pool.map((op) => {

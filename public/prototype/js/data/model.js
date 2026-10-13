@@ -170,17 +170,29 @@
   M.completeness = completeness;
 
   /* ---------- Collection ---------- */
-  M.ops = (RN.data.rawOps || []).map(norm);
+  /* Real and sample operators (owner decision, Oct 13, 2026). The fictional sample profiles (ops_sample.js, op.sample)
+     never take part in matching, ranking, search, lists, counts, featured picks or statistics unless reviewer mode
+     (RN.store.state.notes) is on. M.ops is the one list every surface reads: real operators only, or real operators
+     plus the samples in reviewer mode. It is a getter, so toggling reviewer mode takes effect on the next render.
+     M.allOps always holds every profile; M.byId and M.bySlug always find a sample, so the placeholder work samples
+     (work.js) and a sample profile opened directly keep working. */
+  const ALL = (RN.data.rawOps || []).map(norm);
   // unique slugs
   const seen = {};
-  M.ops.forEach((o) => { if (seen[o.slug]) { seen[o.slug]++; o.slug += '-' + seen[o.slug]; } else seen[o.slug] = 1; });
-  const byId = new Map(M.ops.map((o) => [o.id, o]));
-  const bySlug = new Map(M.ops.map((o) => [o.slug, o]));
+  ALL.forEach((o) => { if (seen[o.slug]) { seen[o.slug]++; o.slug += '-' + seen[o.slug]; } else seen[o.slug] = 1; });
+  const REAL = ALL.filter((o) => !o.sample);
+  M.showSamples = () => !!(RN.store && RN.store.state && RN.store.state.notes);
+  Object.defineProperty(M, 'ops', { enumerable: true, get: () => (M.showSamples() ? ALL : REAL) });
+  Object.defineProperty(M, 'allOps', { enumerable: true, get: () => ALL });
+  // Whether an operator may appear in a list, count or suggestion right now (samples only in reviewer mode)
+  M.listed = (op) => !!op && !op.hidden && (!op.sample || M.showSamples());
+  const byId = new Map(ALL.map((o) => [o.id, o]));
+  const bySlug = new Map(ALL.map((o) => [o.slug, o]));
   M.byId = (id) => byId.get(id) || null;
   M.bySlug = (slug) => bySlug.get(slug) || null;
-  M.add = function (op) { M.ops.push(op); byId.set(op.id, op); bySlug.set(op.slug, op); if (M.refreshLocations) M.refreshLocations(); };
+  M.add = function (op) { ALL.push(op); if (!op.sample) REAL.push(op); byId.set(op.id, op); bySlug.set(op.slug, op); if (M.refreshLocations) M.refreshLocations(); };
   M.norm = norm;
-  M.matt = M.ops.find((o) => o.isMatt);
+  M.matt = ALL.find((o) => o.isMatt);
 
   /* ---------- Place: where an operator is based (Browse location filters, D9) ----------
      RN.model.place(op) -> {city, state, country, tz}, read from op.location ("Newtown, Connecticut", "Boston, MA",
@@ -303,6 +315,8 @@
     return F.locations.options;
   };
   M.refreshLocations();
+  // Reviewer mode adds or removes the samples, and with them their places in the Browse location picker
+  if (RN.store && RN.store.on) RN.store.on((key) => { if (key === 'notes' || key === '*') M.refreshLocations(); });
 
   /* Apply Studio edits (profile changes made during the session) */
   M.applyEdits = function () {
@@ -929,7 +943,7 @@
      fills missing definitions, so the profile bowtie, the Framework grid and the Library agree. */
   M.curate = function (stageMap, defOf) {
     F.fitTags.options.forEach((o) => { if (stageMap[o.v]) o.stage = stageMap[o.v]; if (!o.d && defOf) o.d = defOf(o.v) || ''; });
-    M.ops.forEach((op) => op.tags.forEach((t) => { if (stageMap[t.t]) t.stage = stageMap[t.t]; }));
+    ALL.forEach((op) => op.tags.forEach((t) => { if (stageMap[t.t]) t.stage = stageMap[t.t]; }));
   };
 
   /* Similar operators (after an intro, on profiles, in compare suggestions) */

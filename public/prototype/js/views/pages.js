@@ -842,7 +842,11 @@
 
   function talkDone() {
     const first = RN.fmt.first(T.name) || 'thanks';
-    const ops = (T.sugg || []).map((id) => RN.model.byId(id)).filter(Boolean);
+    // Suggestions saved when the request was sent; if one is no longer listed (a sample operator once reviewer mode
+    // is off, or a hidden profile), rank again from the same answers
+    let ops = (T.sugg || []).map((id) => RN.model.byId(id)).filter(Boolean);
+    if (!ops.every(RN.model.listed)) ops = suggest().top.map((r) => r.op);
+    const nMatch = liveCount();
     const b = brief();
     const cats = needCats(b.need);
     const unsure = !cats.length;
@@ -875,7 +879,7 @@
       <div class="wrap">
         <div class="pg-shead"><div class="pg-shead-l"><span class="eyebrow">${unsure ? 'A few operators to look at while you wait' : 'Operators we would start with'}</span>
           <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your company size and start date.' : `Matched on ${esc(RN.w.label('need', b.need).toLowerCase())}, your company size and start date.`}</h2></div>
-          <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${(T.matches || 0) === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(T.matches || 0, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
+          <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${nMatch === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(nMatch, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
         ${ops.length ? `<p class="pg-sugg-note">${icon('check-circle')}<span>Request intro opens with your answers filled in: ${esc(introSummary())}. Check it and send.</span></p>
         <div class="grid g-3 pg-sugg">${ops.map((op, i) => {
           const fit = RN.model.fit(op, b);
