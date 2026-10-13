@@ -443,7 +443,8 @@
     document.body.style.overflow = 'hidden';
     document.body.classList.add('has-modal');
     modalStack.push({ id, el, onClose: o.onClose, opener: document.activeElement, t: Date.now() });
-    const first = el.querySelector('[autofocus], input, select, textarea, button:not(.x-btn)');
+    // A flow can name its focus target ([data-cx-focus]); an info tip (.tip) never takes first focus
+    const first = el.querySelector('[data-cx-focus]') || el.querySelector('[autofocus], input:not([type=hidden]), select, textarea, button:not(.x-btn):not(.tip)');
     setTimeout(() => first && first.focus(), 30);
     if (o.mount) o.mount(el);
     ui.afterRender(el);
@@ -456,6 +457,16 @@
     if (top.opener && document.contains(top.opener) && top.opener.focus) { try { top.opener.focus(); } catch (e) { /* ignore */ } }
     if (!modalStack.length) { document.body.style.overflow = ''; document.body.classList.remove('has-modal'); }
     if (top.onClose) top.onClose();
+  };
+  /* When a page re-renders the element that opened a modal, point the modal back at its replacement so focus
+     returns there on close. openersIn(el) before the swap, retarget(entries, newRoot) after it. */
+  ui.openersIn = (root) => modalStack.filter((m) => m.opener && root && root.contains(m.opener)).map((m) => ({ m, act: m.opener.dataset && m.opener.dataset.act, kind: m.opener.dataset && m.opener.dataset.kind }));
+  ui.retarget = function (hits, root) {
+    (hits || []).forEach((h) => {
+      const same = h.act && root.querySelector(`[data-act="${h.act}"]${h.kind ? `[data-kind="${h.kind}"]` : ''}`);
+      const n = same || root.querySelector('button, a[href], input:not([type=hidden]), select, textarea');
+      if (n) h.m.opener = n;
+    });
   };
   ui.modalEl = () => (modalStack.length ? modalStack[modalStack.length - 1].el : null);
   /* Close modals opened before a navigation (browser Back); keep ones an action opened alongside the route change */
@@ -527,7 +538,8 @@
   });
   document.addEventListener('mouseover', (e) => { const t = e.target.closest('[data-tip]'); if (t && window.matchMedia('(hover: hover)').matches) showTip(t); });
   document.addEventListener('mouseout', (e) => { const t = e.target.closest('[data-tip]'); if (t && window.matchMedia('(hover: hover)').matches) hideTip(); });
-  document.addEventListener('focusin', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) showTip(t); });
+  // Keyboard focus opens a tip; programmatic focus (a modal opening) does not
+  document.addEventListener('focusin', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && (!t.matches || t.matches(':focus-visible'))) showTip(t); });
   document.addEventListener('focusout', (e) => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t) hideTip(); });
   window.addEventListener('scroll', hideTip, { passive: true });
   document.addEventListener('input', (e) => { const el = e.target.closest('[data-input]'); if (el && RN.inputs[el.dataset.input]) RN.inputs[el.dataset.input](el, e); });

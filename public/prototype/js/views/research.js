@@ -1168,6 +1168,9 @@
   const sumStat = (re, dflt) => { const x = (REP().summary || []).find((s) => re.test(s.l)); return x ? x.v : dflt; };
   const trig = (re) => { const x = (REP().triggers || []).find((t) => re.test(t.l)); return x ? x.v : 0; };
   const yoy = () => { const x = (REP().summary || []).find((s) => /year over year/i.test(s.l)); const m = x && x.l.match(/up (\d+%)/i); return m ? '+' + m[1] : '+9%'; };
+  // Where a key number comes from: only published research figures carry a Share pill (never product facts or sample counts)
+  const SRC_REP = () => `State of Fractional GTM ${REP().year}`;
+  const SRC_RI = () => `Rate Index, ${RN.contrib ? RN.contrib.indexLabel().replace(/ index$/, '') : 'latest quarter'}`;
   const latestMedian = () => { const t = RIX().trend || []; return t.length ? t[t.length - 1].v : 240; };
   // Tables with 3+ columns stack into labelled rows on phones (data-l carries the column label)
   const tbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl ${head.length > 2 ? 'rs-tbl-stack' : ''}"><table class="tbl ${cls || ''}"><thead><tr>${head.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'r' : ''}" data-l="${esc(head[i] || '')}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -1193,7 +1196,7 @@
       slug: 'how-to-scope-a-fractional-sales-engagement', bp: 'vp-sales', group: 'sales', updated: '2026-09-05', mins: 6, cat: 'sales_leadership', opsQ: 'sales playbook',
       q: 'How do you scope a fractional sales engagement?',
       answer: () => ['Scope a fractional sales engagement around one measurable outcome, a fixed number of hours a month and an initial term, usually three to six months.', 'Before day one, write down the 90-day deliverables, who the operator reports to and how progress is reviewed.'],
-      stats: () => { const hrsTop = hoursRows().slice().sort((a, b) => b.v - a.v)[0]; const term = REP().term || []; const tTop = term.slice().sort((a, b) => b.v - a.v)[0]; return [{ v: RN.w.label('hoursPerMonth', hrsTop.code), l: `Most common size (${hrsTop.v}% of engagements)` }, { v: tTop ? tTop.l : '3 to 6 mo', l: `Most common initial term (${tTop ? tTop.v : 38}%)` }, { v: sumStat(/Median engagement length/i, '6.4 mo'), l: 'Median engagement length' }]; },
+      stats: () => { const hrsTop = hoursRows().slice().sort((a, b) => b.v - a.v)[0]; const term = REP().term || []; const tTop = term.slice().sort((a, b) => b.v - a.v)[0]; return [{ v: RN.w.label('hoursPerMonth', hrsTop.code), l: `Most common size (${hrsTop.v}% of engagements)`, src: SRC_REP() }, { v: tTop ? tTop.l : '3 to 6 mo', l: `Most common initial term (${tTop ? tTop.v : 38}%)`, src: SRC_REP() }, { v: sumStat(/Median engagement length/i, '6.4 mo'), l: 'Median engagement length', src: SRC_REP() }]; },
       sections: () => {
         const hRows = hoursRows().map((r) => ({ label: RN.w.label('hoursPerMonth', r.code), value: r.v, hi: r.code === '40' }));
         const term = REP().term || [];
@@ -1231,7 +1234,7 @@
       slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'revops', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
       answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
-      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations' }, { v: monthRange('revenue_operations', '40', '5m_20m').replace(/\/month$/, ''), l: 'Typical month at 40 hrs' }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months' }]; },
+      stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations', src: SRC_RI() }, { v: monthRange('revenue_operations', '40', '5m_20m').replace(/\/month$/, ''), l: 'Typical month at 40 hrs', src: SRC_RI() }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months', src: SRC_REP() }]; },
       sections: () => [
         { id: 'audit', h: 'Days 1 to 30: audit', html: `<p>The first month is diagnosis. Expect a written audit that covers:</p><ul>
           <li><b>The CRM.</b> Duplicates, stale records, fields nobody uses, stages that mean different things to different reps. See ${L('library', 'CRM cleanup')} in the library.</li>
@@ -1261,7 +1264,7 @@
       slug: 'evaluate-fractional-operator-track-record', group: 'methods', updated: '2026-09-15', mins: 7, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do you evaluate a fractional operator\'s track record?',
       answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the companies they did it for.', 'On Revenue Nomad that proof is company-verified focus areas, CORE review scores, Engagement History and the Reputation Index, built mostly from company evidence rather than self-description.'],
-      stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of companies say stage fit mattered most, in hindsight' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
+      stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of companies say stage fit mattered most, in hindsight', src: SRC_REP() }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews', src: SRC_REP() }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
       sections: () => [
         { id: 'hindsight', h: 'What companies wish they had checked', html: `<p>We asked companies what they weighed when they hired a fractional leader, and what they would weigh now.</p>
           ${(REP().hindsight || []).length ? tbl(['Factor', 'Weighed at hire', 'Would weigh now'], REP().hindsight.map((r) => [esc(r[0]), esc(r[1]), `<b>${esc(r[2])}</b>`])) : ''}
@@ -1290,7 +1293,7 @@
       slug: 'how-much-should-a-fractional-operator-charge', group: 'operators', updated: '2026-09-20', mins: 6, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How much should a fractional operator charge?',
       answer: () => { const c = RIX().byCat; return [`Price from the Rate Index for your role category and the revenue range of the companies you serve, then adjust for your verified proof and the scope of the seat.`, `The median across fractional GTM leaders is ${hr(latestMedian())} an hour, from ${hr(c.sellers.p50)} for sellers to ${hr(c.sales_leadership.p50)} for sales leadership.`]; },
-      stats: () => [{ v: hr(latestMedian()) + '/hr', l: 'All-category median, latest quarter' }, { v: yoy(), l: 'Change in the median, year over year' }, { v: (REP().concurrent || []).slice().sort((a, b) => b.v - a.v)[0] ? REP().concurrent.slice().sort((a, b) => b.v - a.v)[0].l : '2 companies', l: 'Most common company load' }],
+      stats: () => [{ v: hr(latestMedian()) + '/hr', l: 'All-category median, latest quarter', src: SRC_RI() }, { v: yoy(), l: 'Change in the median, year over year', src: SRC_REP() }, { v: (REP().concurrent || []).slice().sort((a, b) => b.v - a.v)[0] ? REP().concurrent.slice().sort((a, b) => b.v - a.v)[0].l : '2 companies', l: 'Most common company load', src: SRC_REP() }],
       sections: () => {
         const cats = F.roleCategory.options.filter((o) => RIX().byCat[o.v]);
         const rows = cats.map((o) => ({ label: o.l, value: RIX().byCat[o.v].p50 })).sort((a, b) => b.value - a.value);
@@ -1321,7 +1324,7 @@
       slug: 'how-fractional-operators-win-direct-deals', group: 'operators', updated: '2026-09-16', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do fractional operators win companies without a marketplace intro?',
       answer: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0) || 67; return [`Most fractional work still comes from referrals and former colleagues: ${ref}% of companies in our survey found their operator that way.`, 'Operators win those deals faster when they can send proof: a profile with company-verified focus areas, CORE reviews and a private proof link that shows which parts the prospect read.']; },
-      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague' }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews' }, { v: ((REP().hindsight || [])[0] || [])[2] || '81%', l: 'Of companies say stage fit mattered most, in hindsight' }]; },
+      stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague', src: SRC_REP() }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews', src: SRC_REP() }, { v: ((REP().hindsight || [])[0] || [])[2] || '81%', l: 'Of companies say stage fit mattered most, in hindsight', src: SRC_REP() }]; },
       sections: () => {
         const s = (REP().sources || []).map((x) => ({ label: x.l, value: x.v, hi: /Referral/i.test(x.l) }));
         return [
@@ -1422,7 +1425,7 @@
       slug: c.slug, bp: c.bp, group: 'costs', updated: '2026-09-22', mins: 4, cat, opsQ: c.opsQ,
       q: `How much does a fractional ${c.noun} cost?`,
       answer: () => [`A fractional ${c.noun} costs a median of ${hr(b().p50)} an hour on the Revenue Nomad Rate Index, and the middle half of ${catL} operators charge between ${hr(b().p25)} and ${hr(b().p75)}.`, `At ${hrsL.replace(' / ', ' a ')}, that is a typical range of ${monthRange(cat, c.hours, '5m_20m')} for a company with $5M–$20M in revenue.`],
-      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}` }, { v: monthRange(cat, c.hours, '5m_20m').replace(/\/month$/, ''), l: `Typical month at ${hrsL}` }, { v: plural(b().n, 'rate'), l: 'In the index for this role category' }],
+      stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}`, src: SRC_RI() }, { v: monthRange(cat, c.hours, '5m_20m').replace(/\/month$/, ''), l: `Typical month at ${hrsL}`, src: SRC_RI() }, { v: plural(b().n, 'rate'), l: 'In the index for this role category', src: SRC_RI() }],
       sections: () => {
         const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b().p50 * mult(o.v)), hi: o.v === '5m_20m' }));
         const bp = bpOf();
@@ -1831,6 +1834,7 @@
           ${icon('arrow')}</a>`;
       }).join('')}</div>
       <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue<span data-proto>, illustrative in this prototype</span>. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
+      ${RN.contrib ? `<div class="rs-gcontrib">${RN.contrib.cta('rates', { variant: 'band', ctx: { source: 'guides' } })}</div>` : ''}
     </section>
     <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
         ${grpHd(grp(k))}
@@ -1886,7 +1890,16 @@
     }
     return { h: s, t: '' };
   }
-  function keyBand(keys) {
+  /* Click-to-share on a key number: a small Share pill at the end of the tile's source line (opens RN.share's sheet,
+     operators get "Share with your take"). The shared text is the number, its key and the source, in plain words. */
+  const kbShare = (num, key, src, g) => {
+    if (!RN.share || !num) return '';
+    const sent = (t) => { t = String(t || '').trim(); return t && !/[.?!]$/.test(t) ? t + '.' : t; };
+    const quote = `${sent(num)} ${sent(key)}${src ? ` Source: ${src}.` : ''}`.replace(/\s+/g, ' ').trim();
+    const o = { title: g.post ? g.post.q : g.q, route: 'guide.' + g.slug, quote, kind: 'key-number' };
+    return `<button type="button" class="shr-q-btn rs-kb-sh" data-act="shr-open" data-share="${esc(JSON.stringify(o))}" aria-label="${esc('Share this number: ' + num)}">${icon('share')}<span>Share</span></button>`;
+  };
+  function keyBand(keys, g) {
     const list = (keys || []).map((k) => ({ k, pend: gapOnly(k.v) })).sort((a, b) => a.pend - b.pend);
     const live = list.filter((x) => !x.pend).length;
     return `<section class="rs-kb" data-n="${live}" aria-label="Key numbers" data-rs-reveal>
@@ -1897,7 +1910,7 @@
         return `<div class="rs-kb-i" style="--i:${i}"${pend ? ' data-proto' : ''}>
           <span class="rs-kb-v${plainOf(v.h).length > 26 ? ' is-long' : ''}">${prich(v.h)}</span>
           <span class="rs-kb-k">${prich(k.k)}${v.t ? `<span class="rs-kb-x">${prich(v.t.charAt(0).toUpperCase() + v.t.slice(1) + (/[.?!]$/.test(v.t) ? '' : '.'))}</span>` : ''}</span>
-          <span class="rs-kb-s">${icon('info')}${srcH}</span>
+          <span class="rs-kb-s">${icon('info')}<span class="rs-kb-src">${srcH}</span>${pend ? '' : kbShare(plainOf(v.h), plainOf(k.k), plainOf(k.src), g)}</span>
         </div>`;
       }).join('')}</div>
     </section>`;
@@ -1959,7 +1972,7 @@
           <span class="label">The short answer</span>
           <p>${prich(p.answer)}</p>
         </div>
-        ${keyBand(p.keys)}
+        ${keyBand(p.keys, g)}
         ${mtoc(toc)}
         <div class="prose rs-prose">
           ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec rs-gsec-${esc(x.id)}"><h2>${disp(x.h)}</h2>${x.html}</section>`).join('')}
@@ -1969,6 +1982,7 @@
           ${p.faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${disp(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${prich(f.a)}</p></details>`).join('')}
         </section>
         ${ans}
+        ${closingBlock(g)}
         ${moreLinks(others)}
         <footer class="rs-gfoot">
           <p class="small muted">Built from Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. <span data-proto>A pending chip marks a figure or quote we do not have yet. </span>Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
@@ -2013,17 +2027,14 @@
 
   /* Operator answers (value: an input operators control). Stored in state.answers as
      { id, guideId, opId, text, engagementId, engagement: {company, role}, status: 'in_review' | 'approved', createdAt }; the team approves them.
-     Approved answers show with a byline and profile link. They earn placement here, never Reputation Index points. */
-  const ANS_MAX = 600;
+     Approved answers show with a byline and profile link. They earn placement here, never Reputation Index points.
+     Operators add one from the closing block ("Add a field note", RN.contrib's 'insight' flow, which writes the same record),
+     so this section only lists approved answers. */
   const answersFor = (id) => (RN.store.state.answers || []).filter((a) => (POST_ALIASES[a.guideId] || a.guideId) === id);
   const engKey = (e) => e.id || `${e.company}|${e.start || ''}`;
   function answersBlock(g) {
-    const me = RN.myOp();
-    const opView = RN.store.state.persona === 'operator' && me;
-    const all = answersFor(g.id);
-    const live = all.filter((a) => a.status === 'approved' && RN.model.byId(a.opId));
-    const mine = me ? all.find((a) => a.opId === me.id) : null;
-    if (!live.length && !opView) return '';
+    const live = answersFor(g.id).filter((a) => a.status === 'approved' && RN.model.byId(a.opId));
+    if (!live.length) return '';
     const card = (a) => {
       const op = RN.model.byId(a.opId);
       const eng = (op.engagements || []).find((e) => engKey(e) === a.engagementId) || (a.engagement ? { company: a.engagement.company, clientVerified: false } : null);
@@ -2032,55 +2043,64 @@
         <p class="rs-ans-t">${esc(a.text)}</p>
       </article>`;
     };
-    let foot = '';
-    if (opView) {
-      if (mine && mine.status !== 'approved') foot = `<div class="note rs-ans-mine">${RN.ui.statusPill('application', 'in_review', 'In review')}<span class="small">Your answer is with the Revenue Nomad team. It appears here with your byline once approved.</span></div>`;
-      else if (!mine) foot = `<div class="rs-ans-cta"><p class="small">Have you done this work? Answer in up to ${ANS_MAX} characters and attach one engagement as proof. Approved answers carry your byline and link to your profile. They earn placement on this page, never Reputation Index points.</p>
-        <button type="button" class="btn btn-line btn-sm" data-act="rs-answer" data-g="${esc(g.id)}">${icon('edit')}Answer this question</button></div>`;
-    }
     return `<section id="rs-s-answers" class="rs-answers" aria-labelledby="rs-ans-t">
       <h2 class="h3" id="rs-ans-t">Operators who answered</h2>
-      ${live.length ? `<div class="rs-ans-list">${live.map(card).join('')}</div>` : '<p class="small muted">No operator has answered this question yet.</p>'}
-      ${foot}
+      <div class="rs-ans-list">${live.map(card).join('')}</div>
     </section>`;
   }
-  RN.actions['rs-answer'] = (el) => {
-    const me = RN.myOp();
-    if (!me) { RN.actions.login(el); return; }
-    const g = guideBy(el.dataset.g);
-    if (!g) return;
-    const engs = me.engagements || [];
-    RN.ui.modal({
-      width: 560,
-      title: 'Answer this question',
-      sub: esc(g.title),
-      body: `<form data-submit="rs-answer" data-g="${esc(g.id)}" class="stack" style="--gap:18px" novalidate>
-        <div class="field"><label for="rs-ans-text">Your answer</label>
-          <textarea class="textarea" id="rs-ans-text" name="text" maxlength="${ANS_MAX}" rows="6" required></textarea>
-          <p class="help">Up to ${ANS_MAX} characters, from your own engagements. The team reviews every answer before it appears.</p></div>
-        ${engs.length ? `<div class="field"><label for="rs-ans-eng">Engagement as proof</label>
-          <select class="select" id="rs-ans-eng" name="engagement">${engs.map((e) => `<option value="${esc(engKey(e))}">${esc(e.company)}${e.role ? ' · ' + esc(e.role) : ''}${e.clientVerified ? ' (company-verified)' : ''}</option>`).join('')}</select>
-          <p class="help">From your Engagement History. Company-verified engagements rank first.</p></div>`
-          : `<p class="small muted">Add an engagement in Studio to attach proof. <a href="#studio.profile">Open Studio</a></p>`}
-        <button class="btn" type="submit">Send for review</button>
-      </form>`,
-    });
+
+  /* ---------- Closing block (bottom of every guide and answer post) ----------
+     ONE compact card, in this order: a topic-matched one-tap question that feeds a dataset (cost guides ask what a seat
+     cost and lead into 'paid' or 'rate'; the rest ask a Pulse or 2028-report question), the share row (operators also
+     get "Share with your take"), "Add a field note" for operators, and the Pulse sign-up unless already subscribed.
+     Everything comes from RN.contrib / RN.share; the sign-up is the Insights one (RN.ins.newsSlot). */
+  const CLOSE_Q = {
+    'how-to-hire-a-fractional-vp-of-sales': 'pulse-hiring',
+    'fractional-vp-of-sales-first-90-days': 'topic-length',
+    'interim-vs-fractional-vs-full-time-sales-leader': 'topic-hours',
+    'how-to-stop-running-sales-as-a-founder': 'pulse-problem',
+    'sales-meetings-not-converting': 'pulse-problem',
+    'fractional-cro-vs-full-time-cro': 'pulse-hiring',
+    'how-to-scope-a-fractional-sales-engagement': 'topic-hours',
+    'revops-vs-sales-ops': 'pulse-hiring',
+    'fractional-revops-consultant': 'pulse-problem',
+    'how-to-fix-sales-forecast-accuracy': 'pulse-outlook',
+    'fractional-revops-first-90-days': 'topic-length',
+    'how-to-hire-a-fractional-cmo': 'topic-first-seat',
+    'fractional-cmo-vs-agency': 'pulse-outlook',
+    'how-fractional-operators-win-direct-deals': 'pulse-hiring',
+    'evaluate-fractional-operator-track-record': 'topic-length',
+    'what-is-the-reputation-index': 'pulse-outlook',
+    'what-is-core': 'pulse-problem',
   };
-  RN.submits['rs-answer'] = (form, data) => {
-    const me = RN.myOp();
-    const g = guideBy(form.dataset.g);
-    const text = String(data.text || '').trim();
-    if (!me || !g) return;
-    if (text.length < 40) { RN.ui.toast('Write at least a couple of sentences, from your own work.', { icon: 'info' }); const t = form.querySelector('textarea'); if (t) t.focus(); return; }
-    const eng = (me.engagements || []).find((e) => engKey(e) === data.engagement);
-    const rec = { id: RN.uid('ans'), guideId: g.id, opId: me.id, text: text.slice(0, ANS_MAX), engagementId: eng ? engKey(eng) : null, engagement: eng ? { company: eng.company, role: eng.role || '' } : null, status: 'in_review', createdAt: RN.now().toISOString() };
-    RN.store.update((s) => { s.answers = (s.answers || []).filter((a) => !(a.guideId === g.id && a.opId === me.id)).concat(rec); }, 'answers');
-    RN.track('guide_answer', { opId: me.id, source: 'guide', meta: { guideId: g.id } });
-    RN.mail('team@revenuenomad.com', `Guide answer to review: ${g.title}`, `${me.name} answered "${g.title}".\n\n${rec.text}`, 'admin');
-    RN.ui.closeModal();
-    RN.ui.toast('Answer sent for review');
-    RN.rerender();
-  };
+  // "What does a fractional VP of Sales cost" -> "a fractional VP of Sales"
+  const seatOf = (g) => { const m = /does (an? fractional .+?) cost/i.exec(g.q || ''); return m ? m[1].replace(/^(an?) /i, (x, a) => a.toLowerCase() + ' ') : ''; };
+  R.closeQuestion = (g) => (isCost(g) ? 'topic-cost' : g.group === 'operators' && !CLOSE_Q[g.slug] ? 'rates' : CLOSE_Q[g.slug] || 'pulse-hiring');
+  const firstSentences = (t, max) => { const x = plainOf(t).replace(/\s+/g, ' ').trim(); if (x.length <= max) return x; const cut = x.slice(0, max); const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('? ')); return end > 60 ? cut.slice(0, end + 1) : cut.replace(/\s+\S*$/, '') + '…'; };
+  function closingBlock(g) {
+    const CX = RN.contrib, SH = RN.share;
+    if (!CX || !SH) return '';
+    const qid = R.closeQuestion(g);
+    const ctx = { cat: g.cat || '', source: 'guide-' + g.slug };
+    const seat = seatOf(g);
+    if (seat) ctx.seat = seat;
+    // Operator-audience guides without a question ask for a rate (a known company viewer gets 'what you paid')
+    const ask = qid === 'rates' ? CX.cta(CX.side() === 'company' ? 'rates' : 'rate', { variant: 'band', ctx }) : CX.pulse(qid, ctx);
+    const quote = firstSentences(g.post ? g.post.answer : g.answer().join(' '), 240);
+    const note = CX.cta('insight', { variant: 'line', ctx: { guideId: g.id, source: 'guide-close' } });
+    const news = !CX.subscribed() && RN.ins && RN.ins.newsSlot ? `<div class="rs-close-news">
+        <p class="rs-close-news-t"><b>The Fractional GTM Pulse</b><span>Once a quarter, the Rate Index, the Demand Index and new research. Free.</span></p>
+        ${RN.ins.newsSlot('guide')}
+      </div>` : '';
+    return `<section class="rs-close" id="rs-s-close" aria-label="Add to the research and share this guide">
+      <div class="rs-close-ask">${ask}</div>
+      <div class="rs-close-ft">
+        ${SH.row({ title: g.post ? g.post.q : g.q, route: 'guide.' + g.slug, quote, kind: 'guide', label: 'Share this guide' })}
+        ${note ? `<div class="rs-close-note">${note}</div>` : ''}
+        ${news}
+      </div>
+    </section>`;
+  }
 
   /* The guide's "From the network" module: search results for the guide's topic in its role category, then the
      highest Reputation Index. Every operator is ranked by the same rules. Returns RN.model.search rows {op, why}. */
@@ -2143,7 +2163,7 @@
           <span class="label">The short answer</span>
           <p>${answer.map(esc).join(' ')}</p>
         </div>
-        ${stats.length ? `<section class="rs-kb" data-n="${stats.length}" aria-label="Key numbers" data-rs-reveal><span class="label rs-kb-l">Key numbers</span><div class="rs-kb-g">${stats.map((s, i) => `<div class="rs-kb-i" style="--i:${i}"><span class="rs-kb-v">${esc(s.v)}</span><span class="rs-kb-k">${esc(s.l)}</span></div>`).join('')}</div></section>` : ''}
+        ${stats.length ? `<section class="rs-kb" data-n="${stats.length}" aria-label="Key numbers" data-rs-reveal><span class="label rs-kb-l">Key numbers</span><div class="rs-kb-g">${stats.map((s, i) => `<div class="rs-kb-i" style="--i:${i}"><span class="rs-kb-v">${esc(s.v)}</span><span class="rs-kb-k">${esc(s.l)}</span>${s.src ? `<span class="rs-kb-s rs-kb-s-sh">${kbShare(s.v, s.l, s.src, g)}</span>` : ''}</div>`).join('')}</div></section>` : ''}
         ${mtoc(toc)}
         <div class="prose rs-prose">
           ${secs.map((s) => `<section id="rs-s-${esc(s.id)}" class="rs-gsec"><h2>${esc(s.h)}</h2>${olToTl(s.html)}</section>`).join('')}
@@ -2153,6 +2173,7 @@
           ${faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${esc(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${esc(f.a)}</p></details>`).join('')}
         </section>
         ${ans}
+        ${closingBlock(g)}
         ${moreLinks(others)}
         <footer class="rs-gfoot">
           <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. <span data-proto>Market and survey figures in this prototype are illustrative. </span>Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>

@@ -740,3 +740,30 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
 }
 .bw-spot-fit li:not(.is-match):not(.is-partial) svg { background: var(--sunk); color: var(--mute); }
 .bw-spot-fit li:not(.is-match):not(.is-partial) { color: var(--mute); }
+
+/* ---------- Research: benchmarks the company helps build (RN.contrib) ---------- */
+.bw-bench { display: flex; flex-direction: column; gap: 14px; padding: var(--s-5); border: 1px solid var(--line-2); border-radius: var(--r-card); background: var(--card); }
+.bw-bench-hd { display: flex; flex-direction: column; gap: 2px; }
+.bw-bench-l { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--ink); }
+.bw-bench-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 0; }
+.bw-bench-row + .bw-bench-row { border-top: 1px solid var(--line-2); }
+.bw-bench-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bw-bench-txt b { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); line-height: 1.3; }
+.bw-bench-act { margin-top: 4px; }
+.bw-bench-act .act, .bw-bench > .act { font-size: var(--t-13); }
+.bw-bench > .act { align-self: flex-start; }
+.bw-bench-row.is-done b { color: var(--ink-2); }
+
+/* On a hire card: a line for a hire confirmed in the last 30 days, else one quiet action */
+.bw-bench-note { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--tint-line); border-radius: 14px; background: var(--tint); }
+.bw-bench-note p { margin: 0; line-height: 1.45; }
+.bw-bench-note b { color: var(--ink); }
+.bw-bench-note .btn { white-space: nowrap; }
+.bw-bench-hire { display: inline-flex; }
+.bw-bench-hire .act svg, .bw-bench-in svg { width: 14px; height: 14px; }
+.bw-bench-in { color: var(--ink-2); font-weight: 600; }
+.bw-bench-s0 { padding: 0 var(--s-1); }
+@media (max-width: 720px) {
+  .bw-bench-note { grid-template-columns: auto minmax(0, 1fr); }
+  .bw-bench-note > .btn, .bw-bench-note > .act { grid-column: 2; justify-self: start; }
+}

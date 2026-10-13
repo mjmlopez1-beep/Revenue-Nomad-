@@ -806,7 +806,7 @@
       <div class="bw-now-sub${also.length ? '' : ' is-solo'}">
         ${also.length ? `<div class="bw-also"><h3 class="label">Also needs you</h3><ol class="bw-rows">${also.map(rowHtml).join('')}</ol>
           ${more.length ? `<details class="bw-more"><summary>Show ${more.length} more${icon('chev-down')}</summary><ol class="bw-rows">${more.map(rowHtml).join('')}</ol></details>` : ''}</div>` : ''}
-        <div class="bw-now-side">${waitingHtml(L)}${sinceCard(L)}</div>
+        <div class="bw-now-side">${waitingHtml(L)}${sinceCard(L)}${benchCard(L)}</div>
       </div>
     </section>`;
   }
@@ -875,6 +875,97 @@
       ${arrowLink('buyer.history', 'See history')}
     </section>`;
   }
+
+  /* =====================================================================
+     Research: what the company adds to the Rate Index, the Pulse and the 2028 report (RN.contrib)
+     One quiet rail card on the Overview, one action per hire on the Team tab. Every piece carries
+     data-bw-bench so it repaints in place after a contribution (no page re-render behind the modal).
+     ===================================================================== */
+  const CX = () => RN.contrib;
+  // The paid record for this hire in the open quarter (the core's done('paid') is per quarter, not per hire)
+  const paidFor = (hId) => {
+    const P = CX().period().key;
+    return (st().contributions || []).filter((c) => c && c.kind === 'paid' && c.status !== 'draft' && c.period === P && (c.answers || {}).hireId === hId)
+      .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0] || null;
+  };
+  // A hire can feed the index when its terms give a monthly cost (not cancelled before it started)
+  const benchable = (h) => !!(CX() && h && !h.cancelled && RN.hire.monthly(h) > 0 && catOf(h));
+  const paidCtx = (h, source) => ({ hireId: h.id, cat: catOf(h), source });
+  const paidBtn = (h, source, cls, label) => `<button type="button" class="${cls}" data-act="cx-open" data-kind="paid" data-ctx="${esc(JSON.stringify(paidCtx(h, source)))}">${label}</button>`;
+  const newHire = (h) => daysSince(h.createdAt) <= 30;
+  // Which hire the Overview asks about: the newest benchable one not yet in this quarter's index
+  const benchHire = (L) => L.all.filter((h) => benchable(h) && !paidFor(h.id)).sort((a, b) => ((a.status === 'active') !== (b.status === 'active') ? (a.status === 'active' ? -1 : 1) : String(b.createdAt).localeCompare(String(a.createdAt))))[0] || null;
+
+  function benchRow(o) {
+    return `<li class="bw-bench-row${o.done ? ' is-done' : ''}">${RN.ui.icoTile(o.done ? 'check' : o.icon, { size: 'sm', tone: o.tone })}
+      <span class="bw-bench-txt"><b>${esc(o.t)}</b><span class="tiny muted">${esc(o.b)}</span>${o.act ? `<span class="bw-bench-act">${o.act}</span>` : ''}</span></li>`;
+  }
+  // The Overview rail card: what you paid (newest hire), the quarterly Pulse, the 2028 survey
+  function benchCard(L) {
+    if (!CX()) return '';
+    const C = CX(), P = C.period();
+    const rows = [];
+    // One ask a quarter here: once any hire is in this quarter's index, the Team tab carries the rest
+    const last = L.all.map((x) => paidFor(x.id)).filter(Boolean).sort((x, y) => String(y.createdAt).localeCompare(String(x.createdAt)))[0];
+    const h = !last && benchHire(L);
+    const op = h && opOf(h);
+    if (h && op) {
+      rows.push({ icon: 'chart', tone: 'forest', t: `Add what you ${h.status === 'ended' ? 'paid' : 'pay'} ${op.first}`, b: `${usd(RN.hire.monthly(h))}/month, prefilled from the terms.`,
+        act: paidBtn(h, 'bw-overview', 'act', `Add to the ${P.short} Rate Index${icon('arrow')}`) });
+    } else if (last) {
+      rows.push({ done: true, tone: 'forest', t: `You're in the ${P.label} Rate Index`, b: `It publishes in the first two weeks of ${P.publishes}.`, act: `<button type="button" class="act" data-act="cx-result" data-id="${esc(last.id)}">See your result</button>` });
+    }
+    const pulse = C.done('pulse');
+    rows.push(pulse
+      ? { done: true, tone: 'info', t: `Your ${P.short} Pulse answers are in`, b: `Results publish in the ${P.publishes} Pulse.`, act: `<button type="button" class="act" data-act="cx-result" data-id="${esc(pulse.id)}">See how others answered</button>` }
+      : { icon: 'wave', tone: 'info', t: `Answer the ${P.short} Pulse`, b: `Demand and hiring plans. Three questions, about 60 seconds.`,
+        act: `<button type="button" class="act" data-act="cx-open" data-kind="pulse" data-ctx="${esc(JSON.stringify({ source: 'bw-overview' }))}">Answer the Pulse${icon('arrow')}</button>` });
+    const sv = C.done('survey'), draft = !sv && C.draft();
+    const R = C.datasets.report2028;
+    rows.push(sv
+      ? { done: true, tone: 'enable', t: 'You\'re in the 2028 report', b: 'We\'ll send it a week before it publishes in October 2027.', act: `<button type="button" class="act" data-act="cx-result" data-id="${esc(sv.id)}">See your answers</button>` }
+      : { icon: 'book', tone: 'enable', t: draft ? 'Finish shaping the 2028 report' : 'Shape the 2028 State of Fractional GTM',
+        b: draft ? `Saved at chapter ${draft.chapter || 1} of 6. Open until ${R.window().closesLabel}.` : `Six short chapters. You get the report a week early.`,
+        act: `<button type="button" class="act" data-act="cx-open" data-kind="survey" data-ctx="${esc(JSON.stringify({ source: 'bw-overview' }))}">${draft ? `Pick up at chapter ${draft.chapter || 1}` : 'Start the survey'}${icon('arrow')}</button>` });
+    return `<section class="bw-bench" data-bw-bench="rail" aria-labelledby="bw-bench-t">
+      <div class="bw-bench-hd"><h2 class="label" id="bw-bench-t">Benchmarks you help build</h2><span class="tiny muted">Published only in aggregate. You see your result right away.</span></div>
+      <ul class="bw-bench-l">${rows.map(benchRow).join('')}</ul>
+    </section>`;
+  }
+  // On a hire card: a prominent line for a hire confirmed in the last 30 days, else one quiet action
+  function hirePaid(h, mode) {
+    if (!benchable(h)) return '';
+    const P = CX().period();
+    const rec = paidFor(h.id);
+    const op = opOf(h);
+    const t = h.terms || {};
+    if (mode === 'act') {
+      return `<span class="bw-bench-hire" data-bw-bench="act" data-id="${esc(h.id)}">${rec
+        ? `<button type="button" class="act bw-bench-in" data-act="cx-result" data-id="${esc(rec.id)}">${icon('check-circle')}In the ${esc(P.short)} Rate Index</button>`
+        : paidBtn(h, 'bw-team', 'act', `${icon('chart')}${h.status === 'ended' ? 'Add what you paid' : 'Add what you pay'}`)}</span>`;
+    }
+    const hrs = t.engagementType === 'project' ? 'a project' : hoursText(t.hoursPerMonth);
+    return `<div class="bw-bench-note${rec ? ' is-done' : ''}" data-bw-bench="note" data-id="${esc(h.id)}">${RN.ui.icoTile(rec ? 'check' : 'chart', { size: 'sm', tone: 'forest' })}
+      <p class="small">${rec
+        ? `<b>Thanks, ${esc(op.first)}’s seat is in the ${esc(P.label)} Rate Index.</b> <span class="muted">It publishes in the first two weeks of ${esc(P.publishes)}.</span>`
+        : `<b>Add these terms to the ${esc(P.short)} Rate Index.</b> <span class="muted">Prefilled with ${esc(usd(RN.hire.monthly(h)))}/month, ${esc(hrs)}. Published only in aggregate, about 60 seconds, and you see how it compares right away.</span>`}</p>
+      ${rec ? `<button type="button" class="act" data-act="cx-result" data-id="${esc(rec.id)}">See your result</button>` : paidBtn(h, 'bw-hire-confirmed', 'btn btn-sm', h.status === 'ended' ? 'Add what you paid' : 'Add what you pay')}
+    </div>`;
+  }
+  // Repaint every research piece in place when a contribution lands (the result stays open in the modal)
+  RN.store.on((key) => {
+    if (key !== 'contributions' && key !== '*') return;
+    if (!document.querySelector('[data-bw-bench]')) return;
+    cache = {};
+    RN.$$('[data-bw-bench]').forEach((el) => {
+      const kind = el.dataset.bwBench;
+      const h = el.dataset.id && RN.hire.get(el.dataset.id);
+      const html = kind === 'rail' ? benchCard(life()) : h ? hirePaid(h, kind === 'act' ? 'act' : 'note') : '';
+      if (!html) return;
+      const t = document.createElement('div'); t.innerHTML = html.trim();
+      if (t.firstElementChild) el.replaceWith(t.firstElementChild);
+    });
+  });
 
   /* ---------- S0: Start here ---------- */
   let askText = '';
@@ -964,6 +1055,7 @@
         <li><span class="bw-how-n">3</span><b>Hire</b><p class="small muted">Agree the terms and record them here.</p></li>
       </ol>
     </section>
+    ${CX() ? `<div class="bw-bench-s0">${CX().cta('pulse', { variant: 'line', ctx: { source: 'bw-start' } })}</div>` : ''}
     <div class="bw-quiet">${icon('layers')}<span>Your team, engagements and history appear here as you go.</span></div>`;
   }
   let askTimer = null;
@@ -1790,10 +1882,12 @@
         ${costBox(h)}
       </div>
       ${t.notes ? `<blockquote class="bw-hire-notes"><span class="label">Also agreed</span>${esc(t.notes)}</blockquote>` : ''}
+      ${newHire(h) ? hirePaid(h, 'note') : ''}
       <div class="row bw-intro-act">
         <button type="button" class="btn ${lead === 'extend:' + h.id ? '' : 'btn-line'} btn-sm" data-act="hire-extend" ${attrs}>${icon('calendar')}Extend</button>
         <button type="button" class="btn btn-line btn-sm" data-act="bw-checkin" ${attrs}>${icon('message')}Request a check-in</button>
         ${review}
+        ${newHire(h) ? '' : hirePaid(h, 'act')}
         <button type="button" class="act muted bw-hire-end" data-act="hire-end" ${attrs}>${RN.hire.notStarted(h) ? 'Cancel engagement' : 'End engagement'}</button>
       </div>
     </article>`;
@@ -1826,6 +1920,7 @@
         ${h.cancelled || L.active.some((x) => x.opId === h.opId) ? '' : `<button type="button" class="btn btn-line btn-sm" data-act="bw-rehire" data-hire="${esc(h.id)}">${icon('refresh')}Rehire ${esc(op.first)}</button>`}
         <button type="button" class="act" data-act="bw-similar" data-hire="${esc(h.id)}">Find someone like ${esc(op.first)}</button>
         ${myReviewOf(op.id) ? `<a class="act" href="#op.${esc(op.slug)}">See your review</a>` : ''}
+        ${hirePaid(h, 'act')}
       </div>
     </article>`;
   }

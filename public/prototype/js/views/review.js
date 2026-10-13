@@ -200,7 +200,7 @@
           <button type="submit" class="btn ${step === 3 ? 'btn-lg' : ''}">${step === 3 ? 'Publish my review' : 'Continue'}${step === 3 ? '' : icon('arrow')}</button>
         </div>
       </form>
-      <p class="rv-fine small muted">${icon('shield')}<span>Reviews publish right away and Revenue Nomad never edits them. ${esc(op.first)} sees your review, not your spend. Spend is used anonymously in the Rate Index.</span></p>
+      <p class="rv-fine small muted">${icon('shield')}<span>Reviews publish right away and Revenue Nomad never edits them. ${esc(op.first)} sees your review, not your spend. Spend goes into the Rate Index only in aggregate, never individually.</span></p>
       </div>
       <aside class="rv-side" aria-label="Preview of your review" data-rv-preview>${sideHtml(rr, op, dr.d)}</aside>
     </div>`;
@@ -576,6 +576,56 @@
     RN.go(`review.${rr.id}`, { replace: true });
   }
 
+  /* ---------- Thank-you: one line inviting the company to add what it paid (RN.contrib, Rate Index) ---------- */
+  // Prefilled from the review's engagement and, when the review came from a hire, from the hire terms
+  function paidCtx(rr, rv) {
+    const e = (rv && rv.engagement) || {};
+    const det = reqDetails(rr);
+    const cat = e.roleCategory || det.roleCategory || '';
+    const role = e.title || det.role || '';
+    const roles = (RN.fields.rolesByCat && RN.fields.rolesByCat[cat]) || [];
+    const ctx = { cat, source: 'review:' + rr.id };
+    if (role && roles.includes(role)) ctx.role = role;
+    const monthly = e.monthlySpend || (e.engagementType !== 'project' ? +det.monthlySpend || 0 : 0);
+    if (monthly) ctx.monthly = monthly;
+    if (e.revenueRange || det.revenueRange) ctx.rev = e.revenueRange || det.revenueRange;
+    if (e.engagementType || det.engagementType) ctx.type = e.engagementType || det.engagementType;
+    if (rv && typeof rv.hireAgain === 'boolean') ctx.again = rv.hireAgain ? 'yes' : 'no';
+    if (rr.hireId && RN.hire && RN.hire.get && RN.hire.get(rr.hireId)) ctx.hireId = rr.hireId;
+    return ctx;
+  }
+  // This review's paid record in the open quarter (by the review link, or by the hire it came from)
+  function paidRec(rr) {
+    const C = RN.contrib; if (!C) return null;
+    const P = C.period().key;
+    return (st().contributions || []).find((c) => c && c.kind === 'paid' && c.status !== 'draft' && c.period === P
+      && (c.source === 'review:' + rr.id || (rr.hireId && (c.answers || {}).hireId === rr.hireId))) || null;
+  }
+  function paidLine(rr, op) {
+    const C = RN.contrib;
+    if (!C || !rr) return '';
+    const rv = st().reviews.find((r) => r.id === rr.reviewId) || null;
+    const ctx = paidCtx(rr, rv);
+    if (!ctx.cat) return '';
+    const P = C.period();
+    const rec = paidRec(rr);
+    if (rec) return `<p class="cx-cta cx-line is-done rv-paid" data-rv-paid="${esc(rr.id)}">${icon('check-circle')}<span>Thanks, what you paid for ${esc(op.first)}’s seat is in the ${esc(P.label)} Rate Index. <button type="button" class="act" data-act="cx-result" data-id="${esc(rec.id)}">See your result</button></span></p>`;
+    const pre = ctx.monthly ? `${RN.fmt.usd(ctx.monthly)}/month, prefilled from your review.` : 'Prefilled from your review.';
+    return `<p class="cx-cta cx-line rv-paid" data-rv-paid="${esc(rr.id)}">${icon('chart')}<span>One more thing: add what you paid ${esc(op.first)} to the ${esc(P.short)} Rate Index. ${esc(pre)} Published only in aggregate, and you see how it compares right away. <button type="button" class="act" data-act="cx-open" data-kind="paid" data-ctx="${esc(JSON.stringify(ctx))}">Add what you paid${icon('arrow')}</button></span></p>`;
+  }
+  // Repaint the line in place once the company adds it (the result stays open in the modal)
+  RN.store.on((key) => {
+    if (key !== 'contributions') return;
+    RN.$$('[data-rv-paid]').forEach((el) => {
+      const rr = findRR(el.dataset.rvPaid);
+      const op = rr && RN.model.byId(rr.opId);
+      const html = op ? paidLine(rr, op) : '';
+      if (!html) return;
+      const t = document.createElement('div'); t.innerHTML = html.trim();
+      el.replaceWith(t.firstElementChild);
+    });
+  });
+
   /* ---------- Thank-you / already completed ---------- */
   function done(rr, op) {
     const res = results[rr.id];
@@ -592,6 +642,7 @@
           <h1 class="h2">You already reviewed <span class="serif">${esc(op.first)}</span>. Thank you.</h1>
           <p class="lede">${rv ? `Submitted ${esc(RN.fmt.date(rr.completedAt))}. It is live on ${esc(op.first)}’s profile.` : `This review was submitted${rr.completedAt ? ' on ' + esc(RN.fmt.date(rr.completedAt)) : ''}. Review links work once.`}</p>
           <div class="row rv-cta"><a class="btn" href="#op.${esc(op.slug)}">See ${esc(op.first)}’s profile</a>${isBuyer ? '<a class="btn btn-line" href="#buyer">Back to your workspace</a>' : '<a class="btn btn-line" href="#browse">Browse operators</a>'}</div>
+          ${paidLine(rr, op)}
         </div>
         ${similarHtml(op, similar)}
       </div>`;
@@ -628,6 +679,7 @@
         </section>
       </div>
       <div class="row rv-cta"><a class="btn" href="#op.${esc(op.slug)}">See ${esc(op.first)}’s profile${icon('arrow')}</a>${isBuyer ? '<a class="btn btn-line" href="#buyer">Back to your workspace</a>' : '<a class="btn btn-line" href="#browse">Browse operators</a>'}</div>
+      ${paidLine(rr, op)}
       ${similarHtml(op, similar)}
     </div>`;
   }

@@ -682,7 +682,7 @@
     return `<div class="sb sb-cred">
       ${head('Credibility', 'Proof you can use in any deal, including the ones you find yourself. Proposed: Revenue Nomad takes no share of deals you bring yourself, including deals you win with a proof link.', tier ? `<button type="button" class="btn btn-ghost btn-sm" data-proto data-act="st-tierup-preview" title="Prototype: see the tier-up moment without changing any data">${icon('eye')}Preview tier-up</button>` : '')}
       <nav class="sb-jump" aria-label="On this page">
-        ${[['sb-c-ri', 'Reputation Index'], ['sb-c-rev', 'Reviews'], ['sb-c-tags', 'Verified tags'], ['sb-c-proof', 'Proof links'], ['sb-c-badge', 'Badge']].map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}
+        ${[['sb-c-ri', 'Reputation Index'], ['sb-c-rev', 'Reviews'], ['sb-c-tags', 'Verified tags'], ['sb-c-proof', 'Proof links'], ['sb-c-badge', 'Badge'], ['sb-c-research', 'Research']].map(([id, l]) => `<button type="button" class="chip chip-sm" data-act="sb-scroll" data-target="${id}">${esc(l)}</button>`).join('')}
       </nav>
 
       <section class="card sb-ri" id="sb-c-ri" aria-labelledby="sb-ri-h">
@@ -730,6 +730,7 @@
       ${tagsSection(op)}
       ${proofSection(op)}
       ${badgeSection(op)}
+      ${RN.studio.cx ? RN.studio.cx.history(op) : ''}
     </div>`;
   }
 

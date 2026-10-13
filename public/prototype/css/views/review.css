@@ -228,3 +228,8 @@
   .rv-expired { padding: var(--s-8) var(--s-5); }
 }
 .rv-who > .grow { flex: 1 1 0; min-width: 0; }
+
+/* Thank-you: one line inviting the company to add what it paid to the Rate Index */
+.rv-done .rv-paid { justify-content: center; max-width: 620px; margin: var(--s-5) auto 0; text-align: left; padding: 12px 16px; border: 1px solid var(--line-2); border-radius: 14px; background: var(--card); }
+.rv-done .rv-paid.is-done { background: var(--tint); border-color: var(--tint-line); }
+.rv-done-hd .rv-paid { margin-top: var(--s-2); }

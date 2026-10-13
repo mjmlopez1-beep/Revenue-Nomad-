@@ -1,6 +1,6 @@
 /* Admin: the Revenue Nomad team console (#admin, #admin.<tab>).
    Tabs: Overview, Demand, Hires, Approvals, Intros, Engagements (#admin.engagements; old #admin.projects still opens it),
-   Directory, Emails. Hires (D15) lists every confirmed hire and its terms from RN.hire (intro.js). Admin is internal, so it
+   Directory, Emails, Research datasets (#admin.research). Hires (D15) lists every confirmed hire and its terms from RN.hire (intro.js). Admin is internal, so it
    may show Revenue Nomad's share: operators pay a percentage of billed earnings (proposed 25%); clients pay the rate.
    It reads the one store and model every surface shares, so a search a client runs in Browse, an
    application from Join or an intro requested on a profile shows up here, and every action taken
@@ -25,7 +25,7 @@
   const toast = (m, o) => RN.ui.toast(m, o);
 
   /* View state that should survive a re-render (not persisted) */
-  const ui = { days: 30, dirQ: '', dirCat: '', dirSeg: 'all', dirSort: 'ris', dirLimit: 25, termsAll: false, gapsAll: false, mailSeg: 'all' };
+  const ui = { days: 30, dirQ: '', dirCat: '', dirSeg: 'all', dirSort: 'ris', dirLimit: 25, termsAll: false, gapsAll: false, mailSeg: 'all', resPeriod: 'open', resAll: false };
   let charts = {};   // chart builders for this render, drawn at each slot's real width in mount()
   let ctx = {};      // recruit contexts for this render (zero-result rows, categories, focus areas)
 
@@ -42,6 +42,7 @@
     { key: 'engagements', label: 'Engagements', icon: 'briefcase', group: 'Work queue', badge: () => liveProjects().filter((p) => projInfo(p).flag).length },
     { key: 'directory', label: 'Directory', icon: 'users', group: 'Network' },
     { key: 'emails', label: 'Emails', icon: 'mail', group: 'Network' },
+    { key: 'research', label: 'Research datasets', icon: 'chart', group: 'Research' },
   ];
   const TAB_ALIAS = { projects: 'engagements' };   // old links keep working (D12)
   const tabDef = (k) => TABS.find((x) => x.key === (TAB_ALIAS[k] || k));
@@ -72,7 +73,7 @@
     hydrate();
     charts = {}; ctx = {};
     const tab = tabDef(key) ? tabDef(key).key : 'overview';
-    const body = { overview, demand, hires: hiresTab, approvals, intros: introsTab, engagements: projectsTab, managed: () => RN.admManaged.tab(), directory, emails }[tab]();
+    const body = { overview, demand, hires: hiresTab, approvals, intros: introsTab, engagements: projectsTab, managed: () => RN.admManaged.tab(), directory, emails, research: researchTab }[tab]();
     return `<div class="wrap shell adm" data-adm="${esc(tab)}">${side(tab)}<div class="adm-main">${body}</div></div>`;
   }
 
@@ -112,7 +113,7 @@
   });
   RN.view('admin-tab', {
     route: 'admin.:tab', nav: '', requires: 'admin', footer: false,
-    samples: { tab: 'demand', extra: ['admin.managed', 'admin.hires', 'admin.approvals', 'admin.intros', 'admin.engagements', 'admin.projects', 'admin.directory', 'admin.emails'] },
+    samples: { tab: 'demand', extra: ['admin.managed', 'admin.hires', 'admin.approvals', 'admin.intros', 'admin.engagements', 'admin.projects', 'admin.directory', 'admin.emails', 'admin.research'] },
     title: (p) => (tabDef(p.tab) ? tabDef(p.tab).label : 'Overview') + ' · Admin',
     render: (p) => render(p.tab),
     mount: (root) => mount(root),
@@ -1082,6 +1083,184 @@
       </section>`;
   }
 
+
+  /* =====================================================================================
+     RESEARCH DATASETS (#admin.research)
+     What the contribute flows (RN.contrib) collect for the Rate Index, the 2028 report, the Quarterly Pulse and field
+     notes: responses in each window against the internal targets (RN.contrib.targets, a proposal for the founder to
+     confirm), by role category and side, with every cell under the n=5 publishing threshold flagged.
+     Counts come from the store (RN.contrib.count: contributions made in this browser). The published baselines are the
+     real figures in RN.data.market (the 2027 report sample and the Rate Index n), labelled as such. Nothing is seeded.
+     ===================================================================================== */
+  const RES_MIN = 5;      // a figure publishes only from 5 responses in its group (RN.contrib trust line)
+  const RES_SIDES = [{ v: 'operator', l: 'Operators' }, { v: 'company', l: 'Companies' }];
+  const resAll = () => (Array.isArray(st().contributions) ? st().contributions : []);
+  // The survey keeps its role category under 's2-cat' (RN.contrib.count's cat filter reads answers.cat)
+  const resCat = (c) => { const a = c.answers || {}; return a.cat || a['s2-cat'] || ''; };
+  const resLong = (d) => (d ? RN.fmt.date(d) : '');
+  function resPeriods() {
+    const C = RN.contrib;
+    return { open: C.period(), prev: C.prevPeriod() };
+  }
+  const resMeter = (n, target, label) => {
+    const w = target ? Math.min(100, Math.round((n / target) * 100)) : 0;
+    return `<div class="meter adm-res-meter" role="img" aria-label="${esc(label || `${n} of ${target}`)}"><i style="width:${w}%"></i></div>`;
+  };
+  // One count cell: the number, flagged when it is under the publishing threshold
+  const resCell = (n, l) => `<td class="r tnum${n < RES_MIN ? ' adm-res-thin' : ''}" data-l="${esc(l)}">${int(n)}${n < RES_MIN ? `<span class="sr-only"> (under ${RES_MIN}, not publishable)</span>` : ''}</td>`;
+  function resFlag(n, target) {
+    if (n < RES_MIN) return `<span class="pill pill-warn">Under ${RES_MIN}</span>`;
+    if (target && n < target) return '<span class="pill pill-line">Directional</span>';
+    return `<span class="pill pill-good">${icon('check')}Publishable</span>`;
+  }
+  function resWindow(ds) {
+    const w = ds.window();
+    if (!w.opens) return 'Always open, publishes when approved';
+    const pub = String(w.publishes).replace(/^The /, 'the ').replace(/^First/, 'first');
+    return `${ds.id === 'report2028' ? 'Fieldwork' : 'Window'} ${RN.fmt.dateShort(w.opens)}, ${w.opens.getFullYear()} to ${resLong(w.closes)}, publishes ${pub}`;
+  }
+
+
+  function researchTab() {
+    const C = RN.contrib;
+    if (!C) return `${head('Research datasets', 'The contribute core (RN.contrib) is not loaded.')}`;
+    const T = C.targets, D = C.datasets;
+    const per = resPeriods();
+    const P = ui.resPeriod === 'prev' ? per.prev : per.open;
+    const isOpen = P.key === per.open.key;
+    const cats = Object.keys(RN.data.market.rateIndex.byCat);
+
+    // ---- Rate Index (quarterly) ----
+    const rCnt = (f) => C.count('rateIndex', Object.assign({ period: P.key }, f));
+    const riRates = rCnt({ kind: 'rate' }), riPaid = rCnt({ kind: 'paid' }), riTaps = rCnt({ kind: 'topic' });
+    const riTotal = riRates + riPaid;
+    const riPub = C.published('rateIndex');
+    // ---- 2028 report (annual) ----
+    const surveys = resAll().filter((c) => c.kind === 'survey' && c.dataset === 'report2028');
+    const svDone = C.count('report2028', { kind: 'survey', status: 'done' });
+    const svSide = (side) => C.count('report2028', { kind: 'survey', status: 'done', side });
+    const svOpen = surveys.filter((c) => c.status !== 'done').length;
+    const svTaps = C.count('report2028', { kind: 'topic' });
+    const repPub = C.published('report2028');
+    // ---- Pulse (quarterly) ----
+    const pCnt = (f) => C.count('pulse', Object.assign({ kind: 'pulse', period: P.key }, f));
+    const puTotal = pCnt({});
+    const puPartial = pCnt({ status: 'partial' });
+    // ---- Field notes (ongoing, RN.store.state.answers) ----
+    const ans = st().answers || [];
+    const now = RN.now();
+    const fnMonth = ans.filter((a) => a.status === 'approved' && a.createdAt && new Date(a.createdAt).getMonth() === now.getMonth() && new Date(a.createdAt).getFullYear() === now.getFullYear()).length;
+
+    const seg = `<div class="seg" role="group" aria-label="Quarter">${[['open', `${per.open.label} (open)`], ['prev', per.prev.label]].map(([k, l]) => `<button type="button" class="${ui.resPeriod === k ? 'on' : ''}" aria-pressed="${ui.resPeriod === k}" data-act="adm-res-period" data-p="${k}">${esc(l)}</button>`).join('')}</div>`;
+
+    const card = (ds, o) => `<article class="card adm-res-ds">
+        <div class="adm-res-ds-hd">${RN.ui.icoTile(ds.icon, { tone: ds.tone, size: 'sm' })}<div class="grow"><h2 class="h4">${esc(ds.name)}</h2><span class="tiny muted">${esc(ds.cadence)} · ${esc(o.period)}</span></div>${o.state}</div>
+        <p class="adm-res-big"><span class="num">${int(o.n)}</span><span class="muted">of ${int(o.target)} ${esc(o.unit)}</span></p>
+        ${resMeter(o.n, o.target, `${o.n} of a target of ${o.target} ${o.unit}`)}
+        <ul class="adm-res-lines small">${o.lines.filter(Boolean).map((l) => `<li>${l}</li>`).join('')}</ul>
+        <p class="tiny muted adm-res-win">${icon('calendar')}<span>${esc(o.win)}</span></p>
+      </article>`;
+    const state = (open) => (open ? '<span class="pill pill-good">Open</span>' : '<span class="pill pill-line">Closed</span>');
+    const sideLine = (a, b, ta, tb) => `Operators <b class="tnum">${int(a)}</b>${ta ? ` <span class="muted">of ${int(ta)}</span>` : ''} · Companies <b class="tnum">${int(b)}</b>${tb ? ` <span class="muted">of ${int(tb)}</span>` : ''}`;
+
+    const cards = [
+      card(D.rateIndex, { period: P.label, state: state(isOpen), n: riTotal, target: T.rateIndex.perQuarter, unit: 'rates this quarter',
+        lines: [sideLine(riRates, riPaid), riTaps ? `Plus ${RN.fmt.plural(riTaps, 'one-tap cost answer')} (bucketed, not in the index)` : '', `Published baseline: ${esc(riPub.label)} ${illus('Illustrative data')}`],
+        win: isOpen ? resWindow(D.rateIndex) : `Closed ${resLong(P.end)}, published ${P.publishes}` }),
+      card(D.report2028, { period: '2028 edition', state: state(true), n: svDone, target: T.report2028.total, unit: 'finished surveys',
+        lines: [sideLine(svSide('operator'), svSide('company'), T.report2028.operators, T.report2028.companies), svOpen ? `${RN.fmt.plural(svOpen, 'survey')} saved or in progress` : 'No surveys saved or in progress', svTaps ? `Plus ${RN.fmt.plural(svTaps, 'one-tap answer')} from guides` : '', `Published baseline: ${esc(repPub.label)} ${illus('Illustrative data')}`],
+        win: resWindow(D.report2028) }),
+      card(D.pulse, { period: P.label, state: state(isOpen), n: puTotal, target: T.pulse.perQuarter, unit: 'responses this quarter',
+        lines: [sideLine(pCnt({ side: 'operator' }), pCnt({ side: 'company' }), T.pulse.perSide, T.pulse.perSide), puPartial ? `${RN.fmt.plural(puPartial, 'response')} with some questions skipped` : '', 'No Pulse results are published yet. The first quarterly results publish from this window.'],
+        win: isOpen ? resWindow(D.pulse) : `Closed ${resLong(P.end)}` }),
+      card(D.fieldNotes, { period: RN.now().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), state: state(true), n: fnMonth, target: T.fieldNotes.perMonth, unit: 'approved this month',
+        lines: [`In review <b class="tnum">${int(C.count('fieldNotes', { status: 'in_review' }))}</b> · Approved <b class="tnum">${int(C.count('fieldNotes', { status: 'approved' }))}</b> · Declined <b class="tnum">${int(C.count('fieldNotes', { status: 'declined' }))}</b>`, '<a class="act" href="#admin.approvals">Review field notes in Approvals' + icon('arrow') + '</a>'],
+        win: resWindow(D.fieldNotes) }),
+    ].join('');
+
+    // ---- Rate Index by role category and side ----
+    const riRows = cats.map((cat) => {
+      const pub = C.published('rateIndex', { cat });
+      const op = rCnt({ kind: 'rate', cat }), co = rCnt({ kind: 'paid', cat }), tot = op + co;
+      return `<tr>
+        <th scope="row" class="adm-w">${esc(catLabel(cat))}</th>
+        <td class="r tnum" data-l="Published n">${int(pub.n)}${pub.directional ? ' <span class="pill pill-line">Directional</span>' : ''}</td>
+        ${resCell(op, 'Operators')}${resCell(co, 'Companies')}
+        <td data-l="Toward ${T.rateIndex.perCategory}"><div class="adm-res-prog"><span class="tnum">${int(tot)}</span>${resMeter(tot, T.rateIndex.perCategory, `${tot} of ${T.rateIndex.perCategory}`)}</div></td>
+        <td data-l="Status">${resFlag(tot, T.rateIndex.perCategory)}</td>
+      </tr>`;
+    }).join('');
+    const riTable = `<section class="card adm-sec">
+      ${cardHead(`Rate Index by role category, ${esc(P.label)}`, `Rates operators charge and what companies paid, against ${T.rateIndex.perCategory} a category. A cell under ${RES_MIN} never publishes; under ${T.rateIndex.perCategory} it publishes as directional.`)}
+      <div class="tbl-wrap"><table class="tbl adm-tbl adm-stacktbl adm-res-tbl">
+        <thead><tr><th>Role category</th><th class="r">Published n, ${esc(C.indexLabel())}</th><th class="r">Operators</th><th class="r">Companies</th><th>Toward ${T.rateIndex.perCategory}</th><th>Status</th></tr></thead>
+        <tbody>${riRows}</tbody></table></div>
+      <p class="tiny muted adm-foot">Published n is the sample behind the ${esc(C.indexLabel())} (RN.data.market, illustrative in this prototype). Operators and Companies count contributions made in this browser for ${esc(P.label)}.</p>
+    </section>`;
+
+    // ---- 2028 report by role category and side ----
+    const doneSv = surveys.filter((c) => c.status === 'done');
+    const svCat = (cat, side) => doneSv.filter((c) => resCat(c) === cat && c.side === side).length;
+    const svNoCat = doneSv.filter((c) => !resCat(c)).length;
+    const svRows = cats.map((cat) => {
+      const op = svCat(cat, 'operator'), co = svCat(cat, 'company');
+      return `<tr><th scope="row" class="adm-w">${esc(catLabel(cat))}</th>${resCell(op, 'Operators')}${resCell(co, 'Companies')}<td data-l="Status">${resFlag(op + co)}</td></tr>`;
+    }).join('');
+    const svSideRows = RES_SIDES.map((x) => {
+      const n = svSide(x.v), t = T.report2028[x.v === 'operator' ? 'operators' : 'companies'];
+      const base = x.v === 'operator' ? repPub.operators : repPub.companies;
+      const prog = surveys.filter((c) => c.status !== 'done' && c.side === x.v).length;
+      return `<tr><th scope="row" class="adm-w">${esc(x.l)}</th>
+        <td class="r tnum" data-l="2027 sample">${int(base)}</td>
+        ${resCell(n, '2028 finished')}
+        <td class="r tnum" data-l="In progress">${int(prog)}</td>
+        <td data-l="Toward ${t}"><div class="adm-res-prog"><span class="tnum">${int(n)}</span>${resMeter(n, t, `${n} of ${t}`)}</div></td></tr>`;
+    }).join('');
+    const svTable = `<section class="card adm-sec">
+      ${cardHead('State of Fractional GTM 2028 by side and role category', `Finished surveys against ${T.report2028.total} (${T.report2028.operators} operators, ${T.report2028.companies} companies) by the ${esc(D.report2028.window().closesLabel)} close. The 2027 column is the published sample.`)}
+      <div class="tbl-wrap"><table class="tbl adm-tbl adm-stacktbl adm-res-tbl">
+        <thead><tr><th>Side</th><th class="r">2027 sample</th><th class="r">2028 finished</th><th class="r">In progress</th><th>Toward target</th></tr></thead>
+        <tbody>${svSideRows}</tbody></table></div>
+      <h3 class="label adm-res-sub">Finished surveys by role category</h3>
+      <div class="tbl-wrap"><table class="tbl adm-tbl adm-stacktbl adm-res-tbl">
+        <thead><tr><th>Role category</th><th class="r">Operators</th><th class="r">Companies</th><th>Status</th></tr></thead>
+        <tbody>${svRows}</tbody></table></div>
+      ${svNoCat ? `<p class="tiny muted adm-foot">${RN.fmt.plural(svNoCat, 'finished survey')} skipped the role category question.</p>` : ''}
+    </section>`;
+
+    // ---- Newest contributions, anonymised ----
+    const KIND = { rate: 'Rate', paid: 'What they paid', pulse: 'Pulse', topic: 'One-tap answer', survey: '2028 survey' };
+    const newest = resAll().slice().sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
+    const shown = ui.resAll ? newest : newest.slice(0, 10);
+    const anon = (c) => { const x = JSON.parse(JSON.stringify(c)); if (x.answers) delete x.answers.role; return C.describe(x); };
+    const statusPill = (c) => (c.status === 'draft' ? '<span class="pill pill-line">Saved</span>' : c.status === 'partial' ? '<span class="pill pill-warn">Partial</span>' : '<span class="pill pill-good">Done</span>');
+    const recent = `<section class="card adm-sec">
+      ${cardHead('Newest contributions', 'Anonymised: no names, emails or job titles. Internal only; individual rows never appear on public pages.')}
+      ${newest.length ? `<div class="tbl-wrap"><table class="tbl adm-tbl adm-stacktbl adm-res-tbl adm-res-new">
+        <thead><tr><th>When</th><th>Dataset</th><th>Side</th><th>Answer</th><th>Email</th><th>Status</th></tr></thead>
+        <tbody>${shown.map((c) => `<tr>
+          <td class="small" data-l="When">${esc(RN.fmt.ago(c.updatedAt || c.createdAt))}</td>
+          <td class="small adm-w" data-l="Dataset"><b>${esc((D[c.dataset] || {}).name || c.dataset)}</b><span class="tiny muted adm-block">${esc(KIND[c.kind] || c.kind)} · ${esc(c.periodLabel || '')}</span></td>
+          <td class="small" data-l="Side">${esc(c.side === 'operator' ? 'Operator' : c.side === 'company' ? 'Company' : 'Not given')}</td>
+          <td class="small" data-l="Answer">${esc(anon(c) || 'No answers yet')}</td>
+          <td class="small" data-l="Email">${c.email ? 'Given' : c.persona === 'visitor' ? 'Not given' : 'Signed in'}</td>
+          <td data-l="Status">${statusPill(c)}</td>
+        </tr>`).join('')}</tbody></table></div>
+        ${newest.length > 10 ? `<button type="button" class="act adm-more" data-act="adm-res-all">${ui.resAll ? 'Show the newest 10' : `Show all ${newest.length}`}</button>` : ''}`
+      : RN.ui.empty({ icon: 'chart', title: 'No contributions yet', body: `Contributions land here as companies and operators add a rate, what they paid, Pulse answers or the 2028 survey from the site. The ${esc(per.open.label)} window closes ${esc(per.open.closes)}.`, cta: '<a class="btn btn-sm btn-line" href="#rates">Open the Rate Index</a>' })}
+    </section>`;
+
+    const note = `<div class="adm-res-note" role="note">${RN.ui.icoTile('flag', { tone: 'gold', size: 'sm' })}<p class="small"><span class="pill pill-gold">Proposal</span> <b>${esc(T.note)}</b> ${esc(T.report2028.label)}. ${esc(T.rateIndex.label)}. ${esc(T.pulse.label)}. ${esc(T.fieldNotes.label)}. The 2028 fieldwork opening date (${esc(resLong(D.report2028.window().opens))}) is also to confirm.</p></div>`;
+
+    return `${head('Research datasets', `What companies and operators contribute to Revenue Nomad Research, window by window. Figures publish only from ${RES_MIN} responses in a group. Internal only.`, seg)}
+      ${note}
+      <div class="adm-res-grid">${cards}</div>
+      ${riTable}
+      ${svTable}
+      ${recent}
+      <p class="tiny muted adm-stats-foot">Counts are the contributions stored in this browser (RN.contrib.count). Baselines are the published 2027 report sample and the Rate Index n. Nothing here is seeded.</p>`;
+  }
+
   /* =====================================================================================
      ENGAGEMENTS (client postings, stored as projects)
      ===================================================================================== */
@@ -1290,6 +1469,8 @@
   RN.actions['adm-terms-all'] = () => { ui.termsAll = !ui.termsAll; RN.rerender(); };
   RN.actions['adm-gaps-all'] = () => { ui.gapsAll = !ui.gapsAll; RN.rerender(); };
   RN.actions['adm-mail-seg'] = (el) => { ui.mailSeg = el.dataset.s; RN.rerender(); };
+  RN.actions['adm-res-period'] = (el) => { ui.resPeriod = el.dataset.p === 'prev' ? 'prev' : 'open'; RN.rerender(); };
+  RN.actions['adm-res-all'] = () => { ui.resAll = !ui.resAll; RN.rerender(); };
   RN.actions['adm-dir-seg'] = (el) => { ui.dirSeg = el.dataset.s; ui.dirLimit = 25; RN.rerender(); };
   RN.actions['adm-dir-more'] = () => { ui.dirLimit += 25; refreshDir(); };
   RN.actions['adm-dir-reset'] = () => { Object.assign(ui, { dirQ: '', dirCat: '', dirSeg: 'all', dirLimit: 25 }); RN.rerender(); };

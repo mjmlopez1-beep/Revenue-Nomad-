@@ -330,6 +330,9 @@
 [data-view="home"] .hm-rep-txt .eyebrow { display: block; margin-bottom: var(--s-4); }
 [data-view="home"] .hm-rep-txt .lede { margin-top: var(--s-5); }
 [data-view="home"] .hm-rep-fine { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+/* One line inviting data for the 2028 edition (RN.contrib CTA, line variant): a quiet aside under the report CTA */
+[data-view="home"] .hm-contrib { margin-top: var(--s-6); max-width: 60ch; }
+[data-view="home"] .hm-contrib .cx-line { font-size: var(--t-15, 15px); }
 
 /* ---------- The Fractional GTM brief (one calm band) ---------- */
 [data-view="home"] .hm-brief { margin-top: var(--s-8); padding-top: var(--s-6); border-top: 1px solid var(--ink); }

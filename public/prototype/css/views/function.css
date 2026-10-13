@@ -31,6 +31,9 @@ main[data-view="hire-fractional-sales-vp"], main[data-view="fractional-revops"],
 .fn-page .pg-shead { margin-bottom: var(--s-8); }
 .fn-page .pg-shead-l .lede { max-width: 66ch; }
 .fn-after { display: grid; gap: var(--s-4); margin-top: var(--s-8); max-width: 66ch; }
+/* Under a cost table: one line inviting the number to the Rate Index (RN.contrib CTA, line variant) */
+.fn-contrib { margin-top: var(--s-4); }
+.fn-contrib + .fn-after { margin-top: var(--s-6); }
 .fn-after .pg-p, .fn-outside { text-wrap: pretty; }
 .fn-after .link, .fn-outside .link { font-weight: 600; }
 .night .fn-after .link { color: var(--leaf); }

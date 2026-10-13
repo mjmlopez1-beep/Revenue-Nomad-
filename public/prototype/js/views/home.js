@@ -615,10 +615,19 @@
           <dl class="hm-rep-stats">${[r.summary[0], r.summary[2], r.summary[3]].filter(Boolean).map((s) => `<div><dt class="num">${unit(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
           <div class="row hm-ctas"><a class="btn" href="#report">Read the report${icon('arrow')}</a></div>
           <p class="hm-rep-fine tiny muted"><span>Open to read, no email needed.</span>${RN.ui.illus('Illustrative figures')}</p>
+          ${contribLine()}
           ${briefSec()}
         </div>
       </div>
     </section>`;
+  }
+
+  /* One line inviting data for the next edition (RN.contrib, the 2028 survey). It switches to a thanks or "Pick up at
+     chapter N" state on its own after a contribution (RN.contrib.refresh). Empty when the core is not loaded. */
+  function contribLine() {
+    if (!RN.contrib) return '';
+    const html = RN.contrib.cta('survey', { variant: 'line', ctx: { source: 'home_report' } });
+    return html ? `<div class="hm-contrib">${html}</div>` : '';
   }
 
   /* ---------- The Fractional GTM Pulse (quarterly newsletter, same list as Insights) ---------- */

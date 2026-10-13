@@ -513,8 +513,8 @@
       ${liveNow ? liveStrip(liveNow) : ''}
       ${kpiRow(op, m, d)}
       <div class="sa-cols">
-        <div class="sa-col sa-col-main">${whoSummary(op, a, d)}${whyFound(op, a, d)}${activityCard(op, act, since)}</div>
-        <div class="sa-col sa-col-side">${nbaCard(op)}${risCard(op)}${digestCard(op)}</div>
+        <div class="sa-col sa-col-main">${whoSummary(op, a, d)}${whyFound(op, a, d)}${activityCard(op, act, since)}${RN.studio.cx ? RN.studio.cx.insight(op) : ''}</div>
+        <div class="sa-col sa-col-side">${nbaCard(op)}${RN.studio.cx ? RN.studio.cx.checkin(op) : ''}${risCard(op)}${digestCard(op)}</div>
       </div>
       ${demandCard(op)}
       <p class="tiny muted sa-foot">${icon('info')}Numbers combine illustrative history with live activity from this prototype session. Company names are never shown in Studio.</p>

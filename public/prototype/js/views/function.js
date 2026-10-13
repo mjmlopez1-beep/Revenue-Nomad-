@@ -656,6 +656,7 @@
   function cost(d) {
     return sec('cost', false, `${PG.shead('Cost', 'What it costs', esc(d.cost.lede))}
       ${chartTable(d.cost, { cat: d.cat, label: d.cost.lede.replace(/\.$/, ''), phone: 3 })}
+      ${contribLine({ cat: d.cat, source: 'function_' + d.fn })}
       ${paras(d.cost.after)}`);
   }
 
@@ -798,11 +799,21 @@
     </div></section>`;
   }
 
+  /* Under each cost table: one line inviting the number to the Rate Index (RN.contrib). 'rates' picks by side:
+     companies add what they paid, operators add their rate, a visitor with no known side chooses in the flow.
+     It switches to a thanks state on its own after a contribution (RN.contrib.refresh). */
+  function contribLine(ctx) {
+    if (!RN.contrib) return '';
+    const html = RN.contrib.cta('rates', { variant: 'line', ctx });
+    return html ? `<div class="fn-contrib">${html}</div>` : '';
+  }
+
   /* ---------- Cost hub pieces ---------- */
   function rates(d) {
     const ri = { cols: ['Seat', 'Median rate, typical hours and typical monthly'], rows: d.riSeats.map((s) => ({ seat: s, gap: ['2027 survey figure', 'Survey'] })) };
     return `<section class="section fn-sec fn-rates fn-alt" id="fn-rates"><div class="wrap">${PG.shead('2026 engagements', 'Rates by seat')}
       ${chartTable(d.rates, { label: 'Rates by seat, 2026 engagements', monthly: 'Monthly', phone: 1, noun: 'seats' })}
+      ${contribLine({ source: 'cost_hub' })}
       <div class="fn-ri">
         <p class="pg-p fn-outside">${rich(d.outside)}</p>
         <aside class="fn-ri-r" aria-label="Until the survey lands">

@@ -23,7 +23,9 @@
       reviewRequests: [],          // operator -> past client
       reviews: [],                 // reviews submitted during this session
       proofLinks: [],              // tracked private share links for direct deals
-      answers: [],                 // operator answers to guide questions (in_review | approved | declined)
+      answers: [],                 // operator answers to guide questions (in_review | approved | declined); field notes reuse this
+      contributions: [],           // research contributions (RN.contrib, js/core/contribute.js):
+                                   // {id, kind: rate|paid|pulse|topic|survey, dataset, period, persona, side, answers, createdAt, email?, status}
       outbox: [],                  // emails the system would send
       signup: null,                // operator intake draft
       pending: [],                 // submitted operator profiles awaiting review
@@ -43,6 +45,8 @@
         if (raw) {
           const saved = JSON.parse(raw);
           if (saved && saved.v === 1) store.state = Object.assign(initial(), saved);
+          // States saved before a list existed (or with a damaged one) get an empty list
+          if (!Array.isArray(store.state.contributions)) store.state.contributions = [];
         }
       } catch (e) { /* storage unavailable: run in memory */ }
       return store.state;
