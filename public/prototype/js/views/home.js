@@ -300,11 +300,26 @@
           <span class="hm-seat-n"><span class="num">${RN.fmt.plural(opsIn([s.cat]), 'operator')}</span><span class="hm-go" aria-hidden="true">${icon('arrow')}</span></span>
         </a>`).join('')}</div>
     </nav>
+    ${RN.work ? `<nav class="hm-deliv" aria-labelledby="hm-deliv-t"><h3 class="hm-seats-h" id="hm-deliv-t">Or start from a deliverable</h3>
+      <div class="chipset">${RN.work.types.filter((t) => RN.work.all().some((x) => x.type === t)).map((t) => `<button type="button" class="chip" data-act="wk-go" data-v="${esc(t)}">${esc(t)}<span class="chip-n">${RN.work.all().filter((x) => x.type === t).length}</span></button>`).join('')}<a class="hm-more" href="#work">See all the work${icon('arrow')}</a></div>
+    </nav>` : ''}
     <nav class="hm-prep" aria-labelledby="hm-prep-t">
       <div class="hm-prep-hd"><div><span class="hm-prep-k">Revenue Nomad Research</span><h3 id="hm-prep-t">Not ready to hire yet?</h3></div><p>Start with the numbers, the gap and the plan.</p></div>
       <ul class="hm-prep-list">${PREP.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-t"><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><b>${keep(p[1])}</b></span><span class="hm-prep-d">${keep(p[2])}</span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
       ${prepSource()}
     </nav>`;
+  }
+
+
+  /* ---------- See the work (founder, Oct 13, 2026: the Behance lesson, work as a second way in) ---------- */
+  function workSec() {
+    if (!RN.work) return '';
+    return `<section class="hm-sec section hm-work">
+      <div class="wrap">
+        ${head('The work', 'See the work behind the operators.', more('All work samples', 'href="#work"'), 'Playbooks, comp plans, dashboards and 30/60/90 plans operators built for companies like yours. Find one you need, then meet who built it.')}
+        ${RN.work.strip({ title: '', link: false, source: 'home' })}
+      </div>
+    </section>`;
   }
 
   /* ---------- Start from the problem ---------- */
@@ -329,7 +344,7 @@
     }).join('');
     return `<section class="hm-sec section">
       <div class="wrap">
-        ${head('Start here', 'Start from the problem you have<span class="vm">.</span>', '', `Pick what is broken. Browse opens on the role categories that fix it. Counts are the ${esc(RN.fmt.int(liveOps().length))} profiles in this prototype.`)}
+        ${head('Start here', 'Start from the problem you have<span class="vm">.</span>', '', 'Find operators who have solved your problem.')}
         <div class="hm-ruled hm-needs">${cells}</div>
         ${seats()}
       </div>
@@ -611,7 +626,7 @@
         <div class="hm-rep-txt">
           <span class="eyebrow">New research · Free to read</span>
           <h2 class="h2 hm-h2">${esc(r.title)} ${esc(r.year)}. Where GTM leadership is going.</h2>
-          <p class="lede">${esc(String(r.lede).split('. ')[0].replace(/\.$/, ''))}. Read it on the web, chapter by chapter. Every chart opens the matching operators in Browse.</p>
+          <p class="lede">${esc(String(r.lede).split('. ')[0].replace(/\.$/, ''))}.</p>
           <dl class="hm-rep-stats">${[r.summary[0], r.summary[2], r.summary[3]].filter(Boolean).map((s) => `<div><dt class="num">${unit(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
           <div class="row hm-ctas"><a class="btn" href="#report">Read the report${icon('arrow')}</a></div>
           <p class="hm-rep-fine tiny muted"><span>Open to read, no email needed.</span>${RN.ui.illus('Illustrative figures')}</p>
@@ -1181,7 +1196,7 @@
     title: () => 'Revenue Nomad · Fractional GTM leaders, research and rates',
     render: () => {
       const anim = !S.played && !calm();
-      return [hero(anim), strip(), problems(), featuredSec(), frameworkSec(), pulseSec(), reportSec(), quotesSec(), talkSec()].join('');
+      return [hero(anim), strip(), problems(), featuredSec(), workSec(), frameworkSec(), pulseSec(), reportSec(), quotesSec(), talkSec()].join('');
     },
     mount: (root) => {
       teardown();

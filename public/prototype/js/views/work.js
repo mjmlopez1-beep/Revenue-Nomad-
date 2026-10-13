@@ -272,6 +272,9 @@
   }
   RN.actions['wk-need'] = (el) => { G.type = 'all'; goNeed(el.dataset.v); };
   RN.actions['wk-type'] = (el) => { G.type = el.dataset.v || 'all'; RN.rerender(); };
+  // From another page (Home's "Or start from a deliverable"): open the gallery on one kind of work
+  W.openType = (t) => { G.type = t || 'all'; RN.go ? RN.go('work') : (location.hash = '#work'); };
+  RN.actions['wk-go'] = (el) => W.openType(el.dataset.v);
   RN.actions['wk-clear'] = () => { G.type = 'all'; goNeed('all'); };
   RN.actions['wk-hire'] = (el) => {
     const s = W.get(el.dataset.id);

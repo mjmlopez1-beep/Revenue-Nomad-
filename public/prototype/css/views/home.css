@@ -845,3 +845,8 @@ main[data-view="home"] { overflow-x: clip; }
 [data-view="home"] .hm-steps.is-live .hm-step:not(.on) .hm-step-t, [data-view="home"] .hm-steps.is-live .hm-step:not(.on) p { opacity: .55; transition: opacity .4s ease; }
 [data-view="home"] .hm-steps.is-live .hm-step.on .hm-step-t, [data-view="home"] .hm-steps.is-live .hm-step.on p { opacity: 1; transition: opacity .4s ease; }
 @media (prefers-reduced-motion: reduce) { [data-view="home"] .hm-step .ico, [data-view="home"] .hm-step-k { transition: none; } }
+
+/* Or start from a deliverable (Start here, third way in) */
+[data-view="home"] .hm-deliv { margin-top: var(--s-8); display: grid; gap: var(--s-4); }
+[data-view="home"] .hm-deliv .chipset { align-items: center; }
+[data-view="home"] .hm-deliv .hm-more { margin-left: var(--s-3); }
