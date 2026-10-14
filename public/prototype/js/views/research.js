@@ -243,10 +243,34 @@
      Shared bits
      ===================================================================== */
   const crumbs = (items) => `<nav class="crumbs" aria-label="Breadcrumb"><a href="#insights">Insights</a>${items.map((x) => `${icon('chev-right')}${x.to ? `<a href="#${esc(x.to)}">${esc(x.l)}</a>` : `<span>${esc(x.l)}</span>`}`).join('')}</nav>`;
-  const illus = (label) => RN.ui.illus(label || 'Illustrative', 'Market and survey figures in this prototype are invented to show shape and value, not to be cited.');
+  // Rate Index, survey and demand figures are illustrative: the tag is visible to every visitor (owner rule, Oct 14, 2026)
+  const illus = (label) => RN.ui.illusTag(label || 'Illustrative');
   const jsonAttr = (o) => esc(JSON.stringify(o));
   // The one line companies read about pricing
   const NO_FEES = 'No fees for companies. You pay the operator\'s rate, nothing more.';
+
+  /* [[cost:key.field]] in guide copy reads the canonical cost record (RN.costs, js/data/costs.js), so a guide quotes the
+     same figure as the cost hub, the function pages and the rates pages. field: a text field of the record (hourly,
+     hours, monthly, fixed, yearly, fullTime, fullTimeMonthly, pct, price), or answer, basis, tenure, replace, firstYear.
+     |lower lowercases a leading "About" or "Up to" for use mid-sentence; |bare drops the unit ("$200 - $250/hr" ->
+     "$200 - $250", "About 40 hours a month" -> "About 40"). Money ranges keep no-break spaces so they never wrap. */
+  const NB = (s) => String(s).replace(/(\$[\d.,]+[kKM]?) - (\$)/g, '$1 - $2');
+  function costVal(key, field, mods) {
+    const C = RN.costs, r = C && C.get(key);
+    if (!r) { console.warn('Unknown cost key', key); return ''; }
+    const ft = r.fullTime || {};
+    let v;
+    if (field === 'answer') v = C.answer(key);
+    else if (field === 'basis') v = C.basis(key);
+    else if (field === 'tenure') v = ft.tenureMonths ? `About ${ft.tenureMonths} months` : '';
+    else if (field === 'replace') v = ft.replace ? `Up to ${ft.replace.mult}x salary` : '';
+    else if (field === 'firstYear') v = r.firstYear ? RN.fmt.k(r.firstYear) : '';
+    else v = (r.text && r.text[field]) || '';
+    if (mods.includes('bare')) v = v.replace(/\/(hr|month|year)( flat)?$/, '').replace(/ fixed$/, '').replace(/ hours a month$/, '').replace(/ a year$/, '');
+    if (mods.includes('lower')) v = v.replace(/^About /, 'about ').replace(/^Up to /, 'up to ');
+    return NB(v);
+  }
+  const costTok = (t) => String(t == null ? '' : t).replace(/\[\[cost:([\w.-]+?)\.(\w+)((?:\|\w+)*)\]\]/g, (m, k, f, mods) => costVal(k, f, mods.split('|').filter(Boolean)));
 
   // Browse hand-off (SPEC loop 10): same store keys Browse reads, same event Insights logs.
   // A single role category lands on that category's page (#browse.<cat>), the SEO role page.
@@ -309,12 +333,14 @@
   // Charts are drawn in mount() at the container's real pixel width so chart text stays at 12px.
   let chartFns = {};
   const chartSlot = (key, fn, cls) => { chartFns[key] = fn; return `<div class="rs-chart ${cls || ''}" data-rs-chart="${esc(key)}"></div>`; };
-  function drawCharts(root) {
+  function drawCharts(root, first) {
     RN.$$('[data-rs-chart]', root || document).forEach((el) => {
       const fn = chartFns[el.dataset.rsChart];
       if (!fn) return;
       const w = Math.max(240, Math.round(el.clientWidth || el.parentElement.clientWidth || 320));
       try { el.innerHTML = fn(w); } catch (e) { console.error(e); }
+      // A chart draws once, the first time it scrolls into view (RN.chart output carries data-draw); a resize redraw is still
+      if (first && RN.motion) RN.motion.draw(el, { key: 'rs-chart:' + el.dataset.rsChart });
     });
   }
   // Bars that stay legible on phones: RN.chart.bars at desktop widths, same data with the label above the bar when narrow
@@ -339,16 +365,16 @@
       drawCharts(document.getElementById('main'));
     }, 160);
   }
-  /* Motion: blocks marked data-rs-reveal play their entrance once they scroll into view. They are fully visible
-     without it (no hidden state for a still capture, reduced motion or a browser without IntersectionObserver). */
-  let revealIO = null, spyFn = null;
+  /* Motion (policy, Oct 14, 2026): the shared RN.motion helpers. Blocks marked data-rs-reveal get the one scroll reveal
+     (only blocks still below the screen at the first scroll, 12px and 300ms, once per visit, never on a re-render), so
+     nothing already on screen is hidden and faded back in. HTML bar charts (rate by seat, cost bars, findings meters,
+     scorecard weights) carry data-draw and draw once when they first scroll into view. The diagnostic's leak pulse is
+     the page's one looping element and marks the answer, so it stays (CSS, with a still ring under reduced motion). */
+  let spyFn = null;
   function reveal(root) {
-    if (revealIO) revealIO.disconnect();
-    revealIO = null;
-    const els = RN.$$('[data-rs-reveal]', root || document);
-    if (!els.length || !('IntersectionObserver' in window) || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
-    revealIO = new IntersectionObserver((ents) => ents.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('is-in'); revealIO.unobserve(e.target); } }), { rootMargin: '0px 0px -12% 0px' });
-    els.forEach((el) => revealIO.observe(el));
+    if (!RN.motion) return;
+    RN.motion.reveal(root || document, '[data-rs-reveal]', { key: 'rs-reveal' });
+    RN.$$('[data-rs-draw]', root || document).forEach((el, i) => RN.motion.draw(el, { key: 'rs-draw:' + (el.id || el.dataset.rsDraw || i) }));
   }
   // Guide pages: the "On this page" list marks the section being read and fills a progress rule
   function tocSpy(root) {
@@ -364,13 +390,15 @@
       btns.forEach((b) => b.classList.toggle('on', b === cur));
       if (bar) { const r = art.getBoundingClientRect(); const f = RN.clamp((window.innerHeight * 0.4 - r.top) / Math.max(1, r.height), 0, 1); bar.style.transform = `scaleY(${f.toFixed(3)})`; }
     };
+    // A re-render (RN.rerender) mounts again: drop the last listener first so they never stack
+    if (spyFn) window.removeEventListener('scroll', spyFn);
     spyFn = () => { if (!raf) raf = requestAnimationFrame(run); };
     window.addEventListener('scroll', spyFn, { passive: true });
     run();
   }
   function mountCommon(root) {
     lastW = window.innerWidth;
-    drawCharts(root);
+    drawCharts(root, true);
     window.addEventListener('resize', onResize);
     reveal(root);
     tocSpy(root);
@@ -378,7 +406,6 @@
   function unmountCommon() {
     window.removeEventListener('resize', onResize);
     if (spyFn) { window.removeEventListener('scroll', spyFn); spyFn = null; }
-    if (revealIO) { revealIO.disconnect(); revealIO = null; }
     while (RN.ui.modalEl()) RN.ui.closeModal();
   }
 
@@ -471,7 +498,7 @@
       ${js.map((s) => `<button type="button" class="rs-gh rs-gh-stage" data-act="rs-fw-open" data-stage="${esc(s.name)}">${esc(s.name)}</button>`).join('')}
       <div class="rs-gsp" aria-hidden="true"></div>
       <button type="button" class="rs-gh rs-gh-stage is-all" data-act="rs-fw-open" data-stage="Foundation">Foundation</button>
-      ${g.areas.map((a) => { const t = agg(ix, a.name, null); return `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}" title="${esc(a.def)}">${RN.ui.icoTile(a.icon, { size: 'sm', cat: a.cat, cls: 'rs-ga-ic' })}<span class="rs-ga-tx"><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span><span class="rs-ga-n"><span><b class="tnum">${t.ver}</b> verified</span><span>${t.any} claim</span></span></span></button>
+      ${g.areas.map((a) => { const t = agg(ix, a.name, null); return `<button type="button" class="rs-ga" data-act="rs-fw-open" data-area="${esc(a.name)}" title="${esc(a.def)}">${RN.ui.icoTile(a.icon, { size: 'sm', cls: 'rs-ga-ic' })}<span class="rs-ga-tx"><b>${esc(a.name)}</b><span class="rs-ga-d">${esc(a.def.split(':')[0])}</span><span class="rs-ga-n"><span><b class="tnum">${t.ver}</b> verified</span><span>${t.any} claim</span></span></span></button>
         ${js.map((s) => cellBtn(g, a, s)).join('')}
         <div class="rs-gsp" aria-hidden="true"></div>
         ${cellBtn(g, a, FOUNDATION)}`; }).join('')}
@@ -786,7 +813,7 @@
       ${diagBow(r)}
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
       <div class="rs-dr-grid">
-        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M–$20M company: ${esc(range)}.` : '.'}</span></div>
+        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M to $20M company: ${esc(range)}.` : '.'}</span></div>
         <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as an engagement.</span></div>
       </div>
       <div class="row rs-dr-acts">
@@ -895,7 +922,7 @@
       <span class="eyebrow">Revenue Nomad GTM Framework</span>
       <div class="rs-fw-hero">
         <div>
-          <h1 class="h1">Every revenue problem has <span class="serif">an address.</span></h1>
+          <h1 class="h1">Every revenue problem has <span class="serif">an address</span><span class="vm">.</span></h1>
           <p class="lede">The framework places all go-to-market work on two lenses: the area of work, and the stage of the customer's journey it changes. Every focus area, profile, company review and Engagement Blueprint on Revenue Nomad uses it, so a company's problem and an operator's proof are described in the same words.</p>
         </div>
         <dl class="rs-fw-kpis">
@@ -927,10 +954,10 @@
 
     <section class="wrap section-sm rs-sec rs-find" aria-labelledby="rs-find-t">
       <h2 class="sr-only" id="rs-find-t">What the map shows today</h2>
-      <div class="rs-finds" data-rs-reveal>
+      <div class="rs-finds" data-rs-draw="finds">
         <div class="rs-finds-hd"><span class="eyebrow">What the map shows today</span><p class="small muted">Computed live from ${RN.fmt.int(RN.model.ops.length)} operator profiles${MK().network && MK().network.operators ? `<span data-proto> (this prototype loads a sample of the ${esc(MK().network.operators)} on the network)</span>` : ''}. A focus area counts as verified once a company review rated 4.0 or higher confirms it.</p></div>
         ${finds.map((f, i) => `<div class="rs-fnd" style="--i:${i}"><span class="rs-fnd-v num">${esc(f.v)}</span>
-          ${f.d ? `<span class="rs-fnd-m${f.claim ? ' is-claim' : ''}" role="img" aria-label="${esc(f.dl)}"><span class="rs-fnd-bar"><i style="width:${Math.max(2, Math.round((f.n / f.d) * 100))}%"></i></span><span class="tiny muted tnum">${esc(f.dl)}</span></span>` : ''}
+          ${f.d ? `<span class="rs-fnd-m${f.claim ? ' is-claim' : ''}" role="img" aria-label="${esc(f.dl)}"><span class="rs-fnd-bar"><i data-draw="x" style="width:${Math.max(2, Math.round((f.n / f.d) * 100))}%"></i></span><span class="tiny muted tnum">${esc(f.dl)}</span></span>` : ''}
           <p>${esc(f.l)}</p><button type="button" class="act" ${f.act}>${esc(f.cta)}${icon('arrow')}</button></div>`).join('')}
       </div>
     </section>
@@ -1032,7 +1059,7 @@
         <h3 class="rs-tag-name">${esc(r.name)}${mine ? `<span class="pill ${mine.tier === 'claimed' ? 'pill-line' : 'pill-good'} rs-tag-mine">${mine.tier === 'claimed' ? 'On your profile' : 'Yours, verified'}</span>` : ''}</h3>
         ${r.def ? `<p class="rs-tag-def">${esc(r.def)}</p>` : ''}
         <div class="rs-tag-meta">
-          <span class="rs-tag-cat">${RN.ui.catDot(r.cat)}${esc(F.catLabel(r.cat))}${r.g ? ` · ${esc(r.g)}` : ''}</span>
+          <span class="rs-tag-cat">${esc(F.catLabel(r.cat))}${r.g ? ` · ${esc(r.g)}` : ''}</span>
           ${r.area ? `<button type="button" class="pill pill-accent rs-chip-b" data-act="rs-lib-open" data-area="${esc(r.area)}" title="Show focus areas in ${esc(r.area)}">${esc(r.area)}</button>` : ''}
           <button type="button" class="pill pill-line rs-chip-b" data-act="rs-fw-open" data-area="${esc(r.area)}" data-stage="${esc(r.stage)}" title="Open this cell in the GTM Framework">${icon('grid')}${esc(r.stage)}</button>
         </div>
@@ -1074,7 +1101,7 @@
         const used = cr.filter((r) => r.any).length;
         return `<section class="rs-lib-cat">
           <div class="rs-lib-cat-hd">
-            <h2 class="h3">${RN.ui.catDot(c)}${esc(F.catLabel(c))}</h2>
+            <h2 class="h3">${esc(F.catLabel(c))}</h2>
             <span class="small muted">${plural(cr.length, 'focus area')} · ${ver} company-verified</span>
             <span class="rs-lib-use" role="img" aria-label="${used} of ${cr.length} in use on live profiles"><span class="rs-lib-use-bar"><i style="width:${Math.max(2, Math.round((used / cr.length) * 100))}%"></i></span><span class="tiny muted">${used} in use</span></span>
             ${faces.length ? `<span class="rs-lib-faces" title="Operators with company-verified proof in ${esc(F.catLabel(c))}">${faces.slice(0, 5).map((op) => RN.ui.avatar(op, 'ava-sm', { decorative: true })).join('')}${faces.length > 5 ? `<span class="rs-lib-more">+${faces.length - 5}</span>` : ''}</span>` : ''}
@@ -1199,7 +1226,7 @@
     const me = RN.myOp();
     const rows = tags.filter((t) => t.verified <= 1).sort((a, b) => b.demand - a.demand).slice(0, 6);
     return `<div class="card rs-gaps">
-      <div class="card-hd"><div><h3>Where companies search and proof is thin</h3><p class="sub">Monthly company searches vs operators with company-verified proof</p></div>${illus('Illustrative')}</div>
+      <div class="card-hd"><div><h3>Where companies search and proof is thin</h3><p class="sub">Monthly company searches vs operators with company-verified proof</p></div>${illus()}</div>
       <div class="rs-gap-list">
         ${rows.map((t) => {
           const mine = me && me.tags.find((x) => x.t.toLowerCase() === t.t.toLowerCase());
@@ -1236,7 +1263,7 @@
     <header class="wrap phead rs-head">
       ${crumbs([{ l: 'Fit Tag Library' }])}
       <span class="eyebrow">Fit Tag Library</span>
-      <h1 class="h1">The shared vocabulary of <span class="serif">fractional GTM work.</span></h1>
+      <h1 class="h1">The shared vocabulary of <span class="serif">fractional GTM work</span><span class="vm">.</span></h1>
       <p class="lede">Focus areas (fit tags) name the specific work an operator does. Operators add them to their profiles, companies filter by them, and a company review turns a claim into proof. One list, used on every profile, posted engagement and review.</p>
       <div class="stats-row rs-kpis" style="--cols:4">
         <div class="stat"><span class="stat-v">${RN.fmt.int(libN)}</span><span class="stat-l">Focus areas, ${groupsN} groups</span></div>
@@ -1252,9 +1279,9 @@
         <div class="input-wrap rs-lib-search">${icon('search')}<input class="input" type="search" value="${esc(lib.q)}" placeholder="Search ${RN.fmt.int(libN)} focus areas" aria-label="Search focus areas" data-input="rs-lib-q" autocomplete="off"></div>
         <div class="rs-lib-cats" data-deselect><span class="label">${esc(F.roleCategory.label)}</span>${RN.w.control('roleCategory', lib.cat, { name: 'rsLibCat', id: 'rs-lib-cat', change: 'rs-lib-cat' })}</div>
         <div class="rs-lib-meta">
-          <span class="row rs-lib-count-row" style="--gap:10px"><span class="small" id="rs-lib-count" aria-live="polite">${esc(r.count)}</span>${illus('Search counts illustrative')}</span>
+          <span class="row rs-lib-count-row" style="--gap:10px"><span class="small" id="rs-lib-count" aria-live="polite">${esc(r.count)}</span>${illus()}</span>
           <div class="row" style="--gap:10px"><span id="rs-lib-active" class="row" style="--gap:8px">${activeChips()}</span>
-          <div class="seg" role="group" aria-label="Sort">${sortBtn('used', 'Most proven')}${sortBtn('demand', 'Most searched')}${sortBtn('az', 'A–Z')}</div></div>
+          <div class="seg" role="group" aria-label="Sort">${sortBtn('used', 'Most proven')}${sortBtn('demand', 'Most searched')}${sortBtn('az', 'A to Z')}</div></div>
         </div>
       </div>
       <div id="rs-lib-guides" class="rs-lib-guides">${libGuides()}</div>
@@ -1289,8 +1316,8 @@
     const h = hoursNum(hours), m = mult(rev);
     return RN.fmt.moRange(r500(b.p25 * m * h), r500(b.p75 * m * h));
   }
-    const rateNote = () => `<p class="rs-src">${icon('info')}<span>Rates come from the Rate Index: the middle half of hourly rates for the role, times the hours. ${esc(NO_FEES)} Illustrative.</span></p>`;
-  // Monthly table for a role category at a $5M–$20M company. The rate is the price (no fees for companies).
+  const rateNote = () => `<p class="rs-src">${icon('info')}<span>Rates come from the Rate Index: the middle half of hourly rates for the role, times the hours. ${esc(NO_FEES)}</span>${illus()}</p>`;
+  // Monthly table for a role category at a $5M to $20M company. The rate is the price (no fees for companies).
   const monthTable = (cat, hrs) => tbl(['Available time', 'Typical month'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m'))])) + rateNote();
   const HOURS = { h_under_20: '19', h_20: '20', h_40: '40', h_60: '60', h_80: '80', h_100: '100', h_160: '160' };
   const hoursRows = () => REP().hours.map((r) => ({ code: HOURS[r.h] || r.h, v: r.v }));
@@ -1324,7 +1351,7 @@
     {
       slug: 'how-to-scope-a-fractional-sales-engagement', bp: 'vp-sales', group: 'sales', updated: '2026-09-05', mins: 6, cat: 'sales_leadership', opsQ: 'sales playbook',
       q: 'How do you scope a fractional sales engagement?',
-      answer: () => ['Scope a fractional sales engagement around one measurable outcome, a fixed number of hours a month and an initial term, usually three to six months.', 'Before day one, write down the 90-day deliverables, who the operator reports to and how progress is reviewed.'],
+      answer: () => ['Scope it around one measurable outcome, a fixed number of hours a month and an initial term, usually three to six months.', 'Before day one, agree the 90-day deliverables and who the operator reports to.'],
       stats: () => { const hrsTop = hoursRows().slice().sort((a, b) => b.v - a.v)[0]; const term = REP().term || []; const tTop = term.slice().sort((a, b) => b.v - a.v)[0]; return [{ v: RN.w.label('hoursPerMonth', hrsTop.code), l: `Most common size (${hrsTop.v}% of engagements)`, src: SRC_REP() }, { v: tTop ? tTop.l : '3 to 6 mo', l: `Most common initial term (${tTop ? tTop.v : 38}%)`, src: SRC_REP() }, { v: sumStat(/Median engagement length/i, '6.4 mo'), l: 'Median engagement length', src: SRC_REP() }]; },
       sections: () => {
         const hRows = hoursRows().map((r) => ({ label: RN.w.label('hoursPerMonth', r.code), value: r.v, hi: r.code === '40' }));
@@ -1362,7 +1389,7 @@
     {
       slug: 'fractional-revops-first-90-days', bp: 'vp-revops', group: 'revops', updated: '2026-08-29', mins: 6, cat: 'revenue_operations', opsQ: 'RevOps',
       q: 'What does a fractional RevOps leader do in the first 90 days?',
-      answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, tech stack and reporting, and agrees one source of truth for pipeline.', 'By day 90 they have fixed the data model, rebuilt stages and routing, and shipped the dashboards leadership uses to run the business.'],
+      answer: () => ['In the first 30 days a fractional RevOps leader audits the CRM, stack and reporting.', 'By day 90 they have fixed the data model, stages and routing, and shipped the dashboards leadership uses.'],
       stats: () => { const b = RIX().byCat.revenue_operations; return [{ v: hr(b.p50) + '/hr', l: 'Median rate, Revenue Operations', src: SRC_RI() }, { v: monthRange('revenue_operations', '40', '5m_20m').replace(/\/month$/, ''), l: 'Typical month at 40 hrs', src: SRC_RI() }, { v: String((REP().intent || []).find((x) => x.cat === 'revenue_operations') ? REP().intent.find((x) => x.cat === 'revenue_operations').v + '%' : '22%'), l: 'Of companies plan to hire RevOps in 12 months', src: SRC_REP() }]; },
       sections: () => [
         { id: 'audit', h: 'Days 1 to 30: audit', html: `<p>The first month is diagnosis. Expect a written audit that covers:</p><ul>
@@ -1379,7 +1406,7 @@
           <li>Dashboards for pipeline, conversion by stage and forecast, used in the weekly meeting.</li>
           <li>A forecast cadence that the sales leader runs, with RevOps preparing the data.</li>
           <li>Documentation: a metrics dictionary and a short admin guide, so the next hire can take over.</li></ul>` },
-        { id: 'cost', h: 'What it costs', html: `<p>Revenue Operations has a median of ${hr(RIX().byCat.revenue_operations.p50)} an hour on the Rate Index. At 40 hours a month for a $5M–$20M company, a typical range is ${monthRange('revenue_operations', '40', '5m_20m')}, and that is the whole cost: companies pay no fees. Many RevOps engagements drop to 20 hours after the rebuild, at ${monthRange('revenue_operations', '20', '5m_20m')}.</p>` },
+        { id: 'cost', h: 'What it costs', html: `<p>Revenue Operations has a median of ${hr(RIX().byCat.revenue_operations.p50)} an hour on the Rate Index. At 40 hours a month for a $5M to $20M company, a typical range is ${monthRange('revenue_operations', '40', '5m_20m')}, and that is the whole cost: companies pay no fees. Many RevOps engagements drop to 20 hours after the rebuild, at ${monthRange('revenue_operations', '20', '5m_20m')}.</p>` },
         { id: 'signs', h: 'Signs you need RevOps now', html: `<ul><li>Two leaders quote different pipeline numbers in the same meeting.</li><li>Reps keep their own spreadsheets because they do not trust the CRM.</li><li>You are about to hire a sales leader and want them to inherit clean data.</li><li>Tool spend keeps growing and nobody can say what each tool does.</li></ul>` },
       ],
       faq: () => [
@@ -1392,7 +1419,7 @@
     {
       slug: 'evaluate-fractional-operator-track-record', group: 'methods', updated: '2026-09-15', mins: 7, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do you evaluate a fractional operator\'s track record?',
-      answer: () => ['Look for proof that they have done the same work at your stage and deal size, confirmed by the companies they did it for.', 'On Revenue Nomad that proof is company-verified focus areas, CORE review scores, Engagement History and the Reputation Index, built mostly from company evidence rather than self-description.'],
+      answer: () => ['Look for proof they have done the same work at your stage and deal size, confirmed by those companies.', 'On Revenue Nomad that means company-verified focus areas, CORE reviews and Engagement History.'],
       stats: () => { const h = (REP().hindsight || [])[0]; return [{ v: h ? h[2] : '81%', l: 'Of companies say stage fit mattered most, in hindsight', src: SRC_REP() }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews', src: SRC_REP() }, { v: '4.0+', l: 'Review rating needed to verify a focus area' }]; },
       sections: () => [
         { id: 'hindsight', h: 'What companies wish they had checked', html: `<p>We asked companies what they weighed when they hired a fractional leader, and what they would weigh now.</p>
@@ -1421,7 +1448,7 @@
     {
       slug: 'how-much-should-a-fractional-operator-charge', group: 'operators', updated: '2026-09-20', mins: 6, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How much should a fractional operator charge?',
-      answer: () => { const c = RIX().byCat; return [`Price from the Rate Index for your role category and the revenue range of the companies you serve, then adjust for your verified proof and the scope of the seat.`, `The median across fractional GTM leaders is ${hr(latestMedian())} an hour, from ${hr(c.sellers.p50)} for sellers to ${hr(c.sales_leadership.p50)} for sales leadership.`]; },
+      answer: () => [`Price from the Rate Index for your role and the size of the companies you serve, then adjust for verified proof and scope.`, `The median across fractional GTM leaders is ${hr(latestMedian())} an hour.`],
       stats: () => [{ v: hr(latestMedian()) + '/hr', l: 'All-category median, latest quarter', src: SRC_RI() }, { v: yoy(), l: 'Change in the median, year over year', src: SRC_REP() }, { v: (REP().concurrent || []).slice().sort((a, b) => b.v - a.v)[0] ? REP().concurrent.slice().sort((a, b) => b.v - a.v)[0].l : '2 companies', l: 'Most common company load', src: SRC_REP() }],
       sections: () => {
         const cats = F.roleCategory.options.filter((o) => RIX().byCat[o.v]);
@@ -1432,7 +1459,7 @@
             ${tbl(['Role category', '25th pct', 'Median', '75th pct'], cats.map((o) => { const b = RIX().byCat[o.v]; return [esc(o.l), hr(b.p25), `<b>${hr(b.p50)}</b>`, hr(b.p75)]; }))}
             ${src(`Rate Index, latest quarter. See the full index and estimator on ${L('rates', 'Rates')}. Illustrative.`)}
             ${chartGo('Browse operators by role category and rate', { filters: {}, src: 'guide_chart_rate_cat' })}` },
-          { id: 'revenue', h: 'Adjust for the companies you serve', html: `<p>Rates rise with company size. Against a $5M–$20M company as the baseline:</p>
+          { id: 'revenue', h: 'Adjust for the companies you serve', html: `<p>Rates rise with company size. Against a $5M to $20M company as the baseline:</p>
             ${tbl(['Company revenue', 'Rate vs baseline'], F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => { const m = RIX().byRevenue[o.v]; return [esc(o.l), `${m >= 1 ? '+' : ''}${Math.round((m - 1) * 100)}%`]; }))}` },
           { id: 'model', h: 'Hourly, retainer or project', html: `<p>Most operators list an hourly rate and bill a monthly retainer for a block of hours. At the Sales Leadership median, 20 hours a month is ${usd(RIX().byCat.sales_leadership.p50 * 20)}, 40 hours is ${usd(RIX().byCat.sales_leadership.p50 * 40)}. Scoped projects (${esc(F.engagementTypes.options.find((o) => o.v === 'project').d.toLowerCase().replace(/\.$/, ''))}) are priced per project, from the hours you expect to spend.</p>
             <p>The rate on your profile is the price companies pay. Set it in ${L('studio.profile', 'Studio')} and compare it with the Rate Index for your role.</p>` },
@@ -1452,7 +1479,7 @@
     {
       slug: 'how-fractional-operators-win-direct-deals', group: 'operators', updated: '2026-09-16', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'How do fractional operators win companies without a marketplace intro?',
-      answer: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0) || 67; return [`Most fractional work still comes from referrals and former colleagues: ${ref}% of companies in our survey found their operator that way.`, 'Operators win those deals faster when they can send proof: a profile with company-verified focus areas, CORE reviews and a private proof link that shows which parts the prospect read.']; },
+      answer: () => ['Most fractional work comes from referrals and former colleagues.', 'Operators win those deals faster with proof: company-verified focus areas, CORE reviews and a private proof link.'],
       stats: () => { const s = REP().sources || []; const ref = s.filter((x) => /Referral|colleague/i.test(x.l)).reduce((a, x) => a + x.v, 0); return [{ v: (ref || 67) + '%', l: 'Found their operator through a referral or colleague', src: SRC_REP() }, { v: sumStat(/Rehire rate/i, '2.4x'), l: 'Rehire rate with 3+ verified reviews', src: SRC_REP() }, { v: ((REP().hindsight || [])[0] || [])[2] || '81%', l: 'Of companies say stage fit mattered most, in hindsight', src: SRC_REP() }]; },
       sections: () => {
         const s = (REP().sources || []).map((x) => ({ label: x.l, value: x.v, hi: /Referral/i.test(x.l) }));
@@ -1478,7 +1505,7 @@
     {
       slug: 'what-is-the-reputation-index', group: 'methods', updated: '2026-09-01', mins: 5, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is the Revenue Nomad Reputation Index?',
-      answer: () => ['The Reputation Index is a 0 to 100 score that shows how much company evidence stands behind an operator\'s profile.', 'Most approved profiles sit at 50, the start of Emerging, and the score rises only with company reviews, verified focus areas, strong CORE ratings, a complete profile and recent verified engagements.'],
+      answer: () => ['The Reputation Index is a 0 to 100 score of the company evidence behind an operator\'s profile.', 'Most approved profiles sit at 50, the start of Emerging, and rise only with company evidence.'],
       stats: () => { const ops = RN.model.ops; const hi = ops.filter((o) => o.ris.score >= 60).length; return [{ v: '50', l: 'Where the first tier, Emerging, starts' }, { v: String(F.risFactors.options.length), l: `Factors, ${F.risFactors.options.filter((o) => o.v !== 'complete').length} from company evidence` }, { v: String(hi), l: `Operators at Proven or above today` }]; },
       sections: () => {
         const ops = RN.model.ops.filter((o) => !o.hidden);
@@ -1511,7 +1538,7 @@
     {
       slug: 'what-is-core', group: 'methods', updated: '2026-09-01', mins: 4, cat: null, opsQ: '', opsSort: 'ris',
       q: 'What is CORE?',
-      answer: () => ['CORE is Revenue Nomad\'s company review framework: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5 by a company who worked with the operator.', 'Every review ends with a yes or no answer to "Would you hire this operator again?", and reviews rated 4.0 or higher verify the focus areas the company confirms.'],
+      answer: () => ['CORE is Revenue Nomad\'s company review: Communication, Ownership, Results Focus and Expertise, each rated 1 to 5.', 'Reviews rated 4.0 or higher verify the focus areas the company confirms.'],
       stats: () => [{ v: '4', l: 'Questions, each rated 1 to 5' }, { v: '4.0+', l: 'Average needed to verify focus areas' }, { v: '3', l: 'Short steps for the company' }],
       sections: () => [
         { id: 'questions', h: 'The four questions', html: `<dl class="rs-dl">${F.coreDims.options.map((o) => `<div><dt><span class="rs-core-l">${esc(o.v)}</span>${esc(o.l)}</dt><dd><span class="rs-core-q">“${esc(o.q)}”</span> ${esc(o.d)}</dd></div>`).join('')}</dl>` },
@@ -1556,7 +1583,7 @@
     return {
       slug: c.slug, bp: c.bp, group: 'costs', updated: '2026-09-22', mins: 4, cat, opsQ: c.opsQ,
       q: `How much does a fractional ${c.noun} cost?`,
-      answer: () => [`A fractional ${c.noun} costs a median of ${hr(b().p50)} an hour on the Revenue Nomad Rate Index, and the middle half of ${catL} operators charge between ${hr(b().p25)} and ${hr(b().p75)}.`, `At ${hrsL.replace(' / ', ' a ')}, that is a typical range of ${monthRange(cat, c.hours, '5m_20m')} for a company with $5M–$20M in revenue.`],
+      answer: () => { const r = RN.costs && RN.costs.get('ri.' + cat); const t = r ? r.text : { median: hr(b().p50) + '/hr', hourly: RN.fmt.hrRange(b().p25, b().p75), monthly: monthRange(cat, c.hours, '5m_20m') }; return [NB(`A fractional ${c.noun} costs a median of ${t.median} on the Rate Index (middle half ${t.hourly}), or ${t.monthly} at ${r ? r.hours.lo : c.hours} hours for a $5M to $20M company.`)]; },
       stats: () => [{ v: hr(b().p50) + '/hr', l: `Median rate, ${catL}`, src: SRC_RI() }, { v: monthRange(cat, c.hours, '5m_20m').replace(/\/month$/, ''), l: `Typical month at ${hrsL}`, src: SRC_RI() }, { v: plural(b().n, 'rate'), l: 'In the index for this role category', src: SRC_RI() }],
       sections: () => {
         const revRows = F.companyRevenue.options.filter((o) => RIX().byRevenue[o.v]).map((o) => ({ label: o.l, value: Math.round(b().p50 * mult(o.v)), hi: o.v === '5m_20m' }));
@@ -1566,7 +1593,7 @@
             ${chartSlot('gc-' + cat, (w) => bars(revRows, { fmt: (n) => '$' + n + '/hr', label: `Median hourly rate for ${catL} by company revenue` }, w))}
             ${src(`Median hourly rate for ${esc(catL)} by company revenue range. Rate Index, ${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'Q3 26')}. Illustrative.`)}
             ${chartGo(`Browse ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'guide_cost_' + cat })}` },
-          { id: 'monthly', h: 'What a month costs', html: `<p>Multiply the hourly range by the hours you need. For a $5M–$20M company:</p>
+          { id: 'monthly', h: 'What a month costs', html: `<p>Multiply the hourly range by the hours you need. For a $5M to $20M company:</p>
             ${monthTable(cat, c.hrs || ['20', '40', '60', '80'])}
             <p>${esc(c.buys)}</p>` },
           { id: 'scope', h: 'Scope it before you talk to anyone', html: `<p>${bp ? `The ${L(bp.to, bp.title + ' Blueprint')} gives you` : `An ${L('blueprints', 'Engagement Blueprint')} gives you`} the hours, term, a 30/60/90-day plan and the focus areas the work needs, ready to post as an engagement. ${L('guide.how-to-scope-a-fractional-sales-engagement', 'How to scope a fractional engagement')} covers the outcome, the hours and the operating rhythm.</p>` },
@@ -1586,12 +1613,12 @@
      The playbook's ten refresh-list posts rebuilt into eight guides (the sixteen sales city pages fold into the
      hiring guide) and five drafted Content Bank posts (post 2 also takes the two marketing city pages). Copy is the
      Content Bank draft, or rebuilt from the Content Bank, Site pages and plan data where no draft exists; nothing is
-     invented, and [[gap:what|Owner]] tokens render as pending chips. Posts lead GUIDES, so Browse category pages,
+     invented, and pending tokens ([[gap:what|Owner]]) render as pending chips. Posts lead GUIDES, so Browse category pages,
      the guide samples and Keep reading start with them. They replace the prototype guides they cover. */
   const POSTS = (RN.data.posts && RN.data.posts.list) || [];
   const NETS = () => String((MK() && MK().network && MK().network.operators) || '350+');
   // Plain text for cards, titles and JSON-LD: a pending figure drops out, a link keeps its label
-  const plainOf = (t) => String(t == null ? '' : t)
+  const plainOf = (t) => costTok(t)
     .replace(/\s*\[\[gap:[^\]]*\]\]/g, '')
     .replace(/\[\[(?:link|url):[^\]|]+\|([^\]]+)\]\]/g, '$1')
     .replace(/\[\[net\]\]/g, NETS()).replace(/\*\*/g, '')
@@ -1599,7 +1626,10 @@
   // Body copy with the same tokens as the function pages (RN.fn.rich loads later, so it is looked up at render time)
   // Headings and titles: typographic quotes, and a hyphenated word never breaks across lines ("full-" / "time")
   const disp = (t) => esc(RN.fmt.smart(t)).replace(/(\w)-(?=\w)/g, '$1\u2011');
-  const prich = (t) => (RN.fn && RN.fn.rich ? RN.fn.rich(t) : esc(plainOf(t)));
+  // A money range never breaks across lines ("$200 - $250/hr"). RN.fmt.smart turns no-break spaces back into spaces and
+  // a hyphen is itself a break point, so a rendered range sits in a no-wrap span
+  const keepRanges = (html) => String(html).replace(/(\$[\d.,]+[kKM]?)[\s\u00a0]-[\s\u00a0](\$[\d.,]+[kKM]?(?:\/(?:hr|month|year))?)/g, '<span class="rs-nw">$1 - $2</span>');
+  const prich = (t) => keepRanges(RN.fn && RN.fn.rich ? RN.fn.rich(costTok(t)) : esc(plainOf(t)));
   // Post tables read as text in every column; three or more columns stack into labelled rows on phones
   const prow = (r, head) => {
     const cells = [];
@@ -1671,13 +1701,15 @@
     });
     return out;
   }
-  /* Hourly rates by seat, drawn from the post's own rate table ("About $150", "$200 to $250"): a range bar per seat
-     on one scale. Rows still pending a figure are left out; the table under it shows them. */
+  /* Hourly rates by seat, drawn from the post's own rate table ("About $150", "$200 - $250", "$200 to $250"): a range bar
+     per seat on one scale. Rows still pending a figure are left out; the table under it shows them. */
+  const usdN = (n, k) => +String(n).replace(/,/g, '') * (k ? 1000 : 1);
   function money(c) {
-    const m = plainOf(c).match(/\$([\d,]+)(?:\s*to\s*\$([\d,]+))?/);
+    const t = plainOf(c);
+    const m = t.match(/\$([\d,.]+)(k)?(?:\s*(?:to|-)\s*\$([\d,.]+)(k)?)?/i);
     if (!m) return null;
-    const lo = +m[1].replace(/,/g, ''), hi = m[2] ? +m[2].replace(/,/g, '') : lo;
-    return { lo, hi, approx: /^about/i.test(plainOf(c)), txt: plainOf(c) };
+    const lo = usdN(m[1], m[2]), hi = m[3] ? usdN(m[3], m[4]) : lo;
+    return { lo, hi, approx: /^about/i.test(t), txt: t };
   }
   function rateChart(t) {
     const head = t.head || [];
@@ -1688,17 +1720,19 @@
     const max = Math.ceil(Math.max(...rows.map((x) => x.v.hi)) / 100) * 100;
     const ticks = []; for (let v = 0; v <= max; v += 100) ticks.push(v);
     const pct = (v) => (v / max * 100).toFixed(2) + '%';
-    return `<figure class="rs-rate" data-rs-reveal>
+    return `<figure class="rs-rate" data-rs-draw="rate">
       <figcaption class="label">${esc(plainOf(head[col]))} by ${esc(plainOf(head[0]).toLowerCase())}</figcaption>
       <div class="rs-rate-rows">${rows.map((x, i) => `<div class="rs-rate-r" style="--i:${i}">
         <span class="rs-rate-l">${esc(x.l)}</span>
-        <span class="rs-rate-t" aria-hidden="true">${ticks.slice(1, -1).map((v) => `<i class="rs-rate-g" style="left:${pct(v)}"></i>`).join('')}<span class="rs-rate-b${x.v.hi === x.v.lo ? ' is-pt' : ''}" style="left:${pct(x.v.lo)};width:${x.v.hi === x.v.lo ? '0' : pct(x.v.hi - x.v.lo)}"></span></span>
+        <span class="rs-rate-t" aria-hidden="true">${ticks.slice(1, -1).map((v) => `<i class="rs-rate-g" style="left:${pct(v)}"></i>`).join('')}<span class="rs-rate-b${x.v.hi === x.v.lo ? ' is-pt' : ''}" data-draw="${x.v.hi === x.v.lo ? 'fade' : 'x'}" style="left:${pct(x.v.lo)};width:${x.v.hi === x.v.lo ? '0' : pct(x.v.hi - x.v.lo)}"></span></span>
         <b class="rs-rate-v tnum">${esc(x.v.txt)}</b>
       </div>`).join('')}</div>
       <div class="rs-rate-ax" aria-hidden="true"><span></span><span class="rs-rate-ticks">${ticks.map((v) => `<i style="left:${pct(v)}">$${v}</i>`).join('')}</span><span></span></div>
     </figure>`;
   }
-  function richTable(t, ctx) {
+  // A source or method line under a table or tile row: a caption of the figure, not a paragraph of the article
+  const figCap = (note) => (note ? `<figcaption class="fig-note rs-fig-note">${icon('info')}<span>${prich(note)}</span></figcaption>` : '');
+  function richTable(t, ctx, note) {
     const head = t.head || [], rows = t.rows || [];
     if (isPhaseTable(t)) return phaseTl(t);
     const pc = pctCols(t);
@@ -1707,7 +1741,7 @@
     const hi = cmp && !byRow ? head.findIndex((h, i) => i && /^fractional/i.test(plainOf(h))) : -1;
     const hiRow = cmp && byRow ? rows.findIndex((r) => /^fractional/i.test(plainOf(r[0]))) : -1;
     const cell = (c, i, r) => {
-      if (pc[i] && /^\d+%$/.test(String(c).trim())) return `<span class="rs-pct"><b class="tnum">${esc(String(c).trim())}</b><span class="rs-pct-bar" aria-hidden="true"><i style="width:${Math.round((parseInt(c, 10) / pc[i]) * 100)}%"></i></span></span>`;
+      if (pc[i] && /^\d+%$/.test(String(c).trim())) return `<span class="rs-pct"><b class="tnum">${esc(String(c).trim())}</b><span class="rs-pct-bar" aria-hidden="true"><i data-draw="x" style="width:${Math.round((parseInt(c, 10) / pc[i]) * 100)}%"></i></span></span>`;
       return prich(c);
     };
     const cls = ['tbl-wrap rs-tbl rs-ptbl', head.length > 2 ? 'rs-tbl-stack' : '', head.length > 4 ? 'rs-ptbl-wide' : '', cmp ? 'rs-cmp' : '', head.length === 2 ? 'rs-spec' : '', Object.keys(pc).length ? 'rs-has-pct' : ''].filter(Boolean).join(' ');
@@ -1717,7 +1751,21 @@
       const proto = r.slice(1).every((c) => !String(c || '').trim() || gapOnly(c)) && r.slice(1).some((c) => /\[\[gap:/.test(String(c || '')));
       return `<tr${proto ? ' data-proto' : ''}${rows.indexOf(r) === hiRow ? ' class="rs-hi-row"' : ''}>${cells.map((x) => `<${x.i === 0 && cmp ? 'th scope="row"' : 'td'} data-l="${esc(plainOf(x.span > 1 ? '' : head[x.i] || ''))}"${x.span > 1 ? ` colspan="${x.span}"` : ''}${x.i === hi ? ' class="rs-hi"' : ''}>${cell(x.c, x.i, r)}</${x.i === 0 && cmp ? 'th' : 'td'}>`).join('')}</tr>`;
     };
-    return `${rateChart(t)}<div class="${cls}"><table class="tbl"><thead><tr>${head.map((x, i) => `<th${i === hi ? ' class="rs-hi"' : ''}>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`;
+    const table = `<div class="${cls}"${Object.keys(pc).length ? ' data-rs-draw="pct"' : ''}><table class="tbl"><thead><tr>${head.map((x, i) => `<th${i === hi ? ' class="rs-hi"' : ''}>${prich(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`;
+    return `${rateChart(t)}${note ? `<figure class="rs-fig">${table}${figCap(note)}</figure>` : table}`;
+  }
+  /* Stat tiles, a post block: { stats: [{ v, l, src?, url? }], note? }. A paragraph that is mostly arithmetic becomes two
+     or three tiles: the figure large, what it is under it, then its source. Values and labels take the body-copy tokens,
+     so [[cost:...]] keeps every money figure on the canonical record. A tile whose value is still pending is left out. */
+  function statsBlock(b) {
+    const list = (b.stats || []).filter((x) => x && !gapOnly(x.v));
+    if (!list.length) return '';
+    const srcOf = (x) => (x.url ? `<a class="link" href="${esc(x.url)}" target="_blank" rel="noopener">${esc(plainOf(x.src))}</a>` : prich(x.src));
+    return `<figure class="rs-stats-fig"><div class="rs-stats" data-n="${list.length}">${list.map((x) => `<div class="rs-st">
+        <span class="rs-st-v">${prich(NB(x.v))}</span>
+        <span class="rs-st-l">${prich(NB(x.l))}</span>
+        ${x.src ? `<span class="rs-st-s">${srcOf(x)}</span>` : ''}
+      </div>`).join('')}</div>${figCap(b.note)}</figure>`;
   }
   // "What this looked like at a real company": bold-led paragraphs become a case file with a rail
   function caseFile(blocks) {
@@ -1754,7 +1802,8 @@
       if (b.ol.every(leadOf)) return leadList(b.ol, 'rs-ll-num');
       return numList(b.ol);
     }
-    if (b.table) return richTable(b.table, ctx);
+    if (b.table) return richTable(b.table, ctx, b.note);
+    if (b.stats) return statsBlock(b);
     if (b.quote != null) return `<blockquote class="rs-pq"${protoIf(b.quote)}>${icon('quote')}<p>${prich(b.quote)}</p>${b.by ? `<cite>${prich(b.by)}</cite>` : ''}</blockquote>`;
     return '';
   }
@@ -1819,78 +1868,50 @@
   ];
   R.glossary = GLOSSARY;
 
-  function guideFeature(g) {
-    const a = g.answer();
-    const st = g.post ? (g.post.feature || g.post.keys.slice(0, 3)).map((k) => ({ v: plainOf(k.v), l: plainOf(k.k) })) : (g.stats ? g.stats() : []);
-    return `<a class="card card-link rs-gfeat${g.post ? ' rs-gfeat-post' : ''}" href="#guide.${esc(g.slug)}">
-      <div class="rs-gfeat-main">
-        <span class="label">${esc(KIND[g.slug] || 'Guide')} · Start here</span>
-        <h3 class="h2">${disp(g.q)}</h3>
-        <p class="rs-gfeat-a">${a.map(esc).join(' ')}</p>
-        <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span><span class="act">Read the guide${icon('arrow')}</span></span>
-      </div>
-      <div class="rs-gfeat-stats">${g.post ? '<span class="label rs-gfeat-kl">Key numbers</span>' : `<span class="rs-gfeat-il">${illus()}</span>`}${st.map((x) => `<div class="stat"><span class="stat-v">${esc(x.v)}</span><span class="stat-l">${esc(x.l)}</span></div>`).join('')}</div>
-    </a>`;
-  }
-  function guideCard(g) {
-    const a = g.answer();
-    return `<a class="card card-link rs-gcard" href="#guide.${esc(g.slug)}">
-      <span class="label">${esc(KIND[g.slug] || (g.group === 'costs' ? 'Cost' : GROUPS.find((x) => x.k === g.group).l))}</span>
-      <h3 class="h4">${disp(g.q)}</h3>
-      <p class="small muted clamp-3">${esc(a[0])}</p>
-      <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read · Updated ${esc(RN.fmt.date(g.updated + 'T12:00:00'))}</span>${icon('arrow')}</span>
-    </a>`;
-  }
-
-  /* One row in a function group: kind, the question, the first sentence of the answer */
+  // "Updated Oct 11, 2026 · 7 min read": every card and row on the index carries the date from posts.js
+  const stamp = (g) => `Updated ${RN.fmt.date(g.updated + 'T12:00:00')} · ${g.mins} min read`;
+  /* One row in a function group: kind, the question, the first sentence of the answer (two lines), the date */
   function qrow(g) {
     const a = g.answer()[0] || '';
     return `<li><a class="rs-qrow" href="#guide.${esc(g.slug)}">
-      <span class="rs-qrow-t"><span class="label">${esc(KIND[g.slug] || 'Guide')}</span><h3 class="rs-qrow-q">${disp(g.q)}</h3><span class="small muted clamp-2">${esc(a)}</span><span class="tiny muted">${g.mins} min read</span></span>
+      <span class="rs-qrow-t"><span class="label">${esc(KIND[g.slug] || 'Guide')}</span><h3 class="rs-qrow-q">${disp(g.q)}</h3><span class="small muted clamp-2">${esc(a)}</span><span class="tiny muted">${esc(stamp(g))}</span></span>
       ${icon('arrow')}
     </a></li>`;
-  }
-  // Index card: kind, the question, one headline number from the guide's own key numbers (or the answer's first line)
-  // The first ordered list in a post whose items all open with a bold lead (the steps), for the index's lead card
-  function postSteps(p) {
-    for (const sec of (p.sections || [])) for (const b of sec.blocks) if (b.ol && b.ol.length >= 3 && b.ol.every(leadOf)) return b.ol;
-    return null;
   }
   function rateTable(p) {
     for (const sec of (p.sections || [])) for (const b of sec.blocks) if (b.table && (b.table.head || []).some((h) => /hourly rate/i.test(plainOf(h)))) return b.table;
     return null;
   }
-  const teamBy = (g, extra) => `<span class="rs-pl-by">${RN.ui.teamAva('ava-sm')}<span><b>By Revenue Nomad Research</b><span class="tiny muted">${g.mins} min read</span></span>${extra || ''}</span>`;
-  // Index card: kind, the question, one headline number from the guide's own key numbers (or the answer's first line)
+  const teamBy = (g, extra) => `<span class="rs-pl-by">${RN.ui.teamAva('ava-sm')}<span><b>By Revenue Nomad Research</b><span class="tiny muted">${esc(stamp(g))}</span></span>${extra || ''}</span>`;
+  /* Index card, one layout for every function: kind, the question, the guide's headline number (its key number, the
+     big figure instead of a thumbnail), then the date. A card without a key number shows two lines of the answer.
+     The lead card ("Start here") adds the short answer and the byline; the cost card adds the rate-by-seat chart. */
   function pcard(g, lead, o) {
     o = o || {};
-    const st = g.post && g.post.stat;
+    const st = g.post && g.post.stat && !gapOnly(g.post.stat.v) ? g.post.stat : null;
     const a = g.answer()[0] || '';
+    const num = st ? `<span class="rs-pcard-n"><b class="tnum">${keepRanges(disp(plainOf(st.v)))}</b><span class="small muted">${esc(RN.fmt.smart(plainOf(st.l)))}</span></span>` : '';
     if (lead) {
-      const steps = g.post ? postSteps(g.post) : null;
       return `<a class="card card-link rs-pcard rs-pcard-lead" href="#guide.${esc(g.slug)}">
         <span class="rs-pl">
           <span class="rs-pl-main">
             <span class="label">${esc(KIND[g.slug] || 'Guide')} · Start here</span>
             <h3 class="h2 rs-pcard-q">${disp(g.q)}</h3>
-            <span class="rs-pcard-a">${esc(RN.fmt.smart(a))}</span>
-            ${st ? `<span class="rs-pcard-n"><b class="tnum">${disp(st.v)}</b><span class="small muted">${esc(RN.fmt.smart(st.l))}</span></span>` : ''}
+            <span class="rs-pcard-a clamp-3">${esc(RN.fmt.smart(a))}</span>
           </span>
-          ${steps ? `<span class="rs-pl-side"><span class="label">The ${steps.length} steps</span>
-            <ol class="rs-mtl">${steps.map((x, i) => { const l = leadOf(x); const tm = timeMark(x); return `<li style="--i:${i}"><span class="rs-mtl-n">${i + 1}</span><span class="rs-mtl-h">${esc(RN.fmt.smart(plainOf(l.h)))}</span>${tm ? `<span class="pill pill-accent rs-mtl-w">${esc(tm)}</span>` : ''}</li>`; }).join('')}</ol></span>` : ''}
+          ${num ? `<span class="rs-pl-side">${num}</span>` : ''}
         </span>
         ${teamBy(g, `<span class="act rs-pl-go">Read the guide${icon('arrow')}</span>`)}
       </a>`;
     }
     const rt = o.rates && g.post ? rateTable(g.post) : null;
-    const chart = rt ? rateChart(rt) : '';
+    const chart = rt ? rateChart(rt).replace('class="rs-rate"', 'class="rs-rate rs-rate-mini"') : '';
     return `<a class="card card-link rs-pcard${chart ? ' rs-pcard-rates' : ''}" href="#guide.${esc(g.slug)}">
       <span class="label">${esc(KIND[g.slug] || 'Guide')}</span>
       <h3 class="h4 rs-pcard-q">${disp(g.q)}</h3>
-      ${st ? `<span class="small muted clamp-3 rs-pcard-s">${esc(RN.fmt.smart(a))}</span>` : ''}
-      ${chart ? chart.replace('class="rs-rate"', 'class="rs-rate rs-rate-mini"') : ''}
-      ${st ? `<span class="rs-pcard-n"><b class="tnum">${disp(st.v)}</b><span class="small muted">${esc(RN.fmt.smart(st.l))}</span></span>` : `<span class="small muted clamp-3">${esc(RN.fmt.smart(a))}</span>`}
-      <span class="rs-gcard-ft"><span class="tiny muted">${g.mins} min read</span>${icon('arrow')}</span>
+      ${chart}
+      ${num || `<span class="small muted clamp-2 rs-pcard-s">${esc(RN.fmt.smart(a))}</span>`}
+      <span class="rs-gcard-ft"><span class="tiny muted">${esc(stamp(g))}</span>${icon('arrow')}</span>
     </a>`;
   }
   const fnGuides = (k) => GUIDES.filter((x) => (x.fn || x.group) === k);
@@ -1905,6 +1926,8 @@
       <summary>${icon('doc')}<span><b>${esc(title)}</b><span class="tiny muted">${esc(note)}</span></span>${icon('chev-down', 'rs-chev')}</summary>
       <div class="rs-schema-bd rs-notes-bd">${body}</div>
     </details>`;
+  // The page title's last mark in vermilion (the brand full stop, one per H1)
+  const vmEnd = (html) => String(html).replace(/([.?!])(<\/span>)?$/, (m, c, close) => (close ? `</span><span class="vm">${c}</span>` : `<span class="vm">${c}</span>`));
 
   function renderGuides() {
     chartFns = {};
@@ -1914,7 +1937,8 @@
     };
     const grp = (k) => GROUPS.find((x) => x.k === k);
     const count = (k) => (['sales', 'revops', 'marketing'].includes(k) ? fnGuides(k) : GUIDES.filter((x) => x.group === k)).length;
-    const grpHd = (g, extra) => `<div class="rs-ggrp-hd"><div class="row between" style="--gap:12px"><h2 class="h3" id="rs-g-${g.k}-t">${esc(g.l)}</h2>${extra || ''}</div><p class="small muted">${esc(g.d)}</p></div>`;
+    // Section heading on the hub rhythm: eyebrow, H2 and description 16px apart, then 32px to the cards
+    const grpHd = (g, extra) => `<div class="sec-head rs-ggrp-hd"><span class="eyebrow">${esc(plural(count(g.k), 'guide'))}</span><div class="rs-ggrp-row"><h2 class="h2" id="rs-g-${g.k}-t">${esc(g.l)}</h2>${extra || ''}</div><p class="rs-ggrp-d">${esc(g.d)}</p></div>`;
     const homeLink = (g) => (g.home ? `<a class="act rs-ghome" href="#${esc(g.home)}">${esc(g.l)} home${icon('arrow')}</a>` : '');
     const sales = fnGuides('sales');
     const costs = F.roleCategory.options.map((o) => ({ o, g: GUIDES.find((x) => x.cat === o.v && isCost(x)) })).filter((x) => x.g && (x.g.post || RIX().byCat[x.o.v]));
@@ -1925,60 +1949,59 @@
     <header class="wrap phead rs-head">
       ${crumbs([{ l: 'Guides' }])}
       <span class="eyebrow">Guides</span>
-      <h1 class="h1">Straight answers on <span class="serif">fractional go-to-market.</span></h1>
+      <h1 class="h1">Straight answers on <span class="serif">fractional go-to-market</span><span class="vm">.</span></h1>
       <p class="lede">Each guide answers one question a client asks before hiring, in the first few lines, then shows the numbers behind it from Revenue Nomad's own engagements.</p>
       <a class="rs-ghero-by" href="#report">${RN.ui.teamAva('ava-md')}<span><span class="label">Written by</span><b>Revenue Nomad Research</b><span class="small muted">From our engagements and the Rate Index</span></span></a>
       <p class="rs-gnew small" data-proto>${icon('book')}<span><b>New in October 2026.</b> ${POSTS.length} guides rebuilt from the blog and the content plan, with ${(POSTS.reduce((n, p) => n + (p.replaces || []).length, 0))} older posts merged into them.</span></p>
     </header>
     <nav class="rs-gjump-bar" aria-label="Guide groups"><div class="wrap row rs-gjump">${GROUPS.map((g) => `<button type="button" class="chip" data-act="rs-scroll" data-to="rs-g-${g.k}">${esc(g.l)}<span class="tiny muted">${count(g.k)}</span></button>`).join('')}<button type="button" class="chip" data-act="rs-scroll" data-to="rs-glossary">Glossary<span class="tiny muted">${GLOSSARY.length}</span></button></div></nav>
-    <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-sales" aria-labelledby="rs-g-sales-t">
+    <section class="wrap sec rs-ggrp" id="rs-g-sales" aria-labelledby="rs-g-sales-t">
       ${grpHd(grp('sales'), homeLink(grp('sales')))}
       <div class="rs-pgrid rs-pgrid-top">${pcard(sales[0], true)}${sales[1] ? pcard(sales[1], false, { rates: true }) : ''}</div>
       <div class="rs-pgrid rs-pgrid-more">${sales.slice(2).map((g) => pcard(g)).join('')}</div>
     </section>
-    ${['revops', 'marketing'].map((k) => { const list = fnGuides(k); const G = grp(k); return `<section class="wrap rs-sec-sm rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
+    ${['revops', 'marketing'].map((k) => { const list = fnGuides(k); const G = grp(k); return `<section class="wrap sec rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
       ${grpHd(G, homeLink(G))}
-      <div class="rs-pgrid rs-pgrid-4 rs-pgrid-more">${list.map((g) => pcard(g)).join('')}${list.length % 4 ? `<a class="card card-link rs-pcard rs-pcard-home" href="#${esc(G.home)}"><span class="label">${esc(G.l)}</span><h3 class="h4 rs-pcard-q">Who you get, what it costs, what happens first</h3><span class="small muted">Vetted ${esc(F.catLabel(G.cat))} operators and the Talk to us form.</span><span class="rs-gcard-ft"><span class="tiny muted">${esc(G.l)} home</span>${icon('arrow')}</span></a>` : ''}</div>
+      <div class="rs-pgrid rs-pgrid-4 rs-pgrid-more">${list.map((g) => pcard(g)).join('')}${list.length % 4 ? `<a class="card card-link rs-pcard rs-pcard-home" href="#${esc(G.home)}"><span class="label">${esc(G.l)}</span><h3 class="h4 rs-pcard-q">Who you get, what it costs, what happens first</h3><span class="small muted clamp-2 rs-pcard-s">Vetted ${esc(F.catLabel(G.cat))} operators and the Talk to us form.</span><span class="rs-gcard-ft"><span class="tiny muted">${esc(G.l)} home</span>${icon('arrow')}</span></a>` : ''}</div>
     </section>`; }).join('')}
-    <section class="wrap rs-sec-sm rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
+    <section class="wrap sec rs-ggrp" id="rs-g-costs" aria-labelledby="rs-g-costs-t">
       ${grpHd(grp('costs'), `<a class="act rs-ghome" href="#fractional-cost">The cost hub${icon('arrow')}</a>`)}
-      <div class="card rs-costs" data-rs-reveal>${(() => {
+      <div class="card rs-costs" data-rs-draw="costs">${(() => {
         // One hourly scale for every row: a bar for a quoted range, a dot for a median
         const hourly = costs.map(({ o, g }) => (g.post && g.post.headline ? money(g.post.headline.rate) : RIX().byCat[o.v] ? { lo: RIX().byCat[o.v].p50, hi: RIX().byCat[o.v].p50 } : null));
         const top = Math.ceil(Math.max(...hourly.filter(Boolean).map((x) => x.hi)) / 50) * 50;
-        costBar = (i) => { const x = hourly[i]; return x ? `<span class="rs-cost-bar" aria-hidden="true"><i class="${x.hi === x.lo ? 'is-pt' : ''}" style="left:${(x.lo / top * 100).toFixed(1)}%;width:${((x.hi - x.lo) / top * 100).toFixed(1)}%"></i></span>` : ''; };
+        costBar = (i) => { const x = hourly[i]; return x ? `<span class="rs-cost-bar" aria-hidden="true"><i class="${x.hi === x.lo ? 'is-pt' : ''}" data-draw="${x.hi === x.lo ? 'fade' : 'x'}" style="left:${(x.lo / top * 100).toFixed(1)}%;width:${((x.hi - x.lo) / top * 100).toFixed(1)}%"></i></span>` : ''; };
         return '';
       })()}${costs.map(({ o, g }, ci) => {
         const p = g.post;
         if (p && p.headline) {
           const h = p.headline;
           return `<a class="rs-cost rs-cost-real" href="#guide.${esc(g.id)}">
-          <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · ${esc(h.basis)}</span></span></span>
-          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(h.rate)}</b>${costBar(ci)}</span>
-          <span class="rs-cost-v"><span class="label">${esc(h.monthL)}</span><b class="tnum">${esc(h.month)}</b></span>
+          <span class="rs-cost-k"><span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · ${esc(plainOf(h.basis))}</span></span></span>
+          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(plainOf(h.rate))}</b>${costBar(ci)}</span>
+          <span class="rs-cost-v"><span class="label">${esc(h.monthL)}</span><b class="tnum">${esc(plainOf(h.month))}</b></span>
           ${icon('arrow')}</a>`;
         }
         const b = RIX().byCat[o.v]; const hh = (COST[o.v] && COST[o.v].hours) || '40';
         return `<a class="rs-cost" href="#guide.${esc(g.id)}">
-          <span class="rs-cost-k">${RN.ui.catDot(o.v)}<span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · Rate Index</span></span></span>
+          <span class="rs-cost-k"><span><b>${esc(g.title)}</b><span class="tiny muted rs-cost-b">${esc(o.l)} · Rate Index ${illus()}</span></span></span>
           <span class="rs-cost-v"><span class="label">An hour, median</span><b class="tnum">${hr(b.p50)}</b>${costBar(ci)}</span>
           <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m').replace(/\/month$/, ''))}</b></span>
           ${icon('arrow')}</a>`;
       }).join('')}</div>
-      <p class="rs-src" style="margin-top:12px">${icon('info')}<span>The sales leadership and marketing rows show what clients paid or were quoted in Revenue Nomad's 2026 engagements. The other rows are Rate Index medians and a typical month for a company with $5M to $20M in revenue<span data-proto>, illustrative in this prototype</span>. No platform fee for companies. You pay the operator's rate, and hiring the operator full time later carries a 20% conversion fee.</span></p>
+      <p class="rs-src rs-src-note">${icon('info')}<span>Sales leadership and marketing rows are what clients paid or were quoted in our 2026 engagements. The other rows are Rate Index medians and a typical month for a $5M to $20M company, illustrative until the first survey closes. Companies pay no platform fee; hiring an operator full time later carries a 20% conversion fee.</span></p>
       ${RN.contrib ? `<div class="rs-gcontrib">${RN.contrib.cta('rates', { variant: 'band', ctx: { source: 'guides' } })}</div>` : ''}
     </section>
-    <div class="wrap rs-sec-sm"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
+    <div class="wrap sec"><div class="grid g-2 rs-gpair">${['operators', 'methods'].map((k) => `<section class="rs-ggrp" id="rs-g-${k}" aria-labelledby="rs-g-${k}-t">
         ${grpHd(grp(k))}
         <ul class="rs-qlist">${GUIDES.filter((x) => x.group === k).map(qrow).join('')}</ul>
       </section>`).join('')}</div></div>
-    <section class="wrap rs-sec-sm" id="rs-glossary" aria-labelledby="rs-gl-t">
+    <section class="wrap sec" id="rs-glossary" aria-labelledby="rs-gl-t">
+      <div class="sec-head rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h2" id="rs-gl-t">The words we use, defined once</h2><p class="rs-ggrp-d">The same terms appear on every profile, posted engagement, review and report on Revenue Nomad.</p></div>
       <div class="rs-gloss card">
-        <div class="rs-ggrp-hd"><span class="eyebrow">Glossary</span><h2 class="h3" id="rs-gl-t" style="margin-top:8px">The words we use, defined once</h2><p class="small muted">The same terms appear on every profile, posted engagement, review and report on Revenue Nomad.</p></div>
         ${(() => { const term = (x) => `<div class="rs-gl-i" id="rs-term-${esc(RN.slug(x.t))}"><dt>${esc(x.t)}</dt><dd>${esc(x.d())}${x.to ? ` <a class="rs-gl-a" href="#${esc(x.to)}" aria-label="More on ${esc(x.t)}">More${icon('arrow')}</a>` : ''}</dd></div>`;
           return `<dl class="rs-gl">${GLOSSARY.slice(0, 6).map(term).join('')}</dl>
           <details class="rs-gl-more"><summary><span>Show all ${GLOSSARY.length} terms</span>${icon('chev-down', 'rs-chev')}</summary><dl class="rs-gl">${GLOSSARY.slice(6).map(term).join('')}</dl></details>`; })()}
-
       </div>
       <div class="stack" style="--gap:12px;margin-top:20px">
         ${schemaBlock('rs-gl-schema', schema, 'For the dev team: DefinedTermSet markup for the glossary')}
@@ -2031,35 +2054,83 @@
     const o = { title: g.post ? g.post.q : g.q, route: 'guide.' + g.slug, quote, kind: 'key-number' };
     return `<button type="button" class="shr-q-btn rs-kb-sh" data-act="shr-open" data-share="${esc(JSON.stringify(o))}" aria-label="${esc('Share this number: ' + num)}">${icon('share')}<span>Share</span></button>`;
   };
-  function keyBand(keys, g) {
-    const list = (keys || []).map((k) => ({ k, pend: gapOnly(k.v) })).sort((a, b) => a.pend - b.pend);
-    const live = list.filter((x) => !x.pend).length;
-    return `<section class="rs-kb" data-n="${live}" aria-label="Key numbers" data-rs-reveal>
-      <span class="label rs-kb-l">Key numbers</span>
-      <div class="rs-kb-g">${list.map(({ k, pend }, i) => {
-        const v = splitKey(k.v);
-        const srcH = k.url ? `<a class="link" href="${esc(k.url)}" target="_blank" rel="noopener">${esc(k.src)}</a>` : esc(k.src);
-        return `<div class="rs-kb-i" style="--i:${i}"${pend ? ' data-proto' : ''}>
-          <span class="rs-kb-v${plainOf(v.h).length > 26 ? ' is-long' : ''}">${prich(v.h)}</span>
-          <span class="rs-kb-k">${prich(k.k)}${v.t ? `<span class="rs-kb-x">${prich(v.t.charAt(0).toUpperCase() + v.t.slice(1) + (/[.?!]$/.test(v.t) ? '' : '.'))}</span>` : ''}</span>
-          <span class="rs-kb-s">${icon('info')}<span class="rs-kb-src">${srcH}</span>${pend ? '' : kbShare(plainOf(v.h), plainOf(k.k), plainOf(k.src), g)}</span>
+  /* Key numbers, two tiles (clarity and ratio audits, Oct 14, 2026). The first is the guide's headline number at about
+     56px, the same figure its index card shows, with the source of the key it summarises; the second is the next key
+     number. Every key number, with its source, stays listed under "The numbers in this guide" at the foot of the
+     article. A key still waiting for a figure is a reviewer-only tile (data-proto). */
+  function keyTiles(keys, stat) {
+    const live = (keys || []).filter((k) => !gapOnly(k.v));
+    return live.slice(0, 2).map((k, i) => {
+      const v = splitKey(k.v);
+      if (i === 0 && stat && !gapOnly(stat.v)) return { v: stat.v, k: stat.l, x: '', src: k.src, url: k.url };
+      return { v: v.h, k: k.k, x: v.t, src: k.src, url: k.url };
+    });
+  }
+  const srcLink = (k) => (k.url ? `<a class="link" href="${esc(k.url)}" target="_blank" rel="noopener">${esc(plainOf(k.src))}</a>` : esc(plainOf(k.src)));
+  function keyBand(keys, g, stat) {
+    const tiles = keyTiles(keys, stat);
+    const pend = (keys || []).filter((k) => gapOnly(k.v));
+    const tile = (t, i) => `<div class="rs-kb-i${i === 0 ? ' is-lead' : ''}">
+          <span class="rs-kb-v">${prich(t.v)}</span>
+          <span class="rs-kb-k">${prich(t.k)}${t.x ? `<span class="rs-kb-x">${prich(plainOf(t.x).charAt(0).toUpperCase() + plainOf(t.x).slice(1) + (/[.?!]$/.test(plainOf(t.x)) ? '' : '.'))}</span>` : ''}</span>
+          ${t.src ? `<span class="rs-kb-s">${icon('info')}<span class="rs-kb-src">${srcLink(t)}</span>${kbShare(plainOf(t.v), plainOf(t.k), plainOf(t.src), g)}</span>` : ''}
         </div>`;
-      }).join('')}</div>
+    return `<section class="rs-kb" data-n="${tiles.length}" aria-label="Key numbers">
+      <span class="label rs-kb-l">Key numbers</span>
+      <div class="rs-kb-g">${tiles.map(tile).join('')}${pend.map((k) => `<div class="rs-kb-i" data-proto><span class="rs-kb-v">${prich(k.v)}</span><span class="rs-kb-k">${prich(k.k)}</span><span class="rs-kb-s">${icon('info')}<span class="rs-kb-src">${srcLink(k)}</span></span></div>`).join('')}</div>
     </section>`;
+  }
+  // Every key number with its source, folded at the foot of the article (for citing; the top shows two)
+  function keyList(keys) {
+    const live = (keys || []).filter((k) => !gapOnly(k.v));
+    if (!live.length) return '';
+    return `<details class="rs-kb-all"><summary>${icon('list')}<span>The numbers in this guide, with sources</span><span class="tiny muted">${live.length}</span>${icon('chev-down', 'rs-chev')}</summary>
+      <ul class="rs-kb-list">${live.map((k) => `<li class="rs-kb-i rs-kb-row"><b class="tnum">${prich(k.v)}</b><span>${prich(k.k)}</span><span class="rs-kb-src tiny muted">${srcLink(k)}</span></li>`).join('')}</ul>
+    </details>`;
   }
 
   // Keep reading: three plain links at the foot of the article, not a second copy of the index cards
   const moreLinks = (list) => (list.length ? `<nav class="rs-more-g" aria-label="Keep reading"><span class="label">Keep reading</span><ul>${list.map((x) => `<li><a href="#guide.${esc(x.slug)}">${disp(x.post ? x.post.q : x.q)}${icon('arrow')}</a></li>`).join('')}</ul></nav>` : '');
+  /* An operator who does this work, inside the article (layout audit, Oct 14, 2026): the visitor who reads this far wants a
+     specific operator, so the card's action is Request intro. One card sits after the first table, one after the
+     real-company case. Talk to us stays the page's main path (owner, Oct 14): rail, contents and the closing strip. */
+  const inOp = (x, g) => {
+    const catL = F.catLabel(g.cat);
+    return `<aside class="rs-prel rs-inop" aria-label="${esc(catL)} operator who does this work">
+      <div class="rs-inop-hd"><span class="label">From the network</span><b class="rs-inop-t">${esc(catL)} operators who do this work</b>
+        <a class="act" href="#browse.${esc(g.cat)}" data-act="rs-browse-cat" data-cat="${esc(g.cat)}" data-src="guide_${esc(g.slug)}">Browse ${esc(catL)}${icon('arrow')}</a></div>
+      ${RN.ui.opCard(x.op, { compact: true, why: relWhy(x), cta: 'invite', ctaAct: 'intro-open', ctaLabel: 'Request intro' })}
+    </aside>`;
+  };
+  // Where the two cards go: after the first section with a table (else the second section), then after the case
+  function opSlots(sections, n) {
+    const last = sections.length - 1;
+    let a = sections.findIndex((x) => (x.blocks || []).some((b) => b.table));
+    if (a < 0) a = Math.min(1, last);
+    let b = sections.findIndex((x) => x.id === 'real-company');
+    if (b < 0 || b === a) b = Math.min(last, a + 2);
+    return n > 1 && b !== a ? [a, b] : [a];
+  }
+  // The guide's closing strip: one line and one Talk to us button, on night (it replaces the 387px form band)
+  const talkStrip = (h, to, sub) => `<section class="night rs-ptalk" id="rs-s-talk" aria-labelledby="rs-ptalk-t"><div class="wrap rs-ptalk-in">
+      <h2 class="rs-ptalk-h" id="rs-ptalk-t">${esc(h)}</h2>
+      ${sub ? `<span class="rs-ptalk-sub">${esc(sub)}</span>` : ''}
+      <span class="fn-form-cta"><a class="btn btn-leaf" href="#${esc(to)}">Talk to us${icon('arrow')}</a></span>
+    </div></section>`;
+  // The rail card: Talk to us first (owner, Oct 14, 2026), then a text link to the role's rates
+  const railCta = (h, sub, to, cat) => `<div class="card rs-rail-cta">
+      <b class="h5">${esc(h)}</b>
+      <p class="small muted">${esc(sub)}</p>
+      <a class="btn btn-block" href="#${esc(to)}">Talk to us${icon('arrow')}</a>
+      ${cat ? `<a class="rs-rail-link" href="#rates.${esc(cat)}">${esc(F.catLabel(cat))} rates${icon('arrow')}</a>` : ''}
+    </div>`;
   function renderPost(g) {
     const p = g.post;
     const grp = GROUPS.find((x) => x.k === p.fn);
     const FN = RN.fn || {};
     const gap = (w, o) => (FN.gap ? FN.gap(w, o) : esc(w));
-    const persona = RN.store.state.persona;
-    const updated = RN.fmt.date(p.updated + 'T12:00:00');
     const secs = g.sections();
     const rel = relatedOps(g).slice(0, 2);
-    const bp = blueprintFor(g.cat, g.bp);
     const page = (FN.pages && FN.pages[p.fn]) || { fn: p.fn, need: p.need, form: { h: 'Tell us what you need', lede: '' } };
     const talk = 'talk.' + p.need;
     const plainFaq = (/\?$/.test(p.q) ? [{ q: p.q, a: plainOf(p.answer) }] : []).concat(p.faq.map((f) => ({ q: f.q, a: plainOf(f.a) })));
@@ -2079,6 +2150,7 @@
       .filter((x, i, a) => a.indexOf(x) === i && x.slug !== p.slug).slice(0, 3);
     const ans = answersBlock(g);
     const toc = secs.map((x) => ({ id: x.id, h: x.h })).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'talk', h: 'Talk to us' }]);
+    const slots = opSlots(p.sections, rel.length);
     const reps = p.replaces || [];
     const notes = `<dl class="rs-notes-dl">
         <div><dt>URL</dt><dd class="mono">/post/${esc(p.slug)}</dd></div>
@@ -2098,26 +2170,27 @@
     <div class="wrap rs-guide">
       <article class="rs-art" aria-labelledby="rs-g-h1">
         ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
-        <h1 class="h1 rs-g-h1" id="rs-g-h1">${disp(p.q)}</h1>
+        <h1 class="h1 rs-g-h1" id="rs-g-h1">${vmEnd(disp(p.q))}</h1>
         ${postByline(p.updated, g.mins, `<span class="rs-by-rev" data-proto>Reviewed by ${gap('reviewing operator', 'Matt')}</span>`)}
         <div class="rs-answer" role="note" aria-label="Short answer">
           <span class="label">The short answer</span>
           <p>${prich(p.answer)}</p>
         </div>
-        ${keyBand(p.keys, g)}
+        ${keyBand(p.keys, g, p.stat)}
         ${mtoc(toc)}
-        <div class="prose rs-prose">
-          ${secs.map((x) => `<section id="rs-s-${esc(x.id)}" class="rs-gsec rs-gsec-${esc(x.id)}"><h2>${disp(x.h)}</h2>${x.html}</section>`).join('')}
+        <div class="rs-prose">
+          ${secs.map((x, i) => `<section id="rs-s-${esc(x.id)}" class="prose rs-gsec rs-gsec-${esc(x.id)}"><h2>${disp(x.h)}</h2>${x.html}</section>${slots.indexOf(i) >= 0 && rel[slots.indexOf(i)] ? inOp(rel[slots.indexOf(i)], g) : ''}`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
-          ${p.faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${disp(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${prich(f.a)}</p></details>`).join('')}
+          ${p.faq.map((f) => `<details class="rs-faq-i"><summary><span>${disp(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${prich(f.a)}</p></details>`).join('')}
         </section>
         ${ans}
         ${closingBlock(g)}
         ${moreLinks(others)}
         <footer class="rs-gfoot">
           <p class="small muted">Built from Revenue Nomad's 2026 engagements and the outside sources linked in the key numbers. <span data-proto>A pending chip marks a figure or quote we do not have yet. </span>Cite as "Revenue Nomad, ${esc(RN.fmt.monthYear(p.updated + 'T12:00:00'))}".</p>
+          ${keyList(p.keys)}
           ${devNote('rs-post-notes', 'Publishing notes', 'For the team: meta fields, the 301s from the old blog, what is still pending', notes)}
           ${schemaBlock('rs-faq-schema', schema, 'For the dev team: Article, BreadcrumbList and FAQPage JSON-LD. Add reviewedBy once the reviewing operator signs off, and an image hosted on revenuenomad.com.')}
         </footer>
@@ -2127,32 +2200,11 @@
           <div class="rs-toc"><span class="label">On this page</span>
             <div class="rs-toc-list"><span class="rs-toc-prog" aria-hidden="true"><i></i></span><ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul></div>
           </div>
-          <div class="card rs-rail-cta">
-            ${p.stat && !gapOnly(p.stat.v) ? `<div class="rs-rail-stat"><span class="label">Key number</span><b>${disp(plainOf(p.stat.v))}</b><span class="small muted">${esc(RN.fmt.smart(plainOf(p.stat.l)))}</span></div>` : ''}
-            <b class="h5">${esc(page.form.h)}</b>
-            <p class="small muted">Four short questions. Only your name and email are required.</p>
-            <a class="btn btn-block" href="#${esc(talk)}">Talk to us${icon('arrow')}</a>
-            <a class="btn btn-line btn-block" href="#fractional-cost">What it costs</a>
-          </div>
+          ${railCta(page.form.h, 'Four short questions. Only your name and email are required.', talk, g.cat)}
         </div>
       </aside>
     </div>
-    <section class="section night fn-sec fn-form rs-ptalk" id="rs-s-talk" aria-labelledby="rs-ptalk-t"><div class="wrap fn-form-in">
-      <div class="fn-form-l">
-        <h2 class="h2" id="rs-ptalk-t">${esc(page.form.h)}</h2>
-        <p class="lede">${prich(p.talk)}</p>
-      </div>
-      <div class="fn-form-r">${FN.talkCard ? FN.talkCard(page) : `<a class="btn btn-leaf btn-lg" href="#${esc(talk)}">Talk to us${icon('arrow')}</a>`}</div>
-    </div></section>
-    <div class="wrap rs-guide-after">
-      <section id="rs-s-operators" class="rs-rel rs-prel" aria-labelledby="rs-rel-t">
-        <div class="row between" style="align-items:flex-end"><h2 class="h3" id="rs-rel-t">${esc(F.catLabel(g.cat))} operators who do this work</h2>
-        <a class="btn btn-line btn-sm" href="#browse.${esc(g.cat)}" data-act="rs-browse-cat" data-cat="${esc(g.cat)}" data-src="guide_${esc(g.slug)}">Browse ${esc(F.catLabel(g.cat))}${icon('arrow')}</a></div>
-        <div class="grid g-2 rs-rel-ops">
-          ${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: relWhy(x) })).join('')}
-        </div>
-      </section>
-    </div>
+    ${talkStrip(page.form.h, talk, 'Four short questions. A role profile and 2 to 3 vetted operators, often within 48 hours.')}
     </div>`;
   }
 
@@ -2249,6 +2301,9 @@
   // Same count the page shows: answer posts end on 2 operator cards (playbook template), older guides show 3
   R.relatedOps = (g) => { const x = typeof g === 'string' ? guideFor(g) || {} : g; return relatedOps(x).slice(0, x.post ? 2 : 3); };
 
+  // Talk to us with the need already picked, for guides that predate the posts (role category -> the function's need)
+  const NEED_OF = { sales_leadership: 'sales_motion', sales_enablement: 'sales_motion', sellers: 'sales_motion', revenue_operations: 'systems', marketing: 'pipeline' };
+  const RI_SRC = () => [SRC_RI(), SRC_REP()];
   function renderGuide(slug) {
     chartFns = {};
     const g = guideBy(slug);
@@ -2261,21 +2316,25 @@
     const secs = g.sections().filter((s) => s.html);
     const faq = g.faq();
     const stats = g.stats ? g.stats() : [];
-    const updated = RN.fmt.date(g.updated + 'T12:00:00');
     const persona = RN.store.state.persona;
     // Byline: Revenue Nomad Research is the author. The reviewer is the highest Reputation Index sample operator in the
     // guide's category, so no real operator is named as a reviewer without their OK; no sample in that category: pending.
     const reviewer = g.cat ? RN.model.ops.filter((o) => o.sample && !o.hidden && o.catKey === g.cat).sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a))[0] : null;
-
     const rel = relatedOps(g);
     const bp = blueprintFor(g.cat, g.bp);
+    const client = R.isClientGuide(g);
+    // Rate Index and survey figures are illustrative: the short answer of a cost guide and any key number from them carry the tag
+    const riStats = stats.some((x) => RI_SRC().includes(x.src));
+    const riAnswer = isCost(g) || g.slug === 'how-much-should-a-fractional-operator-charge';
+    const keys = stats.map((x) => ({ k: x.l, v: x.v, src: x.src || '' }));
 
-    // CTA
+    // Rail: Talk to us leads on the client guides (owner, Oct 14, 2026); operator and method guides keep their own action
     const c = g.cta || {};
     let cta = '';
     if (c.operator && persona !== 'operator') cta = `<a class="btn btn-block" href="#join">Join as an operator${icon('arrow')}</a>`;
     else if (c.to) cta = `<a class="btn btn-block" href="#${esc(c.to)}">${esc(c.label)}${icon('arrow')}</a>`;
     else cta = browseBtn(c.label || 'Browse operators', { filters: c.filters || {}, tags: c.tags || [], sort: c.sort, src: 'guide_' + g.slug }, 'btn btn-block');
+    const talk = NEED_OF[g.cat] ? 'talk.' + NEED_OF[g.cat] : 'talk';
 
     const schema = {
       '@context': 'https://schema.org', '@type': 'FAQPage',
@@ -2284,31 +2343,33 @@
     const others = GUIDES.filter((x) => x.slug !== g.slug).sort((a, b) => (a.group === g.group ? -1 : 0) - (b.group === g.group ? -1 : 0)).slice(0, 3);
     const ans = answersBlock(g);
     const toc = secs.map((s) => ({ id: s.id, h: s.h })).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'operators', h: rel.length ? 'Operators' : 'Next steps' }]);
+    const tiles = keys.slice(0, 2);
 
     return `<div class="rs rs-guide-pg">
     <div class="wrap rs-guide">
       <article class="rs-art" aria-labelledby="rs-g-h1">
         ${crumbs([{ l: 'Guides', to: 'guides' }, { l: grp.l }])}
-        <h1 class="h1 rs-g-h1" id="rs-g-h1">${esc(g.q)}</h1>
+        <h1 class="h1 rs-g-h1" id="rs-g-h1">${vmEnd(esc(g.q))}</h1>
         ${postByline(g.updated, g.mins, reviewer ? `<span class="rs-by-rev" data-proto>Reviewed by <a href="#op.${esc(reviewer.slug)}">${esc(reviewer.name)}</a>${RN.ui.illus('Illustrative', 'A sample operator stands in as the reviewer until the team picks one for this guide.')}</span>` : `<span class="rs-by-rev" data-proto>Reviewed by ${RN.fn && RN.fn.gap ? RN.fn.gap('reviewing operator', 'Matt') : 'an operator, pending'}</span>`)}
         <div class="rs-answer" role="note" aria-label="Short answer">
-          <span class="label">The short answer</span>
+          <span class="rs-answer-l"><span class="label">The short answer</span>${riAnswer ? illus() : ''}</span>
           <p>${answer.map(esc).join(' ')}</p>
         </div>
-        ${stats.length ? `<section class="rs-kb" data-n="${stats.length}" aria-label="Key numbers" data-rs-reveal><span class="label rs-kb-l">Key numbers</span><div class="rs-kb-g">${stats.map((s, i) => `<div class="rs-kb-i" style="--i:${i}"><span class="rs-kb-v">${esc(s.v)}</span><span class="rs-kb-k">${esc(s.l)}</span>${s.src ? `<span class="rs-kb-s rs-kb-s-sh">${kbShare(s.v, s.l, s.src, g)}</span>` : ''}</div>`).join('')}</div></section>` : ''}
+        ${tiles.length ? `<section class="rs-kb" data-n="${tiles.length}" aria-label="Key numbers"><span class="rs-kb-l"><span class="label">Key numbers</span>${riStats ? illus() : ''}</span><div class="rs-kb-g">${tiles.map((s, i) => `<div class="rs-kb-i${i === 0 ? ' is-lead' : ''}"><span class="rs-kb-v">${esc(s.v)}</span><span class="rs-kb-k">${esc(s.k)}</span>${s.src ? `<span class="rs-kb-s">${icon('info')}<span class="rs-kb-src">${esc(s.src)}</span>${kbShare(s.v, s.k, s.src, g)}</span>` : ''}</div>`).join('')}</div></section>` : ''}
         ${mtoc(toc)}
-        <div class="prose rs-prose">
-          ${secs.map((s) => `<section id="rs-s-${esc(s.id)}" class="rs-gsec"><h2>${esc(s.h)}</h2>${olToTl(s.html)}</section>`).join('')}
+        <div class="rs-prose">
+          ${secs.map((s) => `<section id="rs-s-${esc(s.id)}" class="prose rs-gsec"><h2>${esc(s.h)}</h2>${olToTl(s.html)}</section>`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
-          ${faq.map((f, i) => `<details class="rs-faq-i" ${i === 0 ? 'open' : ''}><summary><span>${esc(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${esc(f.a)}</p></details>`).join('')}
+          ${faq.map((f) => `<details class="rs-faq-i"><summary><span>${esc(f.q)}</span>${icon('chev-down', 'rs-chev')}</summary><p>${esc(f.a)}</p></details>`).join('')}
         </section>
         ${ans}
         ${closingBlock(g)}
         ${moreLinks(others)}
         <footer class="rs-gfoot">
-          <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. <span data-proto>Market and survey figures in this prototype are illustrative. </span>Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
+          <p class="small muted">Sources: Revenue Nomad Rate Index (${esc((RIX().trend || []).slice(-1)[0] ? RIX().trend.slice(-1)[0].l : 'latest quarter')}), the State of Fractional GTM ${esc(String(REP().year || 2027))} survey (fieldwork ${esc(REP().fieldwork || '')}) and live operator profiles. Market and survey figures are illustrative until the first survey closes. Cite as "Revenue Nomad Research, ${esc(RN.fmt.monthYear(g.updated + 'T12:00:00'))}".</p>
+          ${keyList(keys)}
           ${schemaBlock('rs-faq-schema', schema, 'For the dev team: FAQPage JSON-LD built from the short answer and the FAQ. Also add Article (author Revenue Nomad as an Organization, reviewedBy the reviewing operator, dateModified) and BreadcrumbList.')}
         </footer>
       </article>
@@ -2317,29 +2378,28 @@
           <div class="rs-toc"><span class="label">On this page</span>
             <div class="rs-toc-list"><span class="rs-toc-prog" aria-hidden="true"><i></i></span><ul>${toc.map((t) => `<li><button type="button" data-act="rs-scroll" data-to="rs-s-${esc(t.id)}">${disp(t.h)}</button></li>`).join('')}</ul></div>
           </div>
-          <div class="card rs-rail-cta">
-            <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : g.group === 'methods' ? 'See it on a profile' : 'Ready to hire?')}</b>
-            <p class="small muted">${esc(g.group === 'operators' ? (persona === 'operator' ? 'Studio shows your numbers next to the benchmarks in this guide.' : 'Join the network to get a Studio with your numbers next to these benchmarks.') : g.group === 'methods' ? 'Every profile shows its Reputation Index, CORE reviews and verified focus areas.' : 'Browse operators with company-verified proof, or estimate the cost first.')}</p>
+          ${client ? railCta('Tell us what you need', 'Four short questions. Only your name and email are required.', talk, g.cat && RIX().byCat[g.cat] ? g.cat : '') : `<div class="card rs-rail-cta">
+            <b class="h5">${esc(g.group === 'operators' ? 'Put this to work' : 'See it on a profile')}</b>
+            <p class="small muted">${esc(g.group === 'operators' ? (persona === 'operator' ? 'Studio shows your numbers next to the benchmarks in this guide.' : 'Join the network to get a Studio with your numbers next to these benchmarks.') : 'Every profile shows its Reputation Index, CORE reviews and verified focus areas.')}</p>
             ${cta}
-            ${R.isClientGuide(g) ? `<a class="btn btn-line btn-block" href="#rates">Estimate the cost</a>` : ''}
-          </div>
+          </div>`}
         </div>
       </aside>
     </div>
     <div class="wrap rs-guide-after">
         <section id="rs-s-operators" class="rs-rel" aria-labelledby="rs-rel-t">
-          <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:6px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most company evidence'}</h2></div>
+          <div class="row between" style="align-items:flex-end"><div><span class="eyebrow">From the network</span><h2 class="h3" id="rs-rel-t" style="margin-top:16px">${g.cat ? `${esc(F.catLabel(g.cat))} operators who do this work` : 'Operators with the most company evidence'}</h2></div>
           ${browseBtn(g.cat ? `Browse ${F.catLabel(g.cat)}` : 'Browse all', { filters: g.cat ? { roleCategories: [g.cat] } : {}, src: 'guide_' + g.slug }, 'btn btn-line btn-sm')}</div>
-          <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: relWhy(x) })).join('')}</div>
+          <div class="grid g-3 rs-rel-ops">${rel.map((x) => RN.ui.opCard(x.op, { compact: true, why: relWhy(x), cta: 'invite', ctaAct: 'intro-open', ctaLabel: 'Request intro' })).join('')}</div>
           <div class="grid g-2 rs-glinks">
           <a class="rs-bp card card-link" href="#${esc(bp ? bp.to : 'blueprints')}">
-            ${RN.ui.icoTile('doc', { cat: g.cat, cls: 'rs-bp-ic' })}
+            ${RN.ui.icoTile('doc', { cls: 'rs-bp-ic' })}
             <span class="grow"><span class="label">Engagement Blueprint</span><b>${esc(bp ? bp.title : `Scope this work${g.cat ? ` with a ${F.catLabel(g.cat)} Blueprint` : ' with a Blueprint'}`)}</b><span class="small muted">${esc(bp && bp.sub ? bp.sub : 'Typical hours, term, a 30/60/90-day plan and a rate range from the Rate Index, ready to post as an engagement.')}</span></span>
             ${icon('arrow')}
           </a>
-          ${g.cat && RIX().byCat[g.cat] ? `<a class="rs-bp card card-link" href="#rates">
-            ${RN.ui.icoTile('chart', { tone: 'gold', cls: 'rs-bp-ic' })}
-            <span class="grow"><span class="label">Rate Index</span><b>${esc(F.catLabel(g.cat))}: median ${esc(RN.fmt.rate(RIX().byCat[g.cat].p50))}</b><span class="small muted">Middle half ${esc(RN.fmt.hrRange(RIX().byCat[g.cat].p25, RIX().byCat[g.cat].p75))}. Estimate a month for your company size.</span></span>
+          ${g.cat && RIX().byCat[g.cat] ? `<a class="rs-bp card card-link" href="#rates.${esc(g.cat)}">
+            ${RN.ui.icoTile('chart', { cls: 'rs-bp-ic' })}
+            <span class="grow"><span class="rs-bp-l"><span class="label">Rate Index</span>${illus()}</span><b>${esc(F.catLabel(g.cat))}: median ${esc(RN.fmt.rate(RIX().byCat[g.cat].p50))}</b><span class="small muted">Middle half ${esc(RN.fmt.hrRange(RIX().byCat[g.cat].p25, RIX().byCat[g.cat].p75))}. Estimate a month for your company size.</span></span>
             ${icon('arrow')}
           </a>` : `<a class="rs-bp card card-link" href="#framework">
             ${RN.ui.icoTile('grid', { cls: 'rs-bp-ic' })}
@@ -2349,6 +2409,7 @@
           </div>
         </section>
     </div>
+    ${client ? talkStrip('Tell us what you need', talk, 'Four short questions. A role profile and 2 to 3 vetted operators, often within 48 hours.') : ''}
     </div>`;
   }
 

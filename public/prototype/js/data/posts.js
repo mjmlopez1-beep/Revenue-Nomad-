@@ -5,8 +5,14 @@
      read from this environment, so each rewrite is built from the Content Bank and plan data, not from the old copy.
    - kind 'new': a drafted Content Bank post (posts 1, 2, 4, 5 and 7), converted faithfully. Post 2 also takes the two
      marketing city pages and the part-time CMO hiring guide, since its URL already owns "how to hire a fractional CMO".
-   Body text uses the function pages' tokens: [[gap:what|Owner]] pending chip, [[link:route|label]], [[url:https://…|label]],
-   **bold** and [[net]]. replaces[] is the 301 list with Search Console figures from the May 2026 export (null = not in it).
+   Body text uses the function pages' tokens: a pending chip ([[gap:what|Owner]], written with no space before it, so
+   a visitor never sees a stray " ." where it hides), [[link:route|label]], [[url:https://…|label]], **bold** and
+   [[net]]. Money figures that have a canonical record use [[cost:key.field]] (RN.costs, js/data/costs.js; research.js
+   resolves it, |lower and |bare as modifiers), so a guide quotes the same number as every other page.
+   Blocks: p, ul, ol, quote, table (with an optional note, its source caption) and stats, a row of figure tiles
+   ({ stats: [{ v, l, src, url }], note }) for a paragraph that would otherwise be mostly arithmetic (design pass, Oct 14).
+   Voice: Revenue Nomad writes as a company ("we", "our team"); no founder first person. GoFractional is never named.
+   replaces[] is the 301 list with Search Console figures from the May 2026 export (null = not in it).
    aliases maps a prototype guide a post replaced to that post, so its old link still lands. */
 (function () {
   'use strict';
@@ -267,7 +273,7 @@
             "action": "city"
           }
         ],
-        "answer": "Pick the seat and the hours first. If you run a $5M to $75M company and still carry the number, the rest is a discovery call, a role profile, 2 to 3 vetted operators often within 48 hours, meetings in week 1 to 2, an optional working assignment, and a contract with a 3 to 4 month initial term.",
+        "answer": "Name the seat, then fill in Talk to us. We send a role profile and 2 to 3 vetted operators, often within 48 hours. Contracts start with a 3 to 4 month initial term.",
         "keys": [
           {
             "k": "Time to a role profile and 2 to 3 vetted operators",
@@ -276,15 +282,15 @@
             "url": ""
           },
           {
-            "k": "Operators in the network",
-            "v": "[[net]], all dedicated fractional, with 50+ data points tracked on each",
-            "src": "Revenue Nomad network",
+            "k": "Fractional director or VP of Sales, team under 5 to 8 reps",
+            "v": "[[cost:vp-sales.hourly]], [[cost:vp-sales.hours]]",
+            "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
-            "k": "Fractional director or VP of Sales, team under 5 to 8 reps",
-            "v": "$200 to $250 an hour, 20 to 40 hours a month",
-            "src": "Revenue Nomad 2026 engagements",
+            "k": "Operators in the network",
+            "v": "[[net]], all dedicated fractional, with 50+ data points tracked on each",
+            "src": "Revenue Nomad network",
             "url": ""
           },
           {
@@ -295,7 +301,7 @@
           },
           {
             "k": "Cost of replacing a sales leader",
-            "v": "Up to 1.5x salary, with 3+ months of ramp",
+            "v": "[[cost:vp-sales.replace]], with 3+ months of ramp",
             "src": "Skaled",
             "url": "https://skaled.com/services/fractional-vp-of-sales/"
           }
@@ -410,7 +416,7 @@
                 "p": "This guide replaces the separate fractional VP of Sales and head of sales guides we used to run for 16 metros. Atlanta, Austin, Baltimore, Charlotte, Chicago, Dallas, Denver, Houston, Kansas City, Los Angeles, Miami, Nashville, New York, Portland, San Francisco and Seattle. The steps and the terms are the same in each."
               },
               {
-                "p": "Location only matters through the cadence. The work is weekly and hands-on, with pipeline reviews, sitting in on calls, coaching reps and role-play. Agree in the scope which of those happen in person and how often. [[gap:how many 2026 sales engagements ran remote, hybrid or on-site|Matt]] [[gap:operator count by metro for these 16 cities|Matt]]"
+                "p": "Location only matters through the cadence. The work is weekly and hands-on, with pipeline reviews, sitting in on calls, coaching reps and role-play. Agree in the scope which of those happen in person and how often.[[gap:how many 2026 sales engagements ran remote, hybrid or on-site|Matt]][[gap:operator count by metro for these 16 cities|Matt]]"
               }
             ]
           },
@@ -460,7 +466,7 @@
                 }
               },
               {
-                "p": "The initial term is a floor. At Ferry, a hospitality tip management platform, I signed for 4 months and stayed about 18."
+                "p": "The initial term is a floor. At Ferry, a hospitality tip management platform, our team signed for 4 months and stayed about 18."
               },
               {
                 "p": "Three jobs are yours in the first week."
@@ -482,7 +488,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** A founder-led water damage restoration marketing agency. [[gap:revenue band for the restoration marketing agency|Matt]]"
+                "p": "**The company.** A founder-led water damage restoration marketing agency.[[gap:revenue band for the restoration marketing agency|Matt]]"
               },
               {
                 "p": "**Before.** 278 appointments booked year to date and 134 showed, about half. In one month 19 were booked, 13 showed and none closed. The founder had carried every one of those calls while running the company, and wanted out of running revenue."
@@ -494,7 +500,7 @@
                 "p": "**The first month.** 20 hours a month at $4,000, spent on SDR pay, talk tracks, role-play, the booking system and channel choices. [[link:guide.sales-meetings-not-converting|Why booked sales meetings are not turning into deals]] has the full plan."
               },
               {
-                "p": "**After.** It started in September 2026, so there are no results yet. [[gap:90-day results at the restoration marketing agency, with the client's OK|Operator]]"
+                "p": "**After.** It started in September 2026, so there are no results yet.[[gap:90-day results at the restoration marketing agency, with the client's OK|Operator]]"
               },
               {
                 "quote": "[[gap:quote from the operator on what they looked for in the working assignment, with permission|Operator]]"
@@ -603,15 +609,15 @@
         "words": 1792,
         "opsQ": "VP of Sales",
         "headline": {
-          "rate": "$200 to $250",
+          "rate": "[[cost:vp-sales.hourly|bare]]",
           "rateL": "An hour",
-          "month": "$4,000 to $10,000",
+          "month": "[[cost:vp-sales.monthly|bare]]",
           "monthL": "A month, 20 to 40 hrs",
           "basis": "2026 engagements, teams under 5 to 8 reps"
         },
         "stat": {
-          "v": "$200 to $250",
-          "l": "An hour for a director or VP, teams under 5 to 8 reps"
+          "v": "[[cost:vp-sales.hourly]]",
+          "l": "For a director or VP, teams under 5 to 8 reps"
         },
         "related": [
           "interim-vs-fractional-vs-full-time-sales-leader",
@@ -643,17 +649,17 @@
             "action": "merge"
           }
         ],
-        "answer": "A fractional VP of Sales cost $200 to $250 an hour across Revenue Nomad's 2026 engagements, or $4,000 to $10,000 a month for 20 to 40 hours. That covers founder-led and growth-stage companies with teams under 5 to 8 reps. Venture-backed companies at around $5M ARR accepted about $300 an hour. Larger teams pay more.",
+        "answer": "[[cost:vp-sales.answer]]",
         "keys": [
           {
             "k": "Fractional director or VP of Sales, team under 5 to 8 reps",
-            "v": "$200 to $250 an hour, 20 to 40 hours, $4,000 to $10,000 a month",
+            "v": "[[cost:vp-sales.hourly]], [[cost:vp-sales.hours]], [[cost:vp-sales.monthly]]",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Embedded fractional CRO, ~$55M company",
-            "v": "50 hours a month at $23,200",
+            "v": "[[cost:cro.monthly]], [[cost:cro.hours]]",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -665,13 +671,13 @@
           },
           {
             "k": "Average total full-time VP of Sales compensation",
-            "v": "About $334K a year, average tenure about 19 months",
+            "v": "[[cost:vp-sales.fullTime]], average tenure [[cost:vp-sales.tenure|lower]]",
             "src": "Glassdoor 2026 via Stealth Agents, secondary source",
             "url": "https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026"
           },
           {
             "k": "Fractional VP of Sales arrangements commonly cited",
-            "v": "$8,000 to $20,000 a month",
+            "v": "$8k - $20k/month",
             "src": "Stealth Agents, secondary source",
             "url": "https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026"
           }
@@ -682,7 +688,7 @@
             "h": "What does each sales seat cost per hour and per month?",
             "blocks": [
               {
-                "p": "A fractional director or VP of Sales for a team under 5 to 8 reps ran $200 to $250 an hour in our 2026 engagements, or $4,000 to $10,000 a month. Price follows scope, team size and hours."
+                "p": "Price follows scope, team size and hours. Here is what each sales seat ran in our engagements."
               },
               {
                 "table": {
@@ -695,9 +701,9 @@
                   "rows": [
                     [
                       "Sales coach, ~$10M company",
-                      "About $150",
-                      "About 40",
-                      "About $6,000"
+                      "[[cost:sales-coach.hourly|bare]]",
+                      "[[cost:sales-coach.hours|bare]]",
+                      "[[cost:sales-coach.monthly|bare]]"
                     ],
                     [
                       "Sales manager",
@@ -707,9 +713,9 @@
                     ],
                     [
                       "Director or VP of Sales, team under 5 to 8 reps",
-                      "$200 to $250",
-                      "20 to 40",
-                      "$4,000 to $10,000"
+                      "[[cost:vp-sales.hourly|bare]]",
+                      "[[cost:vp-sales.hours|bare]]",
+                      "[[cost:vp-sales.monthly|bare]]"
                     ],
                     [
                       "VP of Sales, larger teams",
@@ -719,21 +725,16 @@
                     ],
                     [
                       "Embedded fractional CRO, ~$55M media and marketing services company",
-                      "About $464",
-                      "50",
-                      "$23,200"
+                      "[[cost:cro.hourly|bare]]",
+                      "[[cost:cro.hours|bare]]",
+                      "[[cost:cro.monthly|bare]]"
                     ]
                   ]
-                }
+                },
+                "note": "[[cost:vp-sales.basis]]. What clients paid or were quoted, GTM leadership seats only; the [[link:fractional-cost|cost hub]] adds RevOps and marketing. The CRO rate is its [[cost:cro.monthly|bare]] retainer divided by 50 hours, after a 45-day assessment at [[cost:sales-assessment.fixed|bare]]."
               },
               {
-                "p": "The CRO rate is the $23,200 retainer divided by 50 hours. That client ran a 45-day assessment at $27,500 first."
-              },
-              {
-                "p": "Broader published averages include tactical and non-GTM work. [[url:https://gofractional.com/insights|Go Fractional]] puts the average fractional rate at $161 an hour as of July 23 2026, across every function and seniority. [[url:https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026|Stealth Agents]], a secondary source, cites $8,000 to $20,000 a month for fractional VP of Sales arrangements, a range that fits larger teams and more hours."
-              },
-              {
-                "p": "**Source.** What clients paid or were quoted in 2026 Revenue Nomad engagements, GTM leadership seats only. The [[link:fractional-cost|cost hub]] adds RevOps and marketing. Medians by seat from the [[link:report|State of Fractional GTM]] survey land in the [[link:rates.sales_leadership|Rate Index for sales leadership]] in early December. [[gap:2027 Rate Index medians by seat, with sample size and survey dates|Survey]]"
+                "p": "Medians by seat from the [[link:report|State of Fractional GTM]] survey land in the [[link:rates.sales_leadership|Rate Index for sales leadership]] once the survey closes.[[gap:2027 Rate Index medians by seat, with sample size and survey dates|Survey]]"
               }
             ]
           },
@@ -753,10 +754,24 @@
                 ]
               },
               {
-                "p": "Price has to fit the team. One founder-led client had other quotes of $6,000 to $12,000 a month that felt like overkill for their team. A $4,000 retainer for 20 hours was, in the founder's words, \"a no-brainer.\""
+                "p": "Price has to fit the team, and cheap and thin is the most expensive option. More in [[link:guide.how-to-scope-a-fractional-sales-engagement|how to scope a fractional sales engagement]]."
               },
               {
-                "p": "Cheap and thin is the most expensive option. One 2026 client placed at 20 hours a month for $3,000 did not hit targets in any month. More in [[link:guide.how-to-scope-a-fractional-sales-engagement|how to scope a fractional sales engagement]]."
+                "stats": [
+                  {
+                    "v": "$6k - $12k",
+                    "l": "A month: other quotes one founder-led client had, which felt like overkill for their team"
+                  },
+                  {
+                    "v": "$4k/month",
+                    "l": "Our 20-hour retainer, in the founder's words \"a no-brainer\""
+                  },
+                  {
+                    "v": "$3k/month",
+                    "l": "A 20-hour placement that did not hit targets in any month"
+                  }
+                ],
+                "note": "From 2026 Revenue Nomad engagements."
               }
             ]
           },
@@ -780,19 +795,19 @@
                       "Monthly retainer",
                       "Set hours a month, billed upfront",
                       "You know the seat and the scope",
-                      "Director of sales, 20 hours, $4,000 a month"
+                      "Director of sales, 20 hours, $4k a month"
                     ],
                     [
                       "Fixed project",
                       "Defined deliverable, fixed fee",
                       "One problem with a clear end",
-                      "30-day RevOps project, about $7,000 to $8,000"
+                      "30-day RevOps project, [[cost:revops-project.fixed|lower]]"
                     ],
                     [
                       "Assessment then retainer",
                       "Fixed-fee diagnosis, then the operator executes",
                       "You need a diagnosis before you commit",
-                      "45-day assessment at $27,500, then a CRO at $23,200 a month"
+                      "45-day assessment at [[cost:sales-assessment.fixed|bare]], then a CRO at [[cost:cro.monthly]]"
                     ]
                   ]
                 }
@@ -801,13 +816,34 @@
                 "p": "These are the usual terms across our network of [[net]] dedicated fractional operators."
               },
               {
-                "ul": [
-                  "A 3 to 4 month initial term, then month-to-month with 30 days notice.",
-                  "Hours tracked and flagged before an overage happens. Small overages, for example up to 15%, may be agreed in the contract without extra consent.",
-                  "You can swap the operator if the fit is wrong.",
-                  "You pay the operator's rate and nothing more. There is no platform fee.",
-                  "Hiring the operator full time carries a conversion fee of 20% of annual salary."
-                ]
+                "table": {
+                  "head": [
+                    "Term",
+                    "How it works"
+                  ],
+                  "rows": [
+                    [
+                      "Initial term",
+                      "3 to 4 months, then month-to-month with 30 days notice"
+                    ],
+                    [
+                      "Hours",
+                      "Tracked and flagged before an overage happens. Small overages, for example up to 15%, may be agreed in the contract without extra consent"
+                    ],
+                    [
+                      "Fit",
+                      "You can swap the operator if the fit is wrong"
+                    ],
+                    [
+                      "Fees",
+                      "None. You pay the operator's rate and nothing more"
+                    ],
+                    [
+                      "Full-time hire",
+                      "A conversion fee of 20% of annual salary"
+                    ]
+                  ]
+                }
               },
               {
                 "p": "\"Fractional rate, full-time availability\" is the most common expectation mismatch we see. Fix it upfront with a set hour block and a weekly cadence."
@@ -819,19 +855,54 @@
             "h": "How does the cost compare with a full-time VP of Sales salary?",
             "blocks": [
               {
-                "p": "A full-time VP of Sales averages about $334K a year in total compensation, per [[url:https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026|Stealth Agents citing Glassdoor 2026]], a secondary source. A fractional VP at $10,000 a month, the high end of our small-team range, is $120,000 a year."
+                "stats": [
+                  {
+                    "v": "[[cost:vp-sales.pct]]",
+                    "l": "Of full-time pay: a fractional VP at [[cost:vp-sales.monthly]] against [[cost:vp-sales.fullTimeMonthly]] for a full-time VP",
+                    "src": "Our 2026 engagements; full-time pay from Glassdoor 2026 via Stealth Agents",
+                    "url": "https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026"
+                  },
+                  {
+                    "v": "[[cost:vp-sales.replace]]",
+                    "l": "To replace a sales leader who leaves, plus 3+ months of ramp. Average full-time tenure is [[cost:vp-sales.tenure|lower]]",
+                    "src": "Skaled; tenure from Glassdoor 2026 via Stealth Agents",
+                    "url": "https://skaled.com/services/fractional-vp-of-sales/"
+                  }
+                ]
               },
               {
-                "p": "Pay is only part of it. Average VP of Sales tenure is about 19 months, per the same source [[gap:outside search fee for hiring a full-time VP of Sales, with a source|Matt]]. [[url:https://skaled.com/services/fractional-vp-of-sales/|Skaled]] puts the cost of replacing a sales leader at up to 1.5x salary, with 3+ months of ramp."
+                "table": {
+                  "head": [
+                    "Option",
+                    "A month",
+                    "A year",
+                    "What else to count"
+                  ],
+                  "rows": [
+                    [
+                      "Full-time VP of Sales",
+                      "[[cost:vp-sales.fullTimeMonthly]]",
+                      "[[cost:vp-sales.fullTime|bare]]",
+                      "Average tenure [[cost:vp-sales.tenure|lower]]"
+                    ],
+                    [
+                      "Fractional VP of Sales, 20 to 40 hours",
+                      "[[cost:vp-sales.monthly]]",
+                      "[[cost:vp-sales.yearly]]",
+                      "A 3 to 4 month initial term, then 30 days notice"
+                    ],
+                    [
+                      "Embedded fractional CRO, 50 hours",
+                      "[[cost:cro.monthly]]",
+                      "[[cost:cro.firstYear]] in year one, with the 45-day assessment",
+                      "The client's own full-time CRO benchmark was up to about $800K all in"
+                    ]
+                  ]
+                },
+                "note": "[[cost:vp-sales.basis]]. Full-time pay and tenure: [[url:https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026|Stealth Agents citing Glassdoor 2026]], a secondary source; it also cites $8k - $20k/month for fractional VP of Sales arrangements, a range that fits larger teams and more hours. Replacement cost: [[url:https://skaled.com/services/fractional-vp-of-sales/|Skaled]]."
               },
               {
-                "p": "Run the math on a miss. A $334K hire who leaves at 19 months costs about $529K in pay. Replacement at 1.5x adds roughly $501K. Then you lose another 3+ months to ramp."
-              },
-              {
-                "p": "The CRO seat follows the same pattern. One ~$55M client benchmarked a full-time CRO at up to about $800K all in, then chose a 45-day assessment at $27,500 and an embedded fractional CRO at $23,200 a month."
-              },
-              {
-                "p": "Full-time wins once the team is large, the process works and the job is running it every day. If you convert the operator instead of starting a new search, the fee is 20% of annual salary. More in [[link:guide.interim-vs-fractional-vs-full-time-sales-leader|interim, fractional or full-time sales leader]] [[gap:2027 survey figure on when clients convert to full time|Survey]]."
+                "p": "Full-time wins once the team is large, the process works and the job is running it every day, and converting your operator costs 20% of annual salary instead of a new search.[[gap:outside search fee for hiring a full-time VP of Sales, with a source|Matt]] More in [[link:guide.interim-vs-fractional-vs-full-time-sales-leader|interim, fractional or full-time sales leader]].[[gap:2027 survey figure on when clients convert to full time|Survey]]"
               }
             ]
           },
@@ -846,10 +917,27 @@
                 "p": "Our 2026 marketing searches treated demand gen and brand as different jobs, and we score marketing leaders on sales enablement as its own factor. Some can support sales. Tell us whether you need brand strategy, enablement or both, and we will tell you when one person cannot cover it."
               },
               {
-                "p": "For scale, a fractional CMO search for a PE-backed platform was scoped at 40 to 80 hours a month at $200 to $250 an hour, the same band as our small-team sales leaders. More on [[link:fractional-marketing-leadership|fractional marketing leadership]]."
+                "p": "For scale, a fractional CMO search for a PE-backed platform was quoted [[cost:cmo.hourly]], the same band as our small-team sales leaders. More on [[link:fractional-marketing-leadership|fractional marketing leadership]]."
               },
               {
-                "p": "It can work. At Ferry, a hospitality tip management platform, I came in as fractional GTM strategy leader in February 2025 on a 4-month term and stayed about 18 months [[gap:Ferry revenue band|Matt]]. I built the first digital demand generation program, which produced the first 20 inbound leads. I closed 2 deals that doubled the client base, then hired the first AE, who closed a deal within 60 days. [[gap:hours, monthly cost and ROI of the Ferry seat, cleared to publish|Matt]]"
+                "p": "It can work. At Ferry, a hospitality tip management platform, our team took the fractional GTM strategy seat in February 2025 on a 4-month term and stayed about 18 months[[gap:Ferry revenue band|Matt]]. We built Ferry's first digital demand generation program, closed the deals that doubled its client base and hired its first AE.[[gap:hours, monthly cost and ROI of the Ferry seat, cleared to publish|Matt]]"
+              },
+              {
+                "stats": [
+                  {
+                    "v": "20",
+                    "l": "First inbound leads, from Ferry's first digital demand generation program"
+                  },
+                  {
+                    "v": "2 deals",
+                    "l": "Closed by our team, doubling the client base"
+                  },
+                  {
+                    "v": "60 days",
+                    "l": "For the first AE our team hired to close a deal"
+                  }
+                ],
+                "note": "Revenue Nomad engagement at Ferry, from February 2025."
               },
               {
                 "p": "If the miss runs across sales, marketing, comp and the CRM at once, that is a CRO job."
@@ -873,10 +961,10 @@
                 "quote": "[[gap:quote from the operator on sitting above an existing Director of Sales, with permission|Operator]]"
               },
               {
-                "p": "**After.** It started in September 2026, and there are no results yet. We are tracking close rate, sales cycle length and new clients closed per month against the goal of 10. [[gap:90-day result at the physical therapy marketing agency, with the client's OK|Operator]]"
+                "p": "**After.** It started in September 2026, and there are no results yet. We are tracking close rate, sales cycle length and new clients closed per month against the goal of 10.[[gap:90-day result at the physical therapy marketing agency, with the client's OK|Operator]]"
               },
               {
-                "p": "**The low end of the range.** A founder-led healthcare services company with 8 commission-only reps, about half not performing, took a 90-day build at 20 hours a month for $4,000 [[gap:revenue band for the healthcare services company|Matt]]. The scope covers rep assessment, process, scripts, training, a CRM audit and personnel calls. It also started in September 2026."
+                "p": "**The low end of the range.** A founder-led healthcare services company with 8 commission-only reps, about half not performing, took a 90-day build at 20 hours a month for $4,000[[gap:revenue band for the healthcare services company|Matt]]. The scope covers rep assessment, process, scripts, training, a CRM audit and personnel calls. It also started in September 2026."
               },
               {
                 "p": "More client stories are on the [[link:hire-fractional-sales-vp|fractional sales leadership page]]."
@@ -941,13 +1029,13 @@
         ],
         "flags": [
           "Calculated, not quoted. About $464 an hour for the embedded CRO is the $23,200 retainer divided by 50 hours. Kept from the post 6 draft seat table. Needs Matt's OK.",
-          "Calculated, not quoted. $120,000 a year for a fractional VP at $10,000 a month (12 months at the high end of the small-team range). Kept from the post 6 draft. Needs Matt's OK.",
-          "Calculated, not quoted. The cost of a miss, about $529K in pay for a $334K hire who leaves at 19 months plus roughly $501K to replace at 1.5x, built from public VP of Sales figures. Kept from the post 6 draft. It applies Skaled's 1.5x-of-salary multiple to a total-comp figure. Needs Matt's OK.",
+          "Calculated, not quoted. The full-time comparison reads the canonical cost record (js/data/costs.js): $48k - $120k a year is 12 x the $4k - $10k monthly range, 14% to 36% is that range against $27.8k a month ($334K / 12), and $305.9k is the CRO's first year, the $27.5k assessment plus 12 months at $23.2k. Needs Matt's OK.",
+          "Removed in the Oct 14 design pass: the cost-of-a-miss arithmetic (about $529K in pay for a $334K hire who leaves at 19 months, plus roughly $501K to replace), which applied Skaled's 1.5x-of-salary multiple to a total-comp figure. The section now shows the share of full-time pay and Skaled's multiple as published.",
           "Monthly range derived from hourly rates. $4,000 to $10,000 a month is 20 to 40 hours at $200 to $250 an hour (answer, key numbers, seat table, FAQ). Both ends match real 2026 retainers, $4,000 for 20 hours and $10,000 for 40 hours, and the physical therapy agency's 'about $250 an hour' is $10,000 divided by 40. Needs Matt's OK.",
           "Possibly derived. The sales coach row (about $150 an hour, about 40 hours, about $6,000 a month) comes from the G1 and G4 cost copy, not the post 6 draft. If the $6,000 was computed from the hourly rate it needs the same OK.",
           "Decision. The $3,000 for 20 hours lesson runs unattributed in the price section. The overview's open question on unattributed use names posts 9, 10, 12 and the Jan 28 post, and post 6 already carried it, but confirm.",
           "Decision. The anonymized founder quote 'a no-brainer' is kept from the post 6 draft. The inbound plan ties it to a named client that HubSpot lists as won, so confirm it is cleared to publish unattributed.",
-          "Decision. The sales-and-marketing section uses Ferry as proof that one leader can cover both. The overview still asks Matt whether the Dec 22 marketing lesson should use Ferry or a marketing operator's story, so confirm Ferry for this use too."
+          "Decision. The sales-and-marketing section uses Ferry (in company voice since Oct 14) as proof that one leader can cover both. The overview still asks Matt whether the Dec 22 marketing lesson should use Ferry or a marketing operator's story, so confirm Ferry for this use too."
         ]
       },
       {
@@ -987,11 +1075,17 @@
             "action": "rebuild"
           }
         ],
-        "answer": "By day 30, a rep-by-rep view and a written 30/60/90-day plan. By day 60, a playbook the team uses. By day 90, a right-sized team and a hiring brief. It applies to a $5M to $75M company whose growth has stalled. Measure close rate and new clients a month against where you started.",
+        "answer": "By day 30, a rep-by-rep view and a 30/60/90-day plan. By day 60, a playbook the team uses. By day 90, a right-sized team and a hiring brief. Measure close rate and new clients monthly.",
         "keys": [
           {
+            "k": "Initial term on every engagement",
+            "v": "3 to 4 months, then month-to-month with 30 days notice",
+            "src": "Revenue Nomad engagement terms",
+            "url": ""
+          },
+          {
             "k": "Fractional VP or director of sales, team under 5 to 8 reps",
-            "v": "20 to 40 hours a month at $200 to $250 an hour",
+            "v": "[[cost:vp-sales.hourly]], [[cost:vp-sales.hours]]",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -1008,14 +1102,8 @@
             "url": ""
           },
           {
-            "k": "Initial term on every engagement",
-            "v": "3 to 4 months, then month-to-month with 30 days notice",
-            "src": "Revenue Nomad engagement terms",
-            "url": ""
-          },
-          {
             "k": "Cost and ramp to replace a sales leader",
-            "v": "Up to 1.5x salary, with 3+ months of ramp",
+            "v": "[[cost:vp-sales.replace]], with 3+ months of ramp",
             "src": "Skaled",
             "url": "https://skaled.com/services/fractional-vp-of-sales/"
           }
@@ -1098,7 +1186,7 @@
                       "Rep-level activity and close rates, rep count against 4 to 5, process documented, founder hours on sales each week"
                     ],
                     [
-                      "Founder-led restoration marketing agency [[gap:revenue band for the restoration marketing agency|Matt]]",
+                      "Founder-led restoration marketing agency[[gap:revenue band for the restoration marketing agency|Matt]]",
                       "In one month 19 meetings booked, 13 showed, 0 closed",
                       "Show rate, close rate on held meetings, booking system use by week 2, cost per closed client by channel"
                     ]
@@ -1106,7 +1194,7 @@
                 }
               },
               {
-                "p": "No results yet. [[gap:90-day results at the three September 2026 engagements, with each client's OK|Operator]]"
+                "p": "No results yet.[[gap:90-day results at the three September 2026 engagements, with each client's OK|Operator]]"
               },
               {
                 "p": "A bigger seat runs on a longer clock. At a ~$55M media and marketing services company, the fractional CRO plan starts with a 45-day assessment and expects meaningful progress by month 3 and traction by month 6."
@@ -1142,7 +1230,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** A healthcare services company, still run by its founder. [[gap:revenue band for the healthcare services company|Matt]]"
+                "p": "**The company.** A healthcare services company, still run by its founder.[[gap:revenue band for the healthcare services company|Matt]]"
               },
               {
                 "p": "**Before.** 8 commission-only reps, about half not performing. No repeatable process and no accountability rhythm. The founder was stretched across the whole business, and sales got whatever hours were left."
@@ -1154,7 +1242,7 @@
                 "p": "**The number to watch.** Rep count. The plan expects 8 reps to become 4 or 5. With commission-only reps who are not closing, most of that headcount was never capacity."
               },
               {
-                "p": "**After.** The engagement started in September 2026, so there is nothing to report yet. We track rep-level close rates, rep count, process documentation and the founder's weekly hours on sales. [[gap:90-day results at the healthcare services company, rep count after the review and any close rate change, with the client's OK|Operator]]"
+                "p": "**After.** The engagement started in September 2026, so there is nothing to report yet. We track rep-level close rates, rep count, process documentation and the founder's weekly hours on sales.[[gap:90-day results at the healthcare services company, rep count after the review and any close rate change, with the client's OK|Operator]]"
               }
             ]
           },
@@ -1272,11 +1360,17 @@
             "action": "rebuild"
           }
         ],
-        "answer": "Start fractional if you run a $5M to $75M company, still carry the number and cannot yet say which full-time seat you need. Pick interim when a seat needs near full-time cover for a defined period. Hire full time once the system works and needs running every day. Use a consulting firm for findings your team will execute.",
+        "answer": "Start fractional if you still carry the number and cannot yet name the full-time seat. Pick interim for near full-time cover for a set period. Hire full time once the system works.",
         "keys": [
           {
+            "k": "Full-time CRO benchmark at a ~$55M client",
+            "v": "Up to about $800K all in",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
             "k": "Fractional director or VP of Sales, team under 5 to 8 reps",
-            "v": "$200 to $250 an hour, 20 to 40 hours a month",
+            "v": "[[cost:vp-sales.hourly]], [[cost:vp-sales.hours]]",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -1287,12 +1381,6 @@
             "url": ""
           },
           {
-            "k": "Full-time CRO benchmark at a ~$55M client",
-            "v": "Up to about $800K all in",
-            "src": "Revenue Nomad 2026 engagements",
-            "url": ""
-          },
-          {
             "k": "Large consultancy quote to one enterprise SaaS client",
             "v": "About $230K for a 6-week assessment",
             "src": "Revenue Nomad 2026 engagements",
@@ -1300,7 +1388,7 @@
           },
           {
             "k": "Average total full-time VP of Sales compensation and tenure",
-            "v": "About $334K, about 19 months in seat",
+            "v": "[[cost:vp-sales.fullTime|bare]], about 19 months in seat",
             "src": "Glassdoor 2026 via Stealth Agents, secondary source",
             "url": "https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026"
           }
@@ -1362,7 +1450,7 @@
                 }
               },
               {
-                "p": "The [[link:fractional-cost|cost hub]] breaks rates down by seat, and network-wide 2027 rates arrive with our survey [[gap:2027 survey figure for fractional sales leader rates|Survey]]."
+                "p": "The [[link:fractional-cost|cost hub]] breaks rates down by seat, and network-wide 2027 rates arrive with our survey[[gap:2027 survey figure for fractional sales leader rates|Survey]]."
               }
             ]
           },
@@ -1383,7 +1471,7 @@
                 "p": "We place only dedicated fractional operators, and retainers run on a set block of hours."
               },
               {
-                "p": "Fractional can run long, too. I signed with Ferry, a hospitality tip management platform, for 4 months as its fractional GTM strategy leader and stayed about 18."
+                "p": "Fractional can run long, too. Our team signed with Ferry, a hospitality tip management platform, for 4 months in its fractional GTM strategy seat and stayed about 18."
               }
             ]
           },
@@ -1396,7 +1484,7 @@
               },
               {
                 "ul": [
-                  "**A director or VP of Sales** fits a team under 5 to 8 reps, at 20 to 40 hours a month and $200 to $250 an hour. A founder-led healthcare services company with 8 commission-only reps, about half not performing, runs a 90-day build at 20 hours a month for $4,000 [[gap:revenue band for the healthcare services company|Matt]].",
+                  "**A director or VP of Sales** fits a team under 5 to 8 reps, at 20 to 40 hours a month and $200 to $250 an hour. A founder-led healthcare services company with 8 commission-only reps, about half not performing, runs a 90-day build at 20 hours a month for $4,000[[gap:revenue band for the healthcare services company|Matt]].",
                   "**A CRO** fits when sales, marketing, comp and the CRM all feed the miss. A ~$55M media and marketing services company ran a 45-day assessment at $27,500, then embedded a fractional CRO at 50 hours a month for $23,200."
                 ]
               },
@@ -1434,7 +1522,7 @@
                 "p": "In 2026 a large consultancy quoted one of our enterprise software clients about $230K for a 6-week assessment. The fee covered findings, with nobody from the firm staying to run the fix."
               },
               {
-                "p": "Clients tell us they want the diagnosis to lead into execution. You can buy it from a fractional operator and keep the same person for the fix, as the ~$55M media company above did. I spent about 10 years in B2B sales consulting and still do fractional work myself, so I have sat in both seats."
+                "p": "Clients tell us they want the diagnosis to lead into execution. You can buy it from a fractional operator and keep the same person for the fix, as the ~$55M media company above did. We have sat in both seats: our team spent about 10 years in B2B sales consulting and still does fractional work."
               }
             ]
           },
@@ -1471,7 +1559,7 @@
                 ]
               },
               {
-                "p": "Network-wide data on when fractional clients convert to a full-time hire lands with the [[link:report|State of Fractional GTM report]] [[gap:2027 survey figure on when clients convert to full time|Survey]]."
+                "p": "Network-wide data on when fractional clients convert to a full-time hire lands with the [[link:report|State of Fractional GTM report]][[gap:2027 survey figure on when clients convert to full time|Survey]]."
               }
             ]
           },
@@ -1480,7 +1568,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "An enterprise billing software company had flat pipeline [[gap:revenue band for the enterprise billing software company|Matt]]. Meeting conversion was the lowest the CEO had seen, and \"no decision\" was the leading loss reason. Nobody could show the bridge from the bookings goal to pipeline. The forecast needed 3 to 4 deals of about $1M each, and the CRO and CMO had been in seat for 6+ years."
+                "p": "An enterprise billing software company had flat pipeline[[gap:revenue band for the enterprise billing software company|Matt]]. Meeting conversion was the lowest the CEO had seen, and \"no decision\" was the leading loss reason. Nobody could show the bridge from the bookings goal to pipeline. The forecast needed 3 to 4 deals of about $1M each, and the CRO and CMO had been in seat for 6+ years."
               },
               {
                 "p": "The CEO weighed three of the options on this page. A full-time hire, a large consultancy that quoted about $230K for a 6-week assessment, and a fractional operator."
@@ -1489,7 +1577,7 @@
                 "p": "The company chose a fractional lead revenue architect who reports to the CFO, about 2.5 days a week at $27,000 a month flat. The same person diagnoses and then builds. A point of view lands by day 14, and days 31 to 90 deploy a KPI framework, a forecast the leadership team can defend and pipeline coverage targets. Reporting to the CFO lets the operator question pipeline assumptions without reporting to the leaders who set them."
               },
               {
-                "p": "Work starts October 19, 2026, so nothing has moved yet. We will judge it on forecast accuracy, pipeline coverage against the bridge math and how many losses still end in \"no decision.\" [[gap:day-90 result, with the client's OK|Operator]]"
+                "p": "Work starts October 19, 2026, so nothing has moved yet. We will judge it on forecast accuracy, pipeline coverage against the bridge math and how many losses still end in \"no decision.\"[[gap:day-90 result, with the client's OK|Operator]]"
               },
               {
                 "quote": "[[gap:quote from the operator on choosing fractional over a large consultancy, with permission|Operator]]"
@@ -1587,8 +1675,8 @@
         "words": 1350,
         "opsQ": "founder-led",
         "stat": {
-          "v": "$4,000",
-          "l": "A month for 20 hours with a founder-led team"
+          "v": "$4k/month",
+          "l": "For 20 hours with a founder-led team"
         },
         "related": [
           "sales-meetings-not-converting",
@@ -1604,24 +1692,24 @@
             "action": "merge"
           }
         ],
-        "answer": "You stop running sales as a founder by handing the system to one accountable owner, not by hiring another rep. For a founder-CEO at a $5M to $20M services firm, that means 90 days. Month one is diagnosis and talk tracks. Month two is people and process. Month three is the handoff, with you out of the weekly pipeline call.",
+        "answer": "Hand the sales system to one accountable owner, not another rep. For a founder-CEO at a $5M to $20M services firm that takes 90 days and ends with you out of the weekly pipeline call.",
         "keys": [
           {
             "k": "Fractional sales leader scope for a founder-led team",
-            "v": "20 hours a month at $4,000",
+            "v": "$4k/month, for 20 hours",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Days for the first AE hired at Ferry to close a deal",
             "v": "Within 60 days",
-            "src": "Matt Lopez at Ferry, Revenue Nomad network",
+            "src": "Revenue Nomad engagement at Ferry",
             "url": ""
           },
           {
             "k": "Ferry engagement length vs initial term",
             "v": "About 18 months vs a 4-month initial term",
-            "src": "Matt Lopez at Ferry, Revenue Nomad network",
+            "src": "Revenue Nomad engagement at Ferry",
             "url": ""
           },
           {
@@ -1632,7 +1720,7 @@
           },
           {
             "k": "Cost of replacing a sales leader",
-            "v": "Up to 1.5x salary, with 3+ months of ramp",
+            "v": "[[cost:vp-sales.replace]], with 3+ months of ramp",
             "src": "Skaled",
             "url": "https://skaled.com/services/fractional-vp-of-sales/"
           }
@@ -1657,7 +1745,7 @@
                 ]
               },
               {
-                "p": "One founder-led healthcare services company we work with had 8 commission-only reps [[gap:revenue band for the healthcare services company|Matt]]. About half were not performing. The founder was stretched across the whole business. There was no repeatable process and no accountability. Hiring rep number 9 would not have fixed any of that."
+                "p": "One founder-led healthcare services company we work with had 8 commission-only reps[[gap:revenue band for the healthcare services company|Matt]]. About half were not performing. The founder was stretched across the whole business. There was no repeatable process and no accountability. Hiring rep number 9 would not have fixed any of that."
               },
               {
                 "p": "If your meetings get booked but never close, start with [[link:guide.sales-meetings-not-converting|why booked sales meetings are not turning into deals]]."
@@ -1696,7 +1784,7 @@
                 "p": "Two first-month plans from 2026 engagements show the pattern."
               },
               {
-                "p": "At a water damage restoration marketing agency, the fractional sales director's first month covers SDR compensation, discovery and close talk tracks, role-play training, booking system adoption by week 2, and cutting or doubling down on channels based on conversion [[gap:revenue band for the restoration marketing agency|Matt]]."
+                "p": "At a water damage restoration marketing agency, the fractional sales director's first month covers SDR compensation, discovery and close talk tracks, role-play training, booking system adoption by week 2, and cutting or doubling down on channels based on conversion[[gap:revenue band for the restoration marketing agency|Matt]]."
               },
               {
                 "p": "At the healthcare services company, the plan starts with assessing every rep, documenting the sales process, and auditing the CRM."
@@ -1741,7 +1829,7 @@
                 "p": "By day 90 you should have a documented process, trained reps on clear talk tracks, a CRM that reflects reality and one owner accountable for the forecast. Then decide what comes next. Keep the operator on a defined hour block, hire a full-time leader into a working system, or hire your first AE under the operator."
               },
               {
-                "p": "That last path is what happened at Ferry, a hospitality tip management platform where I was the fractional GTM strategy leader from February 2025. I built their first digital demand generation program, which produced their first 20 inbound leads. I closed 2 deals that doubled the client base. Then I hired and onboarded their first AE, who closed a deal within 60 days."
+                "p": "That last path is what happened at Ferry, a hospitality tip management platform where our team held the fractional GTM strategy seat from February 2025. We built Ferry's first digital demand generation program, which produced its first 20 inbound leads. We closed 2 deals that doubled the client base. Then we hired and onboarded Ferry's first AE, who closed a deal within 60 days."
               },
               {
                 "p": "To check progress at day 30, 60 and 90, read [[link:guide.fractional-vp-of-sales-first-90-days|what a fractional VP of Sales should deliver in 90 days]]."
@@ -1756,7 +1844,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** A founder-led healthcare services company. [[gap:revenue band for the healthcare services company|Matt]]"
+                "p": "**The company.** A founder-led healthcare services company.[[gap:revenue band for the healthcare services company|Matt]]"
               },
               {
                 "p": "**Before.** 8 commission-only reps, about half not performing. The founder was stretched across the business. No repeatable process. No accountability."
@@ -1765,7 +1853,7 @@
                 "p": "**What the operator is doing.** A fractional sales leader is running a 90-day build at 20 hours a month for $4,000. Assess every rep. Document the sales process. Write scripts and run training. Audit the CRM. Make personnel calls, likely cutting to 4 to 5 reps."
               },
               {
-                "p": "**What is being measured.** The engagement started in September 2026. No results yet. We are tracking rep-level activity and close rates, rep count against the 4 to 5 target, process documentation completed, and founder hours spent on sales each week. [[gap:90-day results at the healthcare services company, with the client's OK|Operator]]"
+                "p": "**What is being measured.** The engagement started in September 2026. No results yet. We are tracking rep-level activity and close rates, rep count against the 4 to 5 target, process documentation completed, and founder hours spent on sales each week.[[gap:90-day results at the healthcare services company, with the client's OK|Operator]]"
               }
             ]
           },
@@ -1886,17 +1974,17 @@
           "fractional-vp-of-sales-cost"
         ],
         "replaces": [],
-        "answer": "Booked meetings stall for three reasons. Prospects do not show up, discovery never finds a real problem, or nobody asks for a decision. If you are a founder-CEO at a $5M to $20M services firm and still run sales yourself, measure show rate and close rate by stage before you buy more leads. Then give the leak one owner.",
+        "answer": "Booked meetings stall for three reasons. Prospects do not show, discovery finds no real problem, or nobody asks for a decision. Measure show rate and close rate by stage before you buy more leads.",
         "keys": [
           {
-            "k": "Meetings booked year to date at one agency, and how many showed",
-            "v": "278 booked, 134 showed, about half",
+            "k": "One month at the same agency",
+            "v": "19 booked, 13 showed, 0 closed",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
-            "k": "One month at the same agency",
-            "v": "19 booked, 13 showed, 0 closed",
+            "k": "Meetings booked year to date at one agency, and how many showed",
+            "v": "278 booked, 134 showed, about half",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -1908,13 +1996,13 @@
           },
           {
             "k": "Fractional sales director for a team under 5 to 8 reps",
-            "v": "$4,000 to $10,000 a month for 20 to 40 hours",
+            "v": "[[cost:vp-sales.monthly]], for 20 to 40 hours",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Cost of replacing a sales leader",
-            "v": "Up to 1.5x salary, with 3+ months of ramp",
+            "v": "[[cost:vp-sales.replace]], with 3+ months of ramp",
             "src": "Skaled",
             "url": "https://skaled.com/services/fractional-vp-of-sales/"
           }
@@ -1938,7 +2026,7 @@
                 ]
               },
               {
-                "p": "At one restoration marketing agency we work with, 19 meetings were booked in a single month [[gap:revenue band for the restoration marketing agency|Matt]]. 13 showed. None closed. The calendar looked full. The pipeline was empty. The founder had been carrying every one of those calls while also running the company."
+                "p": "At one restoration marketing agency we work with, 19 meetings were booked in a single month[[gap:revenue band for the restoration marketing agency|Matt]]. 13 showed. None closed. The calendar looked full. The pipeline was empty. The founder had been carrying every one of those calls while also running the company."
               }
             ]
           },
@@ -2046,7 +2134,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** A water damage restoration marketing agency, founder-led. [[gap:revenue band for the restoration marketing agency|Matt]]"
+                "p": "**The company.** A water damage restoration marketing agency, founder-led.[[gap:revenue band for the restoration marketing agency|Matt]]"
               },
               {
                 "p": "**Before.** 278 appointments booked year to date, 134 showed. About $60K of MRR on about $80K of cost. In one month, 19 booked, 13 showed and 0 closed. The founder wanted out of running revenue. That move has its own [[link:guide.how-to-stop-running-sales-as-a-founder|90-day founder handoff plan]]."
@@ -2055,7 +2143,7 @@
                 "p": "**What the operator did.** The founder ran a short working assignment with two finalists. Each reviewed a recorded BDR call and a Loom video, then answered 3 written questions. The founder chose the more tactical, agency-familiar operator over the more strategic builder. The engagement runs 20 hours a month at $4,000, with the first-month plan above."
               },
               {
-                "p": "**What is being measured.** The engagement started in September 2026. No results yet. We are tracking show rate, close rate on held meetings, booking system adoption by week 2, and cost per closed client by channel. [[gap:90-day results at the restoration marketing agency, with the client's OK|Operator]]"
+                "p": "**What is being measured.** The engagement started in September 2026. No results yet. We are tracking show rate, close rate on held meetings, booking system adoption by week 2, and cost per closed client by channel.[[gap:90-day results at the restoration marketing agency, with the client's OK|Operator]]"
               }
             ]
           },
@@ -2080,7 +2168,7 @@
         "faq": [
           {
             "q": "What is a normal show rate for booked sales meetings?",
-            "a": "It varies by channel and deal size. One agency we work with saw 134 of 278 bookings show, about half. [[gap:2027 survey figure on typical show rate|Survey]]"
+            "a": "It varies by channel and deal size. One agency we work with saw 134 of 278 bookings show, about half.[[gap:2027 survey figure on typical show rate|Survey]]"
           },
           {
             "q": "How fast should a fractional sales leader show results?",
@@ -2154,25 +2242,25 @@
         "opsQ": "CRO",
         "bp": "cro",
         "stat": {
-          "v": "$23,200",
-          "l": "A month for an embedded fractional CRO, 50 hours"
+          "v": "[[cost:cro.monthly]]",
+          "l": "For an embedded fractional CRO, 50 hours"
         },
         "related": [
           "interim-vs-fractional-vs-full-time-sales-leader",
           "fractional-vp-of-sales-cost"
         ],
         "replaces": [],
-        "answer": "At $30M with stalled growth, most CEOs should start with a fractional CRO and hire full time once the system works. You do not yet know what is broken. A fractional CRO diagnoses first, then runs the fix. Across our 2026 engagements an embedded fractional CRO cost $23,200 a month. The full-time benchmark ran up to about $800K all in.",
+        "answer": "At $30M with stalled growth, start fractional and hire a full-time CRO once the system works. In one 2026 engagement, an embedded fractional CRO cost [[cost:cro.monthly]] against a full-time benchmark of up to $800K.",
         "keys": [
           {
             "k": "Embedded fractional CRO at a ~$55M company",
-            "v": "50 hours a month at $23,200",
+            "v": "[[cost:cro.monthly]], [[cost:cro.hours]]",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Revenue maturity assessment before the CRO seat",
-            "v": "45 days, $27,500 fixed",
+            "v": "[[cost:sales-assessment.fixed]], for 45 days",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -2184,13 +2272,13 @@
           },
           {
             "k": "Average total VP of Sales compensation and tenure",
-            "v": "About $334K, about 19 months in seat",
+            "v": "[[cost:vp-sales.fullTime|bare]], about 19 months in seat",
             "src": "Glassdoor 2026 via Stealth Agents, secondary source",
             "url": "https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026"
           },
           {
             "k": "Cost of replacing a sales leader",
-            "v": "Up to 1.5x salary, with 3+ months of ramp",
+            "v": "[[cost:vp-sales.replace]], with 3+ months of ramp",
             "src": "Skaled",
             "url": "https://skaled.com/services/fractional-vp-of-sales/"
           }
@@ -2288,7 +2376,7 @@
                 "p": "The 50 hours matter. We have seen thin scopes fail. One 2026 client placed at 20 hours a month for $3,000 did not hit targets in any month. A CRO seat at a company with $40M or more in recurring revenue needs enough hours to sit in pipeline reviews, coach leaders and rebuild comp, not just advise."
               },
               {
-                "p": "Read more about the seat on our [[link:hire-fractional-sales-vp|fractional sales leadership page]] [[gap:fractional CRO page URL|Rapid Neuron]]."
+                "p": "Read more about the seat on our [[link:hire-fractional-sales-vp|fractional sales leadership page]][[gap:fractional CRO page URL|Rapid Neuron]]."
               }
             ]
           },
@@ -2346,7 +2434,7 @@
                 "p": "The CEO gave one caution we now pass on to every operator. Listen before pushing an ROI-only view, and understand what makes the product different."
               },
               {
-                "p": "The plan expects meaningful progress by month 3 and traction by month 6. We will report what moved once there is something to report [[gap:engagement start date and month 3 results|Matt]]."
+                "p": "The plan expects meaningful progress by month 3 and traction by month 6. We will report what moved once there is something to report[[gap:engagement start date and month 3 results|Matt]]."
               },
               {
                 "quote": "[[gap:quote from the operator on going from the 45-day assessment to running the fix, with permission|Operator]]"
@@ -2437,8 +2525,8 @@
         "words": 1672,
         "opsQ": "RevOps",
         "stat": {
-          "v": "$150 to $175",
-          "l": "An hour for execution-level RevOps help"
+          "v": "[[cost:revops-retainer.hourly]]",
+          "l": "For execution-level RevOps help"
         },
         "related": [
           "fractional-revops-consultant",
@@ -2462,23 +2550,23 @@
             "action": "merge"
           }
         ],
-        "answer": "Pick sales ops when leadership trusts the numbers and sales needs cleaner data and working tools. Pick RevOps when leadership cannot agree on the numbers, the forecast leans on a few large deals or nobody can show the bridge from bookings goal to pipeline. At $25M to $100M SaaS, start RevOps fractional and hire full time once scope is proven.",
+        "answer": "Pick sales ops when leaders trust the numbers and sales needs cleaner tools. Pick RevOps when leaders cannot agree on them. At $25M to $100M SaaS, start RevOps fractional and hire once scope is proven.",
         "keys": [
           {
-            "k": "Fractional RevOps assessment",
-            "v": "$6,000 to $7,500 fixed, about 40 hours over 60 days",
+            "k": "Execution-level RevOps help",
+            "v": "[[cost:revops-retainer.hourly]], [[cost:revops-retainer.hours]]",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
-            "k": "Execution-level RevOps help",
-            "v": "$150 to $175 an hour, 40 to 80 hours a month",
+            "k": "Fractional RevOps assessment",
+            "v": "[[cost:revops-assessment.fixed]], about 40 hours over 60 days",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Senior revenue architect, enterprise SaaS",
-            "v": "$27,000 a month flat for up to 85 hours",
+            "v": "[[cost:revops-architect.monthly]], up to 85 hours a month",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -2539,7 +2627,7 @@
                 }
               },
               {
-                "p": "Rates by seat are on the [[link:fractional-cost|cost hub]]. Network-wide 2027 rates arrive with the [[link:report|State of Fractional GTM report]] [[gap:2027 survey figure on median fractional RevOps rate|Survey]]."
+                "p": "Rates by seat are on the [[link:fractional-cost|cost hub]]. Network-wide 2027 rates arrive with the [[link:report|State of Fractional GTM report]][[gap:2027 survey figure on median fractional RevOps rate|Survey]]."
               }
             ]
           },
@@ -2572,7 +2660,7 @@
                 "ul": [
                   "**Pipeline.** Sales ops keeps stages and fields clean, so the report is accurate. RevOps builds the bridge from the bookings goal back to required pipeline, then right-sizes it, separating real deals from hope.",
                   "**Conversion.** Sales ops can report conversion inside sales. RevOps fixes how deals enter each stage. A run of \"no decision\" losses means deals were never qualified, and they pad coverage until the quarter ends.",
-                  "**Retention.** Sales ops work mostly stops at the signed deal. RevOps carries the same definitions into customer success, which matters when expansion carries more of the number. One enterprise billing software company is building a ~$50K wedge offer to land and expand, against a historic entry deal near $500K, which changes its pipeline math. [[gap:retention or expansion result from a RevOps engagement, with the client's OK|Matt]]"
+                  "**Retention.** Sales ops work mostly stops at the signed deal. RevOps carries the same definitions into customer success, which matters when expansion carries more of the number. One enterprise billing software company is building a ~$50K wedge offer to land and expand, against a historic entry deal near $500K, which changes its pipeline math.[[gap:retention or expansion result from a RevOps engagement, with the client's OK|Matt]]"
                 ]
               },
               {
@@ -2630,7 +2718,7 @@
                 "p": "An agency or a large consultancy fits when the deliverable is defined and your own team will run it. The catch is who stays for the fix. One enterprise SaaS client chose a fractional revenue architect over a large consultancy's quote of about $230K for a 6-week assessment, so the person who finds the problem also builds the fix."
               },
               {
-                "p": "Company size does not decide it. Workforce Software was at about $400M ARR when its President brought in fractional help to build RevOps from zero. Engagement types are on the [[link:fractional-revops|fractional RevOps page]] [[gap:what Workforce Software built and a result, with sign-off|Matt]]."
+                "p": "Company size does not decide it. Workforce Software was at about $400M ARR when its President brought in fractional help to build RevOps from zero. Engagement types are on the [[link:fractional-revops|fractional RevOps page]][[gap:what Workforce Software built and a result, with sign-off|Matt]]."
               }
             ]
           },
@@ -2645,7 +2733,7 @@
                 "p": "More often the client pays a senior rate for admin work, or gets an admin trying to run the forecast. A $27,000 a month revenue architect should not spend hours on picklists, and a $150 an hour admin is the wrong person to redesign the forecast."
               },
               {
-                "p": "So we split the scope before we source anyone. A transactional SaaS company with 50 to 100 sellers got a fixed-fee assessment, about 40 hours over 60 days, with a red, yellow and green scorecard, specs and a roadmap its internal CRM admins could run [[gap:revenue band for the transactional SaaS company|Matt]]."
+                "p": "So we split the scope before we source anyone. A transactional SaaS company with 50 to 100 sellers got a fixed-fee assessment, about 40 hours over 60 days, with a red, yellow and green scorecard, specs and a roadmap its internal CRM admins could run[[gap:revenue band for the transactional SaaS company|Matt]]."
               },
               {
                 "p": "Every RevOps operator is scored on CORE, Communication, Ownership, Results Focus and Expertise. Ownership means they own the forecast as well as the dashboard. We place only dedicated fractional operators, so anyone holding a full-time job is excluded. Browse [[link:browse.revenue_operations|RevOps operators]] from our network of [[net]]."
@@ -2657,7 +2745,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "An enterprise billing software company already had reporting [[gap:revenue band for the enterprise billing software company|Matt]]. A part-time RevOps resource built dashboards, but nothing changed because of them."
+                "p": "An enterprise billing software company already had reporting[[gap:revenue band for the enterprise billing software company|Matt]]. A part-time RevOps resource built dashboards, but nothing changed because of them."
               },
               {
                 "p": "The symptoms crossed teams. Pipeline was flat, meeting conversion hit a low the CEO had not seen before, and \"no decision\" led the loss reasons. Measurement stopped at MQLs, and nobody could show how pipeline added up to a forecast that needed 3 to 4 deals of about $1M each."
@@ -2666,7 +2754,7 @@
                 "p": "The CEO weighed a full-time hire, a fractional operator and a large consultancy that quoted about $230K for 6 weeks. The company chose a fractional lead revenue architect at about 2.5 days a week for $27,000 a month flat, reporting to the CFO. With the CRO and CMO in seat 6+ years, that line lets an outside operator question pipeline and MQL assumptions without reporting to the people who set them."
               },
               {
-                "p": "The plan is a 30-day diagnosis with a point of view by day 14, then a 60-day deploy of a KPI framework, a credible forecast, pipeline coverage targets and a customer-journey redesign. It begins October 19, 2026, so nothing is measured yet. Success will be judged on forecast accuracy, pipeline coverage, meeting-to-opportunity conversion and how many losses end in \"no decision.\" [[gap:day-90 result at the enterprise billing software company, with the client's OK|Operator]]"
+                "p": "The plan is a 30-day diagnosis with a point of view by day 14, then a 60-day deploy of a KPI framework, a credible forecast, pipeline coverage targets and a customer-journey redesign. It begins October 19, 2026, so nothing is measured yet. Success will be judged on forecast accuracy, pipeline coverage, meeting-to-opportunity conversion and how many losses end in \"no decision.\"[[gap:day-90 result at the enterprise billing software company, with the client's OK|Operator]]"
               },
               {
                 "quote": "[[gap:quote from the operator on where sales ops work ends and RevOps work starts, with permission|Operator]]"
@@ -2761,25 +2849,25 @@
         "words": 1261,
         "opsQ": "RevOps",
         "stat": {
-          "v": "$6,000 to $7,500",
-          "l": "Fixed fee for a 60-day RevOps assessment"
+          "v": "[[cost:revops-assessment.fixed]]",
+          "l": "For a 60-day RevOps assessment"
         },
         "related": [
           "revops-vs-sales-ops",
           "how-to-fix-sales-forecast-accuracy"
         ],
         "replaces": [],
-        "answer": "A $25M SaaS company needs RevOps when nobody can show the math from bookings goal to pipeline, or when the forecast leans on a few large deals. For a CRO, VP Sales or CFO at $25M to $100M, start fractional with a fixed-fee assessment. Hire full-time once the scope is proven and the build is defined.",
+        "answer": "A $25M SaaS company needs RevOps when nobody can show the math from bookings goal to pipeline, or the forecast leans on a few large deals. Start fractional with a fixed-fee assessment.",
         "keys": [
           {
             "k": "Fixed-fee fractional RevOps assessment",
-            "v": "$6,000 to $7,500 for about 40 hours over 60 days",
+            "v": "[[cost:revops-assessment.fixed]], about 40 hours over 60 days",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Senior fractional revenue architect at an enterprise SaaS company",
-            "v": "$27,000 a month flat for up to 85 hours, about 2.5 days a week",
+            "v": "[[cost:revops-architect.monthly]], up to 85 hours a month, about 2.5 days a week",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -2791,7 +2879,7 @@
           },
           {
             "k": "Hands-on director-level fractional RevOps",
-            "v": "$12,000 to $15,000 a month for 2 days a week",
+            "v": "[[cost:revops-director.monthly]], about 2 days a week",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           }
@@ -2842,7 +2930,7 @@
                 "p": "One retainer only works if one person can truly cover the combined scope. Most cannot. A senior revenue architect billed at about $315 an hour should not be cleaning up picklists. A $150 an hour admin should not be redesigning your forecast."
               },
               {
-                "p": "A practical split for many $25M to $100M teams is a senior fractional lead who designs the system, plus internal CRM admins who run it. One of our assessments for a 50 to 100 seller transactional SaaS company was built that way on purpose [[gap:revenue band for the transactional SaaS company|Matt]]. It produced a scorecard plus specs and a roadmap that the internal admins could run."
+                "p": "A practical split for many $25M to $100M teams is a senior fractional lead who designs the system, plus internal CRM admins who run it. One of our assessments for a 50 to 100 seller transactional SaaS company was built that way on purpose[[gap:revenue band for the transactional SaaS company|Matt]]. It produced a scorecard plus specs and a roadmap that the internal admins could run."
               }
             ]
           },
@@ -2922,7 +3010,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** An enterprise billing software company. [[gap:ARR band for this company|Matt]]"
+                "p": "**The company.** An enterprise billing software company.[[gap:ARR band for this company|Matt]]"
               },
               {
                 "p": "**Before.** Flat pipeline. Meeting conversion at a low. \"No decision\" as the most common loss reason. No bridge from bookings goal to pipeline. A forecast that needed 3 to 4 $1M-class deals. MQL-centered measurement. A part-time RevOps resource doing reporting with no change. The CRO and CMO had been in seat 6+ years. The company was also building a ~$50K wedge offer to land and expand, against a historic entry point near $500K."
@@ -2931,7 +3019,7 @@
                 "p": "**What the operator is doing.** A fractional lead revenue architect reporting to the CFO, about 2.5 days a week at $27,000 a month flat, running the 30-day diagnostic and 60-day deploy plan above."
               },
               {
-                "p": "**What is being measured.** The engagement starts October 19, 2026. No results yet. We will track pipeline coverage against the bookings goal, [[link:guide.how-to-fix-sales-forecast-accuracy|forecast accuracy]], the share of losses to \"no decision\", and progress on the KPI framework by day 90. [[gap:90-day results|Operator]]"
+                "p": "**What is being measured.** The engagement starts October 19, 2026. No results yet. We will track pipeline coverage against the bookings goal, [[link:guide.how-to-fix-sales-forecast-accuracy|forecast accuracy]], the share of losses to \"no decision\", and progress on the KPI framework by day 90.[[gap:90-day results|Operator]]"
               }
             ]
           },
@@ -3037,17 +3125,23 @@
           "fractional-revops-consultant"
         ],
         "replaces": [],
-        "answer": "Your forecast is wrong because nobody can show the math from the bookings goal back to pipeline. It also leans on a few large deals and measures leads instead of revenue. A 30-day RevOps diagnosis finds those gaps and ranks the fixes. This applies to $20M to $75M companies with a flat pipeline and a part-time RevOps resource.",
+        "answer": "Your forecast is wrong because nobody can show the math from bookings goal to pipeline, it leans on a few large deals and it measures leads, not revenue. A 30-day RevOps diagnosis ranks the fixes.",
         "keys": [
           {
+            "k": "Point of view due in a 30-day diagnostic",
+            "v": "By day 14",
+            "src": "Revenue Nomad 2026 engagement plan",
+            "url": ""
+          },
+          {
             "k": "Fractional RevOps assessment",
-            "v": "$6,000 to $7,500 fixed, about 40 hours over 60 days",
+            "v": "[[cost:revops-assessment.fixed]], about 40 hours over 60 days",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
           {
             "k": "Senior fractional revenue architect, enterprise software",
-            "v": "About 2.5 days a week, $27,000 a month flat for up to 85 hours",
+            "v": "[[cost:revops-architect.monthly]], up to 85 hours a month, about 2.5 days a week",
             "src": "Revenue Nomad 2026 engagements",
             "url": ""
           },
@@ -3055,12 +3149,6 @@
             "k": "Large consultancy quote to the same client",
             "v": "About $230K for a 6-week assessment",
             "src": "Revenue Nomad 2026 engagements",
-            "url": ""
-          },
-          {
-            "k": "Point of view due in a 30-day diagnostic",
-            "v": "By day 14",
-            "src": "Revenue Nomad 2026 engagement plan",
             "url": ""
           }
         ],
@@ -3158,7 +3246,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "An enterprise billing software company. Pipeline was flat [[gap:revenue band for the enterprise billing software company|Matt]]. Meeting conversion was the lowest the CEO had seen. The most common loss reason was \"no decision.\" Nobody could show the bridge from the bookings goal to pipeline. The forecast needed 3 to 4 $1M-class deals plus singles and doubles. Measurement centered on MQLs. A part-time RevOps resource did reporting but drove no change. The CRO and CMO had been in seat 6+ years."
+                "p": "An enterprise billing software company. Pipeline was flat[[gap:revenue band for the enterprise billing software company|Matt]]. Meeting conversion was the lowest the CEO had seen. The most common loss reason was \"no decision.\" Nobody could show the bridge from the bookings goal to pipeline. The forecast needed 3 to 4 $1M-class deals plus singles and doubles. Measurement centered on MQLs. A part-time RevOps resource did reporting but drove no change. The CRO and CMO had been in seat 6+ years."
               },
               {
                 "p": "Historic entry deals ran about $500K. The company is developing a ~$50K wedge offer to land and expand."
@@ -3170,7 +3258,7 @@
                 "p": "The plan runs in two phases. Days 1 to 30 are the diagnostic, with a point of view by day 14. Days 31 to 90 deploy a KPI framework, a credible forecast, pipeline coverage and a customer-journey redesign. Visible impact is expected around day 90."
               },
               {
-                "p": "The engagement starts October 19, 2026, so there are no results yet. We will measure forecast accuracy against actual bookings, pipeline coverage against the bridge math, meeting-to-opportunity conversion and the share of losses tagged \"no decision.\" [[gap:day-90 results at the enterprise billing software company, with the client's OK|Operator]]"
+                "p": "The engagement starts October 19, 2026, so there are no results yet. We will measure forecast accuracy against actual bookings, pipeline coverage against the bridge math, meeting-to-opportunity conversion and the share of losses tagged \"no decision.\"[[gap:day-90 results at the enterprise billing software company, with the client's OK|Operator]]"
               }
             ]
           },
@@ -3292,7 +3380,7 @@
             "action": "merge"
           }
         ],
-        "answer": "Vet a fractional CMO against the problem you have, not the title. If you are a president, CRO or PE operating partner watching lead costs climb while agencies go unmanaged, score candidates on demand gen depth, analytical rigor and agency accountability first. Weight those three at 60% of the decision and screen out brand-first profiles early.",
+        "answer": "Vet a fractional CMO against the problem you have, not the title. Score demand gen depth, analytical rigor and agency accountability first, weight them at 60% of the decision and screen out brand-first profiles.",
         "keys": [
           {
             "k": "Share of the scorecard weight on demand gen, analytics and agency accountability",
@@ -3302,7 +3390,7 @@
           },
           {
             "k": "Scope for a fractional CMO at a PE-backed platform",
-            "v": "40 to 80 hours a month at $200 to $250 an hour",
+            "v": "[[cost:cmo.hourly]], [[cost:cmo.hours]]",
             "src": "Revenue Nomad 2026 fractional CMO search",
             "url": ""
           },
@@ -3311,18 +3399,6 @@
             "v": "[[net]], with 50+ data points tracked per operator",
             "src": "Revenue Nomad network",
             "url": ""
-          },
-          {
-            "k": "Average fractional hourly rate across all functions",
-            "v": "$161 as of July 23, 2026",
-            "src": "Go Fractional 2026 State of Fractional Work",
-            "url": "https://gofractional.com/insights"
-          },
-          {
-            "k": "Fractionals who manage 2 to 3 clients at once",
-            "v": "50%",
-            "src": "Go Fractional 2026 State of Fractional Work",
-            "url": "https://gofractional.com/insights"
           }
         ],
         "sections": [
@@ -3424,7 +3500,7 @@
                 "ol": [
                   "**Brand-heavy CMOs.** Strong storytellers who have never owned a cost per lead number.",
                   "**Backgrounds that do not match the funnel.** Someone who has only run enterprise account-based programs will struggle with high-volume consumer lead flow, and the reverse is also true.",
-                  "**Anyone already carrying 3 or more engagements.** Public data shows 50% of fractionals manage 2 to 3 clients ([[url:https://gofractional.com/insights|Go Fractional]]). At 3 or more, your agency reviews compete with someone else's board meeting.",
+                  "**Anyone already carrying 3 or more engagements.** At 3 or more, your agency reviews compete with someone else's board meeting.",
                   "**Any self-reported background the public record contradicts.** If the profile says they ran a $20M budget and nothing public supports it, ask. If the answer does not hold up, move on."
                 ]
               },
@@ -3456,7 +3532,7 @@
                 "p": "Plan for 40 to 80 hours a month. Below that, a CMO cannot manage agencies and fix data at the same time."
               },
               {
-                "p": "On the home services search, candidates were at $200 to $250 an hour. [[link:guide.fractional-cmo-cost|What a fractional CMO costs]] covers the monthly budget, the other marketing seats and the terms. [[gap:2027 survey figure on median fractional CMO hourly rate|Survey]]"
+                "p": "On the home services search, candidates were at $200 to $250 an hour. [[link:guide.fractional-cmo-cost|What a fractional CMO costs]] covers the monthly budget, the other marketing seats and the terms.[[gap:2027 survey figure on median fractional CMO hourly rate|Survey]]"
               }
             ]
           },
@@ -3471,7 +3547,7 @@
                 "p": "This guide replaces our separate Denver and San Diego hiring pages. The scorecard, the disqualifiers and the interviews work the same way in both cities. Every candidate is someone the client meets before signing. That is how Revenue Nomad runs every search."
               },
               {
-                "p": "If any of the work needs someone in the room, such as agency reviews, agree it in the scope before you sign. [[gap:how often marketing operators work on-site with clients|Matt]] [[gap:marketing operators on the bench near Denver and San Diego|Matt]]"
+                "p": "If any of the work needs someone in the room, such as agency reviews, agree it in the scope before you sign.[[gap:how often marketing operators work on-site with clients|Matt]][[gap:marketing operators on the bench near Denver and San Diego|Matt]]"
               }
             ]
           },
@@ -3480,7 +3556,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** A PE-backed home services platform with two brands. [[gap:revenue band for this platform|Matt]]"
+                "p": "**The company.** A PE-backed home services platform with two brands.[[gap:revenue band for this platform|Matt]]"
               },
               {
                 "p": "**Before.** Lead cost and quality were getting worse. The business leaned on lead aggregators. Agencies were not managed tightly. Marketing data was underused."
@@ -3590,15 +3666,15 @@
         "words": 1763,
         "opsQ": "CMO",
         "headline": {
-          "rate": "$200 to $250",
+          "rate": "[[cost:cmo.hourly|bare]]",
           "rateL": "An hour, quoted",
-          "month": "$8,000 to $20,000",
+          "month": "[[cost:cmo.monthly|bare]]",
           "monthL": "A month, 40 to 80 hrs",
           "basis": "2026 CMO search, quoted rates"
         },
         "stat": {
-          "v": "$200 to $250",
-          "l": "An hour, quoted in a 2026 CMO search"
+          "v": "[[cost:cmo.hourly]]",
+          "l": "Quoted in a 2026 CMO search"
         },
         "related": [
           "fractional-cmo-vs-agency",
@@ -3614,17 +3690,17 @@
             "action": "rebuild"
           }
         ],
-        "answer": "A fractional CMO was quoted at $200 to $250 an hour in Revenue Nomad's 2026 CMO search, for 40 to 80 hours a month. That is about $8,000 to $20,000 a month. It fits PE-backed and growth-stage companies whose lead costs keep rising. Brand and product marketing leaders for a launch were quoted $220 to $400 an hour.",
+        "answer": "[[cost:cmo.answer]]",
         "keys": [
           {
             "k": "Fractional CMO, PE-backed home services platform",
-            "v": "$200 to $250 an hour, 40 to 80 hours a month, about $8,000 to $20,000 a month",
+            "v": "[[cost:cmo.hourly]], [[cost:cmo.hours]], [[cost:cmo.monthly]]",
             "src": "Revenue Nomad 2026 marketing searches, quoted rates",
             "url": ""
           },
           {
             "k": "Brand and product marketing leader, launch scope",
-            "v": "$220 to $400 an hour, 60 to 80 hours a month",
+            "v": "[[cost:marketing-launch.hourly]], [[cost:marketing-launch.hours]]",
             "src": "Revenue Nomad 2026 marketing searches, quoted rates",
             "url": ""
           },
@@ -3633,12 +3709,6 @@
             "v": "[[gap:2027 survey figure, median fractional CMO hourly rate and monthly retainer|Survey]]",
             "src": "State of Fractional GTM 2027, Revenue Nomad network",
             "url": ""
-          },
-          {
-            "k": "Average fractional hourly rate, all functions",
-            "v": "$161 as of July 23 2026",
-            "src": "Go Fractional 2026 State of Fractional Work",
-            "url": "https://gofractional.com/insights"
           },
           {
             "k": "Fee added to the operator's rate",
@@ -3692,13 +3762,13 @@
                 }
               },
               {
-                "p": "These are the rates clients were quoted. We ran marketing leadership searches in 2026 and have no closed marketing placement to report yet. Both searches in the table were PE-backed. [[gap:revenue band and current status of the public-sector software search, cleared for publishing|Matt]]"
+                "p": "These are the rates clients were quoted. We ran marketing leadership searches in 2026 and have no closed marketing placement to report yet. Both searches in the table were PE-backed.[[gap:revenue band and current status of the public-sector software search, cleared for publishing|Matt]]"
               },
               {
-                "p": "The average fractional rate across all functions was $161 an hour as of July 23 2026, per [[url:https://gofractional.com/insights|Go Fractional]]. Ours sit higher because they cover GTM leadership seats only, while broader averages include tactical and non-GTM work."
+                "p": "Our rates cover GTM leadership seats only. Broader published averages also take in tactical and non-GTM work, so they run lower."
               },
               {
-                "p": "**Source.** Revenue Nomad 2026 marketing searches. Medians by seat from our [[link:report|State of Fractional GTM]] survey land in the [[link:rates.marketing|Rate Index for marketing]] in early December, and this page updates then. [[gap:2027 Rate Index medians for marketing seats, with sample size and survey dates|Survey]]"
+                "p": "**Source.** Revenue Nomad 2026 marketing searches. Medians by seat from our [[link:report|State of Fractional GTM]] survey land in the [[link:rates.marketing|Rate Index for marketing]] once the survey closes, and this page updates then.[[gap:2027 Rate Index medians for marketing seats, with sample size and survey dates|Survey]]"
               }
             ]
           },
@@ -3743,7 +3813,7 @@
                 ]
               },
               {
-                "p": "Check load before you compare rates. Public data shows 50% of fractionals manage 2 to 3 clients ([[url:https://gofractional.com/insights|Go Fractional]]). We screen fractional CMOs out if they already carry 3 or more engagements. Unmanaged agencies are the problem you are hiring against, and an operator spread across too many clients reproduces it. We also place only dedicated fractional operators. Anyone holding a full-time job is excluded."
+                "p": "Check load before you compare rates. We screen fractional CMOs out if they already carry 3 or more engagements. Unmanaged agencies are the problem you are hiring against, and an operator spread across too many clients reproduces it. We also place only dedicated fractional operators. Anyone holding a full-time job is excluded."
               }
             ]
           },
@@ -3779,10 +3849,10 @@
                 "p": "If nobody owns the marketing number, hire an owner for the hours the job needs. If the function already runs and needs a permanent head, go full time."
               },
               {
-                "p": "We do not have a sourced full-time CMO pay figure yet, and we will not guess one. What we can compare is commitment [[gap:full-time CMO total compensation, time to hire and search fee benchmarks|Survey]]. A fractional CMO comes with a 3 to 4 month initial term, then month-to-month with 30 days notice, and you can swap the operator if the fit is wrong."
+                "p": "We do not have a sourced full-time CMO pay figure yet, and we will not guess one. What we can compare is commitment[[gap:full-time CMO total compensation, time to hire and search fee benchmarks|Survey]]. A fractional CMO comes with a 3 to 4 month initial term, then month-to-month with 30 days notice, and you can swap the operator if the fit is wrong."
               },
               {
-                "p": "Stage decides a lot of it. Ferry, a hospitality tip management platform, had no digital demand generation program when I joined as its fractional GTM strategy leader in February 2025 [[gap:Ferry revenue band|Matt]]. The one I built produced its first 20 inbound leads, and a 4-month initial term turned into about 18 months. A full-time CMO would have been the wrong shape at that stage. Too much cost for a function that did not exist yet. [[gap:hours and monthly cost of the Ferry seat, cleared to publish|Matt]]"
+                "p": "Stage decides a lot of it. Ferry, a hospitality tip management platform, had no digital demand generation program when our team took its fractional GTM strategy seat in February 2025[[gap:Ferry revenue band|Matt]]. The one we built produced its first 20 inbound leads, and a 4-month initial term turned into about 18 months. A full-time CMO would have been the wrong shape at that stage. Too much cost for a function that did not exist yet.[[gap:hours and monthly cost of the Ferry seat, cleared to publish|Matt]]"
               },
               {
                 "p": "The most common mismatch we see is expecting full-time availability at a fractional rate. Fix it upfront with a set hour block and a weekly cadence. More in [[link:guide.fractional-cmo-vs-agency|fractional CMO, agency or full-time hire]]."
@@ -3794,7 +3864,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "**The company.** A PE-backed home services platform that runs two brands. [[gap:revenue band for the home services platform|Matt]]"
+                "p": "**The company.** A PE-backed home services platform that runs two brands.[[gap:revenue band for the home services platform|Matt]]"
               },
               {
                 "p": "**Before.** Leads were getting more expensive and lower in quality. Aggregators supplied much of the volume, nobody held the agencies to a number, and the marketing data sat unused."
@@ -3803,7 +3873,7 @@
                 "p": "**What we did.** The client asked for a fractional CMO at 40 to 80 hours a month, and candidates were at $200 to $250 an hour. Before we sourced anyone, we built a weighted 7-factor scorecard. Demand gen operator versus brand CMO carried 25%. With analytical rigor and agency accountability, the first three factors carried 60%. We ruled out brand-heavy CMOs, mismatched funnel backgrounds, anyone carrying 3 or more engagements and any self-reported background the public record contradicted. Then we scored 7 candidates. The client was to pick 3 for 30 to 60 minute calls and a first-90-days scenario exercise. The search was planned at 2 to 4 weeks, with a weekly 30-minute check-in."
               },
               {
-                "p": "**After.** The client changed strategy before hiring. No one was placed, so there is no result to report. The scorecard still did its job. It forced the client to say which job it was hiring for, and it is the one I would hand any operating partner or president today."
+                "p": "**After.** The client changed strategy before hiring. No one was placed, so there is no result to report. The scorecard still did its job. It forced the client to say which job it was hiring for, and it is the one we would hand any operating partner or president today."
               },
               {
                 "p": "More on the [[link:fractional-marketing-leadership|fractional marketing leadership page]]."
@@ -3914,24 +3984,24 @@
             "action": "merge"
           }
         ],
-        "answer": "When lead costs keep rising and quality keeps falling, hire someone to own the agencies and the data before you hire another agency. For most PE-backed and growth-stage companies that is a fractional demand gen leader or CMO at 40 to 80 hours a month. In our 2026 CMO search, candidates were at $200 to $250 an hour.",
+        "answer": "When lead costs rise and quality falls, hire someone to own the agencies and the data before another agency. For most PE-backed and growth-stage companies that is a fractional demand gen leader or CMO.",
         "keys": [
           {
+            "k": "Weight on demand gen operator vs brand CMO in one client's scorecard",
+            "v": "25%, the largest of 7 factors",
+            "src": "Revenue Nomad 2026 fractional CMO search",
+            "url": ""
+          },
+          {
             "k": "Fractional CMO scope and rate, PE-backed platform",
-            "v": "40 to 80 hours a month at $200 to $250 an hour",
+            "v": "[[cost:cmo.hourly]], [[cost:cmo.hours]]",
             "src": "Revenue Nomad 2026 marketing searches, quoted rates",
             "url": ""
           },
           {
             "k": "Fractional brand and product marketing leaders",
-            "v": "About $220 to $400 an hour, 60 to 80 hours a month for launch-type scopes",
+            "v": "[[cost:marketing-launch.hourly]], [[cost:marketing-launch.hours]] for launch-type scopes",
             "src": "Revenue Nomad 2026 marketing searches, quoted rates",
-            "url": ""
-          },
-          {
-            "k": "Weight on demand gen operator vs brand CMO in one client's scorecard",
-            "v": "25%, the largest of 7 factors",
-            "src": "Revenue Nomad 2026 fractional CMO search",
             "url": ""
           },
           {
@@ -4038,7 +4108,7 @@
                 "p": "Agree who decides and what the job is before anyone sources a candidate. Brand strategy and sales enablement are different jobs, and the person who asks for help is not always the person who decides."
               },
               {
-                "p": "We learned this on a repositioning search for a PE-backed public-sector software company. The ask mixed one narrative across fragmented products with sales kickoff readiness [[gap:revenue band for the public-sector software company, and its status cleared for publishing|Matt]]. Those need different people. We now agree decision rights and a review date before sourcing."
+                "p": "We learned this on a repositioning search for a PE-backed public-sector software company. The ask mixed one narrative across fragmented products with sales kickoff readiness[[gap:revenue band for the public-sector software company, and its status cleared for publishing|Matt]]. Those need different people. We now agree decision rights and a review date before sourcing."
               },
               {
                 "p": "The same home services client used clear disqualifiers. Brand-heavy CMOs, backgrounds that do not match the funnel, anyone already carrying 3 or more engagements, and any self-reported background the public record contradicts. The plan was for the client to pick 3 of 7 scored candidates for 30 to 60 minute calls and a first-90-days scenario exercise."
@@ -4068,7 +4138,7 @@
             "h": "What this looked like at a real company",
             "blocks": [
               {
-                "p": "A PE-backed home services platform with two brands. Lead cost and lead quality were getting worse [[gap:revenue band for the home services platform|Matt]]. The company relied heavily on lead aggregators. Agencies were not managed tightly. Marketing data was underused."
+                "p": "A PE-backed home services platform with two brands. Lead cost and lead quality were getting worse[[gap:revenue band for the home services platform|Matt]]. The company relied heavily on lead aggregators. Agencies were not managed tightly. Marketing data was underused."
               },
               {
                 "p": "The client scoped a fractional CMO search at 40 to 80 hours a month. We built a weighted 7-factor scorecard and scored 7 candidates against it. Under the plan, the client would pick 3 for calls and a first-90-days scenario exercise, with a weekly 30-minute check-in, over 2 to 4 weeks."
@@ -4103,7 +4173,7 @@
         "faq": [
           {
             "q": "Is a fractional CMO cheaper than an agency?",
-            "a": "It depends on the agency. The two do different jobs. The CMO owns the number and manages agencies. [[gap:typical agency retainer range|Survey]]"
+            "a": "It depends on the agency. The two do different jobs. The CMO owns the number and manages agencies.[[gap:typical agency retainer range|Survey]]"
           },
           {
             "q": "How many hours does a fractional CMO work?",
