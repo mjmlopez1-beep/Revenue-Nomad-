@@ -18,7 +18,11 @@
                                    the grid of 12 (8 on phones), "Explore all" into #work via RN.work.openType
      RN.work.strip(o)              a horizontal row of 6 to 8 cover cards:
                                    o = { need, limit (6 to 8, default 8), title, link (default true), source }
-                                   The isMatt operator's samples never sit in the first four. */
+                                   The isMatt operator's samples never sit in the first four.
+   Samples (design pass, Oct 14, 2026): every record in js/data/work.js is a placeholder (s.placeholder), so each cover
+   says "Sample" in its footer, captions carry it for screen readers, the gallery, the showcase and the sample page
+   carry one quiet tag, and the fictional sample operators credited on them (op.sample) show no tier badge.
+   API unchanged: RN.work.showcase(o) still takes { source, limit, phone } and returns the same .wk-show block. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -28,7 +32,6 @@
 
   const TYPES = ['Playbook', 'Comp plan', 'Dashboard', '30/60/90 plan', 'Process map', 'Template', 'Framework', 'Program'];
   const TYPE_PL = { Playbook: 'Playbooks', 'Comp plan': 'Comp plans', Dashboard: 'Dashboards', '30/60/90 plan': '30/60/90 plans', 'Process map': 'Process maps', Template: 'Templates', Framework: 'Frameworks', Program: 'Programs' };
-  const TYPE_IC = { Playbook: 'book', 'Comp plan': 'trend-up', Dashboard: 'chart', '30/60/90 plan': 'calendar', 'Process map': 'layers', Template: 'doc', Framework: 'grid', Program: 'users' };
   const PROB_SHORT = { sales_motion: 'Sales motion', pipeline: 'Pipeline', team: 'Team', systems: 'Systems', ai: 'AI', retention: 'Retention', partners: 'Partners' };
   const LANDSCAPE = { Dashboard: 1, 'Process map': 1 };
 
@@ -40,6 +43,14 @@
   const sizeLabel = (v) => (v ? `${dash(RN.w.label('employeeRange', v))} employees` : '');
   const indLabel = (v) => (v ? RN.w.label('industry', v) : '');
   const isLand = (s) => s.unit === 'slides' || !!LANDSCAPE[s.type];
+  /* Sample work: placeholders until the portfolio export lands. One quiet tag, never a tier on a fictional operator. */
+  const SAMPLE_TITLE = 'Sample work: shows the kind of deliverable operators publish. Not a real client document.';
+  const isSample = (s) => !!(s && s.placeholder);
+  const sampleSr = (s) => (isSample(s) ? '<span class="sr-only">Sample work. </span>' : '');
+  const sampleTag = (text) => (RN.ui.illusTag ? RN.ui.illusTag(text || 'Sample', { title: SAMPLE_TITLE, cls: 'wk-sample-tag' }) : '');
+  // Tier marks only for real operators: the sample profiles credited on placeholder work are fictional
+  const tierOf = (op) => (op && !op.sample ? RN.ui.cardTier(op, { pill: true, inLink: true }) : '');
+  W.isSample = isSample;
 
   /* ---------- Data access ---------- */
   W.all = () => (RN.data.work || []).filter((s) => { const op = opOf(s); return op && !op.hidden; });
@@ -257,7 +268,7 @@
       <span class="wk-cv-title">${esc(s.title)}</span>
       ${o.out ? `<span class="wk-cv-sum">${s.outcome ? `<span class="wk-cv-out">${esc(s.outcome)}</span>` : ''}${(s.toc || []).length ? `<span class="wk-cv-toc">${s.toc.slice(0, 4).map((t, i) => `<span><b>${String(i + 1).padStart(2, '0')}</b>${esc(t)}</span>`).join('')}</span>` : ''}</span>` : ''}
       <span class="wk-cv-fig">${preview(s)}</span>
-      <span class="wk-cv-foot"><span>${esc(PROB_SHORT[s.problem] || '')}${op ? ` · ${esc(op.initials || RN.fmt.initials(op.name))}` : ''}</span><span>No. ${no}</span></span>
+      <span class="wk-cv-foot"><span>${esc(PROB_SHORT[s.problem] || '')}${op ? ` · ${esc(op.initials || RN.fmt.initials(op.name))}` : ''}</span><span${isSample(s) ? ' class="wk-cv-sample"' : ''}>${isSample(s) ? 'Sample' : `No. ${no}`}</span></span>
     </span>`;
   };
 
@@ -270,11 +281,11 @@
     return `<article class="wk-card${o.size === 'sm' ? ' sm' : ''}">
       <a class="wk-card-cover" href="${href}" tabindex="-1" aria-hidden="true">${W.cover(s)}</a>
       <div class="wk-card-body">
-        <span class="wk-card-type">${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
+        <span class="wk-card-type">${sampleSr(s)}${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
         <h3 class="wk-card-t"><a href="${href}">${esc(s.title)}</a></h3>
         ${o.size === 'sm' ? '' : `<p class="wk-card-out">${esc(s.outcome)}</p>`}
         <a class="wk-by" href="#op.${esc(op.slug)}" data-view-source="work">
-          ${RN.ui.avatar(op, 'ava-xs', { decorative: true })}<span class="wk-by-n">${esc(op.name)}</span>${RN.ui.cardTier(op, { pill: true, inLink: true })}
+          ${RN.ui.avatar(op, 'ava-xs', { decorative: true })}<span class="wk-by-n">${esc(op.name)}</span>${tierOf(op)}
         </a>
       </div>
     </article>`;
@@ -422,10 +433,10 @@
     return `<article class="wk-tile ${isLand(s) ? 'land' : 'port'}" data-in="${inn.join(' ')}"${big.length ? ` data-big="${big.join(' ')}"` : ''} style="${vars.join(';')};--i:${i}">
       <a class="wk-tile-cv" href="${href}" tabindex="-1" aria-hidden="true">${W.cover(s, { out: big.length > 0 })}</a>
       <div class="wk-tile-info">
-        <span class="wk-tile-k">${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
+        <span class="wk-tile-k">${sampleSr(s)}${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
         <h3 class="wk-tile-t"><a href="${href}">${esc(s.title)}</a></h3>
         ${big.length ? `<p class="wk-tile-out">${esc(s.outcome)}</p>` : ''}
-        <a class="wk-by" href="#op.${esc(op.slug)}" data-view-source="${esc(src || 'work')}">${RN.ui.avatar(op, 'ava-xs', { decorative: true })}<span class="wk-by-n">${esc(op.name)}</span>${RN.ui.cardTier(op, { pill: true, inLink: true })}</a>
+        <a class="wk-by" href="#op.${esc(op.slug)}" data-view-source="${esc(src || 'work')}">${RN.ui.avatar(op, 'ava-xs', { decorative: true })}<span class="wk-by-n">${esc(op.name)}</span>${tierOf(op)}</a>
       </div>
     </article>`;
   }
@@ -460,7 +471,7 @@
     return `${W.grid(list, o)}
       <div class="wk-show-foot">
         <button type="button" class="btn btn-line" data-act="wk-go" data-v="${esc(SH.type)}">${esc(label)}${icon('arrow')}</button>
-        <p class="wk-show-proto" data-proto>${icon('info')}<span>Placeholder covers</span></p>
+        ${list.some(isSample) ? sampleTag('Sample work') : ''}
       </div>`;
   }
   W.showcase = function (o) {
@@ -482,6 +493,7 @@
     root.querySelectorAll('[data-act="wk-show-type"]').forEach((b) => b.setAttribute('aria-pressed', String(b === el)));
     const body = root.querySelector('.wk-show-body');
     body.innerHTML = showBody({ source: root.dataset.src, limit: +root.dataset.limit || 12, phone: +root.dataset.phone || 8 });
+    // Explanation (motion policy): the new set settles in once, 320ms, at most 12px, stagger capped at 4 steps
     if (!calm()) body.querySelector('.wk-show-grid').classList.add('is-swap');
     // Keep the start of the grid just under the sticky tabs, and the chosen tab in view in its own row
     const tabs = root.querySelector('.wk-show-tabs');
@@ -515,9 +527,9 @@
           <span class="eyebrow">See the work</span>
           <h1 class="h1">The work behind <span class="serif">the operators</span><span class="vm">.</span></h1>
           <p class="lede">Playbooks, comp plans, dashboards and 30/60/90 plans operators have built. Start from the deliverable you need, then meet who built it.</p>
+          ${all.some(isSample) ? `<p class="wk-sample-note">${sampleTag()}<span>Covers show the kind of work operators publish. Real portfolios replace them as operators add their own.</span></p>` : ''}
           <p class="wk-proto" data-proto>${icon('info')}<span>Placeholder covers until the portfolio export lands.</span></p>
         </div>
-        <ul class="wk-head-types" aria-label="Kinds of work">${types.map((t) => `<li>${RN.ui.icoTile(TYPE_IC[t] || 'doc', { size: 'sm', soft: true, still: true })}<span>${esc(TYPE_PL[t] || t)}</span></li>`).join('')}</ul>
       </section>
       <section class="wrap wk-filters" aria-label="Filter the work">
         <div class="wk-frow">
@@ -562,8 +574,9 @@
     return list.find((b) => b.cat === s.role) || PJ.blueprints.find((b) => b.cat === s.role) || list[0] || null;
   }
   function bpCard(bp) {
-    return `<a class="wk-bp card" href="#blueprint.${esc(bp.id)}" style="--cat:${RN.fields.catColor(bp.cat)}">
-      <span class="wk-bp-hd">${RN.ui.icoTile('doc', { size: 'sm', cat: bp.cat })}<span class="label">Engagement Blueprint</span></span>
+    // No category colours on public pages (colour audit): the accent rule, a monochrome icon tile
+    return `<a class="wk-bp card" href="#blueprint.${esc(bp.id)}">
+      <span class="wk-bp-hd">${RN.ui.icoTile('doc', { size: 'sm' })}<span class="label">Engagement Blueprint</span></span>
       <b class="wk-bp-t">${esc(bp.problem)}</b>
       <span class="small muted">${esc(bp.title || 'Fractional ' + bp.role)}${bp.blurb ? ` · ${esc(bp.blurb)}` : ''}</span>
       <span class="act">Open the Blueprint${icon('arrow')}</span>
@@ -597,15 +610,15 @@
         <div class="wk-sp-grid">
           <div class="wk-sp-cover">${W.cover(s, { big: true })}</div>
           <div class="wk-sp-copy">
-            <span class="eyebrow">${esc(s.type)}</span>
-            <h1 class="h1 wk-sp-t">${esc(s.title)}</h1>
+            <span class="wk-sp-k"><span class="eyebrow">${esc(s.type)}</span>${isSample(s) ? sampleTag() : ''}</span>
+            <h1 class="h1 wk-sp-t">${esc(s.title)}<span class="vm">.</span></h1>
             <p class="lede wk-sp-out">${esc(s.outcome)}.</p>
             <dl class="wk-facts">${facts.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
             <div class="row wk-sp-cta">
               <button type="button" class="btn" data-act="wk-hire" data-id="${esc(s.id)}">Hire who built it${icon('arrow')}</button>
               <a class="btn btn-line" href="#talk.${esc(s.problem)}" data-act="wk-adapt" data-id="${esc(s.id)}">Adapt this for us</a>
             </div>
-            <a class="wk-by wk-by-lg" href="#op.${esc(op.slug)}" data-view-source="work">${RN.ui.avatar(op, 'ava-sm', { decorative: true })}<span><span class="faint small">Built by</span> <span class="wk-by-n">${esc(op.name)}</span></span>${RN.ui.cardTier(op, { pill: true, inLink: true })}</a>
+            <a class="wk-by wk-by-lg" href="#op.${esc(op.slug)}" data-view-source="work">${RN.ui.avatar(op, 'ava-sm', { decorative: true })}<span><span class="faint small">Built by</span> <span class="wk-by-n">${esc(op.name)}</span></span>${tierOf(op)}</a>
           </div>
         </div>
       </section>
@@ -623,7 +636,7 @@
         </div>
         <aside class="wk-sp-side" aria-label="Who built it">
           <span class="label">Who built it</span>
-          ${RN.ui.opCard(op, { compact: true })}
+          <div class="wk-sp-op${op.sample ? ' is-sample' : ''}">${RN.ui.opCard(op, { compact: true })}</div>
           ${bp ? `<span class="label wk-side-l">Hire for this as an engagement</span>${bpCard(bp)}` : ''}
         </aside>
       </section>

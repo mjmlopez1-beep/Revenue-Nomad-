@@ -19,7 +19,11 @@
    Loops wired here: Talk to us logs a `search` (+ impressions for the suggested operators) for Admin demand
    and Studio "Why you appeared", emails the team and the client, and hands its answers to the intro sheet.
    A zero-result "Tell us what you need" in Browse (search event with meta.tellUs, or seen.talkPrefill)
-   carries its query and company-size filters into the flow. */
+   carries its query and company-size filters into the flow.
+   Design pass (Oct 14, 2026; BRIEF.md and the GoFractional audit): section rhythm on the shared tokens (.sec between
+   sections on one background, .sec-band inside a band), hero splits on the 12-column grid (hero(o).split), one
+   vermilion full stop per page H1, market.js figures carry RN.ui.illusTag, About's cost card reads the canonical
+   record (RN.costs 'vp-sales'), no count-ups, and reveals and chart draws only through RN.motion. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -40,6 +44,11 @@
   const market = () => RN.data.market;
   const illus = (txt) => RN.ui.illus(txt);
   const livePill = (txt) => `<span class="pill pill-accent">${icon('check-circle')}${esc(txt || 'Live export')}</span>`;
+  // Visible to every visitor: market.js figures (illustrative survey data) carry this tag (credibility audit item 1)
+  const illusTag = (txt, o) => (RN.ui.illusTag ? RN.ui.illusTag(txt, o) : illus(txt));
+  // The vermilion full stop (or closing mark) on a page H1: escapes the text and colours its last character
+  const vmEnd = (t) => { t = String(t || ''); const m = /[.?!]$/.exec(t); return m ? `${esc(t.slice(0, -1))}<span class="vm">${m[0]}</span>` : esc(t); };
+  const vm = '<span class="vm">.</span>';
   const curView = () => { const c = RN.currentRoute && RN.currentRoute(); return c && c.view ? c.view.name : ''; };
 
   /* Studio tab keys are owned by the Studio builders; resolve by label so links survive renames. */
@@ -69,15 +78,18 @@
 
   /* ---------- Layout pieces ---------- */
   /* Page head on paper, like Insights and the Framework: eyebrow, .h1 (the page's one serif accent), lede, actions */
+  /* o.split: '7/5' or '6/6' puts the copy and the aside on the 12-column grid (.g12, 20px gutter). Without it the head
+     keeps its own columns (the function homes in js/views/function.js call this too). */
   function hero(o) {
-    return `<header class="wrap phead pg-head${o.aside ? ' has-aside' : ''}">
-      <div class="pg-head-copy">
+    const sp = o.aside && o.split ? String(o.split).split('/') : null;
+    return `<header class="wrap phead pg-head${o.aside ? ' has-aside' : ''}${sp ? ' g12 pg-g12' : ''}">
+      <div class="pg-head-copy${sp ? ' c-' + esc(sp[0]) : ''}">
         <span class="eyebrow">${esc(o.eyebrow)}</span>
         <h1 class="h1">${o.h}</h1>
         ${o.lede ? `<p class="lede">${o.lede}</p>` : ''}
         ${o.actions ? `<div class="pg-actions">${o.actions}</div>` : ''}
       </div>
-      ${o.aside ? `<div class="pg-head-aside">${o.aside}</div>` : ''}
+      ${o.aside ? `<div class="pg-head-aside${sp ? ' c-' + esc(sp[1]) : ''}">${o.aside}</div>` : ''}
       ${o.foot || ''}
     </header>`;
   }
@@ -167,7 +179,7 @@
         <span class="pg-brow-b">${RN.ui.tierBadge(t.v, { size: o.stairs ? 64 : 56 })}</span>
         <b>${esc(t.l)}</b>
         <span class="pg-brow-r">${t.min} to ${t.max}</span>
-        ${o.stairs ? '<i class="pg-brow-step" aria-hidden="true"></i>' : `<span class="pg-brow-n">${RN.fmt.plural(n, 'profile')}</span>`}
+        ${o.stairs ? '<i class="pg-brow-step" data-draw="y" aria-hidden="true"></i>' : `<span class="pg-brow-n">${RN.fmt.plural(n, 'profile')}</span>`}
         ${mine ? `<span class="pg-rung-me">${RN.ui.avatar(me, 'ava-xs')}You, ${esc(me.ris.score)}</span>` : ''}
       </li>`;
     }).join('')}</ol>${!o.stairs && counts.null ? `<p class="small muted pg-brow-below">${esc(unscoredLine(counts.null))}</p>` : ''}`;
@@ -186,16 +198,28 @@
   function aboutView() {
     const R = market().report;
     const hind = R.hindsight;
-    const fvf = R.fracVsFull;
     const ops = RN.model.ops;
+    // The cost card reads the canonical record (js/data/costs.js): real 2026 engagement figures and the sourced
+    // full-time pay, so About says 14% to 36% like every other page (the old 41% came from illustrative figures)
+    const vp = RN.costs && RN.costs.get ? RN.costs.get('vp-sales') : null;
+    const ft = vp && vp.fullTime;
     const lib = RN.fields.fitTags.options.length;
     const smart = (t) => esc(RN.fmt.smart(t));
     const keep = (t) => smart(t).replace(/[^\s<>]+-[^\s<>]+/g, (w) => `<span class="nowrap">${w}</span>`);
 
-    // Bars drawn to scale from the research figures ("$12,500" or "68%"); the highlighted row carries the point
+    // Bars drawn to scale ("$12,500" or "68%"); the highlighted row carries the point. A row may be a range
+    // ([label, text, hi, lo, hi value]): the bar runs to the top of the range and is solid from its bottom.
+    // Each bar carries data-draw, so it draws once the first time it scrolls into view (RN.motion.draw, about mount).
     const num = (v) => parseFloat(String(v).replace(/[^0-9.]/g, '')) || 0;
-    const bars = (rows, max) => { max = max || Math.max(...rows.map((r) => num(r[1]))) || 1; return `<div class="ab-bars">${rows.map(([l, v, hi]) => `<div class="ab-bar${hi ? ' is-hi' : ''}"><span class="ab-bar-l">${keep(l)}</span><span class="ab-bar-t"><i style="--w:${Math.round((num(v) / max) * 100)}%"></i></span><b class="num">${esc(v)}</b></div>`).join('')}</div>`; };
-    const pct = Math.round((num(fvf[0][1]) / num(fvf[1][1])) * 100);
+    const bars = (rows, max) => {
+      max = max || Math.max(...rows.map((r) => (r[4] != null ? r[4] : num(r[1])))) || 1;
+      return `<div class="ab-bars">${rows.map(([l, v, hi, lo, top]) => {
+        const end = top != null ? top : num(v);
+        const w = Math.round((end / max) * 100);
+        const from = lo != null && end ? Math.round((lo / end) * 100) : 0;
+        return `<div class="ab-bar${hi ? ' is-hi' : ''}${lo != null ? ' is-range' : ''}"><span class="ab-bar-l">${keep(l)}</span><span class="ab-bar-t"><i data-draw="x" style="--w:${w}%${lo != null ? `;--lo:${from}%` : ''}"></i></span><b class="num">${esc(v)}</b></div>`;
+      }).join('')}</div>`;
+    };
     const fitFirst = hind[0], brand = hind[hind.length - 1];
     const times = (num(fitFirst[2]) / num(brand[2])).toFixed(1);
     const fame = ['Big logo on the resume', 'Impressive title', 'A friend’s referral'];
@@ -217,56 +241,57 @@
     return `
     ${hero({
       eyebrow: 'About Revenue Nomad',
-      h: 'Built by operators who got tired of watching good companies <span class="serif">hire the wrong person.</span>',
+      h: `Built by operators who got tired of watching good companies <span class="serif">hire the wrong person</span>${vm}`,
       lede: `The open network for fractional <span class="nowrap">go-to-market</span> leaders, matched on fit and backed by proof a company confirmed.`,
       actions: `<a class="btn btn-lg" href="#browse">Browse operators${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#how">How it works</a>`,
       aside: network,
       foot: glance,
+      split: '7/5',
     })}
 
-    <section class="section ab-why">
-      <div class="wrap ab-why-in">
-        <div class="ab-why-l">
+    <section class="sec ab-why">
+      <div class="wrap g12 ab-why-in">
+        <div class="ab-why-l c-5">
           <span class="eyebrow">Why we exist</span>
           <h2 class="h2">The problem was always <span class="serif">fit.</span></h2>
           <p class="ab-line">Great leaders fail in the wrong business.</p>
           <p class="ab-line">A $500M company’s CRO rarely fits a $30M one.</p>
           <p class="ab-line is-answer">So we match on fit, and show you the proof before you talk to anyone.</p>
         </div>
-        <div class="ab-vs" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Six months, nothing changed. Hired on fit: same stage, same deal size, same motion, culture fit, proof a company confirmed. Results in the first quarter.">
+        <div class="ab-vs c-7" role="img" aria-label="Hired on fame: big logo, impressive title, a referral. Six months, nothing changed. Hired on fit: same stage, same deal size, same motion, culture fit, proof a company confirmed. Results in the first quarter.">
           <div class="ab-vs-col is-fame"><span class="ab-vs-h">Hired on fame</span><ul>${fame.map((x) => `<li>${icon('x')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">6 months, nothing changed</span></div>
           <div class="ab-vs-col is-fit"><span class="ab-vs-h">Hired on fit</span><ul>${fit.map((x) => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul><span class="ab-vs-out">Results in the first quarter</span></div>
         </div>
       </div>
     </section>
 
-    <section class="section ab-pov-sec">
+    <section class="sec ab-pov-sec">
       <div class="wrap">
         ${shead('What we believe', 'Two beliefs behind every introduction.')}
-        <div class="ab-pov">
-          <article class="ab-pov-card is-tint">
+        <div class="g12 ab-pov">
+          ${vp && ft ? `<article class="c-6 ab-pov-card is-tint">
             <h3 class="h3">Fractional is a strategy, not a stopgap.</h3>
-            <p class="ab-pov-p">Senior leadership for about ${pct}% of the monthly cost of a full-time hire, and far less risk if it is not working.</p>
-            ${bars([['Fractional, per month', fvf[0][1], true], ['Full-time, per month', fvf[1][1]]])}
+            <p class="ab-pov-p">Senior leadership for ${esc(vp.text.pct)} of the monthly cost of a full-time VP of Sales, and far less risk if it is not working.</p>
+            ${bars([['Fractional VP of Sales, a month', vp.text.monthly.replace(/\/month$/, ''), true, vp.monthly.lo, vp.monthly.hi], ['Full-time VP of Sales, a month', RN.fmt.k(ft.monthly), false, null, ft.monthly]])}
             <dl class="ab-cmp">
               <div class="ab-cmp-h" aria-hidden="true"><span></span><span>Fractional</span><span>Full-time</span></div>
-              <div><dt>Time to start</dt><dd class="is-hi">${keep(fvf[0][2])}</dd><dd>${keep(fvf[1][2])}</dd></div>
-              <div><dt>If it isn’t working</dt><dd class="is-hi">${keep(fvf[0][3])}</dd><dd>${keep(fvf[1][3])}</dd></div>
+              <div><dt>Term</dt><dd class="is-hi">3 to 4 months, then 30 days notice</dd><dd>Average tenure about ${esc(ft.tenureMonths)} months</dd></div>
+              <div><dt>If it isn’t working</dt><dd class="is-hi">Swap the operator</dd><dd>${keep(`Up to ${ft.replace.mult}x salary to replace, plus ${ft.replace.rampMonths}+ months of ramp`)}</dd></div>
             </dl>
-            <div class="ab-pov-foot">${illus('Illustrative research')}<a class="act" href="#rates">Compare the cost${icon('arrow')}</a></div>
-          </article>
-          <article class="ab-pov-card is-gold">
+            <div class="ab-pov-foot">${RN.ui.figNote([RN.costs.basis('vp-sales'), `Full-time pay from ${ft.src}`, `replacement cost from ${ft.replace.src}`])}<a class="act" href="#fractional-cost">Compare the cost${icon('arrow')}</a></div>
+          </article>` : ''}
+          <article class="c-6 ab-pov-card is-paper">
             <h3 class="h3">Fit and proof beat fame.</h3>
             <p class="ab-pov-p">Looking back on a hire, companies ranked relevant experience ${times}<span class="u-x">×</span> more often than brand-name employers.</p>
             ${bars(hind.map((h, i) => [h[0], h[2], i === 0]), 100)}
-            <span class="ab-pov-k">Share of hiring companies ranking it in their top three, looking back</span>
-            <div class="ab-pov-foot">${illus('Illustrative research')}<a class="act" href="#levels">How we verify proof${icon('arrow')}</a></div>
+            ${RN.ui.figNote(['Share of hiring companies ranking it in their top three, looking back'], { illus: true, cls: 'ab-pov-k' })}
+            <div class="ab-pov-foot"><a class="act" href="#levels">How we verify proof${icon('arrow')}</a></div>
           </article>
         </div>
       </div>
     </section>
 
-    <section class="section night pg-core">
+    <section class="sec-band night pg-core">
       <div class="wrap">
         ${shead('What companies rate', 'Four scores after every engagement.', 'Only the company that hired them can give these. Together they move the Reputation Index you see on every profile.')}
         <div class="pg-core-grid ab-core">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
@@ -278,18 +303,18 @@
       </div>
     </section>
 
-    <section class="section ab-diff-sec">
+    <section class="sec ab-diff-sec">
       <div class="wrap">
         ${shead('How we are different', 'Three things most talent firms won’t do.')}
         <ol class="ab-diff">
           <li>${RN.ui.icoTile('eye', { size: 'lg', cls: 'ab-diff-i' })}<h3 class="h4">Open profiles</h3><p class="ab-diff-was">A shortlist, after a sales call</p><p class="ab-diff-now">Every profile is open. No login, no sales call.</p><a class="act" href="#browse">Browse ${RN.fmt.int(ops.length)} profiles${icon('arrow')}</a></li>
-          <li>${RN.ui.icoTile('seal', { size: 'lg', tone: 'gold', cls: 'ab-diff-i' })}<h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p class="ab-diff-now">Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
-          <li>${RN.ui.icoTile('chart', { size: 'lg', tone: 'info', cls: 'ab-diff-i' })}<h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p class="ab-diff-now">Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
+          <li>${RN.ui.icoTile('seal', { size: 'lg', cls: 'ab-diff-i' })}<h3 class="h4">Verified proof</h3><p class="ab-diff-was">References the candidate picked</p><p class="ab-diff-now">Companies confirm the work. Only they can move a score.</p><a class="act" href="#levels">How levels work${icon('arrow')}</a></li>
+          <li>${RN.ui.icoTile('chart', { size: 'lg', cls: 'ab-diff-i' })}<h3 class="h4">Public research</h3><p class="ab-diff-was">Rates after you sign</p><p class="ab-diff-now">Rates, reports and ${RN.fmt.int(lib)} focus areas. Free to read.</p><a class="act" href="#insights">Open Insights${icon('arrow')}</a></li>
         </ol>
       </div>
     </section>
 
-    <section class="section-sm ab-reach-sec">
+    <section class="sec-band ab-reach-sec">
       <div class="wrap ab-reach">
         <div class="ab-team">
           <span class="eyebrow">Who we are</span>
@@ -300,6 +325,14 @@
       </div>
     </section>
 `;
+  }
+
+  /* Motion on About (policy, BRIEF.md): each card's bars draw once the first time they scroll into view
+     (explanation), and the three differences rise in when they come on screen. Both no-op on screen, calm or reduced. */
+  function aboutMount(root) {
+    if (!RN.motion) return;
+    RN.$$('.ab-pov-card', root).forEach((c, i) => RN.motion.draw(c, { key: 'ab-pov-' + i }));
+    RN.motion.reveal(root, '.ab-diff > li', { key: 'ab-diff' });
   }
 
   /* =====================================================================
@@ -343,7 +376,7 @@
     return `
     ${hero({
       eyebrow: 'How it works',
-      h: `One network, <span class="serif">two sides that both win.</span>`,
+      h: `One network, <span class="serif">two sides that both win</span>${vm}`,
       lede: 'Companies find proven fractional leaders without a retained search. Operators get found, build proof, and get value even in months with no intro.',
       aside: `<div class="pg-flow" aria-label="From an intro request to an introduction">
         <span class="label">From request to introduction</span>
@@ -400,6 +433,8 @@
     RN.$$('[data-act="pg-how-tab"]', root).forEach((b) => b.setAttribute('aria-selected', String(b.dataset.k === k)));
     RN.$$('.pg-how-panel', root).forEach((x) => { x.hidden = x.dataset.how !== k; });
     RN.$$('[data-how-h]', root).forEach((x) => { x.hidden = x.dataset.howH !== k; });
+    const sec = root.querySelector('.pg-how-sec');
+    if (sec) { sec.classList.remove('is-switch'); void sec.offsetWidth; sec.classList.add('is-switch'); }
     howMount(root);
   };
 
@@ -502,7 +537,7 @@
     return `
     ${hero({
       eyebrow: 'Results',
-      h: `Proof, <span class="serif">in their words.</span>`,
+      h: `Proof, <span class="serif">in their words</span>${vm}`,
       lede: 'Company reviews of operators on the network, written by the company and published as submitted. Where a figure comes from research instead of a review, we say so.',
       aside: `<div class="pg-proof">
         <div class="pg-proof-faces">
@@ -537,7 +572,7 @@
         ${shead('Company reviews', 'More from their companies.', `Every company review on the network, ${RN.fmt.int(all.length)} so far. Reviews publish without a moderation queue.`)}
         <div class="pg-wall-f" role="group" aria-label="Filter reviews by the operator’s role">
           <button type="button" class="chip${W.cat === 'all' ? ' on' : ''}" data-act="pg-wall-cat" data-cat="all" aria-pressed="${W.cat === 'all'}">All<span class="pg-wall-n">${wall.length}</span></button>
-          ${cats.map(({ o, n }) => `<button type="button" class="chip${W.cat === o.v ? ' on' : ''}" data-act="pg-wall-cat" data-cat="${esc(o.v)}" aria-pressed="${W.cat === o.v}">${RN.ui.catDot(o.v)}${esc(o.l)}<span class="pg-wall-n">${n}</span></button>`).join('')}
+          ${cats.map(({ o, n }) => `<button type="button" class="chip${W.cat === o.v ? ' on' : ''}" data-act="pg-wall-cat" data-cat="${esc(o.v)}" aria-pressed="${W.cat === o.v}">${esc(o.l)}<span class="pg-wall-n">${n}</span></button>`).join('')}
         </div>
         <div class="pg-wall" data-pg-wall>${wall.map(revCard).join('')}
           <article class="pg-rev pg-rev-how">
@@ -552,7 +587,7 @@
 
     <section class="section pg-research-sec">
       <div class="wrap">
-        ${shead('What the research says', 'Proof is what gets operators rehired.', `From the State of Fractional GTM ${esc(R.year)} research mockup. Every figure in this section is illustrative.`, `${illus()}<a class="act" href="#report">Read the report${icon('arrow')}</a>`)}
+        ${shead('What the research says', 'Proof is what gets operators rehired.', `From the State of Fractional GTM ${esc(R.year)} research. Every figure in this section is illustrative.`, `${illusTag()}<a class="act" href="#report">Read the report${icon('arrow')}</a>`)}
         <div class="stats-row" style="--cols:${research.length}">${research.map((s) => `<div class="stat"><span class="stat-v">${esc(s.v)}</span><span class="stat-l">${esc(s.l.replace(/buyers/gi, 'clients'))}</span></div>`).join('')}</div>
         <details class="pg-more">
           <summary>${icon('chev-down')}What hiring companies say mattered, and how engagements end</summary>
@@ -564,7 +599,7 @@
           <div class="card">
             <div class="card-hd"><div><h3>How engagements end</h3><p class="sub">Share of fractional GTM engagements</p></div></div>
             <div class="pg-meters">${R.outcomes.map((o) => `<div class="pg-mrow"><span>${esc(o.l)}</span><div class="meter"><i style="width:${parseInt(o.v, 10)}%"></i></div><b>${esc(o.v)}</b></div>`).join('')}</div>
-            <blockquote class="pg-survey-q">“${esc(R.quote.text)}”<span>${esc(R.quote.by)}, illustrative</span></blockquote>
+            <blockquote class="pg-survey-q">“${esc(R.quote.text)}”<span>${esc(R.quote.by)} ${illusTag()}</span></blockquote>
           </div>
         </div>
         </details>
@@ -597,7 +632,7 @@
      TALK TO US: short auto-advancing flow on the standard picklists
      ===================================================================== */
   const STEPS = [
-    { key: 'need', q: 'What do you need help with?', cols: 2, hint: 'Pick the closest. We match it to the role categories that solve it.' },
+    { key: 'need', q: 'What do you need help with?', cols: 2, hint: 'Pick the closest.' },
     // Company size is one screen with two chip rows: revenue, then headcount. It advances once both are picked.
     { key: 'size', q: 'How big is the business today?', rows: [{ key: 'companyRevenue', cols: 3 }, { key: 'companyEmployees', cols: 3 }] },
     { key: 'startBy', q: 'When do you need them to start?', cols: 3, hint: 'We match this to each operator’s availability.' },
@@ -635,12 +670,12 @@
     if (!answered()) return `<b class="num" data-n="${n}">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator' : 'operators'} on the network`;
     return `<b class="num" data-n="${n}">${RN.fmt.int(n)}</b> ${n === 1 ? 'operator matches' : 'operators match'} so far`;
   }
-  // Live match count: a result that moves as they answer, from the first question on
+  // Live match count: a result that moves as they answer, from the first question on. The number is set, never
+  // counted up (motion policy: a number never shows a wrong intermediate value); a short bump marks the change.
   function liveBadge() {
     const n = liveCount();
     return `<p class="pg-live${n ? '' : ' is-zero'}" role="status" aria-live="polite"><span class="pg-live-dot" aria-hidden="true"></span><span class="pg-live-t">${liveText(n)}</span></p>`;
   }
-  let liveRaf = 0;
   function updateLive() {
     const el = RN.$('.pg-talk .pg-live');
     if (!el) return;
@@ -650,20 +685,8 @@
     lastLive = to;
     el.classList.toggle('is-zero', !to);
     el.querySelector('.pg-live-t').innerHTML = liveText(to);
-    const nb = el.querySelector('b.num');
-    cancelAnimationFrame(liveRaf);
     if (from === to) return;
     el.classList.remove('is-bump'); void el.offsetWidth; el.classList.add('is-bump');
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduce) return;
-    const t0 = performance.now(), dur = 450;
-    const tick = (now) => {
-      const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
-      nb.textContent = RN.fmt.int(Math.round(from + (to - from) * e));
-      if (p < 1) liveRaf = requestAnimationFrame(tick);
-    };
-    nb.textContent = RN.fmt.int(from);
-    liveRaf = requestAnimationFrame(tick);
   }
   function brief() {
     return { need: T.ans.need, revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees, availability: T.ans.startBy };
@@ -753,6 +776,10 @@
     return T.done ? talkDone() : talkStep();
   }
 
+  /* Three facts under the answer grid (layout and ratio audits): all already stated in the site copy. The open-profile
+     count is not repeated here because the live badge above shows it on the same screen. */
+  const talkFacts = () => `<ul class="pg-talk-facts" aria-label="Good to know">${['No fees for companies', 'No login to browse', 'A reply within one business day'].map((t) => `<li>${icon('check')}${esc(t)}</li>`).join('')}</ul>`;
+
   /* Flow progress: the shared step count and segmented .stepper, one segment per question */
   function progress(cur, total, done) {
     const label = done ? 'Request sent' : `Question ${cur + 1} of ${total}`;
@@ -819,6 +846,7 @@
         <div class="pg-tiles${s.key === 'need' ? ' has-ic' : ''}" data-cols="${s.cols || 2}">${decorate(RN.w.control(s.key, T.ans[s.key] || '', { name: s.key, id: 'pg-t-' + s.key, change: 'pg-talk-pick' }), s.key)}</div>
 `;
     }
+    if (s.key !== 'contact') body += talkFacts();
     // Answers so far ride above the question, each one a button back to its step
     const crumbs = chips.length && s.key !== 'contact' ? `<div class="pg-recap pg-crumbs" aria-label="Your answers so far">${chips.join('')}</div>` : '';
     return `<section class="pg-talk night" data-step="${esc(s.key)}">
@@ -831,7 +859,7 @@
         ${liveBadge()}
         ${note}${T.step === 0 ? searched : ''}
         ${crumbs}
-        <h1 class="h2 pg-q" tabindex="-1">${esc(s.q)}</h1>
+        <h1 class="h2 pg-q" tabindex="-1">${vmEnd(s.q)}</h1>
         ${body}
         <div class="pg-talk-alt">
           ${RN.ui.teamAva('ava-md')}
@@ -857,7 +885,7 @@
       <div class="pg-talk-in">
         <div class="pg-talk-top"><button type="button" class="pg-back" data-act="pg-talk-reset">${icon('refresh')}Start a new request</button><span class="step-count">Sent</span></div>
         ${progress(steps().length - 1, steps().length, true)}
-        <h1 class="h2 pg-q" tabindex="-1">Got it, ${esc(first)}. A person is on it.</h1>
+        <h1 class="h2 pg-q" tabindex="-1">Got it, ${esc(first)}. A person is on it${vm}</h1>
         <p class="lede pg-done-lede">You will hear from us at ${esc(T.email)} within one business day. Want to move faster? Book a call now, or request an intro to one of the operators below.</p>
         <div class="pg-done-grid">
           <div class="pg-done-card">
@@ -912,7 +940,6 @@
     document.removeEventListener('keydown', onTalkKey);
     clearTimeout(keyT); keyBuf = ''; lastLive = null;
     clearTimeout(advTimer);
-    cancelAnimationFrame(liveRaf);
   }
   // Number keys pick a tile. Several rows share one numbering (1 to 6, then 7 to 12), so a 1 waits a moment for a
   // second digit when a tile 10 or above exists.
@@ -1134,7 +1161,7 @@
     return `<div class="pg-sp" aria-label="Studio preview for a sample operator">
       <div class="pg-sp-hd">
         <span class="row-nw" style="--gap:10px">${RN.ui.teamAva('ava-sm')}<span><b>Studio</b><span class="pg-sp-sub">Sample operator · last 30 days</span></span></span>
-        ${illus('Illustrative analytics')}
+        ${illusTag()}
       </div>
       <div class="pg-sp-stats">
         ${stat(T0.impressions, 'Search impressions', P.impressions)}
@@ -1194,39 +1221,41 @@
     return `
     ${hero({
       eyebrow: 'For fractional operators',
-      h: `Get value from the network <span class="serif">even in months with no intro.</span>`,
+      h: `Get found by companies <span class="serif">hiring fractional GTM leaders</span>${vm}`,
       lede: 'There are more fractional leaders than open seats, and we will not pretend otherwise. So your profile works for you every week: it shows who looked and why, where you stand on rate, and gives you proof you can take into your own deals.',
       actions: `<a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a>${studioSample('studio')}`,
       aside: `<div class="op-hero-sp">${studioPreview()}<p class="op-sp-cap">${icon('chart')}<span>A sample operator’s Studio. The profile, rate and reviews are live; views and searches are illustrative.</span></p></div>`,
+      split: '6/6',
     })}
 
-    <section class="section pg-honest-sec">
-      <div class="wrap pg-honest">
-        <div class="pg-honest-l">
+    <section class="sec pg-honest-sec">
+      <div class="wrap g12 pg-honest">
+        <div class="pg-honest-l c-5">
           <span class="eyebrow">The honest part</span>
           <h2 class="h2">Supply is crowded. Proof is how you stand out.</h2>
           <p class="pg-p">${topShare}% of the ${RN.fmt.int(ops.length)} open profiles lead ${esc(top.l)}, while about ${esc(intent[top.v] || 0)}% of company hiring intent sits there (illustrative survey data). Most operators will not get an intro in a given month. That is why intros are not the only thing we give you.</p>
           <p class="pg-p">Categories where company intent runs ahead of supply are where a verified record pays off fastest.</p>
           <a class="act" href="#library">See demand vs verified supply by focus area${icon('arrow')}</a>
         </div>
-        <div class="card pg-honest-r">
+        <div class="card pg-honest-r c-7">
           <div class="card-hd"><div><h3>Where operators are vs where companies are hiring</h3><p class="sub">Share by role category</p></div></div>
-          <div class="legend"><span><i style="background:var(--viz-muted)"></i>Open profiles ${livePill()}</span><span><i style="background:var(--viz-1)"></i>Company hiring intent ${illus()}</span></div>
+          <div class="legend"><span><i style="background:var(--viz-muted)"></i>Open profiles ${livePill()}</span><span><i style="background:var(--viz-1)"></i>Company hiring intent ${illusTag()}</span></div>
           <div class="pg-sd">${RN.fields.roleCategory.options.map((o) => {
             const s = Math.round(((supply[o.v] || 0) / total) * 100);
             const d = intent[o.v];
-            return `<div class="pg-sd-row"><span class="pg-sd-l">${RN.ui.catDot(o.v)}${esc(o.l)}</span>
-              <div class="pg-sd-bars"><div class="pg-sd-bar is-s"><i style="width:${(s / maxShare * 100).toFixed(1)}%"></i><b>${s}%</b></div><div class="pg-sd-bar is-d">${d == null ? '<b class="pg-sd-na">Not in the survey</b>' : `<i style="width:${(d / maxShare * 100).toFixed(1)}%"></i><b>${d}%</b>`}</div></div></div>`;
+            // No category colours on public pages (colour audit): the role name alone labels the row
+            return `<div class="pg-sd-row"><span class="pg-sd-l">${esc(o.l)}</span>
+              <div class="pg-sd-bars"><div class="pg-sd-bar is-s"><i data-draw="x" style="width:${(s / maxShare * 100).toFixed(1)}%"></i><b>${s}%</b></div><div class="pg-sd-bar is-d">${d == null ? '<b class="pg-sd-na">Not in the survey</b>' : `<i data-draw="x" style="width:${(d / maxShare * 100).toFixed(1)}%"></i><b>${d}%</b>`}</div></div></div>`;
           }).join('')}</div>
         </div>
       </div>
     </section>
 
-    <section class="section pg-value-sec">
+    <section class="sec-band pg-value-sec">
       <div class="wrap">
         ${shead('What you get even when no intro happens', 'Five things your profile does every week.', 'All of it lives in your Studio from the day you are approved.')}
         <div class="pg-values">${values.map((v, i) => `<article class="pg-value${i === 0 ? ' is-wide' : ''}">
-            ${RN.ui.icoTile(v.i, { size: 'lg', night: i === 0, cls: 'pg-value-i' })}
+            ${RN.ui.icoTile(v.i, { size: 'lg', cls: 'pg-value-i' })}
             <h3 class="h4">${esc(v.t)}</h3>
             <p class="pg-p">${esc(v.d)}</p>
             ${asLink('operator', v.to, { mine: `Open in Studio${icon('arrow')}`, other: `See it in a sample Studio${icon('arrow')}` }, 'act')}
@@ -1234,7 +1263,7 @@
       </div>
     </section>
 
-    <section class="section pg-ladder-sec">
+    <section class="sec pg-ladder-sec">
       <div class="wrap">
         ${shead('Invest more, get more', 'One ladder. Every rung is earned.', 'Your label comes from your Reputation Index, and the Index moves on company evidence: reviews, verified fit tags and engagements. What each tier unlocks is on the Levels page.', `<a class="act" href="#levels">What each tier unlocks${icon('arrow')}</a>`)}
         ${badgeRow({ me: true })}
@@ -1244,7 +1273,7 @@
       </div>
     </section>
 
-    <section class="section pg-samples-sec" data-proto>
+    <section class="sec-band pg-samples-sec" data-proto>
       <div class="wrap">
         ${shead('What operators tell us', 'The kind of week we are building for.', '', `<span class="pill pill-warn">${icon('info')}Sample quotes, not from real operators</span>`)}
         <div class="grid g-3">${samples.map((s) => `<figure class="card pg-sample">
@@ -1255,13 +1284,22 @@
       </div>
     </section>
 
-    <section class="section-sm pg-faq-sec">
+    <section class="sec pg-faq-sec">
       <div class="wrap-narrow">
         <h2 class="h3">Questions operators ask</h2>
         <div class="pg-faq">${faq.map(([q, a]) => `<details><summary>${esc(q)}${icon('chev-down')}</summary><p class="pg-p">${esc(a)}</p></details>`).join('')}</div>
         <div class="pg-actions pg-faq-cta"><a class="btn btn-lg" href="#join.operator">Apply to join${icon('arrow')}</a><span class="small muted">One intake with the same fields companies filter on.</span></div>
       </div>
     </section>`;
+  }
+
+  /* Motion on For operators: the supply and demand bars draw once when they first scroll into view (explanation);
+     the five value cards rise in as they come on screen (stagger capped at 4 by RN.motion). */
+  function operatorsMount(root) {
+    if (!RN.motion) return;
+    const sd = root.querySelector('.pg-sd');
+    if (sd) RN.motion.draw(sd, { key: 'op-sd' });
+    RN.motion.reveal(root, '.pg-values > .pg-value', { key: 'op-values' });
   }
 
   /* =====================================================================
@@ -1294,13 +1332,14 @@
     return `
     ${hero({
       eyebrow: 'Levels and the Reputation Index',
-      h: 'One score. <span class="serif">Earned, never bought.</span>',
+      h: `One score. <span class="serif">Earned, never bought</span>${vm}`,
       lede: 'The Reputation Index is a 0 to 100 score built from company evidence. Companies and operators see the same number and the same label.',
       actions: `<button type="button" class="btn btn-lg" data-act="pg-browse-sort" data-sort="ris">Browse by Reputation Index${icon('arrow')}</button>${studioSample(studioRoute(/cred/i), 'btn btn-line btn-lg', 'See your level in Studio')}`,
       aside: `<div class="lv-hero-vis"><span class="lv-vis-k">Reputation Index, 0 to 100</span>${badgeRow({ stairs: true, me: true })}</div>`,
+      split: '6/6',
     })}
 
-    <section class="section pg-ladder-sec">
+    <section class="sec pg-ladder-sec">
       <div class="wrap">
         ${shead('The ladder', 'Five tiers, from the day you are approved.', `${RN.fmt.int(emerging)} of ${RN.fmt.int(total)} profiles sit at Emerging today. What each tier unlocks is proposed and not final.`)}
         ${ladder({ desc: true, counts: true, me: true, rail: true })}
@@ -1312,16 +1351,16 @@
       </div>
     </section>
 
-    <section class="section pg-factors-sec">
+    <section class="sec-band pg-factors-sec">
       <div class="wrap">
         ${shead('How score is calculated', 'Five signals, one number.', 'The Reputation Index blends five signals into one 0 to 100 score. Tiers start at 50, Emerging.')}
-        <div class="pg-factors">
-        <div class="card pg-factors-r">
+        <div class="g12 pg-factors">
+        <div class="card c-6 pg-factors-r">
           <div class="card-hd"><div><h3>Weight of each signal</h3><p class="sub">Share of the score above 50</p></div><span class="pill pill-warn">Proposed weights</span></div>
-          <div class="pg-meters">${factors.map((f) => `<div class="pg-mrow"><span>${esc(factorLabel(f))}<small class="pg-mrow-d">${esc(factorDesc(f))}</small></span><div class="meter"><i style="width:${Math.round((f.w / maxW) * 100)}%"></i></div><b>${Math.round((f.w || 0) * 100)}%</b></div>`).join('')}</div>
+          <div class="pg-meters">${factors.map((f) => `<div class="pg-mrow"><span>${esc(factorLabel(f))}<small class="pg-mrow-d">${esc(factorDesc(f))}</small></span><div class="meter"><i data-draw="x" style="width:${Math.round((f.w / maxW) * 100)}%"></i></div><b>${Math.round((f.w || 0) * 100)}%</b></div>`).join('')}</div>
           <p class="small muted pg-factors-note">Profile completeness is the only signal an operator controls alone. Everything else needs a company.</p>
         </div>
-        <div class="card lv-curve">
+        <div class="card c-6 lv-curve">
           <div class="card-hd"><div><h3>A claim becomes proof one review at a time</h3><p class="sub">Focus area score by confirming company reviews. Each column is one more review rated 4.0 or higher.</p></div></div>
           <p class="small">Operators claim up to 25 focus areas (in Studio they are called fit tags). A focus area turns Verified when a company review confirms it, and its score climbs with each confirming review. A focus area a company adds in a review joins the profile as Verified.</p>
           <div class="pg-curve-chart" data-lv-curve>${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w: 520, h: 220, fmt: (n) => String(n), label: 'Focus area score by number of confirming company reviews' })}</div>
@@ -1332,7 +1371,7 @@
       </div>
     </section>
 
-    <section class="section night pg-core">
+    <section class="sec-band night pg-core">
       <div class="wrap">
         ${shead('CORE company reviews', 'Four questions, asked the same way every time.', 'Each company rates the operator from 1 to 5 on all four and can explain every score. The review also asks for the overall experience and whether they would hire the operator again.')}
         <div class="pg-core-grid">${RN.fields.coreDims.options.map((d) => `<article class="pg-core-item">
@@ -1360,6 +1399,17 @@
       </div>
     </section>`;
   }
+  /* Motion on Levels (explanation only): the hero staircase and the two charts draw once, the first time each scrolls
+     into view. On screen at load (the staircase on desktop) they are simply drawn, never hidden and replayed. */
+  function levelsMount(root) {
+    if (!RN.motion) return;
+    const st = root.querySelector('.lv-hero-vis');
+    if (st) RN.motion.draw(st, { key: 'lv-stairs' });
+    const w = root.querySelector('.pg-factors-r .pg-meters');
+    if (w) RN.motion.draw(w, { key: 'lv-weights' });
+    const c = root.querySelector('[data-lv-curve]');
+    if (c) RN.motion.draw(c, { key: 'lv-curve' });
+  }
   RN.actions['pg-browse-ris'] = (el) => goBrowse({ filters: { risMin: el.dataset.v } });
   RN.actions['pg-browse-sort'] = (el) => goBrowse({ sort: el.dataset.sort || 'ris' });
 
@@ -1383,7 +1433,7 @@
       <div class="wrap-narrow">
         <span class="pg-404-code num" aria-hidden="true">404</span>
         <span class="eyebrow">Page not found</span>
-        <h1 class="h1 pg-404-h">We could not find <span class="serif">that page.</span></h1>
+        <h1 class="h1 pg-404-h">We could not find <span class="serif">that page</span>${vm}</h1>
         <p class="lede">${path ? `Nothing lives at <span class="mono">#${esc(path)}</span>. The link may be old, or the page moved.` : 'The link may be old, or the page moved.'} Search the network or pick a place to start.</p>
         <form class="pg-404-search" data-submit="pg-404-search" role="search">
           <div class="input-wrap grow">${icon('search')}<input class="input" type="search" name="q" value="${esc(words)}" placeholder="Search a role, focus area or industry" aria-label="Search operators"></div>
@@ -1392,7 +1442,7 @@
         ${guesses.length ? `<div class="pg-404-guess"><span class="label">Did you mean</span>${guesses.map((op) => `<a class="pg-rev-op" href="#op.${esc(op.slug)}">${RN.ui.avatar(op, 'ava-sm')}<span class="pg-rev-op-t"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>${icon('arrow')}</a>`).join('')}</div>` : ''}
         <div class="pg-404-grid">${places.map(([i, t, d, to]) => `<a class="card card-link pg-404-card" href="#${to}">${RN.ui.icoTile(i, { cls: 'pg-value-i' })}<span><b>${esc(t)}</b><span>${esc(d)}</span></span>${icon('arrow')}</a>`).join('')}
           ${face ? `<a class="card card-link pg-404-card pg-404-op" href="#op.${esc(face.slug)}">${RN.ui.avatar(face, 'ava-md')}<span><span class="pg-404-k">Maybe you were looking for</span><b>${esc(face.name)}</b><span>Fractional ${esc(face.role)} · ${esc(RN.fmt.plural(face.reviews.length, 'company review'))}</span></span>${icon('arrow')}</a>` : `<a class="card card-link pg-404-card" href="#home"><span class="pg-value-i">${icon('home')}</span><span><b>Home</b><span>Start over</span></span>${icon('arrow')}</a>`}</div>
-        <div class="pg-404-cats"><span class="label">Browse by role</span><div class="row" style="--gap:8px">${RN.fields.roleCategory.options.map((o) => `<a class="chip chip-sm" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}</a>`).join('')}</div></div>
+        <div class="pg-404-cats"><span class="label">Browse by role</span><div class="row" style="--gap:8px">${RN.fields.roleCategory.options.map((o) => `<a class="chip chip-sm" href="#browse.${esc(o.v)}">${esc(o.l)}</a>`).join('')}</div></div>
       </div>
     </section>`;
   }
@@ -1405,13 +1455,13 @@
      list, so every company page is built from one set of pieces. */
   PG.hero = hero; PG.shead = shead;
   PG.faq = (items, o) => `<div class="pg-faq">${items.map(([q, a], i) => `<details${i === 0 && !(o && o.closed) ? ' open' : ''}><summary>${esc(q)}${icon('chev-down')}</summary><p class="pg-p">${esc(a)}</p></details>`).join('')}</div>`;
-  RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView });
+  RN.view('about', { route: 'about', nav: 'about', title: () => 'About', render: aboutView, mount: aboutMount });
   RN.view('how', { route: 'how', nav: '', title: () => 'How it works', render: howView, mount: howMount, unmount: howUnmount });
   RN.view('results', { route: 'results', nav: '', title: () => 'Results', render: resultsView, mount: applyWall, unmount: () => { W.cat = 'all'; W.all = false; } });
   RN.view('talk', { route: 'talk', nav: '', chrome: 'over', footer: false, title: () => 'Talk to us', render: () => talkView(), mount: talkMount, unmount: talkUnmount });
   // Deep link that starts the flow with the need answered (#talk.pipeline): used by need tiles and zero-result states
   RN.view('talk-need', { route: 'talk.:need', nav: '', chrome: 'over', footer: false, samples: { need: 'pipeline' }, title: () => 'Talk to us', render: (p) => talkView(p), mount: talkMount, unmount: talkUnmount });
-  RN.view('operators', { route: 'operators', nav: 'operators', title: () => 'For operators', render: operatorsView });
-  RN.view('levels', { route: 'levels', nav: 'operators', title: () => 'Levels and the Reputation Index', render: levelsView });
+  RN.view('operators', { route: 'operators', nav: 'operators', title: () => 'For operators', render: operatorsView, mount: operatorsMount });
+  RN.view('levels', { route: 'levels', nav: 'operators', title: () => 'Levels and the Reputation Index', render: levelsView, mount: levelsMount });
   RN.view('notfound', { route: 'notfound', nav: '', title: () => 'Page not found', render: notFoundView });
 })();
