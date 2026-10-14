@@ -1,8 +1,11 @@
 /* Ranked search (RN.rank): the Browse view for a free-text search. Every operator is force-ranked by
    RN.vsearch and shown as one row: a match ring, one dot per need (filled = a client proved it, half = they
    say they can, dashed = close, hollow = missing) and a tick or cross per fact. Pictures first, few words.
-   Browse renders RN.rank.html(text, pool) into #br-results and calls RN.rank.mount() after; mount animates
-   the rows and asks Claude to refine the needs, then re-ranks in place with the rows gliding to new spots. */
+   Browse renders RN.rank.html(text, pool) into #br-results and calls RN.rank.mount() after; mount asks Claude
+   to refine the needs, then re-ranks in place with the rows gliding to new spots (explanation motion, played on
+   the re-rank only). Rows never fade or rise in: a search result is content, not an entrance. Only the match
+   rings and the "can do it" bars draw once (600ms, stagger capped at 4) the first time a ranking shows.
+   The founder is ranked like everyone else but never takes row 1 (RN.vsearch.notFirst). */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -47,7 +50,18 @@
     const client = RN.store.state.persona === 'buyer';
     const rate = !op.rate ? '' : client ? `<span class="rk-rate">${esc(RN.fmt.rate(op.rate))}</span>`
       : RN.store.state.persona === 'visitor' ? `<button type="button" class="rk-rate is-locked" data-act="fm-rates">${icon('lock')}Rate</button>` : '';
-    return `<span class="rk-ris">${RN.ui.cardTier(op, { pill: true })}${rate}</span>`;
+    return `<span class="rk-ris">${standing(op)}${rate}</span>`;
+  }
+  /* The tier in words, as on the cards: the pill without the number, the score and what earned it in the tooltip.
+     The card rule holds (Proven up only); sample profiles are fictional and carry no tier mark. */
+  function standing(op) {
+    if (op.sample) return '';
+    const r = op.ris || {};
+    const t = RN.fields.risTier.options.find((x) => x.v === r.tier) || RN.fields.risTierFor(r.score);
+    if (!t || !RN.ui.tierShown(t.v)) return '';
+    const why = RN.ui.tierWhy(op);
+    const plain = String(why).replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    return `<button type="button" class="tier-mark tier-mark-pill" data-tip="${esc(why)}" aria-label="${esc(plain)}">${RN.ui.tierPill(t.v)}</button>`;
   }
   function acts(op) {
     const saved = RN.store.state.shortlist.includes(op.id);
@@ -131,6 +145,8 @@
     if (keep.length && keep.length < needs.length) { needs = keep; res = RN.vsearch.rank(text, needs, opts); }
     // A signed-in client's history nudges the order (hired before first, declined last); the ring keeps the match
     if (FM) { res.rows.forEach((r) => { r.hist = FM.history(r.op.id); }); res.rows.sort((a, b) => (b.score + (b.hist ? b.hist.bonus : 0)) - (a.score + (a.hist ? a.hist.bonus : 0))); }
+    // Re-sorted here, so the founder rule (never first, still ranked) is applied again after the nudge
+    res.rows = RN.vsearch.notFirst ? RN.vsearch.notFirst(res.rows, text) : res.rows;
     return res;
   }
   RK.rows = (text, pool) => (RN.vsearch.isReady() ? compute(text, pool).rows : (RN.vsearch.ready().then((ok) => { if (ok && RN.browse && RN.browse.refresh) RN.browse.refresh({ noTrack: true }); }), []));
@@ -178,7 +194,7 @@
       if (!dy) return;
       el.style.transform = `translateY(${dy}px)`;
       el.style.transition = 'none';
-      requestAnimationFrame(() => { el.style.transition = 'transform .6s var(--ease)'; el.style.transform = ''; });
+      requestAnimationFrame(() => { el.style.transition = 'transform var(--dur-draw) var(--ease-out)'; el.style.transform = ''; });
     });
   }
 

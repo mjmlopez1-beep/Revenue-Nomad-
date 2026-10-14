@@ -239,8 +239,18 @@
       const score = role === null ? base : (1 - ROLE_W) * base + ROLE_W * role;
       return { op, score, match: Math.round(100 * score), meets, checks, like, parts: { needs: needScore, sem: semN, facts: factScore, ris, role } };
     }).sort((a, b) => b.score - a.score);
-    return { text, needs: needs.map(({ tag, label }) => ({ tag, label })), facts: facts.map(({ k, label }) => ({ k, label })), like: likeKeys, conflict, rows };
+    // The founder stays ranked but never leads (owner decision, Oct 14, 2026), unless the words name him
+    return { text, needs: needs.map(({ tag, label }) => ({ tag, label })), facts: facts.map(({ k, label }) => ({ k, label })), like: likeKeys, conflict, rows: VS.notFirst(rows, text) };
   };
+  /* RN.model.notFirst for ranked rows ({op, ...}): skipped when the search text names the founder, as RN.model.search
+     does, so a search for him by name still finds him first */
+  VS.namesFounder = function (text) {
+    const m = RN.model.matt;
+    if (!m || !text) return false;
+    const words = String(text).toLowerCase().split(/[^a-z]+/);
+    return String(m.name || '').toLowerCase().split(/\s+/).filter((w) => w.length >= 3).some((w) => words.includes(w));
+  };
+  VS.notFirst = (rows, text) => (!RN.model.notFirst || VS.namesFounder(text) ? rows : RN.model.notFirst(rows));
 
   // ---------- Claude refines the needs (optional) ----------
   let samplePromise = null;

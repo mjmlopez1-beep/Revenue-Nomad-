@@ -59,10 +59,10 @@
     ] },
     'Eric Barbalace': { core: [5, 5, 5, 5], title: 'Fractional VP Sales' },
   };
-  // Platform CORE benchmark per dimension (illustrative)
-  const CORE_BENCH = [{ mean: 4.2, sd: 0.45 }, { mean: 4.1, sd: 0.5 }, { mean: 3.9, sd: 0.55 }, { mean: 4.3, sd: 0.4 }];
-  // Peer Reputation Index distribution (illustrative)
-  const PEER = { mean: 60, sd: 11 };
+  /* Design pass (Oct 14, 2026): a real person is never set against illustrative data. The invented peer curve
+     (64th percentile), the 6.4-month report median and the invented CORE platform averages came out; standing is
+     read from the live network instead (networkStanding). No percentage from fewer than 5 company reviews. */
+  const MIN_PCT = 5;
 
   const CONTRIB = { sellers: 'Does the work', sales_leadership: 'Leads the team', customer_success_growth: 'Leads the team', revenue_operations: 'Builds the system', sales_enablement: 'Builds the system', ai_gtm: 'Builds the system', marketing: 'Drives demand', partnerships: 'Drives demand' };
   const CONTRIB_ORDER = ['Does the work', 'Leads the team', 'Builds the system', 'Drives demand'];
@@ -95,8 +95,6 @@
 
   /* ---------- Small helpers ---------- */
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
-  function ncdf(x) { const t = 1 / (1 + 0.2316419 * Math.abs(x)); const d = 0.3989423 * Math.exp((-x * x) / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return x > 0 ? 1 - p : p; }
-  const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
   const smart = (s) => String(s || '').replace(/"([^"]*)"/g, '“$1”').replace(/(\w)'(\w)/g, '$1’$2');
   const mon = (ym) => { if (!ym) return 'Present'; const [y, m] = String(ym).split('-').map(Number); return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
   const usdShort = (n) => { n = +n; if (!n) return ''; if (n >= 1e6) return '$' + (n / 1e6).toFixed(n % 1e6 ? 1 : 0).replace(/\.0$/, '') + 'M'; if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'K'; return '$' + n; };
@@ -462,7 +460,7 @@
   /* The score on profile pages: one representation, the shared tier badge with the score inside. Profiles show
      the full tier for every tier, Emerging included; a profile with no tier yet (not scored yet) shows
      nothing tier-related. */
-  const tierOf = (op) => F.risTierFor(op && op.ris ? op.ris.score : null);
+  const tierOf = (op) => (!op || op.sample ? null : F.risTierFor(op.ris ? op.ris.score : null)); // samples are fictional: no tier
   // The badge on the photo
   function tierSeal(op, size) {
     const t = tierOf(op);
@@ -506,7 +504,7 @@
                   ${tierPillTip(op)}
                   <span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(availTxt + hrs)}</span>
                 </div>
-                <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
+                <h1 class="h1 pf-name serif-up">${esc(op.name)}<span class="vm">.</span></h1>
                 <p class="pf-role">Fractional ${esc(op.role)}</p>
               </div>
             </div>
@@ -554,7 +552,7 @@
   function ownerBar(c) {
     const m = c.v.mode;
     return `<div class="pf-owner" role="region" aria-label="Owner view">
-      <span class="pf-owner-l">${icon('eye')}<span><b>${m === 'owner' ? 'This is how companies see your profile' : m === 'client' ? 'Previewing as a signed-in company' : 'Previewing as a logged-out visitor'}</b><span class="pf-owner-sub">${m === 'owner' ? 'Rate and Studio shortcuts are shown to you only.' : m === 'client' ? 'Sample company: Northwind Health. Buttons are inactive in preview.' : 'Visitors see a monthly range. Your hourly rate and match signals stay locked.'}</span></span></span>
+      <span class="pf-owner-l">${icon('eye')}<span><b>${m === 'owner' ? 'This is how companies see your profile' : m === 'client' ? 'Previewing as a signed-in company' : 'Previewing as a logged-out visitor'}</b><span class="pf-owner-sub">${m === 'owner' ? 'Rate and Studio shortcuts are shown to you only.' : m === 'client' ? 'Sample company: Northwind Health. Buttons are inactive in preview.' : 'Visitors see a monthly range. Your hourly rate, and how you fit their company, stay locked.'}</span></span></span>
       <div class="seg pf-seg-night" role="group" aria-label="View as">
         ${[['owner', 'Your view'], ['visitor', 'Visitor'], ['client', 'Company']].map(([k, l]) => `<button type="button" class="${m === k ? 'on' : ''}" aria-pressed="${m === k}" data-act="pf-viewas" data-v="${k}">${l}</button>`).join('')}
       </div>
@@ -625,62 +623,99 @@
     </div>`;
   }
 
-  /* ---------- Proof strip: 3 cards overlapping the band ---------- */
+  /* ---------- Proof strip: up to 3 cards overlapping the band ---------- */
+  /* Where the operator stands on the live network, in plain words: how many real, scored operators reach Proven
+     (the first tier cards show) or above. Never a percentile from a modelled curve. */
+  function networkStanding(op) {
+    const real = (RN.model.allOps || RN.model.ops).filter((o) => !o.sample && !o.hidden && F.risTierFor(o.ris && o.ris.score));
+    const proven = F.risTier.options.find((t) => t.v === 'proven');
+    const atOrAbove = real.filter((o) => +o.ris.score >= proven.min).length;
+    return { scored: real.length, atOrAbove, proven };
+  }
+  // The tier scale (50 to 100, one equal band per tier, the score marked inside its band): profile and verify page
+  function tierScale(op, tier, o) {
+    o = o || {};
+    const score = op.ris.score;
+    const tiers = F.risTier.options.slice().reverse();
+    const at = tiers.findIndex((t) => t.v === tier.v);
+    const bands = tiers.map((t, i) => `<span class="pf-vb-band t-${esc(t.v)}${i === at ? ' on' : ''}${i < at ? ' past' : ''}" title="${esc(t.l)}, ${t.min} to ${t.max}">${o.names === false ? '' : `<em>${esc(t.l)}</em>`}</span>`).join('');
+    const markAt = ((at + RN.clamp((score - tier.min) / (tier.max - tier.min + 1), 0, 1)) / tiers.length) * 100;
+    return `<div class="pf-vb${o.names === false ? ' pf-vb-sm' : ''}" role="img" aria-label="Reputation Index ${esc(score)}, ${esc(tier.l)} tier, ${tier.min} to ${tier.max}">
+        <div class="pf-vb-track">${bands}<i class="pf-vb-mark" style="left:${markAt.toFixed(2)}%"></i></div>
+        <div class="pf-vb-ticks" aria-hidden="true">${tiers.map((t, i) => `<span style="left:${(i / tiers.length) * 100}%">${t.min}</span>`).join('')}<span style="left:100%">100</span></div>
+      </div>`;
+  }
+  /* "Would hire again" in words below 5 reviews ("1 company review", "Both would hire again"); a percentage from 5 */
+  function hireAgain(reviews) {
+    const n = reviews.length;
+    const yes = reviews.filter((r) => r.hireAgain !== false).length;
+    if (!n) return { n, yes, pct: null, line: '' };
+    if (n >= MIN_PCT) return { n, yes, pct: Math.round((yes / n) * 100), line: `${Math.round((yes / n) * 100)}% would hire again` };
+    const line = yes === n ? (n === 1 ? 'Would hire again' : n === 2 ? 'Both would hire again' : `All ${n} would hire again`) : `${yes} of ${n} would hire again`;
+    return { n, yes, pct: null, line };
+  }
   function proofCards(c) {
     const op = c.op;
     const tier = tierOf(op);
     const explain = RN.ui.tip(RN.ui.risExplainer(), 'How score is calculated');
-    // Not scored yet: no tier, no badge, no number, no curve
-    const pctile = tier ? RN.clamp(Math.round(ncdf((op.ris.score - PEER.mean) / PEER.sd) * 100), 1, 99) : 0;
-    const rep = !tier ? `<article class="pf-proof pf-proof-rep is-pending">
+    // Sample profiles are fictional: no Reputation Index card at all. Not scored yet: no tier, no badge, no number.
+    let rep = '';
+    if (!op.sample && !tier) {
+      rep = `<article class="pf-proof pf-proof-rep is-pending">
       <div class="pf-rep-r">
         <div class="pf-proof-hd"><span>Reputation Index ${explain}</span></div>
         <p class="pf-proof-empty">${esc(F.risNone.l)}</p>
         <p class="pf-proof-note">${esc(F.risNone.d)}</p>
       </div>
-    </article>` : `<article class="pf-proof pf-proof-rep t-${esc(tier.v)}">
+    </article>`;
+    } else if (tier) {
+      const ns = networkStanding(op);
+      const shown = RN.ui.tierShown(tier.v);
+      // Proven up: how few reach it, as a count of real operators. Emerging: what the tier means, never a rank.
+      const standing = shown && ns.scored
+        ? `<p class="pf-rep-rank"><b>One of ${esc(RN.fmt.int(ns.atOrAbove))} operators at ${esc(ns.proven.l)} or above</b><span>out of ${esc(RN.fmt.int(ns.scored))} scored on the network</span></p>`
+        : `<p class="pf-rep-rank"><span>The first tier. A score moves up only on company-verified evidence.</span></p>`;
+      rep = `<article class="pf-proof pf-proof-rep t-${esc(tier.v)}">
       <div class="pf-rep-seal">${RN.ui.tierBadge(tier.v, { size: 72, score: op.ris.score, label: `${tier.l}, Reputation Index ${op.ris.score}` })}</div>
       <div class="pf-rep-r">
         <div class="pf-proof-hd"><span>Reputation Index ${explain}</span><b class="pf-rep-tier">${esc(tier.l)}</b></div>
-        <div class="pf-bell">${RN.chart.bell({ w: 230, h: 64, mean: PEER.mean, sd: PEER.sd, value: op.ris.score, label: `${ordinal(pctile)} percentile of ${catLabel(op.catKey)} operators` })}</div>
-        <div class="pf-bell-foot"><span>Median ${PEER.mean} ${RN.ui.illus('Illustrative peers')}</span><b>${ordinal(pctile)} percentile</b></div>
+        ${tierScale(op, tier, { names: false })}
+        ${standing}
       </div>
       <div class="pf-rep-x"><b class="pf-rep-tier">${esc(tier.l)} · ${esc(tier.min)} to ${esc(tier.max)}</b><p>${esc(tier.d)}</p></div>
     </article>`;
-    // How long clients stay
-    const median = medianMonths();
+    }
+    // How long companies stay: this operator's own engagements only (no illustrative median beside a real person)
     const ver = c.engs.filter((e) => e.verified);
     const rows = (ver.length ? ver : c.engs).slice(0, 3);
     const scale = Math.max(24, ...rows.map((e) => e.months || 0));
     const stay = !rows.length && !c.v.owner ? '' : `<article class="pf-proof">
       <div class="pf-proof-hd"><span>How long companies stay</span></div>
-      ${rows.length ? `<div class="pf-stay" style="--med:${((median / scale) * 100).toFixed(1)}%">
+      ${rows.length ? `<div class="pf-stay">
           ${rows.map((e) => `<div class="pf-stay-row ${e.verified ? '' : 'self'}"><i style="width:calc(${Math.max(6, ((e.months || 0) / scale) * 100).toFixed(1)}% * .6)"></i><span><b>${esc(plural(e.months || 0, 'mo', 'mo'))}</b> · ${esc(e.company)}</span></div>`).join('')}
-          <span class="pf-stay-med" aria-hidden="true"><em>median ${median} mo</em></span>
         </div>
-        <p class="pf-proof-note">${ver.length ? `Company-verified engagements vs the ${median}-month median in the ${jumpBtnLink('report', 'State of Fractional GTM')}` : `Self-reported. Each turns verified when that company leaves a review.`}</p>`
+        <p class="pf-proof-note">${ver.length ? `${ver.length === 1 ? 'Engagement length confirmed by the company' : 'Engagement lengths confirmed by each company'}.` : `Self-reported. Each turns verified when that company leaves a review.`}</p>`
       : `<p class="pf-proof-empty">No engagements added yet</p><p class="pf-proof-note">${c.v.owner ? '<a class="act" href="#studio.profile">Add engagement history</a>' : `Shown once ${esc(op.first)} adds engagement history.`}</p>`}
     </article>`;
-    // Would hire again
-    const n = c.reviews.length;
-    const again = n ? Math.round((c.reviews.filter((r) => r.hireAgain !== false).length / n) * 100) : 0;
+    // Company reviews: a count in words under 5 reviews, a "would hire again" percentage from 5
+    const ha = hireAgain(c.reviews);
+    const n = ha.n;
     const avg = n ? mean(c.reviews.map((r) => +r.overall || 5)) : 0;
+    const link = `<button type="button" class="pf-hire-link" data-act="pf-jump" data-to="pf-reviews"><span class="pf-dots">${c.reviews.map(() => '<i></i>').join('')}</span><u>${esc(ha.pct != null ? plural(n, 'company review') : ha.line)}</u><span>· ${avg.toFixed(1)}</span>${RN.ui.stars(avg)}${icon('arrow')}</button>`;
     const hire = n ? `<article class="pf-proof">
-      <div class="pf-proof-hd"><span>Would hire again</span></div>
-      <p class="pf-big serif-up">${again}%</p>
-      <button type="button" class="pf-hire-link" data-act="pf-jump" data-to="pf-reviews"><span class="pf-dots">${c.reviews.map(() => '<i></i>').join('')}</span><u>${esc(plural(n, 'client'))}</u><span>· ${avg.toFixed(1)}</span>${RN.ui.stars(avg)}${icon('arrow')}</button>
+      ${ha.pct != null
+        ? `<div class="pf-proof-hd"><span>Would hire again</span></div><p class="pf-big serif-up">${ha.pct}%</p>`
+        : `<div class="pf-proof-hd"><span>Company reviews</span></div><p class="pf-big serif-up">${n}<span class="pf-big-u">${n === 1 ? 'company review' : 'company reviews'}</span></p>`}
+      ${link}
     </article>` : !c.v.owner ? '' : `<article class="pf-proof">
       <div class="pf-proof-hd"><span>Company reviews</span></div>
       <p class="pf-proof-empty">None yet</p>
       <p class="pf-proof-note">${c.v.owner ? `<a class="act" href="#studio.credibility">Request a review from a past company</a>` : `Reviews come from past companies ${esc(op.first)} invites. Each one verifies focus areas.`}</p>
     </article>`;
-    return { html: rep + stay + hire, n: 1 + (stay ? 1 : 0) + (hire ? 1 : 0) };
+    return { html: rep + stay + hire, n: (rep ? 1 : 0) + (stay ? 1 : 0) + (hire ? 1 : 0) };
   }
+
   function jumpBtnLink(route, label) { return `<a class="link" href="#${route}">${esc(label)}</a>`; }
-  function medianMonths() {
-    const s = (RN.data.market.report.summary || []).find((x) => /mo$/.test(x.v));
-    return s ? parseFloat(s.v) : 6.4;
-  }
 
   /* ---------- Sticky sub-nav: only sections that exist ---------- */
   function subnav(c, secs) {
@@ -738,14 +773,14 @@
         <h3 class="h4">${esc(b.title)}</h3>
         <p class="pf-offer-blurb">${esc(b.blurb || '')}</p>
         ${(b.when || [])[0] ? `<p class="pf-offer-when"><b>The problem it solves</b>${esc(b.when[0])}</p>` : ''}
-        <div class="pf-offer-m"><span>Typical month</span><b class="num">${esc(kRange(m))}</b></div>
+        <div class="pf-offer-m"><span>Typical month ${RN.ui.illusTag()}</span><b class="num">${esc(kRange(m))}</b></div>
         <div class="pf-offer-f">
           ${v.owner ? '' : `<button type="button" class="btn btn-sm" data-act="${v.preview ? 'pf-preview-cta' : 'pf-offer'}" data-id="${esc(op.id)}" data-bp="${esc(b.id)}">Request this</button>`}
           <a class="act" href="#blueprint.${esc(b.id)}">See the 90-day plan${icon('arrow')}</a>
         </div>
       </article>`).join('');
     return sec(c, 'offers', 'Ways to work', `Ways to work with ${esc(op.first)}`, `<div class="pf-offers">${cards}</div>
-      <p class="pf-note" data-proto>${RN.ui.illus()} Typical months use the Rate Index for ${esc(catLabel(op.catKey))} at ${esc(RN.w.label('hoursPerMonth', hrs))} for a ${esc(RN.w.label('revenueRange', rev))} company.</p>`,
+      ${RN.ui.illusNote(`Typical months use the Rate Index for ${catLabel(op.catKey)} at ${RN.w.label('hoursPerMonth', hrs)} for a ${RN.w.label('revenueRange', rev)} company. Illustrative figures until the first survey closes.`, { cls: 'pf-note' })}`,
     { edit: 'studio.profile', editLabel: 'Edit offers' });
   }
 
@@ -881,7 +916,7 @@
       const ranked = c.axes.map((a) => ({ a, g: c.axAgg[a] })).sort((x, y) => (y.g ? y.g.pct : -1) - (x.g ? x.g.pct : -1));
       return `<div class="pf-how">
         <h3 class="pf-how-h">Proof by area</h3>
-        <ul class="pf-axbars">${ranked.map((x) => `<li><button type="button" data-act="pf-focus" data-kind="axis" data-key="${esc(x.a)}" data-ax="${esc(AX_KEY[x.a] || '')}"><span>${esc(x.a)}</span><b>${x.g ? (x.g.claimedOnly ? 'Claimed' : x.g.pct + '%') : '–'}</b><i><em style="width:${x.g ? Math.max(3, x.g.pct) : 0}%"></em></i></button></li>`).join('')}</ul>
+        <ul class="pf-axbars">${ranked.map((x) => `<li><button type="button" data-act="pf-focus" data-kind="axis" data-key="${esc(x.a)}" data-ax="${esc(AX_KEY[x.a] || '')}"><span>${esc(x.a)}</span><b>${x.g ? (x.g.claimedOnly ? 'Claimed' : x.g.pct + '%') : '–'}</b><i><em data-draw="x" style="width:${x.g ? Math.max(3, x.g.pct) : 0}%"></em></i></button></li>`).join('')}</ul>
         <details class="pf-fold"><summary>${icon('chev-right')}How scores work</summary>
         <ul class="pf-how-list">
           <li>Each focus area earns points from proof: <b>10</b> if self-claimed, <b>50</b> with one company review, up to <b>100</b> with more.</li>
@@ -1171,47 +1206,41 @@
   }
   const pips = (v) => `<span class="pf-pips" aria-hidden="true">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= Math.round(v) ? 'on' : ''}"></i>`).join('')}</span>`;
 
-  /* ---------- CORE: how clients rate working with {first} ---------- */
+  /* ---------- CORE: how clients rate working with {first} ----------
+     The operator's own ratings only. The platform averages were invented (illustrative) and there is no measured one
+     yet, so no "vs average" comparison is drawn beside a real person's scores. */
   function coreStats(c) {
     const revs = c.coreRevs;
     const dims = F.coreDims.options.map((d, i) => {
       const vals = revs.map((x) => x.c.scores[i]);
       const avg = mean(vals);
-      const b = CORE_BENCH[i];
-      const pct = Math.min(99, Math.round(ncdf((avg - b.mean) / b.sd) * 100));
       const quotes = revs.map((x) => ({ q: x.c.notes && x.c.notes[i], r: x.r })).filter((q) => q.q);
-      return { d, i, avg, bench: b.mean, delta: avg - b.mean, top: Math.max(1, 100 - pct), quotes, chips: revs.map((x) => ({ r: x.r, s: x.c.scores[i] })) };
+      return { d, i, avg, quotes, chips: revs.map((x) => ({ r: x.r, s: x.c.scores[i] })) };
     });
-    const comp = mean(dims.map((x) => x.avg));
-    const bench = mean(CORE_BENCH.map((b) => b.mean));
-    return { dims, comp, bench, compPct: Math.min(99, Math.round(ncdf((comp - bench) / 0.38) * 100)), n: revs.length };
+    return { dims, comp: mean(dims.map((x) => x.avg)), n: revs.length };
   }
   function secCore(c) {
     return sec(c, 'core', 'CORE · Company ratings', `How companies rate working with ${esc(c.op.first)}`, coreBody(c));
   }
   function coreBody(c) {
-    const op = c.op;
     const st = coreStats(c);
     const X = (v) => (((v - 1) / 4) * 100).toFixed(1) + '%';
     return `<div class="pf-core">
         <div class="pf-core-panel">
           <span class="eyebrow pf-core-k">CORE score</span>
           <p class="pf-core-big serif-up">${st.comp.toFixed(1)}<small>/5</small></p>
-          <p class="pf-core-vs"><b>${st.comp >= st.bench ? '+' : ''}${(st.comp - st.bench).toFixed(1)}</b> vs platform average ${st.bench.toFixed(1)}</p>
           <p class="pf-core-vs">From ${plural(st.n, 'company rating')}</p>
         </div>
         <div class="pf-core-rows">
           ${st.dims.map((x) => `<div class="pf-core-row" data-dim="${x.i}">
-              <div class="pf-core-top"><span class="pf-core-l">${esc(x.d.v)}</span><b class="pf-core-name">${esc(x.d.l)}</b><span class="pf-core-avg serif-up">${x.avg.toFixed(1)}</span>
-                <span class="pill ${x.delta >= 0 ? 'pill-good' : 'pill-warn'} pf-delta">${x.delta >= 0 ? '+' : ''}${x.delta.toFixed(1)} vs avg</span></div>
-              <div class="pf-core-track" role="img" aria-label="${esc(x.d.l)}: ${x.avg.toFixed(1)} out of 5, platform average ${x.bench.toFixed(1)}">
-                <i class="pf-core-fill" style="width:${X(x.avg)}"></i><i class="pf-core-bench" style="left:${X(x.bench)}"></i><i class="pf-core-you" style="left:${X(x.avg)}"></i></div>
+              <div class="pf-core-top"><span class="pf-core-l">${esc(x.d.v)}</span><b class="pf-core-name">${esc(x.d.l)}</b><span class="pf-core-avg serif-up">${x.avg.toFixed(1)}</span></div>
+              <div class="pf-core-track" role="img" aria-label="${esc(x.d.l)}: ${x.avg.toFixed(1)} out of 5">
+                <i class="pf-core-fill" data-draw="x" style="width:${X(x.avg)}"></i></div>
             </div>`).join('')}
           <details class="pf-fold"><summary>${icon('chev-right')}What CORE measures</summary>
             <dl class="pf-core-defs">${F.coreDims.options.map((d) => `<div><dt>${esc(d.v)}</dt><dd><b>${esc(d.l)}.</b> ${esc(d.d)}</dd></div>`).join('')}</dl>
-            <p class="pf-note">Each company scores four behaviours from 1 to 5 and can add a note to each score. The grey mark is the platform average.</p>
+            <p class="pf-note">Each company scores four behaviours from 1 to 5 and can add a note to each score.</p>
           </details>
-          <p class="pf-note" data-proto>${RN.ui.illus()} Platform averages are invented to show the comparison.</p>
         </div>
       </div>`;
   }
@@ -1275,13 +1304,13 @@
   function matchCard(c) {
     const op = c.op, v = c.v;
     if (v.owner) {
-      return `<section class="pf-card pf-match"><span class="eyebrow">Match signals</span>
+      return `<section class="pf-card pf-match"><span class="eyebrow">How you fit a company</span>
         <p class="pf-match-own">Signed-in companies see how you fit their company on five signals: company revenue, employee range, GTM motion, industry and focus areas. They come from the same fields as your profile.</p>
         <button type="button" class="act" data-act="pf-viewas" data-v="client">${icon('eye')}Preview as a company</button></section>`;
     }
     if (!v.client) {
-      return `<section class="pf-card pf-match"><span class="eyebrow">Match signals</span>
-        <div class="pf-lock">${icon('lock')}<b>See how ${esc(op.first)} fits your company</b><p>Sign in as a company and we score every profile against your company’s needs.</p>
+      return `<section class="pf-card pf-match"><span class="eyebrow">How ${esc(op.first)} fits your company</span>
+        <div class="pf-lock">${icon('lock')}<b>Sign in as a company to see it</b><p>We score every profile against your company’s revenue, size, industry and needs.</p>
         ${v.persona === 'operator' ? `<p class="tiny faint">You are signed in as an operator.</p>` : ''}
         <button type="button" class="btn btn-block" data-act="persona" data-p="buyer">Log in as company</button></div></section>`;
     }
@@ -1291,13 +1320,13 @@
     const fit = RN.model.fit(op, Object.assign({}, base, { roleCategory: base.roleCategory || op.catKey }));
     const ic = { match: icon('check'), partial: '<span class="pf-half"></span>', low: icon('minus') };
     if (!fit.signals.length) {
-      return `<section class="pf-card pf-match"><div class="row between"><span class="eyebrow">Match signals</span>${v.preview ? '' : `<a class="pill pill-line" href="#buyer.company">${icon('edit')}Edit preferences</a>`}</div>
+      return `<section class="pf-card pf-match"><div class="row between"><span class="eyebrow">How ${esc(op.first)} fits your company</span>${v.preview ? '' : `<a class="pill pill-line" href="#buyer.company">${icon('edit')}Edit preferences</a>`}</div>
         <p class="pf-match-own">${esc(op.first)} has not added company revenue, employee range, industry or GTM motion yet, so we can’t score the fit for ${esc(co.name)}. Ask about it when you request an intro.</p></section>`;
     }
     return `<section class="pf-card pf-match">
-      <div class="row between"><span class="eyebrow">Match signals</span>${v.preview ? '' : `<a class="pill pill-line" href="#buyer.company">${icon('edit')}Edit preferences</a>`}</div>
+      <div class="row between"><span class="eyebrow">How ${esc(op.first)} fits your company</span>${v.preview ? '' : `<a class="pill pill-line" href="#buyer.company">${icon('edit')}Edit preferences</a>`}</div>
       <div class="pf-match-hd"><div class="pf-ring sm">${RN.chart.ring(fit.pct, { size: 64, stroke: 6, label: fit.pct + ' match' })}<b>${fit.pct}</b></div>
-        <div><b class="pf-match-l">${esc(fit.label)}</b><span>for ${esc(co.name)} · ${fit.count} of ${fit.signals.length} signals</span></div></div>
+        <div><b class="pf-match-l">${esc(fit.label)}</b><span>for ${esc(co.name)} · ${fit.count} of ${fit.signals.length} points match</span></div></div>
       <ul class="pf-sigs">${fit.signals.map((s) => `<li class="is-${s.state}"><span class="pf-sig-i">${ic[s.state]}</span><span><b>${esc(s.l)}</b><span>${esc(s.text)}</span></span></li>`).join('')}</ul>
       ${fit.notes.length ? `<p class="pf-fine">${esc(fit.notes.join('. '))}.</p>` : ''}
       <p class="pf-fine">${v.preview ? 'Scored against a sample company profile.' : 'Scored against your company profile. Your preferences follow you to every profile.'}</p>
@@ -1310,7 +1339,7 @@
     return `<section class="wrap pf-similar" aria-labelledby="pf-sim-h">
       <div class="pf-sec-hd"><div class="grow"><span class="eyebrow">Keep looking</span><h2 class="h2 pf-h2" id="pf-sim-h">Operators like ${esc(op.first)}</h2></div>
         <a class="btn btn-line btn-sm" href="#browse.${esc(op.catKey)}">Browse ${esc(catLabel(op.catKey))}${icon('arrow')}</a></div>
-      <div class="grid g-3">${sims.map((o) => RN.ui.opCard(o, { why: sharedWhy(op, o) })).join('')}</div>
+      <div class="grid g-3 pf-sim-grid">${sims.map((o) => (RN.browse && RN.browse.card ? RN.browse.card(o, { why: sharedWhy(op, o), prefer: op.tags.map((t) => t.t) }) : RN.ui.opCard(o, { why: sharedWhy(op, o) }))).join('')}</div>
     </section>`;
   }
   function sharedWhy(op, o) {
@@ -1403,6 +1432,11 @@
       vid.src = op.video;
     }
     applyStackFilter(root);
+    // The CORE bars draw once, the first time they scroll into view (motion policy: a chart draws, nothing else rises)
+    const core = root.querySelector('.pf-core-rows');
+    if (core && RN.motion && RN.motion.draw) RN.motion.draw(core, { key: 'pf-core-' + op.slug });
+    const ax = root.querySelector('.pf-axbars');
+    if (ax && RN.motion && RN.motion.draw) RN.motion.draw(ax, { key: 'pf-ax-' + op.slug });
     S.railFit = () => fitRail(root);
     fitRail(root);
     setTimeout(() => fitRail(root), 400);
@@ -1595,7 +1629,7 @@
         <div class="pf-expired-card">
           ${RN.ui.icoTile('link', { size: 'xl', round: true, cls: 'pf-expired-i' })}
           <span class="eyebrow">Private proof link</span>
-          <h1 class="h2">This link has expired</h1>
+          <h1 class="h2">This link has expired<span class="vm">.</span></h1>
           <p class="lede">Proof links are private and the operator can turn them off at any time. Every profile on Revenue Nomad is also open to browse, with company reviews and verified engagements.</p>
           <div class="row pf-center"><a class="btn" href="#browse">Browse talent</a><a class="btn btn-line" href="#talk">Talk to us</a></div>
         </div>
@@ -1633,7 +1667,7 @@
             <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}</div>
             <div class="grow">
               <div class="pf-pills"><span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
-              <h1 class="h1 pf-name serif-up">${esc(op.name)}</h1>
+              <h1 class="h1 pf-name serif-up">${esc(op.name)}<span class="vm">.</span></h1>
               <p class="pf-role">Fractional ${esc(op.role)}</p>
               ${op.headline ? `<p class="pf-headline hl-m">${esc(smart(op.headline))}</p>` : ''}
             </div>
@@ -1677,7 +1711,7 @@
     const lead = c.engs.find((e) => rel(e.industry)) || null;
     const ind = lead ? lead.industry : op.industries.find(rel);
     const ver = c.engs.filter((e) => e.verified);
-    const again = c.reviews.length ? Math.round((c.reviews.filter((r) => r.hireAgain !== false).length / c.reviews.length) * 100) : null;
+    const ha = hireAgain(c.reviews);
     const leadCard = lead ? `<article class="pf-why-lead">
         <span class="pf-why-k">${icon('target')}Closest to ${esc(co)}</span>
         <div class="pf-why-co">${lead.logo ? `<span class="pf-why-logo">${logoHtml(lead.logo, lead.company, 30)}</span>` : `<b class="pf-why-logo txt">${esc(lead.company)}</b>`}
@@ -1692,7 +1726,7 @@
       </article>` : '';
     const pts = [];
     if (ind && !lead) pts.push({ i: 'briefcase', b: `Works in ${esc(indOf(ind))}`, t: `One of ${plural(op.industries.length, 'industry', 'industries')} on ${esc(op.first)}’s profile.` });
-    if (ver.length) pts.push({ i: 'seal', b: `${plural(ver.length, 'engagement')} verified by the company`, t: `${esc(ver.map((e) => e.company).join(' and '))}${again != null ? `, ${again}% would hire again` : ''}.`, logos: ver.filter((e) => e.logo) });
+    if (ver.length) pts.push({ i: 'seal', b: `${plural(ver.length, 'engagement')} verified by the company`, t: `${esc(ver.map((e) => e.company).join(' and '))}${ha.n ? `. ${esc(ha.line)}` : ''}.`, logos: ver.filter((e) => e.logo) });
     if (c.verified.length) pts.push({ i: 'check-circle', b: `${plural(c.verified.length, 'focus area')} confirmed in reviews`, chips: c.verified.slice(0, 3).map((t) => t.t) });
     const longest = c.engs.slice().sort((a, b) => (b.months || 0) - (a.months || 0))[0];
     if (longest && longest.months) pts.push({ i: 'clock', b: `Engagements run ${Math.min(...c.engs.map((e) => e.months || 0).filter(Boolean))} to ${longest.months} months`, t: `Across ${plural(c.engs.length, 'company', 'companies')}, most recently ${esc(c.engs[0].company)}.` });
@@ -1750,10 +1784,10 @@
           <div><dt>${esc(F.availability.label)}</dt><dd>${esc(op.avail.label)}</dd></div>
           <div><dt>${esc(F.startDate.label)}</dt><dd>${esc(mdy(nextStart(op)))}</dd></div>
           ${op.avail.hoursCode ? `<div><dt>${esc(F.hoursPerMonth.label)}</dt><dd>${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</dd></div>` : ''}
-          ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))}</dt><dd>${esc(RN.fmt.hrRange(idx.p25, idx.p75))} · median ${esc(RN.fmt.rate(idx.p50))}</dd></div>` : ''}
+          ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))} ${RN.ui.illusTag()}</dt><dd>${esc(RN.fmt.hrRange(idx.p25, idx.p75))} · median ${esc(RN.fmt.rate(idx.p50))}</dd></div>` : ''}
         </dl>
       </div>
-      ${idx ? `<p class="pf-note" data-proto>${RN.ui.illus()} Rate Index figures are invented to show the benchmark. <a class="link" href="#rates">See the Rate Index</a></p>` : ''}
+      ${idx ? `<p class="pf-note">${RN.ui.illusTag()} Rate Index figures are illustrative until the first survey closes. <a class="link" href="#rates">See the Rate Index</a></p>` : ''}
     </section>`;
   }
   function mountProof(root, p) {
@@ -1933,12 +1967,13 @@
   function renderVerify(p) {
     RN.model.applyEdits();
     const op = RN.model.bySlug(p.slug);
-    if (!op || op.hidden) {
+    // A sample profile is fictional: there is nothing to verify, and it never carries a tier
+    if (!op || op.hidden || op.sample) {
       return `<section class="wrap-narrow section pf-expired"><div class="pf-expired-card">
           ${RN.ui.icoTile('shield', { size: 'xl', round: true, cls: 'pf-expired-i' })}
           <span class="eyebrow">Revenue Nomad verification</span>
-          <h1 class="h2">We could not verify this badge</h1>
-          <p class="lede">No live profile matches this badge. It may be out of date, or the profile may be hidden.</p>
+          <h1 class="h2">We could not verify this badge<span class="vm">.</span></h1>
+          <p class="lede">${op && op.sample ? `${esc(op.name)} is a sample profile, not a real operator. Sample profiles show how the network looks and carry no badge.` : 'No live profile matches this badge. It may be out of date, or the profile may be hidden.'}</p>
           <div class="row pf-center"><a class="btn" href="#browse">Browse talent</a><a class="btn btn-line" href="#talk">Talk to us</a></div>
         </div></section>`;
     }
@@ -1951,14 +1986,7 @@
     const verEngs = engs.filter((e) => e.verified).length;
     const asOf = RN.fmt.date(RN.now());
     // The 50 to 100 scale, one equal band per tier, the score marked inside its band
-    const tiers = F.risTier.options.slice().reverse();
-    const at = tier ? tiers.findIndex((t) => t.v === tier.v) : -1;
-    const bands = tiers.map((t, i) => `<span class="pf-vb-band t-${esc(t.v)}${i === at ? ' on' : ''}${i < at ? ' past' : ''}" title="${esc(t.l)}, ${t.min} to ${t.max}"><em>${esc(t.l)}</em></span>`).join('');
-    const markAt = tier ? ((at + RN.clamp((score - tier.min) / (tier.max - tier.min + 1), 0, 1)) / tiers.length) * 100 : 0;
-    const scale = tier ? `<div class="pf-vb" role="img" aria-label="Reputation Index ${esc(score)}, ${esc(tier.l)} tier, ${tier.min} to ${tier.max}">
-        <div class="pf-vb-track">${bands}<i class="pf-vb-mark" style="left:${markAt.toFixed(2)}%"></i></div>
-        <div class="pf-vb-ticks" aria-hidden="true">${tiers.map((t, i) => `<span style="left:${(i / tiers.length) * 100}%">${t.min}</span>`).join('')}<span style="left:100%">100</span></div>
-      </div>` : '';
+    const scale = tier ? tierScale(op, tier) : '';
     const scoreBlock = tier ? `<div class="pf-vf-score-hd t-${esc(tier.v)}">
           <span class="pf-vf-badge">${RN.ui.tierBadge(tier.v, { size: 64, score, label: `${tier.l}, Reputation Index ${score}` })}</span>
           <span class="pf-vf-score-t"><span class="label">Reputation Index</span><b>${esc(tier.l)}</b><small>${tier.min} to ${tier.max} on a 100-point scale</small></span>
@@ -1978,10 +2006,9 @@
               <span class="eyebrow pf-vf-k">${icon('shield')}Revenue Nomad verification</span>
               <div class="pf-vf-id">
                 <div class="pf-photo pf-vf-photo">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}</div>
-                <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}</h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
+                <div class="grow"><h1 class="h2 serif-up pf-vf-name">${esc(op.name)}<span class="vm">.</span></h1><p class="pf-role">Fractional ${esc(op.role)}</p></div>
               </div>
               <p class="pf-vf-status">${icon('check-circle')}<span><b>Confirmed on Revenue Nomad</b> <span class="pf-nw">as of ${esc(asOf)}</span></span></p>
-              ${op.sample ? RN.ui.illus('Sample profile, not a real operator', 'A fictional operator added to show how the network looks. The person, companies and reviews are invented.').replace('class="illus"', 'class="illus illus-sample"') : ''}
             </header>
             <div class="pf-vf-score">
               ${scoreBlock}

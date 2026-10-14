@@ -128,9 +128,14 @@
     if (sort === 'available') {
       const t = (r) => { const d = r.op.avail.startDate ? new Date(r.op.avail.startDate).getTime() : 0; return Math.max(d, RN.now().getTime() - 864e5); };
       res.sort((a, b) => (AVAIL_RANK[a.op.avail.key] || 0) - (AVAIL_RANK[b.op.avail.key] || 0) || t(a) - t(b) || b.score - a.score);
+      res = notFirst(res);
     }
     return res;
   }
+  /* The founder stays in every list and sort but never takes the first slot (owner decision, Oct 14, 2026).
+     RN.model.search already applies it; lists re-sorted here (availability, fit, nearby categories) apply it again.
+     A search that names him (RN.model.search marks the row .named) keeps the raw order, as the model does. */
+  const notFirst = (list) => (RN.model.notFirst && !list.some((r) => r && r.named && RN.model.isFounder(r)) ? RN.model.notFirst(list) : list);
 
   /* Change criteria from anywhere in the view. Records what was added last for the zero-result relax. */
   function setCrit(patch, o) {
@@ -270,7 +275,7 @@
   function fitMark(f) {
     const n = f.signals.length;
     if (f.pct < 50) return icon('target');
-    return `<span class="br-fitmark ${f.pct >= 75 ? 'is-strong' : 'is-good'}" title="${esc(`${f.count} of ${n} match signals`)}">${esc(f.label)}<b>${esc(f.pct)}%</b></span>`;
+    return `<span class="br-fitmark ${f.pct >= 75 ? 'is-strong' : 'is-good'}" title="${esc(`Fits your company on ${f.count} of ${n} points`)}">${esc(f.label)}<b>${esc(f.pct)}%</b></span>`;
   }
 
   function fitTokens(m) {
@@ -369,6 +374,30 @@
     return out.slice(0, 2).join(' · ');
   }
   const firstLine = (t) => { const m = String(t || '').replace(/\s+/g, ' ').trim().match(/^.{20,180}?[.!?](\s|$)/); return m ? m[0].trim() : ''; };
+  /* The card, trimmed for scanning (design pass, Oct 14, 2026). On top of RN.ui.opCard:
+     - at most 2 focus areas, the ones the search asked for first, then company-verified, then claimed (a claimed one
+       only fills an empty slot and keeps the quieter claimed style); never a "+N more" counter
+     - the footer names the tier and the company reviews in words ("Trusted · 2 company reviews"); the score lives in
+       the tier mark's tooltip with what earned it. The card rule holds: a mark only from Proven up.
+     - sample profiles (fictional, reviewer mode only) carry no tier mark */
+  const TAGS_MAX = 2;
+  function cardTags(op, prefer) {
+    const want = (prefer || []).map((t) => String(t).toLowerCase());
+    const rank = (t) => (want.includes(t.t.toLowerCase()) ? 0 : t.tier !== 'claimed' ? 1 : 2);
+    const list = (op.tags || []).map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || (b.t.score || 0) - (a.t.score || 0) || a.i - b.i)
+      .slice(0, TAGS_MAX).map((x) => (x.t.tier === 'claimed' ? x.t : Object.assign({}, x.t, { tier: 'verified' })));
+    return list.length ? `<div class="opc-tags br-tags">${list.map((t) => RN.ui.ftag(t)).join('')}</div>` : '';
+  }
+  const tierOfOp = (op) => { const r = op.ris || {}; return RN.fields.risTier.options.find((t) => t.v === r.tier) || RN.fields.risTierFor(r.score); };
+  BR.standing = function (op) {
+    if (op.sample) return '';
+    const t = tierOfOp(op);
+    if (!t || !RN.ui.tierShown(t.v)) return '';
+    const n = (op.reviews || []).length;
+    const why = RN.ui.tierWhy(op);
+    const plainWhy = String(why).replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+    return `<span class="br-stand"><button type="button" class="tier-mark tier-mark-pill" data-tip="${esc(why)}" aria-label="${esc(plainWhy)}">${RN.ui.tierPill(t.v)}</button>${n ? `<span class="br-stand-n">${esc(RN.fmt.plural(n, 'company review'))}</span>` : ''}</span>`;
+  };
   BR.card = function (op, opts) {
     opts = opts || {};
     const visitor = RN.store.state.persona === 'visitor';
@@ -377,14 +406,12 @@
     const fit = opts.fit && opts.fit.signals.length ? opts.fit : null;
     let html = RN.ui.opCard(shown, { why: fit ? fitSignal(fit, op) : opts.why || '' });
     if (fit) html = html.replace(`<div class="opc-why">${icon('target')}`, () => `<div class="opc-why br-fitwhy">${fitMark(fit)}`);
-    // Replace the card's 3 tags with 4, verified first (2 on phones, with the rest counted). Expert tags (5+ reviews)
-    // are company-verified too, but RN.ui.ftag only styles tier === 'verified', so normalize them here.
-    const vFirst = (a, b) => (a.tier === 'verified' ? -1 : 1) - (b.tier === 'verified' ? -1 : 1);
-    const three = RN.ui.ftags((op.tags || []).slice().sort(vFirst), 3);
-    const all = (op.tags || []).map((t) => (t.tier === 'claimed' ? t : Object.assign({}, t, { tier: 'verified' }))).sort(vFirst);
-    const n = all.length;
-    const four = `<div class="opc-tags">${all.slice(0, 4).map((t, i) => (i >= 2 ? RN.ui.ftag(t).replace('class="ftag', 'class="ftag br-t-x') : RN.ui.ftag(t))).join('')}${n > 4 ? `<span class="ftag more br-t-d">+${n - 4} more</span>` : ''}${n > 2 ? `<span class="ftag more br-t-m">+${n - 2}</span>` : ''}</div>`;
-    if (html.includes(three)) html = html.replace(three, () => four);
+    // Two focus areas (ftags renders spans only, so the first closing div ends the tag row)
+    html = html.replace(/<div class="opc-tags">[\s\S]*?<\/div>/, () => cardTags(op, opts.prefer));
+    // Footer: the tier in words with the review count, replacing the score seal and "Reputation Index"
+    const f0 = html.indexOf('<div class="opc-foot">');
+    const f1 = f0 >= 0 ? html.indexOf('<div class="row" style="--gap:8px">', f0) : -1;
+    if (f1 > f0) html = html.slice(0, f0) + '<div class="opc-foot">' + BR.standing(op) + html.slice(f1);
     const a = `<span>${RN.ui.avail(op)}</span>`;
     const put = (x) => { html = html.includes(a) ? html.replace(a, () => a + x) : html.replace('<div class="opc-meta">', () => '<div class="opc-meta">' + x); };
     if (visitor && op.rate) {
@@ -405,7 +432,7 @@
       width: 480,
       onClose: o.onClose,
       title: esc(o.title || 'Log in to see rates'),
-      sub: esc(o.sub || 'Hourly rates and match signals are shown to signed-in companies. Browsing stays open to everyone.'),
+      sub: esc(o.sub || 'Hourly rates, and how each operator fits your company, are shown to signed-in companies. Browsing stays open to everyone.'),
       body: `<div class="stack" style="--gap:12px">
         <button type="button" class="optcard" data-act="persona" data-p="buyer"><b>Continue as ${esc(p.name)} <span class="muted" style="font-weight:500">· ${esc(p.sub)}</span></b><span>Company account. You stay on this page.</span></button>
         <button type="button" class="act" data-act="br-login-all" style="align-self:flex-start">${icon('user')}Log in as an operator or the team</button>
@@ -459,42 +486,18 @@
     </div>`;
   }
 
-  /* Operators with a photo who can start now, one per role category first, strongest Reputation Index first */
   const risOf = (op) => RN.fields.risRank(op); // no score yet: the neutral 50
-  function featured(n) {
-    const pool = RN.model.ops.filter((op) => !op.hidden && !op.isMatt && op.photo && op.avail && op.avail.key === 'available_now')
-      .sort((a, b) => risOf(b) - risOf(a) || (b.reviews || []).length - (a.reviews || []).length || (b.completeness || 0) - (a.completeness || 0));
-    const out = [], seen = new Set();
-    pool.forEach((op) => { if (out.length < n && !seen.has(op.catKey)) { seen.add(op.catKey); out.push(op); } });
-    pool.forEach((op) => { if (out.length < n && !out.includes(op)) out.push(op); });
-    return out;
-  }
+  /* General head: the title and one sentence, nothing else, so the first row of cards sits above the fold.
+     (Design pass, Oct 14, 2026: the "Available now" and "company-verified proof" counts and the Available now card
+     came out. A count under 10 in a headline spot undercuts trust, and the card repeated people from the grid.) */
   function genHead() {
     const live = RN.model.ops.filter((op) => !op.hidden);
-    const now = live.filter((op) => op.avail && op.avail.key === 'available_now').length;
-    const proof = live.filter(hasProof).length;
-    const feat = featured(5);
-    const visitor = RN.store.state.persona === 'visitor';
-    const price = (op) => { if (!op.rate) return 'Rate on request'; if (!visitor) return RN.fmt.rate(op.rate); const r = RN.model.opMonthlyRange && RN.model.opMonthlyRange(op); return r ? r.short + ' ' + r.text : ''; };
     return `<header class="wrap br-head br-head-gen">
       <div class="br-head-copy">
         <span class="eyebrow">Direct access to talent</span>
-        <h1 class="h1">Browse <span class="serif">operators</span></h1>
-        <p class="lede">Open profiles. Reviews and focus areas a company confirmed are marked Verified. No login needed to browse.</p>
-        <dl class="br-head-stats">
-          <div><dt>Operators</dt><dd>${RN.fmt.int(live.length)}</dd></div>
-          <div><dt>Available now</dt><dd>${RN.fmt.int(now)}</dd></div>
-          <div><dt>With company-verified proof</dt><dd>${RN.fmt.int(proof)}</dd></div>
-        </dl>
+        <h1 class="h1">Browse <span class="serif">operators</span><span class="vm">.</span></h1>
+        <p class="lede">${esc(RN.fmt.int(live.length))} open profiles. Reviews and focus areas a company confirmed are marked Verified. No login needed to browse.</p>
       </div>
-      ${feat.length ? `<aside class="br-feat" aria-labelledby="br-feat-h">
-        <div class="br-feat-hd"><span class="br-feat-live"><i class="dot dot-now"></i></span><h2 class="h5" id="br-feat-h">Available now</h2><span class="small muted">${RN.fmt.int(now)} can start this week</span></div>
-        <ul class="br-feat-list">${feat.map((op, i) => `<li style="--i:${i}"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">
-          ${RN.ui.avatar(op, 'ava-md', { decorative: true })}
-          <span class="br-feat-who"><b>${esc(op.name)}</b><span>Fractional ${esc(op.role)}</span></span>
-          <span class="br-feat-meta">${RN.ui.cardTier(op, { pill: true, inLink: true })}<span>${esc(price(op))}</span></span>
-        </a></li>`).join('')}</ul>
-      </aside>` : ''}
     </header>`;
   }
 
@@ -526,17 +529,17 @@
     const mr = idx && RN.model.monthlyRange ? RN.model.monthlyRange(cat, null, '40') : null;
     return `<header class="wrap br-head br-head-cat">
       <nav class="crumbs" aria-label="Breadcrumb"><a href="#browse">Browse talent</a>${icon('chev-right')}<span>${esc(label)}</span></nav>
-      <div class="br-cat-grid">
-        <div class="br-cat-copy">
-          <span class="eyebrow br-cat-eyebrow">${RN.ui.catDot(cat)}Role category</span>
-          <h1 class="h1">Fractional <span class="serif">${esc(label)}</span></h1>
+      <div class="br-cat-grid g12">
+        <div class="br-cat-copy c-7">
+          <span class="eyebrow br-cat-eyebrow">Role category</span>
+          <h1 class="h1">Fractional <span class="serif">${esc(label)}</span><span class="vm">.</span></h1>
           <div class="br-cat-intro"><p class="lede" id="br-cat-lede">${esc(copy.body)}</p><button type="button" class="act br-lede-more" data-act="br-lede" aria-controls="br-cat-lede" aria-expanded="false">Read more${icon('chev-down')}</button></div>
           ${titles ? `<p class="small br-titles"><span class="label">Common titles</span>${esc(titles)}</p>` : ''}
           ${tags.length ? `<div class="br-cat-tags"><span class="label">Most searched focus areas</span>
             <div class="row" style="--gap:8px">${tags.map((t) => `<button type="button" class="chip chip-sm" data-act="br-tag-toggle" data-t="${esc(t)}" aria-pressed="${sel.includes(t.toLowerCase())}">${icon('plus', 'br-i-off')}${icon('check', 'br-i-on')}${esc(t)}</button>`).join('')}</div></div>` : ''}
         </div>
-        ${idx ? `<aside class="card br-rate-card" aria-label="Rate Index for ${esc(label)}">
-          <span class="label">Rate Index · ${esc(label)}</span>
+        ${idx ? `<aside class="card br-rate-card c-5" aria-label="Rate Index for ${esc(label)}">
+          <div class="br-rate-hd"><span class="label">Rate Index · ${esc(label)}</span>${RN.ui.illusTag()}</div>
           <div class="br-rate-big"><span class="num">$${esc(idx.p50)}</span><span class="small muted">median per hour</span></div>
           <p class="small">Typical range <b>${esc(RN.fmt.hrRange(idx.p25, idx.p75))}</b> (middle half of ${esc(idx.n)} profiles).</p>
           ${mr ? `<dl class="br-rate-mo">
@@ -544,7 +547,7 @@
           </dl>
           <p class="small muted br-rate-free">No fees for companies. You pay the operator’s rate, nothing more.</p>` : ''}
           <div class="br-rate-chart" data-br-chart="${esc(cat)}" aria-label="Median hourly rate by role category"></div>
-          <div class="row between br-rate-foot"><a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a>${RN.ui.illus('Illustrative figures')}</div>
+          <div class="br-rate-foot">${RN.ui.illusNote()}<a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a></div>
         </aside>` : ''}
       </div>
     </header>`;
@@ -580,13 +583,13 @@
     const perGuide = guideRoute();
     const link = (href, text) => `<li><a class="act" href="${href}">${esc(text)}${icon('arrow')}</a></li>`;
     return `<section class="wrap br-plan" aria-labelledby="br-plan-h">
-      <div class="br-plan-hd"><span class="eyebrow">Plan it</span><h2 class="h3" id="br-plan-h">Plan a fractional ${esc(noun)} engagement</h2></div>
-      <div class="grid g-3" style="--gap:16px">
-        <a class="card card-link br-plan-card" href="#rates">${RN.ui.icoTile('chart', { tone: 'gold' })}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
-        <div class="card br-plan-card">${RN.ui.icoTile('layers', { tone: 'info' })}<h3 class="h4">Scope it from a Blueprint</h3>
+      <div class="sec-head"><span class="eyebrow">Plan it</span><h2 class="h2" id="br-plan-h">Plan a fractional ${esc(noun)} engagement<span class="vm">.</span></h2></div>
+      <div class="grid g-3">
+        <a class="card card-link br-plan-card" href="#rates">${RN.ui.icoTile('chart')}<h3 class="h4">What does a fractional ${esc(noun)} cost?</h3><p class="small muted">Hourly medians and ranges for ${esc(label)}, adjusted for company revenue, in the Rate Index.</p><span class="act">See rates${icon('arrow')}</span></a>
+        <div class="card br-plan-card">${RN.ui.icoTile('layers')}<h3 class="h4">Scope it from a Blueprint</h3>
           <p class="small muted">${bps.length ? esc(bps[0].blurb) + ' ' : ''}Hours, term and a 30/60/90-day plan. Post it as an engagement in minutes.</p>
           <ul class="br-plan-links">${bps.length ? bps.map((b) => link('#blueprint.' + esc(b.id), `${b.role} Blueprint`)).join('') : link('#blueprints', 'Browse Blueprints')}</ul></div>
-        <div class="card br-plan-card">${RN.ui.icoTile('book', { tone: 'enable' })}<h3 class="h4">Hiring guides</h3>
+        <div class="card br-plan-card">${RN.ui.icoTile('book')}<h3 class="h4">Hiring guides</h3>
           <p class="small muted">Plain answers on scoping, pricing and managing a fractional ${esc(noun)}.</p>
           <ul class="br-plan-links">${perGuide ? guides.map((g) => link('#guide.' + esc(g.slug), g.q)).join('') : ''}${link('#guides', perGuide && guides.length ? 'All guides' : 'Read the guides')}</ul></div>
       </div>
@@ -610,24 +613,23 @@
   function thinBlock(cat) {
     if (catCount(cat) >= THIN) return '';
     const label = RN.fields.catLabel(cat);
-    const near = RN.model.ops.filter((op) => !op.hidden && op.catKey !== cat)
+    const near = notFirst(RN.model.ops.filter((op) => !op.hidden && op.catKey !== cat)
       .map((op) => { const t = (op.tags || []).filter((x) => x.c === cat).sort((a, b) => (a.tier === 'claimed') - (b.tier === 'claimed')); return { op, t, v: t.filter((x) => x.tier !== 'claimed').length }; })
       .filter((x) => x.t.length)
-      .sort((a, b) => b.v - a.v || b.t.length - a.t.length || risOf(b.op) - risOf(a.op))
+      .sort((a, b) => b.v - a.v || b.t.length - a.t.length || risOf(b.op) - risOf(a.op)))
       .slice(0, 3);
     if (!near.length) return '';
     return `<section class="wrap br-near" aria-labelledby="br-near-h" data-view-source="search">
-      <h2 class="h4" id="br-near-h">Operators in other categories with ${esc(label)} focus areas</h2>
-      <div class="grid g-3 br-grid">${near.map((x) => BR.card(x.op, { why: x.v ? `Company-verified in ${x.t.filter((t) => t.tier !== 'claimed').slice(0, 2).map((t) => t.t).join(' and ')}` : `Lists ${x.t.slice(0, 2).map((t) => t.t).join(' and ')}` })).join('')}</div>
+      <div class="sec-head"><h2 class="h3" id="br-near-h">Operators in other categories with ${esc(label)} focus areas</h2></div>
+      <div class="grid g-3 br-grid">${near.map((x) => BR.card(x.op, { prefer: x.t.map((t) => t.t), why: x.v ? `Company-verified in ${x.t.filter((t) => t.tier !== 'claimed').slice(0, 2).map((t) => t.t).join(' and ')}` : `Lists ${x.t.slice(0, 2).map((t) => t.t).join(' and ')}` })).join('')}</div>
     </section>`;
   }
 
+  // Role links without counts: several categories hold fewer than 10 people, and a small count in a chip reads as weak
   function rolesNav(cat) {
-    const counts = {};
-    RN.model.ops.forEach((op) => { if (!op.hidden) counts[op.catKey] = (counts[op.catKey] || 0) + 1; });
     return `<nav class="wrap br-roles" aria-label="Browse by role category">
       <span class="label">${cat ? 'Other role categories' : 'Browse by role'}</span>
-      <div class="br-roles-list">${RN.fields.roleCategory.options.filter((o) => o.v !== cat).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}Fractional ${esc(o.l)}${counts[o.v] ? `<b class="chip-n">${counts[o.v]}</b>` : ''}</a>`).join('')}</div>
+      <div class="br-roles-list">${RN.fields.roleCategory.options.filter((o) => o.v !== cat).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">Fractional ${esc(o.l)}</a>`).join('')}</div>
     </nav>`;
   }
 
@@ -778,14 +780,14 @@
       <span class="br-more-n">Showing <b>${RN.fmt.int(n)}</b> of ${RN.fmt.int(total)}</span>
       <button type="button" class="btn btn-line br-more-btn" data-act="br-more">Show ${Math.min(pageSize(), total - n)} more${icon('chev-down')}</button></div>`;
   }
-  /* One break in the grid after the third row: the role categories with live counts, on a dark band */
+  /* One break in the grid after the third row: the role categories that have anyone live, on a dark band (no counts) */
   function gridBreak(c) {
     if (hasCrit(c) || landedCat) return '';
     const counts = {};
     RN.model.ops.forEach((op) => { if (!op.hidden) counts[op.catKey] = (counts[op.catKey] || 0) + 1; });
     return `<aside class="br-break night" aria-label="Browse by role">
       <div class="br-break-l"><span class="eyebrow">Narrow it down</span><h2 class="h3">Start from the seat you need to fill</h2></div>
-      <div class="br-break-pills">${RN.fields.roleCategory.options.filter((o) => counts[o.v]).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">${RN.ui.catDot(o.v)}${esc(o.l)}<b class="chip-n">${counts[o.v]}</b></a>`).join('')}</div>
+      <div class="br-break-pills">${RN.fields.roleCategory.options.filter((o) => counts[o.v]).map((o) => `<a class="chip br-pill" href="#browse.${esc(o.v)}">${esc(o.l)}</a>`).join('')}</div>
     </aside>`;
   }
   // The rank card goes in a few rows down (or after the last card when there are fewer); its summary can lead the grid
@@ -825,13 +827,13 @@
     if (brief) {
       // Stable: equal fits keep the search order
       const rows = res.map((r, i) => ({ r, i, f: RN.model.fit(r.op, brief) })).sort((a, b) => b.f.pct - a.f.pct || a.i - b.i);
-      res = rows.map((x) => x.r); fits = new Map(rows.map((x) => [x.r.op.id, x.f]));
+      res = notFirst(rows.map((x) => x.r)); fits = new Map(rows.map((x) => [x.r.op.id, x.f]));
     }
     const shown = res.slice(0, limit);
     const more = res.length - shown.length;
     // A last row with one gap closes on a dark "tell us" tile (wide screens only; the line below covers phones)
     const closer = more <= 0 && shown.length % 3 === 2 && !(landedCat && catCount(landedCat) < THIN);
-    const cards = withFit(shown.map((r) => BR.card(r.op, { why: whyFor(r, c), fit: fits && fits.get(r.op.id) })));
+    const cards = withFit(shown.map((r) => BR.card(r.op, { why: whyFor(r, c), fit: fits && fits.get(r.op.id), prefer: c.tags })));
     return `<div class="grid g-3 br-grid">${withBreak(cards, c)}${closer ? `<aside class="br-closer night">${RN.ui.icoTile('message', { round: true, cls: 'br-zero-ic' })}<h3 class="h4">Not seeing the right fit?</h3><p>Tell us what you need and our team will shortlist operators for you. Your search comes with you.</p><button type="button" class="btn btn-leaf" data-act="br-tell" data-zero="">Tell us what you need</button></aside>` : ''}</div>
       ${moreHtml(shown.length, res.length)}
       ${landedCat && catCount(landedCat) < THIN ? thinNote(landedCat) : `<p class="br-tell${closer ? ' br-tell-alt' : ''}">${icon('message')}<span>Not seeing the right fit? <button type="button" class="act" data-act="br-tell" data-zero="">Tell us what you need</button> and our team will shortlist operators for you.</span></p>`}`;

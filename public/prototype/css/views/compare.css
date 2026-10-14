@@ -7,7 +7,7 @@
 .cmp-body { padding-bottom: var(--s-8); }
 
 /* ---------- Table ---------- */
-.cmp-wrap { border-top: 1px solid var(--ink); }
+.cmp-wrap { position: relative; border-top: 1px solid var(--ink); } /* contains the Illustrative tag's screen-reader text inside the scroller */
 .cmp-tbl { --lab: 210px; --col: 300px; table-layout: fixed; width: min(100%, calc(var(--lab) + var(--cols) * var(--col))); border-collapse: separate; border-spacing: 0; font-size: var(--t-14); }
 .cmp-tbl th, .cmp-tbl td { text-align: left; vertical-align: top; padding: var(--s-4); border-bottom: 1px solid var(--line-2); }
 .cmp-tbl .cmp-lab { width: var(--lab); padding-left: 0; background: var(--paper); }
@@ -118,7 +118,7 @@
 .cmp-gh-col .ava { filter: grayscale(1) blur(1.5px); opacity: .55; }
 .cmp-gh-name { width: 62%; height: 12px; border-radius: 6px; background: var(--line); display: block; }
 .cmp-gh-btn { width: 100%; height: 34px; border-radius: var(--r-btn, 10px); border: 1px solid var(--line); display: block; }
-.cmp-empty-card { grid-area: 1 / 1; align-self: start; justify-self: center; z-index: 1; margin-top: 64px; width: min(560px, 100%); padding: var(--s-8); border: 1px solid var(--line-2); border-radius: var(--r-card); background: var(--card); box-shadow: var(--shadow-2); display: flex; flex-direction: column; gap: var(--s-3); animation: rise .45s var(--ease) both; }
+.cmp-empty-card { grid-area: 1 / 1; align-self: start; justify-self: center; z-index: 1; margin-top: 64px; width: min(560px, 100%); padding: var(--s-8); border: 1px solid var(--line-2); border-radius: var(--r-card); background: var(--card); box-shadow: var(--shadow-2); display: flex; flex-direction: column; gap: var(--s-3); }
 .cmp-empty-card .h2 { margin-top: var(--s-1); }
 .cmp-empty-p { margin: 0; font-size: var(--t-15); line-height: 1.55; color: var(--ink-2); max-width: 46ch; }
 .cmp-slots { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }

@@ -6,7 +6,7 @@
    role answers that measure the same thing sit in "Comparable scope" (with the source question under each value);
    the rest is grouped by role, and a question another role was never asked reads "Not asked for {role}".
    Rates are the price (no fees for companies), so the rate row shows the operator's rate only.
-   Rate and match signals are login-gated. Loops: compare_view per operator (Studio "Compared, not
+   Rate and company fit are login-gated. Loops: compare_view per operator (Studio "Compared, not
    chosen"), intro-open per column (shared intro flow), shortlist-toggle; profile links inherit
    data-view-source="compare" so core ui.js records profile_view source=compare. */
 (function () {
@@ -52,6 +52,7 @@
   /* ---------- Cells ---------- */
   const sub = (t) => `<span class="cmp-sub">${t}</span>`;
   function risCell(op) {
+    if (op.sample) return none('Sample profile'); // fictional: no tier
     const t = RN.fields.risTierFor(op.ris && op.ris.score);
     if (!t) return none(RN.fields.risNone.l); // not scored yet: no tier, no number
     return `<span class="ris t-${esc(t.v)}">${RN.ui.tierBadge(t.v, { size: 40, score: op.ris.score, label: `${t.l}, Reputation Index ${op.ris.score}` })}<span class="ris-txt"><b>${esc(t.l)}</b><span>${esc(t.min)} to ${esc(t.max)} tier</span></span></span>`;
@@ -88,7 +89,7 @@
     if (!op.rate) return none(RN.fmt.rate(null));
     if (RN.store.state.persona === 'visitor') { const rg = RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null; return `<b class="cmp-v cmp-v-sm" ${rg ? `title="${esc(rg.note)}"` : ''}>${rg ? esc(rg.text) : '—'}</b>${rg ? sub(rg.retainer ? 'Listed retainer' : 'Estimate from the hourly rate') : ''}${sub('<button type="button" class="act" data-act="cmp-login">Exact hourly rate after sign-in</button>')}`; }
     const idx = RN.data.market.rateIndex.byCat[op.catKey];
-    return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}/hr`) : ''}`;
+    return `<b class="cmp-v cmp-v-sm">${esc(RN.fmt.rate(op.rate))}</b>${idx ? sub(`Rate Index ${esc(RN.fields.catLabel(op.catKey))} median $${esc(idx.p50)}/hr ${RN.ui.illusTag()}`) : ''}`;
   }
   // Registry label, or a readable fallback for stored values the registry does not list (e.g. mid_market)
   const SEG = { smb: 'SMB', mid_market: 'Mid-market', enterprise: 'Enterprise', plg: 'PLG' };
@@ -110,7 +111,7 @@
     const f = RN.model.fit(op, brief(op));
     const ic = { match: 'check', partial: 'minus', low: 'x' };
     return `<div class="cmp-fit">
-      <div class="cmp-fit-hd"><span class="cmp-ring">${RN.chart.ring(f.pct, { size: 48, stroke: 5, label: f.pct + '% match' })}<b>${f.pct}</b></span><div><b>${esc(f.label)}</b>${sub(`${f.count} of ${f.signals.length} signals`)}</div></div>
+      <div class="cmp-fit-hd"><span class="cmp-ring">${RN.chart.ring(f.pct, { size: 48, stroke: 5, label: f.pct + '% match' })}<b>${f.pct}</b></span><div><b>${esc(f.label)}</b>${sub(`${f.count} of ${f.signals.length} points match`)}</div></div>
       <ul class="cmp-sig">${f.signals.map((s) => `<li class="is-${s.state}">${icon(ic[s.state] || 'minus')}<span>${esc(s.text)}</span></li>`).join('')}</ul>
       ${f.notes.length ? `<p class="cmp-sub">${esc(f.notes.join('. '))}.</p>` : ''}
     </div>`;
@@ -166,8 +167,8 @@
     const F = RN.fields;
     const coreTip = `<b>CORE company reviews</b><br>Companies rate ${F.coreDims.options.map((d) => esc(d.l)).join(', ')} from 1 to 5 after an engagement. Shown as the average across reviews.`;
     const R = [];
-    if (buyer) R.push({ sec: `Fit for ${esc(co.name)}`, l: 'Match signals', tip: `<b>Match signals</b><br>Scored against ${esc(co.name)}: company revenue, employee range, industry, plus the role, GTM motion and need in your saved match preferences.`, cell: fitCell, val: (op) => RN.model.fit(op, brief(op)).pct, dir: 'max' });
-    else if (visitor) R.push({ sec: 'Fit for your company', l: 'Match signals', lock: true });
+    if (buyer) R.push({ sec: `Fit for ${esc(co.name)}`, l: 'How each fits your company', tip: `<b>How each fits your company</b><br>Scored against ${esc(co.name)}: company revenue, employee range, industry, plus the role, GTM motion and need in your saved match preferences.`, cell: fitCell, val: (op) => RN.model.fit(op, brief(op)).pct, dir: 'max' });
+    else if (visitor) R.push({ sec: 'Fit for your company', l: 'How each fits your company', lock: true });
     R.push({ sec: 'Standing', l: 'Reputation Index', tip: RN.ui.risExplainer(), cell: risCell, val: (op) => op.ris.score, dir: 'max' });
     R.push({ l: 'CORE average', tip: coreTip, cell: coreCell, val: (op) => { const c = coreAvg(op); return c ? c.avg : null; }, dir: 'max' });
     R.push({ l: 'Engagement history', cell: engCell, val: (op) => (op.engagements || []).length || null, dir: 'max' });
@@ -224,10 +225,12 @@
     st.shortlist.map(RN.model.byId).forEach((op) => push(op, 'On your shortlist'));
     ops.forEach((op) => RN.model.similar(op, 4).forEach((x) => push(x, `Similar to ${op.first}`)));
     RN.model.ops.slice().sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || b.completeness - a.completeness).slice(0, 8).forEach((x) => push(x, 'High Reputation Index'));
-    return out.slice(0, n || 3);
+    // The founder can be suggested but never leads the list (owner decision, Oct 14, 2026)
+    return (RN.model.notFirst ? RN.model.notFirst(out) : out).slice(0, n || 3);
   }
   /* The card rule in a text sub-line: Proven up the score and tier, below that nothing */
   function suggStanding(op) {
+    if (op.sample) return '';
     const t = RN.fields.risTierFor(op.ris && op.ris.score);
     if (!t) return '';
     return RN.ui.tierShown(t.v) ? ` · ${esc(op.ris.score)} ${esc(t.l)}` : '';
@@ -341,7 +344,7 @@
           <h2 class="h2">Line operators up side by side</h2>
           <p class="cmp-empty-p">Add up to four from Browse or any profile. Compare puts them on the same standard fields and tints the best value in each row.</p>
           ${sugg.length ? `<div class="cmp-quick"><span class="label">${st.shortlist.length ? 'From your shortlist' : 'Start with these'}</span>
-            <ul>${sugg.map((x) => `<li>${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span class="grow"><a href="#op.${esc(x.op.slug)}">${esc(x.op.name)}</a><span>Fractional ${esc(x.op.role)}</span></span>${RN.ui.cardTier(x.op, { size: 28 })}<button type="button" class="btn btn-sm btn-line" data-act="compare-toggle" data-id="${esc(x.op.id)}" aria-label="Add ${esc(x.op.name)} to compare">${icon('plus')}Add</button></li>`).join('')}</ul></div>` : ''}
+            <ul>${sugg.map((x) => `<li>${RN.ui.avatar(x.op, 'ava-sm', { decorative: true })}<span class="grow"><a href="#op.${esc(x.op.slug)}">${esc(x.op.name)}</a><span>Fractional ${esc(x.op.role)}</span></span>${x.op.sample ? '' : RN.ui.cardTier(x.op, { size: 28 })}<button type="button" class="btn btn-sm btn-line" data-act="compare-toggle" data-id="${esc(x.op.id)}" aria-label="Add ${esc(x.op.name)} to compare">${icon('plus')}Add</button></li>`).join('')}</ul></div>` : ''}
           <div class="cmp-empty-act"><a class="btn" href="#browse">Browse operators${icon('arrow')}</a><span class="small muted">Use Compare on any card to add it.</span></div>
         </div>
       </div>`;
@@ -356,7 +359,7 @@
       <nav class="crumbs" aria-label="Breadcrumb"><a href="#browse">Browse talent</a>${icon('chev-right')}<span>Compare</span></nav>
       <div class="cmp-head-row">
         <div class="stack" style="--gap:12px">
-          <h1 class="h1">Compare <span class="serif">operators</span></h1>
+          <h1 class="h1">Compare <span class="serif">operators</span><span class="vm">.</span></h1>
           <p class="lede">The same standard fields for everyone, side by side. ${ops.length > 1 ? 'The best value in each row is tinted.' : 'Add up to four.'}</p>
         </div>
         ${ops.length ? `<div class="cmp-head-acts"><a class="btn btn-line" href="#browse">${icon('plus')}Add operators</a><button type="button" class="act muted" data-act="cmp-clear">Clear compare</button></div>` : ''}
@@ -368,7 +371,7 @@
         ${new Set(ops.map((op) => op.catKey)).size > 1 ? `<p class="cmp-mixnote">${icon('info')}<span>These operators answered different onboarding questions for their roles. Shared questions and comparable scope sit side by side; the rest is grouped by role.</span></p>` : ''}
         ${ops.length > 1 ? `<p class="cmp-swipe">${icon('arrow')}Swipe sideways to see all ${ops.length} operators</p>` : ''}
         ${table(ops)}
-        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet.${new Set(ops.map((op) => op.catKey)).size > 1 ? ' Not asked means the question is not part of that role’s onboarding.' : ''} No fees for companies. You pay the operator’s rate, nothing more. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and match signals</button>` : ''}</p>
+        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet.${new Set(ops.map((op) => op.catKey)).size > 1 ? ' Not asked means the question is not part of that role’s onboarding.' : ''} No fees for companies. You pay the operator’s rate, nothing more. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and how each fits your company</button>` : ''}</p>
       </section></div>`;
   }
 
@@ -395,7 +398,7 @@
   };
   RN.actions['cmp-login'] = (el) => {
     const fit = el && el.dataset.fit;
-    if (RN.browse && RN.browse.loginPrompt) RN.browse.loginPrompt(fit ? { title: 'Log in to see match signals', sub: 'Every operator is scored against your company once you sign in as a company. Browsing and compare stay open to everyone.' } : { title: 'Log in to see rates', sub: 'Hourly rates are shown to signed-in companies. Browsing and compare stay open to everyone.' });
+    if (RN.browse && RN.browse.loginPrompt) RN.browse.loginPrompt(fit ? { title: 'Log in to see how each operator fits', sub: 'Every operator is scored against your company once you sign in as a company. Browsing and compare stay open to everyone.' } : { title: 'Log in to see rates', sub: 'Hourly rates are shown to signed-in companies. Browsing and compare stay open to everyone.' });
     else RN.actions.login();
   };
 
