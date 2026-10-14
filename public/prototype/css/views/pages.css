@@ -26,16 +26,13 @@
 .pg-hero-strip b { font-size: var(--t-40); font-weight: 700; line-height: 1; color: var(--ink); }
 .pg-hero-strip span { font-size: var(--t-14); color: var(--mute); max-width: 34ch; }
 
-.pg-shead { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-6); flex-wrap: wrap; margin-bottom: var(--s-10); }
+.pg-shead { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-6); flex-wrap: wrap; margin-bottom: var(--head-to-body); }
 .pg-shead-l { max-width: 760px; }
-.pg-shead-l .eyebrow { display: block; margin-bottom: var(--s-3); }
-.pg-shead-l .lede { margin-top: var(--s-4); }
+/* Heading stack on every page that uses RN.pages.shead (spacing tokens): eyebrow, H2 and description --head-gap (16px)
+   apart, then --head-to-body (32px, 24px on a phone) to the content */
+.pg-shead-l .eyebrow { display: block; margin-bottom: var(--head-gap); }
+.pg-shead-l .lede { margin-top: var(--head-gap); }
 .pg-shead-r { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; }
-/* Heading stack on the company pages (spacing tokens): eyebrow, H2 and description 16px apart, 32px to the content.
-   Scoped to this file's routes; the function homes (function.js) set their own. */
-:is([data-view="about"], [data-view="operators"], [data-view="levels"], [data-view="how"], [data-view="results"]) .pg-shead { margin-bottom: var(--head-to-body); }
-:is([data-view="about"], [data-view="operators"], [data-view="levels"], [data-view="how"], [data-view="results"]) .pg-shead-l .eyebrow { margin-bottom: var(--head-gap); }
-:is([data-view="about"], [data-view="operators"], [data-view="levels"], [data-view="how"], [data-view="results"]) .pg-shead-l .lede { margin-top: var(--head-gap); }
 .pg-p { font-size: var(--t-16); line-height: 1.6; color: var(--ink-2); max-width: 66ch; }
 .night .pg-p { color: var(--night-mute); }
 .pg-lead { font-size: var(--t-20); line-height: 1.5; color: var(--ink); max-width: 60ch; }
@@ -482,7 +479,6 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
   .pg-hero-strip > div { flex-direction: row; align-items: baseline; gap: var(--s-4); padding: var(--s-4) 0; border-bottom: 1px solid var(--line); }
   .pg-hero-strip > div + div { padding-left: 0; border-left: 0; }
   .pg-hero-strip b { font-size: var(--t-30); min-width: 3.2ch; }
-  .pg-shead { margin-bottom: var(--s-8); }
   .pg-pov-card, .pg-how-col { padding: var(--s-5); }
   .pg-pov-stats { grid-template-columns: minmax(0, 1fr); }
   .pg-pov-stats > div + div { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); margin-top: var(--s-4); }

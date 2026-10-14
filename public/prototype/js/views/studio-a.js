@@ -1206,11 +1206,13 @@
     const hot = RN.model.positioning(op.id).opps.filter((o) => o.have && o.tier !== 'claimed').map((o) => o.t);
     const lead = hot.concat(verified.filter((x) => !hot.includes(x)));
     const revs = op.revenueRanges.map((r) => lab('revenueRange', r));
+    const RANGE_SEP = /\s+-\s+|–/;
     let span = '';
     if (revs.length === 1) span = revs[0];
-    else if (revs.length > 1 && revs[0].includes('–')) {
+    else if (revs.length > 1 && RANGE_SEP.test(revs[0])) {
+      // Labels read "$1M - $5M" (older saved labels used an en dash)
       const last = revs[revs.length - 1];
-      span = last.includes('–') ? `${revs[0].split('–')[0]}–${last.split('–')[1]}` : `${revs[0].split('–')[0]}+`;
+      span = RANGE_SEP.test(last) ? `${revs[0].split(RANGE_SEP)[0]} - ${last.split(RANGE_SEP)[1]}` : `${revs[0].split(RANGE_SEP)[0]}+`;
     }
     const inds = op.industries.slice(0, 2).map(ind);
     const list = (arr) => (arr.length > 1 ? arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1] : arr[0] || '');

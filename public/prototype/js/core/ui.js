@@ -96,7 +96,9 @@
        RN.ui.tierWhy(op)       what earned the tier, from the operator's own record
        RN.ui.cardTier(op, o)   the one tier mark for cards and lists: Proven up a badge (o.size, 40) or o.pill,
                                with tierWhy on hover and focus; o.text adds the tier name; o.inLink for a mark
-                               inside a link (title only); Emerging the Vetted mark; no tier ''
+                               inside a link (title only); Emerging, no tier and sample profiles ''
+       RN.ui.cardStanding(op)  the operator card's footer: the tier pill in words plus "N company reviews", the
+                               score and what earned it in the mark's tooltip (Proven up; '' otherwise)
        RN.ui.ris(op, o)        cards and rails follow the card rule; {full: true} (profiles) shows any tier */
   const TIER_RANK = { emerging: 0, proven: 1, trusted: 2, elite: 3, apex: 4 };
   const tierOpts = () => RN.fields.risTier.options;
@@ -230,9 +232,11 @@
      score) or, with o.pill, the pill, in a mark that shows tierWhy on hover and keyboard focus. o.text adds the
      tier name and the "Reputation Index" explainer beside the badge (the card footer layout; o.viewer passes on).
      o.inLink: the mark sits inside a link, so it carries a plain title instead of a focusable tip.
-     Emerging and no tier: '' (founder, Oct 12, 2026: no mark at all below the first badge). */
+     Emerging and no tier: '' (founder, Oct 12, 2026: no mark at all below the first badge). Sample profiles
+     (fictional, op.sample) never carry a tier mark. */
   ui.cardTier = function (op, o) {
     o = o || {};
+    if (op && op.sample) return '';
     const t = opTier(op);
     if (!t) return '';
     if (!ui.tierShown(t.v)) return '';
@@ -326,8 +330,8 @@
      (components.css .illus-tag). Works on paper, cards, dark theme and .night bands.
        RN.ui.illusTag(text?, o?)   inline tag, default text "Illustrative". o.tip: true renders a focusable button
                                    that opens the shared explainer popover (do not use inside a link; the default
-                                   span carries a title and a screen-reader sentence instead). o.title replaces the
-                                   explanation. o.cls adds classes.
+                                   span carries a title and one short screen-reader sentence instead, ILLUS_SR).
+                                   o.title replaces the explanation, o.sr the screen-reader sentence. o.cls adds classes.
        RN.ui.illusNote(text?, o?)  one line under a figure group, default "Illustrative figures until the first survey
                                    closes." o.asOf adds "As of <date>" in front (a Date, ISO string or text).
        RN.ui.figNote(parts, o?)    the as-of and sample line under any figure block: parts are joined with " · "
@@ -335,13 +339,16 @@
      The reviewer-only label RN.ui.illus (below) is unchanged: it stays hidden from visitors. */
   ui.ILLUS_TITLE = 'Illustrative survey data. These figures show the shape of the research and are not measured yet. They are replaced by real results when the first State of Fractional GTM survey closes.';
   ui.ILLUS_NOTE = 'Illustrative figures until the first survey closes.';
+  // What a screen reader hears after the tag text: one short sentence (the title and the tip keep the full explanation)
+  ui.ILLUS_SR = 'Not measured data yet.';
   ui.illusTag = function (text, o) {
     o = o || {};
     const t = text || 'Illustrative';
     const title = o.title || ui.ILLUS_TITLE;
+    const sr = o.sr || ui.ILLUS_SR;
     const cls = 'illus-tag' + (o.cls ? ' ' + esc(o.cls) : '');
-    if (o.tip) return `<button type="button" class="${cls}" data-tip="${esc(title)}" aria-label="${esc(t + '. ' + title)}">${icon('info')}<span>${esc(t)}</span></button>`;
-    return `<span class="${cls}" title="${esc(title)}">${icon('info')}<span>${esc(t)}</span><span class="sr-only">. ${esc(title)}</span></span>`;
+    if (o.tip) return `<button type="button" class="${cls}" data-tip="${esc(title)}" aria-label="${esc(t + '. ' + sr)}">${icon('info')}<span>${esc(t)}</span></button>`;
+    return `<span class="${cls}" title="${esc(title)}">${icon('info')}<span>${esc(t)}</span><span class="sr-only">. ${esc(sr)}</span></span>`;
   };
   ui.illusNote = function (text, o) {
     o = o || {};
@@ -410,13 +417,44 @@
   };
 
   /* ---------- Operator card (used everywhere an operator is listed) ----------
-     opts: { why: 'reason string', compact, cta: 'profile'|'intro'|'invite', meta: extra html, rank } */
+     opts: { why: 'reason string', compact (no headline), meta: extra html, prefer: ['focus area the search asked for'],
+             cta: 'invite' with ctaAct and ctaLabel (a filled button), ctaStyle: 'line' (an outlined button, for a
+             page whose primary action is elsewhere, e.g. Talk to us on the function pages) }
+     The card is trimmed for scanning (design pass, Oct 14, 2026). Browse's card (RN.browse.card) is the reference,
+     and every list (home, guides, work, the function pages, engagements) now shows the same card:
+     - at most 2 focus areas (RN.ui.cardTags): the ones the search asked for first (opts.prefer), then company-verified,
+       then claimed; a claimed one only fills an empty slot and keeps the quieter claimed style; never "+N more"
+     - the footer names the tier and the company reviews in words (RN.ui.cardStanding, "Trusted · 2 company
+       reviews"); the score lives in the tier mark's tooltip with what earned it. The card rule holds: a mark only
+       from Proven up, and none for sample profiles.
+     - no tagline yet: the first sentence of the operator's own bio, so a card never reads as a stub */
+  const CARD_TAGS = 2;
+  ui.cardTags = function (op, prefer, max) {
+    const want = (prefer || []).map((t) => String(t).toLowerCase());
+    const rank = (t) => (want.includes(String(t.t).toLowerCase()) ? 0 : t.tier !== 'claimed' ? 1 : 2);
+    const list = (op.tags || []).map((t) => (typeof t === 'string' ? { t, tier: 'claimed' } : t)).filter((t) => t && t.t).map((t, i) => ({ t, i }))
+      .sort((a, b) => rank(a.t) - rank(b.t) || (b.t.score || 0) - (a.t.score || 0) || a.i - b.i)
+      .slice(0, max || CARD_TAGS).map((x) => (x.t.tier === 'claimed' ? x.t : Object.assign({}, x.t, { tier: 'verified' })));
+    return list.length ? `<div class="opc-tags">${list.map((t) => ui.ftag(t)).join('')}</div>` : '';
+  };
+  ui.cardStanding = function (op) {
+    if (!op || op.sample) return '';
+    const t = opTier(op);
+    if (!t || !ui.tierShown(t.v)) return '';
+    const n = (op.reviews || []).length;
+    const why = ui.tierWhy(op);
+    return `<span class="opc-stand"><button type="button" class="tier-mark tier-mark-pill t-${t.v}" data-tip="${esc(why)}" aria-label="${esc(plain(why))}">${ui.tierPill(t.v)}</button>${n ? `<span class="opc-stand-n">${esc(RN.fmt.plural(n, 'company review'))}</span>` : ''}</span>`;
+  };
+  const firstLine = (t) => { const m = String(t || '').replace(/\s+/g, ' ').trim().match(/^.{20,180}?[.!?](\s|$)/); return m ? m[0].trim() : ''; };
   ui.opCard = function (op, opts) {
     opts = opts || {};
     const st = RN.store.state;
     const saved = st.shortlist.includes(op.id);
     const inCompare = st.compare.includes(op.id);
-    const tags = (op.tags || []).slice().sort((a, b) => (b.score || 0) - (a.score || 0) || (a.tier === 'claimed') - (b.tier === 'claimed'));
+    const headline = op.headline || firstLine(op.bio);
+    const visitor = st.persona === 'visitor';
+    const rg = op.rate && visitor && RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null;
+    const ctaCls = opts.ctaStyle === 'line' ? 'btn btn-line btn-sm' : 'btn btn-sm';
     return `<article class="opc tb-host" data-op="${esc(op.id)}">
       <button type="button" class="opc-save ${saved ? 'on' : ''}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}" aria-label="${saved ? 'Remove from shortlist' : 'Save to shortlist'}">${icon('bookmark')}</button>
       <div class="opc-top">
@@ -426,20 +464,20 @@
           <div class="opc-role">Fractional ${esc(op.role)}</div>
         </div>
       </div>
-      ${op.headline && !opts.compact ? `<p class="opc-head clamp-2 serif-up" style="font-size:16px">${esc(RN.fmt.smart(op.headline))}</p>` : ''}
+      ${headline && !opts.compact ? `<p class="opc-head clamp-2 serif-up" style="font-size:16px">${esc(RN.fmt.smart(headline))}</p>` : ''}
       ${opts.why ? `<div class="opc-why">${icon('target')}<span>${esc(opts.why)}</span></div>` : ''}
-      ${ui.ftags(tags, opts.compact ? 2 : 3)}
+      ${ui.cardTags(op, opts.prefer)}
       <div class="opc-meta">
         <span>${ui.avail(op)}</span>
-        ${op.rate ? (RN.store.state.persona === 'visitor' ? ((r) => (r ? `<span title="${esc(r.note)} The exact hourly rate shows after you sign in.">${icon('clock')}${esc(r.short + ' ' + r.text)}</span>` : ''))(RN.model.opMonthlyRange && RN.model.opMonthlyRange(op)) : `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>`) : ''}
+        ${op.rate ? (visitor ? (rg ? `<span class="opc-range" title="${esc(rg.note)} The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.short + ' ' + rg.text)}</span>` : '') : `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>`) : ''}
         ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
       </div>
       ${opts.meta || ''}
       <div class="opc-foot">
-        ${ui.cardTier(op, { text: true })}
+        ${ui.cardStanding(op)}
         <div class="row" style="--gap:8px">
           <button type="button" class="act ${inCompare ? '' : 'muted'}" data-act="compare-toggle" data-id="${esc(op.id)}">${icon('compare')}${inCompare ? 'In compare' : 'Compare'}</button>
-          ${opts.cta === 'invite' ? `<button type="button" class="btn btn-sm" data-act="${esc(opts.ctaAct || 'project-invite')}" data-id="${esc(op.id)}">${esc(opts.ctaLabel || 'Invite')}</button>` : ''}
+          ${opts.cta === 'invite' ? `<button type="button" class="${ctaCls}" data-act="${esc(opts.ctaAct || 'project-invite')}" data-id="${esc(op.id)}">${esc(opts.ctaLabel || 'Invite')}</button>` : ''}
         </div>
       </div>
     </article>`;

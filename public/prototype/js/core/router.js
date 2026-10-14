@@ -9,6 +9,10 @@
        footer: true,                       // show site footer (default true)
        requires: 'buyer' | 'operator' | 'admin' | null,
        title: (params) => 'Page title',
+       description: (params) => 'One sentence', // optional: <meta name="description"> for this route (a string works too);
+                                           // routes without one get the site default from index.html. Read after render,
+                                           // like title, so it can use what render worked out. RN.setDescription(text)
+                                           // changes it in place (a page that rewrites its own URL), '' restores the default.
        render: (params) => htmlString,
        mount: (root, params) => {},        // optional: wire charts, focus, observers
        unmount: () => {},                  // optional
@@ -72,6 +76,21 @@
     return best;
   }
 
+  /* Per-route meta description. The site default is the one index.html ships with. */
+  const descMeta = () => {
+    let m = document.querySelector('meta[name="description"]');
+    if (!m) { m = document.createElement('meta'); m.setAttribute('name', 'description'); document.head.appendChild(m); }
+    return m;
+  };
+  const DEFAULT_DESC = (document.querySelector('meta[name="description"]') || { getAttribute: () => '' }).getAttribute('content') || 'Revenue Nomad is the fractional GTM network, research hub and operator studio in one system.';
+  RN.defaultDescription = DEFAULT_DESC;
+  RN.setDescription = function (text) {
+    const t = String(text == null ? '' : text).replace(/<[^>]+>/g, '').replace(/\u2060/g, '').replace(/\s+/g, ' ').trim();
+    const m = descMeta();
+    const next = t || DEFAULT_DESC;
+    if (m.getAttribute('content') !== next) m.setAttribute('content', next);
+  };
+
   RN.currentRoute = () => current;
   RN.path = () => RN.canonical(decodeURIComponent((location.hash || '').replace(/^#/, ''))) || 'home';
 
@@ -120,7 +139,11 @@
     root.innerHTML = `<main id="main" class="${keepScroll ? '' : 'view-enter' + (first ? ' is-first' : '')}" data-view="${view.name}">${html}</main>`;
     RN.shell.update(view);
     try { document.title = (view.title ? view.title(params) : 'Revenue Nomad') + (view.name === 'home' ? '' : ' · Revenue Nomad'); } catch (e) { document.title = 'Revenue Nomad'; }
-    if (view.mount && !(view.requires && view.requires !== persona && !(view.requires === 'any-user' && persona !== 'visitor'))) {
+    const gated = view.requires && view.requires !== persona && !(view.requires === 'any-user' && persona !== 'visitor');
+    let desc = '';
+    if (!gated && view.description) { try { desc = typeof view.description === 'function' ? view.description(params) : view.description; } catch (e) { console.error(e); } }
+    RN.setDescription(desc);
+    if (view.mount && !gated) {
       try { view.mount(root.firstElementChild, params); } catch (e) { console.error(e); }
     }
     if (keepScroll) window.scrollTo(0, y);

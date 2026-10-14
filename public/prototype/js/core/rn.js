@@ -69,19 +69,24 @@
     },
     initials: (name) => String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join(''),
     first: (name) => String(name || '').split(/\s+/)[0],
-    // Typesetting for display copy (review quotes, headlines). Words never change: curly quotes and apostrophes,
-    // a real ellipsis, an en dash in a spaced number range ("$9,000 - $13,500") and a spaced en dash where a
-    // spaced hyphen stands in for a dash. Run it on raw text, before RN.esc.
+    // Typesetting for display copy (review quotes, headlines, body copy). Words never change: curly quotes and
+    // apostrophes, a real ellipsis, and hyphens only (house style: a spaced "--" becomes a spaced hyphen, never an en
+    // or em dash). A number or money range ("$9,000 - $13,500", "$4k - $10k/month") is held together on one line
+    // (RN.fmt.keepRange). Run it on raw text, before RN.esc.
     smart: (s) => String(s == null ? '' : s)
       .replace(/\.\.\./g, '…')
-      .replace(/(\d[kKM]?)\s+-\s+(?=[$€£]?\d)/g, '$1 \uE000 ')
-      .replace(/\s-{1,2}\s/g, ' – ')
+      .replace(/(\d[kKM]?)\s+-\u2060?\s+(?=[$€£]?\d)/g, '$1\u00a0\uE000\u2060\u00a0')
+      .replace(/\s-{1,2}\s/g, ' - ')
       .replace(/(^|[\s([{–—])'/g, '$1‘')
       .replace(/'/g, '’')
       .replace(/(^|[\s([{–—])"/g, '$1“')
       .replace(/"/g, '”')
       // Number and money ranges keep a spaced hyphen ("$2.2k - $3.4k/month", founder decision Oct 12, 2026)
       .replace(/\uE000/g, '-'),
+    /* A money range never breaks across lines. No-break spaces alone are not enough: a hyphen is itself a line-break
+       chance, so a word joiner (U+2060, invisible) follows it. "$4k - $10k/month" -> "$4k\u00a0-\u2060\u00a0$10k/month".
+       Safe on text or escaped HTML, and idempotent. */
+    keepRange: (s) => String(s == null ? '' : s).replace(/(\$[\d.,]+[kKM]?)[ \u00a0]+-\u2060?[ \u00a0]+(?=\$)/g, '$1\u00a0-\u2060\u00a0'),
   };
 
   /* ---------- Time: the prototype runs on a simulated clock (Prototype dock can advance it) ---------- */

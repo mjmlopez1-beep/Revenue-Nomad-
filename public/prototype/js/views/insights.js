@@ -63,8 +63,9 @@
   const TAG_SHORT = 'Illustrative preview figure. Replaced by real results when the first State of Fractional GTM survey closes.';
   const tagS = (t) => tag(t, { title: TAG_SHORT });
   const figNote = (parts, illus) => RN.ui.figNote(parts, { illus: illus && ILLUS() });
-  // Money ranges inside a sentence never wrap ("$185 - $290/hr" stays together), as in RN.costs.answer
-  const nb = (s) => String(s).replace(/(\$[\d.,]+[kKM]?) - (\$)/g, '$1 - $2');
+  // Money ranges inside a sentence never wrap ("$185 - $290/hr" stays together), as in RN.costs.answer. No-break
+  // spaces alone still let a line break after the hyphen, so this is RN.fmt.keepRange (it adds a word joiner)
+  const nb = (s) => RN.fmt.keepRange(s);
   // Plain-language seat names for the role pages: H1 ("What fractional RevOps leaders charge") and title ("Fractional RevOps Leader Cost (2026)")
   const ROLE_T = { sales_leadership: 'Sales Leader', marketing: 'Marketing Leader', revenue_operations: 'RevOps Leader', sales_enablement: 'Sales Enablement Leader', customer_success_growth: 'Customer Success Leader', ai_gtm: 'AI GTM Leader', partnerships: 'Partnerships Leader', sellers: 'Seller' };
   const year = () => asOfDate().getFullYear();
@@ -72,19 +73,10 @@
   const indexTitle = () => `Fractional GTM Leader Rates (${year()})`;
   // Guides for a role category (cost guide first), from the research registry
   const guidesFor = (cat, n) => (RN.research && RN.research.guidesFor ? RN.research.guidesFor(cat, n || 3) : []);
-  /* One meta description per route (credibility audit): set on mount, the shared one put back on unmount */
-  let metaPrev = null;
-  function setMeta(text) {
-    const m = document.querySelector('meta[name="description"]');
-    if (!m) return;
-    if (metaPrev === null) metaPrev = m.getAttribute('content') || '';
-    m.setAttribute('content', text);
-  }
-  function resetMeta() {
-    const m = document.querySelector('meta[name="description"]');
-    if (m && metaPrev !== null) m.setAttribute('content', metaPrev);
-    metaPrev = null;
-  }
+  /* One meta description per route (credibility audit): each view's description option (the router sets it on every
+     route change and puts the site default back elsewhere). setMeta changes it in place when the estimator rewrites a
+     role permalink. */
+  const setMeta = (text) => { if (RN.setDescription) RN.setDescription(text); };
 
   /* Contribute and share (RN.contrib, RN.share in js/core/contribute.js). Every piece below comes from that core:
      the CTAs switch to their thanks state on their own after a contribution (RN.contrib.refresh). */
@@ -182,7 +174,7 @@
     const more = extra ? extra(root) : null;
     cleanup = () => { window.removeEventListener('resize', onResize); clearTimeout(t); if (more) more(); cleanup = null; };
   }
-  function unmount() { if (cleanup) cleanup(); resetMeta(); }
+  function unmount() { if (cleanup) cleanup(); }
 
   /* Clipboard. Call from inside the click handler so the browser sees a user gesture.
      navigator.clipboard.writeText first; if it is missing or refused (file://, permissions), select the
@@ -564,11 +556,11 @@
   RN.view('insights', {
     route: 'insights', nav: 'insights',
     title: () => 'Fractional GTM Insights',
+    description: () => 'Rates, demand and research on fractional go-to-market leadership. The Rate Index by role, the 2027 State of Fractional GTM preview and guides for companies hiring.',
     render: hub,
     mount: (root) => {
       lifecycle(root);
       drawMinis(root);
-      setMeta('Rates, demand and research on fractional go-to-market leadership. The Rate Index by role, the 2027 State of Fractional GTM preview and guides for companies hiring.');
     },
     unmount,
   });
@@ -966,11 +958,11 @@
   RN.view('report', {
     route: 'report', nav: 'insights', chrome: 'over',
     title: () => `The State of Fractional GTM ${REP().year} (Preview Edition)`,
+    description: () => `The State of Fractional GTM ${REP().year}, preview edition with illustrative figures. What companies pay, how they scope fractional GTM work, which roles they hire first and who gets rehired.`,
     render: report,
     mount: (root) => {
       lifecycle(root, reportScroll);
       tagCxMeta(root);
-      setMeta(`The State of Fractional GTM ${REP().year}, preview edition with illustrative figures. What companies pay, how they scope fractional GTM work, which roles they hire first and who gets rehired.`);
     },
     unmount,
   });
@@ -1494,8 +1486,9 @@
   RN.view('rates', {
     route: 'rates', nav: 'insights',
     title: () => indexTitle(),
+    description: () => ratesMeta(),
     render: () => { routeCat = null; return rates(); },
-    mount: (root) => { lifecycle(root); bindVar(root); tagCxMeta(root); setMeta(ratesMeta()); },
+    mount: (root) => { lifecycle(root); bindVar(root); tagCxMeta(root); },
     unmount,
   });
   /* Role permalink (#rates.revenue_operations): the estimator opens on that role and the row is marked */
@@ -1504,12 +1497,13 @@
     route: 'rates.:cat', nav: 'insights',
     samples: { cat: 'revenue_operations' },
     title: (p) => (rateCat(p.cat) ? roleTitle(p.cat) : indexTitle()),
+    description: (p) => (rateCat(p.cat) ? roleMeta(p.cat) : ratesMeta()),
     render: (p) => {
       routeCat = rateCat(p.cat);
       if (routeCat) { estDefaults(); est.cat = routeCat; }
       return rates();
     },
-    mount: (root) => { lifecycle(root); bindVar(root); tagCxMeta(root); setMeta(routeCat ? roleMeta(routeCat) : ratesMeta()); },
+    mount: (root) => { lifecycle(root); bindVar(root); tagCxMeta(root); },
     unmount,
   });
 })();

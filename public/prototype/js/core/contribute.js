@@ -12,7 +12,9 @@
      cta(kind, {variant, ctx})     inline invitation: variant 'band' | 'card' | 'line'. '' when it does not apply.
      pulse(qid, ctx)               one-tap question for the end of an article (question bank: RN.contrib.questions)
      count(dataset, filter)        finished contributions in this browser for a dataset
-     published(dataset, filter)    the real published sample behind a dataset (2027 report, Rate Index n)
+     published(dataset, filter)    the published sample behind a dataset (2027 report, Rate Index n): {n, label, source,
+                                   illustrative}. While market.illustrative is true the label is an illustrative count:
+                                   show it with C.illusTag() (the CTAs and results here already do)
      mine()                        the viewer's own contributions, newest first, with what each fed
      done(kind, ctx)               the viewer's finished contribution for this window (truthy), else null
      draft()                       the viewer's saved, unfinished 2028 survey, else null
@@ -36,6 +38,14 @@
   const S = (RN.share = {});
   const REP = () => RN.data.market.report;
   const RI = () => RN.data.market.rateIndex;
+  /* The Rate Index and 2027 report figures (js/data/market.js) are illustrative until the first survey closes, so every
+     figure or sample count from them that a visitor sees here carries the visible tag (RN.ui.illusTag). The tags are
+     rendered by these functions, so they come back on every RN.contrib.refresh. */
+  const ILLUS = () => !!RN.data.market && RN.data.market.illustrative !== false;
+  const ILLUS_TIP = 'Illustrative preview figure. Replaced by real results when the first State of Fractional GTM survey closes.';
+  const illusTag = () => (ILLUS() ? ' ' + RN.ui.illusTag('Illustrative', { title: ILLUS_TIP }) : '');
+  // A shared or emailed figure says so too, so it never travels as a measured number
+  const illusLine = (what) => (ILLUS() ? ` ${what || 'Illustrative figures'} until the first survey closes.` : '');
   const st = () => RN.store.state;
   const persona = () => st().persona;
   const MIN_N = 5;       // a figure publishes only when its group has at least this many responses
@@ -169,18 +179,19 @@
   };
 
   /* The real published sample behind a dataset. Rate Index: n per role category. Report: the 2027 sample. */
+  C.illusTag = illusTag;
   C.published = function (dataset, filter) {
     filter = filter || {};
     const R = REP();
     if (dataset === 'rateIndex') {
       const by = RI().byCat;
       const n = filter.cat ? ((by[filter.cat] || {}).n || 0) : Object.keys(by).reduce((s, k) => s + (by[k].n || 0), 0);
-      return { n, label: `${RN.fmt.plural(n, 'rate')} in the ${C.indexLabel()}${filter.cat ? ` for ${catLabel(filter.cat)}` : ''}`, directional: !!filter.cat && n < MIN_CELL, source: 'Rate Index' };
+      return { n, label: `${RN.fmt.plural(n, 'rate')} in the ${C.indexLabel()}${filter.cat ? ` for ${catLabel(filter.cat)}` : ''}`, directional: !!filter.cat && n < MIN_CELL, source: 'Rate Index', illustrative: ILLUS() };
     }
     if (dataset === 'report2028' || dataset === 'report2027' || dataset === 'pulse') {
       const s = R.sample || {};
       const n = filter.side === 'operator' ? s.operators : filter.side === 'company' ? s.companies : (s.operators || 0) + (s.companies || 0);
-      return { n, operators: s.operators, companies: s.companies, label: `The ${R.year} edition heard from ${RN.fmt.int(s.operators)} operators and ${RN.fmt.int(s.companies)} companies`, source: `State of Fractional GTM ${R.year}` };
+      return { n, operators: s.operators, companies: s.companies, label: `The ${R.year} edition heard from ${RN.fmt.int(s.operators)} operators and ${RN.fmt.int(s.companies)} companies`, source: `State of Fractional GTM ${R.year}`, illustrative: ILLUS() };
     }
     return { n: 0, label: '', source: '' };
   };
@@ -347,7 +358,7 @@
             : 'overlaps the 20 and 40-hour ranges for this seat';
           place = `<p class="cx-res-line">Your answer, <b class="nowrap">${esc(b.l)}</b>, ${esc(where)}.</p>`;
         }
-        return { html: `<p class="cx-res-line">The ${esc(C.indexLabel())} puts ${esc(catLabel(cat))} at <b class="nowrap">${esc(m20.label)}</b> for 20 hours and <b class="nowrap">${esc(m40.label)}</b> for 40 hours.</p>${place}<p class="cx-src">Rate Index, ${esc(RN.fmt.plural(pub.n, 'rate'))} in this category${pub.directional ? '. Read it as directional' : ''}. Your answer is bucketed and does not go into the index; add the details to count.</p>` };
+        return { html: `<p class="cx-res-line">The ${esc(C.indexLabel())} puts ${esc(catLabel(cat))} at <b class="nowrap">${esc(m20.label)}</b> for 20 hours and <b class="nowrap">${esc(m40.label)}</b> for 40 hours.</p>${place}<p class="cx-src">Rate Index, ${esc(RN.fmt.plural(pub.n, 'rate'))} in this category${pub.directional ? '. Read it as directional' : ''}.${illusTag()} Your answer is bucketed and does not go into the index; add the details to count.</p>` };
       },
     },
     'topic-hours': {
@@ -377,7 +388,7 @@
     const max = Math.max.apply(null, res.rows.map((r) => r.pct).concat(1));
     return `<figure class="cx-bars-fig"><figcaption class="label">${esc(res.label)}</figcaption>
       <ul class="cx-bars">${res.rows.map((r) => `<li class="${r.v === chosen ? 'on' : ''}"><span class="cx-bar-l">${esc(r.l)}${r.v === chosen ? '<em>Your answer</em>' : ''}</span><span class="cx-bar-t" aria-hidden="true"><i style="width:${Math.max(2, (r.pct / max) * 100).toFixed(1)}%"></i></span><b class="cx-bar-v">${esc(r.pct)}%</b></li>`).join('')}</ul>
-      <p class="cx-src">${esc(res.source)}</p>${RN.ui.illus()}</figure>`;
+      <p class="cx-src">${esc(res.source)}${illusTag()}</p></figure>`;
   }
   const honest = (q) => (q && q.dataset === 'report2028'
     ? `<p class="cx-honest">${icon('clock')}<span>Results publish in the State of Fractional GTM 2028, in October 2027, once each group has at least ${MIN_N} answers.</span></p>`
@@ -608,7 +619,7 @@
     if (persona() === 'visitor') C.setSide(op ? 'operator' : 'company');
     const pos = C.position(hourly, data.cat, data.rev);
     track(kind, F && F.ctx, { cat: data.cat });
-    if (email) RN.mail(email, `Your ${P.short} Rate Index benchmark`, `${op ? 'Your rate' : 'What you paid'} for ${catLabel(data.cat)} works out to ${RN.fmt.usd(pos.hourly)}/hr. That is ${BAND[pos.band]} in the ${C.indexLabel()}: ${RN.fmt.hrRange(pos.p25, pos.p75)}, median ${RN.fmt.usd(pos.p50)}/hr${data.rev ? ` for ${revLabel(data.rev)} companies` : ''}.\n\nIt goes into the ${P.label} Rate Index, published in the first two weeks of ${P.publishes}. Published only in aggregate, never individually.`, 'research');
+    if (email) RN.mail(email, `Your ${P.short} Rate Index benchmark`, `${op ? 'Your rate' : 'What you paid'} for ${catLabel(data.cat)} works out to ${RN.fmt.usd(pos.hourly)}/hr. That is ${BAND[pos.band]} in the ${C.indexLabel()}: ${RN.fmt.hrRange(pos.p25, pos.p75)}, median ${RN.fmt.usd(pos.p50)}/hr${data.rev ? ` for ${revLabel(data.rev)} companies` : ''}.${illusLine('The index figures are illustrative')}\n\nIt goes into the ${P.label} Rate Index, published in the first two weeks of ${P.publishes}. Published only in aggregate, never individually.`, 'research');
     C.refresh();
     show(rateResult(rec));
   }
@@ -626,7 +637,7 @@
     const bc = (RI().byCat || {})[a.cat];
     const idxQ = C.indexLabel().replace(/ index$/, '');
     const shareO = bc
-      ? { title: `${catLabel(a.cat)} rates, Revenue Nomad Rate Index`, route: 'rates.' + a.cat, kind: 'rateIndex', quote: `The median fractional ${catLabel(a.cat)} rate is ${RN.fmt.usd(Math.round(bc.p50))}/hr, from ${RN.fmt.plural(bc.n, 'rate')}. Revenue Nomad Rate Index, ${idxQ}.` }
+      ? { title: `${catLabel(a.cat)} rates, Revenue Nomad Rate Index`, route: 'rates.' + a.cat, kind: 'rateIndex', quote: `The median fractional ${catLabel(a.cat)} rate is ${RN.fmt.usd(Math.round(bc.p50))}/hr, from ${RN.fmt.plural(bc.n, 'rate')}. Revenue Nomad Rate Index, ${idxQ}.${ILLUS() ? ' Illustrative figure from the preview index.' : ''}` }
       : { title: 'The Revenue Nomad Rate Index', route: 'rates', kind: 'rateIndex', quote: `Median hourly rates for fractional GTM leaders by role category. Revenue Nomad Rate Index, ${idxQ}.` };
     return {
       title: op ? 'Where your rate sits' : 'How it compares',
@@ -636,8 +647,7 @@
         <h3 class="h3 cx-res-h" tabindex="-1" data-cx-focus>${esc(who)} is ${esc(BAND[pos.band])}<span class="vm">.</span></h3>
         ${scale(pos, op ? 'You' : 'You paid')}
         ${conv}
-        <p class="cx-src">${esc(C.indexLabel().replace(/^./, (c) => c.toUpperCase()))} for ${esc(catLabel(a.cat))}${a.rev ? `, adjusted for ${esc(revLabel(a.rev))} companies` : ', all company sizes'}. ${esc(RN.fmt.plural(pub.n, 'rate'))} in this category${pub.directional ? `, under our minimum of ${MIN_CELL}, so read it as directional` : ''}.</p>
-        ${RN.ui.illus()}
+        <p class="cx-src">${esc(C.indexLabel().replace(/^./, (c) => c.toUpperCase()))} for ${esc(catLabel(a.cat))}${a.rev ? `, adjusted for ${esc(revLabel(a.rev))} companies` : ', all company sizes'}. ${esc(RN.fmt.plural(pub.n, 'rate'))} in this category${pub.directional ? `, under our minimum of ${MIN_CELL}, so read it as directional` : ''}.${illusTag()}</p>
         <p class="cx-res-next">Your ${op ? 'rate' : 'number'} goes into the ${esc(P.label)} index, published in the first two weeks of ${esc(P.publishes)}. Published only in aggregate, never individually.</p>
         ${shareLine(op ? 'Know an operator who should add theirs?' : 'Know a company that should compare theirs?', shareO, 'Share the Rate Index')}
       </div>`,
@@ -1008,7 +1018,7 @@
       body: `<div class="cx-res">
         <p class="cx-res-kicker">${icon('check-circle')}<span>${esc(C.describe(rec))}</span></p>
         <h3 class="h3 cx-res-h" tabindex="-1" data-cx-focus>You'll get the 2028 report a week before it publishes, plus the full breakdown for your role<span class="vm">.</span></h3>
-        <p class="cx-res-line">${esc(pub.label)}. The 2028 edition publishes in October 2027. Fieldwork closes Aug 31, 2027.</p>
+        <p class="cx-res-line">${esc(pub.label)}.${illusTag()} The 2028 edition publishes in October 2027. Fieldwork closes Aug 31, 2027.</p>
         ${shareLine('Know someone who should be in it?', { title: 'Shape the State of Fractional GTM 2028', route: 'report', kind: 'report2028', quote: 'The State of Fractional GTM 2028 survey is open. Six short chapters, and you get the report a week early.' }, 'Share the survey')}
       </div>`,
       foot: `<button type="button" class="act muted cx-ft-l" data-act="cx-open" data-kind="survey" data-ctx="${jsonAttr({ chapter: 1, full: true })}">Review my answers</button><button type="button" class="btn" data-act="modal-close">Done</button>`,
@@ -1120,11 +1130,11 @@
     const pub = C.published('report2028');
     const chap = chapterOf(ctx.chapter);
     const C2 = {
-      rate: { icon: 'chart', tone: 'forest', eb: `Rate Index · ${ds.rateIndex.cadence}`, t: `Add your rate to the ${P.short} Rate Index`, b: `${ds.rateIndex.time}, published only in aggregate. See where you sit right away.`, meta: [`${P.label} window closes ${P.closes}`, ctx.cat ? C.published('rateIndex', { cat: ctx.cat }).label : ''], btn: 'Add your rate', line: `Charge for one of these seats? Add your rate to the ${P.short} Rate Index.`, lineBtn: 'Add your rate' },
-      paid: { icon: 'chart', tone: 'forest', eb: `Rate Index · ${ds.rateIndex.cadence}`, t: `Add what you paid to the ${P.short} Rate Index`, b: `${ds.rateIndex.time}, published only in aggregate. See how it compares right away.`, meta: [`${P.label} window closes ${P.closes}`, ctx.cat ? C.published('rateIndex', { cat: ctx.cat }).label : ''], btn: 'Add what you paid', line: `Paid for one of these seats? Add it to the ${P.short} Rate Index.`, lineBtn: 'Add what you paid' },
-      rates: { icon: 'chart', tone: 'forest', eb: `Rate Index · ${ds.rateIndex.cadence}`, t: `Add to the ${P.short} Rate Index`, b: `Operators add a rate they charge, companies add what they paid. ${ds.rateIndex.time}, published only in aggregate, with your result right away.`, meta: [`${P.label} window closes ${P.closes}`, ctx.cat ? C.published('rateIndex', { cat: ctx.cat }).label : ''], btn: 'Add what you paid', btn2: 'Add your rate', line: `Paid for one of these seats, or charge for one? Add it to the ${P.short} Rate Index.`, lineBtn: 'Add yours' },
+      rate: { icon: 'chart', tone: 'forest', eb: `Rate Index · ${ds.rateIndex.cadence}`, t: `Add your rate to the ${P.short} Rate Index`, b: `${ds.rateIndex.time}, published only in aggregate. See where you sit right away.`, meta: [`${P.label} window closes ${P.closes}`, ctx.cat ? { t: C.published('rateIndex', { cat: ctx.cat }).label, illus: true } : ''], btn: 'Add your rate', line: `Charge for one of these seats? Add your rate to the ${P.short} Rate Index.`, lineBtn: 'Add your rate' },
+      paid: { icon: 'chart', tone: 'forest', eb: `Rate Index · ${ds.rateIndex.cadence}`, t: `Add what you paid to the ${P.short} Rate Index`, b: `${ds.rateIndex.time}, published only in aggregate. See how it compares right away.`, meta: [`${P.label} window closes ${P.closes}`, ctx.cat ? { t: C.published('rateIndex', { cat: ctx.cat }).label, illus: true } : ''], btn: 'Add what you paid', line: `Paid for one of these seats? Add it to the ${P.short} Rate Index.`, lineBtn: 'Add what you paid' },
+      rates: { icon: 'chart', tone: 'forest', eb: `Rate Index · ${ds.rateIndex.cadence}`, t: `Add to the ${P.short} Rate Index`, b: `Operators add a rate they charge, companies add what they paid. ${ds.rateIndex.time}, published only in aggregate, with your result right away.`, meta: [`${P.label} window closes ${P.closes}`, ctx.cat ? { t: C.published('rateIndex', { cat: ctx.cat }).label, illus: true } : ''], btn: 'Add what you paid', btn2: 'Add your rate', line: `Paid for one of these seats, or charge for one? Add it to the ${P.short} Rate Index.`, lineBtn: 'Add yours' },
       pulse: { icon: 'wave', tone: 'info', eb: `Quarterly Pulse · ${P.label}`, t: `Answer the ${P.short} Pulse`, b: `Three questions, about 60 seconds. Results publish in the ${P.publishes} Pulse.`, meta: ['Feeds the Demand Index', `Open until ${P.closes}`], btn: 'Answer the Pulse', line: `Three questions on demand and hiring plans, about 60 seconds. Answer the ${P.short} Pulse.`, lineBtn: 'Answer the Pulse' },
-      survey: { icon: 'book', tone: 'enable', eb: 'State of Fractional GTM 2028 · Annual', t: chap ? `Add your answer to chapter ${chap}` : 'Shape the 2028 State of Fractional GTM', b: chap ? `${C.chapters[chap - 1].t}. One to three questions for the 2028 edition, published only in aggregate.` : `Six short chapters, ${ds.report2028.time.toLowerCase()}. Save and finish later. Get the report a week before it publishes.`, meta: [pub.label, `Open until ${ds.report2028.window().closesLabel}`], btn: chap ? 'Add your answer' : 'Start the survey', line: chap ? `For the 2028 edition, ${chapterAsk(chap).replace(/^./, (c) => c.toLowerCase())}` : 'Add your data to the next State of Fractional GTM. Six short chapters, and you get the report a week early.', lineBtn: chap ? 'Add your answer' : 'Take the survey' },
+      survey: { icon: 'book', tone: 'enable', eb: 'State of Fractional GTM 2028 · Annual', t: chap ? `Add your answer to chapter ${chap}` : 'Shape the 2028 State of Fractional GTM', b: chap ? `${C.chapters[chap - 1].t}. One to three questions for the 2028 edition, published only in aggregate.` : `Six short chapters, ${ds.report2028.time.toLowerCase()}. Save and finish later. Get the report a week before it publishes.`, meta: [{ t: pub.label, illus: true }, `Open until ${ds.report2028.window().closesLabel}`], btn: chap ? 'Add your answer' : 'Start the survey', line: chap ? `For the 2028 edition, ${chapterAsk(chap).replace(/^./, (c) => c.toLowerCase())}` : 'Add your data to the next State of Fractional GTM. Six short chapters, and you get the report a week early.', lineBtn: chap ? 'Add your answer' : 'Take the survey' },
       insight: { icon: 'edit', tone: 'sales', eb: 'Field notes', t: 'Add a field note to this guide', b: 'Answer from your own engagements. Approved notes carry your byline and never change your Reputation Index.', meta: [], btn: 'Add a field note', line: 'Done this work? Add a field note to this guide with your byline.', lineBtn: 'Add a field note' },
     };
     return C2[k];
@@ -1184,7 +1194,7 @@
       <div class="cx-card-hd">${tile('md')}<span class="cx-eb">${esc(copy.eb)}</span></div>
       <${H} class="h4 cx-t">${esc(t)}</${H}>
       <p class="cx-b">${esc(b)}</p>
-      ${meta.length ? `<ul class="cx-meta">${meta.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
+      ${meta.length ? `<ul class="cx-meta">${meta.map((m) => (typeof m === 'object' ? `<li><span>${esc(m.t)}${m.illus ? illusTag() : ''}</span></li>` : `<li>${esc(m)}</li>`)).join('')}</ul>` : ''}
       <div class="cx-acts">${buttons}</div>
     </article>`;
   };

@@ -71,6 +71,9 @@
   --info-bg: #E5EDF8;
   --gold: #7E5A0B;            /* stars, tier seals, "Illustrative" labels (4.5:1 on --gold-bg) */
   --gold-bg: #FAF1D8;
+  /* Amber: the home "Not ready to hire yet" panel's accent (owner decision, Oct 14, 2026: yellow there, not vermilion).
+     For graphics and accents on dark surfaces; under 3:1 on paper, so never body text on a light background. */
+  --amber: #E9A63D;
   /* The vermilion full stop (.vm, base.css) reads --vm; dark surfaces swap it */
   --vm: var(--vermilion);
 
@@ -217,6 +220,7 @@
     --info-bg: #17213A;
     --gold: #E3C35A;
     --gold-bg: #2A2413;
+    --amber: #EDB458;
     --viz-1: #8FD46F;
     --viz-2: #4E9A5E;
     --viz-3: #2C5A3B;
@@ -272,6 +276,7 @@
   --info-bg: #17213A;
   --gold: #E3C35A;
   --gold-bg: #2A2413;
+  --amber: #EDB458;
   --viz-1: #8FD46F;
   --viz-2: #4E9A5E;
   --viz-3: #2C5A3B;

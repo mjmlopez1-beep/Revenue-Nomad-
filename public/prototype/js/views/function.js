@@ -74,8 +74,7 @@
     cost: () => [[kk(C('vp-sales').monthly.lo) + '/month', 'Where a director-level sales retainer starts'], [kk(C('revops-assessment').fixed.lo), 'Where a RevOps assessment starts, as a fixed fee'], ['$0', NO_FEES_L]],
   };
   const statsOf = (d) => (STATS[d.fn] || STATS.cost)(leadOf(d));
-  /* Short seat names for the hero cost card */
-  const SEAT_L = { 'sales-coach': 'Sales coach', 'vp-sales': 'Director or VP of Sales', cro: 'Embedded CRO, ~$55M company', 'revops-retainer': 'Follow-on execution', 'revops-director': 'Hands-on director', 'revops-architect': 'Senior revenue architect', cmo: 'Fractional CMO', 'marketing-launch': 'Brand and product launch lead', 'sales-assessment': '45-day assessment', 'revops-assessment': 'Assessment', 'revops-project': '30-day project' };
+  /* Short seat names for the hero cost card come from the cost record (RN.costs seat .shortLabel) */
   /* The rows the page quotes are drawn in forest; every other bar is --viz-muted (one hue, no category colours) */
   const LEAD_ROWS = ['Director or VP of Sales, teams under 5 to 8 reps', 'Follow-on execution', 'Fractional CMO, PE-backed platform'];
   /* Where each function's benchmark and cost guide live (the cost hub links them under each function) */
@@ -175,7 +174,7 @@
       // fee). Billing and the 20-hour client who missed target live on the cost hub, linked from here.
       terms: () => [['Initial term', '3 to 4 months', 'Then month-to-month'], ['Notice', '30 days', 'Once the initial term ends'],
         ['Assessment', kk(C('sales-assessment').fixed.lo), 'A 45-day fixed fee larger seats can start with'], ['Platform fee', '$0', 'You pay the operator’s rate']],
-      note: 'Market rates [[gap:2027 survey figure|Survey]].',
+      note: 'Market rates[[gap:2027 survey figure|Survey]].',
     },
     first: {
       rows: [
@@ -191,12 +190,12 @@
     stories: [
       [{ title: 'Physical therapy marketing agency, ~$9M revenue' }, ['Problem', 'Close rate fell from 30 to 40% into the teens. 2 to 4 new clients a month against a goal of 10+. The founder-CEO wants to reach $15M.'],
         ['What the operator does', 'A fractional VP of Sales sits above the existing director as strategist and process builder, 40 hours a month for 3 months.'],
-        ['Starting point', 'Close rate in the teens. Started Sep 2026 [[gap:90-day result|Matt]]']],
+        ['Starting point', 'Close rate in the teens. Started Sep 2026[[gap:90-day result|Matt]]']],
       [{ title: 'Founder-led healthcare services company' }, ['Problem', '8 commission-only reps, about half not performing, no repeatable process.'],
         ['What the operator does', 'A 90-day build at 20 hours a month for $4,000. Assess reps, document the process, write scripts, train, audit the CRM, make personnel calls.'],
-        ['Starting point', '8 reps, about 4 performing. Started Sep 2026 [[gap:90-day result|Matt]]']],
+        ['Starting point', '8 reps, about 4 performing. Started Sep 2026[[gap:90-day result|Matt]]']],
       [{ title: 'Ferry, hospitality tip management platform' }, ['What happened', 'A Revenue Nomad operator served as fractional GTM strategy leader from Feb 2025, signed for 4 months and retained about 18.'],
-        ['Result', 'First 20 inbound leads, 2 deals that doubled the client base, first AE hired and closing within 60 days. [[gap:Ferry revenue band|Matt]] [[gap:client quote with sign-off|Matt]]']],
+        ['Result', 'First 20 inbound leads, 2 deals that doubled the client base, first AE hired and closing within 60 days.[[gap:Ferry revenue band|Matt]][[gap:client quote with sign-off|Matt]]']],
     ],
     // One small picture per story, drawn only from figures in that story's own copy
     viz: [
@@ -213,7 +212,7 @@
     },
     faq: [
       ['When does a fractional VP of Sales make sense?', 'When the founder or CEO still runs sales and the revenue system is broken. The trigger is usually overload, not an empty seat.'],
-      ['How does cost compare with a full-time VP of Sales?', 'Average total VP of Sales comp is about $334K, with average tenure about 19 months (Glassdoor 2026 via Stealth Agents, a secondary source). Skaled says replacing a sales leader can cost 1.5x salary. A fractional director for a small team ran $4,000 to $10,000 a month in our 2026 engagements.'],
+      ['How does cost compare with a full-time VP of Sales?', 'Average total VP of Sales comp is about $334K, with average tenure about 19 months (Glassdoor 2026 via Stealth Agents, a secondary source). Skaled says replacing a sales leader can cost up to 1.5x salary. A fractional director for a small team ran $4,000 to $10,000 a month in our 2026 engagements.'],
       ['Will the operator clash with my current sales leader?', 'We set reporting lines before we source. In one engagement the fractional VP sits above an existing director as coach.'],
       ['What if the fit is wrong?', 'You can swap the operator.'],
       ['Can I hire the operator full time later?', 'Yes. The conversion fee is 20% of annual salary.'],
@@ -243,7 +242,7 @@
       ],
       terms: () => [['Initial term', '3 to 4 months', 'Retainers, then month-to-month'], ['Notice', '30 days', 'Once the initial term ends'],
         ['Assessment', rng(C('revops-assessment').fixed), 'Fixed fee, about 40 hours over 60 days'], ['Platform fee', '$0', 'You pay the operator’s rate']],
-      note: 'Market rates [[gap:2027 survey figure|Survey]].',
+      note: 'Market rates[[gap:2027 survey figure|Survey]].',
     },
     first: {
       rows: [
@@ -259,10 +258,10 @@
     stories: [
       [{ title: 'Enterprise billing software company' }, ['Problem', 'Pipeline flat, meeting conversion the lowest the CEO had seen, "no decision" the leading loss reason. Nobody could show the bridge from bookings goal to pipeline.'],
         ['What the operator does', 'A fractional lead revenue architect reporting to the CFO, about 2.5 days a week at $27,000 a month, chosen over a full-time hire and a $230K consultancy assessment.'],
-        ['Starting point', 'Forecast needing 3 to 4 deals of about $1M each. Starts Oct 19 2026 [[gap:day-90 result|Matt]]']],
+        ['Starting point', 'Forecast needing 3 to 4 deals of about $1M each. Starts Oct 19 2026[[gap:day-90 result|Matt]]']],
       [{ title: 'Transactional SaaS company, 50 to 100 sellers' }, ['What the operator does', 'A 60-day fixed-fee reporting assessment, about 40 hours, delivering a scorecard, specs and a roadmap internal CRM admins can run.'],
         ['Starting point', '[[gap:revenue band and measured starting point|Matt]]']],
-      [{ title: 'Workforce Software' }, [null, 'At about $400M ARR, the President brought in fractional help to stand up a RevOps function from zero. Fractional works well past early stage. [[gap:what was built and a result|Matt]] [[gap:client quote with sign-off|Matt]]']],
+      [{ title: 'Workforce Software' }, [null, 'At about $400M ARR, the President brought in fractional help to stand up a RevOps function from zero. Fractional works well past early stage.[[gap:what was built and a result|Matt]][[gap:client quote with sign-off|Matt]]']],
     ],
     viz: [
       { k: 'deals', n: 4, on: 3, v: '$1M', l: 'Forecast needing 3 to 4 deals of about $1M each' },
@@ -306,7 +305,7 @@
       ],
       terms: () => [['Initial term', '3 to 4 months', 'Then month-to-month'], ['Notice', '30 days', 'Once the initial term ends'],
         ['Billing', 'Monthly', 'Upfront for a set block of hours, overages flagged first'], ['Platform fee', '$0', 'You pay the operator’s rate']],
-      note: 'Market rates [[gap:2027 survey figure|Survey]].',
+      note: 'Market rates[[gap:2027 survey figure|Survey]].',
     },
     first: {
       rows: [
@@ -324,7 +323,7 @@
         ['What we did', 'Scored 7 candidates for a 40 to 80 hour a month fractional CMO seat on a weighted 7-factor scorecard.'],
         { table: [['Demand gen operator vs brand CMO', 25], ['Analytical rigor on CPL, attribution and CAC', 20], ['Agency and aggregator accountability', 15], ['Funnel fluency in the vertical', 15], ['Opinionated enough to manage brand marketers', 10], ['Sales enablement straddle, including call center', 10], ['Channel diversification instinct', 5]] },
         ['Disqualified', 'Brand-heavy CMOs, mismatched funnel backgrounds, anyone carrying 3+ engagements, and any self-reported background the public record contradicts.'],
-        ['Where it stands', 'The client changed strategy before hiring. [[gap:revenue band|Matt]]']],
+        ['Where it stands', 'The client changed strategy before hiring.[[gap:revenue band|Matt]]']],
       [{ title: 'PE-backed public-sector software company repositioning after acquisitions' }, ['Problem', 'Fragmented products needed one narrative before a sales kickoff.'],
         ['What we did', 'Scoped a 60 to 80 hour a month seat, candidates at $220 to $400 an hour. Brand strategy and sales enablement turned out to be different jobs, and the person who asks is not always the person who decides.'],
         ['Where it stands', '[[gap:revenue band and current status cleared for publishing|Matt]]']],
@@ -414,13 +413,13 @@
         ['VP of Sales', 'About $334K average total comp a year, average tenure about 19 months (secondary)', '$48,000 to $120,000 a year for a director or VP at 20 to 40 hours a month'],
         ['CRO, ~$55M company', 'Client benchmarked up to about $800K all in', '$27,500 assessment plus 12 months at $23,200, about $306,000'],
         ['RevOps assessment, enterprise SaaS', 'Large consultancy quoted about $230K for 6 weeks', '$27,000 a month for a senior architect at about 2.5 days a week'],
-        ['Replacing a sales leader', 'Can cost 1.5x salary, with 3+ months of ramp', 'Swap the operator, then 30 days notice after the initial term'],
+        ['Replacing a sales leader', 'Up to 1.5x salary, with 3+ months of ramp', 'Swap the operator, then 30 days notice after the initial term'],
       ],
       // Yearly figures from the two rows that state both sides in dollars: [full-time lo, hi], [fractional lo, hi]
       viz: [[[334000, 334000], [48000, 120000]], [[800000, 800000], [306000, 306000]], null, null],
       after: [
         'The most common mismatch we see is expecting full-time availability at a fractional rate. Fix it upfront with a set hour block and a weekly cadence.',
-        'Our 2027 survey comparison of fractional and full-time cost [[gap:2027 survey figure|Survey]].',
+        'Our 2027 survey comparison of fractional and full-time cost[[gap:2027 survey figure|Survey]].',
       ],
     },
     terms: {
@@ -632,11 +631,11 @@
     const lead = leadOf(d);
     const seats = RN.costs.seats(d.fn);
     const quoted = lead.paid === 'quoted';
-    const rows = seats.filter((r) => r.monthly).map((r) => ({ l: SEAT_L[r.key] || r.label, lo: r.monthly.lo, hi: r.monthly.hi, t: r.text.monthly, cls: r.key === lead.key ? 'is-lead' : '' }));
+    const rows = seats.filter((r) => r.monthly).map((r) => ({ l: r.shortLabel || r.label, lo: r.monthly.lo, hi: r.monthly.hi, t: r.text.monthly, cls: r.key === lead.key ? 'is-lead' : '' }));
     const ft = lead.fullTime;
     if (ft) rows.push({ l: `Full-time VP of Sales, ${lead.text.fullTime.replace(/^About/, 'about')}`, lo: ft.monthly, hi: ft.monthly, t: lead.text.fullTimeMonthly, cls: 'is-ft' });
     const fixed = seats.filter((r) => !r.monthly && r.fixed);
-    const fx = fixed.length ? `<div class="fn-cc-fx"><span class="label">${fixed.length > 1 ? 'Fixed fees' : 'Fixed fee'}</span>${fixed.map((r) => `<span><b>${esc(SEAT_L[r.key] || r.label)}</b> ${esc(r.text.fixed.replace(/ fixed$/, '').replace(/^About/, 'about'))}</span>`).join('')}</div>` : '';
+    const fx = fixed.length ? `<div class="fn-cc-fx"><span class="label">${fixed.length > 1 ? 'Fixed fees' : 'Fixed fee'}</span>${fixed.map((r) => `<span><b>${esc(r.shortLabel || r.label)}</b> ${esc(r.text.fixed.replace(/ fixed$/, '').replace(/^About/, 'about'))}</span>`).join('')}</div>` : '';
     const notes = [RN.costs.basis(lead.key)].concat(ft ? ['Full-time pay from ' + ft.src] : []);
     return `<figure class="fn-cc fn-io" aria-label="${esc((quoted ? 'Monthly rates quoted in our 2026 searches: ' : 'Monthly cost by seat in our 2026 engagements: ') + rows.map((r) => r.l + ' ' + r.t).join(', '))}">
       <figcaption class="fn-cc-hd"><span class="label">${quoted ? 'Quoted in our 2026 searches' : 'Our 2026 engagements'}</span><b>What each seat costs a month</b></figcaption>

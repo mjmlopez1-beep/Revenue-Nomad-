@@ -16,9 +16,13 @@
 .nav a:hover::after, .nav a.on::after { transform: scaleX(1); }
 .nav-actions { display: flex; align-items: center; gap: var(--s-3); }
 /* Talk to us is the one filled header button (owner, Oct 14, 2026: inbound through Talk to us). Forest on the paper
-   header (leaf in dark theme, through --btn), leaf over a dark hero. Log in and the nav stay text links. */
-.hdr.over .hdr-cta { background: var(--leaf); color: var(--forest-deep); }
-.hdr.over .hdr-cta:hover { background: var(--leaf-hi); }
+   header (leaf in dark theme, through --btn). Over a dark hero or band (chrome 'over': home, profiles, the report,
+   Talk) it turns to a glass outline, so the page's own primary (Request intro on a profile) is the only bright
+   button on screen; it stays an outline once the header sticks, so it never changes style mid-scroll.
+   Log in and the nav stay text links. */
+.hdr.over .hdr-cta { background: rgba(255, 255, 255, .06); color: #fff; border-color: rgba(255, 255, 255, .5); }
+.hdr.over .hdr-cta:hover { background: rgba(255, 255, 255, .12); border-color: #fff; }
+.hdr.over .hdr-cta:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
 .nav-actions .nav-burger { display: none; }
 .nav-count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 6px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 11px; letter-spacing: 0; }
 .hdr.over .nav-count { background: var(--leaf); color: var(--forest-deep); }
@@ -119,7 +123,7 @@
 
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mute-2); flex: 0 0 auto; }
 .dot-now { background: #2C9A66; box-shadow: 0 0 0 3px rgba(44,154,102,.18); }
-.dot-soon { background: #C9A227; }
+.dot-soon { background: var(--mute-2); } /* gold means reputation only */
 .dot-later { background: var(--mute-2); }
 
 /* Focus areas (fit tags), RN.ui.ftag. Verified: tinted fill + check icon. Claimed: no fill, plain hairline, no icon. */
@@ -200,6 +204,14 @@
 .opc-save svg { width: 16px; height: 16px; }
 .opc-why { font-size: var(--t-12); color: var(--accent); font-weight: 600; display: flex; gap: 6px; align-items: center; }
 .opc-why svg { width: 14px; height: 14px; }
+/* The card's footer standing (RN.ui.cardStanding): the tier pill in words and the company review count; the visitor's
+   monthly range reads in ink like Browse's (RN.browse.card) */
+.opc-stand { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-height: 32px; }
+.opc-stand-n { font-size: var(--t-13); font-weight: 600; color: var(--ink-2); }
+.opc-stand .tb-pill { min-height: 28px; }
+.opc-meta .opc-range { color: var(--ink-2); }
+.opc-meta .opc-range svg { color: var(--mute); }
+:is(.night, .panel-night) .opc-stand-n, :is(.night, .panel-night) .opc-meta .opc-range { color: var(--night-ink); }
 
 /* Reputation Index on cards and rails (RN.ui.ris) */
 .ris { display: inline-flex; align-items: center; gap: 10px; }
@@ -541,8 +553,10 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
      .illus-tag   inline, next to a figure or in a card header ("Illustrative")
      .illus-note  one line under a figure group ("Illustrative figures until the first survey closes.")
      .fig-note    the as-of and sample line under any figure block ("As of Sep 24, 2026 · n=425 rates") */
-.illus-tag { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: transparent; color: var(--mute); font-family: var(--f-text); font-size: var(--t-12); font-weight: 500; font-style: normal; line-height: 1; letter-spacing: 0; text-transform: none; white-space: nowrap; vertical-align: middle; cursor: help; }
+.illus-tag { position: relative; display: inline-flex; align-items: center; gap: 4px; flex: none; height: 20px; padding: 0 7px; border: 1px solid var(--line); border-radius: var(--r-pill); background: transparent; color: var(--mute); font-family: var(--f-text); font-size: var(--t-12); font-weight: 500; font-style: normal; line-height: 1; letter-spacing: 0; text-transform: none; white-space: nowrap; vertical-align: middle; cursor: help; }
 .illus-tag svg { width: 12px; height: 12px; flex: none; opacity: .8; }
+/* The screen-reader sentence is positioned inside the tag, so it can never reach past a horizontal scroller's edge */
+.illus-tag .sr-only { top: 0; left: 0; }
 button.illus-tag { appearance: none; margin: 0; font: inherit; font-family: var(--f-text); font-size: var(--t-12); font-weight: 500; }
 button.illus-tag:hover, button.illus-tag:focus-visible { color: var(--ink-2); border-color: var(--chip-line-hi); }
 .illus-note, .fig-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-family: var(--f-text); font-size: var(--t-12); font-weight: 400; line-height: 1.45; letter-spacing: 0; text-transform: none; color: var(--mute); }
@@ -630,6 +644,9 @@ html:not(.rn-notes) .fn-gap, html:not(.rn-notes) .illus, html:not(.rn-notes) .rs
 /* A sample profile (op.sample) is reachable from the placeholder work samples with reviewer mode off, so its note always shows */
 html:not(.rn-notes) .illus.illus-sample { display: inline-flex !important; }
 html:not(.rn-notes) .fn-gap-w { display: contents; }
+/* Pending chips follow their sentence with no space in the copy (no stray " ." when they are hidden), so in reviewer
+   mode the chip keeps its own small gap */
+html.rn-notes .fn-gap { margin-left: 5px; }
 html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after, html:not(.rn-notes) dd:has(> .fn-gap:only-child)::after { content: "To come"; color: var(--mute-2); font-style: italic; }
 
 /* ---------- Icon tile (RN.ui.icoTile), one shared treatment ----------

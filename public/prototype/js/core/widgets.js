@@ -20,7 +20,15 @@
     if (!d) throw new Error('Unknown field: ' + key);
     return d;
   };
-  w.opt = (key, v) => (w.def(key).options || []).find((o) => o.v === v || o.l === v);
+  // An en-dash label saved before the hyphens-only labels (Oct 14, 2026: "$1M–$5M" is now "$1M - $5M") still resolves
+  const dashed = (v) => (typeof v === 'string' && /[\u2013\u2014]/.test(v) ? v.replace(/\s*[\u2013\u2014]\s*/g, ' - ') : null);
+  w.opt = (key, v) => {
+    const list = w.def(key).options || [];
+    const o = list.find((x) => x.v === v || x.l === v);
+    if (o) return o;
+    const d = dashed(v);
+    return d ? list.find((x) => x.v === d || x.l === d) : undefined;
+  };
   /* Display label for a stored value (accepts slug or label) */
   w.label = (key, v) => { const o = w.opt(key, v); return o ? o.l : v == null ? '' : String(v); };
   w.labels = (key, vs, sep) => (vs || []).map((v) => w.label(key, v)).filter(Boolean).join(sep || ', ');

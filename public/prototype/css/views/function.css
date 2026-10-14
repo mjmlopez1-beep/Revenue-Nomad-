@@ -23,9 +23,8 @@ main[data-view="hire-fractional-sales-vp"], main[data-view="fractional-revops"],
 .fn-sec.fn-alt { background: var(--paper-2); }
 /* Every section is a band (its neighbours have another background): --band-y inside, 80px (56px on a phone) */
 .fn-page .fn-sec { padding-block: var(--band-y); scroll-margin-top: calc(var(--nav-h) + 8px); }
-/* Heading stack: eyebrow, H2 and description --head-gap apart, then --head-to-body to the content */
-.fn-page .pg-shead { margin-bottom: var(--head-to-body); }
-.fn-page .pg-shead-l .eyebrow { margin-bottom: var(--head-gap); }
+/* Heading stack: eyebrow, H2 and description --head-gap apart, then --head-to-body to the content (pages.css .pg-shead);
+   the description is narrower here */
 .fn-page .pg-shead-l .lede { margin-top: var(--head-gap); max-width: 62ch; }
 .fn-after { display: grid; gap: var(--s-4); margin-top: var(--s-8); max-width: 66ch; }
 .fn-after .pg-p { text-wrap: pretty; }

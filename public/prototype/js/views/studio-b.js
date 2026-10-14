@@ -24,8 +24,8 @@
   const initials = (s) => RN.fmt.initials(String(s || '').replace(/[^\w\s]/g, ' ')) || '?';
   const edits = (op) => st().edits[op.id] || {};
   const pageUrl = () => location.href.split('#')[0];
-  // Escape, and keep numeric ranges like "51–200" or "$5M–$20M" from breaking at the dash
-  const nb = (str) => esc(str).replace(/(\$?[\d.,]+[KM]?–\$?[\d.,]+[KM]?\+?)/g, '<span class="nowrap">$1</span>');
+  // Escape, and keep numeric ranges like "51 - 200" or "$5M - $20M" from breaking at the dash
+  const nb = (str) => esc(str).replace(/(\$?[\d.,]+[KM]?(?:–| - )\$?[\d.,]+[KM]?\+?)/g, '<span class="nowrap">$1</span>');
   const segs = (str) => String(str || '').split(' · ').map((x) => `<span class="nowrap">${esc(x)}</span>`).join(' · ');
   const fitCls = (pct) => (pct >= 75 ? 'strong' : pct >= 50 ? 'good' : 'part');
 

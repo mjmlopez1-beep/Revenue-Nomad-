@@ -95,20 +95,22 @@
   };
 
   /* ---------- Company fit (operators pick up to 3 each; companies pick one) ---------- */
-  // L190: Pre-revenue, Under $1M, $1M–$5M, $5M–$20M, $20M–$50M, $50M+ ("range", never "bucket", row 11)
+  // L190: Pre-revenue, Under $1M, $1M - $5M, $5M - $20M, $20M - $50M, $50M+ ("range", never "bucket", row 11).
+  // House style is hyphens only (Oct 14, 2026): labels read "$1M - $5M" and "51 - 200"; the stored values (keys) never
+  // changed, and RN.w.opt still resolves an old en-dash label ("$1M–$5M") saved before the change.
   F.revenueRange = {
     label: 'Revenue range', type: 'multi', max: 3,
     help: 'Company revenue ranges where you do your best work.',
     options: opts([
-      ['pre_revenue', 'Pre-revenue'], ['under_1m', 'Under $1M'], ['1m_5m', '$1M–$5M'],
-      ['5m_20m', '$5M–$20M'], ['20m_50m', '$20M–$50M'], ['50m_plus', '$50M+'],
+      ['pre_revenue', 'Pre-revenue'], ['under_1m', 'Under $1M'], ['1m_5m', '$1M - $5M'],
+      ['5m_20m', '$5M - $20M'], ['20m_50m', '$20M - $50M'], ['50m_plus', '$50M+'],
     ]),
   };
   F.employeeRange = {
     label: 'Employee range', type: 'multi', max: 3,
     help: 'Company sizes where you do your best work.',
     options: opts([
-      ['1_10', '1–10'], ['11_50', '11–50'], ['51_200', '51–200'], ['201_500', '201–500'], ['501_1000', '501–1,000'], ['1001_plus', '1,000+'],
+      ['1_10', '1 - 10'], ['11_50', '11 - 50'], ['51_200', '51 - 200'], ['201_500', '201 - 500'], ['501_1000', '501 - 1,000'], ['1001_plus', '1,000+'],
     ]),
   };
   F.companyRevenue = Object.assign({}, F.revenueRange, { type: 'single', max: null, label: 'Company revenue', help: 'Your company’s annual revenue.' });
@@ -203,8 +205,8 @@
 
   // Sales Leadership
   // Two fields after the L15/L150 renames: team headcount (people) and annual quota (USD)
-  F.largestTeamManaged = { label: 'Largest sales team managed', type: 'single', options: opts([['<5', 'Under 5 people'], ['5-10', '5–10 people'], ['10-25', '10–25 people'], ['25-50', '25–50 people'], ['50+', '50+ people']]) };
-  F.largestTeamQuota = { label: 'Largest annual quota managed', type: 'single', options: opts([['1_5m', '$1M–$5M'], ['5_10m', '$5M–$10M'], ['10_25m', '$10M–$25M'], ['25_50m', '$25M–$50M'], ['50_100m', '$50M–$100M'], ['100m_plus', '$100M+']]) };
+  F.largestTeamManaged = { label: 'Largest sales team managed', type: 'single', options: opts([['<5', 'Under 5 people'], ['5-10', '5 - 10 people'], ['10-25', '10 - 25 people'], ['25-50', '25 - 50 people'], ['50+', '50+ people']]) };
+  F.largestTeamQuota = { label: 'Largest annual quota managed', type: 'single', options: opts([['1_5m', '$1M - $5M'], ['5_10m', '$5M - $10M'], ['10_25m', '$10M - $25M'], ['25_50m', '$25M - $50M'], ['50_100m', '$50M - $100M'], ['100m_plus', '$100M+']]) };
   F.salesCycle = { label: 'Sales cycle range', type: 'multi', max: 2, options: opts(['<5 days', '5 - 30 days', '30 - 90 days', '3 - 6 months', '6 - 12 months', '12+ months']) };
   F.avgSalesCycleDays = { label: 'Average sales cycle', type: 'number', unit: 'days', min: 1, max: 720, optional: true };
   // Marketing

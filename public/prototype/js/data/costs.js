@@ -13,8 +13,8 @@
 
    API
      RN.costs.get(key)            the record (below), with .text holding the house-format strings; null if unknown
-     RN.costs.answer(key)         one plain answer sentence naming the figures, house money format (the spaces inside
-                                  a money range are no-break spaces, so "$200 - $250/hr" never wraps; escape as usual)
+     RN.costs.answer(key)         one plain answer sentence naming the figures, house money format (a money range is
+                                  held together by RN.fmt.keepRange, so "$200 - $250/hr" never wraps; escape as usual)
      RN.costs.basis(key, o?)      "From our 2026 engagements, as of Oct 2026" | "Quoted in our 2026 marketing searches,
                                   as of Oct 2026" | "From one 2026 engagement, a ~$55M company, as of Oct 2026" |
                                   "Illustrative". o.long: the long form for illustrative records ("Illustrative Rate
@@ -33,7 +33,8 @@
 
    Record
      { key, kind: 'seat' | 'function' | 'hub' | 'category', status: 'real' | 'illustrative', paid: 'paid' | 'quoted',
-       fn, cat, label, noun, scope,
+       fn, cat, label, shortLabel, noun, scope,
+       shortLabel: the seat's name in a compact list or chart row ("Director or VP of Sales"; label when unset)
        hourly: {lo, hi, approx} | null,        $ an hour
        hours: {lo, hi, approx, upTo, per: 'month'} | null, cadence: '2 days a week' | '' (when hours are not stated)
        monthly: {lo, hi, approx, flat} | null, $ a month (retainers)
@@ -105,41 +106,41 @@
 
   /* ---------- Seats (REAL) ---------- */
   const SEATS = [
-    { key: 'sales-coach', fn: 'sales', cat: 'sales_leadership', label: 'Sales coach, ~$10M company', noun: 'a sales coach at a ~$10M company',
+    { key: 'sales-coach', shortLabel: 'Sales coach', fn: 'sales', cat: 'sales_leadership', label: 'Sales coach, ~$10M company', noun: 'a sales coach at a ~$10M company',
       hourly: range(150, 150, { approx: true }), hours: range(40, 40, { approx: true, per: 'month' }), monthly: range(6000, 6000, { approx: true }),
       basis: basis(1, 'From one 2026 engagement, a ~$10M company') },
-    { key: 'vp-sales', fn: 'sales', cat: 'sales_leadership', label: 'Director or VP of Sales, teams under 5 to 8 reps', noun: 'a fractional director or VP of Sales for a team under 5 to 8 reps',
+    { key: 'vp-sales', shortLabel: 'Director or VP of Sales', fn: 'sales', cat: 'sales_leadership', label: 'Director or VP of Sales, teams under 5 to 8 reps', noun: 'a fractional director or VP of Sales for a team under 5 to 8 reps',
       short: 'a fractional VP of Sales', scope: 'Teams under 5 to 8 reps',
       hourly: range(200, 250), hours: range(20, 40, { per: 'month' }), monthly: range(4000, 10000),
       fullTime: FULL_TIME_VP,
       outside: [{ l: 'Fractional VP of Sales arrangements commonly cited', lo: 8000, hi: 20000, unit: 'month', src: 'Stealth Agents, a secondary source', url: STEALTH }],
       basis: basis(null, 'From our 2026 engagements') },
-    { key: 'sales-assessment', fn: 'sales', cat: 'sales_leadership', label: 'Revenue maturity assessment, ~$55M company', noun: 'a 45-day revenue maturity assessment at a ~$55M company',
+    { key: 'sales-assessment', shortLabel: '45-day assessment', fn: 'sales', cat: 'sales_leadership', label: 'Revenue maturity assessment, ~$55M company', noun: 'a 45-day revenue maturity assessment at a ~$55M company',
       fixed: range(27500, 27500, { term: '45 days' }), basis: basis(1, 'From one 2026 engagement, a ~$55M company') },
-    { key: 'cro', fn: 'sales', cat: 'sales_leadership', label: 'Embedded fractional CRO, ~$55M company', noun: 'an embedded fractional CRO at a ~$55M company',
+    { key: 'cro', shortLabel: 'Embedded CRO, ~$55M company', fn: 'sales', cat: 'sales_leadership', label: 'Embedded fractional CRO, ~$55M company', noun: 'an embedded fractional CRO at a ~$55M company',
       hourly: range(464, 464, { approx: true }), hours: range(50, 50, { per: 'month' }), monthly: range(23200, 23200),
       fullTime: { comp: 800000, compUpTo: true, monthly: Math.round(800000 / 12), label: 'The client benchmarked a full-time CRO at up to about $800K all in', tenureMonths: null, replace: null, src: 'The client’s own benchmark, 2026 engagement', url: '', asOf: '2026' },
       // First year: the $27,500 assessment plus 12 months at $23,200 = $305,900 (function.js COST.total: "about $306,000")
       firstYear: 27500 + 12 * 23200,
       basis: basis(1, 'From one 2026 engagement, a ~$55M company') },
-    { key: 'revops-assessment', fn: 'revops', cat: 'revenue_operations', label: 'RevOps assessment with scorecard, specs and roadmap', noun: 'a RevOps assessment with a scorecard, specs and roadmap',
+    { key: 'revops-assessment', shortLabel: 'Assessment', fn: 'revops', cat: 'revenue_operations', label: 'RevOps assessment with scorecard, specs and roadmap', noun: 'a RevOps assessment with a scorecard, specs and roadmap',
       fixed: range(6000, 7500, { term: 'about 40 hours over 60 days' }), basis: basis(null, 'From our 2026 engagements') },
-    { key: 'revops-retainer', fn: 'revops', cat: 'revenue_operations', label: 'Follow-on RevOps execution', noun: 'follow-on RevOps execution',
+    { key: 'revops-retainer', shortLabel: 'Follow-on execution', fn: 'revops', cat: 'revenue_operations', label: 'Follow-on RevOps execution', noun: 'follow-on RevOps execution',
       hourly: range(150, 175), hours: range(40, 80, { per: 'month' }), monthly: range(6000, 14000), basis: basis(null, 'From our 2026 engagements') },
-    { key: 'revops-project', fn: 'revops', cat: 'revenue_operations', label: 'Fixed 30-day RevOps project', noun: 'a fixed 30-day RevOps project',
+    { key: 'revops-project', shortLabel: '30-day project', fn: 'revops', cat: 'revenue_operations', label: 'Fixed 30-day RevOps project', noun: 'a fixed 30-day RevOps project',
       fixed: range(7000, 8000, { approx: true, term: '30 days' }), basis: basis(null, 'From our 2026 engagements') },
-    { key: 'revops-director', fn: 'revops', cat: 'revenue_operations', label: 'Hands-on RevOps director', noun: 'a hands-on RevOps director',
+    { key: 'revops-director', shortLabel: 'Hands-on director', fn: 'revops', cat: 'revenue_operations', label: 'Hands-on RevOps director', noun: 'a hands-on RevOps director',
       cadence: 'about 2 days a week', monthly: range(12000, 15000), basis: basis(null, 'From our 2026 engagements') },
-    { key: 'revops-architect', fn: 'revops', cat: 'revenue_operations', label: 'Senior revenue architect, enterprise SaaS', noun: 'a senior revenue architect at an enterprise SaaS company',
+    { key: 'revops-architect', shortLabel: 'Senior revenue architect', fn: 'revops', cat: 'revenue_operations', label: 'Senior revenue architect, enterprise SaaS', noun: 'a senior revenue architect at an enterprise SaaS company',
       hourly: range(315, 315, { approx: true }), hours: range(85, 85, { upTo: true, per: 'month' }), monthly: range(27000, 27000, { flat: true }),
       compare: { l: 'A large consultancy quoted about $230K for a 6-week assessment', v: 230000, term: '6 weeks', src: 'Client quote, 2026 engagement' },
       basis: basis(1, 'From one 2026 engagement, an enterprise SaaS company') },
-    { key: 'cmo', fn: 'marketing', cat: 'marketing', paid: 'quoted', label: 'Fractional CMO, PE-backed platform', noun: 'a fractional CMO for a PE-backed platform',
+    { key: 'cmo', shortLabel: 'Fractional CMO', fn: 'marketing', cat: 'marketing', paid: 'quoted', label: 'Fractional CMO, PE-backed platform', noun: 'a fractional CMO for a PE-backed platform',
       short: 'a fractional CMO',
       hourly: range(200, 250), hours: range(40, 80, { per: 'month' }), monthly: range(8000, 20000),
       fullTime: null, fullTimeNote: 'No sourced full-time CMO pay figure yet, so none is shown (fractional-cmo-cost guide).',
       basis: basis(null, 'Quoted in our 2026 marketing searches'), src: SRC_MKT },
-    { key: 'marketing-launch', fn: 'marketing', cat: 'marketing', paid: 'quoted', label: 'Brand and product marketing leader, launch scope', noun: 'a brand and product marketing leader for a launch',
+    { key: 'marketing-launch', shortLabel: 'Brand and product launch lead', fn: 'marketing', cat: 'marketing', paid: 'quoted', label: 'Brand and product marketing leader, launch scope', noun: 'a brand and product marketing leader for a launch',
       hourly: range(220, 400), hours: range(60, 80, { per: 'month' }), monthly: range(13200, 32000),
       basis: basis(null, 'Quoted in our 2026 marketing searches'), src: SRC_MKT },
   ];
@@ -170,7 +171,7 @@
     const trend = ri.trend || [];
     return {
       key: 'ri.' + cat, kind: 'category', status: 'illustrative', paid: 'index', cat, fn: '',
-      label: (RN.fields && RN.fields.catLabel ? RN.fields.catLabel(cat) : cat), noun: (RN.fields && RN.fields.catLabel ? RN.fields.catLabel(cat) : cat) + ' operators',
+      label: (RN.fields && RN.fields.catLabel ? RN.fields.catLabel(cat) : cat), shortLabel: (RN.fields && RN.fields.catLabel ? RN.fields.catLabel(cat) : cat), noun: (RN.fields && RN.fields.catLabel ? RN.fields.catLabel(cat) : cat) + ' operators',
       hourly: { lo: b.p25, hi: b.p75, mid: b.p50, approx: false },
       hours: range(h, h, { per: 'month' }),
       monthly: m ? { lo: m.lo, hi: m.hi, mid: m.mid, approx: false } : { lo: r500(b.p25 * h), hi: r500(b.p75 * h), mid: r500(b.p50 * h), approx: false },
@@ -219,6 +220,7 @@
   }
   function finish(rec, kind) {
     const r = Object.assign({ kind, status: 'real', paid: 'paid', fn: '', cat: '', scope: '', cadence: '', hourly: null, hours: null, monthly: null, fixed: null, fullTime: null, outside: [], src: SRC_RN }, rec);
+    r.shortLabel = r.shortLabel || r.label;
     r.yearly = r.monthly ? { lo: r.monthly.lo * 12, hi: r.monthly.hi * 12 } : null;
     r.pct = r.pct || pctOf(r);
     r.text = {
@@ -306,8 +308,8 @@
     asOf: AS_OF,
     fullTime: FULL_TIME_VP,
     get,
-    // Money ranges inside a sentence never break across lines ("$200 - $250/hr" stays together: no-break spaces)
-    answer: (key) => (key === 'hub' ? hubAnswer() : answer(key)).replace(/(\$[\d.,]+[kKM]?) - (\$)/g, '$1\u00a0-\u00a0$2'),
+    // Money ranges inside a sentence never break across lines ("$200 - $250/hr" stays together: RN.fmt.keepRange)
+    answer: (key) => RN.fmt.keepRange(key === 'hub' ? hubAnswer() : answer(key)),
     basis: basisText,
     forCat: (cat) => get(FOR_CAT[cat] || 'ri.' + cat),
     seats: (fn) => SEATS.filter((s) => !fn || s.fn === fn).map((s) => REC[s.key]),
