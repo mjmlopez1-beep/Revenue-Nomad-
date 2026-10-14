@@ -71,6 +71,8 @@
   --info-bg: #E5EDF8;
   --gold: #7E5A0B;            /* stars, tier seals, "Illustrative" labels (4.5:1 on --gold-bg) */
   --gold-bg: #FAF1D8;
+  /* The vermilion full stop (.vm, base.css) reads --vm; dark surfaces swap it */
+  --vm: var(--vermilion);
 
   /* Reputation Index tier badges (RN.ui.tierBadge), five tiers. Rarity reads from material: single line,
      solid forest, forest with a ring, flat gold in a bevelled rim, black stone in a gold rim. No glow. */
@@ -138,15 +140,44 @@
 
   --wrap: 1240px;
   --wrap-narrow: 880px;
+  --wrap-wide: 1440px;        /* the one sanctioned wide showcase (home "The work"); its heading stays on --wrap */
   --gutter: 40px;
   --nav-h: 76px;
 
-  --ease: cubic-bezier(.2, .7, .2, 1);
-  --dur: .25s;
+  /* Rhythm (design pass, Oct 14, 2026; spacing audit). One value per boundary, on every route.
+     --sec-y       space between two sections on the same background (each .sec pads half of it)
+     --band-y      padding inside a band whose background differs from its neighbours (.sec-band, .section)
+     --head-gap    eyebrow to H2, and H2 to its description (.sec-head)
+     --head-to-body the header group to the content under it (.sec-head margin) */
+  --sec-y: 96px;
+  --band-y: 80px;
+  --head-gap: 16px;
+  --head-to-body: 32px;
+  /* Grid: 12 columns, one 20px gutter (components.css .g12 .c-N). On the 1240px wrap: 85px columns,
+     7/5 = 715/505, 8/4 = 820/400, 6/6 = 610/610. Card gaps everywhere use --grid-gap. */
+  --grid-gap: 20px;
+  --card-pad: 24px;           /* standard card */
+  --card-pad-lg: 32px;        /* feature card */
+  /* --r-card (16px, above) is the one card radius */
+
+  /* Motion (motion policy, Oct 14, 2026). Four durations, two easings.
+     --dur-1 colour, background, border, opacity, shadow . --dur-2 movement (with --ease-out)
+     --dur-3 a panel, menu or modal opening . --dur-draw one chart draw, played once */
+  --dur-1: 150ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --dur-draw: 600ms;
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --lift: -2px;               /* the only hover lift */
+  --nudge: 3px;               /* the only arrow nudge */
+  /* Legacy names, kept so the 230+ existing uses keep working: --dur is now the colour duration and --ease the
+     one movement curve. New code uses the numbered tokens. */
+  --ease: var(--ease-out);
+  --dur: var(--dur-1);
 }
 
 @media (max-width: 720px) {
-  :root { --gutter: 16px; --nav-h: 64px; }
+  :root { --gutter: 16px; --nav-h: 64px; --sec-y: 64px; --band-y: 56px; --head-to-body: 24px; --card-pad-lg: 24px; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -201,6 +232,7 @@
     --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
     --chip-line: #34403A; --chip-line-hi: #66726B; --chip-line-soft: rgba(255, 255, 255, .06); --chip-bg-hi: #1B2520;
     --ico-forest: var(--leaf); --ico-pole: #FFFFFF; --ico-ink-mix: 55%; --ico-hl: rgba(255, 255, 255, .06);
+    --vm: var(--vermilion-night);
   }
 }
 
@@ -255,6 +287,7 @@
   --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
   --chip-line: #34403A; --chip-line-hi: #66726B; --chip-line-soft: rgba(255, 255, 255, .06); --chip-bg-hi: #1B2520;
   --ico-forest: var(--leaf); --ico-pole: #FFFFFF; --ico-ink-mix: 55%; --ico-hl: rgba(255, 255, 255, .06);
+  --vm: var(--vermilion-night);
 }
 
 /* The night band is dark in both themes, so tier badges on it take the dark set */
@@ -265,4 +298,5 @@
   --tb-au-edge: #8A6512;
   --tb-apx-1: #22302A; --tb-apx-2: #040705;
   --tb-pill-bg: #151D19; --tb-pill-line: #2A342E; --tb-pill-ink: #F2F2EC;
+  --vm: var(--vermilion-night);
 }

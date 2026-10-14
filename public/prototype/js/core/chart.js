@@ -1,5 +1,8 @@
 /* RN.chart: small SVG chart kit. Every chart reads theme tokens through CSS classes/vars,
-   draws to one scale, and leaves room in the viewBox for its outermost labels. */
+   draws to one scale, and leaves room in the viewBox for its outermost labels.
+   Motion: the moving parts carry data-draw ("x" bars, "y" columns, "line" the main trend line, "fade" areas and
+   points), so RN.motion.draw(container) can draw a chart once when it first scrolls into view. At rest, and in
+   every capture, a chart is fully drawn. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -48,7 +51,7 @@
       const fill = r.hi ? 'var(--viz-1)' : r.muted ? 'var(--viz-muted)' : 'var(--viz-2)';
       return `<text x="0" y="${y + o.rowH / 2 + 4}">${esc(r.label)}</text>
         <rect x="${o.labelW}" y="${y + (o.rowH - o.barH) / 2}" width="${track}" height="${o.barH}" rx="4" fill="var(--viz-grid)"/>
-        <rect x="${o.labelW}" y="${y + (o.rowH - o.barH) / 2}" width="${bw.toFixed(1)}" height="${o.barH}" rx="4" fill="${fill}"/>
+        <rect x="${o.labelW}" y="${y + (o.rowH - o.barH) / 2}" width="${bw.toFixed(1)}" height="${o.barH}" rx="4" fill="${fill}" data-draw="x"/>
         <text class="v" x="${o.labelW + track + 10}" y="${y + o.rowH / 2 + 4}">${esc(o.fmt(r.value, r))}</text>`;
     }).join('');
     return `<div class="chart"><svg viewBox="0 0 ${o.w} ${h}" role="img" aria-label="${esc(o.label || 'Bar chart')}">${body}</svg></div>`;
@@ -66,7 +69,7 @@
       const bh = Math.max(2, (r.value / max) * plotH);
       const y = top + plotH - bh;
       const fill = r.hi ? 'var(--viz-1)' : 'var(--viz-2)';
-      return `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="5" fill="${fill}"/>
+      return `<rect x="${(cx - bw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="5" fill="${fill}" data-draw="y"/>
         <text class="v" x="${cx}" y="${(y - 7).toFixed(1)}" text-anchor="middle">${esc(o.fmt(r.value, r))}</text>
         <text x="${cx}" y="${o.h - 8}" text-anchor="middle">${esc(r.label)}</text>`;
     }).join('');
@@ -97,9 +100,9 @@
       const col = s.color || (si === 0 ? 'var(--viz-1)' : 'var(--viz-muted)');
       const pts = s.values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
       const d = 'M' + pts.join(' L');
-      const area = o.area && si === 0 ? `<path d="${d} L${x(s.values.length - 1).toFixed(1)},${top + ph} L${x(0).toFixed(1)},${top + ph} Z" fill="${col}" opacity=".1"/>` : '';
+      const area = o.area && si === 0 ? `<path d="${d} L${x(s.values.length - 1).toFixed(1)},${top + ph} L${x(0).toFixed(1)},${top + ph} Z" fill="${col}" opacity=".1" data-draw="fade"/>` : '';
       const lp = pts[pts.length - 1].split(',');
-      return `${area}<path d="${d}" fill="none" stroke="${col}" stroke-width="${si === 0 ? 2.25 : 1.75}" ${s.dashed ? 'stroke-dasharray="5 5"' : ''} stroke-linejoin="round" stroke-linecap="round"/>${si === 0 ? `<circle cx="${lp[0]}" cy="${lp[1]}" r="4" fill="${col}"/>` : ''}`;
+      return `${area}<path d="${d}" fill="none" stroke="${col}" stroke-width="${si === 0 ? 2.25 : 1.75}" ${s.dashed ? 'stroke-dasharray="5 5" data-draw="fade"' : 'data-draw="line"'} stroke-linejoin="round" stroke-linecap="round"/>${si === 0 ? `<circle cx="${lp[0]}" cy="${lp[1]}" r="4" fill="${col}" data-draw="fade"/>` : ''}`;
     }).join('');
     return `<div class="chart"><svg viewBox="0 0 ${o.w} ${o.h}" role="img" aria-label="${esc(o.label || 'Trend chart')}">${grid}${xl}${paths}</svg></div>`;
   };
@@ -172,7 +175,7 @@
       const bw = Math.max(3, (s.value / max) * track);
       const conv = i > 0 && steps[i - 1].value ? ` · ${Math.round((s.value / steps[i - 1].value) * 100)}%` : '';
       return `<text x="0" y="${y + o.rowH / 2 + 4}">${esc(s.label)}</text>
-        <rect x="${labelW}" y="${y + 8}" width="${bw.toFixed(1)}" height="${o.rowH - 16}" rx="6" fill="var(--viz-1)" opacity="${(1 - i * 0.16).toFixed(2)}"/>
+        <rect x="${labelW}" y="${y + 8}" width="${bw.toFixed(1)}" height="${o.rowH - 16}" rx="6" fill="var(--viz-1)" opacity="${(1 - i * 0.16).toFixed(2)}" data-draw="x"/>
         <text class="v" x="${labelW + bw + 10}" y="${y + o.rowH / 2 + 4}">${RN.fmt.int(s.value)}<tspan style="font-weight:400;fill:var(--mute)">${conv}</tspan></text>`;
     }).join('');
     return `<div class="chart"><svg viewBox="0 0 ${o.w} ${h}" role="img" aria-label="${esc(o.label || 'Funnel')}">${body}</svg></div>`;

@@ -193,9 +193,10 @@
     heart: '<path d="M12 20s-7.5-4.6-9-9.5C2 7 4.3 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 2.9 0 5.2 2.5 4.2 6-1.5 4.9-9 9.5-9 9.5Z"/>',
     wave: '<path d="M2 12h2"/><path d="M6 8v8"/><path d="M10 5v14"/><path d="M14 8v8"/><path d="M18 10v4"/><path d="M22 12h-2"/>',
   };
+  /* Every icon carries i-<name> (i-arrow nudges +3px inside a hovered link or button, components.css) */
   RN.icon = function (name, cls) {
     const d = P[name] || P.dots;
-    return `<svg class="i ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    return `<svg class="i i-${P[name] ? name : 'dots'} ${cls || ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   };
   RN.iconNames = Object.keys(P);
 })();

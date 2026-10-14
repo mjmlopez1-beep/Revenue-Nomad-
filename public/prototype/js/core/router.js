@@ -25,6 +25,7 @@
   const RN = window.RN;
   const order = [];
   let current = null;
+  let rendered = false;
 
   // state-of-fractional: the address the Content Bank links to for the report (open decision, Oct 10, 2026); #report stays canonical
   const ALIASES = { projects: 'engagements', project: 'engagement', 'state-of-fractional': 'report' };
@@ -111,7 +112,12 @@
     }
     const keepScroll = sameView && opts && opts.keepScroll;
     const y = window.scrollY;
-    root.innerHTML = `<main id="main" class="${keepScroll ? '' : 'view-enter'}" data-view="${view.name}">${html}</main>`;
+    // Motion: a fresh route is a new visit (scroll reveals and chart draws may play once more); a re-render is not.
+    // The route change fades in 150ms (.view-enter); the first render of a visit to the site does not (.is-first).
+    if (!keepScroll && RN.motion && RN.motion.newVisit) RN.motion.newVisit();
+    const first = !rendered;
+    rendered = true;
+    root.innerHTML = `<main id="main" class="${keepScroll ? '' : 'view-enter' + (first ? ' is-first' : '')}" data-view="${view.name}">${html}</main>`;
     RN.shell.update(view);
     try { document.title = (view.title ? view.title(params) : 'Revenue Nomad') + (view.name === 'home' ? '' : ' · Revenue Nomad'); } catch (e) { document.title = 'Revenue Nomad'; }
     if (view.mount && !(view.requires && view.requires !== persona && !(view.requires === 'any-user' && persona !== 'visitor'))) {

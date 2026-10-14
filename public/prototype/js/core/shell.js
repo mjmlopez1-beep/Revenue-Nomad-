@@ -110,9 +110,11 @@
     el.className = 'hdr' + (over ? ' over' : '') + (over && window.scrollY > 40 ? ' stuck' : '');
     el.hidden = view.chrome === 'bare';
     let right = '';
+    // Talk to us is the one filled header button (owner, Oct 14, 2026: inbound leads come through Talk to us); Log in and
+    // the nav are text links. Forest on the paper header, leaf over a dark hero (components.css .hdr-cta).
     if (p === 'visitor') {
       right = `<button type="button" class="navlink hide-m" data-act="login" style="background:none;border:0;font-family:var(--f-display);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:inherit;height:44px">Log in</button>
-        <a class="btn btn-leaf btn-sm" href="#talk">Talk to us</a>`;
+        <a class="btn btn-sm hdr-cta" href="#talk">Talk to us</a>`;
     } else if (p === 'buyer') {
       const n = st.shortlist.length;
       right = `<a class="btn btn-line btn-sm hide-m" href="#buyer.talent">${icon('bookmark')}Shortlist${n ? `<span class="nav-count">${n}</span>` : ''}</a>

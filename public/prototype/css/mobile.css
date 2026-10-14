@@ -31,3 +31,9 @@
   .chip:is(button, a, label, [data-act])::after { content: ""; position: absolute; inset: -5px -3px; }
   .chip-sm:is(button, a, label, [data-act])::after { inset: -8px -3px; }
 }
+
+/* The Illustrative tag as a button (RN.ui.illusTag(text, {tip: true})): a 44px hit box on touch screens */
+@media (pointer: coarse), (max-width: 640px) {
+  button.illus-tag { position: relative; }
+  button.illus-tag::after { content: ""; position: absolute; inset: -12px -4px; }
+}

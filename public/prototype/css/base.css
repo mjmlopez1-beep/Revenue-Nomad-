@@ -81,14 +81,26 @@ h1 .serif, h2 .serif, .h-hero .serif { font-size: 1.04em; color: var(--accent); 
 /* Layout primitives */
 .wrap { width: 100%; max-width: calc(var(--wrap) + var(--gutter) * 2); margin: 0 auto; padding-inline: var(--gutter); }
 .wrap-narrow { width: 100%; max-width: calc(var(--wrap-narrow) + var(--gutter) * 2); margin: 0 auto; padding-inline: var(--gutter); }
+/* .section (80px) and .section-sm (48px) keep their values; on desktop they equal --band-y and --sec-y / 2 */
 .section { padding-block: var(--s-20); }
 .section-sm { padding-block: var(--s-12); }
+/* Section rhythm (design pass, Oct 14, 2026). Stack .sec sections on one background and they sit --sec-y (96px)
+   apart; a section on a different background (a night or tint band) is a .sec-band with --band-y (80px) inside.
+   .sec-head is the heading group: eyebrow, H2 and description --head-gap (16px) apart, then --head-to-body (32px)
+   to the content. .sec-line on a .sec draws the optional hairline at the midpoint between it and the section above. */
+.sec { padding-block: calc(var(--sec-y) / 2); }
+.sec-band { padding-block: var(--band-y); }
+.sec.sec-line { border-top: 1px solid var(--line-2); }
+.sec-head { display: flex; flex-direction: column; align-items: flex-start; gap: var(--head-gap); margin: 0 0 var(--head-to-body); }
+.sec-head > * { margin: 0; }
+.sec-head .lede { max-width: 62ch; }
+.sec-head.is-center { align-items: center; text-align: center; }
 .stack { display: flex; flex-direction: column; gap: var(--gap, var(--s-4)); }
 .row { display: flex; align-items: center; gap: var(--gap, var(--s-3)); flex-wrap: wrap; }
 .row-nw { display: flex; align-items: center; gap: var(--gap, var(--s-3)); }
 .between { justify-content: space-between; }
 .grow { flex: 1 1 auto; min-width: 0; }
-.grid { display: grid; gap: var(--gap, var(--s-6)); }
+.grid { display: grid; gap: var(--gap, var(--grid-gap)); }
 .g-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .g-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .g-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -108,11 +120,18 @@ h1 .serif, h2 .serif, .h-hero .serif { font-size: 1.04em; color: var(--accent); 
 .divider { height: 1px; background: var(--line); border: 0; margin: 0; }
 .scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
+/* Reduced motion: every animation and transition ends at once, and nothing moves on hover. RN.motion (js/core/motion.js)
+   is a no-op here, so scroll reveals and chart draws never hide anything. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; transition-delay: 0s !important; scroll-behavior: auto !important; }
+  .btn:hover, .card-link:hover, .opc:hover, .lift:hover { transform: none !important; }
 }
 
-/* The 1% accent: a vermilion full stop on a sentence that makes the point. Used two or three times a page at most. */
-.vm { color: var(--vermilion); font-style: normal; }
-.night .vm, .panel-night .vm, [data-theme="dark"] .vm { color: var(--vermilion-night); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .vm { color: var(--vermilion-night); } }
+/* ---------- The vermilion full stop (the 1% accent, founder Oct 12, 2026; colour audit Oct 14, 2026) ----------
+   Rule: every page H1 ends in one vermilion full stop (or question mark), and a page carries at most 3 in all
+   (the H1 plus up to two section H2s that make the page's point). Nothing else is vermilion except the icon hover
+   (components.css .ico) and the "your answer" pin. Never on buttons, links, fills, numbers or body text.
+     <h1 class="h1">What fractional leaders cost in 2026<span class="vm">.</span></h1>
+   Colour comes from --vm: vermilion on paper and cards, the lighter --vermilion-night in dark theme and on .night /
+   .panel-night bands (tokens.css). A custom dark surface that is not .night sets --vm: var(--vermilion-night). */
+.vm { color: var(--vm, var(--vermilion)); font-style: normal; }

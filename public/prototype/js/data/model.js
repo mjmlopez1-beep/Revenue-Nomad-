@@ -197,6 +197,33 @@
   M.norm = norm;
   M.matt = ALL.find((o) => o.isMatt);
 
+  /* ---------- The founder is never first (owner decision, Oct 14, 2026) ----------
+     Matt Lopez (op.isMatt) stays eligible in every list and ranking, but is never in the first slot of a list, row,
+     carousel, avatar strip or default sort, and never the face or voice of the company.
+       RN.model.notFirst(list, n = 1)  a new array whose first n slots hold the first n non-founder items, in their
+                                       order; everything else follows in its original order, so the founder lands
+                                       just after slot n (never dropped). Items are operators or wrappers that hold
+                                       one in .op (search results {op, score}, reviews {op, r}) or .x.
+                                       A list with nobody else in it is returned unchanged.
+       RN.model.isFounder(item)        true for the founder or a wrapper around him
+     Already applied inside the shared entry points: RN.model.search (every sort; skipped when the query matches his
+     name, or with o.raw), RN.model.rank, RN.model.similar and RN.model.topReviews. Page code applies it to the
+     lists it builds itself, e.g. RN.model.notFirst(RN.model.ops.filter(...).sort(byScore)).slice(0, 3). For a row
+     or avatar strip that shows n items side by side, pass n = the row size only if he must not lead any of it;
+     the rule itself is slot 1. */
+  const isFounder = (x) => !!x && !!(x.isMatt || (x.op && x.op.isMatt) || (x.x && x.x.isMatt));
+  M.isFounder = isFounder;
+  M.notFirst = function (list, n) {
+    const arr = Array.from(list || []);
+    n = Math.max(1, n == null ? 1 : Math.floor(+n) || 1);
+    if (!arr.slice(0, n).some(isFounder)) return arr;
+    const lead = [];
+    arr.forEach((x, i) => { if (lead.length < n && !isFounder(x)) lead.push(i); });
+    if (!lead.length) return arr;
+    const taken = new Set(lead);
+    return lead.map((i) => arr[i]).concat(arr.filter((x, i) => !taken.has(i)));
+  };
+
   /* ---------- Place: where an operator is based (Browse location filters, D9) ----------
      RN.model.place(op) -> {city, state, country, tz}, read from op.location ("Newtown, Connecticut", "Boston, MA",
      "London, UK", "Madrid, Spain"), op.timezone and op.country. state is a US state's full name or ''; country is
@@ -483,7 +510,7 @@
       const opTags = op.tags.map((t) => t.t.toLowerCase());
       if (tags.length && !tags.every((t) => opTags.includes(t))) continue;
       // Text relevance: each query group is matched by any of its alternatives; most groups must match
-      let score = 0;
+      let score = 0, named = false;
       const why = [];
       const matchedTags = [];
       if (groups.length) {
@@ -493,7 +520,7 @@
         for (const alts of groups) {
           let g = 0;
           for (const t of alts) {
-            if (inc(hay.name, t)) g = Math.max(g, 40);
+            if (inc(hay.name, t)) { g = Math.max(g, 40); named = true; }
             if (inc(hay.role, t)) { g = Math.max(g, 18); if (!why.includes('role')) why.push('role'); }
             op.tags.forEach((x, xi) => { const tl = tagsL[xi]; if (inc(tl, t) || (t.length > 5 && t.includes(tl))) { g = Math.max(g, x.tier === 'claimed' ? 10 : 18); if (!matchedTags.includes(x.t)) matchedTags.push(x.t); } });
             const indHit = op.industries.filter((x, xi) => inc(indL[xi], t));
@@ -513,7 +540,7 @@
       tags.forEach((t) => { const x = op.tags.find((y) => y.t.toLowerCase() === t); if (x && !matchedTags.includes(x.t)) reasons.push(`${x.tier === 'claimed' ? 'Claims' : 'Client-verified in'} ${x.t}`); });
       why.filter((w) => w.startsWith('ind:')).forEach((w) => reasons.push('Works in ' + RN.w.label('industries', w.slice(4))));
       if (!reasons.length && why.includes('role')) reasons.push(`${op.role}`);
-      out.push({ op, score, why: reasons, matched: { tags: matchedTags } });
+      out.push({ op, score, why: reasons, matched: { tags: matchedTags }, named });
       // o.any: the caller only asks whether anything matches (zero-result checks), so stop at the first hit
       if (o.any) return out;
     }
@@ -524,7 +551,9 @@
       if (sort === 'available') return (a.op.avail.key === 'available_now' ? 0 : 1) - (b.op.avail.key === 'available_now' ? 0 : 1) || b.score - a.score;
       return b.score - a.score;
     });
-    return out;
+    // The founder never leads a result list, unless the visitor searched for him by name (o.raw keeps the raw order)
+    if (o.raw || out.some((r) => r.named && isFounder(r))) return out;
+    return M.notFirst(out);
   };
 
   /* ---------- Match signals (client <-> operator), the 5 Scope signals ----------
@@ -592,9 +621,9 @@
   M.rank = function (brief, o) {
     o = o || {};
     const f = { roleCategories: brief.roleCategory ? [brief.roleCategory] : [] };
-    return M.search({ filters: f }).map((r) => Object.assign(r, { fit: M.fit(r.op, brief) }))
-      .sort((a, b) => b.fit.pct - a.fit.pct || F.risRank(b.op) - F.risRank(a.op) || b.score - a.score)
-      .slice(0, o.limit || 12);
+    const ranked = M.search({ filters: f }).map((r) => Object.assign(r, { fit: M.fit(r.op, brief) }))
+      .sort((a, b) => b.fit.pct - a.fit.pct || F.risRank(b.op) - F.risRank(a.op) || b.score - a.score);
+    return M.notFirst(ranked).slice(0, o.limit || 12);
   };
 
   /* ---------- Analytics (Studio + Admin) ----------
@@ -908,7 +937,8 @@
     const out = [];
     // Sample profiles (ops_sample.js) are fictional, so their reviews never lead an editorial module
     M.ops.forEach((op) => { if (!op.hidden && !op.sample) (op.reviews || []).forEach((r) => out.push({ op, r })); });
-    return out.sort(M.reviewRank);
+    // The founder's reviews never lead an editorial module (owner decision, Oct 14, 2026)
+    return M.notFirst(out.sort(M.reviewRank));
   };
   // Logo key for the reviewing company, from the operator's matching engagement ('' when there is none: callers show the name)
   M.reviewLogo = function (op, r) {
@@ -954,9 +984,10 @@
 
   /* Similar operators (after an intro, on profiles, in compare suggestions) */
   M.similar = function (op, n) {
-    return M.ops.filter((x) => x.id !== op.id && !x.hidden && x.catKey === op.catKey)
+    const out = M.ops.filter((x) => x.id !== op.id && !x.hidden && x.catKey === op.catKey)
       .map((x) => ({ x, s: x.tags.filter((t) => op.tags.some((y) => y.t === t.t)).length * 3 + x.industries.filter((i) => op.industries.includes(i)).length + F.risRank(x) / 20 }))
       .sort((a, b) => b.s - a.s).slice(0, n || 3).map((r) => r.x);
+    return M.notFirst(out);
   };
 })();
 

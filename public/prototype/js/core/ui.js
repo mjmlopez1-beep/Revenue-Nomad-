@@ -320,7 +320,41 @@
     return `<button type="button" class="tip" data-tip="${esc(html)}" aria-label="${esc((label || 'More info') + ': ' + text.slice(0, 220))}">i</button>`;
   };
 
-  /* One "illustrative data" label for the whole system */
+  /* ---------- Illustrative figures, visible to every visitor (design pass, Oct 14, 2026) ----------
+     The Rate Index and 2027 report figures in js/data/market.js are illustrative survey data until the first survey
+     closes. Wherever a visitor sees one, it carries this tag (credibility audit item 1). Quiet: 12px, muted, hairline
+     (components.css .illus-tag). Works on paper, cards, dark theme and .night bands.
+       RN.ui.illusTag(text?, o?)   inline tag, default text "Illustrative". o.tip: true renders a focusable button
+                                   that opens the shared explainer popover (do not use inside a link; the default
+                                   span carries a title and a screen-reader sentence instead). o.title replaces the
+                                   explanation. o.cls adds classes.
+       RN.ui.illusNote(text?, o?)  one line under a figure group, default "Illustrative figures until the first survey
+                                   closes." o.asOf adds "As of <date>" in front (a Date, ISO string or text).
+       RN.ui.figNote(parts, o?)    the as-of and sample line under any figure block: parts are joined with " · "
+                                   ("As of Sep 24, 2026 · n=425 rates"); o.illus adds the tag at the end.
+     The reviewer-only label RN.ui.illus (below) is unchanged: it stays hidden from visitors. */
+  ui.ILLUS_TITLE = 'Illustrative survey data. These figures show the shape of the research and are not measured yet. They are replaced by real results when the first State of Fractional GTM survey closes.';
+  ui.ILLUS_NOTE = 'Illustrative figures until the first survey closes.';
+  ui.illusTag = function (text, o) {
+    o = o || {};
+    const t = text || 'Illustrative';
+    const title = o.title || ui.ILLUS_TITLE;
+    const cls = 'illus-tag' + (o.cls ? ' ' + esc(o.cls) : '');
+    if (o.tip) return `<button type="button" class="${cls}" data-tip="${esc(title)}" aria-label="${esc(t + '. ' + title)}">${icon('info')}<span>${esc(t)}</span></button>`;
+    return `<span class="${cls}" title="${esc(title)}">${icon('info')}<span>${esc(t)}</span><span class="sr-only">. ${esc(title)}</span></span>`;
+  };
+  ui.illusNote = function (text, o) {
+    o = o || {};
+    const d = o.asOf ? (o.asOf instanceof Date || /^\d{4}-\d{2}-\d{2}/.test(String(o.asOf)) ? RN.fmt.date(o.asOf) : String(o.asOf)) : '';
+    return `<p class="illus-note${o.cls ? ' ' + esc(o.cls) : ''}" title="${esc(o.title || ui.ILLUS_TITLE)}">${icon('info')}<span>${d ? `As of ${esc(d)}. ` : ''}${esc(text || ui.ILLUS_NOTE)}</span></p>`;
+  };
+  ui.figNote = function (parts, o) {
+    o = o || {};
+    const list = [].concat(parts || []).filter(Boolean).map((x) => esc(x));
+    return `<p class="fig-note${o.cls ? ' ' + esc(o.cls) : ''}"><span>${list.join(' · ')}${o.illus ? ' ' + ui.illusTag(typeof o.illus === 'string' ? o.illus : '') : ''}</span></p>`;
+  };
+
+  /* One "illustrative data" label for the whole system (reviewer mode only: prototype notes) */
   ui.illus = function (text, title) {
     return `<span class="illus" title="${esc(title || 'Figures are illustrative: invented to show shape and value, not to be cited.')}">${icon('info')}${esc(text || 'Illustrative')}</span>`;
   };
