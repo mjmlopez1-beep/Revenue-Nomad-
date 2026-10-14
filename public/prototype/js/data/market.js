@@ -1,6 +1,7 @@
 /* Market data for the research hub, Rate Index, Studio positioning and Admin demand views.
-   ILLUSTRATIVE: every figure here is invented to show shape and value (same caveat as the
-   State of Fractional GTM 2027 mockup). Every cut uses the standard field slugs from fields.js,
+   ILLUSTRATIVE: every figure here is invented to show shape and value. Wherever a visitor sees one it carries a
+   visible tag (RN.ui.illusTag / illusNote / figNote; design pass, Oct 14, 2026), and the 2027 report is a preview
+   edition until the first survey closes. RN.costs reads the Rate Index from here live ("ri.<category>"). Every cut uses the standard field slugs from fields.js,
    so a report segment, a browse filter and an operator profile all mean the same thing. */
 (function () {
   'use strict';
@@ -21,7 +22,12 @@
     report: {
       title: 'The State of Fractional GTM',
       year: 2027,
+      // A PREVIEW edition (design pass, Oct 14, 2026): every figure below is illustrative until the first survey
+      // closes, and the cover says so (RN.ui.illusNote). Pages that mention the survey say real results land later.
+      edition: 'preview',
+      preview: 'Preview edition. Every figure in it is illustrative until the first survey closes and real results replace it.',
       fieldwork: 'Jul to Aug 2026',
+      fieldworkShort: 'Jul 1 to Aug 15, 2026',
       sample: { operators: 212, companies: 96, profiles: '350+' },
       lede: 'What companies pay, how they scope the work, which roles they hire first, and what separates the operators who get rehired. Built from a survey of operators and hiring companies, plus anonymized profile data from 350+ operators (' + liveN + ' profiles).',
       summary: [
@@ -62,9 +68,11 @@
         { range: '20m_50m', v: 265 },
         { range: '50m_plus', v: 300 },
       ],
+      // Monthly cost column: the view prices row 1 from the Rate Index (illustrative, tagged) and row 2 from the
+      // canonical full-time VP of Sales pay (RN.costs.fullTime: about $334K a year, $27.8k a month, sourced)
       fracVsFull: [
         ['Fractional VP of Sales, 40 hrs / month', '$11,000', '2 to 3 weeks', '30 days notice'],
-        ['Full time VP of Sales, base + OTE + benefits + equity', '$27,000+', '90 to 120 days', 'Severance plus 4 to 6 months lost'],
+        ['Full-time VP of Sales, average total compensation', '$27,800', '90 to 120 days', 'Severance plus 4 to 6 months lost'],
         ['Agency or consultancy', '$15,000+', '4 to 6 weeks', 'Contract term'],
       ],
       // Share of engagements by the standard hoursPerMonth codes (19 = <20 hrs / month)
@@ -97,11 +105,12 @@
       concurrent: [
         { l: '1 company', v: 22 }, { l: '2 companies', v: 39 }, { l: '3 companies', v: 27 }, { l: '4+', v: 12 },
       ],
-      quote: { text: 'I did not need a closer. I needed someone to build the machine and then hand me the keys.', by: 'CEO, $5M–$20M B2B services company' },
+      // Not rendered: an invented quote is not shown, even tagged (owner rule: no invented quotes, Oct 14, 2026)
+      quote: { text: 'I did not need a closer. I needed someone to build the machine and then hand me the keys.', by: 'CEO, $5M - $20M B2B services company' },
       methodology: [
         'Survey fielded July 1 to August 15, 2026 to fractional GTM operators (n=212) and companies that hired one in the last 18 months (n=96). Rate and scope figures are medians of self-reported data. Demand growth combines a monthly scan of public fractional GTM job posts with stated hiring intent. Profile analysis uses anonymized, aggregated data from 350+ operators on the Revenue Nomad network (' + liveN + ' profiles). Segments with fewer than 20 responses are marked directional.',
         'Every segment in this report uses the same fields operators and companies fill in on Revenue Nomad: role category, revenue range, employee range, available time and industry. That is why a number here can be compared directly with any profile or brief on the platform.',
-        'Revenue Nomad is a marketplace for fractional go-to-market leadership, so it has a commercial interest in this market growing. In this prototype edition every figure is illustrative, invented to show the shape of the published report.',
+        'Revenue Nomad is a marketplace for fractional go-to-market leadership, so it has a commercial interest in this market growing. This is a preview edition: every figure in it is illustrative, invented to show the shape of the published report, and real survey results replace them when the first survey closes.',
       ],
     },
 
