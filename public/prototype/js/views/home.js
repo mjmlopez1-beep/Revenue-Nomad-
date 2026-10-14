@@ -1,90 +1,93 @@
 /* Home (#home): the destination for companies hiring fractional GTM leaders.
-   One bold moment (the photo hero with search), then calm, ruled sections that each open a deeper
-   surface: Browse (search, role chips, focus areas, problems), profiles (featured operators),
-   the GTM Framework, the Rate Index and Insights (market pulse), the 2027 report and Talk to us.
-   Home is for clients (founder decision, Sep 25, 2026): operator messaging (the Studio preview and
-   how featuring works) lives on #operators in pages.js. The header's For Operators link and the footer stay.
-   Pricing copy is client-side (D1): rates are shown as the price, companies pay no fees, and the
-   operator fee is never mentioned here.
+   One bold moment (the photo hero with search), then seven calm sections that each open a deeper surface
+   (design pass, Oct 14, 2026; owner decisions on the GoFractional audit):
+     1. Hero          the H1, the search, client logos and three outcome figures (final values on the first frame)
+     2. Start here    the problems (to Browse), the seats (the function pages) and the Not ready to hire yet panel
+     3. The work      the showcase of work samples (RN.work.showcase), on the one sanctioned wide container
+     4. Operators     a static row of three featured operators; carousel controls only when more than three
+     5. Reviews       two company reviews, published as written
+     6. Research      the 2027 report, the Rate Index by role (Illustrative), what a VP of Sales costs (real figures,
+                      RN.costs) and the quarterly Pulse sign-up
+     7. Talk to us    the closing band with the three steps
+   The network activity ticker, the "Or browse by role" chips, the Focus areas picker and the GTM Framework section
+   left home in this pass (the framework stays on #framework and #insights).
+   Home is for clients (founder decision, Sep 25, 2026): operator messaging lives on #operators in pages.js.
+   Pricing copy is client-side (D1): rates are shown as the price, companies pay no fees, and the operator fee is never
+   mentioned here.
+
+   Figures
+   - Real cost figures read RN.costs and say their basis (RN.costs.basis). The full-time VP of Sales tile reads
+     RN.costs.fullTime, never market.js report.fracVsFull.
+   - Every market.js figure (the Rate Index, the 2027 report findings and sample sizes) carries a visible
+     RN.ui.illusTag, so it never reads as measured data.
+   - No headline count under 10: counts below 10 read "See operators" with no number.
+
+   The founder (op.isMatt) stays eligible in every ranking but is never in the first slot of the operators row, and his
+   reviews never feature here (owner decision, Oct 14, 2026; RN.model.notFirst, RN.model.isFounder).
+
+   Motion (motion policy, BRIEF.md): nothing on screen at load is hidden or animated in, and every number is final on
+   the first frame (no count-ups, no parallax). The page's one ambient element is the search placeholder, which shows
+   real example requests one at a time, each for 3s, pauses on hover, focus and a hidden tab or off-screen hero, makes one
+   pass and then rests on the standard placeholder, and never runs under reduced motion or calm mode.
+   Explanation motion: the steps line fills with scroll (stepsLink), the Rate Index chart and the Not ready graphics draw
+   once (RN.motion.draw), the work showcase settles when its filter changes (work.js). Two small reveals
+   (RN.motion.reveal: problem cards, operator cards) play once, below the fold only.
 
    Loops wired here:
-   - Hero search, role chips, problems and trending searches write RN.store.state.browse
-     ({q, tags, filters:{roleCategories}}) with standard slugs, then route to #browse or #browse.<slug>.
-   - Hero search and trending clicks log RN.track('search', {q, tags, filters, results, source}).
-   - Operator cards log one 'impression' each per visit (source 'home') and mark the next
+   - Hero search and problem cards write RN.store.state.browse ({q, tags, filters:{roleCategories}}) with standard slugs,
+     then route to #browse or #browse.<slug>. The search logs RN.track('search', {q, tags, filters, results, source}).
+   - Operator cards log one 'impression' each per visit as they come into view (source 'home') and mark the next
      profile_view source as 'home' (RN.store.state._viewSource).
-   - Top operators = a carousel of every operator at Trusted (70+) and above, ranked by the same rules for
-     every operator (curate(); with a photo first within an equal score). No founder callouts and no exclusions
-     (founder decision, Sep 25, 2026): op.isMatt is demo data only. The carousel auto-advances every 5s, pauses
-     on hover, focus, a hidden tab and its pause button, and never auto-advances for reduced motion.
-   - How it works: a path that draws itself as the section scrolls into view (stepsPath). At rest (no scroll yet,
-     reduced motion, a still capture) the path is fully drawn and every step is shown; .is-live is added only
-     after the visitor starts scrolling while the section is still below the fold.
-   - The activity strip reads intros, engagements (state.projects), review requests, reviews and pending applications
-     from the store. Seeded records and hand-written samples are illustrative (one RN.ui.illus()
-     on the strip); records created in this prototype session are marked "Your session".
    - The Fractional GTM Pulse (the one quarterly newsletter, shared with Insights) stores seen['ins-pulse'], tracks
      'newsletter_signup' {source:'home', meta:{list:'pulse'}} and mails a confirmation to the Outbox. The next
      issue is the first day of the next calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1).
-   Type: .h-hero for the H1, .h2 for section heads, .h1 for the closing band. One Newsreader italic
-   accent on the page (the hero line). */
+   Type: .h-hero for the H1, .h2 for section heads, .h1 for the closing band. Vermilion full stops: the H1 and two H2s
+   (three on the page). */
 (function () {
   'use strict';
   const RN = window.RN;
   const esc = RN.esc, icon = RN.icon;
 
   /* ---------- Module state (kept across re-renders of the same visit) ---------- */
-  const S = { q: '', tags: [], played: false, impressed: false, paused: false, timers: [], offs: [], raf: 0 };
+  const S = { q: '', timers: [], offs: [] };
   const PH = 'Describe what you need, or search a role or focus area';
-  /* Examples typed into the search, one at a time. Clients search their problem first and the category second
-     (inbound plan, Oct 9, 2026), so phrases in the clients' own words alternate with role words. Each phrase was run
-     through RN.model.search and RN.model.understand (Oct 10, 2026) and kept only if it returns three or more operators
-     or reads as a role category; a question-length phrase reaches Browse through RN.browse.fromText as that category. */
-  const TYPE_WORDS = ['founder still running sales', 'VP of Sales', 'why is my forecast wrong', 'RevOps', 'how to vet a fractional CMO', 'Demand Generation', 'should I hire a VP of Sales or a fractional', 'reps with no process', 'HubSpot', 'what does a fractional VP of Sales cost'];
-  const TRUSTED = 70; // Reputation Index floor for the Top operators carousel
-  const CAR_MS = 5000; // carousel auto-advance interval
+  /* Real example requests, shown one at a time in the search placeholder. Clients search their problem first and the
+     category second (inbound plan, Oct 9, 2026), so phrases in the clients' own words alternate with role words. Each
+     phrase was run through RN.model.search and RN.model.understand (Oct 10, 2026) and kept only if it returns three or
+     more operators or reads as a role category. */
+  const EXAMPLES = ['founder still running sales', 'VP of Sales', 'why is my forecast wrong', 'RevOps', 'how to vet a fractional CMO', 'Demand Generation', 'reps with no process', 'HubSpot', 'what does a fractional VP of Sales cost'];
+  const EX_HOLD = 3000; // each example stays readable this long (policy: at least 2.5s)
+  const EX_FADE = 150;  // --dur-1 cross-fade between examples
+  const FEAT_MIN = 60;  // Reputation Index floor for the featured row (Proven and above)
+  const ROW = 3;        // the featured row shows three cards; controls appear only when there are more
+  const MIN_COUNT = 10; // no count under 10 in a headline spot
   const BRIEF_KEY = 'ins-pulse'; // same list and key as the Insights sign-up
 
-  // Icons for the problem picklist (RN.fields.need) and the GTM Framework areas (same map as research.js)
+  // Icons for the problem picklist (RN.fields.need)
   const NEED_IC = { sales_motion: 'target', pipeline: 'trend-up', team: 'users', systems: 'layers', ai: 'ai', retention: 'refresh', partners: 'handshake', not_sure: 'message' };
-  /* Framework areas take the tone of the function that owns most of that work */
-  const AREA_TONE = { 'Lead & plan': 'forest', 'Build the team': 'enable', 'Generate demand': 'mkt', 'Win deals': 'sales', 'Retain & expand': 'cs', 'Systems & data': 'revops' };
-  const AREA_IC = { 'Lead & plan': 'compass', 'Build the team': 'users', 'Generate demand': 'megaphone', 'Win deals': 'handshake', 'Retain & expand': 'refresh', 'Systems & data': 'layers' };
-
-  // GTM Framework area definitions (Operator Profile Explorer AXIS_DEF, verbatim)
-  const AREA_DEF = {
-    'Lead & plan': 'Strategy, positioning, org design, planning and interim leadership: work that sets direction for every stage.',
-    'Build the team': 'Hiring, onboarding, coaching, comp and methodology: work that makes the people in every stage better.',
-    'Generate demand': 'Pipeline creation: demand gen, ABM, outbound, content and partner-sourced opportunities.',
-    'Win deals': 'Turning pipeline into revenue: sales process, discovery, deal execution, pricing and forecasting.',
-    'Retain & expand': 'Keeping and growing customers: onboarding, adoption, renewals, expansion and advocacy.',
-    'Systems & data': 'CRM, reporting, routing, tech stack and automation: the plumbing every stage runs on.',
-  };
 
   /* ---------- Helpers ---------- */
-  const calm = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches || !!navigator.webdriver; } catch (e) { return true; } };
+  const calm = () => (RN.motion && RN.motion.calm ? RN.motion.calm() : true);
   const later = (fn, ms) => { const t = setTimeout(fn, ms); S.timers.push(t); return t; };
   const on = (target, type, fn, opts) => { target.addEventListener(type, fn, opts); S.offs.push(() => target.removeEventListener(type, fn, opts)); };
   const onHome = on;
   function teardown() {
     S.timers.forEach(clearTimeout); S.timers = [];
     S.offs.forEach((off) => off()); S.offs = [];
-    if (S.raf) cancelAnimationFrame(S.raf); S.raf = 0;
   }
   const liveOps = () => RN.model.ops.filter((o) => !o.hidden);
   const opsIn = (cats) => liveOps().filter((o) => cats.includes(o.catKey)).length;
-  const an = (w) => (/^[aeiou]/i.test(w) ? 'an' : 'a');
   const catLabel = (c) => RN.fields.catLabel(c);
+  const seeOps = (n) => (n >= MIN_COUNT ? `See ${RN.fmt.plural(n, 'operator')}` : 'See operators');
   const more = (label, attrs) => `<a class="hm-more" ${attrs}>${esc(label)}${icon('arrow')}</a>`;
-  const head = (eyebrow, title, right, sub) => `<header class="hm-head">
-      <div class="hm-head-l"><span class="eyebrow">${esc(eyebrow)}</span><h2 class="h2 hm-h2">${title}</h2>${sub ? `<p class="lede hm-head-sub">${sub}</p>` : ''}</div>
-      ${right ? `<div class="hm-head-r">${right}</div>` : ''}
-    </header>`;
-  const seeded = (id) => /-seed-/.test(String(id || ''));
+  /* Section head: eyebrow, H2 and description 16px apart, 32px to the content (.sec-head), with an optional link on the right */
+  const head = (o) => `<div class="hm-head">
+      <header class="sec-head">${o.eyebrow ? `<span class="eyebrow">${esc(o.eyebrow)}</span>` : ''}<h2 class="h2 hm-h2"${o.id ? ` id="${o.id}"` : ''}>${o.title}</h2>${o.sub ? `<p class="lede">${o.sub}</p>` : ''}${o.extra || ''}</header>
+      ${o.right ? `<div class="hm-head-r">${o.right}</div>` : ''}
+    </div>`;
   // Display typesetting. keep: a hyphenated compound never breaks across lines ("30/60/90-day", "company-confirmed").
   const unit = (v) => esc(v).replace(/^([$€£]?[\d.,]+)\s*(x|×|%|[a-z]+)$/i, (m, n, u) => /^[x×]$/i.test(u) ? `${n}<span class="u u-x">×</span>` : `${n}<span class="u${u === '%' ? ' u-sym' : ''}">${u}</span>`);
   const keep = (s) => esc(s).replace(/[^\s<>]+-[^\s<>]+/g, (w) => `<span class="nowrap">${w}</span>`);
-  const sentence = (s) => String(s || '').replace(/^\s*\S/, (c) => c.toUpperCase());
 
   /* Write the Browse state with standard slugs, then route. From home every entry starts fresh. */
   function toBrowse(patch, route) {
@@ -100,51 +103,31 @@
     RN.go(route || 'browse');
   }
 
-  // Founder's curation order (L466): photo, then Reputation Index, video, reviews, engagements, completeness.
-  // Every operator is ranked by the same rules (no founder exclusion, founder decision Sep 25, 2026).
-  const curate = (a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || (b.video ? 1 : 0) - (a.video ? 1 : 0) || b.reviews.length - a.reviews.length || b.engagements.length - a.engagements.length || b.completeness - a.completeness;
-  // Top operators carousel: Trusted and above. Operators without a photo are included; within an equal
-  // Reputation Index the ones with a photo come first, then the curation order.
+  // Founder's curation order (L466): Reputation Index, photo, video, reviews, engagements, completeness. Every operator
+  // is ranked by the same rules; RN.model.notFirst then keeps the founder out of slot 1.
+  const curate = (a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || (b.video ? 1 : 0) - (a.video ? 1 : 0) || b.reviews.length - a.reviews.length || b.engagements.length - a.engagements.length || b.completeness - a.completeness;
+  /* Featured operators: Proven (60) and above. When fewer than three qualify, the row is filled with the next best
+     ranked operators, so it is always a full row of three. */
   function featured() {
-    return liveOps().filter((o) => o.ris.score >= TRUSTED)
-      .sort((a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || curate(a, b));
+    const ops = liveOps().slice().sort(curate);
+    const top = ops.filter((o) => o.ris.score >= FEAT_MIN);
+    const list = top.length >= ROW ? top : top.concat(ops.filter((o) => !top.includes(o)).slice(0, ROW - top.length));
+    return RN.model.notFirst(list);
   }
 
-  function guessCat(q) {
-    const terms = RN.model.expand(q || '');
-    const o = RN.fields.roleCategory.options.find((x) => terms.includes(x.l.toLowerCase()));
-    return o ? o.v : '';
-  }
-
-  /* ---------- Hero ---------- */
-  function selHtml() {
-    return `<span class="label">Focus areas</span>
-      ${S.tags.map((t) => `<button type="button" class="chip chip-sm on" data-act="hm-tag-x" data-t="${esc(t)}" aria-label="Remove ${esc(t)}">${esc(t)}<span class="x">${icon('x')}</span></button>`).join('')}
-      <button type="button" class="act hm-sel-clear" data-act="hm-tags-clear">Clear</button>`;
-  }
-
-  /* Buyer outcomes for the hero. Would hire again is computed from company reviews on real (non-sample)
-     profiles. Intro to first meeting has no network data yet, so it reads from the market file when present
-     and otherwise uses a typical figure, labelled illustrative either way. */
-  // Founder figure (Oct 2, 2026): share of companies who would hire again, across past engagements. hireAgain() below
-  // is the share from reviews on live profiles, kept for when the network has enough reviews to show it instead.
+  /* ---------- 1. Hero ---------- */
+  // Founder figure (Oct 2, 2026): share of companies who would hire again, across past engagements.
   const HIRE_AGAIN = 97;
-  function hireAgain() {
-    const rs = RN.model.ops.filter((o) => !o.sample).flatMap((o) => o.reviews || []).filter((r) => typeof r.hireAgain === 'boolean');
-    return { n: rs.length, pct: rs.length ? Math.round(rs.filter((r) => r.hireAgain === true).length / rs.length * 100) : 0 };
-  }
-  // Company logos directly under the search box. Names without a logo file render as a clean wordmark.
-  // [key, name, height]: heights set by eye so a thin wide wordmark and a bold mark read the same size
-  // Cleared client logos only (Ferry, Skaled, BuildingLink have artwork)
+  // Company logos directly under the search box. [key, name, height]: heights set by eye so a thin wide wordmark and a
+  // bold mark read the same size. Cleared client logos only (Ferry, Skaled, BuildingLink have artwork).
   const LOGO_LINE = [['ferryWordmark', 'Ferry', 19], ['skaled', 'Skaled', 15], ['buildinglink', 'BuildingLink', 19]];
   function logoLine() {
     return `<div class="hm-logos"><span class="label">Trusted by teams at</span><ul>${LOGO_LINE.map(([k, name, h]) => `<li>${(RN.data.logos || {})[k] ? RN.ui.logo(k, { h, name }) : `<span class="hm-wm">${esc(name)}</span>`}</li>`).join('')}</ul></div>`;
   }
 
-  function hero(anim) {
-    const cats = RN.fields.roleCategory.options;
+  function hero() {
     const meetDays = +((RN.data.market && RN.data.market.network && RN.data.market.network.introToMeetingDays) || 2); // founder figure, Oct 2, 2026
-    return `<section class="hm-hero night ${anim ? 'hm-anim' : ''}" aria-labelledby="hm-h1">
+    return `<section class="hm-hero night" aria-labelledby="hm-h1">
       <img class="hm-hero-img" src="assets/brand/hero-highfive.webp" alt="" fetchpriority="high">
       <div class="hm-hero-shade" aria-hidden="true"></div>
       <div class="wrap hm-hero-grid">
@@ -155,125 +138,58 @@
             <span class="hm-ln"><span>who already solved</span></span>
             <span class="hm-ln"><span class="serif">your revenue problem<span class="vm">.</span></span></span>
           </h1>
-          <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders, each reviewed by the companies that hired them. Open profiles, no login to browse and no fees for companies.')}</p>
+          <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders. Reviews come only from companies that hired them. Open profiles, no login to browse and no fees for companies.')}</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>
-            <div class="hm-search-acts">
-              <button type="button" class="hm-fa" data-act="hm-tags-open" aria-haspopup="dialog">${icon('plus')}<span>Focus areas</span><b class="hm-fa-n" ${S.tags.length ? '' : 'hidden'}>${S.tags.length}</b></button>
-              <button type="submit" class="btn btn-lg hm-go-btn">Show my matches</button>
-            </div>
+            <button type="submit" class="btn btn-lg hm-go-btn">Show my matches</button>
           </form>
           ${logoLine()}
-          <div class="hm-sel" ${S.tags.length ? '' : 'hidden'}>${selHtml()}</div>
-          <div class="hm-cats">
-            <span class="label">Or browse by role</span>
-            <div class="hm-cats-row">${cats.map((o) => `<a class="chip" href="#browse.${esc(o.v)}" data-act="hm-cat" data-cat="${esc(o.v)}">${esc(o.l)}<span class="hm-cat-n">${opsIn([o.v])}</span></a>`).join('')}</div>
-          </div>
         </div>
         <dl class="hm-stats">
-          <div><dt>From intro to first meeting<small>Typical, from the first reply to a booked call</small></dt><dd class="num"><span data-count="${meetDays}">${meetDays}</span><span class="u">${meetDays === 1 ? 'day' : 'days'}</span></dd></div>
-          <div><dt>Would hire again<small>Companies across past engagements</small></dt><dd class="num"><span data-count="${HIRE_AGAIN}">${HIRE_AGAIN}</span><span class="u u-sym">%</span></dd></div>
+          <div><dt>From intro to first meeting<small>Typical, from the first reply to a booked call</small></dt><dd class="num">${meetDays}<span class="u">${meetDays === 1 ? 'day' : 'days'}</span></dd></div>
+          <div><dt>Would hire again<small>Companies across past engagements</small></dt><dd class="num">${HIRE_AGAIN}<span class="u u-sym">%</span></dd></div>
           <div><dt>Typical first reply to an intro request<small>Every request answered within 72 hours</small></dt><dd class="num"><span class="u-lt">&lt;</span>2<span class="u">hrs</span></dd></div>
         </dl>
       </div>
     </section>`;
   }
 
-  /* ---------- Activity strip ----------
-     Honest by construction: seeded demo records (ids with -seed-) and the hand-written samples are
-     illustrative, so the strip carries one RN.ui.illus(). Records created in this prototype session
-     (intros, engagements, reviews, applications) are real within the prototype and marked "Your session". */
-  function networkItems() {
-    const st = RN.store.state;
-    const role = (opId) => { const op = RN.model.byId(opId); return op ? 'Fractional ' + op.role : 'A fractional operator'; };
-    const co = (c) => { const ind = c && c.industry ? RN.w.label('industries', c.industry) : ''; return ind ? `${an(ind)} ${ind} company` : 'a company'; };
-    const out = [];
-    const add = (id, ts, text) => out.push({ ts, text, meta: RN.fmt.ago(ts), mine: !seeded(id) });
-    (st.intros || []).forEach((i) => {
-      if (i.status === 'declined') return;
-      const c = (i.buyer && i.buyer.company) || {};
-      const last = (i.thread && i.thread.length ? i.thread[i.thread.length - 1].ts : i.createdAt) || i.createdAt;
-      if (i.status === 'hired') add(i.id, last, `${role(i.opId)} hired by ${co(c)}`);
-      else if (i.status === 'introduced') add(i.id, last, `${role(i.opId)} introduced to ${co(c)}`);
-      else add(i.id, i.createdAt, `${role(i.opId)} requested by ${co(c)}`);
-    });
-    (st.projects || []).filter((p) => p.status !== 'draft' && p.postedAt).forEach((p) => {
-      const f = p.fields || {};
-      const kind = RN.fields.catLabel(f.roleCategory || '') || 'fractional';
-      add(p.id, p.postedAt, `${co({ industry: (f.industries || [])[0] }).replace(/^./, (x) => x.toUpperCase())} posted ${an(kind)} ${kind} engagement`);
-    });
-    const done = (st.reviewRequests || []).filter((r) => r.status === 'completed');
-    done.forEach((r) => add(r.id, r.completedAt, `${role(r.opId)} received a new company review`));
-    (st.reviews || []).filter((rv) => rv && rv.opId && !done.some((r) => r.id === rv.requestId)).forEach((rv) => {
-      const ts = rv.ts || rv.date || rv.createdAt || RN.now().toISOString();
-      add(rv.id || rv.requestId, ts, `${role(rv.opId)} received a new company review`);
-    });
-    (st.pending || []).forEach((a) => { const p = a.profile || {}; if (p.role) add(a.id, a.submittedAt, `Fractional ${p.role} applied to join the network`); });
-    out.sort((a, b) => (b.mine - a.mine) || (new Date(b.ts) - new Date(a.ts)));
-    const live = out.slice(0, 8);
-    const d = (n) => RN.fmt.dateShort(RN.daysAgo(n));
-    const sample = [
-      { text: 'Fractional VP of Sales matched with a physical therapy marketing agency', meta: 'started ' + d(10) },
-      { text: 'Fractional Sales Manager now leading an 8-rep team', meta: 'started ' + d(16) },
-      { text: 'Fractional Chief Marketing Officer shortlisted by a $50M+ govtech SaaS company', meta: 'shortlist in progress' },
-      { text: 'Fractional RevOps Manager matched with a $5M–$20M SaaS company', meta: 'started ' + d(21) },
-    ];
-    // Interleave so store activity leads and samples never cluster
-    const mixed = [];
-    for (let i = 0; i < Math.max(live.length, sample.length); i++) { if (live[i]) mixed.push(live[i]); if (sample[i] && (i % 2 === 1 || !live[i])) mixed.push(sample[i]); }
-    sample.forEach((s) => { if (!mixed.includes(s)) mixed.push(s); });
-    return mixed;
-  }
-  const pauseBtn = () => `<button type="button" class="hm-strip-pause" data-act="hm-strip-pause" aria-pressed="${S.paused}" aria-label="${S.paused ? 'Play' : 'Pause'} the activity strip">${S.paused ? icon('play') : '<i aria-hidden="true"></i>'}</button>`;
-  function strip() {
-    const items = networkItems();
-    const mine = items.filter((it) => it.mine).length;
-    const note = mine
-      ? `Sample activity, except the ${RN.fmt.plural(mine, 'item')} marked Your session, which are things you did here.`
-      : 'Sample activity that shows how the strip works. It is not live network data. Anything you do here (an intro request, an engagement) shows up on the strip marked Your session.';
-    const row = (hidden) => `<ul class="hm-strip-list" ${hidden ? 'aria-hidden="true"' : ''}>${items.map((it) => `<li class="hm-tick"><span>${esc(it.text)}</span><small>${esc(it.meta)}</small>${it.mine ? '<span class="pill pill-good hm-mine">Your session</span>' : ''}</li>`).join('')}</ul>`;
-    return `<section class="hm-strip night ${S.paused ? 'is-paused' : ''}" aria-labelledby="hm-strip-t">
-      <div class="hm-strip-tag"><span id="hm-strip-t">Network activity</span>${RN.ui.illus('Illustrative', note)}<span class="sr-only">${esc(note)}</span>${pauseBtn()}</div>
-      <div class="hm-strip-view"><div class="hm-strip-track">${row(false)}${row(true)}</div></div>
-    </section>`;
-  }
-
-  /* ---------- Start from the seat ----------
-     The three function homes (site-pages copy, Oct 10, 2026): each card carries the page's hero line, who it is for
-     from the hero paragraph, and the live operator count in that category; the cost hub follows. Plain links, since the
-     pages render in function.js. */
+  /* ---------- 2. Start here: problems, seats and the Not ready to hire yet panel ---------- */
+  /* The three function homes (site-pages copy, Oct 10, 2026): each card carries the page's hero line and the live
+     operator count in that category. Plain links, since the pages render in function.js. */
   const SEATS = [
-    { cat: 'sales_leadership', to: 'hire-fractional-sales-vp', h: 'Fractional sales leadership for founders who are still the sales team', who: 'You carry the number, coach reps and run the company.' },
-    { cat: 'revenue_operations', to: 'fractional-revops', h: 'Fractional RevOps for $25M to $100M SaaS teams that cannot explain their own pipeline', who: 'For CROs, VPs of Sales and CFOs whose forecast leans on a few large deals.' },
-    { cat: 'marketing', to: 'fractional-marketing-leadership', h: 'Fractional marketing leaders who bring lead costs down and hold your agencies to a number', who: 'For presidents, CROs and PE operating partners whose cost per lead keeps rising.' },
+    { cat: 'sales_leadership', to: 'hire-fractional-sales-vp', h: 'Fractional sales leadership for founders who are still the sales team' },
+    { cat: 'revenue_operations', to: 'fractional-revops', h: 'Fractional RevOps for $25M to $100M SaaS teams that cannot explain their own pipeline' },
+    { cat: 'marketing', to: 'fractional-marketing-leadership', h: 'Fractional marketing leaders who bring lead costs down and hold your agencies to a number' },
   ];
-  /* Not ready to hire yet: a dark panel of four tiles, each with a small living graphic of where it leads, under a
-     source line so it reads as research (founder comment, Oct 12, 2026: bring the modern panel back). */
+  /* Not ready to hire yet: a dark panel of four tiles, each with a small graphic of where it leads, under a source line
+     so it reads as research (founder comment, Oct 12, 2026). It keeps its amber accents (owner decision, Oct 14, 2026).
+     The graphics draw once when the panel scrolls into view (RN.motion.draw: data-draw on the moving parts). */
   const PREP_ART = [
     // Rate spread: a smooth distribution, the middle half shaded, the median marked and labeled
-    `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6FCF97" stop-opacity=".55"/><stop offset="1" stop-color="#6FCF97" stop-opacity="0"/></linearGradient><clipPath id="hpC"><rect x="66" y="0" width="68" height="88"/></clipPath></defs>
+    `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="stop-a"/><stop offset="1" class="stop-b"/></linearGradient><clipPath id="hpC"><rect x="66" y="0" width="68" height="88"/></clipPath></defs>
       ${[18, 46, 74].map((y) => `<line class="grid" x1="10" y1="${y}" x2="190" y2="${y}"/>`).join('')}
-      <path class="dist-fill" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70 Z" fill="url(#hpA)"/>
-      <path class="dist-band" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70 Z" clip-path="url(#hpC)"/>
-      <path class="dist-line" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70"/>
+      <path class="dist-fill" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70 Z" fill="url(#hpA)" data-draw="fade"/>
+      <path class="dist-band" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70 Z" clip-path="url(#hpC)" data-draw="fade"/>
+      <path class="dist-line" d="M10 70 C 45 70, 62 22, 100 18 C 138 22, 155 70, 190 70" data-draw="line"/>
       <line class="axis" x1="10" y1="70" x2="190" y2="70"/>
       <line class="med" x1="100" y1="18" x2="100" y2="70"/><circle class="med-dot" cx="100" cy="18" r="4"/>
       <g class="tag"><rect x="108" y="6" width="58" height="18" rx="9"/><text x="137" y="18.5">$240/hr</text></g>
       <text class="tick" x="10" y="84">$150</text><text class="tick" x="100" y="84" text-anchor="middle">median</text><text class="tick" x="190" y="84" text-anchor="end">$350</text></svg>`,
     // Five questions: a track that fills, checks on the answered ones, the gap found on the fourth
-    `<svg viewBox="0 0 200 88"><defs><linearGradient id="hpG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6FCF97"/><stop offset="1" stop-color="#E9A63D"/></linearGradient></defs>
-      <line class="track" x1="22" y1="40" x2="178" y2="40"/><line class="track-on" x1="22" y1="40" x2="139" y2="40" stroke="url(#hpG)"/>
-      ${[22, 61, 100, 139, 178].map((x, i) => i < 3 ? `<g class="q-on" style="--i:${i}"><circle cx="${x}" cy="40" r="9"/><path d="M${x - 4} 40 l3 3 l5 -6"/></g>` : i === 3 ? `<circle class="gap-ring" cx="${x}" cy="40" r="13"/><circle class="gap" cx="${x}" cy="40" r="9"/><text class="gap-n" x="${x}" y="43.5">4</text>` : `<circle class="q" cx="${x}" cy="40" r="9"/><text class="q-n" x="${x}" y="43.5">5</text>`).join('')}
+    `<svg viewBox="0 0 200 88">
+      <line class="track" x1="22" y1="40" x2="178" y2="40"/><line class="track-on" x1="22" y1="40" x2="139" y2="40" data-draw="line"/>
+      ${[22, 61, 100, 139, 178].map((x, i) => i < 3 ? `<g class="q-on"><circle cx="${x}" cy="40" r="9"/><path d="M${x - 4} 40 l3 3 l5 -6"/></g>` : i === 3 ? `<circle class="gap-ring" cx="${x}" cy="40" r="13"/><circle class="gap" cx="${x}" cy="40" r="9"/><text class="gap-n" x="${x}" y="43.5">4</text>` : `<circle class="q" cx="${x}" cy="40" r="9"/><text class="q-n" x="${x}" y="43.5">5</text>`).join('')}
       <g class="tag tag-gap"><rect x="104" y="60" width="70" height="18" rx="9"/><text x="139" y="72.5">Gap: pipeline</text></g></svg>`,
     // 30/60/90: a small Gantt, each phase starting where the last one hands off, with a milestone at the end
     `<svg viewBox="0 0 200 88">${[46, 90, 134].map((x) => `<line class="grid" x1="${x}" y1="6" x2="${x}" y2="70"/>`).join('')}
-      ${[['Diagnose', 8, 70, 14], ['Build', 46, 74, 34], ['Hand over', 90, 82, 54]].map(([l, x, w, y], i) => `<rect class="gantt-bg" x="${x}" y="${y}" width="${w}" height="12" rx="6"/><rect class="gantt" x="${x}" y="${y}" width="${w}" height="12" rx="6" style="--i:${i}"/><text class="gantt-l" x="${x + 7}" y="${y + 8.6}">${l}</text>`).join('')}
+      ${[['Diagnose', 8, 70, 14], ['Build', 46, 74, 34], ['Hand over', 90, 82, 54]].map(([l, x, w, y]) => `<rect class="gantt-bg" x="${x}" y="${y}" width="${w}" height="12" rx="6"/><rect class="gantt" x="${x}" y="${y}" width="${w}" height="12" rx="6" data-draw="x"/><text class="gantt-l" x="${x + 7}" y="${y + 8.6}">${l}</text>`).join('')}
       <path class="mile" d="M176 60 l6 6 l-6 6 l-6 -6 Z"/>
       <text class="tick" x="46" y="84" text-anchor="middle">Day 30</text><text class="tick" x="90" y="84" text-anchor="middle">Day 60</text><text class="tick" x="134" y="84" text-anchor="middle">Day 90</text></svg>`,
     // A question and its straight answer: two message cards, the answer marked with a check
     `<svg viewBox="0 0 200 88"><g class="msg-q"><rect x="8" y="8" width="118" height="30" rx="10"/><circle cx="22" cy="23" r="6"/><rect class="ln" x="34" y="17" width="72" height="5" rx="2.5"/><rect class="ln" x="34" y="26" width="48" height="5" rx="2.5"/></g>
-      <g class="msg-a"><rect x="58" y="46" width="134" height="34" rx="10"/><rect class="bar-a" x="58" y="46" width="4" height="34" rx="2"/><rect class="ln-a" x="72" y="55" width="94" height="5" rx="2.5"/><rect class="ln-a" x="72" y="65" width="66" height="5" rx="2.5"/><circle class="ok" cx="176" cy="63" r="7"/><path class="ok-t" d="M172.5 63 l2.5 2.5 l4.5 -5"/></g></svg>`,
+      <g class="msg-a" data-draw="fade"><rect x="58" y="46" width="134" height="34" rx="10"/><rect class="bar-a" x="58" y="46" width="4" height="34" rx="2"/><rect class="ln-a" x="72" y="55" width="94" height="5" rx="2.5"/><rect class="ln-a" x="72" y="65" width="66" height="5" rx="2.5"/><circle class="ok" cx="176" cy="63" r="7"/><path class="ok-t" d="M172.5 63 l2.5 2.5 l4.5 -5"/></g></svg>`,
   ];
   const PREP = [
     ['chart', 'Price a role', 'Rate Index medians and a monthly budget estimate', 'href="#rates"'],
@@ -281,54 +197,38 @@
     ['layers', 'Scope it from a Blueprint', 'Role templates with a 30/60/90-day plan', 'href="#blueprints"'],
     ['book', 'Straight answers', 'Guides on cost, scope and hiring', 'href="#guides"'],
   ];
-  // The source line: what the research is built from, all from the data (Rate Index rates, report respondents, framework)
+  // The source line: what the research is built from. The Rate Index rates and survey respondents are illustrative
+  // until the first survey closes, so the line carries the visible tag.
   function prepSource() {
     const M = RN.data.market || {}, RI = M.rateIndex || {}, R = M.report || {}, smp = R.sample || {};
     const rates = Object.values(RI.byCat || {}).reduce((n, b) => n + (+b.n || 0), 0);
     const resp = (+smp.operators || 0) + (+smp.companies || 0);
     const areas = ((RN.fields || {}).fitTags || {}).options ? RN.fields.fitTags.options.length : 0;
-    const bits = [rates && `${RN.fmt.int(rates)} rates in the Rate Index`, resp && `${RN.fmt.int(resp)} survey respondents`, areas && `${RN.fmt.int(areas)} focus areas mapped`, (M.network || {}).operators && `${esc(M.network.operators)} operators`].filter(Boolean);
-    return bits.length ? `<p class="hm-prep-src">${icon('shield')}<span>Built from ${bits.join(' · ')}</span></p>` : '';
+    const bits = [rates && `${RN.fmt.int(rates)} rates in the Rate Index`, resp && `${RN.fmt.int(resp)} survey respondents`, areas && `${RN.fmt.int(areas)} focus areas mapped`].filter(Boolean);
+    return bits.length ? `<p class="hm-prep-src">${icon('shield')}<span>Built from ${bits.join(' · ')}</span>${rates || resp ? RN.ui.illusTag() : ''}</p>` : '';
   }
   function seats() {
     return `<nav class="hm-seats" aria-labelledby="hm-seats-t">
-      <div class="hm-seats-hd"><h3 class="hm-seats-h" id="hm-seats-t">Or start from the seat</h3></div>
-      <div class="hm-ruled hm-seat-row">${SEATS.map((s) => `<a class="hm-seat" href="#${s.to}" style="--hm-cat:${RN.fields.catColor(s.cat)}">
-          <span class="hm-seat-cat">${RN.ui.catDot(s.cat)}${esc(catLabel(s.cat))}</span>
+      <h3 class="hm-seats-h" id="hm-seats-t">Or start from the seat</h3>
+      <div class="hm-ruled hm-seat-row">${SEATS.map((s) => `<a class="hm-seat" href="#${s.to}">
+          <span class="hm-seat-cat">${esc(catLabel(s.cat))}</span>
           <span class="hm-seat-t">${keep(s.h)}</span>
-          <span class="hm-seat-who">${esc(s.who)}</span>
-          <span class="hm-seat-n"><span class="num">${RN.fmt.plural(opsIn([s.cat]), 'operator')}</span><span class="hm-go" aria-hidden="true">${icon('arrow')}</span></span>
+          <span class="hm-seat-n"><span>${esc(seeOps(opsIn([s.cat])))}</span><span class="hm-go" aria-hidden="true">${icon('arrow')}</span></span>
         </a>`).join('')}</div>
     </nav>
-    <nav class="hm-prep" aria-labelledby="hm-prep-t">
+    <nav class="hm-prep panel-night" aria-labelledby="hm-prep-t">
       <div class="hm-prep-hd"><div><span class="hm-prep-k">Revenue Nomad Research</span><h3 id="hm-prep-t">Not ready to hire yet?</h3></div><p>Start with the numbers, the gap and the plan.</p></div>
-      <ul class="hm-prep-list">${PREP.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-t"><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><b>${keep(p[1])}</b></span><span class="hm-prep-d">${keep(p[2])}</span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
+      <ul class="hm-prep-list" data-hm-prep>${PREP.map((p, i) => `<li><a class="hm-prep-a" ${p[3]}><span class="hm-prep-art" aria-hidden="true">${PREP_ART[i]}</span><span class="hm-prep-t"><span class="hm-prep-n" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><b>${keep(p[1])}</b></span><span class="hm-prep-d">${keep(p[2])}</span><span class="hm-prep-go" aria-hidden="true">${icon('arrow')}</span></a></li>`).join('')}</ul>
       ${prepSource()}
     </nav>`;
   }
 
-
-  /* ---------- The work (founder, Oct 13, 2026: "featured and highly visual, think Behance homepage") ----------
-     The one deliverable entry point on Home: type tabs that filter in place and a dense grid of covers
-     (RN.work.showcase, shared with the gallery), then the way into #work on the chosen type. */
-  function workSec() {
-    if (!RN.work || !RN.work.showcase) return '';
-    return `<section class="hm-sec section hm-work" aria-labelledby="hm-work-t">
-      <div class="wrap hm-work-in">
-        <header class="hm-head">
-          <div class="hm-head-l"><span class="eyebrow">The work</span><h2 class="h2 hm-h2" id="hm-work-t">Start from the work you need<span class="vm">.</span></h2><p class="lede hm-head-sub">Playbooks, comp plans, dashboards and 30/60/90 plans operators built for companies like yours. Find the one you need, then meet who built it.</p></div>
-        </header>
-        ${RN.work.showcase({ source: 'home' })}
-      </div>
-    </section>`;
-  }
-
-  /* ---------- Start from the problem ---------- */
   function problems() {
     const needs = RN.fields.need.options;
     const cells = needs.map((o) => {
       const cats = RN.fields.needCats[o.v] || [];
-      const ic = RN.ui.icoTile(NEED_IC[o.v] || 'target', { tone: cats.length ? RN.ui.icoTone(cats[0]) : '', night: !cats.length, cls: 'hm-ic' });
+      const ic = RN.ui.icoTile(NEED_IC[o.v] || 'target', { cls: 'hm-ic' });
+      // "Not sure yet": a paper card with a forest rule on top, leading to a person
       if (!cats.length) {
         return `<button type="button" class="hm-need hm-need-talk" data-act="hm-need" data-need="${esc(o.v)}">
           ${ic}
@@ -339,42 +239,50 @@
       return `<button type="button" class="hm-need" data-act="hm-need" data-need="${esc(o.v)}">
         ${ic}
         <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span>
-          <span class="hm-need-cats">${cats.map((c) => `<span>${RN.ui.catDot(c)}${esc(catLabel(c))}</span>`).join('')}</span></span>
-        <span class="hm-need-n">See ${RN.fmt.plural(opsIn(cats), 'operator')}${icon('arrow')}</span>
+          <span class="hm-need-cats">${esc(cats.map(catLabel).join(' · '))}</span></span>
+        <span class="hm-need-n">${esc(seeOps(opsIn(cats)))}${icon('arrow')}</span>
       </button>`;
     }).join('');
-    return `<section class="hm-sec section">
+    return `<section class="sec hm-sec hm-after-band" aria-labelledby="hm-prob-t">
       <div class="wrap">
-        ${head('Start here', 'Start from the problem you have<span class="vm">.</span>', '', 'Find operators who have solved your problem.')}
-        <div class="hm-ruled hm-needs">${cells}</div>
+        ${head({ eyebrow: 'Start here', id: 'hm-prob-t', title: 'Start from the problem you have<span class="vm">.</span>' })}
+        <div class="hm-needs">${cells}</div>
         ${seats()}
       </div>
     </section>`;
   }
 
-  /* ---------- Top operators carousel ----------
-     Native horizontal scroll with snap points (swipe and trackpad work for free); the buttons and the timer
-     scroll it. Controls come before the slides in reading order (WAI-ARIA APG carousel), the pause button first. */
-  const PAUSE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6.5" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.2"/></svg>';
-  const carPlayBtn = (paused) => `${paused ? icon('play') : PAUSE_SVG}<span class="sr-only">${paused ? 'Start' : 'Pause'} automatic slide show</span>`;
-  function carousel(ops, trust) {
+  /* ---------- 3. The work (founder, Oct 13, 2026: "featured and highly visual, think Behance homepage") ----------
+     The heading sits on the page's left edge (--wrap); the showcase grid keeps the one sanctioned wide container
+     (--wrap-wide), and its filter chips line up with the heading again (home.css). */
+  function workSec() {
+    if (!RN.work || !RN.work.showcase) return '';
+    return `<section class="sec hm-sec hm-work" aria-labelledby="hm-work-t">
+      <div class="wrap">
+        ${head({ eyebrow: 'The work', id: 'hm-work-t', title: 'Start from the work you need<span class="vm">.</span>', sub: 'Playbooks, comp plans, dashboards and 30/60/90 plans operators built for companies like yours. Find one, then meet who built it.' })}
+      </div>
+      <div class="hm-work-in">${RN.work.showcase({ source: 'home', limit: 8, phone: 6 })}</div>
+    </section>`;
+  }
+
+  /* ---------- 4. Operators: a static row of three, a carousel only when there are more ----------
+     Native horizontal scroll with snap points; prev/next and the dots appear only when the cards overflow the row (more
+     than three on desktop, a swipe row with a peek on phones). Nothing advances on its own. */
+  function opsRow(ops, trust) {
     const n = ops.length;
-    const pad = (x) => String(x).padStart(2, '0');
-    return `<div class="hm-car" data-hm-car role="region" aria-roledescription="carousel" aria-labelledby="hm-car-t" style="--car-ms:${CAR_MS}ms">
+    return `<div class="hm-car hm-ops" data-hm-car role="region" aria-roledescription="carousel" aria-labelledby="hm-car-t">
       <div class="hm-row-hd hm-car-hd">
-        <h3 class="label" id="hm-car-t">Top operators · Trusted and above</h3>${trust}
+        <h3 class="label" id="hm-car-t">Featured operators</h3>${trust}
         <div class="hm-car-ctl">
-          <button type="button" class="hm-car-btn hm-car-play" data-car="toggle">${carPlayBtn(true)}</button>
           <button type="button" class="hm-car-btn" data-car="prev" aria-controls="hm-car-view">${icon('chev-left')}<span class="sr-only">Previous operator</span></button>
           <button type="button" class="hm-car-btn" data-car="next" aria-controls="hm-car-view">${icon('chev-right')}<span class="sr-only">Next operator</span></button>
         </div>
       </div>
-      <div class="hm-car-view" id="hm-car-view" data-hm-car-view tabindex="0" aria-live="polite" aria-label="Top operators, use the arrow keys to move">
+      <div class="hm-car-view" id="hm-car-view" data-hm-car-view tabindex="0" aria-live="polite" aria-label="Featured operators, use the arrow keys to move">
         <ul class="hm-car-track">${ops.map((op, i) => `<li class="hm-car-slide" role="group" aria-roledescription="slide" aria-label="${i + 1} of ${n}: ${esc(op.name)}">${RN.ui.opCard(op)}</li>`).join('')}</ul>
       </div>
       <div class="hm-car-foot">
-        <div class="hm-car-dots" role="group" aria-label="Choose a slide">${ops.map((op, i) => `<button type="button" class="hm-car-dot" data-car="go" data-i="${i}" aria-label="Show ${esc(op.name)}, ${i + 1} of ${n}" ${i ? '' : 'aria-current="true"'}><i><b></b></i></button>`).join('')}</div>
-        <span class="hm-car-count tnum" aria-hidden="true"><b data-hm-car-count>${pad(1)}</b> / ${pad(n)}</span>
+        <div class="hm-car-dots" role="group" aria-label="Choose a slide">${ops.map((op, i) => `<button type="button" class="hm-car-dot" data-car="go" data-i="${i}" aria-label="Show ${esc(op.name)}, ${i + 1} of ${n}" ${i ? '' : 'aria-current="true"'}><i></i></button>`).join('')}</div>
       </div>
     </div>`;
   }
@@ -385,11 +293,8 @@
     const view = car.querySelector('[data-hm-car-view]');
     const slides = [...car.querySelectorAll('.hm-car-slide')];
     const dots = [...car.querySelectorAll('.hm-car-dot')];
-    const countEl = car.querySelector('[data-hm-car-count]');
-    const play = car.querySelector('[data-car="toggle"]');
     if (!view || !slides.length) return;
-    // user: paused by the visitor (or by reduced motion). hover/focus/hidden: temporary holds.
-    const C = { i: 0, per: 1, max: 0, timer: 0, left: CAR_MS, t0: 0, lock: -1, lockT: 0, user: S.carUser != null ? S.carUser : calm(), hover: false, focus: false, hidden: document.hidden };
+    const C = { i: 0, per: 1, max: 0, lock: -1, lockT: 0 };
     const step = () => (slides[1] ? slides[1].offsetLeft - slides[0].offsetLeft : view.clientWidth) || 1;
     const measure = () => {
       const w = slides[0].getBoundingClientRect().width || 1;
@@ -397,50 +302,25 @@
       C.per = Math.max(1, Math.min(slides.length, Math.round((view.clientWidth - 2 * (parseFloat(getComputedStyle(view).paddingLeft) || 0) + gap) / (w + gap))));
       C.max = Math.max(0, slides.length - C.per);
       dots.forEach((d, k) => { d.hidden = k > C.max; });
+      // Everything fits: a static row with no controls
       car.classList.toggle('is-static', C.max === 0);
     };
     const seen = S.carSeen || (S.carSeen = new Set());
     const impress = () => slides.slice(C.i, C.i + C.per).forEach((s, k) => {
       const id = s.querySelector('.opc') && s.querySelector('.opc').dataset.op;
-      if (id && !seen.has(id)) { seen.add(id); RN.track('impression', { opId: id, position: C.i + k + 1, source: 'home', surface: 'homepage_carousel' }); }
+      if (id && !seen.has(id)) { seen.add(id); RN.track('impression', { opId: id, position: C.i + k + 1, source: 'home', surface: 'homepage_featured' }); }
     });
-    // Reflect the current position in the dots and counter; restart the progress fill when asked
-    const sync = (restart) => {
+    const sync = () => {
       dots.forEach((d, k) => { if (k === C.i) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current'); });
-      const pad = (x) => String(x).padStart(2, '0');
-      if (countEl) countEl.textContent = C.per > 1 ? `${pad(C.i + 1)}–${pad(C.i + C.per)}` : pad(C.i + 1);
-      if (restart) { const f = dots[C.i] && dots[C.i].querySelector('b'); if (f) { f.style.animation = 'none'; void f.offsetWidth; f.style.animation = ''; } }
       impress();
     };
-    const playing = () => !C.user && !C.hover && !C.focus && !C.hidden && C.max > 0;
-    const arm = () => { C.t0 = performance.now(); C.timer = setTimeout(() => { C.timer = 0; go(C.i + 1, true); }, C.left); };
-    const hold = () => { if (C.timer) { clearTimeout(C.timer); C.timer = 0; C.left = Math.max(250, C.left - (performance.now() - C.t0)); } };
-    const update = () => {
-      const p = playing();
-      if (p && !C.timer) arm(); else if (!p) hold();
-      car.classList.toggle('is-auto', !C.user && C.max > 0);
-      car.classList.toggle('is-playing', p);
-      // Announce slide changes only when the visitor drives them (APG: live region off while rotating)
-      view.setAttribute('aria-live', !C.user ? 'off' : 'polite');
-    };
-    const go = (i, auto) => {
+    const go = (i) => {
       if (i > C.max) i = 0;
       if (i < 0) i = C.max;
       C.i = i;
       C.lock = i; clearTimeout(C.lockT); C.lockT = setTimeout(() => { C.lock = -1; }, 900);
       view.scrollTo({ left: slides[i].offsetLeft - slides[0].offsetLeft, behavior: calm() ? 'auto' : 'smooth' });
-      if (C.timer) { clearTimeout(C.timer); C.timer = 0; }
-      C.left = CAR_MS;
-      sync(true);
-      update();
-      if (!auto) C.lastUser = Date.now();
-    };
-    const setUser = (paused) => {
-      C.user = paused; S.carUser = paused;
-      if (play) play.innerHTML = carPlayBtn(paused);
-      // An explicit Start wins over the hover and focus holds of the click that made it
-      if (!paused) { C.focus = false; C.hover = false; C.left = CAR_MS; sync(true); }
-      update();
+      sync();
     };
     // Swipes and trackpad scrolls move the position too
     let sr = 0;
@@ -450,255 +330,73 @@
         sr = 0;
         const i = Math.max(0, Math.min(C.max, Math.round(view.scrollLeft / step())));
         if (C.lock >= 0) { if (i === C.lock) { C.lock = -1; clearTimeout(C.lockT); } return; }
-        if (i !== C.i) { C.i = i; if (C.timer) { clearTimeout(C.timer); C.timer = 0; } C.left = CAR_MS; sync(true); update(); }
+        if (i !== C.i) { C.i = i; sync(); }
       });
     }, { passive: true });
     on(car, 'click', (e) => {
       const b = e.target.closest('[data-car]');
       if (!b || !car.contains(b)) return;
       const a = b.dataset.car;
-      if (a === 'toggle') setUser(!C.user);
-      else if (a === 'prev') go(C.i - 1);
+      if (a === 'prev') go(C.i - 1);
       else if (a === 'next') go(C.i + 1);
       else if (a === 'go') go(+b.dataset.i);
     });
     on(car, 'keydown', (e) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
       if (!(e.target === view || (e.target.closest && e.target.closest('.hm-car-ctl, .hm-car-dots')))) return;
+      if (C.max === 0) return;
       e.preventDefault();
       go(C.i + (e.key === 'ArrowRight' ? 1 : -1));
       if (e.target.classList && e.target.classList.contains('hm-car-dot') && dots[C.i]) dots[C.i].focus();
     });
-    on(car, 'mouseenter', () => { C.hover = true; update(); });
-    on(car, 'mouseleave', () => { C.hover = false; update(); });
-    // Keyboard focus holds the rotation (APG); a mouse click on a control does not (hover already holds it)
-    const kbd = (el) => { try { return el.matches(':focus-visible'); } catch (e) { return true; } };
-    on(car, 'focusin', (e) => { C.focus = kbd(e.target); update(); });
-    on(car, 'focusout', (e) => { if (!car.contains(e.relatedTarget)) { C.focus = false; update(); } });
-    on(document, 'visibilitychange', () => { C.hidden = document.hidden; update(); });
     let rz = 0;
-    on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(() => { measure(); if (C.i > C.max) C.i = C.max; view.scrollTo({ left: slides[C.i].offsetLeft - slides[0].offsetLeft }); sync(false); update(); }, 150); });
-    S.offs.push(() => { clearTimeout(C.timer); clearTimeout(C.lockT); clearTimeout(rz); if (sr) cancelAnimationFrame(sr); C.timer = 0; });
+    on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(() => { measure(); if (C.i > C.max) C.i = C.max; view.scrollTo({ left: slides[C.i].offsetLeft - slides[0].offsetLeft }); sync(); }, 150); });
+    S.offs.push(() => { clearTimeout(C.lockT); clearTimeout(rz); if (sr) cancelAnimationFrame(sr); });
     measure();
     view.scrollLeft = 0;
-    if (play) play.innerHTML = carPlayBtn(C.user);
-    sync(false);
-    update();
-    // Test and debugging hook: the live state of the carousel on this page
+    // Impressions are logged once the row is on screen, not at render
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) { io.disconnect(); sync(); } }, { threshold: 0.3 });
+      io.observe(view);
+      S.offs.push(() => io.disconnect());
+    } else sync();
+    // Test and debugging hook: the live state of the row on this page
     car._hmCar = C;
   }
 
-  /* ---------- Featured operators ---------- */
   function featuredSec() {
     const feat = featured();
     const n = liveOps().length;
     // One short, client-facing trust line. How featuring works for operators lives on #operators.
-    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Featured operators are chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and company reviews.</span></p>`;
-    return `<section class="hm-sec section hm-band">
+    const trust = `<p class="small muted hm-trust">${icon('seal')}<span>Chosen by Reputation Index ${RN.ui.tip(RN.ui.risExplainer(), 'How the Reputation Index is calculated')} and company reviews.</span></p>`;
+    return `<section class="sec hm-sec" aria-labelledby="hm-ops-t">
       <div class="wrap">
-        ${head('Operators', 'See exactly who you would work with, before you talk to anyone.', more(`All ${n} profiles`, 'href="#browse" data-act="hm-all"'))}
-        ${feat.length ? carousel(feat, trust) : ''}
+        ${head({ eyebrow: 'Operators', id: 'hm-ops-t', title: 'See exactly who you would work with, before you talk to anyone.', right: more(`All ${n} profiles`, 'href="#browse" data-act="hm-all"') })}
+        ${feat.length ? opsRow(feat, trust) : ''}
       </div>
     </section>`;
   }
 
-  /* ---------- GTM Framework teaser ---------- */
-  function frameworkSec() {
-    const fw = RN.data.framework || { axes: [], stages: [] };
-    const stages = (fw.stages || []).map((s) => s.name);
-    const lib = RN.fields.fitTags.options;
-    const ops = liveOps();
-    const tiles = (fw.axes || []).map((axis) => {
-      const tags = lib.filter((t) => t.axis === axis);
-      // 'foundation' focus areas support every stage (explorer bowtie), so they count toward all seven
-      const base = tags.filter((t) => t.stage === 'foundation').length;
-      const per = stages.map((st) => tags.filter((t) => t.stage === st).length + base);
-      const max = Math.max(1, ...per);
-      const nOps = ops.filter((o) => o.tags.some((t) => t.axis === axis)).length;
-      const where = base && per.every((c) => c === base) ? 'every stage' : stages.filter((st, k) => per[k] > 0).join(', ');
-      return `<a class="hm-area" href="#framework" title="${esc(AREA_DEF[axis] || '')}">
-        ${RN.ui.icoTile(AREA_IC[axis] || 'grid', { tone: AREA_TONE[axis], cls: 'hm-ic' })}<span class="hm-go">${icon('arrow')}</span>
-        <span class="hm-area-body"><span class="hm-area-t">${esc(axis)}</span></span>
-        <span class="hm-stages" role="img" aria-label="${esc(axis)} focus areas sit in: ${esc(where || 'no stage yet')}">${per.map((c, k) => `<i title="${esc(stages[k])}: ${c}"><b style="opacity:${c ? (0.28 + 0.72 * (c / max)).toFixed(2) : 0}"></b></i>`).join('')}</span>
-        <span class="hm-area-meta">${RN.fmt.plural(tags.length, 'focus area')} · ${RN.fmt.plural(nOps, 'operator')}</span>
-      </a>`;
-    }).join('');
-    // The one dark band mid-page (founder comment, Oct 12, 2026): the framework map lit in leaf on night, in both themes
-    return `<section class="hm-sec section night hm-fw-sec">
-      <div class="wrap hm-fw">
-        <div class="hm-fw-intro">
-          <span class="eyebrow">The GTM Framework</span>
-          <h2 class="h2 hm-h2">One shared map of go-to-market work<span class="vm">.</span></h2>
-          <p class="lede">Every focus area on Revenue Nomad maps to an area of go-to-market work and the stage of the company journey it moves. Operators are scored against it. Companies use it to find the gap.</p>
-          <dl class="hm-fw-stats"><div><dt class="num">${(fw.axes || []).length}</dt><dd>Areas</dd></div><div><dt class="num">${stages.length}</dt><dd>Stages of the customer journey</dd></div><div><dt class="num">${RN.fmt.int(lib.length)}</dt><dd>Focus areas</dd></div></dl>
-          ${more('Explore the framework', 'href="#framework"')}
-        </div>
-        <div>
-          <div class="hm-ruled hm-areas">${tiles}</div>
-          <p class="hm-legend tiny"><span class="hm-stages hm-stages-key" aria-hidden="true">${stages.map(() => '<i><b style="opacity:.6"></b></i>').join('')}</span><span>Bars show where each area's focus areas sit across the company journey: ${esc(stages.join(', '))}. Foundation areas support every stage.</span></p>
-        </div>
-      </div>
-    </section>`;
+  /* ---------- 5. Company reviews ----------
+     One neutral rule for every operator's reviews (RN.model.topReviews: highest score, then most recent). The founder's
+     reviews never feature (owner decision, Oct 14, 2026), and the two features come from two different operators and
+     companies. Quotes are published as written (RN.model.pullQuote only shortens at a sentence end). */
+  function reviewFeatures() {
+    const pool = RN.model.topReviews().filter((x) => !RN.model.isFounder(x));
+    const first = pool[0];
+    if (!first) return [];
+    const second = pool.find((x) => x.op.id !== first.op.id && x.r.company !== first.r.company);
+    return [first, second].filter(Boolean);
   }
-
-  /* ---------- Market pulse ---------- */
-  function topSearches() {
-    const Q = RN.data.market.queries.filter((q) => !q.zero).map((q) => ({ q: q.q, n: q.vol }));
-    const week = RN.daysAgo(7);
-    (RN.store.state.events || []).filter((e) => e.type === 'search' && e.q && new Date(e.ts) >= week).forEach((e) => {
-      const x = Q.find((q) => q.q.toLowerCase() === e.q.toLowerCase());
-      if (x) x.n += 1; else Q.push({ q: e.q, n: 1, live: true });
-    });
-    return Q.sort((a, b) => b.n - a.n).slice(0, 5);
-  }
-  // Monthly range in the "Typical Engagement Range" format (L58), one rounding rule (RN.model.monthlyRange,
-  // $500 steps). The rate is the price: companies pay no fees (founder decision D1, Sep 25, 2026).
-  function typical() {
-    const byCat = RN.data.market.rateIndex.byCat;
-    const cat = Object.keys(byCat).sort((a, b) => byCat[b].n - byCat[a].n)[0];
-    const hrs = '40';
-    const m = RN.model.monthlyRange(cat, null, hrs);
-    const usd = RN.fmt.usd;
-    const ft = (RN.data.market.report.fracVsFull || [])[1];
-    return `<dl class="hm-typ">
-      <div><dt>${esc(catLabel(cat))} at ${esc(RN.w.label('hoursPerMonth', hrs))}</dt><dd class="num">${esc(RN.fmt.k(m.lo))}<span class="rng"> - </span>${esc(RN.fmt.k(m.hi))}<small>/month</small></dd>
-        <dd class="hm-typ-sub">Typical monthly rate. No fees for companies: you pay the operator’s rate, nothing more.</dd></div>
-      ${ft ? `<div><dt>Full-time VP of Sales, fully loaded</dt><dd class="num">${esc(ft[1])}<small>/month</small></dd><dd class="hm-typ-sub">Base, OTE, benefits and equity</dd></div>` : ''}
-    </dl>`;
-  }
-  function pulseSec() {
-    const mk = RN.data.market;
-    const trend = mk.rateIndex.trend;
-    const cur = trend[trend.length - 1], first = trend[0];
-    const di = mk.report.demandIndex;
-    const diCur = di.find((x) => x.l === '2026') || di[di.length - 2];
-    const diPrev = di.find((x) => x.l === '2025') || di[di.length - 3];
-    const top = topSearches();
-    const maxN = Math.max(...top.map((t) => t.n), 1);
-    return `<section class="hm-sec section">
-      <div class="wrap">
-        ${head('Market pulse', 'This quarter in fractional GTM.', `${RN.ui.illus('Illustrative data')}${more('All insights', 'href="#insights"')}`)}
-        <div class="hm-pulse">
-          <article class="card hm-card hm-rate">
-            <div class="hm-card-hd">
-              <div><h3 class="h4">Median hourly rate by role</h3><p class="small muted">Rate Index, ${esc(cur.l.replace(' ', ' 20'))}. Select a role to browse its operators.</p></div>
-              <div class="hm-kpi"><span class="num">${esc(RN.fmt.usd(cur.v))}</span><span class="small muted">all roles, ${RN.ui.delta(cur.v, first.v)} vs ${esc(first.l.replace(' ', ' 20'))}</span></div>
-            </div>
-            <div class="hm-bars" data-hm-chart="rates"></div>
-            ${typical()}
-            <div class="hm-card-ft">${more('Open the Rate Index', 'href="#rates"')}<span class="small muted">p25 to p75 by role and company revenue</span></div>
-          </article>
-          <div class="hm-pulse-side">
-            <article class="card hm-card">
-              <div class="hm-card-hd">
-                <div><h3 class="h4">Demand Index</h3><p class="small muted">Fractional GTM hiring demand, 2023 = 100</p></div>
-                <div class="hm-kpi"><span class="num">${esc(diCur.v)}</span><span class="small muted">${RN.ui.delta(diCur.v, diPrev.v)} vs ${esc(diPrev.l)}</span></div>
-              </div>
-              <div class="hm-spark" data-hm-chart="demand"></div>
-              <div class="hm-axis tiny"><span>${esc(di[0].l)}</span><span>${esc(di[di.length - 1].l.replace('proj', 'projected'))}</span></div>
-            </article>
-            <article class="card hm-card">
-              <div class="hm-card-hd"><div><h3 class="h4">Top searched this quarter</h3><p class="small muted">Searches by companies so far this quarter. Select one to run it.</p></div></div>
-              <ol class="hm-top">${top.map((t, i) => `<li><button type="button" data-act="hm-q" data-q="${esc(t.q)}">
-                <span class="hm-top-i">${i + 1}</span>
-                <span class="hm-top-b"><span class="hm-top-q">${esc(sentence(t.q))}</span><span class="hm-top-m"><i style="width:${Math.max(4, Math.round((t.n / maxN) * 100))}%"></i></span></span>
-                <span class="hm-top-v tnum">${RN.fmt.int(t.n)}</span></button></li>`).join('')}</ol>
-            </article>
-          </div>
-        </div>
-      </div>
-    </section>`;
-  }
-
-  /* ---------- State of Fractional GTM 2027 teaser ---------- */
-  function reportSec() {
-    const r = RN.data.market.report;
-    return `<section class="hm-sec section hm-report">
-      <div class="wrap hm-rep">
-        <a class="hm-book" href="#report" aria-label="Read ${esc(r.title)} ${esc(r.year)}">
-          <span class="hm-book-sheet" aria-hidden="true"></span>
-          <span class="hm-book-cover">
-            <span class="hm-book-k">Revenue Nomad Research</span>
-            <span class="hm-book-y">${esc(r.year)}</span>
-            <span class="hm-book-t">${esc(r.title)}</span>
-            <span class="hm-book-m">${esc(r.sample.operators)} operators · ${esc(r.sample.companies)} companies surveyed</span>
-          </span>
-        </a>
-        <div class="hm-rep-txt">
-          <span class="eyebrow">New research · Free to read</span>
-          <h2 class="h2 hm-h2">${esc(r.title)} ${esc(r.year)}. Where GTM leadership is going.</h2>
-          <p class="lede">${esc(String(r.lede).split('. ')[0].replace(/\.$/, ''))}.</p>
-          <dl class="hm-rep-stats">${[r.summary[0], r.summary[2], r.summary[3]].filter(Boolean).map((s) => `<div><dt class="num">${unit(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
-          <div class="row hm-ctas"><a class="btn" href="#report">Read the report${icon('arrow')}</a></div>
-          <p class="hm-rep-fine tiny muted"><span>Open to read, no email needed.</span>${RN.ui.illus('Illustrative figures')}</p>
-          ${contribLine()}
-          ${briefSec()}
-        </div>
-      </div>
-    </section>`;
-  }
-
-  /* One line inviting data for the next edition (RN.contrib, the 2028 survey). It switches to a thanks or "Pick up at
-     chapter N" state on its own after a contribution (RN.contrib.refresh). Empty when the core is not loaded. */
-  function contribLine() {
-    if (!RN.contrib) return '';
-    const html = RN.contrib.cta('survey', { variant: 'line', ctx: { source: 'home_report' } });
-    return html ? `<div class="hm-contrib">${html}</div>` : '';
-  }
-
-  /* ---------- The Fractional GTM Pulse (quarterly newsletter, same list as Insights) ---------- */
-  // Next issue: the first day of the next calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1). Month 12 rolls to Jan 1.
-  const nextIssue = () => { const n = RN.now(); return new Date(n.getFullYear(), (Math.floor(n.getMonth() / 3) + 1) * 3, 1); };
-  const briefSub = () => (RN.store.state.seen || {})[BRIEF_KEY] || null;
-  function briefInner() {
-    const sub = briefSub();
-    if (sub) {
-      return `<div class="hm-brief-done" tabindex="-1" data-hm-brief-done>
-        <p>${icon('check-circle')}<span>Subscribed as <b>${esc(sub.email)}</b>. The next Pulse lands ${esc(RN.fmt.date(nextIssue()))}.</span></p>
-        <button type="button" class="act" data-act="hm-brief-unsub">Unsubscribe</button>
-      </div>`;
-    }
-    const me = RN.me && RN.me();
-    const input = RN.w.control('email', (me && me.email) || '', { name: 'email', id: 'hm-brief-email' }).replace('<input ', '<input autocomplete="email" ');
-    return `<form class="hm-brief-form" data-submit="hm-brief" novalidate>
-        <label class="sr-only" for="hm-brief-email">${esc(RN.fields.email.label)}</label>
-        ${input}
-        <button type="submit" class="btn">Get the quarterly Pulse</button>
-      </form>
-      <p class="tiny muted">One email a quarter. Unsubscribe in one click.</p>`;
-  }
-  // Sits under the report teaser: the same research, once a quarter by email
-  function briefSec() {
-    return `<div class="hm-brief" role="group" aria-labelledby="hm-brief-t">
-        <h3 class="hm-brief-h" id="hm-brief-t">The Fractional GTM Pulse<span>Once a quarter: the Rate Index by role category, the Demand Index and new research. Free.</span></h3>
-        <div class="hm-brief-slot" data-hm-brief>${briefInner()}</div>
-      </div>`;
-  }
-  function refreshBrief(focusDone) {
-    const slot = document.querySelector('main[data-view="home"] [data-hm-brief]');
-    if (!slot) return;
-    slot.innerHTML = briefInner();
-    const t = focusDone ? slot.querySelector('[data-hm-brief-done]') : slot.querySelector('input[name=email]');
-    if (t) t.focus({ preventScroll: true });
-  }
-
-  /* ---------- Client quotes ---------- */
   function quotesSec() {
-    // One neutral rule for every operator's reviews (founder decision, Sep 25, 2026): highest score, then most
-    // recent. Ferry's review leads (founder request, Oct 2, 2026), then the top review from another company; the
-    // two features alternate sides and a line draws from one into the next as the page scrolls.
-    const top = RN.model.topReviews();
-    const ferry = top.find((x) => /ferry/i.test(x.r.company || ''));
-    // The second feature comes from another operator, so the pair shows two different people's work
-    const lead = top.find((x) => !ferry || (x.r.company !== ferry.r.company && x.op.id !== ferry.op.id)) || top.find((x) => !ferry || x.r.company !== ferry.r.company);
-    const feats = [ferry, lead].filter(Boolean);
+    const feats = reviewFeatures();
+    if (!feats.length) return '';
     const by = (r) => [r.role, r.company].filter(Boolean).join(', ');
-    // A reviewer's own headshot fills the arch when we have one; the company logo then sits under the quote
     const feature = (x, flip) => {
       const photo = (RN.data.reviewerPhotos || {})[x.r.reviewer] || '';
       const logo = RN.ui.logo(RN.model.reviewLogo(x.op, x.r), { h: 30, name: x.r.company || 'Company' });
-      // With no headshot, the arch carries the review's own rating: the overall score, stars, would hire again
-      // and how many focus areas it verified, signed with the company logo
+      // With no headshot, the arch carries the review's own rating: the overall score, stars, would hire again and how
+      // many focus areas it verified, signed with the company name or logo
       const score = typeof x.r.overall === 'number' ? x.r.overall : null;
       const nTags = (x.r.tags || []).length;
       const rating = `<div class="hm-arch-rate">
@@ -718,26 +416,24 @@
           </figure>
         </div>`;
     };
-    return `<section class="hm-sec section hm-band">
+    return `<section class="sec hm-sec hm-before-band" aria-labelledby="hm-q-t">
       <div class="wrap">
-        ${head('Results, in their words', 'Company reviews, published as written.')}
-        ${feats.length ? `<div class="hm-q-pair" data-hm-qpair data-no-rv>
-          ${feats.length > 1 ? '<svg class="hm-qlink" aria-hidden="true" focusable="false"><path class="hm-qlink-track" d=""/><path class="hm-qlink-glow" d=""/><path class="hm-qlink-line" d=""/><circle class="hm-qlink-tip" r="6" cx="-20" cy="-20"/></svg>' : ''}
+        ${head({ eyebrow: 'Results, in their words', id: 'hm-q-t', title: 'Company reviews, published as written.' })}
+        <div class="hm-q-pair" data-hm-qpair>
+          ${feats.length > 1 ? '<svg class="hm-qlink" aria-hidden="true" focusable="false"><path class="hm-qlink-track" d=""/><path class="hm-qlink-line" d=""/></svg>' : ''}
           ${feats.map((x, i) => feature(x, i % 2 === 0 && feats.length > 1)).join('')}
-        </div>` : ''}
+        </div>
       </div>
     </section>`;
   }
 
   /* The line between the two featured reviews: from the bottom of the first arch, a rounded switchback through the gap,
-     into the top of the second arch. Drawn with stroke-dashoffset as the pair scrolls up; fully drawn at rest. */
-  function quoteLink(root, quiet) {
+     into the top of the second arch. Static (drawn in full); it is laid out again on resize and when images load. */
+  function quoteLink(root) {
     const box = root.querySelector('[data-hm-qpair]');
     const svg = box && box.querySelector('.hm-qlink');
     if (!svg) return;
     const paths = [...svg.querySelectorAll('path')];
-    const line = svg.querySelector('.hm-qlink-line'), glow = svg.querySelector('.hm-qlink-glow'), tip = svg.querySelector('.hm-qlink-tip');
-    let len = 0, a = null, b = null, live = false, raf = 0;
     function layout() {
       const r = box.getBoundingClientRect();
       const W = Math.round(box.clientWidth), H = Math.round(box.clientHeight);
@@ -747,68 +443,143 @@
       if (!W || !H || !A || !B) return;
       svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H);
       const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
-      a = { x: ra.left + ra.width / 2 - r.left, y: ra.bottom - r.top };
-      b = { x: rb.left + rb.width / 2 - r.left, y: rb.top + rb.height * 0.16 - r.top };
+      const a = { x: ra.left + ra.width / 2 - r.left, y: ra.bottom - r.top };
+      const b = { x: rb.left + rb.width / 2 - r.left, y: rb.top + rb.height * 0.16 - r.top };
       const f = (n) => n.toFixed(1);
       const g = (a.y + b.y) / 2, dx = b.x - a.x, sx = Math.sign(dx) || 1;
       const rad = Math.max(0, Math.min(56, Math.abs(dx) / 2, (b.y - a.y) / 2));
       const d = Math.abs(dx) < 2 ? `M ${f(a.x)} ${f(a.y)} L ${f(b.x)} ${f(b.y)}`
         : `M ${f(a.x)} ${f(a.y)} L ${f(a.x)} ${f(g - rad)} Q ${f(a.x)} ${f(g)} ${f(a.x + sx * rad)} ${f(g)} L ${f(b.x - sx * rad)} ${f(g)} Q ${f(b.x)} ${f(g)} ${f(b.x)} ${f(g + rad)} L ${f(b.x)} ${f(b.y)}`;
       paths.forEach((p) => p.setAttribute('d', d));
-      len = line.getTotalLength();
-      if (live) { [line, glow].forEach((p) => { p.style.strokeDasharray = `${len} ${len}`; }); draw(); }
     }
-    function draw() {
-      raf = 0;
-      if (!live || !len || !a || !document.body.contains(box)) return;
-      const r = box.getBoundingClientRect();
-      const y = window.innerHeight * 0.72 - r.top;
-      const t = Math.max(0, Math.min(1, (y - a.y) / Math.max(1, b.y - a.y)));
-      const L = len * t;
-      [line, glow].forEach((p) => { p.style.strokeDashoffset = (len - L).toFixed(1); });
-      const pt = L > 0 && L < len ? line.getPointAtLength(L) : null;
-      tip.style.opacity = pt ? '1' : '0';
-      if (pt) { tip.setAttribute('cx', pt.x.toFixed(1)); tip.setAttribute('cy', pt.y.toFixed(1)); }
-      box.classList.toggle('is-reached', t >= 1);
-    }
-    const req = () => { if (!raf) raf = requestAnimationFrame(draw); };
     layout();
     let rz = 0;
     on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(layout, 150); });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (document.body.contains(box)) layout(); });
     RN.$$('img', box).forEach((im) => { if (!im.complete) im.addEventListener('load', layout, { once: true }); });
-    S.offs.push(() => { clearTimeout(rz); if (raf) cancelAnimationFrame(raf); raf = 0; });
-    if (quiet) return;
-    const arm = () => {
-      if (live || !document.body.contains(box)) return;
-      if (box.getBoundingClientRect().top + (a ? a.y : 0) <= window.innerHeight) return; // already passed: leave it drawn
-      live = true;
-      box.classList.add('is-live');
-      layout();
-      on(window, 'scroll', req, { passive: true });
-    };
-    ['scroll', 'wheel', 'touchmove', 'keydown'].forEach((t) => on(window, t, arm, { passive: true }));
+    S.offs.push(() => clearTimeout(rz));
   }
 
-  /* ---------- How it works, merged into the closing band ----------
-     Three steps in one ruled row under the Talk to us line; the winding path that draws itself lives on #how (RN.homePath). */
+  /* ---------- 6. Research: the 2027 report, the Rate Index by role, what a VP of Sales costs, the Pulse ----------
+     The report findings, its sample and the Rate Index are illustrative market.js figures: each block carries the
+     visible tag. The cost card is real (RN.costs 'vp-sales' and RN.costs.fullTime) and says its basis. */
+  function rateCard() {
+    const RI = RN.data.market.rateIndex;
+    const trend = RI.trend;
+    const cur = trend[trend.length - 1], first = trend[0];
+    const nRates = Object.values(RI.byCat || {}).reduce((n, b) => n + (+b.n || 0), 0);
+    const asOf = RN.data.market.asOf ? RN.fmt.date(RN.data.market.asOf) : '';
+    return `<article class="card card-lg card-col hm-card hm-rate c-7">
+      <div class="hm-card-hd">
+        <div><h3 class="h4 hm-card-t">Median hourly rate by role ${RN.ui.illusTag()}</h3><p class="small muted">Rate Index, ${esc(cur.l.replace(' ', ' 20'))}. Select a role to browse its operators.</p></div>
+        <div class="hm-kpi"><span class="num">${esc(RN.fmt.usd(cur.v))}</span><span class="small muted">all roles, ${RN.ui.delta(cur.v, first.v)} vs ${esc(first.l.replace(' ', ' 20'))}</span></div>
+      </div>
+      <div class="hm-bars" data-hm-chart="rates"></div>
+      <div class="hm-card-ft card-foot">${RN.ui.figNote([asOf && `As of ${asOf}`, nRates && `n=${RN.fmt.int(nRates)} rates`])}${more('Open the Rate Index', 'href="#rates"')}</div>
+    </article>`;
+  }
+  function costCard() {
+    const C = RN.costs && RN.costs.get('vp-sales');
+    if (!C) return '';
+    const T = C.text, ft = RN.costs.fullTime || C.fullTime || {};
+    return `<article class="card card-lg card-col hm-card hm-cost c-5">
+      <div class="hm-card-hd"><div><h3 class="h4">What a VP of Sales costs</h3></div></div>
+      <dl class="hm-typ">
+        <div><dt>Fractional VP of Sales</dt><dd class="num">${esc(T.monthly)}</dd><dd class="hm-typ-sub">${esc(T.hourly)}, ${esc(T.hours)}. ${esc(RN.costs.basis('vp-sales'))}.</dd></div>
+        <div><dt>Full-time VP of Sales</dt><dd class="num">${esc(T.fullTimeMonthly)}</dd><dd class="hm-typ-sub">${esc(T.fullTime)} in total pay, ${esc(ft.src || '')}.</dd></div>
+      </dl>
+      <p class="hm-cost-pct">Fractional runs ${esc(T.pct)} of full-time pay.</p>
+      <div class="hm-card-ft card-foot">${more('What fractional leaders cost', 'href="#fractional-cost"')}</div>
+    </article>`;
+  }
+  function researchSec() {
+    const r = RN.data.market.report;
+    const figs = [r.summary[0], r.summary[2], r.summary[3]].filter(Boolean);
+    return `<section class="sec-band hm-research" aria-labelledby="hm-rep-t">
+      <div class="wrap">
+        <div class="hm-rep">
+          <a class="hm-book" href="#report" aria-label="Read ${esc(r.title)} ${esc(r.year)}">
+            <span class="hm-book-sheet" aria-hidden="true"></span>
+            <span class="hm-book-cover">
+              <span class="hm-book-k">Revenue Nomad Research</span>
+              <span class="hm-book-y">${esc(r.year)}</span>
+              <span class="hm-book-t">${esc(r.title)}</span>
+            </span>
+          </a>
+          <div class="hm-rep-txt">
+            <header class="sec-head">
+              <span class="eyebrow">New research · Free to read</span>
+              <h2 class="h2 hm-h2" id="hm-rep-t">${esc(r.title)} ${esc(r.year)}. Where GTM leadership is going.</h2>
+              <p class="lede">${esc(String(r.lede).split('. ')[0].replace(/\.$/, ''))}.</p>
+            </header>
+            <div class="hm-rep-figs">
+              <dl class="hm-rep-stats">${figs.map((s) => `<div><dt class="num">${unit(s.v)}</dt><dd>${esc(s.l)}</dd></div>`).join('')}</dl>
+              ${RN.ui.illusNote()}
+            </div>
+            <div class="row hm-ctas"><a class="btn" href="#report">Read the report${icon('arrow')}</a><span class="small muted">Open to read, no email needed.</span></div>
+          </div>
+        </div>
+        <div class="g12 hm-mkt">${rateCard()}${costCard()}</div>
+        ${briefSec()}
+      </div>
+    </section>`;
+  }
+
+  /* The Fractional GTM Pulse (quarterly newsletter, same list as Insights) */
+  // Next issue: the first day of the next calendar quarter (Jan 1, Apr 1, Jul 1, Oct 1). Month 12 rolls to Jan 1.
+  const nextIssue = () => { const n = RN.now(); return new Date(n.getFullYear(), (Math.floor(n.getMonth() / 3) + 1) * 3, 1); };
+  const briefSub = () => (RN.store.state.seen || {})[BRIEF_KEY] || null;
+  function briefInner() {
+    const sub = briefSub();
+    if (sub) {
+      return `<div class="hm-brief-done" tabindex="-1" data-hm-brief-done>
+        <p>${icon('check-circle')}<span>Subscribed as <b>${esc(sub.email)}</b>. The next Pulse lands ${esc(RN.fmt.date(nextIssue()))}.</span></p>
+        <button type="button" class="act" data-act="hm-brief-unsub">Unsubscribe</button>
+      </div>`;
+    }
+    const me = RN.me && RN.me();
+    const input = RN.w.control('email', (me && me.email) || '', { name: 'email', id: 'hm-brief-email' }).replace('<input ', '<input autocomplete="email" ');
+    return `<form class="hm-brief-form" data-submit="hm-brief" novalidate>
+        <label class="sr-only" for="hm-brief-email">${esc(RN.fields.email.label)}</label>
+        ${input}
+        <button type="submit" class="btn btn-line">Get the quarterly Pulse</button>
+      </form>
+      <p class="tiny muted">One email a quarter. Unsubscribe in one click.</p>`;
+  }
+  function briefSec() {
+    return `<div class="hm-brief" role="group" aria-labelledby="hm-brief-t">
+        <h3 class="hm-brief-h" id="hm-brief-t">The Fractional GTM Pulse<span>Once a quarter: the Rate Index by role, the Demand Index and new research. Free.</span></h3>
+        <div class="hm-brief-slot" data-hm-brief>${briefInner()}</div>
+      </div>`;
+  }
+  function refreshBrief(focusDone) {
+    const slot = document.querySelector('main[data-view="home"] [data-hm-brief]');
+    if (!slot) return;
+    slot.innerHTML = briefInner();
+    const t = focusDone ? slot.querySelector('[data-hm-brief-done]') : slot.querySelector('input[name=email]');
+    if (t) t.focus({ preventScroll: true });
+  }
+
+  /* ---------- 7. Talk to us, with how it works ----------
+     The primary inbound path (owner decision, Oct 14, 2026): one filled Talk to us button in the closing band. Three steps
+     in one row under it; the line that joins them fills as the band scrolls up (stepsLink). The winding path that
+     draws itself lives on #how (RN.homePath). */
   const STEPS = [
-    ['search', 'Search the network', 'Search by role, focus area or the problem you have. Every profile is open, and anything a company confirmed is marked Verified. No login needed.'],
-    ['message', 'Request an intro or post an engagement', 'Ask to meet one operator, or post an engagement and get ranked matches. Operators reply within 72 hours.'],
-    ['handshake', 'Start on clear terms', 'Agree scope, hours and rate up front: fractional, interim, advisory or a fixed-scope project.'],
+    ['search', 'Search the network', 'Search by role, focus area or the problem you have. Every profile is open, no login needed.'],
+    ['message', 'Request an intro or post an engagement', 'Meet one operator, or post an engagement for ranked matches. Replies within 72 hours.'],
+    ['handshake', 'Start on clear terms', 'Agree scope, hours and rate up front.'],
   ];
   const stepsRow = () => `<div class="hm-how">
       <div class="hm-how-hd"><h3 class="label">How it works · Three steps, no retained search</h3><a class="hm-more" href="#how">Every step, in detail${icon('arrow')}</a></div>
       <ol class="hm-steps" data-hm-steps><li class="hm-steps-track" aria-hidden="true"><i class="hm-steps-fill"></i></li>${STEPS.map((s, i) => `<li class="hm-step">
-        ${RN.ui.icoTile(s[0], { cls: 'hm-ic' })}
+        ${RN.ui.icoTile(s[0], { cls: 'hm-ic', night: true })}
         <span class="hm-step-k">Step ${i + 1}</span><h4 class="hm-step-t">${esc(s[1])}</h4><p>${esc(s[2])}</p>
       </li>`).join('')}</ol>
     </div>`;
 
-
   /* The three steps are joined by a line that fills as the band scrolls up the viewport (founder comment, Oct 12, 2026):
      each step lights when the line reaches its icon. Horizontal when the steps sit in a row, vertical when they stack.
-     Reduced motion (or no scroll yet): the line is full and every step is lit. */
+     Reduced motion (or calm mode): the line is full and every step is lit. */
   function stepsLink(root, quiet) {
     const ol = root.querySelector('[data-hm-steps]');
     if (!ol) return;
@@ -845,11 +616,12 @@
     const ask = () => { if (!raf) raf = requestAnimationFrame(tick); };
     onHome(window, 'scroll', ask, { passive: true });
     onHome(window, 'resize', () => { layout(); ask(); });
+    S.offs.push(() => { if (raf) cancelAnimationFrame(raf); raf = 0; });
     tick();
   }
 
-  /* The path under How it works: measured from the node positions, drawn with stroke-dashoffset as the section
-     scrolls through the lower part of the viewport. Steps light up as the line reaches them. Everything is drawn
+  /* The path under How it works (#how, pages.js): measured from the node positions, drawn with stroke-dashoffset as the
+     section scrolls through the lower part of the viewport. Steps light up as the line reaches them. Everything is drawn
      and lit until .is-live is added, which only happens after the visitor scrolls while the path is below the fold. */
   function stepsPath(root, quiet, bag) {
     // bag: another page's cleanup list (How it works reuses this path); listeners then go there instead of Home's
@@ -934,208 +706,83 @@
     ['scroll', 'wheel', 'touchmove', 'keydown'].forEach((t) => on(window, t, arm, { passive: true }));
   }
 
-  /* ---------- Talk to us ---------- */
   function talkSec() {
-    return `<section class="hm-talk night">
-      <div class="wrap hm-talk-in">
-        <h2 class="h1 hm-talk-h">Rather talk it through with a person?</h2>
-        <div class="hm-talk-r">
-          <p>Four quick questions, then a reply from a person within one business day. Or call <a href="tel:+12032000482">+1 203-200-0482</a>.</p>
-          <div class="row hm-ctas"><a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#browse" data-act="hm-all">Browse operators</a></div>
+    return `<section class="sec-band hm-talk night" aria-labelledby="hm-talk-t">
+      <div class="wrap">
+        <div class="hm-talk-in">
+          <h2 class="h1 hm-talk-h" id="hm-talk-t">Rather talk it through with a person?</h2>
+          <div class="hm-talk-r">
+            <p>Four quick questions, then a reply from a person within one business day. Or call <a href="tel:+12032000482">+1 203-200-0482</a>.</p>
+            <div class="row hm-ctas"><a class="btn btn-leaf btn-lg" href="#talk">Talk to us${icon('arrow')}</a><a class="btn btn-line btn-lg" href="#browse" data-act="hm-all">Browse operators</a></div>
+          </div>
         </div>
+        ${stepsRow()}
       </div>
-      <div class="wrap">${stepsRow()}</div>
     </section>`;
   }
 
   /* ---------- Charts: drawn at the real rendered width so chart text stays at 12px ---------- */
   function fillCharts(root) {
     const rates = root.querySelector('[data-hm-chart="rates"]');
-    if (rates) {
-      const w = Math.max(260, Math.round(rates.clientWidth));
-      const byCat = RN.data.market.rateIndex.byCat;
-      const rows = RN.fields.roleCategory.options.filter((o) => byCat[o.v])
-        .map((o) => ({ cat: o.v, label: o.l, value: byCat[o.v].p50, p25: byCat[o.v].p25, p75: byCat[o.v].p75 }))
-        .sort((a, b) => b.value - a.value);
-      rows[0].hi = true;
-      const rowH = w > 560 ? 38 : 34;
-      rates.innerHTML = RN.chart.bars(rows, { w, labelW: Math.round(Math.min(196, Math.max(166, w * 0.46))), rowH, barH: w > 560 ? 16 : 14, fmt: (n) => '$' + n, label: 'Median hourly rate by role category, Rate Index' })
-        + rows.map((r, i) => `<a class="hm-bars-hit" href="#browse.${esc(r.cat)}" data-act="hm-cat" data-cat="${esc(r.cat)}" style="top:${i * rowH}px;height:${rowH}px" aria-label="Browse ${esc(r.label)} operators. Median $${r.value}/hr, ${esc(RN.fmt.hrRange(r.p25, r.p75))} typical."></a>`).join('');
-    }
-    const dem = root.querySelector('[data-hm-chart="demand"]');
-    if (dem) {
-      const di = RN.data.market.report.demandIndex;
-      // The projected years draw dashed, ending on an open point; the last measured year keeps the solid point
-      dem.innerHTML = RN.chart.spark(di.map((x) => x.v), { w: Math.max(200, Math.round(dem.clientWidth)), h: 64, proj: di.filter((x) => /proj/i.test(x.l)).length, label: 'Demand Index, 2023 to 2027 projected' });
-    }
+    if (!rates) return;
+    const w = Math.max(260, Math.round(rates.clientWidth));
+    const byCat = RN.data.market.rateIndex.byCat;
+    const rows = RN.fields.roleCategory.options.filter((o) => byCat[o.v])
+      .map((o) => ({ cat: o.v, label: o.l, value: byCat[o.v].p50, p25: byCat[o.v].p25, p75: byCat[o.v].p75 }))
+      .sort((a, b) => b.value - a.value);
+    rows[0].hi = true;
+    const rowH = w > 560 ? 34 : 32;
+    rates.innerHTML = RN.chart.bars(rows, { w, labelW: Math.round(Math.min(196, Math.max(166, w * 0.46))), rowH, barH: w > 560 ? 14 : 12, fmt: (n) => '$' + n, label: 'Median hourly rate by role category, Rate Index (illustrative)' })
+      + rows.map((r, i) => `<a class="hm-bars-hit" href="#browse.${esc(r.cat)}" data-act="hm-cat" data-cat="${esc(r.cat)}" style="top:${i * rowH}px;height:${rowH}px" aria-label="Browse ${esc(r.label)} operators. Illustrative median $${r.value}/hr, ${esc(RN.fmt.hrRange(r.p25, r.p75))} typical."></a>`).join('');
   }
 
-  /* ---------- Motion (skipped for reduced motion and automated captures) ---------- */
-  function countUp(el) {
-    const to = +el.dataset.count;
-    if (!to) return;
-    const t0 = performance.now(), dur = 1600;
-    el.textContent = '0';
-    const step = (t) => {
-      const p = Math.min(1, (t - t0) / dur);
-      el.textContent = RN.fmt.int(to * (1 - Math.pow(1 - p, 4)));
-      if (p < 1 && document.body.contains(el)) S.raf = requestAnimationFrame(step);
+  /* ---------- The one ambient element: example requests in the search placeholder ----------
+     Each example shows whole for EX_HOLD (3s), with a 150ms fade between examples. It holds while the visitor hovers or
+     focuses the search, types, hides the tab or scrolls the hero away; focus or a typed value shows the standard
+     placeholder. One pass through the list, then it rests on the standard placeholder. Off under reduced motion and
+     calm mode (RN.motion.calm). */
+  function cycleExamples(root) {
+    const input = root.querySelector('#hm-q');
+    const form = input && input.closest('form');
+    if (!input || calm()) return;
+    let i = -1, hover = false, inView = true;
+    on(form, 'mouseenter', () => { hover = true; });
+    on(form, 'mouseleave', () => { hover = false; });
+    const hero = root.querySelector('.hm-hero');
+    if (hero && 'IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => { inView = es.some((x) => x.isIntersecting); }, { threshold: 0.25 });
+      io.observe(hero);
+      S.offs.push(() => io.disconnect());
+    }
+    const swap = (text) => {
+      input.classList.add('is-swap');
+      later(() => { input.placeholder = text; input.classList.remove('is-swap'); }, EX_FADE);
     };
-    S.raf = requestAnimationFrame(step);
-  }
-  function startTyping(input) {
-    if (!input) return;
-    let wi = 0, ci = 0, dir = 1;
     const tick = () => {
-      if (!document.body.contains(input)) return;
-      if (document.activeElement === input || input.value) { input.placeholder = PH; ci = 0; dir = 1; later(tick, 700); return; }
-      const word = TYPE_WORDS[wi];
-      ci += dir;
-      input.placeholder = word.slice(0, Math.max(0, ci));   // typed as a visitor would type it, no prefix
-      if (dir > 0 && ci >= word.length) { dir = -1; later(tick, 1700); return; }
-      if (dir < 0 && ci <= 0) { dir = 1; wi = (wi + 1) % TYPE_WORDS.length; later(tick, 320); return; }
-      later(tick, dir > 0 ? 78 : 34);
+      if (!input.isConnected) return;
+      if (document.activeElement === input || input.value) { if (input.placeholder !== PH) { input.placeholder = PH; i = Math.max(-1, i - 1); } later(tick, 700); return; }
+      if (hover || document.hidden || !inView) { later(tick, 700); return; }
+      if (i + 1 >= EXAMPLES.length) { swap(PH); return; } // one pass, then the standard placeholder
+      i += 1;
+      swap(EXAMPLES[i]);
+      later(tick, EX_HOLD + EX_FADE);
     };
-    later(tick, 1200);
-  }
-  function parallax(root) {
-    const img = root.querySelector('.hm-hero-img');
-    if (!img) return;
-    let ticking = false;
-    const upd = () => { ticking = false; const y = window.scrollY; if (y < 1400) img.style.transform = `translate3d(0, ${(y * 0.16).toFixed(1)}px, 0)`; };
-    on(window, 'scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(upd); } }, { passive: true });
-  }
-
-  /* Scroll motion from the original site: blocks rise in with a stagger and numbers count up as they arrive.
-     Nothing is hidden at rest: elements are prepared only after the visitor starts scrolling, and only while
-     they are still below the fold, so a still frame (or a visitor who never scrolls) always sees the full page. */
-  const NUM_RE = /\d[\d,]*(?:\.\d+)?/g;
-  function numNodes(el) {
-    const out = [], w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    let n;
-    while ((n = w.nextNode())) if (/\d/.test(n.nodeValue) && !(n.parentElement && n.parentElement.closest('.tip, small'))) out.push({ n, v: n.nodeValue });
-    return out;
-  }
-  const paint = (nodes, p) => nodes.forEach((x) => { x.n.nodeValue = p >= 1 ? x.v : x.v.replace(NUM_RE, (m) => { const dec = (m.split('.')[1] || '').length; const v = parseFloat(m.replace(/,/g, '')) * p; return dec ? v.toFixed(dec) : RN.fmt.int(Math.round(v)); }); });
-  function countIn(el) {
-    const nodes = el._rnNums;
-    if (!nodes || el._rnCounted) return;
-    el._rnCounted = true;
-    const t0 = performance.now(), dur = 1400;
-    const step = (t) => { const p = Math.min(1, (t - t0) / dur); paint(nodes, 1 - Math.pow(1 - p, 4)); if (p < 1 && document.body.contains(el)) requestAnimationFrame(step); else paint(nodes, 1); };
-    requestAnimationFrame(step);
-  }
-  function scrollMotion(root) {
-    if (!('IntersectionObserver' in window)) return;
-    let armed = false;
-    const arm = () => {
-      if (armed || !document.body.contains(root)) return;
-      armed = true;
-      const fold = window.innerHeight;
-      const below = (el) => el.getBoundingClientRect().top > fold + 8;
-      const targets = [];
-      root.querySelectorAll('section.hm-sec, section.hm-talk').forEach((sec) => {
-        const box = sec.querySelector(':scope > .wrap') || sec;
-        [...box.children].forEach((c) => {
-          if (c.matches('[data-no-rv]')) return; // has its own scroll motion (the How it works path)
-          const items = [...c.children].filter((x) => x.nodeType === 1);
-          const d = getComputedStyle(c).display;
-          if (items.length >= 3 && /grid|flex/.test(d) && !c.matches('dl.hm-fw-stats')) items.forEach((x, i) => targets.push([x, (i % 6) * 90]));
-          else targets.push([c, 0]);
-        });
-      });
-      // The work showcase: tiles rise in a quick stagger along each row, tabs and the footer with them
-      root.querySelectorAll('.wk-show').forEach((sh) => {
-        const tabs = sh.querySelector('.wk-show-tabs');
-        if (tabs) targets.push([tabs, 0]);
-        sh.querySelectorAll('.wk-show-grid > .wk-tile').forEach((x, i) => targets.push([x, (i % 6) * 70]));
-        const foot = sh.querySelector('.wk-show-foot');
-        if (foot) targets.push([foot, 0]);
-      });
-      const rise = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('hm-rv-in'); rise.unobserve(e.target); } }), { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
-      targets.forEach(([el, delay]) => { if (!below(el)) return; el.style.setProperty('--rv-d', delay + 'ms'); el.classList.add('hm-rv'); rise.observe(el); });
-      const count = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { countIn(e.target); count.unobserve(e.target); } }), { threshold: 0.6 });
-      root.querySelectorAll('section.hm-sec .num, section.hm-sec .hm-kpi .num').forEach((el) => {
-        if (!below(el) || el._rnNums) return;
-        el._rnNums = numNodes(el);
-        if (!el._rnNums.length) return;
-        paint(el._rnNums, 0);
-        count.observe(el);
-      });
-      S.offs.push(() => { rise.disconnect(); count.disconnect(); root.querySelectorAll('.hm-rv').forEach((el) => el.classList.add('hm-rv-in')); });
-    };
-    ['scroll', 'wheel', 'touchmove', 'keydown'].forEach((t) => on(window, t, arm, { passive: true }));
-  }
-
-  /* ---------- Focus areas picker (shared tag picker with inline search, E479) ---------- */
-  function matchCount() { return RN.model.search({ q: S.q, tags: S.tags }).length; }
-  function syncTagUI() {
-    const main = document.querySelector('main[data-view="home"]');
-    if (main) {
-      const sel = main.querySelector('.hm-sel');
-      if (sel) { sel.innerHTML = selHtml(); sel.hidden = !S.tags.length; }
-      const badge = main.querySelector('.hm-fa-n');
-      if (badge) { badge.textContent = S.tags.length; badge.hidden = !S.tags.length; }
-    }
-    const m = RN.ui.modalEl();
-    if (m && m.querySelector('.hm-tp')) {
-      const n = matchCount();
-      const note = m.querySelector('[data-hm-note]');
-      if (note) {
-        note.className = 'hm-tp-note small' + (S.tags.length && !n ? ' warn' : '');
-        note.innerHTML = !S.tags.length ? `${icon('info')}<span>Operators must match every focus area you add. Company-verified matches rank first.</span>`
-          : n ? `${icon('check-circle')}<span>${RN.fmt.plural(n, 'operator')} ${n === 1 ? 'matches' : 'match'} ${S.tags.length > 1 ? 'all ' + S.tags.length : 'it'}${S.q ? ` with “${esc(S.q)}”` : ''}.</span>`
-            : `${icon('info')}<span>No operator matches all ${S.tags.length} yet. Remove one to widen the search, or search anyway to see the closest profiles.</span>`;
-      }
-      const btn = m.querySelector('[data-hm-apply]');
-      if (btn) btn.innerHTML = (S.tags.length && !n ? 'Search anyway' : `Show ${RN.fmt.plural(S.tags.length ? n : RN.model.search({ q: S.q }).length, 'operator')}`) + icon('arrow');
-      const clr = m.querySelector('[data-act="hm-tags-clear"]');
-      if (clr) clr.disabled = !S.tags.length;
-    }
-  }
-  function openPicker() {
-    const inp = document.getElementById('hm-q');
-    if (inp) S.q = inp.value.trim();
-    RN.ui.modal({
-      width: 640,
-      title: 'Add focus areas',
-      sub: 'Search the full Fit Tag Library. Pick up to 5.',
-      body: `<div class="hm-tp">
-        ${S.q ? `<p class="small muted hm-tp-q">${icon('search')}<span>Searching “${esc(S.q)}” with these focus areas.</span></p>` : ''}
-        <div data-hm-picker>${RN.w.tagPicker('hmTags', S.tags, { id: 'hm-tp', client: true, max: 5, noCustom: true, cat: guessCat(S.q), change: 'hm-tags', emptyText: 'No focus areas yet. Search the library or pick from the list.' })}</div>
-        <p class="hm-tp-note small" data-hm-note></p>
-      </div>`,
-      foot: `<button type="button" class="act muted" data-act="hm-tags-clear">Clear all</button><span class="grow"></span><button type="button" class="btn" data-act="hm-tags-apply" data-hm-apply>Show operators</button>`,
-      onClose: syncTagUI,
-    });
-    syncTagUI();
+    later(tick, 2000);
   }
 
   function runSearch(source) {
     const inp = document.getElementById('hm-q');
     if (inp) S.q = inp.value.trim();
-    const q = S.q, tags = S.tags.slice();
-    if (RN.ui.modalEl()) RN.ui.closeModal();
-    if (q || tags.length) RN.track('search', { q, tags, filters: {}, results: RN.model.search({ q, tags }).length, source });
+    const q = S.q;
+    if (q) RN.track('search', { q, tags: [], filters: {}, results: RN.model.search({ q }).length, source });
     // The search is handed to Browse; the hero starts clean on the next visit
-    S.q = ''; S.tags = [];
-    toBrowse({ q, tags });
+    S.q = '';
+    toBrowse({ q, tags: [] });
   }
 
   /* ---------- Actions ---------- */
   RN.submits['hm-search'] = () => runSearch('home');
   RN.inputs['hm-q'] = (el) => { S.q = el.value; };
-  RN.actions['hm-tags-open'] = openPicker;
-  RN.inputs['hm-tags'] = (el) => { S.tags = el.value ? el.value.split('|').filter(Boolean) : []; syncTagUI(); };
-  RN.actions['hm-tags-apply'] = () => runSearch('home');
-  RN.actions['hm-tags-clear'] = () => {
-    S.tags = [];
-    const m = RN.ui.modalEl();
-    const box = m && m.querySelector('[data-hm-picker]');
-    if (box) box.innerHTML = RN.w.tagPicker('hmTags', [], { id: 'hm-tp', client: true, max: 5, noCustom: true, cat: guessCat(S.q), change: 'hm-tags', emptyText: 'No focus areas yet. Search the library or pick from the list.' });
-    syncTagUI();
-  };
-  RN.actions['hm-tag-x'] = (el) => { S.tags = S.tags.filter((t) => t !== el.dataset.t); syncTagUI(); };
   RN.actions['hm-cat'] = (el) => { const c = el.dataset.cat; toBrowse({ filters: { roleCategories: [c] } }, 'browse.' + c); };
   RN.actions['hm-all'] = () => toBrowse({});
   RN.actions['hm-need'] = (el) => {
@@ -1143,20 +790,6 @@
     const cats = RN.fields.needCats[need] || [];
     if (!cats.length) { RN.go('talk'); return; }
     toBrowse({ need, filters: { roleCategories: cats.slice() } }, cats.length === 1 ? 'browse.' + cats[0] : 'browse');
-  };
-  RN.actions['hm-q'] = (el) => {
-    const q = el.dataset.q;
-    RN.track('search', { q, tags: [], filters: {}, results: RN.model.search({ q }).length, source: 'home_trending' });
-    toBrowse({ q });
-  };
-  // Pause control for the moving strip (WCAG 2.2.2): keyboard and touch users can stop it too
-  RN.actions['hm-strip-pause'] = (el) => {
-    S.paused = !S.paused;
-    const box = el.closest('.hm-strip');
-    if (box) box.classList.toggle('is-paused', S.paused);
-    el.outerHTML = pauseBtn();
-    const b = box && box.querySelector('.hm-strip-pause');
-    if (b) b.focus();
   };
   // Open the GTM Framework on its 5-question diagnostic (#rs-diag, rendered by research.js)
   RN.actions['hm-diag'] = () => {
@@ -1203,26 +836,22 @@
     nav: '',
     chrome: 'over',
     title: () => 'Revenue Nomad · Fractional GTM leaders, research and rates',
-    render: () => {
-      const anim = !S.played && !calm();
-      return [hero(anim), strip(), problems(), workSec(), featuredSec(), frameworkSec(), pulseSec(), reportSec(), quotesSec(), talkSec()].join('');
-    },
+    render: () => [hero(), problems(), workSec(), featuredSec(), quotesSec(), researchSec(), talkSec()].join(''),
     mount: (root) => {
       teardown();
-      const first = !S.played;
-      S.played = true;
       fillCharts(root);
       let rz = 0;
       on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(() => { const m = document.querySelector('main[data-view="home"]'); if (m) fillCharts(m); }, 150); });
-      const quiet = calm();
       carouselRun(root);
-      quoteLink(root, quiet);
-      stepsLink(root, quiet);
-      if (!quiet) {
-        if (first) root.querySelectorAll('.hm-stats [data-count]').forEach(countUp);
-        startTyping(root.querySelector('#hm-q'));
-        parallax(root);
-        scrollMotion(root);
+      quoteLink(root);
+      stepsLink(root, calm());
+      cycleExamples(root);
+      // Explanation motion, played once per visit and only below the fold (RN.motion; no-ops under reduced motion)
+      if (RN.motion) {
+        RN.motion.reveal(root, '.hm-needs > .hm-need', { key: 'hm-needs' });
+        RN.motion.reveal(root, '.hm-ops .hm-car-slide', { key: 'hm-ops' });
+        RN.motion.draw(root.querySelector('[data-hm-chart="rates"]'), { key: 'hm-rates' });
+        RN.motion.draw(root.querySelector('[data-hm-prep]'), { key: 'hm-prep' });
       }
       // Profile views that start on a home card are attributed to 'home'. Window listeners run after
       // the global document handler (which sets 'card'), so this wins for clicks inside home.
@@ -1230,8 +859,7 @@
         const a = e.target && e.target.closest && e.target.closest('main[data-view="home"] a[data-track-view]');
         if (a) RN.store.state._viewSource = 'home';
       });
-      // Carousel impressions are logged by carouselRun as each slide comes into view
     },
-    unmount: () => { teardown(); S.played = false; S.impressed = false; S.carSeen = null; },
+    unmount: () => { teardown(); S.carSeen = null; },
   });
 })();
