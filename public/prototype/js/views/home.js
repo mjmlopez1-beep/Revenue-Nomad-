@@ -26,9 +26,9 @@
    reviews never feature here (owner decision, Oct 14, 2026; RN.model.notFirst, RN.model.isFounder).
 
    Motion (motion policy, BRIEF.md): nothing on screen at load is hidden or animated in, and every number is final on
-   the first frame (no count-ups, no parallax). The page's one ambient element is the search placeholder, which shows
-   real example requests one at a time, each for 3s, pauses on hover, focus and a hidden tab or off-screen hero, makes one
-   pass and then rests on the standard placeholder, and never runs under reduced motion or calm mode.
+   the first frame (no count-ups, no parallax). The page's one ambient element is the search placeholder, which types
+   real example requests one at a time with a natural cadence, holds each whole for 2.6s, pauses on hover, focus and a
+   hidden tab or off-screen hero, and never runs under reduced motion or calm mode.
    Explanation motion: the steps line fills with scroll (stepsLink), the Rate Index chart and the Not ready graphics draw
    once (RN.motion.draw), the work showcase settles when its filter changes (work.js). Two small reveals
    (RN.motion.reveal: problem cards, operator cards) play once, below the fold only.
@@ -56,9 +56,8 @@
      phrase was run through RN.model.search and RN.model.understand (Oct 10, 2026) and kept only if it returns three or
      more operators or reads as a role category. */
   const EXAMPLES = ['founder still running sales', 'VP of Sales', 'why is my forecast wrong', 'RevOps', 'how to vet a fractional CMO', 'Demand Generation', 'reps with no process', 'HubSpot', 'what does a fractional VP of Sales cost'];
-  const EX_HOLD = 3000; // each example stays readable this long (policy: at least 2.5s)
-  const EX_FADE = 150;  // --dur-1 cross-fade between examples
-  const FEAT_MIN = 60;  // Reputation Index floor for the featured row (Proven and above)
+  const EX_HOLD = 2600; // each finished example stays whole this long (policy: at least 2.5s readable)
+    const FEAT_MIN = 60;  // Reputation Index floor for the featured row (Proven and above)
   const ROW = 3;        // the featured row shows three cards; controls appear only when there are more
   const MIN_COUNT = 10; // no count under 10 in a headline spot
   const BRIEF_KEY = 'ins-pulse'; // same list and key as the Insights sign-up
@@ -736,16 +735,19 @@
       + rows.map((r, i) => `<a class="hm-bars-hit" href="#browse.${esc(r.cat)}" data-act="hm-cat" data-cat="${esc(r.cat)}" style="top:${i * rowH}px;height:${rowH}px" aria-label="Browse ${esc(r.label)} operators. Illustrative median $${r.value}/hr, ${esc(RN.fmt.hrRange(r.p25, r.p75))} typical."></a>`).join('');
   }
 
-  /* ---------- The one ambient element: example requests in the search placeholder ----------
-     Each example shows whole for EX_HOLD (3s), with a 150ms fade between examples. It holds while the visitor hovers or
-     focuses the search, types, hides the tab or scrolls the hero away; focus or a typed value shows the standard
-     placeholder. One pass through the list, then it rests on the standard placeholder. Off under reduced motion and
-     calm mode (RN.motion.calm). */
+  /* ---------- The one ambient element: example requests typed into the search placeholder ----------
+     Each example is typed one character at a time with a human cadence (owner comment, Oct 14, 2026: "make this look
+     like natural typing"): 45-95ms a key, a longer beat after spaces and commas, the odd short hesitation, a steady caret
+     while typing that blinks while the finished request is held for EX_HOLD, then a quicker backspace and a short breath
+     before the next one. It holds while the visitor hovers the search, and focus or a typed value shows the standard
+     placeholder; it pauses when the tab is hidden or the hero is scrolled away. Off under reduced motion and calm mode
+     (RN.motion.calm), where the standard placeholder shows. */
   function cycleExamples(root) {
     const input = root.querySelector('#hm-q');
     const form = input && input.closest('form');
     if (!input || calm()) return;
-    let i = -1, hover = false, inView = true;
+    const CARET = '|';
+    let i = -1, hover = false, inView = true, timer = 0;
     on(form, 'mouseenter', () => { hover = true; });
     on(form, 'mouseleave', () => { hover = false; });
     const hero = root.querySelector('.hm-hero');
@@ -754,20 +756,52 @@
       io.observe(hero);
       S.offs.push(() => io.disconnect());
     }
-    const swap = (text) => {
-      input.classList.add('is-swap');
-      later(() => { input.placeholder = text; input.classList.remove('is-swap'); }, EX_FADE);
+    const wait = (fn, ms) => { timer = later(fn, ms); };
+    const paused = () => hover || document.hidden || !inView;
+    const busy = () => document.activeElement === input || !!input.value;
+    const show = (t) => { input.placeholder = t; };
+    // Keystroke rhythm: quick inside a word, a beat after a space or comma, now and then a short hesitation
+    const keyDelay = (ch) => {
+      let d = 45 + Math.random() * 50;
+      if (ch === ' ') d += 40 + Math.random() * 70;
+      if (ch === ',' || ch === '?') d += 120 + Math.random() * 120;
+      if (Math.random() < 0.06) d += 140 + Math.random() * 180;
+      return d;
     };
-    const tick = () => {
-      if (!input.isConnected) return;
-      if (document.activeElement === input || input.value) { if (input.placeholder !== PH) { input.placeholder = PH; i = Math.max(-1, i - 1); } later(tick, 700); return; }
-      if (hover || document.hidden || !inView) { later(tick, 700); return; }
-      if (i + 1 >= EXAMPLES.length) { swap(PH); return; } // one pass, then the standard placeholder
-      i += 1;
-      swap(EXAMPLES[i]);
-      later(tick, EX_HOLD + EX_FADE);
+    // Waits out a pause or the visitor using the search, then resumes where it left off
+    const guard = (next) => {
+      if (!input.isConnected) return true;
+      if (busy()) { if (input.placeholder !== PH) show(PH); wait(() => restart(), 700); return true; }
+      if (paused()) { wait(next, 500); return true; }
+      return false;
     };
-    later(tick, 2000);
+    const restart = () => { if (!input.isConnected) return; if (busy() || paused()) { wait(restart, 700); return; } show(''); wait(nextExample, 300); };
+    const type = (text, n) => {
+      if (guard(() => type(text, n))) return;
+      show(text.slice(0, n) + CARET);
+      if (n >= text.length) { hold(text, 0); return; }
+      wait(() => type(text, n + 1), keyDelay(text[n]));
+    };
+    // Hold the finished request; the caret blinks at the usual 530ms
+    const hold = (text, t) => {
+      if (guard(() => hold(text, t))) return;
+      show(text + (Math.floor(t / 530) % 2 ? '' : CARET));
+      if (t >= EX_HOLD) { erase(text, text.length); return; }
+      wait(() => hold(text, t + 265), 265);
+    };
+    const erase = (text, n) => {
+      if (guard(() => erase(text, n))) return;
+      show(text.slice(0, n) + CARET);
+      if (n <= 0) { show(''); wait(nextExample, 380 + Math.random() * 220); return; }
+      wait(() => erase(text, n - 1), 22 + Math.random() * 18);
+    };
+    const nextExample = () => {
+      if (guard(nextExample)) return;
+      i = (i + 1) % EXAMPLES.length;
+      type(EXAMPLES[i], 1);
+    };
+    S.offs.push(() => clearTimeout(timer));
+    wait(() => { if (!busy()) show(''); nextExample(); }, 1200);
   }
 
   function runSearch(source) {
