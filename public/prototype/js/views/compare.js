@@ -112,7 +112,7 @@
     const ic = { match: 'check', partial: 'minus', low: 'x' };
     return `<div class="cmp-fit">
       <div class="cmp-fit-hd"><span class="cmp-ring">${RN.chart.ring(f.pct, { size: 48, stroke: 5, label: f.pct + '% match' })}<b>${f.pct}</b></span><div><b>${esc(f.label)}</b>${sub(`${f.count} of ${f.signals.length} points match`)}</div></div>
-      <ul class="cmp-sig">${f.signals.map((s) => `<li class="is-${s.state}">${icon(ic[s.state] || 'minus')}<span>${esc(s.text)}</span></li>`).join('')}</ul>
+      <ul class="cmp-sig">${f.signals.map((s) => `<li class="is-${s.state}">${icon(ic[s.state] || 'minus')}<span>${esc(s.text).replace(/(\$[\d.,]+[kKM]?) - (\$[\d.,]+[kKM]?\+?)/g, '<span class="cmp-nw">$1 - $2</span>')}</span></li>`).join('')}</ul>
       ${f.notes.length ? `<p class="cmp-sub">${esc(f.notes.join('. '))}.</p>` : ''}
     </div>`;
   }
@@ -193,7 +193,7 @@
         keys.forEach((k, i) => byRole.push({ sec: i === 0 ? `${esc(F.catLabel(cat))} questions` : '', secTip: i === 0 ? `<b>${esc(F.catLabel(cat))} questions</b><br>Asked of ${esc(F.catLabel(cat))} operators when they join. Operators in other roles were not asked.` : '', l: F[k].label, cell: (op) => (asked(op, k) ? roleCell(op, k) : notAsked(op)) }));
       });
     }
-    R.push({ sec: 'Availability', l: F.availability.label, cell: (op) => RN.ui.avail(op, { hours: false }), val: (op) => AVAIL_SCORE[op.avail.key] || null, dir: 'max' });
+    R.push({ sec: 'Availability', l: F.availability.label, cell: (op) => RN.ui.avail(op, { hours: false, text: op.avail.key === 'available_now' ? 'Available now' : startFor(op) ? `Available ${RN.fmt.dateShort(new Date(op.avail.startDate + 'T12:00:00'))}` : '' }), val: (op) => AVAIL_SCORE[op.avail.key] || null, dir: 'max' });
     R.push({ l: F.startDate.label, cell: startCell, val: (op) => { const d = startFor(op); return d ? -d.getTime() : null; }, dir: 'max' });
     R.push({ l: F.hoursPerMonth.label, cell: hoursCell, val: (op) => +(op.avail.hoursCode || 0) || null, dir: 'max' });
     R.push({ l: visitor ? 'Monthly cost' : F.rate.label, cell: rateCell, val: (op) => (visitor ? null : op.rate || null), dir: 'min' });
@@ -261,6 +261,28 @@
     </div></th>`;
   }
 
+  /* Phones: the table reads as caption-then-values rows, two operators per screen. Once the operator header row
+     scrolls away, this strip of faces and first names sticks under the site header and follows the sideways
+     scroll, so every value has its name above it. Hidden from 641px up (the header row sticks or stays in view). */
+  function mhead(ops) {
+    if (ops.length < 1) return '';
+    return `<div class="cmp-mhead" aria-hidden="true"><div class="cmp-mhead-in" style="--ops:${ops.length}" data-ops="${ops.length}">${ops.map((op) => `<span class="cmp-mhead-c">${RN.ui.avatar(op, 'ava-sm')}<b>${esc(op.first)}</b></span>`).join('')}</div></div>`;
+  }
+  function syncMhead() {
+    const strip = document.querySelector('.cmp-mhead');
+    if (!strip) return;
+    const head = document.querySelector('.cmp-tbl thead');
+    const wrap = document.querySelector('.cmp-wrap');
+    const navH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 64;
+    const body = document.querySelector('.cmp-tbl tbody');
+    const on = !!head && head.getBoundingClientRect().bottom < navH + 8 && !!body && body.getBoundingClientRect().bottom > navH + 120;
+    strip.classList.toggle('is-on', on);
+    const inner = strip.firstElementChild;
+    if (wrap && inner && inner.scrollLeft !== wrap.scrollLeft) inner.scrollLeft = wrap.scrollLeft;
+  }
+  window.addEventListener('scroll', syncMhead, { passive: true });
+  document.addEventListener('scroll', (e) => { if (e.target && e.target.classList && e.target.classList.contains('cmp-wrap')) syncMhead(); }, { passive: true, capture: true });
+
   let showEmpty = false;
   function table(ops) {
     const all = rowsFor(ops);
@@ -307,7 +329,7 @@
       </td></tr>` : '';
     const emptyBody = n ? `<tbody id="cmp-empty" class="cmp-empty-rows" ${showEmpty ? '' : 'hidden'}>${empties.map((r) => rowHtml(Object.assign({}, r, { sec: '' }), 1, add ? '<td class="cmp-add-cell"></td>' : '')).join('')}</tbody>` : '';
     return `<div class="tbl-wrap cmp-wrap" role="region" aria-label="Operator comparison" tabindex="0">
-      <table class="cmp-tbl" style="--cols:${cols}">
+      <table class="cmp-tbl" style="--cols:${cols};--ops:${ops.length}" data-ops="${ops.length}">
         <thead><tr><th scope="col" class="cmp-lab cmp-corner"><span class="cmp-legend"><i></i>Best in row</span></th>${ops.map(colHead).join('')}${addHead}</tr></thead>
         <tbody>${body}${fold}</tbody>${emptyBody}
       </table>
@@ -369,9 +391,10 @@
     return `<div class="cmp-page" data-view-source="compare">${head}
       <section class="wrap cmp-body">
         ${new Set(ops.map((op) => op.catKey)).size > 1 ? `<p class="cmp-mixnote">${icon('info')}<span>These operators answered different onboarding questions for their roles. Shared questions and comparable scope sit side by side; the rest is grouped by role.</span></p>` : ''}
-        ${ops.length > 1 ? `<p class="cmp-swipe">${icon('arrow')}Swipe sideways to see all ${ops.length} operators</p>` : ''}
+        ${ops.length > 2 ? `<p class="cmp-swipe">${icon('arrow')}Swipe sideways to see all ${ops.length} operators</p>` : ''}
+        ${mhead(ops)}
         ${table(ops)}
-        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet.${new Set(ops.map((op) => op.catKey)).size > 1 ? ' Not asked means the question is not part of that role’s onboarding.' : ''} No fees for companies. You pay the operator’s rate, nothing more. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and how each fits your company</button>` : ''}</p>
+        <p class="cmp-foot tiny muted">Not added means the operator has not added this to their profile yet.${new Set(ops.map((op) => op.catKey)).size > 1 ? ' Not asked means the question is not part of that role’s onboarding.' : ''} No fees for companies. The listed rate is the price, with no fee added on top. Rate Index medians are illustrative.${visitor ? ` <button type="button" class="act" data-act="cmp-login">Log in to see rates and how each fits your company</button>` : ''}</p>
       </section></div>`;
   }
 

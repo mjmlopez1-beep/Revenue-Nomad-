@@ -9,14 +9,14 @@ nothing in this folder is deployed by the prototype.
 | `head.json` | Every route: path, canonical, title, description, robots, Open Graph, JSON-LD (`schema`), sitemap, plus the redirect list |
 | `sitemap_index.xml` | Points to the four sitemaps below |
 | `sitemap-pages.xml` | 15 core pages |
-| `sitemap-guides.xml` | 19 published guides and the guides hub |
+| `sitemap-guides.xml` | 26 published guides and the guides hub |
 | `sitemap-roles.xml` | 31 role pages: function pages, cost hub, browse and Rate Index role pages, Blueprints |
 | `sitemap-operators.xml` | 294 approved, searchable real operator profiles (sample profiles excluded) |
 | `robots.txt` | Crawl rules, Content-Signal line, sitemap location |
 | `llms.txt` | A map of the site for AI engines (llmstxt.org proposal) |
 | `hash-redirect.js` | Inline script for the live home page: a shared prototype link (`/#guide.x`) goes to its path |
 
-Totals: 429 routes in head.json, 360 indexable and 69 noindex; 54 redirects (16 Candidate, 17 dated); 1943 JSON-LD nodes.
+Totals: 436 routes in head.json, 367 indexable and 69 noindex; 56 redirects (16 Candidate, 17 dated); 1978 JSON-LD nodes.
 42 prototype-only routes (sample operator profiles and the placeholder work samples credited to them) are left out
 of head.json: they are invented, so the live site never serves them at a public URL, not even as noindex.
 
@@ -52,7 +52,7 @@ of head.json: they are invented, so the live site never serves them at a public 
   tables), so in-page anchors such as the skip link `#main` stay put, and it needs nothing else from the prototype. The
   build runs it against every route and alias and fails if it disagrees with `RN.seo.path`. If the live home page gives a
   section an id equal to a route token (for example `how`), rename the id.
-- 301s (full list in `head.json` → `redirects`, 54 entries), in this order: exact paths, then wildcards,
+- 301s (full list in `head.json` → `redirects`, 56 entries), in this order: exact paths, then wildcards,
   then the host rule last. Every path rule has `anyHost: true`: it matches on both hosts and sends straight to
   `https://revenuenomad.com` + `to`, so an old `https://www.revenuenomad.com/post/<old>` URL takes one hop, not two (the host rule
   first and the path rule second would be a chain). The list: renamed routes (`/projects` → `/engagements`,
@@ -93,7 +93,7 @@ real figure in the title ("Fractional VP of Sales Cost (2026), $4k - $10k/month"
 
 Description precedence in the prototype matches head.json: RN.seo's description first, then a view's own `description`,
 then the site default, so a view's copy (the Rate Index views quote illustrative medians) never reaches the head. The build
-renders 171 routes in the prototype and fails if any rendered head differs from RN.seo's.
+renders 178 routes in the prototype and fails if any rendered head differs from RN.seo's.
 
 ## 3. Structured data rules
 
@@ -206,8 +206,8 @@ redirect has a source and a live route as its target, none points at another rul
 wildcards and the host rule is last, rules to guides not live yet carry their date, and every merged prototype guide has a
 rule; hash-redirect.js agrees with RN.seo.path on every route and alias and leaves in-page anchors alone; llms.txt lists
 each URL once and says companies; every sitemap URL is indexable, live and not blocked by robots.txt; the founder is not
-first in the operator sitemap; all XML is well-formed; and 171 routes rendered in the prototype carry exactly
+first in the operator sitemap; all XML is well-formed; and 178 routes rendered in the prototype carry exactly
 RN.seo's title, description (meta, Open Graph, Twitter), canonical, robots and graph for the URL in the address bar, no
 other JSON-LD, and a BreadcrumbList that follows the visible trail.
 
-Schema nodes by type: Organization 429, WebSite 429, BreadcrumbList 428, Dataset 11, FAQPage 30, Article 26, Occupation 2, ProfilePage 294, Person 294.
+Schema nodes by type: Organization 436, WebSite 436, BreadcrumbList 435, Dataset 11, FAQPage 37, Article 33, Occupation 2, ProfilePage 294, Person 294.

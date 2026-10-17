@@ -532,3 +532,73 @@
   .adm-res-prog { min-width: 0; }
   .adm-res-prog .tnum { text-align: left; }
 }
+
+/* ===== Phone pass (Oct 17) ===== */
+.adm .seg-short { display: none; }
+@media (max-width: 640px) {
+  /* Directory filter stays one segmented line with short labels */
+  .adm-dir-ctl .seg.adm-seg { display: flex; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .adm-dir-ctl .seg.adm-seg::-webkit-scrollbar { display: none; }
+  .adm-dir-ctl .seg.adm-seg button { flex: 1 0 auto; white-space: nowrap; padding: 0 10px; }
+  .adm .seg-long { display: none; }
+  .adm .seg-short { display: inline; }
+}
+@media (max-width: 640px) {
+  /* Managed list rows (admin-managed.css): company line runs full width, source pills wrap instead of clipping,
+     the candidate count reads inline with its breakdown, stage time sits beside it */
+  .adm .mg-row { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .adm .mg-row-co, .adm .mg-row-n { grid-column: 1; }
+  .adm .mg-row-co b { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
+  .adm .mg-row-src .pill { white-space: normal; max-width: 100%; overflow: visible; text-overflow: clip; height: auto; min-height: 24px; padding-block: 3px; line-height: 1.3; }
+  .adm .mg-row-n { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; align-self: center; }
+  .adm .mg-row-n b { font-size: var(--t-16); }
+  .adm .mg-row-n span { white-space: normal; }
+  .adm .mg-row-due { justify-self: start; margin-top: -4px; }
+}
+@media (max-width: 640px) {
+  /* One box at a time: cards hold 16px, empty states and callouts inside a card lose their own frame */
+  .adm .card { --card-pad: 16px; }
+  .adm .card .empty, .adm .adm-sec .empty { border: 0; background: none; padding: var(--s-6) 0; }
+  .adm .adm-sd-card .adm-callout, .adm .card .adm-callout { padding: 16px; }
+}
+/* Supply vs demand: in dark both greens read alike, so supply drops to a muted grey-green (all widths, colour only) */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .adm-bf { --bf-s: #66746C; --bf-d: var(--viz-1); } }
+:root[data-theme="dark"] .adm-bf { --bf-s: #66746C; --bf-d: var(--viz-1); }
+.adm-bf-hd i.s, .adm-bf-s .adm-bf-bar i { background: var(--bf-s, var(--viz-2)); }
+.adm-bf-hd i.d, .adm-bf-d .adm-bf-bar i { background: var(--bf-d, var(--viz-1)); }
+@media (max-width: 640px) {
+  /* Supply vs demand restacked for phones: role and count on line 1, then a supply bar and a demand bar,
+     each left-aligned at full width with its share at the end */
+  .adm-bf-hd { display: flex; justify-content: flex-start; gap: 16px; padding-bottom: 10px; font-size: var(--t-12); }
+  .adm-bf-hd > span:first-child, .adm-bf-hd > span:last-child { padding: 0; justify-self: auto; }
+  .adm-bf-hd > span:last-child { flex-direction: row-reverse; }
+  .adm-bf-row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 12px 0; text-align: left; }
+  .adm-bf-name { grid-column: 1; grid-row: 1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: baseline; text-align: left; gap: 0 8px; margin-bottom: 2px; }
+  .adm-bf-name b { font-size: var(--t-14); }
+  .adm-bf-s, .adm-bf-d { grid-column: 1; display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 10px; padding: 0; border: 0; }
+  .adm-bf-s { grid-row: 2; }
+  .adm-bf-d { grid-row: 3; }
+  .adm-bf-s b { order: 2; text-align: right; }
+  .adm-bf-s .adm-bf-bar, .adm-bf-d .adm-bf-bar { justify-content: flex-start; width: max(3px, calc(100% * var(--w, 0))); height: 10px; }
+  .adm-bf-s b, .adm-bf-d b { font-size: var(--t-12); text-align: right; }
+  .adm-bf-s .adm-bf-bar i { transform-origin: left; }
+}
+@media (max-width: 640px) {
+  /* Directory rows: name line, then reputation, profile strength and actions on one line. The column labels show
+     on the first row only, so 10 rows read as a list rather than 10 forms */
+  .adm-dir.adm-stacktbl tr { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px 14px; padding: 12px 0; align-items: center; }
+  .adm-dir.adm-stacktbl td.adm-w { grid-column: 1 / 3; grid-row: 1; }
+  .adm-dir.adm-stacktbl td.adm-act-cell { grid-column: 3; grid-row: 1; align-self: start; }
+  .adm-dir.adm-stacktbl td[data-l="Profile strength"] { grid-column: 2 / -1; }
+  .adm-dir.adm-stacktbl .adm-cmp { min-width: 0; }
+  .adm-dir.adm-stacktbl tbody tr + tr td[data-l]::before { display: none; }
+  .adm-dir.adm-stacktbl tbody tr:first-child { align-items: end; }
+  .adm-dir .adm-rowact { gap: 12px; padding-top: 2px; }
+  .adm-dir .adm-ratio { min-width: 0; }
+}
+@media (max-width: 720px) {
+  /* Stacked tables need no sideways scroll; the 44px touch boxes on row actions (mobile.css) poked 6px past the
+     wrapper and made each card wobble under a vertical swipe */
+  .adm .tbl-wrap:has(> .adm-stacktbl) { overflow: visible; }
+  .adm-stacktbl td { overflow-wrap: anywhere; }
+}

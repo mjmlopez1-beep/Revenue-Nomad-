@@ -767,3 +767,15 @@ a.bw-mini > svg { width: 16px; height: 16px; color: var(--mute-2); }
   .bw-bench-note { grid-template-columns: auto minmax(0, 1fr); }
   .bw-bench-note > .btn, .bw-bench-note > .act { grid-column: 2; justify-self: start; }
 }
+
+/* ===== Phone pass (Oct 17) ===== */
+.bw-cov-sum { display: none; }
+@media (max-width: 640px) {
+  /* Coverage over time: a short history becomes one line per role; a longer one keeps the timeline with edge fades
+     so it reads as scrollable */
+  .bw-cov-card.is-short .bw-cov-scroll, .bw-cov-card.is-short .bw-legend { display: none; }
+  .bw-cov-card.is-short .bw-cov-sum { display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0; }
+  .bw-cov-sum li { display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line-2); font-size: var(--t-14); color: var(--ink-2); }
+  .bw-cov-sum li:last-child { border-bottom: 1px solid var(--line-2); }
+  .bw-cov-card:not(.is-short) .bw-cov-scroll { -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 24px), transparent); }
+}

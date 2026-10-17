@@ -25,13 +25,26 @@
    The founder (op.isMatt) stays eligible in every ranking but is never in the first slot of the operators row, and his
    reviews never feature here (owner decision, Oct 14, 2026; RN.model.notFirst, RN.model.isFounder).
 
-   Motion (motion policy, BRIEF.md): nothing on screen at load is hidden or animated in, and every number is final on
-   the first frame (no count-ups, no parallax). The page's one ambient element is the search placeholder, which types
-   real example requests one at a time with a natural cadence, holds each whole for 2.6s, pauses on hover, focus and a
-   hidden tab or off-screen hero, and never runs under reduced motion or calm mode.
-   Explanation motion: the steps line fills with scroll (stepsLink), the Rate Index chart and the Not ready graphics draw
-   once (RN.motion.draw), the work showcase settles when its filter changes (work.js). Two small reveals
-   (RN.motion.reveal: problem cards, operator cards) play once, below the fold only.
+   Motion (motion policy, BRIEF.md; owner feedback Oct 17, 2026: "feels too restrained, bring a little more back so it
+   feels alive"). Every number is final on the first frame (no count-ups, no parallax), and all of it is off under
+   prefers-reduced-motion and calm mode (RN.motion.calm), where the page is still.
+   - Entrance (heroEntrance): the first time home renders in a browser session, the eyebrow, the three headline lines,
+     the lede, the search, the three figures and the logos rise 14px in one short cascade (780ms end to end, 340ms each,
+     ease-out; phones run the eyebrow, headline and lede only, since there the hero text fills most of the screen).
+     The class is added by script before the first paint, so without JS nothing is ever hidden; it never replays on a
+     return to home or a re-render.
+   - Scroll reveals (rise): section heads (eyebrow, H2, lede in turn) and their cards rise 16px over 450ms as they come
+     in, up to six in a stagger 70ms apart. Same rules as RN.motion.reveal (once per visit, armed by the first scroll,
+     only blocks still below the screen, never a block taller than 40% of the screen, never replayed by a re-render);
+     the shared helper caps at 12px and 300ms, so home runs its own copy with the richer settings.
+   - Ambient, two in all: the search placeholder types real example requests one at a time with a natural cadence
+     (holds each whole for 2.6s, pauses on hover, focus, a hidden tab or an off-screen hero), and the hero photo drifts
+     once, very slowly, as it settles (photoDrift: 5% over 22s, then rests; it does not loop).
+   - Explanation: the steps line fills with scroll (stepsLink) and each step's icon rings once when the line first
+     reaches it; the Rate Index chart, the Not ready graphics and each review's rating arc draw once (RN.motion.draw);
+     the work showcase settles when its filter changes (work.js).
+   - Feedback: hover lift and shadow on cards, a slow zoom on work covers and operator photos, the report cover turning
+     toward the reader; on touch screens a short press-in instead (home.css).
 
    Loops wired here:
    - Hero search and problem cards write RN.store.state.browse ({q, tags, filters:{roleCategories}}) with standard slugs,
@@ -56,6 +69,12 @@
      phrase was run through RN.model.search and RN.model.understand (Oct 10, 2026) and kept only if it returns three or
      more operators or reads as a role category. */
   const EXAMPLES = ['founder still running sales', 'VP of Sales', 'why is my forecast wrong', 'RevOps', 'how to vet a fractional CMO', 'Demand Generation', 'reps with no process', 'HubSpot', 'what does a fractional VP of Sales cost'];
+  /* Phones (mobile audit, Oct 17, 2026): the field is about 270 to 300px wide, so the standard placeholder is the short
+     one and the cycle skips examples longer than 30 characters (a cut-off example reads as broken) */
+  const PH_PHONE = 'Describe what you need';
+  const phone = () => !!(window.matchMedia && window.matchMedia('(max-width: 640px)').matches);
+  const ph = () => (phone() ? PH_PHONE : PH);
+  const examples = () => (phone() ? EXAMPLES.filter((x) => x.length <= 30) : EXAMPLES);
   const EX_HOLD = 2600; // each finished example stays whole this long (policy: at least 2.5s readable)
     const FEAT_MIN = 60;  // Reputation Index floor for the featured row (Proven and above)
   const ROW = 3;        // the featured row shows three cards; controls appear only when there are more
@@ -140,7 +159,7 @@
           <p class="hm-sub">${keep('Fractional sales, marketing, RevOps and AI GTM leaders. Reviews come only from companies that hired them. Open profiles, no login to browse and no fees for companies.')}</p>
           <form class="hm-search" data-submit="hm-search" role="search" aria-label="Search operators">
             <label class="hm-search-f">${icon('search')}<span class="sr-only">Search operators</span>
-              <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(PH)}" data-input="hm-q"></label>
+              <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(ph())}" data-input="hm-q"></label>
             <button type="submit" class="btn btn-lg hm-go-btn">Show my matches</button>
           </form>
           ${logoLine()}
@@ -222,6 +241,12 @@
     </nav>`;
   }
 
+  // "See 180 operators" with the words in their own spans, so the narrowest phones can show "180" alone (home.css)
+  const needCount = (n) => {
+    if (n < MIN_COUNT) return esc(seeOps(n));
+    const w = RN.fmt.plural(n, 'operator'), num = w.split(' ')[0];
+    return `<span class="hm-need-c"><span class="hm-need-nw">See </span><b class="hm-need-num">${esc(num)}</b><span class="hm-need-nw hm-need-unit">${esc(w.slice(num.length))}</span></span>`;
+  };
   function problems() {
     const needs = RN.fields.need.options;
     const cells = needs.map((o) => {
@@ -239,7 +264,7 @@
         ${ic}
         <span class="hm-need-body"><span class="hm-need-t">${esc(o.l)}</span>
           <span class="hm-need-cats">${esc(cats.map(catLabel).join(' · '))}</span></span>
-        <span class="hm-need-n">${esc(seeOps(opsIn(cats)))}${icon('arrow')}</span>
+        <span class="hm-need-n">${needCount(opsIn(cats))}${icon('arrow')}</span>
       </button>`;
     }).join('');
     return `<section class="sec hm-sec hm-after-band" aria-labelledby="hm-prob-t">
@@ -387,6 +412,17 @@
     const second = pool.find((x) => x.op.id !== first.op.id && x.r.company !== first.r.company);
     return [first, second].filter(Boolean);
   }
+  /* The rating arc: a gauge along the top of the arch, filled to the review's score out of 5. It draws once when the
+     arch scrolls in (RN.motion.draw, data-draw="line"); the figure under it is final from the first frame. The arch
+     top is a semicircle as wide as the arch, so the viewBox is pinned to the top and scales with its width; the arc
+     runs 9 units outside the tint (overflow visible), so it never crosses the score. */
+  function rateArc(score) {
+    const f = Math.max(0, Math.min(1, score / 5)), R = 159, C = 150, a = Math.PI * f; // just outside the tint, clear of the figure
+    const ex = (C - R * Math.cos(a)).toFixed(1), ey = (C - R * Math.sin(a)).toFixed(1);
+    return `<svg class="hm-rate-arc" viewBox="0 0 300 269" preserveAspectRatio="xMidYMin meet" aria-hidden="true" focusable="false">
+        <path class="trk" d="M ${C - R} ${C} A ${R} ${R} 0 0 1 ${C + R} ${C}"/>${f > 0 ? `<path class="val" d="M ${C - R} ${C} A ${R} ${R} 0 0 1 ${ex} ${ey}" data-draw="line"/>` : ''}
+      </svg>`;
+  }
   function quotesSec() {
     const feats = reviewFeatures();
     if (!feats.length) return '';
@@ -399,6 +435,7 @@
       const score = typeof x.r.overall === 'number' ? x.r.overall : null;
       const nTags = (x.r.tags || []).length;
       const rating = `<div class="hm-arch-rate">
+          ${score != null ? rateArc(score) : ''}
           ${score != null ? `<span class="hm-rate-n num">${esc(score.toFixed(1))}</span><span class="hm-rate-stars">${RN.ui.stars(score)}</span><span class="hm-rate-k">Overall rating</span>` : ''}
           <ul class="hm-rate-facts">${x.r.hireAgain ? `<li>${icon('check-circle')}Would hire again</li>` : ''}${nTags ? `<li>${icon('seal')}${esc(RN.fmt.plural(nTags, 'focus area'))} verified</li>` : ''}</ul>
           <span class="hm-rate-logo">${logo}</span>
@@ -569,7 +606,7 @@
     ['handshake', 'Start on clear terms', 'Agree scope, hours and rate up front.'],
   ];
   const stepsRow = () => `<div class="hm-how">
-      <div class="hm-how-hd"><h3 class="label">How it works · Three steps, no retained search</h3><a class="hm-more" href="#how">Every step, in detail${icon('arrow')}</a></div>
+      <div class="hm-how-hd"><h3 class="label hm-how-l"><span>How it works</span><span class="hm-how-dot" aria-hidden="true"> · </span><span class="hm-how-sub">Three steps, no retained search</span></h3><a class="hm-more" href="#how">Every step, in detail${icon('arrow')}</a></div>
       <ol class="hm-steps" data-hm-steps><li class="hm-steps-track" aria-hidden="true"><i class="hm-steps-fill"></i></li>${STEPS.map((s, i) => `<li class="hm-step">
         ${RN.ui.icoTile(s[0], { cls: 'hm-ic', night: true })}
         <span class="hm-step-k">Step ${i + 1}</span><h4 class="hm-step-t">${esc(s[1])}</h4><p>${esc(s[2])}</p>
@@ -584,7 +621,9 @@
     if (!ol) return;
     const track = ol.querySelector('.hm-steps-track'), fill = track.querySelector('.hm-steps-fill');
     const steps = [...ol.querySelectorAll('.hm-step')];
-    let pts = [], vertical = false, raf = 0;
+    let pts = [], vertical = false, raf = 0, armed = false;
+    // Each step's icon rings once, the first time the line reaches it after the visitor scrolls (not at load)
+    const pinged = S.pinged || (S.pinged = new Set());
     function layout() {
       const o = ol.getBoundingClientRect();
       pts = steps.map((li) => { const r = (li.querySelector('.ico') || li).getBoundingClientRect(); return { x: r.left + r.width / 2 - o.left, y: r.top + r.height / 2 - o.top }; });
@@ -600,7 +639,11 @@
       p = Math.max(0, Math.min(1, p));
       fill.style.transform = vertical ? `scaleY(${p})` : `scaleX(${p})`;
       const n = steps.length - 1;
-      steps.forEach((li, i) => li.classList.toggle('on', p >= (n ? i / n : 0) - 0.001));
+      steps.forEach((li, i) => {
+        const on = p >= (n ? i / n : 0) - 0.001;
+        li.classList.toggle('on', on);
+        if (on && armed && !pinged.has(i)) { pinged.add(i); li.classList.add('is-ping'); later(() => li.classList.remove('is-ping'), 1000); }
+      });
     }
     function progress() {
       const r = ol.getBoundingClientRect(), vh = window.innerHeight || 800;
@@ -611,8 +654,9 @@
     layout();
     if (quiet) { ol.classList.add('is-done'); paint(1); return; }
     ol.classList.add('is-live');
+    steps.forEach((li, i) => { if (progress() >= (steps.length > 1 ? i / (steps.length - 1) : 0) - 0.001) pinged.add(i); });
     const tick = () => { raf = 0; paint(progress()); };
-    const ask = () => { if (!raf) raf = requestAnimationFrame(tick); };
+    const ask = () => { armed = true; if (!raf) raf = requestAnimationFrame(tick); };
     onHome(window, 'scroll', ask, { passive: true });
     onHome(window, 'resize', () => { layout(); ask(); });
     S.offs.push(() => { if (raf) cancelAnimationFrame(raf); raf = 0; });
@@ -771,7 +815,7 @@
     // Waits out a pause or the visitor using the search, then resumes where it left off
     const guard = (next) => {
       if (!input.isConnected) return true;
-      if (busy()) { if (input.placeholder !== PH) show(PH); wait(() => restart(), 700); return true; }
+      if (busy()) { if (input.placeholder !== ph()) show(ph()); wait(() => restart(), 700); return true; }
       if (paused()) { wait(next, 500); return true; }
       return false;
     };
@@ -797,11 +841,106 @@
     };
     const nextExample = () => {
       if (guard(nextExample)) return;
-      i = (i + 1) % EXAMPLES.length;
-      type(EXAMPLES[i], 1);
+      const list = examples();
+      i = (i + 1) % list.length;
+      type(list[i], 1);
     };
     S.offs.push(() => clearTimeout(timer));
     wait(() => { if (!busy()) show(''); nextExample(); }, 1200);
+  }
+
+  /* ---------- Entrance: the hero's first-visit cascade (home.css .hm-enter) ----------
+     Once per browser session (sessionStorage, or this page's memory when storage is blocked), only on a fresh render of
+     home, never in calm mode. The class goes on before the first paint and comes off when the cascade has ended. */
+  const INTRO_KEY = 'rn-hm-intro';
+  function heroEntrance(root, fresh) {
+    const hero = root.querySelector('.hm-hero');
+    if (!hero || !fresh || calm() || S.introPlayed) return;
+    S.introPlayed = true;
+    try { if (sessionStorage.getItem(INTRO_KEY)) return; sessionStorage.setItem(INTRO_KEY, '1'); } catch (e) { /* storage blocked: page memory only */ }
+    hero.classList.add('hm-enter');
+    later(() => hero.classList.remove('hm-enter'), 1000);
+  }
+
+  /* ---------- Ambient 2 of 2: the hero photo settles with one very slow drift (home.css .hm-drift) ----------
+     It plays once per page load and then rests (no loop, so nothing keeps moving). A re-render during the drift
+     picks it up where it was (a negative delay), so the photo never jumps. */
+  const DRIFT_MS = 22000;
+  function photoDrift(root, fresh) {
+    const img = root.querySelector('.hm-hero-img');
+    if (!img || calm()) return;
+    // Once per page load: a return to home picks up the clock it started on, so the drift never replays
+    if (fresh && !S.driftT0) S.driftT0 = Date.now();
+    const t = S.driftT0 ? Date.now() - S.driftT0 : DRIFT_MS;
+    if (t >= DRIFT_MS) return;
+    img.style.animationDelay = `-${t}ms`;
+    img.classList.add('hm-drift');
+  }
+
+  /* ---------- Scroll reveals (home's richer copy of RN.motion.reveal) ----------
+     Section heads (eyebrow, H2, lede in turn) and their cards rise 16px over 450ms as they arrive, up to six in a
+     stagger 70ms apart. The rules are the shared helper's: armed by the visitor's first wheel, touch, key or scroll;
+     only blocks still below the screen are parked (.hm-rv), never one taller than 40% of the screen; each block plays
+     once per visit (S.rv, keyed by group and index) and a re-render never replays it. Blocks moving together never
+     cover more than a third of the screen (RV.budget); past that a block simply appears. */
+  const RV = { y: 16, dur: 450, step: 70, cap: 6, maxH: 0.4, budget: 0.33 };
+  const RV_GROUPS = [
+    ['head', '.hm-head .sec-head > *, .hm-head-r'],
+    ['need', '.hm-needs > .hm-need'],
+    ['seat', '.hm-seats-h, .hm-seat'],
+    ['prep', '.hm-prep-hd, .hm-prep-list > li, .hm-prep-src'],
+    ['work', '.hm-work .wk-show-tabs, .hm-work .wk-show-grid > .wk-tile, .hm-work .wk-show-foot'],
+    ['ops', '.hm-ops .hm-car-hd, .hm-ops .hm-car-slide'],
+    ['rev', '.hm-q-feature > [data-hm-arch], .hm-q-feature > .hm-q'],
+    ['rep', '.hm-book, .hm-rep-txt .sec-head > *, .hm-rep-figs, .hm-rep-txt .hm-ctas, .hm-brief'],
+    ['talk', '.hm-talk-h, .hm-talk-r, .hm-how-hd'],
+  ];
+  function rise(root, fresh) {
+    if (fresh || !S.rv) S.rv = new Set();
+    if (calm() || !('IntersectionObserver' in window)) return;
+    const done = S.rv;
+    const items = [];
+    RV_GROUPS.forEach(([g, sel]) => root.querySelectorAll(sel).forEach((el, i) => { const k = g + ':' + i; if (!done.has(k)) items.push({ el, k }); }));
+    if (!items.length) return;
+    let io = null;
+    // Area budget: blocks in motion together never cover more than about a third of the screen. A block that would
+    // go over it (a fast scroll bringing in many at once) is simply shown, with no motion.
+    let moving = 0;
+    const show = (el, delay) => {
+      const r = el.getBoundingClientRect(), vw = window.innerWidth || 1, vh = window.innerHeight || 1;
+      const a = (Math.min(r.width, vw) * Math.min(r.height, vh)) / (vw * vh);
+      if (moving + a > RV.budget) { el.style.transition = 'none'; el.classList.remove('hm-rv'); void el.offsetWidth; el.style.transition = ''; return; }
+      moving += a;
+      el.style.setProperty('--rv-d', delay + 'ms');
+      el.classList.add('hm-rv-in');
+      later(() => { moving = Math.max(0, moving - a); el.classList.remove('hm-rv', 'hm-rv-in'); el.style.removeProperty('--rv-d'); }, RV.dur + delay + 80);
+    };
+    const arm = () => {
+      if (io || !root.isConnected) return;
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      io = new IntersectionObserver((ents) => {
+        ents.filter((e) => e.isIntersecting).map((e) => e.target)
+          .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left)
+          .forEach((el, i) => { io.unobserve(el); done.add(el.__hmRv); show(el, Math.min(i, RV.cap - 1) * RV.step); });
+      }, { rootMargin: '0px 0px 10% 0px', threshold: 0 });
+      S.offs.push(() => { io.disconnect(); root.querySelectorAll('.hm-rv').forEach((el) => el.classList.remove('hm-rv', 'hm-rv-in')); });
+      items.forEach(({ el, k }) => {
+        if (!el.isConnected) return;
+        const r = el.getBoundingClientRect();
+        // On screen, above it, hidden or too tall to move: never parked
+        if (r.top < vh || r.height === 0 || r.height > vh * RV.maxH || r.left >= (window.innerWidth || 0) - 1) { done.add(k); return; }
+        el.__hmRv = k;
+        el.classList.add('hm-rv');
+        io.observe(el);
+      });
+    };
+    // The router's own scrollTo right after mount is not a visitor scroll: scroll events in the first 150ms are ignored
+    const t0 = Date.now();
+    const go = (e) => { if (e && e.type === 'scroll' && Date.now() - t0 < 150) return; off(); arm(); };
+    const evs = ['wheel', 'touchmove', 'keydown', 'scroll'];
+    const off = () => evs.forEach((t) => window.removeEventListener(t, go, { passive: true }));
+    evs.forEach((t) => window.addEventListener(t, go, { passive: true }));
+    S.offs.push(off);
   }
 
   function runSearch(source) {
@@ -873,6 +1012,11 @@
     render: () => [hero(), problems(), workSec(), featuredSec(), quotesSec(), researchSec(), talkSec()].join(''),
     mount: (root) => {
       teardown();
+      // A fresh route render (not RN.rerender) starts a new visit: the router marks it .view-enter
+      const fresh = root.classList.contains('view-enter');
+      if (fresh) S.pinged = null;
+      heroEntrance(root, fresh);
+      photoDrift(root, fresh);
       fillCharts(root);
       let rz = 0;
       on(window, 'resize', () => { clearTimeout(rz); rz = setTimeout(() => { const m = document.querySelector('main[data-view="home"]'); if (m) fillCharts(m); }, 150); });
@@ -881,11 +1025,11 @@
       stepsLink(root, calm());
       cycleExamples(root);
       // Explanation motion, played once per visit and only below the fold (RN.motion; no-ops under reduced motion)
+      rise(root, fresh);
       if (RN.motion) {
-        RN.motion.reveal(root, '.hm-needs > .hm-need', { key: 'hm-needs' });
-        RN.motion.reveal(root, '.hm-ops .hm-car-slide', { key: 'hm-ops' });
         RN.motion.draw(root.querySelector('[data-hm-chart="rates"]'), { key: 'hm-rates' });
         RN.motion.draw(root.querySelector('[data-hm-prep]'), { key: 'hm-prep' });
+        root.querySelectorAll('.hm-arch-logo').forEach((a, i) => RN.motion.draw(a, { key: 'hm-arc-' + i, threshold: 0.5 }));
       }
       // Profile views that start on a home card are attributed to 'home'. Window listeners run after
       // the global document handler (which sets 'card'), so this wins for clicks inside home.
@@ -894,6 +1038,6 @@
         if (a) RN.store.state._viewSource = 'home';
       });
     },
-    unmount: () => { teardown(); S.carSeen = null; },
+    unmount: () => { teardown(); S.carSeen = null; S.rv = null; S.pinged = null; },
   });
 })();

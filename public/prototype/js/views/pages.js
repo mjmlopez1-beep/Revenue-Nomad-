@@ -345,7 +345,7 @@
     const clients = [
       { i: 'search', t: 'Browse free', d: 'Every profile is open. Search by role, focus area, industry and company size. No login and no sales call first.', l: act('browse', 'Browse talent') },
       { i: 'compare', t: 'Shortlist and compare', d: 'Save operators as you go, then put up to four side by side: Reputation Index, CORE ratings, verified focus areas, availability and rate.', l: act('compare', 'Open compare') },
-      { i: 'message', t: 'Request an intro or post an engagement', d: 'Ask to meet one operator by name, or post an engagement from a Blueprint and get ranked matches who reply in their Studio. No fees for companies: you pay the operator’s rate, nothing more.', l: act('engagement.new', 'Post an engagement') + act('blueprints', 'See Blueprints') },
+      { i: 'message', t: 'Request an intro or post an engagement', d: 'Ask to meet one operator by name, or post an engagement from a Blueprint and get ranked matches who reply in their Studio. No fees for companies: the listed rate is the price, with no fee added on top.', l: act('engagement.new', 'Post an engagement') + act('blueprints', 'See Blueprints') },
       { i: 'mail', t: 'Introduced within one business day', d: 'The operator replies within 72 hours. Once they say yes, our team confirms the fit and introduces you by email within one business day.', l: asLink('buyer', 'buyer.intros', { mine: `Track your intros${icon('arrow')}`, other: `See a company workspace${icon('arrow')}` }, 'act') },
       { i: 'star', t: 'Review after the engagement', d: 'When the work wraps, you rate the operator on CORE. Your review verifies the focus areas you saw and moves their Reputation Index.', l: act('levels', 'How reviews count') },
     ];
@@ -504,7 +504,7 @@
     const all = allReviews();
     const R = market().report;
     // One neutral rule for every operator (founder decision, Sep 25, 2026): highest score, then most recent
-    const featured = all.slice().sort(RN.model.reviewRank)[0];
+    const featured = RN.model.notFirst(all.slice().sort(RN.model.reviewRank))[0]; // founder never first (Oct 14, 2026)
     const scored = all.map((x) => reviewScore(x.r)).filter((n) => n != null);
     const avg = scored.length ? scored.reduce((a, n) => a + n, 0) / scored.length : 0;
     const again = all.filter((x) => x.r.hireAgain === true || x.r.hireAgain === 'yes').length;
@@ -512,18 +512,18 @@
     const pick = (re) => R.summary.find((s) => re.test(s.l));
     const research = [pick(/rehire/i), pick(/engagement length/i), pick(/pipeline/i), pick(/first sales leadership/i)].filter(Boolean);
     // The operators behind the reviews, photos first, for the hero's face strip
-    const reviewed = [...new Set(all.map((x) => x.op))].sort((a, b) => (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || b.reviews.length - a.reviews.length);
+    const reviewed = RN.model.notFirst([...new Set(all.map((x) => x.op))].sort((a, b) => (b.photo ? 1 : 0) - (a.photo ? 1 : 0) || b.reviews.length - a.reviews.length));
     const companies = new Set(all.map((x) => x.r.company).filter(Boolean)).size;
     // Photos only in the stack (initials read badly overlapped); the rest are a count
     const faces = reviewed.filter((o) => o.photo).slice(0, 5);
 
     // The wall: a wide card with a face, then pull-stat cards where a company wrote a before-and-after figure
-    const rest = all.filter((x) => x !== featured).map((x) => Object.assign({}, x));
+    const rest = RN.model.notFirst(all.filter((x) => x !== featured)).map((x) => Object.assign({}, x));
     let wides = 0;
     rest.forEach((x) => { if (wides < 3 && ((RN.data.reviewerPhotos || {})[x.r.reviewer] || x.op.photo)) { x.kind = 'wide'; wides++; } });
     /* Rhythm on a 3-column grid: a wide card and one card, a row of three, then one card and the next wide card
        (so the faces alternate sides), with the pull-stat cards spread through the plain ones. */
-    const W3 = rest.filter((x) => x.kind === 'wide');
+    const W3 = RN.model.notFirst(rest.filter((x) => x.kind === 'wide')); // founder never leads the wall
     const stats = rest.filter((x) => !x.kind && pullStat(x.r));
     const plain = rest.filter((x) => !x.kind && !pullStat(x.r));
     const singles = [];
@@ -981,7 +981,7 @@
       <div class="wrap">
         <div class="pg-shead"><div class="pg-shead-l"><span class="eyebrow">${unsure ? 'A few operators to look at while you wait' : 'Operators we would start with'}</span>
           <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your company size and start date.' : `Matched on ${esc(RN.w.label('need', b.need).replace(/^./, (c) => c.toLowerCase()))}, your company size and start date.`}</h2></div>
-          <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${nMatch === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(nMatch, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
+          <div class="pg-shead-r">${nMatch ? `<button type="button" class="act" data-act="pg-talk-browse">${nMatch === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(nMatch, 'matching operator')} in Browse`}${icon('arrow')}</button>` : `<a class="act" href="#browse">Browse all operators${icon('arrow')}</a>`}</div></div>
         ${ops.length ? `<p class="pg-sugg-note">${icon('check-circle')}<span>Request intro opens with your answers filled in: ${esc(introSummary())}. Check it and send.</span></p>
         <div class="grid g-3 pg-sugg">${ops.map((op, i) => {
           const fit = RN.model.fit(op, b);
@@ -1454,7 +1454,7 @@
         <div class="card c-6 lv-curve">
           <div class="card-hd"><div><h3>A claim becomes proof one review at a time</h3><p class="sub">Focus area score by confirming company reviews. Each column is one more review rated 4.0 or higher.</p></div></div>
           <p class="small">Operators claim up to 25 focus areas (in Studio they are called fit tags). A focus area turns Verified when a company review confirms it, and its score climbs with each confirming review. A focus area a company adds in a review joins the profile as Verified.</p>
-          <div class="pg-curve-chart" data-lv-curve>${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w: 520, h: 220, fmt: (n) => String(n), label: 'Focus area score by number of confirming company reviews' })}</div>
+          <div class="pg-curve-chart" data-lv-curve>${[['lv-curve-d', 520, 220], ['lv-curve-m', 300, 210]].map(([cls, w, h]) => `<div class="${cls}">${RN.chart.columns(curve.map((c) => ({ label: c.r === 10 ? '10+' : String(c.r), value: c.score, hi: c.r === 5 })), { w, h, fmt: (n) => String(n), label: 'Focus area score by number of confirming company reviews' })}</div>`).join('')}</div>
           <div class="row pg-curve-ex">${RN.ui.ftag({ t: 'Sales Playbook', tier: 'verified' })}${RN.ui.ftag({ t: 'Board Revenue Reporting', tier: 'claimed' })}<span class="small muted">Solid with a check is verified by a company. Dashed is claimed by the operator.</span></div>
           <div class="lv-bands" aria-label="Tier by number of confirming reviews">${['claimed', 'verified', 'expert'].map((t) => { const rows = curve.filter((c) => c.tier === t); if (!rows.length) return ''; const a = rows[0].r, z = rows[rows.length - 1].r; const txt = z === 0 ? 'No company reviews' : z === 10 ? `${a} or more reviews` : a === z ? RN.fmt.plural(a, 'review') : `${a} to ${z} reviews`; return `<span class="lv-band is-${t}">${tierPill(t)}<small>${esc(txt)}</small></span>`; }).join('')}</div>
         </div>

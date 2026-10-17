@@ -356,6 +356,9 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
 [data-fold]:not(.is-open) .fn-fold { display: none; }
 .fn-fold .pg-faq { margin-top: 0; border-top: 0; }
 .fn-more-m { display: none; }
+/* On a night band the fold toggle reads in leaf, like the other links on dark */
+:is(.night, .panel-night, .fn-total) .fn-more { color: var(--leaf); }
+:is(.night, .panel-night, .fn-total) .fn-more:hover { color: var(--night-ink); }
 
 /* ---------- FAQ ---------- */
 .fn-faq-in { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--s-6) var(--grid-gap); align-items: start; }
@@ -481,16 +484,17 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
   .fn-grp tr:not(.fn-grp-h) { padding-left: 14px; box-shadow: inset 2px 0 0 var(--line); }
   .fn-grp tr:not(.fn-grp-h):hover > * { background: transparent; }
   .fn-rc-gap td { grid-column: 1 / -1; }
-  /* Gantt: each step stacks over its own lane */
-  .fn-g-r { grid-template-columns: minmax(0, 1fr); }
-  .fn-g-hd > .fn-g-when, .fn-g-hd > .fn-g-what { display: none; }
-  .fn-g-axis { height: 52px; }
-  .fn-g-when { padding: 16px 0 2px; }
+  /* Gantt on a phone: a vertical timeline. Each step is When, What, then its check-marked deliverable on one rail */
+  .fn-g-hd, .fn-g-lines, .fn-g-bar, .fn-g-mile { display: none; }
+  .fn-g-rows { position: relative; margin-left: 5px; border-left: 2px solid var(--line); }
+  .fn-g-r, .fn-g-rows .fn-g-r { position: relative; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 0 0 var(--s-6) 20px; border-bottom: 0; }
+  .fn-g-rows .fn-g-r:last-child { padding-bottom: 0; }
+  .fn-g-rows .fn-g-r:hover { background: none; }
+  .fn-g-rows .fn-g-r::before { content: ""; position: absolute; left: -7px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 3px var(--accent); }
+  .fn-g-when { padding: 0; font-size: var(--t-15); line-height: 1.4; }
   .fn-g-what { padding: 0; }
-  .fn-g-lane { padding: 24px 0 10px; }
-  .fn-g-bar { top: 8px; height: 10px; }
-  .fn-g-mile { top: 7px; width: 10px; height: 10px; }
-  .fn-g-out { font-size: var(--t-13); }
+  .fn-g-lane { display: block; padding: 6px 0 0; }
+  .fn-g-out { position: static; width: auto; max-width: none !important; margin: 0 !important; text-align: left !important; justify-content: flex-start !important; font-size: var(--t-14); }
   .fn-logos ul { gap: 8px 22px; }
   .fn-logos li { height: 34px; }
   .fn-logos li.fn-logos-net { padding-left: 0; border-left: 0; }
@@ -526,8 +530,6 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
   .fn-trm dd b { font-size: 22px; }
   .fn-faces-t span { display: none; }
   .fn-faces-row .ava { --sz: 38px; }
-  .fn-g-axw > i:first-of-type { display: none; }
-  .fn-g-zone { font-size: 10px; letter-spacing: .06em; padding-left: 6px; }
 }
 @media (max-width: 420px) {
   .fn-wm { font-size: 15px; }
@@ -535,4 +537,32 @@ p .fn-gap, td .fn-gap, .fn-story p .fn-gap { margin-inline: 1px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fn-page *, .fn-page *::before, .fn-page *::after { animation: none !important; transition: none !important; }
+}
+/* Dark theme: the night bands (Comparison, How we vet) sit a step lighter than the page with hairlines, so sections
+   do not run together */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .fn-page :is(.fn-total, .section.night, .sec-band.night) { background: radial-gradient(60% 90% at 0% 100%, rgba(31, 122, 77, .22), transparent 60%), var(--night-2); border-block: 1px solid var(--night-line); }
+}
+:root[data-theme="dark"] .fn-page :is(.fn-total, .section.night, .sec-band.night) { background: radial-gradient(60% 90% at 0% 100%, rgba(31, 122, 77, .22), transparent 60%), var(--night-2); border-block: 1px solid var(--night-line); }
+@media (max-width: 720px) {
+  /* Hero cost card on a phone: the first two seats, the page's own seat and the full-time comparison. Every seat
+     follows in full under What it costs (the card's link jumps there) */
+  .fn-hero .fn-ln-r:nth-child(n+3):not(.is-lead):not(.is-ft) { display: none; }
+}
+@media (max-width: 560px) {
+  /* How we vet: the two policy figures sit side by side as compact tiles */
+  .fn-vt { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .fn-vt-c { padding: 14px; }
+  .fn-vt-c b { font-size: 22px; }
+  .fn-vt-c span { font-size: var(--t-13); line-height: 1.45; }
+  /* Terms table: each term is a label over its answer, no header row */
+  .fn-terms-t .fn-tbl, .fn-terms-t .fn-tbl tbody { display: block; }
+  .fn-terms-t .fn-tbl thead { display: none; }
+  .fn-terms-t .fn-tbl tr { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .fn-terms-t .fn-tbl th, .fn-terms-t .fn-tbl td { padding: 0 !important; border: 0 !important; }
+  .fn-terms-t .fn-tbl tbody th { font-family: var(--f-display); font-size: var(--t-12); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+  /* Three KPIs: the figure on the left, its label beside it */
+  .fn-kpis.is-3 .fn-kpi { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); align-items: baseline; gap: 12px; }
+  .fn-kpis.is-3 .fn-kpi dd { order: -1; }
+  .fn-kpis.is-3 .fn-kpi dt { max-width: none; }
 }

@@ -28,7 +28,7 @@
     // Registry label for the stored chip code ("40 hrs / month"), never a raw number
     const code = a.hoursCode || (a.hours ? RN.fields.hoursCode(a.hours) : '');
     const hrs = code ? ` · ${RN.w.label('hoursPerMonth', code)}` : '';
-    return `<span class="row-nw" style="--gap:8px"><i class="dot ${cls}"></i><span>${esc(a.label || 'Availability not set')}${o && o.hours === false ? '' : esc(hrs)}</span></span>`;
+    return `<span class="row-nw" style="--gap:8px"><i class="dot ${cls}"></i><span>${esc((o && o.text) || a.label || 'Availability not set')}${o && o.hours === false ? '' : esc(hrs)}</span></span>`;
   };
 
   ui.ftag = function (tag, o) {
@@ -455,11 +455,16 @@
     const visitor = st.persona === 'visitor';
     const rg = op.rate && visitor && RN.model.opMonthlyRange ? RN.model.opMonthlyRange(op) : null;
     const ctaCls = opts.ctaStyle === 'line' ? 'btn btn-line btn-sm' : 'btn btn-sm';
+    // A card with no tier mark and no button has only Compare in its footer: on phones that link moves to the end of the
+    // meta line and the footer row (divider and all) goes (components.css .opc-foot.is-bare, .opc-cmp-in)
+    const standing = ui.cardStanding(op);
+    const bare = !standing && opts.cta !== 'invite';
+    const cmp = `<button type="button" class="act ${inCompare ? '' : 'muted'}" data-act="compare-toggle" data-id="${esc(op.id)}">${icon('compare')}${inCompare ? 'In compare' : 'Compare'}</button>`;
     return `<article class="opc tb-host" data-op="${esc(op.id)}">
       <button type="button" class="opc-save ${saved ? 'on' : ''}" data-act="shortlist-toggle" data-id="${esc(op.id)}" aria-pressed="${saved}" aria-label="${saved ? 'Remove from shortlist' : 'Save to shortlist'}">${icon('bookmark')}</button>
       <div class="opc-top">
         ${ui.avatar(op, 'ava-md', { decorative: true })}
-        <div class="grow" style="padding-right:36px">
+        <div class="grow">
           <h3 class="opc-name"><a href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a></h3>
           <div class="opc-role">Fractional ${esc(op.role)}</div>
         </div>
@@ -471,12 +476,13 @@
         <span>${ui.avail(op)}</span>
         ${op.rate ? (visitor ? (rg ? `<span class="opc-range" title="${esc(rg.note)} The exact hourly rate shows after you sign in.">${icon('clock')}${esc(rg.short + ' ' + rg.text)}</span>` : '') : `<span>${icon('clock')}${esc(RN.fmt.rate(op.rate))}</span>`) : ''}
         ${op.location ? `<span>${icon('pin')}${esc(op.location)}</span>` : ''}
+        ${bare ? cmp.replace('class="act ', 'class="act opc-cmp-in ') : ''}
       </div>
       ${opts.meta || ''}
-      <div class="opc-foot">
-        ${ui.cardStanding(op)}
+      <div class="opc-foot${bare ? ' is-bare' : ''}">
+        ${standing}
         <div class="row" style="--gap:8px">
-          <button type="button" class="act ${inCompare ? '' : 'muted'}" data-act="compare-toggle" data-id="${esc(op.id)}">${icon('compare')}${inCompare ? 'In compare' : 'Compare'}</button>
+          ${cmp}
           ${opts.cta === 'invite' ? `<button type="button" class="${ctaCls}" data-act="${esc(opts.ctaAct || 'project-invite')}" data-id="${esc(op.id)}">${esc(opts.ctaLabel || 'Invite')}</button>` : ''}
         </div>
       </div>
@@ -588,7 +594,17 @@
   ui.hideTip = hideTip;
 
   /* ---------- After render hook ---------- */
-  ui.afterRender = function (root) { /* reserved for lazy wiring; views use mount() */ };
+  /* After every render: a workspace tab row that scrolls sideways (phones, components.css .side) brings the current
+     tab into view, centred, without moving the page vertically. */
+  ui.afterRender = function (root) {
+    (root || document).querySelectorAll('.side').forEach((s) => {
+      const a = s.querySelector('a.on');
+      if (!a || s.scrollWidth <= s.clientWidth + 1) return;
+      const sr = s.getBoundingClientRect(), ar = a.getBoundingClientRect();
+      if (ar.left >= sr.left + 16 && ar.right <= sr.right - 28) return;
+      s.scrollLeft = Math.max(0, s.scrollLeft + (ar.left - sr.left) - (sr.width - ar.width) / 2);
+    });
+  };
 
   /* ---------- Global delegation ---------- */
   document.addEventListener('click', (e) => {

@@ -7,7 +7,7 @@
   var T = ["about","admin","blueprint","blueprints","browse","buyer","compare","engagement","engagements","fractional-cost","fractional-marketing-leadership","fractional-revops","framework","guide","guides","hire-fractional-sales-vp","home","how","insights","join","levels","library","notfound","op","operators","proof","rates","report","results","review","standards","studio","talk","verify","work"];
   var A = {"projects":"engagements","project":"engagement","state-of-fractional":"report"};
   var E = {"project":"engagements","engagement":"engagements"};
-  var P = {"guide.fractional-vs-full-time-vp-of-sales":"guide.interim-vs-fractional-vs-full-time-sales-leader","guide.transition-out-of-founder-led-sales":"guide.how-to-stop-running-sales-as-a-founder","guide.fractional-cmo-vs-marketing-agency":"guide.fractional-cmo-vs-agency"};
+  var P = {"guide.fractional-vs-full-time-vp-of-sales":"guide.interim-vs-fractional-vs-full-time-sales-leader","guide.transition-out-of-founder-led-sales":"guide.how-to-stop-running-sales-as-a-founder","guide.fractional-cmo-vs-marketing-agency":"guide.fractional-cmo-vs-agency","guide.how-to-scope-a-fractional-sales-engagement":"guide.what-should-a-fractional-engagement-fix-first"};
   var B = {"guide":"post","op":"operators"};
   var h = location.hash.replace(/^#/, '');
   try { h = decodeURIComponent(h); } catch (e) { return; }

@@ -40,7 +40,7 @@
   Object.defineProperty(PJ, 'FEE', { get: () => RN.model.FEE, enumerable: true }); // operator fee, proposed (one source: RN.model.FEE). Operator-facing and Admin only.
   PJ.takeHome = (rate) => RN.model.takeHome(rate);                            // operator-facing only
   PJ.clientRate = (rate) => (rate ? Math.round(+rate) : null);               // what a client pays: the listed rate
-  PJ.NO_FEES = 'No fees for companies. You pay the operator’s rate, nothing more.';
+  PJ.NO_FEES = 'No fees for companies. The listed rate is the price, with no fee added on top.';
   PJ.overBudget = (rate, rateMax) => (rate && rateMax ? Math.max(0, Math.round(+rate) - rateMax) : 0);
   /* Monthly and project totals round to $500, the Rate Index estimator's rule (RN.model.monthlyRange) */
   const r500 = (n) => Math.round((+n || 0) / 500) * 500;
@@ -469,7 +469,7 @@
     </article>`;
   }
   /* One note for any grid of Blueprint prices: the figures are illustrative, and the rate is the price */
-  const bpPriceNote = () => `<p class="tiny muted pj-bp-note">${RN.ui.illus('Rate Index figures are illustrative')}<span>From rates are the lower quartile of hourly rates on the Rate Index${clientRev() ? ` for ${esc(W().label('companyRevenue', clientRev()))} revenue companies` : ''}.</span></p>`;
+  const bpPriceNote = () => `<p class="tiny muted pj-bp-note">${RN.ui.illusTag()}<span>From rates are the lower quartile of hourly rates on the Rate Index${clientRev() ? ` for ${esc(W().label('companyRevenue', clientRev()))} revenue companies` : ''}.</span></p>`;
   function miniOp(op, right) {
     return `<div class="pj-mini">${RN.ui.avatar(op, 'ava-sm')}<div class="grow"><a class="pj-mini-n" href="#op.${esc(op.slug)}" data-track-view="${esc(op.id)}">${esc(op.name)}</a><span class="tiny muted pj-mini-r">Fractional ${esc(op.role)}</span></div>${right || ''}</div>`;
   }
@@ -624,7 +624,7 @@
     <section class="wrap section-sm">
       <div class="panel-night night pj-band">
         <div><span class="eyebrow">Pricing</span><h2 class="h3" style="margin-top:8px">No fees for companies.</h2>
-        <p class="small muted" style="margin-top:10px;max-width:60ch">Browsing, posting, intros and hiring are free. You pay the operator’s rate, nothing more. The rate on a profile or a response is the price.</p></div>
+        <p class="small muted" style="margin-top:10px;max-width:60ch">Browsing, posting, intros and hiring are free. The rate on a profile or a response is the price, with no fee added on top.</p></div>
         <div class="row"><a class="btn btn-leaf" href="#engagement.new">Post an engagement</a><a class="btn btn-line" href="#talk">Talk to us</a></div>
       </div>
     </section>`;
@@ -837,7 +837,7 @@
   }
 
   function footHtml(step, posted) {
-    const back = step > 1 ? `<button type="button" class="btn btn-line" data-act="pj-step" data-to="${step - 1}">${icon('arrow-left')}Back</button>` : '';
+    const back = step > 1 ? `<button type="button" class="btn btn-line" data-act="pj-step" data-to="${step - 1}" aria-label="Back">${icon('arrow-left')}Back</button>` : '';
     const leave = posted ? '<button type="button" class="act muted" data-act="pj-edit-cancel">Cancel</button>' : '';
     const save = posted ? '' : '<button type="button" class="btn btn-ghost" data-act="pj-save">Save draft</button>';
     const next = step < 3 ? `<button type="button" class="btn" data-act="pj-step" data-to="${step + 1}">Continue${icon('arrow')}</button>` : `<button type="submit" class="btn">${posted ? 'Save changes' : 'Post engagement'}${icon('arrow')}</button>`;
@@ -1841,7 +1841,7 @@
         <span class="pj-sheet-s">${esc(bp.title)} · ${esc(bpTime(bp))}</span>
         <ol class="pj-sheet-tl">${bp.milestones.map((m, i) => `<li style="--i:${i}"><span class="pj-bp-day">Day ${(i + 1) * 30}</span><span>${esc(m)}</span></li>`).join('')}</ol>
         <div class="pj-sheet-rate">
-          <span class="pj-sheet-lbl">Rate Index ${RN.ui.illus()}</span>
+          <span class="pj-sheet-lbl">Rate Index ${RN.ui.illusTag()}</span>
           <div class="pj-range"><i class="pj-range-band" style="left:${at(pr.rate.lo)}%;right:${(100 - at(pr.rate.hi)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${at(pr.rate.mid)}%"></i></div>
           <span class="pj-sheet-rv num">${esc(RN.fmt.hrRange(pr.rate.lo, pr.rate.hi))}</span>
         </div>
@@ -1881,7 +1881,7 @@
         <li><div class="pj-how-art" aria-hidden="true"><span class="pj-how-chips">${[W().label('engagementType', std.engagementType), W().label('hoursPerMonth', std.hoursPerMonth), W().label('term', std.term), W().label('startBy', std.startBy)].map((x) => `<span class="pill pill-accent">${esc(x)}</span>`).join('')}</span><span class="pj-how-eq">${icon('user')}Same lists as every operator profile</span></div>
           <h3 class="h4">Built on standard fields</h3><p class="small muted">Engagement type, available time, term and focus areas use the lists operators fill in, so a Blueprint matches profiles with no translation.</p></li>
         <li><div class="pj-how-art" aria-hidden="true"><div class="pj-how-bands">${bands.map((b) => `<div><span>${esc(RN.fields.catLabel(b.c))}</span><i style="--cat:${RN.fields.catColor(b.c)}"><b style="left:${bx(b.r.p25)}%;right:${(100 - bx(b.r.p75)).toFixed(1)}%"></b></i></div>`).join('')}</div></div>
-          <h3 class="h4">Priced from the Rate Index ${RN.ui.illus()}</h3><p class="small muted">Rates are the p25 to p75 hourly rates operators list in each role category. The rate is what you pay. There are no fees for companies.</p></li>
+          <h3 class="h4">Priced from the Rate Index ${RN.ui.illusTag()}</h3><p class="small muted">Rates are the p25 to p75 hourly rates operators list in each role category. The rate is what you pay. There are no fees for companies.</p></li>
         <li><div class="pj-how-art" aria-hidden="true"><ol class="pj-how-flow">${flow.map((x, i) => `<li style="--i:${i}"><i>${i + 1}</i><span>${esc(x)}</span></li>`).join('')}</ol></div>
           <h3 class="h4">Adjust, then post</h3><p class="small muted">Set the type, time, term and start on the Blueprint. Posting fills the brief from it and your company profile, with the top 3 ranked matches picked to invite.</p></li>
       </ol>
@@ -1900,7 +1900,7 @@
   const sizeLine = (pr, t) => (pr.project ? `About ${pr.h} hours over the term` : `At ${W().label('hoursPerMonth', t.hoursPerMonth)}`);
   function estHtml(bp, rev, t) {
     const pr = PJ.price(bp, rev, t);
-    return `<div class="pj-est"><span class="label">Rate</span><b class="num">${esc(RN.fmt.hrRange(pr.rate.lo, pr.rate.hi))}</b><span class="tiny muted">Rate Index, p25 to p75</span></div>
+    return `<div class="pj-est"><span class="label">Rate</span><b class="num">${esc(RN.fmt.hrRange(pr.rate.lo, pr.rate.hi))}</b><span class="tiny muted pj-est-src">Rate Index, p25 to p75 ${RN.ui.illusTag()}</span></div>
       <div class="pj-est"><span class="label">${pr.project ? 'Typical project' : 'Typical month'}</span><b class="num">${esc(pr.total.label)}</b><span class="tiny muted">${esc(sizeLine(pr, t))}</span></div>`;
   }
   function termsHtml(bp, rev) {
@@ -1982,6 +1982,16 @@
     const mine = !!(me && (me.offers || []).includes(bp.id));
     const listLink = `<a class="act" href="#framework">${esc(bp.area)}${stageName ? ` × ${esc(stageName)}` : ''}</a>`;
     const people = RN.model.notFirst(offer.concat(fits.map((x) => x.op))).slice(0, 5); // founder never first (Oct 14, 2026)
+    // When only the founder offers it, the Strong fits group renders first so he is never the first card (Oct 14, 2026)
+    const founderOnly = offer.length > 0 && offer.every(RN.model.isFounder);
+    const offerGrp = `<div class="pj-offer-grp">
+          <div class="pj-offer-hd"><span class="pill pill-gold pj-offer-tag">${icon('seal')}Offer this Blueprint</span><span class="tiny muted">${offer.length ? 'Listed on their profile as a packaged engagement' : 'No one lists it yet'}</span></div>
+          ${offer.length ? `<div class="pj-offer-cards">${RN.model.notFirst(offer).map((o) => RN.ui.opCard(o)).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet. The strong fits run this kind of engagement today.</p>'}
+        </div>`;
+    const fitsGrp = `<div class="pj-offer-grp">
+          <div class="pj-offer-hd"><span class="pill pj-offer-tag">${icon('target')}Strong fits</span><span class="tiny muted">Ranked on the focus areas above</span></div>
+          <div class="pj-offer-cards">${fits.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the engagement and our team will source candidates.', cta: '' })}</div>
+        </div>`;
     return `<section class="wrap pj-bpd-top">
       ${crumbs([['Post an engagement', 'engagements'], ['Blueprints', 'blueprints'], [bp.role, '']])}
       <div class="panel-night night pj-bpd-hero" style="--cat:${RN.fields.catColor(bp.cat)}">
@@ -2009,7 +2019,7 @@
         </div>
         <aside class="pj-bpd-side">
           <div class="card pj-rate">
-            <div class="pj-rate-hd"><span class="label">Rate · Rate Index</span>${RN.ui.illus()}</div>
+            <div class="pj-rate-hd"><span class="label">Rate · Rate Index</span>${RN.ui.illusTag()}</div>
             <div class="pj-range" role="img" aria-label="${esc(`Rate p25 ${usd(pr.rate.lo)}, median ${usd(pr.rate.mid)}, p75 ${usd(pr.rate.hi)} per hour`)}"><i class="pj-range-band" style="left:${pos(pr.rate.lo).toFixed(1)}%;right:${(100 - pos(pr.rate.hi)).toFixed(1)}%"></i><i class="pj-range-mid" style="left:${pos(pr.rate.mid).toFixed(1)}%"></i></div>
             <div class="pj-range-l"><span>${usd(pr.rate.lo)}</span><b>${usd(pr.rate.mid)}/hr median</b><span>${usd(pr.rate.hi)}</span></div>
             <p class="tiny muted">Hourly rates operators list in ${esc(cat)}${rev ? ` for ${esc(W().label('companyRevenue', rev))} revenue companies` : ''}, p25 to p75, from ${pr.n} profiles. The rate is what you pay.</p>
@@ -2052,15 +2062,8 @@
     </section>
     <section class="wrap section-sm pj-offer" id="pj-top-ops">
       <div class="row between pj-sec-hd"><div><span class="eyebrow">Operators who offer this</span><h2 class="h3" style="margin-top:6px">Who runs this engagement</h2></div><a class="act" href="#browse.${esc(bp.cat)}">Browse all ${esc(cat)}${icon('arrow')}</a></div>
-      <div class="pj-offer-row${offer.length > 1 ? ' is-many' : ''}">
-        <div class="pj-offer-grp">
-          <div class="pj-offer-hd"><span class="pill pill-gold pj-offer-tag">${icon('seal')}Offer this Blueprint</span><span class="tiny muted">${offer.length ? 'Listed on their profile as a packaged engagement' : 'No one lists it yet'}</span></div>
-          ${offer.length ? `<div class="pj-offer-cards">${offer.map((o) => RN.ui.opCard(o)).join('')}</div>` : '<p class="small muted pj-offer-none">No operator lists this Blueprint yet. The strong fits run this kind of engagement today.</p>'}
-        </div>
-        <div class="pj-offer-grp">
-          <div class="pj-offer-hd"><span class="pill pj-offer-tag">${icon('target')}Strong fits</span><span class="tiny muted">Ranked on the focus areas above</span></div>
-          <div class="pj-offer-cards">${fits.map((x) => RN.ui.opCard(x.op, { why: x.fit.signals[0] ? x.fit.signals[0].text : '' })).join('') || RN.ui.empty({ icon: 'users', title: 'No operators in this category yet', body: 'Post the engagement and our team will source candidates.', cta: '' })}</div>
-        </div>
+      <div class="pj-offer-row${offer.length > 1 || founderOnly ? ' is-many' : ''}">
+        ${founderOnly ? fitsGrp + offerGrp : offerGrp + fitsGrp}
       </div>
       ${me ? `<div class="pj-offer-me">${mine ? `<span class="small">${icon('check-circle')}You offer this Blueprint. Companies see you in this list.</span><button type="button" class="act" data-act="pj-offer" data-id="${esc(bp.id)}">Remove it</button>`
         : `<span class="small">Do you run this engagement? Offer it as a packaged engagement and companies see you here.</span><button type="button" class="btn btn-line btn-sm" data-act="pj-offer" data-id="${esc(bp.id)}">I offer this Blueprint</button>`}</div>` : ''}

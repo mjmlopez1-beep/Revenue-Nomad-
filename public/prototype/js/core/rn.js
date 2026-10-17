@@ -43,9 +43,9 @@
     usd: (n) => '$' + Math.round(n || 0).toLocaleString('en-US'),
     // $7,500 -> $7.5k, $12,000 -> $12k. Retainer ranges read "$2.2k - $3.4k/month" (founder decision Oct 12, 2026)
     k: (n) => { n = Math.round(+n || 0); return n < 1000 ? '$' + n : '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'k'; },
-    moRange: (lo, hi, unit) => (lo === hi ? `About ${RN.fmt.k(lo)}` : `${RN.fmt.k(lo)} - ${RN.fmt.k(hi)}`) + (unit === false ? '' : '/month'),
+    moRange: (lo, hi, unit) => (lo === hi ? `About ${RN.fmt.k(lo)}` : `${RN.fmt.k(lo)}\u00a0-\u2060\u00a0${RN.fmt.k(hi)}`) + (unit === false ? '' : '/month'),
     // Hourly ranges read "$220 - $340/hr"
-    hrRange: (lo, hi) => `${RN.fmt.usd(lo)} - ${RN.fmt.usd(hi)}/hr`,
+    hrRange: (lo, hi) => `${RN.fmt.usd(lo)}\u00a0-\u2060\u00a0${RN.fmt.usd(hi)}/hr`, // no-break spaces: a range never splits across lines
     usdK: (n) => (n >= 1e6 ? '$' + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : n >= 1e3 ? '$' + Math.round(n / 1e3) + 'K' : '$' + n),
     // $300/hr; four figures read the house way, $1,000 -> $1k/hr (RN.fmt.k)
     rate: (n) => (n ? (Math.round(n) > 999 ? RN.fmt.k(n) : '$' + Math.round(n)) + '/hr' : 'Rate on request'),

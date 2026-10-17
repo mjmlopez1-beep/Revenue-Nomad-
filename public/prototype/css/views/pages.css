@@ -461,9 +461,11 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
   .pg-ladder-wrap.has-d.has-n .pg-rung-meta { grid-column: 2 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
 }
 @media (max-width: 980px) {
-  .pg-head.has-aside, .pg-story-in,   .pg-story-in { gap: var(--s-8); }
+  .pg-head.has-aside, .pg-story-in, .pg-founder, .pg-facts, .pg-feature, .pg-honest, .pg-sp-wrap, .pg-factors, .pg-curve, .pg-band-in { grid-template-columns: minmax(0, 1fr); }
+  .pg-head.has-aside, .pg-story-in { gap: var(--s-8); }
+  .pg-feature { gap: var(--s-10); }
   .pg-story-l, .pg-honest-l { position: static; }
-    .pg-arch { max-width: 320px; }
+  .pg-arch { max-width: 320px; }
   .pg-core-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-core-item:nth-child(3) { padding-left: 0; border-left: 0; }
   .pg-core-item:nth-child(n+3) { margin-top: var(--s-6); border-top: 1px solid var(--night-line); }
@@ -489,7 +491,7 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
   .pg-diff li { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); padding: var(--s-6) 0; }
   .pg-diff li > div { grid-column: auto; }
   .pg-diff li:hover { padding-left: 0; background: none; }
-  .pg-pull,   .pg-lead { font-size: var(--t-18); }
+  .pg-pull, .pg-lead { font-size: var(--t-18); }
   .pg-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pg-track li:nth-child(3) { padding-left: 0; border-left: 0; }
   .pg-track li:nth-child(n+3) { margin-top: var(--s-3); }
@@ -745,6 +747,13 @@ main[data-view="about"], main[data-view="how"], main[data-view="results"], main[
   .pg-wall-f .chip { flex: 0 0 auto; }
   .pg-proof { padding: var(--s-5); }
   .pg-proof-n { font-size: 60px; }
+  /* Featured review on phones: quote first, the rating arch after it, chips with room */
+  .pg-feature { gap: var(--s-8); }
+  .pg-feature .pg-arch { order: 2; max-width: 260px; aspect-ratio: 2 / 3; }
+  .pg-feature-q blockquote { font-size: 20px; line-height: 1.35; }
+  .pg-feature-tags { padding: var(--s-4); }
+  /* Closing band: both actions run full width */
+  .pg-band-in .pg-actions .btn { flex: 1 1 100%; }
 }
 .pg-rev-face-w:not(.is-reviewer) { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: var(--s-6) var(--s-4); }
 .pg-rev-ava { box-shadow: 0 0 0 6px var(--card), 0 14px 30px color-mix(in srgb, var(--accent) 22%, transparent); }
@@ -858,15 +867,19 @@ main[data-view="about"] .pg-head.has-aside { align-items: end; }
 .ab-reach-mail { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-size: var(--t-18); font-weight: 700; }
 .ab-reach-mail svg { width: 18px; height: 18px; color: var(--accent); }
 @media (max-width: 980px) {
-    .ab-diff { grid-template-columns: minmax(0, 1fr); }
+  .ab-diff { grid-template-columns: minmax(0, 1fr); }
   .ab-diff li, .ab-diff li + li { padding: var(--s-6) 0 var(--s-5); border-left: 0; border-bottom: 1px solid var(--line); }
   .ab-diff li::after { right: 0; }
-  }
+}
 @media (max-width: 560px) {
-  .ab-glance dd { font-size: 32px; }
-  .ab-glance > div { padding-right: var(--s-3); }
-  .ab-glance > div + div { padding-left: var(--s-3); }
-  }
+  /* At a glance: one ruled row per figure, the number leading and its label beside it */
+  .ab-glance { grid-template-columns: minmax(0, 1fr); }
+  .ab-glance > div { flex-direction: row-reverse; justify-content: flex-end; align-items: baseline; gap: var(--s-4); padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .ab-glance > div:last-child { border-bottom: 0; }
+  .ab-glance > div + div { padding-left: 0; border-left: 0; }
+  .ab-glance dd { flex: 0 0 auto; min-width: 84px; font-size: 34px; }
+  .ab-glance dt { max-width: none; }
+}
 .ab-diff .act { align-self: flex-start; }
 
 /* =====================================================================
@@ -962,6 +975,13 @@ main[data-view="levels"] .pg-head.has-aside { align-items: end; }
 .lv-curve { display: flex; flex-direction: column; gap: var(--s-4); }
 .lv-curve .pg-curve-chart { max-width: none; margin: 0; }
 .lv-curve .pg-curve-chart svg { width: 100%; height: auto; }
+.lv-curve-m { display: none; }
+@media (max-width: 560px) {
+  /* Phone: the same columns drawn on a narrow canvas so labels render at about 12px instead of 7px */
+  .lv-curve-d { display: none; }
+  .lv-curve-m { display: block; }
+  .lv-curve-m .chart text { font-size: 13px; }
+}
 .lv-bands { display: flex; gap: 4px; padding-left: 28px; }
 .lv-band { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 8px 0; border-top: 3px solid var(--line); min-width: 0; }
 .lv-band.is-verified { border-color: var(--good, var(--accent)); }
@@ -1074,6 +1094,13 @@ main[data-view="levels"] .pg-head.has-aside { align-items: end; }
   .pg-talk .pg-tiles .chipset .chip::before, .pg-talk .pg-tiles.has-ic .chipset .chip::before { display: none; }
   .pg-talk .pg-tiles.has-ic .chipset .chip { padding-right: 16px; }
   .pg-talk-alt p { flex-basis: 180px; }
+  /* The answer recap is one scrolling row of compact chips, so the next question stays in the first screen */
+  .pg-talk .pg-recap { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(var(--gutter) * -1); padding: 2px var(--gutter) 6px; -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .pg-talk .pg-recap::-webkit-scrollbar { display: none; }
+  .pg-talk .pg-recap-chip { display: inline-flex; flex: 0 0 auto; flex-direction: row; align-items: center; gap: 8px; min-height: 44px; padding: 6px 8px 6px 12px; white-space: nowrap; }
+  .pg-talk .pg-recap-chip.is-fixed { padding-right: 12px; }
+  .pg-talk .pg-recap-chip > span { font-size: 11px; }
+  .pg-talk .pg-recap-ed { width: 24px; height: 24px; }
   .pg-talk-alt { margin-top: var(--s-6); }
 }
 .ab-cmp dd.is-hi { color: var(--accent); }
@@ -1105,9 +1132,11 @@ main[data-view="levels"] .pg-head.has-aside { align-items: end; }
 }
 /* Phone length (Levels ladder): the count sits beside the tier name, and the rung is tighter */
 @media (max-width: 640px) {
-  .pg-ladder-wrap.is-rail .pg-rung { grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-3); row-gap: var(--s-2); padding-block: var(--s-4); }
+  .pg-ladder-wrap.is-rail .pg-rung { grid-template-columns: minmax(0, 1fr); column-gap: var(--s-3); row-gap: var(--s-2); padding-block: var(--s-4); }
   .pg-ladder-wrap.is-rail .pg-rung-id { grid-column: 1; grid-row: 1; }
-  .pg-ladder-wrap.is-rail.has-d.has-n .pg-rung-meta { grid-column: 2; grid-row: 1; align-self: center; }
+  /* The profile count reads as a third line of the tier's name block, under its score range */
+  .pg-ladder-wrap.is-rail.has-d.has-n .pg-rung-meta { grid-column: 1; grid-row: 2; align-self: start; margin: -6px 0 2px calc(48px + var(--s-4)); }
+  .pg-ladder-wrap.is-rail .pg-rung-n { font-size: var(--t-13); font-weight: 600; color: var(--mute); }
   .pg-ladder-wrap.is-rail .pg-rung-d, .pg-ladder-wrap.is-rail .pg-rung-u { grid-column: 1 / -1; }
   .pg-ladder-wrap.is-rail .pg-rung-ul { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0; }
   .pg-ladder-wrap.is-rail .pg-seal { width: 48px; height: 48px; }
@@ -1134,3 +1163,30 @@ main[data-view="levels"] .pg-head.has-aside { align-items: end; }
   .pg-ho > span { flex-basis: calc(100% - 26px); }
   .pg-ho-x.act { margin-left: 26px; min-height: 32px; }
 }
+@media (max-width: 400px) {
+  /* Size tiles at 360: ranges stay on one line beside a smaller scale glyph */
+  .pg-talk .pg-row .pg-tiles .chipset .chip { white-space: nowrap; padding: 10px; gap: 8px; font-size: 14px; }
+  .pg-talk .pg-row .pg-t-sc { transform: scale(.8); transform-origin: right center; margin-left: auto; }
+}
+@media (max-width: 560px) {
+  /* Levels: the tier legend under the curve stacks, one tier per row */
+  .lv-bands { flex-direction: column; gap: 10px; padding-left: 0; }
+  .lv-band { flex: none; flex-direction: row; align-items: center; gap: 10px; padding: 8px 0 0; }
+}
+@media (max-width: 640px) {
+  /* Closing bands end with full-width actions, like the heroes on the same pages */
+  .pg-band .pg-actions .btn, .lv-use .pg-uses-chips .btn { flex: 1 1 100%; width: 100%; }
+}
+@media (max-width: 720px) {
+  /* Operators: the hero H1 balances across the full width instead of leaving "companies" alone on a line */
+  main[data-view="operators"] .pg-head .h1 { max-width: none; text-wrap: balance; }
+  .pg-shead .eyebrow { text-wrap: balance; }
+}
+/* Dark theme: night bands on the marketing pages sit a step lighter than the page with hairlines, so the band rhythm
+   survives; the Emerging hexagon's outline lifts so it reads on near-black */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) :is(main[data-view="about"], main[data-view="how"], main[data-view="results"], main[data-view="operators"], main[data-view="levels"]) :is(.sec-band.night, .section.night:not(.pg-band)) { background: var(--night-2); border-block: 1px solid var(--night-line); }
+  :root:not([data-theme="light"]) :is(main[data-view="levels"], main[data-view="operators"]) .tb.t-emerging { --tb-emg-line: color-mix(in srgb, var(--leaf) 60%, #6BA85F); }
+}
+:root[data-theme="dark"] :is(main[data-view="about"], main[data-view="how"], main[data-view="results"], main[data-view="operators"], main[data-view="levels"]) :is(.sec-band.night, .section.night:not(.pg-band)) { background: var(--night-2); border-block: 1px solid var(--night-line); }
+:root[data-theme="dark"] :is(main[data-view="levels"], main[data-view="operators"]) .tb.t-emerging { --tb-emg-line: color-mix(in srgb, var(--leaf) 60%, #6BA85F); }

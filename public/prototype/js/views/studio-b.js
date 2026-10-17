@@ -11,7 +11,7 @@
   const st = () => RN.store.state;
 
   /* UI state that does not need to persist */
-  const S = { jobMore: false, inboxFilter: 'all', passOpen: {}, respOpen: {}, jobCat: '', jobEng: '', jobStatus: 'board', prosStatus: 'review', dirty: false, focusSec: '', newProof: '', addEng: false, removedEng: new Set(), leaveTo: null };
+  const S = { jobMore: false, inboxFilter: 'all', passOpen: {}, respOpen: {}, jobCat: '', jobEng: '', jobStatus: 'board', prosStatus: 'review', dirty: false, focusSec: '', newProof: '', addEng: false, removedEng: new Set(), leaveTo: null, secOpen: null };
 
   /* ======================================================================
      Shared helpers
@@ -140,6 +140,7 @@
 
   RN.actions['sb-scroll'] = (el) => {
     const t = document.getElementById(el.dataset.target);
+    openSec(el.dataset.target);
     if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'start' }); const f = t.querySelector('input, textarea, select, button'); if (f && el.dataset.focus) setTimeout(() => f.focus({ preventScroll: true }), 400); }
   };
   RN.actions['sb-copy'] = (el) => {
@@ -148,6 +149,23 @@
   };
   // Open one Edit profile section from anywhere (Studio overview, the checklist, profile edit shortcuts)
   const SEC_IDS = { about: 'sb-f-about', avail: 'sb-f-avail', fit: 'sb-f-fit', sell: 'sb-f-sell', role: 'sb-f-role', engagements: 'sb-f-eng', samples: 'sb-f-samples', media: 'sb-f-media', photo: 'sb-f-media', video: 'sb-f-media', offers: 'sb-f-offers', tags: 'sb-f-tags' };
+  /* Phones fold Edit profile into one open section at a time (css/views/studio2.css gates it at <=640px, so wider
+     screens always show every section). S.secOpen keeps what the operator opened across re-renders. */
+  function openSec(id) {
+    const s = id && document.getElementById(id);
+    if (!s || !s.classList.contains('sb-sec-card')) return;
+    if (!S.secOpen) S.secOpen = new Set();
+    S.secOpen.add(id);
+    s.classList.remove('is-folded');
+    const b = s.querySelector('.sb-sec-tog'); if (b) b.setAttribute('aria-expanded', 'true');
+  }
+  RN.actions['sb-sec-tog'] = (el) => {
+    const s = el.closest('.sb-sec-card'); if (!s) return;
+    if (!S.secOpen) S.secOpen = new Set();
+    const open = s.classList.toggle('is-folded') === false;
+    if (open) S.secOpen.add(s.id); else S.secOpen.delete(s.id);
+    el.setAttribute('aria-expanded', String(open));
+  };
   function editSection(key) {
     // 'engagements-new' opens the Engagement History section with a blank engagement ready to fill in
     const add = key === 'engagements-new';
@@ -165,6 +183,7 @@
     const id = S.focusSec; S.focusSec = '';
     const t = id && document.getElementById(id);
     if (!t) return;
+    openSec(id);
     setTimeout(() => {
       t.scrollIntoView({ behavior: 'smooth', block: 'start' });
       const sel = 'input:not([type=hidden]):not([type=search]), select, textarea';
@@ -269,7 +288,7 @@
       ${head('Inbox', `Intro requests, engagement invites and requests from your proof links. Marketplace companies stay anonymous until Revenue Nomad introduces you. Reply within ${WINDOW_H} hours.`)}
       <div class="sb-toolbar">
         <div class="seg" role="group" aria-label="Show">
-          ${[['all', 'All', items.length], ['intro', 'Intro requests', nIntro], ['project', 'Engagement invites', nProj]].map(([k, l, n]) => `<button type="button" aria-pressed="${f === k}" data-act="sb-inbox-filter" data-f="${k}">${l} <span class="sb-n">${n}</span></button>`).join('')}
+          ${[['all', 'All', items.length], ['intro', 'Intro requests', nIntro, 'Intros'], ['project', 'Engagement invites', nProj, 'Invites']].map(([k, l, n, s]) => `<button type="button" aria-pressed="${f === k}" data-act="sb-inbox-filter" data-f="${k}">${s ? `<span class="seg-long">${l}</span><span class="seg-short">${s}</span>` : l} <span class="sb-n">${n}</span></button>`).join('')}
         </div>
         <span class="small muted">${needs ? `<b class="sb-ink">${needs}</b> waiting on you` : 'Nothing waiting on you'}${nProof ? ` · ${nProof} from your proof ${nProof === 1 ? 'link' : 'links'}` : ''}</span>
       </div>
@@ -1540,7 +1559,7 @@
     const nWord = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'][op.reviews.length] || String(op.reviews.length);
     const reviews = op.reviews.length >= 2 ? ` ${nWord} of my companies have reviewed that work on Revenue Nomad.` : '';
     const ind = op.industries.includes(p.ind) ? RN.w.label('industries', p.ind) : RN.w.label('industries', op.industries[0] || 'Saas');
-    const hrs = op.avail && op.avail.hoursCode ? RN.w.label('hoursPerMonth', op.avail.hoursCode).replace(' / month', ' a month') : 'a few days a month';
+    const hrs = op.avail && op.avail.hoursCode ? RN.w.label('hoursPerMonth', op.avail.hoursCode).replace(/\s\/\u2060?\smonth/, ' a month') : 'a few days a month';
     const linkLine = link ? `Proof of my work, prepared for ${p.co}: ${proofUrl(link.id)}` : `My profile, with verified company reviews: revenuenomad.com/operators/${op.slug}`;
     return {
       subject: p.subj,
@@ -1771,7 +1790,11 @@
     const room = Math.max(0, RN.fields.fitTags.max - claimedCount);
     const engs = (op.engagements || []).slice().sort(byRecent);
     const samples = e.samples || [];
-    const sec = (id, title, sub, inner) => `<section class="card sb-sec-card" id="${id}" aria-labelledby="${id}-h"><div class="card-hd"><div><h3 id="${id}-h">${title}</h3>${sub ? `<p class="sub">${sub}</p>` : ''}</div></div><div class="stack" style="--gap:22px">${inner}</div></section>`;
+    // Open on phones: the first section, any the operator opened, the one a link targets (S.focusSec) and Engagements when adding one
+    const open = S.secOpen || (S.secOpen = new Set(['sb-f-about']));
+    if (S.focusSec) open.add(S.focusSec);
+    if (S.addEng) open.add('sb-f-eng');
+    const sec = (id, title, sub, inner) => { const on = open.has(id); return `<section class="card sb-sec-card${on ? '' : ' is-folded'}" id="${id}" aria-labelledby="${id}-h"><div class="card-hd"><div><h3 id="${id}-h">${title}</h3>${sub ? `<p class="sub">${sub}</p>` : ''}</div><button type="button" class="sb-sec-tog" data-act="sb-sec-tog" aria-expanded="${on}" aria-controls="${id}-b"><span class="sr-only">Show ${title.replace(/<[^>]+>/g, '')}</span>${icon('chev-down')}</button></div><div class="stack sb-sec-b" id="${id}-b" style="--gap:22px">${inner}</div></section>`; };
     const addEng = S.addEng; S.addEng = false;
     S.removedEng = new Set();
     const preview = (cls) => `<button type="button" class="btn btn-line btn-sm ${cls || ''}" data-act="sb-prof-preview">${icon('eye')}Preview as company</button>`;
@@ -1797,7 +1820,7 @@
             RN.w.field('salesMotions', op.motions || [], { name: 'salesMotions' })
             + RN.w.field('crm', op.crm || '', { name: 'crm' })
             + RN.w.field('methodologies', op.methodologies || [], { name: 'methodologies' }))}
-          ${roleKeys.length ? sec('sb-f-role', `Role details: ${esc(RN.fields.catLabel(op.catKey))}`, 'Shown in the Operating range section of your profile.',
+          ${roleKeys.length ? sec('sb-f-role', `${esc(RN.fields.catLabel(op.catKey))} role details`, 'Shown in the Operating range section of your profile.',
             roleKeys.map((k) => RN.w.field(k, roleValue(op, k), { name: 'rf_' + k, id: 'sb-rf-' + k })).join('')) : ''}
           ${sec('sb-f-eng', 'Engagement history', `${engs.length} ${engs.length === 1 ? 'engagement' : 'engagements'}. Each one turns Company-verified when that company leaves a review.`,
             `<div class="sb-englist-edit" data-eng-list>${engs.map((g) => engItem(op, g, engStatus(op, g))).join('')}${addEng ? engItem(op, { id: newId('eng-new'), company: '', role: op.role, engagementType: 'fractional' }, null, { open: true, isNew: true }) : ''}</div>
@@ -1981,7 +2004,7 @@
     const op = RN.myOp();
     const prev = edits(op);
     const num = (v) => (v === '' || v == null ? null : +v);
-    const fail = (m, id) => { RN.ui.toast(m, { icon: 'info' }); const el = id && document.getElementById(id); if (el) { const box = el.closest('details'); if (box) box.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } return false; };
+    const fail = (m, id) => { RN.ui.toast(m, { icon: 'info' }); const el = id && document.getElementById(id); if (el) { const box = el.closest('details'); if (box) box.open = true; const sc = el.closest('.sb-sec-card'); if (sc) openSec(sc.id); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } return false; };
     if (d.rate && +d.rate < RN.fields.rate.min) return fail(`Hourly rate starts at $${RN.fields.rate.min}.`);
     if (d.newClientCapacity && (+d.newClientCapacity < 1 || +d.newClientCapacity > 10)) return fail('New company capacity is 1 to 10 companies.');
     const photo = (d.photo || '').trim(), video = (d.video || '').trim();

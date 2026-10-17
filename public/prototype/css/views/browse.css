@@ -257,13 +257,13 @@
   .br-popular-list .chip { scroll-snap-align: start; }
   .br-grid .opc { gap: var(--s-3); }
   .br-break { padding: var(--s-6) var(--s-5); }
-  /* Category page: title, then the rate, then a clamped intro, so results arrive a screen earlier */
+  /* Category page: title, a clamped intro that says what the role does, then a compact rate card */
   .br-head-cat .br-cat-grid { display: flex; flex-direction: column; gap: var(--s-4); }
   .br-head-cat .br-cat-copy { display: contents; }
   .br-head-cat .br-cat-eyebrow { order: 1; }
   .br-head-cat .br-cat-copy > .h1 { order: 2; }
-  .br-head-cat .br-rate-card { order: 3; }
-  .br-head-cat .br-cat-intro { order: 4; }
+  .br-head-cat .br-cat-intro { order: 3; }
+  .br-head-cat .br-rate-card { order: 4; }
   .br-head-cat .br-titles { order: 5; }
   .br-head-cat .br-cat-tags { order: 6; }
   .br-rate-card .br-rate-chart, .br-rate-card .br-rate-free { display: none; }
@@ -336,3 +336,30 @@
   .br-fit.is-done { padding: var(--s-4); }
   .br-fit-save { width: 100%; }
 }
+
+/* ==========================================================================
+   Phone pass (Oct 17, 2026)
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Save search lives in the phone action bar; the inline link would be its twin */
+  .br-save-slot { display: none; }
+  /* Rate Index card: the header wraps with the tag on its own line, the month row stacks, one hairline */
+  .br-rate-hd { flex-wrap: wrap; gap: 6px 12px; }
+  .br-rate-card .br-rate-mo { border-bottom: 0; padding-bottom: 0; }
+  .br-rate-mo > div { display: grid; justify-content: start; gap: 2px; }
+  .br-rate-mo dd { font-size: var(--t-16); }
+  .br-rate-card .illus-note { display: none; }
+  .br-rate-foot { padding-top: var(--s-3); }
+  /* The last block before the footer: half a section gap, then the footer's own section gap */
+  .br-roles { padding-bottom: 0; }
+  /* Focus areas: a bottom sheet like Filters, scrolling on its own. The sticky bar drops its blur while the
+     sheet is open (a backdrop filter would make the bar the sheet's containing block) */
+  .br-bar:has(.br-tp:not([hidden])) { z-index: 95; -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--paper); }
+  .br-tp { position: fixed; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 85vh; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-5) var(--gutter) 0; border-radius: 20px 20px 0 0; border-bottom: 0; box-shadow: 0 -12px 40px rgba(0, 0, 0, .22); animation: br-sheet var(--dur-3) var(--ease-out); }
+  .br-tp .tagpick-list { max-height: none; }
+  .br-tp-ft { position: sticky; bottom: 0; margin: 0 calc(var(--gutter) * -1); padding: var(--s-3) var(--gutter) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)); background: var(--card); border-top: 1px solid var(--line-2); }
+  .br-tp-ft .btn { width: 100%; --h: 46px; }
+  body:has(.br-tp:not([hidden])) .br-mbar { display: none; }
+}
+@keyframes br-sheet { from { transform: translateY(24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .br-tp { animation: none; } }

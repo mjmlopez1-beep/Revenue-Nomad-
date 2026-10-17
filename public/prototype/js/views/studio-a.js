@@ -496,7 +496,11 @@
   /* =====================================================================
      OVERVIEW
      ===================================================================== */
-  const showAll = { demand: false, activity: false, terms: false, gaps: false };
+  const showAll = { demand: false, activity: false, terms: false, gaps: false, opps: false };
+  // Numbers stay on one line: money ranges (RN.fmt.keepRange), "20 hrs / month", "6 to 12 months". Run before esc.
+  const keepNums = (s) => RN.fmt.keepRange(String(s == null ? '' : s))
+    .replace(/(\d+)\s+hrs\s*\/\s*(month|week)/g, '$1\u00a0hrs\u00a0/\u2060\u00a0$2')
+    .replace(/(\d+)\s+to\s+(\d+)\s+(months?|weeks?|days?|hours?|hrs)\b/g, '$1\u00a0to\u00a0$2\u00a0$3');
 
   function renderOverview(op) {
     resetSlots();
@@ -647,7 +651,7 @@
           ${RN.ui.icoTile(x.ic, x.live ? { soft: true, color: 'var(--good)', cls: 'sa-feed-ic' } : { soft: true, cls: 'sa-feed-ic' })}
           <div class="grow">
             <p class="sa-feed-t">${x.live ? '<span class="pill pill-good sa-pill-live">Live</span>' : ''}${x.text}</p>
-            <p class="sa-feed-m">${esc(x.meta || '')}</p>
+            <p class="sa-feed-m">${esc(keepNums(x.meta || ''))}</p>
             <div class="sa-feed-f">${fitPill(x.fit)}${x.you ? youPill(x.you === 'none' ? null : x.you) : ''}<span class="tiny muted">${esc(cap(fmt.ago(x.ts)))}</span>${x.act ? `<span class="sa-feed-a">${actBtn(x.act, 'act')}</span>` : ''}</div>
           </div>
         </li>`).join('')}</ul>` : RN.ui.empty({ icon: 'search', title: 'No demand in this range yet', body: 'Try another company revenue range, or clear the filter to see everything.', cta: `<button type="button" class="btn btn-line btn-sm" data-act="sa-demand-clear">Clear filter</button>` })}
@@ -1004,7 +1008,7 @@
 
   /* One action per edge. Availability asks for a real date, never "available now". */
   const EDGE_ACT = (edge) => {
-    if (/start sooner/.test(edge)) return { l: 'Confirm your next available start date', k: 'avail' };
+    if (/start sooner/.test(edge)) return { l: 'Confirm your start date', k: 'avail' };
     if (/review/.test(edge)) return { l: 'Request a review', k: 'reviews' };
     if (/verified/.test(edge)) return { l: 'Ask a company to verify tags', k: 'verified' };
     if (/rate/.test(edge)) return { l: 'See your rate position', to: 'studio.positioning' };
@@ -1132,7 +1136,7 @@
     const opps = pos.opps;
     return `<section class="card sa-card">
       ${cardHd('Focus-area opportunities', `Company demand vs operators with the focus area verified, in ${esc(RN.fields.catLabel(op.catKey))} and your tags`)}
-      <div class="tbl-wrap"><table class="tbl sa-opps sa-stack"><thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r sa-hide-s">Verified operators</th><th>You</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table class="tbl sa-opps sa-stack${showAll.opps ? ' is-all' : ''}"><thead><tr><th>Focus area</th><th class="r">Searches / mo</th><th class="r sa-hide-s">Verified operators</th><th>You</th><th></th></tr></thead><tbody>
         ${opps.map((o) => {
           const act = !o.have ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-tag-sheet" data-t="${esc(o.t)}">${icon('plus')}Add</button>`
             : o.tier === 'claimed' ? `<button type="button" class="btn btn-line btn-sm" data-act="sa-do" data-k="verified" data-t="${esc(o.t)}">Get it verified</button>`
@@ -1147,6 +1151,7 @@
           </tr>`;
         }).join('')}
       </tbody></table></div>
+      ${opps.length > 4 ? `<button type="button" class="act sa-more sa-more-m" data-act="sa-more" data-k="opps">${showAll.opps ? 'Show fewer' : `Show all ${opps.length}`}${icon(showAll.opps ? 'chev-up' : 'chev-down')}</button>` : ''}
       <p class="tiny muted sa-card-foot">${illus('Illustrative volumes')}<span>Added tags show as Claimed until a company review verifies them.</span></p>
     </section>`;
   }
@@ -1238,7 +1243,7 @@
       <div class="sa-heads-cur"><span class="label">Your headline now</span><p class="serif-up">${op.headline ? esc(op.headline) : '<span class="muted">No headline yet</span>'}</p>${orig != null && orig !== op.headline ? `<button type="button" class="act" data-act="sa-headline-undo">${icon('refresh')}Restore previous</button>` : ''}</div>
       ${list.length ? `<ol class="sa-heads-l">${list.map((c, i) => `<li>
           <span class="sa-rank num">${String.fromCharCode(65 + i)}</span>
-          <div class="grow"><p class="sa-heads-h">${esc(c.h)}</p><p class="tiny muted">${c.h.length} of 110 characters${c.why.length ? ' · uses ' + c.why.join(', ') : ''}</p></div>
+          <div class="grow"><p class="sa-heads-h">${esc(keepNums(c.h))}</p><p class="tiny muted">${c.h.length} of 110 characters${c.why.length ? ' · uses ' + c.why.join(', ') : ''}</p></div>
           <div class="sa-heads-a"><button type="button" class="btn btn-line btn-sm" data-act="sa-headline" data-h="${esc(c.h)}">Use this</button><button type="button" class="btn btn-ghost btn-sm btn-icon" data-act="sa-copy" data-copy="${esc(c.h)}" aria-label="Copy headline">${icon('copy')}</button></div>
         </li>`).join('')}</ol>` : RN.ui.empty({ icon: 'edit', title: 'No suggestions yet', body: 'Suggestions appear once companies search terms that match your tags.' })}
       <p class="tiny muted" style="margin-top:12px">Suggestions are drafts. Edit the wording in your profile so it sounds like you.</p>
@@ -1424,7 +1429,7 @@
             <div><span class="label">Clicks</span><b class="num">${fmt.int(gc)}</b></div>
             <div class="grow"><span class="label">Clicks by week</span>${slot((w) => RN.chart.spark(weekly, { w, h: 32, label: 'Weekly clicks from Google, last 4 weeks' }), '', 32)}</div>
           </div>
-          <div class="tbl-wrap"><table class="tbl sa-gsc"><thead><tr><th>Query</th><th class="r">Impressions</th><th class="r">Clicks</th><th class="r sa-hide-s">Typical position</th></tr></thead><tbody>
+          <div class="tbl-wrap"><table class="tbl sa-gsc"><thead><tr><th>Query</th><th class="r"><span class="sa-l-long">Impressions</span><abbr class="sa-l-short" title="Impressions">Impr.</abbr></th><th class="r">Clicks</th><th class="r sa-hide-s">Typical position</th></tr></thead><tbody>
             ${g.map((r) => `<tr><td>${esc(r.q)}</td><td class="r">${fmt.int(r.imp)}</td><td class="r">${fmt.int(r.clicks)}</td><td class="r sa-hide-s">${r.pos <= 3 ? 'Top 3' : r.pos <= 10 ? 'Page 1' : 'Page 2'}</td></tr>`).join('')}
           </tbody></table></div>
         </section>

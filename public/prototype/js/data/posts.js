@@ -13,7 +13,11 @@
    ({ stats: [{ v, l, src, url }], note }) for a paragraph that would otherwise be mostly arithmetic (design pass, Oct 14).
    Voice: Revenue Nomad writes as a company ("we", "our team"); no founder first person. GoFractional is never named.
    replaces[] is the 301 list with Search Console figures from the May 2026 export (null = not in it).
-   aliases maps a prototype guide a post replaced to that post, so its old link still lands. */
+   aliases maps a prototype guide a post replaced to that post, so its old link still lands.
+   Oct 17, 2026: eight guides from the buyer questions backlog, section (b), kind 'new', live (publish null). Each answers
+   bank questions from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized so no company,
+   person or deal value tied to a company appears. High-confidence answers read as policy, medium ones as "what we have
+   seen", low and none are left out. The legacy scoping guide now aliases to what-should-a-fractional-engagement-fix-first. */
 (function () {
   'use strict';
   const RN = window.RN;
@@ -23,7 +27,8 @@
     "aliases": {
       "fractional-vs-full-time-vp-of-sales": "interim-vs-fractional-vs-full-time-sales-leader",
       "transition-out-of-founder-led-sales": "how-to-stop-running-sales-as-a-founder",
-      "fractional-cmo-vs-marketing-agency": "fractional-cmo-vs-agency"
+      "fractional-cmo-vs-marketing-agency": "fractional-cmo-vs-agency",
+      "how-to-scope-a-fractional-sales-engagement": "what-should-a-fractional-engagement-fix-first"
     },
     "candidates": [
       {
@@ -452,7 +457,7 @@
                     ],
                     [
                       "Fees",
-                      "No platform fee. You pay the operator's rate and nothing more"
+                      "No platform fee on top of the rate in your agreement"
                     ],
                     [
                       "Full-time conversion",
@@ -541,7 +546,7 @@
           },
           {
             "q": "What if the operator is the wrong fit?",
-            "a": "You can swap the operator. Once the 3 to 4 month initial term ends, the contract runs month-to-month with 30 days notice."
+            "a": "You can swap the operator. We present replacement candidates and move the work over at no added cost. Once the 3 to 4 month initial term ends, the contract runs month-to-month with 30 days notice."
           },
           {
             "q": "Will a fractional VP clash with my current sales leader?",
@@ -836,7 +841,7 @@
                     ],
                     [
                       "Fees",
-                      "None. You pay the operator's rate and nothing more"
+                      "None on top of the rate in your agreement"
                     ],
                     [
                       "Full-time hire",
@@ -1009,7 +1014,7 @@
           },
           {
             "q": "Does Revenue Nomad add a fee to the operator's rate?",
-            "a": "No. You pay the operator's rate and nothing more. Hiring the operator full time later carries a conversion fee of 20% of annual salary."
+            "a": "No. Revenue Nomad's share is built into the rate, so there is no separate platform fee. Travel and other expenses are billed at cost only when you approve them in advance in writing, and any software a plan recommends is bought by you, in your name. Hiring the operator full time later carries a conversion fee of 20% of annual salary."
           }
         ],
         "talk": "Answer four short questions, with only your name and email required. We reply with a role profile and 2 to 3 vetted operators priced for your team size, often within 48 hours, and you meet them before you sign. [[link:talk.sales_motion|Talk to us about your sales team]]",
@@ -1281,7 +1286,7 @@
           },
           {
             "q": "What if the operator is the wrong fit?",
-            "a": "You can swap the operator. Every engagement runs on a signed contract, with a monthly retainer billed upfront for a set block of hours."
+            "a": "You can swap the operator. We present replacement candidates and move the work over at no added cost. Every engagement runs on a signed contract, with a monthly retainer billed upfront for a set block of hours."
           },
           {
             "q": "What does the first month usually cover?",
@@ -1608,7 +1613,7 @@
           },
           {
             "q": "What if the operator is the wrong fit?",
-            "a": "You can swap the operator. Every contract starts with a 3 to 4 month initial term, then goes month-to-month with 30 days notice."
+            "a": "You can swap the operator. We present replacement candidates and move the work over at no added cost. Every contract starts with a 3 to 4 month initial term, then goes month-to-month with 30 days notice."
           }
         ],
         "talk": "Not sure which fits? [[link:talk.sales_motion|Tell us about your sales team]] in four short questions, covering what you need, how big the business is, when someone should start and where to reply. Only name and email are required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
@@ -1900,7 +1905,7 @@
           },
           {
             "q": "What if the operator is the wrong fit?",
-            "a": "Our engagements let the client swap the operator if fit is wrong."
+            "a": "You can swap the operator. We present replacement candidates and move the work over at no added cost."
           },
           {
             "q": "Can the fractional leader become full-time later?",
@@ -2480,7 +2485,7 @@
           },
           {
             "q": "What if the operator is the wrong fit?",
-            "a": "You can swap the operator. After the 3 to 4 month initial term the engagement runs month-to-month with 30 days notice."
+            "a": "You can swap the operator. We present replacement candidates and move the work over at no added cost. After the 3 to 4 month initial term the engagement runs month-to-month with 30 days notice."
           }
         ],
         "talk": "If growth has stalled and you are weighing a CRO, start with the [[link:talk.sales_motion|Talk to us form]]. Four short questions, and name and email are the only required fields. Often within 48 hours you get a role profile and 2 to 3 vetted operators who have done this job at your stage, and you meet each one before you sign anything.",
@@ -2781,7 +2786,7 @@
           },
           {
             "q": "How is fractional RevOps billed?",
-            "a": "Every engagement runs on a signed contract. Assessments and projects are fixed fees. Ongoing work is a monthly retainer billed upfront for a set block of hours, with a 3 to 4 month initial term, then month-to-month with 30 days notice. You pay the operator's rate and nothing more."
+            "a": "Every engagement runs on a signed contract. Assessments and projects are fixed fees. Ongoing work is a monthly retainer billed upfront for a set block of hours, with a 3 to 4 month initial term, then month-to-month with 30 days notice. There is no separate platform fee, and travel or other expenses are billed at cost only when you approve them in advance in writing."
           },
           {
             "q": "Can we hire the operator full time later?",
@@ -3841,7 +3846,7 @@
                   "**Initial term.** 3 to 4 months, then month-to-month with 30 days notice.",
                   "**Overage.** Hours are tracked and flagged before an overage happens, and you decide whether to extend.",
                   "**Fit.** If the fit is wrong, you can swap the operator.",
-                  "**Fees.** No platform fee. Clients pay the operator's rate and nothing more.",
+                  "**Fees.** No platform fee on top of the rate in your agreement.",
                   "**Conversion.** A later full-time hire of the operator carries a fee of 20% of annual salary."
                 ]
               },
@@ -3933,7 +3938,7 @@
           },
           {
             "q": "Do you add a fee to the operator's rate?",
-            "a": "No. Clients pay the operator's rate with no platform fee added. Converting the operator to a full-time hire later carries a fee of 20% of annual salary."
+            "a": "No. Our share is built into the rate, so there is no separate platform fee. Travel and other expenses are billed at cost only when you approve them in advance in writing, and any software a plan recommends is bought by you, in your name. Converting the operator to a full-time hire later carries a fee of 20% of annual salary."
           }
         ],
         "talk": "Tell us what your marketing is costing you. The form takes four short questions and needs only your name and email. Often within 48 hours you get a role profile and 2 to 3 vetted marketing operators to meet before you sign. [[link:talk.pipeline|Talk to us about your marketing]]",
@@ -4270,6 +4275,1912 @@
         "flags": [
           "Decision on a story fact, not a calculation. Post 8 says the home services client picked 3 of 7 scored candidates for calls and a first-90-days scenario exercise, and that the search ran or took 2 to 4 weeks. bank-nov Post 2 ('The plan was for the client to pick 3') and bank-jan ('planned at 2 to 4 weeks') say this was the plan, and G3 stops at scoring 7 candidates before the client changed strategy. This post now says planned in all five places (the table's time-to-start cell, the line under the table, the disqualifier paragraph, the real-company section and the 'How fast can we start?' answer). That matches the fractional CMO cost guide and the hiring guide. inbound-plan.md says the home services search took about 4 weeks to a no-decision, which backs the duration but not the calls or the exercise. If the calls and the exercise did happen, restore the draft's wording in all three posts.",
           "Decision. The public-sector software repositioning story in 'How do we avoid hiring the wrong marketing leader?' needs Matt's clearance before this post publishes. G3 marks its revenue band and current status as not yet cleared for publishing."
+        ]
+      },
+      {
+        "slug": "how-a-fractional-leader-works-with-your-team",
+        "kind": "new",
+        "kindL": "How it works",
+        "template": "answer",
+        "fn": "sales",
+        "cat": "sales_leadership",
+        "need": "sales_motion",
+        "persona": "P1 and P2",
+        "q": "How does a fractional leader work with your team week to week?",
+        "metaTitle": "How a Fractional Leader Works With Your Team Week to Week",
+        "metaDescription": "What a week with a fractional sales leader looks like. The meetings, your own time, who owns what next to your team and vendors, and what Revenue Nomad does.",
+        "term": "how a fractional sales leader works with your team",
+        "prompt": "How does a fractional sales leader work with my existing team each week?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b1 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 1317,
+        "opsQ": "sales process",
+        "stat": {
+          "v": "30 to 60 minutes",
+          "l": "A week with the person the operator reports to, through the first 90 days"
+        },
+        "related": [
+          "keep-what-an-operator-builds",
+          "what-should-a-fractional-engagement-fix-first"
+        ],
+        "replaces": [],
+        "answer": "Expect a standing weekly session with the person the operator reports to, a weekly pipeline meeting and regular rep one-to-ones. Who owns what is written into the scope before day one.",
+        "keys": [
+          {
+            "k": "Weekly working session with the person the operator reports to",
+            "v": "30 to 60 minutes, through the first 90 days",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Director or VP of Sales seat",
+            "v": "[[cost:vp-sales.hours]], for [[cost:vp-sales.monthly]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Intake in the first week",
+            "v": "3 to 6 short sessions, plus CRM and call recording access",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Notice to change the monthly hour block",
+            "v": "30 days, by a short addendum",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "On-site visits, when a company wants them",
+            "v": "Every 6 to 8 weeks, each trip approved in advance",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "your-week",
+            "h": "What does a normal week look like?",
+            "blocks": [
+              {
+                "p": "Most engagements run on a weekly rhythm. The hours go into building the plan, the process and the playbooks, not into meetings."
+              },
+              {
+                "table": {
+                  "head": [
+                    "Meeting",
+                    "How often",
+                    "Who is in it"
+                  ],
+                  "rows": [
+                    [
+                      "Working session",
+                      "Weekly, 30 to 60 minutes",
+                      "The person the operator reports to, usually the CEO"
+                    ],
+                    [
+                      "Pipeline or forecast review",
+                      "Weekly",
+                      "Your sellers and their manager"
+                    ],
+                    [
+                      "Rep one-to-ones",
+                      "Every week or two",
+                      "Each rep"
+                    ],
+                    [
+                      "Written update",
+                      "Weekly, once the build is done",
+                      "Leadership"
+                    ],
+                    [
+                      "On-site visit",
+                      "Every 6 to 8 weeks, if you want it",
+                      "The team"
+                    ]
+                  ]
+                },
+                "note": "The rhythm in our 2026 statements of work and delivery calls. Larger programs add a monthly executive review."
+              },
+              {
+                "p": "The first 90 days are deliberately light on meetings. One statement of work we wrote called the weekly session with the CEO the single largest factor in how fast the process gets built. Keep that slot, even when the quarter gets busy."
+              },
+              {
+                "p": "In-person work is optional. When a company wants it, the usual pattern is two days on site in the first week, then a visit every 6 to 8 weeks around milestones, each trip approved by you in advance."
+              }
+            ]
+          },
+          {
+            "id": "your-time",
+            "h": "How much of our own time will this take?",
+            "blocks": [
+              {
+                "p": "Plan on a standing 30 to 60 minute session a week through the first 90 days. The first one to two weeks take more."
+              },
+              {
+                "p": "In week one the operator interviews you, your sales and marketing leads and a few people on the team, usually in 3 to 6 short intake sessions. Our statements of work set a 30-minute weekly session, and in practice most run 45 to 60 minutes."
+              },
+              {
+                "p": "The usual delay is access, not the CEO's calendar. Email accounts, CRM, call recordings, org charts and comp history arrive late, and the first deliverables wait on them. Name one person inside to coordinate scheduling and materials, and have these ready for week one."
+              },
+              {
+                "ol": [
+                  "CRM access and a data export",
+                  "Call recordings",
+                  "Comp plans",
+                  "Funnel data by stage and source",
+                  "Sales decks and proposals",
+                  "An org chart",
+                  "Onboarding documents",
+                  "A calendar of stakeholder interviews"
+                ]
+              },
+              {
+                "p": "After the build phase, most of the time comes from your managers, not from you."
+              }
+            ]
+          },
+          {
+            "id": "alongside-your-team",
+            "h": "How does the operator work alongside our team and vendors?",
+            "blocks": [
+              {
+                "p": "We write the split into the statement of work before anyone starts, with a reporting line and an out-of-scope list."
+              },
+              {
+                "ul": [
+                  "**The operator owns** the plan, the process, the operating cadence and the weekly numbers.",
+                  "**Your team and vendors keep** the work they already do, such as CRM builds, campaigns and content. The operator specifies what that work needs to deliver.",
+                  "**Both sides share** one scoreboard, and the operator holds a standing session on handoffs with the team or vendor involved."
+                ]
+              },
+              {
+                "p": "Our sales leader agreements use a simple rule for systems. The operator specifies what the CRM needs to do, and your admin or vendor configures it. That keeps a senior leader from turning into an admin. Personally closing deals, recruiting, CRM administration and marketing execution sit out of scope unless the agreement adds them."
+              },
+              {
+                "p": "Where an existing sales leader stays, the scope says the engagement is there to raise their effectiveness, not to replace them. Say that out loud at kickoff. The fear we hear most on calls is that the outside leader will take over someone's function."
+              }
+            ]
+          },
+          {
+            "id": "earning-trust",
+            "h": "How does an outside leader earn the trust of a long-tenured team?",
+            "blocks": [
+              {
+                "p": "By earning the right to change things before changing them. What we have seen work follows the same order."
+              },
+              {
+                "ol": [
+                  "**Start with facts.** Interviews and a look at the real data and recorded calls come first, so the first proposals rest on numbers the team recognizes.",
+                  "**Write down what already wins.** Documenting what your strongest performers already do is often the fastest way to credibility.",
+                  "**Back the role from the start.** The CEO introduces the operator as a leadership-backed role.",
+                  "**Report around the resistance.** The operator reports to the CEO or CFO, not to the leaders whose habits may need to change.",
+                  "**Treat existing leaders as partners.** They help redesign the process, one topic at a time, in small working sessions."
+                ]
+              },
+              {
+                "p": "The failure mode is an outside leader who reports to the very person resisting the change. Fix the reporting line before day one."
+              }
+            ]
+          },
+          {
+            "id": "other-clients",
+            "h": "How many other clients will the operator be working with?",
+            "blocks": [
+              {
+                "p": "It depends on the size of the seat, so ask. Operators we place work fractionally as their main business, not alongside a full-time job, and commit to a fixed monthly hour block in writing."
+              },
+              {
+                "p": "Small seats of a few hours a week can sit alongside several other clients. Embedded seats of 60 hours a month or more usually mean one or two. A [[link:hire-fractional-sales-vp|fractional director or VP of Sales]] seat in our 2026 engagements ran [[cost:vp-sales.hours|lower]], and [[link:fractional-cost|the cost hub]] lists every seat. For market-wide rates, see [[link:rates.sales_leadership|Sales Leadership rates on the Rate Index (illustrative)]]."
+              },
+              {
+                "p": "Ask each finalist three things. How many hours a week they can give you, what they are committed to now and when each commitment ends, and the earliest date they can start. \"As much as you need\" is a weak answer."
+              },
+              {
+                "p": "Between sessions, operators answer by email or chat rather than on a fixed response clock, so agree on response expectations at kickoff. If you need more or fewer hours later, you can change the block with 30 days' written notice. [[link:guide.what-should-a-fractional-engagement-fix-first|What a fractional engagement should fix first]] covers how hours and scope change."
+              }
+            ]
+          },
+          {
+            "id": "revenue-nomad-role",
+            "h": "Who is our day-to-day contact, and what does Revenue Nomad do?",
+            "blocks": [
+              {
+                "p": "The operator is your day-to-day contact. Revenue Nomad holds the contract and the relationship."
+              },
+              {
+                "ul": [
+                  "**One agreement.** You sign with Revenue Nomad, and we pay the operator, so you never manage a second contract.",
+                  "**Billing and changes.** We invoice at the start of each monthly cycle and handle any change to hours or scope.",
+                  "**Quality and escalation.** We keep in touch with the operator on quality and are your escalation path if anything slips.",
+                  "**Replacement.** If the fit is wrong, or the operator has to step away, we present replacement candidates and move the work over at no added cost."
+                ]
+              },
+              {
+                "p": "Operators owe us 30 days' notice before they step away, keep notes and status in your own project tools, and join handoff calls with their replacement, so the work does not live in one person's head."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "When does this way of working not fit?",
+            "blocks": [
+              {
+                "ul": [
+                  "**You need someone in the office every day.** A fractional seat is a fixed block of hours and a weekly rhythm. If the job needs full-time presence, hire full-time.",
+                  "**Nobody inside can hold the weekly session.** Without a sponsor's standing slot, the build slows down.",
+                  "**You want an admin, not a leader.** If the job is configuring the CRM or running campaigns, hire for that seat instead."
+                ]
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Do we work with the operator directly, or through you?",
+            "a": "Directly, day to day. Revenue Nomad holds the contract, handles billing and any change to hours or scope, and is your escalation path if anything slips."
+          },
+          {
+            "q": "Is the operator reachable outside the weekly session?",
+            "a": "Yes, by email or chat between sessions. There is no fixed response clock today, so agree on response expectations at kickoff."
+          },
+          {
+            "q": "Will the operator take over our sales manager's job?",
+            "a": "No. The split is written into the scope, and where a sales leader stays, the engagement is set up to raise their effectiveness, not to replace them."
+          },
+          {
+            "q": "What if our operator gets sick or leaves partway through?",
+            "a": "We present replacement candidates and move the work over at no added cost. Operators owe 30 days' notice and keep their notes in your systems, so a replacement starts from documents, not memory."
+          },
+          {
+            "q": "Does the operator need to be on site?",
+            "a": "Only if you want it. Larger engagements often start with two on-site days in week one, then a visit every 6 to 8 weeks, each trip approved by you in advance."
+          }
+        ],
+        "talk": "Tell us how your team runs today through the [[link:talk.sales_motion|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "a response-time standard between sessions, if the company wants to set one",
+            "owner": "Owner"
+          },
+          {
+            "what": "a client-load rule for every seat (today the 3-engagement screen is published for CMOs only)",
+            "owner": "Owner"
+          },
+          {
+            "what": "an operator quote on earning a tenured team's trust, with permission",
+            "owner": "Operator"
+          }
+        ],
+        "flags": [
+          "Medium confidence, phrased as what we have seen. The trust section (ih-change), the client-load section (rf-bandwidth), the cadence (em-cadence) and Revenue Nomad's role (em-contact) come from 2026 agreements and buyer calls but no written policy. No fixed Revenue Nomad check-in calendar is promised, because none exists.",
+          "Left out. The part-time answer (fx-parttime-enough) is low confidence, so the guide gives only the hours from RN.costs and the response-time point."
+        ]
+      },
+      {
+        "slug": "what-to-put-in-place-before-hiring-more-reps",
+        "kind": "new",
+        "kindL": "Team building",
+        "template": "answer",
+        "fn": "sales",
+        "cat": "sales_leadership",
+        "need": "team",
+        "persona": "P1 and P2",
+        "q": "What should be in place before you hire more reps?",
+        "metaTitle": "What to Put in Place Before You Hire More Sales Reps",
+        "metaDescription": "Before you add reps, get a written process, a hiring profile, a ramp plan and a comp plan in place. How a fractional sales leader builds each one.",
+        "term": "before hiring more sales reps",
+        "prompt": "What should we have in place before we hire more sales reps?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b2 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 1176,
+        "opsQ": "sales coaching",
+        "stat": {
+          "v": "Day 90",
+          "l": "A written assessment of every rep, with a recommendation"
+        },
+        "related": [
+          "how-to-stop-running-sales-as-a-founder",
+          "how-a-fractional-leader-works-with-your-team"
+        ],
+        "replaces": [],
+        "answer": "A documented sales process the team can repeat, a hiring profile built from what your strongest seller does, a 30/60/90-day ramp plan, and a comp plan reps understand. Hire into a system, not a hero.",
+        "keys": [
+          {
+            "k": "Written assessment of every rep",
+            "v": "By day 90, with a keep, invest or exit recommendation",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Benchmark of what you already have",
+            "v": "First 2 to 3 weeks, from your CRM, recorded calls and how your strongest seller wins",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Ramp plan for each new rep",
+            "v": "30/60/90 days, with pipeline milestones",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Data operators design comp from",
+            "v": "18 to 24 months of your own pipeline, bookings and comp",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Director or VP of Sales seat",
+            "v": "[[cost:vp-sales.monthly]], for [[cost:vp-sales.hours|lower]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "system-first",
+            "h": "Should we build the system before we hire the reps?",
+            "blocks": [
+              {
+                "p": "Yes, in most cases. New reps learn whatever system is there. If the process lives in the founder's head, every hire depends on the founder."
+              },
+              {
+                "p": "A common starting point in our engagements is a company that already has the product, the lead flow and a founder who wins deals, but no documented, teachable version of how. That is why new reps cannot reproduce it. The fix is to write down the motion that already wins, in structured intake sessions, not to import a new methodology."
+              },
+              {
+                "p": "In the engagements we have seen, a phased start worked better than hiring reps first. A part-time leader builds the follow-up motion, the target list, the KPIs and the playbook, then reps are added into it."
+              }
+            ]
+          },
+          {
+            "id": "checklist",
+            "h": "What needs to be in place before the next hire?",
+            "blocks": [
+              {
+                "ol": [
+                  "**A documented sales process.** Stage gates, CRM standards, discovery and close talk tracks, and an objection guide built from the objections that come up in real calls.",
+                  "**A hiring profile.** Built from what your strongest rep actually does, separating their outcomes from the behavior a new hire can repeat.",
+                  "**An interview process.** Questions on territory planning, self-sourcing and running discovery through proposal, plus a role-play as a selection tool.",
+                  "**A ramp plan.** Outcomes at day 30, 60 and 90, a library of recorded calls, role-play and certification.",
+                  "**A comp plan reps understand.** Clear activity expectations tied to earnings, and SDR pay with a written qualification rule."
+                ]
+              },
+              {
+                "p": "Then decide how many reps you need, what each should produce and the order to hire them. Operators make that recommendation inside the plan."
+              }
+            ]
+          },
+          {
+            "id": "coaching",
+            "h": "Will the operator coach our reps and managers, not just report on the numbers?",
+            "blocks": [
+              {
+                "p": "Yes. Operators coach managers so they can carry the process, and coach reps in the work itself."
+              },
+              {
+                "ul": [
+                  "**Game tape.** A weekly review of recorded calls.",
+                  "**Role-play.** Against written talk tracks, until execution is consistent.",
+                  "**One-to-ones.** Every week or two, with documented coaching notes for each rep."
+                ]
+              },
+              {
+                "p": "Training builds knowledge and coaching builds skill, so plan for both. In larger teams the operator coaches the managers first. In small teams with no sales manager, the fractional leader manages the reps directly."
+              },
+              {
+                "p": "When a rep will not run the new process, the operator makes it visible with CRM and call data, sets clear standards and a short written window to change, then gives you a keep, invest or exit recommendation with the reasoning. The decision on any exit stays with you. CRM non-adoption is treated as an accountability problem, not a tooling problem."
+              }
+            ]
+          },
+          {
+            "id": "hiring",
+            "h": "Can the operator help us define, find and interview the reps we hire next?",
+            "blocks": [
+              {
+                "p": "Yes, as hiring support rather than recruiting. Inside the monthly hours the operator writes the role profile and comp structure, sets the hiring sequence, designs the interview process and role-plays, joins interviews and builds the onboarding plan. You make the hire."
+              },
+              {
+                "table": {
+                  "head": [
+                    "Hiring work",
+                    "In a sales leader seat"
+                  ],
+                  "rows": [
+                    [
+                      "Role profile and comp structure",
+                      "Included"
+                    ],
+                    [
+                      "Rep count, production per rep and hiring order",
+                      "Included"
+                    ],
+                    [
+                      "Interview design and role-plays",
+                      "Included"
+                    ],
+                    [
+                      "Joining interviews",
+                      "Included"
+                    ],
+                    [
+                      "Onboarding plan",
+                      "Included"
+                    ],
+                    [
+                      "Sourcing candidates and placement",
+                      "Out of scope unless added by written amendment"
+                    ]
+                  ]
+                },
+                "note": "From our recent sales leader statements of work."
+              },
+              {
+                "p": "If you need candidates found, add sourcing by amendment or have your recruiter work from the operator's profile."
+              }
+            ]
+          },
+          {
+            "id": "ramp",
+            "h": "What does a 90-day ramp for new reps look like?",
+            "blocks": [
+              {
+                "p": "The ramp plan comes out of the sales process work, so it teaches the same system the team already runs."
+              },
+              {
+                "ul": [
+                  "**Tell, show, do.** Training that explains the process, shows it on real recorded calls with real objections, then has the rep run it.",
+                  "**Certification.** Product certification and mock demos before a rep runs live calls alone.",
+                  "**Pipeline milestones.** The outcomes a rep should reach by day 30, 60 and 90, written into the plan.",
+                  "**Reinforcement.** Weekly coaching continues after the formal ramp ends."
+                ]
+              },
+              {
+                "p": "The aim is reps who plug into a system rather than depend on one strong seller. The handoff pattern we have seen is train-the-trainer with your internal trainer, plus about three months of weekly reinforcement. When the training load is large, a dedicated enablement operator can take it on, usually as a lighter second seat of about 20 hours a month."
+              }
+            ]
+          },
+          {
+            "id": "comp",
+            "h": "Can you help design comp, quotas and commission plans?",
+            "blocks": [
+              {
+                "p": "Yes. Operators design comp plans, quotas and SDR pay from your own data, typically 18 to 24 months of pipeline, bookings and comp, plus their own experience. We do not bring a proprietary benchmark dataset, and final decisions on pay stay with you."
+              },
+              {
+                "ul": [
+                  "**Quota-carrying reps.** One design we have seen used a roughly 50/50 split of base and variable, with activity math tied to each rep's earnings goal.",
+                  "**SDRs.** Pay that triggers only when a booked meeting becomes a qualified opportunity, with a written qualification rule and a view for the SDR into what happens after the handoff."
+                ]
+              },
+              {
+                "p": "Unclear qualification rules are the most common comp dispute we see. Write the rule down before the plan goes live."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "When is it too early to build for more reps?",
+            "blocks": [
+              {
+                "ul": [
+                  "**You have only a few closed deals.** If the founder is still finding the repeatable sale, a fractional sales leader is usually too early. Sell to a narrow customer profile and write down what works first.",
+                  "**Your customer profile is still \"SMB\".** A broad profile with no measured funnel means there is nothing yet to teach a new rep.",
+                  "**You need one more closer, not a system.** If the process works and you are simply short a seller, hire the rep."
+                ]
+              },
+              {
+                "p": "[[link:guide.how-to-stop-running-sales-as-a-founder|How to stop running sales as a founder]] covers the handoff from a founder-led sale, and the [[link:hire-fractional-sales-vp|fractional VP of Sales]] page shows who does this work, and [[link:fractional-cost|the cost hub]] lists what each seat costs. Market-wide rates are on [[link:rates.sales_leadership|the Rate Index (illustrative)]]."
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Will the operator recruit candidates for us?",
+            "a": "Not by default. Sourcing and placement are out of scope in our recent sales leader agreements. The operator writes the profile, designs the interviews, joins them and builds onboarding, and sourcing can be added by written amendment."
+          },
+          {
+            "q": "Can the operator tell us whether our current reps are the right people?",
+            "a": "Yes. By day 90 you get a written assessment of each rep with a keep, invest or exit recommendation and the reasoning. The decision stays with you."
+          },
+          {
+            "q": "Can a fractional sales leader also sell for us?",
+            "a": "Usually not. A sales leader seat builds, coaches and manages the team that sells, and closing is out of scope unless the agreement adds it. If you only need a closer, a fractional seller seat fits better."
+          },
+          {
+            "q": "Do you bring comp benchmarks?",
+            "a": "No proprietary dataset. Operators design from 18 to 24 months of your own pipeline, bookings and comp data, plus their own experience."
+          }
+        ],
+        "talk": "If you are about to hire and want the system in place first, tell us about your team through the [[link:talk.team|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "a stand-alone onboarding engagement with hours, price and result, cleared to publish",
+            "owner": "Owner"
+          },
+          {
+            "what": "an outside comp benchmark and its source, if the company wants to cite one",
+            "owner": "Owner"
+          }
+        ],
+        "flags": [
+          "Medium confidence, phrased as what we have seen. The ramp section (rs-onboard), comp designs (rs-comp, the roughly 50/50 split) and the phased start before hiring (fv-too-early guide notes) each rest on a few 2026 agreements and calls.",
+          "Not used. The \"around $1M in annual revenue\" readiness line (fv-too-early) comes from one call, so the too-early list gives signs instead of a revenue figure."
+        ]
+      },
+      {
+        "slug": "should-you-fix-your-crm-or-switch",
+        "kind": "new",
+        "kindL": "Systems",
+        "template": "answer",
+        "fn": "revops",
+        "cat": "revenue_operations",
+        "need": "systems",
+        "persona": "P3",
+        "q": "Should you fix your CRM or switch?",
+        "metaTitle": "Should You Fix Your CRM or Switch? A RevOps Answer",
+        "metaDescription": "Most CRM problems are setup, governance and adoption, not the tool. When to fix, when to switch, who does the work and what RevOps help costs.",
+        "term": "fix crm or switch",
+        "prompt": "Should we fix our current CRM or switch to a new one?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b3 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 915,
+        "opsQ": "CRM",
+        "stat": {
+          "v": "[[cost:revops-project.fixed]]",
+          "l": "For a fixed 30-day RevOps project"
+        },
+        "related": [
+          "fractional-revops-consultant",
+          "revops-vs-sales-ops"
+        ],
+        "replaces": [],
+        "answer": "Usually fix it first. In our recent engagements the problem was setup, governance and adoption, not the tool. Switch only when the CRM cannot support how you sell or the data you need.",
+        "keys": [
+          {
+            "k": "Fixed 30-day RevOps project",
+            "v": "[[cost:revops-project.fixed]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "RevOps assessment with scorecard, specs and roadmap",
+            "v": "[[cost:revops-assessment.fixed]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Follow-on RevOps execution",
+            "v": "[[cost:revops-retainer.hourly]], [[cost:revops-retainer.hours|lower]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Sales tools in one recent brief",
+            "v": "6 to 8, connected ad hoc",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "fix-or-switch",
+            "h": "Do we need to switch CRMs, or can you fix what we have?",
+            "blocks": [
+              {
+                "p": "Usually fix it first. When we look under a struggling CRM, the cause is rarely the software."
+              },
+              {
+                "ul": [
+                  "**Stages that do not match how you sell.** The CRM was set up on the fly, so the stages and required fields do not mirror the real process.",
+                  "**Tools overwriting each other.** Enrichment tools write over the same fields, and nobody owns which source wins.",
+                  "**Data living outside the CRM.** Renewals tracked in a spreadsheet, or product usage stranded in a BI tool.",
+                  "**Broken basics.** Email tracking that fails quietly, or reports that hit the tool's limits.",
+                  "**Low adoption.** Reps update the CRM before leadership meetings and not otherwise."
+                ]
+              },
+              {
+                "p": "A migration fixes none of those. Each one comes back in the new tool unless the process and the ownership change first."
+              }
+            ]
+          },
+          {
+            "id": "when-switch",
+            "h": "When does switching make sense?",
+            "blocks": [
+              {
+                "p": "Switch when the CRM genuinely cannot support your motion or your data. The clearest trigger we have seen is a CRM configured for other divisions of a larger group, built around a motion the team did not run."
+              },
+              {
+                "table": {
+                  "head": [
+                    "",
+                    "Fix what you have",
+                    "Switch"
+                  ],
+                  "rows": [
+                    [
+                      "When it fits",
+                      "Setup, governance or adoption is the problem",
+                      "The tool cannot support your motion or your data"
+                    ],
+                    [
+                      "First step",
+                      "Map the current state and write the spec",
+                      "Map the current state and write the spec"
+                    ],
+                    [
+                      "Who builds it",
+                      "Your admin or a RevOps specialist",
+                      "A RevOps or systems specialist, with your admin"
+                    ],
+                    [
+                      "Main risk",
+                      "Fixing fields without fixing the process",
+                      "Moving the same problems into a new tool"
+                    ]
+                  ]
+                }
+              },
+              {
+                "p": "Either way, write down what each team needs from the system before you price a path. A spec written first is what makes a rebuild or a migration worth paying for."
+              }
+            ]
+          },
+          {
+            "id": "who-does-the-work",
+            "h": "Can you set it up properly, and who does the hands-on work?",
+            "blocks": [
+              {
+                "p": "It depends on the seat. In sales leader engagements, the operator writes the CRM specification, with stages, required fields and reports that mirror the sales process, and your admin configures it. In a RevOps seat, the operator can do the hands-on build too, including administration, rebuilds and migrations, or hand the specification to your admin."
+              },
+              {
+                "ul": [
+                  "**Revenue leadership** decides what gets measured, sets the KPI framework and owns the forecast method.",
+                  "**CRM admin** keeps fields, workflows and reports clean.",
+                  "**Systems work** connects the tools and builds the dashboards."
+                ]
+              },
+              {
+                "p": "Some engagements pair a revenue lead with a separate CRM and RevOps specialist, so a senior leader is not cleaning up picklists. [[link:guide.revops-vs-sales-ops|RevOps vs sales ops]] shows where each job sits, and [[link:fractional-revops|fractional RevOps]] covers who you get."
+              }
+            ]
+          },
+          {
+            "id": "one-view",
+            "h": "Can you connect our tools so data flows into one view we trust?",
+            "blocks": [
+              {
+                "p": "Yes, with the CRM as the hub. One recent brief described 6 to 8 sales tools connected ad hoc, with reports stitched together by hand."
+              },
+              {
+                "ol": [
+                  "**Agree the numbers.** Which numbers leadership needs for pipeline review and forecasting.",
+                  "**Map the current state.** How each tool connects today, and where data is copied by hand.",
+                  "**Write the blueprint.** Fields, integrations and dashboards, built around decisions rather than dashboard volume.",
+                  "**Build and govern.** A RevOps or systems specialist builds it, yours or one we add, and the CRM stays the source of truth."
+                ]
+              },
+              {
+                "p": "The first deliverable leadership values is a single trusted baseline built on cleaned data. Reporting should change behavior, so make it actionable, not a way to catch people out. [[link:guide.how-to-fix-sales-forecast-accuracy|Why forecasts miss]] shows what a diagnosis finds."
+              }
+            ]
+          },
+          {
+            "id": "tools-advice",
+            "h": "Will you give us a straight opinion on which sales tools to use?",
+            "blocks": [
+              {
+                "p": "Yes. Operators give a direct recommendation once they have seen how you sell. A frequent finding is that the tools a company already pays for are under-used or misconfigured, so the answer is often to use what you own better rather than add another one."
+              },
+              {
+                "p": "Evaluate sequencing, data and call tools against the process on paper, and keep work inside the CRM rather than adding a point tool. Any software a plan recommends is bought by you, in your name, and set up in your own accounts, so it stays yours."
+              },
+              {
+                "p": "What it costs depends on the job. In our 2026 engagements a 30-day RevOps project ran [[cost:revops-project.fixed|lower]], and [[link:fractional-cost|the cost hub]] lists every seat. For market-wide rates, see [[link:rates.revenue_operations|Revenue Operations rates on the Rate Index (illustrative)]]."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "When is a CRM project the wrong first step?",
+            "blocks": [
+              {
+                "ul": [
+                  "**Nobody agrees on the sales process.** A CRM can only mirror a process that exists, so settle the process first.",
+                  "**You want new software to fix adoption.** Non-adoption is a process and accountability problem. A new tool will not solve it.",
+                  "**You need a builder, not a strategist.** If the spec is clear and only configuration is left, hire an admin or systems specialist for that work."
+                ]
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "What does it cost to fix a CRM?",
+            "a": "It depends on scope. In our 2026 engagements a 30-day RevOps project ran [[cost:revops-project.fixed|lower]], an assessment with scorecard, specs and roadmap ran [[cost:revops-assessment.fixed]], and follow-on execution ran [[cost:revops-retainer.hourly]]."
+          },
+          {
+            "q": "Will you work inside the tools we already pay for?",
+            "a": "Yes. Operators work inside your existing systems, and the usual finding is that current tools are under-used. Anything new a plan recommends is bought by you, in your name."
+          },
+          {
+            "q": "Who owns the CRM setup after the engagement?",
+            "a": "You do. Everything built for you is yours under the agreement, it is set up in your own accounts, and your admin runs it."
+          }
+        ],
+        "talk": "If your CRM is not telling you the truth, describe what breaks through the [[link:talk.systems|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators matched to your stack and stage, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "one CRM rebuild or migration engagement with scope, hours and price, cleared to publish",
+            "owner": "Owner"
+          },
+          {
+            "what": "the stance on vendor referral arrangements and disclosure, before the guide says anything about them",
+            "owner": "Owner"
+          }
+        ],
+        "flags": [
+          "Medium confidence, phrased as what we see. Fix-first (ts-crm), connecting tools (ts-stack) and tool advice (ts-advice) rest on a few 2026 agreements and buyer calls. The fix-or-switch table is a summary of those, not a measured result.",
+          "Left out on purpose. ts-advice's \"no referral or resale arrangements\" line and the disclosure promise are a proposed policy for the owner, so the guide does not make either claim."
+        ]
+      },
+      {
+        "slug": "where-ai-fits-in-sales",
+        "kind": "new",
+        "kindL": "AI in sales",
+        "template": "answer",
+        "fn": "revops",
+        "cat": "ai_gtm",
+        "need": "ai",
+        "persona": "P2 and P3",
+        "q": "Where does AI fit in sales, and what still needs a person?",
+        "metaTitle": "Where AI Fits in Sales and What Still Needs a Person",
+        "metaDescription": "Where AI pays off in a sales process, where it fails, whether to buy or build, and how to roll it out across a team, from our 2026 AI GTM work.",
+        "term": "ai in the sales process",
+        "prompt": "Where does AI fit in our sales process, and what still needs a person?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b4 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 970,
+        "opsQ": "AI",
+        "stat": {
+          "v": "60 to 90 days",
+          "l": "Test window we set to prove lift, one use case at a time"
+        },
+        "related": [
+          "should-you-fix-your-crm-or-switch",
+          "keep-what-an-operator-builds"
+        ],
+        "replaces": [],
+        "answer": "AI fits the preparation and admin around selling, like research, enrichment, call notes, CRM updates and first-draft follow-ups. A person still picks the problem, approves what goes out, runs the conversations and makes the call.",
+        "keys": [
+          {
+            "k": "Test window we set to prove lift",
+            "v": "60 to 90 days, one use case at a time",
+            "src": "Revenue Nomad 2026 engagement plans",
+            "url": ""
+          },
+          {
+            "k": "Planned rollout from internal test to the whole team, per use case",
+            "v": "About 4 to 5 weeks",
+            "src": "Revenue Nomad 2026 engagement plans",
+            "url": ""
+          },
+          {
+            "k": "Discovery before any build",
+            "v": "Usually the first 2 to 3 weeks",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Standing up one enrichment workflow, in one comparison",
+            "v": "11 to 15 hours ready-made, 16 to 22 hours custom",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "where-ai-fits",
+            "h": "What parts of the sales process can AI take on?",
+            "blocks": [
+              {
+                "p": "AI fits most clearly in the preparation and admin around selling. The work that has paid off in the engagements we have seen is narrow and repeatable."
+              },
+              {
+                "ul": [
+                  "**Call summaries and follow-up drafts.** Written into the CRM after each call, for the rep to edit and send.",
+                  "**Account research and enrichment.** Company and contact data filled in before outreach.",
+                  "**Account snapshots.** A short brief before a call, built from what the CRM already knows.",
+                  "**Scoring.** Ranking accounts and leads, so reps spend time on the right ones.",
+                  "**Coaching flags.** Moments in recorded calls worth a manager's attention."
+                ]
+              },
+              {
+                "p": "Keep sequences in the CRM and let AI fill in data, rather than giving it admin access to your systems."
+              }
+            ]
+          },
+          {
+            "id": "needs-a-person",
+            "h": "What still needs a person?",
+            "blocks": [
+              {
+                "p": "A person still picks the problem, approves what goes out, runs the qualification call, owns the relationship and makes the decision."
+              },
+              {
+                "p": "AI fits poorly as a stand-in for a seller. Generic AI-written outreach gets opened but not answered. In one case we saw, it produced high open rates and no meetings, and fully autonomous AI SDRs have tested poorly in the work we have seen."
+              },
+              {
+                "p": "So a person reviews what AI produces before it reaches a customer. Build that review into a step someone already does, rather than adding it as an afterthought."
+              }
+            ]
+          },
+          {
+            "id": "where-to-start",
+            "h": "Where should we start, and when is automation worth it?",
+            "blocks": [
+              {
+                "p": "Start from one measurable problem, not a tool. Common symptoms are reps spending time on the wrong deals, a forecast that is a guess, and SDRs drowning in research."
+              },
+              {
+                "ol": [
+                  "**Pick one problem.** The one that costs the most time or money today.",
+                  "**Take a baseline.** Measure it before anything is built, so the lift can be shown.",
+                  "**Get the data right.** Treat the CRM as a source of facts, not prose, so the model works over facts and makes less up.",
+                  "**Land it in existing work.** Put the output where someone already works, such as the manager's one-to-one or a CRM task, not a dashboard nobody checks.",
+                  "**Set a 60 to 90 day test window.** Then decide whether to scale it."
+                ]
+              },
+              {
+                "p": "Most companies do not have the data, KPIs or process mapped well enough to build on day one, so the first 2 to 3 weeks are usually discovery. If the process an AI tool would run is not written down yet, write it down first. Start IT and security review early too, because that is where most builds stall."
+              }
+            ]
+          },
+          {
+            "id": "buy-or-build",
+            "h": "Should we buy off-the-shelf AI tools or have something built?",
+            "blocks": [
+              {
+                "p": "Use ready-made tools where they cover the job, and build only where your process or data is the advantage."
+              },
+              {
+                "table": {
+                  "head": [
+                    "",
+                    "Ready-made tool",
+                    "Custom build"
+                  ],
+                  "rows": [
+                    [
+                      "Time to a first demo",
+                      "Same day",
+                      "2 to 3 days"
+                    ],
+                    [
+                      "Hours to stand up one enrichment workflow",
+                      "11 to 15",
+                      "16 to 22"
+                    ],
+                    [
+                      "Control and explainability",
+                      "Low",
+                      "Higher"
+                    ],
+                    [
+                      "Reuse in other workflows",
+                      "Low",
+                      "Higher"
+                    ]
+                  ]
+                },
+                "note": "From one build-versus-buy comparison in our 2026 engagements. Hours vary with the workflow."
+              },
+              {
+                "p": "A custom build should state its limits in writing, for example that its scores are estimates rather than verified data, and flag low-confidence records for a person to review."
+              }
+            ]
+          },
+          {
+            "id": "roll-out",
+            "h": "How do we roll AI out across the whole team?",
+            "blocks": [
+              {
+                "p": "One use case at a time. The rollout we plan takes each build through internal testing, then a small test group of reps, then the whole team, in a cycle of roughly four to five weeks, with a baseline taken first."
+              },
+              {
+                "p": "The plan is for what is built to live in your systems, ship with handoff documentation and pass to your RevOps team to run, with training so they can maintain it. Everything built for you is yours under the agreement, and ongoing tuning can continue on a retainer if you want it. Our recent operator agreements also bar operators from putting your data into AI tools you have not approved."
+              },
+              {
+                "p": "Before you hire anyone for AI work, ask what broke after their last go-live and who owns it now. Pilots that stop at launch, and output that lands in a dashboard instead of a workflow, are the failure modes we see most."
+              },
+              {
+                "p": "We do not publish a real AI GTM price range yet. [[link:guide.fractional-ai-gtm-cost|What AI GTM help costs]] and [[link:rates.ai_gtm|AI GTM rates on the Rate Index]] use illustrative figures until the first survey closes, and [[link:fractional-cost|the cost hub]] has the seats we have real prices for."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "When is AI the wrong first move?",
+            "blocks": [
+              {
+                "ul": [
+                  "**There is no process to automate yet.** AI speeds up a process. It does not design one.",
+                  "**You want an end-to-end AI organization on day one.** Prove one use case before building the next.",
+                  "**You want AI to replace your sellers.** Autonomous outreach has tested poorly. Use AI to give sellers more time with buyers."
+                ]
+              },
+              {
+                "p": "If the data underneath is the problem, start with [[link:guide.should-you-fix-your-crm-or-switch|whether to fix your CRM or switch]], or see [[link:fractional-revops|fractional RevOps]]."
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Can AI let a small sales team do the work of a bigger one?",
+            "a": "For specific, repeatable tasks, yes, such as call notes, research and follow-up drafts. We do not have a cleared result with hours saved to publish yet, so measure your own baseline first."
+          },
+          {
+            "q": "Will a person review what AI produces before it goes out?",
+            "a": "Yes. A person approves anything that reaches a customer, and custom builds flag low-confidence records for review."
+          },
+          {
+            "q": "Will what you build hold up as the tools change?",
+            "a": "Builds live in your systems with handoff documentation, and your RevOps team is trained to maintain them. Ongoing tuning can continue on a retainer."
+          },
+          {
+            "q": "Can operators put our data into AI tools?",
+            "a": "Only tools you have approved. Our recent operator agreements bar operators from putting your data into AI tools you have not approved, and your information stays confidential."
+          }
+        ],
+        "talk": "Tell us the one problem you want AI to take off your team through the [[link:talk.ai|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "one AI engagement with measured hours saved and the client's OK to publish",
+            "owner": "Owner"
+          },
+          {
+            "what": "maintenance terms after an AI handoff, such as response times for fixes",
+            "owner": "Owner"
+          },
+          {
+            "what": "a recording and consent policy for calls and AI note-takers",
+            "owner": "Owner"
+          }
+        ],
+        "flags": [
+          "Medium confidence throughout. The AI answers (ts-ai-replace, ts-ai-where, ts-ai-buildbuy, ts-ai-team) rest on partner-delivered build documents, one AI strategist role profile and buyer calls. The build-versus-buy hours come from one comparison and are labelled that way. Projected productivity numbers in a partner proposal are targets and are not used.",
+          "Left out. fx-diy (why not do it ourselves) is low confidence, so the guide does not argue the do-it-yourself case."
+        ]
+      },
+      {
+        "slug": "keep-what-an-operator-builds",
+        "kind": "new",
+        "kindL": "Handoff",
+        "template": "answer",
+        "fn": "sales",
+        "cat": "sales_leadership",
+        "need": "sales_motion",
+        "persona": "P1, P2 and P3",
+        "q": "How do you keep what an operator builds after they leave?",
+        "metaTitle": "Keep What a Fractional Operator Builds After They Leave",
+        "metaDescription": "Ownership, documents, a step-down in hours and managers who already run the meetings. How to make a fractional engagement's work survive the handoff.",
+        "term": "fractional handoff",
+        "prompt": "How do we keep what a fractional leader builds after they leave?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b5 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 890,
+        "opsQ": "sales playbook",
+        "stat": {
+          "v": "30 to 20",
+          "l": "Hours a month, one build stepping down after day 90"
+        },
+        "related": [
+          "fractional-vp-of-sales-first-90-days",
+          "how-a-fractional-leader-works-with-your-team"
+        ],
+        "replaces": [],
+        "answer": "Everything built for you is yours and lives in your systems. Hours step down after the build while your managers take over the meetings, so the work runs without the operator.",
+        "keys": [
+          {
+            "k": "Hours after the build, in recent statements of work",
+            "v": "Often lower than the build, for example 30 down to 20 a month",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Ongoing support per seat after a 90-day build",
+            "v": "About $4k - $6k/month, as discussed",
+            "src": "Revenue Nomad 2026 buyer calls",
+            "url": ""
+          },
+          {
+            "k": "Operator notice before stepping away",
+            "v": "30 days, with handoff calls to a replacement",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Your information returned or deleted at the end",
+            "v": "Within 48 hours",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "who-owns-it",
+            "h": "Where does what you build live, and will we own it?",
+            "blocks": [
+              {
+                "p": "Everything built for you is yours. Every client agreement treats deliverables, playbooks, lists, workflows and systems as work made for hire, owned by your company as it is created. Anything an operator brings from earlier work, such as a template or framework, is licensed to you permanently."
+              },
+              {
+                "p": "Work is done in your own systems and tools, not the operator's. At the end, operators return all company material and return or delete your information within 48 hours."
+              },
+              {
+                "p": "Check two things in any agreement, ours or anyone's. That it covers pre-existing material with a permanent license, not just new work, and that tools are set up in your accounts."
+              }
+            ]
+          },
+          {
+            "id": "what-you-keep",
+            "h": "What does the handoff leave behind?",
+            "blocks": [
+              {
+                "p": "The work is written down as it is built, not at the end."
+              },
+              {
+                "table": {
+                  "head": [
+                    "What you keep",
+                    "Why it matters"
+                  ],
+                  "rows": [
+                    [
+                      "A documented sales process with stage gates",
+                      "A new rep or manager can run the same process"
+                    ],
+                    [
+                      "Scripts and an objection guide",
+                      "The talk tracks outlive the person who wrote them"
+                    ],
+                    [
+                      "The plan",
+                      "Leadership can see what was decided and why"
+                    ],
+                    [
+                      "A CRM specification",
+                      "Your admin can maintain the system"
+                    ],
+                    [
+                      "Coaching notes for each rep",
+                      "The next manager starts from the record"
+                    ],
+                    [
+                      "Updated onboarding materials",
+                      "The process survives turnover"
+                    ]
+                  ]
+                },
+                "note": "The deliverables in our 2026 sales leader statements of work."
+              },
+              {
+                "p": "Name in the scope who owns each document after the operator leaves, and when your managers take over each meeting."
+              }
+            ]
+          },
+          {
+            "id": "adoption",
+            "h": "How do we make sure the team actually uses what gets built?",
+            "blocks": [
+              {
+                "p": "Have your managers run it before the operator steps back. In the handoffs we have seen, managers run the weekly scoreboard and pipeline review themselves while the operator is still there to coach them."
+              },
+              {
+                "p": "Adoption is a management habit, not a tooling problem. When reps do not use the CRM or the new talk tracks, the operator makes it visible with data, sets a standard and coaches to it, and your managers keep holding that line after the handoff."
+              },
+              {
+                "p": "Push every playbook change into the decks and job aids that depend on it, or the team keeps using the old version."
+              }
+            ]
+          },
+          {
+            "id": "step-down",
+            "h": "What does the step-down look like?",
+            "blocks": [
+              {
+                "p": "The step-down in hours is the handoff. Hours drop after the build phase while the operator shifts from building to coaching the managers who now run the cadence."
+              },
+              {
+                "stats": [
+                  {
+                    "v": "30 to 20",
+                    "l": "Hours a month, one build stepping down after day 90",
+                    "src": "Revenue Nomad 2026 engagements"
+                  },
+                  {
+                    "v": "$4k - $6k/month",
+                    "l": "Per seat for ongoing support, as discussed in recent buyer calls",
+                    "src": "Revenue Nomad 2026 buyer calls"
+                  }
+                ]
+              },
+              {
+                "p": "Plan the step-down in the statement of work, so day 90 is not a renegotiation. You can also change the hour block with 30 days' written notice."
+              },
+              {
+                "p": "Ongoing work is enablement, such as a weekly pipeline review, a monthly forecast, quarterly tune-ups of the system and messaging, and coaching new hires. It can wind down once your own team or a full-time hire owns it."
+              }
+            ]
+          },
+          {
+            "id": "successor",
+            "h": "Can the operator hand over to a full-time hire?",
+            "blocks": [
+              {
+                "p": "Yes. When you are ready for a permanent leader, the operator helps define the role, hire them and onboard them. Successor support is written into leadership seats, and the cleanest plans put hiring and onboarding the successor in the scope from the start."
+              },
+              {
+                "p": "There is no standard overlap period, so agree one if you want it. Hiring the operator full time instead carries a conversion fee written into the agreement. [[link:guide.interim-vs-fractional-vs-full-time-sales-leader|Interim, fractional or full-time]] compares the options."
+              }
+            ]
+          },
+          {
+            "id": "new-leader",
+            "h": "Will the work survive a new leader or a reorganization?",
+            "blocks": [
+              {
+                "p": "It is designed to. Engagements end with the process, scoreboard and meeting rhythm run by your own managers, enablement and onboarding materials updated so they survive turnover, and everything documented in your systems."
+              },
+              {
+                "p": "A new leader can still change direction. That is why the handoff rests on documents and habits your team already owns, not on the operator's memory. The [[link:hire-fractional-sales-vp|fractional VP of Sales]] page shows who does this work, [[link:fractional-cost|the cost hub]] what it costs, and [[link:rates.sales_leadership|the Rate Index (illustrative)]] market-wide rates."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "What makes a handoff fail?",
+            "blocks": [
+              {
+                "ul": [
+                  "**The process lives in the operator's head.** If it is not written down in your systems, it leaves with them.",
+                  "**Dashboards nobody inspects.** A scoreboard only works while your managers keep running the meeting around it.",
+                  "**Changes that never reach the job aids.** Update the decks and guides when the playbook changes."
+                ]
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Do we own everything the operator builds?",
+            "a": "Yes. Every client agreement treats the work as made for hire and owned by your company as it is created, with a permanent license to anything the operator brings from earlier work."
+          },
+          {
+            "q": "What happens if the operator leaves partway through?",
+            "a": "Revenue Nomad stays responsible for delivery. We present replacement candidates and move the work over at no added cost. Operators owe 30 days' notice and join handoff calls with the replacement."
+          },
+          {
+            "q": "Is there a standard overlap at the end?",
+            "a": "No. Agree one in the scope if you want it. The step-down in hours usually does the job of an overlap, because your managers run the meetings while the operator still coaches."
+          },
+          {
+            "q": "What does ongoing support cost after the build?",
+            "a": "In recent buyer calls, ongoing support after a 90-day build was discussed at about $4k - $6k/month per seat, with fewer hours than the build, month to month."
+          }
+        ],
+        "talk": "If you want the work to outlast the engagement, say so on the [[link:talk.sales_motion|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "one conversion-fee rule, so the site and the agreement template agree (the guide says only that the fee is written into the agreement)",
+            "owner": "Owner"
+          },
+          {
+            "what": "whether ownership should be conditioned on payment (today the clause is not)",
+            "owner": "Owner"
+          }
+        ],
+        "flags": [
+          "Medium confidence on the money. The ongoing $4k - $6k/month per seat (cp-ongoing, as discussed) and the step-down examples come from 2026 statements of work, proposals and buyer calls, not from billing. Some agreements leave the post-build rate to be agreed after the assessment.",
+          "Ownership (ts-ownership), deliverables (ih-handoff) and replacement (rf-dropout) are high confidence and read as policy."
+        ]
+      },
+      {
+        "slug": "what-should-a-fractional-engagement-fix-first",
+        "kind": "new",
+        "kindL": "Scoping",
+        "template": "answer",
+        "fn": "sales",
+        "cat": "sales_leadership",
+        "need": "sales_motion",
+        "persona": "P1 and P2",
+        "q": "What should a fractional engagement fix first?",
+        "metaTitle": "What Should a Fractional Engagement Fix First?",
+        "metaDescription": "Scope a fractional engagement around the one or two problems that cost the most. What the first 30 days deliver, and how scope and hours change later.",
+        "term": "scope a fractional engagement",
+        "prompt": "What should a fractional sales leader fix first, and how do we scope the engagement?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b6 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named. Replaces the legacy prototype guide how-to-scope-a-fractional-sales-engagement, which conflicted with the real terms",
+        "words": 894,
+        "opsQ": "sales process",
+        "stat": {
+          "v": "Day 30",
+          "l": "A diagnostic and a ranked list of changes"
+        },
+        "related": [
+          "fractional-vp-of-sales-first-90-days",
+          "how-to-hire-a-fractional-vp-of-sales"
+        ],
+        "replaces": [],
+        "answer": "The one or two problems that cost the most, found in a 30-day diagnostic that ranks every fix. Scope the hours to that, then re-rank at the day 30 readout as you learn.",
+        "keys": [
+          {
+            "k": "Diagnostic and ranked list of changes",
+            "v": "By day 30",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Process and scripts live with the team",
+            "v": "By day 60",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Notice to change the monthly hour block",
+            "v": "30 days, by a short addendum",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Fixed 30-day RevOps project",
+            "v": "[[cost:revops-project.fixed]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Director or VP of Sales seat",
+            "v": "[[cost:vp-sales.monthly]], for [[cost:vp-sales.hours|lower]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "start-small",
+            "h": "Can we start with the one or two things that hurt most?",
+            "blocks": [
+              {
+                "p": "Yes, and you should. A good first month finds the problem that costs the most and fixes it before anything else."
+              },
+              {
+                "p": "Most engagements start with a diagnostic inside the first 30 days. The operator benchmarks what you already have, including your CRM, recorded calls and how your strongest seller wins, breaks conversion down by segment, lead source and rep, and ranks the fixes by impact."
+              },
+              {
+                "table": {
+                  "head": [
+                    "When",
+                    "What you get",
+                    "What you decide"
+                  ],
+                  "rows": [
+                    [
+                      "Days 1 to 30",
+                      "A diagnostic and a ranked list of changes",
+                      "Targets and success measures, at the day 30 readout"
+                    ],
+                    [
+                      "Days 31 to 60",
+                      "The process and scripts live with the team",
+                      "What to keep, change or drop"
+                    ],
+                    [
+                      "Days 61 to 90",
+                      "A plan and an assessment of the team",
+                      "Whether to scale, step down or end"
+                    ]
+                  ]
+                }
+              },
+              {
+                "p": "Check conversion before volume. If close rates fell while lead volume held, the sales motion is the first fix, not more leads."
+              }
+            ]
+          },
+          {
+            "id": "focus",
+            "h": "How do we decide which customers or segments to focus on first?",
+            "blocks": [
+              {
+                "p": "Usually inside the same 30-day diagnostic, not as a separate project. The operator sizes what each segment needs to hit the plan and recommends where to focus, often narrowing outbound to two or three customer profiles and testing a small batch of accounts before scaling."
+              },
+              {
+                "p": "Narrowing outbound focus does not mean narrowing who you will sell to. Build lookalikes from your real qualified opportunities, not from the whole addressable list, and revisit exclusion rules that quietly drop good prospects."
+              }
+            ]
+          },
+          {
+            "id": "hours",
+            "h": "How many hours should we start with?",
+            "blocks": [
+              {
+                "p": "Match the hours to the job. A [[link:hire-fractional-sales-vp|fractional director or VP of Sales]] seat in our 2026 engagements ran [[cost:vp-sales.hours|lower]] for [[cost:vp-sales.monthly]]. Thin hours fail, so do not buy fewer hours than the first problem needs."
+              },
+              {
+                "p": "Many companies want more hours at the start than they planned, especially when hiring is in scope. A common shape is a heavier build block for about 90 days that steps down to fewer hours afterward. Plan that step-down in the statement of work, so day 90 is not a renegotiation."
+              },
+              {
+                "p": "If budget is tight, start with a fixed project. A 30-day RevOps project ran [[cost:revops-project.fixed|lower]] in our 2026 engagements, and [[link:fractional-cost|the cost hub]] lists every seat. For market-wide rates, see [[link:rates.sales_leadership|Sales Leadership rates on the Rate Index (illustrative)]]."
+              }
+            ]
+          },
+          {
+            "id": "scope-change",
+            "h": "What happens when priorities or scope change once the work is underway?",
+            "blocks": [
+              {
+                "p": "Inside the monthly hour block, priorities can shift without paperwork. Focus areas are refined as you learn, and the day 30 readout is where the plan is formally re-ranked."
+              },
+              {
+                "ul": [
+                  "**More hours or a new workstream.** Needs your written approval first, by email, before the work starts.",
+                  "**Larger changes.** Go in a short addendum or change order.",
+                  "**Approved extra hours.** Billed at the rate in your statement of work, on the next invoice.",
+                  "**No revision rounds.** You are buying an operator's time and judgment, not a fixed deliverable, so there are no rounds to count."
+                ]
+              },
+              {
+                "p": "One clean trigger to write in is team size. Our statements of work price against a stated team, for example up to five reps, and reopen the hours if the team grows past it."
+              }
+            ]
+          },
+          {
+            "id": "scale",
+            "h": "Can we start small and scale hours up or down?",
+            "blocks": [
+              {
+                "p": "Yes. You can raise or lower the monthly hour block with 30 days' written notice. The change goes in a short addendum and takes effect from the next billing cycle. An increase can start sooner, with a pro-rated invoice for the extra hours that month."
+              },
+              {
+                "p": "The rate usually stays the same. When a company adds a large block of hours or commits to a longer term, the added hours can be priced lower, which brings the blended rate down. Adding hours at the same monthly spend is not a lever that works."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "When does a narrow first scope go wrong?",
+            "blocks": [
+              {
+                "ul": [
+                  "**The scope names activities, not a problem.** Write down the outcome you are buying, then the hours.",
+                  "**Hours creep past the block.** Extra hours need written approval first, or they cannot be billed or paid.",
+                  "**The opt-out hides in the notice clause.** Write any opt-out as a date, separate from the 30 days' notice that applies after the initial term."
+                ]
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Is refining the work included, or will there be change orders?",
+            "a": "Shifting priorities inside the monthly hours is included. Only added hours or a new workstream need your written approval, and larger changes go in a short addendum."
+          },
+          {
+            "q": "Can we change our hours later?",
+            "a": "Yes, up or down, with 30 days' written notice. The change takes effect from the next billing cycle, and an increase can start sooner with a pro-rated invoice."
+          },
+          {
+            "q": "Is there room on price if we add hours?",
+            "a": "Sometimes, when it is tied to commitment. Added hours or a longer term can be priced lower, which brings the blended rate down. A lower rate agreed for a longer commitment assumes you keep that commitment."
+          },
+          {
+            "q": "Can we end it early inside the initial term?",
+            "a": "It depends on your agreement. Most of ours name an opt-out point inside the initial term, usually at week 8, week 12 or day 90, so ask for one in writing. After the initial term, either side can end with 30 days' written notice."
+          }
+        ],
+        "talk": "Tell us the one or two problems that cost you most through the [[link:talk.sales_motion|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "research.js still lists the legacy guide how-to-scope-a-fractional-sales-engagement; its link now lands here through the alias",
+            "owner": "Rapid Neuron"
+          }
+        ],
+        "flags": [
+          "Medium confidence, phrased with care. The segment focus (rs-focus) and the early-exit FAQ (em-exit) rest on a few 2026 agreements; one larger program is a firm six-month term with no opt-out, so the FAQ says \"most of ours\", not every.",
+          "Scope changes (em-scope-change), hour changes (em-flex) and price movement (cp-negotiate) are high confidence and read as policy."
+        ]
+      },
+      {
+        "slug": "get-your-ceo-or-board-to-approve-fractional-help",
+        "kind": "new",
+        "kindL": "Approval",
+        "template": "answer",
+        "fn": "sales",
+        "cat": "sales_leadership",
+        "need": "sales_motion",
+        "persona": "P1 and P2",
+        "q": "How do you get your CEO or board to approve fractional help?",
+        "metaTitle": "How to Get Your CEO or Board to Approve Fractional Help",
+        "metaDescription": "What to bring to the approval meeting. The cost against a full-time hire, a written 30/60/90-day plan, what we stand behind and how you get out.",
+        "term": "approve a fractional sales leader",
+        "prompt": "How do I get my CEO or board to approve hiring a fractional sales leader?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b7 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 919,
+        "opsQ": "VP of Sales",
+        "stat": {
+          "v": "[[cost:vp-sales.pct]]",
+          "l": "Of a full-time VP of Sales' monthly cost, for a fractional director or VP"
+        },
+        "related": [
+          "interim-vs-fractional-vs-full-time-sales-leader",
+          "fractional-vp-of-sales-cost"
+        ],
+        "replaces": [],
+        "answer": "Bring three things. The cost against the full-time option, a written 30/60/90-day plan with the numbers it will be judged on, and the exit terms. We send that plan in writing after the discovery call.",
+        "keys": [
+          {
+            "k": "A fractional director or VP as a share of full-time monthly cost",
+            "v": "[[cost:vp-sales.pct]]",
+            "src": "Calculated from our 2026 engagements and the full-time figure below",
+            "url": ""
+          },
+          {
+            "k": "Director or VP of Sales seat",
+            "v": "[[cost:vp-sales.monthly]], for [[cost:vp-sales.hours|lower]]",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Full-time VP of Sales, total comp",
+            "v": "[[cost:vp-sales.fullTime]], about [[cost:vp-sales.fullTimeMonthly]]",
+            "src": "Stealth Agents, secondary source citing Glassdoor 2026",
+            "url": "https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026"
+          },
+          {
+            "k": "Cost of replacing a sales leader",
+            "v": "[[cost:vp-sales.replace]], with 3+ months of ramp",
+            "src": "Skaled",
+            "url": "https://skaled.com/services/fractional-vp-of-sales/"
+          },
+          {
+            "k": "Notice once the initial term ends",
+            "v": "30 days, in writing",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "make-the-case",
+            "h": "How do I make the case to our CEO and leadership team?",
+            "blocks": [
+              {
+                "p": "Bring three things to the meeting."
+              },
+              {
+                "ol": [
+                  "**The cost against the full-time option.** What the seat costs a month next to a full-time hire, including the cost of getting a full-time hire wrong.",
+                  "**A written plan.** Scope, hours, monthly cost, milestones at day 30, 60 and 90, and the numbers the work will be judged on.",
+                  "**The exit terms.** The initial term, any opt-out date and the notice after it."
+                ]
+              },
+              {
+                "p": "After the discovery call we send that plan in writing, so you can forward it to your CEO, CFO or board. You can also have the CEO and the CFO each meet the finalist before you sign."
+              },
+              {
+                "p": "The objections we hear most are budget fit, an unclear ask on internal time, fear of conflict with existing leaders and wanting a bounded trial. Answer each one in the plan before the meeting."
+              }
+            ]
+          },
+          {
+            "id": "cost-compare",
+            "h": "How does the cost compare with a full-time hire?",
+            "blocks": [
+              {
+                "p": "In our 2026 engagements, a [[link:hire-fractional-sales-vp|fractional director or VP of Sales]] for a team under 5 to 8 reps ran [[cost:vp-sales.monthly]] for [[cost:vp-sales.hours|lower]]. Public estimates put a full-time VP of Sales at [[cost:vp-sales.fullTime|lower]] in total comp, about [[cost:vp-sales.fullTimeMonthly]] ([[url:https://stealthagents.com/research/cost-of-hiring-a-vp-of-sales-2026|Stealth Agents, secondary source citing Glassdoor 2026]])."
+              },
+              {
+                "p": "Count the cost of a wrong hire too. Replacing a sales leader can cost [[cost:vp-sales.replace|lower]], with 3+ months of ramp ([[url:https://skaled.com/services/fractional-vp-of-sales/|Skaled]])."
+              },
+              {
+                "p": "PE-backed companies often weigh fractional against a full-time CRO and a consulting firm in the same decision. [[link:guide.interim-vs-fractional-vs-full-time-sales-leader|Interim, fractional or full-time]] compares all of them, [[link:guide.fractional-vp-of-sales-cost|what a fractional VP of Sales costs]] breaks down every seat, and [[link:fractional-cost|the cost hub]] covers sales, RevOps and marketing. Market-wide rates are on [[link:rates.sales_leadership|the Rate Index (illustrative)]]."
+              }
+            ]
+          },
+          {
+            "id": "pay-for-itself",
+            "h": "How do we know this will pay for itself?",
+            "blocks": [
+              {
+                "p": "Tie the plan to your own numbers, not to a promise. Plans that tie the fee to your own unit economics, such as what a new customer is worth and what you spend to win one, are easier to approve."
+              },
+              {
+                "p": "We do not promise payback. Fees are fixed monthly or fixed project fees, never tied to promised results. What makes the case is a dated diagnostic, targets agreed at the day 30 readout and tracked weekly, and a decision at day 90 against numbers you set yourself."
+              }
+            ]
+          },
+          {
+            "id": "stand-behind",
+            "h": "What results will you stand behind?",
+            "blocks": [
+              {
+                "p": "We stand behind the fit and the deliverables, not a revenue guarantee."
+              },
+              {
+                "ul": [
+                  "**The fit.** If the operator is not the right fit, we replace them at no added cost.",
+                  "**The deliverables.** Dated deliverables at day 30, 60 and 90, in writing before you sign.",
+                  "**The measures.** Success measures agreed at the day 30 readout.",
+                  "**A way out.** After the initial term, you can end on 30 days' notice."
+                ]
+              },
+              {
+                "p": "Write any opt-out as a date, separate from the notice clause. A monthly summary of what was delivered also helps a board see progress between reviews."
+              }
+            ]
+          },
+          {
+            "id": "board-plan",
+            "h": "Will we get a plan we can take to our board or investors?",
+            "blocks": [
+              {
+                "p": "Yes, when the seat calls for it, and it is written into the plan. Leadership plans deliver a scored baseline and a ranked roadmap, and by day 90 a 12 to 18 month revenue plan with targets, hiring sequence and investment mix that your CEO and CFO can take to the board."
+              },
+              {
+                "ul": [
+                  "**A bridge.** From this year's bookings to next year's pipeline plan.",
+                  "**Pipeline targets.** By source and quarter, lagged by the sales cycle.",
+                  "**A KPI framework.** With the pipeline coverage the plan requires.",
+                  "**Org design.** A decision on the permanent team and the leader it needs."
+                ]
+              },
+              {
+                "p": "Smaller seats, such as a sales director for a small rep team, end the build phase with a team assessment and a hiring recommendation instead of a board plan. Time the day 30 readout so the plan exists before the board locks next year's number."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "Why do approvals stall?",
+            "blocks": [
+              {
+                "ul": [
+                  "**The hours do not fit the budget.** Offer a lower-hour option or a fixed first project instead of the full seat. One board we worked with ruled out three days a week, and a lower-hour option followed.",
+                  "**Nobody has said what it asks of the team.** Put the internal time in the plan, usually a weekly 30 to 60 minute session.",
+                  "**Existing leaders fear being replaced.** Write the reporting line and the split of work into the scope.",
+                  "**The case promises revenue.** Promise dated deliverables and agreed measures instead."
+                ]
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Is there a summary I can forward to our board?",
+            "a": "We send the full written plan after the discovery call, with scope, hours, monthly cost, milestones and term. It is written so you can forward it to your CEO, CFO or board."
+          },
+          {
+            "q": "Do you guarantee results?",
+            "a": "No. We stand behind the fit and the deliverables. If the operator is not the right fit, we replace them at no added cost, and fees are never tied to promised results."
+          },
+          {
+            "q": "Can our CEO or CFO interview the finalists?",
+            "a": "Yes. The CEO and the CFO can each meet the finalist before you sign."
+          },
+          {
+            "q": "Can we start with something smaller to prove it?",
+            "a": "Yes. A fixed first project or assessment, with any ongoing seat as a separate decision, is the usual bounded start. Ask for the opt-out date in writing."
+          }
+        ],
+        "talk": "If you need a plan your CEO or board can approve, start on the [[link:talk.sales_motion|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and send the written plan after the discovery call.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "day-90 results from a 2026 engagement, with the client's OK, for the return side of the case",
+            "owner": "Owner"
+          },
+          {
+            "what": "whether a one-page board summary should become a standard document",
+            "owner": "Owner"
+          }
+        ],
+        "flags": [
+          "Left out. op-roi (no completed day-90 result) and op-cycle (no measured cycle change) are none and low confidence, so the guide makes no payback or cycle-time claim. The pay-for-itself section uses only the method that op-commit and ih-buyin support.",
+          "Medium confidence, phrased with care. The approval objections and the CEO and CFO meetings (ih-buyin) come from 2026 emails and buyer calls."
+        ]
+      },
+      {
+        "slug": "outbound-without-hurting-your-reputation",
+        "kind": "new",
+        "kindL": "Pipeline",
+        "template": "answer",
+        "fn": "sales",
+        "cat": "sales_leadership",
+        "need": "pipeline",
+        "persona": "P1 and P4",
+        "q": "How do you build outbound without hurting your reputation?",
+        "metaTitle": "How to Build Outbound Without Hurting Your Reputation",
+        "metaDescription": "Signal-based outbound with a real offer and a 60-day test. How fractional sales leaders build pipeline without mass blasts, and when outsourced SDRs fit.",
+        "term": "outbound without spam",
+        "prompt": "How can we build outbound pipeline without becoming spammy and hurting our reputation?",
+        "publish": null,
+        "updated": "2026-10-17",
+        "base": "Proposed guide b8 in the buyer questions backlog (Oct 17, 2026), answered from Revenue Nomad's 2026 agreements, statements of work and buyer calls, generalized with no company named",
+        "words": 1134,
+        "opsQ": "outbound",
+        "stat": {
+          "v": "60 days",
+          "l": "A controlled outbound test, with a threshold agreed up front"
+        },
+        "related": [
+          "sales-meetings-not-converting",
+          "what-should-a-fractional-engagement-fix-first"
+        ],
+        "replaces": [],
+        "answer": "Keep it narrow and relevant. Target a small set of accounts that show buying signals, write in the buyer's language, offer a review of their own numbers, and run a 60-day test before you scale.",
+        "keys": [
+          {
+            "k": "Controlled outbound test",
+            "v": "60 days, with a meeting and pipeline threshold agreed up front",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Accounts a month in one design",
+            "v": "30 to 40, with 2 to 5 contacts each",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Customer profiles tested at once",
+            "v": "2 to 3",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          },
+          {
+            "k": "Outsourced SDR quotes we have seen",
+            "v": "Roughly $5k - $10k/month",
+            "src": "Agency quotes companies showed us, 2026",
+            "url": ""
+          },
+          {
+            "k": "Hands-on outreach in some leader seats",
+            "v": "The first 60 to 90 days, then handed to an SDR, agency or hire",
+            "src": "Revenue Nomad 2026 engagements",
+            "url": ""
+          }
+        ],
+        "sections": [
+          {
+            "id": "not-pushy",
+            "h": "Can we grow pipeline without becoming pushy or spammy?",
+            "blocks": [
+              {
+                "p": "Yes, if outbound is narrow and relevant instead of high-volume. Outbound tends to fail as generic prospecting into a market that does not respond to it. One outbound design we wrote rests on five things."
+              },
+              {
+                "ul": [
+                  "**Depth in the vertical.** Messages that speak to that industry's real problems, in the buyer's language.",
+                  "**Proof from peers.** Results from customers of the same size and type.",
+                  "**Names the buyer respects.** The vendors, associations and advisors already in front of them.",
+                  "**An offer worth a reply.** A no-cost review of the prospect's own numbers, not a demo.",
+                  "**Targeting by signal.** Accounts chosen because they show they are ready, not because they are on a list."
+                ]
+              },
+              {
+                "p": "Calls back up the emails. In one program we have seen, cold calls booked more meetings than email, and email mostly set up the call."
+              },
+              {
+                "p": "Two things caused pushback in that program. Aggressive framing, such as telling prospects their numbers are bad, and copying the prospect's boss. Personalizing every email by hand also ate the time reps needed for selling."
+              }
+            ]
+          },
+          {
+            "id": "data",
+            "h": "Where will our contact and lead data come from?",
+            "blocks": [
+              {
+                "p": "From more than one place. Operators start with the data already in your CRM, then pair an enrichment source with a second source to fill gaps, and check key contacts by hand."
+              },
+              {
+                "ul": [
+                  "**Work the strongest list first.** Log the accounts it misses.",
+                  "**Cross-check every month.** Compare against a second source, confirm titles on leadership pages and professional profiles, and call main lines for gaps.",
+                  "**Clean up every month.** Remove bad data before it reaches a sequence."
+                ]
+              },
+              {
+                "p": "Signals that predict readiness, such as new locations, hiring or leadership changes, usually beat a bigger list. Some signals point the other way. A company in the middle of a major system migration often freezes vendor evaluations for 12 to 24 months."
+              },
+              {
+                "p": "Paid intent data is worth it only when it feeds a defined workflow. Keep that workflow provider-neutral, so you can switch vendors."
+              }
+            ]
+          },
+          {
+            "id": "still-works",
+            "h": "Can outbound still work for us, given how crowded it is?",
+            "blocks": [
+              {
+                "p": "Often, when it is narrow and specific, but it is not guaranteed. We usually run it as a 60-day test with a meeting and pipeline threshold agreed up front, so the decision to scale or hire is made on data."
+              },
+              {
+                "stats": [
+                  {
+                    "v": "60 days",
+                    "l": "Test length, with a threshold agreed up front",
+                    "src": "Revenue Nomad 2026 engagements"
+                  },
+                  {
+                    "v": "30 to 40",
+                    "l": "Accounts a month in one design, 2 to 5 contacts each",
+                    "src": "Revenue Nomad 2026 engagements"
+                  },
+                  {
+                    "v": "2 to 3",
+                    "l": "Customer profiles tested at once",
+                    "src": "Revenue Nomad 2026 engagements"
+                  }
+                ]
+              },
+              {
+                "p": "Scale only the plays that work. Markets with fewer than about 25 target accounts underperformed in the program we have seen, so combine small regions. Build lookalikes from your real qualified opportunities, not from the whole addressable list."
+              },
+              {
+                "p": "Do not expect an SDR program to turn pipeline around within 30 days. Judge the test at its end date, against the threshold you set."
+              }
+            ]
+          },
+          {
+            "id": "new-market",
+            "h": "Can someone build a repeatable outbound pipeline, including in a new market?",
+            "blocks": [
+              {
+                "p": "Yes. The same approach opens a new market. Map who is already in front of the buyer there, test two or three customer profiles, and keep only what converts."
+              },
+              {
+                "p": "Be clear early about where the line sits between owning the outbound function and personally running it. The operators we place are leaders who build and manage the team that sells. Some seats include hands-on list building, campaigns and direct outreach for the first 60 to 90 days, until an SDR, agency or new hire takes it over. Daily prospecting in addition to running the team is a different scope with different hours."
+              },
+              {
+                "p": "In a tight vertical, partners can be the cheapest path to new meetings. Map the vendors, associations and advisors already in front of the buyer, and size what a referral or co-marketing motion could add before committing. When the gap is demand rather than outreach, see [[link:fractional-marketing-leadership|fractional marketing leadership]]."
+              }
+            ]
+          },
+          {
+            "id": "agency",
+            "h": "Should we use an agency, outsourced SDRs or a consulting firm instead?",
+            "blocks": [
+              {
+                "p": "An outsourced SDR team buys meeting volume. It does not fix what happens after the meeting. In the calls we see, agencies struggle when the process, CRM and playbook are not yet documented, and offshore teams struggle with complex, relationship-based offers that are hard to explain."
+              },
+              {
+                "table": {
+                  "head": [
+                    "",
+                    "Outsourced SDRs",
+                    "Fractional sales leader"
+                  ],
+                  "rows": [
+                    [
+                      "What you buy",
+                      "Meeting volume",
+                      "A named owner of the pipeline motion"
+                    ],
+                    [
+                      "Works when",
+                      "The process and playbook already exist",
+                      "The process, CRM and playbook need building first"
+                    ],
+                    [
+                      "Judge it on",
+                      "Qualified opportunities and closed deals, not activity",
+                      "The same numbers, plus the system it leaves behind"
+                    ],
+                    [
+                      "What we have seen it cost",
+                      "Roughly $5k - $10k/month, in quotes",
+                      "[[cost:vp-sales.monthly]] for a director or VP seat"
+                    ]
+                  ]
+                },
+                "note": "Outsourced SDR figures are quotes companies showed us in 2026. The fractional figure is what clients paid in our 2026 engagements."
+              },
+              {
+                "p": "Consulting firms tend to hand over an assessment. A fractional operator is the named owner who carries it out, and can run or manage outsourced SDRs against conversion instead of activity."
+              },
+              {
+                "p": "If you keep outsourced SDRs, measure them past the booked meeting. Target universe, replies, meetings, show rate, qualified opportunities and closed won. If one customer profile brings high no-shows and low qualification, move SDR focus away from it. Pay SDRs on meetings that become qualified opportunities, with a written qualification rule."
+              },
+              {
+                "p": "The [[link:hire-fractional-sales-vp|fractional VP of Sales]] page shows who does this work, [[link:fractional-cost|the cost hub]] what each seat costs, and [[link:rates.sales_leadership|the Rate Index (illustrative)]] market-wide rates."
+              }
+            ]
+          },
+          {
+            "id": "not-right",
+            "h": "When is outbound the wrong place to start?",
+            "blocks": [
+              {
+                "ul": [
+                  "**Meetings already come in and do not close.** Fix conversion first. [[link:guide.sales-meetings-not-converting|Why booked meetings do not turn into deals]] shows where they leak.",
+                  "**The target market is tiny.** With fewer than about 25 target accounts, combine regions or start with partners and referrals.",
+                  "**You want volume for its own sake.** Mass blasts trade your reputation for activity numbers. Start narrow and earn the right to scale."
+                ]
+              }
+            ]
+          }
+        ],
+        "faq": [
+          {
+            "q": "Will you run our outbound yourselves?",
+            "a": "Some leader seats include hands-on outreach for the first 60 to 90 days, until an SDR, agency or new hire takes it over. For ongoing prospecting, a fractional seller such as an SDR is a separate seat."
+          },
+          {
+            "q": "Is paid intent data worth it?",
+            "a": "Only when it feeds a defined workflow. Keep the workflow provider-neutral so you can switch vendors, and pair any source with a second one and a monthly cleanup."
+          },
+          {
+            "q": "Can a fractional leader manage our outsourced SDR agency?",
+            "a": "Yes. The operator can run or manage outsourced SDRs against conversion, measuring past the booked meeting to qualified opportunities and closed deals."
+          },
+          {
+            "q": "Do you have an outbound result we can see?",
+            "a": "Not one cleared to publish yet. Results stay confidential unless the company agrees, so on a call we walk you through how similar programs were scoped, without names."
+          }
+        ],
+        "talk": "If you need pipeline without burning your market, tell us about it through the [[link:talk.pipeline|Talk to us form]]. Four short questions, only name and email required. We reply with a role profile and 2 to 3 vetted operators, often within 48 hours, and you meet them before you sign.",
+        "gaps": [
+          {
+            "what": "reviewing operator name and sign-off (shown in the byline, not in the text)",
+            "owner": "Owner"
+          },
+          {
+            "what": "one outbound or new-market result with the client's OK to publish (meeting and pipeline counts stay out until then)",
+            "owner": "Owner"
+          }
+        ],
+        "flags": [
+          "Medium confidence, phrased as what we have seen. The outbound design (rf-reputation), whether outbound still works (op-outbound-works), data sources (ts-data) and agencies (fx-agency) rest on a few 2026 agreements, one outbound program and buyer calls. That program ran below its target pace, so the guide says outbound works \"often, when it is narrow\", not always.",
+          "Held back. The program's meeting counts and target pace are not cleared to publish. rf-capacity (more demand than the team can handle) is low confidence and is left out.",
+          "The outsourced SDR quote range ($5k - $10k/month) is from quotes companies showed us, not paid figures, and the table says so."
         ]
       }
     ]

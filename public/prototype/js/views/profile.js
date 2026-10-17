@@ -97,9 +97,13 @@
   const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const smart = (s) => String(s || '').replace(/"([^"]*)"/g, '“$1”').replace(/(\w)'(\w)/g, '$1’$2');
   const mon = (ym) => { if (!ym) return 'Present'; const [y, m] = String(ym).split('-').map(Number); return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
+  // "Jul 2023 - May 2025": a hyphen, each date kept on one line, the only break after the first date (escaped)
+  const monSpan = (a, b) => `${esc(mon(a)).replace(/ /g, '\u00a0')} -\u00a0${esc(mon(b)).replace(/ /g, '\u00a0')}`;
   const usdShort = (n) => { n = +n; if (!n) return ''; if (n >= 1e6) return '$' + (n / 1e6).toFixed(n % 1e6 ? 1 : 0).replace(/\.0$/, '') + 'M'; if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'K'; return '$' + n; };
   const tzLabel = (s) => TZ[s] || String(s || '').replace(/_/g, ' ');
   const nextStart = (op) => { const d = op.avail.startDate ? new Date(op.avail.startDate + 'T12:00:00') : null; return !d || d < RN.now() ? RN.now() : d; };
+  // One wording for availability everywhere on the profile (hero, sticky bar, Engage card, rate panel): the start date
+  const availText = (op) => (op.avail.key === 'available_now' ? 'Available now' : `Available ${RN.fmt.dateShort(nextStart(op))}`);
   // MM/DD/YYYY, the same format compare uses for Next available start date (Sheet3 #4)
   const mdy = (d) => (RN.fmt.mdy ? RN.fmt.mdy(d) : `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`);
   // Client-facing name of the operator's revenue range field (the registry label is the operator's "Revenue range")
@@ -219,7 +223,7 @@
   }
   const UNITS = { largestTeamQuota: 'annual quota', largestBudget: 'annual budget', largestArrBook: 'ARR book', partnerRevenue: 'partner-attributed', individualQuota: 'annual quota', avgDealSize: 'ACV', largestAccountArr: 'account ARR', bestNrr: 'net revenue retention', bestGrr: 'gross revenue retention', largestRepCount: 'reps enabled', largestCsTeam: 'CSMs', typicalTeamSize: 'people', partnerEcosystem: 'partners', largestTeamManaged: 'people' };
   const filled = (v) => v != null && v !== '' && !(Array.isArray(v) && !v.length);
-  /* Sales cycle: the picked ranges read as one span in the big-figure style ("30–90 days", "1–6 months") */
+  /* Sales cycle: the picked ranges read as one span in the big-figure style ("30 - 90 days", "1 - 6 months"; hyphens, bound with no-break spaces) */
   const CYCLE_DAYS = { '<5 days': [0, 5], '5 - 30 days': [5, 30], '30 - 90 days': [30, 90], '3 - 6 months': [90, 180], '6 - 12 months': [180, 365], '12+ months': [365, null] };
   function cycleSpan(vals) {
     const spans = [].concat(vals || []).map((v) => CYCLE_DAYS[v]).filter(Boolean);
@@ -228,8 +232,8 @@
     const hi = spans.some((x) => x[1] == null) ? null : Math.max(...spans.map((x) => x[1]));
     const mo = (d) => Math.max(1, Math.round(d / 30));
     if (hi == null) return { value: (lo >= 30 ? mo(lo) : lo) + '+', unit: lo >= 30 ? 'months' : 'days' };
-    if (hi <= 90) return { value: lo === 0 ? '<' + hi : `${lo}–${hi}`, unit: 'days' };
-    return { value: lo < 30 ? `<1–${mo(hi)}` : `${mo(lo)}–${mo(hi)}`, unit: 'months' };
+    if (hi <= 90) return { value: lo === 0 ? '<' + hi : `${lo}\u00a0-\u00a0${hi}`, unit: 'days' };
+    return { value: lo < 30 ? `<1\u00a0-\u00a0${mo(hi)}` : `${mo(lo)}\u00a0-\u00a0${mo(hi)}`, unit: 'months' };
   }
   function cycleVal(vals, days) {
     const span = cycleSpan(vals);
@@ -290,7 +294,7 @@
         const n = num('budget_managed_usd', 'largest_annual_budget_managed');
         if (n) return { kind: 'big', value: usdShort(n), unit: 'annual budget' };
         const b = parseBandM(rd.largest_annual_budget_managed);
-        return b ? { kind: 'big', value: b.plus ? `$${b.lo}M+` : `$${b.lo}M–$${b.hi}M`, unit: 'annual budget' } : null;
+        return b ? { kind: 'big', value: b.plus ? `$${b.lo}M+` : `$${b.lo}M\u00a0-\u00a0$${b.hi}M`, unit: 'annual budget' } : null;
       }
       case 'channelsRun': {
         // A channel the map does not know still shows, title-cased ("field_marketing" -> "Field Marketing"), never dropped
@@ -477,7 +481,7 @@
   function hero(c) {
     const op = c.op, v = c.v;
     const start = nextStart(op);
-    const availTxt = op.avail.key === 'available_now' ? 'Available now' : `Available ${RN.fmt.dateShort(start)}`;
+    const availTxt = availText(op);
     // Available time sits in the At a glance tiles when they show; with a video it rides on the availability pill
     const hrs = op.video && op.avail.hoursCode ? ` · ${RN.w.label('hoursPerMonth', op.avail.hoursCode)}` : '';
     const heroTags = c.verified.length ? c.verified.slice(0, 3) : c.tags.slice(0, 3);
@@ -534,9 +538,12 @@
     const op = c.op;
     let html = '';
     const nCo = logos.total != null ? logos.total : c.engs.length;
+    // Repeated "Confidential company" entries read as a broken logo wall: name them once, with a count
+    const isConf = (e) => !e.logo && /^confidential/i.test(String(e.company || '').trim());
+    const named = logos.filter((e) => !isConf(e)), conf = logos.filter(isConf);
     if (c.engs.length >= 2) {
       html = `<span class="eyebrow pf-clients-l">Companies</span>
-        <div class="pf-logos">${logos.map((e) => `<span class="pf-logo ${e.verified ? 'ver' : ''}" title="${esc(e.company)} · ${esc(plural(e.months || 0, 'month'))}${e.verified ? ' · company verified' : ' · self-reported'}">${e.logo ? logoHtml(e.logo, e.company, 30) : `<b>${esc(e.company)}</b>`}${e.verified ? `<span class="pf-logo-seal">${icon('check')}</span>` : ''}</span>`).join('')}
+        <div class="pf-logos">${named.map((e) => `<span class="pf-logo ${e.verified ? 'ver' : ''}${e.logo ? '' : ' is-txt'}" title="${esc(e.company)} · ${esc(plural(e.months || 0, 'month'))}${e.verified ? ' · company verified' : ' · self-reported'}">${e.logo ? logoHtml(e.logo, e.company, 30) : `<b>${esc(e.company)}</b>`}${e.verified ? `<span class="pf-logo-seal">${icon('check')}</span>` : ''}</span>`).join('')}${conf.length ? `<span class="pf-logo is-txt is-conf" title="${esc(plural(conf.length, 'company', 'companies'))} the operator keeps confidential"><b>${conf.length > 1 ? `${conf.length} confidential companies` : 'Confidential company'}</b>${conf.some((e) => e.verified) ? `<span class="pf-logo-seal">${icon('check')}</span>` : ''}</span>` : ''}
           ${nCo > 5 ? jumpBtn('pf-engagements', `+${nCo - 5} more`, 'pf-more') : ''}</div>
         ${c.engs.some((e) => e.verified) ? `<span class="pf-clients-note">${icon('check-circle')}Company-verified engagement${nCo > 5 ? ` · showing 5 of ${nCo}, verified first` : ''}</span>` : `<span class="pf-clients-note">Self-reported engagements</span>`}`;
     } else if (op.video && op.industries.length) {
@@ -579,7 +586,7 @@
     const tiles = [
       op.revenueRanges.length && `<div class="pf-tile"><span class="pf-tile-l">${esc(revLabel())}</span>${chips('revenueRange', op.revenueRanges, 3)}</div>`,
       op.employeeRanges.length && `<div class="pf-tile"><span class="pf-tile-l">${esc(F.employeeRange.label)}</span>${chips('employeeRange', op.employeeRanges, 3)}</div>`,
-      op.avail.hoursCode && `<div class="pf-tile"><span class="pf-tile-l">${esc(F.hoursPerMonth.label)}</span><b class="pf-tile-v">${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode).replace(' / month', ''))}<small>/ month</small></b></div>`,
+      op.avail.hoursCode && `<div class="pf-tile"><span class="pf-tile-l">${esc(F.hoursPerMonth.label)}</span><b class="pf-tile-v">${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode).replace(/\s\/\u2060?\smonth/, ''))}<small>/ month</small></b></div>`,
       op.industries.length && `<div class="pf-tile"><span class="pf-tile-l">${esc(F.industries.label)}</span><span class="pf-tile-chips">${inds}</span></div>`,
     ].filter(Boolean);
     if (!tiles.length && !c.v.owner) return '';
@@ -618,8 +625,11 @@
     const cta = v.owner ? `<a class="btn btn-sm" href="#studio.profile">${icon('edit')}Edit in Studio</a>`
       : intro ? `<a class="btn btn-sm btn-line" href="#buyer.intros">Track your intro</a>`
       : `<button type="button" class="btn btn-sm" data-act="${v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>`;
+    // Operators in compare: a small Compare (n) link stands in for the floating tray, which hides on phones here
+    const n = RN.store.state.compare.length;
+    const cmp = !v.owner && n ? `<a class="btn btn-sm btn-line pf-mbar-cmp" href="#compare" aria-label="Compare ${n} operators">${icon('compare')}<span>${n}</span></a>` : '';
     return `<div class="pf-mbar" data-pf-mbar role="region" aria-label="${esc(v.owner ? 'Edit your profile' : 'Request an intro to ' + op.first)}">
-      <span class="pf-mbar-who"><b>${esc(op.name)}</b><span><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></span>${cta}
+      <span class="pf-mbar-who"><b>${esc(op.name)}</b><span><i class="dot ${availDot(op)}"></i>${esc(availText(op))}</span></span>${cmp}${cta}
     </div>`;
   }
 
@@ -822,12 +832,12 @@
     const bigs = vals.filter((x) => x.rv.kind === 'big');
     const rest = vals.filter((x) => x.rv.kind !== 'big');
     // Big figures in rows of two: the labels in a row share one height (CSS subgrid), so the numbers share a baseline.
-    // A row with a long figure ("$10M–$25M") sets both numbers one step smaller, so the row still reads as one line.
+    // A row with a long figure ("$10M - $25M", spaces not counted) sets both numbers one step smaller, so the row still reads as one line.
     const rows = [];
     for (let i = 0; i < bigs.length; i += 2) rows.push(bigs.slice(i, i + 2));
     const range = vals.length ? `<div class="pf-range">
         <h3 class="h5 pf-h3">Operating range</h3>
-        ${rows.length ? `<div class="pf-range-bigs">${rows.map((r) => `<div class="pf-range-row${r.some((x) => String(x.rv.value).length > 6) ? ' is-long' : ''}">${r.map((x) => roleValHtml(x.k, x.rv)).join('')}</div>`).join('')}</div>` : ''}
+        ${rows.length ? `<div class="pf-range-bigs">${rows.map((r) => `<div class="pf-range-row${r.some((x) => String(x.rv.value).replace(/\s/g, '').length > 6) ? ' is-long' : ''}">${r.map((x) => roleValHtml(x.k, x.rv)).join('')}</div>`).join('')}</div>` : ''}
         ${rest.map((x) => roleValHtml(x.k, x.rv)).join('')}
       </div>` : '';
     const stack = c.stack ? stackBlock(c) : '';
@@ -916,7 +926,7 @@
       const ranked = c.axes.map((a) => ({ a, g: c.axAgg[a] })).sort((x, y) => (y.g ? y.g.pct : -1) - (x.g ? x.g.pct : -1));
       return `<div class="pf-how">
         <h3 class="pf-how-h">Proof by area</h3>
-        <ul class="pf-axbars">${ranked.map((x) => `<li><button type="button" data-act="pf-focus" data-kind="axis" data-key="${esc(x.a)}" data-ax="${esc(AX_KEY[x.a] || '')}"><span>${esc(x.a)}</span><b>${x.g ? (x.g.claimedOnly ? 'Claimed' : x.g.pct + '%') : '–'}</b><i><em data-draw="x" style="width:${x.g ? Math.max(3, x.g.pct) : 0}%"></em></i></button></li>`).join('')}</ul>
+        <ul class="pf-axbars">${ranked.map((x) => `<li><button type="button" data-act="pf-focus" data-kind="axis" data-key="${esc(x.a)}" data-ax="${esc(AX_KEY[x.a] || '')}"><span>${esc(x.a)}</span><b>${x.g ? (x.g.claimedOnly ? 'Claimed' : x.g.pct + '%') : '-'}</b><i><em data-draw="x" style="width:${x.g ? Math.max(3, x.g.pct) : 0}%"></em></i></button></li>`).join('')}</ul>
         <details class="pf-fold"><summary>${icon('chev-right')}How scores work</summary>
         <ul class="pf-how-list">
           <li>Each focus area earns points from proof: <b>10</b> if self-claimed, <b>50</b> with one company review, up to <b>100</b> with more.</li>
@@ -1129,10 +1139,10 @@
         <span class="pf-eng-logo">${e.logo ? logoHtml(e.logo, e.company, 24) : `<b>${esc(e.company[0] || '?')}</b>`}</span>
         <span class="pf-eng-main">
           <b class="pf-eng-role">${esc(e.role || 'Engagement')}</b>
-          <span class="pf-eng-co">${esc(e.company)}${meta.length ? ` · ${esc(meta.join(' · '))}` : ''}</span>
+          <span class="pf-eng-co">${esc(e.company)}${meta.length ? `<span class="pf-eng-meta"><span class="pf-eng-sep"> · </span>${meta.map((m) => `<span class="pf-nwb">${esc(m)}</span>`).join(' · ')}</span>` : ''}</span>
           <span class="pf-eng-tags">${e.industry ? `<span class="pill pill-accent">${esc(RN.w.label('industries', e.industry))}</span>` : ''}${e.verified ? `<span class="pf-verified">${icon('check-circle')}Company verified</span>` : `<span class="pf-self">${hasReviews ? 'Self-reported' : `Awaiting a review from ${esc(e.company)}`}</span>`}</span>
         </span>
-        <span class="pf-eng-when"><b>${esc(mon(e.start))} – ${esc(mon(e.end))}</b><span>${esc(plural(e.months || 0, 'mo', 'mo'))}${r ? ` · ${RN.ui.stars(r.overall || 5)}` : ''}</span></span>
+        <span class="pf-eng-when"><b>${monSpan(e.start, e.end)}</b><span>${esc(plural(e.months || 0, 'mo', 'mo'))}${r ? ` · ${RN.ui.stars(r.overall || 5)}` : ''}</span></span>
         ${hasDetail ? `<span class="pf-eng-chev">${icon('chev-down')}</span>` : ''}
       </${hasDetail ? 'button' : 'div'}>
       ${hasDetail ? `<div class="pf-eng-bd" ${open ? '' : 'hidden'}>
@@ -1196,7 +1206,7 @@
         ${(r.tags || []).length ? `<span class="label pf-lab">Focus areas this company verified</span><div class="pf-chips">${r.tags.map((t) => `<span class="ftag">${icon('check-circle')}${esc(t)}</span>`).join('')}</div>` : ''}
         ${e ? `<span class="label pf-lab">Engagement</span><dl class="pf-facts">
           <div><dt>Operator title at engagement</dt><dd>${esc(e.role || det.title || '')}</dd></div>
-          <div><dt>Engagement dates</dt><dd>${esc(mon(e.start))} – ${esc(mon(e.end))} · ${esc(plural(e.months || 0, 'mo', 'mo'))}</dd></div>
+          <div><dt>Engagement dates</dt><dd>${monSpan(e.start, e.end)} · ${esc(plural(e.months || 0, 'mo', 'mo'))}</dd></div>
           ${e.revenueRange ? `<div><dt>Company revenue</dt><dd>${esc(RN.w.label('revenueRange', e.revenueRange))}</dd></div>` : ''}
           ${e.industry ? `<div><dt>Industry</dt><dd>${esc(RN.w.label('industries', e.industry))}</dd></div>` : ''}
         </dl>` : ''}
@@ -1262,7 +1272,7 @@
       : mr ? `<div class="pf-fact-range"><dt>${mr.retainer ? 'Monthly retainer' : 'Estimated monthly'}</dt><dd><b class="num" title="${esc(mr.note)}">${esc(mr.text)}</b><button type="button" class="pf-rate-hint" data-act="login">${icon('lock')}Exact rate after you sign in</button></dd></div>` : '';
     return `<section class="pf-card pf-engage" aria-label="Engage ${esc(op.first)}">
       <span class="eyebrow">Engage ${esc(op.first)}</span>
-      <p class="pf-engage-st"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</p>
+      <p class="pf-engage-st"><i class="dot ${availDot(op)}"></i>${esc(availText(op))}</p>
       <dl class="pf-facts">
         <div><dt>${esc(F.startDate.label)}</dt><dd>${esc(mdy(start))}</dd></div>
         ${op.avail.hoursCode ? `<div><dt>${esc(F.hoursPerMonth.label)}</dt><dd>${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</dd></div>` : ''}
@@ -1282,7 +1292,7 @@
         <button type="button" class="btn btn-line btn-sm ${saved ? 'is-on' : ''}" data-act="${v.preview ? 'pf-preview-cta' : 'shortlist-toggle'}" data-id="${esc(op.id)}" aria-pressed="${saved}">${icon('bookmark')}${saved ? 'Saved' : 'Save'}</button>
       </div>
       <a class="pf-talklink" href="#talk">Not sure ${esc(op.first)} is the one? <b>Talk to our team</b></a>
-      <p class="pf-fine">${v.rate && op.rate ? 'No fees for companies. You pay the rate shown, nothing more. ' : ''}Scheduling, messaging and contracting run through Revenue Nomad. Intro requests have a 72-hour response window.</p>`}
+      <p class="pf-fine">${v.rate && op.rate ? 'No fees for companies. The rate shown is the price, with no fee added on top. ' : ''}Scheduling, messaging and contracting run through Revenue Nomad. Intro requests have a 72-hour response window.</p>`}
       </div>
     </section>`;
   }
@@ -1295,7 +1305,7 @@
       : intro ? `<a class="btn btn-block btn-sm btn-line" href="#buyer.intros">Track your intro${icon('arrow')}</a>`
       : `<button type="button" class="btn btn-block" data-act="${v.preview ? 'pf-preview-cta' : 'intro-open'}" data-id="${esc(op.id)}">Request intro</button>`;
     return `<section class="pf-card pf-rail-mini" aria-label="Request an intro to ${esc(op.first)}">
-      <div class="pf-mini-id">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<div><b>${esc(op.name)}</b><span><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div></div>
+      <div class="pf-mini-id">${RN.ui.avatar(op, 'ava-md', { decorative: true })}<div><b>${esc(op.name)}</b><span><i class="dot ${availDot(op)}"></i>${esc(availText(op))}</span></div></div>
       ${mr ? `<p class="pf-mini-range" title="${esc(mr.note)}"><span>${esc(mr.lead)}</span><b>${esc(mr.text)}</b></p>` : ''}
       ${cta}
       ${v.owner ? '' : `<button type="button" class="act pf-mini-2" data-act="pf-jump" data-to="${c.reviews.length ? 'pf-reviews' : 'pf-expertise'}">${icon('star')}${c.reviews.length ? `Read ${plural(c.reviews.length, 'company review')}` : 'See the proof'}</button>`}
@@ -1403,9 +1413,10 @@
       RN.$$('.pf-sec', root).forEach((s) => o2.observe(s));
       S.obs.push(o2);
     }
-    // Phone action bar: hidden while the hero or Engage buttons are on screen
+    // Phone action bar: shown from load, hidden only while a duplicate of its button is on screen (the hero CTA
+    // row, the Engage buttons). The hero band is a screen and a half tall on phones, so it is not the trigger.
     const bar = root.querySelector('[data-pf-mbar]');
-    const targets = [root.querySelector('.pf-band') || cta, root.querySelector('.pf-engage-act'), root.querySelector('.pf-rail-mini')].filter(Boolean);
+    const targets = [cta, root.querySelector('.pf-engage-act'), root.querySelector('.pf-rail-mini')].filter(Boolean);
     if (bar && targets.length && 'IntersectionObserver' in window) {
       const seen = new Set();
       const o3 = new IntersectionObserver((ents) => {
@@ -1666,7 +1677,7 @@
           <div class="pf-pl-id-in">
             <div class="pf-photo sm">${op.photo ? `<img src="${esc(op.photo)}" alt="${esc(op.name)}">` : `<span class="pf-initials">${esc(op.initials)}</span>`}</div>
             <div class="grow">
-              <div class="pf-pills"><span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(op.avail.label)}</span></div>
+              <div class="pf-pills"><span class="pill pf-pill"><i class="dot ${availDot(op)}"></i>${esc(availText(op))}</span></div>
               <h1 class="h1 pf-name serif-up">${esc(op.name)}<span class="vm">.</span></h1>
               <p class="pf-role">Fractional ${esc(op.role)}</p>
               ${op.headline ? `<p class="pf-headline hl-m">${esc(smart(op.headline))}</p>` : ''}
@@ -1715,7 +1726,7 @@
     const leadCard = lead ? `<article class="pf-why-lead">
         <span class="pf-why-k">${icon('target')}Closest to ${esc(co)}</span>
         <div class="pf-why-co">${lead.logo ? `<span class="pf-why-logo">${logoHtml(lead.logo, lead.company, 30)}</span>` : `<b class="pf-why-logo txt">${esc(lead.company)}</b>`}
-          <span class="pf-why-when">${esc(mon(lead.start))} – ${esc(mon(lead.end))}<em>${esc(plural(lead.months || 0, 'month'))}</em></span></div>
+          <span class="pf-why-when">${monSpan(lead.start, lead.end)}<em>${esc(plural(lead.months || 0, 'month'))}</em></span></div>
         <h3 class="h3">${esc(lead.role || 'Engagement')} at ${esc(lead.company)}</h3>
         <ul class="pf-why-facts">
           ${lead.industry ? `<li><span>Industry</span><b>${esc(indOf(lead.industry))}</b></li>` : ''}
@@ -1777,11 +1788,11 @@
         <div class="pf-rate-main">
           ${op.rate ? `<div class="pf-rate-big"><span class="label pf-lab">${esc(F.rate.label)}</span><b class="serif-up">${esc(RN.fmt.usd(op.rate))}<small>/hr</small></b></div>
             ${monthly ? `<div class="pf-rate-big"><span class="label pf-lab">At ${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</span><b class="serif-up">${esc(RN.fmt.k(monthly))}<small>/month</small></b></div>` : ''}
-            <p class="pf-rate-range">${mr ? `${mr.retainer ? 'Listed monthly retainer' : 'Estimated'} <b>${esc(mr.text)}</b>${!mr.retainer && mr.hLo && mr.hHi ? ` (the hourly rate at ${esc(mr.hLo)} - ${esc(mr.hHi)} hrs/month)` : ''}. ` : ''}No fees for companies. You pay ${esc(op.first)}’s rate, nothing more.</p>`
+            <p class="pf-rate-range">${mr ? `${mr.retainer ? 'Listed monthly retainer' : 'Estimated'} <b>${esc(mr.text)}</b>${!mr.retainer && mr.hLo && mr.hHi ? ` (the hourly rate at ${esc(mr.hLo)} - ${esc(mr.hHi)} hrs/month)` : ''}. ` : ''}No fees for companies. The rate shown is the price, with no fee added on top.</p>`
           : `<p class="pf-rate-range">${esc(op.first)} quotes a rate on the first call.</p>`}
         </div>
         <dl class="pf-facts">
-          <div><dt>${esc(F.availability.label)}</dt><dd>${esc(op.avail.label)}</dd></div>
+          <div><dt>${esc(F.availability.label)}</dt><dd>${esc(availText(op))}</dd></div>
           <div><dt>${esc(F.startDate.label)}</dt><dd>${esc(mdy(nextStart(op)))}</dd></div>
           ${op.avail.hoursCode ? `<div><dt>${esc(F.hoursPerMonth.label)}</dt><dd>${esc(RN.w.label('hoursPerMonth', op.avail.hoursCode))}</dd></div>` : ''}
           ${idx ? `<div><dt>Rate Index, ${esc(catLabel(op.catKey))} ${RN.ui.illusTag()}</dt><dd>${esc(RN.fmt.hrRange(idx.p25, idx.p75))} · median ${esc(RN.fmt.rate(idx.p50))}</dd></div>` : ''}
@@ -2016,7 +2027,7 @@
             </div>
             <dl class="pf-vf-facts">
               <div><dt>Company-verified reviews</dt><dd>${revs.length}</dd></div>
-              <div><dt>Verified engagements</dt><dd>${verEngs}<small> of ${engs.length}</small></dd></div>
+              <div><dt>Verified engagements</dt><dd>${verEngs}${engs.length ? `<small> of ${engs.length}</small>` : ''}</dd></div>
               <div><dt>Verified focus areas</dt><dd>${verifiedTags}</dd></div>
             </dl>
             ${by ? `<div class="pf-vby"><span class="label">Verified by</span><ul>${by}</ul></div>` : ''}

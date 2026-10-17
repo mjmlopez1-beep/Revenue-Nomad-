@@ -482,7 +482,7 @@
       ${cat ? thinBlock(cat) : ''}
       ${cat ? catPlan(cat) : ''}
       ${rolesNav(cat)}
-      <div class="br-mbar" role="region" aria-label="Quick actions"><a class="btn btn-line" href="#talk">${icon('message')}Talk to us</a><span id="br-mbar-save">${mbarSave(c)}</span></div>
+      <div class="br-mbar" id="br-mbar" role="region" aria-label="Quick actions">${mbarHtml(c)}</div>
     </div>`;
   }
 
@@ -543,9 +543,9 @@
           <div class="br-rate-big"><span class="num">$${esc(idx.p50)}</span><span class="small muted">median per hour</span></div>
           <p class="small">Typical range <b>${esc(RN.fmt.hrRange(idx.p25, idx.p75))}</b> (middle half of ${esc(idx.n)} profiles).</p>
           ${mr ? `<dl class="br-rate-mo">
-            <div><dt>Typical month at ${esc(RN.w.label('hoursPerMonth', '40'))}</dt><dd class="tnum">${esc(kMonth(mr))}</dd></div>
+            <div><dt>Typical month at ${esc(RN.w.label('hoursPerMonth', '40')).replace(/ /g, '\u00a0')}</dt><dd class="tnum">${esc(kMonth(mr))}</dd></div>
           </dl>
-          <p class="small muted br-rate-free">No fees for companies. You pay the operator’s rate, nothing more.</p>` : ''}
+          <p class="small muted br-rate-free">No fees for companies. The listed rate is the price, with no fee added on top.</p>` : ''}
           <div class="br-rate-chart" data-br-chart="${esc(cat)}" aria-label="Median hourly rate by role category"></div>
           <div class="br-rate-foot">${RN.ui.illusNote()}<a class="act" href="#rates">Open the Rate Index${icon('arrow')}</a></div>
         </aside>` : ''}
@@ -730,11 +730,21 @@
       ? `<button type="button" class="act br-save on" data-act="br-save" aria-label="Saved as ${esc(ex.name)}. Rename or delete">${icon('check')}Saved</button>`
       : `<button type="button" class="act br-save" data-act="br-save">${icon('bookmark')}Save search</button>`;
   }
-  // Phone action bar: the two next steps, always in reach
-  function mbarSave(c) {
-    const ex = isClient() && hasCrit(c) ? findSaved(c) : null;
-    return ex ? `<button type="button" class="btn" data-act="br-save">${icon('check')}Saved</button>` : `<button type="button" class="btn" data-act="br-save" ${hasCrit(c) ? '' : 'disabled'}>${icon('bookmark')}Save search</button>`;
+  /* Phone action bar: only steps the header and the sticky search bar do not already offer. Save search once there
+     is a search, Compare (n) once operators are in compare (it stands in for the floating tray on phones). With
+     neither, the bar renders empty and CSS hides it. No whitespace: the bar is hidden with :empty */
+  function mbarHtml(c) {
+    const out = [];
+    if (hasCrit(c)) {
+      const ex = isClient() ? findSaved(c) : null;
+      out.push(ex ? `<button type="button" class="btn btn-line" data-act="br-save" aria-label="Saved as ${esc(ex.name)}. Rename or delete">${icon('check')}Saved</button>`
+        : `<button type="button" class="btn btn-line" data-act="br-save">${icon('bookmark')}Save search</button>`);
+    }
+    const ops = RN.store.state.compare.map(RN.model.byId).filter(Boolean);
+    if (ops.length) out.push(`<a class="btn br-mbar-cmp" href="#compare" aria-label="Compare ${ops.length} operators"><span class="ava-stack" aria-hidden="true">${ops.slice(0, 3).map((o) => RN.ui.avatar(o, 'ava-sm')).join('')}</span>Compare ${ops.length}</a>`);
+    return out.join('');
   }
+  const syncMbar = (c) => { const m = document.getElementById('br-mbar'); if (m) m.innerHTML = mbarHtml(c || crit()); };
   function proofSwitch(c) {
     return `<label class="switch br-proof-sw" title="Operators with a company review or a focus area a company confirmed"><input type="checkbox" data-change="br-proof" ${c.filters.verifiedProof ? 'checked' : ''}><i></i><span>${PROOF}</span></label>`;
   }
@@ -743,7 +753,7 @@
     const c = crit();
     const a = document.getElementById('br-saved'); if (a) a.innerHTML = savedRow(c);
     const b = document.getElementById('br-save-slot'); if (b) b.innerHTML = saveBtn(c);
-    const m = document.getElementById('br-mbar-save'); if (m) m.innerHTML = mbarSave(c);
+    syncMbar(c);
   }
 
   // A rate filter hides operators who don't publish a rate; say how many, with a one-click way back
@@ -906,7 +916,7 @@
     set('br-bar-acts', barBtns(c));
     set('br-saved', savedRow(c));
     set('br-save-slot', saveBtn(c));
-    set('br-mbar-save', mbarSave(c));
+    syncMbar(c);
     const pc = root.querySelector('.br-proof-sw input'); if (pc) pc.checked = !!c.filters.verifiedProof;
     const shown = st().said || st().q;
     const x = root.querySelector('.br-q-x'); if (x) x.hidden = !shown;
@@ -1061,6 +1071,7 @@
   // A visitor who clicked Save search and then signed in as a client gets the search saved (no second click).
   let pendingSave = false;
   RN.store.on((key) => {
+    if (key === 'compare' && document.querySelector('.br-page')) { syncMbar(); return; }
     if (key !== 'persona') return;
     const box = document.querySelector('#br-ff [data-br-rate]');
     if (box) box.outerHTML = rateField(st().filters.rateMax);

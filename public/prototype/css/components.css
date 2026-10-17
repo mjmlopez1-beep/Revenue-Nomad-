@@ -2,6 +2,7 @@
 
 /* ---------- Site header ---------- */
 .hdr { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 60; height: var(--nav-h); background: color-mix(in srgb, var(--paper) 90%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line-2); transition: background var(--dur-1) ease, border-color var(--dur-1) ease; }
+.hdr.hdr-now, .hdr.hdr-now * { transition: none !important; }
 .hdr-in { height: 100%; display: flex; align-items: center; gap: var(--s-6); }
 .hdr.over { position: fixed; left: 0; right: 0; background: transparent; border-color: transparent; color: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .hdr.over.stuck { background: rgba(14, 20, 17, .92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: rgba(255,255,255,.08); }
@@ -43,7 +44,14 @@
   .nav-actions .hide-m { display: none; }
 }
 .menu-sheet { position: fixed; inset: 0; z-index: 90; background: var(--night); color: #fff; padding: calc(env(safe-area-inset-top, 0px) + 18px) var(--gutter) 28px; display: flex; flex-direction: column; overflow-y: auto; animation: fadeIn var(--dur-3) var(--ease-out); }
-.menu-sheet a, .menu-sheet button.mlink { display: flex; align-items: center; justify-content: space-between; min-height: 60px; border: 0; border-bottom: 1px solid var(--night-line); background: none; color: #fff; font-family: var(--f-display); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; text-align: left; width: 100%; }
+.menu-sheet a:not(.btn), .menu-sheet button.mlink { display: flex; align-items: center; justify-content: space-between; min-height: 60px; padding: 0; border: 0; border-bottom: 1px solid var(--night-line); background: none; color: #fff; font-family: var(--f-display); font-size: 24px; font-weight: 700; letter-spacing: -0.02em; text-align: left; width: 100%; }
+/* The sheet's one filled button (Talk to us), full width on the gutter; then the reviewer tools row at the foot */
+.menu-sheet .btn { width: 100%; min-height: 56px; margin: 28px 0 24px; flex: 0 0 auto; font-size: var(--t-14); }
+.menu-dock { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; margin-top: auto; padding: 16px 0 0; border: 0; border-top: 1px solid rgba(255, 255, 255, .1); background: none; color: var(--night-mute); font-family: var(--f-text); font-size: var(--t-14); font-weight: 600; text-align: left; cursor: pointer; }
+.menu-dock svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--leaf); }
+.menu-dock > span { display: flex; flex-direction: column; gap: 2px; }
+.menu-dock-s { font-size: var(--t-12); font-weight: 500; }
+.menu-dock:hover { color: #fff; }
 
 /* ---------- Buttons ---------- */
 .btn { --h: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: var(--h); padding: 0 22px; border: 1px solid transparent; border-radius: var(--r-btn); background: var(--btn); color: var(--btn-ink); font-family: var(--f-display); font-size: var(--t-13); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; cursor: pointer; transition: background var(--dur-1) ease, transform var(--dur-2) var(--ease-out), box-shadow var(--dur-1) ease, border-color var(--dur-1) ease, color var(--dur-1) ease; text-decoration: none; }
@@ -190,6 +198,12 @@
 .opc-top { display: flex; gap: var(--s-4); align-items: flex-start; }
 .opc-name { font-family: var(--f-display); font-size: 19px; line-height: 1.2; letter-spacing: -0.01em; font-weight: 700; }
 .opc-name a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.opc-name { padding-right: 40px; } /* clears the bookmark; the role line below keeps the full width */
+.opc-meta .opc-cmp-in { display: none; position: relative; z-index: 2; margin-left: auto; font-size: var(--t-13); }
+@media (max-width: 640px) {
+  .opc-foot.is-bare { display: none; }
+  .opc-meta .opc-cmp-in { display: inline-flex; }
+}
 .opc-role { font-family: var(--f-display); font-size: var(--t-13); font-weight: 700; color: var(--accent); margin-top: 3px; }
 .opc-head { font-size: var(--t-14); color: var(--ink-2); line-height: 1.45; }
 .opc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -444,6 +458,12 @@ body:has(#tray:not([hidden])) .toasts { bottom: calc(96px + env(safe-area-inset-
 .toast { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-radius: 12px; background: var(--night-2); color: #fff; font-size: var(--t-14); font-weight: 500; box-shadow: var(--shadow-3); animation: rise var(--dur-3) var(--ease-out); pointer-events: auto; max-width: min(520px, calc(100vw - 32px)); }
 .toast svg { width: 18px; height: 18px; color: var(--leaf); flex: 0 0 auto; }
 .toast .act { color: var(--leaf); }
+/* Phones: toasts span the gutter-to-gutter width (a 50% box shrank them to half the screen) and clear a phone action bar */
+@media (max-width: 640px) {
+  .toasts { left: 16px; right: 16px; transform: none; align-items: stretch; }
+  .toast { max-width: none; width: 100%; }
+  body:has(.pf-mbar:not(.is-away), .br-mbar:not(:empty), .sb-savebar) .toasts { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
 
 /* ---------- Stepper (multi-step flows) ---------- */
 .stepper { display: flex; gap: 6px; }
@@ -480,6 +500,16 @@ body:has(#tray:not([hidden])) .toasts { bottom: calc(96px + env(safe-area-inset-
   .side-id, .side-sep, .side-label { display: none; }
   .side a { flex: 0 0 auto; height: 38px; border: 1px solid var(--line-2); background: var(--card); }
 }
+/* Phones: the tab row bleeds to the screen edge and fades out at the right, so a clipped tab reads as "scroll for
+   more"; the current tab is centred after each render (RN.ui.afterRender). The action links after the last divider
+   (Browse talent, Post an engagement, View public profile) are buttons on the page itself, so the row keeps tabs only. */
+@media (max-width: 640px) {
+  .side { margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, transparent 0, #000 var(--gutter), #000 calc(100% - 28px), transparent); }
+  .side a { height: 44px; }
+  .side-sep:not(:has(~ .side-sep)) ~ a { display: none; }
+}
 .app-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; margin-bottom: var(--s-6); }
 .app-head h1 { font-size: var(--t-30); letter-spacing: -0.03em; }
 .app-head .sub { color: var(--mute); margin-top: 6px; font-size: var(--t-15); }
@@ -498,11 +528,38 @@ body:has(#tray:not([hidden])) .toasts { bottom: calc(96px + env(safe-area-inset-
 .ftr a.logo { display: inline-flex; padding: 0; color: #fff; }
 .ftr-base { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-4); margin-top: var(--s-12); padding-top: var(--s-6); border-top: 1px solid var(--night-line); font-size: var(--t-13); color: var(--night-mute); }
 @media (max-width: 900px) { .ftr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ftr-grid > :first-child { grid-column: 1 / -1; } }
+/* Link groups are <details> (js/core/shell.js renderFooter): open, with a plain heading, above 640px */
+.ftr-g > summary { display: block; list-style: none; }
+.ftr-g > summary::-webkit-details-marker { display: none; }
+.ftr-g > summary > svg { display: none; }
+.ftr-links a { display: block; }
+@media (min-width: 641px) { .ftr-g > summary { cursor: default; } }
+/* Phones: one column; each group is a 52px accordion row, closed by default. The footer sits one phone section
+   (32px) below a closing section's own padding, and flush under a closing night band. */
+@media (max-width: 640px) {
+  .ftr { margin-top: 32px; padding-block: 48px 32px; }
+  .ftr-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .ftr-grid > :first-child { padding-bottom: 28px; }
+  .ftr-g { border-top: 1px solid var(--night-line); }
+  .ftr-g > summary { display: flex; align-items: center; justify-content: space-between; min-height: 52px; cursor: pointer; }
+  .ftr-g > summary h2.ftr-h { margin: 0; }
+  .ftr-g > summary > svg { display: block; width: 18px; height: 18px; color: var(--night-mute); transition: transform var(--dur-2) var(--ease-out); }
+  .ftr-g[open] > summary > svg { transform: rotate(180deg); }
+  .ftr-links { padding-bottom: 12px; }
+  .ftr-base { margin-top: 0; flex-direction: column; gap: 8px; }
+  /* Pages that pulled the footer up with a negative bottom margin (built for the 80px desktop gap) are handled here */
+  #app > main { margin-bottom: 0; }
+  /* Flush under a closing full-bleed band: main's last block, or the last block of a full-width page wrapper */
+  #app:has(> main > :nth-last-child(1 of :not(script, style, template)):is(.night, .sec-band, .pg-band, .ins-band)) + .ftr,
+  #app:has(> main > :nth-last-child(1 of :not(script, style, template)):not(.wrap, .wrap-narrow) > :last-child:is(.night, .sec-band, .pg-band, .rs-ptalk, .ins-band, .lv-use)) + .ftr { margin-top: 0; }
+  #app:has(> main > :nth-last-child(1 of :not(script, style, template)):is(.night, .pg-band)) + .ftr,
+  #app:has(> main > :nth-last-child(1 of :not(script, style, template)):not(.wrap, .wrap-narrow) > :last-child:is(.night, .pg-band, .rs-ptalk)) + .ftr { border-top: 1px solid var(--night-line); }
+}
 
 /* ---------- Compare tray (persistent across browse and profiles) ---------- */
 .tray { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: var(--s-4); padding: 10px 10px 10px 18px; border-radius: 16px; background: var(--night-2); color: #fff; box-shadow: var(--shadow-3); animation: rise var(--dur-3) var(--ease-out); max-width: calc(100vw - 32px); }
 @media (max-width: 520px) {
-  .tray { left: 68px; right: 12px; transform: none; gap: 10px; padding: 8px 8px 8px 12px; justify-content: space-between; animation: none; }
+  .tray { left: 16px; right: 16px; transform: none; gap: 10px; padding: 8px 8px 8px 12px; justify-content: space-between; animation: none; }
   .tray .tray-l { display: none; }
   .tray .ava-sm { --sz: 28px; }
 }
@@ -521,6 +578,7 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 .dock-btn .dot { background: var(--leaf); }
 .dock-panel { position: absolute; left: 0; bottom: 50px; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 100px); overflow-y: auto; padding: var(--s-5); border-radius: 16px; background: var(--night-2); color: #fff; box-shadow: var(--shadow-3); display: flex; flex-direction: column; gap: var(--s-4); animation: rise var(--dur-3) var(--ease-out); }
 .dock-panel .label { color: var(--night-mute); }
+.dock-panel .act { text-align: left; }
 .dock-panel .seg { background: rgba(255,255,255,.06); flex-wrap: wrap; }
 .dock-panel .seg button { color: var(--night-mute); }
 .dock-panel .seg button.on { background: var(--leaf); color: var(--forest-deep); }
@@ -534,7 +592,21 @@ body.has-modal .dock, body.has-modal .tray { display: none; }
 .dock-row .btn-sm { --h: 32px; }
 .dock-panel .btn-line { color: #fff; border-color: rgba(255,255,255,.35); background: transparent; }
 .dock-panel .btn-line:hover { background: rgba(255,255,255,.08); border-color: #fff; }
-@media (max-width: 640px) { .dock { left: auto; right: 10px; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); } .dock-panel { right: 0; left: auto; } .dock-btn { width: 34px; height: 34px; opacity: .78; } .dock-btn svg { width: 16px; height: 16px; } .dock-btn .dock-tag { display: none; } }
+/* The dock never sits over the menu sheet */
+body:has(.menu-sheet) .dock { display: none; }
+/* Phones (mobile audit, Oct 17, 2026): the floating button no longer covers the content column. With reviewer notes
+   off (what the owner and real visitors see) there is no floating button at all: Reviewer tools is the last row of the
+   menu sheet. With notes on it is a 16x48 edge tab inside the right gutter, above any phone action bar. The panel
+   opens as a bottom sheet either way. */
+@media (max-width: 640px) {
+  .dock { left: auto; right: 0; bottom: calc(148px + env(safe-area-inset-bottom, 0px)); }
+  :root:not(.rn-notes) .dock-btn { display: none; }
+  .dock-btn { width: 16px; height: 48px; border-radius: 10px 0 0 10px; border-right: 0; opacity: .7; box-shadow: var(--shadow-2); }
+  .dock-btn svg, .dock-btn .dock-tag, .dock-btn .dock-live { display: none; }
+  .dock-btn::before { content: ""; width: 2px; height: 18px; border-radius: 2px; background: var(--leaf); }
+  .dock-panel { position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 86vh; border-radius: 16px 16px 0 0; padding-bottom: calc(var(--s-5) + env(safe-area-inset-bottom, 0px)); z-index: 1; }
+  .dock-row .btn-sm { --h: 40px; }
+}
 
 /* ---------- Charts (SVG, drawn by RN.chart) ---------- */
 .chart { width: 100%; }
@@ -753,6 +825,8 @@ html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after,
 .cx-pulse-q { font-family: var(--f-display); font-size: var(--t-18); font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; max-width: 52ch; }
 .cx-pulse-side button { height: 30px; padding: 0 12px; font-size: var(--t-12); }
 .cx-opts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* A long option label wraps inside its pill on a phone instead of running past it */
+.cx-opts .chip { max-width: 100%; min-height: var(--chip-h); height: auto; white-space: normal; text-align: left; line-height: 1.25; padding-block: 6px; }
 .cx-pulse-res { display: flex; flex-direction: column; gap: 8px; }
 .cx-pulse-ft { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding-top: 2px; }
 .cx-res-mine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; font-size: var(--t-14); color: var(--ink-2); }
@@ -872,6 +946,8 @@ html:not(.rn-notes) td:has(> .fn-gap:only-child, > .fn-gap-w:only-child)::after,
 .shr-row-l { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; font-family: var(--f-display); font-size: var(--t-12); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
 .shr-row-l svg { width: 14px; height: 14px; }
 .shr-row a.chip { text-decoration: none; }
+/* Phones: the label takes its own line, so the share chips stay together on one row */
+@media (max-width: 640px) { .shr-row-l { flex-basis: 100%; } }
 :is(.night, .panel-night) .shr-row-l { color: var(--night-mute); }
 
 /* Pull quote and key number with click-to-share */

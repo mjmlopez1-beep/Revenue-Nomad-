@@ -438,3 +438,42 @@
   .sb-he { grid-template-columns: minmax(0, 1fr); padding: var(--s-6) var(--s-5); }
   .sb-he-card { transform: none; }
 }
+
+/* ===== Phone pass (Oct 17) ===== */
+.sb .seg-short { display: none; }
+@media (max-width: 640px) {
+  /* Segmented filters stay on one line: full width, short labels, sideways scroll as a last resort */
+  .sb-toolbar > .seg { display: flex; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .sb-toolbar > .seg::-webkit-scrollbar { display: none; }
+  .sb-toolbar > .seg button { flex: 1 0 auto; white-space: nowrap; padding: 0 12px; }
+  .sb .seg-long { display: none; }
+  .sb .seg-short { display: inline; }
+}
+@media (max-width: 640px) {
+  /* One box at a time inside cards */
+  .sb .card .empty { border: 0; background: none; padding: var(--s-6) 0; }
+  .sb-he { padding: var(--s-5) 16px; }
+  .sb-he-card { padding: 16px; }
+}
+/* Edit profile folds on phones (studio-b.js openSec): one tap target per section header, body hidden while folded */
+.sb-sec-tog { display: none; }
+@media (max-width: 640px) {
+  .sb-sec-card { position: relative; }
+  .sb .sb-sec-card > .card-hd { display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: center; gap: 12px; }
+  .sb .sb-sec-card > .card-hd > div:first-child { flex: 1 1 auto; min-width: 0; }
+  .sb-sec-tog { display: inline-grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; margin: -6px -8px -6px 0; border: 0; border-radius: 10px; background: none; color: var(--mute); cursor: pointer; }
+  .sb-sec-tog svg { width: 18px; height: 18px; transition: transform var(--dur-2) var(--ease-out); }
+  .sb-sec-tog[aria-expanded="true"] svg { transform: rotate(180deg); }
+  .sb-sec-card.is-folded { padding-block: 16px; }
+  .sb-sec-card.is-folded > .card-hd { margin-bottom: 0; }
+  .sb-sec-card.is-folded > .card-hd .sub, .sb-sec-card.is-folded > .sb-sec-b { display: none; }
+  .sb-sec-card.is-folded .sb-sec-tog::before { content: ""; position: absolute; inset: 0; border-radius: var(--r-card); }
+  .sb-sec-card.is-folded:hover { border-color: var(--line); }
+}
+@media (prefers-reduced-motion: reduce) { .sb-sec-tog svg { transition: none; } }
+@media (max-width: 640px) {
+  /* Role and prospect card actions: an even two-column grid instead of a ragged wrap; an odd last one spans */
+  .sb-job-act { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .sb-job-act .btn { justify-content: center; min-width: 0; white-space: nowrap; }
+  .sb-job-act > .btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}

@@ -145,7 +145,8 @@
 [data-view^="join-operator"] .jn-head-k { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); margin-bottom: var(--s-3); }
 [data-view^="join-operator"] .jn-skip-top { display: none; margin-left: auto; }
 [data-view^="join-operator"] .jn-head h1:focus { outline: none; }
-[data-view^="join-operator"] .jn-head h1:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; border-radius: 4px; }
+/* The step title takes focus programmatically (screen readers hear the new step); no ring, it is not a control */
+[data-view^="join-operator"] .jn-head h1[tabindex="-1"]:focus, [data-view^="join-operator"] .jn-head h1[tabindex="-1"]:focus-visible { outline: none; }
 [data-view^="join-operator"] .jn-head .lede { margin-top: var(--s-3); font-size: var(--t-16); max-width: 60ch; }
 
 /* Form: one question group per step, generous spacing, big tap targets */
@@ -319,22 +320,22 @@
   [data-view^="join-operator"] .jn-form { gap: var(--s-6); }
   [data-view^="join-operator"] .jn-2, [data-view^="join-operator"] .jn-media, [data-view^="join-operator"] .jn-dl, [data-view^="join-operator"] .jn-form .optcards { grid-template-columns: minmax(0, 1fr); }
   [data-view^="join-operator"] .jn-group { padding-top: var(--s-6); }
-  [data-view^="join-operator"] .field[data-field="roleCategory"] > .chipset { gap: 10px; }
-  [data-view^="join-operator"] .field[data-field="roleCategory"] > .chipset > .chip { min-height: 128px; padding: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-  [data-view^="join-operator"] .jn-cat-ico { margin-bottom: 6px; --ico-sz: 34px; --ico-g: 18px; }
-  [data-view^="join-operator"] .jn-cat-ok { top: 10px; right: 10px; }
-  [data-view^="join-operator"] .jn-form .field[data-field="roleCategory"] > .chipset > .chip { padding: 16px 14px 18px; padding-right: 36px; }
+  /* Role cards: one column in the desktop row layout (icon left, title and line right), about 76px each */
+  [data-view^="join-operator"] .field[data-field="roleCategory"] > .chipset { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  [data-view^="join-operator"] .jn-form .field[data-field="roleCategory"] > .chipset > .chip { min-height: 0; padding: 14px 40px 14px 14px; column-gap: 12px; }
+  [data-view^="join-operator"] .jn-cat-ico { margin: 0; --ico-sz: 34px; --ico-g: 18px; }
+  [data-view^="join-operator"] .jn-cat-ok { top: 50%; right: 12px; margin-top: -11px; }
   [data-view^="join-operator"] .jn-li-ok { display: none; }
   /* Room under the last answers, so the sticky bar never sits on them */
   [data-view^="join-operator"] .jn-form > .jn-foot { margin-top: var(--s-4); }
   [data-view^="join-operator"] .jn-main { padding-bottom: var(--s-2); }
-  /* Full-bleed footer; buttons sit right so the prototype dock never covers them */
-  [data-view^="join-operator"] .jn-foot { margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); justify-content: flex-end; }
+  /* Full-bleed footer: Back keeps 48px, the main action fills the rest of the bar */
+  [data-view^="join-operator"] .jn-foot { margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); }
   [data-view^="join-operator"] .jn-foot .grow { display: none; }
   [data-view^="join-operator"] .jn-foot { gap: var(--s-2); }
   [data-view^="join-operator"] .jn-back { width: 48px; padding: 0; }
   [data-view^="join-operator"] .jn-back span { display: none; }
-  [data-view^="join-operator"] .jn-foot .btn:not(.jn-back):not(.jn-skip) { min-width: 0; flex: 0 1 172px; padding: 0 14px; }
+  [data-view^="join-operator"] .jn-foot .btn:not(.jn-back):not(.jn-skip) { min-width: 0; flex: 1 1 auto; padding: 0 14px; }
   /* The optional step's skip moves to the header, so the footer keeps clear of the prototype dock */
   [data-view^="join-operator"] .jn-foot .jn-skip { display: none; }
   [data-view^="join-operator"] .jn-skip-top { display: inline-flex; }
@@ -343,10 +344,6 @@
   [data-view^="join-operator"] .jn-rev-hd .btn { height: 40px; }
   [data-view^="join-operator"] .jn-photo { align-items: flex-start; }
   [data-view^="join-operator"] .jn-rev-side { max-width: none; }
-}
-@media (max-width: 360px) {
-  [data-view^="join-operator"] .field[data-field="roleCategory"] > .chipset { grid-template-columns: minmax(0, 1fr); }
-  [data-view^="join-operator"] .field[data-field="roleCategory"] > .chipset > .chip { min-height: 0; }
 }
 
 /* =========================================================================================
@@ -469,3 +466,15 @@
 .jn-vid-player { display: block; width: 100%; border-radius: 12px; background: var(--night); }
 [data-view="join-done"] .jn-done-vis .ris-txt, [data-view="join-done"] .jn-done-vis .ris-txt span { color: var(--night-mute); }
 [data-view="join-done"] .jn-done-vis .ris-txt b { color: var(--night-ink); }
+
+/* ===== Phone pass (Oct 17) ===== */
+@media (max-width: 640px) {
+  /* Review: the role category sits on its own line under the section name, not stranded after a dot */
+  [data-view^="join-operator"] .jn-rev-cat { display: block; margin-top: 2px; font-family: var(--f-text); font-size: var(--t-14); font-weight: 500; }
+  [data-view^="join-operator"] .jn-rev-dot { display: none; }
+  /* Review top row: step count left, Start over right; the saved mark keeps its icon only */
+  [data-view^="join-operator"] .jn-top { flex-wrap: nowrap; gap: var(--s-3); }
+  [data-view^="join-operator"] .jn-top .step-count { white-space: nowrap; }
+  [data-view^="join-operator"] .jn-top .act { white-space: nowrap; }
+  [data-view^="join-operator"] .jn-top:has([data-act="join-restart"]) .jn-saved > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}

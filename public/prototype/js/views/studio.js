@@ -49,7 +49,15 @@
     const body = t ? t.render(op) : `<div class="empty">${icon('info')}<b>This part of Studio is being built</b></div>`;
     return `<div class="wrap shell" data-studio="${esc(key)}">${side(op, key)}<div class="studio-main" style="min-width:0">${body}</div></div>`;
   }
+  // Phone tab strip (<=980px): bring the current tab into view; the strip otherwise opens scrolled to its first tab
+  function centerSideTab(root) {
+    const s = root && root.querySelector('.shell > .side'); const a = s && s.querySelector('a.on');
+    if (!a || s.scrollWidth <= s.clientWidth + 1) return;
+    const sr = s.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    s.scrollLeft = Math.max(0, s.scrollLeft + (ar.left - sr.left) - (sr.width - ar.width) / 2);
+  }
   function mountTab(root, key) {
+    centerSideTab(root);
     const t = studio.tabs[key];
     const op = RN.myOp();
     if (t && t.mount) t.mount(root, op);
@@ -218,7 +226,7 @@
     if (pick >= list.length) pick = 0;
     const f = list[pick];
     return `<section class="card sa-card st-cx st-cx-share" data-st-cx="insight" aria-labelledby="st-cx-share-h">
-      <div class="st-cx-hd">${RN.ui.icoTile('share', { size: 'sm', tone: 'enable' })}<span class="eyebrow">Revenue Nomad Research · Share</span></div>
+      <div class="st-cx-hd">${RN.ui.icoTile('share', { size: 'sm', tone: 'enable' })}<span class="eyebrow">Revenue Nomad Research<span class="st-cx-hd-x"> · Share</span></span></div>
       <h2 class="h4" id="st-cx-share-h">Share an insight</h2>
       <p class="small st-cx-lede">Findings for ${esc(RN.fields.catLabel(op.catKey))} from the latest State of Fractional GTM, ready to post with your take.</p>
       ${list.length > 1 ? `<div class="seg st-cx-pick" role="group" aria-label="Pick a finding">${list.map((x, i) => `<button type="button" data-act="st-cx-pick" data-i="${i}" aria-pressed="${i === pick}">${esc(x.k === 'intent' ? 'Demand' : x.k === 'rate' ? 'Rates' : 'Rehire')}</button>`).join('')}</div>` : ''}

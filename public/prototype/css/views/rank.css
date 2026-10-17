@@ -189,7 +189,26 @@
 @media (max-width: 640px) {
   .rk-head { padding: var(--s-4); }
   .rk-needs-key { grid-template-columns: 1fr; }
-  .rk-row, .rk-row.is-first { padding: 12px; gap: 10px; }
+  /* Phones: three rows. Person and ring; need dots with the fact ticks on the right; tier and rate with the
+     actions on the right. The right column is as wide as its widest part, so Meet never runs past the card */
+  .rk-row, .rk-row.is-first { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "n who ring" ". needs facts" ". side acts"; padding: 12px; gap: 10px 10px; }
+  .rk-row .rk-ring, .rk-facts, .rk-acts { justify-self: end; }
+  .rk-ris { flex-wrap: wrap; min-width: 0; gap: 6px 10px; }
+  /* No tier and no rate to show: the fact ticks move down beside the actions instead of leaving a lone button */
+  .rk-ris:empty { display: none; }
+  .rk-row:has(.rk-ris:empty) { grid-template-areas: "n who ring" ". needs needs" ". facts acts"; }
+  .rk-row:has(.rk-ris:empty) .rk-facts { justify-self: start; align-self: center; }
+  .rk-act { position: relative; height: 40px; min-width: 40px; }
+  .rk-act::after { content: ""; position: absolute; inset: -2px; }
+  .rk-rate.is-locked { position: relative; min-height: 32px; }
+  .rk-rate.is-locked::after { content: ""; position: absolute; inset: -6px -8px; }
+  .rk-row .tier-mark-pill { position: relative; }
+  .rk-row .tier-mark-pill::after { content: ""; position: absolute; inset: -8px -2px; }
+  .br-mode button { position: relative; }
+  .br-mode button::after { content: ""; position: absolute; inset: -5px 0; }
+  /* The rates sheet: the email field gets the full width, the button sits under it */
+  .fm-email { grid-template-columns: minmax(0, 1fr); max-width: none; }
+  .fm-email .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .rk-ask, .rk-need-bar span, .rk-ring-fg, .rk-up { animation: none !important; }
@@ -229,14 +248,19 @@
 
 /* Browse phone action bar (same pattern as the profile's) */
 .br-mbar { display: none; }
+/* Phones: only what the page cannot do from the header or the sticky search bar. Save search once there is a
+   search, Compare (n) once operators are in compare (the floating tray hides on this page). Nothing to show, no bar. */
 @media (max-width: 640px) {
-  .br-page { padding-bottom: 76px; }
-  .br-mbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  .br-mbar:not(:empty) { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px;
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--card) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
     border-top: 1px solid var(--line-2); box-shadow: 0 -8px 24px rgba(0, 0, 0, .08); }
-  body:has(.dock) .br-mbar { padding-left: 68px; }
-  .br-mbar .btn { width: 100%; --h: 46px; padding: 0 12px; }
-  .br-mbar > span { display: block; }
+  .br-mbar .btn { width: 100%; min-width: 0; --h: 46px; padding: 0 12px; letter-spacing: .04em; }
+  .br-mbar-cmp .ava-stack { margin-right: 2px; }
+  .br-mbar-cmp .ava-sm { --sz: 24px; }
+  body:has(.br-page) .tray { display: none; }
+  /* The end of the page: the footer sits one section gap below the last block, and carries the bar's clearance */
+  body:has(.br-page) .ftr { margin-top: var(--sec-y); }
+  body:has(.br-mbar:not(:empty)) .ftr { padding-bottom: calc(var(--s-10) + 66px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* While the search index loads */

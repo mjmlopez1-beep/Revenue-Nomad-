@@ -929,3 +929,120 @@
 .ins-calc-cta { align-items: center; gap: 10px 16px; }
 .ins-calc-cta .btn { white-space: normal; height: auto; min-height: var(--h); padding-block: 12px; line-height: 1.3; text-align: center; }
 @media (max-width: 720px) { .ins-calc-cta .btn { flex: 1 1 100%; } }
+
+/* =========================================================
+   Mobile pass, Oct 17, 2026: phone layouts only (desktop unchanged).
+   ========================================================= */
+
+@media (max-width: 1099px) {
+  /* Chapter bar: a fade shows there is more to scroll; 44px targets */
+  .ins-chapnav-in { -webkit-mask-image: linear-gradient(to right, #000 85%, transparent); mask-image: linear-gradient(to right, #000 85%, transparent); padding-right: 40px; }
+  .ins-chap { height: 44px; }
+}
+
+@media (max-width: 760px) {
+  /* Rate Index rows: name and median on one line, the track full width under them, a 44px chevron on the right */
+  .ins-rrow { grid-template-columns: minmax(0, 1fr) auto 32px; grid-template-areas: "l v go" "bar bar go"; gap: 6px 12px; padding: 12px 0; }
+  .ins-rrow-bar { padding-block: 4px; }
+  .ins-rrow-go { align-self: center; }
+}
+
+@media (max-width: 640px) {
+  /* Money ranges never break (RN.fmt.keepRange in the markup; this is the safety net) */
+  .ins-est-term b { white-space: nowrap; }
+  /* Balanced wrapping for figure titles, calculator labels and chapter heads */
+  .ins-fig-hd .h4, .ins-calc-in .field > label, .ins-ch-hd .h2 { text-wrap: balance; }
+
+  /* Hero Rate Index card: the eyebrow gets its own line, the tag and Share sit under it */
+  .ins-rcard-top { flex-wrap: wrap; justify-content: flex-start; row-gap: 10px; }
+  .ins-rcard-top .ins-rcard-k { flex: 1 1 100%; }
+  .ins-rcard-tools { order: 2; }
+
+  /* Rate Index rows: a quiet 32 x 44 chevron instead of the round button */
+  .ins-rrow-go { width: 32px; height: 44px; border: 0; border-radius: 8px; }
+
+  /* Chip groups: short labels sit in an even grid, the long role names scroll in one row */
+  .ins-est-form #ins-est-rev, .ins-est-form #ins-est-hours, #ins-idx-rev, #ins-rep-hours, :is(.rs, .ins-hub, .ins-report, .ins-rates) .cx-pulse .cx-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .ins-est-form #ins-est-rev > .chip, .ins-est-form #ins-est-hours > .chip, #ins-idx-rev > .chip, #ins-rep-hours > .chip, :is(.rs, .ins-hub, .ins-report, .ins-rates) .cx-pulse .cx-opts > .chip { width: 100%; justify-content: center; }
+  /* an odd last chip takes the full row so the grid ends square (the hidden input is the last child) */
+  .ins-est-form #ins-est-hours > .chip:nth-child(odd):nth-last-child(2), #ins-rep-hours > .chip:nth-child(odd):nth-last-child(2), #ins-idx-rev > .chip:nth-child(odd):nth-last-child(2), :is(.rs, .ins-hub, .ins-report, .ins-rates) .cx-pulse .cx-opts > .chip:nth-child(odd):last-child { grid-column: 1 / -1; }
+  .ins-est-form #ins-est-cat { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; margin-inline: calc(-1 * var(--s-5)); padding: 2px 40px 2px var(--s-5); scroll-padding-inline: var(--s-5); -webkit-mask-image: linear-gradient(to right, #000 82%, transparent); mask-image: linear-gradient(to right, #000 82%, transparent); }
+  .ins-est-form #ins-est-cat::-webkit-scrollbar { display: none; }
+  .ins-est-form #ins-est-cat > .chip { scroll-snap-align: start; }
+
+  /* Rates by role (insights hub) and the KPI strip on role pages */
+  .ins-rates-kpis .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+  /* Tool cards: icon and title share a line, the description and tag use the full width */
+  .ins-tool-hd { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 6px; align-items: center; }
+  .ins-tool-hd > div { display: contents; }
+  .ins-tool-hd .ins-tool-ic { width: 40px; height: 40px; }
+  .ins-tool-hd .h4 { grid-column: 2; margin: 0; }
+  .ins-tool-hd > div > p { grid-column: 1 / -1; grid-row: 2; }
+  .ins-tool-night .ins-tool-hd > .illus-tag { grid-column: 3; grid-row: 1; margin: 0; }
+
+  /* Report: Demand vs supply as stacked rows; the role name opens the row */
+  .ins-ds thead { display: none; }
+  .ins-ds, .ins-ds tbody { display: block; width: 100%; }
+  .ins-ds tr { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px; align-items: center; gap: 4px 12px; padding: 12px 0; border-bottom: 1px solid var(--line-2); }
+  .ins-ds tbody tr:last-child { border-bottom: 0; }
+  .ins-ds td { display: block; padding: 0 !important; border: 0; }
+  .ins-ds td:nth-child(4) { display: none; }
+  .ins-ds td:nth-child(2), .ins-ds td:nth-child(3) { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+  .ins-ds td:nth-child(2)::before, .ins-ds td:nth-child(3)::before { font-size: var(--t-12); color: var(--mute); font-family: var(--f-text); font-weight: 400; }
+  .ins-ds td:nth-child(2)::before { content: "Intent"; }
+  .ins-ds td:nth-child(3)::before { content: "Network"; }
+  .ins-ds .ins-cellbar { min-width: 0; }
+  .ins-ds-name { gap: 6px 8px; }
+  .ins-ds-a::after { content: ""; position: absolute; inset: 0; }
+  .ins-ds-a { text-decoration: none; }
+
+  /* Links with a trailing arrow: the arrow follows the last word */
+  .ins-deeper { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .ins-deeper .act, .ins-roles-ft .act, .ins-fig-go .act, .ins-how-more.act { display: inline; text-align: left; white-space: normal; line-height: 1.45; }
+  .ins-deeper .act svg, .ins-roles-ft .act svg, .ins-fig-go .act svg, .ins-how-more.act svg { display: inline-block; vertical-align: -2px; margin-left: 4px; }
+  .ins-how-more.act { justify-content: flex-start; width: auto; align-self: flex-start; }
+
+  /* Contribute card: two even 44px buttons */
+  .ins-hub .cx-acts, .ins-rates .cx-acts, .ins-rcx .cx-acts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .ins-hub .cx-acts .btn, .ins-rates .cx-acts .btn, .ins-rcx .cx-acts .btn { --h: 44px; width: 100%; min-height: 44px; padding-inline: 8px; }
+
+  /* Multi-line notes read as body copy: 13px */
+  .ins-hub .fig-note, .ins-report .fig-note, .ins-rates .fig-note, .ins-est-hand, .ins-cite p.tiny, .ins-ctl p.tiny { font-size: var(--t-13); line-height: 1.5; }
+  .ins-fig-go b { white-space: nowrap; }
+}
+
+@media (max-width: 480px) {
+  /* Key findings: one compact row each, the number on the left */
+  .ins-sumgrid { grid-template-columns: minmax(0, 1fr); }
+  .ins-sumgrid li, .ins-sumgrid li:nth-child(even), .ins-sumgrid li:not(:nth-child(3n + 1)) { border-left: 0 !important; }
+  .ins-sumgrid li .ins-sumstat, .ins-sumgrid li:nth-child(odd) .ins-sumstat, .ins-sumgrid li:nth-child(3n + 1) .ins-sumstat { display: grid; grid-template-columns: 96px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 16px; row-gap: 6px; align-items: start; padding: 16px 52px 16px 0 !important; }
+  .ins-sum-v { grid-row: 1 / span 2; white-space: nowrap; font-size: 28px; }
+  .ins-sum-l { grid-column: 2; }
+  .ins-sumgo { grid-column: 2; margin-top: 0; }
+  .ins-sum-share { top: 12px; right: 0; width: 44px; height: 44px; }
+
+  /* Rate Index list: the p25-p75 text is on the track already */
+  .ins-rrow-v .tiny { display: none; }
+}
+
+@media (max-width: 420px) {
+  /* Rates by role: compact list rows inside one card, name and n on the left, median and range on the right */
+  .ins-roles-grid { grid-template-columns: minmax(0, 1fr); gap: 0; border: 1px solid var(--line-2); border-radius: var(--r-card); background: var(--card); overflow: hidden; }
+  .ins-role { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t v" "n r" "g g"; gap: 2px 12px; align-items: baseline; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; box-shadow: none; }
+  .ins-role:last-child { border-bottom: 0; }
+  .ins-role:hover { transform: none; box-shadow: none; background: var(--tint); }
+  .ins-role-t { grid-area: t; }
+  .ins-role-v { grid-area: v; margin: 0; justify-self: end; }
+  .ins-role-v .num { font-size: var(--t-20); }
+  .ins-role-v small { font-size: var(--t-12); }
+  .ins-role-r { grid-area: r; justify-self: end; font-size: var(--t-13); white-space: nowrap; }
+  .ins-role-r .muted { display: none; }
+  .ins-role-n { grid-area: n; }
+  .ins-role-g { grid-area: g; margin: 0; padding-top: 4px; font-size: var(--t-12); }
+}
+
+/* Get this scoped with our team: one line in its full-width phone button */
+@media (max-width: 640px) {
+  :is(.ins-est-cta, .ins-calc-cta) [data-act="ins-est-talk"] { white-space: nowrap; font-size: 12px; letter-spacing: .04em; padding-inline: 14px; }
+}

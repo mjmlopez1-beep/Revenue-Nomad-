@@ -586,3 +586,49 @@
   .st-cx-list li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .st-cx-act { grid-column: 2 / -1; text-align: left; min-width: 0; }
 }
+
+/* ===== Phone pass (Oct 17) =====
+   App tab strip for all three app shells (Studio, Workspace, Admin), page-scoped here until it moves to
+   components.css: runs edge to edge, fades at the edges so it reads as scrollable, snaps, 44px tap targets.
+   The current tab is scrolled into view by each view's mount (centerSideTab). */
+@media (max-width: 980px) {
+  .shell > .side { margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); scroll-padding-inline: var(--gutter); scroll-snap-type: x proximity;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 28px), transparent); }
+  .shell > .side a { height: 44px; scroll-snap-align: start; }
+}
+@media (max-width: 640px) {
+  /* One box at a time inside Studio cards */
+  .sa-card .empty { border: 0; background: none; padding: var(--s-6) 0; }
+  .sa-card .sa-lost-c, .sa-card .card { padding: 14px; }
+}
+@media (max-width: 720px) {
+  /* Stacked Studio tables: no sideways scroll (the touch boxes on actions poked past the wrapper) */
+  .tbl-wrap:has(> .sa-stack) { overflow: visible; }
+  .sa-stack td { overflow-wrap: anywhere; }
+}
+/* Phone-only Show all (the full list stays on wider screens) */
+.sa-more-m { display: none; }
+@media (max-width: 640px) {
+  .sa-more-m { display: inline-flex; }
+  /* Focus-area opportunities: four rows before Show all; every row ends with its action on its own line */
+  .sa-opps.sa-stack:not(.is-all) tbody tr:nth-child(n+5) { display: none; }
+  .sa-opps.sa-stack td.r:last-child { flex: 1 1 100%; margin-left: 0; text-align: left; }
+  .sa-opps.sa-stack td.r:last-child .btn, .sa-opps.sa-stack td.r:last-child .act { margin-top: 2px; }
+}
+.sa-l-short { display: none; text-decoration: none; }
+@media (max-width: 640px) {
+  /* Google queries: short number columns so the query gets the width */
+  .sa-l-long { display: none; }
+  .sa-l-short { display: inline; }
+  .sa-gsc th.r, .sa-gsc td.r { width: 60px; padding-left: 8px; padding-right: 0; }
+  .sa-gsc td:first-child { padding-left: 0; }
+  /* JSON-LD wraps instead of running 870px wide in a 320px box */
+  .sa-pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; }
+}
+@media (max-width: 640px) {
+  .sa-lost-one .btn { width: 100%; justify-content: center; }
+}
+@media (max-width: 640px) {
+  /* Share card eyebrow: one line on phones ("Share" alone wrapped to line 2) */
+  .st-cx-hd-x { display: none; }
+}

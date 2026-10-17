@@ -481,10 +481,10 @@
       const editL = opt && skipped ? 'Add' : 'Edit';
       return `<section class="jn-rev ${bad ? 'is-bad' : ''}" aria-labelledby="jn-rev-${sec.n}">
         <div class="jn-rev-hd">
-          <div><span class="label">Step ${sec.n}${opt ? ' · Optional' : ''}</span><h2 class="h4" id="jn-rev-${sec.n}">${esc(STEPS[sec.n].label)}${sec.n === OPTIONAL_STEP && d.roleCategory ? ` <span class="muted jn-rev-cat">· ${esc(catLabel(d.roleCategory))}</span>` : ''}</h2></div>
+          <div><span class="label">Step ${sec.n}${opt ? ' · Optional' : ''}</span><h2 class="h4" id="jn-rev-${sec.n}">${esc(STEPS[sec.n].label)}${sec.n === OPTIONAL_STEP && d.roleCategory ? ` <span class="muted jn-rev-cat"><span class="jn-rev-dot">· </span>${esc(catLabel(d.roleCategory))}</span>` : ''}</h2></div>
           <button type="button" class="btn btn-line btn-sm" data-act="join-edit" data-step="${sec.n}" aria-label="${editL} ${esc(STEPS[sec.n].label)}">${icon(editL === 'Add' ? 'plus' : 'edit')}${editL}</button>
         </div>
-        ${bad ? `<p class="jn-rev-warn">${icon('info')}<span>${esc(Object.values(errs)[0])}${Object.keys(errs).length > 1 ? ` and ${Object.keys(errs).length - 1} more` : ''}.</span></p>` : ''}
+        ${bad ? `<p class="jn-rev-warn">${icon('info')}<span>${esc(Object.values(errs)[0].replace(/\.$/, ''))}${Object.keys(errs).length > 1 ? ` and ${Object.keys(errs).length - 1} more` : ''}.</span></p>` : ''}
         <dl class="jn-dl">${sec.rows.map((r) => `<div class="${r.wide ? 'wide' : ''}"><dt>${esc(r.label)}</dt><dd class="${r.prose ? 'jn-prose' : ''}">${r.html ? r.html : r.v ? esc(r.v) : r.optional ? '<span class="muted">Not added</span>' : `<span class="jn-missing">${icon('info')}Missing</span>`}</dd></div>`).join('')}</dl>
       </section>`;
     }).join('');

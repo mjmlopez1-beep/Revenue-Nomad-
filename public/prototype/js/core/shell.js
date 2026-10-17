@@ -94,10 +94,10 @@
   /* ---------- Header ---------- */
   const NAV = [
     // Browse and Talk to us are the two paths for a cold visitor; posting an engagement is a bigger ask, so it comes after Insights
-    { key: 'browse', label: 'Browse Talent', to: 'browse' },
+    { key: 'browse', label: 'Browse talent', to: 'browse' },
     { key: 'insights', label: 'Insights', to: 'insights' },
-    { key: 'projects', label: 'Post an Engagement', to: 'engagements' },   // view nav key stays 'projects' (D12)
-    { key: 'operators', label: 'For Operators', to: 'operators' },
+    { key: 'projects', label: 'Post an engagement', to: 'engagements' },   // view nav key stays 'projects' (D12)
+    { key: 'operators', label: 'For operators', to: 'operators' },
     { key: 'about', label: 'About', to: 'about' },
   ];
 
@@ -107,14 +107,20 @@
     const p = st.persona;
     const el = document.getElementById('hdr');
     const over = view.chrome === 'over';
-    el.className = 'hdr' + (over ? ' over' : '') + (over && window.scrollY > 40 ? ' stuck' : '');
+    // Switching between the solid and the over-hero header (first load, route change) is instant: easing it would flash
+    // a pale bar over the dark hero photo for a few frames. Only scrolling (.stuck) eases.
+    const instant = el.classList.contains('over') !== over;
+    el.className = 'hdr' + (over ? ' over' : '') + (over && window.scrollY > 40 ? ' stuck' : '') + (instant ? ' hdr-now' : '');
+    if (instant) requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('hdr-now')));
     el.hidden = view.chrome === 'bare';
     let right = '';
     // Talk to us is the one filled header button (owner, Oct 14, 2026: inbound leads come through Talk to us); Log in and
     // the nav are text links. Forest on the paper header, a glass outline over a dark hero (components.css .hdr-cta).
+    // On the Talk to us flow itself the header button would point at the page the visitor is on, so it is left out
+    const onTalk = /^talk/.test(view.name || '');
     if (p === 'visitor') {
       right = `<button type="button" class="navlink hide-m" data-act="login" style="background:none;border:0;font-family:var(--f-display);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:inherit;height:44px">Log in</button>
-        <a class="btn btn-sm hdr-cta" href="#talk">Talk to us</a>`;
+        ${onTalk ? '' : '<a class="btn btn-sm hdr-cta" href="#talk">Talk to us</a>'}`;
     } else if (p === 'buyer') {
       const n = st.shortlist.length;
       right = `<a class="btn btn-line btn-sm hide-m" href="#buyer.talent">${icon('bookmark')}Shortlist${n ? `<span class="nav-count">${n}</span>` : ''}</a>
@@ -148,7 +154,8 @@
       ${p === 'visitor' ? `<button class="mlink" data-act="menu-login">Log in${icon('arrow')}</button><a href="#join" data-act="menu-go" data-to="join">Join as operator${icon('arrow')}</a>` : ''}
       ${p === 'buyer' ? `<a href="#buyer" data-act="menu-go" data-to="buyer">Workspace${icon('arrow')}</a>` : ''}
       ${p === 'operator' ? `<a href="#studio" data-act="menu-go" data-to="studio">Studio${icon('arrow')}</a>` : ''}
-      <a class="btn btn-leaf btn-lg" style="margin-top:28px" href="#talk" data-act="menu-go" data-to="talk">Talk to us${icon('arrow')}</a>`;
+      <a class="btn btn-leaf btn-lg" href="#talk" data-act="menu-go" data-to="talk">Talk to us${icon('arrow')}</a>
+      <button type="button" class="menu-dock" data-act="menu-dock">${icon('sliders')}<span>Reviewer tools<span class="menu-dock-s">Viewing as ${esc(viewingAs(p))}</span></span></button>`;
     document.body.appendChild(sheet);
     document.body.style.overflow = 'hidden';
     const first = sheet.querySelector('a, button');
@@ -159,6 +166,10 @@
   RN.actions['menu-close'] = closeMenu;
   RN.actions['menu-go'] = (el) => { closeMenu(); RN.go(el.dataset.to); };
   RN.actions['menu-login'] = () => { closeMenu(); RN.actions.login(); };
+  // Phones: reviewer tools live in the menu (the floating dock button only shows with reviewer notes on); the panel
+  // opens as a bottom sheet (components.css .dock)
+  RN.actions['menu-dock'] = () => { closeMenu(); dockOpen = true; shell.renderDock(); const t = document.querySelector('.dock-panel .x-btn'); if (t) t.focus(); };
+  const viewingAs = (p) => (p === 'visitor' ? 'Visitor' : RN.personas[p].name + (p === 'admin' ? ' (admin)' : ''));
 
   window.addEventListener('scroll', () => {
     const el = document.getElementById('hdr');
@@ -168,6 +179,24 @@
   /* ---------- Footer ----------
      The line under the tagline is the one-sentence brand description fixed for every channel (visibility plan, Oct 2026).
      Hire lists the three function homes and the cost hub first; How it works and the stories sit under Company. */
+  const FTR_COLS = [
+    ['Hire', [['browse', 'Browse talent'], ['hire-fractional-sales-vp', 'Hire a fractional VP of Sales'], ['fractional-revops', 'Fractional RevOps'], ['fractional-marketing-leadership', 'Fractional marketing leaders'], ['fractional-cost', 'What it costs'], ['engagements', 'Post an engagement'], ['talk', 'Talk to us']]],
+    ['Operators', [['operators', 'Why join'], ['join', 'Join the network'], ['levels', 'Levels and Reputation Index'], ['studio', 'Operator Studio']]],
+    ['Insights', [['report', 'State of Fractional GTM 2027'], ['rates', 'Rate Index'], ['framework', 'GTM Framework'], ['library', 'Fit Tag Library'], ['guides', 'Guides']]],
+    ['Company', [['about', 'About us'], ['how', 'How it works'], ['results', 'Company stories'], ['talk', 'Contact']]],
+  ];
+  /* Phones: each link group is a closed accordion (a 52px summary row), so the footer is about one screen instead of
+     1.3; wider screens keep every group open and the summary is a plain heading (not focusable, not a toggle). */
+  const ftrPhone = window.matchMedia('(max-width: 640px)');
+  function syncFooter() {
+    document.querySelectorAll('#ftr .ftr-g').forEach((d) => {
+      d.open = !ftrPhone.matches;
+      const sm = d.querySelector('summary');
+      if (sm) { if (ftrPhone.matches) sm.removeAttribute('tabindex'); else sm.setAttribute('tabindex', '-1'); }
+    });
+  }
+  if (ftrPhone.addEventListener) ftrPhone.addEventListener('change', syncFooter);
+  document.addEventListener('click', (e) => { const sm = e.target.closest('#ftr .ftr-g > summary'); if (sm && !ftrPhone.matches) e.preventDefault(); });
   shell.renderFooter = function (view) {
     const el = document.getElementById('ftr');
     el.hidden = view && view.footer === false;
@@ -178,20 +207,20 @@
           <p class="serif-up" style="font-size:22px;line-height:1.3;color:#fff;max-width:26ch;text-wrap:balance">The home of fractional <span class="nowrap">go-to-market</span> leadership.</p>
           <p class="small" style="color:var(--night-mute);max-width:42ch;text-wrap:pretty">Revenue Nomad matches vetted fractional sales, marketing and RevOps leaders with SaaS and professional services companies.</p>
         </div>
-        <div><h2 class="ftr-h">Hire</h2><a href="#browse">Browse talent</a><a href="#hire-fractional-sales-vp">Hire a fractional VP of Sales</a><a href="#fractional-revops">Fractional RevOps</a><a href="#fractional-marketing-leadership">Fractional marketing leaders</a><a href="#fractional-cost">What it costs</a><a href="#engagements">Post an engagement</a><a href="#talk">Talk to us</a></div>
-        <div><h2 class="ftr-h">Operators</h2><a href="#operators">Why join</a><a href="#join">Join the network</a><a href="#levels">Levels and Reputation Index</a><a href="#studio">Operator Studio</a></div>
-        <div><h2 class="ftr-h">Insights</h2><a href="#report">State of Fractional GTM 2027</a><a href="#rates">Rate Index</a><a href="#framework">GTM Framework</a><a href="#library">Fit Tag Library</a><a href="#guides">Guides</a></div>
-        <div><h2 class="ftr-h">Company</h2><a href="#about">About us</a><a href="#how">How it works</a><a href="#results">Company stories</a><a href="#talk">Contact</a>${RN.store.state.persona === 'admin' ? '' : ''}</div>
+        ${FTR_COLS.map(([h, links]) => `<details class="ftr-g" open><summary><h2 class="ftr-h">${esc(h)}</h2>${icon('chev-down')}</summary><div class="ftr-links">${links.map(([to, l]) => `<a href="#${to}">${esc(l)}</a>`).join('')}</div></details>`).join('')}
       </div>
       <div class="ftr-base"><span>© 2026 Revenue Nomad. Research figures are illustrative.</span><span>Every profile is open. No login required to browse.</span></div>
     </div>`;
+    syncFooter();
   };
 
   /* ---------- Compare tray ---------- */
   shell.renderTray = function (view) {
     let el = document.getElementById('tray');
     const ids = RN.store.state.compare;
-    if (!ids.length || (view && (view.name === 'compare' || view.chrome === 'bare'))) { if (el) el.hidden = true; return; }
+    // Focused flows (forms, questionnaires, workspaces) have their own primary action and a fixed footer the tray would cover
+    const focused = view && /^(join|talk|project-new|buyer|studio|admin|review)/.test(view.name || '');
+    if (!ids.length || (view && (view.name === 'compare' || view.chrome === 'bare' || focused))) { if (el) el.hidden = true; return; }
     const ops = ids.map(RN.model.byId).filter(Boolean);
     el.hidden = false;
     el.className = 'tray';
@@ -233,7 +262,9 @@
   // Keep keyboard focus: open moves it to the panel's close button, close returns it to the dock button
   RN.actions['dock'] = () => {
     dockOpen = !dockOpen; shell.renderDock();
-    const t = document.querySelector(dockOpen ? '.dock-panel .x-btn' : '.dock-btn');
+    // On phones with reviewer notes off there is no dock button (the panel opened from the menu): focus goes to the burger
+    const btn = document.querySelector('.dock-btn');
+    const t = dockOpen ? document.querySelector('.dock-panel .x-btn') : (btn && btn.offsetParent ? btn : document.querySelector('.nav-burger'));
     if (t) t.focus();
   };
   RN.actions['clock'] = (el) => {

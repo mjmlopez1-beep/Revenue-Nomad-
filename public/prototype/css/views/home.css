@@ -36,7 +36,7 @@
 [data-view="home"] .hm-ruled { display: grid; gap: 1px; background: var(--line); border-top: 1px solid var(--ink); border-bottom: 1px solid var(--line); margin: 0; padding: 0; list-style: none; }
 [data-view="home"] .hm-ruled > * { background: var(--paper); }
 
-/* ---------- 1. Hero (the one bold moment; static at load: no line mask, no cascade, no parallax) ---------- */
+/* ---------- 1. Hero (the one bold moment; no line mask, no parallax; a short first-visit cascade, see Motion below) ---------- */
 [data-view="home"] .hm-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: flex-end; min-height: clamp(700px, calc(100svh - 56px), 900px); padding: calc(var(--nav-h) + 56px) 0 64px; background: var(--night); }
 [data-view="home"] .hm-hero-img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; max-width: none; object-fit: cover; object-position: 60% 30%; opacity: .92; }
 [data-view="home"] .hm-hero-shade { position: absolute; inset: 0; z-index: -1; background: var(--hm-grain),
@@ -526,13 +526,182 @@
   [data-view="home"] .hm-talk .hm-ctas > .btn { flex: 1 1 100%; }
 }
 
+/* ---------- Motion (home.js heroEntrance, photoDrift, rise, rateArc, stepsLink; owner feedback Oct 17, 2026) ----------
+   All of it is added by script and only outside calm mode, so a still capture, a visitor without JS and reduced motion
+   see the finished page. Fills are 'backwards' or none: nothing is held once a motion ends. */
+@keyframes hmRise { from { opacity: 0; transform: translate3d(0, 14px, 0); } }
+@keyframes hmRule { from { transform: scaleX(0); } }
+/* Entrance: eyebrow, the three headline lines, lede, search, the figures, then the logos; 780ms end to end. Each piece
+   moves for 340ms, so no more than about a quarter of the screen is in motion at once. Phones (the hero text fills most
+   of the screen) run the eyebrow, headline and lede only; the search, logos and figures are still there. */
+[data-view="home"] .hm-enter :is(.hm-kicker, .hm-ln > span, .hm-sub, .hm-search, .hm-logos, .hm-stats > div) { animation: hmRise 340ms var(--ease-out) backwards; }
+[data-view="home"] .hm-enter .hm-kicker::before { transform-origin: left center; animation: hmRule 480ms var(--ease-out) 60ms backwards; }
+[data-view="home"] .hm-enter .hm-ln:nth-child(1) > span { animation-delay: 50ms; }
+[data-view="home"] .hm-enter .hm-ln:nth-child(2) > span { animation-delay: 100ms; }
+[data-view="home"] .hm-enter .hm-ln:nth-child(3) > span { animation-delay: 150ms; }
+[data-view="home"] .hm-enter .hm-sub { animation-delay: 220ms; }
+[data-view="home"] .hm-enter .hm-search { animation-delay: 290ms; }
+[data-view="home"] .hm-enter .hm-stats > div:nth-child(1) { animation-delay: 330ms; }
+[data-view="home"] .hm-enter .hm-stats > div:nth-child(2) { animation-delay: 380ms; }
+[data-view="home"] .hm-enter .hm-stats > div:nth-child(3) { animation-delay: 430ms; }
+[data-view="home"] .hm-enter .hm-logos { animation-delay: 440ms; }
+@media (max-width: 640px) {
+  [data-view="home"] .hm-enter :is(.hm-search, .hm-logos, .hm-stats > div) { animation: none; }
+}
+/* Ambient: the photo settles once, very slowly (5% over 22s), then rests */
+@keyframes hmDrift { from { transform: scale(1.05) translate3d(-1%, 0, 0); } }
+[data-view="home"] .hm-hero-img.hm-drift { transform-origin: 60% 40%; animation: hmDrift 22s cubic-bezier(.3, .1, .3, 1) backwards; }
+/* Scroll reveals: 16px, 450ms, stagger set per block (--rv-d) */
+[data-view="home"] .hm-rv { opacity: 0; transform: translate3d(0, 16px, 0); }
+[data-view="home"] .hm-rv.hm-rv-in { opacity: 1; transform: none; transition: opacity 450ms var(--ease-out) var(--rv-d, 0ms), transform 450ms var(--ease-out) var(--rv-d, 0ms); }
+/* The rating arc along the top of each review's arch: a faint track and the score, drawn once */
+/* Room for the arc above the score on wide screens (the rating used to sit tight against the top of the tint) */
+@media (min-width: 861px) { [data-view="home"] .hm-arch-logo { height: 360px; } }
+[data-view="home"] .hm-rate-arc { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+[data-view="home"] .hm-rate-arc path { fill: none; stroke-width: 3; stroke-linecap: round; }
+[data-view="home"] .hm-rate-arc .trk { stroke: var(--tint-line); }
+[data-view="home"] .hm-rate-arc .val { stroke: var(--accent); }
+/* How it works: a step's icon rings once when the line first reaches it */
+@keyframes hmPing { from { opacity: .8; transform: scale(1); } to { opacity: 0; transform: scale(1.6); } }
+[data-view="home"] .hm-step.is-ping .ico::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 0 0 2px var(--leaf); animation: hmPing 900ms var(--ease-out) 1 both; pointer-events: none; }
+
+/* Hover life (pointer devices): covers zoom a touch inside their frame, operator photos follow the card's lift, the
+   report cover turns toward the reader, a review's arch lifts. Transforms use --ease-out; colour stays at --dur-1. */
+[data-view="home"] .hm-work .wk-tile .wk-cover { overflow: hidden; }
+[data-view="home"] .hm-work .wk-tile .wk-cv-fig { transform-origin: 50% 100%; transition: transform var(--dur-3) var(--ease-out); }
+[data-view="home"] .hm-ops .opc .ava { transition: transform var(--dur-3) var(--ease-out); }
+[data-view="home"] .hm-book-sheet { transition: transform var(--dur-3) var(--ease-out); }
+[data-view="home"] .hm-book-cover { transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3) ease; }
+[data-view="home"] .hm-arch::before { transform-origin: 50% 100%; transition: transform var(--dur-3) var(--ease-out), background-color var(--dur-1) ease; }
+[data-view="home"] .hm-rate-arc .val { transition: stroke-width var(--dur-2) var(--ease-out); }
+@media (hover: hover) {
+  [data-view="home"] .hm-work .wk-tile:is(:hover, :focus-within) .wk-cv-fig { transform: scale(1.04); }
+  [data-view="home"] .hm-ops .opc:hover .ava { transform: scale(1.06); }
+  [data-view="home"] .hm-book:is(:hover, :focus-visible) .hm-book-cover { transform: rotate(-2deg) translateY(-6px); }
+  [data-view="home"] .hm-book:is(:hover, :focus-visible) .hm-book-sheet { transform: rotate(7deg); }
+  [data-view="home"] .hm-q-feature:hover .hm-arch::before { transform: scale(1.025); }
+  [data-view="home"] .hm-q-feature:hover .hm-rate-arc .val { stroke-width: 4; }
+}
+/* Touch screens: a short press-in on the tappable cards instead of hover */
+@media (hover: none) {
+  [data-view="home"] :is(.hm-need, .hm-prep-a, .hm-ops .opc, .hm-work .wk-tile-cv, .hm-book) { transition: transform 120ms var(--ease-out); -webkit-tap-highlight-color: transparent; }
+  [data-view="home"] :is(.hm-need, .hm-prep-a, .hm-ops .opc, .hm-work .wk-tile-cv, .hm-book):active { transform: scale(.985); }
+}
+
 /* ---------- Reduced motion: no transitions on the scroll-linked parts; the steps line is full and lit ---------- */
 @media (prefers-reduced-motion: reduce) {
   [data-view="home"] :is(.hm-need, .hm-need-n svg, .hm-seat, .hm-seat::before, .hm-go, .hm-prep-a, .hm-prep-go, .hm-book-cover, .hm-step .ico, .hm-step-k) { transition: none; }
   [data-view="home"] .hm-search input::placeholder { transition: none; }
+  [data-view="home"] :is(.hm-enter *, .hm-hero-img, .hm-step .ico)::before, [data-view="home"] :is(.hm-enter *, .hm-hero-img, .hm-step .ico)::after, [data-view="home"] :is(.hm-enter *, .hm-hero-img) { animation: none !important; }
+  [data-view="home"] .hm-rv { opacity: 1; transform: none; }
+  [data-view="home"] :is(.hm-work .wk-tile .wk-cv-fig, .hm-ops .opc .ava, .hm-book-cover, .hm-book-sheet, .hm-arch::before) { transition: none; }
+  [data-view="home"] .hm-work .wk-tile:is(:hover, :focus-within) .wk-cv-fig, [data-view="home"] .hm-ops .opc:hover .ava, [data-view="home"] .hm-q-feature:hover .hm-arch::before, [data-view="home"] :is(.hm-need, .hm-prep-a, .hm-ops .opc, .hm-work .wk-tile-cv, .hm-book):active { transform: none; }
+  [data-view="home"] .hm-book:is(:hover, :focus-visible) .hm-book-cover { transform: rotate(-4deg); }
+  [data-view="home"] .hm-book:is(:hover, :focus-visible) .hm-book-sheet { transform: rotate(5deg); }
   :is([data-view="home"], [data-view="how"]) :is(.hm-pnode, .hm-pcard, .hm-pnode-n) { transition: none; }
   :is([data-view="home"], [data-view="how"]) .hm-path.is-live .hm-pstep .hm-pcard { opacity: 1; transform: none; }
 }
 
 /* Wide pieces can poke a few px past the edge on phones; clip without making a scroll container */
 main[data-view="home"] { overflow-x: clip; }
+
+/* ---------- Phone pass (mobile audit, Oct 17, 2026) ----------
+   Shorter stacks on phones: problems as rows, the Not ready panel as a swipe row, the review rating as a compact
+   gauge strip, the carousel arrows beside their label, a balanced closing heading. Desktop is unchanged. */
+[data-view="home"] .hm-need-num { font-weight: inherit; }
+[data-view="home"] .hm-search input { text-overflow: ellipsis; }
+@media (max-width: 400px) {
+  /* 36px at 360: "who already solved" holds one line, so the headline is 4 lines as at 390, not 6 */
+  [data-view="home"] .hm-h1 { font-size: clamp(32px, 10vw, 40px); }
+  [data-view="home"] .hm-ln > span { text-wrap: balance; }
+}
+@media (max-width: 640px) {
+  /* Problems: one ruled row each (icon, problem, count), not a 2-up grid of half-empty tiles */
+  [data-view="home"] .hm-needs { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  [data-view="home"] .hm-need { min-height: 0; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto; grid-template-areas: "ic body n"; align-items: center; gap: 14px; padding: 12px 14px; }
+  [data-view="home"] .hm-need .hm-ic { --ico-sz: 36px; --ico-g: 18px; --ico-r: 10px; }
+  [data-view="home"] .hm-need-body { gap: 2px; }
+  [data-view="home"] .hm-need-t { font-size: 16px; }
+  [data-view="home"] .hm-need-n { white-space: nowrap; }
+  [data-view="home"] .hm-need-c { display: grid; justify-items: end; text-align: right; }
+  [data-view="home"] .hm-need-num { font-size: var(--t-16); line-height: 1.1; color: var(--ink); }
+  [data-view="home"] .hm-need-unit { font-family: var(--f-text); font-size: var(--t-12); font-weight: 500; line-height: 1.3; color: var(--mute); }
+  [data-view="home"] .hm-need-nw:not(.hm-need-unit) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  [data-view="home"] .hm-need-talk { border-top-width: 1px; border-left: 3px solid var(--forest); }
+  [data-view="home"] .hm-need-talk:is(:hover, :focus-visible) { border-left-color: var(--forest); }
+  [data-view="home"] .hm-need-talk .hm-need-cats { font-size: var(--t-13); }
+
+  /* Not ready to hire yet: the four tiles as one swipe row, the next tile peeking (amber accents unchanged) */
+  [data-view="home"] .hm-prep-list { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 80%; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none;
+    margin-inline: calc(var(--card-pad) * -1); padding: 2px var(--card-pad) 6px; scroll-padding-inline: var(--card-pad); }
+  [data-view="home"] .hm-prep-list::-webkit-scrollbar { display: none; }
+  [data-view="home"] .hm-prep-list > li { scroll-snap-align: start; }
+  [data-view="home"] .hm-prep-a { grid-template-rows: auto auto 1fr; align-items: start; }
+  [data-view="home"] .hm-prep-art { max-height: 104px; }
+  [data-view="home"] .hm-prep-go { align-self: end; }
+
+  /* The work: with six tiles on phones the type tabs need not follow the reader down (no overlap with the CTA) */
+  [data-view="home"] .hm-work .wk-show-tabs { position: static; box-shadow: none; clip-path: none; background: none; }
+
+  /* Operators: the arrows sit beside the label; the dots get a taller hit box */
+  [data-view="home"] .hm-car-hd { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 4px; }
+  [data-view="home"] .hm-car-hd > .label { grid-column: 1; grid-row: 1; }
+  [data-view="home"] .hm-car-hd > .hm-trust { grid-column: 1; grid-row: 2; }
+  [data-view="home"] .hm-car-ctl { grid-column: 2; grid-row: 1 / span 2; }
+  [data-view="home"] .hm-car-dot { position: relative; }
+  [data-view="home"] .hm-car-dot::after { content: ""; position: absolute; inset: -8px -2px; }
+  /* Each dot owns a 24px-wide strip (20px dot box, 4px gap) so a thumb lands on the one it meant */
+  [data-view="home"] .hm-car-dot { width: 20px; }
+  [data-view="home"] .hm-car-dots { gap: 4px; }
+
+  /* Reviews: the rating arch becomes a full-width strip, a small gauge (the arc still draws once) beside the stars */
+  [data-view="home"] .hm-q-feature, [data-view="home"] .hm-q-feature.is-flip { gap: var(--s-5); }
+  [data-view="home"] .hm-q-pair { gap: var(--s-12); }
+  [data-view="home"] .hm-arch-logo { width: 100%; height: auto; }
+  [data-view="home"] .hm-arch-logo::before { top: 0; height: auto; border-radius: var(--r-card); }
+  [data-view="home"] .hm-arch-logo .hm-arch-rate { position: relative; height: auto; display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; grid-template-areas: "n stars stars" "n k k" "facts facts logo";
+    align-items: center; justify-items: start; gap: 4px 14px; padding: 18px; text-align: left; }
+  [data-view="home"] .hm-arch-logo .hm-rate-arc { inset: 12px auto auto 18px; width: 104px; height: 94px; }
+  [data-view="home"] .hm-arch-logo .hm-rate-arc path { stroke-width: 7; }
+  [data-view="home"] .hm-arch-logo .hm-rate-n { grid-area: n; justify-self: center; padding-top: 22px; font-size: 44px; }
+  [data-view="home"] .hm-arch-logo .hm-rate-stars { grid-area: stars; align-self: end; }
+  [data-view="home"] .hm-arch-logo .hm-rate-stars svg { width: 18px; height: 18px; }
+  [data-view="home"] .hm-arch-logo .hm-rate-k { grid-area: k; align-self: start; }
+  /* One rule across the strip above the facts and the company */
+  [data-view="home"] .hm-arch-logo .hm-arch-rate::after { content: ""; grid-column: 1 / -1; grid-row: 3; align-self: start; justify-self: stretch; margin-top: 10px; border-top: 1px solid var(--tint-line); }
+  [data-view="home"] .hm-arch-logo .hm-rate-facts { grid-area: facts; align-items: flex-start; justify-content: center; margin: 10px 0 0; padding: 12px 0 0; border-top: 0; font-size: var(--t-13); }
+  [data-view="home"] .hm-arch-logo .hm-rate-logo { grid-area: logo; align-self: center; margin: 22px 0 0; min-height: 40px; padding: 6px 12px; }
+  [data-view="home"] .hm-arch-logo .hm-rate-logo img { height: 22px; max-width: 110px; }
+  [data-view="home"] .hm-q-mark { font-size: 64px; height: 28px; }
+  [data-view="home"] .hm-q-text { margin-top: var(--s-3); font-size: 21px; }
+  [data-view="home"] .hm-q-by { margin-top: var(--s-5); }
+
+  /* Research band: a smaller report cover, no stray gap in the cost card, a tighter seam into the night band */
+  [data-view="home"] .hm-book { width: min(176px, 48%); }
+  /* The cover's type scales with it, so the year and title fit inside the clipped cover */
+  [data-view="home"] .hm-book-cover { padding: 18px 16px 18px 20px; }
+  [data-view="home"] .hm-book-k { font-size: 9px; letter-spacing: .12em; line-height: 1.3; }
+  [data-view="home"] .hm-book-y { font-size: 54px; }
+  [data-view="home"] .hm-book-t { margin-top: 8px; font-size: 15px; }
+  [data-view="home"] .hm-book-cover::before { width: 200px; height: 200px; right: -80px; bottom: -90px; }
+  [data-view="home"] .hm-book-cover::after { width: 126px; height: 126px; right: -40px; bottom: -46px; }
+  [data-view="home"] .hm-cost .hm-typ > div:last-child { padding-bottom: 0; }
+  [data-view="home"] .hm-research { padding-bottom: 40px; }
+  [data-view="home"] .hm-talk { padding-top: 48px; }
+  [data-view="home"] .hm-brief-slot .tiny { font-size: var(--t-13); }
+
+  /* Closing band: two balanced lines across the width, not three under a 16ch cap */
+  [data-view="home"] .hm-talk-h { max-width: none; text-wrap: balance; }
+  /* How it works: the label, then the short line under it in sentence case */
+  [data-view="home"] .hm-how-l .hm-how-dot { display: none; }
+  [data-view="home"] .hm-how-l .hm-how-sub { display: block; margin-top: 6px; font-size: var(--t-16); font-weight: 700; letter-spacing: -0.01em; text-transform: none; color: var(--night-ink); }
+}
+/* Small text links get a 44px hit box on touch screens and phones */
+@media (pointer: coarse), (max-width: 640px) {
+  [data-view="home"] .hm-more { position: relative; }
+  [data-view="home"] .hm-more::after { content: ""; position: absolute; inset: -12px -6px; }
+}
+/* Phones: the whole work tile is the title link (work.css), so the press-in follows a tap anywhere on the tile */
+@media (hover: none) and (prefers-reduced-motion: no-preference) {
+  [data-view="home"] .hm-work .wk-tile:has(.wk-tile-t a:active) .wk-tile-cv { transform: scale(.985); }
+}

@@ -27,7 +27,7 @@
   const toast = (m, o) => RN.ui.toast(m, o);
 
   /* View state that should survive a re-render (not persisted) */
-  const ui = { days: 30, dirQ: '', dirCat: '', dirSeg: 'all', dirSort: 'ris', dirLimit: 25, termsAll: false, gapsAll: false, mailSeg: 'all', resPeriod: 'open', resAll: false };
+  const ui = { days: 30, dirQ: '', dirCat: '', dirSeg: 'all', dirSort: 'ris', dirLimit: 0, termsAll: false, gapsAll: false, mailSeg: 'all', resPeriod: 'open', resAll: false };
   let charts = {};   // chart builders for this render, drawn at each slot's real width in mount()
   let ctx = {};      // recruit contexts for this render (zero-result rows, categories, focus areas)
 
@@ -96,7 +96,15 @@
     });
   }
   let onResize = null;
+  // Phone tab strip (<=980px): bring the current tab into view; the strip otherwise opens scrolled to its first tab
+  function centerSideTab(root) {
+    const s = root && root.querySelector('.shell > .side'); const a = s && s.querySelector('a.on');
+    if (!a || s.scrollWidth <= s.clientWidth + 1) return;
+    const sr = s.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    s.scrollLeft = Math.max(0, s.scrollLeft + (ar.left - sr.left) - (sr.width - ar.width) / 2);
+  }
   function mount(root) {
+    centerSideTab(root);
     drawCharts(root);
     if (!onResize) {
       let tm;
@@ -554,7 +562,8 @@
     const list = [];
     RN.model.ops.forEach((op) => (op.reviews || []).forEach((r) => list.push({ op, r, d: r.date || r.ts || r.submittedAt || r.createdAt })));
     (st().reviews || []).forEach((r) => { const op = RN.model.byId(r.opId); if (op && !list.some((x) => x.r === r || (r.id && x.r.id === r.id))) list.push({ op, r, d: r.ts || r.submittedAt || r.createdAt || r.date }); });
-    return list.filter((x) => x.d && !x.op.hidden).sort((a, b) => ms(b.d) - ms(a.d)).slice(0, 5);
+    // The founder is never first in a list (owner decision 4); wrappers carry .op, so notFirst sees him
+    return RN.model.notFirst(list.filter((x) => x.d && !x.op.hidden).sort((a, b) => ms(b.d) - ms(a.d))).slice(0, 5);
   }
   function reviewsCard() {
     const list = recentReviews();
@@ -726,7 +735,8 @@
     const lead = gaps[0];
     const PIPS = 10;
     const pips = (n) => `${Array.from({ length: Math.min(n, PIPS) }, () => '<i></i>').join('')}${n > PIPS ? `<em>+${n - PIPS}</em>` : ''}${n ? '' : '<em class="adm-gap-none">None</em>'}`;
-    const shortL = (l) => String(l).replace(/^Pre-revenue$/, 'Pre-rev').replace(/^Under /, '<').replace(/M\s*[–-]\s*\$/, '–');
+    // Narrow column labels: hyphens only, ranges closed up, thousands as k ('$1-5M', '501-1k', '1k+')
+    const shortL = (l) => String(l).replace(/^Pre-revenue$/, 'Pre-rev').replace(/^Under /, '<').replace(/M\s*[–-]\s*\$/, '-').replace(/(\d)\s+-\s+([\d$])/, '$1-$2').replace(/(\d),000\b/g, '$1k');
     const srcTotal = Math.max(1, src.rows.reduce((a, r) => a + r.value, 0));
     const srcRows = src.rows.slice().sort((a, b) => b.value - a.value);
     const fl = filterUse(days);
@@ -1285,7 +1295,7 @@
       <div class="adm-proj-hd">
         <div class="grow"><div class="row" style="--gap:8px">${f.roleCategory ? `<span class="pill">${RN.ui.catDot(f.roleCategory)}${esc(catLabel(f.roleCategory))}</span>` : ''}${RN.ui.statusPill('project', p.status)}${info.flag ? `<span class="pill pill-bad">${icon('flag')}No interested operator in 72 hrs</span>` : ''}</div>
           <h2 class="h4 adm-proj-t"><a href="#engagement.${esc(p.id)}">${esc(p.title || 'Untitled engagement')}</a></h2>
-          <p class="small muted">${esc(c.company || c.name)}${scope ? ' · ' + esc(scope) : ''}</p></div>
+          <p class="small muted">${esc(c.company || c.name)}${scope ? ' · ' + esc(keepNums(scope)) : ''}</p></div>
       </div>
       <div class="adm-proj-stats">
         <div><span class="label">Since posting</span><b class="num ${info.flag ? 'adm-bad' : ''}">${int(Math.round(info.hrs))} hrs</b><span class="tiny muted">${info.hrs >= 48 ? Math.round(info.hrs / 24) + ' days · ' : ''}flag at 72 hrs</span></div>
@@ -1322,11 +1332,18 @@
     const by = { ris: (a, b) => RN.fields.risRank(b) - RN.fields.risRank(a) || a.name.localeCompare(b.name), complete: (a, b) => a.completeness - b.completeness || a.name.localeCompare(b.name), name: (a, b) => a.name.localeCompare(b.name), recent: (a, b) => (b.admin ? 1 : 0) - (a.admin ? 1 : 0) || RN.fields.risRank(b) - RN.fields.risRank(a) }[ui.dirSort];
     ops.sort(by);
     if (q) ops.sort((a, b) => (a.name.toLowerCase().includes(q) ? 0 : 1) - (b.name.toLowerCase().includes(q) ? 0 : 1));
-    return ops;
+    // Default view never opens on the founder (owner decision 4); a search for his name still puts him first
+    return q && ops[0] && RN.model.isFounder(ops[0]) && ops[0].name.toLowerCase().includes(q) ? ops : RN.model.notFirst(ops);
   }
+  // Phones page the directory 10 rows at a time (25 on wider screens)
+  const dirPage = () => (window.matchMedia && window.matchMedia('(max-width: 640px)').matches ? 10 : 25);
+  // Numbers stay on one line: money ranges (RN.fmt.keepRange), "20 hrs / month", "6 to 12 months". Run before esc.
+  const keepNums = (s) => RN.fmt.keepRange(String(s == null ? '' : s))
+    .replace(/(\d+)\s+hrs\s*\/\s*(month|week)/g, '$1\u00a0hrs\u00a0/\u2060\u00a0$2')
+    .replace(/(\d+)\s+to\s+(\d+)\s+(months?|weeks?|days?|hours?|hrs)\b/g, '$1\u00a0to\u00a0$2\u00a0$3');
   function dirTable() {
     const rows = dirRows();
-    const shown = rows.slice(0, ui.dirLimit);
+    const shown = rows.slice(0, ui.dirLimit || dirPage());
     if (!rows.length) return RN.ui.empty({ icon: 'search', title: 'No operators match', body: 'Try a different name, role or focus area, or clear the role category.', cta: '<button type="button" class="btn btn-sm btn-line" data-act="adm-dir-reset">Clear search and filters</button>' });
     return `<p class="small muted adm-dir-count">${RN.fmt.plural(rows.length, 'operator')}${rows.length > shown.length ? `, showing ${shown.length}` : ''}</p>
       <div class="tbl-wrap"><table class="tbl adm-tbl adm-dir adm-stacktbl">
@@ -1348,18 +1365,18 @@
           </div></td>
         </tr>`;
       }).join('')}</tbody></table></div>
-      ${rows.length > shown.length ? `<button type="button" class="btn btn-line btn-sm adm-more" data-act="adm-dir-more">Show ${Math.min(25, rows.length - shown.length)} more</button>` : ''}`;
+      ${rows.length > shown.length ? `<button type="button" class="btn btn-line btn-sm adm-more" data-act="adm-dir-more">Show ${Math.min(dirPage(), rows.length - shown.length)} more</button>` : ''}`;
   }
   function directory() {
     const all = RN.model.ops.filter(inDir);
     const hidden = all.filter((o) => o.hidden).length;
-    const segs = [['all', 'All'], ['work', 'Profile under 60%'], ['edited', 'Edited by team'], ['hidden', `Hidden${hidden ? ' (' + hidden + ')' : ''}`]];
+    const segs = [['all', 'All'], ['work', 'Profile under 60%', 'Under 60%'], ['edited', 'Edited by team', 'Edited'], ['hidden', `Hidden${hidden ? ' (' + hidden + ')' : ''}`]];
     return `${head('Operator directory', `${RN.fmt.plural(all.length - hidden, 'operator')} in search${hidden ? `, ${hidden} hidden` : ''}. Edit a profile on the operator’s behalf, or hide it from search. Hidden profiles stay reachable by direct link.`)}
       <section class="card adm-sec adm-dir-card">
         <div class="adm-dir-ctl">
           <div class="input-wrap adm-dir-q">${icon('search')}<input class="input" type="search" placeholder="Search name, role, location or focus area" value="${esc(ui.dirQ)}" data-input="adm-dir-q" aria-label="Search operators"></div>
           <div class="row" style="--gap:10px">
-            <div class="seg adm-seg" role="group" aria-label="Show">${segs.map(([k, l]) => `<button type="button" class="${ui.dirSeg === k ? 'on' : ''}" aria-pressed="${ui.dirSeg === k}" data-act="adm-dir-seg" data-s="${k}">${esc(l)}</button>`).join('')}</div>
+            <div class="seg adm-seg" role="group" aria-label="Show">${segs.map(([k, l, s]) => `<button type="button" class="${ui.dirSeg === k ? 'on' : ''}" aria-pressed="${ui.dirSeg === k}" data-act="adm-dir-seg" data-s="${k}">${s ? `<span class="seg-long">${esc(l)}</span><span class="seg-short">${esc(s)}</span>` : esc(l)}</button>`).join('')}</div>
             <label class="adm-sort"><span class="sr-only">Sort by</span><select class="select" data-change="adm-dir-sort" aria-label="Sort by">${[['ris', 'Reputation Index'], ['complete', 'Weakest profile first'], ['name', 'Name'], ['recent', 'Newly approved first']].map(([k, l]) => `<option value="${k}" ${ui.dirSort === k ? 'selected' : ''}>Sort: ${esc(l)}</option>`).join('')}</select></label>
           </div>
           <div class="adm-dir-cats" data-deselect>${RN.w.control('roleCategory', ui.dirCat, { name: 'adm-dir-cat', id: 'adm-dir-cat', change: 'adm-dir-cat' })}</div>
@@ -1474,11 +1491,11 @@
   RN.actions['adm-mail-seg'] = (el) => { ui.mailSeg = el.dataset.s; RN.rerender(); };
   RN.actions['adm-res-period'] = (el) => { ui.resPeriod = el.dataset.p === 'prev' ? 'prev' : 'open'; RN.rerender(); };
   RN.actions['adm-res-all'] = () => { ui.resAll = !ui.resAll; RN.rerender(); };
-  RN.actions['adm-dir-seg'] = (el) => { ui.dirSeg = el.dataset.s; ui.dirLimit = 25; RN.rerender(); };
-  RN.actions['adm-dir-more'] = () => { ui.dirLimit += 25; refreshDir(); };
-  RN.actions['adm-dir-reset'] = () => { Object.assign(ui, { dirQ: '', dirCat: '', dirSeg: 'all', dirLimit: 25 }); RN.rerender(); };
-  RN.inputs['adm-dir-q'] = (el) => { ui.dirQ = el.value; ui.dirLimit = 25; refreshDir(); };
-  RN.inputs['adm-dir-cat'] = (el) => { ui.dirCat = el.value; ui.dirLimit = 25; refreshDir(); };
+  RN.actions['adm-dir-seg'] = (el) => { ui.dirSeg = el.dataset.s; ui.dirLimit = 0; RN.rerender(); };
+  RN.actions['adm-dir-more'] = () => { ui.dirLimit = (ui.dirLimit || dirPage()) + dirPage(); refreshDir(); };
+  RN.actions['adm-dir-reset'] = () => { Object.assign(ui, { dirQ: '', dirCat: '', dirSeg: 'all', dirLimit: 0 }); RN.rerender(); };
+  RN.inputs['adm-dir-q'] = (el) => { ui.dirQ = el.value; ui.dirLimit = 0; refreshDir(); };
+  RN.inputs['adm-dir-cat'] = (el) => { ui.dirCat = el.value; ui.dirLimit = 0; refreshDir(); };
   RN.inputs['adm-dir-sort'] = (el) => { ui.dirSort = el.value; refreshDir(); };
 
   /* ---------- Approvals ---------- */

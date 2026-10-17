@@ -635,6 +635,7 @@
 
 /* Phone action bar: keeps Request intro one tap away while reading */
 .pf-mbar { display: none; }
+.pf-nwb { white-space: nowrap; }
 
 /* Similar operators */
 .pf-similar { margin-top: 0; padding-bottom: calc(var(--sec-y) / 2); }
@@ -823,14 +824,14 @@
   .pf-proofs { grid-template-columns: minmax(0, 1fr); margin-top: -60px; }
   .pf-subnav { margin-top: 28px; }
   .pf-subnav.show-cta .pf-subnav-cta { display: none; }
-  .pf-proof-rep { flex-wrap: wrap; }
-  .pf-rep-r { flex: 1 1 100%; }
+  .pf-proof-rep { flex-wrap: nowrap; align-items: flex-start; gap: 14px; }
+  .pf-rep-seal { width: 56px; height: 56px; }
+  .pf-rep-seal svg { width: 56px; height: auto; }
+  .pf-rep-r { flex: 1 1 auto; }
   .pf-bell { max-width: none; }
-  .pf { padding-bottom: 76px; }
   .pf-mbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); background: color-mix(in srgb, var(--card) 94%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
     border-top: 1px solid var(--line-2); box-shadow: 0 -8px 24px rgba(0, 0, 0, .08); transition: transform var(--dur-2) var(--ease-out), opacity var(--dur-1) ease; }
-  body:has(.dock) .pf-mbar { padding-left: 68px; }
   .pf-mbar.is-away { transform: translateY(110%); opacity: 0; pointer-events: none; }
   .pf-mbar-who { display: flex; flex-direction: column; min-width: 0; }
   .pf-mbar-who b { font-family: var(--f-display); font-size: var(--t-14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1215,8 +1216,8 @@
   .pf-reviews > *, .pf-samples > *, .pf-offers > *, .pf-similar .grid > * { scroll-snap-align: start; min-width: 0; }
 }
 @media (max-width: 640px) {
-  .pf-axbars { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; }
-  .pf-axbars span { font-size: var(--t-13); }
+  .pf-axbars { grid-template-columns: minmax(0, 1fr); column-gap: 20px; }
+  .pf-axbars span { font-size: var(--t-14); }
   .pf-bow-v { max-width: 290px !important; }
 }
 @media (max-width: 640px) {
@@ -1226,4 +1227,63 @@
   .pf-core-panel .pf-core-vs { margin-top: 4px; font-size: var(--t-13); }
   /* Phones show two engagements and two focus areas before Show all */
   .pf-tl:not(.all) > .pf-eng:nth-child(n+3), .pf-tags:not(.all) > .pf-tag:nth-child(n+3) { display: none; }
+}
+
+/* ==========================================================================
+   Phone pass (Oct 17, 2026): gutters, the action bar from load, At a glance as rows, quieter text logos,
+   single cards at full width, 13px floor for sentences, footer one section gap below the page
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* Action bar: Compare (n) stands in for the floating tray, which would sit on top of the bar */
+  .pf-mbar { gap: 10px; }
+  .pf-mbar-who { flex: 1 1 auto; }
+  .pf-mbar-cmp { --h: 40px; flex: 0 0 auto; gap: 6px; padding: 0 12px; letter-spacing: 0; }
+  .pf-mbar-cmp svg { width: 16px; height: 16px; }
+  body:has(.pf-mbar) .tray, body:has(.pf-vf) .tray { display: none; }
+  body:has(.pf) .ftr { margin-top: var(--sec-y); }
+  .pf-similar { padding-bottom: 0; }
+  .pf-verify .pf-vf { padding-bottom: 0; }
+  body:has(.pf-mbar) .ftr { padding-bottom: calc(var(--s-10) + 64px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Section tabs: full-bleed scroller with a fade, so a cut-off tab reads as more to swipe */
+  .pf-subnav-in { height: 48px; }
+  .pf-subnav-links { margin-inline: -16px; padding-inline: 4px 16px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+  .pf-subnav-links button { height: 44px; padding: 0 10px; }
+  .pf-subnav-links button.on::after { left: 10px; right: 10px; bottom: 0; }
+  .pf-sec { scroll-margin-top: 50px; }
+
+  /* At a glance: label left, value right, one row each */
+  .pf-tiles-grid { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 4px; }
+  .pf-tile { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 0; padding: 12px 0; border: 0; border-bottom: 1px solid var(--night-line); border-radius: 0; background: none; }
+  .pf-tile:last-child { border-bottom: 0; padding-bottom: 2px; }
+  .pf-tile-l { flex: 0 0 auto; font-size: var(--t-13); white-space: nowrap; }
+  .pf-tile-chips { justify-content: flex-end; }
+  .pf-tile-v { margin-top: 0; font-size: var(--t-24); white-space: nowrap; }
+
+  /* Company names without a logo: quiet chips, the verified seal inline after the name */
+  .pf-logos { gap: 10px 12px; }
+  .pf-logo.is-txt { min-height: 32px; padding: 4px 12px; border: 1px solid var(--night-line); border-radius: 99px; }
+  .pf-logo.is-txt b { font-size: var(--t-15); font-weight: 700; letter-spacing: 0; }
+  .pf-logo.is-conf b { font-weight: 600; color: var(--night-mute); }
+  .pf-logo.is-txt .pf-logo-seal { position: static; margin-left: 8px; width: 16px; height: 16px; }
+
+  /* A swipe row with a single card: the card takes the full width */
+  .pf-reviews:has(> :only-child), .pf-samples:has(> :only-child), .pf-offers:has(> :only-child) { grid-auto-columns: 100%; overflow: visible; }
+
+  /* Sentences keep a 13px floor; 12px stays for uppercase labels */
+  .pf-fine, .pf-verify .tb-ladder .tb-l-name small, .pf-tiles .pf-tile-l { font-size: var(--t-13); }
+
+  /* Verify page: the three facts as rows */
+  .pf-verify .pf-vf-facts { grid-template-columns: minmax(0, 1fr); }
+  .pf-verify .pf-vf-facts > div, .pf-verify .pf-vf-facts > div:first-child { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 20px; border-left: 0; border-top: 1px solid var(--line-2); }
+  .pf-verify .pf-vf-facts > div:first-child { border-top: 0; }
+  .pf-verify .pf-vf-facts > div:nth-child(3) { border-left: 0; }
+  .pf-verify .pf-vf-facts dt { font-size: var(--t-14); }
+  .pf-verify .pf-vf-facts dd { margin: 0; font-size: var(--t-20); white-space: nowrap; }
+}
+
+/* Engagement history: on phones the company size goes on its own line under the name, so no separator dangles at a line end */
+@media (max-width: 640px) {
+  .pf-eng-meta { display: block; }
+  .pf-eng-sep { display: none; }
 }

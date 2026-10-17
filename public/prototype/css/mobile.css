@@ -37,3 +37,57 @@
   button.illus-tag { position: relative; }
   button.illus-tag::after { content: ""; position: absolute; inset: -12px -4px; }
 }
+
+/* ---------- Mobile audit, Oct 17, 2026 ---------- */
+/* Hit boxes for the remaining small controls (about 44px, nothing moves). Position uses :where() so a control a view
+   positions absolutely (a share button in a card corner) keeps its own position. */
+@media (pointer: coarse), (max-width: 640px) {
+  :where(.btn-sm, .seg button, .nav-burger, .nav-actions > a, .opc-save, .ins-shr, .ins-ch-share, .rs-kb-sh, .rs-chip-b,
+    .ins-bar-a, .ins-td-h a, .pg-talk-tel, .pj-bpd-ops, .pg-back) { position: relative; }
+  :where(.btn-sm, .seg button)::after { content: ""; position: absolute; inset: -4px 0; }
+  .seg button::after { inset: -5px -1px; }
+  :where(.nav-burger, .opc-save)::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; }
+  .nav-actions > a:not(.btn)::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+  :where(.ins-shr, .ins-ch-share, .rs-kb-sh, .ins-bar-a, .ins-td-h a)::after { content: ""; position: absolute; inset: -10px -4px; }
+  .rs-chip-b::after { content: ""; position: absolute; inset: -6px -2px; }
+  .rs-tag-meta { gap: 8px; }
+  :where(.pg-talk-tel, .pj-bpd-ops)::after { content: ""; position: absolute; inset: -12px -6px; }
+  .pg-back::after { content: ""; position: absolute; inset: -2px -8px; }
+}
+@media (max-width: 640px) {
+  .ins-est-sizes button { padding-block: 12px; }
+  .shr-row a.chip-sm { min-width: 44px; justify-content: center; }
+}
+
+/* Reading sizes on phones: sentences set as .tiny read at 13px; chart and fact labels keep a 12px floor */
+@media (max-width: 640px) {
+  p.tiny, span.tiny:not(.label), .fig-note, .fig-note span, .pj-how-eq, .pj-terms-note { font-size: 13px !important; line-height: 1.5; }
+  .fn-rc-l, .fn-g-zone, .pg-brow-r, .fn-vs-l, .fn-bars-cap, .fn-guide-k, .fn-page dt,
+  .bw-spot-facts dt, .bw-cov-today span, .bw-mo b, .bw-flow-l, .bw-fit i, .bw-cov-lab, .adm-bf-hd, .adm-kv dt, .sb-facts dt,
+  .sb-he-facts span, .sa-range-ticks span, .mg-steps span, .adm-stacktbl td[data-l]::before { font-size: 12px !important; }
+  .fn-to { font-size: max(11px, 1em) !important; }
+}
+
+/* Option chips with long labels (what you need, role category, hours a month): a 2-column grid of 44px rows on
+   phones instead of ragged one-chip rows. Start-by fits three across. Works in the intro sheet, Company profile,
+   Join and Studio. .chipset.is-grid opts any other group in. Join's role cards keep their own one-column layout. */
+@media (max-width: 640px) {
+  :is(#f-need, #f-roleCategory, #f-hoursPerMonth).chipset:not([data-view^="join-operator"] #f-roleCategory), .chipset.is-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  :is(#f-need, #f-roleCategory, #f-hoursPerMonth).chipset:not([data-view^="join-operator"] #f-roleCategory) .chip, .chipset.is-grid .chip { height: auto; min-height: 44px; padding-block: 8px; white-space: normal; justify-content: flex-start; text-align: left; border-radius: 12px; line-height: 1.25; }
+  :is(#f-need, #f-roleCategory, #f-hoursPerMonth, #f-startBy).chipset .chip::after, .chipset.is-grid .chip::after { inset: 0; }
+  #f-startBy.chipset { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  #f-startBy.chipset .chip { height: auto; min-height: 44px; padding-inline: 8px; white-space: normal; justify-content: center; text-align: center; border-radius: 12px; line-height: 1.2; }
+  /* The intro request sheet: a one-line subtitle, the X closes (no second Cancel), a full-width primary and the fee
+     line on one row */
+  .modal:has(#intro-form) .modal-hd { padding-block: 16px 8px; }
+  .modal:has(#intro-form) .modal-hd .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .modal:has(#intro-form) .modal-ft { padding-block: 10px calc(10px + env(safe-area-inset-bottom, 0px)); gap: 8px; }
+  .modal:has(#intro-form) .modal-ft [data-act="modal-close"] { display: none; }
+  .modal:has(#intro-form) .modal-ft > .grow:first-child { font-size: 12px; text-align: center; }
+}
+
+/* Small text links and buttons that stand alone: an invisible 32px-tall hit area around the text, with no layout change */
+@media (max-width: 640px) {
+  :is(a.cmp-name, .fn-grp-a > a, a.rs-by-who, button.pf-rate-hint, .sa-kpi-l > a, a.jn-why) { position: relative; }
+  :is(a.cmp-name, .fn-grp-a > a, a.rs-by-who, button.pf-rate-hint, .sa-kpi-l > a, a.jn-why)::after { content: ""; position: absolute; inset: -6px -2px; }
+}

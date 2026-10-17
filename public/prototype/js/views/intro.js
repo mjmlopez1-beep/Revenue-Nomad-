@@ -561,7 +561,7 @@
     const m = hire.monthly(fake);
     return `<div class="hire-sum-n"><span class="label">Estimated monthly cost</span><b class="num">${m ? RN.fmt.usd(m) : 'Add the terms'}</b><span class="tiny muted">${esc(project ? (v.projectBudget ? `${RN.fmt.usd(v.projectBudget)} spread over the term` : 'Add the project budget') : hire.monthlyNote(fake))}</span></div>
       <div class="hire-sum-n"><span class="label">End date</span><b>${end ? esc(hire.date(end)) : 'Pick a start date and term'}</b><span class="tiny muted">${v.term ? esc(RN.w.label('term', v.term)) + ' from the start date' : ''}</span></div>
-      <p class="small hire-sum-note">No fees for companies. You pay the operator’s rate, nothing more.</p>`;
+      <p class="small hire-sum-note">No fees for companies. The listed rate is the price, with no fee added on top.</p>`;
   }
   RN.inputs['hire-calc'] = (form) => {
     if (!form || !form.matches || !form.matches('form')) form = form && form.closest ? form.closest('form') : null;
@@ -640,7 +640,7 @@
       RN.mail('Revenue Nomad team', `Rehire: ${co} and ${op.name}`, `${client.name || co} (${co}) rehired ${op.name}.\n${lines}`, 'hire');
       RN.track('hire', { opId: op.id, source, sourceId: o.sourceId || '' });
     } else {
-      RN.mail(client.email, `You hired ${op.name}`, `${op.first} starts ${hire.date(terms.startDate)}. The terms you recorded:\n${lines}\n\nNo fees for companies: you pay ${op.first}’s rate, nothing more. Your Team tab keeps these terms, the end date and a check-in button: #buyer.team`, 'hire');
+      RN.mail(client.email, `You hired ${op.name}`, `${op.first} starts ${hire.date(terms.startDate)}. The terms you recorded:\n${lines}\n\nNo fees for companies: the agreed rate is the price, with no fee added on top. Your Team tab keeps these terms, the end date and a check-in button: #buyer.team`, 'hire');
       RN.mail(op.name, `Engagement confirmed with ${co}`, `Congratulations. ${co} confirmed the terms:\n${lines}${terms.rate ? `\n\nYour take-home at ${RN.fmt.rate(terms.rate)} is ${RN.fmt.rate(hire.takeHome(terms.rate))}. ${hire.FEE_LINE}` : `\n\n${hire.FEE_LINE}`}\n\nWhen the engagement wraps, we ask the company for a CORE review, which verifies your fit tags. See it in Studio: #studio.engagements`, 'hire');
       RN.track('hire', { opId: op.id, source, sourceId: o.sourceId || '' });
     }

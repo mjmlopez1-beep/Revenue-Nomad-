@@ -185,3 +185,63 @@
   .cmp-quick li .tb { display: none; }
   .cmp-empty-act .btn { width: 100%; }
 }
+
+/* ==========================================================================
+   Phones (Oct 17, 2026): each row is a caption line, then the values, two operators per screen. The caption
+   stays pinned on the left while the values scroll sideways; a strip of faces and first names sticks under
+   the site header once the operator header row has scrolled away (compare.js mhead).
+   ========================================================================== */
+.cmp-mhead { display: none; }
+.cmp-nw { white-space: nowrap; }
+@media (max-width: 640px) {
+  .cmp-tbl { --cw: calc((100vw - var(--gutter) * 2 - 12px) / 2); width: calc(var(--ops) * var(--cw) + (var(--ops) - 1) * 12px); min-width: calc(100vw - var(--gutter) * 2); }
+  .cmp-tbl[data-ops="1"] { --cw: calc(100vw - var(--gutter) * 2); }
+  .cmp-tbl, .cmp-tbl thead, .cmp-tbl tbody { display: block; }
+  .cmp-tbl tbody[hidden] { display: none; }
+  .cmp-tbl tr { display: grid; grid-template-columns: repeat(var(--ops), var(--cw)); column-gap: 12px; align-items: start; border-bottom: 1px solid var(--line-2); }
+  .cmp-tbl th, .cmp-tbl td { border-bottom: 0; padding: 4px 0 14px; min-width: 0; }
+  .cmp-tbl tr.cmp-sec-start { border-top: 1px solid var(--line); }
+  .cmp-tbl tr.cmp-sec-start > th, .cmp-tbl tr.cmp-sec-start > td { border-top: 0; padding-top: 4px; }
+  .cmp-tbl tr.cmp-sec-start > th.cmp-lab { padding-top: 18px; }
+  /* The caption: a full-width line pinned to the left edge of the scroller */
+  .cmp-tbl .cmp-lab { grid-column: 1 / -1; position: sticky; left: 0; width: calc(100vw - var(--gutter) * 2); padding: 12px 0 6px; box-shadow: none; background: transparent; }
+  .cmp-tbl .cmp-lab:empty { display: none; }
+  .cmp-lab .cmp-sec { margin-bottom: 4px; }
+  .cmp-l { font-size: var(--t-14); color: var(--ink-2); }
+  .cmp-lab .cmp-sub { display: inline; margin: 0 0 0 6px; }
+  .cmp-tbl td, .cmp-tbl thead th:not(.cmp-lab) { scroll-margin-left: 0; }
+  .cmp-tbl td.cmp-best { padding-inline: 10px; border-radius: 10px; }
+  .cmp-tbl td.cmp-best::after { top: 10px; right: 8px; }
+  /* Operator header row */
+  .cmp-tbl thead tr { border-bottom: 1px solid var(--line); align-items: stretch; }
+  .cmp-tbl thead th { height: auto; padding: 0 0 14px; border-bottom: 0; }
+  .cmp-tbl tbody:first-of-type > tr:first-child { border-top: 0; }
+  .cmp-tbl td :is(.ftag, .pill) { max-width: 100%; height: auto; min-height: 28px; white-space: normal; text-align: left; line-height: 1.25; padding-block: 4px; }
+  .cmp-tbl thead th.cmp-corner { padding: 12px 0 8px; }
+  .cmp-hd-id { flex-direction: column; gap: 8px; }
+  .cmp-hd-id .ava-md { --sz: 40px; }
+  .cmp-name { white-space: normal; font-size: var(--t-18); }
+  .cmp-hd-acts { gap: var(--s-3); flex-wrap: wrap; }
+  /* The add column becomes the Add operators button in the page head */
+  .cmp-col-add, .cmp-add-cell { display: none; }
+  /* Rows that span every column */
+  .cmp-tbl .cmp-lockrow, .cmp-fold-row > td { grid-column: 1 / -1; position: sticky; left: 0; width: calc(100vw - var(--gutter) * 2); padding-top: 8px; }
+  .cmp-lockrow .cmp-lockbox { position: static; max-width: none; }
+  .cmp-fold-row { border-bottom: 0; }
+  /* Sticky name strip */
+  .cmp-mhead { display: block; position: sticky; top: var(--nav-h); z-index: 6; height: 0; }
+  .cmp-mhead-in { --cw: calc((100vw - var(--gutter) * 2 - 12px) / 2); display: grid; grid-template-columns: repeat(var(--ops), var(--cw)); column-gap: 12px; overflow: hidden; padding: 8px 0; background: color-mix(in srgb, var(--paper) 96%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); opacity: 0; visibility: hidden; transition: opacity var(--dur-1) ease, visibility 0s linear var(--dur-1); }
+  .cmp-mhead-in[data-ops="1"] { --cw: calc(100vw - var(--gutter) * 2); }
+  .cmp-mhead.is-on .cmp-mhead-in { opacity: 1; visibility: visible; transition: opacity var(--dur-1) ease; }
+  .cmp-mhead-c { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .cmp-mhead-c .ava-sm { --sz: 26px; }
+  .cmp-mhead-c b { font-family: var(--f-display); font-size: var(--t-14); font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Sentences keep a 13px floor */
+  .cmp-foot.tiny { font-size: var(--t-13); }
+  .cmp-foot .act { font-size: var(--t-13); }
+  .cmp-sub, .cmp-src { font-size: var(--t-13); }
+  /* The footer sits one section gap below the page */
+  body:has(.cmp-page) .ftr { margin-top: var(--sec-y); }
+  .cmp-body { padding-bottom: 0; }
+}
+@media (max-width: 640px) and (prefers-reduced-motion: reduce) { .cmp-mhead-in { transition: none; } }

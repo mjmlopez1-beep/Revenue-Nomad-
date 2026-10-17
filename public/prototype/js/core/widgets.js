@@ -22,9 +22,12 @@
   };
   // An en-dash label saved before the hyphens-only labels (Oct 14, 2026: "$1M–$5M" is now "$1M - $5M") still resolves
   const dashed = (v) => (typeof v === 'string' && /[\u2013\u2014]/.test(v) ? v.replace(/\s*[\u2013\u2014]\s*/g, ' - ') : null);
+  // Labels keep their numbers together with no-break spaces; a label saved with plain spaces still resolves
+  const flat = (s) => (typeof s === 'string' ? s.replace(/\u2060/g, '').replace(/\u00a0/g, ' ') : s);
   w.opt = (key, v) => {
     const list = w.def(key).options || [];
-    const o = list.find((x) => x.v === v || x.l === v);
+    const fv = flat(v);
+    const o = list.find((x) => x.v === v || x.l === v || flat(x.l) === fv);
     if (o) return o;
     const d = dashed(v);
     return d ? list.find((x) => x.v === d || x.l === d) : undefined;

@@ -212,7 +212,7 @@
 
   // Operators strongest in a cell, area or stage: verified proof first, then claims, then Reputation Index
   function topOps(area, stage, n, cat) {
-    return RN.model.ops.filter((op) => !op.hidden && (!cat || op.catKey === cat)).map((op) => {
+    const ranked = RN.model.ops.filter((op) => !op.hidden && (!cat || op.catKey === cat)).map((op) => {
       const hits = op.tags.filter((t) => {
         const info = RN.model.tagInfo(t.t) || {};
         const ax = t.axis || info.axis;
@@ -220,7 +220,9 @@
       });
       const v = hits.filter((t) => t.tier !== 'claimed');
       return { op, hits, v, s: v.length * 100 + Math.min(hits.length, 6) * 8 + RN.fields.risRank(op) * 0.5 + (op.photo ? 4 : 0) };
-    }).filter((x) => x.hits.length).sort((a, b) => b.s - a.s).slice(0, n || 3);
+    }).filter((x) => x.hits.length).sort((a, b) => b.s - a.s);
+    // The founder stays eligible but never takes the first slot (owner rule, Oct 14, 2026)
+    return RN.model.notFirst(ranked).slice(0, n || 3);
   }
   const whyLine = (x) => x.v.length ? `Company-verified in ${x.v[0].t}${x.v.length > 1 ? ` and ${x.v.length - 1} more here` : ''}` : `Claims ${x.hits.slice(0, 2).map((t) => t.t).join(' and ')}`;
 
@@ -247,14 +249,17 @@
   const illus = (label) => RN.ui.illusTag(label || 'Illustrative');
   const jsonAttr = (o) => esc(JSON.stringify(o));
   // The one line companies read about pricing
-  const NO_FEES = 'No fees for companies. You pay the operator\'s rate, nothing more.';
+  const NO_FEES = 'No fees for companies. The listed rate is the price, with no fee added on top.';
 
   /* [[cost:key.field]] in guide copy reads the canonical cost record (RN.costs, js/data/costs.js), so a guide quotes the
      same figure as the cost hub, the function pages and the rates pages. field: a text field of the record (hourly,
      hours, monthly, fixed, yearly, fullTime, fullTimeMonthly, pct, price), or answer, basis, tenure, replace, firstYear.
      |lower lowercases a leading "About" or "Up to" for use mid-sentence; |bare drops the unit ("$200 - $250/hr" ->
      "$200 - $250", "About 40 hours a month" -> "About 40"). Money ranges keep no-break spaces so they never wrap. */
-  const NB = (s) => String(s).replace(/(\$[\d.,]+[kKM]?) - (\$)/g, '$1 - $2');
+  // RN.fmt.keepRange: no-break spaces plus a word joiner after the hyphen, so Chrome never breaks a range
+  const NB = (s) => RN.fmt.keepRange(s);
+  // "40 hrs / month" with no-break spaces, so the unit never splits on phones
+  const HRS = (v) => String(RN.w.label('hoursPerMonth', v) || '').replace(/ /g, '\u00a0');
   function costVal(key, field, mods) {
     const C = RN.costs, r = C && C.get(key);
     if (!r) { console.warn('Unknown cost key', key); return ''; }
@@ -813,7 +818,7 @@
       ${diagBow(r)}
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
       <div class="rs-dr-grid">
-        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M to $20M company: ${esc(range)}.` : '.'}</span></div>
+        <div class="rs-dr-box"><span class="row between" style="--gap:8px"><span class="label">Who to hire</span>${ri ? illus() : ''}</span><b>A fractional ${esc(roleFor(cat))}</b><span class="small">${esc(catL)}${ri ? `, median ${esc(RN.fmt.rate(ri.p50))} on the Rate Index. At 40 hrs a month for a $5M to $20M company: ${esc(NB(range))}.` : '.'}</span></div>
         <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as an engagement.</span></div>
       </div>
       <div class="row rs-dr-acts">
@@ -909,7 +914,7 @@
     let list = topOps(r.top.area, r.top.stage, 3, cat);
     if (list.length < 3) list = list.concat(topOps(r.top.area, null, 6, cat).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
     if (list.length < 3) list = list.concat(RN.model.search({ filters: { roleCategories: [cat] }, sort: 'ris' }).map((x) => ({ op: x.op, hits: [], v: [] })).filter((x) => !list.some((y) => y.op.id === x.op.id))).slice(0, 3);
-    return list;
+    return RN.model.notFirst(list);
   }
   function diagOps() {
     const r = diagScore();
@@ -983,7 +988,7 @@
     <section class="wrap section-sm rs-sec" aria-labelledby="rs-grid-t">
       <div class="rs-sec-hd">
         <div><span class="eyebrow">The map</span><h2 class="h2" id="rs-grid-t">Six areas across seven stages</h2></div>
-        <p class="body">Each number is the operators with company-verified proof in that cell; hover for how many claim the work. Select a cell, a stage or an area to see what good looks like, the focus areas that live there and who is strongest. Foundation holds the work every stage runs on.</p>
+        <p class="body">Each number is the operators with company-verified proof in that cell<span class="rs-hover-only">; hover for how many claim the work</span>. Select a cell, a stage or an area to see what good looks like, the focus areas that live there and who is strongest. Foundation holds the work every stage runs on.</p>
       </div>
       <div class="rs-grid-box" data-rs-grid>${grid(ix)}</div>
       ${legend()}
@@ -1083,7 +1088,8 @@
     const me = RN.myOp();
     const mine = me ? me.tags.find((t) => t.t.toLowerCase() === r.name.toLowerCase()) : null;
     const gap = r.demand >= 50 && r.ver < 2;
-    const vShow = r.verOps.slice(0, 4);
+    let vShow = RN.model.notFirst(r.verOps).slice(0, 4);
+    if (vShow.length && RN.model.isFounder(vShow[0])) vShow = [];
     let opAct = '';
     if (me) {
       opAct = mine
@@ -1133,8 +1139,11 @@
         const cr = rows.filter((r) => r.cat === c);
         if (!cr.length) return '';
         const ver = cr.reduce((a, r) => a + r.ver, 0);
-        const faces = [];
+        let faces = [];
         cr.forEach((r) => r.verOps.forEach((op) => { if (!faces.includes(op)) faces.push(op); }));
+        faces = RN.model.notFirst(faces);
+        // A strip whose only face is the founder would make him the face of the category: leave it out
+        if (faces.length && RN.model.isFounder(faces[0])) faces = [];
         const used = cr.filter((r) => r.any).length;
         return `<section class="rs-lib-cat">
           <div class="rs-lib-cat-hd">
@@ -1355,7 +1364,7 @@
   }
   const rateNote = () => `<p class="rs-src">${icon('info')}<span>Rates come from the Rate Index: the middle half of hourly rates for the role, times the hours. ${esc(NO_FEES)}</span>${illus()}</p>`;
   // Monthly table for a role category at a $5M to $20M company. The rate is the price (no fees for companies).
-  const monthTable = (cat, hrs) => tbl(['Available time', 'Typical month'], hrs.map((h) => [esc(RN.w.label('hoursPerMonth', h)), esc(monthRange(cat, h, '5m_20m'))])) + rateNote();
+  const monthTable = (cat, hrs) => tbl(['Available time', 'Typical month'], hrs.map((h) => [esc(HRS(h)), esc(NB(monthRange(cat, h, '5m_20m')))])) + rateNote();
   const HOURS = { h_under_20: '19', h_20: '20', h_40: '40', h_60: '60', h_80: '80', h_100: '100', h_160: '160' };
   const hoursRows = () => REP().hours.map((r) => ({ code: HOURS[r.h] || r.h, v: r.v }));
   const sumStat = (re, dflt) => { const x = (REP().summary || []).find((s) => re.test(s.l)); return x ? x.v : dflt; };
@@ -1366,7 +1375,8 @@
   const SRC_RI = () => `Rate Index, ${RN.contrib ? RN.contrib.indexLabel().replace(/ index$/, '') : 'latest quarter'}`;
   const latestMedian = () => { const t = RIX().trend || []; return t.length ? t[t.length - 1].v : 240; };
   // Tables with 3+ columns stack into labelled rows on phones (data-l carries the column label)
-  const tbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl ${head.length > 2 ? 'rs-tbl-stack' : ''}"><table class="tbl ${cls || ''}"><thead><tr>${head.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'r' : ''}" data-l="${esc(head[i] || '')}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  // Phones: short numeric tables stay tables (rs-tbl-num); only wide tables or ones with text cells (rs-tbl-l) stack
+  const tbl = (head, rows, cls) => `<div class="tbl-wrap rs-tbl ${head.length > 4 || (head.length > 2 && /\brs-tbl-l\b/.test(cls || '')) ? 'rs-tbl-stack' : head.length > 2 ? 'rs-tbl-num' : ''}"><table class="tbl ${cls || ''}"><thead><tr>${head.map((x, i) => `<th class="${i ? 'r' : ''}">${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c, i) => `<td class="${i ? 'r' : ''}" data-l="${esc(head[i] || '')}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const src = (t) => `<p class="rs-src">${icon('info')}<span>${t}</span></p>`;
   // Every chart hands its cut to Browse (SPEC loop 10)
   const chartGo = (label, o) => `<p class="rs-chart-go">${browseBtn(label, o, 'act')}</p>`;
@@ -1401,7 +1411,7 @@
           { id: 'hours', h: 'Choose hours and term', html: `<p>Most engagements run 20 to 59 hours a month. Buy fewer hours than you think for the first 90 days: the operator spends the first weeks learning, and adding hours later is easy.</p>
             ${chartSlot('g3-hours', (w) => bars(hRows, { fmt: (n) => n + '%', label: 'Share of engagements by available time' }, w))}
             ${src('Share of fractional GTM engagements by hours a month, State of Fractional GTM 2027 survey. Illustrative.')}
-            ${chartGo(`Browse operators with ${RN.w.label('hoursPerMonth', '40')} or more available`, { filters: { hoursPerMonth: ['40'] }, src: 'guide_chart_hours' })}
+            ${chartGo(`Browse operators with ${HRS('40')} or more available`, { filters: { hoursPerMonth: ['40'] }, src: 'guide_chart_hours' })}
             ${term.length ? `<p>For the initial term, ${term.map((t, i) => `${esc(F.term.options[i] ? F.term.options[i].l : t.l)} (${t.v}%)`).join(', ')}. Three to six months is long enough to ship a playbook and see it work.</p>` : ''}` },
           { id: 'plan', h: 'Write the 30/60/90-day plan', html: `<ol>
             <li><b>Days 1 to 30: learn and diagnose.</b> Sit in on calls, read the CRM, interview the team and five customers. Deliver a written diagnosis and a plan.</li>
@@ -1638,7 +1648,7 @@
       },
       faq: () => [
         { q: 'Is there a minimum commitment?', a: 'Most operators ask for an initial term of three months, since the first month is spent learning the business. After that, 30 days notice is common.' },
-        { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. You pay the operator's rate, nothing more: at the ${catL} median of ${hr(b().p50)} an hour, ${hrsL.replace(' / ', ' a ')} is ${usd(b().p50 * hoursNum(c.hours))}.` },
+        { q: 'Does Revenue Nomad charge companies a fee?', a: `No. Browsing, posting an engagement, intros and hiring are free for companies. The listed rate is the price, with no fee added on top. At the ${catL} median of ${hr(b().p50)} an hour, ${hrsL.replace(/\s\/\u2060?\s/, ' a ')} is ${usd(b().p50 * hoursNum(c.hours))}.` },
         { q: 'Can I see an operator\'s rate before I contact them?', a: 'Yes. Signed-in companies see each operator\'s hourly rate on their profile and can filter search by rate. The rate you see is the price you pay.' },
       ],
       cta: { label: `Browse ${catL}`, filters: { roleCategories: [cat] } },
@@ -1665,7 +1675,7 @@
   const disp = (t) => esc(RN.fmt.smart(t)).replace(/(\w)-(?=\w)/g, '$1\u2011');
   // A money range never breaks across lines ("$200 - $250/hr"). RN.fmt.smart turns no-break spaces back into spaces and
   // a hyphen is itself a break point, so a rendered range sits in a no-wrap span
-  const keepRanges = (html) => String(html).replace(/(\$[\d.,]+[kKM]?)[\s\u00a0]-[\s\u00a0](\$[\d.,]+[kKM]?(?:\/(?:hr|month|year))?)/g, '<span class="rs-nw">$1 - $2</span>');
+  const keepRanges = (html) => String(html).replace(/(\$[\d.,]+[kKM]?)[\s\u00a0]-\u2060?[\s\u00a0](\$[\d.,]+[kKM]?(?:\/(?:hr|month|year))?)/g, '<span class="rs-nw">$1 - $2</span>');
   const prich = (t) => keepRanges(RN.fn && RN.fn.rich ? RN.fn.rich(costTok(t)) : esc(plainOf(t)));
   // Post tables read as text in every column; three or more columns stack into labelled rows on phones
   const prow = (r, head) => {
@@ -1865,6 +1875,8 @@
   // A prototype guide a post replaced keeps its link: #guide.<old> is rewritten to the post (router path aliases)
   const POST_ALIASES = (RN.data.posts && RN.data.posts.aliases) || {};
   Object.keys(POST_ALIASES).forEach((old) => { if (POSTS.some((p) => p.slug === POST_ALIASES[old])) RN.pathAliases['guide.' + old] = 'guide.' + POST_ALIASES[old]; });
+  // A legacy guide a post replaced is not listed twice: its card goes, and its link lands on the post
+  for (let i = GUIDES.length - 1; i >= 0; i--) if (!GUIDES[i].post && RN.pathAliases['guide.' + GUIDES[i].slug]) GUIDES.splice(i, 1);
   // Public shape for other surfaces: { id, title, cat, group, href } (slug and q stay for older callers)
   GUIDES.forEach((g) => { g.id = g.slug; g.title = g.q; g.href = '#guide.' + g.slug; });
   R.guides = GUIDES;
@@ -2015,15 +2027,15 @@
           const h = p.headline;
           return `<a class="rs-cost rs-cost-real" href="#guide.${esc(g.id)}">
           <span class="rs-cost-k"><span><b>${esc(g.title)}</b><span class="tiny muted">${esc(o.l)} · ${esc(plainOf(h.basis))}</span></span></span>
-          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(plainOf(h.rate))}</b>${costBar(ci)}</span>
-          <span class="rs-cost-v"><span class="label">${esc(h.monthL)}</span><b class="tnum">${esc(plainOf(h.month))}</b></span>
+          <span class="rs-cost-v"><span class="label">${esc(h.rateL)}</span><b class="tnum">${esc(NB(plainOf(h.rate)))}</b>${costBar(ci)}</span>
+          <span class="rs-cost-v"><span class="label">${esc(h.monthL)}</span><b class="tnum">${esc(NB(plainOf(h.month)))}</b></span>
           ${icon('arrow')}</a>`;
         }
         const b = RIX().byCat[o.v]; const hh = (COST[o.v] && COST[o.v].hours) || '40';
         return `<a class="rs-cost" href="#guide.${esc(g.id)}">
           <span class="rs-cost-k"><span><b>${esc(g.title)}</b><span class="tiny muted rs-cost-b">${esc(o.l)} · Rate Index ${illus()}</span></span></span>
           <span class="rs-cost-v"><span class="label">An hour, median</span><b class="tnum">${hr(b.p50)}</b>${costBar(ci)}</span>
-          <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(monthRange(o.v, hh, '5m_20m').replace(/\/month$/, ''))}</b></span>
+          <span class="rs-cost-v"><span class="label">A month, ${esc(hh)} hrs</span><b class="tnum">${esc(NB(monthRange(o.v, hh, '5m_20m').replace(/\/month$/, '')))}</b></span>
           ${icon('arrow')}</a>`;
       }).join('')}</div>
       <p class="rs-src rs-src-note">${icon('info')}<span>Sales leadership and marketing rows are what clients paid or were quoted in our 2026 engagements. The other rows are Rate Index medians and a typical month for a $5M to $20M company, illustrative until the first survey closes. Companies pay no platform fee; hiring an operator full time later carries a 20% conversion fee.</span></p>
@@ -2145,7 +2157,11 @@
     let a = sections.findIndex((x) => (x.blocks || []).some((b) => b.table));
     if (a < 0) a = Math.min(1, last);
     let b = sections.findIndex((x) => x.id === 'real-company');
-    if (b < 0 || b === a) b = Math.min(last, a + 2);
+    if (b < 0 || b === a) {
+      b = a + 2;
+      // No room after the table: the closing section never sits between two cards, so the first card moves up
+      if (b >= last && a >= 2) { b = a; a -= 2; } else b = Math.min(last, b);
+    }
     return n > 1 && b !== a ? [a, b] : [a];
   }
   // The guide's closing strip: one line and one Talk to us button, on night (it replaces the 387px form band)
@@ -2155,7 +2171,7 @@
       <span class="fn-form-cta"><a class="btn btn-leaf" href="#${esc(to)}">Talk to us${icon('arrow')}</a></span>
     </div></section>`;
   // The rail card: Talk to us first (owner, Oct 14, 2026), then a text link to the role's rates
-  const railCta = (h, sub, to, cat) => `<div class="card rs-rail-cta">
+  const railCta = (h, sub, to, cat) => `<div class="card rs-rail-cta rs-rail-talk">
       <b class="h5">${esc(h)}</b>
       <p class="small muted">${esc(sub)}</p>
       <a class="btn btn-block" href="#${esc(to)}">Talk to us${icon('arrow')}</a>
@@ -2332,8 +2348,10 @@
     // The founder's own operator listing is never the one a company-voice guide singles out (founder decision Oct 12, 2026)
     const ok = (x) => !x.op.isMatt;
     let rel = g.opsQ ? RN.model.search({ q: g.opsQ, filters: f }).filter(ok).slice(0, 3) : [];
-    if (rel.length < 3) rel = rel.concat(RN.model.search({ filters: f, sort: 'ris' }).filter((x) => ok(x) && !rel.some((y) => y.op.id === x.op.id))).slice(0, 3);
-    return rel;
+    if (rel.length < 4) rel = rel.concat(RN.model.search({ filters: f, sort: 'ris' }).filter((x) => ok(x) && !rel.some((y) => y.op.id === x.op.id))).slice(0, 4);
+    // Guides on the same topic would all open on the same operator, so each guide starts at its own place in the top 4
+    if (g.post && rel.length > 1) { const h = String(g.slug || '').split('').reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7); const k = h % rel.length; rel = rel.slice(k).concat(rel.slice(0, k)); }
+    return rel.slice(0, 3);
   }
   // Same count the page shows: answer posts end on 2 operator cards (playbook template), older guides show 3
   R.relatedOps = (g) => { const x = typeof g === 'string' ? guideFor(g) || {} : g; return relatedOps(x).slice(0, x.post ? 2 : 3); };

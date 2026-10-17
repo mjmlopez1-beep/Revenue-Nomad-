@@ -281,7 +281,7 @@
     return `<article class="wk-card${o.size === 'sm' ? ' sm' : ''}">
       <a class="wk-card-cover" href="${href}" tabindex="-1" aria-hidden="true">${W.cover(s)}</a>
       <div class="wk-card-body">
-        <span class="wk-card-type">${sampleSr(s)}${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
+        <span class="wk-card-type">${sampleSr(s)}${esc(s.type)}<span aria-hidden="true"> · </span><span class="wk-nw">${esc(fmtLen(s))}</span></span>
         <h3 class="wk-card-t"><a href="${href}">${esc(s.title)}</a></h3>
         ${o.size === 'sm' ? '' : `<p class="wk-card-out">${esc(s.outcome)}</p>`}
         <a class="wk-by" href="#op.${esc(op.slug)}" data-view-source="work">
@@ -421,24 +421,35 @@
     if (!op) return '';
     const href = `#work.${esc(s.id)}`;
     const vars = [], inn = [];
-    const big = [];
+    const big = [], wide = [];
     Object.keys(lay).forEach((k) => {
       const p = lay[k].get(s);
       if (!p) return;
       inn.push(k);
       vars.push(`--x${k}:${p.x + 1};--y${k}:${p.y + 1};--w${k}:${p.w};--h${k}:${p.h}`);
       if (p.h === 2) big.push(k);
+      if (p.wide) wide.push(k);
     });
     if (!inn.length) return '';
-    return `<article class="wk-tile ${isLand(s) ? 'land' : 'port'}" data-in="${inn.join(' ')}"${big.length ? ` data-big="${big.join(' ')}"` : ''} style="${vars.join(';')};--i:${i}">
+    return `<article class="wk-tile ${isLand(s) ? 'land' : 'port'}" data-in="${inn.join(' ')}"${big.length ? ` data-big="${big.join(' ')}"` : ''}${wide.length ? ` data-wide="${wide.join(' ')}"` : ''} style="${vars.join(';')};--i:${i}">
       <a class="wk-tile-cv" href="${href}" tabindex="-1" aria-hidden="true">${W.cover(s, { out: big.length > 0 })}</a>
       <div class="wk-tile-info">
-        <span class="wk-tile-k">${sampleSr(s)}${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
-        <h3 class="wk-tile-t"><a href="${href}">${esc(s.title)}</a></h3>
-        ${big.length ? `<p class="wk-tile-out">${esc(s.outcome)}</p>` : ''}
+        <span class="wk-tile-k">${esc(s.type)}<span aria-hidden="true"> · </span>${esc(fmtLen(s))}</span>
+        <h3 class="wk-tile-t"><a href="${href}">${sampleSr(s)}${esc(s.title)}</a></h3>
+        ${big.length || wide.length ? `<p class="wk-tile-out">${esc(s.outcome)}</p>` : ''}
         <a class="wk-by" href="#op.${esc(op.slug)}" data-view-source="${esc(src || 'work')}">${RN.ui.avatar(op, 'ava-xs', { decorative: true })}<span class="wk-by-n">${esc(op.name)}</span>${tierOf(op)}</a>
       </div>
     </article>`;
+  }
+
+  /* Phones (2 columns): a ragged pack can end on one half-width tile beside an empty half. That tile takes the whole
+     row instead (wide: cover on the left, its details beside it; work.css .wk-tile[data-wide]). */
+  function endFlush(L) {
+    if (!L.length) return L;
+    const lastY = Math.max(...L.map((p) => p.y + p.h - 1));
+    const row = L.filter((p) => p.y <= lastY && p.y + p.h - 1 >= lastY);
+    if (row.length !== 1 || row[0].w !== 1 || row[0].h !== 1) return L;
+    return L.map((p) => (p === row[0] ? Object.assign({}, p, { x: 0, w: 2, wide: true }) : p));
   }
 
   /* RN.work.grid(list, o): the packed grid alone. o = { limit (12), phone (8), features (true), ragged, source } */
@@ -451,7 +462,7 @@
     // Narrower layouts start from the desktop order and may take the next covers to end their rows flush
     const pool = first.concat(cands.filter((s) => !first.includes(s)));
     const L4 = pack(pool, 4, first.length, { features: o.features !== false, ragged: o.ragged });
-    const L2 = pack(pool, 2, Math.min(o.phone || 8, first.length), { ragged: o.ragged });
+    const L2 = endFlush(pack(pool, 2, Math.min(o.phone || 8, first.length), { ragged: o.ragged }));
     const order = pool.filter((s) => first.includes(s) || L4.some((p) => p.s === s) || L2.some((p) => p.s === s));
     const toMap = (L) => new Map(L.map((p) => [p.s, p]));
     const lay = { 6: toMap(L6), 4: toMap(L4), 2: toMap(L2) };
@@ -563,7 +574,7 @@
         <i></i><i class="w8"></i><i></i><i class="w6"></i>${i ? '<i></i><i class="w8"></i><i class="w5"></i>' : ''}
       </span>
       ${locked ? `<span class="wk-pg-lock">${icon('lock')}<b>${esc(label || 'Shared after an intro')}</b></span>` : ''}
-      <figcaption>${locked ? `Section ${i + 1}` : `Section ${i + 1} · ${esc(head)}`}</figcaption>
+      <figcaption>${locked ? (label ? `From section ${i + 1} on` : `Section ${i + 1}`) : `Section ${i + 1} · ${esc(head)}`}</figcaption>
     </figure>`;
   }
 
@@ -582,9 +593,9 @@
       <span class="act">Open the Blueprint${icon('arrow')}</span>
     </a>`;
   }
-  function row(title, list, more) {
+  function row(title, list, more, cls) {
     if (!list.length) return '';
-    return `<section class="wk-more"><div class="wk-more-hd"><h2 class="h3">${esc(title)}</h2>${more || ''}</div><div class="wk-more-row">${list.map((x) => W.card(x, { size: 'sm' })).join('')}</div></section>`;
+    return `<section class="wk-more${cls ? ' ' + cls : ''}"><div class="wk-more-hd"><h2 class="h3">${esc(title)}</h2>${more || ''}</div><div class="wk-more-row">${list.map((x) => W.card(x, { size: 'sm' })).join('')}</div></section>`;
   }
 
   function renderSample(s) {
@@ -641,7 +652,7 @@
         </aside>
       </section>
       <div class="wrap wk-sp-rows">
-        ${row(`More from ${first}`, mine, `<a class="act" href="#op.${esc(op.slug)}">See ${esc(first)}’s profile${icon('arrow')}</a>`)}
+        ${row(`More from ${first}`, mine, `<a class="act" href="#op.${esc(op.slug)}">See ${esc(first)}’s profile${icon('arrow')}</a>`, 'wk-more-mine')}
         ${row('More like this', like, `<a class="act" href="#work.${esc(s.problem)}">See all for this problem${icon('arrow')}</a>`)}
       </div>`;
   }
@@ -673,10 +684,21 @@
 
   /* ---------- Views ---------- */
   const isNeed = (k) => needOpts().some((o) => o.v === k);
+  /* Phones: each filter row is one swipe row (work.css); bring the chosen chip into view, as wk-show-type does */
+  function chipsInView(root) {
+    if (!root) return;
+    root.querySelectorAll('.wk-chips').forEach((row) => {
+      const on = row.querySelector('[aria-pressed="true"]');
+      if (!on || row.scrollWidth <= row.clientWidth) return;
+      const left = on.getBoundingClientRect().left - row.getBoundingClientRect().left + row.scrollLeft;
+      if (left + on.offsetWidth > row.scrollLeft + row.clientWidth - 28 || left < row.scrollLeft) row.scrollLeft = Math.max(0, left - 12);
+    });
+  }
   RN.view('work', {
     route: 'work', nav: 'browse',
     title: () => 'The work',
     render: () => renderGallery(''),
+    mount: (root) => chipsInView(root),
   });
   RN.view('work-item', {
     route: 'work.:id', nav: 'browse',
@@ -688,5 +710,6 @@
       if (!s) return `<section class="wrap-narrow section">${RN.ui.empty({ icon: 'doc', title: 'This work sample is not available', body: 'It may have been unpublished by the operator.', cta: '<a class="btn btn-sm" href="#work">See all the work</a>' })}</section>`;
       return renderSample(s);
     },
+    mount: (root) => chipsInView(root),
   });
 })();

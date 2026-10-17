@@ -41,7 +41,7 @@
   const DAY = 864e5;
   const LIVE = ['posted', 'in_progress'];
   const usd = (n) => RN.fmt.usd(n);
-  const NO_FEES = () => (RN.projects && RN.projects.NO_FEES) || 'No fees for companies. You pay the operator’s rate, nothing more.';
+  const NO_FEES = () => (RN.projects && RN.projects.NO_FEES) || 'No fees for companies. The listed rate is the price, with no fee added on top.';
   const FEE_NOTE = 'You pay each operator’s rate and no fees.';
 
   /* ---------- Company + preferences (shared with profile / compare match signals) ---------- */
@@ -127,6 +127,10 @@
   const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   const monthYear = (v) => (v ? RN.fmt.monthYear(new Date(dayOf(v) + 'T12:00:00')) : '');
   const hoursText = (code) => (code ? RN.w.label('hoursPerMonth', code) : '');
+  // Numbers stay on one line: money ranges (RN.fmt.keepRange), "20 hrs / month", "6 to 12 months". Run before esc.
+  const keepNums = (s) => RN.fmt.keepRange(String(s == null ? '' : s))
+    .replace(/(\d+)\s+hrs\s*\/\s*(month|week)/g, '$1\u00a0hrs\u00a0/\u2060\u00a0$2')
+    .replace(/(\d+)\s+to\s+(\d+)\s+(months?|weeks?|days?|hours?|hrs)\b/g, '$1\u00a0to\u00a0$2\u00a0$3');
   // "$250/hr · 40 hrs / month" or "$18,000 project budget"
   function termsLine(h, sep) {
     const t = h.terms || {};
@@ -318,7 +322,7 @@
           : `${plural(unseen.length, 'operator')} responded to “${title}”`,
         body: unseen.length ? 'Compare their notes and rates, then request an intro or hire.' : 'Request an intro, hire, or mark not a fit so the operators can move on.',
         note: rep ? rep.text : '',
-        people: list.slice(0, 3).map((r) => { const op = RN.model.byId(r.opId); return op && { op, sub: personSub(op, r.rate), rate: r.rate, quote: r.note || '' }; }).filter(Boolean),
+        people: RN.model.notFirst(list.map((r) => ({ r, op: RN.model.byId(r.opId) }))).map((x) => x.r).slice(0, 3).map((r) => { const op = RN.model.byId(r.opId); return op && { op, sub: personSub(op, r.rate), rate: r.rate, quote: r.note || '' }; }).filter(Boolean),
         primary: { label: 'Review responses', href: 'engagement.' + p.id },
         facts: (() => {
           const inv = (p.invited || []).length, got = (p.responses || []).length;
@@ -651,7 +655,15 @@
     mount: (root, params) => mount(root, params || {}),
   });
 
+  // Phone tab strip (<=980px): bring the current tab into view; the strip otherwise opens scrolled to its first tab
+  function centerSideTab(root) {
+    const s = root && root.querySelector('.shell > .side'); const a = s && s.querySelector('a.on');
+    if (!a || s.scrollWidth <= s.clientWidth + 1) return;
+    const sr = s.getBoundingClientRect(), ar = a.getBoundingClientRect();
+    s.scrollLeft = Math.max(0, s.scrollLeft + (ar.left - sr.left) - (sr.width - ar.width) / 2);
+  }
   function mount(root, params) {
+    centerSideTab(root);
     // Keep a thread open across re-renders once the client opened it.
     RN.$$('details[data-thread]', root).forEach((d) => d.addEventListener('toggle', () => { if (d.open) openThreads.add(d.dataset.thread); else openThreads.delete(d.dataset.thread); }));
     // A fresh route (not an in-place re-render) carries .view-enter on <main>
@@ -1207,7 +1219,7 @@
       f.engagementType && RN.w.label('engagementType', f.engagementType),
       f.engagementType === 'project' ? f.projectBudget && `${usd(f.projectBudget)} budget` : f.hoursPerMonth && hoursText(f.hoursPerMonth),
       f.term && RN.w.label('term', f.term),
-    ].filter(Boolean).map(esc);
+    ].filter(Boolean).map((s) => esc(keepNums(s)));
     // A no-break space keeps each separator on the line of the item before it
     return [projCat(p) ? catTag(projCat(p)) : ''].concat(bits).filter(Boolean).join(' · ');
   }
@@ -2190,11 +2202,11 @@
         const end = h.status === 'ended' ? RN.hire.winEnd(h) : t.endDate || today();
         const sg = segs(h, w);
         if (!sg.length) return;   // nothing to draw yet (an open-ended hire that has not started)
-        bars.push({ a: t.startDate, b: end, segs: sg, label: `${op.name} · ${t.engagementType === 'project' ? usd(t.projectBudget || 0) + ' project' : (t.rate ? RN.fmt.rate(t.rate) : 'Rate not recorded')}`, sr: `${op.name}, ${dmd(t.startDate)} to ${dmd(end)}` });
+        bars.push({ a: t.startDate, b: end, segs: sg, label: `${op.name} · ${t.engagementType === 'project' ? usd(t.projectBudget || 0) + ' project' : (t.rate ? RN.fmt.rate(t.rate) : 'Rate not recorded')}`, sr: `${op.name}, ${dmd(t.startDate)} to ${dmd(end)}`, sum: end === today() ? `${op.name} in the seat since ${dmd(t.startDate)}` : `${op.name}, ${dmd(t.startDate)} to ${dmd(end)}` });
       });
       posted.filter((p) => projCat(p) === c).forEach((p) => {
         const a = dayOf(p.postedAt), b = searchEnd(p);
-        bars.push({ a, b, segs: [{ cls: 'is-search', l: w.pct(a), r: w.pct(b), clip: a < w.ws }], label: `Searching · “${p.title || 'Untitled engagement'}”`, sr: `Searching with “${p.title || 'an engagement'}”, ${dmd(a)} to ${dmd(b)}` });
+        bars.push({ a, b, segs: [{ cls: 'is-search', l: w.pct(a), r: w.pct(b), clip: a < w.ws }], label: `Searching · “${p.title || 'Untitled engagement'}”`, sr: `Searching with “${p.title || 'an engagement'}”, ${dmd(a)} to ${dmd(b)}`, sum: b === today() ? `Searching since ${dmd(a)}` : `Searched ${dmd(a)} to ${dmd(b)}` });
       });
       // Pack bars into rows so none overlap (with room for the label above each)
       bars.sort((x, y) => (x.a < y.a ? -1 : 1));
@@ -2211,7 +2223,11 @@
     // The legend lists only the marks drawn (a client still hiring sees Searching alone)
     const used = new Set();
     lanes.forEach((ln) => ln.bars.forEach((bar) => bar.segs.forEach((sg) => used.add(sg.cls))));
-    return `<section class="card bw-cov-card" aria-labelledby="bw-cov-t">
+    // A short history (under 3 roles and 60 days) reads better on a phone as one line per role than as a
+    // 640px timeline with one bar in it; css/views/buyer.css swaps them at <=640px
+    const firstDay = lanes.reduce((m, ln) => ln.bars.reduce((mm, bar) => (bar.a && bar.a < mm ? bar.a : mm), m), today());
+    const short = lanes.length < 3 && dayDiff(firstDay, today()) < 60;
+    return `<section class="card bw-cov-card${short ? ' is-short' : ''}" aria-labelledby="bw-cov-t">
       <div class="card-hd"><div><h2 class="h4" id="bw-cov-t">Coverage over time</h2><p class="sub">Each role you have hired or searched for: who held the seat, the term agreed ahead, and when you were searching.</p></div></div>
       <div class="bw-cov-scroll" data-bw-cov>
         <div class="bw-cov" style="--p:${(w.pct(w.t0) / 100).toFixed(4)}">
@@ -2229,6 +2245,7 @@
           <span class="bw-cov-today" aria-hidden="true"><span>Today</span></span>
         </div>
       </div>
+      ${short ? `<ul class="bw-cov-sum">${lanes.map((ln) => ln.bars.map((bar) => `<li>${catTag(ln.c)}<span>${esc(bar.sum)}</span></li>`).join('')).join('')}</ul>` : ''}
       ${LEGEND([['is-worked', 'In seat'], ['is-ahead', 'Agreed term ahead'], ['is-ended', 'Ended'], ['is-search', 'Searching']].filter(([cls]) => used.has(cls)))}
     </section>`;
   }
@@ -2396,7 +2413,8 @@
   function preview(brief, name) {
     const rows = RN.model.ops.filter((o) => !o.hidden).map((op) => ({ op, fit: RN.model.fit(op, brief) }));
     const good = rows.filter((r) => r.fit.pct >= 50).length;
-    const top = rows.slice().sort((a, b) => b.fit.pct - a.fit.pct || RN.fields.risRank(b.op) - RN.fields.risRank(a.op)).slice(0, 4);
+    // The founder is never the first match shown (owner decision 4)
+    const top = RN.model.notFirst(rows.slice().sort((a, b) => b.fit.pct - a.fit.pct || RN.fields.risRank(b.op) - RN.fields.risRank(a.op))).slice(0, 4);
     const checks = [
       { l: 'Company revenue', on: !!brief.revenueRange },
       { l: 'Employee range', on: !!brief.employeeRange },

@@ -67,12 +67,12 @@
     label: 'Available time', type: 'single', unit: 'hrs / month',
     help: 'Hours per month you can give a new company.',
     options: opts([
-      ['19', '<20 hrs / month'], ['20', '20 hrs / month'], ['40', '40 hrs / month'], ['60', '60 hrs / month'],
-      ['80', '80 hrs / month'], ['100', '100 hrs / month'], ['160', '160 hrs / month'],
+      ['19', '<20\u00a0hrs\u00a0/\u2060\u00a0month'], ['20', '20\u00a0hrs\u00a0/\u2060\u00a0month'], ['40', '40\u00a0hrs\u00a0/\u2060\u00a0month'], ['60', '60\u00a0hrs\u00a0/\u2060\u00a0month'],
+      ['80', '80\u00a0hrs\u00a0/\u2060\u00a0month'], ['100', '100\u00a0hrs\u00a0/\u2060\u00a0month'], ['160', '160\u00a0hrs\u00a0/\u2060\u00a0month'],
     ]),
   };
   // Client filter: the same stored chip codes, read as a floor ("at least"); <20 is left out because it is no floor
-  F.minHours = { label: 'Minimum available time', type: 'single', unit: 'hrs / month', options: opts([['20', '20+ hrs / month'], ['40', '40+ hrs / month'], ['60', '60+ hrs / month'], ['80', '80+ hrs / month'], ['100', '100+ hrs / month'], ['160', '160 hrs / month']]) };
+  F.minHours = { label: 'Minimum available time', type: 'single', unit: 'hrs / month', options: opts([['20', '20+\u00a0hrs\u00a0/\u2060\u00a0month'], ['40', '40+\u00a0hrs\u00a0/\u2060\u00a0month'], ['60', '60+\u00a0hrs\u00a0/\u2060\u00a0month'], ['80', '80+\u00a0hrs\u00a0/\u2060\u00a0month'], ['100', '100+\u00a0hrs\u00a0/\u2060\u00a0month'], ['160', '160\u00a0hrs\u00a0/\u2060\u00a0month']]) };
   F.hoursCode = (n) => { n = +n || 0; return n < 20 ? '19' : n < 40 ? '20' : n < 60 ? '40' : n < 80 ? '60' : n < 100 ? '80' : n < 160 ? '100' : '160'; };
   F.newClientCapacity = { label: 'New company capacity', type: 'number', min: 1, max: 10, unit: 'clients', help: 'Maximum 10 companies.' };
   // L192 order; "turnaround" removed, "fractional" and "project" added (row 23)
@@ -102,8 +102,8 @@
     label: 'Revenue range', type: 'multi', max: 3,
     help: 'Company revenue ranges where you do your best work.',
     options: opts([
-      ['pre_revenue', 'Pre-revenue'], ['under_1m', 'Under $1M'], ['1m_5m', '$1M - $5M'],
-      ['5m_20m', '$5M - $20M'], ['20m_50m', '$20M - $50M'], ['50m_plus', '$50M+'],
+      ['pre_revenue', 'Pre-revenue'], ['under_1m', 'Under $1M'], ['1m_5m', '$1M\u00a0-\u2060\u00a0$5M'],
+      ['5m_20m', '$5M\u00a0-\u2060\u00a0$20M'], ['20m_50m', '$20M\u00a0-\u2060\u00a0$50M'], ['50m_plus', '$50M+'],
     ]),
   };
   F.employeeRange = {

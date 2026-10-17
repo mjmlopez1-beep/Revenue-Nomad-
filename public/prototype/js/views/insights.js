@@ -32,11 +32,12 @@
   ins.fmtRange = (lo, hi) => RN.fmt.moRange(r500(lo), r500(hi));
   /* The Rate Index is the price: a client pays the operator's listed rate and no fees (founder
      decision D1, Sep 25, 2026). Nothing on these client-facing pages mentions a fee, margin or split. */
-  const NO_FEES = 'No fees for companies. You pay the operator’s rate, nothing more.';
+  const NO_FEES = 'No fees for companies. The listed rate is the price, with no fee added on top.';
   ins.noFees = NO_FEES;
   const catLabel = (c) => F.catLabel(c);
   const revLabel = (v) => (RN.contrib && RN.contrib.revLabel ? RN.contrib.revLabel(v) : RN.w.label('companyRevenue', v));
-  const hoursLabel = (v) => RN.w.label('hoursPerMonth', v);
+  // Unit phrases never split on phones: "40 hrs / month" keeps no-break spaces (the option labels live in fields.js)
+  const hoursLabel = (v) => String(RN.w.label('hoursPerMonth', v) || '').replace(/ /g, '\u00a0');
   const pctChange = (a, b) => Math.round(((a - b) / b) * 100);
   const MIN_CELL = 20;
   const sampleNote = (n) => (n < MIN_CELL ? `Only ${n} rates in this category, below our minimum of ${MIN_CELL}. Read it as directional.` : '');
@@ -943,7 +944,7 @@
         const sc = RN.$('.ins-chapnav-in', root);
         if (on && sc && sc.scrollWidth > sc.clientWidth) {
           const l = on.offsetLeft, r = l + on.offsetWidth;
-          if (l < sc.scrollLeft + 16 || r > sc.scrollLeft + sc.clientWidth - 16) sc.scrollTo({ left: Math.max(0, l - 24), behavior: 'smooth' });
+          if (l < sc.scrollLeft + 16 || r > sc.scrollLeft + sc.clientWidth - 56) sc.scrollTo({ left: Math.max(0, l - 24), behavior: 'smooth' });
         }
       }
     };
@@ -1022,20 +1023,20 @@
     const under20 = String(est.hours) === '19';
     const maxX = ins.range(est.cat, '50m_plus', est.hours).mid || 1;
     return `<div class="ins-est-k"><span class="label">Typical engagement range</span>${tag()}</div>
-      <div class="ins-est-big num">${esc(g.label)}</div>
+      <div class="ins-est-big num">${esc(nb(g.label))}</div>
       <p class="ins-est-mid">Median <b>${RN.fmt.k(g.mid)}/month</b> at ${esc(hoursLabel(est.hours))}${under20 ? ' (counted as 15 hours)' : ''} and ${hr(r.p50)}/hr.</p>
       <p class="ins-est-nofee">${icon('check-circle')}<span>${esc(NO_FEES)}</span></p>
       <div class="ins-est-scale">${rangeBar(r.p25, r.p50, r.p75, 450, { labels: true, cls: 'ins-rtrack-night' })}
         <div class="ins-est-legend tiny"><span><i class="b"></i>Middle 50% of rates (p25 to p75)</span><span><i class="m"></i>Median</span></div></div>
       <div class="ins-est-sizes"><span class="label">Median by company revenue</span>
         <ul>${F.companyRevenue.options.map((o) => { const x = ins.range(est.cat, o.v, est.hours); return `<li class="${o.v === est.rev ? 'on' : ''}"><button type="button" data-act="ins-est-size" data-v="${esc(o.v)}" aria-pressed="${o.v === est.rev}"><span>${esc(o.l)}</span><span class="ins-est-sbar"><i style="width:${((x.mid / maxX) * 100).toFixed(1)}%"></i></span><b class="num">${RN.fmt.k(x.mid)}</b></button></li>`; }).join('')}</ul></div>
-      <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${RN.fmt.k(r500(g.mid * 3))} - ${RN.fmt.k(r500(g.mid * 6))}</b> for the first term.</p>
-      <p class="ins-est-basis small">Illustrative Rate Index, as of ${esc(asOfText())}. Based on ${RN.fmt.int(r.n)} ${esc(catLabel(est.cat))} rates, adjusted for ${esc(revLabel(est.rev))} companies (×${r.m.toFixed(2)}).${low ? ` <span class="ins-low">${icon('info')}${esc(low)}</span>` : ''}</p>
+      <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${esc(nb(RN.fmt.k(r500(g.mid * 3)) + ' - ' + RN.fmt.k(r500(g.mid * 6))))}</b> for the first term.</p>
+      <p class="ins-est-basis small">Illustrative Rate Index, as of ${esc(asOfText())}. Based on ${RN.fmt.int(r.n)} ${esc(catLabel(est.cat))} rates, adjusted for ${esc(nb(revLabel(est.rev)))} companies (×${r.m.toFixed(2)}).${low ? ` <span class="ins-low">${icon('info')}${esc(low)}</span>` : ''}</p>
       <div class="row ins-est-cta">
         <button type="button" class="btn btn-leaf" data-act="ins-est-talk" data-from="estimator">Get this scoped with our team${icon('arrow')}</button>
         <button type="button" class="btn btn-line" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(hand.f)}">${esc(hand.label)}</button>
       </div>
-      <p class="tiny ins-est-hand">Our team gets the role, hours, company revenue and this estimate. ${esc(hand.note)}</p>
+      <p class="tiny ins-est-hand">Our team gets the role, hours, company revenue and this estimate. ${esc(nb(hand.note))}</p>
       <button type="button" class="act ins-est-ft" data-act="ins-jump" data-to="ins-calc">Compare with full time${icon('arrow')}</button>`;
   }
 
@@ -1046,7 +1047,7 @@
   const revPhrase = (v) => ({ pre_revenue: 'a pre-revenue company', under_1m: 'a company under $1M' }[v] || `a ${revLabel(v)} company`);
   function estPayload(from) {
     const g = ins.range(est.cat, est.rev, est.hours);
-    const cat = catLabel(est.cat), hrs = hoursLabel(est.hours).replace(/ \/ /, '/');
+    const cat = catLabel(est.cat), hrs = hoursLabel(est.hours).replace(/[ \u00a0]\/[ \u00a0]/, '/');
     const il = ILLUS() ? ' (illustrative Rate Index)' : ' (Rate Index)';
     const p = {
       source: from === 'calculator' ? 'calculator' : 'estimator',

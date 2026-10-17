@@ -128,7 +128,7 @@
 .pj-rank { width: 24px; font-size: var(--t-15); font-weight: 800; color: var(--mute-2); }
 .pj-band { display: flex; align-items: center; justify-content: space-between; gap: var(--s-6); flex-wrap: wrap; }
 @media (max-width: 900px) { .pj-hero-grid { grid-template-columns: minmax(0, 1fr); gap: var(--s-8); } .pj-hero { padding-top: var(--s-10); } }
-@media (max-width: 640px) { .pj-hero-cta .btn { width: 100%; } .pj-band { padding: var(--s-6); } }
+@media (max-width: 640px) { .pj-hero-cta .btn { width: 100%; } .pj-band { padding: var(--s-6); } .pj-band > .row { width: 100%; } .pj-band .btn { width: 100%; } }
 
 /* ---------- #project.new: posting form ---------- */
 .pj-new { padding-block: var(--s-8) var(--s-16); }
@@ -179,8 +179,17 @@
 .pj-live-top { display: flex; flex-direction: column; gap: 10px; padding: 12px 0; border-block: 1px solid var(--line-2); }
 @media (max-width: 980px) { .pj-new-grid { grid-template-columns: minmax(0, 1fr); } .pj-rail { position: static; } }
 @media (max-width: 640px) {
-  .pj-form { padding: var(--s-5) var(--s-4); border-radius: var(--r-card); }
+  /* Phone: the form drops its own card so the inner cards sit on the page gutter (no card in a card in a card) */
+  .pj-form { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
   .pj-form-ft .btn { padding: 0 16px; }
+  /* Footer on one row: an icon Back, then the primary action filling the rest. Save draft goes (the form saves as you go) */
+  .pj-form-ft { flex-wrap: nowrap; gap: 8px; }
+  .pj-foot-l:empty { display: none; }
+  .pj-foot-l .btn { width: 48px; padding: 0; font-size: 0; gap: 0; justify-content: center; }
+  .pj-foot-l .btn svg { width: 18px; height: 18px; }
+  .pj-foot-r { flex: 1 1 auto; flex-wrap: nowrap; }
+  .pj-foot-r .btn:not(.btn-ghost) { flex: 1 1 auto; }
+  .pj-foot-r .btn-ghost { display: none; }
   .pj-pickrow { flex-wrap: wrap; }
   .pj-pickrow .pj-mini { flex-basis: 100%; }
   .pj-pick-r { flex: 1 1 auto; justify-content: flex-start; }
@@ -285,6 +294,7 @@
 .pj-terms-est { display: flex; gap: var(--s-6); flex-wrap: wrap; }
 .pj-est { display: flex; flex-direction: column; gap: 2px; min-width: 150px; }
 .pj-est b { font-family: var(--f-display); font-size: var(--t-20); font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.pj-est-src { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .pj-terms-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-5) var(--s-8); }
 .pj-terms-grid .field { margin: 0; }
 .pj-terms-size { font-family: var(--f-display); font-size: var(--t-18); font-weight: 700; color: var(--ink); }
@@ -331,9 +341,17 @@
   .pj-terms { margin: -28px 0 0; padding: var(--s-5) var(--s-4); gap: var(--s-5); }
   .pj-terms-est { gap: var(--s-4); width: 100%; }
   .pj-est { min-width: 0; flex: 1 1 130px; }
-  .pj-est b { font-size: var(--t-18); white-space: normal; }
+  .pj-est b { font-size: var(--t-18); white-space: nowrap; }
   .pj-terms-ft .btn { width: 100%; }
   .pj-bpd-main { gap: var(--s-10); }
+}
+@media (max-width: 640px) {
+  /* The two estimates stack so a range never splits across lines */
+  .pj-terms-est { flex-direction: column; gap: 12px; }
+  .pj-terms-est .pj-est { flex: none; }
+  /* Terms chips sit in an even two-column grid instead of ragged wraps */
+  #pj-terms .chipset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  #pj-terms .chipset .chip { min-width: 0; justify-content: center; text-align: center; }
 }
 
 /* Small fixes on shared components inside this surface */
@@ -418,7 +436,15 @@
   .pj-bp-cats { margin-inline: calc(var(--gutter) * -1); }
   .pj-bp-cats .chipset { flex-wrap: nowrap; overflow-x: auto; padding: 2px var(--gutter) 6px; scrollbar-width: none; scroll-padding-inline: var(--gutter); }
   .pj-bp-cats .chipset::-webkit-scrollbar { display: none; }
-  .pj-bp-cats .chip { flex: 0 0 auto; }
+  .pj-bp-cats .chip { flex: 0 0 auto; scroll-snap-align: start; }
+  /* The row fades at the right edge so it reads as one that scrolls */
+  .pj-bp-cats .chipset { scroll-snap-type: x proximity; padding-right: 40px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+  /* Index cards: the 30/60/90 timeline repeats on the Blueprint page, so the list stays short */
+  .pj-bps .pj-bp-tl { display: none; }
+  .pj-bps .pj-bp { padding: 20px; }
+  /* "Start from this" gets a 44px touch target without moving the layout */
+  .pj-bp-go { position: relative; }
+  .pj-bp-go::after { content: ""; position: absolute; inset: -13px -8px; }
 }
 /* The closing dark tile fills the empty cells after the last card */
 .pj-bp-help { display: flex; flex-direction: column; gap: 14px; padding: var(--s-6); border-radius: var(--r-card); background: var(--forest-deep); color: var(--night-ink); position: relative; overflow: hidden; }
