@@ -56,6 +56,13 @@
   // The seat each function page quotes (VP of Sales, RevOps follow-on execution, fractional CMO)
   const leadOf = (d) => (d.cat && RN.costs ? RN.costs.forCat(d.cat) : C('hub'));
   const hoursOf = (r) => (r && r.hours ? `${r.hours.lo} to ${r.hours.hi}` : '');
+  /* FAQ answers (buyer question bank, Oct 17, 2026) quote the record in the house money format, each range held
+     together (RN.fmt.keepRange), so an FAQ says the same number as the hero and the guides */
+  const T = (key, f) => { const r = C(key); return (r && r.text && r.text[f]) || ''; };
+  const kr = (s) => (RN.fmt.keepRange ? RN.fmt.keepRange(s) : s);
+  const lc = (s) => String(s).replace(/^About /, 'about ').replace(/^Up to /, 'up to ');
+  // One answer for every function page: swap, conversion and the term, from the terms list
+  const FIT_FT = ['What if the fit is wrong, or we want to hire them full time?', 'You can swap the operator if the fit is wrong. If it works and you want them full time, the conversion fee is 20% of annual salary. After the 3 to 4 month initial term, the contract runs month-to-month with 30 days notice.'];
   /* One answer sentence per page (about 20 words), from the record */
   const ANSWER = {
     sales: (r) => `A VP of Sales who has built sales at your stage, ${hoursOf(r)} hours a month for ${rng(r.monthly)} in our 2026 engagements.`,
@@ -212,10 +219,13 @@
     },
     faq: [
       ['When does a fractional VP of Sales make sense?', 'When the founder or CEO still runs sales and the revenue system is broken. The trigger is usually overload, not an empty seat.'],
-      ['How does cost compare with a full-time VP of Sales?', 'Average total VP of Sales comp is about $334K, with average tenure about 19 months (Glassdoor 2026 via Stealth Agents, a secondary source). Skaled says replacing a sales leader can cost up to 1.5x salary. A fractional director for a small team ran $4,000 to $10,000 a month in our 2026 engagements.'],
-      ['Will the operator clash with my current sales leader?', 'We set reporting lines before we source. In one engagement the fractional VP sits above an existing director as coach.'],
-      ['What if the fit is wrong?', 'You can swap the operator.'],
-      ['Can I hire the operator full time later?', 'Yes. The conversion fee is 20% of annual salary.'],
+      ['How does cost compare with a full-time VP of Sales?', kr(`A fractional director or VP for a team under 5 to 8 reps ran ${T('vp-sales', 'monthly')} in our 2026 engagements, ${T('vp-sales', 'pct')} of a full-time VP’s pay. Average total full-time VP of Sales comp is about $334K, with average tenure about 19 months (Glassdoor 2026 via Stealth Agents, a secondary source). Skaled says replacing a sales leader can cost up to 1.5x salary.`)],
+      ['Will the operator coach and manage our team, or just advise?', 'Coaching, yes. It is weekly, hands-on work, with pipeline reviews, sitting in on calls, coaching reps and role-play against written talk tracks. Managing the team day to day can be in scope too, and in a founder handoff the operator runs the weekly pipeline call from month two and owns the number by day 90. Agree which one you are buying before the start date, and buy the hours it takes.'],
+      ['Will the operator clash with my current sales leader?', 'Not if the reporting line is set first, and we set it before we source. At a ~$9M physical therapy marketing agency, the fractional VP sits above the existing Director of Sales as strategist and process builder, while the director runs the team day to day. Write who decides what into the role profile.'],
+      ['Can the operator help us hire our next reps?', 'Yes. Days 61 to 90 cover personnel calls and hiring decisions, and end with a right-sized team and a hiring brief. In a fractional GTM strategy seat at Ferry, our team hired and onboarded the first AE, who closed a deal within 60 days. Agree in the scope whether the operator also sources candidates and runs the interviews.'],
+      ['Will they build on what we already have instead of starting over?', 'The plan starts from what you hand over in the first week, call recordings, the CRM, your 10 biggest won deals and your honest view of each rep. Days 1 to 30 assess reps, audit the CRM and sit in on calls, and days 31 to 60 document the process, scripts and training. Ask each finalist for a written 30/60/90-day plan for your business before you sign, and check that it builds on what already works.'],
+      ['Can a fractional sales leader sell for us?', 'Some, but not as your extra closer. The leader you want sells to prove what works, then writes it down, hires and manages. In a fractional GTM strategy seat at Ferry, our team closed the 2 deals that doubled the client base, then hired Ferry’s first AE. If the process works and you are only short a seller, hire a rep.'],
+      FIT_FT,
     ],
     form: {
       h: 'Tell us about your sales team',
@@ -275,11 +285,14 @@
         ['1 retainer', 'Works only if one person can truly cover the combined scope. We tell you when it cannot.']],
     },
     faq: [
-      ['Do I need an assessment first?', 'If you already know the problem, go straight to an embedded operator. If you need a ranked list your team can run, the $6,000 to $7,500 assessment is the faster start.'],
+      ['Do I need an assessment first?', kr(`If you already know the problem, go straight to an embedded operator. If you need a ranked list your team can run, the ${rng(C('revops-assessment').fixed)} fixed-fee assessment is the faster start.`)],
+      ['Should we fix our CRM or switch to a new one?', 'First find out whether the tool or the setup is the problem. A new tool does not fix a CRM built for the wrong job. At one ~$55M company the CRM had been set up as a customer-service database, and someone has to redesign the stages, fields and rules for what counts.'],
+      ['Can someone own pipeline hygiene, CRM data and the forecast?', 'Yes, and name which part you need. Clean fields, workflows and stages are CRM admin work, while the forecast method and pipeline coverage are revenue leadership, and one retainer covers both only if one person truly can. Every RevOps operator is scored on owning the forecast as well as the dashboard.'],
       ['Who should the operator report to?', 'Whoever owns the number and the budget. In our enterprise billing engagement that is the CFO.'],
+      ['Do we need to clean up our data before you can help?', 'No. Cleanup is usually part of the first job, not a condition for starting. A diagnosis pulls your CRM data, bookings history and loss reasons as they are, and fixing the stages often shrinks pipeline on paper before the number is real. If you are also hiring a sales leader, fix the CRM first or at the same time.'],
       ['Will they replace my RevOps admin?', 'No. The operator sets the system and the priorities. Your admins keep building against a roadmap.'],
-      ['What if the fit is wrong?', 'You can swap the operator.'],
-      ['Can we hire them full time?', 'Yes, with a conversion fee of 20% of annual salary.'],
+      ['Can RevOps help us grow existing accounts and renewals?', 'Yes, as part of the revenue system. RevOps carries the same definitions past the signed deal into customer success, which matters when expansion carries more of the number. We have no retention or expansion result to publish yet.'],
+      FIT_FT,
     ],
     form: {
       h: 'Tell us where your revenue system breaks',
@@ -340,10 +353,11 @@
     },
     faq: [
       ['Do I need a fractional CMO or a demand gen operator?', 'If leads cost too much and agencies run unchecked, start with a demand gen operator with analytical rigor. Brand-heavy CMOs were a disqualifier in our home services search for that reason.'],
+      ['Can someone set up reporting that shows which channels actually work?', 'Yes, it is the first month’s job. The operator audits channels, agencies and aggregators and rebuilds cost per lead and attribution reporting, so by day 30 you have a cost and quality view by channel. By day 90 that view drives agency plans and a budget mix tied to acquisition cost. Every marketing operator is scored on reporting cost per lead and pipeline weekly without being asked.'],
       ['Will they manage my agencies?', 'Yes, if it is in scope. Agency and aggregator accountability carries 15% of our scorecard weight.'],
+      ['Can you sharpen our messaging and positioning?', kr(`It can be scoped as brand and product marketing work, quoted at ${T('marketing-launch', 'hourly')} for 60 to 80 hours a month in our 2026 searches. We have no closed marketing placement to report yet. Brand strategy and sales enablement are different jobs, so one retainer may not cover both.`)],
       ['Can they also support sales?', 'Some can. Sales enablement, including call centers, is a scored factor. Tell us whether you need brand strategy, enablement or both.'],
-      ['What if the fit is wrong?', 'You can swap the operator.'],
-      ['Can we hire them full time?', 'Yes, with a conversion fee of 20% of annual salary.'],
+      FIT_FT,
     ],
     form: {
       h: 'Tell us what your marketing is costing you',
@@ -437,8 +451,13 @@
     },
     faq: [
       ['Why do your ranges differ from other published averages?', 'Ours come from 2026 Revenue Nomad engagements in GTM leadership seats only. Broader averages include tactical and non-GTM work.'],
-      ['Is hourly or monthly better?', 'Monthly. A fixed block with a weekly cadence sets clear expectations on both sides.'],
-      ['What happens if we go over hours?', 'The operator flags it before it happens. You decide whether to extend.'],
+      ['Can we start with the one or two things that matter most?', kr(`Yes. Pick the problem that costs the most and buy it as a fixed project or an assessment. A fixed 30-day RevOps project ran ${lc(T('revops-project', 'fixed')).replace(/ fixed$/, '')} in our 2026 engagements, and a diagnosis force-ranks the fixes by impact, with a point of view by day 14. In sales, check conversion before volume, because if close rate fell while lead volume held, the sales motion is the first fix.`)],
+      ['How small can we start when budget is tight?', kr(`Smaller than a full retainer, but not thinner than the job. In our 2026 engagements a director of sales started at ${kk(C('vp-sales').monthly.lo)}/month for 20 hours, and a RevOps assessment started at ${kk(C('revops-assessment').fixed.lo)} as a fixed fee. Narrow the scope before you cut the hours.`)],
+      ['What exactly is included in the price?', 'The operator’s hours on the agreed scope. A retainer buys a set block of hours each month, billed upfront, with the deliverables written into the scope, such as a 30/60/90-day plan by day 30 and a playbook by day 60 in a sales engagement. An assessment or project buys a defined deliverable for a fixed fee. Hours are tracked and flagged before an overage happens, and the contract sets how much overage can go ahead without extra consent.'],
+      ['How long do engagements usually last?', 'The contract sets a floor, not a length. Every retainer starts with a 3 to 4 month initial term, then runs month-to-month with 30 days notice. Our standard sales plan runs 90 days, and at Ferry a 4-month term turned into about 18 months.'],
+      ['Is now the right time, or should we wait?', 'Now, if you still carry the number and the system under it is broken, the trigger we see most. Wait if the budget cannot buy the hours the job needs, if nobody has written down why customers buy, or if nobody on the leadership team will act on the findings. Settle those first, then bring someone in.'],
+      ['How do we avoid paying for months with nothing to show?', 'Buy a fixed monthly block with a plan and a review date, not open hours. Ask for a written 30/60/90-day plan with named outcomes before the retainer starts, book a day-90 review inside the initial term, and buy the hours the job needs. If the fit is wrong, you can swap the operator.'],
+      ['Why go through Revenue Nomad instead of hiring a consultant directly?', 'Companies pay no platform fee, only the operator’s rate, and you get a vetted shortlist and a way out. We send vetted profiles, often within 48 hours, all dedicated fractionals scored on CORE with 50+ data points tracked on each, and you meet them before you sign. If the fit is wrong, you can swap the operator.'],
     ],
     // Read next: one guide per function, each answering the question this page leaves open
     reading: ['interim-vs-fractional-vs-full-time-sales-leader', 'fractional-revops-consultant', 'fractional-cmo-vs-agency'],

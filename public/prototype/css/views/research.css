@@ -1189,3 +1189,10 @@ g.rs-dbow-sig polygon { fill: none; stroke: var(--leaf); stroke-width: 1; stroke
     .rs-pgrid-more > .rs-pcard > .rs-pcard-s { align-self: start; }
   }
 }
+
+/* Diagnostic result to Talk to us (RN.handoff): one primary, the browse path secondary, the rest as quiet links */
+.rs-dr .rs-dr-talk-note { display: flex; align-items: flex-start; gap: 8px; margin-top: var(--s-3); font-size: var(--t-13); line-height: 1.45; color: var(--night-mute); }
+.rs-dr .rs-dr-talk-note svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 2px; color: var(--leaf); }
+.rs-dr .rs-dr-more { margin-top: var(--s-4); gap: 6px 20px; }
+.rs-dr .rs-dr-more .rs-dr-reset { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-13); }
+.rs-dr .rs-dr-more .rs-dr-reset svg { width: 14px; height: 14px; }

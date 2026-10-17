@@ -1981,7 +1981,7 @@
     const me = RN.myOp();
     const mine = !!(me && (me.offers || []).includes(bp.id));
     const listLink = `<a class="act" href="#framework">${esc(bp.area)}${stageName ? ` × ${esc(stageName)}` : ''}</a>`;
-    const people = offer.concat(fits.map((x) => x.op)).slice(0, 5);
+    const people = RN.model.notFirst(offer.concat(fits.map((x) => x.op))).slice(0, 5); // founder never first (Oct 14, 2026)
     return `<section class="wrap pj-bpd-top">
       ${crumbs([['Post an engagement', 'engagements'], ['Blueprints', 'blueprints'], [bp.role, '']])}
       <div class="panel-night night pj-bpd-hero" style="--cat:${RN.fields.catColor(bp.cat)}">

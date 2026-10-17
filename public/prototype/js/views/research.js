@@ -809,7 +809,7 @@
     const saved = diag.saved && diag.saved.key === diagKey() ? diag.saved : null;
     return `<div class="rs-dr">
       <span class="eyebrow">Your result</span>
-      <h3 class="h3 rs-dr-t">Your biggest leak: ${esc(cellText(r.top.area, r.top.stage))}.</h3>
+      <h3 class="h3 rs-dr-t">Your biggest leak is ${esc(cellText(r.top.area, r.top.stage))}.</h3>
       ${diagBow(r)}
       <p class="rs-dr-p">${esc(st ? st.skilled : '')}</p>
       <div class="rs-dr-grid">
@@ -817,18 +817,55 @@
         <div class="rs-dr-box"><span class="label">How to scope it</span><b>${esc(bp ? bp.title + ' Blueprint' : 'Start from an Engagement Blueprint')}</b><span class="small">Hours, term and a 30/60/90-day plan for this kind of work, ready to post as an engagement.</span></div>
       </div>
       <div class="row rs-dr-acts">
-        ${browseBtn(`See ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-leaf')}
-        <a class="btn btn-line" href="#${esc(bp ? bp.to : 'blueprints')}">${bp ? 'See the Blueprint' : 'Blueprints'}</a>
-        <button type="button" class="btn btn-line" data-act="rs-fw-open" data-area="${esc(r.top.area)}" data-stage="${esc(r.top.stage)}">Open this cell</button>
+        <button type="button" class="btn btn-leaf" data-act="rs-dg-talk">Talk it through with our team${icon('arrow')}</button>
+        ${browseBtn(`See ${catL} operators`, { filters: { roleCategories: [cat] }, src: 'framework_diagnostic' }, 'btn btn-line')}
       </div>
+      <p class="small rs-dr-talk-note">${icon('check')}<span>We pass on this result, with the other signals, the role and the Blueprint, so you do not answer again.</span></p>
       <div class="row rs-dr-more">
-        ${saved ? `<span class="rs-dr-sent">${icon('check-circle')}Sent to ${esc(saved.email)}</span>` : `<button type="button" class="act rs-dr-reset" data-act="rs-dg-save">${icon('mail')}Email me this result and the 3 operators</button>`}
+        <a class="act rs-dr-reset" href="#${esc(bp ? bp.to : 'blueprints')}">${icon('doc')}${bp ? 'See the Blueprint' : 'Blueprints'}</a>
+        <button type="button" class="act rs-dr-reset" data-act="rs-fw-open" data-area="${esc(r.top.area)}" data-stage="${esc(r.top.stage)}">${icon('grid')}Open this cell</button>
+        ${saved ? `<span class="rs-dr-sent">${icon('check-circle')}Sent to ${esc(saved.email)}</span>` : `<button type="button" class="act rs-dr-reset" data-act="rs-dg-save">${icon('mail')}Email me this result</button>`}
         <button type="button" class="act rs-dr-reset" data-act="rs-dg-reset">${icon('refresh')}Start over</button>
       </div>
-      <p class="tiny rs-dr-note">We record only the cell and role category, never your answers. If you ask for the email, we keep your work email and company revenue range to send it.</p>
+      <p class="tiny rs-dr-note">We record only the cell and role category until you send this result to our team or ask for the email. For the email, we keep your work email and company revenue range to send it.</p>
     </div>`;
   }
   const diagKey = () => diag.ans.join('-');
+  /* Talk it through with our team: the result goes to Talk to us through RN.handoff (js/core/handoff.js) with the
+     leak, its stage and the role it recommends, so the flow opens with the need answered and our team gets the
+     context. The result travels as shown (leak, stage, role, the other signals, the Blueprint), never the raw answers;
+     the note under the result says so. */
+  function diagHandoff() {
+    const r = diagScore();
+    if (!r.top) return null;
+    const cat = r.cat || AREA_META[r.top.area].cat;
+    const role = roleFor(cat);
+    const st = r.top.stage;
+    const fnd = st === 'Foundation';
+    const others = (r.ranked || []).slice(1);
+    // The summary names at most two other areas; the details list every other signal
+    const sec = others.length ? listAnd(Array.from(new Set(others.map((c) => c.area))).filter((a) => a !== r.top.area).slice(0, 2)) : '';
+    const bp = blueprintFor(cat);
+    const summary = (fnd ? `Biggest leak in ${r.top.area}, across every stage` : `Biggest leak at ${st}, in ${r.top.area}`) + (sec ? `, with secondary signals in ${sec}` : '');
+    return {
+      source: 'diagnostic',
+      need: RN.handoff.needFor(cat, r.top.area),
+      roleCategory: cat,
+      role,
+      summary,
+      details: [
+        { l: 'Biggest leak', v: cellText(r.top.area, st) },
+        { l: 'Stage', v: fnd ? 'Foundation, every stage' : `${st} (${phaseOf(st)})` },
+        { l: 'Role it recommends', v: `A fractional ${role} (${F.catLabel(cat)})` },
+      ].concat(others.length ? [{ l: 'Other signals', v: others.map((c) => cellText(c.area, c.stage)).join('; ') }] : [], bp ? [{ l: 'Blueprint', v: bp.title }] : []),
+    };
+  }
+  RN.actions['rs-dg-talk'] = () => {
+    const p = diagHandoff();
+    if (!p || !RN.handoff) { RN.go('talk'); return; }
+    RN.track('research_cta', { source: 'framework_diagnostic', meta: { to: 'talk', area: p.details[0].v, roleCategory: p.roleCategory } });
+    RN.handoff.go(p);
+  };
   // Save the result by email (value: a reason to come back). Work email + the standard company revenue field.
   RN.actions['rs-dg-save'] = () => {
     const me = RN.me && RN.me();

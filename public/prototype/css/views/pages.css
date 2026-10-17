@@ -1117,3 +1117,20 @@ main[data-view="levels"] .pg-head.has-aside { align-items: end; }
 .pg-core .lv-princ-h { margin: var(--s-12, 48px) 0 var(--s-5); padding-top: var(--s-6); border-top: 1px solid var(--night-line); color: var(--leaf); }
 .pg-core .pg-princ h3 { color: var(--night-ink); }
 .pg-core .pg-princ p { color: var(--night-mute); }
+
+/* Tool handoff (RN.handoff): one quiet line under the live count saying where the context came from, what the
+   visitor found and a Remove link. Hairline on the left, no fill, so it reads as context, not as a question. */
+.pg-ho { display: flex; align-items: flex-start; gap: 10px; margin: calc(var(--s-4) * -1) 0 var(--s-6); padding: 2px 0 2px 12px; border-left: 2px solid color-mix(in srgb, var(--leaf) 55%, transparent); max-width: 68ch; font-size: var(--t-14); line-height: 1.5; color: var(--night-mute); }
+.pg-ho > svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 3px; color: var(--leaf); }
+.pg-ho > span { flex: 1 1 auto; min-width: 0; }
+.pg-ho b { color: var(--night-ink); font-weight: 700; margin-right: 4px; }
+.pg-ho .illus-tag { vertical-align: 1px; margin-left: 4px; color: var(--night-mute); border-color: var(--night-line); }
+.pg-ho-x.act { flex: 0 0 auto; min-height: 0; padding: 0; font-size: var(--t-13); color: var(--night-mute); text-decoration: underline; text-underline-offset: 3px; transition: color var(--dur-1) ease; }
+.pg-ho-x.act:hover, .pg-ho-x.act:focus-visible { color: var(--leaf); }
+.pg-live + .pg-ho { margin-top: calc(var(--s-4) * -1); }
+.pg-talk-note + .pg-ho { margin-top: 0; }
+@media (max-width: 720px) {
+  .pg-ho { flex-wrap: wrap; column-gap: 8px; row-gap: 4px; }
+  .pg-ho > span { flex-basis: calc(100% - 26px); }
+  .pg-ho-x.act { margin-left: 26px; min-height: 32px; }
+}

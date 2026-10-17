@@ -641,7 +641,7 @@
   // The answer keys a step sets (one for a single chip row, two for the size step)
   const stepKeys = (s) => (s.rows ? s.rows.map((r) => r.key) : [s.key]);
   const TKEY = 'rn-pg-talk-v3';
-  const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, name: '', email: '', company: '', title: '', err: '', focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, note: '', usedSearch: null });
+  const fresh = (need) => ({ step: need ? 1 : 0, ans: need ? { need } : {}, ctx: need || null, name: '', email: '', company: '', title: '', err: '', focus: '', done: false, sugg: [], matches: 0, booked: null, sentAt: null, search: null, note: '', usedSearch: null, ho: null, hoId: null, hoFill: [], who: null });
   let T = (function () { try { const s = JSON.parse(window.sessionStorage.getItem(TKEY) || 'null'); if (s && s.ans) return Object.assign(fresh(), s); } catch (e) { /* ignore */ } return fresh(); })();
   function save() { try { window.sessionStorage.setItem(TKEY, JSON.stringify(T)); } catch (e) { /* in memory only */ } }
   let advTimer = null;
@@ -697,7 +697,7 @@
     T.ans.companyRevenue = T.ans.companyRevenue || b.company.revenueRange;
     T.ans.companyEmployees = T.ans.companyEmployees || b.company.employeeRange;
     if (!T.name) T.name = b.name;
-    if (!T.email) T.email = b.email;
+    if (!T.email) { T.email = b.email; T.who = 'profile'; }
     if (!T.company) T.company = b.company.name;
     if (!T.title) T.title = b.title || '';
   }
@@ -707,12 +707,13 @@
     o = o || {};
     const keys = ['need', 'companyRevenue', 'companyEmployees', 'startBy'];
     const st = steps();
-    return keys.filter((k) => T.ans[k]).map((k) => {
+    // The open step's own answers show as selected tiles, not as a chip above the question
+    return keys.filter((k) => T.ans[k] && (o.text || st.findIndex((s) => stepKeys(s).includes(k)) !== T.step)).map((k) => {
       const i = st.findIndex((s) => stepKeys(s).includes(k));
       const label = k === 'need' ? needL(T.ans[k]) : RN.w.label(k, T.ans[k]);
       const name = RECAP[k] || RN.fields[k].label;
       if (o.text) return `${name}: ${label}`;
-      return i >= 0 ? `<button type="button" class="pg-recap-chip" data-act="pg-talk-jump" data-i="${i}" title="Change this answer"><span>${esc(name)}</span>${esc(label)}<i class="pg-recap-ed" aria-hidden="true">${icon('edit')}</i></button>`
+      return i >= 0 ? `<button type="button" class="pg-recap-chip" data-act="pg-talk-jump" data-i="${i}" title="Edit this answer" aria-label="Edit ${esc(name)}, ${esc(label)}"><span>${esc(name)}</span>${esc(label)}<i class="pg-recap-ed" aria-hidden="true">${icon('edit')}</i></button>`
         : `<span class="pg-recap-chip is-fixed" title="From your company profile"><span>${esc(name)}</span>${esc(label)}</span>`;
     });
   }
@@ -772,8 +773,76 @@
       applySearch(ctx);
       if (need) { T.ans.need = need; T.ctx = need; T.step = 1; save(); }
     } else if (need && T.ctx !== need) { T = Object.assign(fresh(need), { usedSearch: T.usedSearch }); save(); }
+    // Shared device: a name and email filled from a signed-in client's profile never carry over to someone else
+    if (persona() !== 'buyer' && T.who === 'profile' && !T.done) { Object.assign(T, { name: '', email: '', company: '', title: '', who: null }); save(); }
+    syncHandoff(need);
     prefillPersona();
     return T.done ? talkDone() : talkStep();
+  }
+
+  /* Tool handoff (RN.handoff, js/core/handoff.js): the diagnostic on #framework and the estimator and calculator on
+     #rates hand over what the visitor told them and what they found. The flow preselects the answers it can (need,
+     company size), opens on the first question still open (the answered ones ride above it as chips that edit them),
+     shows one quiet "From your diagnostic" line with a Remove link, and sends the summary and details to our team.
+     A new handoff (a different id) is applied once; a removed or expired one drops off an unsent request. */
+  const firstOpen = () => {
+    const st = steps();
+    const i = st.findIndex((s) => s.key !== 'contact' && !stepKeys(s).every((k) => T.ans[k]));
+    return i < 0 ? st.length - 1 : i;
+  };
+  function syncHandoff(routeNeed) {
+    const h = RN.handoff && RN.handoff.get();
+    if (!h) { if (T.ho && !T.done) { T.ho = null; save(); } return; }
+    if (T.hoId === h.id) return;
+    // A finished request starts again. What the visitor typed stays, unless it came from a signed-in profile.
+    if (T.done) T = Object.assign(fresh(routeNeed), T.who === 'profile' && persona() !== 'buyer' ? {} : { name: T.name, email: T.email, company: T.company, title: T.title, who: T.who }, { usedSearch: T.usedSearch });
+    T.ho = h;
+    T.hoId = h.id;
+    // A tool fills only what is still open. An answer the visitor gave stays; one an earlier tool filled, and the
+    // visitor left as it was, gives way to the newer tool's. An explicit #talk.<need> link wins over the tool's need.
+    const prev = T.hoFill || [];
+    const mine = [];
+    let changed = false;
+    const fill = (k, v) => {
+      if (!v || (T.ans[k] && !prev.includes(k))) return;
+      if (T.ans[k] !== v) changed = true;
+      T.ans[k] = v;
+      mine.push(k);
+    };
+    if (!routeNeed) fill('need', h.need);
+    // A signed-in client's company size comes from their company profile, not from a tool; the estimator's default
+    // revenue band (one the visitor never picked) is not an answer
+    if (persona() !== 'buyer') {
+      if (h.revenueChosen !== false) fill('companyRevenue', h.companyRevenue);
+      fill('companyEmployees', h.companyEmployees);
+    }
+    T.hoFill = Array.from(new Set(prev.concat(mine)));
+    if (persona() === 'buyer') prefillPersona();
+    // Open on the first question still open only when the tool filled something; otherwise the visitor stays put
+    if (changed) T.step = firstOpen();
+    T.err = '';
+    save();
+  }
+  // The revenue band the tool's figures use, when it differs from the company revenue in the request
+  const revGap = () => (T.ho && T.ho.companyRevenue && T.ans.companyRevenue && T.ho.companyRevenue !== T.ans.companyRevenue ? T.ho.companyRevenue : '');
+  function gapLine() {
+    const g = revGap();
+    if (!g) return '';
+    const said = persona() === 'buyer' ? 'Their company profile says' : 'They answered';
+    return `Revenue to confirm: ${said} ${RN.w.label('companyRevenue', T.ans.companyRevenue)}; the ${T.ho.source === 'calculator' ? 'calculator' : 'estimate'} used ${RN.w.label('companyRevenue', g)}.`;
+  }
+  // The summary as HTML, with the visible Illustrative tag right where the illustrative figure sits
+  function hoHtml(ho) {
+    const s = ho.summary;
+    if (!ho.illustrative || !RN.ui.illusTag) return esc(s);
+    const m = s.match(/\s*\(illustrative[^)]*\)/i);
+    if (!m) return `${esc(s)} ${RN.ui.illusTag()}`;
+    return `${esc(s.slice(0, m.index))} ${RN.ui.illusTag()}${esc(s.slice(m.index + m[0].length))}`;
+  }
+  // The quiet line on every question: where the context came from, what they found, and a way to leave it out
+  function hoLine() {
+    if (!T.ho) return '';
+    return `<p class="pg-ho" data-ho="${esc(T.ho.source)}">${icon(T.ho.source === 'diagnostic' ? 'target' : 'sliders')}<span><b>${esc(RN.handoff.label(T.ho.source))}</b> ${hoHtml(T.ho)}</span><button type="button" class="act pg-ho-x" data-act="pg-talk-ho-remove" aria-label="Remove this from your request">Remove</button></p>`;
   }
 
   /* Three facts under the answer grid (layout and ratio audits): all already stated in the site copy. The open-profile
@@ -809,7 +878,7 @@
     const s = st[T.step];
     save();
     const p = persona();
-    const note = p === 'buyer' ? `<p class="pg-talk-note">${icon('check-circle')}Signed in as ${esc(RN.personas.buyer.name)}, ${esc(RN.personas.buyer.company.name)}. We filled in your company size.</p>`
+    const note = p === 'buyer' ? `<p class="pg-talk-note">${icon('check-circle')}Signed in as ${esc(RN.personas.buyer.name)}, ${esc(RN.personas.buyer.company.name)}. We filled in your company size${revGap() ? ` from your profile, ${esc(RN.w.label('companyRevenue', T.ans.companyRevenue))} revenue. The ${T.ho.source === 'calculator' ? 'calculator' : 'estimate'} used ${esc(RN.w.label('companyRevenue', revGap()))}, so our team will confirm it` : ''}.</p>`
       : p === 'operator' ? `<p class="pg-talk-note">${icon('info')}This form is for companies hiring. For help with your profile, open <a href="#studio">Studio</a> or call ${PHONE}.</p>` : '';
     const searched = T.search ? `<p class="pg-talk-note pg-talk-search">${icon('search')}<span>You searched “${esc(T.search.label)}”. We send it to our team with your answers, so you do not have to describe it again.</span></p>` : '';
     const chips = T.step > 0 ? recap() : [];
@@ -846,7 +915,8 @@
         <div class="pg-tiles${s.key === 'need' ? ' has-ic' : ''}" data-cols="${s.cols || 2}">${decorate(RN.w.control(s.key, T.ans[s.key] || '', { name: s.key, id: 'pg-t-' + s.key, change: 'pg-talk-pick' }), s.key)}</div>
 `;
     }
-    if (s.key !== 'contact') body += talkFacts();
+    // The handoff line takes the place of the three facts, so a step from a tool reads no longer than the same step without it
+    if (s.key !== 'contact' && !T.ho) body += talkFacts();
     // Answers so far ride above the question, each one a button back to its step
     const crumbs = chips.length && s.key !== 'contact' ? `<div class="pg-recap pg-crumbs" aria-label="Your answers so far">${chips.join('')}</div>` : '';
     return `<section class="pg-talk night" data-step="${esc(s.key)}">
@@ -858,6 +928,7 @@
         ${progress(T.step, st.length)}
         ${liveBadge()}
         ${note}${T.step === 0 ? searched : ''}
+        ${hoLine()}
         ${crumbs}
         <h1 class="h2 pg-q" tabindex="-1">${vmEnd(s.q)}</h1>
         ${body}
@@ -880,7 +951,8 @@
     const b = brief();
     const cats = needCats(b.need);
     const unsure = !cats.length;
-    const lines = recap({ text: true }).concat(T.note ? [`Looking for: ${T.note}`] : T.search ? [`Search: ${T.search.label}`] : []);
+    // Escaped lines; the tool's line is HTML so its illustrative figure carries the visible tag
+    const lines = recap({ text: true }).map(esc).concat(T.ho ? [`${esc(RN.handoff.label(T.ho.source))}: ${hoHtml(T.ho)}`] : [], (T.note ? [`Looking for: ${T.note}`] : T.search ? [`Search: ${T.search.label}`] : []).map(esc));
     return `<section class="pg-talk pg-talk-done night">
       <div class="pg-talk-in">
         <div class="pg-talk-top"><button type="button" class="pg-back" data-act="pg-talk-reset">${icon('refresh')}Start a new request</button><span class="step-count">Sent</span></div>
@@ -900,7 +972,7 @@
           </div>
           <div class="pg-done-card">
             <span class="label">${icon('doc')}Your request</span>
-            <ul class="pg-done-list">${lines.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+            <ul class="pg-done-list">${lines.map((x) => `<li>${x}</li>`).join('')}</ul>
           </div>
         </div>
       </div>
@@ -908,7 +980,7 @@
     <section class="section-sm pg-sugg-sec">
       <div class="wrap">
         <div class="pg-shead"><div class="pg-shead-l"><span class="eyebrow">${unsure ? 'A few operators to look at while you wait' : 'Operators we would start with'}</span>
-          <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your company size and start date.' : `Matched on ${esc(RN.w.label('need', b.need).toLowerCase())}, your company size and start date.`}</h2></div>
+          <h2 class="h3 pg-sugg-h">${unsure ? 'Ranked on your company size and start date.' : `Matched on ${esc(RN.w.label('need', b.need).replace(/^./, (c) => c.toLowerCase()))}, your company size and start date.`}</h2></div>
           <div class="pg-shead-r"><button type="button" class="act" data-act="pg-talk-browse">${nMatch === 1 ? 'See the matching operator in Browse' : `See all ${RN.fmt.plural(nMatch, 'matching operator')} in Browse`}${icon('arrow')}</button></div></div>
         ${ops.length ? `<p class="pg-sugg-note">${icon('check-circle')}<span>Request intro opens with your answers filled in: ${esc(introSummary())}. Check it and send.</span></p>
         <div class="grid g-3 pg-sugg">${ops.map((op, i) => {
@@ -967,6 +1039,7 @@
   RN.inputs['pg-talk-pick'] = (el) => {
     if (!el.value) return;
     T.ans[el.name] = el.value;
+    if (T.hoFill) T.hoFill = T.hoFill.filter((k) => k !== el.name);
     T.err = '';
     save();
     updateLive();
@@ -989,6 +1062,16 @@
   RN.actions['pg-talk-back'] = () => { clearTimeout(advTimer); T.step = Math.max(0, T.step - 1); T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-jump'] = (el) => { clearTimeout(advTimer); T.step = +el.dataset.i || 0; T.moved = true; save(); RN.render(); };
   RN.actions['pg-talk-reset'] = () => { T = Object.assign(fresh(), { usedSearch: T.usedSearch }); save(); if (curView() === 'talk') RN.render(); else RN.go('talk'); };
+  RN.actions['pg-talk-ho-remove'] = () => {
+    if (RN.handoff) RN.handoff.clear();
+    T.ho = null;
+    save();
+    RN.rerender();
+    // The Remove button is gone after the re-render; focus moves to the question so it never falls to the page
+    const q = RN.$('.pg-talk .pg-q');
+    if (q) q.focus({ preventScroll: true });
+    RN.ui.toast('Removed from your request. Your answers stay, and you can edit any of them.', { icon: 'check' });
+  };
   RN.actions['pg-talk-browse'] = () => { const s = suggest(); goBrowse({ filters: s.filters }); };
 
   RN.submits['pg-talk-send'] = (form, data) => {
@@ -1012,17 +1095,21 @@
     T.sentAt = RN.now().toISOString();
     save();
     // Demand intelligence (Admin) and "Why you appeared" (Studio): same event shapes Browse logs
-    RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { startBy: T.ans.startBy, need: T.ans.need, searched: T.search ? T.search.q : undefined } });
+    const hoSrc = T.ho ? T.ho.source : undefined;
+    RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { startBy: T.ans.startBy, need: T.ans.need, searched: T.search ? T.search.q : undefined, handoff: hoSrc } });
     s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk' }));
-    RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: 'talk' });
+    // `handoff` names the tool the request came from (diagnostic, estimator, calculator), if any
+    RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: 'talk', handoff: hoSrc, meta: { handoff: hoSrc || null } });
     const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note && !(T.search && T.note === T.search.label) ? [`What they are looking for: ${T.note}`] : []);
     const names = s.top.map((r) => r.op.name);
     // Company and title are optional; the team researches whatever is blank before the call
     const who = `${[T.name, T.title].filter(Boolean).join(', ')} <${T.email}>${T.company ? ', ' + T.company : ''}`;
     const blank = [!T.company && 'company name', !T.title && 'title'].filter(Boolean);
     const todo = blank.length ? `\nTo research before the call: ${blank.join(' and ')}.` : '';
-    RN.mail(TEAM, `Talk to us: ${needLabel}`, `${who}${todo}\n${lines.join('\n')}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
-    RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team will reply within one business day.\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book a call from the confirmation page.`, 'talk');
+    RN.mail(TEAM, `Talk to us: ${needLabel}${T.ho ? `, ${RN.handoff.label(T.ho.source).replace(/^From (your |the )?/, 'from the ')}` : ''}`, `${who}${todo}\n${lines.join('\n')}${T.ho ? '\n\n' + RN.handoff.text(T.ho).concat(gapLine() || []).join('\n') : ''}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
+    RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team will reply within one business day.${T.ho ? ` We have your ${T.ho.source === 'diagnostic' ? 'diagnostic result' : 'estimate'} too, so there is no need to explain it again.` : ''}\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book a call from the confirmation page.`, 'talk');
+    // The handoff is used up once it is sent; the done screen keeps its copy (T.ho)
+    if (RN.handoff) RN.handoff.clear();
     RN.render();
     RN.ui.toast(`Sent. A person replies to ${esc(T.email)} within one business day.`, { icon: 'send' });
   };
@@ -1036,7 +1123,7 @@
     RN.intro.open(op.id, introPrefill());
   };
   /* Talk answers as intro-sheet prefill. Same for all three suggestions; the sheet fills its own defaults for
-     engagementType and hoursPerMonth (the flow does not ask them). */
+     engagementType (the flow does not ask it) and, without hours from the estimator, hoursPerMonth. */
   function introSummary() {
     const parts = [];
     if (T.ans.need) parts.push(needL(T.ans.need));
@@ -1047,12 +1134,16 @@
   }
   function introPrefill() {
     const sum = introSummary();
-    const extra = T.note || (T.search ? 'Searched for: ' + T.search.label : '');
+    // The operator reads this note: the diagnostic result goes in plain words; the estimator's illustrative Rate Index
+    // figures never do (the hours go in their own field)
+    const hoNote = T.ho && T.ho.source === 'diagnostic' ? `GTM diagnostic result: ${T.ho.summary}.` : '';
+    const extra = [hoNote, T.note || (T.search ? 'Searched for: ' + T.search.label : '')].filter(Boolean).join(' ');
     const note = [sum ? `From Talk to us: ${sum}.` : '', extra].filter(Boolean).join(' ').slice(0, 500);
     const pre = {
       source: 'talk', need: T.ans.need, startBy: T.ans.startBy, note,
       name: T.name, email: T.email, company: T.company, title: T.title, industry: T.industry,
       revenueRange: T.ans.companyRevenue, employeeRange: T.ans.companyEmployees,
+      hoursPerMonth: T.ho && T.ho.hours,
     };
     Object.keys(pre).forEach((k) => { if (pre[k] == null || pre[k] === '') delete pre[k]; });
     return pre;
@@ -1132,7 +1223,7 @@
     const onTalkPage = vname === 'talk' || vname === 'talk-need';
     const page = onTalkPage ? 'Talk to us' : cur && cur.view && typeof cur.view.title === 'function' ? cur.view.title(cur.params || {}) : 'site';
     const from = onTalkPage ? 'talk' : vname || 'site';
-    RN.mail(TEAM, `Call booked: ${label}`, `${[k.name, k.title].filter(Boolean).join(', ')} <${k.email}>${k.company ? ', ' + k.company : ''} booked a 30-minute call from the ${page} page.${T.done ? '\n\nTalk to us answers:\n' + recap({ text: true }).join('\n') : ''}`, 'call');
+    RN.mail(TEAM, `Call booked: ${label}`, `${[k.name, k.title].filter(Boolean).join(', ')} <${k.email}>${k.company ? ', ' + k.company : ''} booked a 30-minute call from the ${page} page.${T.done ? '\n\nTalk to us answers:\n' + recap({ text: true }).join('\n') : ''}${T.ho ? '\n\n' + RN.handoff.text(T.ho).concat(gapLine() || []).join('\n') : ''}`, 'call');
     RN.mail(k.email, `Your call with Revenue Nomad: ${label}`, `Thanks, ${RN.fmt.first(k.name)}. You are booked for ${label}, 30 minutes. A calendar invite with the video link is on its way.\n\nNeed another time? Reply to this email or call ${PHONE}.`, 'call');
     RN.track('contact_submit', { kind: 'call', source: from });
     RN.ui.closeModal();

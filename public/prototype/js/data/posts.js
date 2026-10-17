@@ -533,11 +533,11 @@
           },
           {
             "q": "What does a fractional VP of Sales cost?",
-            "a": "Across our 2026 engagements, a director or VP for a team under 5 to 8 reps ran $200 to $250 an hour for 20 to 40 hours a month. [[link:guide.fractional-vp-of-sales-cost|What a fractional VP of Sales costs]] covers every seat."
+            "a": "Across our 2026 engagements, a director or VP for a team under 5 to 8 reps ran [[cost:vp-sales.hourly]] for [[cost:vp-sales.hours]], with no platform fee added. If you later hire the operator full time, the conversion fee is 20% of annual salary. [[link:guide.fractional-vp-of-sales-cost|What a fractional VP of Sales costs]] covers every seat."
           },
           {
-            "q": "Is there a fee besides the operator's rate?",
-            "a": "No platform fee. You pay the operator's rate and nothing more. If you later hire the operator full time, the conversion fee is 20% of annual salary."
+            "q": "Does the operator need experience in our exact industry?",
+            "a": "Not always. The same kind of sale and the same stage come first, and we check both before you see a profile. Industry familiarity still helps, and one founder picked the finalist who knew the industry. Several of our 2026 sales engagements are services businesses, and you can filter [[link:browse.sales_leadership|sales leadership profiles]] by industry and sales motion."
           },
           {
             "q": "What if the operator is the wrong fit?",
@@ -1282,6 +1282,10 @@
           {
             "q": "What if the operator is the wrong fit?",
             "a": "You can swap the operator. Every engagement runs on a signed contract, with a monthly retainer billed upfront for a set block of hours."
+          },
+          {
+            "q": "What does the first month usually cover?",
+            "a": "The first-month plans in our 2026 sales engagements cover paying SDRs for meetings that show and qualify, written discovery and close talk tracks with role-play, one booking system the whole team uses, a rep-by-rep assessment and a CRM audit. They should show within 30 days. Results from those engagements are not in yet, so judge them against the numbers you record in week one."
           }
         ],
         "talk": "If your growth has stalled and you want one person to own the next 90 days, [[link:talk.sales_motion|tell us about your sales team]]. Four short questions, only name and email required. You get a role profile and 2 to 3 vetted operators, often within 48 hours, and meet them before you sign.",
@@ -1588,15 +1592,19 @@
         "faq": [
           {
             "q": "What are the alternatives to a full-time sales leader?",
-            "a": "An interim leader close to full time for a defined period, a fractional leader on a set block of hours, or a consulting firm that delivers findings. With under 3 reps and the founder still closing most deals, start with a sales coach."
+            "a": "An interim leader close to full time for a defined period, a fractional leader on a set block of hours, or a consulting firm that delivers findings. With under 3 reps and the founder still closing most deals, start with a sales coach. If the process works and you only need hands, hire a rep."
           },
           {
-            "q": "Can a fractional sales leader become our full-time hire?",
-            "a": "Yes. Some clients convert the operator once the system works. The full-time conversion fee is 20% of annual salary."
+            "q": "Can a fractional sales leader become our full-time hire, or hand over to one?",
+            "a": "Yes, either way. Some companies convert the operator once the system works, for a fee of 20% of annual salary. Others hire a full-time leader into the system the operator built, and a leader at month 6 can write that job description with real data."
           },
           {
-            "q": "Is there a fee besides the operator's rate?",
-            "a": "No. Clients pay no platform fee. You pay the operator's rate and nothing more."
+            "q": "We're comparing several options. How should we judge them?",
+            "a": "On the same three things, hours, term and who is on the hook when the number moves. Meet the person who will do the work before you sign, ask for a written 30/60/90-day plan before a retainer starts, and check whether whoever diagnoses also stays for the fix."
+          },
+          {
+            "q": "We tried fractional help before and it didn't work. What should be different?",
+            "a": "Check which of four things failed. Hours were too thin, full-time availability was expected at a fractional rate, the operator lacked authority, or one retainer covered several jobs. Fix each before sourcing, with enough hours, a weekly cadence, written decision rights and a scope one person can cover."
           },
           {
             "q": "What if the operator is the wrong fit?",
@@ -2778,6 +2786,10 @@
           {
             "q": "Can we hire the operator full time later?",
             "a": "Yes. The conversion fee is 20% of annual salary. You can also swap the operator if the fit is wrong."
+          },
+          {
+            "q": "How do we get marketing, sales and customer success working from the same numbers?",
+            "a": "Give one owner the definitions every team reports on. That is the RevOps job, shared definitions across marketing, sales and customer success, and an owner for the conversion between teams. If marketing counts MQLs and sales counts bookings, the handoff between them has no owner, which is where most forecasts break."
           }
         ],
         "talk": "Not sure which one you have? [[link:talk.systems|Tell us where your revenue system breaks]] in four short questions, what you need help with, how big the business is today, when you need someone to start and where to reply. Only name and email are required. We reply with a role profile and 2 to 3 vetted RevOps operators, often within 48 hours, and you meet them before you sign.",

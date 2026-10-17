@@ -970,7 +970,8 @@
   /* =====================================================================
      3. RATE INDEX (#rates)
      ===================================================================== */
-  const est = { cat: undefined, rev: undefined, hours: undefined };
+  // revSet: the visitor picked the revenue band (or it came from their company profile); false while it is the default
+  const est = { cat: undefined, rev: undefined, hours: undefined, revSet: false };
   // Full-time side of the calculator. variable is '' until the user types their own figure (then varCustom).
   const calc = { base: 220000, benefits: 25, variable: '', recruit: 25, months: 4 };
   let varCustom = false;
@@ -979,7 +980,7 @@
   function estDefaults() {
     const me = opMe(), co = personaCo();
     if (est.cat === undefined) est.cat = me ? me.catKey : 'sales_leadership';
-    if (est.rev === undefined) est.rev = co ? co.revenueRange : me && me.revenueRanges[0] ? me.revenueRanges[0] : '5m_20m';
+    if (est.rev === undefined) { est.rev = co ? co.revenueRange : me && me.revenueRanges[0] ? me.revenueRanges[0] : '5m_20m'; est.revSet = !!co; }
     if (est.hours === undefined) est.hours = me && me.avail.hoursCode ? me.avail.hoursCode : '40';
     if (idxRev === undefined) idxRev = co ? co.revenueRange : '';
   }
@@ -1007,10 +1008,10 @@
     const cat = catLabel(est.cat);
     const withRev = { roleCategories: [est.cat], revenueRange: [est.rev] };
     const n1 = count(withRev);
-    if (n1 >= MIN_HANDOFF) return { f: withRev, label: `See ${n1} operators`, note: `Opens Browse filtered to ${cat} and ${revLabel(est.rev)} company revenue.`, n: n1 };
+    if (n1 >= MIN_HANDOFF) return { f: withRev, label: `See ${n1} operators`, note: `The operators button opens Browse filtered to ${cat} and ${revLabel(est.rev)} company revenue.`, n: n1 };
     const roleOnly = { roleCategories: [est.cat] };
     const n2 = count(roleOnly);
-    if (n2) return { f: roleOnly, label: n2 === 1 ? 'See the operator' : `See all ${n2} operators`, note: `Opens Browse filtered to ${cat}. Fewer than ${MIN_HANDOFF} list ${revLabel(est.rev)} companies.`, n: n2 };
+    if (n2) return { f: roleOnly, label: n2 === 1 ? 'See the operator' : `See all ${n2} operators`, note: `The operators button opens Browse filtered to ${cat}, since fewer than ${MIN_HANDOFF} list ${revLabel(est.rev)} companies.`, n: n2 };
     return { f: {}, label: 'Browse all operators', note: `No ${cat} operators are live yet.`, n: 0 };
   }
   function estOut() {
@@ -1031,11 +1032,53 @@
       <p class="ins-est-term">Most first terms run ${esc(RN.w.label('term', '3_6').toLowerCase())} (${REP().term[1].v}% of engagements). At the median that is <b>${RN.fmt.k(r500(g.mid * 3))} - ${RN.fmt.k(r500(g.mid * 6))}</b> for the first term.</p>
       <p class="ins-est-basis small">Illustrative Rate Index, as of ${esc(asOfText())}. Based on ${RN.fmt.int(r.n)} ${esc(catLabel(est.cat))} rates, adjusted for ${esc(revLabel(est.rev))} companies (×${r.m.toFixed(2)}).${low ? ` <span class="ins-low">${icon('info')}${esc(low)}</span>` : ''}</p>
       <div class="row ins-est-cta">
-        <button type="button" class="btn btn-leaf" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(hand.f)}">${esc(hand.label)}${icon('arrow')}</button>
-        <button type="button" class="btn btn-line" data-act="ins-jump" data-to="ins-calc">Compare with full time</button>
+        <button type="button" class="btn btn-leaf" data-act="ins-est-talk" data-from="estimator">Get this scoped with our team${icon('arrow')}</button>
+        <button type="button" class="btn btn-line" data-act="ins-browse" data-src="rates_estimator" data-f="${jsonAttr(hand.f)}">${esc(hand.label)}</button>
       </div>
-      <p class="tiny ins-est-hand">${esc(hand.note)}</p>`;
+      <p class="tiny ins-est-hand">Our team gets the role, hours, company revenue and this estimate. ${esc(hand.note)}</p>
+      <button type="button" class="act ins-est-ft" data-act="ins-jump" data-to="ins-calc">Compare with full time${icon('arrow')}</button>`;
   }
+
+  /* Get this scoped with our team: the estimate (and, from the calculator, the full-time comparison) goes to Talk to
+     us through RN.handoff (js/core/handoff.js). The flow opens with the need answered, and the company revenue when the
+     visitor picked a band (never the estimator's default); our team
+     gets the role, hours, revenue band and the figures. Rate Index figures stay labelled illustrative in the summary. */
+  const revPhrase = (v) => ({ pre_revenue: 'a pre-revenue company', under_1m: 'a company under $1M' }[v] || `a ${revLabel(v)} company`);
+  function estPayload(from) {
+    const g = ins.range(est.cat, est.rev, est.hours);
+    const cat = catLabel(est.cat), hrs = hoursLabel(est.hours).replace(/ \/ /, '/');
+    const il = ILLUS() ? ' (illustrative Rate Index)' : ' (Rate Index)';
+    const p = {
+      source: from === 'calculator' ? 'calculator' : 'estimator',
+      need: RN.handoff.needFor(est.cat),
+      companyRevenue: est.rev,
+      revenueChosen: !!est.revSet,
+      roleCategory: est.cat,
+      hours: est.hours,
+      illustrative: ILLUS(),
+      details: [
+        { l: 'Role category', v: cat },
+        { l: 'Revenue band used', v: revLabel(est.rev) + (est.revSet ? '' : ', the estimator default') },
+        { l: 'Hours', v: hrs },
+        { l: ILLUS() ? 'Estimate, illustrative' : 'Estimate', v: `${g.label}, median ${RN.fmt.k(g.mid)}/month at ${hr(g.r.p50)}/hr` },
+      ],
+    };
+    if (p.source === 'calculator') {
+      const c = calcNums();
+      // Rounded exactly as the chart rounds (DRAW.calc), so the figures match the bars the visitor just saw
+      const mo = (n) => RN.fmt.k(r500(Math.round(n)));
+      p.summary = `Fractional ${cat} at ${hrs} vs a full-time hire for ${revPhrase(est.rev)}, about ${mo(c.frac)}/month${il} vs ${mo(c.ft)}/month for the full-time costs entered`;
+      p.details.push({ l: 'Full time, as entered', v: `${mo(c.ft)}/month (base ${usd(c.base)}, commission and bonus ${usd(c.variable)}, benefits ${Math.round(c.b * 100)}%, recruiting fee ${Math.round(c.fee * 100)}%, ${RN.fmt.plural(c.months, 'month')} to hire)` });
+      p.details.push({ l: 'Next 12 months', v: `${RN.fmt.k(r500(c.fracYear))} fractional vs ${RN.fmt.k(r500(c.ftYear))} full time` });
+    } else {
+      p.summary = `${cat} at ${hrs} for ${revPhrase(est.rev)}, about ${g.label}${il}`;
+    }
+    return p;
+  }
+  RN.actions['ins-est-talk'] = (el) => {
+    if (!RN.handoff) { RN.go('talk'); return; }
+    RN.handoff.go(estPayload(el.dataset.from));
+  };
   /* The index, twice: visual rows (range bar, forest median on --viz-muted, the estimator's role highlighted) and the
      same figures as a real <table> (credibility audit: #rates had no table). No category colours (colour audit). */
   const idxData = () => {
@@ -1141,6 +1184,7 @@
           <div><dt>Fractional, Rate Index median ${tagS()}</dt><dd>${RN.fmt.k(c.frac)}/month</dd></div>
         </dl>
         <p class="tiny muted">A fractional leader works ${esc(hoursLabel(est.hours))}. A full-time leader works about 170 hours a month. Compare the outcomes you need in those hours.</p>
+        <div class="row ins-calc-cta"><button type="button" class="btn btn-leaf" data-act="ins-est-talk" data-from="calculator">Get this scoped with our team${icon('arrow')}</button><span class="tiny muted">We pass on these inputs and both monthly figures.</span></div>
         <p class="fig-note ins-calc-ref"><span>For reference, full-time VP of Sales pay averages ${esc(lowerFirst(RN.costs.get('vp-sales').text.fullTime))} in total compensation, or ${esc(RN.costs.get('vp-sales').text.fullTimeMonthly)} (${esc(RN.costs.fullTime.src)}).</span></p>
       </div>`;
   }
@@ -1430,10 +1474,12 @@
     const k = { 'ins-est-cat': 'cat', 'ins-est-rev': 'rev', 'ins-est-hours': 'hours' }[el.name];
     if (!k || !el.value) return;
     est[k] = el.value;
+    if (k === 'rev') est.revSet = true;
     // On a role permalink, the page follows the estimator's role: URL, title, answer, related roles and citation
     if (k === 'cat' && routeCat && routeCat !== est.cat) {
       routeCat = est.cat;
       try { history.replaceState(null, '', '#rates.' + est.cat); } catch (e) { /* file:// in some browsers */ }
+      if (RN.refreshHead) RN.refreshHead(); // title, description and canonical follow the new role
       document.title = `${roleTitle(est.cat)} · Revenue Nomad`;
       setMeta(roleMeta(est.cat));
       const hd = RN.$('[data-ins-rhead]'); if (hd) hd.innerHTML = ratesHead();
