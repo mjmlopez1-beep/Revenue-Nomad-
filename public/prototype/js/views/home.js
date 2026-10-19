@@ -143,6 +143,19 @@
     return `<div class="hm-logos"><span class="label">Trusted by teams at</span><ul>${LOGO_LINE.map(([k, name, h]) => `<li>${(RN.data.logos || {})[k] ? RN.ui.logo(k, { h, name }) : `<span class="hm-wm">${esc(name)}</span>`}</li>`).join('')}</ul></div>`;
   }
 
+  /* How it works, above the fold (Oct 19, 2026: "how it works above the fold"): the three steps of the closing band in
+     one quiet line under the search, each a few words, with the full walk-through on #how. No motion of its own; it
+     joins the first-visit entrance between the search and the logos. */
+  const HERO_HOW = [
+    ['Tell us what you need', 'Search, or talk to our team'],
+    ['Meet matched operators', 'Replies within 72 hours'],
+    ['Start on clear terms', 'Scope, hours and rate up front'],
+  ];
+  const heroHow = () => `<div class="hm-hiw">
+      <a class="label hm-hiw-l" href="#how">How it works${icon('arrow')}</a>
+      <ol class="hm-hiw-steps">${HERO_HOW.map((x, i) => `<li><span class="hm-hiw-n" aria-hidden="true">${i + 1}</span><span class="hm-hiw-t"><b>${esc(x[0])}</b><span>${esc(x[1])}</span></span></li>`).join('')}</ol>
+    </div>`;
+
   function hero() {
     const meetDays = +((RN.data.market && RN.data.market.network && RN.data.market.network.introToMeetingDays) || 2); // founder figure, Oct 2, 2026
     return `<section class="hm-hero night" aria-labelledby="hm-h1">
@@ -162,6 +175,7 @@
               <input id="hm-q" name="q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(S.q)}" placeholder="${esc(ph())}" data-input="hm-q"></label>
             <button type="submit" class="btn btn-lg hm-go-btn">Show my matches</button>
           </form>
+          ${heroHow()}
           ${logoLine()}
         </div>
         <dl class="hm-stats">

@@ -65,6 +65,17 @@
 [data-view="home"] .hm-search .hm-go-btn:hover { background: var(--forest-hi); }
 
 /* Logo line under the search box: one compact row of company names */
+/* How it works in the hero: one quiet line of three numbered steps under the search, the label links to #how */
+[data-view="home"] .hm-hiw { display: flex; align-items: flex-start; gap: 10px 28px; margin-top: var(--s-5); max-width: 880px; }
+[data-view="home"] .hm-hiw-l { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; padding-top: 5px; color: var(--leaf); text-decoration: none; white-space: nowrap; }
+[data-view="home"] .hm-hiw-l svg { width: 14px; height: 14px; transition: transform var(--dur-2) var(--ease-out); }
+[data-view="home"] .hm-hiw-l:hover svg, [data-view="home"] .hm-hiw-l:focus-visible svg { transform: translateX(3px); }
+[data-view="home"] .hm-hiw-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; list-style: none; }
+[data-view="home"] .hm-hiw-steps li { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+[data-view="home"] .hm-hiw-n { display: inline-grid; place-items: center; flex: 0 0 auto; width: 24px; height: 24px; border: 1px solid color-mix(in srgb, var(--leaf) 55%, transparent); border-radius: 50%; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--leaf); }
+[data-view="home"] .hm-hiw-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; line-height: 1.3; }
+[data-view="home"] .hm-hiw-t b { font-size: var(--t-15); font-weight: 600; color: var(--night-ink); }
+[data-view="home"] .hm-hiw-t span { font-size: var(--t-13); color: var(--night-mute); }
 [data-view="home"] .hm-logos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-top: var(--s-5); }
 [data-view="home"] .hm-logos .label { color: var(--night-mute); }
 [data-view="home"] .hm-logos ul { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 24px; margin: 0; padding: 0; list-style: none; }
@@ -470,6 +481,14 @@
   [data-view="home"] .hm-search-f { flex-basis: 100%; }
   [data-view="home"] .hm-search input { height: 52px; font-size: 17px; }
   [data-view="home"] .hm-search .hm-go-btn { --h: 52px; flex: 1 1 100%; padding: 0 16px; }
+  /* How it works: the label above, three short steps in a row, the second line dropped */
+  [data-view="home"] .hm-hiw { flex-direction: column; gap: 10px; margin-top: var(--s-5); }
+  [data-view="home"] .hm-hiw-l { padding-top: 0; }
+  [data-view="home"] .hm-hiw-steps { gap: 10px; }
+  [data-view="home"] .hm-hiw-steps li { flex-direction: column; gap: 6px; }
+  [data-view="home"] .hm-hiw-n { width: 22px; height: 22px; font-size: 11px; }
+  [data-view="home"] .hm-hiw-t b { font-size: var(--t-14); line-height: 1.3; }
+  [data-view="home"] .hm-hiw-t span { display: none; }
   /* How it works (#how): a straight path down the left, every card to its right */
   :is([data-view="home"], [data-view="how"]) .hm-path { --node: 52px; --pgap: 16px; }
   :is([data-view="home"], [data-view="how"]) .hm-psteps { gap: 24px; padding: 8px 0 24px; }
@@ -534,7 +553,7 @@
 /* Entrance: eyebrow, the three headline lines, lede, search, the figures, then the logos; 780ms end to end. Each piece
    moves for 340ms, so no more than about a quarter of the screen is in motion at once. Phones (the hero text fills most
    of the screen) run the eyebrow, headline and lede only; the search, logos and figures are still there. */
-[data-view="home"] .hm-enter :is(.hm-kicker, .hm-ln > span, .hm-sub, .hm-search, .hm-logos, .hm-stats > div) { animation: hmRise 340ms var(--ease-out) backwards; }
+[data-view="home"] .hm-enter :is(.hm-kicker, .hm-ln > span, .hm-sub, .hm-search, .hm-hiw, .hm-logos, .hm-stats > div) { animation: hmRise 340ms var(--ease-out) backwards; }
 [data-view="home"] .hm-enter .hm-kicker::before { transform-origin: left center; animation: hmRule 480ms var(--ease-out) 60ms backwards; }
 [data-view="home"] .hm-enter .hm-ln:nth-child(1) > span { animation-delay: 50ms; }
 [data-view="home"] .hm-enter .hm-ln:nth-child(2) > span { animation-delay: 100ms; }
@@ -544,9 +563,10 @@
 [data-view="home"] .hm-enter .hm-stats > div:nth-child(1) { animation-delay: 330ms; }
 [data-view="home"] .hm-enter .hm-stats > div:nth-child(2) { animation-delay: 380ms; }
 [data-view="home"] .hm-enter .hm-stats > div:nth-child(3) { animation-delay: 430ms; }
+[data-view="home"] .hm-enter .hm-hiw { animation-delay: 360ms; }
 [data-view="home"] .hm-enter .hm-logos { animation-delay: 440ms; }
 @media (max-width: 640px) {
-  [data-view="home"] .hm-enter :is(.hm-search, .hm-logos, .hm-stats > div) { animation: none; }
+  [data-view="home"] .hm-enter :is(.hm-search, .hm-hiw, .hm-logos, .hm-stats > div) { animation: none; }
 }
 /* Ambient: the photo settles once, very slowly (5% over 22s), then rests */
 @keyframes hmDrift { from { transform: scale(1.05) translate3d(-1%, 0, 0); } }

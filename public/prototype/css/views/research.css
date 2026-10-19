@@ -1279,3 +1279,41 @@ g.rs-dbow-sig polygon { fill: none; stroke: var(--leaf); stroke-width: 1; stroke
 
 /* Copy that tells the visitor to hover is left out on touch screens */
 @media (hover: none) { .rs-hover-only { display: none; } }
+
+/* =========================================================
+   Inline Talk to us form in guides (Oct 19, 2026). One per guide, mid-article. It sends the same request as #talk
+   (RN.pages.talkFromGuide); while it is on screen the rail card steps back so the screen has one Talk to us.
+   ========================================================= */
+.rs-prose > .rs-gtalk { margin: var(--s-10) 0 0; }
+.rs-gtalk { padding: var(--s-6) var(--s-6) var(--s-6); border: 1px solid var(--line); border-radius: var(--r-card); background: var(--card); scroll-margin-top: 96px; }
+.rs-gtalk-hd { display: flex; flex-direction: column; gap: 6px; }
+.rs-gtalk-hd .label { color: var(--accent); }
+.rs-gtalk .rs-gtalk-h { margin: 0; font-family: var(--f-display); font-size: var(--t-24, 24px); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; color: var(--ink); text-wrap: balance; }
+.rs-gtalk-h:focus { outline: none; }
+.rs-gtalk .rs-gtalk-sub { margin: 0; max-width: 56ch; font-size: var(--t-15); line-height: 1.5; color: var(--mute); }
+.rs-gtalk-f { margin-top: var(--s-5, 20px); }
+.rs-gtalk-g { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+.rs-gtalk-g .field { min-width: 0; margin: 0; }
+.rs-gtalk-g .select, .rs-gtalk-g .input { width: 100%; }
+.rs-gtalk-note { grid-column: 1 / -1; }
+.rs-gtalk-note .textarea { min-height: 64px; resize: vertical; }
+.rs-gtalk-err { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: var(--t-14); color: var(--bad); font-weight: 600; }
+.rs-gtalk-err svg { flex: 0 0 auto; width: 16px; height: 16px; }
+.rs-gtalk-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: var(--s-4); }
+.rs-gtalk-foot .small { color: var(--mute); }
+.rs-gtalk.is-sent { border-color: var(--tint-line); background: var(--tint); }
+.rs-gtalk-done { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px 16px; }
+.rs-gtalk-done .btn { grid-column: 2; justify-self: start; }
+.rs-gtalk-done-t { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* The rail card steps back while the form is on screen */
+.rs-rail-talk { transition: opacity var(--dur-2, 200ms) var(--ease-out, ease); }
+.rs-rail-talk.is-quiet { opacity: 0; visibility: hidden; transition: opacity var(--dur-2, 200ms) var(--ease-out, ease), visibility 0s linear var(--dur-2, 200ms); }
+@media (prefers-reduced-motion: reduce) { .rs-rail-talk, .rs-rail-talk.is-quiet { transition: none; } }
+@media (max-width: 640px) {
+  .rs-gtalk { padding: var(--s-5, 20px) 16px; }
+  .rs-gtalk-g { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .rs-gtalk .rs-gtalk-h { font-size: 21px; }
+  .rs-gtalk-foot .btn { width: 100%; justify-content: center; }
+  .rs-gtalk-done { grid-template-columns: minmax(0, 1fr); }
+  .rs-gtalk-done .btn { grid-column: 1; width: 100%; justify-content: center; white-space: normal; height: auto; min-height: var(--h, 44px); padding-block: 10px; }
+}

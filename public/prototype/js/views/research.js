@@ -407,8 +407,10 @@
     window.addEventListener('resize', onResize);
     reveal(root);
     tocSpy(root);
+    gTalkSpy(root);
   }
   function unmountCommon() {
+    if (gtObs) { gtObs.disconnect(); gtObs = null; }
     window.removeEventListener('resize', onResize);
     if (spyFn) { window.removeEventListener('scroll', spyFn); spyFn = null; }
     while (RN.ui.modalEl()) RN.ui.closeModal();
@@ -2170,6 +2172,81 @@
       ${sub ? `<span class="rs-ptalk-sub">${esc(sub)}</span>` : ''}
       <span class="fn-form-cta"><a class="btn btn-leaf" href="#${esc(to)}">Talk to us${icon('arrow')}</a></span>
     </div></section>`;
+  /* The inline Talk to us form inside a guide (Oct 19, 2026: "embedded forms in articles"). One per guide, mid-article,
+     where a reader who has the short answer and the first sections decides to ask. It sends the same request as the
+     last step of #talk (RN.pages.talkFromGuide), so the team gets one kind of lead and the visitor stays on the page.
+     The need is prefilled from the guide's role. While it is on screen the rail card steps back (gTalkSpy), so the
+     screen has one Talk to us. Once a request is in this session, guides show its confirmation instead of the form. */
+  const NEED_OPTS = () => F.need.options.map((o) => ({ v: o.v, l: o.v === 'not_sure' ? 'Something else' : o.l }));
+  const gSelect = (id, name, opts, val, ph) => `<select class="select" id="${id}" name="${name}">${ph ? `<option value="">${esc(ph)}</option>` : ''}${opts.map((o) => `<option value="${esc(o.v)}"${o.v === val ? ' selected' : ''}>${esc(String(o.l).replace(/⁠/g, ''))}</option>`).join('')}</select>`;
+  function gTalkDone(sent) {
+    return `<div class="rs-gtalk-done" role="status">
+        ${RN.ui.icoTile('check-circle', { cls: 'rs-gtalk-ic' })}
+        <div class="rs-gtalk-done-t"><h2 class="rs-gtalk-h" id="rs-gtalk-t" tabindex="-1">Got it, ${esc(sent.first || 'thanks')}. A person is on it</h2>
+          <p class="rs-gtalk-sub">We reply to ${esc(sent.email)} within one business day. Your matches are ready now.</p></div>
+        <a class="btn btn-line" href="#talk">See the operators we would start with${icon('arrow')}</a>
+      </div>`;
+  }
+  function gTalk(g, need, h) {
+    const sent = RN.pages && RN.pages.talkSent ? RN.pages.talkSent() : null;
+    const buyer = RN.store.state.persona === 'buyer' && RN.personas && RN.personas.buyer;
+    const title = g.post ? g.post.q : g.q;
+    const inner = sent ? gTalkDone(sent) : `<div class="rs-gtalk-hd">
+          <span class="label">Talk to us</span>
+          <h2 class="rs-gtalk-h" id="rs-gtalk-t">${esc(h || 'Tell us what you need')}</h2>
+          <p class="rs-gtalk-sub">A person on our team replies within one business day, with operators matched to your answers. No fees for companies.</p>
+        </div>
+        <form class="rs-gtalk-f" data-submit="rs-gtalk-send" data-slug="${esc(g.slug)}" data-title="${esc(title)}" novalidate>
+          <div class="rs-gtalk-g">
+            <div class="field"><label for="rs-gt-need">What you need</label>${gSelect('rs-gt-need', 'need', NEED_OPTS(), need || 'not_sure')}</div>
+            ${buyer ? '' : `<div class="field"><label for="rs-gt-rev">Company revenue <span class="opt">Optional</span></label>${gSelect('rs-gt-rev', 'companyRevenue', F.companyRevenue.options, '', 'Select')}</div>`}
+            <div class="field"><label for="rs-gt-name">Your name</label><input class="input" id="rs-gt-name" name="name" autocomplete="name" value="${buyer ? esc(buyer.name) : ''}"></div>
+            <div class="field"><label for="rs-gt-email">Work email</label><input class="input" id="rs-gt-email" name="email" type="email" autocomplete="email" inputmode="email" value="${buyer ? esc(buyer.email) : ''}"></div>
+            <div class="field rs-gtalk-note"><label for="rs-gt-note">Anything we should know <span class="opt">Optional</span></label><textarea class="textarea input" id="rs-gt-note" name="note" rows="2" maxlength="500" placeholder="The problem, the timeline, what good looks like in 90 days."></textarea></div>
+          </div>
+          <p class="rs-gtalk-err" role="alert" hidden></p>
+          <div class="rs-gtalk-foot"><button class="btn" type="submit">Send to our team${icon('arrow')}</button><span class="small">Only your name and email are required.</span></div>
+        </form>`;
+    return `<section class="rs-gtalk${sent ? ' is-sent' : ''}" id="rs-s-ask" aria-labelledby="rs-gtalk-t">${inner}</section>`;
+  }
+  RN.submits['rs-gtalk-send'] = (form, data) => {
+    const sec = form.closest('.rs-gtalk');
+    const err = form.querySelector('.rs-gtalk-err');
+    if (!RN.pages || !RN.pages.talkFromGuide) { RN.go('talk'); return; }
+    const r = RN.pages.talkFromGuide({ need: data.need, companyRevenue: data.companyRevenue, name: data.name, email: data.email, note: data.note, guide: { slug: form.dataset.slug, title: form.dataset.title } });
+    if (!r.ok) {
+      err.innerHTML = `${icon('info')}${esc(r.err)}`;
+      err.hidden = false;
+      const f = form.querySelector(r.field === 'name' ? '#rs-gt-name' : '#rs-gt-email');
+      if (f) { f.setAttribute('aria-invalid', 'true'); f.focus(); }
+      return;
+    }
+    sec.classList.add('is-sent');
+    sec.innerHTML = gTalkDone(r);
+    const h = sec.querySelector('.rs-gtalk-h');
+    if (h) h.focus({ preventScroll: true });
+    RN.ui.toast(`Sent. A person replies to ${esc(r.email)} within one business day.`, { icon: 'send' });
+  };
+  // While the inline form is on screen, the rail's Talk to us card steps back: one Talk to us per screen
+  let gtObs = null;
+  function gTalkSpy(root) {
+    if (gtObs) { gtObs.disconnect(); gtObs = null; }
+    const form = root.querySelector('.rs-gtalk');
+    const rail = root.querySelector('.rs-rail-talk');
+    if (!form || !rail || !('IntersectionObserver' in window)) return;
+    gtObs = new IntersectionObserver((es) => es.forEach((e) => rail.classList.toggle('is-quiet', e.isIntersecting)), { threshold: 0.15 });
+    gtObs.observe(form);
+  }
+  // Mid-article: the section closest to the middle that has no operator card after it, never the first or the last
+  function gTalkAt(n, taken) {
+    if (n < 3) return n - 1;
+    const mid = Math.floor((n - 1) / 2);
+    const cand = [];
+    for (let i = 1; i < n - 1; i++) cand.push(i);
+    cand.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid) || a - b);
+    const free = cand.filter((i) => !(taken || []).includes(i));
+    return (free[0] != null ? free[0] : cand[0]);
+  }
   // The rail card: Talk to us first (owner, Oct 14, 2026), then a text link to the role's rates
   const railCta = (h, sub, to, cat) => `<div class="card rs-rail-cta rs-rail-talk">
       <b class="h5">${esc(h)}</b>
@@ -2202,8 +2279,10 @@
       .concat(GUIDES.filter((x) => x.post && x.slug !== p.slug))
       .filter((x, i, a) => a.indexOf(x) === i && x.slug !== p.slug).slice(0, 3);
     const ans = answersBlock(g);
-    const toc = secs.map((x) => ({ id: x.id, h: x.h })).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'talk', h: 'Talk to us' }]);
     const slots = opSlots(p.sections, rel.length);
+    const askAt = gTalkAt(secs.length, slots.filter((x, k) => rel[k]));
+    // The contents list names the inline form where it sits in the article
+    const toc = secs.flatMap((x, i) => [{ id: x.id, h: x.h }].concat(i === askAt ? [{ id: 'ask', h: 'Talk to us' }] : [])).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : []);
     const reps = p.replaces || [];
     const notes = `<dl class="rs-notes-dl">
         <div><dt>URL</dt><dd class="mono">/post/${esc(p.slug)}</dd></div>
@@ -2232,7 +2311,7 @@
         ${keyBand(p.keys, g, p.stat)}
         ${mtoc(toc)}
         <div class="rs-prose">
-          ${secs.map((x, i) => `<section id="rs-s-${esc(x.id)}" class="prose rs-gsec rs-gsec-${esc(x.id)}"><h2>${disp(x.h)}</h2>${x.html}</section>${slots.indexOf(i) >= 0 && rel[slots.indexOf(i)] ? inOp(rel[slots.indexOf(i)], g) : ''}`).join('')}
+          ${secs.map((x, i) => `<section id="rs-s-${esc(x.id)}" class="prose rs-gsec rs-gsec-${esc(x.id)}"><h2>${disp(x.h)}</h2>${x.html}</section>${slots.indexOf(i) >= 0 && rel[slots.indexOf(i)] ? inOp(rel[slots.indexOf(i)], g) : ''}${i === askAt ? gTalk(g, p.need, page.form.h) : ''}`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>
@@ -2397,7 +2476,8 @@
     };
     const others = GUIDES.filter((x) => x.slug !== g.slug).sort((a, b) => (a.group === g.group ? -1 : 0) - (b.group === g.group ? -1 : 0)).slice(0, 3);
     const ans = answersBlock(g);
-    const toc = secs.map((s) => ({ id: s.id, h: s.h })).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'operators', h: rel.length ? 'Operators' : 'Next steps' }]);
+    const askAt = client ? gTalkAt(secs.length) : -1;
+    const toc = secs.flatMap((s, i) => [{ id: s.id, h: s.h }].concat(i === askAt ? [{ id: 'ask', h: 'Talk to us' }] : [])).concat([{ id: 'faq', h: 'Common questions' }], ans ? [{ id: 'answers', h: 'Operators who answered' }] : [], [{ id: 'operators', h: rel.length ? 'Operators' : 'Next steps' }]);
     const tiles = keys.slice(0, 2);
 
     return `<div class="rs rs-guide-pg">
@@ -2413,7 +2493,7 @@
         ${tiles.length ? `<section class="rs-kb" data-n="${tiles.length}" aria-label="Key numbers"><span class="rs-kb-l"><span class="label">Key numbers</span>${riStats ? illus() : ''}</span><div class="rs-kb-g">${tiles.map((s, i) => `<div class="rs-kb-i${i === 0 ? ' is-lead' : ''}"><span class="rs-kb-v">${esc(s.v)}</span><span class="rs-kb-k">${esc(s.k)}</span>${s.src ? `<span class="rs-kb-s">${icon('info')}<span class="rs-kb-src">${esc(s.src)}</span>${kbShare(s.v, s.k, s.src, g)}</span>` : ''}</div>`).join('')}</div></section>` : ''}
         ${mtoc(toc)}
         <div class="rs-prose">
-          ${secs.map((s) => `<section id="rs-s-${esc(s.id)}" class="prose rs-gsec"><h2>${esc(s.h)}</h2>${olToTl(s.html)}</section>`).join('')}
+          ${secs.map((s, i) => `<section id="rs-s-${esc(s.id)}" class="prose rs-gsec"><h2>${esc(s.h)}</h2>${olToTl(s.html)}</section>${i === askAt ? gTalk(g, NEED_OF[g.cat] || 'not_sure', 'Tell us what you need') : ''}`).join('')}
         </div>
         <section id="rs-s-faq" class="rs-faq" aria-labelledby="rs-faq-t">
           <h2 class="h3" id="rs-faq-t">Common questions</h2>

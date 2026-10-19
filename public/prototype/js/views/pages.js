@@ -1086,6 +1086,14 @@
       save(); RN.rerender(); return;
     }
     T.err = '';
+    sendRequest();
+    RN.render();
+    RN.ui.toast(`Sent. A person replies to ${esc(T.email)} within one business day.`, { icon: 'send' });
+  };
+  /* The request itself, once T holds the answers and a valid name and email: suggestions, the logged events and the
+     two emails. Talk to us sends it from its last step; a guide's inline form (research.js) sends it from the article
+     through PG.talkFromGuide, with T.guide naming the guide. */
+  function sendRequest() {
     const s = suggest();
     const needLabel = needL(T.ans.need);
     T.sugg = s.top.map((r) => r.op.id);
@@ -1099,20 +1107,40 @@
     RN.track('search', { q: needLabel, results: s.matches, source: 'talk', filters: s.filters, meta: { startBy: T.ans.startBy, need: T.ans.need, searched: T.search ? T.search.q : undefined, handoff: hoSrc } });
     s.top.forEach((r, i) => RN.track('impression', { opId: r.op.id, q: needLabel, filters: s.filters, position: i + 1, source: 'talk' }));
     // `handoff` names the tool the request came from (diagnostic, estimator, calculator), if any
-    RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: 'talk', handoff: hoSrc, meta: { handoff: hoSrc || null } });
-    const lines = recap({ text: true }).concat(T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note && !(T.search && T.note === T.search.label) ? [`What they are looking for: ${T.note}`] : []);
+    const src = T.guide ? 'guide' : 'talk';
+    RN.track('contact_submit', { kind: 'talk', need: T.ans.need, source: src, handoff: hoSrc, meta: { handoff: hoSrc || null, guide: T.guide ? T.guide.slug : null } });
+    const lines = recap({ text: true }).concat(T.guide ? [`Sent from the guide: ${T.guide.title}`] : [], T.search ? [`Searched in Browse: ${T.search.label}`] : [], T.note && !(T.search && T.note === T.search.label) ? [`What they are looking for: ${T.note}`] : []);
     const names = s.top.map((r) => r.op.name);
     // Company and title are optional; the team researches whatever is blank before the call
     const who = `${[T.name, T.title].filter(Boolean).join(', ')} <${T.email}>${T.company ? ', ' + T.company : ''}`;
     const blank = [!T.company && 'company name', !T.title && 'title'].filter(Boolean);
     const todo = blank.length ? `\nTo research before the call: ${blank.join(' and ')}.` : '';
-    RN.mail(TEAM, `Talk to us: ${needLabel}${T.ho ? `, ${RN.handoff.label(T.ho.source).replace(/^From (your |the )?/, 'from the ')}` : ''}`, `${who}${todo}\n${lines.join('\n')}${T.ho ? '\n\n' + RN.handoff.text(T.ho).concat(gapLine() || []).join('\n') : ''}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
+    RN.mail(TEAM, `Talk to us: ${needLabel}${T.ho ? `, ${RN.handoff.label(T.ho.source).replace(/^From (your |the )?/, 'from the ')}` : T.guide ? ', from a guide' : ''}`, `${who}${todo}\n${lines.join('\n')}${T.ho ? '\n\n' + RN.handoff.text(T.ho).concat(gapLine() || []).join('\n') : ''}\n\n${RN.fmt.plural(s.matches, 'operator')} on the network match these answers.${names.length ? '\nSuggested first: ' + names.join(', ') + '.' : ''}\nReply within one business day.`, 'lead');
     RN.mail(T.email, `We got your request, ${RN.fmt.first(T.name)}`, `A person on our team will reply within one business day.${T.ho ? ` We have your ${T.ho.source === 'diagnostic' ? 'diagnostic result' : 'estimate'} too, so there is no need to explain it again.` : ''}\n\n${names.length ? 'While you wait, these are the operators we would start with: ' + names.join(', ') + '.\n' : ''}Rather talk now? Call ${PHONE} or book a call from the confirmation page.`, 'talk');
     // The handoff is used up once it is sent; the done screen keeps its copy (T.ho)
     if (RN.handoff) RN.handoff.clear();
-    RN.render();
-    RN.ui.toast(`Sent. A person replies to ${esc(T.email)} within one business day.`, { icon: 'send' });
+  }
+
+  /* Talk to us from a guide: the inline form in an article (research.js) sends the same request as the last step of
+     #talk, without leaving the page. o = { need, companyRevenue, name, email, note, guide: { slug, title } }.
+     A tool handoff still waiting is sent with it. The done screen on #talk then shows the three operators.
+     Returns { ok: true, first, email } or { ok: false, err, field }. */
+  PG.talkFromGuide = function (o) {
+    o = o || {};
+    const name = String(o.name || '').trim();
+    const email = String(o.email || '').trim();
+    if (!name || !EMAIL_RE.test(email)) return { ok: false, err: 'Add your name and a valid work email so we can reply.', field: !name ? 'name' : 'email' };
+    const need = RN.fields.need.options.some((x) => x.v === o.need) ? o.need : 'not_sure';
+    T = Object.assign(fresh(need), { usedSearch: T.usedSearch, name, email, note: String(o.note || '').trim().slice(0, 500), guide: o.guide ? { slug: String(o.guide.slug || ''), title: String(o.guide.title || '') } : null });
+    if (o.companyRevenue && RN.fields.companyRevenue.options.some((x) => x.v === o.companyRevenue)) T.ans.companyRevenue = o.companyRevenue;
+    const h = RN.handoff && RN.handoff.get();
+    if (h) { T.ho = h; T.hoId = h.id; }
+    prefillPersona();
+    sendRequest();
+    return { ok: true, first: RN.fmt.first(T.name), email: T.email };
   };
+  // What a guide's inline form shows once a request is in this session (its confirmation instead of the form again)
+  PG.talkSent = () => (T.done ? { first: RN.fmt.first(T.name), email: T.email, guide: T.guide ? T.guide.slug : '' } : null);
 
   /* Request intro from a suggestion: open the shared intro sheet with the Talk answers prefilled.
      A visitor who sends it becomes their own client (RN.intro handles that). */

@@ -1,6 +1,6 @@
 # Revenue Nomad SEO and AI-search spec
 
-For the developers building the live site. Generated 2026-10-17 by `node tools/build-seo.js` from `js/data/seo.js` (RN.seo);
+For the developers building the live site. Generated 2026-10-19 by `node tools/build-seo.js` from `js/data/seo.js` (RN.seo);
 rerun it after any change to routes, guides, operators or RN.costs. Everything here is a proposal for the live build;
 nothing in this folder is deployed by the prototype.
 
