@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital Front Door Index</title>
+<meta name="description" content="How easy is it for a patient to reach a US health system? A benchmark of phone, after-hours, digital and accessibility access.">
+<link rel="stylesheet" href="tokens.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font-family: var(--font-sans); background: var(--page); color: var(--ink); line-height: 1.55; font-size: 16px; }
+a { color: var(--brand-500); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 16px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 16px; top: 8px; z-index: 100; background: var(--surface); padding: 8px 12px; }
+
+/* Demo banner: persistent, never dismissible. */
+.demo-banner { position: sticky; top: 0; z-index: 50; background: var(--demo-bg); color: var(--demo-ink); font-size: 14px; border-bottom: 1px solid rgba(0,0,0,.08); }
+.demo-banner .wrap { padding-top: 8px; padding-bottom: 8px; display: flex; gap: 8px; align-items: baseline; }
+.demo-banner strong { white-space: nowrap; }
+
+header.site { background: var(--brand-900); color: var(--on-brand); }
+header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; flex-wrap: wrap; }
+.logo { display: flex; flex-direction: column; color: #fff; text-decoration: none; line-height: 1.1; padding: 10px 0; }
+.logo b { font-size: 22px; letter-spacing: -.01em; }
+.logo small { font-size: 11px; opacity: .75; letter-spacing: .02em; }
+nav.main ul { list-style: none; display: flex; gap: 20px; margin: 0; padding: 0; flex-wrap: wrap; }
+nav.main a { color: #fff; text-decoration: none; font-size: 15px; opacity: .9; }
+nav.main a[aria-current] { opacity: 1; text-decoration: underline; text-underline-offset: 6px; }
+@media (max-width: 720px) { nav.main { display: none; } }
+
+.hero { background: var(--brand-900); color: #fff; padding: 40px 0 56px; }
+.eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; opacity: .8; margin: 0 0 8px; }
+.hero h1 { font-size: clamp(30px, 5vw, 50px); line-height: 1.08; margin: 0 0 14px; letter-spacing: -.02em; max-width: 18ch; }
+.hero .thesis { font-size: clamp(17px, 2.2vw, 21px); max-width: 60ch; opacity: .92; margin: 0 0 24px; }
+.hero .meta { font-size: 14px; opacity: .8; margin-bottom: 28px; }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.finding { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: var(--radius-md); padding: 18px; }
+.finding .big { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+.finding p { margin: 10px 0 0; font-size: 15px; opacity: .92; }
+
+.chip { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-radius: var(--radius-pill); padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
+.chip.modeled { background: var(--modeled-bg); color: var(--modeled); }
+.chip.measured { background: var(--measured-bg); color: var(--measured); }
+.hero .chip.modeled { background: #fdf0cf; color: #5a3d00; }
+.hero .chip.measured { background: #d9f2e3; color: #0b5a31; }
+.modeled-val { text-decoration: underline dotted 2px; text-underline-offset: 4px; text-decoration-color: var(--modeled); }
+
+section.block { padding: 48px 0; }
+section.block + section.block { border-top: 1px solid var(--line); }
+h2 { font-size: clamp(24px, 3.4vw, 32px); line-height: 1.15; margin: 0 0 10px; letter-spacing: -.01em; }
+h3 { font-size: 19px; margin: 0 0 8px; }
+.lede { color: var(--ink-2); max-width: 70ch; margin: 0 0 24px; font-size: 17px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+.grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px; min-width: 0; }
+.card h3 small { font-weight: 400; color: var(--ink-muted); font-size: 14px; }
+.pillar .w { font-size: 13px; font-weight: 700; color: var(--brand-500); text-transform: uppercase; letter-spacing: .05em; }
+.pillar p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; }
+.muted { color: var(--ink-muted); font-size: 14px; }
+.chart-box { position: relative; height: 260px; }
+figure { margin: 0; }
+figcaption { font-size: 14px; color: var(--ink-2); margin-top: 8px; }
+details.tbl { margin-top: 10px; font-size: 14px; }
+details.tbl summary { cursor: pointer; color: var(--brand-500); }
+details.tbl table { margin-top: 8px; }
+
+/* Oregon field test */
+.oregon { background: var(--surface); }
+.stat { border-left: 4px solid var(--measured); padding: 4px 0 4px 14px; }
+.stat .n { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.stat p { margin: 4px 0 0; font-size: 15px; color: var(--ink-2); }
+.callout { background: var(--surface-2); border-radius: var(--radius-md); padding: 16px 18px; font-size: 15px; color: var(--ink-2); margin-top: 20px; }
+
+/* Tile map */
+.tilemap { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; max-width: 560px; }
+.tile { aspect-ratio: 1; border-radius: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: clamp(9px, 1.6vw, 12px); font-weight: 700; border: 0; padding: 0; cursor: pointer; font-family: inherit; line-height: 1.05; }
+.tile span { font-weight: 400; font-size: .85em; }
+.tile.empty { visibility: hidden; }
+.tile.sel { outline: 3px solid var(--accent); outline-offset: 1px; }
+.legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-top: 10px; align-items: center; }
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+
+/* Gate */
+.gate { background: var(--brand-100); }
+.gate form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px 16px; margin-top: 16px; }
+label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+input, select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-height: 44px; }
+input[aria-invalid="true"] { border-color: var(--band-f); }
+.err { color: var(--band-f); font-size: 14px; min-height: 1em; margin-top: 4px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 600; background: var(--brand-500); color: #fff; border: 0; border-radius: var(--radius-pill); padding: 12px 22px; min-height: 46px; cursor: pointer; text-decoration: none; }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--brand-500); border: 1.5px solid currentColor; }
+.form-end { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
+
+/* Explorer */
+#explorer[hidden] { display: none; }
+#explorer { animation: reveal .5s ease both; }
+@keyframes reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { #explorer { animation: none; } }
+.picker { position: relative; max-width: 560px; }
+.picker ul { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 300px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.12); }
+.picker li { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 15px; }
+.picker li small { color: var(--ink-muted); }
+.picker li[aria-selected="true"], .picker li:hover { background: var(--brand-100); }
+.picked { margin-top: 10px; font-size: 15px; color: var(--ink-2); }
+[role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 24px 0 20px; overflow-x: auto; }
+[role="tab"] { font: inherit; font-weight: 600; background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 14px; color: var(--ink-2); cursor: pointer; white-space: nowrap; min-height: 44px; }
+[role="tab"][aria-selected="true"] { color: var(--brand-500); border-bottom-color: var(--brand-500); }
+.score-head { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.dial { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.dial div { width: 96px; height: 96px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; text-align: center; }
+.dial b { font-size: 34px; line-height: 1; }
+.dial small { display: block; font-size: 12px; color: var(--ink-muted); }
+.pillrow { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 12px; align-items: center; font-size: 15px; }
+.bar { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; grid-column: 1 / -1; margin-bottom: 8px; }
+.bar i { display: block; height: 100%; border-radius: 5px; }
+.band { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; font-weight: 700; color: #fff; font-size: 14px; }
+.band.C { color: #111; }
+.pctl { position: relative; height: 34px; margin: 18px 0 6px; }
+.pctl .track { position: absolute; left: 0; right: 0; top: 14px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--band-f), var(--band-c), var(--band-a)); }
+.pctl .mk { position: absolute; top: 4px; width: 4px; height: 26px; background: var(--ink); border-radius: 2px; transform: translateX(-2px); }
+.drag li { margin-bottom: 10px; }
+.drag b { color: var(--ink); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 520px; overflow-y: auto; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; }
+th button { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+td.num, th.num { text-align: right; }
+tr.me td { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; }
+tr.pinned td { border-bottom: 2px solid var(--accent); }
+.filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
+.filters > div { min-width: 170px; flex: 1 1 170px; max-width: 240px; }
+.narr { background: var(--surface-2); border-radius: var(--radius-md); padding: 14px 16px; color: var(--ink-2); font-size: 15px; }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kv div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 14px; }
+.kv b { display: block; font-size: 24px; }
+.kv span { font-size: 13px; color: var(--ink-muted); }
+
+.close-cta { background: var(--brand-900); color: #fff; border-radius: var(--radius-lg); padding: 32px; }
+.close-cta h2 { color: #fff; }
+.close-cta p { opacity: .9; max-width: 60ch; }
+.close-cta .btn { background: #fff; color: var(--brand-900); }
+.close-cta a { color: #cfe2f7; }
+footer.site { background: var(--brand-900); color: rgba(255,255,255,.8); font-size: 14px; padding: 36px 0; margin-top: 48px; }
+footer.site .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; }
+footer.site h4 { color: #fff; margin: 0 0 8px; font-size: 14px; }
+footer.site ul { list-style: none; padding: 0; margin: 0; }
+footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height: 2; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="demo-banner" role="note" aria-label="Demo data notice">
+  <div class="wrap"><strong>Concept preview.</strong><span>Every system shown is invented, and all scores are <span class="chip modeled">modeled</span> sample data. The Oregon statewide figures are <span class="chip measured">measured</span>.</span></div>
+</div>
+
+<header class="site">
+  <div class="wrap">
+    <a class="logo" href="#" aria-label="Clarus home"><b>ClarusCare</b><small>A Graham Holdings Company</small></a>
+    <nav class="main" aria-label="Main">
+      <ul><li><a href="#">Solutions</a></li><li><a href="#">Who we serve</a></li><li><a href="#" aria-current="page">Resources</a></li><li><a href="#">Company</a></li></ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="title">
+    <div class="wrap">
+      <p class="eyebrow">Clarus Research · Patient Access</p>
+      <h1 id="title">The Digital Front Door Index 2026</h1>
+      <p class="thesis">For most patients, care starts with a phone call or a website. We measured how easy that first step is at US health systems and FQHCs, and the gap between the best and the rest is wider than most leaders assume.</p>
+      <p class="meta">Published October 2026 · <span id="hero-n"></span> systems across 50 states · <a href="#method" style="color:#cfe2f7">Methodology</a></p>
+      <div class="findings" id="findings" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="block oregon" id="oregon" aria-labelledby="or-h">
+    <div class="wrap">
+      <p class="eyebrow" style="color:var(--measured)">Field test · <span class="chip measured">measured</span></p>
+      <h2 id="or-h">What one day of calls to Oregon clinics showed</h2>
+      <p class="lede">On September 21, 2026, we called the published numbers of 575 clinic lines across 25 Oregon health systems, hospitals and FQHCs, in a mid-morning and an early-afternoon window. No staff were spoken to. We timed each call from the first ring to the first word from a live person. This is the kind of evidence behind every state in the Index.</p>
+      <div class="grid-4" id="or-stats"></div>
+      <div class="callout"><b>What this tells a COO:</b> the same line can be fine at 10 a.m. and dead at 1 p.m. Of the 64 lines we dialed in both windows, several answered in seconds in the morning and then went unanswered or dropped the call in the afternoon. One large system had a median wait under 7 seconds, yet it accounted for 30 of the 38 lines that left us in a queue for the full 20 minutes. A system-wide average hides individual lines that are failing patients.</div>
+    </div>
+  </section>
+
+  <section class="block" id="method" aria-labelledby="m-h">
+    <div class="wrap">
+      <h2 id="m-h">How the Index works</h2>
+      <p class="lede">Each system gets four pillar scores from 0 to 100, rolled into a single DFD Score. Each pillar also gets a letter grade from A to F. Phone metrics come from calls placed by an AI voice agent to published clinic numbers. Digital and accessibility metrics come from inspecting each system's public website. The full definitions are in the methodology notes.</p>
+      <div class="grid-4" id="pillars"></div>
+    </div>
+  </section>
+
+  <section class="block" aria-labelledby="dist-h">
+    <div class="wrap">
+      <h2 id="dist-h">Where systems land</h2>
+      <p class="lede">Average DFD Score by state, alongside the national spread. <span class="chip modeled">modeled</span></p>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Average DFD Score by state</h3>
+          <div class="tilemap" id="tilemap-teaser" role="img" aria-label="Tile map of average DFD Score by state. A table version follows."></div>
+          <div class="legend" id="map-legend"></div>
+          <details class="tbl"><summary>Show as table</summary><div id="map-table"></div></details>
+        </div>
+        <div class="card">
+          <figure>
+            <h3>Distribution of DFD Scores</h3>
+            <div class="chart-box"><canvas id="c-hist" role="img" aria-label="Histogram of DFD Scores. A table version follows."></canvas></div>
+            <figcaption id="hist-cap"></figcaption>
+            <details class="tbl"><summary>Show as table</summary><div id="hist-table"></div></details>
+          </figure>
+        </div>
+        <div class="card">
+          <figure>
+            <h3>Phone menu depth vs. wait for a person</h3>
+            <div class="chart-box"><canvas id="c-ivr" role="img" aria-label="Median seconds to reach a person by number of phone menu layers. A table version follows."></canvas></div>
+            <figcaption id="ivr-cap"></figcaption>
+            <details class="tbl"><summary>Show as table</summary><div id="ivr-table"></div></details>
+          </figure>
+        </div>
+        <div class="card">
+          <figure>
+            <h3>What happens after hours</h3>
+            <div class="chart-box"><canvas id="c-ah" role="img" aria-label="Share of after-hours calls by outcome. A table version follows."></canvas></div>
+            <figcaption id="ah-cap"></figcaption>
+            <details class="tbl"><summary>Show as table</summary><div id="ah-table"></div></details>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block gate" id="gate" aria-labelledby="g-h">
+    <div class="wrap">
+      <h2 id="g-h">See where your system ranks</h2>
+      <p class="lede">The full Index is free. Find your system and compare it against in-state peers, a cohort matched on size and type, and the national picture.</p>
+      <form id="gate-form" novalidate>
+        <div><label for="g-name">Full name</label><input id="g-name" name="name" autocomplete="name" required><div class="err" id="e-name"></div></div>
+        <div><label for="g-email">Work email</label><input id="g-email" name="email" type="email" autocomplete="email" required aria-describedby="e-email"><div class="err" id="e-email" aria-live="polite"></div></div>
+        <div><label for="g-org">Organization</label><input id="g-org" name="org" autocomplete="organization" required><div class="err" id="e-org"></div></div>
+        <div><label for="g-role">Role</label>
+          <select id="g-role" name="role" required>
+            <option value="">Choose one</option><option>CEO / President</option><option>COO / Operations</option><option>VP / Director, Patient Access</option><option>CIO / IT</option><option>Practice / Clinic Manager</option><option>Other</option>
+          </select><div class="err" id="e-role"></div></div>
+        <div class="form-end"><button class="btn" type="submit">Open the Index</button><span class="muted">We'll only use this to send you the report.</span></div>
+      </form>
+    </div>
+  </section>
+
+  <section class="block" id="explorer" hidden aria-labelledby="x-h">
+    <div class="wrap">
+      <h2 id="x-h">Explore the Index</h2>
+      <div class="picker">
+        <label for="sys-q">Find a system</label>
+        <input id="sys-q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sys-list" placeholder="Start typing a system name or state" autocomplete="off">
+        <ul id="sys-list" role="listbox" hidden></ul>
+        <div class="picked" id="picked" aria-live="polite"></div>
+      </div>
+      <div role="tablist" aria-label="Explorer views">
+        <button role="tab" id="t-sys" aria-controls="p-sys" aria-selected="true">Your system</button>
+        <button role="tab" id="t-state" aria-controls="p-state" aria-selected="false" tabindex="-1">Your state</button>
+        <button role="tab" id="t-peers" aria-controls="p-peers" aria-selected="false" tabindex="-1">Your peers</button>
+        <button role="tab" id="t-nat" aria-controls="p-nat" aria-selected="false" tabindex="-1">National</button>
+      </div>
+      <div role="tabpanel" id="p-sys" aria-labelledby="t-sys"></div>
+      <div role="tabpanel" id="p-state" aria-labelledby="t-state" hidden></div>
+      <div role="tabpanel" id="p-peers" aria-labelledby="t-peers" hidden></div>
+      <div role="tabpanel" id="p-nat" aria-labelledby="t-nat" hidden></div>
+
+      <div class="close-cta" style="margin-top:40px">
+        <h2>Get your system's full breakdown</h2>
+        <p>We'll send a line-by-line view of your system: which clinic numbers were answered and how fast, what callers hear after hours, and which website fixes would move your score the most.</p>
+        <button class="btn" id="cta-btn" type="button">Send me my breakdown</button>
+        <p id="cta-msg" aria-live="polite" style="margin-bottom:0"></p>
+        <p class="muted" style="color:#cfe2f7;margin-top:18px">Clarus helps health systems answer more patient calls. <a href="#">See more research in Resources</a></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap cols">
+    <div><h4>ClarusCare</h4><p style="margin:0">A Graham Holdings Company</p></div>
+    <div><h4>Solutions</h4><ul><li><a href="#">Call management</a></li><li><a href="#">After-hours</a></li></ul></div>
+    <div><h4>Resources</h4><ul><li><a href="#">Research</a></li><li><a href="#">Blog</a></li></ul></div>
+    <div><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Contact</a></li></ul></div>
+  </div>
+</footer>
+
+<script src="vendor/chart.umd.min.js"></script>
+<script src="data/dfd_index.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
