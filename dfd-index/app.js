@@ -108,7 +108,7 @@
   }
 
   function renderPillars() {
-    $("#pillars").innerHTML = PILLARS.map(p => `<div class="card pillar"><div class="w">${Math.round(META.weights[p.key] * 100)}% of score</div><h3>${p.label}</h3><p>${p.desc}</p></div>`).join("");
+    $("#pillars").innerHTML = PILLARS.map((p, i) => `<div class="card pillar"><div class="num">0${i + 1}</div><div class="w">${Math.round(META.weights[p.key] * 100)}% of score</div><h3>${p.label}</h3><p>${p.desc}</p></div>`).join("");
   }
 
   // ---------- tile map ----------

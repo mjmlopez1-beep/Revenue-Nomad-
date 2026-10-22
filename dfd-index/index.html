@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Digital Front Door Index</title>
 <meta name="description" content="How easy is it for a patient to reach a US health system? A benchmark of phone, after-hours, digital and accessibility access.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="tokens.css">
 <style>
 *, *::before, *::after { box-sizing: border-box; }
@@ -22,43 +25,48 @@ a { color: var(--brand-500); }
 .demo-banner .wrap { padding-top: 8px; padding-bottom: 8px; display: flex; gap: 8px; align-items: baseline; }
 .demo-banner strong { white-space: nowrap; }
 
-header.site { background: var(--brand-900); color: var(--on-brand); }
+header.site { background: var(--page); color: var(--ink); border-bottom: 1px solid var(--line); }
 header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; flex-wrap: wrap; }
-.logo { display: flex; flex-direction: column; color: #fff; text-decoration: none; line-height: 1.1; padding: 10px 0; }
-.logo b { font-size: 22px; letter-spacing: -.01em; }
-.logo small { font-size: 11px; opacity: .75; letter-spacing: .02em; }
+.logo { display: flex; flex-direction: column; color: var(--ink); text-decoration: none; line-height: 1.1; padding: 12px 0; gap: 4px; }
+.logo img { height: 34px; width: auto; display: block; }
+.logo small { font-family: var(--font-label); font-size: 11px; color: var(--ink-muted); letter-spacing: .02em; }
+.logo .on-dark { display: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo .on-light { display: none; } :root:not([data-theme="light"]) .logo .on-dark { display: block; } }
 nav.main ul { list-style: none; display: flex; gap: 20px; margin: 0; padding: 0; flex-wrap: wrap; }
-nav.main a { color: #fff; text-decoration: none; font-size: 15px; opacity: .9; }
+nav.main a { color: var(--ink); text-decoration: none; font-family: var(--font-label); font-size: 16px; }
 nav.main a[aria-current] { opacity: 1; text-decoration: underline; text-underline-offset: 6px; }
 @media (max-width: 720px) { nav.main { display: none; } }
 
-.hero { background: var(--brand-900); color: #fff; padding: 40px 0 56px; }
-.eyebrow { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; opacity: .8; margin: 0 0 8px; }
-.hero h1 { font-size: clamp(30px, 5vw, 50px); line-height: 1.08; margin: 0 0 14px; letter-spacing: -.02em; max-width: 18ch; }
-.hero .thesis { font-size: clamp(17px, 2.2vw, 21px); max-width: 60ch; opacity: .92; margin: 0 0 24px; }
-.hero .meta { font-size: 14px; opacity: .8; margin-bottom: 28px; }
-.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
-.finding { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: var(--radius-md); padding: 18px; }
-.finding .big { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
-.finding p { margin: 10px 0 0; font-size: 15px; opacity: .92; }
+.hero { background: var(--page); color: var(--ink); padding: 64px 0 72px; }
+.eyebrow { font-family: var(--font-label); text-transform: uppercase; letter-spacing: .14em; font-size: 14px; font-weight: 500; color: var(--ink-muted); margin: 0 0 12px; }
+.hl { color: var(--blue); }
+.dark .hl { color: var(--orange); }
+.hero h1 { font-size: clamp(36px, 6vw, 64px); font-weight: 700; line-height: 1.02; margin: 0 0 18px; letter-spacing: -.03em; max-width: 16ch; }
+.hero .thesis { font-size: 18px; line-height: 28px; max-width: 60ch; color: var(--ink-2); margin: 0 0 20px; }
+.hero .meta { font-family: var(--font-label); font-size: 15px; color: var(--ink-muted); margin-bottom: 36px; }
+.hero .meta a { color: var(--brand-500); }
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; background: var(--panel); border-radius: var(--radius-lg); padding: 16px; }
+.finding { background: rgba(255,255,255,.7); border-radius: var(--radius-md); padding: 20px; box-shadow: 0 4px 18px rgba(7,29,73,.06); }
+.finding .big { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
+.finding p { margin: 10px 0 12px; font-size: 15px; color: var(--ink-2); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .finding { background: var(--surface-2); } }
 
-.chip { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-radius: var(--radius-pill); padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
+.chip { display: inline-block; font-family: var(--font-label); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-radius: var(--radius-pill); padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
 .chip.modeled { background: var(--modeled-bg); color: var(--modeled); }
 .chip.measured { background: var(--measured-bg); color: var(--measured); }
-.hero .chip.modeled { background: #fdf0cf; color: #5a3d00; }
-.hero .chip.measured { background: #d9f2e3; color: #0b5a31; }
 .modeled-val { text-decoration: underline dotted 2px; text-underline-offset: 4px; text-decoration-color: var(--modeled); }
 
-section.block { padding: 48px 0; }
+section.block { padding: 88px 0; }
 section.block + section.block { border-top: 1px solid var(--line); }
-h2 { font-size: clamp(24px, 3.4vw, 32px); line-height: 1.15; margin: 0 0 10px; letter-spacing: -.01em; }
+h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; line-height: 1.08; margin: 0 0 14px; letter-spacing: -.025em; }
 h3 { font-size: 19px; margin: 0 0 8px; }
-.lede { color: var(--ink-2); max-width: 70ch; margin: 0 0 24px; font-size: 17px; }
+.lede { color: var(--ink-2); max-width: 68ch; margin: 0 0 32px; font-size: 18px; line-height: 28px; }
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
 .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 20px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px; min-width: 0; box-shadow: 0 4px 18px rgba(7,29,73,.05); }
 .card h3 small { font-weight: 400; color: var(--ink-muted); font-size: 14px; }
-.pillar .w { font-size: 13px; font-weight: 700; color: var(--brand-500); text-transform: uppercase; letter-spacing: .05em; }
+.pillar .num { font-family: var(--font-label); font-size: 14px; font-weight: 600; color: var(--blue); letter-spacing: .08em; }
+.pillar .w { font-family: var(--font-label); font-size: 13px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .1em; }
 .pillar p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; }
 .muted { color: var(--ink-muted); font-size: 14px; }
 .chart-box { position: relative; height: 260px; }
@@ -69,11 +77,15 @@ details.tbl summary { cursor: pointer; color: var(--brand-500); }
 details.tbl table { margin-top: 8px; }
 
 /* Oregon field test */
-.oregon { background: var(--surface); }
-.stat { border-left: 4px solid var(--measured); padding: 4px 0 4px 14px; }
-.stat .n { font-size: 34px; font-weight: 700; line-height: 1.1; }
-.stat p { margin: 4px 0 0; font-size: 15px; color: var(--ink-2); }
-.callout { background: var(--surface-2); border-radius: var(--radius-md); padding: 16px 18px; font-size: 15px; color: var(--ink-2); margin-top: 20px; }
+.dark { background: var(--navy); color: #fff; }
+.dark .lede { color: rgba(255,255,255,.75); }
+.dark .eyebrow { color: rgba(255,255,255,.7); }
+.stat { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius-md); padding: 18px; }
+.stat .n { font-size: 40px; font-weight: 700; line-height: 1.05; color: var(--orange); }
+.stat p { margin: 6px 0 0; font-size: 15px; color: rgba(255,255,255,.8); }
+.callout { background: rgba(255,255,255,.06); border-radius: var(--radius-md); padding: 18px 20px; font-size: 16px; color: rgba(255,255,255,.82); margin-top: 20px; }
+.callout b { color: #fff; }
+.dark .chip.measured { background: #def3ea; color: #0b5a3e; }
 
 /* Tile map */
 .tilemap { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; max-width: 560px; }
@@ -85,14 +97,15 @@ details.tbl table { margin-top: 8px; }
 .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
 
 /* Gate */
-.gate { background: var(--brand-100); }
+.gate { background: var(--panel); }
 .gate form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px 16px; margin-top: 16px; }
-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-input, select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-height: 44px; }
+label { display: block; font-family: var(--font-label); font-size: 14px; font-weight: 600; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+input, select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #c9d0de; border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-height: 44px; }
 input[aria-invalid="true"] { border-color: var(--band-f); }
 .err { color: var(--band-f); font-size: 14px; min-height: 1em; margin-top: 4px; }
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-weight: 600; background: var(--brand-500); color: #fff; border: 0; border-radius: var(--radius-pill); padding: 12px 22px; min-height: 46px; cursor: pointer; text-decoration: none; }
-.btn:hover { filter: brightness(1.08); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; background: var(--btn-bg); color: #fff; border: 0; border-radius: var(--radius-md); padding: 12px 28px; min-height: 46px; cursor: pointer; text-decoration: none; box-shadow: 0 6px 16px rgba(7,29,73,.18); }
+.btn::after { content: "\2192"; font-size: 16px; }
+.btn:hover { background: var(--navy); }
 .btn.ghost { background: transparent; color: var(--brand-500); border: 1.5px solid currentColor; }
 .form-end { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
 
@@ -108,7 +121,7 @@ input[aria-invalid="true"] { border-color: var(--band-f); }
 .picker li[aria-selected="true"], .picker li:hover { background: var(--brand-100); }
 .picked { margin-top: 10px; font-size: 15px; color: var(--ink-2); }
 [role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 24px 0 20px; overflow-x: auto; }
-[role="tab"] { font: inherit; font-weight: 600; background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 14px; color: var(--ink-2); cursor: pointer; white-space: nowrap; min-height: 44px; }
+[role="tab"] { font: inherit; font-family: var(--font-label); font-size: 17px; font-weight: 500; background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 14px; color: var(--ink-2); cursor: pointer; white-space: nowrap; min-height: 44px; }
 [role="tab"][aria-selected="true"] { color: var(--brand-500); border-bottom-color: var(--brand-500); }
 .score-head { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
 .dial { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; flex: none; }
@@ -141,12 +154,10 @@ tr.pinned td { border-bottom: 2px solid var(--accent); }
 .kv b { display: block; font-size: 24px; }
 .kv span { font-size: 13px; color: var(--ink-muted); }
 
-.close-cta { background: var(--brand-900); color: #fff; border-radius: var(--radius-lg); padding: 32px; }
-.close-cta h2 { color: #fff; }
-.close-cta p { opacity: .9; max-width: 60ch; }
-.close-cta .btn { background: #fff; color: var(--brand-900); }
-.close-cta a { color: #cfe2f7; }
-footer.site { background: var(--brand-900); color: rgba(255,255,255,.8); font-size: 14px; padding: 36px 0; margin-top: 48px; }
+.close-cta { background: var(--panel); color: var(--ink); border-radius: var(--radius-lg); padding: clamp(24px, 5vw, 56px); text-align: center; }
+.close-cta p { color: var(--ink-2); max-width: 60ch; margin-left: auto; margin-right: auto; font-size: 18px; line-height: 28px; }
+footer.site { background: var(--navy); color: rgba(255,255,255,.75); font-size: 14px; padding: 56px 0; margin-top: 88px; }
+footer.site img { height: 30px; width: auto; display: block; margin-bottom: 8px; }
 footer.site .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; }
 footer.site h4 { color: #fff; margin: 0 0 8px; font-size: 14px; }
 footer.site ul { list-style: none; padding: 0; margin: 0; }
@@ -162,7 +173,7 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
 <header class="site">
   <div class="wrap">
-    <a class="logo" href="#" aria-label="Clarus home"><b>ClarusCare</b><small>A Graham Holdings Company</small></a>
+    <a class="logo" href="#"><img class="on-light" src="assets/clarus-logo-navy.png" alt="Clarus"><img class="on-dark" src="assets/clarus-logo-white.png" alt="Clarus"><small>A Graham Holdings Company</small></a>
     <nav class="main" aria-label="Main">
       <ul><li><a href="#">Solutions</a></li><li><a href="#">Who we serve</a></li><li><a href="#" aria-current="page">Resources</a></li><li><a href="#">Company</a></li></ul>
     </nav>
@@ -173,17 +184,17 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
   <section class="hero" aria-labelledby="title">
     <div class="wrap">
       <p class="eyebrow">Clarus Research · Patient Access</p>
-      <h1 id="title">The Digital Front Door Index 2026</h1>
+      <h1 id="title">The Digital Front Door <span class="hl">Index 2026</span></h1>
       <p class="thesis">For most patients, care starts with a phone call or a website. We measured how easy that first step is at US health systems and FQHCs, and the gap between the best and the rest is wider than most leaders assume.</p>
-      <p class="meta">Published October 2026 · <span id="hero-n"></span> systems across 50 states · <a href="#method" style="color:#cfe2f7">Methodology</a></p>
+      <p class="meta">Published October 2026 · <span id="hero-n"></span> systems across 50 states · <a href="#method">Methodology</a></p>
       <div class="findings" id="findings" aria-live="polite"></div>
     </div>
   </section>
 
-  <section class="block oregon" id="oregon" aria-labelledby="or-h">
+  <section class="block dark" id="oregon" aria-labelledby="or-h">
     <div class="wrap">
-      <p class="eyebrow" style="color:var(--measured)">Field test · <span class="chip measured">measured</span></p>
-      <h2 id="or-h">What one day of calls to Oregon clinics showed</h2>
+      <p class="eyebrow">Field test · <span class="chip measured">measured</span></p>
+      <h2 id="or-h">What one day of calls to Oregon clinics <span class="hl">actually showed</span></h2>
       <p class="lede">On September 21, 2026, we called the published numbers of 575 clinic lines across 25 Oregon health systems, hospitals and FQHCs, in a mid-morning and an early-afternoon window. No staff were spoken to. We timed each call from the first ring to the first word from a live person. This is the kind of evidence behind every state in the Index.</p>
       <div class="grid-4" id="or-stats"></div>
       <div class="callout"><b>What this tells a COO:</b> the same line can be fine at 10 a.m. and dead at 1 p.m. Of the 64 lines we dialed in both windows, several answered in seconds in the morning and then went unanswered or dropped the call in the afternoon. One large system had a median wait under 7 seconds, yet it accounted for 30 of the 38 lines that left us in a queue for the full 20 minutes. A system-wide average hides individual lines that are failing patients.</div>
@@ -192,7 +203,8 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
   <section class="block" id="method" aria-labelledby="m-h">
     <div class="wrap">
-      <h2 id="m-h">How the Index works</h2>
+      <p class="eyebrow">Methodology</p>
+      <h2 id="m-h">How the Index <span class="hl">works</span></h2>
       <p class="lede">Each system gets four pillar scores from 0 to 100, rolled into a single DFD Score. Each pillar also gets a letter grade from A to F. Phone metrics come from calls placed by an AI voice agent to published clinic numbers. Digital and accessibility metrics come from inspecting each system's public website. The full definitions are in the methodology notes.</p>
       <div class="grid-4" id="pillars"></div>
     </div>
@@ -200,7 +212,8 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
   <section class="block" aria-labelledby="dist-h">
     <div class="wrap">
-      <h2 id="dist-h">Where systems land</h2>
+      <p class="eyebrow">The national picture</p>
+      <h2 id="dist-h">Where systems <span class="hl">land</span></h2>
       <p class="lede">Average DFD Score by state, alongside the national spread. <span class="chip modeled">modeled</span></p>
       <div class="grid-2">
         <div class="card">
@@ -239,7 +252,8 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
   <section class="block gate" id="gate" aria-labelledby="g-h">
     <div class="wrap">
-      <h2 id="g-h">See where your system ranks</h2>
+      <p class="eyebrow">Free access</p>
+      <h2 id="g-h">See where <span class="hl">your system</span> ranks</h2>
       <p class="lede">The full Index is free. Find your system and compare it against in-state peers, a cohort matched on size and type, and the national picture.</p>
       <form id="gate-form" novalidate>
         <div><label for="g-name">Full name</label><input id="g-name" name="name" autocomplete="name" required><div class="err" id="e-name"></div></div>
@@ -275,11 +289,11 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
       <div role="tabpanel" id="p-nat" aria-labelledby="t-nat" hidden></div>
 
       <div class="close-cta" style="margin-top:40px">
-        <h2>Get your system's full breakdown</h2>
+        <h2>Get your system's <span class="hl">full breakdown</span></h2>
         <p>We'll send a line-by-line view of your system: which clinic numbers were answered and how fast, what callers hear after hours, and which website fixes would move your score the most.</p>
         <button class="btn" id="cta-btn" type="button">Send me my breakdown</button>
         <p id="cta-msg" aria-live="polite" style="margin-bottom:0"></p>
-        <p class="muted" style="color:#cfe2f7;margin-top:18px">Clarus helps health systems answer more patient calls. <a href="#">See more research in Resources</a></p>
+        <p class="muted" style="margin-top:18px">Clarus helps health systems answer more patient calls. <a href="#">See more research in Resources</a></p>
       </div>
     </div>
   </section>
@@ -287,7 +301,7 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
 <footer class="site">
   <div class="wrap cols">
-    <div><h4>ClarusCare</h4><p style="margin:0">A Graham Holdings Company</p></div>
+    <div><img src="assets/clarus-logo-white.png" alt="Clarus"><p style="margin:0">A Graham Holdings Company</p></div>
     <div><h4>Solutions</h4><ul><li><a href="#">Call management</a></li><li><a href="#">After-hours</a></li></ul></div>
     <div><h4>Resources</h4><ul><li><a href="#">Research</a></li><li><a href="#">Blog</a></li></ul></div>
     <div><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Contact</a></li></ul></div>

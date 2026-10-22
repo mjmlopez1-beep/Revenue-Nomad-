@@ -7,6 +7,10 @@ inline = lambda tag, p: f"<{tag}>\n" + (root / p).read_text().replace("</script"
 html = html.replace('<link rel="stylesheet" href="tokens.css">', inline("style", "tokens.css"))
 for src in ["vendor/chart.umd.min.js", "data/dfd_index.js", "app.js"]:
     html = html.replace(f'<script src="{src}"></script>', inline("script", src))
+import base64
+for img in ["assets/clarus-logo-navy.png", "assets/clarus-logo-white.png"]:
+    uri = "data:image/png;base64," + base64.b64encode((root / img).read_bytes()).decode()
+    html = html.replace(f'src="{img}"', f'src="{uri}"')
 out = root / "dist" / "dfd-index-concept.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(html)

@@ -1,92 +1,80 @@
 /* Design tokens: the one place brand values live.
-   PLACEHOLDER VALUES. claruscare.com was unreachable from the build
-   environment, so these are neutral stand-ins, not extracted brand tokens.
-   Swap this block for the real values from the live site (see BRAND.md). */
+   Source: computed styles read from claruscare.com on 2026-10-22 (brand brief
+   captured in a separate session, see BRAND.md). Logo comes from
+   Clarus_Sales_Deck_v19.pptx. */
 :root {
   color-scheme: light;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-label: "Barlow", "Archivo", system-ui, sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 14px;   /* site buttons */
+  --radius-lg: 18px;
   --radius-pill: 999px;
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
-  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 72px;
-  --maxw: 1160px;
+  --maxw: 1080px;
 
-  --brand-900: #0d2645;   /* header, hero */
-  --brand-700: #17406f;
-  --brand-500: #1f6fb8;   /* primary action */
-  --brand-100: #e6f0fa;
-  --accent: #e0662f;      /* selected-system highlight */
+  --navy: #071d49;          /* headlines, body, footer, primary button */
+  --blue: #417de9;          /* highlighted headline words, accents */
+  --orange: #ff9f13;        /* secondary accent; highlight on dark */
+  --navy-muted: #435e93;    /* subheads, stat labels */
+  --navy-muted-2: #334870;
+  --panel: #e1e4ed;         /* light stat band */
 
-  --page: #f7f7f4;
+  --brand-900: var(--navy);
+  --brand-500: #2f6ad6;     /* link/active blue: site #417de9 deepened to 4.5:1 for small text */
+  --brand-100: #eef1f7;
+  --accent: var(--orange);  /* selected-system highlight */
+  --btn-bg: rgba(7, 29, 73, .88);
+
+  --page: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f0efea;
-  --ink: #0e1726;
-  --ink-2: #4a5160;
-  --ink-muted: #6b7180;
-  --line: #e0dfd8;
-  --focus: #1f6fb8;
+  --surface-2: #f3f5f9;
+  --ink: var(--navy);
+  --ink-2: var(--navy-muted-2);
+  --ink-muted: var(--navy-muted);
+  --line: #dde2ec;
+  --focus: #417de9;
   --on-brand: #ffffff;
 
-  --demo-bg: #fff4d6;
-  --demo-ink: #5a4100;
-  --measured: #0b6b3a;
-  --measured-bg: #e2f4e9;
-  --modeled: #6b4a00;
-  --modeled-bg: #fdf0cf;
+  --demo-bg: #fff3dc;
+  --demo-ink: #5a3800;
+  --measured: #0b6b4a;
+  --measured-bg: #def3ea;
+  --modeled: #7a4a00;
+  --modeled-bg: #ffefcf;
 
-  /* Letter bands: diverging blue <-> red around a neutral grey C. */
-  --band-a: #184f95;
-  --band-b: #5598e7;
-  --band-c: #a3a29b;
-  --band-d: #e8897a;
-  --band-f: #c63b3b;
+  /* Letter bands: blue (good) through grey to orange-red (poor), lightness-ordered. */
+  --band-a: #1f4fb0;
+  --band-b: #6f9df0;
+  --band-c: #a7adbd;
+  --band-d: #f5a54a;
+  --band-f: #c8402f;
 
-  --chart-1: #2a78d6;
-  --chart-grid: #e1e0d9;
-  --chart-axis: #6b7180;
+  --chart-1: #417de9;
+  --chart-grid: #e6e9f0;
+  --chart-axis: #435e93;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --brand-900: #0a1d36;
-    --brand-700: #8fb8e8;
-    --brand-500: #4b95e0;
-    --brand-100: #16263a;
-    --accent: #f08350;
-    --page: #111214;
-    --surface: #1a1b1e;
-    --surface-2: #232428;
-    --ink: #eeeff1;
-    --ink-2: #c3c6cd;
-    --ink-muted: #9a9ea8;
-    --line: #2e3035;
-    --focus: #7fb4ee;
-    --demo-bg: #3a2e0c;
-    --demo-ink: #fbe3a0;
-    --measured: #7fd6a4;
-    --measured-bg: #12301f;
-    --modeled: #f3d27a;
-    --modeled-bg: #3a2e0c;
-    --band-a: #3987e5;
-    --band-b: #86b6ef;
-    --band-c: #7c7b75;
-    --band-d: #e66767;
-    --band-f: #f08a8a;
-    --chart-1: #3987e5;
-    --chart-grid: #2c2c2a;
-    --chart-axis: #9a9ea8;
+    --brand-500: #7aa6f2; --brand-100: #0f2558;
+    --page: #04122f; --surface: #0b1d47; --surface-2: #10275a;
+    --ink: #f2f5fb; --ink-2: #c9d4ea; --ink-muted: #9fb0d2; --line: #1d356b; --focus: #ff9f13;
+    --panel: #0b1d47; --btn-bg: #417de9;
+    --demo-bg: #3a2603; --demo-ink: #ffdca0;
+    --measured: #72d9b0; --measured-bg: #0b3a2c; --modeled: #ffc76b; --modeled-bg: #3a2603;
+    --band-a: #6f9df0; --band-b: #a9c6f7; --band-c: #7b86a3; --band-d: #f7b267; --band-f: #ef6a5a;
+    --chart-1: #6f9df0; --chart-grid: #1d356b; --chart-axis: #9fb0d2;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --brand-900: #0a1d36; --brand-700: #8fb8e8; --brand-500: #4b95e0; --brand-100: #16263a;
-  --accent: #f08350; --page: #111214; --surface: #1a1b1e; --surface-2: #232428;
-  --ink: #eeeff1; --ink-2: #c3c6cd; --ink-muted: #9a9ea8; --line: #2e3035; --focus: #7fb4ee;
-  --demo-bg: #3a2e0c; --demo-ink: #fbe3a0; --measured: #7fd6a4; --measured-bg: #12301f;
-  --modeled: #f3d27a; --modeled-bg: #3a2e0c;
-  --band-a: #3987e5; --band-b: #86b6ef; --band-c: #7c7b75; --band-d: #e66767; --band-f: #f08a8a;
-  --chart-1: #3987e5; --chart-grid: #2c2c2a; --chart-axis: #9a9ea8;
+  --brand-500: #7aa6f2; --brand-100: #0f2558;
+  --page: #04122f; --surface: #0b1d47; --surface-2: #10275a;
+  --ink: #f2f5fb; --ink-2: #c9d4ea; --ink-muted: #9fb0d2; --line: #1d356b; --focus: #ff9f13;
+  --panel: #0b1d47; --btn-bg: #417de9;
+  --demo-bg: #3a2603; --demo-ink: #ffdca0;
+  --measured: #72d9b0; --measured-bg: #0b3a2c; --modeled: #ffc76b; --modeled-bg: #3a2603;
+  --band-a: #6f9df0; --band-b: #a9c6f7; --band-c: #7b86a3; --band-d: #f7b267; --band-f: #ef6a5a;
+  --chart-1: #6f9df0; --chart-grid: #1d356b; --chart-axis: #9fb0d2;
 }

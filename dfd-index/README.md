@@ -10,7 +10,7 @@ This is a gated research landing page plus a benchmark dataset. It exists to pre
 |---|---|
 | All 1,800 system records (names, scores, metrics) | **Synthetic.** Names are invented. Size, state, type and rurality mix are shaped on our real target lists (the 1,154-system national list plus the OR/PA/ME/AZ Rural Rounds lists). No record maps to a real organisation. |
 | Oregon field-test section | **Measured.** These are the statewide aggregates from *Digital Front Door: Oregon Patient Access Benchmark 2026*, from calls placed 2026-09-21. |
-| Brand styling | **Placeholder.** claruscare.com was blocked from the build environment. Replace the values in `tokens.css` and check them against the live header and footer. |
+| Brand styling | Matched to claruscare.com computed styles (colors, Archivo/Barlow, buttons). Logo cut from the Clarus sales deck. See `BRAND.md`. |
 
 The page shows a persistent demo banner. Every modeled figure carries a "modeled" tag, and the Oregon figures carry "measured".
 
@@ -42,7 +42,7 @@ python3 scripts/bundle.py
 
 ## Not done yet (concept scope)
 
-- Brand tokens are not extracted from the live site.
+- The logo is a monochrome stand-in for the official two-colour mark (see `BRAND.md`).
 - The page is plain JS plus Chart.js, not React or Next.js components. The logic is split by view, so it can be ported.
 - The explorer is not code-split behind the gate. The whole bundle is about 780 KB.
 - The gate only logs a Salesforce web-to-lead-shaped payload to the console. Nothing is sent.
