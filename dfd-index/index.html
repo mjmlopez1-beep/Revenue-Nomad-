@@ -4,109 +4,204 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Digital Front Door Index</title>
-<meta name="description" content="How easy is it for a patient to reach a US health system? A benchmark of phone, after-hours, digital and accessibility access.">
+<meta name="description" content="An annual, independent benchmark of how easily patients can reach U.S. health systems by phone, after hours and online.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Barlow:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="tokens.css">
 <style>
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 body { margin: 0; font-family: var(--font-sans); background: var(--page); color: var(--ink); line-height: 1.55; font-size: 16px; }
 a { color: var(--brand-500); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 16px; }
+.wrap { max-width: var(--maxw); margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .skip { position: absolute; left: -9999px; }
 .skip:focus { left: 16px; top: 8px; z-index: 100; background: var(--surface); padding: 8px 12px; }
+h1, h2, h3 { text-wrap: balance; }
+.num { font-variant-numeric: tabular-nums; }
 
 /* Demo banner: persistent, never dismissible. */
-.demo-banner { position: sticky; top: 0; z-index: 50; background: var(--demo-bg); color: var(--demo-ink); font-size: 14px; border-bottom: 1px solid rgba(0,0,0,.08); }
-.demo-banner .wrap { padding-top: 8px; padding-bottom: 8px; display: flex; gap: 8px; align-items: baseline; }
-.demo-banner strong { white-space: nowrap; }
+.demo-banner { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 60; background: var(--demo-bg); color: var(--demo-ink); font-size: 14px; border-bottom: 1px solid rgba(0,0,0,.08); }
+.demo-banner .wrap { padding-top: 8px; padding-bottom: 8px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 
 header.site { background: var(--page); color: var(--ink); border-bottom: 1px solid var(--line); }
-header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; flex-wrap: wrap; }
+header.site .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; flex-wrap: wrap; }
 .logo { display: flex; flex-direction: column; color: var(--ink); text-decoration: none; line-height: 1.1; padding: 12px 0; gap: 4px; }
 .logo img { height: 34px; width: auto; display: block; }
 .logo small { font-family: var(--font-label); font-size: 11px; color: var(--ink-muted); letter-spacing: .02em; }
 .logo .on-dark { display: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo .on-light { display: none; } :root:not([data-theme="light"]) .logo .on-dark { display: block; } }
-nav.main ul { list-style: none; display: flex; gap: 20px; margin: 0; padding: 0; flex-wrap: wrap; }
+:root[data-theme="dark"] .logo .on-light { display: none; } :root[data-theme="dark"] .logo .on-dark { display: block; }
+nav.main ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; flex-wrap: wrap; }
 nav.main a { color: var(--ink); text-decoration: none; font-family: var(--font-label); font-size: 16px; }
-nav.main a[aria-current] { opacity: 1; text-decoration: underline; text-underline-offset: 6px; }
-@media (max-width: 720px) { nav.main { display: none; } }
+nav.main a[aria-current] { text-decoration: underline; text-underline-offset: 6px; text-decoration-color: var(--blue); }
+@media (max-width: 760px) { nav.main { display: none; } }
 
-.hero { background: var(--page); color: var(--ink); padding: 64px 0 72px; }
 .eyebrow { font-family: var(--font-label); text-transform: uppercase; letter-spacing: .14em; font-size: 14px; font-weight: 500; color: var(--ink-muted); margin: 0 0 12px; }
 .hl { color: var(--blue); }
 .dark .hl { color: var(--orange); }
-.hero h1 { font-size: clamp(36px, 6vw, 64px); font-weight: 700; line-height: 1.02; margin: 0 0 18px; letter-spacing: -.03em; max-width: 16ch; }
-.hero .thesis { font-size: 18px; line-height: 28px; max-width: 60ch; color: var(--ink-2); margin: 0 0 20px; }
-.hero .meta { font-family: var(--font-label); font-size: 15px; color: var(--ink-muted); margin-bottom: 36px; }
-.hero .meta a { color: var(--brand-500); }
-.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; background: var(--panel); border-radius: var(--radius-lg); padding: 16px; }
-.finding { background: rgba(255,255,255,.7); border-radius: var(--radius-md); padding: 20px; box-shadow: 0 4px 18px rgba(7,29,73,.06); }
-.finding .big { font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
-.finding p { margin: 10px 0 12px; font-size: 15px; color: var(--ink-2); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .finding { background: var(--surface-2); } }
-
-.chip { display: inline-block; font-family: var(--font-label); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-radius: var(--radius-pill); padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
+.chip { display: inline-block; font-family: var(--font-label); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; border-radius: var(--radius-pill); padding: 2px 8px; vertical-align: middle; white-space: nowrap; }
 .chip.modeled { background: var(--modeled-bg); color: var(--modeled); }
 .chip.measured { background: var(--measured-bg); color: var(--measured); }
-.modeled-val { text-decoration: underline dotted 2px; text-underline-offset: 4px; text-decoration-color: var(--modeled); }
-
-section.block { padding: 88px 0; }
-section.block + section.block { border-top: 1px solid var(--line); }
-h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 700; line-height: 1.08; margin: 0 0 14px; letter-spacing: -.025em; }
-h3 { font-size: 19px; margin: 0 0 8px; }
-.lede { color: var(--ink-2); max-width: 68ch; margin: 0 0 32px; font-size: 18px; line-height: 28px; }
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
-.grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 14px; }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px; min-width: 0; box-shadow: 0 4px 18px rgba(7,29,73,.05); }
-.card h3 small { font-weight: 400; color: var(--ink-muted); font-size: 14px; }
-.pillar .num { font-family: var(--font-label); font-size: 14px; font-weight: 600; color: var(--blue); letter-spacing: .08em; }
-.pillar .w { font-family: var(--font-label); font-size: 13px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .1em; }
-.pillar p { margin: 6px 0 0; color: var(--ink-2); font-size: 15px; }
 .muted { color: var(--ink-muted); font-size: 14px; }
-.chart-box { position: relative; height: 260px; }
-figure { margin: 0; }
-figcaption { font-size: 14px; color: var(--ink-2); margin-top: 8px; }
-details.tbl { margin-top: 10px; font-size: 14px; }
-details.tbl summary { cursor: pointer; color: var(--brand-500); }
-details.tbl table { margin-top: 8px; }
 
-/* Oregon field test */
+/* Report cover */
+.cover { padding-block: 56px 40px; }
+.cover-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+@media (max-width: 880px) { .cover-grid { grid-template-columns: 1fr; } }
+.edition { display: inline-flex; gap: 10px; align-items: center; font-family: var(--font-label); font-size: 14px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 18px; }
+.edition b { background: var(--navy); color: #fff; padding: 3px 10px; border-radius: 6px; letter-spacing: .08em; }
+.cover h1 { font-size: clamp(38px, 6.4vw, 72px); font-weight: 800; line-height: 1; margin: 0 0 20px; letter-spacing: -.035em; }
+.cover .dek { font-size: 19px; line-height: 30px; color: var(--ink-2); max-width: 60ch; margin: 0 0 24px; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px 26px; font-family: var(--font-label); font-size: 15px; color: var(--ink-muted); }
+.facts b { color: var(--ink); font-family: var(--font-sans); font-size: 17px; display: block; }
+.toc { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px 24px; background: var(--surface); }
+.toc h2 { font-size: 15px; font-family: var(--font-label); text-transform: uppercase; letter-spacing: .12em; color: var(--ink-muted); font-weight: 500; margin: 0 0 10px; }
+.toc ol { margin: 0; padding: 0; list-style: none; counter-reset: toc; }
+.toc li { counter-increment: toc; border-top: 1px solid var(--line); }
+.toc li:first-child { border-top: 0; }
+.toc a { display: flex; gap: 14px; align-items: baseline; padding: 9px 0; text-decoration: none; color: var(--ink); font-weight: 600; }
+.toc a::before { content: counter(toc, decimal-leading-zero); font-family: var(--font-label); color: var(--blue); font-weight: 600; font-size: 14px; min-width: 22px; }
+.toc a:hover { color: var(--brand-500); }
+
+.findings { margin-top: 44px; background: var(--panel); border-radius: var(--radius-lg); padding: 18px; }
+.findings h2 { font-size: 15px; font-family: var(--font-label); text-transform: uppercase; letter-spacing: .12em; color: var(--ink-muted); font-weight: 500; margin: 6px 6px 14px; }
+.findings ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 14px; }
+.finding { background: rgba(255,255,255,.75); border-radius: var(--radius-md); padding: 20px; box-shadow: 0 4px 18px rgba(7,29,73,.06); display: flex; flex-direction: column; gap: 8px; }
+.finding .big { font-size: 42px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+.finding p { margin: 0; font-size: 15px; color: var(--ink-2); flex: 1; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .finding { background: var(--surface-2); } }
+:root[data-theme="dark"] .finding { background: var(--surface-2); }
+
+/* Sections and chapters */
+section.block { padding-block: 80px; }
+section.block + section.block { border-top: 1px solid var(--line); }
+.chapter-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 22px; align-items: baseline; margin-bottom: 28px; }
+.chapter-no { font-family: var(--font-label); font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--blue); grid-row: span 2; padding-top: 10px; }
+.dark .chapter-no { color: var(--orange); }
+h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; line-height: 1.06; margin: 0; letter-spacing: -.028em; }
+h3 { font-size: 19px; margin: 0 0 6px; letter-spacing: -.01em; }
+.lede { color: var(--ink-2); max-width: 68ch; margin: 10px 0 0; font-size: 18px; line-height: 28px; }
+@media (max-width: 640px) { .chapter-head { grid-template-columns: 1fr; } .chapter-no { grid-row: auto; padding: 0; } }
+
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 22px; min-width: 0; }
+.card > h3 + .muted { margin: 0 0 12px; }
+.chart-box { position: relative; height: 280px; }
+.chart-box.short { height: 220px; }
+.chart-box.tall { height: 340px; }
+figure { margin: 0; }
+figcaption { font-size: 15px; color: var(--ink-2); margin-top: 12px; }
+figcaption b { color: var(--ink); }
+details.tbl { margin-top: 10px; font-size: 14px; }
+details.tbl summary { cursor: pointer; color: var(--brand-500); font-weight: 600; }
+details.tbl .table-wrap { margin-top: 8px; }
+
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 20px; }
+.stat-strip > div { background: var(--surface); padding: 18px 20px; }
+.stat-strip b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+.stat-strip span { font-size: 14px; color: var(--ink-muted); }
+
+/* Oregon field test (dark) */
 .dark { background: var(--navy); color: #fff; }
-.dark .lede { color: rgba(255,255,255,.75); }
+.dark .lede { color: rgba(255,255,255,.78); }
 .dark .eyebrow { color: rgba(255,255,255,.7); }
-.stat { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius-md); padding: 18px; }
-.stat .n { font-size: 40px; font-weight: 700; line-height: 1.05; color: var(--orange); }
-.stat p { margin: 6px 0 0; font-size: 15px; color: rgba(255,255,255,.8); }
-.callout { background: rgba(255,255,255,.06); border-radius: var(--radius-md); padding: 18px 20px; font-size: 16px; color: rgba(255,255,255,.82); margin-top: 20px; }
-.callout b { color: #fff; }
+.or-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 14px; margin-top: 28px; }
+.or-stat { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius-md); padding: 18px; }
+.or-stat .n { font-size: 40px; font-weight: 800; line-height: 1.05; color: var(--orange); letter-spacing: -.02em; }
+.or-stat p { margin: 6px 0 0; font-size: 15px; color: rgba(255,255,255,.82); }
+.pattern { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; margin-top: 18px; }
+.pattern div { background: rgba(255,255,255,.06); border-radius: var(--radius-md); padding: 18px 20px; font-size: 16px; color: rgba(255,255,255,.84); }
+.pattern b { color: #fff; display: block; font-size: 17px; margin-bottom: 6px; }
 .dark .chip.measured { background: #def3ea; color: #0b5a3e; }
 
-/* Tile map */
-.tilemap { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; max-width: 560px; }
-.tile { aspect-ratio: 1; border-radius: 5px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: clamp(9px, 1.6vw, 12px); font-weight: 700; border: 0; padding: 0; cursor: pointer; font-family: inherit; line-height: 1.05; }
-.tile span { font-weight: 400; font-size: .85em; }
-.tile.empty { visibility: hidden; }
-.tile.sel { outline: 3px solid var(--accent); outline-offset: 1px; }
-.legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-top: 10px; align-items: center; }
-.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px; margin-right: 4px; }
+/* Map */
+.map-layout { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 960px) { .map-layout { grid-template-columns: 1fr; } }
+.metric-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.metric-switch button { font: inherit; font-family: var(--font-label); font-size: 15px; font-weight: 500; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: var(--radius-pill); padding: 7px 14px; cursor: pointer; min-height: 38px; }
+.metric-switch button[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--navy); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .metric-switch button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); } }
+:root[data-theme="dark"] .metric-switch button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); }
+.map-card { position: relative; padding: 14px; }
+.us-map { width: 100%; height: auto; display: block; }
+.us-map path { stroke: var(--surface); stroke-width: 1; cursor: pointer; transition: opacity .15s; outline: none; }
+.us-map path:hover, .us-map path:focus-visible { stroke: var(--navy); stroke-width: 2; }
+.us-map path.sel { stroke: var(--orange); stroke-width: 3; }
+.us-map path.dim { opacity: .35; }
+.us-map text { font-family: var(--font-label); font-size: 11px; font-weight: 600; pointer-events: none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .us-map path:hover { stroke: #fff; } }
+.map-tip { position: absolute; z-index: 20; pointer-events: none; background: var(--navy); color: #fff; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 10px 30px rgba(7,29,73,.3); min-width: 180px; transform: translate(-50%, calc(-100% - 14px)); }
+.map-tip b { font-size: 15px; display: block; }
+.map-tip .row { display: flex; justify-content: space-between; gap: 14px; }
+.map-tip .row span:last-child { font-weight: 700; font-variant-numeric: tabular-nums; }
+.map-legend { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--ink-muted); flex-wrap: wrap; }
+.map-legend .ramp { display: flex; height: 12px; border-radius: 6px; overflow: hidden; flex: 0 1 260px; min-width: 160px; }
+.map-legend .ramp i { flex: 1; }
+.small-states { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; font-size: 13px; color: var(--ink-muted); }
+.small-states button { font: inherit; font-family: var(--font-label); font-weight: 600; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 3px 8px; cursor: pointer; min-height: 30px; }
+.state-panel { position: sticky; top: 64px; }
+.state-panel .head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.state-panel h3 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 0; }
+.bigscore { display: flex; align-items: baseline; gap: 10px; margin: 10px 0 4px; }
+.bigscore b { font-size: 52px; font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+.cmp-rows { display: grid; gap: 10px; margin: 14px 0; }
+.cmp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; font-size: 14px; align-items: center; }
+.cmp-row .track { grid-column: 1 / -1; position: relative; height: 8px; background: var(--surface-2); border-radius: 4px; }
+.cmp-row .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--blue); }
+.cmp-row .track u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
+.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 10px; margin: 12px 0; }
+.kv div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; }
+.kv b { display: block; font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+.kv span { font-size: 12.5px; color: var(--ink-muted); line-height: 1.3; display: block; }
+.narr { background: var(--surface-2); border-radius: var(--radius-md); padding: 14px 16px; color: var(--ink-2); font-size: 15px; margin: 12px 0 0; }
+.gradebar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; margin: 8px 0 4px; }
+.gradebar span { display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; min-width: 0; }
+.gradebar span.C { color: #111; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.table-wrap.scroll { max-height: 560px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; font-family: var(--font-label); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); }
+th button { font: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
+td.n, th.n { text-align: right; }
+tr.me td { background: color-mix(in srgb, var(--orange) 18%, transparent); font-weight: 600; }
+tr.pinned td { border-bottom: 2px solid var(--orange); }
+tbody tr[data-state] { cursor: pointer; }
+tbody tr[data-state]:hover td { background: var(--surface-2); }
+.inbar { display: inline-block; width: 90px; height: 8px; background: var(--surface-2); border-radius: 4px; vertical-align: middle; margin-right: 8px; position: relative; overflow: hidden; }
+.inbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); border-radius: 4px; }
+.band { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; font-weight: 800; color: #fff; font-size: 13px; }
+.band.C { color: #111; }
+.band.lg { width: 44px; height: 44px; font-size: 22px; border-radius: 10px; }
+
+/* Method */
+.method-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
+.pillar .no { font-family: var(--font-label); font-size: 14px; font-weight: 600; color: var(--blue); letter-spacing: .08em; }
+.pillar .w { font-family: var(--font-label); font-size: 13px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: .1em; }
+.pillar ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink-2); font-size: 15px; }
+.pillar .weight { height: 6px; border-radius: 3px; background: var(--surface-2); margin: 8px 0 10px; overflow: hidden; }
+.pillar .weight i { display: block; height: 100%; background: var(--blue); }
+.prose { max-width: 70ch; color: var(--ink-2); font-size: 16px; }
+.prose h3 { color: var(--ink); margin-top: 26px; }
+.prose li { margin-bottom: 6px; }
 
 /* Gate */
 .gate { background: var(--panel); }
-.gate form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px 16px; margin-top: 16px; }
+.gate form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 14px 16px; margin-top: 22px; }
 label { display: block; font-family: var(--font-label); font-size: 14px; font-weight: 600; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
-input, select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #c9d0de; border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-height: 44px; }
+input, select { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid #c9d0de; border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); min-height: 46px; }
 input[aria-invalid="true"] { border-color: var(--band-f); }
 .err { color: var(--band-f); font-size: 14px; min-height: 1em; margin-top: 4px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; background: var(--btn-bg); color: #fff; border: 0; border-radius: var(--radius-md); padding: 12px 28px; min-height: 46px; cursor: pointer; text-decoration: none; box-shadow: 0 6px 16px rgba(7,29,73,.18); }
 .btn::after { content: "\2192"; font-size: 16px; }
 .btn:hover { background: var(--navy); }
-.btn.ghost { background: transparent; color: var(--brand-500); border: 1.5px solid currentColor; }
 .form-end { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
 
 /* Explorer */
@@ -114,49 +209,66 @@ input[aria-invalid="true"] { border-color: var(--band-f); }
 #explorer { animation: reveal .5s ease both; }
 @keyframes reveal { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { #explorer { animation: none; } }
-.picker { position: relative; max-width: 560px; }
-.picker ul { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 300px; overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.12); }
-.picker li { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 15px; }
+.picker { position: relative; max-width: 620px; }
+.picker ul { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 320px; overflow: auto; box-shadow: 0 10px 30px rgba(7,29,73,.14); }
+.picker li { padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 15px; }
 .picker li small { color: var(--ink-muted); }
 .picker li[aria-selected="true"], .picker li:hover { background: var(--brand-100); }
 .picked { margin-top: 10px; font-size: 15px; color: var(--ink-2); }
-[role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 24px 0 20px; overflow-x: auto; }
-[role="tab"] { font: inherit; font-family: var(--font-label); font-size: 17px; font-weight: 500; background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 14px; color: var(--ink-2); cursor: pointer; white-space: nowrap; min-height: 44px; }
-[role="tab"][aria-selected="true"] { color: var(--brand-500); border-bottom-color: var(--brand-500); }
-.score-head { display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
-.dial { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; flex: none; }
-.dial div { width: 96px; height: 96px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; text-align: center; }
-.dial b { font-size: 34px; line-height: 1; }
-.dial small { display: block; font-size: 12px; color: var(--ink-muted); }
-.pillrow { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 12px; align-items: center; font-size: 15px; }
-.bar { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; grid-column: 1 / -1; margin-bottom: 8px; }
-.bar i { display: block; height: 100%; border-radius: 5px; }
-.band { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; font-weight: 700; color: #fff; font-size: 14px; }
-.band.C { color: #111; }
-.pctl { position: relative; height: 34px; margin: 18px 0 6px; }
-.pctl .track { position: absolute; left: 0; right: 0; top: 14px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--band-f), var(--band-c), var(--band-a)); }
-.pctl .mk { position: absolute; top: 4px; width: 4px; height: 26px; background: var(--ink); border-radius: 2px; transform: translateX(-2px); }
-.drag li { margin-bottom: 10px; }
-.drag b { color: var(--ink); }
-.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); max-height: 520px; overflow-y: auto; background: var(--surface); }
-table { border-collapse: collapse; width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
-th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
-th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; }
-th button { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
-td.num, th.num { text-align: right; }
-tr.me td { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 600; }
-tr.pinned td { border-bottom: 2px solid var(--accent); }
-.filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
-.filters > div { min-width: 170px; flex: 1 1 170px; max-width: 240px; }
-.narr { background: var(--surface-2); border-radius: var(--radius-md); padding: 14px 16px; color: var(--ink-2); font-size: 15px; }
-.kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.kv div { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 14px; }
-.kv b { display: block; font-size: 24px; }
-.kv span { font-size: 13px; color: var(--ink-muted); }
+[role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 26px 0 24px; overflow-x: auto; }
+[role="tab"] { font: inherit; font-family: var(--font-label); font-size: 17px; font-weight: 500; background: none; border: 0; border-bottom: 3px solid transparent; padding: 12px 14px; color: var(--ink-2); cursor: pointer; white-space: nowrap; min-height: 46px; }
+[role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--blue); font-weight: 600; }
 
-.close-cta { background: var(--panel); color: var(--ink); border-radius: var(--radius-lg); padding: clamp(24px, 5vw, 56px); text-align: center; }
+.report-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 24px; align-items: center; }
+@media (max-width: 760px) { .report-head { grid-template-columns: auto minmax(0, 1fr); } .report-head .ranks { grid-column: 1 / -1; } }
+.dial { width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+.dial div { width: 104px; height: 104px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; text-align: center; }
+.dial b { font-size: 38px; line-height: 1; font-weight: 800; letter-spacing: -.02em; }
+.dial small { display: block; font-size: 11px; color: var(--ink-muted); font-family: var(--font-label); text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+.report-head h3 { font-size: 26px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+.ranks { display: grid; grid-template-columns: repeat(3, auto); gap: 4px 22px; text-align: right; }
+.ranks b { font-size: 24px; font-weight: 800; display: block; letter-spacing: -.01em; }
+.ranks span { font-size: 12.5px; color: var(--ink-muted); font-family: var(--font-label); text-transform: uppercase; letter-spacing: .06em; }
+@media (max-width: 760px) { .ranks { text-align: left; } }
+.pctl { position: relative; height: 46px; margin: 22px 0 4px; }
+.pctl .track { position: absolute; left: 0; right: 0; top: 18px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--band-f), var(--band-d), var(--band-c), var(--band-b), var(--band-a)); }
+.pctl .mk { position: absolute; top: 8px; width: 4px; height: 28px; background: var(--ink); border-radius: 2px; transform: translateX(-2px); }
+.pctl .mk.med { background: var(--ink-muted); width: 2px; height: 20px; top: 12px; }
+.pctl .lab { position: absolute; top: -6px; font-size: 12px; font-weight: 700; transform: translateX(-50%); white-space: nowrap; }
+.pctl .lab.med { top: auto; bottom: -8px; font-weight: 400; color: var(--ink-muted); }
+.so { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.so ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.so li { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: 15px; color: var(--ink-2); }
+.so li b { color: var(--ink); }
+.so .tag { font-family: var(--font-label); font-size: 13px; text-transform: uppercase; letter-spacing: .1em; font-weight: 600; }
+.so .tag.good { color: var(--band-a); }
+.so .tag.work { color: var(--band-f); }
+.pillar-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.pc-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pc-head h4 { margin: 0; font-size: 17px; }
+.pc-head .s { display: flex; gap: 8px; align-items: center; font-weight: 800; font-size: 22px; }
+.mrow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.mrow .v { font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.mrow .vs { font-size: 12.5px; color: var(--ink-muted); grid-column: 1 / -1; margin-top: -4px; }
+.dot { position: relative; height: 10px; background: var(--surface-2); border-radius: 5px; }
+.dot i { position: absolute; top: -2px; width: 14px; height: 14px; border-radius: 50%; background: var(--blue); border: 2px solid var(--surface); transform: translateX(-7px); }
+.dot u { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-muted); }
+.yn { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.yn::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--band-a); }
+.yn.no::before { background: var(--band-f); }
+.calllog { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 10px; }
+.ampm { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px 10px; align-items: center; font-size: 14px; margin-top: 8px; }
+.ampm .t { height: 12px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.ampm .t i { display: block; height: 100%; border-radius: 6px; }
+.footnote { font-size: 13px; color: var(--ink-muted); border-top: 1px solid var(--line); margin-top: 22px; padding-top: 12px; }
+.filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 18px; }
+.filters > div { min-width: 170px; flex: 1 1 170px; max-width: 260px; }
+.section-gap { margin-top: 20px; }
+
+.close-cta { background: var(--panel); color: var(--ink); border-radius: var(--radius-lg); padding: clamp(24px, 5vw, 56px); text-align: center; margin-top: 48px; }
+.close-cta h2 { margin-bottom: 12px; }
 .close-cta p { color: var(--ink-2); max-width: 60ch; margin-left: auto; margin-right: auto; font-size: 18px; line-height: 28px; }
-footer.site { background: var(--navy); color: rgba(255,255,255,.75); font-size: 14px; padding: 56px 0; margin-top: 88px; }
+footer.site { background: var(--navy); color: rgba(255,255,255,.75); font-size: 14px; padding-block: 56px; margin-top: 88px; }
 footer.site img { height: 30px; width: auto; display: block; margin-bottom: 8px; }
 footer.site .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; }
 footer.site h4 { color: #fff; margin: 0 0 8px; font-size: 14px; }
@@ -168,12 +280,12 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 <a class="skip" href="#main">Skip to content</a>
 
 <div class="demo-banner" role="note" aria-label="Demo data notice">
-  <div class="wrap"><strong>Concept preview.</strong><span>Every system shown is invented, and all scores are <span class="chip modeled">modeled</span> sample data. The Oregon statewide figures are <span class="chip measured">measured</span>.</span></div>
+  <div class="wrap"><strong>Concept preview.</strong><span>Every health system shown is invented and its scores are <span class="chip modeled">modeled</span> sample data. Figures tagged <span class="chip measured">measured</span> come from real calls.</span></div>
 </div>
 
 <header class="site">
   <div class="wrap">
-    <a class="logo" href="#"><img class="on-light" src="assets/clarus-logo-navy.png" alt="Clarus"><img class="on-dark" src="assets/clarus-logo-white.png" alt="Clarus"><small>A Graham Holdings Company</small></a>
+    <a class="logo" href="#top"><img class="on-light" src="assets/clarus-logo-navy.png" alt="Clarus"><img class="on-dark" src="assets/clarus-logo-white.png" alt="Clarus"><small>A Graham Holdings Company</small></a>
     <nav class="main" aria-label="Main">
       <ul><li><a href="#">Solutions</a></li><li><a href="#">Who we serve</a></li><li><a href="#" aria-current="page">Resources</a></li><li><a href="#">Company</a></li></ul>
     </nav>
@@ -181,13 +293,84 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 </header>
 
 <main id="main">
-  <section class="hero" aria-labelledby="title">
+  <section class="cover" id="top" aria-labelledby="title">
     <div class="wrap">
-      <p class="eyebrow">Clarus Research · Patient Access</p>
-      <h1 id="title">The Digital Front Door <span class="hl">Index 2026</span></h1>
-      <p class="thesis">For most patients, care starts with a phone call or a website. We measured how easy that first step is at US health systems and FQHCs, and the gap between the best and the rest is wider than most leaders assume.</p>
-      <p class="meta">Published October 2026 · <span id="hero-n"></span> systems across 50 states · <a href="#method">Methodology</a></p>
-      <div class="findings" id="findings" aria-live="polite"></div>
+      <div class="cover-grid">
+        <div>
+          <div class="edition"><b>2026 Edition</b> Annual report · Patient access</div>
+          <h1 id="title">The Digital Front Door <span class="hl">Index</span></h1>
+          <p class="dek">For most patients, care starts with a phone call or a website. Every year we call U.S. health systems the way a patient would and inspect their websites the way a new patient would use them. Then we score how easy it is to get through. This is the national edition, covering all 50 states.</p>
+          <div class="facts" id="cover-facts"></div>
+        </div>
+        <nav class="toc" aria-label="Report contents">
+          <h2>In this report</h2>
+          <ol>
+            <li><a href="#map">The national picture</a></li>
+            <li><a href="#phone">Phone access</a></li>
+            <li><a href="#after-hours">After hours</a></li>
+            <li><a href="#digital">Digital self-service</a></li>
+            <li><a href="#findability">Findability and accessibility</a></li>
+            <li><a href="#leaders">What the top quarter does differently</a></li>
+            <li><a href="#method">About this index</a></li>
+            <li><a href="#gate">Look up your system</a></li>
+          </ol>
+        </nav>
+      </div>
+      <div class="findings" aria-labelledby="kf-h">
+        <h2 id="kf-h">Key findings <span class="chip modeled">modeled</span></h2>
+        <ol id="findings"></ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="map" aria-labelledby="map-h">
+    <div class="wrap">
+      <div class="chapter-head"><span class="chapter-no">Chapter 01</span><h2 id="map-h">The national <span class="hl">picture</span></h2>
+        <p class="lede">Each state's color shows the average score of the health systems we measured there. Hover over a state for its numbers, or click it for the full state profile. Use the buttons to switch the map to any single measure.</p></div>
+      <div class="metric-switch" role="group" aria-label="Map measure" id="metric-switch"></div>
+      <div class="map-layout">
+        <div class="card map-card">
+          <svg class="us-map" id="us-map" role="group" aria-label="Map of the United States. Each state is a button that opens its profile."></svg>
+          <div class="map-tip" id="map-tip" hidden></div>
+          <div class="map-legend" id="map-legend"></div>
+          <div class="small-states" id="small-states"><span>Small states:</span></div>
+          <div style="margin-top:12px;max-width:280px"><label for="state-select">Or choose a state</label><select id="state-select"></select></div>
+        </div>
+        <aside class="card state-panel" id="state-panel" aria-live="polite"></aside>
+      </div>
+      <h3 class="section-gap" style="margin-top:40px">State rankings</h3>
+      <p class="muted" style="margin:0 0 12px">All 50 states, ranked by average score. Select a row to open its profile, or a column header to re-sort.</p>
+      <div id="state-table"></div>
+    </div>
+  </section>
+
+  <section class="block" id="phone" aria-labelledby="phone-h">
+    <div class="wrap">
+      <div class="chapter-head"><span class="chapter-no">Chapter 02</span><h2 id="phone-h">Phone <span class="hl">access</span></h2>
+        <p class="lede" id="phone-lede"></p></div>
+      <div class="stat-strip" id="phone-strip"></div>
+      <div class="grid-2">
+        <div class="card"><figure>
+          <h3>How long callers wait for a person</h3><p class="muted">Health systems grouped by their median wait across all answered calls.</p>
+          <div class="chart-box"><canvas id="c-wait" role="img" aria-label="Share of health systems in each median-wait range. A table version follows."></canvas></div>
+          <figcaption id="wait-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="wait-table"></div></details>
+        </figure></div>
+        <div class="card"><figure>
+          <h3>Morning and afternoon are not the same line</h3><p class="muted">Share of calls that reached a person, by time of call and type of system.</p>
+          <div class="chart-box"><canvas id="c-ampm" role="img" aria-label="Morning and afternoon answer rates by system type. A table version follows."></canvas></div>
+          <figcaption id="ampm-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="ampm-table"></div></details>
+        </figure></div>
+        <div class="card"><figure>
+          <h3>Each phone menu adds to the wait</h3><p class="muted">Median wait for a person, by the number of menu layers a caller hears first.</p>
+          <div class="chart-box"><canvas id="c-ivr" role="img" aria-label="Median wait by number of phone menu layers. A table version follows."></canvas></div>
+          <figcaption id="ivr-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="ivr-table"></div></details>
+        </figure></div>
+        <div class="card"><figure>
+          <h3>What happens to calls that don't get through</h3><p class="muted">Every call that did not reach a person, by how it ended.</p>
+          <div class="chart-box"><canvas id="c-miss" role="img" aria-label="Unanswered calls by outcome. A table version follows."></canvas></div>
+          <figcaption id="miss-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="miss-table"></div></details>
+        </figure></div>
+      </div>
     </div>
   </section>
 
@@ -195,56 +378,117 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
     <div class="wrap">
       <p class="eyebrow">Field test · <span class="chip measured">measured</span></p>
       <h2 id="or-h">What one day of calls to Oregon clinics <span class="hl">actually showed</span></h2>
-      <p class="lede">On September 21, 2026, we called the published numbers of 575 clinic lines across 25 Oregon health systems, hospitals and FQHCs, in a mid-morning and an early-afternoon window. No staff were spoken to. We timed each call from the first ring to the first word from a live person. This is the kind of evidence behind every state in the Index.</p>
-      <div class="grid-4" id="or-stats"></div>
-      <div class="callout"><b>What this tells a COO:</b> the same line can be fine at 10 a.m. and dead at 1 p.m. Of the 64 lines we dialed in both windows, several answered in seconds in the morning and then went unanswered or dropped the call in the afternoon. One large system had a median wait under 7 seconds, yet it accounted for 30 of the 38 lines that left us in a queue for the full 20 minutes. A system-wide average hides individual lines that are failing patients.</div>
+      <p class="lede">On September 21, 2026, we called the published numbers of 575 clinic lines at 25 Oregon health systems, hospitals and community health centers, once mid-morning and again in the early afternoon. We timed each call from the first ring to the first word from a live person. This is the kind of measurement every state in the index will be built on.</p>
+      <div class="or-stats" id="or-stats"></div>
+      <div class="pattern">
+        <div><b>Fast pickup and endless hold in the same organization.</b>One large system had a median wait under 7 seconds. It also accounted for 30 of the 38 lines that held us for the full 20 minutes. Averages hide this, and line-by-line data shows it.</div>
+        <div><b>Time of day changes the answer.</b>The same line answered in 10 seconds mid-morning and 77 seconds in the early afternoon. Another answered in 1 second in the morning and dropped the call after lunch. Of the 64 lines we called in both windows, several behaved this way.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="after-hours" aria-labelledby="ah-h">
+    <div class="wrap">
+      <div class="chapter-head"><span class="chapter-no">Chapter 03</span><h2 id="ah-h">After <span class="hl">hours</span></h2>
+        <p class="lede" id="ah-lede"></p></div>
+      <div class="stat-strip" id="ah-strip"></div>
+      <div class="grid-2">
+        <div class="card"><figure>
+          <h3>Who answers after 6 p.m.</h3><p class="muted">Outcome of one call to each system's main line after business hours, by type of system.</p>
+          <div class="chart-box tall"><canvas id="c-ah" role="img" aria-label="After-hours call outcomes by system type. A table version follows."></canvas></div>
+          <figcaption id="ah-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="ah-table"></div></details>
+        </figure></div>
+        <div class="card"><figure>
+          <h3>Is there a path for something urgent?</h3><p class="muted">Share of systems whose after-hours message offers a nurse line, on-call provider or emergency guidance.</p>
+          <div class="chart-box tall"><canvas id="c-urgent" role="img" aria-label="Share of systems offering an urgent path after hours, by rurality. A table version follows."></canvas></div>
+          <figcaption id="urgent-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="urgent-table"></div></details>
+        </figure></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="digital" aria-labelledby="dg-h">
+    <div class="wrap">
+      <div class="chapter-head"><span class="chapter-no">Chapter 04</span><h2 id="dg-h">Digital <span class="hl">self-service</span></h2>
+        <p class="lede" id="dg-lede"></p></div>
+      <div class="grid-2">
+        <div class="card"><figure>
+          <h3>What a new patient can do without calling</h3><p class="muted">Share of health systems whose website offers each capability.</p>
+          <div class="chart-box"><canvas id="c-feat" role="img" aria-label="Share of systems offering each digital capability. A table version follows."></canvas></div>
+          <figcaption id="feat-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="feat-table"></div></details>
+        </figure></div>
+        <div class="card"><figure>
+          <h3>Online booking by size of system</h3><p class="muted">Share of systems where a new patient can book online, by number of locations.</p>
+          <div class="chart-box"><canvas id="c-book" role="img" aria-label="Online booking share by number of locations. A table version follows."></canvas></div>
+          <figcaption id="book-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="book-table"></div></details>
+        </figure></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="findability" aria-labelledby="fd-h">
+    <div class="wrap">
+      <div class="chapter-head"><span class="chapter-no">Chapter 05</span><h2 id="fd-h">Findability and <span class="hl">accessibility</span></h2>
+        <p class="lede" id="fd-lede"></p></div>
+      <div class="grid-2">
+        <div class="card"><figure>
+          <h3>Can a patient find the basics?</h3><p class="muted">Share of health system websites that pass each check.</p>
+          <div class="chart-box short"><canvas id="c-find" role="img" aria-label="Share of websites passing each findability check. A table version follows."></canvas></div>
+          <figcaption id="find-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="find-table"></div></details>
+        </figure></div>
+        <div class="card"><figure>
+          <h3>Serious accessibility issues per website</h3><p class="muted">Automated check against the web accessibility standard (WCAG 2.1, level AA), home page and location finder.</p>
+          <div class="chart-box short"><canvas id="c-wcag" role="img" aria-label="Distribution of serious accessibility issues per website. A table version follows."></canvas></div>
+          <figcaption id="wcag-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="wcag-table"></div></details>
+        </figure></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="leaders" aria-labelledby="ld-h">
+    <div class="wrap">
+      <div class="chapter-head"><span class="chapter-no">Chapter 06</span><h2 id="ld-h">What the top quarter <span class="hl">does differently</span></h2>
+        <p class="lede" id="ld-lede"></p></div>
+      <div class="grid-2">
+        <div class="card"><h3>Top quarter vs. bottom quarter</h3><p class="muted">Health systems split by score into four equal groups.</p><div id="quart-table"></div></div>
+        <div class="card"><figure>
+          <h3>Scores by type of system and setting</h3><p class="muted">Median score with the middle half of systems shown as a range.</p>
+          <div class="chart-box tall"><canvas id="c-type" role="img" aria-label="Median score by system type and rurality. A table version follows."></canvas></div>
+          <figcaption id="type-cap"></figcaption><details class="tbl"><summary>Show as table</summary><div id="type-table"></div></details>
+        </figure></div>
+      </div>
     </div>
   </section>
 
   <section class="block" id="method" aria-labelledby="m-h">
     <div class="wrap">
-      <p class="eyebrow">Methodology</p>
-      <h2 id="m-h">How the Index <span class="hl">works</span></h2>
-      <p class="lede">Each system gets four pillar scores from 0 to 100, rolled into a single DFD Score. Each pillar also gets a letter grade from A to F. Phone metrics come from calls placed by an AI voice agent to published clinic numbers. Digital and accessibility metrics come from inspecting each system's public website. The full definitions are in the methodology notes.</p>
-      <div class="grid-4" id="pillars"></div>
-    </div>
-  </section>
-
-  <section class="block" aria-labelledby="dist-h">
-    <div class="wrap">
-      <p class="eyebrow">The national picture</p>
-      <h2 id="dist-h">Where systems <span class="hl">land</span></h2>
-      <p class="lede">Average DFD Score by state, alongside the national spread. <span class="chip modeled">modeled</span></p>
-      <div class="grid-2">
-        <div class="card">
-          <h3>Average DFD Score by state</h3>
-          <div class="tilemap" id="tilemap-teaser" role="img" aria-label="Tile map of average DFD Score by state. A table version follows."></div>
-          <div class="legend" id="map-legend"></div>
-          <details class="tbl"><summary>Show as table</summary><div id="map-table"></div></details>
+      <div class="chapter-head"><span class="chapter-no">Chapter 07</span><h2 id="m-h">About this <span class="hl">index</span></h2>
+        <p class="lede">The Digital Front Door score runs from 0 to 100. It combines four measures of access, each weighted by how often patients depend on it. Every rule below is applied the same way to every system.</p></div>
+      <div class="method-grid" id="pillars"></div>
+      <div class="grid-2 section-gap">
+        <div class="card prose">
+          <h3 style="margin-top:0">How we measured</h3>
+          <ul>
+            <li><b>Calls:</b> an automated voice agent called each system's published clinic numbers, the numbers a patient would find. Each line got one mid-morning and one early-afternoon call on a weekday, plus one call to the main line after 6 p.m. local time.</li>
+            <li><b>Wait time:</b> the time from the start of the call to the first word spoken by a live person, read from the call transcript. Calls stop at 20 minutes.</li>
+            <li><b>Websites:</b> the home page and location finder, checked as a new patient on a phone and a laptop, plus an automated accessibility scan.</li>
+            <li><b>No staff were interviewed</b> and no call recordings are published.</li>
+          </ul>
+          <h3>Grades</h3>
+          <div id="grade-key"></div>
         </div>
-        <div class="card">
-          <figure>
-            <h3>Distribution of DFD Scores</h3>
-            <div class="chart-box"><canvas id="c-hist" role="img" aria-label="Histogram of DFD Scores. A table version follows."></canvas></div>
-            <figcaption id="hist-cap"></figcaption>
-            <details class="tbl"><summary>Show as table</summary><div id="hist-table"></div></details>
-          </figure>
-        </div>
-        <div class="card">
-          <figure>
-            <h3>Phone menu depth vs. wait for a person</h3>
-            <div class="chart-box"><canvas id="c-ivr" role="img" aria-label="Median seconds to reach a person by number of phone menu layers. A table version follows."></canvas></div>
-            <figcaption id="ivr-cap"></figcaption>
-            <details class="tbl"><summary>Show as table</summary><div id="ivr-table"></div></details>
-          </figure>
-        </div>
-        <div class="card">
-          <figure>
-            <h3>What happens after hours</h3>
-            <div class="chart-box"><canvas id="c-ah" role="img" aria-label="Share of after-hours calls by outcome. A table version follows."></canvas></div>
-            <figcaption id="ah-cap"></figcaption>
-            <details class="tbl"><summary>Show as table</summary><div id="ah-table"></div></details>
-          </figure>
+        <div class="card prose">
+          <h3 style="margin-top:0">Independence and disclosure</h3>
+          <p>The index is published by <span class="pub">Clarus Care</span>, which sells call-handling software to health systems. To keep the results neutral, the scoring rules are published in full, every system is measured with the same scripts on the same schedule, and customers are scored the same way as everyone else. No system can pay to be included, excluded or re-scored.</p>
+          <h3>Limitations</h3>
+          <ul>
+            <li>Each line is called on one day, so a single score is a snapshot. Treat differences of a few points as noise.</li>
+            <li>Published numbers are not always the lines a system wants patients to use. We score the experience a patient actually gets.</li>
+            <li>The accessibility scan is a signal, not a full conformance audit.</li>
+            <li>Small states and small peer groups have wide ranges. Pages flag any comparison based on fewer than 20 systems.</li>
+          </ul>
+          <h3>Corrections</h3>
+          <p>Any system can request its line-level call data and ask for a re-measurement if a published number or listing is wrong.</p>
         </div>
       </div>
     </div>
@@ -252,48 +496,46 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
   <section class="block gate" id="gate" aria-labelledby="g-h">
     <div class="wrap">
-      <p class="eyebrow">Free access</p>
-      <h2 id="g-h">See where <span class="hl">your system</span> ranks</h2>
-      <p class="lede">The full Index is free. Find your system and compare it against in-state peers, a cohort matched on size and type, and the national picture.</p>
+      <div class="chapter-head"><span class="chapter-no">Your report</span><h2 id="g-h">Look up <span class="hl">your system</span></h2>
+        <p class="lede">Every system in the index has its own report: its score and grade, how it compares with in-state systems and a peer group matched on size and setting, and the call-by-call detail behind its phone results. Access is free.</p></div>
       <form id="gate-form" novalidate>
         <div><label for="g-name">Full name</label><input id="g-name" name="name" autocomplete="name" required><div class="err" id="e-name"></div></div>
         <div><label for="g-email">Work email</label><input id="g-email" name="email" type="email" autocomplete="email" required aria-describedby="e-email"><div class="err" id="e-email" aria-live="polite"></div></div>
         <div><label for="g-org">Organization</label><input id="g-org" name="org" autocomplete="organization" required><div class="err" id="e-org"></div></div>
         <div><label for="g-role">Role</label>
           <select id="g-role" name="role" required>
-            <option value="">Choose one</option><option>CEO / President</option><option>COO / Operations</option><option>VP / Director, Patient Access</option><option>CIO / IT</option><option>Practice / Clinic Manager</option><option>Other</option>
+            <option value="">Choose one</option><option>Chief executive / President</option><option>Chief operating officer / Operations</option><option>Patient access leader</option><option>Information technology leader</option><option>Practice or clinic manager</option><option>Other</option>
           </select><div class="err" id="e-role"></div></div>
-        <div class="form-end"><button class="btn" type="submit">Open the Index</button><span class="muted">We'll only use this to send you the report.</span></div>
+        <div class="form-end"><button class="btn" type="submit">Open the full index</button><span class="muted">We'll only use this to send you the report.</span></div>
       </form>
     </div>
   </section>
 
   <section class="block" id="explorer" hidden aria-labelledby="x-h">
     <div class="wrap">
-      <h2 id="x-h">Explore the Index</h2>
+      <div class="chapter-head"><span class="chapter-no">Full index</span><h2 id="x-h" tabindex="-1">Explore <span class="hl">the index</span></h2></div>
       <div class="picker">
-        <label for="sys-q">Find a system</label>
-        <input id="sys-q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sys-list" placeholder="Start typing a system name or state" autocomplete="off">
+        <label for="sys-q">Find a health system</label>
+        <input id="sys-q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sys-list" placeholder="Start typing a system name or a state" autocomplete="off">
         <ul id="sys-list" role="listbox" hidden></ul>
         <div class="picked" id="picked" aria-live="polite"></div>
       </div>
-      <div role="tablist" aria-label="Explorer views">
-        <button role="tab" id="t-sys" aria-controls="p-sys" aria-selected="true">Your system</button>
-        <button role="tab" id="t-state" aria-controls="p-state" aria-selected="false" tabindex="-1">Your state</button>
-        <button role="tab" id="t-peers" aria-controls="p-peers" aria-selected="false" tabindex="-1">Your peers</button>
-        <button role="tab" id="t-nat" aria-controls="p-nat" aria-selected="false" tabindex="-1">National</button>
+      <div role="tablist" aria-label="Report views">
+        <button role="tab" id="t-sys" aria-controls="p-sys" aria-selected="true">System report</button>
+        <button role="tab" id="t-state" aria-controls="p-state" aria-selected="false" tabindex="-1">State report</button>
+        <button role="tab" id="t-peers" aria-controls="p-peers" aria-selected="false" tabindex="-1">Peer group</button>
+        <button role="tab" id="t-nat" aria-controls="p-nat" aria-selected="false" tabindex="-1">National explorer</button>
       </div>
       <div role="tabpanel" id="p-sys" aria-labelledby="t-sys"></div>
       <div role="tabpanel" id="p-state" aria-labelledby="t-state" hidden></div>
       <div role="tabpanel" id="p-peers" aria-labelledby="t-peers" hidden></div>
       <div role="tabpanel" id="p-nat" aria-labelledby="t-nat" hidden></div>
 
-      <div class="close-cta" style="margin-top:40px">
-        <h2>Get your system's <span class="hl">full breakdown</span></h2>
-        <p>We'll send a line-by-line view of your system: which clinic numbers were answered and how fast, what callers hear after hours, and which website fixes would move your score the most.</p>
-        <button class="btn" id="cta-btn" type="button">Send me my breakdown</button>
+      <div class="close-cta">
+        <h2>Get your system's <span class="hl">line-by-line</span> results</h2>
+        <p>We'll send the detail behind your score: which clinic numbers were answered and how fast, morning against afternoon, what callers hear after hours, and which website fixes would move your score the most.</p>
+        <button class="btn" id="cta-btn" type="button">Send me the line-by-line results</button>
         <p id="cta-msg" aria-live="polite" style="margin-bottom:0"></p>
-        <p class="muted" style="margin-top:18px">Clarus helps health systems answer more patient calls. <a href="#">See more research in Resources</a></p>
       </div>
     </div>
   </section>
@@ -302,13 +544,14 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 <footer class="site">
   <div class="wrap cols">
     <div><img src="assets/clarus-logo-white.png" alt="Clarus"><p style="margin:0">A Graham Holdings Company</p></div>
-    <div><h4>Solutions</h4><ul><li><a href="#">Call management</a></li><li><a href="#">After-hours</a></li></ul></div>
+    <div><h4>The index</h4><ul><li><a href="#map">National picture</a></li><li><a href="#method">Methodology</a></li></ul></div>
     <div><h4>Resources</h4><ul><li><a href="#">Research</a></li><li><a href="#">Blog</a></li></ul></div>
     <div><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Contact</a></li></ul></div>
   </div>
 </footer>
 
 <script src="vendor/chart.umd.min.js"></script>
+<script src="data/us_states.js"></script>
 <script src="data/dfd_index.js"></script>
 <script src="app.js"></script>
 </body>

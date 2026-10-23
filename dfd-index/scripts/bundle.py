@@ -5,7 +5,7 @@ root = Path(__file__).resolve().parent.parent
 html = (root / "index.html").read_text()
 inline = lambda tag, p: f"<{tag}>\n" + (root / p).read_text().replace("</script", "<\\/script") + f"\n</{tag}>"
 html = html.replace('<link rel="stylesheet" href="tokens.css">', inline("style", "tokens.css"))
-for src in ["vendor/chart.umd.min.js", "data/dfd_index.js", "app.js"]:
+for src in ["vendor/chart.umd.min.js", "data/us_states.js", "data/dfd_index.js", "app.js"]:
     html = html.replace(f'<script src="{src}"></script>', inline("script", src))
 import base64
 for img in ["assets/clarus-logo-navy.png", "assets/clarus-logo-white.png"]:

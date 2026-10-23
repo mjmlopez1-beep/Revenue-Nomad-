@@ -75,8 +75,8 @@ NAME_B = ["field", "brook", "ridge", "vale", "crest", "haven", "mere", "wood", "
           "hollow", "bend", "run", "springs", "gate", "moor", "fall", "point", "reach"]
 SUFFIX = {
     "Rural health system": ["Regional Health", "Health System", "Valley Health", "Health Partners"],
-    "FQHC": ["Community Health Center", "Family Health Centers", "Community Clinics",
-             "Health Collaborative"],
+    "Community health center": ["Community Health Center", "Family Health Centers",
+                                "Community Clinics", "Health Collaborative"],
     "Community hospital": ["Memorial Hospital", "Community Hospital", "Medical Center"],
     "Multi-specialty group": ["Medical Group", "Physicians Group", "Clinic Network",
                               "Specialty Partners"],
@@ -142,11 +142,18 @@ def shape_from_frame(fr, rng):
 
 def shape_topup(state, rng):
     """Top-up records: rural systems and FQHCs with 5+ locations."""
-    stype = "FQHC" if rng.random() < 0.6 else "Rural health system"
+    stype = "Community health center" if rng.random() < 0.6 else "Rural health system"
     loc = int(clamp(round(rng.lognormvariate(math.log(9), 0.55)), 5, 60))
     prov = int(clamp(round(loc * rng.uniform(2.5, 6)), 10, 400))
     rur = "Rural" if rng.random() < 0.65 else ("Micropolitan" if rng.random() < 0.7 else "Metro")
     return stype, loc, prov, rur
+
+
+# States differ in labor markets, payer mix and how centralized their systems
+# are, so each state gets its own shift in access maturity. Oregon stays at
+# zero so it remains calibrated to the measured field test.
+_fx = random.Random(SEED + 7)
+STATE_FX = {st: (0.0 if st == "OR" else _fx.gauss(0, 0.45)) for st in sorted(STATE_NAMES)}
 
 
 def size_band(loc):
@@ -163,10 +170,10 @@ def size_band(loc):
 
 def gen_metrics(stype, loc, rur, state, rng):
     """Correlated access metrics from one latent 'access maturity' factor."""
-    m = rng.gauss(0, 1)
+    m = rng.gauss(0, 1) + STATE_FX.get(state, 0.0)
     big = math.log(loc) / math.log(150)            # 0..1
     rural = {"Rural": 1.0, "Micropolitan": 0.5, "Metro": 0.0}[rur]
-    fqhc = 1.0 if stype == "FQHC" else 0.0
+    fqhc = 1.0 if stype == "Community health center" else 0.0
 
     # Phone. Bigger systems centralise into IVR menus; deep menus mean longer waits.
     ivr = clamp(round(0.6 + 2.6 * big - 0.5 * rural - 0.45 * m + rng.gauss(0, 0.7)), 0, 5)
@@ -177,10 +184,9 @@ def gen_metrics(stype, loc, rur, state, rng):
     ans = clamp(0.53 + 0.12 * m - 0.03 * (ivr - 1.5) - 0.05 * (math.log(tth) - math.log(58))
                 + 0.04 * rural + rng.gauss(0, 0.10), 0.05, 1.0)
     if state == "OR":  # nudge toward the measured Oregon aggregate
-        ans = clamp(ans - 0.05, 0.05, 1.0)
-        tth = int(clamp(round(tth * 1.15), 1, 1200))
-    abandon = clamp(0.05 + 0.04 * (math.log(tth) - math.log(58)) - 0.02 * m + rng.gauss(0, 0.03),
-                    0.0, 0.45)
+        ans = clamp(ans + 0.06, 0.05, 1.0)
+        tth = int(clamp(round(tth * 0.95), 1, 1200))
+    calls = simulate_calls(ans, tth, m, loc, rng)
 
     # After hours.
     p_live = clamp(0.10 + 0.08 * m + 0.06 * big, 0.02, 0.4)
@@ -215,10 +221,8 @@ def gen_metrics(stype, loc, rur, state, rng):
     wcag_v = int(clamp(round(rng.lognormvariate(math.log(9), 0.7) * math.exp(-0.25 * m)), 0, 80))
 
     return {
-        "answer_rate": round(ans, 3),
-        "time_to_human_s": tth,
+        **calls,
         "ivr_layers": int(ivr),
-        "abandon_rate": round(abandon, 3),
         "ah_outcome": ah,
         "ah_urgent_path": bool(urgent),
         "online_booking": bool(booking),
@@ -230,6 +234,68 @@ def gen_metrics(stype, loc, rur, state, rng):
         "hours_within_2_clicks": bool(hours2),
         "mobile_responsive": bool(mobile),
         "wcag_violations": wcag_v,
+    }
+
+
+CAP_S = 1200  # 20-minute cap per call
+
+
+def simulate_calls(ans, tth, m, loc, rng):
+    """Simulate line-level calls the way the voice-agent batches capture them.
+
+    Each clinic line gets a mid-morning and (usually) an early-afternoon call.
+    Lines vary around the system's typical answer rate and wait, and afternoons
+    run a little worse, which is the pattern the Oregon batch showed. Every
+    aggregate below is computed from these simulated calls, so the fields stay
+    internally consistent exactly as real call logs would.
+    """
+    lines = int(clamp(round(loc * rng.uniform(1.0, 1.7)), 3, 60))
+    base = math.log(ans / (1 - ans)) if 0 < ans < 1 else (4 if ans >= 1 else -4)
+    pm_shift = rng.gauss(-0.35, 0.3)
+    waits, reached = [], {"am": [0, 0], "pm": [0, 0]}
+    full_hold = dropped = 0
+    lines_never = 0
+    for _ in range(lines):
+        g = rng.gauss(0, 0.7)
+        got_any = False
+        for window in ("am", "pm"):
+            if window == "pm" and rng.random() < 0.12:
+                continue
+            logit = base + g + (pm_shift if window == "pm" else 0)
+            ok = rng.random() < 1 / (1 + math.exp(-logit))
+            reached[window][1] += 1
+            if ok:
+                w = math.exp(math.log(tth) - 0.35 * g + (0.15 if window == "pm" else 0) + rng.gauss(0, 0.85))
+                waits.append(int(clamp(round(w), 1, CAP_S - 1)))
+                reached[window][0] += 1
+                got_any = True
+            else:
+                u = rng.random()
+                if u < clamp(0.18 - 0.05 * m, 0.03, 0.4):
+                    full_hold += 1
+                elif u < clamp(0.30 - 0.06 * m, 0.08, 0.55):
+                    dropped += 1
+        lines_never += not got_any
+    placed = reached["am"][1] + reached["pm"][1]
+    got = reached["am"][0] + reached["pm"][0]
+    waits.sort()
+    pick = lambda q: waits[min(len(waits) - 1, int(q * (len(waits) - 1)))] if waits else CAP_S
+    rate = lambda w: round(reached[w][0] / reached[w][1], 3) if reached[w][1] else None
+    return {
+        "lines_tested": lines,
+        "calls_placed": placed,
+        "calls_reached": got,
+        "answer_rate": round(got / placed, 3),
+        "answer_rate_morning": rate("am"),
+        "answer_rate_afternoon": rate("pm"),
+        "time_to_human_s": pick(0.5),
+        "wait_p90_s": pick(0.9),
+        "longest_wait_s": waits[-1] if waits else None,
+        "share_waits_over_2min": round(sum(w > 120 for w in waits) / len(waits), 3) if waits else None,
+        "calls_full_hold": full_hold,
+        "calls_dropped_on_hold": dropped,
+        "abandon_rate": round((full_hold + dropped) / placed, 3),
+        "lines_never_answered": lines_never,
     }
 
 

@@ -1,178 +1,496 @@
-/* Digital Front Door Index: concept page logic.
-   Every sentence below the hero is generated from the data at render time,
-   so refreshing dfd_index.js refreshes the narrative. */
+/* Digital Front Door Index: report page logic.
+   Every number and sentence on the page is computed from the dataset at
+   render time, so replacing dfd_index.js with measured data rewrites the
+   report without touching this file. */
 (function () {
   "use strict";
 
-  const D = window.DFD_DATA;
-  const META = D.meta;
-  const COLS = D.cols;
+  // ---------- data ----------
+  const D = window.DFD_DATA, META = D.meta, COLS = D.cols, GEO = window.US_STATES;
   const N = COLS.system_id.length;
-  const SYS = Array.from({ length: N }, (_, i) => {
-    const r = {};
-    for (const k in COLS) r[k] = COLS[k][i];
-    return r;
-  });
+  const SYS = Array.from({ length: N }, (_, i) => { const r = {}; for (const k in COLS) r[k] = COLS[k][i]; return r; });
   const BY_ID = Object.fromEntries(SYS.map(r => [r.system_id, r]));
   const STATES = META.state_names;
+  const ST_CODES = Object.keys(STATES).filter(s => GEO.paths[s]);
+  const BY_STATE = {}; SYS.forEach(r => (BY_STATE[r.state] = BY_STATE[r.state] || []).push(r));
+  const MEASURED_STATES = { OR: META.oregon_measured };
   const PILLARS = [
-    { key: "phone", label: "Phone Access", desc: "Answer rate, time to a live person, phone menu depth and calls that drop on hold." },
-    { key: "after_hours", label: "After-Hours", desc: "What a caller reaches outside business hours, and whether an urgent path is offered." },
-    { key: "digital", label: "Digital Self-Service", desc: "Online booking for new patients, portal, request forms, visible availability, tap-to-call." },
-    { key: "findability", label: "Findability & Accessibility", desc: "Number and hours within two clicks, mobile layout, and a WCAG 2.1 AA signal check." },
+    { key: "phone", label: "Phone access", short: "Phone", items: ["Share of calls that reach a person", "Time to reach a person", "Phone menu layers", "Calls dropped or held to the cap"] },
+    { key: "after_hours", label: "After hours", short: "After hours", items: ["Who answers after 6 p.m.", "Whether an urgent path is offered"] },
+    { key: "digital", label: "Digital self-service", short: "Digital", items: ["Online booking for new patients", "Patient portal", "Request forms", "Next available appointment shown", "Tap-to-call on a phone"] },
+    { key: "findability", label: "Findability and accessibility", short: "Findability", items: ["Number within two clicks", "Hours within two clicks", "Works on a phone", "Accessibility scan"] },
   ];
-  const AH_LABEL = { live: "Live person", service: "Answering service", voicemail: "Voicemail only", dead: "Dead line / no message" };
+  const AH = { live: "Live person", service: "Answering service", voicemail: "Voicemail only", dead: "No answer or message" };
+  const AH_KEYS = ["live", "service", "voicemail", "dead"];
+  const TYPES = ["Rural health system", "Community health center", "Community hospital", "Multi-specialty group"];
+  const RURS = ["Rural", "Micropolitan", "Metro"];
+  const SIZES = ["1-4", "5-9", "10-24", "25-49", "50+"];
+  const SIZE_LABEL = { "1-4": "1–4 locations", "5-9": "5–9 locations", "10-24": "10–24 locations", "25-49": "25–49 locations", "50+": "50+ locations" };
+  const CAP = 1200;
 
   // ---------- helpers ----------
   const $ = s => document.querySelector(s);
-  const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const k in attrs) e.setAttribute(k, attrs[k]); e.innerHTML = html; return e; };
   const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const pct = (x, d = 0) => (100 * x).toFixed(d) + "%";
-  const mean = a => a.reduce((s, x) => s + x, 0) / (a.length || 1);
-  const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const pct = (x, d = 0) => x == null || isNaN(x) ? "–" : (100 * x).toFixed(d) + "%";
+  const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN;
+  const median = a => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
   const quantile = (a, q) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.max(0, Math.floor(q * (s.length - 1))))]; };
-  const share = (rows, f) => rows.filter(f).length / (rows.length || 1);
-  const fmtSec = s => s < 60 ? `${Math.round(s)} seconds` : (s < 120 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${(s / 60).toFixed(s < 600 ? 1 : 0)} minutes`);
-  const fmtSecShort = s => s < 60 ? `${Math.round(s)}s` : `${(s / 60).toFixed(1)} min`;
+  const share = (rows, f) => rows.length ? rows.filter(f).length / rows.length : NaN;
+  const sum = (rows, k) => rows.reduce((s, r) => s + (r[k] || 0), 0);
+  const fmtInt = n => Math.round(n).toLocaleString();
+  const fmtWait = s => s == null || isNaN(s) ? "–" : s >= CAP ? "No call answered" : s < 60 ? `${Math.round(s)} sec` : s < 600 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} sec` : `${Math.round(s / 60)} min`;
+  const fmtWaitShort = s => s == null || isNaN(s) ? "–" : s >= CAP ? "none" : s < 60 ? `${Math.round(s)}s` : `${(s / 60).toFixed(1)} min`;
+  const ord = n => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
   const bandOf = s => { for (const [l, f] of META.bands) if (s >= f) return l; return "F"; };
   const bandColor = l => css(`--band-${l.toLowerCase()}`);
-  const bandChip = l => `<span class="band ${l}" style="background:${bandColor(l)}" aria-label="Grade ${l}">${l}</span>`;
-  const modeled = v => `<span class="modeled-val" title="Modeled sample data">${v}</span>`;
+  const bandChip = (l, lg) => `<span class="band ${l}${lg ? " lg" : ""}" style="background:${bandColor(l)}" aria-label="Grade ${l}">${l}</span>`;
+  const MODELED = `<span class="chip modeled">modeled</span>`;
+  const MEASURED = `<span class="chip measured">measured</span>`;
   const pearson = (x, y) => { const mx = mean(x), my = mean(y); let n = 0, dx = 0, dy = 0; for (let i = 0; i < x.length; i++) { const a = x[i] - mx, b = y[i] - my; n += a * b; dx += a * a; dy += b * b; } return n / Math.sqrt(dx * dy || 1); };
-  const percentileOf = (rows, r) => share(rows, x => x.dfd_score < r.dfd_score);
-  const ord = n => { const s = ["th", "st", "nd", "rd"], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+  const answered = r => r.calls_reached > 0;
+  const pooledAnswer = rows => sum(rows, "calls_reached") / (sum(rows, "calls_placed") || 1);
+  const typicalWait = rows => median(rows.filter(answered).map(r => r.time_to_human_s));
+  const isGood = o => o === "live" || o === "service";
+  const smallNote = n => n < 20 ? ` <span class="muted">(small sample: ${n} systems)</span>` : "";
 
-  function tableHTML(headers, rows) {
-    return `<div class="table-wrap"><table><thead><tr>${headers.map(h => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  function table(headers, rows, opts = {}) {
+    const th = headers.map((h, i) => `<th scope="col" class="${opts.num && opts.num.includes(i) ? "n" : ""}">${h}</th>`).join("");
+    const tr = rows.map(r => `<tr>${r.map((c, i) => `<td class="${opts.num && opts.num.includes(i) ? "n" : ""}">${c}</td>`).join("")}</tr>`).join("");
+    return `<div class="table-wrap${opts.scroll ? " scroll" : ""}"><table><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`;
   }
+
+  // ---------- group statistics ----------
+  function stats(rows) {
+    return {
+      n: rows.length,
+      score: mean(rows.map(r => r.dfd_score)),
+      phone: mean(rows.map(r => r.phone_score)),
+      after_hours: mean(rows.map(r => r.after_hours_score)),
+      digital: mean(rows.map(r => r.digital_score)),
+      findability: mean(rows.map(r => r.findability_score)),
+      answer: pooledAnswer(rows),
+      wait: typicalWait(rows),
+      booking: share(rows, r => r.online_booking),
+      ahGood: share(rows, r => isGood(r.ah_outcome)),
+      calls: sum(rows, "calls_placed"),
+      lines: sum(rows, "lines_tested"),
+    };
+  }
+  const NAT = stats(SYS);
+  const STATE_STATS = Object.fromEntries(ST_CODES.map(s => [s, stats(BY_STATE[s] || [])]));
+  const STATE_RANK = Object.fromEntries([...ST_CODES].sort((a, b) => STATE_STATS[b].score - STATE_STATS[a].score).map((s, i) => [s, i + 1]));
 
   // ---------- charts ----------
   const charts = {};
   function chartDefaults() {
     Chart.defaults.font.family = css("--font-sans");
+    Chart.defaults.font.size = 12;
     Chart.defaults.color = css("--chart-axis");
     Chart.defaults.borderColor = css("--chart-grid");
-    Chart.defaults.animation = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 400 };
+    Chart.defaults.animation = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 450 };
+    Chart.defaults.plugins.tooltip.backgroundColor = css("--navy");
+    Chart.defaults.plugins.tooltip.padding = 10;
+    Chart.defaults.plugins.tooltip.cornerRadius = 8;
   }
-  function barChart(id, labels, data, opts = {}) {
+  function draw(id, cfg) {
+    const el = document.getElementById(id);
+    if (!el) return;
     if (charts[id]) charts[id].destroy();
-    const colors = opts.colors || data.map(() => css("--chart-1"));
-    charts[id] = new Chart(document.getElementById(id), {
+    charts[id] = new Chart(el, cfg);
+  }
+  const pctAxis = { ticks: { callback: v => v + "%" }, beginAtZero: true, max: 100 };
+  function bars(id, labels, data, o = {}) {
+    draw(id, {
       type: "bar",
-      data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: "bottom", maxBarThickness: 46, categoryPercentage: .9, barPercentage: .92 }] },
+      data: { labels, datasets: [{ data, backgroundColor: o.colors || css("--chart-1"), borderRadius: 4, borderSkipped: false, maxBarThickness: o.thick || 44, barPercentage: .82, categoryPercentage: .9 }] },
       options: {
-        responsive: true, maintainAspectRatio: false, indexAxis: opts.horizontal ? "y" : "x",
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => (opts.tip ? opts.tip(c.raw, c.dataIndex) : c.raw) } } },
-        scales: {
-          x: { grid: { display: !!opts.horizontal }, title: { display: !!opts.xTitle, text: opts.xTitle }, ticks: opts.horizontal && opts.pctAxis ? { callback: v => v + "%" } : {} },
-          y: { grid: { display: !opts.horizontal }, beginAtZero: true, title: { display: !!opts.yTitle, text: opts.yTitle }, ticks: !opts.horizontal && opts.pctAxis ? { callback: v => v + "%" } : {} },
-        },
+        responsive: true, maintainAspectRatio: false, indexAxis: o.horizontal ? "y" : "x",
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => o.tip ? o.tip(c.raw, c.dataIndex) : String(c.raw) } } },
+        scales: o.horizontal
+          ? { x: Object.assign({ grid: { color: css("--chart-grid") } }, o.pct ? pctAxis : { beginAtZero: true }, o.xTitle ? { title: { display: true, text: o.xTitle } } : {}), y: { grid: { display: false } } }
+          : { x: { grid: { display: false }, title: { display: !!o.xTitle, text: o.xTitle } }, y: Object.assign({ grid: { color: css("--chart-grid") }, title: { display: !!o.yTitle, text: o.yTitle } }, o.pct ? pctAxis : { beginAtZero: true }) },
       },
     });
   }
   function histogram(rows, bins = 10) {
     const counts = Array(bins).fill(0);
     rows.forEach(r => counts[Math.min(bins - 1, Math.floor(r.dfd_score / (100 / bins)))]++);
-    const labels = counts.map((_, i) => `${i * (100 / bins)}–${(i + 1) * (100 / bins)}`);
-    return { labels, counts };
+    return { labels: counts.map((_, i) => `${i * 10}–${i * 10 + 10}`), counts };
+  }
+  function histChart(id, rows, mark) {
+    const h = histogram(rows);
+    const bin = mark ? Math.min(9, Math.floor(mark.dfd_score / 10)) : -1;
+    const colors = h.counts.map((_, i) => i === bin ? css("--accent") : css("--chart-1"));
+    bars(id, h.labels, h.counts, { colors, xTitle: "Digital Front Door score", yTitle: "Health systems", tip: (v, i) => `${v} systems${i === bin ? " (includes this system)" : ""}` });
+    return h;
   }
 
-  // ---------- hero ----------
-  function renderHero() {
-    $("#hero-n").textContent = N.toLocaleString();
-    const tth = SYS.map(r => r.time_to_human_s).sort((a, b) => a - b);
-    const top = quantile(tth, .1), bottom = quantile(tth, .9);
-    const noBook = share(SYS, r => !r.online_booking);
-    const ahBad = share(SYS, r => r.ah_outcome === "voicemail" || r.ah_outcome === "dead");
-    const wcag = share(SYS, r => r.wcag_violations >= 10);
+  // ---------- cover ----------
+  function renderCover() {
+    const facts = [
+      [fmtInt(N), "health systems"],
+      ["50", "states"],
+      [fmtInt(NAT.calls), "calls placed"],
+      [fmtInt(NAT.lines), "clinic lines"],
+      ["Oct 2026", "published"],
+    ];
+    $("#cover-facts").innerHTML = facts.map(([b, s]) => `<span><b>${b}</b>${s}</span>`).join("");
+    const waits = SYS.filter(answered).map(r => r.time_to_human_s);
+    const fast = quantile(waits, .1), slow = quantile(waits, .9);
+    const am = pooled(SYS, "answer_rate_morning"), pm = pooled(SYS, "answer_rate_afternoon");
     const items = [
-      [pct(noBook), `of systems make a new patient call to book a first appointment. There is no online option.`],
-      [`${Math.round(bottom / top)}×`, `gap in time to reach a person: ${fmtSecShort(top)} for the fastest tenth of systems vs. ${fmtSecShort(bottom)} or more for the slowest tenth.`],
-      [pct(ahBad), `of after-hours calls end in voicemail or a dead line, with no live person or answering service.`],
-      [pct(wcag), `of system websites show 10 or more serious accessibility issues ahead of the May 11, 2027 HHS Section 504 deadline.`],
+      [pct(NAT.answer), `of calls to clinic lines reached a live person. The rest rang out, went to voicemail, dropped or held past 20 minutes.`],
+      [`${Math.round(slow / Math.max(1, fast))}×`, `gap in wait time between the fastest tenth of systems (${fmtWaitShort(fast)}) and the slowest tenth (${fmtWaitShort(slow)}).`],
+      [`${Math.round((am - pm) * 100)} pts`, `lower answer rate in the early afternoon than mid-morning, on the same clinic lines.`],
+      [pct(1 - NAT.booking), `of systems require a new patient to call to book a first appointment.`],
+      [pct(share(SYS, r => r.wcag_violations >= 10)), `of websites show 10 or more serious accessibility issues ahead of the May 11, 2027 federal deadline.`],
     ];
-    $("#findings").innerHTML = items.map(([n, t]) => `<div class="finding"><div class="big">${n}</div><p>${t}</p><span class="chip modeled">modeled</span></div>`).join("");
+    $("#findings").innerHTML = items.map(([n, t]) => `<li class="finding"><div class="big">${n}</div><p>${t}</p></li>`).join("");
+  }
+  // Call-weighted answer rate for one window.
+  function pooled(rows, key) {
+    let num = 0, den = 0;
+    rows.forEach(r => { if (r[key] != null) { const w = r.lines_tested; num += r[key] * w; den += w; } });
+    return den ? num / den : NaN;
   }
 
-  // ---------- Oregon (measured aggregates) ----------
-  function renderOregon() {
-    const o = META.oregon_measured;
-    const stats = [
-      [pct(o.calls_reached_person / o.calls), `of ${o.calls} calls reached a live person (${o.calls_reached_person} of ${o.calls}).`],
-      [`${o.median_wait_s}s`, `median wait for a person. The average was ${Math.round(o.mean_wait_s / 60)} minutes, pulled up by a long tail.`],
-      [`1 in 4`, `answered calls waited more than 2 minutes. 1 in 10 waited more than 5.`],
-      [`${o.calls_hit_20min_cap}`, `calls never reached anyone within our 20-minute cap. ${o.lines_hold_then_disconnect} lines put us on hold and then hung up.`],
-    ];
-    $("#or-stats").innerHTML = stats.map(([n, t]) => `<div class="stat"><div class="n">${n}</div><p>${t}</p></div>`).join("");
-  }
+  // ---------- map ----------
+  const MAP_METRICS = [
+    { key: "score", label: "Overall score", get: s => s.score, fmt: v => v.toFixed(1), up: true },
+    { key: "phone", label: "Phone access", get: s => s.phone, fmt: v => v.toFixed(1), up: true },
+    { key: "after_hours", label: "After hours", get: s => s.after_hours, fmt: v => v.toFixed(1), up: true },
+    { key: "digital", label: "Digital self-service", get: s => s.digital, fmt: v => v.toFixed(1), up: true },
+    { key: "findability", label: "Findability", get: s => s.findability, fmt: v => v.toFixed(1), up: true },
+    { key: "answer", label: "Calls answered", get: s => s.answer, fmt: v => pct(v), up: true },
+    { key: "wait", label: "Wait for a person", get: s => s.wait, fmt: v => fmtWaitShort(v), up: false },
+    { key: "booking", label: "Online booking", get: s => s.booking, fmt: v => pct(v), up: true },
+  ];
+  const SEQ = ["#dbe6fb", "#b7cdf6", "#8fb0ef", "#6a93e6", "#4677d6", "#2b5bbf", "#1a4196", "#0d2a6b"];
+  let mapMetric = MAP_METRICS[0], selState = "OR";
 
-  function renderPillars() {
-    $("#pillars").innerHTML = PILLARS.map((p, i) => `<div class="card pillar"><div class="num">0${i + 1}</div><div class="w">${Math.round(META.weights[p.key] * 100)}% of score</div><h3>${p.label}</h3><p>${p.desc}</p></div>`).join("");
-  }
-
-  // ---------- tile map ----------
-  const TILE = { AK: [0, 0], ME: [0, 11], VT: [1, 10], NH: [1, 11], WA: [2, 1], ID: [2, 2], MT: [2, 3], ND: [2, 4], MN: [2, 5], IL: [2, 6], WI: [2, 7], MI: [2, 8], NY: [2, 9], RI: [2, 10], MA: [2, 11], OR: [3, 1], NV: [3, 2], WY: [3, 3], SD: [3, 4], IA: [3, 5], IN: [3, 6], OH: [3, 7], PA: [3, 8], NJ: [3, 9], CT: [3, 10], CA: [4, 1], UT: [4, 2], CO: [4, 3], NE: [4, 4], MO: [4, 5], KY: [4, 6], WV: [4, 7], VA: [4, 8], MD: [4, 9], DE: [4, 10], AZ: [5, 2], NM: [5, 3], KS: [5, 4], AR: [5, 5], TN: [5, 6], NC: [5, 7], SC: [5, 8], OK: [6, 4], LA: [6, 5], MS: [6, 6], AL: [6, 7], GA: [6, 8], HI: [7, 0], TX: [7, 4], FL: [7, 9] };
-  const SEQ = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
-  function stateAverages(rows) {
-    const g = {};
-    rows.forEach(r => (g[r.state] = g[r.state] || []).push(r.dfd_score));
-    const out = {};
-    for (const s in g) out[s] = { avg: mean(g[s]), n: g[s].length };
-    return out;
-  }
-  function renderTileMap(container, rows, opts = {}) {
-    const avgs = stateAverages(rows);
-    const vals = Object.values(avgs).map(a => a.avg);
-    const lo = Math.floor(Math.min(...vals) / 2) * 2, hi = Math.ceil(Math.max(...vals) / 2) * 2;
-    const step = (hi - lo) / SEQ.length || 1;
-    const colorFor = v => SEQ[Math.min(SEQ.length - 1, Math.floor((v - lo) / step))];
-    container.innerHTML = "";
-    const cells = Array(8 * 12).fill(null);
-    for (const s in TILE) cells[TILE[s][0] * 12 + TILE[s][1]] = s;
-    cells.forEach(s => {
-      if (!s || !avgs[s]) { container.appendChild(el("div", { class: "tile empty", "aria-hidden": "true" })); return; }
-      const v = avgs[s].avg, c = colorFor(v), dark = SEQ.indexOf(c) >= 3;
-      const b = el("button", { class: "tile" + (opts.selected === s ? " sel" : ""), type: "button", title: `${STATES[s]}: average ${v.toFixed(1)} across ${avgs[s].n} systems`, "aria-label": `${STATES[s]}, average ${v.toFixed(1)}` }, `${s}<span>${Math.round(v)}</span>`);
-      b.style.background = c; b.style.color = dark ? "#fff" : "#0b0b0b";
-      if (opts.onPick) b.addEventListener("click", () => opts.onPick(s));
-      container.appendChild(b);
+  function buildMap(svg, onPick, onHover) {
+    svg.setAttribute("viewBox", GEO.viewBox);
+    const NS = "http://www.w3.org/2000/svg";
+    const tiny = new Set(["VT", "NH", "MA", "RI", "CT", "NJ", "DE", "MD", "HI"]);
+    const paths = {}, labels = {};
+    ST_CODES.forEach(s => {
+      const p = document.createElementNS(NS, "path");
+      p.setAttribute("d", GEO.paths[s]);
+      p.setAttribute("tabindex", "0");
+      p.setAttribute("role", "button");
+      p.dataset.state = s;
+      p.addEventListener("click", () => onPick(s));
+      p.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(s); } });
+      if (onHover) {
+        p.addEventListener("mousemove", e => onHover(s, e));
+        p.addEventListener("mouseleave", () => onHover(null));
+        p.addEventListener("focus", () => onHover(s, null, p));
+        p.addEventListener("blur", () => onHover(null));
+      }
+      svg.appendChild(p); paths[s] = p;
     });
-    if (opts.legend) opts.legend.innerHTML = "Lower " + SEQ.map((c, i) => `<span><i style="background:${c}"></i>${Math.round(lo + i * step)}</span>`).join("") + " Higher";
-    if (opts.table) {
-      const rowsT = Object.entries(avgs).sort((a, b) => b[1].avg - a[1].avg).map(([s, a]) => [STATES[s], a.avg.toFixed(1), a.n]);
-      opts.table.innerHTML = tableHTML(["State", "Average DFD Score", "Systems"], rowsT);
-    }
+    ST_CODES.forEach(s => {
+      if (tiny.has(s) || !GEO.labels[s]) return;
+      const t = document.createElementNS(NS, "text");
+      t.setAttribute("x", GEO.labels[s][0]); t.setAttribute("y", GEO.labels[s][1] + 4);
+      t.setAttribute("text-anchor", "middle"); t.setAttribute("aria-hidden", "true");
+      t.textContent = s; svg.appendChild(t); labels[s] = t;
+    });
+    return {
+      color(values, metric, sel) {
+        const vals = Object.values(values).filter(v => !isNaN(v));
+        const lo = Math.min(...vals), hi = Math.max(...vals);
+        const step = (hi - lo) / SEQ.length || 1;
+        const idx = v => { let i = Math.min(SEQ.length - 1, Math.floor((v - lo) / step)); return metric.up ? i : SEQ.length - 1 - i; };
+        ST_CODES.forEach(s => {
+          const v = values[s], p = paths[s];
+          if (v == null || isNaN(v)) { p.style.fill = css("--surface-2"); p.setAttribute("aria-label", `${STATES[s]}: no systems in this view`); if (labels[s]) labels[s].style.fill = css("--ink-muted"); return; }
+          const i = idx(v);
+          p.style.fill = SEQ[i];
+          p.classList.toggle("sel", s === sel);
+          p.setAttribute("aria-label", `${STATES[s]}, ${metric.label} ${metric.fmt(v)}`);
+          if (labels[s]) labels[s].style.fill = i >= 4 ? "#fff" : "#071d49";
+        });
+        return { lo, hi, step };
+      },
+    };
   }
 
-  // ---------- ungated teasers ----------
-  function renderTeasers() {
-    renderTileMap($("#tilemap-teaser"), SYS, { legend: $("#map-legend"), table: $("#map-table") });
+  let mainMap;
+  function initMap() {
+    const sw = $("#metric-switch");
+    sw.innerHTML = MAP_METRICS.map((m, i) => `<button type="button" aria-pressed="${i === 0}" data-k="${m.key}">${m.label}</button>`).join("");
+    sw.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      mapMetric = MAP_METRICS.find(m => m.key === b.dataset.k);
+      sw.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      colorMain();
+    });
+    const tip = $("#map-tip"), card = $(".map-card");
+    mainMap = buildMap($("#us-map"), pickState, (s, e, el) => {
+      if (!s) { tip.hidden = true; return; }
+      const st = STATE_STATS[s], rect = card.getBoundingClientRect();
+      let x, y;
+      if (e) { x = e.clientX - rect.left; y = e.clientY - rect.top; }
+      else { const b = el.getBoundingClientRect(); x = b.left + b.width / 2 - rect.left; y = b.top + b.height / 2 - rect.top; }
+      tip.innerHTML = `<b>${STATES[s]}</b><div class="row"><span>Overall score</span><span>${st.score.toFixed(1)} (${bandOf(st.score)})</span></div>`
+        + (mapMetric.key !== "score" ? `<div class="row"><span>${mapMetric.label}</span><span>${mapMetric.fmt(mapMetric.get(st))}</span></div>` : "")
+        + `<div class="row"><span>Rank among states</span><span>${STATE_RANK[s]} of 50</span></div><div class="row"><span>Systems measured</span><span>${st.n}</span></div>`
+        + (MEASURED_STATES[s] ? `<div class="row"><span>Field test</span><span>measured</span></div>` : "");
+      tip.style.left = Math.max(100, Math.min(rect.width - 100, x)) + "px";
+      tip.style.top = Math.max(110, y) + "px";
+      tip.hidden = false;
+    });
+    const small = $("#small-states");
+    ["VT", "NH", "MA", "RI", "CT", "NJ", "DE", "MD", "HI"].forEach(s => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = s; b.setAttribute("aria-label", STATES[s]);
+      b.addEventListener("click", () => pickState(s)); small.appendChild(b);
+    });
+    const sel = $("#state-select");
+    sel.innerHTML = [...ST_CODES].sort((a, b) => STATES[a].localeCompare(STATES[b])).map(s => `<option value="${s}">${STATES[s]}</option>`).join("");
+    sel.addEventListener("change", () => pickState(sel.value));
+    colorMain();
+    renderStatePanel();
+    renderStateTable();
+  }
+  function colorMain() {
+    const vals = Object.fromEntries(ST_CODES.map(s => [s, mapMetric.get(STATE_STATS[s])]));
+    const sc = mainMap.color(vals, mapMetric, selState);
+    legend($("#map-legend"), sc, mapMetric);
+  }
+  function legend(el, sc, metric) {
+    const ramp = SEQ.map(c => `<i style="background:${c}"></i>`).join("");
+    const lo = metric.fmt(metric.up ? sc.lo : sc.hi), hi = metric.fmt(metric.up ? sc.hi : sc.lo);
+    el.innerHTML = `<span>${metric.label}:</span><span class="num">${lo}</span><span class="ramp" aria-hidden="true">${ramp}</span><span class="num">${hi}</span><span>Darker is better</span> ${MODELED}`;
+  }
+  function pickState(s) {
+    selState = s;
+    $("#state-select").value = s;
+    colorMain();
+    renderStatePanel();
+    if (window.matchMedia("(max-width: 960px)").matches) $("#state-panel").scrollIntoView({ block: "start" });
+  }
 
-    const h = histogram(SYS);
-    barChart("c-hist", h.labels, h.counts, { xTitle: "DFD Score", yTitle: "Systems", tip: v => `${v} systems` });
-    const q1 = quantile(SYS.map(r => r.dfd_score), .25), q3 = quantile(SYS.map(r => r.dfd_score), .75);
-    $("#hist-cap").textContent = `Half of all systems score between ${q1.toFixed(0)} and ${q3.toFixed(0)}. Only ${share(SYS, r => r.dfd_band === "A").toLocaleString(undefined, { style: "percent", maximumFractionDigits: 1 })} earn an A.`;
-    $("#hist-table").innerHTML = tableHTML(["Score range", "Systems"], h.labels.map((l, i) => [l, h.counts[i]]));
+  function gradeBar(rows) {
+    const g = ["A", "B", "C", "D", "F"].map(l => [l, rows.filter(r => r.dfd_band === l).length]);
+    return `<div class="gradebar" role="img" aria-label="Grades: ${g.map(([l, n]) => `${n} ${l}`).join(", ")}">${g.filter(([, n]) => n).map(([l, n]) => `<span class="${l}" style="flex:${n};background:${bandColor(l)}" title="${n} systems graded ${l}">${n / rows.length > .06 ? l : ""}</span>`).join("")}</div>`;
+  }
+  function cmpRows(st) {
+    return `<div class="cmp-rows">${PILLARS.map(p => `<div class="cmp-row"><span>${p.label}</span><b class="num">${st[p.key].toFixed(1)} <span class="muted" style="font-weight:400">vs ${NAT[p.key].toFixed(1)}</span></b><div class="track" aria-hidden="true"><i style="width:${st[p.key]}%"></i><u style="left:${NAT[p.key]}%"></u></div></div>`).join("")}</div><p class="muted" style="margin:-4px 0 0">Bars show the state average. The dark tick marks the national average.</p>`;
+  }
+  function stateNarrative(s) {
+    const st = STATE_STATS[s], rows = BY_STATE[s];
+    const gaps = PILLARS.map(p => ({ p, d: st[p.key] - NAT[p.key] })).sort((a, b) => b.d - a.d);
+    const best = gaps[0], worst = gaps[gaps.length - 1];
+    const spread = Math.max(...rows.map(r => r.dfd_score)) - Math.min(...rows.map(r => r.dfd_score));
+    const dir = Math.abs(st.score - NAT.score) < 1.5 ? "close to the national average" : st.score > NAT.score ? `${(st.score - NAT.score).toFixed(1)} points above the national average` : `${(NAT.score - st.score).toFixed(1)} points below the national average`;
+    return `${STATES[s]}'s ${rows.length} measured systems average ${st.score.toFixed(1)}, ${dir}. The state compares best on <b>${best.p.label.toLowerCase()}</b> (${best.d >= 0 ? "+" : ""}${best.d.toFixed(1)}) and least well on <b>${worst.p.label.toLowerCase()}</b> (${worst.d >= 0 ? "+" : ""}${worst.d.toFixed(1)}). The highest and lowest systems in the state are ${spread.toFixed(0)} points apart, so where a patient lives within ${STATES[s]} matters as much as the state itself.`;
+  }
+  function renderStatePanel() {
+    const s = selState, st = STATE_STATS[s], rows = BY_STATE[s];
+    const top = [...rows].sort((a, b) => b.dfd_score - a.dfd_score).slice(0, 3);
+    const m = MEASURED_STATES[s];
+    $("#state-panel").innerHTML = `
+      <div class="head"><div><p class="eyebrow" style="margin:0 0 4px">State profile</p><h3>${STATES[s]}</h3></div>${m ? MEASURED : MODELED}</div>
+      <div class="bigscore"><b>${st.score.toFixed(1)}</b>${bandChip(bandOf(st.score))}<span class="muted">Rank ${STATE_RANK[s]} of 50</span></div>
+      <div class="muted">${st.n} health systems · ${fmtInt(st.calls)} calls to ${fmtInt(st.lines)} clinic lines${smallNote(st.n)}</div>
+      ${cmpRows(st)}
+      <div class="kv">
+        <div><b>${pct(st.answer)}</b><span>Calls reaching a person (U.S. ${pct(NAT.answer)})</span></div>
+        <div><b>${fmtWaitShort(st.wait)}</b><span>Typical wait (U.S. ${fmtWaitShort(NAT.wait)})</span></div>
+        <div><b>${pct(st.ahGood)}</b><span>Reach a person or service after hours</span></div>
+        <div><b>${pct(st.booking)}</b><span>Offer online booking</span></div>
+      </div>
+      <div class="muted" style="margin-top:6px">Grades of ${STATES[s]} systems</div>${gradeBar(rows)}
+      ${m ? `<p class="narr"><b>Measured field test:</b> ${m.calls_reached_person} of ${m.calls} calls (${pct(m.calls_reached_person / m.calls)}) reached a person on ${new Date(m.measured_at + "T12:00").toLocaleDateString("en-US", { month: "long", day: "numeric" })}, with a median wait of ${m.median_wait_s} seconds across ${m.clinic_lines} clinic lines.</p>` : ""}
+      <p class="narr">${stateNarrative(s)}</p>
+      <h4 style="margin:16px 0 6px">Highest-scoring systems</h4>
+      ${table(["System", "Score"], top.map(r => [esc(r.system_name), `${r.dfd_score.toFixed(1)} ${bandChip(r.dfd_band)}`]), { num: [1] })}
+      <p style="margin:14px 0 0"><a href="${gateIsOpen() ? "#explorer" : "#gate"}" id="panel-full">See every ${STATES[s]} system in the full state report</a></p>`;
+    $("#panel-full").addEventListener("click", e => {
+      if (!gateIsOpen()) return;
+      e.preventDefault();
+      const pick = [...rows].sort((a, b) => b.dfd_score - a.dfd_score)[Math.floor(rows.length / 2)];
+      select(pick); activateTab("t-state"); $("#explorer").scrollIntoView();
+    });
+  }
+
+  let stSort = { key: "rank", dir: 1 };
+  function renderStateTable() {
+    const cols = [
+      ["rank", "Rank", s => STATE_RANK[s], v => v],
+      ["name", "State", s => STATES[s], v => v],
+      ["score", "Score", s => STATE_STATS[s].score, (v, s) => `<span class="inbar"><i style="width:${v}%"></i></span>${v.toFixed(1)} ${bandChip(bandOf(v))}`],
+      ["n", "Systems", s => STATE_STATS[s].n, v => v],
+      ["answer", "Calls answered", s => STATE_STATS[s].answer, v => pct(v)],
+      ["wait", "Typical wait", s => STATE_STATS[s].wait, v => fmtWaitShort(v)],
+      ["ah", "After hours", s => STATE_STATS[s].ahGood, v => pct(v)],
+      ["booking", "Online booking", s => STATE_STATS[s].booking, v => pct(v)],
+    ];
+    const c = cols.find(x => x[0] === stSort.key);
+    const order = [...ST_CODES].sort((a, b) => { const x = c[2](a), y = c[2](b); return (x > y ? 1 : x < y ? -1 : 0) * stSort.dir; });
+    $("#state-table").innerHTML = `<div class="table-wrap scroll"><table aria-label="State rankings"><thead><tr>${cols.map(([k, l], i) => `<th scope="col" class="${i > 1 ? "n" : ""}" aria-sort="${stSort.key === k ? (stSort.dir > 0 ? "ascending" : "descending") : "none"}"><button data-k="${k}">${l}${stSort.key === k ? (stSort.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`).join("")}</tr></thead><tbody>${order.map(s => `<tr data-state="${s}" tabindex="0">${cols.map(([k, , g, f], i) => `<td class="${i > 1 ? "n" : ""}">${f(g(s), s)}${k === "name" && MEASURED_STATES[s] ? " " + MEASURED : ""}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+    $("#state-table").querySelectorAll("th button").forEach(b => b.addEventListener("click", () => {
+      const k = b.dataset.k; stSort = { key: k, dir: stSort.key === k ? -stSort.dir : (k === "rank" || k === "name" || k === "wait" ? 1 : -1) };
+      renderStateTable(); $(`#state-table th button[data-k="${k}"]`).focus();
+    }));
+    $("#state-table").querySelectorAll("tr[data-state]").forEach(tr => {
+      const go = () => { pickState(tr.dataset.state); $("#map").scrollIntoView(); };
+      tr.addEventListener("click", go);
+      tr.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+    });
+  }
+
+  // ---------- chapters ----------
+  const WAIT_BANDS = [["Under 30 sec", 0, 30], ["30–60 sec", 30, 60], ["1–2 min", 60, 120], ["2–5 min", 120, 300], ["5+ min", 300, CAP], ["No call answered", CAP, Infinity]];
+  function renderPhone() {
+    const missed = sum(SYS, "calls_placed") - sum(SYS, "calls_reached");
+    const held = sum(SYS, "calls_full_hold"), dropped = sum(SYS, "calls_dropped_on_hold");
+    const neverLines = sum(SYS, "lines_never_answered");
+    $("#phone-lede").innerHTML = `We placed ${fmtInt(NAT.calls)} calls to ${fmtInt(NAT.lines)} published clinic lines. ${pct(NAT.answer)} reached a person. When someone did answer, the typical system's median wait was ${fmtWait(NAT.wait)}, but the spread between systems is wide, and it widens again after lunch.`;
+    $("#phone-strip").innerHTML = [
+      [fmtInt(NAT.calls), "calls placed"], [pct(NAT.answer), "reached a live person"], [fmtWaitShort(NAT.wait), "typical median wait"],
+      [fmtInt(held), "calls held the full 20 minutes"], [pct(neverLines / NAT.lines), "of lines never answered either call"],
+    ].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join("");
+
+    const wb = WAIT_BANDS.map(([l, lo, hi]) => share(SYS, r => { const w = answered(r) ? r.time_to_human_s : CAP; return w >= lo && w < hi; }));
+    bars("c-wait", WAIT_BANDS.map(b => b[0]), wb.map(v => +(v * 100).toFixed(1)), { pct: true, colors: WAIT_BANDS.map((_, i) => i < 2 ? css("--band-a") : i < 3 ? css("--band-b") : i < 4 ? css("--band-c") : css("--band-f")), tip: v => `${v}% of systems` });
+    $("#wait-cap").innerHTML = `<b>${pct(wb[0] + wb[1])}</b> of systems get callers to a person within a minute on a typical call. <b>${pct(wb[4] + wb[5])}</b> keep the typical caller waiting five minutes or more, or never answered.`;
+    $("#wait-table").innerHTML = table(["Typical wait", "Share of systems"], WAIT_BANDS.map((b, i) => [b[0], pct(wb[i], 1)]), { num: [1] });
+
+    const groups = [["All systems", SYS], ...TYPES.map(t => [t, SYS.filter(r => r.system_type === t)])];
+    const am = groups.map(([, g]) => +(100 * pooled(g, "answer_rate_morning")).toFixed(1));
+    const pm = groups.map(([, g]) => +(100 * pooled(g, "answer_rate_afternoon")).toFixed(1));
+    draw("c-ampm", {
+      type: "bar",
+      data: { labels: groups.map(g => g[0].replace(" system", "").replace("Community health center", "Health center")), datasets: [
+        { label: "Mid-morning", data: am, backgroundColor: css("--chart-1"), borderRadius: 4, maxBarThickness: 30 },
+        { label: "Early afternoon", data: pm, backgroundColor: css("--accent"), borderRadius: 4, maxBarThickness: 30 },
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "top", align: "start", labels: { boxWidth: 12, boxHeight: 12, useBorderRadius: true, borderRadius: 3 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.raw}% answered` } } }, scales: { x: { grid: { display: false } }, y: Object.assign({ grid: { color: css("--chart-grid") } }, pctAxis) } },
+    });
+    const gapIdx = am.map((v, i) => v - pm[i]);
+    const widest = gapIdx.indexOf(Math.max(...gapIdx.slice(1)));
+    $("#ampm-cap").innerHTML = `Across all systems, <b>${am[0]}%</b> of mid-morning calls reached a person against <b>${pm[0]}%</b> in the early afternoon. The gap is widest at ${groups[widest][0].toLowerCase()}s (${gapIdx[widest].toFixed(0)} points).`;
+    $("#ampm-table").innerHTML = table(["Systems", "Mid-morning", "Early afternoon"], groups.map((g, i) => [g[0], am[i] + "%", pm[i] + "%"]), { num: [1, 2] });
 
     const layers = [0, 1, 2, 3, 4, 5];
-    const med = layers.map(l => median(SYS.filter(r => r.ivr_layers === l).map(r => r.time_to_human_s)));
+    const med = layers.map(l => median(SYS.filter(r => r.ivr_layers === l && answered(r)).map(r => r.time_to_human_s)));
     const cnt = layers.map(l => SYS.filter(r => r.ivr_layers === l).length);
-    barChart("c-ivr", layers.map(l => l === 0 ? "None" : `${l}`), med, { xTitle: "Phone menu layers before a person", yTitle: "Median seconds to a person", tip: (v, i) => `${Math.round(v)}s median (${cnt[i]} systems)` });
-    $("#ivr-cap").textContent = `Each extra menu layer adds wait. Systems with ${layers[med.length - 1]} layers have a median wait about ${Math.round(med[med.length - 1] / Math.max(1, med[0]))}× that of systems that go straight to a person.`;
-    $("#ivr-table").innerHTML = tableHTML(["Menu layers", "Median seconds to a person", "Systems"], layers.map((l, i) => [l, Math.round(med[i]), cnt[i]]));
+    bars("c-ivr", layers.map(l => l === 0 ? "None" : String(l)), med.map(v => Math.round(v)), { xTitle: "Menu layers before a person", yTitle: "Median seconds", tip: (v, i) => `${v} sec median (${cnt[i]} systems)` });
+    $("#ivr-cap").innerHTML = `Systems that put callers straight through have a median wait of <b>${fmtWait(med[0])}</b>. With ${layers.length - 1} menu layers it is <b>${fmtWait(med[med.length - 1])}</b>.`;
+    $("#ivr-table").innerHTML = table(["Menu layers", "Median wait", "Systems"], layers.map((l, i) => [l, fmtWait(med[i]), cnt[i]]), { num: [1, 2] });
 
-    const ks = ["live", "service", "voicemail", "dead"];
-    const sh = ks.map(k => +(100 * share(SYS, r => r.ah_outcome === k)).toFixed(1));
-    barChart("c-ah", ks.map(k => AH_LABEL[k]), sh, { horizontal: true, pctAxis: true, tip: v => `${v}% of systems` });
-    $("#ah-cap").textContent = `Only ${pct(sh[0] / 100)} of after-hours calls reach a live person. ${pct(share(SYS, r => !r.ah_urgent_path))} of systems offer no urgent path at all.`;
-    $("#ah-table").innerHTML = tableHTML(["After-hours outcome", "Share of systems"], ks.map((k, i) => [AH_LABEL[k], sh[i] + "%"]));
+    const other = missed - held - dropped;
+    const mk = [["Rang out or went to voicemail", other], ["Held, then disconnected", dropped], ["Held the full 20 minutes", held]];
+    bars("c-miss", mk.map(m => m[0]), mk.map(m => +(100 * m[1] / missed).toFixed(1)), { horizontal: true, pct: true, colors: [css("--band-c"), css("--band-d"), css("--band-f")], tip: (v, i) => `${v}% (${fmtInt(mk[i][1])} calls)` });
+    $("#miss-cap").innerHTML = `Of ${fmtInt(missed)} calls that did not reach anyone, <b>${pct((held + dropped) / missed)}</b> held the caller first, then dropped the call or kept them waiting for the full 20 minutes.`;
+    $("#miss-table").innerHTML = table(["Outcome", "Calls", "Share"], mk.map(m => [m[0], fmtInt(m[1]), pct(m[1] / missed, 1)]), { num: [1, 2] });
+  }
+
+  function renderAfterHours() {
+    const good = share(SYS, r => isGood(r.ah_outcome)), urgent = share(SYS, r => r.ah_urgent_path), dead = share(SYS, r => r.ah_outcome === "dead");
+    $("#ah-lede").innerHTML = `Patients do not stop needing care at 5 p.m. We placed one call to each system's main line after 6 p.m. local time. ${pct(good)} of calls reached a live person or an answering service. ${pct(dead)} rang out with no answer and no message.`;
+    $("#ah-strip").innerHTML = [[pct(share(SYS, r => r.ah_outcome === "live")), "reached a live person"], [pct(share(SYS, r => r.ah_outcome === "service")), "reached an answering service"], [pct(share(SYS, r => r.ah_outcome === "voicemail")), "voicemail only"], [pct(urgent), "offer an urgent path"]].map(([b, s]) => `<div><b>${b}</b><span>${s}</span></div>`).join("");
+    const groups = [["All systems", SYS], ...TYPES.map(t => [t, SYS.filter(r => r.system_type === t)])];
+    const colors = [css("--band-a"), css("--band-b"), css("--band-c"), css("--band-f")];
+    draw("c-ah", {
+      type: "bar",
+      data: { labels: groups.map(g => g[0]), datasets: AH_KEYS.map((k, i) => ({ label: AH[k], data: groups.map(([, g]) => +(100 * share(g, r => r.ah_outcome === k)).toFixed(1)), backgroundColor: colors[i], borderColor: css("--surface"), borderWidth: { right: 2 }, borderSkipped: false, maxBarThickness: 34 })) },
+      options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "top", align: "start", labels: { boxWidth: 12, boxHeight: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.raw}%` } } }, scales: { x: Object.assign({ stacked: true, grid: { color: css("--chart-grid") } }, pctAxis), y: { stacked: true, grid: { display: false } } } },
+    });
+    const byType = TYPES.map(t => [t, share(SYS.filter(r => r.system_type === t), r => isGood(r.ah_outcome))]).sort((a, b) => b[1] - a[1]);
+    $("#ah-cap").innerHTML = `${byType[0][0]}s are most likely to put a caller through to a person or service after hours (<b>${pct(byType[0][1])}</b>). ${byType[byType.length - 1][0]}s are least likely (<b>${pct(byType[byType.length - 1][1])}</b>).`;
+    $("#ah-table").innerHTML = table(["Systems", ...AH_KEYS.map(k => AH[k])], groups.map(([l, g]) => [l, ...AH_KEYS.map(k => pct(share(g, r => r.ah_outcome === k), 1))]), { num: [1, 2, 3, 4] });
+    const ur = RURS.map(z => share(SYS.filter(r => r.rurality === z), r => r.ah_urgent_path));
+    bars("c-urgent", ["All systems", ...RURS], [urgent, ...ur].map(v => +(100 * v).toFixed(1)), { pct: true, colors: [css("--chart-1"), css("--band-b"), css("--band-b"), css("--band-b")], tip: v => `${v}% offer an urgent path` });
+    $("#urgent-cap").innerHTML = `<b>${pct(1 - urgent)}</b> of systems give an after-hours caller no direction for something that can't wait until morning, such as a nurse line, an on-call provider or emergency guidance.`;
+    $("#urgent-table").innerHTML = table(["Setting", "Offer an urgent path"], [["All systems", pct(urgent, 1)], ...RURS.map((z, i) => [z, pct(ur[i], 1)])], { num: [1] });
+  }
+
+  function renderDigital() {
+    const feats = [["Patient portal", "patient_portal"], ["Tap-to-call on a phone", "click_to_call"], ["Appointment request form", "request_forms"], ["Online booking for new patients", "online_booking"], ["Next available time shown", "next_available_visible"]];
+    const v = feats.map(([, k]) => share(SYS, r => r[k]));
+    $("#dg-lede").innerHTML = `Nearly every system has a patient portal, but a portal serves existing patients. For someone new, the question is whether they can book without calling. ${pct(NAT.booking)} of systems let them. ${pct(share(SYS, r => r.next_available_visible))} show when the next appointment is open.`;
+    bars("c-feat", feats.map(f => f[0]), v.map(x => +(100 * x).toFixed(1)), { horizontal: true, pct: true, tip: x => `${x}% of systems` });
+    $("#feat-cap").innerHTML = `The gap between having a portal (<b>${pct(v[0])}</b>) and offering online booking to new patients (<b>${pct(v[3])}</b>) is the largest in the digital chapter.`;
+    $("#feat-table").innerHTML = table(["Capability", "Share of systems"], feats.map((f, i) => [f[0], pct(v[i], 1)]), { num: [1] });
+    const bs = SIZES.map(z => share(SYS.filter(r => r.size_band === z), r => r.online_booking));
+    const bn = SIZES.map(z => SYS.filter(r => r.size_band === z).length);
+    bars("c-book", SIZES.map(z => SIZE_LABEL[z].replace(" locations", "")), bs.map(x => +(100 * x).toFixed(1)), { pct: true, xTitle: "Number of locations", tip: (x, i) => `${x}% of ${bn[i]} systems` });
+    $("#book-cap").innerHTML = `Online booking rises with size, from <b>${pct(bs[0])}</b> of systems with 1–4 locations to <b>${pct(bs[bs.length - 1])}</b> of those with 50 or more.`;
+    $("#book-table").innerHTML = table(["Locations", "Offer online booking", "Systems"], SIZES.map((z, i) => [SIZE_LABEL[z], pct(bs[i], 1), bn[i]]), { num: [1, 2] });
+  }
+
+  function renderFindability() {
+    const checks = [["Works well on a phone", "mobile_responsive"], ["Main number within two clicks", "number_within_2_clicks"], ["Hours within two clicks", "hours_within_2_clicks"]];
+    const v = checks.map(([, k]) => share(SYS, r => r[k]));
+    const bins = [["None", 0, 0], ["1–5", 1, 5], ["6–10", 6, 10], ["11–20", 11, 20], ["21–30", 21, 30], ["31+", 31, 999]];
+    const bv = bins.map(([, lo, hi]) => share(SYS, r => r.wcag_violations >= lo && r.wcag_violations <= hi));
+    $("#fd-lede").innerHTML = `Before a patient can call, they need the number and the hours. ${pct(share(SYS, r => r.number_within_2_clicks && r.hours_within_2_clicks))} of system websites put both within two clicks of the home page. Under a federal rule (Section 504 of the Rehabilitation Act), health system websites must meet the web accessibility standard by May 11, 2027.`;
+    bars("c-find", checks.map(c => c[0]), v.map(x => +(100 * x).toFixed(1)), { horizontal: true, pct: true, tip: x => `${x}% pass` });
+    $("#find-cap").innerHTML = `Hours are the item patients most often can't find: <b>${pct(1 - v[2])}</b> of websites bury them more than two clicks deep.`;
+    $("#find-table").innerHTML = table(["Check", "Share passing"], checks.map((c, i) => [c[0], pct(v[i], 1)]), { num: [1] });
+    bars("c-wcag", bins.map(b => b[0]), bv.map(x => +(100 * x).toFixed(1)), { pct: true, xTitle: "Serious issues found", colors: bins.map((_, i) => i === 0 ? css("--band-a") : i < 3 ? css("--band-c") : css("--band-f")), tip: x => `${x}% of websites` });
+    $("#wcag-cap").innerHTML = `Only <b>${pct(bv[0])}</b> of websites showed no serious issues. The median website had <b>${median(SYS.map(r => r.wcag_violations))}</b>.`;
+    $("#wcag-table").innerHTML = table(["Serious issues", "Share of websites"], bins.map((b, i) => [b[0], pct(bv[i], 1)]), { num: [1] });
+  }
+
+  function quartileRows(rows) {
+    const sc = rows.map(r => r.dfd_score), q1 = quantile(sc, .25), q3 = quantile(sc, .75);
+    const top = rows.filter(r => r.dfd_score >= q3), bot = rows.filter(r => r.dfd_score <= q1);
+    return { top, bot, rows: [
+      ["Calls reaching a person", pct(pooledAnswer(top)), pct(pooledAnswer(bot))],
+      ["Typical wait for a person", fmtWaitShort(typicalWait(top)), fmtWaitShort(typicalWait(bot))],
+      ["Afternoon answer rate", pct(pooled(top, "answer_rate_afternoon")), pct(pooled(bot, "answer_rate_afternoon"))],
+      ["Average phone menu layers", mean(top.map(r => r.ivr_layers)).toFixed(1), mean(bot.map(r => r.ivr_layers)).toFixed(1)],
+      ["Person or service after hours", pct(share(top, r => isGood(r.ah_outcome))), pct(share(bot, r => isGood(r.ah_outcome)))],
+      ["Online booking for new patients", pct(share(top, r => r.online_booking)), pct(share(bot, r => r.online_booking))],
+      ["Median accessibility issues", median(top.map(r => r.wcag_violations)), median(bot.map(r => r.wcag_violations))],
+    ] };
+  }
+  function renderLeaders() {
+    const q = quartileRows(SYS);
+    $("#quart-table").innerHTML = table(["Measure", "Top 25%", "Bottom 25%"], q.rows, { num: [1, 2] });
+    const groups = [...TYPES.map(t => [t, SYS.filter(r => r.system_type === t)]), ...RURS.map(z => [z + " setting", SYS.filter(r => r.rurality === z)])];
+    const iqr = groups.map(([, g]) => [quantile(g.map(r => r.dfd_score), .25), quantile(g.map(r => r.dfd_score), .75)]);
+    const med = groups.map(([, g]) => median(g.map(r => r.dfd_score)));
+    draw("c-type", {
+      type: "bar",
+      data: { labels: groups.map(g => g[0]), datasets: [
+        { type: "line", label: "Median", data: med, showLine: false, pointRadius: 7, pointHoverRadius: 8, pointStyle: "rectRot", backgroundColor: css("--accent"), borderColor: css("--surface"), borderWidth: 2 },
+        { label: "Middle half of systems", data: iqr, backgroundColor: groups.map((_, i) => i < TYPES.length ? css("--chart-1") : css("--band-b")), borderRadius: 4, borderSkipped: false, barPercentage: .55 },
+      ] },
+      options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "top", align: "start", labels: { boxWidth: 12, boxHeight: 12 } }, tooltip: { callbacks: { label: c => Array.isArray(c.raw) ? `Middle half: ${c.raw[0].toFixed(0)}–${c.raw[1].toFixed(0)}` : `Median: ${c.raw.toFixed(1)}` } } }, scales: { x: { min: Math.max(0, Math.floor(Math.min(...iqr.map(v => v[0])) / 10) * 10 - 10), max: Math.min(100, Math.ceil(Math.max(...iqr.map(v => v[1])) / 10) * 10 + 10), grid: { color: css("--chart-grid") }, title: { display: true, text: "Digital Front Door score" } }, y: { grid: { display: false } } } },
+    });
+    const sortedT = TYPES.map((t, i) => [t, med[i]]).sort((a, b) => b[1] - a[1]);
+    $("#type-cap").innerHTML = `The ranges overlap heavily. Type and setting explain far less than what an individual system does: the middle half of every group spans roughly 20 points or more.`;
+    $("#type-table").innerHTML = table(["Group", "Median", "Middle half", "Systems"], groups.map((g, i) => [g[0], med[i].toFixed(1), `${iqr[i][0].toFixed(0)}–${iqr[i][1].toFixed(0)}`, g[1].length]), { num: [1, 2, 3] });
+    const r = pearson(SYS.map(x => Math.log(x.location_count)), SYS.map(x => x.dfd_score));
+    $("#ld-lede").innerHTML = `Size barely predicts the score (correlation ${r.toFixed(2)}). What separates the top quarter is operational: they answer more calls, keep menus short, hold up in the afternoon, and give new patients a way to book online. The median ${sortedT[0][0].toLowerCase()} scores ${sortedT[0][1].toFixed(0)}, against ${sortedT[sortedT.length - 1][1].toFixed(0)} for the median ${sortedT[sortedT.length - 1][0].toLowerCase()}.`;
+  }
+
+  function renderMethod() {
+    $("#pillars").innerHTML = PILLARS.map((p, i) => `<div class="card pillar"><div class="no">0${i + 1}</div><h3>${p.label}</h3><div class="w">${Math.round(META.weights[p.key] * 100)}% of the score</div><div class="weight" aria-hidden="true"><i style="width:${META.weights[p.key] * 100 / .35}%"></i></div><ul>${p.items.map(x => `<li>${x}</li>`).join("")}</ul></div>`).join("");
+    const g = META.bands.map(([l, f], i) => [bandChip(l), i === 0 ? `${f}–100` : `${f}–${META.bands[i - 1][1] - 1}`, `${pct(share(SYS, r => r.dfd_band === l), 1)}`]);
+    $("#grade-key").innerHTML = table(["Grade", "Score range", "Share of systems"], g, { num: [2] });
+  }
+
+  function renderOregon() {
+    const o = META.oregon_measured;
+    $("#or-stats").innerHTML = [
+      [pct(o.calls_reached_person / o.calls), `of ${o.calls} calls reached a live person (${o.calls_reached_person} of ${o.calls}).`],
+      [`${o.median_wait_s} sec`, `median wait for a person. The average was ${Math.round(o.mean_wait_s / 60)} minutes, pulled up by a long tail.`],
+      ["1 in 4", "answered calls waited more than 2 minutes. 1 in 10 waited more than 5."],
+      [String(o.calls_hit_20min_cap), `calls never reached anyone within 20 minutes. ${o.lines_hold_then_disconnect} lines put us on hold and then hung up.`],
+    ].map(([n, t]) => `<div class="or-stat"><div class="n">${n}</div><p>${t}</p></div>`).join("");
   }
 
   // ---------- gate ----------
   const GATE_KEY = "dfd_gate_v1";
   const FREE = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "aol.com", "icloud.com", "me.com", "live.com", "msn.com", "protonmail.com", "proton.me", "gmx.com", "mail.com", "ymail.com", "comcast.net", "att.net", "verizon.net"];
-  function gateOpen() { try { return !!localStorage.getItem(GATE_KEY); } catch (e) { return false; } }
+  function gateIsOpen() { try { return !!localStorage.getItem(GATE_KEY); } catch (e) { return !$("#explorer").hidden; } }
   function initGate() {
     const f = $("#gate-form");
     f.addEventListener("submit", e => {
@@ -184,51 +502,37 @@
       else if (FREE.includes(v.email.split("@")[1].toLowerCase())) errs.email = "Please use your work email. We send the report to organizational addresses only.";
       if (!v.org) errs.org = "Please enter your organization.";
       if (!v.role) errs.role = "Please choose a role.";
-      for (const k of ["name", "email", "org", "role"]) {
-        $("#e-" + k).textContent = errs[k] || "";
-        f[k].setAttribute("aria-invalid", errs[k] ? "true" : "false");
-      }
+      for (const k of ["name", "email", "org", "role"]) { $("#e-" + k).textContent = errs[k] || ""; f[k].setAttribute("aria-invalid", errs[k] ? "true" : "false"); }
       const first = Object.keys(errs)[0];
       if (first) { f[first].focus(); return; }
       const [firstName, ...rest] = v.name.split(/\s+/);
-      const lead = {
-        // Shape matches a Salesforce web-to-lead POST.
-        first_name: firstName, last_name: rest.join(" ") || "-", email: v.email, company: v.org, title: v.role,
-        lead_source: "DFD Index 2026", "00N_campaign": "dfd-index-2026", submitted_at: new Date().toISOString(),
-      };
-      console.log("[DFD gate] web-to-lead payload", lead);
+      const lead = { first_name: firstName, last_name: rest.join(" ") || "-", email: v.email, company: v.org, title: v.role, lead_source: "Digital Front Door Index 2026", campaign: "digital-front-door-index-2026", submitted_at: new Date().toISOString() };
+      console.log("[Index gate] web-to-lead payload", lead);
       try { localStorage.setItem(GATE_KEY, JSON.stringify(lead)); } catch (e2) { /* private mode: reveal anyway */ }
       unlock(true);
     });
   }
   function unlock(fromSubmit) {
     $("#gate").hidden = true;
-    const x = $("#explorer");
-    x.hidden = false;
+    $("#explorer").hidden = false;
     initExplorer();
-    if (fromSubmit) { $("#x-h").setAttribute("tabindex", "-1"); $("#x-h").focus(); }
+    renderStatePanel();
+    if (fromSubmit) $("#x-h").focus();
   }
 
   // ---------- explorer ----------
-  let current = null, explorerReady = false;
-  let natFilters = { type: "", size: "", rur: "" };
-
+  let current = null, ready = false, natF = { type: "", size: "", rur: "" }, natMap = null;
   function initExplorer() {
-    if (explorerReady) return;
-    explorerReady = true;
-    initPicker();
-    initTabs();
+    if (ready) return; ready = true;
+    initPicker(); initTabs();
     $("#cta-btn").addEventListener("click", () => {
       let lead = null; try { lead = JSON.parse(localStorage.getItem(GATE_KEY)); } catch (e) { /* ignore */ }
-      const payload = { event: "breakdown_requested", system_id: current && current.system_id, system_name: current && current.system_name, lead };
-      console.log("[DFD] breakdown request", payload);
-      $("#cta-msg").textContent = current ? `Thanks. We'll send the ${current.system_name} breakdown to your inbox within two business days.` : "Pick your system above first, and we'll send its breakdown.";
+      console.log("[Index] line-level results requested", { system_id: current && current.system_id, system_name: current && current.system_name, lead });
+      $("#cta-msg").textContent = current ? `Thanks. The line-by-line results for ${current.system_name} will arrive by email within two business days.` : "Choose a system above first.";
     });
-    // Default to an Oregon system so the first view is populated.
-    const or = SYS.filter(r => r.state === "OR").sort((a, b) => a.dfd_score - b.dfd_score);
-    select(or[Math.floor(or.length * 0.4)] || SYS[0]);
+    const or = (BY_STATE[selState] || BY_STATE.OR).slice().sort((a, b) => a.dfd_score - b.dfd_score);
+    select(or[Math.floor(or.length * .45)]);
   }
-
   function initPicker() {
     const q = $("#sys-q"), list = $("#sys-list");
     let items = [], active = -1;
@@ -243,265 +547,319 @@
     });
     q.addEventListener("keydown", e => {
       if (list.hidden) return;
-      if (e.key === "ArrowDown") { active = Math.min(items.length - 1, active + 1); }
-      else if (e.key === "ArrowUp") { active = Math.max(0, active - 1); }
+      if (e.key === "ArrowDown") active = Math.min(items.length - 1, active + 1);
+      else if (e.key === "ArrowUp") active = Math.max(0, active - 1);
       else if (e.key === "Enter" && active >= 0) { e.preventDefault(); select(items[active]); close(); q.value = ""; return; }
       else if (e.key === "Escape") { close(); return; }
       else return;
-      e.preventDefault(); paint();
-      if (active >= 0) q.setAttribute("aria-activedescendant", "opt-" + active);
+      e.preventDefault(); paint(); if (active >= 0) q.setAttribute("aria-activedescendant", "opt-" + active);
     });
     list.addEventListener("mousedown", e => { const li = e.target.closest("li[data-id]"); if (li) { e.preventDefault(); select(BY_ID[li.dataset.id]); close(); q.value = ""; } });
-    q.addEventListener("blur", () => setTimeout(close, 100));
+    q.addEventListener("blur", () => setTimeout(close, 120));
   }
-
   function initTabs() {
     const tabs = [...document.querySelectorAll('[role="tab"]')];
-    const activate = t => {
-      tabs.forEach(x => { const on = x === t; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; document.getElementById(x.getAttribute("aria-controls")).hidden = !on; });
-      renderActive();
-    };
     tabs.forEach((t, i) => {
-      t.addEventListener("click", () => activate(t));
+      t.addEventListener("click", () => activateTab(t.id));
       t.addEventListener("keydown", e => {
         let j = null;
         if (e.key === "ArrowRight") j = (i + 1) % tabs.length;
         if (e.key === "ArrowLeft") j = (i - 1 + tabs.length) % tabs.length;
-        if (e.key === "Home") j = 0;
-        if (e.key === "End") j = tabs.length - 1;
-        if (j !== null) { e.preventDefault(); tabs[j].focus(); activate(tabs[j]); }
+        if (e.key === "Home") j = 0; if (e.key === "End") j = tabs.length - 1;
+        if (j !== null) { e.preventDefault(); tabs[j].focus(); activateTab(tabs[j].id); }
       });
     });
   }
-
+  function activateTab(id) {
+    document.querySelectorAll('[role="tab"]').forEach(x => { const on = x.id === id; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; document.getElementById(x.getAttribute("aria-controls")).hidden = !on; });
+    renderActive();
+  }
   function select(r) {
     current = r;
-    $("#picked").innerHTML = `Showing <b>${esc(r.system_name)}</b>, ${r.system_type}, ${STATES[r.state]} · ${r.location_count} locations · ${r.rurality} <span class="chip modeled">modeled</span>`;
+    $("#picked").innerHTML = `Showing <b>${esc(r.system_name)}</b> · ${r.system_type} · ${STATES[r.state]} · ${r.location_count} locations · ${r.rurality} ${MODELED}`;
     renderActive();
   }
   function renderActive() {
     if (!current) return;
     const t = document.querySelector('[role="tab"][aria-selected="true"]').id;
-    ({ "t-sys": renderSystem, "t-state": renderState, "t-peers": renderPeers, "t-nat": renderNational })[t]();
+    ({ "t-sys": renderSystem, "t-state": renderStateReport, "t-peers": renderPeers, "t-nat": renderNational })[t]();
   }
 
+  // Peer group: same type, size band and setting; widened step by step until it holds 20+ systems.
   function cohortOf(r) {
-    let c = SYS.filter(x => x.cohort === r.cohort);
-    let label = `${r.system_type.toLowerCase()}s with ${r.size_band} locations in ${r.rurality.toLowerCase()} areas`;
-    if (c.length < 12) {
-      c = SYS.filter(x => x.system_type === r.system_type && x.rurality === r.rurality);
-      label = `${r.system_type.toLowerCase()}s in ${r.rurality.toLowerCase()} areas (all sizes, since the exact size cohort is small)`;
-    }
-    return { rows: c, label };
+    const ladder = [
+      [x => x.system_type === r.system_type && x.size_band === r.size_band && x.rurality === r.rurality, `${r.system_type.toLowerCase()}s with ${SIZE_LABEL[r.size_band]} in ${r.rurality.toLowerCase()} areas`],
+      [x => x.system_type === r.system_type && x.rurality === r.rurality, `${r.system_type.toLowerCase()}s in ${r.rurality.toLowerCase()} areas, all sizes`],
+      [x => x.system_type === r.system_type && x.size_band === r.size_band, `${r.system_type.toLowerCase()}s with ${SIZE_LABEL[r.size_band]}, all settings`],
+      [x => x.system_type === r.system_type, `all ${r.system_type.toLowerCase()}s`],
+    ];
+    for (const [f, label] of ladder) { const rows = SYS.filter(f); if (rows.length >= 20) return { rows, label }; }
+    return { rows: SYS, label: "all systems" };
   }
 
-  // Plain-language drag factors: the metrics costing this system the most
-  // composite points, each compared against its cohort.
-  function dragFactors(r, cohort) {
-    const W = META.weights;
-    const tthPts = s => s <= 1 ? 100 : Math.max(0, 100 * (1 - Math.log(s) / Math.log(1200)));
-    const pctWorse = (f, higherIsBetter) => share(cohort, x => higherIsBetter ? f(x) > f(r) : f(x) < f(r));
-    const F = [
-      { lost: W.phone * .40 * (100 - 100 * r.answer_rate), text: () => `<b>Only ${pct(r.answer_rate)} of calls reach a person.</b> ${pct(pctWorse(x => x.answer_rate, true))} of similar systems answer more often.` },
-      { lost: W.phone * .35 * (100 - tthPts(r.time_to_human_s)), text: () => `<b>Callers wait ${fmtSec(r.time_to_human_s)} to reach a person.</b> That is slower than ${pct(pctWorse(x => x.time_to_human_s, false))} of similar systems.` },
-      { lost: W.phone * .15 * Math.min(100, 22 * Math.max(0, r.ivr_layers - 1)), text: () => `<b>Callers go through ${r.ivr_layers} layers of phone menus</b> before reaching anyone.` },
-      { lost: W.phone * .10 * Math.min(100, 100 * r.abandon_rate / .30), text: () => `<b>${pct(r.abandon_rate)} of calls drop while on hold.</b>` },
-      { lost: W.after_hours * .75 * (100 - { live: 100, service: 80, voicemail: 30, dead: 0 }[r.ah_outcome]), text: () => r.ah_outcome === "dead" ? `<b>After hours, the main line rings out with no message.</b> A patient with an urgent question has nowhere to go.` : `<b>After hours, callers reach ${AH_LABEL[r.ah_outcome].toLowerCase()}.</b> ${pct(share(cohort, x => x.ah_outcome === "live" || x.ah_outcome === "service"))} of similar systems put callers through to a person or an answering service.` },
-      { lost: W.after_hours * .25 * (r.ah_urgent_path ? 0 : 100), text: () => `<b>There is no urgent path after hours.</b> Nothing tells a caller what to do if it can't wait until morning.` },
-      { lost: W.digital * 35 * (r.online_booking ? 0 : 1), text: () => `<b>A new patient can't book online.</b> They have to call. ${pct(share(cohort, x => x.online_booking))} of similar systems offer online booking.` },
-      { lost: W.digital * 15 * (r.next_available_visible ? 0 : 1), text: () => `<b>The website doesn't show when the next appointment is available.</b>` },
-      { lost: W.digital * 15 * (r.click_to_call ? 0 : 1), text: () => `<b>On a phone, the number isn't tap-to-call.</b>` },
-      { lost: W.findability * (30 * !r.number_within_2_clicks + 20 * !r.hours_within_2_clicks), text: () => `<b>The main number${r.hours_within_2_clicks ? "" : " or hours"} takes more than two clicks to find${r.number_within_2_clicks ? " (hours)" : ""}.</b>` },
-      { lost: W.findability * .30 * (100 - (r.wcag_violations <= 10 ? Math.max(0, 100 - 5 * r.wcag_violations) : Math.max(0, 50 - 2.5 * (r.wcag_violations - 10)))), text: () => `<b>The website has ${r.wcag_violations} serious accessibility issues</b> under WCAG 2.1 AA. The HHS Section 504 deadline is May 11, 2027.` },
-    ];
-    return F.filter(f => f.lost > 1.5).sort((a, b) => b.lost - a.lost).slice(0, 3).map(f => ({ lost: f.lost, html: f.text() }));
+  // Metric catalogue for system comparisons. better(x) returns a number where higher is better.
+  const AH_PTS = { live: 100, service: 80, voicemail: 30, dead: 0 };
+  const M = [
+    { k: "answer", p: "phone", label: "Calls reaching a person", val: r => pct(r.answer_rate), better: r => r.answer_rate, lost: r => META.weights.phone * .40 * (100 - 100 * r.answer_rate), good: r => `<b>${pct(r.answer_rate)} of calls reach a person</b>, more than {p} of similar systems.`, bad: r => `<b>${pct(r.answer_rate)} of calls reach a person.</b> {p} of similar systems answer more often.` },
+    { k: "wait", p: "phone", label: "Typical wait for a person", val: r => answered(r) ? fmtWaitShort(r.time_to_human_s) : "No answer", better: r => -(answered(r) ? r.time_to_human_s : CAP), lost: r => META.weights.phone * .35 * (100 - (r.time_to_human_s <= 1 ? 100 : Math.max(0, 100 * (1 - Math.log(answered(r) ? r.time_to_human_s : CAP) / Math.log(CAP))))), good: r => `<b>Callers reach a person in ${fmtWait(r.time_to_human_s)}</b>, faster than {p} of similar systems.`, bad: r => answered(r) ? `<b>Callers wait ${fmtWait(r.time_to_human_s)} for a person.</b> That is slower than {p} of similar systems.` : `<b>No test call reached a person.</b>` },
+    { k: "ivr", p: "phone", label: "Phone menu layers", val: r => String(r.ivr_layers), better: r => -r.ivr_layers, lost: r => META.weights.phone * .15 * Math.min(100, 22 * Math.max(0, r.ivr_layers - 1)), good: r => `<b>${r.ivr_layers <= 1 ? "Callers go almost straight to a person" : `Only ${r.ivr_layers} menu layers`}</b>, fewer than {p} of similar systems.`, bad: r => `<b>Callers go through ${r.ivr_layers} layers of phone menus</b> before reaching anyone.` },
+    { k: "abandon", p: "phone", label: "Calls dropped or held to the cap", val: r => pct(r.abandon_rate), better: r => -r.abandon_rate, lost: r => META.weights.phone * .10 * Math.min(100, 100 * r.abandon_rate / .30), good: r => `<b>Few calls drop while on hold</b> (${pct(r.abandon_rate)}), better than {p} of similar systems.`, bad: r => `<b>${pct(r.abandon_rate)} of calls were dropped on hold or held for the full 20 minutes.</b>` },
+    { k: "pm", p: "phone", label: "Afternoon answer rate", val: r => pct(r.answer_rate_afternoon), better: r => r.answer_rate_afternoon ?? 0, lost: () => 0, good: r => `<b>Holds up in the afternoon:</b> ${pct(r.answer_rate_afternoon)} of early-afternoon calls answered, above {p} of similar systems.`, bad: () => "" },
+    { k: "ah", p: "after_hours", label: "After-hours call", val: r => AH[r.ah_outcome], better: r => AH_PTS[r.ah_outcome], lost: r => META.weights.after_hours * .75 * (100 - AH_PTS[r.ah_outcome]), good: r => `<b>After hours, callers reach ${AH[r.ah_outcome].toLowerCase()}.</b>`, bad: r => r.ah_outcome === "dead" ? `<b>After hours, the main line rings out with no message.</b>` : `<b>After hours, callers reach voicemail only.</b> {g} of similar systems put callers through to a person or service.`, g: rows => share(rows, x => isGood(x.ah_outcome)) },
+    { k: "urgent", p: "after_hours", bool: "ah_urgent_path", label: "Urgent path offered", lost: r => META.weights.after_hours * .25 * (r.ah_urgent_path ? 0 : 100), good: () => `<b>Offers an urgent path after hours</b>, which {g} of similar systems do.`, bad: () => `<b>No urgent path after hours.</b> Nothing tells a caller what to do if it can't wait.` },
+    { k: "booking", p: "digital", bool: "online_booking", label: "Online booking for new patients", lost: r => META.weights.digital * 35 * !r.online_booking, good: () => `<b>New patients can book online</b>, which only {g} of similar systems offer.`, bad: () => `<b>A new patient can't book online.</b> {g} of similar systems offer it.` },
+    { k: "portal", p: "digital", bool: "patient_portal", label: "Patient portal", lost: r => META.weights.digital * 20 * !r.patient_portal, good: () => `<b>Patient portal linked from the site.</b>`, bad: () => `<b>No patient portal linked from the website.</b>` },
+    { k: "forms", p: "digital", bool: "request_forms", label: "Appointment request form", lost: r => META.weights.digital * 15 * !r.request_forms, good: () => `<b>Appointment request form available.</b>`, bad: () => `<b>No appointment request form.</b>` },
+    { k: "next", p: "digital", bool: "next_available_visible", label: "Next available time shown", lost: r => META.weights.digital * 15 * !r.next_available_visible, good: () => `<b>Shows the next available appointment</b>, which only {g} of similar systems do.`, bad: () => `<b>The website doesn't show when the next appointment is open.</b>` },
+    { k: "c2c", p: "digital", bool: "click_to_call", label: "Tap-to-call on a phone", lost: r => META.weights.digital * 15 * !r.click_to_call, good: () => `<b>Tap-to-call works on a phone.</b>`, bad: () => `<b>On a phone, the number isn't tap-to-call.</b>` },
+    { k: "num2", p: "findability", bool: "number_within_2_clicks", label: "Number within two clicks", lost: r => META.weights.findability * 30 * !r.number_within_2_clicks, good: () => `<b>The main number is within two clicks.</b>`, bad: () => `<b>The main number takes more than two clicks to find.</b>` },
+    { k: "hours2", p: "findability", bool: "hours_within_2_clicks", label: "Hours within two clicks", lost: r => META.weights.findability * 20 * !r.hours_within_2_clicks, good: () => `<b>Hours are within two clicks.</b>`, bad: () => `<b>Hours take more than two clicks to find.</b>` },
+    { k: "mobile", p: "findability", bool: "mobile_responsive", label: "Works on a phone", lost: r => META.weights.findability * 20 * !r.mobile_responsive, good: () => `<b>The website works well on a phone.</b>`, bad: () => `<b>The website doesn't fit a phone screen.</b>` },
+    { k: "wcag", p: "findability", label: "Serious accessibility issues", val: r => String(r.wcag_violations), better: r => -r.wcag_violations, lost: r => META.weights.findability * .30 * (100 - (r.wcag_violations <= 10 ? Math.max(0, 100 - 5 * r.wcag_violations) : Math.max(0, 50 - 2.5 * (r.wcag_violations - 10)))), good: r => `<b>Only ${r.wcag_violations} serious accessibility issues</b>, fewer than {p} of similar systems.`, bad: r => `<b>${r.wcag_violations} serious accessibility issues</b> on the home page and location finder.` },
+  ];
+  const pctBetter = (m, r, rows) => share(rows, x => m.better(r) > m.better(x));
+  const pctWorse = (m, r, rows) => share(rows, x => m.better(x) > m.better(r));
+  function fill(t, m, r, rows) {
+    return t.replace("{p}", pct(m.bool ? 0 : (t.includes("more often") || t.includes("slower") ? pctWorse(m, r, rows) : pctBetter(m, r, rows)))).replace("{g}", pct(m.bool ? share(rows, x => x[m.bool]) : m.g ? m.g(rows) : 0));
+  }
+  function strengthsAndWork(r, rows) {
+    const strengths = [];
+    M.forEach(m => {
+      if (m.bool) { const s = share(rows, x => x[m.bool]); if (r[m.bool] && s < .5) strengths.push({ score: 1 - s, html: fill(m.good(r), m, r, rows) }); }
+      else { const b = pctBetter(m, r, rows); if (b >= .6 && !(m.k === "wait" && !answered(r))) strengths.push({ score: b, html: fill(m.good(r), m, r, rows) }); }
+    });
+    strengths.sort((a, b) => b.score - a.score);
+    if (!strengths.length) {
+      const best = M.filter(m => !m.bool).map(m => ({ m, b: pctBetter(m, r, rows) })).sort((a, b) => b.b - a.b)[0];
+      strengths.push({ html: `Strongest measure relative to peers: <b>${best.m.label.toLowerCase()}</b> (${best.m.val(r)}), ahead of ${pct(best.b)} of similar systems.` });
+    }
+    const work = M.map(m => ({ m, lost: m.lost(r) })).filter(x => x.lost > 1.2 && x.m.bad(r)).sort((a, b) => b.lost - a.lost).slice(0, 3).map(x => ({ html: fill(x.m.bad(r), x.m, r, rows), pts: x.lost }));
+    if (!work.length) work.push({ html: "No single measure costs this system more than a point. Its score is limited only by small gaps spread across several measures." });
+    return { strengths: strengths.slice(0, 3), work };
   }
 
   function renderSystem() {
-    const r = current, c = cohortOf(r), p = percentileOf(SYS, r);
+    const r = current, c = cohortOf(r), rows = c.rows, st = BY_STATE[r.state];
+    const natP = share(SYS, x => x.dfd_score < r.dfd_score), natMed = median(SYS.map(x => x.dfd_score));
+    const peerRank = [...rows].sort((a, b) => b.dfd_score - a.dfd_score).indexOf(r) + 1;
+    const sw = strengthsAndWork(r, rows);
     const ring = bandColor(r.dfd_band);
-    const drag = dragFactors(r, c.rows);
+    const pillarCard = p => {
+      const s = r[p.key + "_score"], b = r[p.key + "_band"], pm = median(rows.map(x => x[p.key + "_score"]));
+      const ms = M.filter(m => m.p === p.key);
+      return `<div class="card"><div class="pc-head"><h4>${p.label} <span class="muted" style="font-weight:400">${Math.round(META.weights[p.key] * 100)}% of score</span></h4><span class="s num">${Math.round(s)} ${bandChip(b)}</span></div>
+        <div class="muted" style="margin-bottom:6px">Peer median ${pm.toFixed(0)} · national median ${median(SYS.map(x => x[p.key + "_score"])).toFixed(0)}</div>
+        ${ms.map(m => {
+          if (m.bool) { const sh = share(rows, x => x[m.bool]); return `<div class="mrow"><span>${m.label}</span><span class="muted">${pct(sh)} of peers</span><span class="v"><span class="yn${r[m.bool] ? "" : " no"}">${r[m.bool] ? "Yes" : "No"}</span></span></div>`; }
+          const b2 = pctBetter(m, r, rows);
+          return `<div class="mrow"><span>${m.label}</span><div class="dot" role="img" aria-label="Better than ${pct(b2)} of peers"><u style="left:50%"></u><i style="left:${(b2 * 100).toFixed(0)}%"></i></div><span class="v">${m.val(r)}</span></div>`;
+        }).join("")}
+        <div class="muted" style="margin-top:8px;font-size:12.5px">Dots show position among peers: right is better, the tick is the peer median.</div></div>`;
+    };
     $("#p-sys").innerHTML = `
-      <div class="grid-2">
-        <div class="card">
-          <div class="score-head">
-            <div class="dial" style="background:conic-gradient(${ring} ${r.dfd_score * 3.6}deg, var(--surface-2) 0)" role="img" aria-label="DFD Score ${r.dfd_score} out of 100, grade ${r.dfd_band}"><div><span><b>${Math.round(r.dfd_score)}</b><small>DFD Score</small></span></div></div>
-            <div><h3 style="margin:0">${esc(r.system_name)}</h3><div class="muted">${STATES[r.state]} · ${r.system_type} · ${r.location_count} locations</div>
-            <p style="margin:8px 0 0">Grade ${bandChip(r.dfd_band)} &nbsp;#${r.national_rank.toLocaleString()} of ${N.toLocaleString()} nationally · #${r.state_rank} in ${STATES[r.state]}</p></div>
+      <div class="card">
+        <div class="report-head">
+          <div class="dial" style="background:conic-gradient(${ring} ${r.dfd_score * 3.6}deg, var(--surface-2) 0)" role="img" aria-label="Score ${r.dfd_score} of 100, grade ${r.dfd_band}"><div><span><b>${Math.round(r.dfd_score)}</b><small>Score</small></span></div></div>
+          <div><p class="eyebrow" style="margin:0 0 4px">System report · 2026</p><h3>${esc(r.system_name)}</h3>
+            <div class="muted">${r.system_type} · ${STATES[r.state]} · ${r.location_count} locations · ${fmtInt(r.provider_count)} providers · ${r.rurality}</div>
+            <p style="margin:10px 0 0">Grade ${bandChip(r.dfd_band)} ${MODELED}</p></div>
+          <div class="ranks"><div><b>${fmtInt(r.national_rank)}</b><span>of ${fmtInt(N)} in U.S.</span></div><div><b>${r.state_rank}</b><span>of ${st.length} in ${STATES[r.state]}</span></div><div><b>${peerRank}</b><span>of ${rows.length} peers</span></div></div>
+        </div>
+        <div class="pctl" role="img" aria-label="Scores higher than ${pct(natP)} of systems nationally">
+          <div class="track"></div>
+          <div class="mk med" style="left:${(share(SYS, x => x.dfd_score < natMed) * 100).toFixed(1)}%"></div><span class="lab med" style="left:${(share(SYS, x => x.dfd_score < natMed) * 100).toFixed(1)}%">U.S. median ${natMed.toFixed(0)}</span>
+          <div class="mk" style="left:${(natP * 100).toFixed(1)}%"></div><span class="lab" style="left:${Math.min(92, Math.max(8, natP * 100)).toFixed(1)}%">This system</span>
+        </div>
+        <p class="muted" style="margin:12px 0 0">Scores higher than <b>${pct(natP)}</b> of health systems nationally (${ord(Math.max(1, Math.round(natP * 100)))} percentile).</p>
+      </div>
+
+      <div class="so section-gap">
+        <div class="card"><div class="tag good">Strengths</div><ul>${sw.strengths.map(x => `<li>${x.html}</li>`).join("")}</ul></div>
+        <div class="card"><div class="tag work">Largest opportunities</div><ul>${sw.work.map(x => `<li>${x.html}${x.pts ? ` <span class="muted">About ${x.pts.toFixed(1)} points of score.</span>` : ""}</li>`).join("")}</ul></div>
+      </div>
+      <p class="muted" style="margin:8px 0 0">Compared with ${rows.length} peers: ${esc(c.label)}.</p>
+
+      <div class="pillar-cards section-gap">${PILLARS.map(pillarCard).join("")}</div>
+
+      <div class="grid-2 section-gap">
+        <div class="card"><h3>Phone test detail</h3><p class="muted">Every test call to this system's published clinic lines.</p>
+          <div class="kv calllog">
+            <div><b>${r.lines_tested}</b><span>clinic lines called</span></div>
+            <div><b>${r.calls_placed}</b><span>calls placed</span></div>
+            <div><b>${r.calls_reached}</b><span>reached a person</span></div>
+            <div><b>${fmtWaitShort(r.time_to_human_s)}</b><span>median wait</span></div>
+            <div><b>${answered(r) ? fmtWaitShort(r.wait_p90_s) : "–"}</b><span>wait for slowest tenth</span></div>
+            <div><b>${r.longest_wait_s ? fmtWaitShort(r.longest_wait_s) : "–"}</b><span>longest wait answered</span></div>
+            <div><b>${r.calls_full_hold}</b><span>held the full 20 minutes</span></div>
+            <div><b>${r.calls_dropped_on_hold}</b><span>held, then dropped</span></div>
+            <div><b>${r.lines_never_answered}</b><span>lines never answered</span></div>
           </div>
-          <div class="pctl" role="img" aria-label="Scores higher than ${pct(p)} of systems nationally"><div class="track"></div><div class="mk" style="left:${(p * 100).toFixed(1)}%"></div></div>
-          <div class="muted">Scores higher than <b>${pct(p)}</b> of systems nationally (${ord(Math.round(p * 100))} percentile). <span class="chip modeled">modeled</span></div>
-          <h3 style="margin-top:22px">Pillar scores</h3>
-          <div class="pillrow">${PILLARS.map(pl => {
-            const s = r[pl.key + "_score"], b = r[pl.key + "_band"];
-            return `<span>${pl.label} <small class="muted">${Math.round(META.weights[pl.key] * 100)}%</small></span><b>${modeled(Math.round(s))}</b>${bandChip(b)}<div class="bar" aria-hidden="true"><i style="width:${s}%;background:${bandColor(b)}"></i></div>`;
-          }).join("")}</div>
+          <div class="ampm">
+            <span>Mid-morning</span><div class="t"><i style="width:${(r.answer_rate_morning ?? 0) * 100}%;background:var(--chart-1)"></i></div><b class="num">${pct(r.answer_rate_morning)}</b>
+            <span>Early afternoon</span><div class="t"><i style="width:${(r.answer_rate_afternoon ?? 0) * 100}%;background:var(--accent)"></i></div><b class="num">${pct(r.answer_rate_afternoon)}</b>
+          </div>
+          <p class="muted" style="margin:10px 0 0">${systemAmPmNote(r)}</p>
         </div>
-        <div class="card">
-          <h3>What's pulling the score down</h3>
-          <p class="muted">Compared with ${c.rows.length} ${c.label}.</p>
-          <ol class="drag">${drag.length ? drag.map(d => `<li>${d.html}</li>`).join("") : "<li>Nothing stands out. This system does well on every measure.</li>"}</ol>
-          <h3 style="margin-top:20px">Key measures</h3>
-          ${tableHTML(["Measure", "This system", "Peer median"], [
-            ["Calls reaching a person", pct(r.answer_rate), pct(median(c.rows.map(x => x.answer_rate)))],
-            ["Time to a person", fmtSecShort(r.time_to_human_s), fmtSecShort(median(c.rows.map(x => x.time_to_human_s)))],
-            ["Phone menu layers", r.ivr_layers, median(c.rows.map(x => x.ivr_layers))],
-            ["After hours", AH_LABEL[r.ah_outcome], "-"],
-            ["Online booking for new patients", r.online_booking ? "Yes" : "No", pct(share(c.rows, x => x.online_booking)) + " of peers"],
-            ["Serious accessibility issues", r.wcag_violations, median(c.rows.map(x => x.wcag_violations))],
-          ])}
+        <div class="card"><figure><h3>Where this system sits among peers</h3><p class="muted">${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}.</p>
+          <div class="chart-box short"><canvas id="c-sys-peer" role="img" aria-label="Peer score distribution with this system's range highlighted. A table version follows."></canvas></div>
+          <figcaption><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--accent);vertical-align:-1px"></span> Range containing this system (${r.dfd_score.toFixed(1)}). Peer median ${median(rows.map(x => x.dfd_score)).toFixed(1)}.</figcaption>
+          <details class="tbl"><summary>Show as table</summary><div id="sys-peer-table"></div></details></figure>
         </div>
-      </div>`;
+      </div>
+      <p class="footnote">Phone results come from ${r.calls_placed} calls to ${r.lines_tested} published clinic lines, one mid-morning and one early-afternoon call per line, plus one call to the main line after 6 p.m. Website results come from the home page and location finder. In this concept build every figure for this system is modeled sample data.</p>`;
+    const h = histChart("c-sys-peer", rows, r);
+    $("#sys-peer-table").innerHTML = table(["Score range", "Peers"], h.labels.map((l, i) => [l, h.counts[i]]), { num: [1] });
+  }
+  function systemAmPmNote(r) {
+    if (r.answer_rate_morning == null || r.answer_rate_afternoon == null) return "Some lines were reached in only one window.";
+    const d = (r.answer_rate_morning - r.answer_rate_afternoon) * 100;
+    if (Math.abs(d) < 5) return "Answer rates hold steady between morning and afternoon.";
+    return d > 0 ? `Afternoon answer rate is ${d.toFixed(0)} points lower than mid-morning on the same lines.` : `Afternoon answer rate is ${(-d).toFixed(0)} points higher than mid-morning.`;
   }
 
   let stateSort = { key: "dfd_score", dir: -1 };
-  function renderState() {
-    const r = current, st = r.state, rows = SYS.filter(x => x.state === st);
-    const sAvg = mean(rows.map(x => x.dfd_score)), nAvg = mean(SYS.map(x => x.dfd_score));
-    const pAvg = k => mean(rows.map(x => x[k + "_score"])), nP = k => mean(SYS.map(x => x[k + "_score"]));
-    const gaps = PILLARS.map(p => ({ p, d: pAvg(p.key) - nP(p.key) })).sort((a, b) => a.d - b.d);
-    const best = rows.reduce((a, b) => (b.dfd_score > a.dfd_score ? b : a));
-    const spread = best.dfd_score - rows.reduce((a, b) => (b.dfd_score < a.dfd_score ? b : a)).dfd_score;
-    const narrative = `${STATES[st]}'s ${rows.length} systems average <b>${sAvg.toFixed(1)}</b>, ${Math.abs(sAvg - nAvg).toFixed(1)} points ${sAvg >= nAvg ? "above" : "below"} the modeled national average of ${nAvg.toFixed(1)}. The state's weakest pillar relative to the nation is <b>${gaps[0].p.label}</b> (${gaps[0].d >= 0 ? "+" : ""}${gaps[0].d.toFixed(1)}). Its strongest is <b>${gaps[3].p.label}</b> (${gaps[3].d >= 0 ? "+" : ""}${gaps[3].d.toFixed(1)}). The top and bottom systems are ${spread.toFixed(0)} points apart. ${pct(share(rows, x => !x.online_booking))} of ${STATES[st]} systems have no online booking for new patients.`;
-    const cols = [["state_rank", "Rank", 1], ["system_name", "System", 0], ["dfd_score", "DFD", 1], ["phone_score", "Phone", 1], ["after_hours_score", "After-hours", 1], ["digital_score", "Digital", 1], ["findability_score", "Findability", 1]];
+  function renderStateReport() {
+    const r = current, s = r.state, rows = BY_STATE[s], st = STATE_STATS[s];
+    const cols = [["state_rank", "Rank", 1], ["system_name", "System", 0], ["system_type", "Type", 0], ["dfd_score", "Score", 1], ["phone_score", "Phone", 1], ["after_hours_score", "After hours", 1], ["digital_score", "Digital", 1], ["findability_score", "Findability", 1]];
     const sorted = [...rows].sort((a, b) => { const k = stateSort.key; return (a[k] > b[k] ? 1 : a[k] < b[k] ? -1 : 0) * stateSort.dir; });
-    const rowHTML = (x, cls) => `<tr class="${cls}">${cols.map(([k, , n]) => `<td class="${n ? "num" : ""}">${k === "system_name" ? esc(x[k]) : (typeof x[k] === "number" ? (k === "state_rank" ? x[k] : x[k].toFixed(1)) : x[k])}</td>`).join("")}</tr>`;
+    const cell = (x, k) => k === "system_name" ? esc(x[k]) : k === "dfd_score" ? `${x[k].toFixed(1)} ${bandChip(x.dfd_band)}` : typeof x[k] === "number" && k !== "state_rank" ? x[k].toFixed(0) : x[k];
+    const row = (x, cls) => `<tr class="${cls}">${cols.map(([k, , n]) => `<td class="${n ? "n" : ""}">${cell(x, k)}</td>`).join("")}</tr>`;
     $("#p-state").innerHTML = `
-      <div class="kv">
-        <div><b>${sAvg.toFixed(1)}</b><span>${STATES[st]} average</span></div>
-        <div><b>${nAvg.toFixed(1)}</b><span>National average (modeled)</span></div>
-        <div><b>#${r.state_rank} of ${rows.length}</b><span>${esc(r.system_name)}</span></div>
+      <div class="card">
+        <div class="report-head">
+          <div class="dial" style="background:conic-gradient(${bandColor(bandOf(st.score))} ${st.score * 3.6}deg, var(--surface-2) 0)" role="img" aria-label="State average ${st.score.toFixed(1)}"><div><span><b>${st.score.toFixed(0)}</b><small>State avg.</small></span></div></div>
+          <div><p class="eyebrow" style="margin:0 0 4px">State report · 2026</p><h3>${STATES[s]}</h3><div class="muted">${st.n} health systems · ${fmtInt(st.calls)} calls to ${fmtInt(st.lines)} clinic lines${smallNote(st.n)}</div><p style="margin:10px 0 0">Grade ${bandChip(bandOf(st.score))} ${MEASURED_STATES[s] ? MEASURED + " field test" : ""} ${MODELED}</p></div>
+          <div class="ranks"><div><b>${STATE_RANK[s]}</b><span>of 50 states</span></div><div><b>${pct(st.answer)}</b><span>calls answered</span></div><div><b>${fmtWaitShort(st.wait)}</b><span>typical wait</span></div></div>
+        </div>
       </div>
-      <p class="narr">${narrative} <span class="chip modeled">modeled</span></p>
-      <div class="table-wrap" style="margin-top:16px"><table aria-label="${STATES[st]} systems ranked">
-        <thead><tr>${cols.map(([k, l, n]) => `<th scope="col" class="${n ? "num" : ""}" aria-sort="${stateSort.key === k ? (stateSort.dir > 0 ? "ascending" : "descending") : "none"}"><button data-k="${k}">${l}${stateSort.key === k ? (stateSort.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`).join("")}</tr></thead>
-        <tbody>${rowHTML(r, "me pinned")}${sorted.map(x => rowHTML(x, x === r ? "me" : "")).join("")}</tbody>
-      </table></div>
-      <p class="muted">Your system is pinned to the top and also shown in its ranked position. Select a column header to sort.</p>`;
+      <div class="grid-2 section-gap">
+        <div class="card"><figure><h3>${STATES[s]} against the nation</h3><p class="muted">Average pillar scores.</p>
+          <div class="chart-box short"><canvas id="c-st-pillars" role="img" aria-label="State and national pillar averages. A table version follows."></canvas></div>
+          <details class="tbl"><summary>Show as table</summary>${table(["Pillar", STATES[s], "United States"], PILLARS.map(p => [p.label, st[p.key].toFixed(1), NAT[p.key].toFixed(1)]), { num: [1, 2] })}</details></figure></div>
+        <div class="card"><h3>At a glance</h3>
+          <div class="kv">
+            <div><b>${pct(st.answer)}</b><span>Calls reaching a person (U.S. ${pct(NAT.answer)})</span></div>
+            <div><b>${fmtWaitShort(st.wait)}</b><span>Typical wait (U.S. ${fmtWaitShort(NAT.wait)})</span></div>
+            <div><b>${pct(st.ahGood)}</b><span>Person or service after hours (U.S. ${pct(NAT.ahGood)})</span></div>
+            <div><b>${pct(st.booking)}</b><span>Online booking (U.S. ${pct(NAT.booking)})</span></div>
+          </div>
+          <div class="muted">Grades of ${STATES[s]} systems</div>${gradeBar(rows)}
+          <p class="narr">${stateNarrative(s)}</p></div>
+      </div>
+      <div class="card section-gap"><figure><h3>Score distribution in ${STATES[s]}</h3>
+        <div class="chart-box short"><canvas id="c-st-hist" role="img" aria-label="Distribution of scores in the state with the selected system's range highlighted."></canvas></div>
+        <figcaption><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--accent);vertical-align:-1px"></span> Range containing ${esc(r.system_name)}.</figcaption></figure></div>
+      <h3 class="section-gap">Every ${STATES[s]} system</h3>
+      <div class="table-wrap scroll"><table aria-label="${STATES[s]} systems ranked">
+        <thead><tr>${cols.map(([k, l, n]) => `<th scope="col" class="${n ? "n" : ""}" aria-sort="${stateSort.key === k ? (stateSort.dir > 0 ? "ascending" : "descending") : "none"}"><button data-k="${k}">${l}${stateSort.key === k ? (stateSort.dir > 0 ? " ▲" : " ▼") : ""}</button></th>`).join("")}</tr></thead>
+        <tbody>${row(r, "me pinned")}${sorted.map(x => row(x, x === r ? "me" : "")).join("")}</tbody></table></div>
+      <p class="muted">The selected system is pinned to the top and highlighted in its ranked position.</p>`;
+    draw("c-st-pillars", {
+      type: "bar",
+      data: { labels: PILLARS.map(p => p.short), datasets: [{ label: STATES[s], data: PILLARS.map(p => +st[p.key].toFixed(1)), backgroundColor: css("--chart-1"), borderRadius: 4, maxBarThickness: 34 }, { label: "United States", data: PILLARS.map(p => +NAT[p.key].toFixed(1)), backgroundColor: css("--band-c"), borderRadius: 4, maxBarThickness: 34 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "top", align: "start", labels: { boxWidth: 12, boxHeight: 12 } } }, scales: { x: { grid: { display: false } }, y: { beginAtZero: true, max: 100, grid: { color: css("--chart-grid") } } } },
+    });
+    histChart("c-st-hist", rows, r);
     $("#p-state").querySelectorAll("th button").forEach(b => b.addEventListener("click", () => {
-      const k = b.dataset.k;
-      stateSort = { key: k, dir: stateSort.key === k ? -stateSort.dir : (k === "system_name" || k === "state_rank" ? 1 : -1) };
-      renderState();
-      $(`#p-state th button[data-k="${k}"]`).focus();
+      const k = b.dataset.k; stateSort = { key: k, dir: stateSort.key === k ? -stateSort.dir : (["system_name", "state_rank", "system_type"].includes(k) ? 1 : -1) };
+      renderStateReport(); $(`#p-state th button[data-k="${k}"]`).focus();
     }));
   }
 
   function renderPeers() {
     const r = current, c = cohortOf(r), rows = c.rows;
-    const h = histogram(rows);
-    const myBin = Math.min(9, Math.floor(r.dfd_score / 10));
-    const p = percentileOf(rows, r);
-    const med = median(rows.map(x => x.dfd_score));
-    const topQ = rows.filter(x => x.dfd_score >= quantile(rows.map(y => y.dfd_score), .75));
+    const sorted = [...rows].sort((a, b) => b.dfd_score - a.dfd_score);
+    const rank = sorted.indexOf(r) + 1, p = share(rows, x => x.dfd_score < r.dfd_score);
+    const q = quartileRows(rows);
+    const list = sorted.slice(0, 10);
+    if (!list.includes(r)) list.push(r);
     $("#p-peers").innerHTML = `
-      <div class="kv">
-        <div><b>${rows.length}</b><span>Systems in cohort</span></div>
-        <div><b>${med.toFixed(1)}</b><span>Cohort median</span></div>
-        <div><b>#${[...rows].sort((a, b) => b.dfd_score - a.dfd_score).indexOf(r) + 1}</b><span>Your rank in cohort</span></div>
-        <div><b>${ord(Math.round(p * 100))}</b><span>Percentile in cohort</span></div>
+      <div class="card"><p class="eyebrow" style="margin:0 0 4px">Peer group report · 2026</p><h3 style="font-size:24px;margin:0">${esc(c.label.charAt(0).toUpperCase() + c.label.slice(1))}</h3>
+        <p class="muted" style="margin:6px 0 0">Peers are matched on type of system, number of locations and setting, then widened step by step until the group holds at least 20 systems. A 7-clinic rural health center is compared with other small rural centers, not a 40-site metro group.</p>
+        <div class="kv" style="margin-top:14px">
+          <div><b>${rows.length}</b><span>systems in the group</span></div>
+          <div><b>${median(rows.map(x => x.dfd_score)).toFixed(1)}</b><span>group median score</span></div>
+          <div><b>${rank} of ${rows.length}</b><span>${esc(r.system_name)}</span></div>
+          <div><b>${ord(Math.max(1, Math.round(p * 100)))}</b><span>percentile in group</span></div>
+          <div><b>${new Set(rows.map(x => x.state)).size}</b><span>states represented</span></div>
+        </div></div>
+      <div class="grid-2 section-gap">
+        <div class="card"><figure><h3>Score distribution</h3>
+          <div class="chart-box"><canvas id="c-peer" role="img" aria-label="Peer group distribution with this system's range highlighted. A table version follows."></canvas></div>
+          <figcaption><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--accent);vertical-align:-1px"></span> Range containing ${esc(r.system_name)} (${r.dfd_score.toFixed(1)}).</figcaption>
+          <details class="tbl"><summary>Show as table</summary><div id="peer-table"></div></details></figure></div>
+        <div class="card"><h3>What the top quarter of this group does differently</h3><p class="muted">Top and bottom 25% of the group by score.</p>
+          ${table(["Measure", "Top 25%", "Bottom 25%"], q.rows, { num: [1, 2] })}</div>
       </div>
-      <div class="grid-2">
-        <div class="card"><figure>
-          <h3>Score distribution: ${esc(c.label)}</h3>
-          <div class="chart-box"><canvas id="c-peer" role="img" aria-label="Histogram of cohort DFD Scores, with your system's range highlighted. A table version follows."></canvas></div>
-          <figcaption><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${css("--accent")};vertical-align:-1px"></span> The range containing ${esc(r.system_name)} (${r.dfd_score.toFixed(1)})</figcaption>
-          <details class="tbl"><summary>Show as table</summary>${tableHTML(["Score range", "Systems"], h.labels.map((l, i) => [l + (i === myBin ? " (your system)" : ""), h.counts[i]]))}</details>
-        </figure></div>
-        <div class="card">
-          <h3>What the top quarter of this cohort does differently</h3>
-          ${tableHTML(["Measure", "Top quarter", "Whole cohort", "You"], [
-            ["Calls reaching a person", pct(mean(topQ.map(x => x.answer_rate))), pct(mean(rows.map(x => x.answer_rate))), pct(r.answer_rate)],
-            ["Median time to a person", fmtSecShort(median(topQ.map(x => x.time_to_human_s))), fmtSecShort(median(rows.map(x => x.time_to_human_s))), fmtSecShort(r.time_to_human_s)],
-            ["Live or service after hours", pct(share(topQ, x => x.ah_outcome === "live" || x.ah_outcome === "service")), pct(share(rows, x => x.ah_outcome === "live" || x.ah_outcome === "service")), (r.ah_outcome === "live" || r.ah_outcome === "service") ? "Yes" : "No"],
-            ["Online booking", pct(share(topQ, x => x.online_booking)), pct(share(rows, x => x.online_booking)), r.online_booking ? "Yes" : "No"],
-          ])}
-          <p class="muted">The cohort is matched on system type, location-count band and rurality. Comparing a 7-clinic rural FQHC with a 40-site metro group tells you nothing.</p>
-        </div>
-      </div>`;
-    const colors = h.counts.map((_, i) => i === myBin ? css("--accent") : css("--chart-1"));
-    barChart("c-peer", h.labels, h.counts, { colors, xTitle: "DFD Score", yTitle: "Systems", tip: (v, i) => `${v} systems${i === myBin ? " (includes yours)" : ""}` });
+      <h3 class="section-gap">Highest-scoring peers</h3>
+      ${table(["Rank", "System", "State", "Locations", "Score"], list.map(x => [sorted.indexOf(x) + 1, esc(x.system_name) + (x === r ? " (selected)" : ""), STATES[x.state], x.location_count, `${x.dfd_score.toFixed(1)} ${bandChip(x.dfd_band)}`]), { num: [0, 3, 4] })}`;
+    const h = histChart("c-peer", rows, r);
+    $("#peer-table").innerHTML = table(["Score range", "Systems"], h.labels.map((l, i) => [l, h.counts[i]]), { num: [1] });
   }
 
   function renderNational() {
-    const types = [...new Set(SYS.map(r => r.system_type))].sort();
-    const sizes = ["1-4", "5-9", "10-24", "25-49", "50+"];
-    const rurs = ["Rural", "Micropolitan", "Metro"];
-    const opt = (vals, cur, all) => `<option value="">${all}</option>` + vals.map(v => `<option ${v === cur ? "selected" : ""}>${v}</option>`).join("");
+    const opts = (vals, key, field, all, label) => {
+      const others = SYS.filter(x => (key !== "type" && natF.type ? x.system_type === natF.type : true) && (key !== "size" && natF.size ? x.size_band === natF.size : true) && (key !== "rur" && natF.rur ? x.rurality === natF.rur : true));
+      return `<option value="">${all} (${others.length})</option>` + vals.map(v => { const n = others.filter(x => x[field] === v).length; return `<option value="${v}" ${v === natF[key] ? "selected" : ""} ${n < 10 ? "disabled" : ""}>${label ? label(v) : v} (${n})</option>`; }).join("");
+    };
     $("#p-nat").innerHTML = `
-      <div class="filters" role="group" aria-label="Filter national view">
-        <div><label for="f-type">System type</label><select id="f-type">${opt(types, natFilters.type, "All types")}</select></div>
-        <div><label for="f-size">Locations</label><select id="f-size">${opt(sizes, natFilters.size, "All sizes")}</select></div>
-        <div><label for="f-rur">Rurality</label><select id="f-rur">${opt(rurs, natFilters.rur, "All areas")}</select></div>
+      <div class="filters" role="group" aria-label="Filter the national view">
+        <div><label for="f-type">Type of system</label><select id="f-type">${opts(TYPES, "type", "system_type", "All types")}</select></div>
+        <div><label for="f-size">Locations</label><select id="f-size">${opts(SIZES, "size", "size_band", "All sizes", v => SIZE_LABEL[v])}</select></div>
+        <div><label for="f-rur">Setting</label><select id="f-rur">${opts(RURS, "rur", "rurality", "All settings")}</select></div>
       </div>
+      <p class="muted" style="margin-top:-6px">Numbers in brackets show how many systems each choice leaves. Choices that would leave fewer than 10 systems are unavailable.</p>
       <div id="nat-body" aria-live="polite"></div>`;
-    ["type", "size", "rur"].forEach(k => $("#f-" + k).addEventListener("change", e => { natFilters[k] = e.target.value; renderNatBody(); }));
-    renderNatBody();
-  }
-
-  function renderNatBody() {
-    const f = natFilters;
-    const rows = SYS.filter(r => (!f.type || r.system_type === f.type) && (!f.size || r.size_band === f.size) && (!f.rur || r.rurality === f.rur));
-    const body = $("#nat-body");
-    if (rows.length < 10) { body.innerHTML = `<p class="narr">Only ${rows.length} systems match these filters, too few to chart. Widen a filter.</p>`; return; }
-    const scores = rows.map(r => r.dfd_score);
-    const q1 = quantile(scores, .25), q3 = quantile(scores, .75);
-    const top = rows.filter(r => r.dfd_score >= q3), bot = rows.filter(r => r.dfd_score <= q1);
-    const h = histogram(rows);
+    ["type", "size", "rur"].forEach(k => $("#f-" + k).addEventListener("change", e => { natF[k] = e.target.value; renderNational(); $("#f-" + k).focus(); }));
+    const rows = SYS.filter(r => (!natF.type || r.system_type === natF.type) && (!natF.size || r.size_band === natF.size) && (!natF.rur || r.rurality === natF.rur));
+    const sc = rows.map(r => r.dfd_score), q = quartileRows(rows);
+    const desc = [natF.type, natF.size && SIZE_LABEL[natF.size], natF.rur].filter(Boolean).join(" · ") || "All systems";
     const corr = [
-      { r: pearson(rows.map(x => x.ivr_layers), rows.map(x => Math.log(x.time_to_human_s))), t: "phone menu depth and time to reach a person" },
+      { r: pearson(rows.map(x => x.ivr_layers), rows.map(x => Math.log(answered(x) ? x.time_to_human_s : CAP))), t: "phone menu depth and wait for a person" },
+      { r: pearson(rows.map(x => x.ivr_layers), rows.map(x => x.answer_rate)), t: "phone menu depth and answer rate" },
       { r: pearson(rows.map(x => Math.log(x.location_count)), rows.map(x => x.digital_score)), t: "number of locations and digital self-service" },
       { r: pearson(rows.map(x => x.digital_score), rows.map(x => x.phone_score)), t: "digital self-service and phone access" },
-      { r: pearson(rows.map(x => x.ivr_layers), rows.map(x => x.answer_rate)), t: "phone menu depth and answer rate" },
     ].sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
-    const strength = r => Math.abs(r) >= .5 ? "strong" : Math.abs(r) >= .3 ? "moderate" : Math.abs(r) >= .15 ? "weak" : "no meaningful";
-    const desc = f.type || f.size || f.rur ? [f.type, f.size && `${f.size} locations`, f.rur].filter(Boolean).join(", ") : "all systems";
-    body.innerHTML = `
-      <div class="kv">
-        <div><b>${rows.length.toLocaleString()}</b><span>Systems (${esc(desc)})</span></div>
-        <div><b>${median(scores).toFixed(1)}</b><span>Median DFD Score</span></div>
-        <div><b>${q1.toFixed(0)}–${q3.toFixed(0)}</b><span>Middle half</span></div>
-        <div><b>${fmtSecShort(median(rows.map(r => r.time_to_human_s)))}</b><span>Median time to a person</span></div>
+    const strength = v => Math.abs(v) >= .5 ? "Strong" : Math.abs(v) >= .3 ? "Moderate" : Math.abs(v) >= .15 ? "Weak" : "No meaningful";
+    const states = new Set(rows.map(r => r.state)).size;
+    $("#nat-body").innerHTML = `
+      <div class="stat-strip">
+        <div><b>${fmtInt(rows.length)}</b><span>${esc(desc)}</span></div>
+        <div><b>${median(sc).toFixed(1)}</b><span>median score</span></div>
+        <div><b>${quantile(sc, .25).toFixed(0)}–${quantile(sc, .75).toFixed(0)}</b><span>middle half of systems</span></div>
+        <div><b>${pct(pooledAnswer(rows))}</b><span>calls reaching a person</span></div>
+        <div><b>${fmtWaitShort(typicalWait(rows))}</b><span>typical wait</span></div>
       </div>
       <div class="grid-2">
-        <div class="card"><figure>
-          <h3>DFD Score distribution</h3>
-          <div class="chart-box"><canvas id="c-nat" role="img" aria-label="Histogram of DFD Scores for the filtered systems. A table version follows."></canvas></div>
-          <details class="tbl"><summary>Show as table</summary>${tableHTML(["Score range", "Systems"], h.labels.map((l, i) => [l, h.counts[i]]))}</details>
-        </figure></div>
-        <div class="card">
-          <h3>Average score by state</h3>
-          <div class="tilemap" id="tilemap-nat" role="img" aria-label="Tile map of average DFD Score by state for the filtered systems. A table version follows."></div>
-          <div class="legend" id="nat-legend"></div>
-          <details class="tbl"><summary>Show as table</summary><div id="nat-map-table"></div></details>
-        </div>
-        <div class="card">
-          <h3>Top quarter vs. bottom quarter</h3>
-          ${tableHTML(["Measure", "Top 25%", "Bottom 25%"], [
-            ["Median time to a person", fmtSecShort(median(top.map(r => r.time_to_human_s))), fmtSecShort(median(bot.map(r => r.time_to_human_s)))],
-            ["Calls reaching a person", pct(mean(top.map(r => r.answer_rate))), pct(mean(bot.map(r => r.answer_rate)))],
-            ["Average phone menu layers", mean(top.map(r => r.ivr_layers)).toFixed(1), mean(bot.map(r => r.ivr_layers)).toFixed(1)],
-            ["Live or service after hours", pct(share(top, r => r.ah_outcome === "live" || r.ah_outcome === "service")), pct(share(bot, r => r.ah_outcome === "live" || r.ah_outcome === "service"))],
-            ["Online booking", pct(share(top, r => r.online_booking)), pct(share(bot, r => r.online_booking))],
-            ["Median accessibility issues", median(top.map(r => r.wcag_violations)), median(bot.map(r => r.wcag_violations))],
-          ])}
-        </div>
-        <div class="card">
-          <h3>Relationships in the data</h3>
-          <ul>${corr.map(c => `<li><b>${strength(c.r).replace(/^./, s => s.toUpperCase())}</b> ${c.r >= 0 ? "positive" : "negative"} link between ${c.t} (r = ${c.r.toFixed(2)}).</li>`).join("")}</ul>
-          <p class="muted">Correlations are recomputed for whatever filters are applied. They describe the modeled sample and are not causal claims.</p>
-        </div>
+        <div class="card"><figure><h3>Score distribution</h3>
+          <div class="chart-box"><canvas id="c-nat" role="img" aria-label="Distribution of scores for the filtered systems. A table version follows."></canvas></div>
+          <details class="tbl"><summary>Show as table</summary><div id="nat-hist-table"></div></details></figure></div>
+        <div class="card"><h3>Average score by state</h3><p class="muted">${states} states have systems in this view. Grey states have none.</p>
+          <svg class="us-map" id="nat-map" role="group" aria-label="Map of average score by state for the filtered systems"></svg>
+          <div class="map-legend" id="nat-legend"></div></div>
+        <div class="card"><h3>Top quarter vs. bottom quarter</h3>${table(["Measure", "Top 25%", "Bottom 25%"], q.rows, { num: [1, 2] })}</div>
+        <div class="card"><h3>Relationships in the data</h3>
+          <ul style="padding-left:18px;margin:8px 0">${corr.map(c => `<li style="margin-bottom:8px"><b>${strength(c.r)}</b> ${Math.abs(c.r) < .15 ? "link" : c.r >= 0 ? "positive link" : "negative link"} between ${c.t} (r = ${c.r.toFixed(2)}).</li>`).join("")}</ul>
+          <p class="muted">Correlations are recomputed for the filters above. They describe the systems in view, not causes.</p></div>
       </div>`;
-    barChart("c-nat", h.labels, h.counts, { xTitle: "DFD Score", yTitle: "Systems", tip: v => `${v} systems` });
-    renderTileMap($("#tilemap-nat"), rows, { legend: $("#nat-legend"), table: $("#nat-map-table"), selected: current && current.state, onPick: s => { const pick = SYS.filter(x => x.state === s).sort((a, b) => b.dfd_score - a.dfd_score)[0]; if (pick) { select(pick); document.getElementById("t-state").click(); } } });
+    const h = histChart("c-nat", rows);
+    $("#nat-hist-table").innerHTML = table(["Score range", "Systems"], h.labels.map((l, i) => [l, h.counts[i]]), { num: [1] });
+    const by = {}; rows.forEach(x => (by[x.state] = by[x.state] || []).push(x.dfd_score));
+    const vals = Object.fromEntries(ST_CODES.map(s => [s, by[s] ? mean(by[s]) : NaN]));
+    natMap = buildMap($("#nat-map"), s => { const pick = (BY_STATE[s] || []).filter(x => rows.includes(x)).sort((a, b) => b.dfd_score - a.dfd_score)[0]; if (pick) { select(pick); activateTab("t-state"); } });
+    const scale = natMap.color(vals, MAP_METRICS[0], current && current.state);
+    legend($("#nat-legend"), scale, MAP_METRICS[0]);
   }
 
   // ---------- boot ----------
-  chartDefaults();
-  renderHero();
-  renderOregon();
-  renderPillars();
-  renderTeasers();
+  function renderAll() {
+    chartDefaults();
+    renderCover(); renderPhone(); renderOregon(); renderAfterHours(); renderDigital(); renderFindability(); renderLeaders(); renderMethod();
+    if (mainMap) { colorMain(); renderStatePanel(); }
+  }
+  renderAll();
+  initMap();
   initGate();
-  if (gateOpen()) unlock(false);
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { chartDefaults(); renderTeasers(); if (explorerReady) renderActive(); });
+  if (gateIsOpen()) unlock(false);
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderAll(); if (ready) renderActive(); });
 })();
