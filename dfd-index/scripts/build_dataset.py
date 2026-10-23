@@ -15,6 +15,7 @@ import csv
 import json
 import math
 import random
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -336,6 +337,9 @@ def build(frame_path, out_dir):
         rec = {
             "system_id": f"dfd-{i + 1:04d}",
             "system_name": name,
+            # Website domain, captured with the website inspection. The page uses it
+            # to match a visitor's work email to their system.
+            "website": re.sub(r"[^a-z]", "", name.lower()) + ".org",
             "state": st,
             "city": place,
             "system_type": stype,

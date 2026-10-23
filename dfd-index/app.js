@@ -495,43 +495,121 @@
     const f = $("#gate-form");
     f.addEventListener("submit", e => {
       e.preventDefault();
-      const v = { name: f.name.value.trim(), email: f.email.value.trim(), org: f.org.value.trim(), role: f.role.value };
+      const v = { name: f.name.value.trim(), email: f.email.value.trim(), org: f.org.value.trim(), state: f.state.value, role: f.role.value };
       const errs = {};
       if (!v.name) errs.name = "Please enter your name.";
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) errs.email = "Please enter a valid email address.";
       else if (FREE.includes(v.email.split("@")[1].toLowerCase())) errs.email = "Please use your work email. We send the report to organizational addresses only.";
       if (!v.org) errs.org = "Please enter your organization.";
+      if (!v.state) errs.state = "Please choose your state.";
       if (!v.role) errs.role = "Please choose a role.";
-      for (const k of ["name", "email", "org", "role"]) { $("#e-" + k).textContent = errs[k] || ""; f[k].setAttribute("aria-invalid", errs[k] ? "true" : "false"); }
+      for (const k of ["name", "email", "org", "state", "role"]) { $("#e-" + k).textContent = errs[k] || ""; f[k].setAttribute("aria-invalid", errs[k] ? "true" : "false"); }
       const first = Object.keys(errs)[0];
       if (first) { f[first].focus(); return; }
       const [firstName, ...rest] = v.name.split(/\s+/);
-      const lead = { first_name: firstName, last_name: rest.join(" ") || "-", email: v.email, company: v.org, title: v.role, lead_source: "Digital Front Door Index 2026", campaign: "digital-front-door-index-2026", submitted_at: new Date().toISOString() };
+      const lead = { first_name: firstName, last_name: rest.join(" ") || "-", email: v.email, company: v.org, state: v.state, title: v.role, lead_source: "Digital Front Door Index 2026", campaign: "digital-front-door-index-2026", submitted_at: new Date().toISOString() };
       console.log("[Index gate] web-to-lead payload", lead);
       try { localStorage.setItem(GATE_KEY, JSON.stringify(lead)); } catch (e2) { /* private mode: reveal anyway */ }
-      unlock(true);
+      unlock(true, lead);
     });
   }
-  function unlock(fromSubmit) {
+  function initStateSelect(el) {
+    el.innerHTML = `<option value="">Choose a state</option>` + [...ST_CODES].sort((a, b) => STATES[a].localeCompare(STATES[b])).map(s => `<option value="${s}">${STATES[s]}</option>`).join("");
+  }
+  function storedLead() { try { return JSON.parse(localStorage.getItem(GATE_KEY)); } catch (e) { return null; } }
+  function unlock(fromSubmit, lead) {
     $("#gate").hidden = true;
     $("#explorer").hidden = false;
-    initExplorer();
+    initExplorer(lead || storedLead());
     renderStatePanel();
     if (fromSubmit) $("#x-h").focus();
   }
 
   // ---------- explorer ----------
-  let current = null, ready = false, natF = { type: "", size: "", rur: "" }, natMap = null;
-  function initExplorer() {
+  let current = null, ready = false, natF = { type: "", size: "", rur: "" }, natMap = null, exampleFor = null;
+
+  // Match a visitor to their system: website domain first, then a unique
+  // organization-name match (preferring their state). Ambiguous names return
+  // the candidates so the visitor can choose.
+  const STOP = new Set(["the", "of", "and", "inc", "llc", "health", "healthcare", "system", "systems", "medical", "center", "centers", "hospital", "clinic", "clinics", "group", "regional", "community", "family", "care", "partners", "network"]);
+  const norm = t => String(t || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w && !STOP.has(w)).join(" ");
+  function matchSystem(lead) {
+    if (!lead) return null;
+    const dom = String(lead.email || "").split("@")[1]?.toLowerCase().replace(/^www\./, "") || "";
+    const byDomain = SYS.find(r => r.website && (dom === r.website || dom.endsWith("." + r.website)));
+    if (byDomain) return { r: byDomain, how: "your email domain" };
+    const o = norm(lead.company);
+    if (o.length < 4) return null;
+    const cands = SYS.filter(r => { const n = norm(r.system_name); return n && (n === o || n.startsWith(o + " ") || o.startsWith(n + " ") || n === o.split(" ")[0]); });
+    const inState = cands.filter(r => r.state === lead.state);
+    const pool = inState.length ? inState : cands;
+    if (pool.length === 1) return { r: pool[0], how: "your organization's name" };
+    if (pool.length > 1) return { cands: pool.slice(0, 5) };
+    return null;
+  }
+  function note(html) {
+    let el = $("#match-note");
+    if (!el) { el = document.createElement("div"); el.id = "match-note"; el.className = "match-note"; el.setAttribute("aria-live", "polite"); $(".picker").after(el); }
+    el.innerHTML = html; el.hidden = !html;
+  }
+  function initExplorer(lead) {
     if (ready) return; ready = true;
-    initPicker(); initTabs();
+    initPicker(); initTabs(); initRequest(lead);
     $("#cta-btn").addEventListener("click", () => {
-      let lead = null; try { lead = JSON.parse(localStorage.getItem(GATE_KEY)); } catch (e) { /* ignore */ }
-      console.log("[Index] line-level results requested", { system_id: current && current.system_id, system_name: current && current.system_name, lead });
-      $("#cta-msg").textContent = current ? `Thanks. The line-by-line results for ${current.system_name} will arrive by email within two business days.` : "Choose a system above first.";
+      if (exampleFor) { $("#cta-msg").innerHTML = `This is an example report. <a href="#request" class="req-open">Request a benchmark</a> to get line-by-line results for ${esc(exampleFor.name)}.`; return; }
+      console.log("[Index] line-level results requested", { system_id: current.system_id, system_name: current.system_name, lead: storedLead() });
+      $("#cta-msg").textContent = `Thanks. The line-by-line results for ${current.system_name} will arrive by email within two business days.`;
     });
-    const or = (BY_STATE[selState] || BY_STATE.OR).slice().sort((a, b) => a.dfd_score - b.dfd_score);
-    select(or[Math.floor(or.length * .45)]);
+    const m = matchSystem(lead);
+    if (m && m.r) {
+      select(m.r);
+      note(`We matched you to <b>${esc(m.r.system_name)}</b> using ${m.how}. Not right? Search for your system above, or <a href="#request" class="req-open">request a benchmark</a>.`);
+      return;
+    }
+    // No match: open the visitor's state with an example report, and put the
+    // benchmark request in front of them.
+    const st = lead && BY_STATE[lead.state] ? lead.state : selState;
+    const pool = BY_STATE[st].slice().sort((a, b) => a.dfd_score - b.dfd_score);
+    exampleFor = lead ? { name: lead.company || "your system", state: st } : null;
+    select(pool[Math.floor(pool.length / 2)]);
+    if (lead) {
+      showRequest(false);
+      const choices = m && m.cands ? ` Is one of these yours? ${m.cands.map(r => `<button type="button" class="linkbtn" data-id="${r.system_id}">${esc(r.system_name)} (${r.state})</button>`).join(" ")}` : "";
+      note(`<b>${esc(lead.company)}</b> isn't in the index yet. Below is ${STATES[st]}'s state report and an example system report, and the form above requests a benchmark for your system.${choices}`);
+      document.querySelectorAll("#match-note .linkbtn").forEach(b => b.addEventListener("click", () => { exampleFor = null; select(BY_ID[b.dataset.id]); note(`Showing <b>${esc(BY_ID[b.dataset.id].system_name)}</b>.`); $("#request").hidden = true; }));
+      activateTab("t-state");
+    }
+  }
+  function initRequest(lead) {
+    const opts = `<option value="">Choose a state</option>` + [...ST_CODES].sort((a, b) => STATES[a].localeCompare(STATES[b])).map(s => `<option value="${s}">${STATES[s]}</option>`).join("");
+    $("#r-state").innerHTML = opts;
+    if (lead) { $("#r-name").value = lead.company || ""; $("#r-state").value = lead.state || ""; const d = String(lead.email || "").split("@")[1]; if (d) $("#r-site").value = d; }
+    document.addEventListener("click", e => { const a = e.target.closest(".req-open"); if (a) { e.preventDefault(); showRequest(true); } });
+    const f = $("#req-form");
+    f.addEventListener("submit", e => {
+      e.preventDefault();
+      const v = { sysname: f.sysname.value.trim(), site: f.site.value.trim(), state: f.state.value, locs: f.locs.value };
+      const errs = {};
+      if (!v.sysname) errs.sysname = ["r-name", "Please enter the system's name."];
+      if (!/^[^\s]+\.[a-z]{2,}(\/.*)?$/i.test(v.site.replace(/^https?:\/\//, ""))) errs.site = ["r-site", "Please enter the system's website, for example example.org."];
+      if (!v.state) errs.state = ["r-state", "Please choose a state."];
+      if (!v.locs) errs.locs = ["r-locs", "Please choose the number of locations."];
+      [["sysname", "r-name"], ["site", "r-site"], ["state", "r-state"], ["locs", "r-locs"]].forEach(([k, id]) => { $("#e-" + id).textContent = errs[k] ? errs[k][1] : ""; $("#" + id).setAttribute("aria-invalid", errs[k] ? "true" : "false"); });
+      const first = Object.values(errs)[0];
+      if (first) { $("#" + first[0]).focus(); return; }
+      const req = { event: "benchmark_request", system_name: v.sysname, website: v.site, state: v.state, locations: v.locs, requested_by: storedLead(), requested_at: new Date().toISOString() };
+      console.log("[Index] benchmark request", req);
+      const who = req.requested_by && req.requested_by.email;
+      $("#req-msg").textContent = `Request received for ${v.sysname}. We'll email the report${who ? " to " + who : ""} when the measurement is complete.`;
+      f.querySelector("button[type=submit]").disabled = true;
+    });
+  }
+  function showRequest(focus) {
+    const card = $("#request");
+    card.hidden = false;
+    const q = $("#sys-q").value.trim();
+    if (q && !$("#r-name").value) $("#r-name").value = q;
+    if (focus) { card.scrollIntoView({ block: "start" }); $("#r-name").focus(); }
   }
   function initPicker() {
     const q = $("#sys-q"), list = $("#sys-list");
@@ -542,19 +620,25 @@
       const t = q.value.trim().toLowerCase();
       if (t.length < 2) { close(); return; }
       items = SYS.filter(r => r.system_name.toLowerCase().includes(t) || STATES[r.state].toLowerCase().startsWith(t) || r.state.toLowerCase() === t).slice(0, 12);
-      list.innerHTML = items.length ? items.map((r, i) => `<li role="option" id="opt-${i}" data-id="${r.system_id}">${esc(r.system_name)} <small>${STATES[r.state]} · ${r.system_type}</small></li>`).join("") : `<li role="option" aria-disabled="true">No matching systems</li>`;
+      list.innerHTML = items.length ? items.map((r, i) => `<li role="option" id="opt-${i}" data-id="${r.system_id}">${esc(r.system_name)} <small>${STATES[r.state]} · ${r.system_type}</small></li>`).join("") : `<li role="option" id="opt-req" data-req="1">No matching systems. <b>Request a benchmark for “${esc(q.value.trim())}”</b></li>`;
       list.hidden = false; q.setAttribute("aria-expanded", "true"); active = -1;
     });
     q.addEventListener("keydown", e => {
       if (list.hidden) return;
       if (e.key === "ArrowDown") active = Math.min(items.length - 1, active + 1);
       else if (e.key === "ArrowUp") active = Math.max(0, active - 1);
-      else if (e.key === "Enter" && active >= 0) { e.preventDefault(); select(items[active]); close(); q.value = ""; return; }
+      else if (e.key === "Enter" && active >= 0) { e.preventDefault(); userPick(items[active]); close(); q.value = ""; return; }
+      else if (e.key === "Enter" && !items.length) { e.preventDefault(); close(); showRequest(true); return; }
       else if (e.key === "Escape") { close(); return; }
       else return;
       e.preventDefault(); paint(); if (active >= 0) q.setAttribute("aria-activedescendant", "opt-" + active);
     });
-    list.addEventListener("mousedown", e => { const li = e.target.closest("li[data-id]"); if (li) { e.preventDefault(); select(BY_ID[li.dataset.id]); close(); q.value = ""; } });
+    list.addEventListener("mousedown", e => {
+      const li = e.target.closest("li[data-id], li[data-req]"); if (!li) return;
+      e.preventDefault(); close();
+      if (li.dataset.req) { showRequest(true); return; }
+      userPick(BY_ID[li.dataset.id]); q.value = "";
+    });
     q.addEventListener("blur", () => setTimeout(close, 120));
   }
   function initTabs() {
@@ -574,9 +658,12 @@
     document.querySelectorAll('[role="tab"]').forEach(x => { const on = x.id === id; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; document.getElementById(x.getAttribute("aria-controls")).hidden = !on; });
     renderActive();
   }
+  function userPick(r) { exampleFor = null; note(""); select(r); }
   function select(r) {
     current = r;
-    $("#picked").innerHTML = `Showing <b>${esc(r.system_name)}</b> · ${r.system_type} · ${STATES[r.state]} · ${r.location_count} locations · ${r.rurality} ${MODELED}`;
+    $("#picked").innerHTML = exampleFor
+      ? `Example report: <b>${esc(r.system_name)}</b>, a typical ${STATES[r.state]} ${r.system_type.toLowerCase()}. Search above to open any other system.`
+      : `Showing <b>${esc(r.system_name)}</b> · ${r.system_type} · ${STATES[r.state]} · ${r.location_count} locations · ${r.rurality} ${MODELED}`;
     renderActive();
   }
   function renderActive() {
@@ -660,7 +747,7 @@
       <div class="card">
         <div class="report-head">
           <div class="dial" style="background:conic-gradient(${ring} ${r.dfd_score * 3.6}deg, var(--surface-2) 0)" role="img" aria-label="Score ${r.dfd_score} of 100, grade ${r.dfd_band}"><div><span><b>${Math.round(r.dfd_score)}</b><small>Score</small></span></div></div>
-          <div><p class="eyebrow" style="margin:0 0 4px">System report · 2026</p><h3>${esc(r.system_name)}</h3>
+          <div><p class="eyebrow" style="margin:0 0 4px">${exampleFor ? "Example system report" : "System report"} · 2026</p><h3>${esc(r.system_name)}</h3>
             <div class="muted">${r.system_type} · ${STATES[r.state]} · ${r.location_count} locations · ${fmtInt(r.provider_count)} providers · ${r.rurality}</div>
             <p style="margin:10px 0 0">Grade ${bandChip(r.dfd_band)} ${MODELED}</p></div>
           <div class="ranks"><div><b>${fmtInt(r.national_rank)}</b><span>of ${fmtInt(N)} in U.S.</span></div><div><b>${r.state_rank}</b><span>of ${st.length} in ${STATES[r.state]}</span></div><div><b>${peerRank}</b><span>of ${rows.length} peers</span></div></div>
@@ -860,6 +947,7 @@
   renderAll();
   initMap();
   initGate();
+  initStateSelect($("#g-state"));
   if (gateIsOpen()) unlock(false);
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderAll(); if (ready) renderActive(); });
 })();

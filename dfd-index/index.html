@@ -203,6 +203,15 @@ input[aria-invalid="true"] { border-color: var(--band-f); }
 .btn::after { content: "\2192"; font-size: 16px; }
 .btn:hover { background: var(--navy); }
 .form-end { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; }
+.btn.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); box-shadow: none; margin-left: 8px; }
+.btn.ghost:hover { background: var(--surface); }
+@media (max-width: 640px) { .btn.ghost { margin: 12px 0 0; } }
+.request { border: 2px solid var(--blue); }
+.req-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px; }
+@media (max-width: 860px) { .req-grid { grid-template-columns: 1fr; } }
+#req-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 14px; }
+.linkbtn { font: inherit; font-weight: 600; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; margin: 4px 2px 0 0; cursor: pointer; color: var(--brand-500); }
+.match-note { background: var(--brand-100); border-radius: var(--radius-md); padding: 12px 16px; margin-top: 14px; font-size: 15px; }
 
 /* Explorer */
 #explorer[hidden] { display: none; }
@@ -502,6 +511,7 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
         <div><label for="g-name">Full name</label><input id="g-name" name="name" autocomplete="name" required><div class="err" id="e-name"></div></div>
         <div><label for="g-email">Work email</label><input id="g-email" name="email" type="email" autocomplete="email" required aria-describedby="e-email"><div class="err" id="e-email" aria-live="polite"></div></div>
         <div><label for="g-org">Organization</label><input id="g-org" name="org" autocomplete="organization" required><div class="err" id="e-org"></div></div>
+        <div><label for="g-state">State</label><select id="g-state" name="state" required><option value="">Choose a state</option></select><div class="err" id="e-state"></div></div>
         <div><label for="g-role">Role</label>
           <select id="g-role" name="role" required>
             <option value="">Choose one</option><option>Chief executive / President</option><option>Chief operating officer / Operations</option><option>Patient access leader</option><option>Information technology leader</option><option>Practice or clinic manager</option><option>Other</option>
@@ -519,6 +529,21 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
         <input id="sys-q" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="sys-list" placeholder="Start typing a system name or a state" autocomplete="off">
         <ul id="sys-list" role="listbox" hidden></ul>
         <div class="picked" id="picked" aria-live="polite"></div>
+        <p class="muted" style="margin:8px 0 0">Don't see your system? <a href="#request" class="req-open">Request a benchmark</a></p>
+      </div>
+      <div class="card request section-gap" id="request" hidden aria-labelledby="req-h">
+        <div class="req-grid">
+          <div><p class="eyebrow" style="margin:0 0 6px">Not in the index yet</p><h3 id="req-h" style="font-size:24px">Request a benchmark for your system</h3>
+            <p class="muted" id="req-intro" style="font-size:15px">We'll call your system's published clinic lines in the morning and afternoon, place an after-hours call, and inspect your website, using the same method as every system in the index. Your report arrives by email when the measurement is complete.</p></div>
+          <form id="req-form" novalidate>
+            <div><label for="r-name">Health system name</label><input id="r-name" name="sysname" required><div class="err" id="e-r-name"></div></div>
+            <div><label for="r-site">Website</label><input id="r-site" name="site" placeholder="example.org" inputmode="url" required><div class="err" id="e-r-site"></div></div>
+            <div><label for="r-state">State</label><select id="r-state" name="state" required><option value="">Choose a state</option></select><div class="err" id="e-r-state"></div></div>
+            <div><label for="r-locs">Number of locations</label><select id="r-locs" name="locs" required><option value="">Choose one</option><option>1–4</option><option>5–9</option><option>10–24</option><option>25–49</option><option>50 or more</option></select><div class="err" id="e-r-locs"></div></div>
+            <div class="form-end"><button class="btn" type="submit">Request a benchmark</button></div>
+          </form>
+        </div>
+        <p id="req-msg" aria-live="polite" style="margin:12px 0 0;font-weight:600"></p>
       </div>
       <div role="tablist" aria-label="Report views">
         <button role="tab" id="t-sys" aria-controls="p-sys" aria-selected="true">System report</button>
@@ -535,6 +560,7 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
         <h2>Get your system's <span class="hl">line-by-line</span> results</h2>
         <p>We'll send the detail behind your score: which clinic numbers were answered and how fast, morning against afternoon, what callers hear after hours, and which website fixes would move your score the most.</p>
         <button class="btn" id="cta-btn" type="button">Send me the line-by-line results</button>
+        <a class="btn ghost req-open" href="#request">Request a benchmark for another system</a>
         <p id="cta-msg" aria-live="polite" style="margin-bottom:0"></p>
       </div>
     </div>
