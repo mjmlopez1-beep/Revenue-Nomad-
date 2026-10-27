@@ -1,7 +1,9 @@
 /* Design tokens: the one place brand values live.
    Source: computed styles read from claruscare.com on 2026-10-22 (brand brief
    captured in a separate session, see BRAND.md). Logo comes from
-   Clarus_Sales_Deck_v19.pptx. */
+   Clarus_Sales_Deck_v19.pptx.
+   Light only by design: the report always renders on white in the Clarus
+   palette, whatever the viewer's dark-mode setting. */
 :root {
   color-scheme: light;
   --font-sans: "Archivo", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -52,29 +54,4 @@
   --chart-1: #417de9;
   --chart-grid: #e6e9f0;
   --chart-axis: #435e93;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --brand-500: #7aa6f2; --brand-100: #0f2558;
-    --page: #04122f; --surface: #0b1d47; --surface-2: #10275a;
-    --ink: #f2f5fb; --ink-2: #c9d4ea; --ink-muted: #9fb0d2; --line: #1d356b; --focus: #ff9f13;
-    --panel: #0b1d47; --btn-bg: #417de9;
-    --demo-bg: #3a2603; --demo-ink: #ffdca0;
-    --measured: #72d9b0; --measured-bg: #0b3a2c; --modeled: #ffc76b; --modeled-bg: #3a2603;
-    --band-a: #6f9df0; --band-b: #a9c6f7; --band-c: #7b86a3; --band-d: #f7b267; --band-f: #ef6a5a;
-    --chart-1: #6f9df0; --chart-grid: #1d356b; --chart-axis: #9fb0d2;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --brand-500: #7aa6f2; --brand-100: #0f2558;
-  --page: #04122f; --surface: #0b1d47; --surface-2: #10275a;
-  --ink: #f2f5fb; --ink-2: #c9d4ea; --ink-muted: #9fb0d2; --line: #1d356b; --focus: #ff9f13;
-  --panel: #0b1d47; --btn-bg: #417de9;
-  --demo-bg: #3a2603; --demo-ink: #ffdca0;
-  --measured: #72d9b0; --measured-bg: #0b3a2c; --modeled: #ffc76b; --modeled-bg: #3a2603;
-  --band-a: #6f9df0; --band-b: #a9c6f7; --band-c: #7b86a3; --band-d: #f7b267; --band-f: #ef6a5a;
-  --chart-1: #6f9df0; --chart-grid: #1d356b; --chart-axis: #9fb0d2;
 }

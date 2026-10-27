@@ -32,9 +32,6 @@ header.site .wrap { display: flex; align-items: center; justify-content: space-b
 .logo { display: flex; flex-direction: column; color: var(--ink); text-decoration: none; line-height: 1.1; padding: 12px 0; gap: 4px; }
 .logo img { height: 34px; width: auto; display: block; }
 .logo small { font-family: var(--font-label); font-size: 11px; color: var(--ink-muted); letter-spacing: .02em; }
-.logo .on-dark { display: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo .on-light { display: none; } :root:not([data-theme="light"]) .logo .on-dark { display: block; } }
-:root[data-theme="dark"] .logo .on-light { display: none; } :root[data-theme="dark"] .logo .on-dark { display: block; }
 nav.main ul { list-style: none; display: flex; gap: 22px; margin: 0; padding: 0; flex-wrap: wrap; }
 nav.main a { color: var(--ink); text-decoration: none; font-family: var(--font-label); font-size: 16px; }
 nav.main a[aria-current] { text-decoration: underline; text-underline-offset: 6px; text-decoration-color: var(--blue); }
@@ -73,8 +70,6 @@ nav.main a[aria-current] { text-decoration: underline; text-underline-offset: 6p
 .finding { background: rgba(255,255,255,.75); border-radius: var(--radius-md); padding: 20px; box-shadow: 0 4px 18px rgba(7,29,73,.06); display: flex; flex-direction: column; gap: 8px; }
 .finding .big { font-size: 42px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
 .finding p { margin: 0; font-size: 15px; color: var(--ink-2); flex: 1; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .finding { background: var(--surface-2); } }
-:root[data-theme="dark"] .finding { background: var(--surface-2); }
 
 /* Sections and chapters */
 section.block { padding-block: 80px; }
@@ -125,8 +120,6 @@ details.tbl .table-wrap { margin-top: 8px; }
 .metric-switch { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .metric-switch button { font: inherit; font-family: var(--font-label); font-size: 15px; font-weight: 500; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: var(--radius-pill); padding: 7px 14px; cursor: pointer; min-height: 38px; }
 .metric-switch button[aria-pressed="true"] { background: var(--navy); color: #fff; border-color: var(--navy); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .metric-switch button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); } }
-:root[data-theme="dark"] .metric-switch button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); }
 .map-card { position: relative; padding: 14px; }
 .us-map { width: 100%; height: auto; display: block; }
 .us-map path { stroke: var(--surface); stroke-width: 1; cursor: pointer; transition: opacity .15s; outline: none; }
@@ -134,7 +127,6 @@ details.tbl .table-wrap { margin-top: 8px; }
 .us-map path.sel { stroke: var(--orange); stroke-width: 3; }
 .us-map path.dim { opacity: .35; }
 .us-map text { font-family: var(--font-label); font-size: 11px; font-weight: 600; pointer-events: none; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .us-map path:hover { stroke: #fff; } }
 .map-tip { position: absolute; z-index: 20; pointer-events: none; background: var(--navy); color: #fff; border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.4; box-shadow: 0 10px 30px rgba(7,29,73,.3); min-width: 180px; transform: translate(-50%, calc(-100% - 14px)); }
 .map-tip b { font-size: 15px; display: block; }
 .map-tip .row { display: flex; justify-content: space-between; gap: 14px; }
@@ -294,7 +286,7 @@ footer.site a { color: rgba(255,255,255,.85); text-decoration: none; line-height
 
 <header class="site">
   <div class="wrap">
-    <a class="logo" href="#top"><img class="on-light" src="assets/clarus-logo-navy.png" alt="Clarus"><img class="on-dark" src="assets/clarus-logo-white.png" alt="Clarus"><small>A Graham Holdings Company</small></a>
+    <a class="logo" href="#top"><img src="assets/clarus-logo-navy.png" alt="Clarus"><small>A Graham Holdings Company</small></a>
     <nav class="main" aria-label="Main">
       <ul><li><a href="#">Solutions</a></li><li><a href="#">Who we serve</a></li><li><a href="#" aria-current="page">Resources</a></li><li><a href="#">Company</a></li></ul>
     </nav>

@@ -14,7 +14,7 @@ All values live in `tokens.css`.
 ## Deliberate deviations
 
 - **Link and active-tab blue is `#2F6AD6`, not `#417DE9`.** Small text needs 4.5:1 contrast on white. `#417DE9` is still used for large headline highlights and charts.
-- **Dark mode is our own extension.** The site has no dark mode, so these values are derived from the same navy, blue and orange.
+- **Light only.** The site has no dark mode, so the report always renders on white in the Clarus palette, whatever the viewer's system setting.
 
 ## Still to verify
 

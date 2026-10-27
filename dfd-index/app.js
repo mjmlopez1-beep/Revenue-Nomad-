@@ -949,5 +949,4 @@
   initGate();
   initStateSelect($("#g-state"));
   if (gateIsOpen()) unlock(false);
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderAll(); if (ready) renderActive(); });
 })();
