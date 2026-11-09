@@ -192,17 +192,25 @@
 .rp-owns-head .rp-intro {
   margin-top: 14px;
 }
+/* Six cards a reader can scan: number and title, what it means, what the leader does, what you get by day 90;
+   the two questions companies ask fold away (owner review 2026-11-09: "too much text, not bite-sized"). */
 .rp-owns-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
 }
 .rp-own {
-  padding: 22px 0 26px;
-  border-top: 1px solid var(--rn-line);
-}
-.rp-own:last-child {
-  border-bottom: 1px solid var(--rn-line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid var(--rn-line);
+  border-radius: var(--rn-radius-sm);
+  background: var(--rn-white);
+  min-width: 0;
 }
 .rp-own-head {
   display: flex;
@@ -210,11 +218,18 @@
   gap: 14px;
 }
 .rp-own-n {
-  flex: 0 0 28px;
-  padding-top: 3px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--rn-radius-xs);
+  background: var(--rn-gold);
+  color: var(--rn-ink);
+  font-size: 12px;
   font-weight: 700;
-  color: var(--rn-forest);
 }
 .rp-own-head h3 {
   margin: 0;
@@ -227,35 +242,70 @@
   font-size: 14px;
   color: var(--rn-mute);
 }
-.rp-own-body {
+.rp-own-rows {
   display: grid;
-  gap: 16px;
-  margin-top: 14px;
-}
-.rp-day90 {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 12px;
+  gap: 10px;
   margin: 0;
-  padding: 12px 16px;
-  border-radius: var(--rn-radius-sm);
-  background: var(--rn-leaf-pale);
-  font-size: 14.5px;
-  line-height: 1.5;
-  color: var(--rn-ink);
 }
-.rp-day90-k {
+.rp-own-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--rn-radius-sm);
+  background: var(--rn-mist);
+}
+.rp-own-row dt {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  color: var(--rn-mute);
+}
+.rp-own-row dd {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--rn-ink-soft);
+}
+.rp-own-row--get {
+  background: var(--rn-leaf-pale);
+}
+.rp-own-row--get dt {
   color: var(--rn-forest);
+}
+.rp-own-row--get dd {
+  color: var(--rn-ink);
+  font-weight: 600;
+}
+.rp-own-more {
+  margin-top: auto;
+  border-top: 1px solid var(--rn-line);
+  padding-top: 10px;
+}
+.rp-own-more summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--rn-forest-link);
+}
+.rp-own-more summary::-webkit-details-marker {
+  display: none;
+}
+.rp-own-more[open] summary .rp-plus {
+  transform: rotate(45deg);
+}
+.rp-own-more .rp-qa {
+  margin-top: 14px;
 }
 .rp-qa {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
 }
 .rp-qa h4 {
   margin: 0;
@@ -848,16 +898,8 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 56px;
   }
-  .rp-owns {
-    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.5fr);
-    gap: 56px;
-  }
-  .rp-own-body {
-    padding-left: 42px;
-  }
-  .rp-qa {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 24px;
+  .rp-owns-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .rp-steps {
     grid-template-columns: repeat(5, minmax(0, 1fr));

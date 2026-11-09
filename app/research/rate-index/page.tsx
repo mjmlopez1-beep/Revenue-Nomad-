@@ -28,7 +28,7 @@ const monthName = (iso: string) => new Date(iso + "T00:00:00Z").toLocaleDateStri
 const d = rateIndex;
 const floor = d.rates.publicationFloor;
 const published = d.rates.byCategory.filter((c) => c.n >= floor);
-const directional = d.rates.byCategory.filter((c) => c.n > 0 && c.n < floor);
+const small = d.rates.byCategory.filter((c) => c.n > 0 && c.n < floor);
 const asOf = monthName(d.asOf);
 const bands = d.engagements.byRevenue.filter((b) => b.band !== "Pre-revenue");
 const scaleMin = 80, scaleMax = 400;
@@ -139,16 +139,15 @@ export default function RateIndexPage() {
             </div>
             <p className="rn-body rix-intro">
               The middle half of rates (25th to 75th percentile) with the median marked, per role category. Every figure is an
-              hourly rate from the Revenue Nomad Rate Index. Categories with fewer than {floor} rates are directional.
+              hourly rate from the Revenue Nomad Rate Index, with the number of rates behind each category beside it.
             </p>
             <ol className="rix-ranges">
-              {[...published, ...directional].map((c) => (
-                <li key={c.category} className={c.n < floor ? "rix-range is-directional" : "rix-range"}>
+              {[...published, ...small].map((c) => (
+                <li key={c.category} className={c.n < floor ? "rix-range is-small" : "rix-range"}>
                   <div className="rix-range-label">
                     <b>{c.category}</b>
                     <span>
                       n={c.n}
-                      {c.n < floor ? " · directional" : ""}
                     </span>
                   </div>
                   <div className="rix-range-bar" role="img" aria-label={`${c.category}: ${usd(c.p25)} to ${usd(c.p75)} an hour, median ${usd(c.median)}, from ${c.n} rates`}>

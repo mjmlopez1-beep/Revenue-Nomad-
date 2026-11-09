@@ -33,7 +33,7 @@ const rateLow = Math.min(...roleRows.map((r) => r.rate));
 const extendedHigh = Math.max(...roleRows.map((r) => r.extended));
 const demandHigh = Math.max(...roleRows.map((r) => r.s.demandMean ?? 0));
 const rateTag = (r: (typeof roleRows)[number]) =>
-  r.rate === rateHigh ? (r.rateN < f.rates.floor ? " (highest, directional)" : " (highest)") : r.rate === rateLow ? " (lowest)" : "";
+  r.rate === rateHigh ? " (highest)" : r.rate === rateLow ? " (lowest)" : "";
 const extendedTag = (s: number) => (s === extendedHigh ? " (highest)" : s === 0 ? " (long terms)" : "");
 const demandTag = (m: number | null) => (m === demandHigh ? " (highest)" : "");
 
@@ -74,7 +74,7 @@ const chapter: Chapter = {
         `${f.pct(r.extended)}${extendedTag(r.extended)}`,
         String(r.rateN),
       ]),
-      note: `Rates and n from the Revenue Nomad Rate Index (cuts under ${f.rates.floor} records are directional). Median monthly spend from the ${f.engagements.n} engagements described in the operator survey; hours, demand and extension from the operator survey, n=${f.survey.detailed}. Bars scaled to the highest value in each column.`,
+      note: `Rates and n from the Revenue Nomad Rate Index; each cut carries its n. Median monthly spend from the ${f.engagements.n} engagements described in the operator survey; hours, demand and extension from the operator survey, n=${f.survey.detailed}. Bars scaled to the highest value in each column.`,
     },
 
     { t: "h2", text: "Sales Leadership", id: "sales-leadership" },
@@ -207,7 +207,7 @@ const chapter: Chapter = {
       t: "stats",
       items: [
         { v: f.pct(se.share), l: "of operators" },
-        { v: f.category("Sales Enablement").median, l: "median hourly", s: `${f.category("Sales Enablement").n} rates, directional` },
+        { v: f.category("Sales Enablement").median, l: "median hourly", s: `${f.category("Sales Enablement").n} rates` },
         { v: f.of(se.term12Plus.x, se.term12Plus.y), l: "12-month+ terms" },
         { v: f.of(se.resultOver90.x, se.resultOver90.y), l: "results past 90 days" },
       ],
@@ -273,7 +273,7 @@ const chapter: Chapter = {
       t: "callout",
       tone: "night",
       title: "Customer Success and Partnerships",
-      html: `Together, ${f.pct(cs.share + pa.share)} of operators. Customer Success and Growth prices around ${f.category("Customer Success & Growth").median} (n=${f.category("Customer Success & Growth").n}); Partnerships around ${f.category("Partnerships").median} (n=${f.category("Partnerships").n}); both cuts are directional. Channel and partner experience is on 53% of platform profiles, so partner work is usually bought inside a sales leadership engagement. Three of the ${f.survey.detailed} survey engagements were channel resets.`,
+      html: `Together, ${f.pct(cs.share + pa.share)} of operators. Customer Success and Growth prices around ${f.category("Customer Success & Growth").median} (n=${f.category("Customer Success & Growth").n}); Partnerships around ${f.category("Partnerships").median} (n=${f.category("Partnerships").n}). Channel and partner experience is on 53% of platform profiles, so partner work is usually bought inside a sales leadership engagement. Three of the ${f.survey.detailed} survey engagements were channel resets.`,
     },
 
     {

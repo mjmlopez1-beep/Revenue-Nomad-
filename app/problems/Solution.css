@@ -17,22 +17,23 @@
   padding: 56px 0 64px;
   background: var(--rn-white);
 }
-.solp-hero-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: 56px;
-  align-items: center;
+/* Text-led hero (owner review 2026-11-09): the statement carries the top of the page, as a consulting firm's would. */
+.solp-hero-copy {
+  max-width: 820px;
 }
 .solp-h1 {
   margin-top: 14px;
-  font-size: 56px;
+  max-width: 16ch;
+  font-size: 64px;
+  line-height: 1.02;
 }
 .solp-stop {
   color: var(--rn-coral);
 }
 .solp-lede {
-  margin-top: 22px;
-  max-width: 560px;
+  margin-top: 24px;
+  max-width: 640px;
+  font-size: 19px;
 }
 .solp-actions {
   display: flex;
@@ -47,61 +48,6 @@
 .solp-fine {
   margin-top: 14px;
 }
-/* The card art, 520 wide at 1440, in a rounded frame with a short gold rule at its foot. */
-.solp-art {
-  position: relative;
-  justify-self: end;
-  width: 100%;
-  max-width: 520px;
-  margin: 0;
-}
-.solp-art-panel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 400px;
-  padding: 36px;
-  border-radius: var(--rn-radius-sm);
-  border: 1px solid var(--rn-line);
-  background:
-    radial-gradient(closest-side at 60% 40%, color-mix(in srgb, var(--rn-leaf-pale) 70%, transparent), transparent 85%),
-    repeating-linear-gradient(60deg, transparent 0 23px, color-mix(in srgb, var(--rn-line) 55%, transparent) 23px 24px),
-    repeating-linear-gradient(-60deg, transparent 0 23px, color-mix(in srgb, var(--rn-line) 55%, transparent) 23px 24px),
-    var(--rn-mist);
-}
-.solp-art-panel .solp-motif {
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  filter: drop-shadow(0 14px 18px color-mix(in srgb, var(--rn-forest) 18%, transparent));
-}
-.solp-art-cap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 14px 0 0 28px;
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--rn-ink);
-}
-.solp-art-k {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--rn-mute);
-}
-.solp-art-rule {
-  position: absolute;
-  left: 28px;
-  top: 408px;
-  width: 72px;
-  height: 4px;
-  border-radius: var(--rn-radius-xs);
-  background: var(--rn-gold);
-}
-
-/* ---------- the checklist card ---------- */
 .solp-signs-band {
   padding: 0 0 72px;
   background: var(--rn-white);
@@ -232,7 +178,7 @@
 /* ---------- why: the night band with the motif ---------- */
 .solp-why-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 440px;
   gap: 48px;
   align-items: center;
 }
@@ -245,14 +191,34 @@
 }
 .solp-why-art {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+  margin: 0;
 }
 .solp-motif {
   display: block;
   width: 100%;
-  max-width: 340px;
+  max-width: 440px;
   height: auto;
   overflow: visible;
+  filter: drop-shadow(0 16px 20px color-mix(in srgb, var(--rn-night) 60%, transparent));
+}
+.solp-why-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-self: stretch;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rn-white);
+}
+.solp-why-cap-k {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rn-gold);
 }
 .solp-reasons {
   list-style: none;
@@ -653,7 +619,6 @@
   .solp-hero {
     padding: 32px 0 40px;
   }
-  .solp-hero-grid,
   .solp-signs-list,
   .solp-bigstats,
   .solp-why-grid,
@@ -663,22 +628,11 @@
   .solp-faq {
     grid-template-columns: 1fr;
   }
-  .solp-hero-grid {
-    gap: 32px;
-  }
   .solp-h1 {
     font-size: 38px;
   }
-  .solp-art {
-    justify-self: stretch;
-    max-width: none;
-  }
-  .solp-art-panel {
-    height: 240px;
-    padding: 24px;
-  }
-  .solp-art-rule {
-    top: 248px;
+  .solp-lede {
+    font-size: 17px;
   }
   .solp-signs-band {
     padding-bottom: var(--rn-section-y-sm);
@@ -715,10 +669,13 @@
     gap: 32px;
   }
   .solp-why-art {
-    justify-content: center;
+    align-items: center;
   }
   .solp-motif {
-    max-width: 280px;
+    max-width: 320px;
+  }
+  .solp-why-cap {
+    text-align: center;
   }
   .solp-reasons {
     margin-top: 36px;

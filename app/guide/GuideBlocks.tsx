@@ -37,7 +37,7 @@ export function StatRow({ items, note, variant = "light" }: { items: Stat[]; not
 
 type Cell = { value: string; tag?: string; num: number; unit: "$" | "%" | ""; bold: boolean };
 
-/** A cell that is one figure, optionally followed by a parenthetical tag such as "(highest)" or "(directional)". */
+/** A cell that is one figure, optionally followed by a parenthetical tag such as "(highest)" or "(lowest)". */
 function parseCell(html: string): Cell | null {
   const plain = html.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").trim();
   const m = plain.match(/^(\$?[\d,]+(?:\.\d+)?%?)(?:\s*\(([^)]*)\))?$/);

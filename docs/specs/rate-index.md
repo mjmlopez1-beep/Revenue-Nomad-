@@ -29,7 +29,7 @@ Refresh: re-export, rerun the script with the new as-of date, commit `data/rate-
    Nomad direct contracts only: hourly range, contracted hours, monthly range, number of contracts. The Skaled
    subcontracting book records operator pay, which is confidential and not a price a company paid, so it is excluded.
 3. **Hourly rate by role category.** Middle half and median per category on a shared $80 to $400 scale; categories
-   under the publication floor of 10 are shown as directional.
+   under the publication floor of 10 are shown with their n and no tag (owner, 2026-11-09: readers draw their own conclusions).
 4. **What a month costs, by role.** Median monthly spend and hours per category from engagements described in the
    survey (first and second client), categories with five or more engagements.
 5. **How the number changes with company size.** Median monthly spend and share of engagements by client revenue
@@ -54,4 +54,4 @@ Refresh: re-export, rerun the script with the new as-of date, commit `data/rate-
 
 Hourly rates by category: 10. Monthly spend by category: 5 engagements. Hourly rates by company size: not
 published (cuts fall under the floor). These match the sheet's README rule ("answers reported only in groups of
-10 or more") and the summary tab's caveat that cuts under 20 are directional.
+10 or more") and the summary tab's caveat about cuts under 20 (the site prints the n instead of a label).

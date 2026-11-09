@@ -5,7 +5,7 @@ import * as f from "./figures";
 const GUIDE_ROLES = ["Sales Leadership", "Marketing", "Revenue Operations", "Sales Enablement", "AI GTM"];
 const roleCuts = f.byCategory.filter((c) => GUIDE_ROLES.includes(c.category));
 const largestCut = roleCuts.reduce((a, b) => (b.n > a.n ? b : a));
-const directionalCuts = roleCuts.filter((c) => c.n < f.rates.floor).map((c) => c.category);
+const smallCuts = roleCuts.filter((c) => c.n < f.rates.floor).map((c) => c.category);
 const list = (xs: string[]) => (xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1] : xs.join(""));
 const operators = (n: number) => n.toLocaleString("en-US");
 
@@ -107,7 +107,7 @@ const chapter: Chapter = {
     { t: "h2", text: "Sample sizes", id: "sample-sizes" },
     {
       t: "p",
-      html: `Every table carries a single n, the total number of records behind it regardless of which source they came from. Every role-level cut carries its n - ${roleCuts.map((c) => `${c.category} (n=${c.n})`).join(", ")} - so readers can weigh it. The index publishes a median on its own only at ${f.rates.floor} records or more; ${list(directionalCuts)} sit under that floor and are directional. Cross-tabulations (extension by hours, result timing by stage) involve cells as small as 3 to 8 and should be read for pattern, not precision.`,
+      html: `Every table carries a single n, the total number of records behind it regardless of which source they came from. Every role-level cut carries its n - ${roleCuts.map((c) => `${c.category} (n=${c.n})`).join(", ")} - so readers can weigh it. The index tags highest and lowest only among roles with ${f.rates.floor} records or more; ${list(smallCuts)} sit under that floor, and their n is printed beside every figure. Cross-tabulations (extension by hours, result timing by stage) involve cells as small as 3 to 8; the n is there to weigh them.`,
     },
     { t: "h3", text: "Records behind each role-level cut" },
     {

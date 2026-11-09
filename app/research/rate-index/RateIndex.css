@@ -166,7 +166,7 @@
   border-radius: var(--rn-radius-pill);
   background: var(--rn-leaf-strong);
 }
-.is-directional .rix-range-fill {
+.is-small .rix-range-fill {
   background: var(--rn-leaf);
 }
 .rix-range-med {

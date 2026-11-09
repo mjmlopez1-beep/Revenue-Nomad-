@@ -79,3 +79,10 @@ seat gets it):
 
 Not borrowed: the "our members have led marketing at" logo wall (we only show logos of companies that hired through us), the
 "98% match success" style claims (no dataset column), and the industry sub-pages (no content yet).
+
+## Revision 2026-11-09 (later): "Six things" as cards
+
+Owner's gallery comment: "too much text and not bite-sized enough where someone will quickly glance at and appreciate what
+it means and what they will do and what they'll get out of them." The six owned scopes now render as cards in a three-column
+grid: gold number and title, the one-line meaning, a "They do" row (the board's body sentence), a leaf "You get by day 90"
+row, and the two buyer questions folded behind a disclosure. Content modules are unchanged.

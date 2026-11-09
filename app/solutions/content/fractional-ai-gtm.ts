@@ -7,7 +7,7 @@
 import type { RolePage } from "./types";
 import * as f from "../../guide/content/figures";
 
-/* The Rate Index cut: eight rates, so the guide calls it directional. */
+/* The Rate Index cut: a small n, printed beside every figure that uses it. */
 const cat = f.category("AI GTM");
 /* The operator survey cut for the role: seven operators. */
 const role = f.role("AI GTM");
@@ -96,7 +96,7 @@ const page: RolePage = {
   cost: {
     title: "What does one cost?",
     intro: "AI GTM is the most wanted role in our research and, so far, priced at the market median - with no search fee and no equity ask.",
-    price: { v: `${cat.median}/hour`, l: `median rate, Revenue Nomad Rate Index - ${cat.n} rates, so directional` },
+    price: { v: `${cat.median}/hour`, l: `median rate, Revenue Nomad Rate Index, ${cat.n} rates` },
     more: `The middle half of AI GTM rates runs ${cat.p25} - ${cat.p75} an hour. In the engagements operators described, the median AI GTM month was ${monthly} at about ${monthlyHours} hours (${monthlyN} engagements). Our 2027 guide expects the rate to move toward the ${revOps.median} - ${enablement.median} that RevOps and enablement command - if you are buying this in 2027, you are buying early.`,
     link: { label: "See the Rate Index", href: "/research/rate-index" },
     noFees: "No fees for companies - you pay the operator's rate and nothing else.",
@@ -106,7 +106,7 @@ const page: RolePage = {
     eyebrow: "What the leader works on",
     title: "Six things a fractional AI GTM leader owns",
     intro: "The same scope a full-time head of revenue AI would carry, sequenced so the first use cases ship before the strategy deck does. Open any one to see what it covers, what you should see by day 90, and the questions buyers ask first.",
-    source: `Figures from the State of Fractional GTM 2027 operator survey, n=${surveyN}, and the Revenue Nomad Rate Index, ${f.rates.n} rates. The AI GTM cells are ${role.n} operators and ${cat.n} rates, so directional.`,
+    source: `Figures from the State of Fractional GTM 2027 operator survey, n=${surveyN}, and the Revenue Nomad Rate Index, ${f.rates.n} rates. The AI GTM cells are ${role.n} operators and ${cat.n} rates.`,
     items: [
       {
         n: "01",
@@ -275,7 +275,7 @@ const page: RolePage = {
       { v: f.pct(f.engagements.resultInside60), l: "of engagements show a measurable result inside 60 days" },
       { v: extended, l: "AI GTM engagements extended past the first term" },
     ],
-    source: `From the State of Fractional GTM 2027 operator survey, n=${surveyN}. The AI GTM cell is ${role.n} operators, so directional.`,
+    source: `From the State of Fractional GTM 2027 operator survey, n=${surveyN}. The AI GTM cell is ${role.n} operators.`,
   },
 
   ninety: {
@@ -415,7 +415,7 @@ const page: RolePage = {
       },
       {
         q: "What does it cost?",
-        a: `The Rate Index puts AI GTM at ${cat.median} an hour median (${cat.n} rates, directional), the market median - with the middle half at ${cat.p25} - ${cat.p75}. ${monthly} a month at about ${monthlyHours} hours was the median in the engagements operators described. The guide expects that rate to rise toward the ${revOps.median} - ${enablement.median} RevOps and enablement command. No fees for companies.`,
+        a: `The Rate Index puts AI GTM at ${cat.median} an hour median (${cat.n} rates), the market median - with the middle half at ${cat.p25} - ${cat.p75}. ${monthly} a month at about ${monthlyHours} hours was the median in the engagements operators described. The guide expects that rate to rise toward the ${revOps.median} - ${enablement.median} RevOps and enablement command. No fees for companies.`,
       },
     ],
   },

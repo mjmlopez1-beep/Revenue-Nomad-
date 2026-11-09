@@ -4,7 +4,9 @@ import { byDepth, Cuboid, DEPTH, HALF, RISE, type Grid, type Kind } from "../dia
  * One isometric drawing per problem page, on the Diagnostic's grid (app/diagnostic/iso.tsx) so the pages share
  * the method's visual language: leaf for the engine, gold for the one element the fix changes, ghost for what
  * is scattered or not yet built, l1 to l4 for the four maturity levels. Fills live in Solution.css under
- * .solp-motif (tokens only). Each drawing lists its blocks; the viewBox is fitted to them.
+ * .solp-motif (tokens only). Each drawing lists its blocks; the viewBox is fitted to them. The hero is text only
+ * (owner review 2026-11-09: a consulting firm would lead with the statement), so the drawing sits in the
+ * "Why it happens" band with its caption.
  */
 export type MotifKey = "founder" | "pipeline" | "forecast" | "ai";
 
@@ -14,65 +16,7 @@ type Drawing = { label: string; blocks: Block[]; over?: Block[] };
 
 const unit: Grid = [1, 1, 1];
 
-/** Founder-led sales: the row of leaf blocks is the team, standing on its own; the gold block is the founder,
- * stepped out in front and to the side. */
-const founder: Drawing = {
-  label: "A row of five green blocks stands on its own while one gold block steps away from the row.",
-  blocks: [
-    ...Array.from({ length: 5 }, (_, i): Block => ({ at: [i, 0, 0], kind: "leaf" })),
-    { at: [5.6, 1.4, 0], kind: "gold" },
-  ],
-};
-
-/** Pipeline: scattered dashed blocks at the wide end funnel into one tight leaf row, with a gold block at the end
- * where the meetings land. */
-const pipeline: Drawing = {
-  label: "Scattered dashed blocks narrow into one tight row of green blocks that ends in a gold block.",
-  blocks: [
-    { at: [-0.6, 0.2, 0], kind: "ghost" },
-    { at: [0.4, 1.6, 0], kind: "ghost" },
-    { at: [-0.2, 2.9, 0], kind: "ghost" },
-    { at: [1.0, -0.4, 0], kind: "ghost" },
-    { at: [1.0, 3.6, 0], kind: "ghost" },
-    { at: [2.2, 2.4, 0], kind: "ghost" },
-    { at: [2.2, 0.6, 0], kind: "ghost" },
-    { at: [3.3, 1.8, 0], kind: "leaf" },
-    { at: [4.3, 1.8, 0], kind: "leaf" },
-    { at: [5.3, 1.8, 0], kind: "leaf" },
-    { at: [6.3, 1.8, 0], kind: "leaf" },
-    { at: [7.3, 1.8, 0], kind: "gold" },
-  ],
-};
-
-/** Forecast: a wall five wide and three high, each block shaded by its maturity level, and a thin gold slab
- * floating above it as the target the wall has to reach. */
-const forecastLevels: number[][] = [
-  [1, 2, 1],
-  [2, 2, 3],
-  [1, 1, 2],
-  [3, 2, 2],
-  [2, 3, 3],
-];
-const forecast: Drawing = {
-  label: "A wall of blocks shaded from pale to dark green by maturity level, with a thin gold slab floating above it.",
-  blocks: forecastLevels.flatMap((col, i) => col.map((lvl, k): Block => ({ at: [i, 0, k], kind: `l${lvl}` as Kind }))),
-  over: [{ at: [0, 0, 3.7], size: [5, 1, 0.3], kind: "gold" }],
-};
-
-/** AI: a grid of leaf blocks, the revenue process, with gold blocks set inside it where AI does a task. */
-const aiGold = new Set(["1-0", "2-2", "0-3", "3-1"]);
-const ai: Drawing = {
-  label: "A four by four grid of green blocks with four gold blocks set among them.",
-  blocks: Array.from({ length: 16 }, (_, n): Block => {
-    const i = n % 4;
-    const j = Math.floor(n / 4);
-    return { at: [i, j, 0], kind: aiGold.has(`${i}-${j}`) ? "gold" : "leaf" };
-  }),
-};
-
-const drawings: Record<MotifKey, Drawing> = { founder, pipeline, forecast, ai };
-
-/* ---------- hero drawings: the problem as a parti, larger, for the top of each page ---------- */
+/* ---------- the drawings: the problem as a parti, one per page, in the "Why it happens" band ---------- */
 
 type HeroDrawing = Drawing & { caption: string };
 
@@ -137,10 +81,10 @@ const aiHero: HeroDrawing = {
   ],
 };
 
-export const heroDrawings: Record<MotifKey, HeroDrawing> = { founder: founderHero, pipeline: pipelineHero, forecast: forecastHero, ai: aiHero };
+const drawings: Record<MotifKey, HeroDrawing> = { founder: founderHero, pipeline: pipelineHero, forecast: forecastHero, ai: aiHero };
 
-/** The hero drawing's visible caption, for the figure the page renders around it. */
-export const heroCaption = (motif: MotifKey) => heroDrawings[motif].caption;
+/** The drawing's visible caption, for the figure the page renders around it. */
+export const motifCaption = (motif: MotifKey) => drawings[motif].caption;
 
 const PAD = 6;
 
@@ -169,8 +113,8 @@ function bounds(blocks: Block[]) {
   return { minX, maxX, minY, maxY };
 }
 
-export default function ProblemMotif({ motif, className, variant = "motif" }: { motif: MotifKey; className?: string; variant?: "motif" | "hero" }) {
-  const d = variant === "hero" ? heroDrawings[motif] : drawings[motif];
+export default function ProblemMotif({ motif, className }: { motif: MotifKey; className?: string }) {
+  const d = drawings[motif];
   const all = [...d.blocks, ...(d.over ?? [])];
   const b = bounds(all);
   const w = Math.ceil(b.maxX - b.minX + PAD * 2);

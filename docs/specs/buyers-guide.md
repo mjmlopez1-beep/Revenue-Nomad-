@@ -81,3 +81,9 @@ redirects back and stores the lead; the homepage form unlocks with email only; t
   `HUBSPOT_GUIDE_FORM_ID`.
 - The deck's "trademark the title" note from the naming session still stands.
 - Optional: a PDF export once the edition is final, then the gate copy can promise the download.
+
+## Revision 2026-11-09: no "directional"
+
+Owner's gallery comment on Chapter 3: "Don't say directional. Readers can draw their own conclusions." The word is gone from
+the guide (Chapters 3, 6, 10, the methodology and the answers), the AI GTM role page and the Rate Index page. Small cuts
+print their n beside every figure and carry no label; highest and lowest tags still apply only at the publication floor.

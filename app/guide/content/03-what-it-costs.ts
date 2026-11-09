@@ -2,7 +2,7 @@ import type { Chapter } from "./types";
 import * as f from "./figures";
 
 /* Figure 3.1: every role in the Rate Index. Highest and lowest are tagged only among roles at or above the
-   publication floor; smaller cuts are directional. Ties share the tag. */
+   publication floor; smaller cuts carry their n and no tag. Ties share the tag. */
 const isPublished = (c: f.CategoryCut) => c.n >= f.rates.floor && c.median != null;
 const tagCategory = (c: f.CategoryCut) => {
   if (!isPublished(c)) return "";
@@ -90,17 +90,17 @@ const chapter: Chapter = {
       caption: "Figure 3.1. Median hourly rate by role",
       head: ["Role", "Median rate", "n"],
       rows: [
-        ...f.byCategory.map((cat) => [cat.category, `${f.rate(cat.median)}${tagCategory(cat)}`, `${cat.n}${isPublished(cat) ? "" : " (directional)"}`]),
+        ...f.byCategory.map((cat) => [cat.category, `${f.rate(cat.median)}${tagCategory(cat)}`, String(cat.n)]),
         ["<strong>All roles</strong>", `<strong>${f.rates.median}</strong>`, `<strong>${f.rates.n}</strong>`],
       ],
       firstColHeader: true,
-      note: `Revenue Nomad Rate Index, ${f.rates.n} hourly rates as companies pay them, as of ${f.asOf.long}. Highest and lowest are tagged among roles with ${f.rates.floor} or more rates; smaller cuts are directional. Bars scaled to the highest median rate (${f.rate(topCategoryMedian)}).`,
+      note: `Revenue Nomad Rate Index, ${f.rates.n} hourly rates as companies pay them, as of ${f.asOf.long}. Highest and lowest are tagged among roles with ${f.rates.floor} or more rates; smaller cuts carry their n. Bars scaled to the highest median rate (${f.rate(topCategoryMedian)}).`,
     },
     {
       t: "callout",
       tone: "leaf",
       title: "Two things stand out",
-      html: `Enablement prices above sales leadership, ${enablement.median} against ${salesLeadership.median}, though on ${enablement.n} rates that is directional, and RevOps matches sales leadership at ${revOps.median}. Both surprise people until they realize how few people can build a forecast that holds or a playbook a rep will actually open.`,
+      html: `Enablement prices above sales leadership, ${enablement.median} against ${salesLeadership.median}, on ${enablement.n} rates, and RevOps matches sales leadership at ${revOps.median}. Both surprise people until they realize how few people can build a forecast that holds or a playbook a rep will actually open.`,
     },
     {
       t: "callout",
@@ -173,9 +173,9 @@ const chapter: Chapter = {
       t: "table",
       caption: "Figure 3.4. Median monthly spend by client revenue",
       head: ["Client annual revenue", "Median monthly spend", "n"],
-      rows: monthlyBands.map((b) => [b.band, f.monthly(b.medianMonthly), `${b.monthlyN}${b.monthlyN < f.rates.floor ? " (directional)" : ""}`]),
+      rows: monthlyBands.map((b) => [b.band, f.monthly(b.medianMonthly), String(b.monthlyN)]),
       firstColHeader: true,
-      note: `Operator survey, n=${f.engagements.monthlyN} engagements with a stated rate and hours, first and second client; monthly spend is hours x effective rate. Cuts under ${f.rates.floor} are directional. Bars scaled to the highest median (${f.monthly(topMonthly)}).`,
+      note: `Operator survey, n=${f.engagements.monthlyN} engagements with a stated rate and hours, first and second client; monthly spend is hours x effective rate. Bars scaled to the highest median (${f.monthly(topMonthly)}).`,
     },
     {
       t: "p",

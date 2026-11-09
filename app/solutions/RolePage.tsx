@@ -327,12 +327,21 @@ function Owns({ page }: { page: Role }) {
                   <p className="rp-own-sub">{it.sub}</p>
                 </div>
               </div>
-              <div className="rp-own-body">
-                <p className="rn-body">{it.body}</p>
-                <p className="rp-day90">
-                  <span className="rp-day90-k">By day 90</span>
-                  <span>{it.byDay90}</span>
-                </p>
+              <dl className="rp-own-rows">
+                <div className="rp-own-row">
+                  <dt>They do</dt>
+                  <dd>{it.body}</dd>
+                </div>
+                <div className="rp-own-row rp-own-row--get">
+                  <dt>You get by day 90</dt>
+                  <dd>{it.byDay90}</dd>
+                </div>
+              </dl>
+              <details className="rp-own-more">
+                <summary>
+                  Two questions companies ask
+                  <Plus />
+                </summary>
                 <div className="rp-qa">
                   {it.qa.map((qa) => (
                     <div key={qa.q}>
@@ -341,7 +350,7 @@ function Owns({ page }: { page: Role }) {
                     </div>
                   ))}
                 </div>
-              </div>
+              </details>
             </li>
           ))}
         </ol>

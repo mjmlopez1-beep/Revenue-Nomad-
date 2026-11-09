@@ -73,3 +73,10 @@ on one person"); pipeline, a tight cluster with a row that fades to outlines bef
 pipeline has to keep going."); forecast, five columns like a bar chart under one gold slab ("One number the board can
 hold"); AI, a platform with one gold block set into it and two dashed blocks floating beside it ("Plugged into the engine,
 not bought beside it"). The smaller motifs in the "Why it happens" band stay. The card photos still serve the homepage.
+
+## Revision 2026-11-09 (later): text-led hero
+
+Owner's gallery comment on the founder-led page: "An image on header here feels out of place. What would Skaled or SBI or
+McKinsey have here." The hero is now text only: eyebrow, a 64px headline, the lede, the two buttons and the fine print, with
+the signs card below as before. The drawings made for the hero moved to the "Why it happens" band, replacing the smaller
+motifs, with their captions in gold on the night band.

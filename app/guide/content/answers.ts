@@ -121,7 +121,7 @@ const chapter: Chapter = {
           n: "14",
           figure: f.pct(f.survey.aiUse.share),
           q: "How is AI changing it?",
-          html: `${f.pct(f.survey.aiUse.share)} of operators use AI in delivery, and ${f.pct(f.survey.aiUse.most)} say most of their delivery runs through it. AI GTM is the highest-demand role and already prices at the market center, about ${aiGtm.median} an hour on ${aiGtm.n} rates, so read that as directional. The early-adopter discount is gone.`,
+          html: `${f.pct(f.survey.aiUse.share)} of operators use AI in delivery, and ${f.pct(f.survey.aiUse.most)} say most of their delivery runs through it. AI GTM is the highest-demand role and already prices at the market center, about ${aiGtm.median} an hour on ${aiGtm.n} rates. The early-adopter discount is gone.`,
           see: "Chapters 6 and 10",
         },
       ],

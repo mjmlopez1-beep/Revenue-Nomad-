@@ -5,14 +5,14 @@ import { FigureLabel, FigureSource, FigureValue } from "../home/Figure";
 import { facts } from "../home/content/numbers";
 import { hrefs } from "../home/content/links";
 import { pillarLabel, pillars as allPillars } from "../check/content";
-import ProblemMotif, { heroCaption } from "./ProblemMotif";
+import ProblemMotif, { motifCaption } from "./ProblemMotif";
 import type { Solution } from "./content";
 import "./Solution.css";
 
 const two = (n: number) => String(n).padStart(2, "0");
 
 /**
- * Shared template for the four "Solve a problem" pages, in artboard order: hero with its drawing, the checklist card,
+ * Shared template for the four "Solve a problem" pages, in artboard order: a text-led hero, the checklist card,
  * data, why (night band with the motif), the fix with its pillars strip, the method (forest band), the
  * comparison, results, common questions, the closing band. Visual treatment in docs/specs/solution-pages.md.
  */
@@ -20,7 +20,7 @@ export default function SolutionPage({ s }: { s: Solution }) {
   return (
     <main id="main" className="sol-page">
       <section className="solp-hero" aria-labelledby="solp-h">
-        <div className="rn-wrap solp-hero-grid">
+        <div className="rn-wrap">
           <div className="solp-hero-copy">
             <p className="rn-eyebrow">{s.eyebrow}</p>
             <h1 id="solp-h" className="rn-h1 solp-h1">
@@ -39,18 +39,6 @@ export default function SolutionPage({ s }: { s: Solution }) {
             </div>
             <p className="rn-small solp-fine">We speak within {facts.responseHours} - no fees for companies</p>
           </div>
-          {s.motif && (
-            <figure className="solp-art">
-              <div className="solp-art-panel">
-                <ProblemMotif motif={s.motif} variant="hero" className="solp-motif--hero" />
-              </div>
-              <figcaption className="solp-art-cap">
-                <span className="solp-art-k">The problem, drawn</span>
-                <span>{heroCaption(s.motif)}</span>
-              </figcaption>
-              <span className="solp-art-rule" aria-hidden="true" />
-            </figure>
-          )}
         </div>
       </section>
 
@@ -116,9 +104,13 @@ export default function SolutionPage({ s }: { s: Solution }) {
               </h2>
             </div>
             {s.motif && (
-              <div className="solp-why-art">
+              <figure className="solp-why-art">
                 <ProblemMotif motif={s.motif} />
-              </div>
+                <figcaption className="solp-why-cap">
+                  <span className="solp-why-cap-k">The problem, drawn</span>
+                  <span>{motifCaption(s.motif)}</span>
+                </figcaption>
+              </figure>
             )}
           </div>
           <ol className="solp-reasons">

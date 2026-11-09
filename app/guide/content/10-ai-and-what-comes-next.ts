@@ -24,7 +24,7 @@ const chapter: Chapter = {
     { v: f.pct(ai.share), l: "of operators use AI in delivery" },
     { v: "6 of 20", l: "detailed inbound requests named AI" },
     { v: `${aiGtmRole.demandMean} / 5`, l: "AI GTM demand trend" },
-    { v: aiGtm.median, l: `AI GTM median hourly rate (${aiGtm.n} rates, directional)` },
+    { v: aiGtm.median, l: `AI GTM median hourly rate (${aiGtm.n} rates)` },
   ],
   blocks: [
     {
@@ -93,17 +93,17 @@ const chapter: Chapter = {
       t: "stats",
       items: [
         { v: `${aiGtmRole.demandMean} / 5`, l: "AI GTM demand trend" },
-        { v: aiGtm.median, l: `AI GTM median hourly rate (${aiGtm.n} rates, directional)` },
+        { v: aiGtm.median, l: `AI GTM median hourly rate (${aiGtm.n} rates)` },
         { v: `${revOps.median} - ${enablement.median}`, l: "what RevOps and enablement command" },
       ],
     },
     {
       t: "p",
-      html: `Here is the anomaly worth watching. AI GTM has the highest demand trend of any role in the survey with more than one answer (${aiGtmRole.demandMean} of 5, on ${aiGtmRole.n} operators) and a median rate of ${aiGtm.median} an hour, the market median, on ${aiGtm.n} rates, so directional. The lowest-priced role is Marketing, at ${marketing.median}. Buyers want AI GTM more than anything else and pay the going rate for it, not a premium.`,
+      html: `Here is the anomaly worth watching. AI GTM has the highest demand trend of any role in the survey with more than one answer (${aiGtmRole.demandMean} of 5, on ${aiGtmRole.n} operators) and a median rate of ${aiGtm.median} an hour, the market median, on ${aiGtm.n} rates. The lowest-priced role is Marketing, at ${marketing.median}. Buyers want AI GTM more than anything else and pay the going rate for it, not a premium.`,
     },
     {
       t: "p",
-      html: `That will not hold. Either the AI GTM specialists will reprice toward the ${revOps.median} to ${enablement.median} that RevOps and enablement command (enablement on ${enablement.n} rates, directional), or, more likely, the work will get absorbed into the other roles.`,
+      html: `That will not hold. Either the AI GTM specialists will reprice toward the ${revOps.median} to ${enablement.median} that RevOps and enablement command (enablement on ${enablement.n} rates), or, more likely, the work will get absorbed into the other roles.`,
     },
     { t: "p", html: "A fractional CRO in 2028 who cannot put AI into a revenue process will not be a fractional CRO for long." },
     {
