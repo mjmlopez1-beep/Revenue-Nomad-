@@ -95,3 +95,6 @@ replaced by `app/home/RoleWheel.tsx`: the eight Rate Index categories as isometr
 gold slab labeled "Revenue engine", in the Diagnostic's drawing language. Block heights follow each category's share of the
 index (Sales Leadership tallest), and the ring is ordered front to back by size so the tall blocks hide nothing. Labels are
 display names; the list and order come from `data/rate-index.json`. The glass mark file stays in `public/home/`.
+
+Reverted the same day on the owner's next comment ("Revert back to our logo here"): the hero shows the glass mark again,
+inside the grid and centered on the copy. `RoleWheel.tsx` stays in the repo, unused, for a later page.
