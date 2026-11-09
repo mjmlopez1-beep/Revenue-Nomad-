@@ -9,6 +9,8 @@ For the next session (human or agent) picking up the marketing site. Written 202
   from the Next.js sections under `app/home/` (`docs/design/homepage-d-design.md` 4.1; D's seven extra sections were
   built, then removed from the page and remain in git history).
 - The 2-minute Revenue Health Check lives at `/check` (`app/check/`, spec `docs/specs/revenue-health-check.md`, ticket 11).
+- Talk to us lives at `/talk` (`app/talk/`, spec `docs/specs/talk-to-us.md`, ticket 12). Both forms record leads through
+  `app/leads/record.ts`: HubSpot form when configured, else a JSON file under `RN_DATA_DIR`.
 - Quality gates: `npm run check` runs `tsc`, the token guard and the Playwright + axe smoke check. Results of the
   last run are in the "Verification" section below.
 - Everything the founder has not confirmed is flagged `verified: false` in `app/home/content/numbers.ts` and shows a
@@ -30,9 +32,10 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
    `app/home/content/logos.ts`. The marquee appears once six have files.
 4. **Forms.** `app/home/actions.ts` validates and discards the report email; wire `requestReport` to the email tool and
    keep the redirect to `/thanks`. The Revenue Health Check (`app/check/actions.ts`) posts to HubSpot once
-   `HUBSPOT_CHECK_FORM_ID` is set; the setup checklist is in `docs/specs/revenue-health-check.md`.
-5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/`, `/portal`, `/thanks` and `/check`
-   is a stub. Build them in the order the site map artboard suggests: Talk to us, Rate Index, the four solution pages.
+   `HUBSPOT_CHECK_FORM_ID` is set, and Talk to us (`app/talk/actions.ts`) once `HUBSPOT_TALK_FORM_ID` is set; the
+   setup checklists are in `docs/specs/revenue-health-check.md` and `docs/specs/talk-to-us.md`.
+5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/`, `/portal`, `/thanks`, `/check` and
+   `/talk` is a stub. Next in the site map's order: Rate Index, the four solution pages, the Diagnostic page.
 6. **SEO extras.** Open Graph image (1200 by 630), JSON-LD (Organization, ProfessionalService, FAQPage), sitemap page.
 7. **Validation strip.** Fill at least one real "As seen in / Rated on" entry or delete the section data.
 8. **Production flag.** Set `NEXT_PUBLIC_SITE_ENV=production` only on the production deployment.

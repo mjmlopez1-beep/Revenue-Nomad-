@@ -1,7 +1,6 @@
 "use server";
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { field, recordLead, type HubSpotField, type LeadDelivery } from "../leads/record";
 import { employeeRanges, pillars, questions, revenueRanges, type EmployeeRange, type Level, type Pillar, type RevenueRange } from "./content";
 import { levelForAnswer, score, type Answers, type CheckResult } from "./scoring";
 
@@ -45,7 +44,11 @@ export async function submitCheck(input: CheckSubmission): Promise<CheckResult> 
   if (!EMAIL.test(email)) throw new Error("Add a work email we can send the results to.");
 
   const result = score(answers, revenue);
-  await recordLead({ revenue, employees, answers, firstName, lastName, email, company, result });
+  const lead: Lead = { revenue, employees, answers, firstName, lastName, email, company, result };
+  await recordLead(delivery, hubspotFields(lead), {
+    ...lead,
+    answers: Object.fromEntries(questions.map((q) => [q.pillar, lead.answers[q.pillar]])),
+  });
   return result;
 }
 
@@ -61,63 +64,23 @@ type Lead = {
 };
 
 /** HubSpot Forms API field names. Custom properties must exist on the contact (docs/specs/revenue-health-check.md). */
-function hubspotFields(lead: Lead) {
-  const f = (name: string, value: string | number) => ({ objectTypeId: "0-1", name, value: String(value) });
+function hubspotFields(lead: Lead): HubSpotField[] {
   return [
-    f("email", lead.email),
-    f("firstname", lead.firstName),
-    f("lastname", lead.lastName),
-    ...(lead.company ? [f("company", lead.company)] : []),
-    f("rn_check_revenue_range", lead.revenue),
-    f("rn_check_employee_range", lead.employees),
-    f("rn_check_total", lead.result.total),
-    ...pillars.map((p: Pillar) => f(`rn_check_${p}`, lead.answers[p] as Level)),
-    f("rn_check_fix_first", lead.result.fixFirst.map((x) => x.pillar).join(";")),
+    field("email", lead.email),
+    field("firstname", lead.firstName),
+    field("lastname", lead.lastName),
+    ...(lead.company ? [field("company", lead.company)] : []),
+    field("rn_check_revenue_range", lead.revenue),
+    field("rn_check_employee_range", lead.employees),
+    field("rn_check_total", lead.result.total),
+    ...pillars.map((p: Pillar) => field(`rn_check_${p}`, lead.answers[p] as Level)),
+    field("rn_check_fix_first", lead.result.fixFirst.map((x) => x.pillar).join(";")),
   ];
 }
 
-async function recordLead(lead: Lead): Promise<void> {
-  const portal = process.env.HUBSPOT_PORTAL_ID;
-  const form = process.env.HUBSPOT_CHECK_FORM_ID;
-  if (portal && form) {
-    const res = await fetch(`https://api.hsforms.com/submissions/v3/integration/submit/${portal}/${form}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        fields: hubspotFields(lead),
-        context: { pageUri: "https://revenuenomad.com/check", pageName: "The 2-minute revenue health check" },
-      }),
-    });
-    if (res.ok) return;
-    console.error(`HubSpot form submission failed: HTTP ${res.status}. Falling back to the local store.`);
-  } else {
-    console.warn("HUBSPOT_PORTAL_ID or HUBSPOT_CHECK_FORM_ID is not set; the check lead is written to the local store only.");
-  }
-  await appendLocal(lead);
-}
-
-/** Same directory rule as lib/store.ts: RN_DATA_DIR, else /tmp on serverless hosts, else ./data. */
-function dataDir(): string {
-  const serverless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
-  return process.env.RN_DATA_DIR || (serverless ? path.join("/tmp", "revenue-nomad") : path.join(process.cwd(), "data"));
-}
-
-async function appendLocal(lead: Lead): Promise<void> {
-  const dir = dataDir();
-  const file = path.join(dir, "checks.json");
-  await fs.mkdir(dir, { recursive: true });
-  let existing: unknown[] = [];
-  try {
-    existing = JSON.parse(await fs.readFile(file, "utf8")) as unknown[];
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") console.error("checks.json unreadable, starting a new file:", e);
-  }
-  existing.push({
-    at: new Date().toISOString(),
-    ...lead,
-    answers: Object.fromEntries(questions.map((q) => [q.pillar, lead.answers[q.pillar]])),
-  });
-  const tmp = `${file}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(existing, null, 2), "utf8");
-  await fs.rename(tmp, file);
-}
+const delivery: LeadDelivery = {
+  formIdEnv: "HUBSPOT_CHECK_FORM_ID",
+  localFile: "checks.json",
+  pageUri: "https://revenuenomad.com/check",
+  pageName: "The 2-minute revenue health check",
+};

@@ -1,7 +1,7 @@
 # Revenue Nomad
 
 Next.js 15 (App Router) + React 19, TypeScript strict, plain CSS. Two surfaces live here:
-the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/`) and the
+the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/` and Talk to us at `app/talk/`) and the
 **Operator Portal** (`app/portal`, job board + prospects, backed by `lib/`).
 
 ## Commands
@@ -26,7 +26,7 @@ the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" 
 
 - Homepage sections are server components under `app/home/`, one file per section, composed in `app/page.tsx`.
   A section is a `<section>` with an `aria-labelledby` heading. Client components only where there is state
-  (menus, the marquee and review controls, the health-check stepper).
+  (menus, the marquee and review controls, the check and Talk to us steppers).
 - Fonts load through `next/font/google` in `app/layout.tsx` and are exposed as `--font-dm-serif` and `--font-red-hat`.
 - Images live in `public/home/` and render through `next/image` with explicit width and height.
 - Copy voice: plain, specific, active, written from the reader's side. Buttons say what happens.
