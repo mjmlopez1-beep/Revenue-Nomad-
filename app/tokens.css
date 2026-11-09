@@ -1,0 +1,67 @@
+/*
+ * Revenue Nomad design tokens.
+ * Source of truth for the marketing site. Extracted from the "Homepage D,
+ * the lead engine" artboard (Design canvas "Revenue Nomad - Option D website"),
+ * which used 55 raw hex values; they collapse to the set below. Views use
+ * these variables only. See CONSTRAINTS.md "Design" and CLAUDE.md.
+ */
+:root {
+  /* Ink and surfaces */
+  --rn-ink: #14201a;          /* headings, body on white */
+  --rn-ink-soft: #3c4842;     /* lede and long body copy */
+  --rn-mute: #5b6660;         /* captions, sources, labels on white */
+  --rn-white: #ffffff;
+  --rn-mist: #f3f7f5;         /* quiet section background */
+  --rn-line: #e3e9e5;         /* hairlines on white */
+
+  /* Brand greens */
+  --rn-forest: #285b44;       /* primary action, eyebrows, dark green bands */
+  --rn-forest-link: #1e6b47;  /* text links on white */
+  --rn-leaf: #a8dcbb;         /* accents on dark */
+  --rn-leaf-strong: #78c095;
+  --rn-leaf-pale: #ddf3e5;
+  --rn-leaf-line: #b9e2c6;    /* outlines and focus on dark */
+
+  /* Deep blue (assessment solid, dark UI) */
+  --rn-night: #0e2433;
+  --rn-night-tint: #e3ecef;
+  --rn-night-tint-2: #c3d3d9;
+
+  /* Accents: status and emphasis only */
+  --rn-gold: #f6ab40;         /* step numbers, assessment band */
+  --rn-coral: #ff6a4f;        /* the single headline full stop */
+
+  /* Dark band gradients (one source for every dark section) */
+  --rn-band-dark: linear-gradient(160deg, #0b1e16 0%, #11291e 55%, #163626 100%);
+  --rn-band-dark-cta: linear-gradient(135deg, #0c241a 0%, #143826 55%, #1e4c36 100%);
+  --rn-band-research:
+    radial-gradient(ellipse 55% 85% at 82% 45%, rgba(64, 168, 112, 0.42) 0%, rgba(64, 168, 112, 0) 62%),
+    radial-gradient(ellipse 45% 70% at 6% 100%, rgba(28, 110, 120, 0.45) 0%, rgba(28, 110, 120, 0) 65%),
+    linear-gradient(135deg, #081a12 0%, #0f2a1d 48%, #15392a 100%);
+  --rn-hero-glow: radial-gradient(closest-side, rgba(123, 177, 99, 0.2) 0%, rgba(128, 204, 243, 0.14) 48%, rgba(255, 255, 255, 0) 100%);
+
+  /* Type: Red Hat Display for UI and body, DM Serif Display for headlines. */
+  --rn-font-display: var(--font-dm-serif), Georgia, "Times New Roman", serif;
+  --rn-font-ui: var(--font-red-hat), system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --rn-text-eyebrow: 12px;    /* 700, letter-spacing .2em, uppercase */
+  --rn-text-small: 13px;
+  --rn-text-body: 15px;
+  --rn-text-lede: 17px;
+  --rn-text-h3: 23px;
+  --rn-text-h2: 40px;
+  --rn-text-h2-lg: 48px;
+  --rn-text-hero: 68px;
+  --rn-track-eyebrow: 0.2em;
+  --rn-track-button: 0.08em;
+
+  /* Shape and spacing */
+  --rn-radius-xs: 4px;
+  --rn-radius-sm: 8px;
+  --rn-radius-pill: 999px;
+  --rn-shadow-hover: 0 10px 22px rgba(20, 32, 26, 0.22);
+  --rn-wrap: 1120px;          /* content width at 1440 */
+  --rn-gutter: 20px;          /* side gutter below the wrap width */
+  --rn-section-y: 96px;       /* vertical rhythm between sections on desktop */
+  --rn-section-y-sm: 64px;
+}
