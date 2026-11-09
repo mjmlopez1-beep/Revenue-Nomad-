@@ -9,7 +9,10 @@ For the next session (human or agent) picking up the marketing site. Written 202
   from the Next.js sections under `app/home/` (`docs/design/homepage-d-design.md` 4.1; D's seven extra sections were
   built, then removed from the page and remain in git history).
 - The 2-minute Revenue Health Check lives at `/check` (`app/check/`, spec `docs/specs/revenue-health-check.md`, ticket 11).
-- Talk to us lives at `/talk` (`app/talk/`, spec `docs/specs/talk-to-us.md`, ticket 12). Both forms record leads through
+- Talk to us lives at `/talk` (`app/talk/`, spec `docs/specs/talk-to-us.md`, ticket 12).
+- The Rate Index lives at `/research/rate-index` (`app/research/rate-index/`, spec `docs/specs/rate-index.md`, ticket 13).
+  Every figure, and the homepage's rate figures, derive from `data/rate-index.json`, built by
+  `scripts/build-rate-index.mjs` from exports of the research Google Sheet. Refresh procedure in the spec. Both forms record leads through
   `app/leads/record.ts`: HubSpot form when configured, else a JSON file under `RN_DATA_DIR`.
 - Quality gates: `npm run check` runs `tsc`, the token guard and the Playwright + axe smoke check. Results of the
   last run are in the "Verification" section below.
@@ -24,6 +27,8 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
 ## Launch blockers (not done in this build, by design)
 
 1. **Confirm the figures.** Every `verified: false` entry in `numbers.ts`. Flip the flag once confirmed; the badge disappears.
+   Rate figures (median rate, rate count, VP of Sales range, FAQ price range, results inside 60 days) are now computed
+   from the research data source and marked verified by construction.
    The claims review (`docs/design/homepage-d-claims.md`) lists which third-party figures matched their sources.
 2. **Permissions.** Reviews name Eric B. (myHR Partner), Trista Kempa (Ferry), Neil Trickett (Practice Promotions);
    the outcomes name Grow Pro Agency. The logo list names thirteen clients. Get written OK before adding photos or
@@ -35,7 +40,7 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
    `HUBSPOT_CHECK_FORM_ID` is set, and Talk to us (`app/talk/actions.ts`) once `HUBSPOT_TALK_FORM_ID` is set; the
    setup checklists are in `docs/specs/revenue-health-check.md` and `docs/specs/talk-to-us.md`.
 5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/`, `/portal`, `/thanks`, `/check` and
-   `/talk` is a stub. Next in the site map's order: Rate Index, the four solution pages, the Diagnostic page.
+   `/talk` and `/research/rate-index` is a stub. Next in the site map's order: the four solution pages, the Diagnostic page.
 6. **SEO extras.** Open Graph image (1200 by 630), JSON-LD (Organization, ProfessionalService, FAQPage), sitemap page.
 7. **Validation strip.** Fill at least one real "As seen in / Rated on" entry or delete the section data.
 8. **Production flag.** Set `NEXT_PUBLIC_SITE_ENV=production` only on the production deployment.

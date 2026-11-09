@@ -4,6 +4,8 @@
  * visible "confirm" badge everywhere except the production deployment (see showUnverified).
  * Phase 9 (doubt review) flips flags it can confirm from a primary source.
  */
+import rateIndex from "@/data/rate-index.json";
+
 export type Figure = {
   value: string;
   label: string;
@@ -18,7 +20,7 @@ export const facts = {
   companySizeRange: "$1M and $200M",
   responseHours: "24 hours",
   buildingBlocks: "21",
-  rateIndexCount: "137",
+  rateIndexCount: String(rateIndex.rates.all.n),
   firstTerm: "3 to 6 months",
   noticePeriod: "30 days",
   operatorsCount: "350+",
@@ -26,8 +28,19 @@ export const facts = {
   reportContracts: "38",
   reportBuyerRequests: "77",
   daysPerWeek: "1 to 3 days a week",
-  updated: "October 2026",
+  updated: new Date(rateIndex.asOf + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),
 } as const;
+
+/* Rate figures derive from data/rate-index.json (built from the research data source) so the homepage, the
+   footer and the Rate Index page cannot disagree. */
+const k = (n: number) => "$" + Math.round(n / 1000) + "k";
+const vpSeat = rateIndex.contracts.bySeat.find((s) => s.seat === "Sales Director or VP of Sales");
+const fractionalSeats = rateIndex.contracts.bySeat.filter((s) => s.seat !== "Interim head of sales" && s.monthly);
+const vpMonthly = vpSeat?.monthly ? k(vpSeat.monthly.min) + " - " + k(vpSeat.monthly.max) + "/month" : "see the Rate Index";
+const vpHours = vpSeat?.hours ? vpSeat.hours.min + " to " + vpSeat.hours.max + " hours a month" : "";
+const allMonthly = fractionalSeats.flatMap((s) => (s.monthly ? [s.monthly.min, s.monthly.max] : []));
+const fractionalRange = allMonthly.length ? k(Math.min(...allMonthly)) + " - " + k(Math.max(...allMonthly)) + "/month" : "see the Rate Index";
+const indexSource = "Revenue Nomad Rate Index, " + rateIndex.rates.all.n + " hourly rates from the operator survey and platform listings, " + facts.updated;
 
 export const numbers = {
   // Hero band
@@ -74,16 +87,16 @@ export const numbers = {
 
   // What it costs and the FAQ
   vpSalesMonthly: {
-    value: "$4k - $10k/month",
-    label: "Fractional VP of Sales, 20 to 40 hours a month",
-    source: "From our 2026 data, as companies pay it",
-    verified: false,
+    value: vpMonthly,
+    label: "Fractional VP of Sales, " + vpHours,
+    source: "Revenue Nomad direct contracts, 2026 (" + (vpSeat?.contracts ?? 0) + " agreements)",
+    verified: true,
   },
   faqPriceRange: {
-    value: "$4k - $27k/month",
+    value: fractionalRange,
     label: "depending on the seat and days per week",
-    source: "From our 2026 data",
-    verified: false,
+    source: "Revenue Nomad direct contracts, 2026",
+    verified: true,
   },
 
   // Outcomes
@@ -102,10 +115,15 @@ export const numbers = {
   },
 
   // Footer "At a glance"
-  glanceVpSales: { value: "$4k - $10k/month", label: "Fractional VP of Sales", source: "From our 2026 data, 20 to 40 hours a month", verified: false },
-  glanceMedianRate: { value: "$225/hour", label: "Market median rate", source: "Revenue Nomad Rate Index, 137 rates as companies pay them", verified: false },
+  glanceVpSales: { value: vpMonthly, label: "Fractional VP of Sales", source: "Our 2026 contracts, " + vpHours, verified: true },
+  glanceMedianRate: { value: "$" + rateIndex.rates.all.median + "/hour", label: "Market median rate", source: indexSource, verified: true },
   glanceEngagement: { value: facts.daysPerWeek, label: "Typical engagement", source: "First term of 3 to 6 months, then 30 days notice", verified: false },
-  glanceResults60: { value: "82%", label: "Results inside 60 days", source: "Operators reporting a first measurable result, operator survey, n=65", verified: false },
+  glanceResults60: {
+    value: rateIndex.engagements.resultInside60 + "%",
+    label: "Results inside 60 days",
+    source: "Operators reporting a first measurable result inside 60 days, operator survey, n=" + rateIndex.engagements.ttrN,
+    verified: true,
+  },
   glanceResponse: { value: "Within 24 hours", label: "Response time", source: "Service commitment; intro calls with matched leaders follow within days", verified: false },
   glanceFees: { value: "None", label: "Fees for companies", source: "You pay the operator's rate.", verified: true },
 } satisfies Record<string, Figure>;

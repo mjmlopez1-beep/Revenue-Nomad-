@@ -1,0 +1,338 @@
+{
+  "asOf": "2026-11-09",
+  "source": {
+    "title": "2027 State of Fractional Report (Google Sheet), the research data source behind The State of Fractional GTM 2027",
+    "tabs": [
+      "The State of Fractional GTM 2027 Survey",
+      "Platform Signups 2026",
+      "Engagements"
+    ],
+    "note": "Hourly rates: operator survey answers plus Revenue Nomad platform listings appended to the survey tab (operators already in the survey are not double counted). Monthly spend, company-size and hours figures: engagements described in the operator survey (first and second client), monthly spend = hours a month x effective hourly rate. Contract ranges: Revenue Nomad direct agreements only, as billed to the company. Cuts under 10 are directional."
+  },
+  "rates": {
+    "all": {
+      "n": 113,
+      "p25": 180,
+      "median": 250,
+      "p75": 304
+    },
+    "surveyN": 74,
+    "platformN": 39,
+    "byCategory": [
+      {
+        "category": "Sales Leadership",
+        "n": 48,
+        "p25": 200,
+        "median": 250,
+        "p75": 350,
+        "surveyN": 31
+      },
+      {
+        "category": "Marketing",
+        "n": 22,
+        "p25": 150,
+        "median": 218,
+        "p75": 250,
+        "surveyN": 18
+      },
+      {
+        "category": "Revenue Operations",
+        "n": 17,
+        "p25": 180,
+        "median": 250,
+        "p75": 350,
+        "surveyN": 11
+      },
+      {
+        "category": "Sales Enablement",
+        "n": 8,
+        "p25": 219,
+        "median": 288,
+        "p75": 300,
+        "surveyN": 4
+      },
+      {
+        "category": "Customer Success & Growth",
+        "n": 6,
+        "p25": 221,
+        "median": 238,
+        "p75": 269,
+        "surveyN": 1
+      },
+      {
+        "category": "AI GTM",
+        "n": 8,
+        "p25": 194,
+        "median": 250,
+        "p75": 388,
+        "surveyN": 7
+      },
+      {
+        "category": "Partnerships",
+        "n": 3,
+        "p25": 208,
+        "median": 250,
+        "p75": 275,
+        "surveyN": 2
+      },
+      {
+        "category": "Front-line Sellers / SDR",
+        "n": 1,
+        "p25": 225,
+        "median": 225,
+        "p75": 225,
+        "surveyN": 0
+      }
+    ],
+    "publicationFloor": 10
+  },
+  "engagements": {
+    "n": 119,
+    "firstClientN": 74,
+    "byRevenue": [
+      {
+        "band": "Pre-revenue",
+        "engagements": 7,
+        "share": 6,
+        "medianMonthly": 3000,
+        "monthlyN": 7
+      },
+      {
+        "band": "Under $1M",
+        "engagements": 16,
+        "share": 13,
+        "medianMonthly": 2750,
+        "monthlyN": 16
+      },
+      {
+        "band": "$1M - $5M",
+        "engagements": 34,
+        "share": 29,
+        "medianMonthly": 5000,
+        "monthlyN": 34
+      },
+      {
+        "band": "$5M - $20M",
+        "engagements": 39,
+        "share": 33,
+        "medianMonthly": 7520,
+        "monthlyN": 39
+      },
+      {
+        "band": "$20M - $50M",
+        "engagements": 16,
+        "share": 13,
+        "medianMonthly": 10010,
+        "monthlyN": 16
+      },
+      {
+        "band": "$50M+",
+        "engagements": 7,
+        "share": 6,
+        "medianMonthly": 11200,
+        "monthlyN": 7
+      }
+    ],
+    "byHours": [
+      {
+        "band": "Under 20",
+        "n": 42,
+        "p25": 150,
+        "median": 250,
+        "p75": 381,
+        "typicalMonth": 3750
+      },
+      {
+        "band": "20 - 39",
+        "n": 24,
+        "p25": 150,
+        "median": 167,
+        "p75": 255,
+        "typicalMonth": 3340
+      },
+      {
+        "band": "40 - 59",
+        "n": 30,
+        "p25": 168,
+        "median": 200,
+        "p75": 250,
+        "typicalMonth": 8000
+      },
+      {
+        "band": "60+",
+        "n": 23,
+        "p25": 125,
+        "median": 167,
+        "p75": 211,
+        "typicalMonth": 12000
+      }
+    ],
+    "monthlyByCategory": [
+      {
+        "category": "Sales Leadership",
+        "medianMonthly": 6600,
+        "medianHours": 20,
+        "n": 52
+      },
+      {
+        "category": "Marketing",
+        "medianMonthly": 4500,
+        "medianHours": 20,
+        "n": 31
+      },
+      {
+        "category": "Revenue Operations",
+        "medianMonthly": 9000,
+        "medianHours": 30,
+        "n": 14
+      },
+      {
+        "category": "Sales Enablement",
+        "medianMonthly": 9000,
+        "medianHours": 40,
+        "n": 6
+      },
+      {
+        "category": "Customer Success & Growth",
+        "medianMonthly": 13700,
+        "medianHours": 60,
+        "n": 2
+      },
+      {
+        "category": "AI GTM",
+        "medianMonthly": 6750,
+        "medianHours": 18,
+        "n": 10
+      },
+      {
+        "category": "Partnerships",
+        "medianMonthly": 7460,
+        "medianHours": 40,
+        "n": 4
+      },
+      {
+        "category": "Front-line Sellers / SDR",
+        "medianMonthly": null,
+        "medianHours": null,
+        "n": 0
+      }
+    ],
+    "termShare": [
+      {
+        "term": "1 to 3 months",
+        "share": 36
+      },
+      {
+        "term": "3 to 6 months",
+        "share": 38
+      },
+      {
+        "term": "6 to 12 months",
+        "share": 16
+      },
+      {
+        "term": "12+ months",
+        "share": 9
+      }
+    ],
+    "extendedShare": 57,
+    "resultInside60": 82,
+    "ttrN": 71,
+    "extendedN": 74
+  },
+  "movement": {
+    "n": 61,
+    "raised": 31,
+    "held": 27,
+    "cut": 3,
+    "medianChangePct": 3,
+    "plan": {
+      "n": 74,
+      "raise": 24,
+      "hold": 45,
+      "lower": 5
+    },
+    "demand": {
+      "n": 74,
+      "up": 26,
+      "flat": 37,
+      "down": 11
+    }
+  },
+  "contracts": {
+    "direct": 15,
+    "active": 10,
+    "hourly": {
+      "n": 12,
+      "p25": 219,
+      "median": 233,
+      "p75": 256
+    },
+    "bySeat": [
+      {
+        "seat": "CRO and revenue transformation",
+        "contracts": 4,
+        "hourly": {
+          "min": 225,
+          "max": 300
+        },
+        "hours": {
+          "min": 30,
+          "max": 85
+        },
+        "monthly": {
+          "min": 8500,
+          "max": 27000
+        }
+      },
+      {
+        "seat": "Interim head of sales",
+        "contracts": 2,
+        "hourly": {
+          "min": 240,
+          "max": 240
+        },
+        "hours": {
+          "min": 130,
+          "max": 173
+        },
+        "monthly": {
+          "min": 31200,
+          "max": 35750
+        }
+      },
+      {
+        "seat": "Sales Director or VP of Sales",
+        "contracts": 7,
+        "hourly": {
+          "min": 195,
+          "max": 300
+        },
+        "hours": {
+          "min": 20,
+          "max": 40
+        },
+        "monthly": {
+          "min": 3900,
+          "max": 12000
+        }
+      },
+      {
+        "seat": "Sales enablement lead",
+        "contracts": 2,
+        "hourly": {
+          "min": 225,
+          "max": 275
+        },
+        "hours": {
+          "min": 38,
+          "max": 38
+        },
+        "monthly": {
+          "min": 10358,
+          "max": 10358
+        }
+      }
+    ]
+  }
+}

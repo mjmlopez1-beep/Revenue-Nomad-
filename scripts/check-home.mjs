@@ -20,7 +20,7 @@ try {
 const args = Object.fromEntries(
   process.argv.slice(2).map((a, i, arr) => (a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : [])).filter((x) => x.length)
 );
-const PATHS = String(args.path ?? "/,/check,/talk").split(",").map((p) => p.trim()).filter(Boolean);
+const PATHS = String(args.path ?? "/,/check,/talk,/research/rate-index").split(",").map((p) => p.trim()).filter(Boolean);
 const PATH = PATHS[0];
 const SITE_ENV = args["site-env"] ?? process.env.NEXT_PUBLIC_SITE_ENV ?? "preview";
 const PRODUCTION = SITE_ENV === "production";
