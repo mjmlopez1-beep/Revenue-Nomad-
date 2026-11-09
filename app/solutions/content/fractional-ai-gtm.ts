@@ -39,7 +39,7 @@ const page: RolePage = {
     title: "Fractional AI GTM leader",
     description: `Hire a fractional AI GTM leader who maps your revenue process to the task level, ships AI into the workflow your team already uses and measures adoption. ${cat.median} an hour median on the Rate Index, ${monthly} a month median in the engagements operators described. No fees for companies.`,
   },
-  order: ["triggers", "does", "cost", "owns", "compare", "engagements", "ninety", "practice", "pick", "leaders", "faq", "keepReading"],
+  order: ["leaders", "triggers", "does", "cost", "owns", "compare", "engagements", "ninety", "practice", "pick", "faq", "keepReading"],
 
   hero: {
     eyebrow: "Solutions - Fractional AI GTM leader",
@@ -255,6 +255,8 @@ const page: RolePage = {
     cards: [
       {
         title: "Monthly fractional",
+        price: { v: price, l: `starting point: ${priceNote}` },
+        badge: "Most common",
         body: `Scoped to the hours the work needs, ${price} at about ${monthlyHours} hours - the median month in the engagements operators described. A defined first term of three to six months, then 30 days notice either way.`,
         href: "/how-we-engage/fractional",
       },

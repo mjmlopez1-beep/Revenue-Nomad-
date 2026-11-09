@@ -29,6 +29,8 @@ const keptGoing = f.pct(100 - Math.round((status.endedEarly / status.n) * 100));
 const converted = `${status.converted === 1 ? "one" : status.converted} of ${status.n}`;
 const aiMost = f.pct(f.survey.aiUse.most);
 
+const interim = f.seat("Interim head of sales");
+
 const page: RolePage = {
   slug: "fractional-vp-of-sales",
   role: "Fractional VP of Sales",
@@ -38,7 +40,7 @@ const page: RolePage = {
     title: "Fractional VP of Sales",
     description: `A fractional VP of Sales builds the process, the pipeline and the forecast, then coaches your team to run them. ${vpMonthly} from our 2026 contracts, no fees for companies.`,
   },
-  order: ["triggers", "does", "cost", "owns", "compare", "engagements", "ninety", "practice", "pick", "leaders", "faq", "keepReading"],
+  order: ["leaders", "triggers", "does", "cost", "owns", "compare", "engagements", "ninety", "practice", "pick", "faq", "keepReading"],
   hero: {
     eyebrow: "Solutions - Fractional VP of Sales",
     h1: { plain: "A sales engine that", em: "runs without you in every deal" },
@@ -237,16 +239,20 @@ const page: RolePage = {
     cards: [
       {
         title: "Monthly fractional",
+        price: { v: vpMonthly, l: "signed VP of Sales contracts, 20 to 40 hours a month" },
+        badge: "Most common",
         body: `1 to 3 days a week at ${vpMonthly}. A defined first term of three to six months, then 30 days notice either way.`,
         href: "/how-we-engage/fractional",
       },
       {
         title: "Interim cover",
+        price: interim?.monthly ? { v: `${f.k(interim.monthly.min)} - ${f.k(interim.monthly.max)}/month`, l: "signed interim contracts, 130 to 173 hours a month" } : { v: "Full-time hours", l: "priced from the operator's rate" },
         body: "The seat is empty and the search is running. An experienced leader holds the team, the pipeline and the forecast until it lands.",
         href: "/how-we-engage/interim",
       },
       {
         title: "Converts to full time",
+        price: { v: "Hire-away terms", l: "written into the contract from day one" },
         body: "When the role becomes a full-time job, hire the person already doing it - with the ramp, the trust and the playbook built.",
         href: "/how-we-engage/full-time",
       },

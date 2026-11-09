@@ -62,7 +62,7 @@ const page: RolePage = {
     title: "Fractional RevOps leader | Revenue Nomad",
     description: `A fractional RevOps leader puts marketing, sales and customer success on one set of data and reporting, so the forecast holds. Median month ${medianMonth}, operator survey. No fees for companies.`,
   },
-  order: ["compare", "triggers", "does", "cost", "owns", "engagements", "ninety", "practice", "pick", "leaders", "faq", "keepReading"],
+  order: ["leaders", "compare", "triggers", "does", "cost", "owns", "engagements", "ninety", "practice", "pick", "faq", "keepReading"],
 
   hero: {
     eyebrow: "Solutions - Fractional RevOps leader",
@@ -277,11 +277,14 @@ const page: RolePage = {
       },
       {
         title: "Monthly fractional",
+        price: { v: `${medianMonth}/month`, l: `starting point: median month at about ${medianHours} hours, operator survey` },
+        badge: "Most common",
         body: `Hands-on execution at the survey's median month of ${medianMonth}, or a director cadence at about 2 days a week for $12k - $15k/month.`,
         href: "/how-we-engage/fractional",
       },
       {
         title: "Converts to full time",
+        price: { v: "Hire-away terms", l: "written into the contract from day one" },
         body: "When the role becomes a full-time job, hire the person already doing it - with the data model, the cadence and the trust built.",
         href: "/how-we-engage/full-time",
       },

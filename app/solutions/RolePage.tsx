@@ -1,11 +1,12 @@
+import Image from "next/image";
 import Link from "next/link";
+import * as f from "../guide/content/figures";
 import Arrow from "../home/Arrow";
-import Avatar from "../home/Avatar";
 import ClosingBand from "../home/ClosingBand";
 import SiteFooter from "../home/SiteFooter";
 import SiteHeader from "../home/SiteHeader";
 import PickMethod, { SectionHead, StatValue, TierMark } from "./PickMethod";
-import { tierFor } from "./content/shared";
+import { roles, tierFor } from "./content/shared";
 import type { RolePage as Role, SectionKey } from "./content/types";
 import "../home/home.css";
 import "./Role.css";
@@ -14,6 +15,10 @@ import "./Role.css";
  * Shared template for the four role pages ("Hire a fractional leader"). Renders a RolePage content module in
  * its `order`, between the site header and footer. Artboard: "VPSalesPage" and its phone twin; the CMO and
  * RevOps boards use the same sections in their own order. Prefix rp-; tokens only (Role.css).
+ *
+ * Borrowed from the best fractional marketplaces (Go Fractional's hire pages, studied 2026-11-09): a seat
+ * switcher and a trust line in the hero, a band of index figures under it, the leaders shown before the
+ * explanation, pricing-style engagement cards with a live rate line, and a related-seats strip at the end.
  */
 export default function RolePage({ page }: { page: Role }) {
   const sections: React.ReactNode[] = [];
@@ -33,7 +38,9 @@ export default function RolePage({ page }: { page: Role }) {
       <SiteHeader />
       <main id="main" className="rp-page">
         <Hero page={page} />
+        <Proof page={page} />
         {sections}
+        <RelatedRoles page={page} />
         <ClosingBand />
       </main>
       <SiteFooter />
@@ -98,6 +105,7 @@ function Hero({ page }: { page: Role }) {
     <section className="rp-hero" aria-labelledby="rp-hero-h">
       <div className="rn-wrap rp-hero-inner">
         <span className="rp-hero-glow" aria-hidden="true" />
+        <RoleSwitch page={page} />
         <p className="rn-eyebrow">{hero.eyebrow}</p>
         <h1 id="rp-hero-h" className="rn-h1 rp-h1">
           {hero.h1.plain} <em>{hero.h1.em}</em>
@@ -116,6 +124,86 @@ function Hero({ page }: { page: Role }) {
             <StatValue stat={hero.price} className="rp-hero-price-v" /> - {hero.price.l}
           </p>
         </div>
+        <ul className="rp-trust" aria-label="What to expect">
+          <li>No fees for companies</li>
+          <li>{f.platform.availableNowShare}% of listed leaders available now</li>
+          <li>First term of 3 to 6 months, then 30 days notice</li>
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+/** "Which leader do you need?": the four seats as chips, the current page marked. */
+function RoleSwitch({ page }: { page: Role }) {
+  const here = `/${page.slug}`;
+  return (
+    <nav className="rp-roles" aria-label="Which leader do you need?">
+      <span className="rp-roles-k">Which leader do you need?</span>
+      <ul>
+        {roles.map((r) => (
+          <li key={r.href}>
+            <Link href={r.href} prefetch={false} aria-current={r.href === here ? "page" : undefined}>
+              {r.short}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/** The index figures behind the page: the seat's median rate, the index size, engagements under contract, the price to companies. */
+function Proof({ page }: { page: Role }) {
+  const cat = f.category(page.category);
+  const items: { v: string; l: string }[] = [
+    { v: `${cat.median}/hr`, l: `median ${page.category} rate, ${cat.n} rates` },
+    { v: String(f.rates.n), l: "rates in the Rate Index, as companies pay them" },
+    { v: String(f.contracts.engagements), l: "engagements under signed contract or partner terms" },
+    { v: "$0", l: "fees for companies - you pay the operator's rate" },
+  ];
+  return (
+    <section className="rp-proof" aria-label="The numbers behind this page">
+      <div className="rn-wrap rp-proof-inner">
+        <ul className="rp-proof-list">
+          {items.map((it) => (
+            <li key={it.l}>
+              <b>{it.v}</b>
+              <span>{it.l}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="rn-small rp-proof-src">
+          Revenue Nomad Rate Index and contracts, as of {f.asOf.long}. <Link href="/research/rate-index">See the Rate Index</Link>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/** The other three seats, at the end of the page. */
+function RelatedRoles({ page }: { page: Role }) {
+  const here = `/${page.slug}`;
+  return (
+    <section className="rp-section rp-related rn-band--mist" aria-labelledby="rp-related-h">
+      <div className="rn-wrap">
+        <SectionHead id="rp-related-h" title="Need a different seat?" intro="The same method, the same network, a different leader. Every seat is scoped to 1 to 3 days a week." />
+        <ul className="rp-cards rp-cards--3 rp-related-list">
+          {roles
+            .filter((r) => r.href !== here)
+            .map((r) => (
+              <li key={r.href}>
+                <Link className="rp-related-card" href={r.href} prefetch={false}>
+                  <b>{r.name}</b>
+                  <span>{r.line}</span>
+                  <span className="rp-related-go">
+                    See the page
+                    <Arrow size={13} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+        </ul>
       </div>
     </section>
   );
@@ -304,14 +392,22 @@ function Compare({ page }: { page: Role }) {
 
 function Engagements({ page }: { page: Role }) {
   const e = page.engagements;
+  const cat = f.category(page.category);
   return (
     <section className="rp-section" aria-labelledby="rp-engagements-h">
       <div className="rn-wrap">
         <SectionHead id="rp-engagements-h" title={e.title} />
         <ul className="rp-cards rp-cards--3">
           {e.cards.map((c) => (
-            <li key={c.title} className="rp-card">
+            <li key={c.title} className={c.badge ? "rp-card rp-card--price is-featured" : "rp-card rp-card--price"}>
+              {c.badge && <span className="rp-badge">{c.badge}</span>}
               <h3>{c.title}</h3>
+              {c.price && (
+                <p className="rp-card-price">
+                  <StatValue stat={c.price} className="rp-card-price-v" />
+                  <span className="rp-card-price-l">{c.price.l}</span>
+                </p>
+              )}
               <p className="rn-body">{c.body}</p>
               {c.href && (
                 <Link className="rn-link rp-card-link" href={c.href}>
@@ -333,6 +429,14 @@ function Engagements({ page }: { page: Role }) {
           </ul>
           <p className="rn-small rp-source">{e.source}</p>
         </div>
+        <p className="rp-rateline">
+          <span className="rp-rateline-k" aria-hidden="true" />
+          {page.category} rates have a median of <b>{cat.median}/hour</b> across {cat.n} rates in the Rate Index. The price moves with days a week and scope.{" "}
+          <Link className="rn-link" href="/research/rate-index">
+            See the Rate Index
+            <Arrow size={13} />
+          </Link>
+        </p>
       </div>
     </section>
   );
@@ -401,6 +505,9 @@ function Practice({ page }: { page: Role }) {
   );
 }
 
+/** The canvas's illustrative portraits (480 by 480), one per sample profile, in card order. */
+const samplePhotos = ["sample-erin.webp", "sample-scott.webp", "sample-lionel.webp"];
+
 function Leaders({ page }: { page: Role }) {
   const l = page.leaders;
   return (
@@ -408,12 +515,13 @@ function Leaders({ page }: { page: Role }) {
       <div className="rn-wrap">
         <SectionHead id="rp-leaders-h" title={l.title} />
         <ul className="rp-cards rp-cards--3 rp-leader-grid">
-          {l.items.map((p) => {
+          {l.items.map((p, i) => {
             const tier = tierFor(p.tier);
+            const photo = samplePhotos[i % samplePhotos.length];
             return (
               <li key={p.name} className="rp-leader">
                 <div className="rp-leader-head">
-                  <Avatar name={p.name} size={46} tone="leaf" />
+                  <Image className="rp-leader-photo" src={`/home/people/${photo}`} alt="" width={480} height={480} sizes="56px" />
                   <div className="rp-leader-id">
                     <h3>{p.name}</h3>
                     <p>{p.role}</p>
@@ -443,6 +551,11 @@ function Leaders({ page }: { page: Role }) {
                     - {p.reviews}
                   </span>
                 </p>
+                <Link className="rn-btn rn-btn--sm rp-leader-cta" href="/talk">
+                  Request an intro
+                  <span className="rn-sr-only"> to a leader like {p.name.split(" ")[0]}</span>
+                  <Arrow size={13} />
+                </Link>
               </li>
             );
           })}

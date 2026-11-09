@@ -62,7 +62,8 @@ export type RolePage = {
   };
   engagements: {
     title: string;
-    cards: { title: string; body: string; href?: string }[];
+    /** `price` renders the card in the pricing style ("Starting at"); `badge` marks the most common one. */
+    cards: { title: string; body: string; href?: string; price?: Stat; badge?: string }[];
     stats: Stat[];
     source: string;
   };

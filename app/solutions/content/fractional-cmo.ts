@@ -35,7 +35,7 @@ const page: RolePage = {
     title: "Fractional CMO | Revenue Nomad",
     description: `A marketing leader 1 to 3 days a week, owning positioning, the demand engine and the pipeline marketing produces. ${monthly} median. No fees for companies.`,
   },
-  order: ["does", "cost", "triggers", "compare", "owns", "engagements", "ninety", "practice", "pick", "leaders", "faq", "keepReading"],
+  order: ["leaders", "does", "cost", "triggers", "compare", "owns", "engagements", "ninety", "practice", "pick", "faq", "keepReading"],
 
   hero: {
     eyebrow: "Solutions - Fractional CMO",
@@ -259,16 +259,20 @@ const page: RolePage = {
     cards: [
       {
         title: "Monthly fractional",
+        price: { v: monthly, l: `starting point: ${monthlyNote}` },
+        badge: "Most common",
         body: `1 to 3 days a week at ${monthly}, ${monthlyNote}. A defined first term of three to six months, then 30 days notice either way.`,
         href: "/how-we-engage/fractional",
       },
       {
         title: "Interim cover",
+        price: { v: "Full-time hours", l: "for a defined stretch, priced from the operator's rate" },
         body: "The seat is empty and the search is running. An experienced leader holds the team, the pipeline and the forecast until it lands.",
         href: "/how-we-engage/interim",
       },
       {
         title: "Converts to full time",
+        price: { v: "Hire-away terms", l: "written into the contract from day one" },
         body: "When the role becomes a full-time job, hire the person already doing it - with the ramp, the trust and the playbook built.",
         href: "/how-we-engage/full-time",
       },

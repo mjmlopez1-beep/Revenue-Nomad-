@@ -59,3 +59,23 @@ Before launch the owner confirms reviewers and clients are happy to be shown, as
 `check:tokens` covers `app/solutions` and the four route folders; `check:home` runs the VP of Sales and RevOps
 pages by default and passed on all four role pages and the homepage against the production build (zero axe
 violations, no horizontal scroll, page weight inside the budget, fee language clean).
+
+## Revision 2026-11-09: patterns from the best hire pages
+
+Owner's direction: "Look at Go Fractional for inspiration on role pages." Studied gofractional.com (homepage, /hire/fractional-cmo,
+/explore/marketing, /how-it-works). What was borrowed, adapted to our voice and data (template-level in `RolePage.tsx`, so every
+seat gets it):
+
+- **Seat switcher** at the top of the hero ("Which leader do you need?": VP of Sales, CMO, RevOps, AI GTM, current page marked)
+  and a **related-seats strip** before the closing band. The list lives in `content/shared.ts` (`roles`).
+- **Trust line** under the hero buttons: no fees for companies, the platform's available-now share, the first-term and notice terms.
+- **Proof band** under the hero: the seat's median rate and record count, rates in the index, engagements under contract, "$0 fees
+  for companies", all from `data/rate-index.json` through figures.ts, with the as-of date and a link to the Rate Index.
+- **People first**: the "Leaders ready for this seat" band now follows the hero on every page (the boards had it near the end). The
+  sample profiles carry the canvas's illustrative portraits (`public/home/people/sample-*.webp`) and a "Request an intro" button.
+- **Pricing-style engagement cards**: each card can carry a `price` ("Starting at" figure with its source) and a `badge` ("Most
+  common"). Prices read the signed-seat ranges (VP of Sales, interim head of sales) or the survey's median month; cards with no
+  figure state their terms instead. A **rate line** under the cards quotes the seat's median hourly rate and record count.
+
+Not borrowed: the "our members have led marketing at" logo wall (we only show logos of companies that hired through us), the
+"98% match success" style claims (no dataset column), and the industry sub-pages (no content yet).

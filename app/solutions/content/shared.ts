@@ -66,3 +66,11 @@ export const pick: { eyebrow: string; title: string; intro: string; checks: Pick
   ],
   source: `Survey figures from the State of Fractional GTM 2027, n=${f.survey.detailed}. CORE scoring and Reputation Index tiers as published on our operator page.`,
 };
+
+/** The four seats, for the "Which leader do you need?" switcher in the hero and the related-roles strip. */
+export const roles = [
+  { href: "/fractional-vp-of-sales", short: "VP of Sales", name: "Fractional VP of Sales", line: "Owns the number, the team and the forecast 1 to 3 days a week." },
+  { href: "/fractional-cmo", short: "CMO", name: "Fractional CMO", line: "Positioning, the demand engine and the pipeline marketing produces." },
+  { href: "/fractional-revops", short: "RevOps", name: "Fractional RevOps leader", line: "One pipeline definition, a CRM people trust and a forecast the board believes." },
+  { href: "/fractional-ai-gtm", short: "AI GTM", name: "Fractional AI GTM leader", line: "AI in the revenue engine that pays for itself, measured on pipeline and cost." },
+] as const;
