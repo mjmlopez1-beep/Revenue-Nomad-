@@ -346,7 +346,7 @@ const page: RolePage = {
       by: "How our engagements start",
       context: "A month-one Revenue Health Diagnostic became a 15-month roadmap at a $400M ARR software company, and the operating rhythm it built still runs",
     },
-    caseHref: "/case-studies",
+    caseHref: "/case-studies/software-400m-arr",
     caseLabel: "Read the case study",
     stat: {
       v: "15 months",

@@ -138,6 +138,8 @@ export const numbers = {
     verified: true,
   },
   outcomeClarusPipeline: { value: "833%", label: "pipeline generation pace, year over year", source: "Engagement record, Clarus Care", verified: false },
+  outcomeBuildingLink: { value: "$400K", label: "expansion engine on the secondary product motion", source: "Engagement record, BuildingLink, at 18 months", verified: false },
+  outcomeSoftwareRoadmap: { value: "15 months", label: "from a month-one Revenue Health Diagnostic to a roadmap still running", source: "Engagement record, a $400M ARR software company", verified: false },
 
   // Footer "At a glance"
   glanceVpSales: { value: vpMonthly, label: "Fractional VP of Sales", source: "Our 2026 contracts, " + vpHours, verified: true },

@@ -334,7 +334,7 @@ const page: RolePage = {
       by: "Engagement lead at Skaled, on a placed operator",
       context: "Skaled staffs sales, marketing, RevOps and AI leadership seats from this network",
     },
-    caseHref: "/case-studies",
+    caseHref: "/case-studies/ferry",
     caseLabel: "Read the case study",
     stat: {
       v: "100%",

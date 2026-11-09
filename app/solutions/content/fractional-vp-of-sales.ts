@@ -312,7 +312,7 @@ const page: RolePage = {
       by: "Neil Trickett, PT",
       context: "CEO, Practice Promotions, five weeks into a fractional VP of Sales engagement - two SDRs hired and training, first AE hire underway",
     },
-    caseHref: "/case-studies",
+    caseHref: "/case-studies/practice-promotions",
     caseLabel: "Read the case study",
     stat: {
       v: "+54.8%",
