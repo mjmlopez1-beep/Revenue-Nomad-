@@ -101,30 +101,7 @@ a:hover {
   text-decoration: none;
 }
 
-/* ---------- landing ---------- */
-.hero {
-  padding: 90px 0 60px;
-  max-width: 720px;
-}
-.hero h1 {
-  font-size: 46px;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  margin-bottom: 18px;
-  color: #16201a;
-}
-.hero h1 em {
-  font-style: normal;
-  background: var(--gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.hero p {
-  color: var(--text-dim);
-  font-size: 17px;
-  margin-bottom: 30px;
-}
+/* ---------- buttons (portal) ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -149,37 +126,6 @@ a:hover {
 .btn:disabled {
   opacity: 0.55;
   cursor: default;
-}
-.btn-ghost {
-  background: var(--card);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  box-shadow: none;
-}
-.btn-ghost:hover {
-  background: var(--card-nested);
-}
-.features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-  padding: 30px 0 80px;
-}
-.feature {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 22px;
-  box-shadow: var(--shadow);
-}
-.feature h3 {
-  font-size: 15px;
-  margin-bottom: 6px;
-  color: #1d2a21;
-}
-.feature p {
-  color: var(--text-dim);
-  font-size: 13.5px;
 }
 
 /* ---------- portal ---------- */
@@ -859,9 +805,6 @@ a:hover {
 }
 
 @media (max-width: 640px) {
-  .hero h1 {
-    font-size: 33px;
-  }
   .job-top {
     flex-direction: column;
   }

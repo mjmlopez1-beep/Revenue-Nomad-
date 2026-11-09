@@ -1,0 +1,83 @@
+/* Section 22: Closing band (dark CTA gradient). Prefix: closing- */
+.closing {
+  background: var(--rn-band-dark-cta);
+  color: var(--rn-white);
+  font-family: var(--rn-font-ui);
+}
+.closing-row {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+  padding-top: 56px;
+  padding-bottom: 60px;
+}
+.closing-copy {
+  flex-grow: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.closing .rn-h2 {
+  font-size: 36px;
+  line-height: 1.1;
+  color: var(--rn-white);
+}
+.closing-line {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--rn-white);
+}
+.closing-gets {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.closing-kicker {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--rn-leaf);
+}
+.closing-gets ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+.closing-gets li {
+  display: flex;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--rn-leaf-pale);
+}
+.closing-check {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--rn-leaf-line);
+}
+.closing .rn-btn {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+  .closing-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 22px;
+    padding-top: 44px;
+    padding-bottom: 48px;
+  }
+  .closing .rn-h2 {
+    font-size: 30px;
+  }
+  .closing-gets {
+    margin-top: 12px;
+  }
+  .closing .rn-btn {
+    width: 100%;
+  }
+}

@@ -1,0 +1,249 @@
+/* Section 12: Assessment. Gold band (design 4.1 row 12) with ink text; the cube solid is CubeSolid.tsx. */
+.asmt {
+  background: var(--rn-gold);
+  color: var(--rn-ink);
+  font-family: var(--rn-font-ui);
+  overflow: hidden;
+}
+.asmt-eyebrow {
+  color: var(--rn-night);
+}
+.asmt-h {
+  margin-top: 14px;
+  font-size: var(--rn-text-h2-lg);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.asmt-lede {
+  margin: 18px 0 0;
+  font-size: 20px;
+  line-height: 1.55;
+  color: var(--rn-ink-soft);
+}
+
+/* The three layers */
+.asmt-layers {
+  list-style: none;
+  margin: 56px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+}
+.asmt-layer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.asmt-cube-box {
+  height: 250px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+.asmt-solid {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.asmt-layer-k {
+  margin: 26px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--rn-track-eyebrow);
+  text-transform: uppercase;
+  color: var(--rn-night);
+}
+.asmt-layer-t {
+  margin: 8px 0 0;
+  font-family: var(--rn-font-display);
+  font-weight: 400;
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--rn-ink);
+}
+.asmt-layer-d {
+  margin: 6px 0 0;
+  font-size: var(--rn-text-body);
+  line-height: 1.5;
+  color: var(--rn-ink-soft);
+}
+
+/* Cube faces. Built slabs in night tints, new pillars in leaf greens, the next pillars as dashed ghosts. */
+.asmt-face {
+  stroke: var(--rn-night);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+.asmt-cube--b .asmt-face--l {
+  fill: var(--rn-night-tint);
+}
+.asmt-cube--b .asmt-face--r {
+  fill: var(--rn-night-tint-2);
+}
+.asmt-cube--b .asmt-face--t {
+  fill: var(--rn-white);
+}
+.asmt-cube--n .asmt-face--l {
+  fill: var(--rn-leaf);
+}
+.asmt-cube--n .asmt-face--r {
+  fill: var(--rn-leaf-strong);
+}
+.asmt-cube--n .asmt-face--t {
+  fill: var(--rn-leaf-pale);
+}
+.asmt-cube--g .asmt-face {
+  fill: var(--rn-leaf-strong);
+  fill-opacity: 0.3;
+  stroke: var(--rn-night);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+}
+
+/* The seven pillars */
+.asmt-pillars {
+  margin-top: 52px;
+  display: flex;
+  gap: 4px;
+}
+.asmt-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.asmt-group-k {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--rn-track-eyebrow);
+  text-transform: uppercase;
+  color: var(--rn-ink-soft);
+}
+.asmt-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rn-ink-soft);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+}
+.asmt-group-num {
+  display: none;
+}
+.asmt-pills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+}
+.asmt-pill {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.asmt-bar {
+  display: block;
+  height: 30px;
+  background: var(--rn-night-tint-2);
+}
+.asmt-group--1 .asmt-bar {
+  background: color-mix(in srgb, var(--rn-night) 16%, transparent);
+}
+.asmt-group--2 .asmt-bar {
+  background: color-mix(in srgb, var(--rn-night) 38%, transparent);
+}
+.asmt-group--3 .asmt-bar {
+  background: var(--rn-white);
+}
+.asmt-group--3 .asmt-pill:last-child .asmt-bar {
+  border-radius: 0 15px 15px 0;
+}
+.asmt-pill-label {
+  text-align: center;
+  font-size: var(--rn-text-small);
+  color: var(--rn-ink-soft);
+}
+.asmt-cta {
+  margin: 40px 0 0;
+}
+.asmt-link {
+  font-size: var(--rn-text-body);
+  color: var(--rn-ink);
+}
+
+@media (max-width: 900px) {
+  .asmt-h {
+    font-size: 34px;
+  }
+  .asmt-lede {
+    font-size: 18px;
+  }
+  .asmt-layers {
+    margin-top: 34px;
+    grid-template-columns: 1fr;
+  }
+  .asmt-cube-box {
+    height: auto;
+  }
+  .asmt-layer-t {
+    font-size: 25px;
+  }
+  /* Phone artboard: one stacked group per layer, each pillar as a filled row. */
+  .asmt-pillars {
+    margin-top: 34px;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .asmt-group {
+    flex: none !important;
+  }
+  .asmt-group-k {
+    margin-bottom: 6px;
+    font-size: 10.5px;
+    letter-spacing: 0.18em;
+  }
+  .asmt-dot {
+    display: none;
+  }
+  .asmt-group-num {
+    display: inline;
+  }
+  .asmt-pills {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .asmt-bar {
+    display: none;
+  }
+  .asmt-pill-label {
+    display: block;
+    padding: 10px 14px;
+    border-radius: var(--rn-radius-xs);
+    text-align: left;
+    font-size: 13.5px;
+    color: var(--rn-ink);
+    background: var(--rn-night-tint-2);
+  }
+  .asmt-group--1 .asmt-pill-label {
+    background: color-mix(in srgb, var(--rn-night) 16%, transparent);
+  }
+  .asmt-group--2 .asmt-pill-label {
+    background: color-mix(in srgb, var(--rn-night) 38%, transparent);
+  }
+  .asmt-group--3 .asmt-pill-label {
+    background: var(--rn-white);
+    color: var(--rn-night);
+  }
+  .asmt-cta {
+    margin-top: 30px;
+  }
+}

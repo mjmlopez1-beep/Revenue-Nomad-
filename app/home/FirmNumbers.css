@@ -1,0 +1,54 @@
+/* Firm numbers. Prefix fnum-. */
+.fnum {
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  border-top: 1px solid var(--rn-line);
+  font-family: var(--rn-font-ui);
+}
+.fnum-inner {
+  padding: 40px 0 44px;
+}
+.fnum-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 48px;
+}
+.fnum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.fnum-v {
+  display: block;
+  font-family: var(--rn-font-display);
+  font-weight: 400;
+  font-size: 46px;
+  line-height: 1;
+  color: var(--rn-forest);
+  font-variant-numeric: tabular-nums;
+}
+.fnum-l {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--rn-mute);
+}
+
+@media (max-width: 900px) {
+  .fnum-inner {
+    padding: 34px 0 36px;
+  }
+  .fnum-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 26px 20px;
+  }
+  .fnum-v {
+    font-size: 38px;
+  }
+  .fnum-l {
+    font-size: 14px;
+  }
+}

@@ -1,0 +1,160 @@
+/* Section 07, "GTM is evolving" and "How we work", one dark band. Prefix gtm-.
+   Muted whites are mixes of the white token so the band stays on one gradient source. */
+.gtm {
+  padding: 100px 0 104px;
+  font-family: var(--rn-font-ui);
+}
+.gtm-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 520px;
+  gap: 80px;
+  align-items: start;
+}
+.gtm-eyebrow {
+  color: var(--rn-gold);
+}
+.gtm-h {
+  margin-top: 14px;
+  max-width: 540px;
+  font-size: var(--rn-text-h2-lg);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+/* Statistics. The artboard rotates these one at a time; here all four stay visible, so
+   nothing moves on its own and every source is readable without waiting. */
+.gtm-stats {
+  list-style: none;
+  margin: 34px 0 0;
+  padding: 0;
+  max-width: 500px;
+  display: grid;
+  gap: 0;
+}
+.gtm-stat {
+  padding: 22px 0;
+  border-top: 1px solid color-mix(in srgb, var(--rn-white) 14%, transparent);
+}
+.gtm-stat:last-child {
+  border-bottom: 1px solid color-mix(in srgb, var(--rn-white) 14%, transparent);
+}
+.gtm-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.gtm-stat-v {
+  flex: none;
+  min-width: 132px;
+  font-family: var(--rn-font-display);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--rn-leaf-line);
+  font-variant-numeric: tabular-nums;
+}
+.gtm-stat-l {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: var(--rn-text-lede);
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--rn-white) 88%, transparent);
+}
+.gtm-stat-src {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--rn-white) 62%, transparent);
+}
+
+/* How we work */
+.gtm-how-label {
+  margin: 0 0 14px;
+  font-size: var(--rn-text-eyebrow);
+  font-weight: 700;
+  letter-spacing: var(--rn-track-eyebrow);
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--rn-white) 62%, transparent);
+}
+.gtm-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--rn-white) 14%, transparent);
+}
+.gtm-point {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 20px;
+  padding: 28px 0;
+  border-top: 1px solid color-mix(in srgb, var(--rn-white) 14%, transparent);
+}
+.gtm-point-n {
+  font-family: var(--rn-font-display);
+  font-size: 30px;
+  line-height: 1;
+  color: var(--rn-gold);
+}
+.gtm-point-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gtm-point-title {
+  margin: 0;
+  font-family: var(--rn-font-display);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.15;
+  color: var(--rn-white);
+}
+.gtm-point-body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--rn-white) 74%, transparent);
+}
+
+@media (max-width: 900px) {
+  .gtm {
+    padding: 56px 0 52px;
+  }
+  .gtm-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .gtm-stats {
+    margin-top: 24px;
+  }
+  .gtm-how-label {
+    margin-bottom: 10px;
+  }
+  .gtm-point {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 14px;
+    padding: 22px 0;
+  }
+  .gtm-point-n {
+    font-size: 26px;
+  }
+  .gtm-point-title {
+    font-size: 24px;
+  }
+  .gtm-point-body {
+    font-size: 15.5px;
+  }
+}
+@media (max-width: 480px) {
+  .gtm-stat-row {
+    gap: 14px;
+  }
+  .gtm-stat-v {
+    min-width: 104px;
+    font-size: 38px;
+  }
+  .gtm-stat-l {
+    font-size: 16px;
+  }
+}

@@ -1,0 +1,119 @@
+/* Featured research: dark band with the report cover and the email form. Prefix: research- */
+.research {
+  position: relative;
+  overflow: hidden;
+  padding: var(--rn-section-y) 0 100px;
+  background: var(--rn-band-research);
+  color: var(--rn-white);
+  font-family: var(--rn-font-ui);
+}
+.research-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 540px;
+  gap: 60px;
+  align-items: center;
+}
+.research .rn-eyebrow {
+  color: var(--rn-gold);
+}
+.research-h {
+  margin-top: 14px;
+  font-size: var(--rn-text-h2-lg);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: var(--rn-white);
+  text-wrap: balance;
+}
+.research-title {
+  color: inherit;
+  text-decoration: none;
+}
+.research-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 6px;
+  text-decoration-thickness: 2px;
+}
+.research-lede {
+  margin-top: 16px;
+  max-width: 540px;
+  font-size: 18px;
+  color: var(--rn-white);
+  opacity: 0.82;
+}
+.research-form {
+  display: flex;
+  gap: 6px;
+  max-width: 520px;
+  margin-top: 28px;
+  padding: 6px;
+  border-radius: var(--rn-radius-pill);
+  background: var(--rn-white);
+}
+.research-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--rn-radius-pill);
+  background: transparent;
+  font-family: var(--rn-font-ui);
+  font-size: 16px;
+  color: var(--rn-ink);
+}
+.research-input::placeholder {
+  color: var(--rn-mute);
+  opacity: 1;
+}
+.research-input:focus-visible {
+  outline: 2px solid var(--rn-forest);
+  outline-offset: -2px;
+}
+.research-btn {
+  flex: 0 0 auto;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 22px;
+  background: var(--rn-gold);
+  border-color: var(--rn-gold);
+  color: var(--rn-ink);
+  font-size: 13px;
+}
+.research-btn:focus-visible {
+  outline-color: var(--rn-gold);
+}
+.research-note {
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--rn-white);
+  opacity: 0.72;
+}
+.research-cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 900px) {
+  .research {
+    padding-bottom: var(--rn-section-y);
+  }
+  .research-grid {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .research-cover {
+    max-width: 540px;
+  }
+}
+@media (max-width: 480px) {
+  .research-h {
+    font-size: 36px;
+  }
+  .research-lede {
+    font-size: 16.5px;
+  }
+  .research-btn {
+    padding: 0 18px;
+  }
+}

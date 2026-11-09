@@ -1,0 +1,197 @@
+/* Section 13: Outcomes. White section, three case-study cards. The artboard's card photos are omitted
+   (no shipped assets); the metric sits on a night surface instead. */
+.out {
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  border-top: 1px solid var(--rn-line);
+  font-family: var(--rn-font-ui);
+}
+.out-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
+}
+.out-h {
+  margin-top: 14px;
+  font-size: 52px;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  max-width: 760px;
+}
+.out-all {
+  margin-bottom: 8px;
+  font-size: 15.5px;
+  color: var(--rn-forest-link);
+  white-space: nowrap;
+}
+.out-grid {
+  list-style: none;
+  margin: 40px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.out-grid > li {
+  display: flex;
+  min-width: 0;
+}
+.out-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--rn-line);
+  background: var(--rn-white);
+}
+.out-metric {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 6px;
+  min-height: 200px;
+  padding: 26px 22px 20px 26px;
+  background: var(--rn-night);
+  color: var(--rn-white);
+}
+.out-value {
+  display: block;
+  font-family: var(--rn-font-display);
+  font-size: 60px;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.out-metric-l {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--rn-night-tint);
+}
+.out-body {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  padding: 24px 26px 26px;
+}
+.out-co {
+  margin: 0;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--rn-ink);
+}
+.out-sector {
+  margin: 6px 0 0;
+  font-size: var(--rn-text-small);
+  color: var(--rn-mute);
+}
+.out-ba {
+  margin: 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.out-ba-k {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rn-mute);
+}
+.out-ba-k--after {
+  color: var(--rn-forest);
+}
+.out-ba-v {
+  margin: 6px 0 0;
+  font-size: var(--rn-text-body);
+  line-height: 1.55;
+  color: var(--rn-ink);
+}
+.out-ba-v--before {
+  color: var(--rn-mute);
+}
+.out-foot {
+  margin-top: auto;
+  padding-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.out-quote {
+  margin: 0 0 2px;
+  padding: 14px 16px;
+  border-radius: 6px;
+  background: var(--rn-mist);
+}
+.out-quote blockquote {
+  margin: 0;
+}
+.out-quote p {
+  margin: 0;
+  font-family: var(--rn-font-display);
+  font-size: 16.5px;
+  line-height: 1.4;
+  color: var(--rn-ink);
+}
+.out-quote figcaption {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--rn-mute);
+}
+.out-src {
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--rn-line);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--rn-mute);
+}
+.out-more {
+  align-self: flex-start;
+  font-size: 14.5px;
+}
+.out-close {
+  margin: 28px 0 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--rn-mute);
+}
+
+@media (max-width: 900px) {
+  .out-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .out-h {
+    font-size: 34px;
+  }
+  .out-all {
+    margin-bottom: 0;
+    white-space: normal;
+  }
+  .out-grid {
+    margin-top: 28px;
+    grid-template-columns: 1fr;
+  }
+  .out-metric {
+    min-height: 180px;
+    padding: 22px 22px 20px;
+  }
+  .out-value {
+    font-size: 52px;
+  }
+  .out-body {
+    padding: 22px 22px 24px;
+  }
+  .out-close {
+    margin-top: 22px;
+  }
+}

@@ -1,0 +1,128 @@
+/* Logo marquee. Prefix lmq-. One loop (one track width) in 40s; the second group makes the loop seamless. */
+.lmq {
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  border-top: 1px solid var(--rn-line);
+  border-bottom: 1px solid var(--rn-line);
+  font-family: var(--rn-font-ui);
+}
+.lmq-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 32px 0 0;
+}
+.lmq-h {
+  margin: 0;
+  font-family: var(--rn-font-ui);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rn-mute);
+}
+.lmq-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--rn-line);
+  border-radius: 50%;
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  cursor: pointer;
+}
+.lmq-toggle:hover {
+  border-color: var(--rn-forest);
+  color: var(--rn-forest);
+}
+.lmq-viewport {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 0 34px;
+}
+.lmq-track {
+  display: flex;
+  width: max-content;
+  animation: lmq-scroll 40s linear infinite;
+}
+.lmq-track[data-paused],
+.lmq-viewport:hover .lmq-track {
+  animation-play-state: paused;
+}
+.lmq-group {
+  display: flex;
+  flex: 0 0 auto;
+}
+.lmq-item {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin-right: 56px;
+}
+.lmq-logo {
+  display: block;
+  width: auto;
+}
+.lmq-fade {
+  position: absolute;
+  top: 0;
+  width: 140px;
+  height: 100%;
+  pointer-events: none;
+}
+.lmq-fade--l {
+  left: 0;
+  background: linear-gradient(90deg, var(--rn-white) 15%, transparent);
+}
+.lmq-fade--r {
+  right: 0;
+  background: linear-gradient(270deg, var(--rn-white) 15%, transparent);
+}
+@keyframes lmq-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 900px) {
+  .lmq-head {
+    padding-top: 28px;
+  }
+  .lmq-viewport {
+    padding: 16px 0 28px;
+  }
+  .lmq-item {
+    height: 36px;
+    margin-right: 36px;
+  }
+  .lmq-logo {
+    filter: grayscale(1);
+    opacity: 0.8;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lmq-track {
+    width: auto;
+    animation: none;
+  }
+  .lmq-group {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px 0;
+    padding: 0 var(--rn-gutter);
+  }
+  .lmq-group--dup,
+  .lmq-toggle,
+  .lmq-fade {
+    display: none;
+  }
+}

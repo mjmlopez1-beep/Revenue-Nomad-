@@ -1,0 +1,107 @@
+/* Hero. Prefix hero-. Desktop geometry from the artboard: copy 560 wide, mark 539 wide at the right on an 860 by 700 glow. */
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  font-family: var(--rn-font-ui);
+}
+.hero-inner {
+  position: relative;
+  min-height: 614px;
+  padding: 86px 0 84px;
+}
+.hero-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+}
+.hero-h {
+  margin-top: 22px;
+  line-height: 1.02;
+}
+.hero-stop {
+  color: var(--rn-coral);
+}
+.hero-lede {
+  margin-top: 26px;
+  max-width: 500px;
+  font-size: 19px;
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 32px;
+  margin-top: 38px;
+}
+.hero-art {
+  position: absolute;
+  top: 66px;
+  right: -39px;
+  width: min(539px, calc(100% - 580px));
+  aspect-ratio: 980 / 984;
+}
+.hero-glow {
+  position: absolute;
+  left: -22%;
+  top: -23%;
+  width: 160%;
+  height: 130%;
+  background: var(--rn-hero-glow);
+  pointer-events: none;
+}
+.hero-mark {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  mix-blend-mode: multiply;
+}
+
+@media (max-width: 900px) {
+  .hero-inner {
+    min-height: 0;
+    padding: 30px 0 20px;
+  }
+  .hero-eyebrow {
+    font-size: 11.5px;
+  }
+  .hero-h {
+    margin-top: 16px;
+    line-height: 1.04;
+    letter-spacing: -0.015em;
+  }
+  .hero-lede {
+    margin-top: 18px;
+    max-width: none;
+    font-size: 17px;
+    line-height: 1.58;
+  }
+  .hero-actions {
+    margin-top: 26px;
+    gap: 12px;
+  }
+  .hero-art {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 255px;
+    margin: 18px auto 0;
+  }
+  .hero-glow {
+    left: -40px;
+    top: -10px;
+    width: calc(100% + 80px);
+    height: calc(100% + 20px);
+  }
+}
+@media (max-width: 480px) {
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .hero-actions .rn-btn {
+    width: 100%;
+  }
+}

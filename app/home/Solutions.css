@@ -1,0 +1,125 @@
+/* Our solutions (section 7). Prefix: sol- */
+.sol {
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  font-family: var(--rn-font-ui);
+  padding-top: 88px;
+}
+.sol-h2 {
+  margin-top: 14px;
+  max-width: 760px;
+  font-size: var(--rn-text-h2-lg);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.sol-grid {
+  list-style: none;
+  margin: 40px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.sol-grid > li {
+  display: flex;
+  min-width: 0;
+}
+.sol-card {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  padding: 22px 26px 26px;
+  border-radius: var(--rn-radius-xs);
+  border: 1px solid var(--rn-line);
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  text-decoration: none;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.sol-card:hover {
+  border-color: var(--rn-forest);
+  transform: translateY(-2px);
+  box-shadow: var(--rn-shadow-hover);
+}
+.sol-role {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rn-mute);
+}
+.sol-title {
+  margin: 12px 0 0;
+  font-family: var(--rn-font-display);
+  font-size: var(--rn-text-h3);
+  font-weight: 400;
+  line-height: 1.18;
+  min-height: 2.36em;
+  color: var(--rn-ink);
+}
+.sol-body {
+  margin-top: 10px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--rn-mute);
+}
+.sol-go {
+  margin-top: auto;
+  padding-top: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--rn-ink);
+}
+.sol-card:hover .rn-arrow {
+  transform: translateX(3px);
+}
+.sol-actions {
+  margin-top: 36px;
+}
+/* The artboard's pill: 46px, sentence case, no tracking. */
+.sol-browse {
+  min-height: 46px;
+  padding: 0 24px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+@media (max-width: 900px) {
+  .sol {
+    padding-top: var(--rn-section-y-sm);
+  }
+  .sol-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 28px;
+  }
+  .sol-card {
+    padding: 22px 22px 24px;
+  }
+  .sol-title {
+    min-height: 0;
+  }
+}
+@media (max-width: 480px) {
+  .sol-grid {
+    grid-template-columns: 1fr;
+  }
+  .sol-title {
+    font-size: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sol-card,
+  .sol-card:hover {
+    transition: none;
+    transform: none;
+  }
+  .sol-card:hover .rn-arrow {
+    transform: none;
+  }
+}
