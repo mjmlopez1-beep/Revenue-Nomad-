@@ -14,6 +14,10 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
+## Landing page hero
+
+The landing hero is rendered live in WebGL (`app/GlassHero.tsx`): a single fragment shader draws procedurally generated foliage swaying behind a pane of reinforced frosted glass — depth-dependent blur and refraction, an embedded wire mesh, and specular glints from a warm light in the top-right. No three.js or textures; it's one full-screen triangle and ~200 lines of GLSL. Motion pauses off-screen, in hidden tabs, under `prefers-reduced-motion`, or via the on-canvas pause button; browsers without WebGL fall back to a CSS gradient.
+
 ## Launch / Deploy
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmjmlopez1-beep%2FRevenue-Nomad-)
