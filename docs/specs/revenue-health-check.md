@@ -1,7 +1,7 @@
 # Spec: the 2-minute Revenue Health Check
 
-Status: DRAFT FOR FOUNDER REVIEW. Nothing below is built until the questions, answers, weights and scoring are
-approved. Decisions already taken (2026-11-09, founder, live): Homepage C ships with a "Take the 2-minute check"
+Status: APPROVED by the founder on 2026-11-09 (questions, weights, scoring, HubSpot capture) and BUILT at `/check`
+(ticket 11). Copy lives in `app/check/content.ts`; scoring in `app/check/scoring.ts` with tests. Decisions already taken (2026-11-09, founder, live): Homepage C ships with a "Take the 2-minute check"
 hero button that opens `/check`; the check asks revenue range and employee range first; seven questions, one per
 pillar; name and email are captured after the seven questions and before results; results render instantly;
 leads go to HubSpot; the pillar weights by stage are drafted here for correction.
@@ -113,9 +113,36 @@ already works.
 Emailing the results (HubSpot workflow once the form exists), saving progress, comparing against benchmarks,
 industry questions, and the 21-building-block depth (that is the paid Diagnostic).
 
-## Open for the founder
+## HubSpot setup (owner, about ten minutes)
 
-1. Approve, edit or replace each question and answer set above.
-2. Correct the stage weights, or tell me the logic in your words.
-3. Confirm the four answers always map A to D onto Optimized to Ad Hoc, or supply per-question mappings.
-4. Confirm the HubSpot form fields, or let me create the custom properties through the connected HubSpot account.
+The site posts to the HubSpot Forms API, which needs no secret, so the only setup is in the HubSpot UI.
+The connected HubSpot connector cannot create properties, and the private-app token saved to the environment was
+not accepted by api.hubapi.com (401, "credentials not found"), so these steps are manual:
+
+1. Contacts > Properties > Create property, group "Revenue health check", for each:
+
+   | Internal name | Label | Type |
+   |---|---|---|
+   | `rn_check_revenue_range` | Check: revenue range | Dropdown select with the six range values (`pre_revenue`, `under_1m`, `1m_5m`, `5m_20m`, `20m_50m`, `50m_plus`) |
+   | `rn_check_employee_range` | Check: employee range | Dropdown select (`1_10`, `11_50`, `51_200`, `201_500`, `501_1000`, `1001_plus`) |
+   | `rn_check_total` | Check: total score | Number |
+   | `rn_check_gtm_design` | Check: GTM Design level | Number |
+   | `rn_check_revenue_technology` | Check: Revenue Technology level | Number |
+   | `rn_check_revenue_insights` | Check: Revenue Insights level | Number |
+   | `rn_check_data_foundations` | Check: Data Foundations level | Number |
+   | `rn_check_operating_rhythm` | Check: Operating Rhythm level | Number |
+   | `rn_check_team_enablement` | Check: Team Enablement level | Number |
+   | `rn_check_ai` | Check: AI level | Number |
+   | `rn_check_fix_first` | Check: fix first | Single-line text (two pillar keys, semicolon separated) |
+
+2. Marketing > Forms > Create a regular form named "Revenue health check" with fields: Email, First name, Last
+   name, Company name, and every `rn_check_*` property above (hidden fields are fine). Publish it.
+3. Copy the form's GUID from its URL or embed code into the environment variable `HUBSPOT_CHECK_FORM_ID`
+   (portal ID 48733774 is already in `.env.example`). Redeploy. Until then, leads append to `checks.json` under
+   `RN_DATA_DIR` (on Vercel that is `/tmp`, which resets, so set the form ID before promoting).
+4. Optional: a workflow on form submission that emails the contact their scores and notifies the team.
+
+## Still open for the founder
+
+- The seven questions and answers are approved as drafted; edit wording in `app/check/content.ts` at any time.
+- Stage weights are the approved draft; revisit after the first fifty submissions.

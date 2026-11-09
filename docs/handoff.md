@@ -5,14 +5,16 @@ For the next session (human or agent) picking up the marketing site. Written 202
 
 ## Where the work stands
 
-- The homepage at `/` is Homepage D rebuilt as Next.js sections under `app/home/` (see `docs/design/homepage-d-design.md`
-  section 4.1 for the section list, `docs/tickets/homepage-d/` for what each slice delivered).
+- The homepage at `/` is **Homepage C** (founder decision 2026-11-09) with a hero button to the 2-minute check, built
+  from the Next.js sections under `app/home/` (`docs/design/homepage-d-design.md` 4.1; D's seven extra sections were
+  built, then removed from the page and remain in git history).
+- The 2-minute Revenue Health Check lives at `/check` (`app/check/`, spec `docs/specs/revenue-health-check.md`, ticket 11).
 - Quality gates: `npm run check` runs `tsc`, the token guard and the Playwright + axe smoke check. Results of the
   last run are in the "Verification" section below.
 - Everything the founder has not confirmed is flagged `verified: false` in `app/home/content/numbers.ts` and shows a
   gold "confirm" badge on every deployment except production (`NEXT_PUBLIC_SITE_ENV=production`).
 
-## Decisions awaiting the founder (A1 to A9)
+## Decisions: A1 overridden (ship C), A3 confirmed; A2 and A4 to A9 awaiting the founder
 
 `docs/design/homepage-d-decisions.md`. Each stands as an assumption. An override changes `docs/specs/homepage-d.md`
 first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from Proposed to Accepted once confirmed.
@@ -26,10 +28,11 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
    logo files.
 3. **Logos.** Drop approved files into `public/home/logos/` and set `file`, `width`, `height` on each entry in
    `app/home/content/logos.ts`. The marquee appears once six have files.
-4. **Forms.** `app/home/actions.ts` validates and discards the email. Wire `requestReport` and `subscribe` to the email
-   tool (send the PDF, add to the list) and keep the redirect to `/thanks`.
-5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/` and `/portal` is a stub. Build them
-   in the order the site map artboard suggests: Talk to us, the 2-minute check, Rate Index, the four solution pages.
+4. **Forms.** `app/home/actions.ts` validates and discards the report email; wire `requestReport` to the email tool and
+   keep the redirect to `/thanks`. The Revenue Health Check (`app/check/actions.ts`) posts to HubSpot once
+   `HUBSPOT_CHECK_FORM_ID` is set; the setup checklist is in `docs/specs/revenue-health-check.md`.
+5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/`, `/portal`, `/thanks` and `/check`
+   is a stub. Build them in the order the site map artboard suggests: Talk to us, Rate Index, the four solution pages.
 6. **SEO extras.** Open Graph image (1200 by 630), JSON-LD (Organization, ProfessionalService, FAQPage), sitemap page.
 7. **Validation strip.** Fill at least one real "As seen in / Rated on" entry or delete the section data.
 8. **Production flag.** Set `NEXT_PUBLIC_SITE_ENV=production` only on the production deployment.

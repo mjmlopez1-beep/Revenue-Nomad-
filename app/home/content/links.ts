@@ -39,8 +39,9 @@ export const routes = {
 
 export type Route = keyof typeof routes;
 
-/** Paths the stub route serves: everything except the two real pages. */
-export const stubRoutes = (Object.keys(routes) as Route[]).filter((p) => p !== "/" && p !== "/portal" && p !== "/thanks");
+/** Paths the stub route serves: everything that is not a real page yet. */
+const realPages: Route[] = ["/", "/portal", "/thanks", "/check"];
+export const stubRoutes = (Object.keys(routes) as Route[]).filter((p) => !realPages.includes(p));
 
 export const hrefs = {
   talk: "/talk",

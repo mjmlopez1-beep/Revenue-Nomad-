@@ -20,7 +20,8 @@ try {
 const args = Object.fromEntries(
   process.argv.slice(2).map((a, i, arr) => (a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : [])).filter((x) => x.length)
 );
-const PATH = args.path ?? "/";
+const PATHS = String(args.path ?? "/,/check").split(",").map((p) => p.trim()).filter(Boolean);
+const PATH = PATHS[0];
 const SITE_ENV = args["site-env"] ?? process.env.NEXT_PUBLIC_SITE_ENV ?? "preview";
 const PRODUCTION = SITE_ENV === "production";
 const FEE_WORDS = /\b(fee|fees|margin|take rate|split|all-in|take-home|take home|you pay only when)\b/i;
@@ -64,7 +65,7 @@ async function startServer() {
 const failures = [];
 const fail = (vp, msg) => failures.push(`[${vp}] ${msg}`);
 
-async function checkViewport(browser, vp) {
+async function checkViewport(browser, vp, pathname = PATH) {
   const context = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   const consoleIssues = [];
@@ -82,7 +83,7 @@ async function checkViewport(browser, vp) {
     if (type.startsWith("image/") || /\.(png|jpe?g|webp|avif|gif|svg)(\?|$)/.test(res.url())) imageBytes += len;
   });
 
-  await page.goto(baseUrl + PATH, { waitUntil: "networkidle" });
+  await page.goto(baseUrl + pathname, { waitUntil: "networkidle" });
   // Trigger lazy content.
   await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 40)); } window.scrollTo(0, 0); });
   await page.waitForLoadState("networkidle");
@@ -148,20 +149,20 @@ async function checkViewport(browser, vp) {
   // Reduced motion: nothing may keep animating.
   const rm = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
   const rmPage = await rm.newPage();
-  await rmPage.goto(baseUrl + PATH, { waitUntil: "networkidle" });
+  await rmPage.goto(baseUrl + pathname, { waitUntil: "networkidle" });
   await rmPage.waitForTimeout(400);
   const running = await rmPage.evaluate(() => document.getAnimations().filter((a) => a.playState === "running" && (a.effect?.getTiming?.().iterations ?? 1) === Infinity).length);
   if (running) fail(vp.name, `${running} infinite animation(s) still running under prefers-reduced-motion`);
   await rm.close();
 
-  console.log(`${vp.name}: ${(totalBytes / 1024).toFixed(0)} KB total, ${(imageBytes / 1024).toFixed(0)} KB images${unmeasured ? ` (${unmeasured} unmeasured)` : ""}, ${axe.violations.length} axe violation(s) of any impact, ${dom.unverified} unverified figure(s)`);
+  console.log(`${pathname} ${vp.name}: ${(totalBytes / 1024).toFixed(0)} KB total, ${(imageBytes / 1024).toFixed(0)} KB images${unmeasured ? ` (${unmeasured} unmeasured)` : ""}, ${axe.violations.length} axe violation(s) of any impact, ${dom.unverified} unverified figure(s)`);
   await context.close();
 }
 
 try {
   if (!baseUrl) await startServer();
   const browser = await chromium.launch();
-  for (const vp of VIEWPORTS) await checkViewport(browser, vp);
+  for (const pathname of PATHS) for (const vp of VIEWPORTS) await checkViewport(browser, vp, pathname);
   await browser.close();
 } catch (e) {
   failures.push(`runner: ${e.message}`);

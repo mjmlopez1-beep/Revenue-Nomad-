@@ -1,0 +1,332 @@
+/* The 2-minute Revenue Health Check. Prefix chk-. Tokens only. */
+.chk {
+  padding: 64px 0 120px;
+  font-family: var(--rn-font-ui);
+  background: var(--rn-mist);
+}
+.chk-intro {
+  max-width: 640px;
+  margin-bottom: 36px;
+}
+.chk-intro .rn-h1 {
+  margin: 18px 0 16px;
+  font-size: var(--rn-text-h2-lg);
+}
+.chk-card,
+.chk-results {
+  max-width: 720px;
+  padding: 36px 40px 40px;
+  background: var(--rn-white);
+  border: 1px solid var(--rn-line);
+  border-radius: var(--rn-radius-sm);
+}
+.chk-h {
+  margin: 10px 0 12px;
+  font-family: var(--rn-font-display);
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--rn-ink);
+  padding: 0;
+  border: 0;
+}
+.chk-h:focus-visible {
+  outline: 2px solid var(--rn-leaf-strong);
+  outline-offset: 6px;
+}
+.chk-help {
+  margin-bottom: 24px;
+}
+.chk-selects,
+.chk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+.chk-field {
+  display: grid;
+  gap: 8px;
+}
+.chk-field--wide {
+  grid-column: 1 / -1;
+}
+.chk-field span {
+  font-size: var(--rn-text-small);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--rn-ink);
+}
+.chk-field select,
+.chk-field input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--rn-line);
+  border-radius: var(--rn-radius-sm);
+  background: var(--rn-white);
+  color: var(--rn-ink);
+  font: inherit;
+  font-size: var(--rn-text-body);
+}
+.chk-field select:focus-visible,
+.chk-field input:focus-visible {
+  outline: 2px solid var(--rn-leaf-strong);
+  outline-offset: 2px;
+  border-color: var(--rn-forest);
+}
+.chk-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.chk-dots {
+  display: flex;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.chk-dots li {
+  width: 26px;
+  height: 4px;
+  border-radius: var(--rn-radius-xs);
+  background: var(--rn-line);
+}
+.chk-dots li.is-done {
+  background: var(--rn-forest);
+}
+.chk-dots li.is-current {
+  background: var(--rn-leaf-strong);
+}
+.chk-pillar {
+  margin: 0 0 0 auto;
+  font-size: var(--rn-text-eyebrow);
+  font-weight: 700;
+  letter-spacing: var(--rn-track-eyebrow);
+  text-transform: uppercase;
+  color: var(--rn-mute);
+}
+.chk-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.chk-options {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.chk-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 12px 16px;
+  border: 1.5px solid var(--rn-line);
+  border-radius: var(--rn-radius-sm);
+  cursor: pointer;
+  font-size: var(--rn-text-body);
+  color: var(--rn-ink);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.chk-option:hover {
+  border-color: var(--rn-leaf-line);
+}
+.chk-option.is-chosen {
+  border-color: var(--rn-forest);
+  background: var(--rn-leaf-pale);
+}
+.chk-option input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--rn-forest);
+  flex: 0 0 auto;
+}
+.chk-option:has(input:focus-visible) {
+  outline: 2px solid var(--rn-leaf-strong);
+  outline-offset: 2px;
+}
+.chk-error {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--rn-radius-xs);
+  background: var(--rn-leaf-pale);
+  color: var(--rn-ink);
+  font-size: var(--rn-text-small);
+  font-weight: 600;
+}
+.chk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  margin-top: 28px;
+}
+.chk-actions--results {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin: 36px 0 20px;
+}
+.chk-back {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  margin-right: auto;
+}
+.rn-btn[aria-busy="true"] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* Results */
+.chk-total {
+  font-weight: 400;
+  color: var(--rn-forest);
+}
+.chk-bars {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.chk-bar {
+  display: grid;
+  grid-template-columns: 180px 1fr 150px;
+  align-items: center;
+  gap: 16px;
+}
+.chk-bar-label {
+  font-weight: 600;
+  font-size: var(--rn-text-body);
+}
+.chk-bar-track {
+  display: block;
+  height: 12px;
+  border-radius: var(--rn-radius-pill);
+  background: var(--rn-night-tint);
+  overflow: hidden;
+}
+.chk-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--rn-radius-pill);
+  background: var(--rn-forest);
+}
+.chk-bar-fill--1 {
+  width: 25%;
+  background: var(--rn-night-tint-2);
+}
+.chk-bar-fill--2 {
+  width: 50%;
+  background: var(--rn-leaf-strong);
+}
+.chk-bar-fill--3 {
+  width: 75%;
+}
+.chk-bar-fill--4 {
+  width: 100%;
+}
+.chk-bar-level {
+  font-size: var(--rn-text-small);
+  color: var(--rn-mute);
+  text-align: right;
+}
+.chk-sub {
+  margin: 40px 0 14px;
+  font-family: var(--rn-font-display);
+  font-weight: 400;
+  font-size: var(--rn-text-h3);
+  color: var(--rn-ink);
+}
+.chk-fix {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+.chk-fix-item {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--rn-line);
+  border-radius: var(--rn-radius-sm);
+  background: var(--rn-mist);
+}
+.chk-fix-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--rn-forest);
+  color: var(--rn-white);
+  font-family: var(--rn-font-display);
+  font-size: 18px;
+}
+.chk-fix-h {
+  margin: 4px 0 8px;
+  font-size: var(--rn-text-lede);
+  font-weight: 700;
+  color: var(--rn-ink);
+}
+.chk-fix-level {
+  font-weight: 500;
+  color: var(--rn-mute);
+  font-size: var(--rn-text-small);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chk-option {
+    transition: none;
+  }
+}
+@media (max-width: 900px) {
+  .chk {
+    padding: 40px 0 80px;
+  }
+  .chk-card,
+  .chk-results {
+    padding: 24px 20px 28px;
+  }
+  .chk-selects,
+  .chk-grid {
+    grid-template-columns: 1fr;
+  }
+  .chk-bar {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .chk-bar-level {
+    text-align: left;
+  }
+  .chk-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .chk-actions .rn-btn {
+    width: 100%;
+  }
+  .chk-back {
+    margin-right: 0;
+    align-self: flex-start;
+  }
+}
+
+.chk-intro-link {
+  color: var(--rn-forest-link);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}

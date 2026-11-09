@@ -1,13 +1,13 @@
 # Revenue Nomad
 
 Next.js 15 (App Router) + React 19, TypeScript strict, plain CSS. Two surfaces live here:
-the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage D" mockup) and the
+the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/`) and the
 **Operator Portal** (`app/portal`, job board + prospects, backed by `lib/`).
 
 ## Commands
 
 - `npm run dev` / `npm run build` / `npm run lint`
-- Type check: `npx tsc --noEmit`
+- Type check: `npx tsc --noEmit`. Unit tests: `npm test` (scoring for the health check). Everything: `npm run check`.
 - Smoke test the homepage at 1440 and 390 with Playwright: `node scripts/check-home.mjs` (after `npm run dev`)
 
 ## Read before writing UI
@@ -26,7 +26,7 @@ the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage D" 
 
 - Homepage sections are server components under `app/home/`, one file per section, composed in `app/page.tsx`.
   A section is a `<section>` with an `aria-labelledby` heading. Client components only where there is state
-  (menus, the health-check question, the review rotator).
+  (menus, the marquee and review controls, the health-check stepper).
 - Fonts load through `next/font/google` in `app/layout.tsx` and are exposed as `--font-dm-serif` and `--font-red-hat`.
 - Images live in `public/home/` and render through `next/image` with explicit width and height.
 - Copy voice: plain, specific, active, written from the reader's side. Buttons say what happens.

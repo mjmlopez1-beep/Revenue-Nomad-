@@ -11,7 +11,8 @@
     "crawl": "tsx scripts/crawl.ts",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:home": "node scripts/check-home.mjs",
-    "check": "tsc --noEmit && npm run check:tokens && npm run check:home"
+    "check": "tsc --noEmit && npm test && npm run check:tokens && npm run check:home",
+    "test": "tsx --test app/check/*.test.ts"
   },
   "dependencies": {
     "next": "^15.4.6",
