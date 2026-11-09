@@ -1,7 +1,7 @@
 # Revenue Nomad
 
 Next.js 15 (App Router) + React 19, TypeScript strict, plain CSS. Two surfaces live here:
-the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/` and Talk to us at `app/talk/`, the Rate Index at `app/research/rate-index/` fed by `data/rate-index.json`) and the
+the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/` and Talk to us at `app/talk/`, the Rate Index at `app/research/rate-index/` fed by `data/rate-index.json`, the solution pages at `app/problems/`) and the
 **Operator Portal** (`app/portal`, job board + prospects, backed by `lib/`).
 
 ## Commands

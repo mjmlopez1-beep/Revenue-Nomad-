@@ -38,7 +38,7 @@ const stats = (a) => ({ n: sorted(a).length, p25: quantile(a, 0.25), median: med
 // Survey columns (0-based): 2 role category, 12 region, 14 rate today, 15 rate 12 months ago, 16 plan,
 // 24 client revenue, 26 hours a month, 27 effective rate, 28 initial term, 33 extended, 34 time to result,
 // 37 second client revenue, 38 second client hours, 39 second client rate, 40 demand vs 12 months, 61 src.
-const S = { role: 2, rate: 14, rateAgo: 15, plan: 16, rev: 24, hours: 26, eff: 27, term: 28, extended: 33, ttr: 34, rev2: 37, hours2: 38, eff2: 39, demand: 40, src: 61 };
+const S = { role: 2, rate: 14, rateAgo: 15, plan: 16, rev: 24, why: 25, hours: 26, eff: 27, term: 28, extended: 33, ttr: 34, rev2: 37, hours2: 38, eff2: 39, demand: 40, ai: 42, src: 61 };
 const hoursCode = (v) => {
   const m = String(v).match(/(\d+)/);
   if (!m) return null;
@@ -112,6 +112,17 @@ const plan = { n: plans.length, raise: plans.filter((r) => r[S.plan] === "Raise 
 const demandRows = surveyAnswers.filter((r) => num(r[S.demand]) != null);
 const demand = { n: demandRows.length, up: demandRows.filter((r) => num(r[S.demand]) >= 4).length, flat: demandRows.filter((r) => num(r[S.demand]) === 3).length, down: demandRows.filter((r) => num(r[S.demand]) <= 2).length };
 
+// 4b. Figures the solution pages quote (survey answers only).
+const aiRows = surveyAnswers.filter((r) => r[S.ai]);
+const aiUse = { n: aiRows.length, share: Math.round((aiRows.filter((r) => r[S.ai] !== "None").length / aiRows.length) * 100), most: Math.round((aiRows.filter((r) => r[S.ai] === "Most").length / aiRows.length) * 100) };
+const demandByCategory = categories.map((cat) => {
+  const rows = surveyAnswers.filter((r) => r[S.role] === cat && num(r[S.demand]) != null);
+  return { category: cat, n: rows.length, mean: rows.length ? Math.round((rows.reduce((a, r) => a + num(r[S.demand]), 0) / rows.length) * 10) / 10 : null };
+});
+const whyRows = surveyAnswers.filter((r) => String(r[S.why]).trim());
+const founderHandoff = { n: whyRows.length, count: whyRows.filter((r) => /founder|ceo|owner/i.test(r[S.why])).length };
+founderHandoff.share = whyRows.length ? Math.round((founderHandoff.count / whyRows.length) * 100) : null;
+
 // 5. What companies paid: Revenue Nomad direct contracts only (client-billed figures; the Skaled subcontract
 // book records operator pay, which is confidential and not a price companies paid). Columns: 0 book,
 // 4 role title, 5 role category, 7 hourly, 8 monthly fee, 10 hours a month, 20 status.
@@ -152,6 +163,7 @@ const out = {
   rates: { all: allRates, surveyN: surveyAnswers.length, platformN: platformListings.length, byCategory, publicationFloor: 10 },
   engagements: { n: eng.length, firstClientN: firstClient.length, byRevenue, byHours, monthlyByCategory, termShare, extendedShare, resultInside60, ttrN: ttrRows.length, extendedN: extendedRows.length },
   movement: { ...movement, plan, demand },
+  survey: { aiUse, demandByCategory, founderHandoff },
   contracts: { direct: direct.length, active: activeDirect, hourly: directHourly, bySeat: contracts },
 };
 writeFileSync(new URL("../data/rate-index.json", import.meta.url), JSON.stringify(out, null, 2) + "\n");

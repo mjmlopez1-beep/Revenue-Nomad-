@@ -259,6 +259,60 @@
       "down": 11
     }
   },
+  "survey": {
+    "aiUse": {
+      "n": 74,
+      "share": 97,
+      "most": 36
+    },
+    "demandByCategory": [
+      {
+        "category": "Sales Leadership",
+        "n": 31,
+        "mean": 3.5
+      },
+      {
+        "category": "Marketing",
+        "n": 18,
+        "mean": 2.9
+      },
+      {
+        "category": "Revenue Operations",
+        "n": 11,
+        "mean": 3.3
+      },
+      {
+        "category": "Sales Enablement",
+        "n": 4,
+        "mean": 2.8
+      },
+      {
+        "category": "Customer Success & Growth",
+        "n": 1,
+        "mean": 4
+      },
+      {
+        "category": "AI GTM",
+        "n": 7,
+        "mean": 3.6
+      },
+      {
+        "category": "Partnerships",
+        "n": 2,
+        "mean": 3
+      },
+      {
+        "category": "Front-line Sellers / SDR",
+        "n": 0,
+        "mean": null
+      }
+    ],
+    "founderHandoff": {
+      "n": 74,
+      "count": 7,
+      "share": 9
+    }
+  },
   "contracts": {
     "direct": 15,
     "active": 10,
