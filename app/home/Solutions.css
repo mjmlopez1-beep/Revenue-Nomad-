@@ -1,11 +1,12 @@
 /* Our solutions (section 7). Prefix: sol- */
-.sol {
+/* Overrides of shared rn- classes are scoped under .sol so they win regardless of CSS import order. */
+.sol.rn-section {
   background: var(--rn-white);
   color: var(--rn-ink);
   font-family: var(--rn-font-ui);
   padding-top: 88px;
 }
-.sol-h2 {
+.sol .sol-h2 {
   margin-top: 14px;
   max-width: 760px;
   font-size: var(--rn-text-h2-lg);
@@ -81,7 +82,7 @@
   margin-top: 36px;
 }
 /* The artboard's pill: 46px, sentence case, no tracking. */
-.sol-browse {
+.sol .sol-browse {
   min-height: 46px;
   padding: 0 24px;
   font-size: 14.5px;
@@ -91,7 +92,7 @@
 }
 
 @media (max-width: 900px) {
-  .sol {
+  .sol.rn-section {
     padding-top: var(--rn-section-y-sm);
   }
   .sol-grid {

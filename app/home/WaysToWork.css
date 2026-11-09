@@ -1,16 +1,17 @@
 /* Ways to work with us (section 8), forest band. Prefix: ways- */
-.ways {
+/* Overrides of shared rn- classes are scoped under .ways so they win regardless of CSS import order. */
+.ways.rn-section {
   font-family: var(--rn-font-ui);
   padding-top: 92px;
 }
-.ways-h2 {
+.ways .ways-h2 {
   margin-top: 14px;
   font-size: var(--rn-text-h2-lg);
   line-height: 1.08;
   letter-spacing: -0.01em;
   text-wrap: balance;
 }
-.ways-lede {
+.ways .ways-lede {
   margin-top: 16px;
   max-width: 620px;
 }
@@ -92,7 +93,7 @@
 }
 
 @media (max-width: 900px) {
-  .ways {
+  .ways.rn-section {
     padding-top: var(--rn-section-y-sm);
   }
   .ways-grid {

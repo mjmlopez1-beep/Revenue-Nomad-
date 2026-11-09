@@ -1,5 +1,6 @@
 /* How it works (section 9), dark band with gold step numbers. Prefix: how- */
-.how {
+/* Overrides of shared rn- classes are scoped under .how so they win regardless of CSS import order. */
+.how.rn-section {
   position: relative;
   overflow: hidden;
   font-family: var(--rn-font-ui);
@@ -29,7 +30,7 @@
 .how .how-eyebrow {
   color: var(--rn-gold);
 }
-.how-h2 {
+.how .how-h2 {
   margin-top: 14px;
   font-size: var(--rn-text-h2-lg);
   line-height: 1.08;
@@ -42,7 +43,7 @@
   line-height: 1.5;
   color: var(--rn-leaf-pale);
 }
-.how-btn {
+.how .how-btn {
   background: var(--rn-gold);
   border-color: var(--rn-gold);
   color: var(--rn-ink);
@@ -89,7 +90,7 @@
 }
 
 @media (max-width: 900px) {
-  .how {
+  .how.rn-section {
     padding: var(--rn-section-y-sm) 0;
   }
   .how-layout {
