@@ -527,3 +527,38 @@ button:focus-visible {
     --rn-text-lede: 16px;
   }
 }
+
+/* ---------- shared: avatar and screen-reader-only ---------- */
+.rn-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  font-family: var(--rn-font-display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.rn-avatar--forest {
+  background: var(--rn-leaf-pale);
+  color: var(--rn-forest);
+}
+.rn-avatar--leaf {
+  background: var(--rn-leaf);
+  color: var(--rn-ink);
+}
+.rn-avatar--night {
+  background: var(--rn-night-tint);
+  color: var(--rn-night);
+}
+.rn-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
