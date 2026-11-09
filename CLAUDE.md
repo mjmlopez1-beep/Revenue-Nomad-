@@ -1,7 +1,7 @@
 # Revenue Nomad
 
 Next.js 15 (App Router) + React 19, TypeScript strict, plain CSS. Two surfaces live here:
-the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/` and Talk to us at `app/talk/`, the Rate Index at `app/research/rate-index/` fed by `data/rate-index.json`, the solution pages at `app/problems/`, the Buyer's Guide at `app/fractional-gtm-buyers-guide-2027/` with its chapters and gate in `app/guide/`) and the
+the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" mockup plus the 2-minute check at `app/check/` and Talk to us at `app/talk/`, the Rate Index at `app/research/rate-index/` fed by `data/rate-index.json`, the solution pages at `app/problems/`, the Buyer's Guide at `app/fractional-gtm-buyers-guide-2027/` with its chapters and gate in `app/guide/`, the four role pages at `/fractional-vp-of-sales`, `/fractional-cmo`, `/fractional-revops` and `/fractional-ai-gtm` rendered by `app/solutions/`) and the
 **Operator Portal** (`app/portal`, job board + prospects, backed by `lib/`).
 
 ## Commands
@@ -28,7 +28,7 @@ the **marketing site** (homepage at `app/page.tsx`, built from the "Homepage C" 
   A section is a `<section>` with an `aria-labelledby` heading. Client components only where there is state
   (menus, the marquee and review controls, the check and Talk to us steppers).
 - Fonts load through `next/font/google` in `app/layout.tsx` and are exposed as `--font-dm-serif` and `--font-red-hat`.
-- Images live in `public/home/` and render through `next/image` with explicit width and height.
+- Images live in `public/home/` (`logos/`, `people/`, `cards/`, `tiers/`, pulled from the Design canvas) and render through `next/image` with explicit width and height.
 - Copy voice: plain, specific, active, written from the reader's side. Buttons say what happens.
   No em-dash asides, no hype, no emoji. Client-facing pages never mention a fee, margin, split or take-home;
   the price is the operator's rate and "No fees for companies."

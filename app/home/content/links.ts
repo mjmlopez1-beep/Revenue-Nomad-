@@ -6,10 +6,10 @@
 export const routes = {
   "/": "Home",
   "/portal": "Operator Portal",
-  "/solutions/vp-sales": "Fractional VP of Sales",
-  "/solutions/cmo": "Fractional CMO",
-  "/solutions/revops": "Fractional RevOps leader",
-  "/solutions/ai-gtm": "Fractional AI GTM leader",
+  "/fractional-vp-of-sales": "Fractional VP of Sales",
+  "/fractional-cmo": "Fractional CMO",
+  "/fractional-revops": "Fractional RevOps leader",
+  "/fractional-ai-gtm": "Fractional AI GTM leader",
   "/problems/founder-led-sales": "Scaling beyond founder-led sales",
   "/problems/pipeline": "Pipeline beyond your network",
   "/problems/forecast": "A forecast the board believes",
@@ -40,7 +40,7 @@ export const routes = {
 export type Route = keyof typeof routes;
 
 /** Paths the stub route serves: everything that is not a real page yet. */
-const realPages: Route[] = ["/", "/portal", "/thanks", "/check", "/talk", "/research/rate-index", "/problems/founder-led-sales", "/problems/pipeline", "/problems/forecast", "/problems/ai", "/fractional-gtm-buyers-guide-2027"];
+const realPages: Route[] = ["/", "/portal", "/thanks", "/check", "/talk", "/research/rate-index", "/problems/founder-led-sales", "/problems/pipeline", "/problems/forecast", "/problems/ai", "/fractional-gtm-buyers-guide-2027", "/fractional-vp-of-sales", "/fractional-cmo", "/fractional-revops", "/fractional-ai-gtm"];
 export const stubRoutes = (Object.keys(routes) as Route[]).filter((p) => !realPages.includes(p));
 
 export const hrefs = {
@@ -61,10 +61,10 @@ export const solutionsMenu: LinkGroup[] = [
   {
     title: "Hire a fractional leader",
     items: [
-      { label: "Fractional VP of Sales", href: "/solutions/vp-sales" },
-      { label: "Fractional CMO", href: "/solutions/cmo" },
-      { label: "Fractional RevOps leader", href: "/solutions/revops" },
-      { label: "Fractional AI GTM leader", href: "/solutions/ai-gtm" },
+      { label: "Fractional VP of Sales", href: "/fractional-vp-of-sales" },
+      { label: "Fractional CMO", href: "/fractional-cmo" },
+      { label: "Fractional RevOps leader", href: "/fractional-revops" },
+      { label: "Fractional AI GTM leader", href: "/fractional-ai-gtm" },
     ],
   },
   {
