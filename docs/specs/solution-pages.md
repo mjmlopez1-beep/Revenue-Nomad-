@@ -30,3 +30,35 @@ params for the four slugs.
 
 - The "Why this happens, in two minutes" video slots: no video assets exist.
 - Hero and card imagery: none shipped (decision A5).
+
+## Visual treatment (2026-11-09 redesign)
+
+The owner's review of the first build: "Template is so boring. It's all grey. Create sections. Use the gold
+color. Add illustrations." The template now reads as banded sections, in the same order, with the copy modules
+untouched. Tokens only; gold is an accent tied to the method, never a wash.
+
+| Section | Band | Treatment |
+|---------|------|-----------|
+| Hero | white | Copy left, the problem's card art right (`public/home/cards/solution-*.webp`, the homepage cover for the same problem, `next/image`, decorative `alt=""`) in a rounded frame with a short gold rule at its foot |
+| Sound familiar / Is this you? | white | One card with a 4px gold header rule, the signs in two columns, the note in forest |
+| What the data says | mist | Three display-font figures, 60px, underlined in gold, hairlines between |
+| Why it happens | night (`rn-band--dark`) | Gold eyebrow, white statement, the problem's isometric motif beside it (340px, `role="img"` with a label), three numbered cards with gold display numbers |
+| The fix we place | white | Two cards carrying the role pages' art strip (`Role.css .rp-read-art`: dark band, brand line, kicker); the primary card's strip ends in a gold rule. Under them "Pillars this touches": the Revenue Health Diagnostic pillars the fix touches as gold-numbered chips (the pillar's number among the seven, `pillarLabel` from `app/check/content.ts`) linking to `/revenue-health-diagnostic`, with "The Diagnostic scores these first." |
+| The method (pipeline only) | forest (`rn-band--forest`) | Heading and note at the left, the five steps as a timeline with gold discs and a gold hairline, results in leaf-pale pills |
+| The comparison | mist | The table in its scroll region on white, the "now" column's header carrying a gold top rule |
+| Results | white | Same display-font stats, underlined in gold |
+| Common questions | mist | Two columns of white cards |
+| Closing band | unchanged | |
+
+Motifs (`app/problems/ProblemMotif.tsx`, the Diagnostic's grid and face kinds from `app/diagnostic/iso.tsx`,
+fills under `.solp-motif` in `Solution.css`): founder-led sales, a row of five leaf blocks standing on its own
+with one gold block stepped out in front; pipeline, scattered ghost blocks funnelling into a tight leaf row that
+ends in a gold block; forecast, a wall five wide and three high shaded l1 to l3 by level with a thin gold slab
+floating above it; AI, a four by four leaf grid with four gold blocks set inside it.
+
+Content fields added to `Solution` (all optional): `art` (file, width, height, position), `motif`
+(`founder | pipeline | forecast | ai`) and `pillars` (founder-led sales: GTM Design, Team Enablement, Operating
+Rhythm; pipeline: GTM Design, Operating Rhythm, Revenue Insights; forecast: Revenue Insights, Data Foundations,
+Operating Rhythm; AI: AI, Revenue Technology, Team Enablement). Decision A5 (no hero imagery) is superseded for
+these pages by the owner's request. Phone: everything stacks, the art drops to 220px, the motif to 280px, the
+table keeps its scroll region; the badge on a 60px figure is fixed at 11px so the figure does not wrap.

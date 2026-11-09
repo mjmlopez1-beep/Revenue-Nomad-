@@ -90,7 +90,6 @@ export default function SolutionPage({ s }: { s: Solution }) {
       {s.stats && (
         <section className="solp-section rn-band--mist solp-stats" aria-labelledby="solp-stats-h">
           <div className="rn-wrap">
-            <p className="rn-eyebrow">The data</p>
             <h2 id="solp-stats-h" className="rn-h2 solp-h2">
               {s.stats.heading}
             </h2>
@@ -145,7 +144,6 @@ export default function SolutionPage({ s }: { s: Solution }) {
 
       <section id="fix" className="solp-section solp-fixband" aria-labelledby="solp-fix-h">
         <div className="rn-wrap">
-          <p className="rn-eyebrow">The fix</p>
           <h2 id="solp-fix-h" className="rn-h2 solp-h2">
             The fix we place
           </h2>
@@ -227,7 +225,6 @@ export default function SolutionPage({ s }: { s: Solution }) {
       {s.comparison && (
         <section className="solp-section rn-band--mist" aria-labelledby="solp-cmp-h">
           <div className="rn-wrap">
-            <p className="rn-eyebrow">Then and now</p>
             <h2 id="solp-cmp-h" className="rn-h2 solp-h2">
               {s.comparison.heading}
             </h2>
@@ -263,7 +260,6 @@ export default function SolutionPage({ s }: { s: Solution }) {
       {s.results && (
         <section className="solp-section solp-results" aria-labelledby="solp-res-h">
           <div className="rn-wrap">
-            <p className="rn-eyebrow">Results</p>
             <h2 id="solp-res-h" className="rn-h2 solp-h2">
               {s.results.heading}
             </h2>
