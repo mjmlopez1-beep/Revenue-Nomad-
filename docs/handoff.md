@@ -53,6 +53,16 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
 7. **Validation strip.** Fill at least one real "As seen in / Rated on" entry or delete the section data.
 8. **Production flag.** Set `NEXT_PUBLIC_SITE_ENV=production` only on the production deployment.
 
+## Preview deployments on Vercel
+
+The repository already carries `vercel.json` (the daily crawl cron) and a CI build on every push. A Vercel preview
+needs no token in the repo: import the GitHub repository at vercel.com/new (framework Next.js, defaults are
+right), and Vercel deploys every branch, including `ccr-f94c4801-enfu3y`, at its own preview URL. Set these in
+the project's Environment Variables when ready: `HUBSPOT_PORTAL_ID` (48733774), `HUBSPOT_CHECK_FORM_ID`,
+`HUBSPOT_TALK_FORM_ID`, `HUBSPOT_GUIDE_FORM_ID` (leads fall back to the ephemeral `/tmp` store until set),
+`CRON_SECRET`, and `NEXT_PUBLIC_SITE_ENV=production` only on the production deployment, since it hides the
+confirm badges and makes `check:home --site-env production` fail while unverified figures remain. Node 22.
+
 ## Manual checks still to do by a person
 
 - Keyboard through the header menus and the phone drawer: Escape closes, focus returns to the button.
