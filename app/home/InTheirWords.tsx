@@ -1,18 +1,22 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
-import Avatar from "./Avatar";
+import { colorLogos } from "./content/logos";
 import "./InTheirWords.css";
 
 /**
  * In their words (design 4.1 row 11). Three verified reviews, one visible at a time, advancing every
  * 9 seconds. Previous, next and pause/play buttons; the quote region is aria-live="polite" only while
  * paused or held (WAI-ARIA carousel pattern: live off during auto-rotation). Under
- * prefers-reduced-motion all three render stacked with no timer and no controls. Reviewers are
- * initials avatars (A5); no photos or company logos ship.
+ * prefers-reduced-motion all three render stacked with no timer and no controls. Each reviewer's
+ * cutout portrait (public/home/people/) sits on the artboard's disc and ring, and the company's color
+ * logo closes the byline, as the canvas draws them.
  */
 
 type Review = {
+  /** Keys the portrait placement and logo height in InTheirWords.css. */
+  id: "eric" | "trista" | "neil";
   quote: string;
   name: string;
   title: string;
@@ -20,26 +24,33 @@ type Review = {
   /** The artboard prints the "Verified review - 5/5, would hire again" line on these. */
   rated: boolean;
   tone: "forest" | "night" | "leaf";
+  /** Cutout portrait, square, with the artboard's alt text. */
+  photo: { file: string; size: number; alt: string };
 };
 
 const REVIEWS: Review[] = [
   {
+    id: "eric",
     quote: "Knowledgeable, responsive, and provided transformative insights and actions to help our growing sales org.",
     name: "Eric B.",
     title: "Account Executive",
     company: "myHR Partner",
     rated: true,
     tone: "forest",
+    photo: { file: "eric-b.webp", size: 560, alt: "Eric B." },
   },
   {
+    id: "trista",
     quote: "I couldn’t recommend working with Matt and his team more. I hope to work with him again on future growth projects.",
     name: "Trista Kempa",
     title: "COO",
     company: "Ferry",
     rated: true,
     tone: "night",
+    photo: { file: "trista-kempa.webp", size: 480, alt: "Trista Kempa, COO, Ferry" },
   },
   {
+    id: "neil",
     quote:
       "Jeff has been fantastic to work with... I do feel 100% confident that Jeff was the right choice for what we needed at this stage of the game.",
     name: "Neil Trickett, PT",
@@ -47,6 +58,7 @@ const REVIEWS: Review[] = [
     company: "Practice Promotions",
     rated: false,
     tone: "leaf",
+    photo: { file: "neil-trickett.webp", size: 450, alt: "Neil Trickett, CEO, Practice Promotions" },
   },
 ];
 
@@ -54,6 +66,7 @@ const INTERVAL_MS = 9000;
 const STAR = "M10 1.8l2.5 5.3 5.8.7-4.3 4 1.1 5.7L10 14.7l-5.1 2.8 1.1-5.7-4.3-4 5.8-.7z";
 
 function ReviewCard({ review, position }: { review: Review; position: number }) {
+  const logo = colorLogos[review.company];
   return (
     <figure className="itw-review">
       <div className="itw-copy">
@@ -70,11 +83,23 @@ function ReviewCard({ review, position }: { review: Review; position: number }) 
           </span>
         </blockquote>
         <figcaption className="itw-by">
-          <span className="itw-person">
-            <b className="itw-name">{review.name}</b>
-            <span className="itw-title">
-              {review.title}, {review.company}
+          <span className="itw-who">
+            <span className="itw-person">
+              <b className="itw-name">{review.name}</b>
+              <span className="itw-title">
+                {review.title}, {review.company}
+              </span>
             </span>
+            {logo && (
+              <Image
+                className={`itw-logo itw-logo--${review.id}`}
+                src={`/home/logos/${logo.file}`}
+                alt=""
+                width={logo.width}
+                height={logo.height}
+                sizes="200px"
+              />
+            )}
           </span>
           {review.rated && (
             <span className="itw-rating">
@@ -90,9 +115,19 @@ function ReviewCard({ review, position }: { review: Review; position: number }) 
           )}
         </figcaption>
       </div>
-      <div className="itw-visual" aria-hidden="true">
-        <div className="itw-visual-inner">
-          <Avatar name={review.name} size={340} tone={review.tone} />
+      <div className="itw-visual">
+        <div className={`itw-visual-inner itw-visual-inner--${review.tone}`}>
+          <span className="itw-disc" aria-hidden="true" />
+          <span className="itw-clip">
+            <Image
+              className={`itw-photo itw-photo--${review.id}`}
+              src={`/home/people/${review.photo.file}`}
+              alt={review.photo.alt}
+              width={review.photo.size}
+              height={review.photo.size}
+              sizes="360px"
+            />
+          </span>
         </div>
       </div>
     </figure>

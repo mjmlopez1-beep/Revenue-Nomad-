@@ -1,18 +1,22 @@
+import Image from "next/image";
 import Link from "next/link";
 import Arrow from "./Arrow";
-import Avatar from "./Avatar";
 import { hrefs } from "./content/links";
-import { FigureLabel, FigureValue } from "./Figure";
+import { FigureValue } from "./Figure";
 import "./ForOperators.css";
 
-/** Sample operators shown on the band. Initials until approved photos exist (design decision A5). */
+/** Sample operators shown on the band, with the canvas's illustrative photos (480 by 480) from public/home/people/. */
 const samples = [
-  { name: "Erin", role: "Fractional Enablement Leader" },
-  { name: "Scott", role: "Fractional VP of RevOps" },
-  { name: "Lionel", role: "Fractional Director of Sales" },
+  { name: "Erin", role: "Fractional Enablement Leader", photo: "sample-erin.webp" },
+  { name: "Scott", role: "Fractional VP of RevOps", photo: "sample-scott.webp" },
+  { name: "Lionel", role: "Fractional Director of Sales", photo: "sample-lionel.webp" },
 ];
 
-/** Section 20: the forest band that recruits operators. One action: Join as an operator. */
+/**
+ * Section 20: the forest band that recruits operators. One action: Join as an operator.
+ * Each sample card is a photo card as the artboard draws it: the portrait fills the card, cropped
+ * to the top fifth, under a night scrim with the name, role and View profile at the foot.
+ */
 export default function ForOperators() {
   return (
     <section className="ops rn-band--forest" aria-labelledby="ops-h">
@@ -42,7 +46,14 @@ export default function ForOperators() {
               {samples.map((s) => (
                 <li key={s.name}>
                   <Link className="ops-card" href={hrefs.browse}>
-                    <Avatar name={s.name} size={72} tone="leaf" />
+                    <Image
+                      className="ops-photo"
+                      src={`/home/people/${s.photo}`}
+                      alt=""
+                      width={480}
+                      height={480}
+                      sizes="(max-width: 900px) 210px, 196px"
+                    />
                     <span className="ops-card-text">
                       <b className="ops-name">{s.name}</b>
                       <span className="ops-role">{s.role}</span>

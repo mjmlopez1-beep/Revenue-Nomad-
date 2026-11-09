@@ -99,6 +99,27 @@
   flex-direction: column;
   gap: 8px;
 }
+/* Name and title at the left, the company's color logo at the right, as the artboard sets the byline. */
+.itw-who {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.itw-logo {
+  display: block;
+  width: auto;
+  flex: 0 0 auto;
+}
+.itw-logo--eric {
+  height: 34px;
+}
+.itw-logo--trista {
+  height: 28px;
+}
+.itw-logo--neil {
+  height: 30px;
+}
 .itw-person {
   display: flex;
   flex-direction: column;
@@ -126,7 +147,9 @@
   color: var(--rn-gold);
 }
 
-/* The portrait slot: the artboard's photo disc becomes an initials avatar on the same ring. */
+/* The portrait slot, 450 square as the artboard draws it: a 340px gradient disc, a 410px gold ring, the
+   cutout portrait clipped so the head rises above the disc and the shoulders end at its lower edge
+   (the clip is the top 240px plus the disc's lower half), and a gold dot at the foot. */
 .itw-visual {
   flex: 0 0 auto;
   width: 450px;
@@ -137,6 +160,59 @@
   width: 450px;
   height: 450px;
   transform-origin: 0 0;
+}
+.itw-disc {
+  position: absolute;
+  left: 55px;
+  top: 70px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  box-shadow: 0 30px 60px color-mix(in srgb, var(--rn-night) 22%, transparent);
+}
+/* The artboard's three disc gradients, mapped onto the palette: forest with its crosshatch, night, and the split teal. */
+.itw-visual-inner--forest .itw-disc {
+  background-image:
+    linear-gradient(45deg, color-mix(in srgb, var(--rn-white) 9%, transparent) 50%, transparent 50%),
+    linear-gradient(-45deg, color-mix(in srgb, var(--rn-ink) 7%, transparent) 50%, transparent 50%),
+    linear-gradient(125deg, var(--rn-leaf-strong) 0%, var(--rn-forest-link) 28%, var(--rn-forest) 50%, var(--rn-night) 100%);
+  background-size: 48px 48px, 48px 48px, 100% 100%;
+}
+.itw-visual-inner--night .itw-disc {
+  background: linear-gradient(140deg, var(--rn-night-tint-2) 0%, var(--rn-night) 55%, var(--rn-ink) 100%);
+}
+.itw-visual-inner--leaf .itw-disc {
+  background: linear-gradient(118deg, var(--rn-night) 0%, var(--rn-night) 49.6%, var(--rn-leaf-strong) 50%, var(--rn-leaf) 100%);
+}
+.itw-clip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 450px;
+  height: 450px;
+  clip-path: path("M0 0 H450 V240 H395 A170 170 0 0 1 55 240 H0 Z");
+}
+.itw-photo {
+  position: absolute;
+  display: block;
+}
+.itw-photo--eric {
+  left: 49px;
+  top: 52px;
+  width: 360px;
+  height: 360px;
+}
+.itw-photo--trista {
+  left: 75px;
+  top: 112px;
+  width: 300px;
+  height: 300px;
+}
+.itw-photo--neil {
+  left: 45px;
+  top: 52px;
+  width: 360px;
+  height: 360px;
 }
 .itw-visual-inner::before {
   content: "";
@@ -158,12 +234,6 @@
   height: 16px;
   border-radius: 50%;
   background: var(--rn-gold);
-}
-.itw-visual-inner .rn-avatar {
-  position: absolute;
-  left: 55px;
-  top: 70px;
-  box-shadow: 0 30px 60px color-mix(in srgb, var(--rn-night) 22%, transparent);
 }
 
 /* Reduced motion: all three stacked, no timer, no controls (see component). */

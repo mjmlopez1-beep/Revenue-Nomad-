@@ -6,7 +6,23 @@
   font-family: var(--rn-font-ui);
   padding: 88px 0 92px;
 }
+/* The knot still: 1000 by 563 at left 840 on the 1440 artboard (120px right of center), vertically
+   centered less 250px, 40% opacity, fading out on a radial mask. The mask reads alpha only, so ink is the opaque stop. */
+.how-knot {
+  position: absolute;
+  left: calc(50% + 120px);
+  top: 50%;
+  width: 1000px;
+  height: 563px;
+  margin-top: -250px;
+  object-fit: cover;
+  opacity: 0.4;
+  pointer-events: none;
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, var(--rn-ink) 45%, transparent 100%);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, var(--rn-ink) 45%, transparent 100%);
+}
 .how-layout {
+  position: relative;
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   grid-template-rows: auto 1fr;
@@ -91,7 +107,21 @@
 
 @media (max-width: 900px) {
   .how.rn-section {
-    padding: var(--rn-section-y-sm) 0;
+    padding: 0 0 var(--rn-section-y-sm);
+  }
+  /* Phone artboard: the still is a full-width 240px band above the copy, fading into the band's bottom 40%. */
+  .how-knot {
+    position: relative;
+    left: auto;
+    top: auto;
+    display: block;
+    width: 100%;
+    height: 240px;
+    margin: 0;
+    object-position: 50% 45%;
+    opacity: 1;
+    -webkit-mask-image: linear-gradient(180deg, var(--rn-ink) 60%, transparent 100%);
+    mask-image: linear-gradient(180deg, var(--rn-ink) 60%, transparent 100%);
   }
   .how-layout {
     grid-template-columns: 1fr;

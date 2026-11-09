@@ -47,21 +47,42 @@
   flex: 0 0 196px;
   display: flex;
 }
+/* Photo card, 196 by 268: the portrait fills it, a scrim covers the lower 60%, the text sits at the foot. */
 .ops-card {
   position: relative;
-  display: flex;
+  display: block;
   flex: 1 1 auto;
-  flex-direction: column;
-  justify-content: space-between;
   height: 268px;
-  padding: 20px 18px 16px;
+  overflow: hidden;
   box-sizing: border-box;
   border-radius: var(--rn-radius-sm);
-  background: color-mix(in srgb, var(--rn-ink) 45%, var(--rn-forest));
+  background: var(--rn-ink);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--rn-white) 10%, transparent);
   color: var(--rn-white);
   text-decoration: none;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.ops-photo {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 20%;
+  transition: transform 0.5s ease;
+}
+.ops-card:hover .ops-photo {
+  transform: scale(1.05);
+}
+.ops-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 60%;
+  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--rn-night) 80%, transparent) 100%);
 }
 .ops-card:hover {
   transform: translateY(-2px);
@@ -72,6 +93,11 @@
   transform: translateX(3px);
 }
 .ops-card-text {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -85,7 +111,7 @@
 .ops-role {
   font-size: 13.5px;
   line-height: 1.35;
-  color: var(--rn-leaf-pale);
+  color: color-mix(in srgb, var(--rn-white) 88%, transparent);
 }
 .ops-view {
   margin-top: 6px;
@@ -140,7 +166,9 @@
 @media (prefers-reduced-motion: reduce) {
   .ops-card,
   .ops-card:hover,
-  .ops-card:hover .rn-arrow {
+  .ops-card:hover .rn-arrow,
+  .ops-photo,
+  .ops-card:hover .ops-photo {
     transition: none;
     transform: none;
   }

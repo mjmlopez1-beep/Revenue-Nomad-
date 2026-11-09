@@ -1,5 +1,5 @@
-/* Section 13: Outcomes. White section, three case-study cards. The artboard's card photos are omitted
-   (no shipped assets); the metric sits on a night surface instead. */
+/* Section 13: Outcomes. White section, three case-study cards. The metric sits on the canvas's case
+   photo (220px strip) under the artboard's night gradient, as the artboard draws it. */
 .out {
   background: var(--rn-white);
   color: var(--rn-ink);
@@ -48,15 +48,47 @@
   background: var(--rn-white);
 }
 .out-metric {
+  position: relative;
   margin: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 6px;
-  min-height: 200px;
-  padding: 26px 22px 20px 26px;
+  min-height: 220px;
+  overflow: hidden;
   background: var(--rn-night);
   color: var(--rn-white);
+}
+.out-photo {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  transition: transform 0.5s ease;
+}
+.out-card:hover .out-photo {
+  transform: scale(1.05);
+}
+/* The artboard's scrim: near-clear at the top, 82% night at the foot so the figure reads. */
+.out-metric::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--rn-night) 5%, transparent) 20%,
+    color-mix(in srgb, var(--rn-night) 82%, transparent) 100%
+  );
+}
+.out-metric-text {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 26px 22px 20px 26px;
 }
 .out-value {
   display: block;
@@ -91,6 +123,10 @@
   font-size: 17px;
   font-weight: 700;
   color: var(--rn-ink);
+}
+.out-logo {
+  display: block;
+  width: auto;
 }
 .out-sector {
   margin: 6px 0 0;
@@ -187,7 +223,9 @@
     grid-template-columns: 1fr;
   }
   .out-metric {
-    min-height: 180px;
+    min-height: 200px;
+  }
+  .out-metric-text {
     padding: 22px 22px 20px;
   }
   .out-value {
@@ -198,5 +236,13 @@
   }
   .out-close {
     margin-top: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .out-photo,
+  .out-card:hover .out-photo {
+    transition: none;
+    transform: none;
   }
 }

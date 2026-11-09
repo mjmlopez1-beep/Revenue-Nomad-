@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import Arrow from "./Arrow";
 import { hrefs } from "./content/links";
@@ -33,11 +34,22 @@ const steps: Step[] = [
 /**
  * "How it works": the dark band with three gold-numbered steps, "No fees for companies."
  * and one Talk to us button (design 4.1, row 9). Gold sits on the dark surface only.
- * The artboard's looping background video is dropped: no asset, and nothing to pause.
+ * The artboard's looping background video is dropped (no asset, nothing to pause); its still,
+ * the knot, ships as the artboard's reduced-motion frame: decorative, 40% opacity under a radial
+ * mask at the right on desktop, a faded 240px band above the copy on phones.
  */
 export default function HowItWorks() {
   return (
     <section className="how rn-section rn-band--dark" aria-labelledby="how-h">
+      <Image
+        className="how-knot"
+        src="/home/hero-knot.webp"
+        alt=""
+        aria-hidden="true"
+        width={1200}
+        height={674}
+        sizes="(max-width: 900px) 100vw, 1000px"
+      />
       <div className="rn-wrap how-layout">
         <div className="how-intro">
           <p className="rn-eyebrow how-eyebrow">How it works</p>
