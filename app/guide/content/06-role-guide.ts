@@ -149,7 +149,7 @@ const chapter: Chapter = {
     { t: "h3", text: "How it runs" },
     {
       t: "p",
-      html: `Forty hours a month is the most common (7 of ${mk.n} engagements). Terms are three to six months most often. Results take longer than sales: ${ofShare(mk.resultUnder30)} inside 30 days, 67% inside 60. But once running, marketing extends more than any other role.`,
+      html: `Forty hours a month is the most common (7 of ${mk.n} engagements). Terms are three to six months most often. Results take longer than sales: ${ofShare(mk.resultUnder30)} inside 30 days, ${ofShare(mk.resultUnder60)} inside 60. But once running, marketing extends more than any other role.`,
     },
     { t: "h3", text: "What to check" },
     {

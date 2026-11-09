@@ -176,6 +176,7 @@ const roleCut = (cat) => {
     share: share(rows.length, detailed.length),
     extended: { x: count(rows, (r) => r[S.extended] === "TRUE"), y: rows.length },
     resultUnder30: { x: count(rows, (r) => ttrOf(r) === "Under 30 days"), y: rows.length },
+    resultUnder60: { x: count(rows, (r) => ttrOf(r) === "Under 30 days" || ttrOf(r) === "30 to 60 days"), y: rows.length },
     resultOver90: { x: count(rows, (r) => ttrOf(r) === "90+ days"), y: rows.length },
     term12Plus: { x: count(rows, (r) => r[S.term] === "12+ months"), y: rows.length },
     medianHours: median(hrs),

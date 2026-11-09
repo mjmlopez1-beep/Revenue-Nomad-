@@ -18,7 +18,7 @@ const share = (x: number, y: number) => f.pct(Math.round((x / y) * 100));
 const inside30 = share(mk.resultUnder30.x, mk.resultUnder30.y);
 const extended = f.of(mk.extended.x, mk.extended.y);
 /** Marketing's inside-60 share has no dataset column (the guide hardcodes it too); confirm before launch. */
-const inside60 = "67%";
+const inside60 = f.pct(Math.round((f.role("Marketing").resultUnder60.x / f.role("Marketing").resultUnder60.y) * 100));
 /** Most common monthly cadence for Marketing, e.g. "40 hrs" -> 40. */
 const modeHours = parseInt(mk.modeHours, 10);
 const status = f.survey.status;

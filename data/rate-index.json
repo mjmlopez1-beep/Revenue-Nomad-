@@ -463,6 +463,10 @@
           "x": 19,
           "y": 31
         },
+        "resultUnder60": {
+          "x": 28,
+          "y": 31
+        },
         "resultOver90": {
           "x": 0,
           "y": 31
@@ -487,6 +491,10 @@
         },
         "resultUnder30": {
           "x": 6,
+          "y": 18
+        },
+        "resultUnder60": {
+          "x": 12,
           "y": 18
         },
         "resultOver90": {
@@ -515,6 +523,10 @@
           "x": 5,
           "y": 11
         },
+        "resultUnder60": {
+          "x": 8,
+          "y": 11
+        },
         "resultOver90": {
           "x": 0,
           "y": 11
@@ -538,6 +550,10 @@
           "y": 4
         },
         "resultUnder30": {
+          "x": 2,
+          "y": 4
+        },
+        "resultUnder60": {
           "x": 2,
           "y": 4
         },
@@ -567,6 +583,10 @@
           "x": 0,
           "y": 1
         },
+        "resultUnder60": {
+          "x": 1,
+          "y": 1
+        },
         "resultOver90": {
           "x": 0,
           "y": 1
@@ -593,6 +613,10 @@
           "x": 4,
           "y": 7
         },
+        "resultUnder60": {
+          "x": 7,
+          "y": 7
+        },
         "resultOver90": {
           "x": 0,
           "y": 7
@@ -616,6 +640,10 @@
           "y": 2
         },
         "resultUnder30": {
+          "x": 0,
+          "y": 2
+        },
+        "resultUnder60": {
           "x": 0,
           "y": 2
         },

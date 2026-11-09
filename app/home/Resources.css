@@ -43,7 +43,7 @@
   flex-direction: column;
   height: 100%;
   box-sizing: border-box;
-  padding: 22px 26px 26px;
+  overflow: hidden;
   border-radius: var(--rn-radius-xs);
   border: 1px solid var(--rn-line);
   background: var(--rn-white);
@@ -57,6 +57,40 @@
 }
 .resources .resources-card:hover .rn-arrow {
   transform: translateX(3px);
+}
+/* Cover image: 152px strip on mist, cover crop; the case-studies card zooms its crop 115% as the artboard does. */
+.resources .resources-cover {
+  position: relative;
+  display: block;
+  height: 152px;
+  overflow: hidden;
+  background: var(--rn-mist);
+}
+.resources .resources-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 50%;
+  transition: transform 0.5s ease;
+}
+.resources .resources-cover--zoom .resources-img {
+  left: -8.2%;
+  top: -7.5%;
+  width: 115%;
+  height: 115%;
+}
+.resources .resources-card:hover .resources-img {
+  transform: scale(1.05);
+}
+.resources .resources-text {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  padding: 22px 26px 26px;
 }
 .resources .resources-kicker {
   font-size: 10.5px;
@@ -96,7 +130,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .resources .resources-card,
-  .resources .resources-card:hover .rn-arrow {
+  .resources .resources-card:hover .rn-arrow,
+  .resources .resources-img,
+  .resources .resources-card:hover .resources-img {
     transition: none;
     transform: none;
   }
@@ -119,6 +155,9 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-top: 28px;
   }
+  .resources .resources-cover {
+    height: 180px;
+  }
 }
 @media (max-width: 480px) {
   .resources .resources-h {
@@ -130,7 +169,7 @@
   .resources .resources-grid {
     grid-template-columns: 1fr;
   }
-  .resources .resources-card {
+  .resources .resources-text {
     padding: 22px 22px 24px;
   }
   .resources .resources-title {
