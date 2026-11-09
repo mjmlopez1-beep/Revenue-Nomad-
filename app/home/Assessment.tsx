@@ -70,7 +70,7 @@ export default function Assessment() {
         </div>
 
         <p className="asmt-cta">
-          <Link className="rn-link asmt-link" href={diagnostic}>
+          <Link className="rn-link asmt-link" href={diagnostic} prefetch={false}>
             See how the assessment works
             <Arrow size={13} />
           </Link>

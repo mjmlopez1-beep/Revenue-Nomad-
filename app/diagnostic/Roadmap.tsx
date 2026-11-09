@@ -25,8 +25,7 @@ export default function Roadmap() {
         <div className="dx-roadmap">
           <div className="dx-roadmap-head" style={cols}>
             <span className="dx-roadmap-k">
-              {r.head.workstream} · {r.head.score} <span aria-hidden="true">to</span>
-              <span className="rn-sr-only">to</span> {r.head.target} · {r.head.owner}
+              {r.head.workstream} · {r.head.score} to {r.head.target} · {r.head.owner}
             </span>
             {r.columns.map((c) => (
               <span key={c} className="dx-roadmap-k dx-roadmap-col">

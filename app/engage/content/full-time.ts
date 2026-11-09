@@ -160,7 +160,7 @@ const page: EngagePage = {
         {
           t: "faq",
           items: [
-            { q: "Is there a conversion fee?", a: "Yes, and it is written into the contract before the engagement starts - so you know the cost of converting on day one, not at the offer." },
+            { q: "Is there a hire-away fee?", a: "Yes, and it is written into the contract before the engagement starts - so you know the cost of converting on day one, not at the offer." },
             { q: "When can we convert?", a: "Most companies decide at the 90-day readout, once there is a working system to judge the leader by." },
             { q: "How often does it happen?", a: `${convertedWords} converted to full time in our 2027 research. Far more extended or expanded instead.` },
             { q: "What if the leader does not want full time?", a: "Then you know early. Keep them fractional, or have them write the job and help hire the full-time leader." },

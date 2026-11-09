@@ -18,7 +18,7 @@ export default function ScoresChart() {
         <span className="dx-badge-illustrative">{s.badge}</span>
       </figcaption>
       <div className="dx-scores-body" role="list">
-        <span className="dx-scores-grid" aria-hidden="true">
+        <span className="dx-scores-grid" aria-hidden="true" style={{ gridRow: `1 / ${sampleScores.length + 2}` }}>
           {[1, 2, 3, 4].map((n) => (
             <span key={n} className="dx-scores-line" style={{ left: pct(n) }} />
           ))}
@@ -28,8 +28,8 @@ export default function ScoresChart() {
             </span>
           </span>
         </span>
-        {sampleScores.map((row) => (
-          <div key={row.pillar} className="dx-score" role="listitem">
+        {sampleScores.map((row, n) => (
+          <div key={row.pillar} className="dx-score" role="listitem" style={{ gridRow: n + 1 }}>
             <span className="dx-score-label">{pillarLabel[row.pillar]}</span>
             <span className="dx-score-track">
               <span className="dx-score-bar" style={{ width: pct(row.score) }} />
@@ -40,13 +40,17 @@ export default function ScoresChart() {
             </span>
           </div>
         ))}
-        <div className="dx-score dx-score--axis" aria-hidden="true">
+        <div className="dx-score dx-score--axis" aria-hidden="true" style={{ gridRow: sampleScores.length + 1 }}>
           <span />
           <span className="dx-scores-axis">
             {[1, 2, 3, 4].map((n) => (
               <span key={n} className="dx-scores-tick" style={{ left: pct(n) }}>
                 {n}
-                {(n === 1 || n === MAX) && <> {name(n)}</>}
+              </span>
+            ))}
+            {[1, MAX].map((n) => (
+              <span key={n} className="dx-scores-tick dx-scores-tick--name" style={{ left: pct(n) }}>
+                {name(n)}
               </span>
             ))}
           </span>

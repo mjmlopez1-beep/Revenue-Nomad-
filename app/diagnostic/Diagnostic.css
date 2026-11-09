@@ -355,35 +355,26 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.dx-pillar-body {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-.dx-stack {
-  flex: 0 0 auto;
-  width: 44px;
-  height: auto;
-  overflow: visible;
-}
 .dx-blocks {
   list-style: none;
   margin: 0;
   padding: 0;
-  flex: 1 1 auto;
-  min-width: 0;
 }
-/* One row per cube: the stack's pitch is 40 viewBox units on a 49-wide drawing scaled to 44px. */
+/* One cube per row, 34px wide and 39px tall on a 40px row, so the three cubes read as one stack. */
 .dx-blocks li {
   display: flex;
   align-items: center;
-  height: 36px;
-  font-size: 13px;
+  gap: 8px;
+  min-height: 40px;
+  font-size: 12.5px;
   line-height: 1.25;
   color: var(--rn-ink-soft);
 }
-.dx-blocks li:first-child {
-  margin-top: 6px;
+.dx-cube-svg {
+  flex: 0 0 auto;
+  width: 34px;
+  height: auto;
+  overflow: visible;
 }
 
 /* The four levels as a horizontal scale on a gold rail. */
@@ -609,7 +600,7 @@
   grid-template-columns: var(--dx-label) minmax(0, 1fr) var(--dx-value);
   column-gap: 12px;
   row-gap: 14px;
-  margin-top: 34px;
+  margin-top: 44px;
 }
 .dx-score {
   display: grid;
@@ -649,13 +640,12 @@
 .dx-scores-grid {
   position: relative;
   grid-column: 2;
-  grid-row: 1 / span 8;
   pointer-events: none;
 }
 .dx-scores-line {
   position: absolute;
   top: -8px;
-  bottom: 22px;
+  bottom: 36px;
   width: 1px;
   margin-left: -1px;
   background: color-mix(in srgb, var(--rn-white) 14%, transparent);
@@ -663,7 +653,7 @@
 .dx-scores-target {
   position: absolute;
   top: -22px;
-  bottom: 22px;
+  bottom: 36px;
   width: 2px;
   margin-left: -1px;
   background: var(--rn-gold);
@@ -683,7 +673,7 @@
 .dx-scores-axis {
   position: relative;
   display: block;
-  height: 16px;
+  height: 30px;
   font-size: 11px;
   color: var(--rn-night-tint-2);
 }
@@ -693,11 +683,8 @@
   transform: translateX(-50%);
   white-space: nowrap;
 }
-.dx-scores-tick:last-child {
-  transform: translateX(-100%);
-}
-.dx-scores-tick:first-child {
-  transform: translateX(-20%);
+.dx-scores-tick--name {
+  top: 15px;
 }
 .dx-scores-note {
   margin: 16px 0 0;
@@ -717,6 +704,7 @@
   margin-bottom: 6px;
 }
 .dx-roadmap-wrap {
+  position: relative; /* contains the sr-only spans, which are absolutely positioned */
   margin-top: 32px;
   overflow-x: auto;
   border: 1px solid var(--rn-line);
@@ -770,7 +758,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 5px;
+  gap: 2px 5px;
   font-size: 12.5px;
   color: var(--rn-mute);
 }
@@ -784,10 +772,9 @@
   color: var(--rn-forest);
 }
 .dx-bar {
-  z-index: 1;
   margin: 0 6px;
-  height: 34px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 6px 12px;
   border-radius: var(--rn-radius-sm);
   background: var(--rn-forest);
   color: var(--rn-white);
@@ -795,11 +782,9 @@
   align-items: center;
   font-size: 12.5px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
+  line-height: 1.25;
 }
 .dx-milestone {
-  z-index: 1;
   margin: 8px 6px 0;
   display: flex;
   align-items: center;
@@ -852,6 +837,7 @@
 
 /* ---------- compare ---------- */
 .dx-tablewrap {
+  position: relative;
   margin-top: 28px;
   overflow-x: auto;
   border: 1px solid var(--rn-line);
@@ -928,7 +914,13 @@
 .dx-unconfirmed {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
+}
+.dx-unconfirmed .rn-badge {
+  margin-left: 0;
+  font-size: 10px;
+  vertical-align: baseline;
 }
 .dx-case-v {
   margin: 0;
@@ -1038,15 +1030,19 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 24px;
   }
-  /* The gold rail behind the four level chips. */
+  /* The gold rail through the four level chips, first chip center to last. Names sit under the chips. */
   .dx-scale::before {
     content: "";
     position: absolute;
     left: 17px;
-    right: 17px;
+    right: calc(25% - 35px);
     top: 16px;
     height: 2px;
     background: var(--rn-gold);
+  }
+  .dx-level {
+    flex-direction: column;
+    gap: 12px;
   }
   .dx-level-n {
     position: relative;

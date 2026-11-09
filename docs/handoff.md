@@ -10,6 +10,9 @@ For the next session (human or agent) picking up the marketing site. Written 202
   built, then removed from the page and remain in git history).
 - The 2-minute Revenue Health Check lives at `/check` (`app/check/`, spec `docs/specs/revenue-health-check.md`, ticket 11).
 - Talk to us lives at `/talk` (`app/talk/`, spec `docs/specs/talk-to-us.md`, ticket 12).
+- The Revenue Health Diagnostic lives at `/revenue-health-diagnostic` (`app/diagnostic/`, spec `docs/specs/engagement-pages.md`,
+  ticket 17) with its inline isometric illustrations; the three How we engage pages at `/how-we-engage/*` (`app/engage/`) share
+  one block-based template. The gold token marks the method: step numbers, pillar numbers, the maturity rail, milestones.
 - The four role pages live at `/fractional-vp-of-sales`, `/fractional-cmo`, `/fractional-revops` and `/fractional-ai-gtm`
   (`app/solutions/`, spec `docs/specs/role-pages.md`, ticket 16): one template, four content modules reading their figures
   from the dataset. The homepage now carries the Design canvas's images (`public/home/{logos,people,cards,tiers}`).
@@ -50,8 +53,8 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
    `HUBSPOT_CHECK_FORM_ID` is set, and Talk to us (`app/talk/actions.ts`) once `HUBSPOT_TALK_FORM_ID` is set; the
    setup checklists are in `docs/specs/revenue-health-check.md` and `docs/specs/talk-to-us.md`.
 5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/`, `/portal`, `/thanks`, `/check` and
-   `/talk`, `/research/rate-index`, `/problems/*`, the Buyer's Guide and the four role pages is a stub. Next in the site map's order: the
-   Diagnostic and the three other engagement pages, case studies (five case pages are on the canvas), About, For operators.
+   `/talk`, `/research/rate-index`, `/problems/*`, the Buyer's Guide, the four role pages, the Diagnostic and the How we engage pages is a stub. Next in the
+   site map's order: case studies (the hub and five case pages are on the canvas), About, For operators, the guides hub.
 6. **SEO extras.** Open Graph image (1200 by 630), JSON-LD (Organization, ProfessionalService, FAQPage), sitemap page.
 7. **Validation strip.** Fill at least one real "As seen in / Rated on" entry or delete the section data.
 8. **Production flag.** Set `NEXT_PUBLIC_SITE_ENV=production` only on the production deployment.
