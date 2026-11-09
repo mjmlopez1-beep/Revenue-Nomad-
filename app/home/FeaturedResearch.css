@@ -7,7 +7,7 @@
   color: var(--rn-white);
   font-family: var(--rn-font-ui);
 }
-.research-grid {
+.research .research-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 540px;
   gap: 60px;
@@ -16,7 +16,7 @@
 .research .rn-eyebrow {
   color: var(--rn-gold);
 }
-.research-h {
+.research .research-h {
   margin-top: 14px;
   font-size: var(--rn-text-h2-lg);
   line-height: 1.08;
@@ -24,23 +24,23 @@
   color: var(--rn-white);
   text-wrap: balance;
 }
-.research-title {
+.research .research-title {
   color: inherit;
   text-decoration: none;
 }
-.research-title:hover {
+.research .research-title:hover {
   text-decoration: underline;
   text-underline-offset: 6px;
   text-decoration-thickness: 2px;
 }
-.research-lede {
+.research .research-lede {
   margin-top: 16px;
   max-width: 540px;
   font-size: 18px;
   color: var(--rn-white);
   opacity: 0.82;
 }
-.research-form {
+.research .research-form {
   display: flex;
   gap: 6px;
   max-width: 520px;
@@ -49,7 +49,7 @@
   border-radius: var(--rn-radius-pill);
   background: var(--rn-white);
 }
-.research-input {
+.research .research-input {
   flex: 1 1 auto;
   min-width: 0;
   height: 48px;
@@ -61,15 +61,15 @@
   font-size: 16px;
   color: var(--rn-ink);
 }
-.research-input::placeholder {
+.research .research-input::placeholder {
   color: var(--rn-mute);
   opacity: 1;
 }
-.research-input:focus-visible {
+.research .research-input:focus-visible {
   outline: 2px solid var(--rn-forest);
   outline-offset: -2px;
 }
-.research-btn {
+.research .research-btn {
   flex: 0 0 auto;
   gap: 8px;
   min-height: 48px;
@@ -79,16 +79,16 @@
   color: var(--rn-ink);
   font-size: 13px;
 }
-.research-btn:focus-visible {
+.research .research-btn:focus-visible {
   outline-color: var(--rn-gold);
 }
-.research-note {
+.research .research-note {
   margin-top: 14px;
   font-size: 14px;
   color: var(--rn-white);
   opacity: 0.72;
 }
-.research-cover img {
+.research .research-cover img {
   display: block;
   width: 100%;
   height: auto;
@@ -98,22 +98,26 @@
   .research {
     padding-bottom: var(--rn-section-y);
   }
-  .research-grid {
-    grid-template-columns: 1fr;
+  .research .research-grid {
+    grid-template-columns: minmax(0, 1fr);
     gap: 30px;
   }
-  .research-cover {
+  .research .research-copy,
+  .research .research-cover {
+    min-width: 0;
+  }
+  .research .research-cover {
     max-width: 540px;
   }
 }
 @media (max-width: 480px) {
-  .research-h {
+  .research .research-h {
     font-size: 36px;
   }
-  .research-lede {
+  .research .research-lede {
     font-size: 16.5px;
   }
-  .research-btn {
+  .research .research-btn {
     padding: 0 18px;
   }
 }

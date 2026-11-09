@@ -5,10 +5,10 @@
   font-family: var(--rn-font-ui);
   overflow: hidden;
 }
-.asmt-eyebrow {
+.asmt .asmt-eyebrow {
   color: var(--rn-night);
 }
-.asmt-h {
+.asmt .asmt-h {
   margin-top: 14px;
   font-size: var(--rn-text-h2-lg);
   line-height: 1.08;
@@ -159,7 +159,7 @@
   background: color-mix(in srgb, var(--rn-night) 16%, transparent);
 }
 .asmt-group--2 .asmt-bar {
-  background: color-mix(in srgb, var(--rn-night) 38%, transparent);
+  background: color-mix(in srgb, var(--rn-night) 28%, transparent);
 }
 .asmt-group--3 .asmt-bar {
   background: var(--rn-white);
@@ -175,13 +175,13 @@
 .asmt-cta {
   margin: 40px 0 0;
 }
-.asmt-link {
+.asmt .asmt-link {
   font-size: var(--rn-text-body);
   color: var(--rn-ink);
 }
 
 @media (max-width: 900px) {
-  .asmt-h {
+  .asmt .asmt-h {
     font-size: 34px;
   }
   .asmt-lede {
@@ -237,7 +237,7 @@
     background: color-mix(in srgb, var(--rn-night) 16%, transparent);
   }
   .asmt-group--2 .asmt-pill-label {
-    background: color-mix(in srgb, var(--rn-night) 38%, transparent);
+    background: color-mix(in srgb, var(--rn-night) 28%, transparent);
   }
   .asmt-group--3 .asmt-pill-label {
     background: var(--rn-white);
