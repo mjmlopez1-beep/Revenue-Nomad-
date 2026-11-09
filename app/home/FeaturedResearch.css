@@ -88,6 +88,11 @@
   color: var(--rn-white);
   opacity: 0.72;
 }
+.research .research-cover img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .research .research-preview {
   color: var(--rn-white);
   text-decoration: underline;

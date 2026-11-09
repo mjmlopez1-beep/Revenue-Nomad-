@@ -1,12 +1,12 @@
+import Image from "next/image";
 import Link from "next/link";
 import { guide } from "../guide/content/guide";
-import GuideCover from "../guide/GuideCover";
 import { requestReport } from "./actions";
 import Arrow from "./Arrow";
 import { hrefs } from "./content/links";
 import "./FeaturedResearch.css";
 
-/** Dark band: the guide cover, its title, one email field and the "Read it" button (design 4.1 row 15, 4.6). */
+/** Dark band: the book render from the canvas, the guide's title, one email field and the "Read it" button (design 4.1 row 15, 4.6). The render still shows the report's October title and figures; it is re-shot once the guide's cover art is final. */
 export default function FeaturedResearch() {
   return (
     <section id="research" className="research" aria-labelledby="research-h">
@@ -46,7 +46,13 @@ export default function FeaturedResearch() {
           </p>
         </div>
         <div className="research-cover">
-          <GuideCover />
+          <Image
+            src="/home/buyers-guide-book.webp"
+            alt="The guide as a printed book, standing beside an open copy showing the rates chapter"
+            width={1200}
+            height={734}
+            sizes="(max-width: 900px) calc(100vw - 40px), 540px"
+          />
         </div>
       </div>
     </section>

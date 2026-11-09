@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import Arrow from "../home/Arrow";
@@ -49,6 +50,15 @@ export default async function GuideLanding() {
               </p>
             </div>
             <aside className="gd-cover-side" aria-label="Sources">
+              <Image
+                className="gd-cover-book"
+                src="/home/buyers-guide-book.webp"
+                alt="The guide as a printed book, standing beside an open copy showing the rates chapter"
+                width={1200}
+                height={734}
+                sizes="(max-width: 900px) calc(100vw - 40px), 460px"
+                priority
+              />
               <StatRow
                 items={[
                   { v: f.rates.median, l: "Median hourly rate", s: `Rate Index, n=${f.rates.n}` },

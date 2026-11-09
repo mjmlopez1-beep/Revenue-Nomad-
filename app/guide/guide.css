@@ -55,6 +55,12 @@
   font-size: var(--rn-text-small);
   color: var(--rn-mute);
 }
+.gd-cover-book {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 18px;
+}
 .gd-cover-side {
   padding: 24px 26px;
   border: 1px solid var(--rn-line);
