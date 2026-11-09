@@ -62,3 +62,9 @@ milestone diamonds, and one gold callout on the Full-time page. No new colors we
 and passed on all four pages, a role page and the homepage against the production build: zero axe violations,
 no horizontal scroll, weight inside the budget, fee language clean. Homepage links that are not menus also stop
 prefetching the Diagnostic on load, which kept the homepage under its weight budget.
+
+## Revision 2026-11-09: fewer cubes
+
+Owner's gallery comment on the Diagnostic: "The cubes down here are overdoing it." The 21 blocks under the method diagram
+were each drawn as a small isometric cube, right below eight cube drawings. The block list now uses a plain leaf square
+per block with hairlines between rows (`BlocksGrid.tsx`); the method diagram keeps the cubes.
