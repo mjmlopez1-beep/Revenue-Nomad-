@@ -43,7 +43,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: var(--rn-radius-sm);
   border: 1px solid var(--rn-line);
   background: var(--rn-white);
 }
@@ -132,7 +132,7 @@
 .out-quote {
   margin: 0 0 2px;
   padding: 14px 16px;
-  border-radius: 6px;
+  border-radius: var(--rn-radius-sm);
   background: var(--rn-mist);
 }
 .out-quote blockquote {

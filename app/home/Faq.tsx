@@ -1,3 +1,4 @@
+import { facts } from "./content/numbers";
 import Link from "next/link";
 import { hrefs } from "./content/links";
 import { FigureLabel, FigureValue } from "./Figure";
@@ -27,7 +28,7 @@ export default function Faq() {
               <Plus />
             </summary>
             <p className="faq-a">
-              A senior sales, marketing or RevOps executive who runs the function 1 to 3 days a week - on your leadership
+              A senior sales, marketing or RevOps executive who runs the function {facts.daysPerWeek} - on your leadership
               team, accountable for a number, at a fraction of a full-time cost.
             </p>
           </details>
@@ -47,7 +48,7 @@ export default function Faq() {
               <Plus />
             </summary>
             <p className="faq-a">
-              We speak within 24 hours and you meet matched leaders within days - not the two quarters a full-time search
+              We speak within {facts.responseHours} and you meet matched leaders within days - not the two quarters a full-time search
               takes, and with no six-month onboarding after.
             </p>
           </details>

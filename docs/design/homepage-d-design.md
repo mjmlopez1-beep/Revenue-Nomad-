@@ -43,8 +43,9 @@ Recorded in `docs/design/homepage-d-decisions.md` as assumptions for the founder
 ## 2. Goals
 
 1. A visitor who searched a role name sees, above the fold, that this firm places that role for companies like
-   theirs, and has two ways to start: Talk to us, or open the two-minute check page (which, until the check is
-   built, explains what it will be and offers the call).
+   theirs, and has two ways to start: Talk to us, or "Take the 2-minute check", which scrolls to the health-check
+   band (as on the artboard); the band's button opens the check page, which until the check is built explains
+   what it will be and offers the call.
 2. Every section of Homepage D ships in the Next.js app, on one token set, at 1440 and 390 wide, with no
    horizontal scroll and no console errors.
 3. Every link on the page resolves to a real route. Missing destinations render a shared, non-indexed stub that
@@ -82,7 +83,7 @@ Each is a server component unless marked client. Section file names are the name
 | 7 | Solutions | "Our solutions", four outcome cards (sales leadership, pipeline, RevOps, AI), each one link, plus a "Browse operator profiles" pill | Card images are decorative; omitted until assets exist |
 | 8 | WaysToWork | Forest band: four engagement models (diagnostic, monthly fractional, interim cover, fractional to full time) with term, "Best when" and "How it works" link. No prices | |
 | 9 | HowItWorks | Three steps with gold numbers, "No fees for companies", Talk to us | |
-| 10 | HealthCheckBand | Mist band, static: the pitch, a card showing "Question 1 of 7" with its four answers as a plain list, one primary button "Start the check" to the check page; beside it "What it costs" with one example row (role, days a week, monthly range, source) and the "Open the Rate Index" link | No form, no selects: the artboard's controls are drawn, not functional, and nothing would consume the answers (zoom-out finding 2) |
+| 10 | HealthCheckBand | Mist band, static: the pitch, a card showing "Question 1 of 7" with its four answers as a plain list, one primary button "Start the check" to the check page; beside it "What it costs" with one example row (role, hours a month, monthly range, source) and the "Open the Rate Index" link | No form, no selects: the artboard's controls are drawn, not functional, and nothing would consume the answers (zoom-out finding 2) |
 | 11 | InTheirWords (client) | Three verified reviews; one visible at a time, advancing every 9 seconds; previous, next and pause buttons; `aria-live="polite"`; all three stacked statically under reduced motion | Reviewer avatars are initials (A5) |
 | 12 | Assessment | Gold band: "Building the GTM foundation", the cube solid in three layers (inline SVG copied from the artboard), the seven pillars beneath, one link | Terms in 4.8 |
 | 13 | Outcomes | "What changed": three case-study cards (metric, before, after, quote, source, link) and "Read all seven case studies" | |
@@ -138,8 +139,8 @@ Each is a server component unless marked client. Section file names are the name
   Metadata sets `robots: { index: false, follow: true }`. The page renders the header, the destination's title
   from the map, one line ("This page is being built. Talk to us in the meantime."), a Talk to us button and the
   footer. It never reads or renders query parameters.
-- `/thanks` is one of those stubs, with two variants chosen by a validated `for` parameter (`report` or
-  `newsletter`); any other value renders the generic text.
+- `/thanks` is its own route (`app/thanks/page.tsx`) because it reads one query parameter, which the static
+  catch-all never does: `for` is matched against `report` or `newsletter`; any other value renders the generic text.
 
 ### 4.6 Forms
 
@@ -154,7 +155,7 @@ Each is a server component unless marked client. Section file names are the name
 ### 4.7 Metadata
 
 `app/page.tsx` exports metadata: title "Fractional revenue leadership for $1M to $200M companies | Revenue Nomad",
-description from the footer's entity paragraph (first sentence), canonical `https://revenuenomad.com/`. The root
+description from the footer's entity paragraph (first two sentences), canonical `https://revenuenomad.com/`. The root
 layout keeps the site name. The Open Graph image is deferred (non-goal) and listed in the handoff.
 
 ### 4.8 Terms
@@ -199,7 +200,7 @@ layout keeps the site name. The Open Graph image is deferred (non-goal) and list
 | Stub pages become a soft-404 farm for the role-name searches the page exists for | Stubs are static, `noindex`, limited to the routes map, and never echo input |
 | Email addresses leak through URLs or logs | Forms post to server actions; addresses are validated and discarded; nothing is put in a query string |
 | Three design systems keep drifting | `tokens.css` is the only color source for `app/home/**`, `app/page.tsx`, the stub and `Brand.tsx`; `check:tokens` fails on any raw color or font-family there. The portal keeps its own variables in `globals.css`, by design |
-| Fee language drifts onto client-facing pages | `check:home` scans rendered text for fee, margin, take rate, split, all-in, take-home and "you pay only when", allowing only the "No fees for companies" phrasings |
+| Fee language drifts onto client-facing pages | `check:home` scans rendered text for fee, margin, take rate, split, all-in, take-home and "you pay only when", allowing only phrasings that state companies pay no fee ("No fees for companies", "no fee on top", "no login, no fee") and rejecting any number after them |
 | Moving content without a stop control fails WCAG 2.2.2 | Marquee and rotator each have a pause button and stop under reduced motion; `check:home` asserts no infinite animation runs with reduced motion on |
 | The health-check button promises a product that does not exist | The band is static and honest about "Start the check" leading to a page that says the check is being built; the hero button stays because the canvas note puts it there; handoff flags it |
 
@@ -215,7 +216,7 @@ is unchanged and out of scope.
 Tickets in `docs/tickets/homepage-d/` map to these phases. Each ticket ends with `npx tsc --noEmit`,
 `npm run check:tokens` and `npm run check:home` passing. File boundary for the whole plan: `app/layout.tsx`,
 `app/page.tsx`, `app/globals.css` (remove the dead landing rules only), `app/tokens.css`, `app/Brand.tsx`,
-`app/home/**`, `app/[...slug]/page.tsx`, `public/home/**`, `scripts/check-home.mjs`, `scripts/check-tokens.mjs`,
+`app/home/**`, `app/[...slug]/page.tsx`, `app/thanks/page.tsx`, `public/home/**`, `scripts/check-home.mjs`, `scripts/check-tokens.mjs`,
 `package.json` (scripts and the `axe-core` devDependency), `CONSTRAINTS.md`, `CLAUDE.md`, `docs/**`.
 
 1. Shell: fonts, tokens import, `Brand` retokenised, `links.ts`, `numbers.ts`, `logos.ts`, SiteHeader,
@@ -243,7 +244,9 @@ clear message if Playwright is missing; `axe-core` is a devDependency so the acc
   the allowed phrasings; zero critical or serious axe violations; total transfer under 1.5 MB and images under
   400 KB when run against a production build (`--url`).
 - Every internal `href` on `/` returns 200; `/no-such-page` returns 404.
-- With `--site-env production`, no element carries `data-unverified`; without it, FirmNumbers renders badges.
+- Unverified figures always carry `data-unverified`. With `--site-env production` the check fails if any renders;
+  without it, the number of badges must equal the number of flagged figures. The production check therefore
+  fails until every first-party figure is confirmed, which is the intended launch gate.
 - Under `prefers-reduced-motion: reduce`, no infinite animation is running.
 - The validation strip is absent from the DOM while its data has no real entries.
 

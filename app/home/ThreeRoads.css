@@ -47,7 +47,7 @@
   display: block;
   width: 18px;
   height: 3px;
-  border-radius: 2px;
+  border-radius: var(--rn-radius-xs);
   background: var(--rn-gold);
 }
 .roads-title {

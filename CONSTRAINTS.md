@@ -19,15 +19,15 @@ These are the rules the homepage mockups kept breaking across three visual syste
 
 | Rule | Reason | Checked by |
 |------|--------|-----------|
-| No raw color in `app/home/**` or `app/page.tsx`: every color is `var(--rn-*)` from `app/tokens.css` | The Homepage D artboard used 55 hex values for an 8-color palette | `check:tokens` |
+| No raw color or radius in `app/home/**`, `app/page.tsx`, the stub and thanks routes or `app/Brand.tsx`: every color is `var(--rn-*)`, every radius `var(--rn-radius-*)` (0 and 50% allowed) | The Homepage D artboard used 55 hex values for an 8-color palette | `check:tokens` |
 | Two type families only: Red Hat Display (UI, body) and DM Serif Display (headlines), loaded via `next/font` | Fonts are chosen, never defaulted (prototype DESIGN.md rule 2) | `check:tokens` (no `font-family:` outside tokens) |
 | Works at 390px wide with no horizontal scroll | Phone artboard is 390 wide; horizontal scroll is the first thing a buyer notices | `check:home` |
 | One primary button per section | Prototype DESIGN.md: one primary action per screen | review |
 | Text contrast 4.5:1 (3:1 at 24px and above) | WCAG AA; the mockup's grey labels on mist were close | axe in `check:home` |
 | Every image has alt text; decorative images use `alt=""` | Accessibility and the canvas's "live text, never an image" footer rule | `check:home` |
 | Every moving element stops under `prefers-reduced-motion: reduce` | Canvas spec for the marquee and review rotator | `check:home` (emulates the media query, asserts no running animations) |
-| Client-facing pages never say fee, margin, take rate, split, all-in, take-home, or "you pay only when" | Founder decision D1: companies pay no fees, the rate is the price | `check:home` text scan |
-| Every number shown names a source or carries `verified: false` and a visible dev badge | Canvas note: "confirm every firm number before launch" | `check:home` (fails in production build if any unverified number renders without `data-unverified`) |
+| Client-facing pages never say fee, margin, take rate, split, all-in, take-home, or "you pay only when", except phrasings that state companies pay no fee | Founder decision D1: companies pay no fees, the rate is the price | `check:home` text scan |
+| Every number shown names a source or carries `verified: false`, a `data-unverified` attribute and, outside production, a visible badge | Canvas note: "confirm every firm number before launch" | `check:home` (outside production: badges must equal flagged figures; with `--site-env production`: fails if any flagged figure renders) |
 | No link with `href="#"` or empty href | Every link resolves; the stub route exists for missing pages | `check:home` |
 | Heading levels do not skip | Screen-reader outline | `check:home` |
 

@@ -13,9 +13,25 @@ export type Figure = {
 
 export const showUnverified = process.env.NEXT_PUBLIC_SITE_ENV !== "production";
 
+/** Plain constants quoted inside prose. Keep them here so a sentence and a stat block never disagree. */
+export const facts = {
+  companySizeRange: "$1M and $200M",
+  responseHours: "24 hours",
+  buildingBlocks: "21",
+  rateIndexCount: "137",
+  firstTerm: "3 to 6 months",
+  noticePeriod: "30 days",
+  operatorsCount: "350+",
+  reportOperators: "172",
+  reportContracts: "38",
+  reportBuyerRequests: "77",
+  daysPerWeek: "1 to 3 days a week",
+  updated: "October 2026",
+} as const;
+
 export const numbers = {
   // Hero band
-  operatorsInNetwork: { value: "350+", label: "operators in the network", verified: false },
+  operatorsInNetwork: { value: facts.operatorsCount, label: "operators in the network", verified: false },
   wouldHireAgain: {
     value: "100%",
     label: "of companies who reviewed their operator would hire them again",
@@ -23,8 +39,8 @@ export const numbers = {
     verified: false,
   },
   researchSample: {
-    value: "172",
-    label: "operators surveyed and 38 signed contracts behind our 2027 research",
+    value: facts.reportOperators,
+    label: `operators surveyed and ${facts.reportContracts} signed contracts behind our 2027 research`,
     source: "The State of Fractional GTM 2027 (published 2026)",
     verified: false,
   },
@@ -88,7 +104,7 @@ export const numbers = {
   // Footer "At a glance"
   glanceVpSales: { value: "$4k - $10k/month", label: "Fractional VP of Sales", source: "From our 2026 data, 20 to 40 hours a month", verified: false },
   glanceMedianRate: { value: "$225/hour", label: "Market median rate", source: "Revenue Nomad Rate Index, 137 rates as companies pay them", verified: false },
-  glanceEngagement: { value: "1 to 3 days a week", label: "Typical engagement", source: "First term of 3 to 6 months, then 30 days notice", verified: false },
+  glanceEngagement: { value: facts.daysPerWeek, label: "Typical engagement", source: "First term of 3 to 6 months, then 30 days notice", verified: false },
   glanceResults60: { value: "82%", label: "Results inside 60 days", source: "Operators reporting a first measurable result, operator survey, n=65", verified: false },
   glanceResponse: { value: "Within 24 hours", label: "Response time", source: "Service commitment; intro calls with matched leaders follow within days", verified: false },
   glanceFees: { value: "None", label: "Fees for companies", source: "You pay the operator's rate.", verified: true },
@@ -96,17 +112,3 @@ export const numbers = {
 
 export type NumberKey = keyof typeof numbers;
 
-/** Plain constants quoted inside prose. Keep them here so a sentence and a stat block never disagree. */
-export const facts = {
-  companySizeRange: "$1M and $200M",
-  responseHours: "24 hours",
-  buildingBlocks: "21",
-  rateIndexCount: "137",
-  firstTerm: "3 to 6 months",
-  noticePeriod: "30 days",
-  operatorsCount: "350+",
-  reportOperators: "172",
-  reportContracts: "38",
-  reportBuyerRequests: "77",
-  updated: "October 2026",
-} as const;

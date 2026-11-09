@@ -2,7 +2,7 @@ import Link from "next/link";
 import Brand from "../Brand";
 import { facts } from "./content/numbers";
 import { footerColumns, hrefs } from "./content/links";
-import { FigureLabel, FigureSource, FigureValue } from "./Figure";
+import { FigureLabel, FigureSource, FigureValue, FlagIf } from "./Figure";
 
 const glance = ["glanceVpSales", "glanceMedianRate", "glanceEngagement", "glanceResults60", "glanceResponse", "glanceFees"] as const;
 
@@ -66,10 +66,14 @@ export default function SiteFooter() {
             <Link href="/sitemap">Sitemap</Link>
           </p>
           <p className="ftr-cite">
-            Hourly rates on this site come from the Revenue Nomad Rate Index - {facts.rateIndexCount} rates as companies pay
-            them. Engagement data comes from The State of Fractional GTM 2027 by Revenue Nomad - {facts.reportOperators}{" "}
-            fractional GTM operators, {facts.reportContracts} signed engagement contracts and {facts.reportBuyerRequests} buyer
-            requests. Cite as Revenue Nomad, The State of Fractional GTM 2027. Updated {facts.updated}.
+            Hourly rates on this site come from the Revenue Nomad Rate Index -{" "}
+            <FlagIf id="glanceMedianRate">{facts.rateIndexCount} rates as companies pay them</FlagIf>. Engagement data comes
+            from The State of Fractional GTM 2027 by Revenue Nomad -{" "}
+            <FlagIf id="researchSample">
+              {facts.reportOperators} fractional GTM operators, {facts.reportContracts} signed engagement contracts and{" "}
+              {facts.reportBuyerRequests} buyer requests
+            </FlagIf>
+            . Cite as Revenue Nomad, The State of Fractional GTM 2027. Updated {facts.updated}.
           </p>
         </div>
       </div>

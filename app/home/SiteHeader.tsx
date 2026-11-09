@@ -39,7 +39,10 @@ export default function SiteHeader() {
       }
     };
     const onClick = (e: MouseEvent) => {
-      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpen(null);
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setOpen(null);
+        lastButton.current?.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);

@@ -6,7 +6,8 @@ import "./InTheirWords.css";
 
 /**
  * In their words (design 4.1 row 11). Three verified reviews, one visible at a time, advancing every
- * 9 seconds. Previous, next and pause/play buttons; the quote region is aria-live="polite". Under
+ * 9 seconds. Previous, next and pause/play buttons; the quote region is aria-live="polite" only while
+ * paused or held (WAI-ARIA carousel pattern: live off during auto-rotation). Under
  * prefers-reduced-motion all three render stacked with no timer and no controls. Reviewers are
  * initials avatars (A5); no photos or company logos ship.
  */
@@ -181,7 +182,7 @@ export default function InTheirWords() {
             ))}
           </div>
         ) : (
-          <div className="itw-stage" aria-live="polite" aria-atomic="true">
+          <div className="itw-stage" aria-live={paused || resting ? "polite" : "off"} aria-atomic="true">
             <ReviewCard key={REVIEWS[index].name} review={REVIEWS[index]} position={index + 1} />
           </div>
         )}

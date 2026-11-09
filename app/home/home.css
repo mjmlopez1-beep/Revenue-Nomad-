@@ -339,7 +339,7 @@ button:focus-visible {
 .hdr-burger span {
   display: block;
   height: 2px;
-  border-radius: 1px;
+  border-radius: var(--rn-radius-xs);
   background: var(--rn-ink);
 }
 .hdr-drawer-backdrop {

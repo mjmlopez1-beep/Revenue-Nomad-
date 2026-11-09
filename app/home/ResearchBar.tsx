@@ -1,3 +1,4 @@
+import { FlagIf } from "./Figure";
 import Link from "next/link";
 import Arrow from "./Arrow";
 import { hrefs, routes } from "./content/links";
@@ -18,8 +19,8 @@ export default function ResearchBar() {
             {routes[hrefs.report]}
             <span className="rbar-detail">
               {" "}
-              - {facts.reportOperators} operators, {facts.reportContracts} signed contracts, {facts.reportBuyerRequests} buyer
-              requests
+              - <FlagIf id="researchSample">{facts.reportOperators} operators, {facts.reportContracts} signed contracts, {facts.reportBuyerRequests} buyer
+              requests</FlagIf>
             </span>
           </span>
         </p>

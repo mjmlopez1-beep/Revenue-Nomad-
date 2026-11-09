@@ -10,8 +10,26 @@ export function FigureValue({ id, className }: { id: NumberKey; className?: stri
   const f = figure(id);
   const flag = !f.verified;
   return (
-    <span className={className} data-unverified={flag && showUnverified ? "" : undefined}>
+    <span className={className} data-unverified={flag ? "" : undefined}>
       {f.value}
+      {flag && showUnverified && (
+        <sup className="rn-badge" title="Not yet confirmed by the founder. See numbers.ts.">
+          confirm
+        </sup>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Wraps prose that quotes an unverified figure, so it carries the same attribute and badge as a stat block.
+ * The attribute is always present when the figure is unverified; the badge only outside production.
+ */
+export function FlagIf({ id, children }: { id: NumberKey; children: React.ReactNode }) {
+  const flag = !figure(id).verified;
+  return (
+    <span data-unverified={flag ? "" : undefined}>
+      {children}
       {flag && showUnverified && (
         <sup className="rn-badge" title="Not yet confirmed by the founder. See numbers.ts.">
           confirm

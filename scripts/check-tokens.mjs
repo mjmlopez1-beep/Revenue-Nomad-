@@ -19,6 +19,8 @@ const hex = /#[0-9a-fA-F]{3,8}\b/g;
 const rgb = /\brgba?\(/g;
 // A font-family that names a token is fine; a literal family name is not.
 const font = /font-family\s*:(?!\s*var\(--rn-font-)/g;
+// A radius must be a token (or 0 / 50% for circles).
+const radius = /border-radius\s*:(?![^;]*var\(--rn-radius-)[^;]*\d+px/g;
 const problems = [];
 for (const f of files) {
   const text = readFileSync(f, "utf8");
@@ -30,7 +32,8 @@ for (const f of files) {
     if (hex.test(line)) problems.push(`${where}: raw hex color -> use var(--rn-*)`);
     if (rgb.test(line)) problems.push(`${where}: raw rgb() color -> add a token`);
     if (font.test(line)) problems.push(`${where}: font-family outside app/tokens.css`);
-    hex.lastIndex = rgb.lastIndex = font.lastIndex = 0;
+    if (radius.test(line)) problems.push(`${where}: literal border-radius -> use var(--rn-radius-*)`);
+    hex.lastIndex = rgb.lastIndex = font.lastIndex = radius.lastIndex = 0;
   });
 }
 if (problems.length) {

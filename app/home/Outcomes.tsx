@@ -2,7 +2,7 @@ import Link from "next/link";
 import Arrow from "./Arrow";
 import { hrefs } from "./content/links";
 import type { NumberKey } from "./content/numbers";
-import { FigureLabel, FigureSource, FigureValue } from "./Figure";
+import { FigureLabel, FigureSource, FigureValue, FlagIf } from "./Figure";
 import "./Outcomes.css";
 
 type Study = {
@@ -117,7 +117,9 @@ export default function Outcomes() {
           ))}
         </ul>
 
-        <p className="out-close">Every company that reviewed its operator said it would hire them again.</p>
+        <p className="out-close">
+          <FlagIf id="wouldHireAgain">Every company that reviewed its operator said it would hire them again.</FlagIf>
+        </p>
       </div>
     </section>
   );

@@ -53,17 +53,20 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
 
 - `npx tsc --noEmit`: clean. `npm run check:tokens`: ok (56 files).
 - `npm run check:home` (dev server, 1440 and 390): 0 console errors, 0 axe violations of any impact, no horizontal
-  scroll, one h1, no heading skips, every internal link 200, unknown path 404, no fee language, 16 unverified
-  figures rendered with badges.
+  scroll, one h1, no heading skips, every internal link 200, unknown path 404, no fee language, 20 unverified
+  figures rendered, each with its badge.
 - `npm run build`: `/` static, 116 KB first-load JS, 35 static pages (28 stubs).
-- `node scripts/check-home.mjs --url` against `next start`: 1,265 KB desktop / 1,238 KB phone total transfer,
+- `node scripts/check-home.mjs --url` against `next start`: 1,278 KB desktop / 1,251 KB phone total transfer,
   47 KB / 20 KB images, passes the 1.5 MB and 400 KB budgets.
-- Production flag: a build with `NEXT_PUBLIC_SITE_ENV=production` renders 0 badges and passes
-  `check-home --site-env production`.
+- Production gate: a build with `NEXT_PUBLIC_SITE_ENV=production` renders 0 badges, and
+  `check-home --site-env production` fails with "20 unverified figure(s)" until they are confirmed in `numbers.ts`.
+  That failure is the launch gate working; do not weaken it.
 - Lighthouse 12.6.1 mobile against the production build: performance 94, accessibility 100, best practices 100,
   SEO 100, CLS 0, TBT 150 ms, LCP 2.9 s (target 2.5 s). The LCP element is the hero h1; 84% of its time is
   render delay from render-blocking CSS and the display font. Follow-up: inline the above-the-fold CSS or
   split the section stylesheets so the hero's CSS loads first, and re-measure on the Vercel preview.
 - Doubt review of every figure: `docs/design/homepage-d-claims.md` (three third-party figures confirmed against
   primary sources; every first-party figure still flagged).
-- Two-axis code review (standards, spec): see the PR body for findings and dispositions.
+- Two-axis code review (standards, spec): `docs/design/homepage-d-code-review.md`. Follow-ups it left: hoist the
+  duplicated section CSS (`.rn-h2--lg`, card shell, email form) into `home.css`; add an inline error message for an
+  invalid email once the forms are wired; the LCP follow-up above.

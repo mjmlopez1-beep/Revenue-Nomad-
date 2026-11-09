@@ -9,7 +9,13 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const axeSource = readFileSync(require.resolve("axe-core/axe.min.js"), "utf8");
 // Playwright is preinstalled machine-wide (resolvable through NODE_PATH), so load it via require.
-const { chromium } = require("playwright");
+let chromium;
+try {
+  ({ chromium } = require("playwright"));
+} catch (e) {
+  console.error("check:home needs Playwright. Install it (npm i -D playwright && npx playwright install chromium) or run where it is preinstalled.\n" + e.message);
+  process.exit(2);
+}
 
 const args = Object.fromEntries(
   process.argv.slice(2).map((a, i, arr) => (a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : [])).filter((x) => x.length)
@@ -41,14 +47,18 @@ async function startServer() {
     env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", NEXT_PUBLIC_SITE_ENV: SITE_ENV },
   });
   const deadline = Date.now() + 90_000;
+  let lastError = "no response yet";
   while (Date.now() < deadline) {
     try {
       const r = await fetch(baseUrl + PATH);
       if (r.ok) return;
-    } catch {}
+      lastError = `HTTP ${r.status}`;
+    } catch (e) {
+      lastError = e.message; // server still starting; keep polling
+    }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error("next dev did not become ready in 90s");
+  throw new Error(`next dev did not become ready in 90s (last: ${lastError})`);
 }
 
 const failures = [];
@@ -60,14 +70,16 @@ async function checkViewport(browser, vp) {
   const consoleIssues = [];
   page.on("console", (m) => { if (["error", "warning"].includes(m.type())) consoleIssues.push(`${m.type()}: ${m.text()}`); });
   page.on("pageerror", (e) => consoleIssues.push(`pageerror: ${e.message}`));
-  let totalBytes = 0, imageBytes = 0;
+  let totalBytes = 0, imageBytes = 0, unmeasured = 0;
   page.on("response", async (res) => {
-    try {
-      const type = res.headers()["content-type"] ?? "";
-      const len = Number(res.headers()["content-length"]) || (await res.body().catch(() => Buffer.alloc(0))).length;
-      totalBytes += len;
-      if (type.startsWith("image/") || type.startsWith("font/") === false && /\.(png|jpe?g|webp|avif|gif|svg)(\?|$)/.test(res.url())) imageBytes += len;
-    } catch {}
+    const type = res.headers()["content-type"] ?? "";
+    let len = Number(res.headers()["content-length"]);
+    if (!len) {
+      // Redirects and aborted responses have no readable body; count them as unmeasured rather than crash.
+      len = await res.body().then((b) => b.length).catch(() => { unmeasured += 1; return 0; });
+    }
+    totalBytes += len;
+    if (type.startsWith("image/") || /\.(png|jpe?g|webp|avif|gif|svg)(\?|$)/.test(res.url())) imageBytes += len;
   });
 
   await page.goto(baseUrl + PATH, { waitUntil: "networkidle" });
@@ -75,7 +87,7 @@ async function checkViewport(browser, vp) {
   await page.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 40)); } window.scrollTo(0, 0); });
   await page.waitForLoadState("networkidle");
 
-  const devNoise = /Download the React DevTools|Fast Refresh|\[HMR\]|webpack-hmr|hydrated|Image with src .* has either width or height modified/i;
+  const devNoise = /Download the React DevTools|Fast Refresh|\[HMR\]|webpack-hmr|hydrated/i;
   consoleIssues.filter((c) => !devNoise.test(c)).forEach((c) => fail(vp.name, `console ${c}`));
 
   const dom = await page.evaluate(() => {
@@ -89,6 +101,7 @@ async function checkViewport(browser, vp) {
     out.badLinks = [...document.querySelectorAll("a")].filter((a) => { const h = a.getAttribute("href"); return !h || h === "#"; }).map((a) => a.textContent.trim().slice(0, 40));
     out.text = document.body.innerText;
     out.unverified = document.querySelectorAll("[data-unverified]").length;
+    out.badges = document.querySelectorAll(".rn-badge").length;
     out.placeholderStrip = document.querySelectorAll('[data-section="validation"][data-placeholder]').length;
     out.hrefs = [...new Set([...document.querySelectorAll("a[href]")].map((a) => a.getAttribute("href")).filter((h) => h && h.startsWith("/") && !h.startsWith("//")).map((h) => h.split("#")[0]).filter(Boolean))];
     return out;
@@ -101,8 +114,14 @@ async function checkViewport(browser, vp) {
   for (const line of dom.text.split("\n")) {
     if (FEE_WORDS.test(line) && !FEE_ALLOWED.test(line)) fail(vp.name, `fee language on a client-facing page: "${line.trim().slice(0, 90)}"`);
   }
-  if (PRODUCTION && dom.unverified) fail(vp.name, `${dom.unverified} unverified number(s) rendered in production`);
-  if (!PRODUCTION && vp.name === "desktop" && dom.unverified === 0) console.log("note: no unverified figures rendered (expected once all numbers are confirmed)");
+  // Unverified figures always carry data-unverified. Outside production each one must show its badge;
+  // in production none may render at all (CONSTRAINTS.md "Design").
+  if (PRODUCTION) {
+    if (dom.unverified) fail(vp.name, `${dom.unverified} unverified figure(s) rendered in production: confirm them in numbers.ts first`);
+    if (dom.badges) fail(vp.name, `${dom.badges} confirm badge(s) rendered in production`);
+  } else if (dom.badges !== dom.unverified) {
+    fail(vp.name, `${dom.unverified} unverified figure(s) but ${dom.badges} badge(s): every flagged figure must show its badge outside production`);
+  }
   if (dom.placeholderStrip) fail(vp.name, "validation strip rendered with placeholder-only data");
   if (vp.name === "desktop") {
     for (const h of dom.hrefs) {
@@ -135,7 +154,7 @@ async function checkViewport(browser, vp) {
   if (running) fail(vp.name, `${running} infinite animation(s) still running under prefers-reduced-motion`);
   await rm.close();
 
-  console.log(`${vp.name}: ${(totalBytes / 1024).toFixed(0)} KB total, ${(imageBytes / 1024).toFixed(0)} KB images, ${axe.violations.length} axe violation(s) of any impact, ${dom.unverified} unverified number(s)`);
+  console.log(`${vp.name}: ${(totalBytes / 1024).toFixed(0)} KB total, ${(imageBytes / 1024).toFixed(0)} KB images${unmeasured ? ` (${unmeasured} unmeasured)` : ""}, ${axe.violations.length} axe violation(s) of any impact, ${dom.unverified} unverified figure(s)`);
   await context.close();
 }
 

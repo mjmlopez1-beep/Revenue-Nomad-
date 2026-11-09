@@ -165,7 +165,7 @@
   background: var(--rn-white);
 }
 .asmt-group--3 .asmt-pill:last-child .asmt-bar {
-  border-radius: 0 15px 15px 0;
+  border-radius: 0 var(--rn-radius-pill) var(--rn-radius-pill) 0;
 }
 .asmt-pill-label {
   text-align: center;

@@ -32,9 +32,11 @@ builds with frontend-ui-engineering and incremental-implementation, doubt-driven
   heading skip, serious contrast violations and 8 MB dev transfer.
 - **After:** `npm run check` green (tsc, token guard, smoke check at 1440 and 390: 0 console errors, 0 axe
   violations, no horizontal scroll, every link resolves, unknown path 404, no fee language).
-  Production build: `/` static, 116 KB first-load JS, 1.27 MB total transfer, 47 KB images.
+  Production build: `/` static, 116 KB first-load JS, 1.28 MB total transfer, 47 KB images.
   Lighthouse mobile: performance 94, accessibility 100, best practices 100, SEO 100, CLS 0, LCP 2.9 s.
-  Production flag (`NEXT_PUBLIC_SITE_ENV=production`) renders zero confirm badges.
+  Production gate: with `NEXT_PUBLIC_SITE_ENV=production` the badges disappear and `check:home --site-env production`
+  fails with "20 unverified figure(s)" until the founder confirms them, by design.
+  Two-axis code review and dispositions: `docs/design/homepage-d-code-review.md`.
 
 ## Merge Danger
 
