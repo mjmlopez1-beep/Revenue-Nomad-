@@ -54,8 +54,8 @@ export type EngagePage = {
 
 /** The four ways to engage, for the "Other ways we engage" block and the menus. */
 export const engagements = [
-  { slug: "diagnostic", name: "Revenue Health Diagnostic", href: "/revenue-health-diagnostic", body: "Score the 21 building blocks first, then decide who to hire." },
-  { slug: "fractional", name: "Monthly fractional leadership", href: "/how-we-engage/fractional", body: "A senior leader 1 to 3 days a week on a first term of three to six months." },
-  { slug: "interim", name: "Interim cover", href: "/how-we-engage/interim", body: "The seat is empty and the search is running. An experienced leader holds it." },
-  { slug: "full-time", name: "Fractional to full time", href: "/how-we-engage/full-time", body: "When the role becomes a full-time job, hire the person already doing it." },
+  { slug: "diagnostic", name: "Revenue Health Diagnostic", kicker: "Start here", href: "/revenue-health-diagnostic", body: "Seven pillars scored in 30 to 60 days, before you hire anyone." },
+  { slug: "fractional", name: "Monthly fractional leadership", kicker: "A leader 1 to 3 days a week", href: "/how-we-engage/fractional", body: "Senior leadership sized to the scope, on a first term of three to six months, then 30 days notice." },
+  { slug: "interim", name: "Interim cover", kicker: "Hold the seat while you search", href: "/how-we-engage/interim", body: "An interim head of sales in the seat within weeks, handed off with overlap when the hire lands." },
+  { slug: "full-time", name: "Fractional to full time", kicker: "Hire the leader already doing the job", href: "/how-we-engage/full-time", body: "Start fractional, then convert on terms written into the contract from day one." },
 ] as const;
