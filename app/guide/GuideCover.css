@@ -1,0 +1,79 @@
+/* Rendered guide cover. Prefix: gcov- */
+.gcov {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 28px;
+  aspect-ratio: 1200 / 734;
+  padding: 34px 36px;
+  border-radius: var(--rn-radius-lg);
+  background: var(--rn-night);
+  color: var(--rn-white);
+  text-decoration: none;
+  box-shadow: var(--rn-shadow-hover);
+  font-family: var(--rn-font-ui);
+  transition: transform 0.25s ease;
+}
+.gcov:hover {
+  transform: translateY(-3px);
+}
+.gcov:focus-visible {
+  outline: 3px solid var(--rn-leaf-line);
+  outline-offset: 4px;
+}
+.gcov-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rn-leaf);
+}
+.gcov-ed {
+  color: var(--rn-gold);
+}
+.gcov-title {
+  display: block;
+  font-family: var(--rn-font-display);
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.gcov-title em {
+  font-style: italic;
+  color: var(--rn-leaf);
+}
+.gcov-stop {
+  color: var(--rn-gold);
+}
+.gcov-sub {
+  display: block;
+  max-width: 34ch;
+  font-size: 15px;
+  line-height: 1.45;
+  opacity: 0.8;
+}
+.gcov-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rn-leaf-line);
+  font-size: 13px;
+  opacity: 0.9;
+}
+.gcov-stats b {
+  font-size: 18px;
+  font-weight: 700;
+  margin-right: 5px;
+  color: var(--rn-leaf);
+}
+@media (max-width: 480px) {
+  .gcov {
+    aspect-ratio: auto;
+    padding: 26px 24px;
+    gap: 20px;
+  }
+}

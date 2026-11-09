@@ -88,10 +88,13 @@
   color: var(--rn-white);
   opacity: 0.72;
 }
-.research .research-cover img {
-  display: block;
-  width: 100%;
-  height: auto;
+.research .research-preview {
+  color: var(--rn-white);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.research .research-preview:hover {
+  color: var(--rn-gold);
 }
 
 @media (max-width: 900px) {

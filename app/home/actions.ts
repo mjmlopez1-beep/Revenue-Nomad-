@@ -1,21 +1,17 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { guide } from "../guide/content/guide";
+import { EMAIL, openGuide } from "../guide/unlock";
 
 /**
- * Server actions for the two email forms (design 4.6). Each reads `email`, checks it against a
- * simple address pattern and redirects: valid input lands on /thanks with its variant, invalid
- * input returns to the form's section. The address is not stored, logged or sent anywhere;
- * wiring it to the email tool is launch work.
+ * Server action for the Featured research form (design 4.6). One work email records the reader, opens every
+ * chapter of the guide on this device and lands on the guide. Invalid input returns to the section.
  */
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function hasValidEmail(formData: FormData): boolean {
-  const value = formData.get("email");
-  return typeof value === "string" && EMAIL.test(value.trim());
-}
-
 export async function requestReport(formData: FormData): Promise<void> {
-  redirect(hasValidEmail(formData) ? "/thanks?for=report" : "/#research");
+  const value = formData.get("email");
+  const email = typeof value === "string" ? value.trim().slice(0, 160) : "";
+  if (!EMAIL.test(email)) redirect("/#research");
+  await openGuide({ email, requested: "/#research" });
+  redirect(guide.path);
 }
-

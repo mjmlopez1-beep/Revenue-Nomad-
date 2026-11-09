@@ -97,7 +97,7 @@ export const solutions: Solution[] = [
         { id: "founderContracts", label: "of our direct contracts name the founder handoff in the scope, almost word for word" },
         { id: "glanceResults60", label: "of engagements show a measurable result inside 60 days - usually a documented process the team follows" },
       ],
-      source: "The State of Fractional GTM 2027 operator survey and Revenue Nomad signed contracts. Method on the full report.",
+      source: "The Fractional GTM Buyer's Guide 2027 operator survey and Revenue Nomad signed contracts. Method in the guide.",
     },
     faqs: [
       { q: "Will the founder lose touch with deals?", a: "No. The founder moves from running every deal to a weekly pipeline review. The leader runs the cadence, coaches the reps and brings the founder in where it counts." },
@@ -215,7 +215,7 @@ export const solutions: Solution[] = [
         { value: med("Revenue Operations"), label: `RevOps rate on the Rate Index (n=${n("Revenue Operations")})` },
         { id: "glanceResults60", label: "of engagements show a measurable result inside 60 days" },
       ],
-      source: "The State of Fractional GTM 2027 - inbound requests and operator survey. Rate from the Revenue Nomad Rate Index.",
+      source: "The Fractional GTM Buyer's Guide 2027 - inbound requests and operator survey. Rate from the Revenue Nomad Rate Index.",
     },
     why: {
       statement: "An unreliable forecast is rarely a sales problem. It is a data model and a cadence nobody owns.",
@@ -268,7 +268,7 @@ export const solutions: Solution[] = [
         { id: "inboundAi", label: "detailed inbound requests named AI as a need" },
         { id: "aiDemandTrend", label: "AI GTM demand trend on a 1 to 5 scale, among AI GTM operators in our 2027 survey" },
       ],
-      source: "The State of Fractional GTM 2027 - operator survey and inbound requests. Method on the full report.",
+      source: "The Fractional GTM Buyer's Guide 2027 - operator survey and inbound requests. Method in the guide.",
     },
     why: {
       statement: "AI in go-to-market fails the same way most tools do. It gets bought before anyone maps the work it should do.",

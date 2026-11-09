@@ -54,7 +54,7 @@ export const numbers = {
   researchSample: {
     value: facts.reportOperators,
     label: `operators surveyed and ${facts.reportContracts} signed contracts behind our 2027 research`,
-    source: "The State of Fractional GTM 2027 (published 2026)",
+    source: "The Fractional GTM Buyer's Guide 2027 (published 2026)",
     verified: false,
   },
   responseTime: { value: "24 hrs", label: "to a first conversation", source: "Service commitment", verified: false },
@@ -119,7 +119,7 @@ export const numbers = {
   founderHandoffShare: {
     value: rateIndex.survey.founderHandoff.share + "%",
     label: "of engagements operators described were brought in to take sales off a founder, CEO or owner",
-    source: "The State of Fractional GTM 2027 operator survey, n=" + rateIndex.survey.founderHandoff.n + " engagements with a stated reason; keyword match on the reason",
+    source: "The Fractional GTM Buyer's Guide 2027 operator survey, n=" + rateIndex.survey.founderHandoff.n + " engagements with a stated reason; keyword match on the reason",
     verified: true,
   },
   founderContracts: { value: "3 of 11", label: "of our direct contracts name the founder handoff in the scope", source: "Revenue Nomad signed agreements, 2026", verified: false },
@@ -128,13 +128,13 @@ export const numbers = {
   aiUseShare: {
     value: rateIndex.survey.aiUse.share + "%",
     label: "of fractional GTM operators already use AI in delivery",
-    source: "The State of Fractional GTM 2027 operator survey, n=" + rateIndex.survey.aiUse.n + "; " + rateIndex.survey.aiUse.most + "% run most of their work through it",
+    source: "The Fractional GTM Buyer's Guide 2027 operator survey, n=" + rateIndex.survey.aiUse.n + "; " + rateIndex.survey.aiUse.most + "% run most of their work through it",
     verified: true,
   },
   aiDemandTrend: {
     value: (rateIndex.survey.demandByCategory.find((c) => c.category === "AI GTM")?.mean ?? "-") + " of 5",
     label: "AI GTM demand trend, among AI GTM operators",
-    source: "The State of Fractional GTM 2027 operator survey, n=" + (rateIndex.survey.demandByCategory.find((c) => c.category === "AI GTM")?.n ?? 0) + "; demand compared with 12 months ago on a 1 to 5 scale",
+    source: "The Fractional GTM Buyer's Guide 2027 operator survey, n=" + (rateIndex.survey.demandByCategory.find((c) => c.category === "AI GTM")?.n ?? 0) + "; demand compared with 12 months ago on a 1 to 5 scale",
     verified: true,
   },
   outcomeClarusPipeline: { value: "833%", label: "pipeline generation pace, year over year", source: "Engagement record, Clarus Care", verified: false },

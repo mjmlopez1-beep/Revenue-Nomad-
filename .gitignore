@@ -9,3 +9,8 @@ next-env.d.ts
 data/jobs.json
 data/jobs.json.tmp
 .DS_Store
+
+# lead stores written when no HubSpot form id is set (personal data, never committed)
+data/checks.json
+data/talk-requests.json
+data/guide-requests.json

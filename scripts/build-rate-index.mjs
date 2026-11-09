@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds data/rate-index.json (aggregates only, no names, emails or operator pay) from exports of the
 // research data source, the Google Sheet "2027 State of Fractional Report" (the system of record behind
-// The State of Fractional GTM 2027). Export each tab with the Google Sheets connector as JSON
+// The Fractional GTM Buyer's Guide 2027). Export each tab with the Google Sheets connector as JSON
 // ({range, values}) and run:
 //   node scripts/build-rate-index.mjs <survey.json> <platform.json> <engagements.json> [as-of YYYY-MM-DD]
 // Tabs: "The State of Fractional GTM 2027 Survey" (A2:BP), "Platform Signups 2026" (A2:AL), "Engagements" (A2:Y).
@@ -156,7 +156,7 @@ const activeDirect = direct.filter((r) => /active/i.test(r[20])).length;
 const out = {
   asOf,
   source: {
-    title: "2027 State of Fractional Report (Google Sheet), the research data source behind The State of Fractional GTM 2027",
+    title: "2027 State of Fractional Report (Google Sheet), the research data source behind The Fractional GTM Buyer's Guide 2027",
     tabs: ["The State of Fractional GTM 2027 Survey", "Platform Signups 2026", "Engagements"],
     note: "Hourly rates: operator survey answers plus Revenue Nomad platform listings appended to the survey tab (operators already in the survey are not double counted). Monthly spend, company-size and hours figures: engagements described in the operator survey (first and second client), monthly spend = hours a month x effective hourly rate. Contract ranges: Revenue Nomad direct agreements only, as billed to the company. Cuts under 10 are directional.",
   },

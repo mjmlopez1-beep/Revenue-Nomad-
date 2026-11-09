@@ -34,7 +34,7 @@ Read in this order: this file, your ticket, `docs/design/homepage-d-design.md` (
   a `// TODO(numbers): move to numbers.ts` comment and list it in your report.
 - Links: `href` values must be keys of `routes` in `links.ts` (use `hrefs.*` where one exists) or an in-page
   anchor like `#health-check`. Never `#` alone.
-- Images: only `public/home/glass-mark.webp` (980 by 984) and `public/home/report-cover.webp` (1200 by 734)
+- Images: only `public/home/glass-mark.webp` (980 by 984)
   exist, via `next/image` with width and height. Everything else: omit decorative images; people are `Avatar`.
 - Motion: anything that moves on its own needs a pause/play `<button>` and must stop under
   `prefers-reduced-motion: reduce`. Hover transitions also stop under reduced motion.

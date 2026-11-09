@@ -18,7 +18,7 @@ export const routes = {
   "/engage/fractional": "Monthly fractional leadership",
   "/engage/interim": "Interim cover",
   "/engage/full-time": "Fractional to full time",
-  "/research/state-of-fractional-gtm-2027": "The State of Fractional GTM 2027",
+  "/fractional-gtm-buyers-guide-2027": "The Fractional GTM Buyer's Guide 2027",
   "/research/rate-index": "The Rate Index",
   "/case-studies": "Case studies",
   "/guides": "Guides",
@@ -40,14 +40,14 @@ export const routes = {
 export type Route = keyof typeof routes;
 
 /** Paths the stub route serves: everything that is not a real page yet. */
-const realPages: Route[] = ["/", "/portal", "/thanks", "/check", "/talk", "/research/rate-index", "/problems/founder-led-sales", "/problems/pipeline", "/problems/forecast", "/problems/ai"];
+const realPages: Route[] = ["/", "/portal", "/thanks", "/check", "/talk", "/research/rate-index", "/problems/founder-led-sales", "/problems/pipeline", "/problems/forecast", "/problems/ai", "/fractional-gtm-buyers-guide-2027"];
 export const stubRoutes = (Object.keys(routes) as Route[]).filter((p) => !realPages.includes(p));
 
 export const hrefs = {
   talk: "/talk",
   check: "/check",
   rateIndex: "/research/rate-index",
-  report: "/research/state-of-fractional-gtm-2027",
+  report: "/fractional-gtm-buyers-guide-2027",
   caseStudies: "/case-studies",
   browse: "/operators/browse",
   join: "/operators/join",
@@ -91,7 +91,7 @@ export const resourcesMenu: LinkGroup[] = [
   {
     title: "Research",
     items: [
-      { label: "The State of Fractional GTM 2027", href: "/research/state-of-fractional-gtm-2027" },
+      { label: "The Fractional GTM Buyer's Guide 2027", href: "/fractional-gtm-buyers-guide-2027" },
       { label: "Fractional leader rates", href: "/research/rate-index" },
       { label: "Case studies", href: "/case-studies" },
     ],
@@ -113,7 +113,7 @@ export const footerColumns: LinkGroup[] = [
   {
     title: "Research",
     items: [
-      { label: "The State of Fractional GTM 2027", href: "/research/state-of-fractional-gtm-2027" },
+      { label: "The Fractional GTM Buyer's Guide 2027", href: "/fractional-gtm-buyers-guide-2027" },
       { label: "Fractional leader rates", href: "/research/rate-index" },
       { label: "Case studies", href: "/case-studies" },
       { label: "Guides", href: "/guides" },

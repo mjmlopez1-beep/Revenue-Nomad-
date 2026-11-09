@@ -10,6 +10,11 @@ For the next session (human or agent) picking up the marketing site. Written 202
   built, then removed from the page and remain in git history).
 - The 2-minute Revenue Health Check lives at `/check` (`app/check/`, spec `docs/specs/revenue-health-check.md`, ticket 11).
 - Talk to us lives at `/talk` (`app/talk/`, spec `docs/specs/talk-to-us.md`, ticket 12).
+- The Fractional GTM Buyer's Guide 2027 (the State of Fractional report, rebranded) lives at
+  `/fractional-gtm-buyers-guide-2027` (`app/fractional-gtm-buyers-guide-2027/`, `app/guide/`, spec `docs/specs/buyers-guide.md`,
+  ticket 15). Three chapters are open; the rest open with a name and email, recorded through `app/leads/record.ts`
+  (`HUBSPOT_GUIDE_FORM_ID`). The old report URL redirects. The guide quotes the October 2026 edition figures; the owner
+  decides whether to recompute them from the live Rate Index.
 - The four "Solve a problem" pages live at `/problems/*` (`app/problems/`, spec `docs/specs/solution-pages.md`, ticket 14), one
   template with four content modules; prices read from the Rate Index data.
 - The Rate Index lives at `/research/rate-index` (`app/research/rate-index/`, spec `docs/specs/rate-index.md`, ticket 13).
@@ -42,7 +47,7 @@ first, then the code. The ADR (`docs/adr/0001-homepage-d-rebuild.md`) moves from
    `HUBSPOT_CHECK_FORM_ID` is set, and Talk to us (`app/talk/actions.ts`) once `HUBSPOT_TALK_FORM_ID` is set; the
    setup checklists are in `docs/specs/revenue-health-check.md` and `docs/specs/talk-to-us.md`.
 5. **Pages behind the stubs.** Every path in `app/home/content/links.ts` except `/`, `/portal`, `/thanks`, `/check` and
-   `/talk`, `/research/rate-index` and `/problems/*` is a stub. Next in the site map's order: the four role pages (VP of Sales, CMO,
+   `/talk`, `/research/rate-index`, `/problems/*` and the Buyer's Guide is a stub. Next in the site map's order: the four role pages (VP of Sales, CMO,
    RevOps, AI GTM leader), the Diagnostic and the three other engagement pages, case studies, the report page.
 6. **SEO extras.** Open Graph image (1200 by 630), JSON-LD (Organization, ProfessionalService, FAQPage), sitemap page.
 7. **Validation strip.** Fill at least one real "As seen in / Rated on" entry or delete the section data.

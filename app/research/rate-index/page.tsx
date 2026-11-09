@@ -12,7 +12,7 @@ import "./RateIndex.css";
 export const metadata: Metadata = {
   title: "What fractional leaders charge: the Rate Index",
   description:
-    "Hourly rates by role category, what a month costs, how the number moves with company size and hours, and how rates are trending. Computed from the research data source behind The State of Fractional GTM 2027.",
+    "Hourly rates by role category, what a month costs, how the number moves with company size and hours, and how rates are trending. Computed from the research data source behind The Fractional GTM Buyer's Guide 2027.",
   alternates: { canonical: "https://revenuenomad.com/research/rate-index" },
 };
 
@@ -56,7 +56,7 @@ export default function RateIndexPage() {
             <p className="rn-lede rix-lede">
               The rates companies paid in our 2026 contracts, an index of {d.rates.all.n} hourly rates across eight role
               categories, and how the monthly number moves with company size and hours. Computed from the same research
-              data source as The State of Fractional GTM 2027. Updated {asOf}.
+              data source as The Fractional GTM Buyer's Guide 2027. Updated {asOf}.
             </p>
             <dl className="rix-kpis">
               <div>
@@ -170,8 +170,8 @@ export default function RateIndexPage() {
               <span>{usd(scaleMax)}/hr</span>
             </div>
             <p className="rn-small rix-note">
-              Source - the Revenue Nomad Rate Index, {d.rates.all.n} hourly rates: {d.rates.surveyN} from The State of Fractional
-              GTM 2027 operator survey and {d.rates.platformN} Revenue Nomad platform listings from operators not already in
+              Source - the Revenue Nomad Rate Index, {d.rates.all.n} hourly rates: {d.rates.surveyN} from The Fractional GTM Buyer's Guide
+              2027 operator survey and {d.rates.platformN} Revenue Nomad platform listings from operators not already in
               the survey. The 2027 report reads its rates from this index.
             </p>
           </div>
@@ -207,7 +207,7 @@ export default function RateIndexPage() {
                 })}
             </ul>
             <p className="rn-small rix-note">
-              Source - engagements described in The State of Fractional GTM 2027 operator survey; monthly spend is the median
+              Source - engagements described in The Fractional GTM Buyer's Guide 2027 operator survey; monthly spend is the median
               of hours a month times the effective hourly rate on that engagement. Categories with fewer than five engagements
               are not shown.
             </p>
@@ -266,7 +266,7 @@ export default function RateIndexPage() {
               </li>
             </ul>
             <p className="rn-small rix-note">
-              Source - The State of Fractional GTM 2027 operator survey, {d.engagements.n} engagements (first and second client);
+              Source - The Fractional GTM Buyer's Guide 2027 operator survey, {d.engagements.n} engagements (first and second client);
               monthly spend implied from hours times effective rate. We do not publish hourly rates by company size: spread
               across six bands, cuts fall under our publication floor of {floor}.
             </p>
@@ -321,7 +321,7 @@ export default function RateIndexPage() {
               </li>
             </ul>
             <p className="rn-small rix-note">
-              Source - engagements described in The State of Fractional GTM 2027 operator survey with recorded hours and an
+              Source - engagements described in The Fractional GTM Buyer's Guide 2027 operator survey with recorded hours and an
               effective rate; typical month is the median of rate times hours. Contract figures from Revenue Nomad direct
               agreements.
             </p>
@@ -360,7 +360,7 @@ export default function RateIndexPage() {
               </li>
             </ul>
             <p className="rn-small rix-note">
-              Source - The State of Fractional GTM 2027 operator survey. Rate change from operators who gave both a current and a
+              Source - The Fractional GTM Buyer's Guide 2027 operator survey. Rate change from operators who gave both a current and a
               prior-year rate. 2027 is the baseline year; every figure here is reported against it next edition.
             </p>
           </div>
@@ -404,11 +404,11 @@ export default function RateIndexPage() {
               </div>
             </dl>
             <p className="rn-small rix-note">
-              Where these numbers come from - the research data source behind The State of Fractional GTM 2027: the operator
+              Where these numbers come from - the research data source behind The Fractional GTM Buyer's Guide 2027: the operator
               survey, Revenue Nomad platform listings and Revenue Nomad&apos;s signed 2026 agreements, recomputed on {asOf}.
               Every figure on this page is a median or a range, never a single deal.{" "}
               <Link className="rix-link" href={hrefs.report}>
-                Read the report
+                Read the guide
                 <Arrow size={12} />
               </Link>
             </p>

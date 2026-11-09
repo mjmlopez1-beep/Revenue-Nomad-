@@ -68,12 +68,12 @@ export default function SiteFooter() {
           <p className="ftr-cite">
             Hourly rates on this site come from the Revenue Nomad Rate Index -{" "}
             <FlagIf id="glanceMedianRate">{facts.rateIndexCount} hourly rates from the operator survey and platform listings</FlagIf>. Engagement data comes
-            from The State of Fractional GTM 2027 by Revenue Nomad -{" "}
+            from The Fractional GTM Buyer's Guide 2027 by Revenue Nomad -{" "}
             <FlagIf id="researchSample">
               {facts.reportOperators} fractional GTM operators, {facts.reportContracts} signed engagement contracts and{" "}
               {facts.reportBuyerRequests} buyer requests
             </FlagIf>
-            . Cite as Revenue Nomad, The State of Fractional GTM 2027. Updated {facts.updated}.
+            . Cite as Revenue Nomad, The Fractional GTM Buyer's Guide 2027. Updated {facts.updated}.
           </p>
         </div>
       </div>

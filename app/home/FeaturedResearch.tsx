@@ -1,11 +1,12 @@
-import Image from "next/image";
 import Link from "next/link";
+import { guide } from "../guide/content/guide";
+import GuideCover from "../guide/GuideCover";
 import { requestReport } from "./actions";
 import Arrow from "./Arrow";
 import { hrefs } from "./content/links";
 import "./FeaturedResearch.css";
 
-/** Dark band: the report cover, its title, one email field and the "Read it" button (design 4.1 row 15, 4.6). */
+/** Dark band: the guide cover, its title, one email field and the "Read it" button (design 4.1 row 15, 4.6). */
 export default function FeaturedResearch() {
   return (
     <section id="research" className="research" aria-labelledby="research-h">
@@ -14,10 +15,10 @@ export default function FeaturedResearch() {
           <p className="rn-eyebrow research-eyebrow">Featured research</p>
           <h2 id="research-h" className="rn-h2 research-h">
             <Link href={hrefs.report} className="research-title">
-              The State of Fractional GTM 2027
+              {guide.title}
             </Link>
           </h2>
-          <p className="rn-lede research-lede">Get your copy</p>
+          <p className="rn-lede research-lede">{guide.subtitle}</p>
           <form className="research-form" action={requestReport}>
             <label htmlFor="research-email" className="rn-sr-only">
               Work email
@@ -36,16 +37,16 @@ export default function FeaturedResearch() {
               <Arrow size={13} />
             </button>
           </form>
-          <p className="rn-small research-note">One email opens the full report and sends the PDF.</p>
+          <p className="rn-small research-note">
+            One email opens every chapter on this device. Or{" "}
+            <Link href={hrefs.report} className="research-preview">
+              start with the free chapters
+            </Link>
+            .
+          </p>
         </div>
         <div className="research-cover">
-          <Image
-            src="/home/report-cover.webp"
-            alt="The State of Fractional GTM 2027 report"
-            width={1200}
-            height={734}
-            sizes="(max-width: 900px) calc(100vw - 40px), 540px"
-          />
+          <GuideCover />
         </div>
       </div>
     </section>

@@ -30,6 +30,7 @@
   /* Accents: status and emphasis only */
   --rn-gold: #f6ab40;         /* step numbers, assessment band */
   --rn-coral: #ff6a4f;        /* the single headline full stop */
+  --rn-coral-text: #b83a22;   /* coral for figures and text: 4.5:1 on white */
 
   /* Dark band gradients (one source for every dark section) */
   --rn-band-dark: linear-gradient(160deg, #0b1e16 0%, #11291e 55%, #163626 100%);

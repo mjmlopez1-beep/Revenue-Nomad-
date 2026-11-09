@@ -8,8 +8,8 @@ export const metadata: Metadata = { title: "Thank you", robots: { index: false, 
 
 const variants = {
   report: {
-    heading: "The report is on its way",
-    body: "Check your inbox for The State of Fractional GTM 2027. If it is not there in a few minutes, look in spam, then talk to us.",
+    heading: "The guide is open",
+    body: "Every chapter of The Fractional GTM Buyer's Guide 2027 is open on this device for a year. If you lose it, enter your email again on any chapter.",
   },
   newsletter: {
     heading: "You are on the list",
