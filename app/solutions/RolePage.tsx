@@ -1,14 +1,12 @@
-import Image from "next/image";
 import Link from "next/link";
 import Arrow from "../home/Arrow";
 import Avatar from "../home/Avatar";
 import ClosingBand from "../home/ClosingBand";
-import { FlagIf } from "../home/Figure";
 import SiteFooter from "../home/SiteFooter";
 import SiteHeader from "../home/SiteHeader";
-import { numbers, type NumberKey } from "../home/content/numbers";
-import { core, pick, tierFor, tiers, type Tier } from "./content/shared";
-import type { RolePage as Role, SectionKey, Stat } from "./content/types";
+import PickMethod, { SectionHead, StatValue, TierMark } from "./PickMethod";
+import { tierFor } from "./content/shared";
+import type { RolePage as Role, SectionKey } from "./content/types";
 import "../home/home.css";
 import "./Role.css";
 
@@ -62,7 +60,7 @@ function renderSection(key: SectionKey, page: Role): React.ReactNode {
     case "practice":
       return <Practice key={key} page={page} />;
     case "pick":
-      return <Pick key={key} />;
+      return <PickMethod key={key} />;
     case "leaders":
       return <Leaders key={key} page={page} />;
     case "faq":
@@ -70,19 +68,6 @@ function renderSection(key: SectionKey, page: Role): React.ReactNode {
     case "keepReading":
       return <KeepReading key={key} page={page} />;
   }
-}
-
-/* ---------- figures ---------- */
-
-/** The numbers.ts key whose value equals this stat and is not yet verified, so the stat carries the house badge. */
-function unverifiedKey(value: string): NumberKey | undefined {
-  return (Object.keys(numbers) as NumberKey[]).find((k) => numbers[k].value === value && !numbers[k].verified);
-}
-
-function StatValue({ stat, className }: { stat: Stat; className: string }) {
-  const id = unverifiedKey(stat.v);
-  const value = <span className={className}>{stat.v}</span>;
-  return id ? <FlagIf id={id}>{value}</FlagIf> : value;
 }
 
 /* ---------- small parts ---------- */
@@ -102,28 +87,6 @@ function Plus() {
     <svg className="rp-plus" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
       <path d="M7 1.5v11M1.5 7h11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
-  );
-}
-
-/** A Reputation Index badge with the score printed over the tier art. Decorative: the tier name sits beside it. */
-function TierMark({ tier, score, size = 38 }: { tier: Tier; score: number; size?: number }) {
-  return (
-    <span className={`rp-tier rp-tier--${tier.ink}`} style={{ width: size, height: size }}>
-      <Image src={`/home/tiers/${tier.slug}.png`} alt="" width={size} height={size} />
-      <b aria-hidden="true">{score}</b>
-    </span>
-  );
-}
-
-function SectionHead({ id, eyebrow, title, intro, light }: { id: string; eyebrow?: string; title: string; intro?: string; light?: boolean }) {
-  return (
-    <>
-      {eyebrow && <p className="rn-eyebrow">{eyebrow}</p>}
-      <h2 id={id} className={eyebrow ? "rn-h2 rp-h2 rp-h2--after-eyebrow" : "rn-h2 rp-h2"}>
-        {title}
-      </h2>
-      {intro && <p className={light ? "rn-lede rp-intro rp-intro--light" : "rn-lede rp-intro"}>{intro}</p>}
-    </>
   );
 }
 
@@ -433,61 +396,6 @@ function Practice({ page }: { page: Role }) {
             </Link>
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-function Pick() {
-  return (
-    <section className="rp-section rn-band--mist" aria-labelledby="rp-pick-h">
-      <div className="rn-wrap">
-        <SectionHead id="rp-pick-h" eyebrow={pick.eyebrow} title={pick.title} intro={pick.intro} />
-        <ol className="rp-cards rp-cards--3 rp-picks">
-          {pick.checks.map((c, i) => (
-            <li key={c.n} className="rp-card rp-pick">
-              <span className="rp-pick-n" aria-hidden="true">
-                {c.n}
-              </span>
-              <h3>{c.title}</h3>
-              <p className="rn-body">{c.body}</p>
-              {c.stats && (
-                <ul className="rp-pick-stats">
-                  {c.stats.map((s, j) => (
-                    <li key={s.l}>
-                      <StatValue stat={s} className={j === 0 ? "rp-stat-v" : "rp-stat-v rp-stat-v--mute"} />
-                      <span className="rp-stat-l">{s.l}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {i === 1 && (
-                <ul className="rp-core">
-                  {core.map((c) => (
-                    <li key={c.letter}>
-                      <span className="rp-core-letter" aria-hidden="true">
-                        {c.letter}
-                      </span>
-                      {c.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {i === 2 && (
-                <ul className="rp-tiers">
-                  {tiers.map((t) => (
-                    <li key={t.slug}>
-                      <TierMark tier={t} score={t.sample} />
-                      <b>{t.name}</b>
-                      <span>{t.range}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ol>
-        <p className="rn-small rp-source">{pick.source}</p>
       </div>
     </section>
   );
