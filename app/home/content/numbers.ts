@@ -25,7 +25,7 @@ export const facts = {
   noticePeriod: "30 days",
   operatorsCount: "350+",
   reportOperators: "172",
-  reportContracts: "38",
+  reportContracts: String(rateIndex.contracts.engagements),
   reportBuyerRequests: "77",
   daysPerWeek: "1 to 3 days a week",
   updated: new Date(rateIndex.asOf + "T00:00:00Z").toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }),

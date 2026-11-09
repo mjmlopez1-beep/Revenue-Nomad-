@@ -1,4 +1,5 @@
 import Link from "next/link";
+import * as f from "./content/figures";
 import { guide } from "./content/guide";
 import "./GuideCover.css";
 
@@ -16,13 +17,13 @@ export default function GuideCover() {
       <span className="gcov-sub">What companies pay for fractional sales, marketing and RevOps leadership, and how to hire one.</span>
       <span className="gcov-stats">
         <span>
-          <b>38</b> signed contracts
+          <b>{f.headline.contracts}</b> signed contracts
         </span>
         <span>
-          <b>137</b> rates
+          <b>{f.rates.n}</b> rates
         </span>
         <span>
-          <b>172</b> operators
+          <b>{f.headline.operators}</b> operators
         </span>
       </span>
     </Link>

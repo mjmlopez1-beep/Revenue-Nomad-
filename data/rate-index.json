@@ -1,7 +1,7 @@
 {
   "asOf": "2026-11-09",
   "source": {
-    "title": "2027 State of Fractional Report (Google Sheet), the research data source behind The State of Fractional GTM 2027",
+    "title": "2027 State of Fractional Report (Google Sheet), the research data source behind The Fractional GTM Buyer's Guide 2027",
     "tabs": [
       "The State of Fractional GTM 2027 Survey",
       "Platform Signups 2026",
@@ -14,7 +14,12 @@
       "n": 113,
       "p25": 180,
       "median": 250,
-      "p75": 304
+      "p75": 304,
+      "topTier": {
+        "floor": 400,
+        "n": 16,
+        "max": 1000
+      }
     },
     "surveyN": 74,
     "platformN": 39,
@@ -89,6 +94,8 @@
   "engagements": {
     "n": 119,
     "firstClientN": 74,
+    "medianMonthly": 6000,
+    "monthlyN": 119,
     "byRevenue": [
       {
         "band": "Pre-revenue",
@@ -311,7 +318,459 @@
       "n": 74,
       "count": 7,
       "share": 9
-    }
+    },
+    "responses": 81,
+    "detailed": 74,
+    "usShare": 77,
+    "mainIncomeShare": 80,
+    "engagements12mo": {
+      "n": 76,
+      "threePlus": 68,
+      "sixPlus": 25
+    },
+    "concurrent": {
+      "n": 74,
+      "threePlus": 42,
+      "three": 20,
+      "fourPlus": 22
+    },
+    "howFound": {
+      "n": 74,
+      "peer": 59,
+      "marketplace": 38,
+      "prior": 27,
+      "jobPost": 1
+    },
+    "steadyPipelineShare": 66,
+    "softwareClientShare": 34,
+    "firstClientRevenue": [
+      {
+        "band": "Pre-revenue",
+        "n": 4,
+        "share": 5
+      },
+      {
+        "band": "Under $1M",
+        "n": 7,
+        "share": 9
+      },
+      {
+        "band": "$1M - $5M",
+        "n": 23,
+        "share": 31
+      },
+      {
+        "band": "$5M - $20M",
+        "n": 23,
+        "share": 31
+      },
+      {
+        "band": "$20M - $50M",
+        "n": 12,
+        "share": 16
+      },
+      {
+        "band": "$50M+",
+        "n": 5,
+        "share": 7
+      }
+    ],
+    "firstClientMonthly": [
+      {
+        "band": "Pre-revenue",
+        "n": 4,
+        "medianMonthly": 3670
+      },
+      {
+        "band": "Under $1M",
+        "n": 7,
+        "medianMonthly": 5000
+      },
+      {
+        "band": "$1M - $5M",
+        "n": 23,
+        "medianMonthly": 5000
+      },
+      {
+        "band": "$5M - $20M",
+        "n": 23,
+        "medianMonthly": 10000
+      },
+      {
+        "band": "$20M - $50M",
+        "n": 12,
+        "medianMonthly": 10000
+      },
+      {
+        "band": "$50M+",
+        "n": 5,
+        "medianMonthly": 11200
+      }
+    ],
+    "status": {
+      "n": 74,
+      "stillRunning": 77,
+      "endedEarly": 4,
+      "converted": 1,
+      "extendedThenEnded": 7,
+      "endedPlanned": 5
+    },
+    "timeToResult": [
+      {
+        "band": "Under 30 days",
+        "n": 36,
+        "share": 49
+      },
+      {
+        "band": "30 to 60 days",
+        "n": 22,
+        "share": 30
+      },
+      {
+        "band": "60 to 90 days",
+        "n": 6,
+        "share": 8
+      },
+      {
+        "band": "90+ days",
+        "n": 7,
+        "share": 9
+      },
+      {
+        "band": "Not measured",
+        "n": 3,
+        "share": 4
+      }
+    ],
+    "reference": {
+      "n": 74,
+      "neverAsked": 46,
+      "privateOnly": 23,
+      "publicReview": 19,
+      "no": 12
+    },
+    "byRole": [
+      {
+        "category": "Sales Leadership",
+        "n": 31,
+        "share": 42,
+        "extended": {
+          "x": 18,
+          "y": 31
+        },
+        "resultUnder30": {
+          "x": 19,
+          "y": 31
+        },
+        "resultOver90": {
+          "x": 0,
+          "y": 31
+        },
+        "term12Plus": {
+          "x": 3,
+          "y": 31
+        },
+        "medianHours": 20,
+        "modeHours": "20 hrs",
+        "demandMean": 3.5,
+        "medianMonthly": 6600,
+        "monthlyN": 52
+      },
+      {
+        "category": "Marketing",
+        "n": 18,
+        "share": 24,
+        "extended": {
+          "x": 13,
+          "y": 18
+        },
+        "resultUnder30": {
+          "x": 6,
+          "y": 18
+        },
+        "resultOver90": {
+          "x": 3,
+          "y": 18
+        },
+        "term12Plus": {
+          "x": 0,
+          "y": 18
+        },
+        "medianHours": 30,
+        "modeHours": "40 hrs",
+        "demandMean": 2.9,
+        "medianMonthly": 4500,
+        "monthlyN": 31
+      },
+      {
+        "category": "Revenue Operations",
+        "n": 11,
+        "share": 15,
+        "extended": {
+          "x": 4,
+          "y": 11
+        },
+        "resultUnder30": {
+          "x": 5,
+          "y": 11
+        },
+        "resultOver90": {
+          "x": 0,
+          "y": 11
+        },
+        "term12Plus": {
+          "x": 0,
+          "y": 11
+        },
+        "medianHours": 20,
+        "modeHours": "under 20 hrs",
+        "demandMean": 3.3,
+        "medianMonthly": 9000,
+        "monthlyN": 14
+      },
+      {
+        "category": "Sales Enablement",
+        "n": 4,
+        "share": 5,
+        "extended": {
+          "x": 0,
+          "y": 4
+        },
+        "resultUnder30": {
+          "x": 2,
+          "y": 4
+        },
+        "resultOver90": {
+          "x": 2,
+          "y": 4
+        },
+        "term12Plus": {
+          "x": 3,
+          "y": 4
+        },
+        "medianHours": 40,
+        "modeHours": "40 hrs",
+        "demandMean": 2.8,
+        "medianMonthly": 9000,
+        "monthlyN": 6
+      },
+      {
+        "category": "Customer Success & Growth",
+        "n": 1,
+        "share": 1,
+        "extended": {
+          "x": 1,
+          "y": 1
+        },
+        "resultUnder30": {
+          "x": 0,
+          "y": 1
+        },
+        "resultOver90": {
+          "x": 0,
+          "y": 1
+        },
+        "term12Plus": {
+          "x": 0,
+          "y": 1
+        },
+        "medianHours": 100,
+        "modeHours": "100 hrs",
+        "demandMean": 4,
+        "medianMonthly": 13700,
+        "monthlyN": 2
+      },
+      {
+        "category": "AI GTM",
+        "n": 7,
+        "share": 9,
+        "extended": {
+          "x": 5,
+          "y": 7
+        },
+        "resultUnder30": {
+          "x": 4,
+          "y": 7
+        },
+        "resultOver90": {
+          "x": 0,
+          "y": 7
+        },
+        "term12Plus": {
+          "x": 0,
+          "y": 7
+        },
+        "medianHours": 60,
+        "modeHours": "under 20 hrs",
+        "demandMean": 3.6,
+        "medianMonthly": 6750,
+        "monthlyN": 10
+      },
+      {
+        "category": "Partnerships",
+        "n": 2,
+        "share": 3,
+        "extended": {
+          "x": 1,
+          "y": 2
+        },
+        "resultUnder30": {
+          "x": 0,
+          "y": 2
+        },
+        "resultOver90": {
+          "x": 2,
+          "y": 2
+        },
+        "term12Plus": {
+          "x": 1,
+          "y": 2
+        },
+        "medianHours": 50,
+        "modeHours": "60 hrs",
+        "demandMean": 3,
+        "medianMonthly": 7460,
+        "monthlyN": 4
+      }
+    ],
+    "extendedByResult": [
+      {
+        "band": "Under 30 days",
+        "x": 18,
+        "y": 36
+      },
+      {
+        "band": "30 to 60 days",
+        "x": 17,
+        "y": 22
+      },
+      {
+        "band": "60 to 90 days",
+        "x": 3,
+        "y": 6
+      },
+      {
+        "band": "90+ days",
+        "x": 3,
+        "y": 7
+      },
+      {
+        "band": "Not measured",
+        "x": 1,
+        "y": 3
+      }
+    ],
+    "extendedByHours": [
+      {
+        "band": "Under 20",
+        "x": 7,
+        "y": 20
+      },
+      {
+        "band": "20 - 39",
+        "x": 11,
+        "y": 16
+      },
+      {
+        "band": "40 - 59",
+        "x": 11,
+        "y": 19
+      },
+      {
+        "band": "60+",
+        "x": 13,
+        "y": 19
+      }
+    ],
+    "wishChecked": [
+      {
+        "key": "stage",
+        "share": 47
+      },
+      {
+        "key": "communication",
+        "share": 39
+      },
+      {
+        "key": "references",
+        "share": 31
+      },
+      {
+        "key": "industry",
+        "share": 30
+      },
+      {
+        "key": "logos",
+        "share": 4
+      }
+    ],
+    "plansByAi": [
+      {
+        "use": "Most",
+        "n": 27,
+        "raise": 41,
+        "demandMean": 3.4
+      },
+      {
+        "use": "Some",
+        "n": 45,
+        "raise": 29,
+        "demandMean": 3.3
+      }
+    ],
+    "mistakesAnswered": 61
+  },
+  "platform": {
+    "approved": 52,
+    "usable": 51,
+    "alsoInSurvey": 10,
+    "withRate": 49,
+    "listingsInIndex": 39,
+    "softwareShare": 82,
+    "availableNowShare": 86,
+    "minThreeMonths": {
+      "x": 34,
+      "y": 49
+    },
+    "minOneMonth": {
+      "x": 15,
+      "y": 49
+    },
+    "quota50M": {
+      "x": 8,
+      "y": 20
+    },
+    "team50": {
+      "x": 11,
+      "y": 22
+    },
+    "frontLine": 1,
+    "signupsByMonth": [
+      {
+        "month": "2026-05",
+        "n": 2
+      },
+      {
+        "month": "2026-06",
+        "n": 1
+      },
+      {
+        "month": "2026-07",
+        "n": 7
+      },
+      {
+        "month": "2026-08",
+        "n": 17
+      },
+      {
+        "month": "2026-09",
+        "n": 34
+      },
+      {
+        "month": "2026-10",
+        "n": 9
+      }
+    ]
   },
   "contracts": {
     "direct": 15,
@@ -387,6 +846,39 @@
           "max": 10358
         }
       }
-    ]
+    ],
+    "directClients": 11,
+    "directDocuments": 15,
+    "partnerEngagements": 28,
+    "engagements": 39,
+    "documents": 43,
+    "partnerTermMedianMonths": 2,
+    "partnerCategories": [
+      {
+        "category": "Sales Leadership",
+        "n": 7
+      },
+      {
+        "category": "AI GTM",
+        "n": 6
+      },
+      {
+        "category": "Sales Enablement",
+        "n": 9
+      },
+      {
+        "category": "Revenue Operations",
+        "n": 1
+      },
+      {
+        "category": "Other",
+        "n": 3
+      },
+      {
+        "category": "Marketing",
+        "n": 2
+      }
+    ],
+    "expandedHours": 4
   }
 }

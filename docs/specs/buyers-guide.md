@@ -39,17 +39,26 @@ operator's rate), and arrow glyphs in ranges and decision branches read "to" or 
 (`--rn-coral-text`) was added to the tokens for coral figures; the headline full stop keeps the bright coral. Site tokens,
 not the redesign's paper palette (decision A3: the canvas palette is the design system).
 
-## Figures and the open question
+## Figures: one dataset for the guide and the Rate Index
 
-The guide text is the October 2026 edition: $225 median, 137 rates, 74 survey, 51 platform profiles, 38 contracts,
-77 inbound requests, 172 operators. The live Rate Index (`data/rate-index.json`, rebuilt 2026-11-09 from the same
-sheet) computes 113 rates and a $250 median. The owner decides whether the guide quotes the live index (then every
-chapter figure is recomputed) or keeps the edition snapshot with its date, which is what ships now. The agents'
-conversion reports also flagged: Answers item 07 says "$230 vs $245+" against the $225 center; Chapter 2 says
-eleven direct clients and lists ten; Chapter 3 says hours "130 to 173" in prose and "130 - 175" in figures;
-Chapter 4 rounds year one to $500,000 to $575,000 against the table's $507,500 to $577,500; Figure 6.1's n sums
-to 118 rates while the extension rates come from the survey; the Methodology dates the evidence to November 2026
-while the edition says October. All are carried as written, for the final edit.
+Decision 2026-11-09 (owner): the guide quotes the most recent dataset, not the October snapshot it was written
+against. Every figure that comes from the research data source reads from `app/guide/content/figures.ts`, which
+formats `data/rate-index.json`; chapter modules use template strings (`${f.rates.median}`), and tables that list
+categories or bands are built from the arrays. `scripts/build-rate-index.mjs` was extended with a `survey`,
+`platform` and `contracts` block carrying every survey distribution, platform count and contract count the guide
+cites (time to result, extension by role and by result timing, references, how operators find clients, concurrent
+clients, platform minimum terms, direct and partner engagement counts, the market-estimate inputs). Rebuild the
+data file and the guide, the Rate Index page and the homepage move together.
+
+What changed against the snapshot: 137 rates and a $225 median became 113 rates and $250 (middle half $180 to
+$305, senior tier $400 to $1,000 on 16 rates); Marketing is the lowest-priced role ($220) and AI GTM sits at the
+center ($250) on eight records, so the "AI GTM prices lowest" passages were rewritten; the median monthly
+engagement is $6,000, so the market estimate is about $135,000 a year per operator and $1.9 billion (range $1.5 to
+$2.4 billion); the contract book is 11 direct clients (15 documents) plus 28 partner-channel engagements, 39 in all;
+platform profiles are 51 usable, 10 also in the survey, 39 unique listings. Nearly every survey percentage matched
+the live data and was kept, now read from the file. Figures with no column in the dataset stay as written and are
+labeled by source in the text: Lightcast, Built In and SPMB figures, the 77 inbound requests and their cuts, the
+67-operator waitlist, and the 172 unique operators (the waitlist is not in the exported tabs).
 
 ## Checks
 
@@ -62,5 +71,5 @@ redirects back and stores the lead; the homepage form unlocks with email only; t
 
 - Create the HubSpot form "Fractional GTM Buyer's Guide 2027" (email, firstname, lastname, company) and set
   `HUBSPOT_GUIDE_FORM_ID`.
-- Decide the figure question above; the deck's "trademark the title" note from the naming session still stands.
+- The deck's "trademark the title" note from the naming session still stands.
 - Optional: a PDF export once the edition is final, then the gate copy can promise the download.

@@ -9,6 +9,7 @@ import { GUIDE_COOKIE } from "../guide/unlock";
 import { chapterHref, guide } from "../guide/content/guide";
 import GuideNav from "../guide/GuideNav";
 import { StatRow } from "../guide/GuideBlocks";
+import * as f from "../guide/content/figures";
 import "../home/home.css";
 import "../guide/guide.css";
 
@@ -50,15 +51,15 @@ export default async function GuideLanding() {
             <aside className="gd-cover-side" aria-label="Sources">
               <StatRow
                 items={[
-                  { v: "$225", l: "Median hourly rate", s: "Rate Index, n=137" },
+                  { v: f.rates.median, l: "Median hourly rate", s: `Rate Index, n=${f.rates.n}` },
                   { v: "~14,000", l: "Fractional GTM leaders in the US", s: "central estimate" },
-                  { v: "$2.8B", l: "Estimated US fractional GTM billings a year", s: "range $2.2B to $3.6B" },
-                  { v: "172", l: "Unique operators", s: "survey, platform and waitlist" },
+                  { v: f.marketSpend.central, l: "Estimated US fractional GTM billings a year", s: `range ${f.marketSpend.range}` },
+                  { v: f.headline.operators, l: "Unique operators", s: "survey, platform and waitlist" },
                 ]}
               />
               <p className="gd-sources">
-                <b>Sources</b> Operator survey (n=74) · Platform profiles (n=51) · Signed contracts (n=38) · Inbound requests (n=77) ·
-                Rate Index (n=137)
+                <b>Sources</b> Operator survey (n={f.headline.survey}) · Platform profiles (n={f.headline.profiles}) · Signed contracts (n={f.headline.contracts}) ·
+                Inbound requests (n={f.headline.inbound}) · Rate Index (n={f.rates.n}), data as of {f.asOf.long}
               </p>
             </aside>
           </div>
@@ -71,23 +72,23 @@ export default async function GuideLanding() {
               Six findings that set the frame
             </h2>
             <p className="gd-lede">
-              Drawn from 172 unique operators, 38 signed engagement contracts, 77 inbound requests and a 137-rate index of what
-              companies pay.
+              Drawn from {f.headline.operators} unique operators, {f.headline.contracts} signed engagement contracts, {f.headline.inbound} inbound requests and a{" "}
+              {f.rates.n}-rate index of what companies pay.
             </p>
             <ul className="gd-findings">
               {[
-                { k: "Rate", v: "$225/hr", l: "Median hourly rate for all GTM roles. Middle half $165 to $300.", s: "Rate Index, n=137" },
-                { k: "Who buys", v: "62%", l: "of engagements are with $1M to $20M companies.", s: "Operator survey, n=74" },
-                { k: "Speed", v: "50%", l: "produced a measurable result inside 30 days.", s: "Operator survey, n=74" },
-                { k: "Retention", v: "57%", l: "of engagements extended past the initial term.", s: "Operator survey, n=74" },
-                { k: "AI", v: "97%", l: "of operators use AI in delivery; 36% for most of it.", s: "Operator survey, n=74" },
-                { k: "Diligence", v: "46%", l: "of clients never asked for a reference.", s: "Operator survey, n=74" },
-              ].map((f) => (
-                <li key={f.k} className="gd-finding">
-                  <p className="rn-eyebrow">{f.k}</p>
-                  <p className="gd-finding-v">{f.v}</p>
-                  <p className="gd-p">{f.l}</p>
-                  <p className="gd-note">{f.s}</p>
+                { k: "Rate", v: `${f.rates.median}/hr`, l: `Median hourly rate for all GTM roles. Middle half ${f.rates.p25} to ${f.rates.p75}.`, s: `Rate Index, n=${f.rates.n}` },
+                { k: "Who buys", v: f.pct(f.coreShare), l: "of engagements are with $1M to $20M companies.", s: `Operator survey, n=${f.survey.detailed}` },
+                { k: "Speed", v: f.pct(f.ttr("Under 30 days").share), l: "produced a measurable result inside 30 days.", s: `Operator survey, n=${f.survey.detailed}` },
+                { k: "Retention", v: f.pct(f.engagements.extendedShare), l: "of engagements extended past the initial term.", s: `Operator survey, n=${f.survey.detailed}` },
+                { k: "AI", v: f.pct(f.survey.aiUse.share), l: `of operators use AI in delivery; ${f.survey.aiUse.most}% for most of it.`, s: `Operator survey, n=${f.survey.aiUse.n}` },
+                { k: "Diligence", v: f.pct(f.survey.reference.neverAsked), l: "of clients never asked for a reference.", s: `Operator survey, n=${f.survey.detailed}` },
+              ].map((x) => (
+                <li key={x.k} className="gd-finding">
+                  <p className="rn-eyebrow">{x.k}</p>
+                  <p className="gd-finding-v">{x.v}</p>
+                  <p className="gd-p">{x.l}</p>
+                  <p className="gd-note">{x.s}</p>
                 </li>
               ))}
             </ul>

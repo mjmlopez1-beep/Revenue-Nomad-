@@ -153,6 +153,104 @@ const contracts = Object.values(seats).map((s) => ({ seat: s.seat, contracts: s.
 const directHourly = stats(direct.map((r) => num(r[7])).filter((h) => h != null && h >= 50));
 const activeDirect = direct.filter((r) => /active/i.test(r[20])).length;
 
+// 6. Figures the Buyer's Guide quotes (survey answers, platform profiles, contract books). Shares are of the
+// detailed survey answers (first client) unless a cut says otherwise; "x of y" cuts carry both numbers.
+const detailed = surveyAnswers.filter((r) => r[S.rev]);
+const responses = survey.filter((r) => r[0] && !String(r[S.src]).startsWith("rn_"));
+const share = (n, d) => (d ? Math.round((n / d) * 100) : null);
+const count = (rows, test) => rows.filter(test).length;
+const split = (v) => String(v ?? "").split(/,\s*(?=[A-Z])/).map((x) => x.trim()).filter(Boolean);
+const twelve = responses.filter((r) => r[1]);
+const concurrent = detailed.map((r) => r[17]);
+const found = detailed.flatMap((r) => split(r[18]));
+const wish = detailed.flatMap((r) => split(r[41]));
+const ttrOf = (r) => r[S.ttr];
+const roleCut = (cat) => {
+  const rows = detailed.filter((r) => r[S.role] === cat);
+  const hrs = rows.map((r) => hoursCode(r[S.hours]));
+  const mode = Object.entries(rows.reduce((a, r) => ((a[r[S.hours]] = (a[r[S.hours]] || 0) + 1), a), {})).sort((a, b) => b[1] - a[1])[0];
+  const monthly = eng.filter((x) => x.role === cat && x.monthly != null).map((x) => x.monthly);
+  return {
+    category: cat,
+    n: rows.length,
+    share: share(rows.length, detailed.length),
+    extended: { x: count(rows, (r) => r[S.extended] === "TRUE"), y: rows.length },
+    resultUnder30: { x: count(rows, (r) => ttrOf(r) === "Under 30 days"), y: rows.length },
+    resultOver90: { x: count(rows, (r) => ttrOf(r) === "90+ days"), y: rows.length },
+    term12Plus: { x: count(rows, (r) => r[S.term] === "12+ months"), y: rows.length },
+    medianHours: median(hrs),
+    modeHours: mode ? mode[0].replace(" / month", "").replace("<20 hrs", "under 20 hrs") : null,
+    demandMean: rows.length ? Math.round((rows.reduce((a, r) => a + num(r[S.demand]), 0) / rows.length) * 10) / 10 : null,
+    medianMonthly: median(monthly),
+    monthlyN: monthly.length,
+  };
+};
+const ttrBands = ["Under 30 days", "30 to 60 days", "60 to 90 days", "90+ days", "Not measured"];
+const guideSurvey = {
+  responses: responses.length,
+  detailed: detailed.length,
+  usShare: share(count(detailed, (r) => r[12] === "United States"), detailed.length),
+  mainIncomeShare: share(count(responses, (r) => String(r[0]).startsWith("Fractional")), responses.length),
+  engagements12mo: { n: twelve.length, threePlus: share(count(twelve, (r) => r[1] === "3 to 5" || r[1] === "6 or more"), twelve.length), sixPlus: share(count(twelve, (r) => r[1] === "6 or more"), twelve.length) },
+  concurrent: { n: detailed.length, threePlus: share(concurrent.filter((v) => v === "3" || v === "4+").length, detailed.length), three: share(concurrent.filter((v) => v === "3").length, detailed.length), fourPlus: share(concurrent.filter((v) => v === "4+").length, detailed.length) },
+  howFound: { n: detailed.length, peer: share(found.filter((v) => v === "Referral from a peer").length, detailed.length), marketplace: share(found.filter((v) => v === "Marketplace or network").length, detailed.length), prior: share(found.filter((v) => v === "Prior colleague or employer").length, detailed.length), jobPost: found.filter((v) => /job post/i.test(v)).length },
+  steadyPipelineShare: share(count(detailed, (r) => r[20] === "Steady pipeline"), detailed.length),
+  softwareClientShare: share(count(detailed, (r) => r[22] === "SaaS" || r[22] === "Enterprise Software"), detailed.length),
+  firstClientRevenue: revenueBands.map((band) => ({ band: band.replace("–", " - "), n: count(detailed, (r) => r[S.rev] === band), share: share(count(detailed, (r) => r[S.rev] === band), detailed.length) })),
+  firstClientMonthly: revenueBands.map((band) => {
+    const rows = detailed.filter((r) => r[S.rev] === band && num(r[S.eff]) != null && hoursCode(r[S.hours]) != null);
+    return { band: band.replace("–", " - "), n: rows.length, medianMonthly: median(rows.map((r) => hoursCode(r[S.hours]) * num(r[S.eff]))) };
+  }),
+  status: { n: detailed.length, stillRunning: share(count(detailed, (r) => r[30] === "Still running"), detailed.length), endedEarly: count(detailed, (r) => r[30] === "Ended early"), converted: count(detailed, (r) => /full-time/i.test(r[30])), extendedThenEnded: count(detailed, (r) => r[30] === "Extended, then ended"), endedPlanned: count(detailed, (r) => r[30] === "Ended at the planned date") },
+  timeToResult: ttrBands.map((b) => ({ band: b, n: count(detailed, (r) => ttrOf(r) === b), share: share(count(detailed, (r) => ttrOf(r) === b), detailed.length) })),
+  reference: { n: detailed.length, neverAsked: share(count(detailed, (r) => r[35] === "Never asked"), detailed.length), privateOnly: share(count(detailed, (r) => r[35] === "Private reference only"), detailed.length), publicReview: share(count(detailed, (r) => r[35] === "Written public review"), detailed.length), no: share(count(detailed, (r) => r[35] === "No"), detailed.length) },
+  byRole: categories.filter((c) => detailed.some((r) => r[S.role] === c)).map(roleCut),
+  extendedByResult: ttrBands.map((b) => ({ band: b, x: count(detailed, (r) => ttrOf(r) === b && r[S.extended] === "TRUE"), y: count(detailed, (r) => ttrOf(r) === b) })),
+  extendedByHours: hoursBands.map((b) => ({ band: b.label, x: count(detailed, (r) => hoursCode(r[S.hours]) != null && b.test(hoursCode(r[S.hours])) && r[S.extended] === "TRUE"), y: count(detailed, (r) => hoursCode(r[S.hours]) != null && b.test(hoursCode(r[S.hours]))) })),
+  wishChecked: [
+    ["stage", /same company stage/i],
+    ["communication", /communicate/i],
+    ["references", /references/i],
+    ["industry", /same industry/i],
+    ["logos", /big-name/i],
+  ].map(([key, re]) => ({ key, share: share(wish.filter((v) => re.test(v)).length, detailed.length) })),
+  plansByAi: ["Most", "Some"].map((k) => ({ use: k, n: count(detailed, (r) => r[S.ai] === k), raise: share(count(detailed, (r) => r[S.ai] === k && r[S.plan] === "Raise your rate"), count(detailed, (r) => r[S.ai] === k)), demandMean: Math.round((detailed.filter((r) => r[S.ai] === k).reduce((a, r) => a + num(r[S.demand]), 0) / count(detailed, (r) => r[S.ai] === k)) * 10) / 10 })),
+  mistakesAnswered: count(detailed, (r) => String(r[43]).trim()),
+};
+// Platform profiles: columns 3 status, 5 in survey, 11 rate, 14 availability, 16 min months, 22 industries,
+// 24 salespeople managed, 26 largest team quota, 37 searchable (usable).
+const usable = platform.filter((r) => r[37] === "TRUE");
+const withVal = (i) => usable.filter((r) => String(r[i]).trim());
+const guidePlatform = {
+  approved: count(platform, (r) => r[3] === "approved"),
+  usable: usable.length,
+  alsoInSurvey: count(usable, (r) => r[5] === "Yes"),
+  withRate: count(usable, (r) => num(r[11]) != null),
+  listingsInIndex: platformListings.length,
+  softwareShare: share(count(withVal(22), (r) => /SaaS|Enterprise Software/.test(r[22])), withVal(22).length),
+  availableNowShare: share(count(withVal(14), (r) => r[14] === "available_now"), withVal(14).length),
+  minThreeMonths: { x: count(withVal(16), (r) => num(r[16]) >= 3), y: withVal(16).length },
+  minOneMonth: { x: count(withVal(16), (r) => num(r[16]) === 1), y: withVal(16).length },
+  quota50M: { x: count(withVal(26), (r) => num(r[26]) >= 50_000_000), y: withVal(26).length },
+  team50: { x: count(withVal(24), (r) => num(r[24]) >= 50), y: withVal(24).length },
+  frontLine: count(usable, (r) => r[7] === "Front-line Sellers / SDR"),
+  signupsByMonth: Object.entries(platform.reduce((a, r) => ((a[String(r[0]).slice(0, 7)] = (a[String(r[0]).slice(0, 7)] || 0) + 1), a), {})).sort().map(([month, n]) => ({ month, n })),
+};
+const partner = engagements.filter((r) => r[0] !== "Revenue Nomad direct");
+const directClients = new Set(direct.map((r) => String(r[1]).replace(/\s*\(.*$/, "").trim().toLowerCase())).size;
+const guideContracts = {
+  directClients,
+  directDocuments: direct.length,
+  partnerEngagements: partner.length,
+  engagements: directClients + partner.length,
+  documents: engagements.length,
+  partnerTermMedianMonths: median(partner.map((r) => num(r[13]))),
+  partnerCategories: Object.entries(partner.reduce((a, r) => ((a[r[5]] = (a[r[5]] || 0) + 1), a), {})).map(([category, n]) => ({ category, n })),
+  expandedHours: direct.filter((r) => r[21] === "addendum").length,
+};
+const topTier = { floor: 400, n: count(rateRows, (r) => num(r[S.rate]) >= 400), max: Math.max(...rateRows.map((r) => num(r[S.rate]))) };
+const allMonthly = eng.map((x) => x.monthly).filter((m) => m != null);
+
 const out = {
   asOf,
   source: {
@@ -160,11 +258,12 @@ const out = {
     tabs: ["The State of Fractional GTM 2027 Survey", "Platform Signups 2026", "Engagements"],
     note: "Hourly rates: operator survey answers plus Revenue Nomad platform listings appended to the survey tab (operators already in the survey are not double counted). Monthly spend, company-size and hours figures: engagements described in the operator survey (first and second client), monthly spend = hours a month x effective hourly rate. Contract ranges: Revenue Nomad direct agreements only, as billed to the company. Cuts under 10 are directional.",
   },
-  rates: { all: allRates, surveyN: surveyAnswers.length, platformN: platformListings.length, byCategory, publicationFloor: 10 },
-  engagements: { n: eng.length, firstClientN: firstClient.length, byRevenue, byHours, monthlyByCategory, termShare, extendedShare, resultInside60, ttrN: ttrRows.length, extendedN: extendedRows.length },
+  rates: { all: { ...allRates, topTier }, surveyN: surveyAnswers.length, platformN: platformListings.length, byCategory, publicationFloor: 10 },
+  engagements: { n: eng.length, firstClientN: firstClient.length, medianMonthly: median(allMonthly), monthlyN: allMonthly.length, byRevenue, byHours, monthlyByCategory, termShare, extendedShare, resultInside60, ttrN: ttrRows.length, extendedN: extendedRows.length },
   movement: { ...movement, plan, demand },
-  survey: { aiUse, demandByCategory, founderHandoff },
-  contracts: { direct: direct.length, active: activeDirect, hourly: directHourly, bySeat: contracts },
+  survey: { aiUse, demandByCategory, founderHandoff, ...guideSurvey },
+  platform: guidePlatform,
+  contracts: { direct: direct.length, active: activeDirect, hourly: directHourly, bySeat: contracts, ...guideContracts },
 };
 writeFileSync(new URL("../data/rate-index.json", import.meta.url), JSON.stringify(out, null, 2) + "\n");
 console.log(JSON.stringify(out, null, 1));

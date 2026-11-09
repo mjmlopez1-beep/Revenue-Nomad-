@@ -15,6 +15,7 @@ open and the rest behind a name-and-email gate that opens everything on the devi
 - [x] Rename across the site (menus, footer cite, Rate Index, solution pages, figure sources); permanent redirect from
       `/research/state-of-fractional-gtm-2027`; the old cover image retired
 - [x] `check:tokens` covers the guide; `check:home` runs the landing, an open and a locked chapter; gate tested end to end
-- [ ] Owner: decide whether the guide keeps the October edition figures ($225, 137 rates) or quotes the live Rate Index
-      ($250, 113 rates); resolve the six wording and figure inconsistencies listed in the spec
+- [x] Guide figures read from the live dataset through `app/guide/content/figures.ts` (owner decision 2026-11-09)
+- [ ] Owner: final edit of the wording slips carried from the source (eleven vs ten direct clients named, the
+      130 to 173 vs 130 to 175 hours, the Chapter 4 rounding)
 - [ ] Owner: create the HubSpot form and set `HUBSPOT_GUIDE_FORM_ID`; trademark check on the title

@@ -13,8 +13,8 @@ For the next session (human or agent) picking up the marketing site. Written 202
 - The Fractional GTM Buyer's Guide 2027 (the State of Fractional report, rebranded) lives at
   `/fractional-gtm-buyers-guide-2027` (`app/fractional-gtm-buyers-guide-2027/`, `app/guide/`, spec `docs/specs/buyers-guide.md`,
   ticket 15). Three chapters are open; the rest open with a name and email, recorded through `app/leads/record.ts`
-  (`HUBSPOT_GUIDE_FORM_ID`). The old report URL redirects. The guide quotes the October 2026 edition figures; the owner
-  decides whether to recompute them from the live Rate Index.
+  (`HUBSPOT_GUIDE_FORM_ID`). The old report URL redirects. Every dataset figure in the guide reads from `data/rate-index.json`
+  through `app/guide/content/figures.ts`, so the guide, the Rate Index page and the homepage move together on a rebuild.
 - The four "Solve a problem" pages live at `/problems/*` (`app/problems/`, spec `docs/specs/solution-pages.md`, ticket 14), one
   template with four content modules; prices read from the Rate Index data.
 - The Rate Index lives at `/research/rate-index` (`app/research/rate-index/`, spec `docs/specs/rate-index.md`, ticket 13).
