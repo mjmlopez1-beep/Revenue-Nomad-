@@ -62,3 +62,14 @@ Rhythm; pipeline: GTM Design, Operating Rhythm, Revenue Insights; forecast: Reve
 Operating Rhythm; AI: AI, Revenue Technology, Team Enablement). Decision A5 (no hero imagery) is superseded for
 these pages by the owner's request. Phone: everything stacks, the art drops to 220px, the motif to 280px, the
 table keeps its scroll region; the badge on a 60px figure is fixed at 11px so the figure does not wrap.
+
+## Revision 2026-11-09: a drawing in the hero
+
+Owner's gallery comment on the forecast page: "Feels out of place. Maybe design a custom illustration for these header
+heros." The stock card photos (the homepage's covers) are gone from the problem pages. Each hero now carries a drawing in
+the Diagnostic's isometric language (`ProblemMotif.tsx`, `variant="hero"`), on a mist panel with a faint isometric grid,
+captioned "The problem, drawn" plus one line: founder-led, a slab of revenue balanced on one gold block ("Everything rests
+on one person"); pipeline, a tight cluster with a row that fades to outlines before the gold block ("The network ends. The
+pipeline has to keep going."); forecast, five columns like a bar chart under one gold slab ("One number the board can
+hold"); AI, a platform with one gold block set into it and two dashed blocks floating beside it ("Plugged into the engine,
+not bought beside it"). The smaller motifs in the "Why it happens" band stay. The card photos still serve the homepage.

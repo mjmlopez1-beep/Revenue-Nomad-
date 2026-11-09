@@ -35,12 +35,15 @@
   gap: 16px 32px;
   margin-top: 38px;
 }
+/* The artboard hung the mark 39px past the grid's right edge and above the copy's middle; the owner read that as
+   off center (gallery review 2026-11-09), so the mark now sits inside the grid, centered on the copy. */
 .hero-art {
   position: absolute;
-  top: 66px;
-  right: -39px;
+  top: 50%;
+  right: 0;
   width: min(539px, calc(100% - 580px));
   aspect-ratio: 980 / 984;
+  transform: translateY(-50%);
 }
 .hero-glow {
   position: absolute;
@@ -90,6 +93,7 @@
     right: auto;
     width: 255px;
     margin: 18px auto 20px;
+    transform: none;
   }
   .hero-glow {
     left: -40px;

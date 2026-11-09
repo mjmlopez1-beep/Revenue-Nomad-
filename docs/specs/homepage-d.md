@@ -81,3 +81,9 @@ photos and logos; any portal change.
 Nine assumptions (A1 to A9 in the design) stand in for founder answers. The canvas note on Homepage D lists
 launch work the founder already knows about: confirm numbers, build the check, fill or remove the validation
 slots, clear logos and quotes.
+
+## Revision 2026-11-09: hero alignment
+
+Owner's gallery comment: "Feels off center." Measured at 1440: the glass mark hung 39px past the content grid's right edge
+(the artboard's `right: -39px`) and its middle sat above the copy's middle. The mark now sits inside the grid (`right: 0`)
+and is centered vertically on the copy (`app/home/Hero.css`). Phone layout unchanged.

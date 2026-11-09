@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import Arrow from "../home/Arrow";
 import ClosingBand from "../home/ClosingBand";
@@ -6,17 +5,14 @@ import { FigureLabel, FigureSource, FigureValue } from "../home/Figure";
 import { facts } from "../home/content/numbers";
 import { hrefs } from "../home/content/links";
 import { pillarLabel, pillars as allPillars } from "../check/content";
-import ProblemMotif from "./ProblemMotif";
+import ProblemMotif, { heroCaption } from "./ProblemMotif";
 import type { Solution } from "./content";
 import "./Solution.css";
-
-/** The hero art is 520px wide at 1440 and full width on phones. */
-const ART_SIZES = "(max-width: 900px) calc(100vw - 40px), 520px";
 
 const two = (n: number) => String(n).padStart(2, "0");
 
 /**
- * Shared template for the four "Solve a problem" pages, in artboard order: hero with art, the checklist card,
+ * Shared template for the four "Solve a problem" pages, in artboard order: hero with its drawing, the checklist card,
  * data, why (night band with the motif), the fix with its pillars strip, the method (forest band), the
  * comparison, results, common questions, the closing band. Visual treatment in docs/specs/solution-pages.md.
  */
@@ -43,20 +39,17 @@ export default function SolutionPage({ s }: { s: Solution }) {
             </div>
             <p className="rn-small solp-fine">We speak within {facts.responseHours} - no fees for companies</p>
           </div>
-          {s.art && (
-            <div className="solp-art" aria-hidden="true">
-              <Image
-                className="solp-art-img"
-                src={`/home/cards/${s.art.file}`}
-                alt=""
-                width={s.art.width}
-                height={s.art.height}
-                sizes={ART_SIZES}
-                priority
-                style={s.art.position ? { objectPosition: s.art.position } : undefined}
-              />
-              <span className="solp-art-rule" />
-            </div>
+          {s.motif && (
+            <figure className="solp-art">
+              <div className="solp-art-panel">
+                <ProblemMotif motif={s.motif} variant="hero" className="solp-motif--hero" />
+              </div>
+              <figcaption className="solp-art-cap">
+                <span className="solp-art-k">The problem, drawn</span>
+                <span>{heroCaption(s.motif)}</span>
+              </figcaption>
+              <span className="solp-art-rule" aria-hidden="true" />
+            </figure>
           )}
         </div>
       </section>

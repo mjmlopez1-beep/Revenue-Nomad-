@@ -13,8 +13,6 @@ export type Stat = { id?: NumberKey; value?: string; label: string };
 export type FixCard = { kicker: string; title: string; body: string; price: string; priceNote: string; cta: string; href: Route };
 export type Faq = { q: string; a: string };
 export type Step = { n: number; kicker: string; title: string; body: string; result?: string };
-/** The hero's card art from public/home/cards/ (the homepage's cover for the same problem), decorative. */
-export type Art = { file: string; width: number; height: number; position?: string };
 
 export type Solution = {
   slug: string;
@@ -32,8 +30,7 @@ export type Solution = {
   comparison?: { heading: string; intro: string; now: string; then: string; rows: { k: string; now: string; then: string }[] };
   results?: { heading: string; items: { id: NumberKey; label: string; company: string }[]; note: string };
   faqs: Faq[];
-  /** Visual treatment (docs/specs/solution-pages.md): hero art, the isometric motif and the Diagnostic pillars the fix touches. */
-  art?: Art;
+  /** Visual treatment (docs/specs/solution-pages.md): the isometric motif (hero and why band) and the Diagnostic pillars the fix touches. */
   motif?: MotifKey;
   pillars?: Pillar[];
 };
@@ -64,7 +61,6 @@ const diagnosticCard = (body: string): FixCard => ({
 export const solutions: Solution[] = [
   {
     slug: "founder-led-sales",
-    art: { file: "solution-founder.webp", width: 960, height: 540 },
     motif: "founder",
     pillars: ["gtm_design", "team_enablement", "operating_rhythm"],
     eyebrow: "Solutions - founder-led to repeatable",
@@ -119,7 +115,6 @@ export const solutions: Solution[] = [
   },
   {
     slug: "pipeline",
-    art: { file: "solution-pipeline.webp", width: 960, height: 720, position: "60% 72%" },
     motif: "pipeline",
     pillars: ["gtm_design", "operating_rhythm", "revenue_insights"],
     eyebrow: "Solutions - outbound that runs without you",
@@ -208,7 +203,6 @@ export const solutions: Solution[] = [
   },
   {
     slug: "forecast",
-    art: { file: "solution-forecast.webp", width: 960, height: 720 },
     motif: "forecast",
     pillars: ["revenue_insights", "data_foundations", "operating_rhythm"],
     eyebrow: "Solutions - CRM, data and RevOps",
@@ -264,7 +258,6 @@ export const solutions: Solution[] = [
   },
   {
     slug: "ai",
-    art: { file: "solution-ai.webp", width: 960, height: 540 },
     motif: "ai",
     pillars: ["ai", "revenue_technology", "team_enablement"],
     eyebrow: "Solutions - AI across your GTM",
