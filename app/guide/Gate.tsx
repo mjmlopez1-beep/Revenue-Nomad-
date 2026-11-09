@@ -3,15 +3,15 @@ import Arrow from "../home/Arrow";
 import { unlockGuide } from "./actions";
 import { chapterHref, chapters, guide } from "./content/guide";
 
-/** The email gate shown in place of a locked chapter (artboard "Gated download modal", inline rather than modal). */
+/** The email gate shown in place of a locked chapter, as a report card (Report Redesign palette), inline rather than modal. */
 export default function Gate({ returnTo, invalid }: { returnTo: string; invalid?: boolean }) {
   const locked = chapters.filter((c) => !c.open).length;
   return (
     <section className="gd-gate" aria-labelledby="gd-gate-h">
       <div className="gd-gate-card">
-        <p className="rn-eyebrow">{guide.shortTitle}</p>
+        <p className="gd-eyebrow gd-eyebrow--forest">{guide.shortTitle}</p>
         <h2 id="gd-gate-h" className="gd-gate-h">
-          Unlock the full guide<span className="gd-stop">.</span>
+          Unlock the full guide
         </h2>
         <p className="gd-p">
           Chapters 2 to 10 and the methodology open with one email, and they stay open on this device. Tell us where to
@@ -40,7 +40,7 @@ export default function Gate({ returnTo, invalid }: { returnTo: string; invalid?
               Add your name and a work email we can reach.
             </p>
           )}
-          <button type="submit" className="rn-btn gd-gate-btn">
+          <button type="submit" className="gd-btn gd-gate-btn">
             Unlock the full guide
             <Arrow />
           </button>

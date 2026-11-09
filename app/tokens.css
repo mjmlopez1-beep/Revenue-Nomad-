@@ -65,4 +65,49 @@
   --rn-gutter: 20px;          /* side gutter below the wrap width */
   --rn-section-y: 96px;       /* vertical rhythm between sections on desktop */
   --rn-section-y-sm: 64px;
+
+  /* Card radii (report cards, cover art, feature tiles) */
+  --rn-radius-md: 12px;
+  --rn-radius-lg: 16px;
+  --rn-radius-xl: 20px;
+  --rn-radius-2xl: 28px;
+
+  /*
+   * Report (Buyer's Guide) palette. Extracted from the Design canvas "Report Redesign" (the "State of
+   * Fractional" boards: Main, Foreword, Answers, Chapter01 to Chapter10, Methodology). Used only by
+   * app/guide/** and the guide routes; the marketing site keeps the tokens above. Paper, sand hairlines,
+   * ink, the report's brighter forest, leaf greens, pale green tints, coral for the one negative figure
+   * and gold tints for the warning callouts. Fonts: Red Hat Display heavy for headings and big numbers,
+   * Red Hat Text for body, Newsreader italic for deks and pull quotes.
+   */
+  --rn-report-paper: #f5f4ee;        /* page ground */
+  --rn-report-paper-2: #fafaf6;      /* table head and footer rows */
+  --rn-report-sand: #e6e5dc;         /* hairlines, card borders */
+  --rn-report-sand-2: #d8d7cc;       /* stronger rules, pills */
+  --rn-report-ink: #0e1411;          /* headings, dark bands */
+  --rn-report-ink-2: #141c18;        /* tiles on dark */
+  --rn-report-body: #2c352f;         /* body copy */
+  --rn-report-body-2: #47524b;       /* deks and secondary copy */
+  --rn-report-mute: #5f6a63;         /* labels and sources on paper: 5.6:1 */
+  --rn-report-forest: #095d42;       /* figures, eyebrows, links, bars */
+  --rn-report-deep: #0b3d2c;         /* sources bar, quote text, bar on tint */
+  --rn-report-leaf: #c2e7b0;         /* figures and labels on dark */
+  --rn-report-leaf-2: #7fb86a;       /* contents numerals, second bar segment */
+  --rn-report-leaf-3: #4e9a5e;       /* step numerals, rate range bar */
+  --rn-report-tint: #e6eedf;         /* leaf-tint callouts, quote band, bar tracks */
+  --rn-report-tint-2: #c9d9bf;       /* tint borders */
+  --rn-report-coral: #c2361f;        /* the negative figure: 5.6:1 on white */
+  --rn-report-coral-tint: #f6e1dc;   /* coral bar track */
+  --rn-report-gold-tint: #fbf0d5;    /* gold callouts */
+  --rn-report-gold-line: #ebd9a6;
+  --rn-report-gold-text: #7a4f00;    /* 7.4:1 on the gold tint */
+  --rn-report-on-dark: rgba(255, 255, 255, 0.82);      /* body on dark bands */
+  --rn-report-on-dark-soft: rgba(255, 255, 255, 0.72); /* labels on dark */
+  --rn-report-line-on-dark: rgba(255, 255, 255, 0.14); /* hairlines on dark */
+  --rn-report-line-on-dark-2: rgba(255, 255, 255, 0.28);
+  --rn-report-leaf-line: rgba(194, 231, 176, 0.4);     /* edition pill outline */
+  --rn-report-shadow: 0 18px 40px rgba(14, 20, 17, 0.16);
+  --rn-font-report-ui: var(--font-red-hat), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --rn-font-report-body: var(--font-red-hat-text), var(--font-red-hat), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --rn-font-report-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
 }
