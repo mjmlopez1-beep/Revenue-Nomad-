@@ -1,4 +1,13 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/** The roles the guide reports on, in the order the Rate Index lists them. */
+const GUIDE_ROLES = ["Sales Leadership", "Marketing", "Revenue Operations", "Sales Enablement", "AI GTM"];
+const roleCuts = f.byCategory.filter((c) => GUIDE_ROLES.includes(c.category));
+const largestCut = roleCuts.reduce((a, b) => (b.n > a.n ? b : a));
+const directionalCuts = roleCuts.filter((c) => c.n < f.rates.floor).map((c) => c.category);
+const list = (xs: string[]) => (xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1] : xs.join(""));
+const operators = (n: number) => n.toLocaleString("en-US");
 
 const chapter: Chapter = {
   slug: "methodology",
@@ -6,29 +15,29 @@ const chapter: Chapter = {
   title: "Methodology",
   dek: "Five sources, described plainly, so you can judge how much weight a finding deserves",
   stats: [
-    { v: "172", l: "unique operators, deduplicated by email" },
-    { v: "38", l: "signed engagement contracts" },
-    { v: "77", l: "inbound requests" },
-    { v: "137", l: "hourly rates in the Rate Index" },
+    { v: f.headline.operators, l: "unique operators, deduplicated by email" },
+    { v: f.headline.contracts, l: "signed engagement contracts" },
+    { v: f.headline.inbound, l: "inbound requests" },
+    { v: f.headline.rates, l: "hourly rates in the Rate Index" },
   ],
   blocks: [
     {
       t: "lede",
-      html: "This guide draws on five sources, all collected by Revenue Nomad between January 2024 and November 2026: 172 unique fractional GTM operators (survey, platform and waitlist, deduplicated by email), 38 signed engagement contracts, 77 inbound requests, and the Revenue Nomad Rate Index of 137 hourly rates. We describe each plainly so you can judge how much weight a finding deserves.",
+      html: `This guide draws on five sources, all collected by Revenue Nomad between January 2024 and ${f.asOf.monthYear}: ${f.headline.operators} unique fractional GTM operators (${f.headline.operatorsNote}), ${f.headline.contracts} signed engagement contracts, ${f.headline.inbound} inbound requests, and the Revenue Nomad Rate Index of ${f.headline.rates} hourly rates. We describe each plainly so you can judge how much weight a finding deserves.`,
     },
-    { t: "note", text: "The evidence base: January 2024 to November 2026." },
+    { t: "note", text: `The evidence base: January 2024 to ${f.asOf.monthYear}.` },
 
     { t: "h2", eyebrow: "The data", text: "Five sources", id: "five-sources" },
 
     { t: "h3", text: "The Fractional GTM Buyer's Guide 2027 operator survey" },
     {
       t: "stats",
-      items: [{ v: "n=81", l: "74 detailed" }],
-      note: "Sept to Nov 2026. 77% US-based.",
+      items: [{ v: `n=${f.survey.responses}`, l: `${f.survey.detailed} detailed` }],
+      note: `Sept to Nov 2026. ${f.pct(f.survey.usShare)} US-based.`,
     },
     {
       t: "p",
-      html: "An online survey of fractional go-to-market operators, open September to November 2026, distributed through Revenue Nomad's network, platform and partners. 81 responses; 74 described a current or recent engagement in detail. Respondents are 77% US-based. The survey asked about rates, client profile, engagement structure, time to results, extension, and open-ended questions on buying triggers and buyer mistakes.",
+      html: `An online survey of fractional go-to-market operators, open September to November 2026, distributed through Revenue Nomad's network, platform and partners. ${f.survey.responses} responses; ${f.survey.detailed} described a current or recent engagement in detail. Respondents are ${f.pct(f.survey.usShare)} US-based. The survey asked about rates, client profile, engagement structure, time to results, extension, and open-ended questions on buying triggers and buyer mistakes.`,
     },
     {
       t: "p",
@@ -38,12 +47,12 @@ const chapter: Chapter = {
     { t: "h3", text: "Revenue Nomad platform profiles" },
     {
       t: "stats",
-      items: [{ v: "n=51", l: "usable profiles" }],
-      note: "As of Oct 26, 2026. 105 combined rate points.",
+      items: [{ v: `n=${f.platform.usable}`, l: "usable profiles" }],
+      note: `As of ${f.asOf.long}. ${f.platform.listingsInIndex} unique listings in the Rate Index.`,
     },
     {
       t: "p",
-      html: "Self-entered profile data from operators approved on the Revenue Nomad platform as of October 26, 2026. Of 65 2026 signups and 7 migrated profiles, 51 had usable rate or role data. Fourteen incomplete signups and three internal or test accounts were excluded. Eleven platform operators also answered the survey; their platform rate rows were removed before combining, so the 105 combined rate points are unique individuals.",
+      html: `Self-entered profile data from operators approved on the Revenue Nomad platform as of ${f.asOf.long}. Of ${f.platform.approved} approved profiles, ${f.platform.usable} had usable rate or role data and ${f.platform.withRate} list an hourly rate. Incomplete signups and internal or test accounts were excluded. ${f.platform.alsoInSurvey} platform operators also answered the survey; their platform rate rows were removed before combining, so the ${f.platform.listingsInIndex} platform listings in the Rate Index are unique individuals.`,
     },
     {
       t: "p",
@@ -54,14 +63,14 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "n=38", l: "engagements" },
-        { v: "11", l: "direct clients (14 documents, 2024 to 2026)" },
-        { v: "27", l: "partner channel (2025 to 2026)" },
+        { v: `n=${f.contracts.engagements}`, l: "engagements" },
+        { v: String(f.contracts.directClients), l: `direct clients (${f.contracts.directDocuments} documents, 2024 to 2026)` },
+        { v: String(f.contracts.partnerEngagements), l: "partner channel (2025 to 2026)" },
       ],
     },
     {
       t: "p",
-      html: "Every signed agreement, statement of work and addendum on file: 11 direct Revenue Nomad clients (14 documents, 2024 to 2026) and 27 engagements delivered through a partner channel (2025 to 2026). Direct-client fees, hours and terms are reported as signed. Partner-channel contracts are used only for engagement structure, scope and term; their fee data reflects operator compensation rather than client price and is not reported. No client is named. Operator compensation and firm margin are excluded throughout.",
+      html: `Every signed agreement, statement of work and addendum on file, ${f.contracts.documents} documents in all: ${f.contracts.directClients} direct Revenue Nomad clients (${f.contracts.directDocuments} documents, 2024 to 2026) and ${f.contracts.partnerEngagements} engagements delivered through a partner channel (2025 to 2026). Direct-client fees, hours and terms are reported as signed. Partner-channel contracts are used only for engagement structure, scope and term; their fee data reflects operator compensation rather than client price and is not reported. No client is named. Operator compensation and firm margin are excluded throughout.`,
     },
 
     { t: "h3", text: "Inbound requests we received" },
@@ -87,33 +96,27 @@ const chapter: Chapter = {
     { t: "h3", text: "The Revenue Nomad Rate Index" },
     {
       t: "stats",
-      items: [{ v: "n=137", l: "hourly rates" }],
-      note: "As of Oct 11, 2026. 8 role categories. 5 inputs.",
+      items: [{ v: `n=${f.rates.n}`, l: "hourly rates" }],
+      note: `As of ${f.asOf.long}. ${f.byCategory.length} role categories. 2 inputs.`,
     },
     {
       t: "p",
-      html: "137 hourly rates as companies pay them, as of October 11, 2026, across eight role categories. It combines five inputs: the operator survey above, operator rate conversations, our signed direct contracts, publicly published operator rates and platform listings. Every rate is normalized to what the company pays per hour; operator compensation and firm margin are excluded, and no rate comes from another fractional firm's research. Hourly medians, the hours bands and the market estimate in this guide read from the index.",
+      html: `${f.rates.n} hourly rates as companies pay them, as of ${f.asOf.long}, across ${f.byCategory.length} role categories. It combines two inputs: ${f.rates.surveyN} rates from the operator survey above and ${f.rates.platformN} Revenue Nomad platform listings; operators already in the survey are not counted twice. Every rate is normalized to what the company pays per hour; operator compensation and firm margin are excluded, and no rate comes from another fractional firm's research. Hourly medians, the hours bands and the market estimate in this guide read from the index.`,
     },
 
     { t: "h2", text: "Sample sizes", id: "sample-sizes" },
     {
       t: "p",
-      html: "Every table carries a single n, the total number of records behind it regardless of which source they came from. Every role-level cut carries its n - Sales Leadership (n=48), Marketing (n=18), Revenue Operations (n=13), Sales Enablement (n=8), AI GTM (n=7) - so readers can weigh it. Cross-tabulations (extension by hours, result timing by stage) involve cells as small as 3 to 8 and should be read for pattern, not precision.",
+      html: `Every table carries a single n, the total number of records behind it regardless of which source they came from. Every role-level cut carries its n - ${roleCuts.map((c) => `${c.category} (n=${c.n})`).join(", ")} - so readers can weigh it. The index publishes a median on its own only at ${f.rates.floor} records or more; ${list(directionalCuts)} sit under that floor and are directional. Cross-tabulations (extension by hours, result timing by stage) involve cells as small as 3 to 8 and should be read for pattern, not precision.`,
     },
     { t: "h3", text: "Records behind each role-level cut" },
     {
       t: "table",
       caption: "Figure A.1. Records behind each role-level cut",
       head: ["Role-level cut", "Records (n)"],
-      rows: [
-        ["Sales Leadership", "48"],
-        ["Marketing", "18"],
-        ["Revenue Operations", "13"],
-        ["Sales Enablement", "8"],
-        ["AI GTM", "7"],
-      ],
+      rows: roleCuts.map((c) => [c.category, String(c.n)]),
       firstColHeader: true,
-      note: "n per role-level cut as stated in this appendix. Bars scaled to the largest value (Sales Leadership, n=48).",
+      note: `n per role-level cut in the Rate Index as of ${f.asOf.long}. Bars scaled to the largest value (${largestCut.category}, n=${largestCut.n}).`,
     },
 
     { t: "h2", text: "External sources", id: "external-sources" },
@@ -132,13 +135,13 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "14,000", l: "leaders (estimate)" },
-        { v: "$2.8B", l: "market (estimate)" },
+        { v: operators(f.market.operatorsCentral), l: "leaders (estimate)" },
+        { v: f.marketSpend.central, l: "market (estimate)" },
       ],
     },
     {
       t: "p",
-      html: "The 14,000-leader and $2.8 billion figures in Chapter 1 are estimates, not counts. They combine Lightcast's floor of 34,000 US fractional-titled workers, a published 14% CMO share of fractional executive roles, our assumed 10% to 18% share for sales and revenue roles, an uplift of 1.25 to 1.5 for operators who use \"outsourced,\" \"interim\" or no modifier, our survey's median for concurrent clients, and the Rate Index median monthly engagement. Each assumption and its range is stated in the text. We expect the estimate to move as better data arrives and will revise it in each edition.",
+      html: `The ${operators(f.market.operatorsCentral)}-leader and ${f.marketSpend.centralLong} figures in Chapter 1 are estimates, not counts. They combine Lightcast's floor of 34,000 US fractional-titled workers, a published 14% CMO share of fractional executive roles, our assumed 10% to 18% share for sales and revenue roles, an uplift of 1.25 to 1.5 for operators who use "outsourced," "interim" or no modifier, our survey's median for concurrent clients, and the Rate Index median monthly engagement of ${f.engagements.medianMonthly}. Each assumption and its range is stated in the text. We expect the estimate to move as better data arrives and will revise it in each edition.`,
     },
     {
       t: "steps",

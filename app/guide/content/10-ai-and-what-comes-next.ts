@@ -1,4 +1,19 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* AI use in delivery: the survey gives the share using any AI and the share using it for most of their work. */
+const ai = f.survey.aiUse;
+const aiSome = ai.share - ai.most;
+const aiNone = 100 - ai.share;
+const aiRows: [string, number][] = [["Most", ai.most], ["Some", aiSome], ["None", aiNone]];
+const aiTop = Math.max(...aiRows.map(([, v]) => v));
+const mostAi = f.plansByAi("Most");
+const someAi = f.plansByAi("Some");
+const aiGtm = f.category("AI GTM");
+const aiGtmRole = f.role("AI GTM");
+const revOps = f.category("Revenue Operations");
+const enablement = f.category("Sales Enablement");
+const marketing = f.category("Marketing");
 
 const chapter: Chapter = {
   slug: "10-ai-and-what-comes-next",
@@ -6,10 +21,10 @@ const chapter: Chapter = {
   title: "AI, lean revenue teams, and where fractional GTM goes from here",
   dek: "Most AI chapters are speculation. This one is mostly data.",
   stats: [
-    { v: "97%", l: "of operators use AI in delivery" },
+    { v: f.pct(ai.share), l: "of operators use AI in delivery" },
     { v: "6 of 20", l: "detailed inbound requests named AI" },
-    { v: "3.6 / 5", l: "AI GTM demand trend" },
-    { v: "~$212", l: "AI GTM median hourly rate" },
+    { v: `${aiGtmRole.demandMean} / 5`, l: "AI GTM demand trend" },
+    { v: aiGtm.median, l: `AI GTM median hourly rate (${aiGtm.n} rates, directional)` },
   ],
   blocks: [
     {
@@ -22,31 +37,27 @@ const chapter: Chapter = {
       t: "table",
       caption: "Figure 10.1. How much of your delivery uses AI tools?",
       head: ["How much of your delivery uses AI tools?", "Share of operators"],
-      rows: [
-        ["Most", "36%"],
-        ["Some", "61% (most common)"],
-        ["None", "3%"],
-      ],
+      rows: aiRows.map(([label, v]) => [label, `${f.pct(v)}${v === aiTop ? " (most common)" : ""}`]),
       firstColHeader: true,
-      note: "n=74. Stacked bar shows each share of the whole; table bars scaled to the highest value in the column (61%).",
+      note: `n=${ai.n}. Stacked bar shows each share of the whole; table bars scaled to the highest value in the column (${f.pct(aiTop)}).`,
     },
     {
       t: "p",
-      html: "<strong>97% of fractional GTM operators use AI in delivery.</strong> A third say most of their work runs through it. On the pre-launch waitlist for our platform, back in early 2026, ChatGPT was already the third most-cited must-have tool, named by 46 of 67 operators, ahead of Gong, ZoomInfo, Outreach and Salesloft. On the platform today, \"AI Sales Automation\" is one of the five most common expertise tags.",
+      html: `<strong>${f.pct(ai.share)} of fractional GTM operators use AI in delivery.</strong> ${f.pct(ai.most)} say most of their work runs through it. On the pre-launch waitlist for our platform, back in early 2026, ChatGPT was already the third most-cited must-have tool, named by 46 of 67 operators, ahead of Gong, ZoomInfo, Outreach and Salesloft. On the platform today, "AI Sales Automation" is one of the five most common expertise tags.`,
     },
     {
       t: "p",
-      html: "The operators who lean hardest into AI are also the ones doing best. Those who say \"most\" of their delivery uses AI report slightly higher demand (3.4 versus 3.2 of 5) and are far more likely to be raising their rates in the next six months (41% versus 29%). Small differences, consistent direction.",
+      html: `The operators who lean hardest into AI are also the ones doing best. Those who say "most" of their delivery uses AI report slightly higher demand (${mostAi.demandMean} versus ${someAi.demandMean} of 5) than those who say "some," and are far more likely to be raising their rates in the next six months (${f.pct(mostAi.raise)} versus ${f.pct(someAi.raise)}). Small differences, consistent direction.`,
     },
     {
       t: "stats",
       items: [
-        { v: "3.4 vs 3.2", l: "demand score out of 5" },
-        { v: "41% vs 29%", l: "raising rates in the next six months" },
+        { v: `${mostAi.demandMean} vs ${someAi.demandMean}`, l: "demand score out of 5" },
+        { v: `${f.pct(mostAi.raise)} vs ${f.pct(someAi.raise)}`, l: "raising rates in the next six months" },
         { v: "46 of 67", l: "waitlist operators named ChatGPT a must-have" },
         { v: "Top 5", l: "\"AI Sales Automation\" as an expertise tag" },
       ],
-      note: "\"Most\" AI users vs. the rest",
+      note: "\"Most\" AI users vs. \"some\"",
     },
     { t: "h3", text: "What this means for a buyer" },
     {
@@ -77,22 +88,22 @@ const chapter: Chapter = {
     },
 
     { t: "h2", eyebrow: "The anomaly, worth watching", text: "The pricing gap that will close", id: "the-pricing-gap-that-will-close" },
-    { t: "lede", html: "Buyers want it more than anything else and pay less for it than the core roles." },
+    { t: "lede", html: "Buyers want it more than anything else and, so far, pay the going rate for it, not a premium." },
     {
       t: "stats",
       items: [
-        { v: "3.6 / 5", l: "AI GTM demand trend" },
-        { v: "~$212", l: "AI GTM median hourly rate" },
-        { v: "$238 - $300", l: "what RevOps and enablement command" },
+        { v: `${aiGtmRole.demandMean} / 5`, l: "AI GTM demand trend" },
+        { v: aiGtm.median, l: `AI GTM median hourly rate (${aiGtm.n} rates, directional)` },
+        { v: `${revOps.median} - ${enablement.median}`, l: "what RevOps and enablement command" },
       ],
     },
     {
       t: "p",
-      html: "Here is the anomaly worth watching. AI GTM has the highest demand trend of any role in the survey (3.6 of 5) and a median rate of about $212 an hour, below sales, marketing and RevOps. Buyers want it more than anything else and pay less for it than the core roles.",
+      html: `Here is the anomaly worth watching. AI GTM has the highest demand trend of any role in the survey with more than one answer (${aiGtmRole.demandMean} of 5, on ${aiGtmRole.n} operators) and a median rate of ${aiGtm.median} an hour, the market median, on ${aiGtm.n} rates, so directional. The lowest-priced role is Marketing, at ${marketing.median}. Buyers want AI GTM more than anything else and pay the going rate for it, not a premium.`,
     },
     {
       t: "p",
-      html: "That will not hold. Either the AI GTM specialists will reprice toward the $238 to $300 that RevOps and enablement command, or, more likely, the work will get absorbed into the other roles.",
+      html: `That will not hold. Either the AI GTM specialists will reprice toward the ${revOps.median} to ${enablement.median} that RevOps and enablement command (enablement on ${enablement.n} rates, directional), or, more likely, the work will get absorbed into the other roles.`,
     },
     { t: "p", html: "A fractional CRO in 2028 who cannot put AI into a revenue process will not be a fractional CRO for long." },
     {
@@ -108,7 +119,7 @@ const chapter: Chapter = {
     },
     {
       t: "p",
-      html: "This is the scenario the current data points toward most directly: companies already extend 57% of engagements, stack a second fractional role after the first works, and buy fewer hours as tools absorb the execution.",
+      html: `This is the scenario the current data points toward most directly: companies already extend ${f.pct(f.engagements.extendedShare)} of engagements, stack a second fractional role after the first works, and buy fewer hours as tools absorb the execution.`,
     },
     { t: "h3", text: "The hybrid network" },
     {
@@ -139,27 +150,27 @@ const chapter: Chapter = {
         {
           n: "1",
           title: "Fractional will show up in the org chart.",
-          html: "Today, 80% of operators do this as a career, and 57% of engagements extend past their initial term. By 2030, the companies in our data will list fractional leaders on their leadership page and in their board decks as a standing part of the team, not a vendor.",
+          html: `Today, ${f.pct(f.survey.mainIncomeShare)} of operators do this as a career, and ${f.pct(f.engagements.extendedShare)} of engagements extend past their initial term. By 2030, the companies in our data will list fractional leaders on their leadership page and in their board decks as a standing part of the team, not a vendor.`,
         },
         {
           n: "2",
           title: "The three-month minimum becomes the three-month standard.",
-          html: "Buyers ask for one to three months (36% of engagements); operators demand three (61%). The contracts already split the difference with an opt-out at week 8 to 12. Expect that to be the default structure across the market within two years.",
+          html: `Buyers ask for one to three months (${f.pct(f.term("1 to 3 months"))} of engagements); operators on our platform set a three-month minimum (${f.of(f.platform.minThreeMonths.x, f.platform.minThreeMonths.y)}). The contracts already split the difference with an opt-out at week 8 to 12. Expect that to be the default structure across the market within two years.`,
         },
         {
           n: "3",
           title: "AI GTM disappears as a separate role and reprices inside the others.",
-          html: "From about $212 an hour as a specialty to a $50-an-hour premium on sales and RevOps leaders who have it. Watch the rate table in the 2028 edition of this guide.",
+          html: `From ${aiGtm.median} an hour as a specialty, the market rate, to a $50-an-hour premium on sales and RevOps leaders who have it. Watch the rate table in the 2028 edition of this guide.`,
         },
         {
           n: "4",
           title: "Verified engagement history replaces the résumé.",
-          html: "46% of clients never ask for a reference and 19% of operators have a public review. That gap is too big and too costly to persist. The marketplaces that win will be the ones with client-verified engagement records, and the operators on them will price higher than the ones who are not.",
+          html: `${f.pct(f.survey.reference.neverAsked)} of clients never ask for a reference and ${f.pct(f.survey.reference.publicReview)} of operators have a public review. That gap is too big and too costly to persist. The marketplaces that win will be the ones with client-verified engagement records, and the operators on them will price higher than the ones who are not.`,
         },
         {
           n: "5",
           title: "Non-software companies become the majority of buyers.",
-          html: "The network is 76% SaaS. Our direct clients are mostly agencies, services, healthcare and nonprofits. The inbound data is 75% companies under 100 people, most outside software. Supply will follow demand, and the 2029 network will look very different from today's.",
+          html: `The network is ${f.pct(f.platform.softwareShare)} SaaS or enterprise software. Our direct clients are mostly agencies, services, healthcare and nonprofits. The inbound data is 75% companies under 100 people, most outside software. Supply will follow demand, and the 2029 network will look very different from today's.`,
         },
       ],
     },

@@ -67,6 +67,9 @@ export const engagements = {
 };
 export const term = (label: string) => d.engagements.termShare.find((t) => t.term === label)?.share ?? 0;
 
+/* Rate and demand movement versus 12 months ago, operator-recalled. */
+export const movement = d.movement;
+
 /* The operator survey. */
 export const survey = d.survey;
 export const role = (name: string) => {

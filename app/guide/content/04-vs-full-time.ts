@@ -1,4 +1,14 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* Fractional VP-level sales leader: the Chapter 3 budget (median monthly spend at a $5M - $20M company) at 40 hours a month. */
+const fractionalMonthly = f.firstClientMonthly("$5M - $20M").medianMonthly ?? 0;
+const fractionalAnnual = fractionalMonthly * 12;
+const fractionalHourly = f.rate(fractionalAnnual / (40 * 12));
+const salesMedian = f.category("Sales Leadership").median;
+/* Interim head of sales, from the direct contracts, to the nearest $1,000. */
+const interim = f.seat("Interim head of sales");
+const thousands = (n: number | undefined) => f.usd(Math.round((n ?? 0) / 1000) * 1000);
 
 const chapter: Chapter = {
   slug: "04-vs-full-time",
@@ -7,9 +17,9 @@ const chapter: Chapter = {
   dek: "This is the chapter where most fractional firms put their thumb on the scale. We are going to try not to.",
   stats: [
     { v: "$507.5k - $577.5k", l: "year one, full-time VP of Sales" },
-    { v: "$120,000", l: "a year, fractional VP at 40 hrs / month", tone: "forest" },
+    { v: f.usd(fractionalAnnual), l: "a year, fractional VP at 40 hrs / month", tone: "forest" },
     { v: "2 wks vs 3 - 4 mo", l: "to day one, fractional vs full-time" },
-    { v: "$230 vs $245 - $280", l: "per hour, fractional vs full-time loaded" },
+    { v: `${salesMedian} vs $245 - $280`, l: "per hour, fractional vs full-time loaded" },
   ],
   blocks: [
     { t: "h2", text: "What a full-time VP of Sales actually costs", id: "what-a-full-time-vp-of-sales-actually-costs" },
@@ -75,12 +85,12 @@ const chapter: Chapter = {
     {
       t: "p",
       html:
-        "From Chapter 3: a fractional VP-level sales leader at 40 hours a month runs about $10,000 a month, or $120,000 a year. No search fee. No benefits. Start in two weeks. First measurable result inside 60 days in nearly four out of five engagements.",
+        `From Chapter 3: a fractional VP-level sales leader at 40 hours a month runs about ${f.usd(fractionalMonthly)} a month, or ${f.usd(fractionalAnnual)} a year. No search fee. No benefits. Start in two weeks. First measurable result inside 60 days in nearly four out of five engagements.`,
     },
     {
       t: "stats",
       items: [
-        { v: "~$10,000", l: "Monthly", s: "at 40 hrs / month" },
+        { v: `~${f.usd(fractionalMonthly)}`, l: "Monthly", s: "at 40 hrs / month" },
         { v: "None", l: "Search fee", s: "no benefits" },
         { v: "2 weeks", l: "Start", s: "to day one" },
         { v: "< 60 days", l: "First result", s: "in nearly 4 of 5 engagements", tone: "forest" },
@@ -93,7 +103,7 @@ const chapter: Chapter = {
       rows: [
         ["Full-time, high", "$577,500"],
         ["Full-time, low", "$507,500"],
-        ["Fractional, 40 hrs / mo", "$120,000"],
+        ["Fractional, 40 hrs / mo", f.usd(fractionalAnnual)],
       ],
       firstColHeader: true,
       note: "Full-time totals from Figure 4.1; fractional from Chapter 3. Bars scaled to the highest total ($577,500).",
@@ -103,7 +113,7 @@ const chapter: Chapter = {
     {
       t: "p",
       html:
-        "Fractional is not meaningfully cheaper per hour. Divide the full-time number by a working year and you get roughly $245 to $280 an hour loaded. Divide the fractional number by 40 hours a month and you get $250, and the Rate Index puts fractional sales leadership at about $230. Same neighborhood. Experienced revenue leadership costs what it costs, however you buy it.",
+        `Fractional is not meaningfully cheaper per hour. Divide the full-time number by a working year and you get roughly $245 to $280 an hour loaded. Divide the fractional number by 40 hours a month and you get ${fractionalHourly}, and the Rate Index puts fractional sales leadership at ${salesMedian}. Same neighborhood. Experienced revenue leadership costs what it costs, however you buy it.`,
     },
     {
       t: "table",
@@ -112,8 +122,8 @@ const chapter: Chapter = {
       rows: [
         ["Full-time, loaded high", "$280"],
         ["Full-time, loaded low", "$245"],
-        ["Fractional, 40 hrs", "$250"],
-        ["Rate Index, sales", "$230"],
+        ["Fractional, 40 hrs", fractionalHourly],
+        ["Rate Index, sales", salesMedian],
       ],
       firstColHeader: true,
       note: "Bars scaled to the highest value ($280).",
@@ -128,14 +138,14 @@ const chapter: Chapter = {
     {
       t: "p",
       html:
-        "<strong>Fractional is cheaper because you buy fewer hours.</strong> The $120,000 buys you a quarter of a leader.",
+        `<strong>Fractional is cheaper because you buy fewer hours.</strong> The ${f.usd(fractionalAnnual)} buys you a quarter of a leader.`,
     },
     {
       t: "callout",
       tone: "gold",
       title: "Where it goes wrong",
       html:
-        "If your business genuinely needs a full-time revenue leader, 160 hours a month of someone in the building, fractional will not get you there, and pretending otherwise is how engagements fail. In our survey, 3% of fractional engagements run at 160 hours. Those are interim roles with a different price (Chapter 3 shows $31,000 to $36,000 a month), and at that point you are paying full-time money for someone who will leave.",
+        `If your business genuinely needs a full-time revenue leader, 160 hours a month of someone in the building, fractional will not get you there, and pretending otherwise is how engagements fail. In our survey, 3% of fractional engagements run at 160 hours. Those are interim roles with a different price (Chapter 3 shows ${thousands(interim?.monthly.min)} to ${thousands(interim?.monthly.max)} a month), and at that point you are paying full-time money for someone who will leave.`,
     },
     {
       t: "quote",
@@ -148,7 +158,7 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "$120,000", l: "a year at 40 hrs / mo", tone: "forest" },
+        { v: f.usd(fractionalAnnual), l: "a year at 40 hrs / mo", tone: "forest" },
         { v: "2 weeks", l: "to start", tone: "forest" },
       ],
     },
@@ -189,13 +199,13 @@ const chapter: Chapter = {
     {
       t: "list",
       items: [
-        "The problem is a deliverable, not a leader. A playbook. An outbound sequence library. A CRM migration. An enablement program for a team that already has a good boss. The 27 project engagements in our contract data are almost all this shape: one to three months, fixed scope, a readout at the end.",
+        `The problem is a deliverable, not a leader. A playbook. An outbound sequence library. A CRM migration. An enablement program for a team that already has a good boss. The ${f.contracts.partnerEngagements} project engagements in our contract data are almost all this shape: one to three months, fixed scope, a readout at the end.`,
         "You have a revenue leader and they need hands. Specialists under a leader works. Specialists instead of a leader, as the operators warned in Chapter 9, mostly does not.",
       ],
     },
     {
       t: "note",
-      text: "Cost and timing figures from this chapter and Chapter 3. Project terms from the 27 project engagements in Revenue Nomad contract data.",
+      text: `Cost and timing figures from this chapter and Chapter 3. Project terms from the ${f.contracts.partnerEngagements} project engagements in Revenue Nomad contract data.`,
     },
 
     {
@@ -212,9 +222,9 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "57%", l: "Extend", s: "of engagements do.", tone: "forest" },
-        { v: "4 of 11", l: "Expand", s: "of our direct clients did." },
-        { v: "1 in 74", l: "Convert", s: "Convert the fractional leader to full-time, with the fee for that written into the contract." },
+        { v: f.pct(f.engagements.extendedShare), l: "Extend", s: "of engagements do.", tone: "forest" },
+        { v: f.of(f.contracts.expandedHours, f.contracts.directClients), l: "Expand", s: "of our direct clients did." },
+        { v: `${f.survey.status.converted} in ${f.survey.status.n}`, l: "Convert", s: "Convert the fractional leader to full-time, with the fee for that written into the contract." },
         { v: "A permanent leader", l: "Hire", s: "Hire a permanent leader into a role that now has a working system under it." },
       ],
     },

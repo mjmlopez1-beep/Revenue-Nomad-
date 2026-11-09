@@ -1,4 +1,31 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* Shares computed from x-of-y counts, rounded to whole percent. */
+const share = (b: { x: number; y: number }) => Math.round((b.x / b.y) * 100);
+const ofShare = (b: { x: number; y: number }) => `${share(b)}%`;
+
+/* Figure 5.1: time to first measurable result. */
+const ttrRows = f.survey.timeToResult;
+const ttrHigh = Math.max(...ttrRows.map((t) => t.share));
+
+/* Figure 5.2: initial term. */
+const termRows = f.engagements.termShare;
+const termHigh = Math.max(...termRows.map((t) => t.share));
+
+/* Figure 5.3: extension by hours a month. */
+const hoursRows = f.survey.extendedByHours.map((b) => ({ ...b, share: share(b) }));
+const hoursHigh = Math.max(...hoursRows.map((b) => b.share));
+const hoursLow = Math.min(...hoursRows.map((b) => b.share));
+const hoursTag = (s: number) => (s === hoursHigh ? " (highest)" : s === hoursLow ? " (lowest)" : "");
+
+/* Figure 5.4: status of the most recent engagement. stillRunning is a share; the rest are counts of n. */
+const st = f.survey.status;
+const statusPct = (count: number) => f.pct(Math.round((count / st.n) * 100));
+
+/* Platform minimum terms. */
+const minThree = f.platform.minThreeMonths;
+const minOne = f.platform.minOneMonth;
 
 const chapter: Chapter = {
   slug: "05-how-fast-how-long",
@@ -6,10 +33,10 @@ const chapter: Chapter = {
   title: "How fast, how long, how it ends",
   dek: "The data on the three things CEOs worry about, with one real caveat",
   stats: [
-    { v: "49%", l: "first measurable result inside 30 days" },
-    { v: "57%", l: "extended past the initial term" },
-    { v: "77%", l: "of most recent engagements still running" },
-    { v: "4 of 74", l: "ended early, all readiness failures" },
+    { v: f.pct(f.ttr("Under 30 days").share), l: "first measurable result inside 30 days" },
+    { v: f.pct(f.engagements.extendedShare), l: "extended past the initial term" },
+    { v: f.pct(st.stillRunning), l: "of most recent engagements still running" },
+    { v: f.of(st.endedEarly, st.n), l: "ended early, all readiness failures" },
   ],
   blocks: [
     {
@@ -22,18 +49,12 @@ const chapter: Chapter = {
       t: "table",
       head: ["Time to first measurable result", "Share of engagements"],
       firstColHeader: true,
-      rows: [
-        ["Under 30 days", "49% (highest)"],
-        ["30 to 60 days", "30%"],
-        ["60 to 90 days", "8%"],
-        ["90+ days", "9%"],
-        ["Not measured", "4%"],
-      ],
-      note: "n=74. Stacked bar shows each share of the whole; table bars scaled to the highest value in the column (49%).",
+      rows: ttrRows.map((t) => [t.band, `${f.pct(t.share)}${t.share === ttrHigh ? " (highest)" : ""}`]),
+      note: `n=${f.survey.detailed}. Stacked bar shows each share of the whole; table bars scaled to the highest value in the column (${f.pct(ttrHigh)}).`,
     },
     {
       t: "p",
-      html: "Half of engagements produced something measurable inside a month. Nearly four in five inside two. The 9% that took more than 90 days were concentrated in enablement programs and marketing builds, both of which have longer natural cycles.",
+      html: `Half of engagements produced something measurable inside a month. Nearly four in five inside two. The ${f.pct(f.ttr("90+ days").share)} that took more than 90 days were concentrated in enablement programs and marketing builds, both of which have longer natural cycles.`,
     },
     {
       t: "p",
@@ -58,26 +79,21 @@ const chapter: Chapter = {
       t: "table",
       head: ["Initial term agreed", "Share of engagements"],
       firstColHeader: true,
-      rows: [
-        ["1 to 3 months", "36%"],
-        ["3 to 6 months", "38% (most common)"],
-        ["6 to 12 months", "16%"],
-        ["12+ months", "9%"],
-      ],
-      note: "n=74. Bars scaled to the highest value in the column (38%).",
+      rows: termRows.map((t) => [t.term, `${f.pct(t.share)}${t.share === termHigh ? " (most common)" : ""}`]),
+      note: `n=${f.survey.detailed}. Bars scaled to the highest value in the column (${f.pct(termHigh)}).`,
     },
     {
       t: "stats",
       items: [
-        { v: "61%", l: "of platform operators set a three-month minimum" },
-        { v: "A third", l: "will take one month" },
-        { v: "36%", l: "initial terms of 1 to 3 months" },
-        { v: "38%", l: "initial terms of 3 to 6 months" },
+        { v: ofShare(minThree), l: "of platform operators set a three-month minimum" },
+        { v: ofShare(minOne), l: "will take one month" },
+        { v: f.pct(f.term("1 to 3 months")), l: "initial terms of 1 to 3 months" },
+        { v: f.pct(f.term("3 to 6 months")), l: "initial terms of 3 to 6 months" },
       ],
     },
     {
       t: "p",
-      html: "Initial terms split almost evenly between three to six months (38%) and one to three months (36%). Buyers want a short trial. But on the Revenue Nomad platform, 61% of operators set a minimum engagement of three months, and only a third will take one month. Experienced operators have learned that nothing meaningful happens in 30 days except a diagnosis, and they do not want to be judged on it.",
+      html: `Initial terms split almost evenly between three to six months (${f.pct(f.term("3 to 6 months"))}) and one to three months (${f.pct(f.term("1 to 3 months"))}). Buyers want a short trial. But on the Revenue Nomad platform, ${ofShare(minThree)} of operators set a minimum engagement of three months, and only ${ofShare(minOne)} (${f.of(minOne.x, minOne.y)}) will take one month. Experienced operators have learned that nothing meaningful happens in 30 days except a diagnosis, and they do not want to be judged on it.`,
     },
     {
       t: "callout",
@@ -89,35 +105,29 @@ const chapter: Chapter = {
     { t: "h2", eyebrow: "Figure 5.3", text: "Whether it extends", id: "whether-it-extends" },
     {
       t: "p",
-      html: "<strong>57% of engagements extended past their initial term.</strong> But extension is not evenly distributed, and the pattern is worth knowing before you set your hours.",
+      html: `<strong>${f.pct(f.engagements.extendedShare)} of engagements extended past their initial term.</strong> But extension is not evenly distributed, and the pattern is worth knowing before you set your hours.`,
     },
     {
       t: "table",
       head: ["Hours per month", "Extended past initial term", "Engagements"],
       firstColHeader: true,
-      rows: [
-        ["Under 20", "35% (lowest)", "7 of 20"],
-        ["20", "69%", "11 of 16"],
-        ["40", "58%", "11 of 19"],
-        ["60", "88% (highest)", "7 of 8"],
-        ["80+", "55%", "6 of 11"],
-      ],
-      note: "n=74. Bars scaled to the highest value in the column (88%).",
+      rows: hoursRows.map((b) => [b.band, `${f.pct(b.share)}${hoursTag(b.share)}`, f.of(b.x, b.y)]),
+      note: `n=${f.survey.detailed}. Bars scaled to the highest value in the column (${f.pct(hoursHigh)}).`,
     },
     {
       t: "p",
-      html: "Engagements under 20 hours a month extend a third of the time. Everything from 20 to 60 hours extends at least half the time, usually much more. The light advisory engagement, a few hours a week of senior counsel, is the one most likely to end on schedule. It is also the one least likely to change anything, because nobody is in the business long enough to move it. If you want the engagement to work well enough that you keep it, 20 hours a month appears to be the floor.",
+      html: "Engagements under 20 hours a month extend a third of the time. Everything from 20 hours a month up extends more than half the time. The light advisory engagement, a few hours a week of senior counsel, is the one most likely to end on schedule. It is also the one least likely to change anything, because nobody is in the business long enough to move it. If you want the engagement to work well enough that you keep it, 20 hours a month appears to be the floor.",
     },
     {
       t: "p",
-      html: "By role, marketing engagements extended most often (13 of 18), sales leadership a bit above half (18 of 31). Revenue operations extended least of the core roles (4 of 11), which makes sense: RevOps work is often a project with a finish line, a CRM migration or a forecast rebuild, and ending on time is the plan.",
+      html: `By role, marketing engagements extended most often (${f.of(f.role("Marketing").extended.x, f.role("Marketing").extended.y)}), sales leadership a bit above half (${f.of(f.role("Sales Leadership").extended.x, f.role("Sales Leadership").extended.y)}). Revenue operations extended least of the core roles (${f.of(f.role("Revenue Operations").extended.x, f.role("Revenue Operations").extended.y)}), which makes sense: RevOps work is often a project with a finish line, a CRM migration or a forecast rebuild, and ending on time is the plan.`,
     },
     {
       t: "stats",
       items: [
-        { v: "13 of 18", l: "Marketing" },
-        { v: "18 of 31", l: "Sales leadership" },
-        { v: "4 of 11", l: "Revenue operations" },
+        { v: f.of(f.role("Marketing").extended.x, f.role("Marketing").extended.y), l: "Marketing" },
+        { v: f.of(f.role("Sales Leadership").extended.x, f.role("Sales Leadership").extended.y), l: "Sales leadership" },
+        { v: f.of(f.role("Revenue Operations").extended.x, f.role("Revenue Operations").extended.y), l: "Revenue operations" },
       ],
       note: "Extended, by role.",
     },
@@ -128,15 +138,15 @@ const chapter: Chapter = {
       head: ["Status of most recent engagement", "Share"],
       firstColHeader: true,
       rows: [
-        ["Still running", "77%"],
-        ["Extended, then ended", "9%"],
-        ["Ended at the planned date", "7%"],
-        ["Ended early", "5%"],
-        ["Converted operator to a full-time hire", "1%"],
+        ["Still running", f.pct(st.stillRunning)],
+        ["Extended, then ended", statusPct(st.extendedThenEnded)],
+        ["Ended at the planned date", statusPct(st.endedPlanned)],
+        ["Ended early", statusPct(st.endedEarly)],
+        ["Converted operator to a full-time hire", statusPct(st.converted)],
       ],
-      note: "n=74. Stacked bar shows each share of the whole; table bars scaled to the highest value in the column (77%).",
+      note: `n=${st.n}. Stacked bar shows each share of the whole; table bars scaled to the highest value in the column (${f.pct(st.stillRunning)}).`,
     },
-    { t: "h3", text: "Four of 74 ended early, and every operator told us why" },
+    { t: "h3", text: `${f.of(st.endedEarly, st.n)} ended early, and every operator told us why` },
     {
       t: "list",
       ordered: true,
@@ -156,8 +166,8 @@ const chapter: Chapter = {
     {
       t: "callout",
       tone: "night",
-      title: "1 in 74",
-      html: "The one engagement in 74 that converted to full-time is worth a word. It happens. The contracts price it in (a hire-away fee of $25,000 to $50,000, Chapter 3). But it is rare, and the operators are not angling for it. 80% of them are doing this as a career.",
+      title: `${st.converted} in ${st.n}`,
+      html: `The one engagement in ${st.n} that converted to full-time is worth a word. It happens. The contracts price it in (a hire-away fee of $25,000 to $50,000, Chapter 3). But it is rare, and the operators are not angling for it. ${f.pct(f.survey.mainIncomeShare)} of them are doing this as a career.`,
     },
 
     { t: "h2", eyebrow: "Direct contracts", text: "What our contracts add", id: "what-our-contracts-add" },
@@ -165,13 +175,13 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "4 of 11", l: "direct clients expanded hours" },
+        { v: f.of(f.contracts.expandedHours, f.contracts.directClients), l: "direct clients expanded hours" },
         { v: "None", l: "reduced" },
       ],
     },
     {
       t: "p",
-      html: "Four of eleven direct clients expanded hours during the engagement. None reduced. In three cases the expansion happened inside the first 90 days.",
+      html: `${f.of(f.contracts.expandedHours, f.contracts.directClients)} direct clients expanded hours during the engagement. None reduced. In three cases the expansion happened inside the first 90 days.`,
     },
     {
       t: "stats",
@@ -193,14 +203,14 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "46%", l: "say their current client never asked for a review or reference" },
-        { v: "19%", l: "have a written public review anywhere" },
-        { v: "23%", l: "gave a private reference only" },
+        { v: f.pct(f.survey.reference.neverAsked), l: "say their current client never asked for a review or reference" },
+        { v: f.pct(f.survey.reference.publicReview), l: "have a written public review anywhere" },
+        { v: f.pct(f.survey.reference.privateOnly), l: "gave a private reference only" },
       ],
     },
     {
       t: "p",
-      html: "One more finding that belongs here because it is about how engagements end: 46% of operators said their current client never asked them for a review or reference. Only 19% have a written public review anywhere. 23% gave a private reference only.",
+      html: `One more finding that belongs here because it is about how engagements end: ${f.pct(f.survey.reference.neverAsked)} of operators said their current client never asked them for a review or reference. Only ${f.pct(f.survey.reference.publicReview)} have a written public review anywhere. ${f.pct(f.survey.reference.privateOnly)} gave a private reference only.`,
     },
     { t: "p", html: "For buyers, Chapter 8 covers why that is your edge. For the market, it is a problem." },
     { t: "p", html: "The best fractional leaders have the thinnest public record, because their clients are happy and quiet." },

@@ -1,26 +1,36 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* Share of engagements extended, by when the first measurable result landed (operator survey). */
+const extendedShare = (band: string) => {
+  const b = f.extendedByResult(band);
+  return f.pct(b.y ? Math.round((b.x / b.y) * 100) : 0);
+};
+const answered = f.survey.mistakesAnswered;
+const endedEarly = f.survey.status.endedEarly;
+const converted = f.survey.status.converted;
 
 const chapter: Chapter = {
   slug: "09-first-90-days",
   number: "09",
   title: "The first 90 days, and the nine ways buyers get it wrong",
-  dek: "Sixty-three operators named the biggest buyer mistake. Nine patterns cover them all.",
+  dek: `${answered} of ${f.survey.detailed} operators named the biggest buyer mistake. Nine patterns cover them all.`,
   stats: [
-    { v: "63 of 74", l: "operators gave a real answer on the biggest mistake" },
+    { v: f.of(answered, f.survey.detailed), l: "operators gave a real answer on the biggest mistake" },
     { v: "9", l: "patterns cover every answer" },
-    { v: "4 of 74", l: "engagements ended early" },
-    { v: "57%", l: "extend after day 90" },
+    { v: f.of(endedEarly, f.survey.detailed), l: "engagements ended early" },
+    { v: f.pct(f.engagements.extendedShare), l: "extend after day 90" },
   ],
   blocks: [
     {
       t: "lede",
-      html: "Sixty-three operators named the biggest buyer mistake. Nine patterns cover them all - every one the buyer's to fix.",
+      html: `${answered} of ${f.survey.detailed} operators named the biggest buyer mistake. Nine patterns cover them all - every one the buyer's to fix.`,
     },
 
     { t: "h2", eyebrow: "The nine mistakes", text: "Every one of them is the buyer's to fix", id: "every-one-of-them-is-the-buyers-to-fix" },
     {
       t: "p",
-      html: "We asked 74 operators the biggest mistake companies make when hiring a fractional GTM leader. Sixty-three gave real answers. We coded every one. Nine patterns cover them all, and every one of them is the buyer's to fix.",
+      html: `We asked ${f.survey.detailed} operators the biggest mistake companies make when hiring a fractional GTM leader. ${answered} gave real answers. We coded every one. Nine patterns cover them all, and every one of them is the buyer's to fix.`,
     },
     {
       t: "steps",
@@ -111,28 +121,28 @@ const chapter: Chapter = {
         {
           n: "08",
           title: "No off-ramp",
-          html: "\"No exit or off-ramp.\" \"Not clarifying expectations and any guarantees up front.\" Two of the 63 answers; both from operators who had seen engagements end badly because nobody had defined how they would end well.<br><br><strong>The fix</strong><br>The contracts handle this: opt-out at week 8 to 12, 30-day notice, hire-away fee if you want to keep them. Use those clauses. Talk about the end on day one.",
+          html: `"No exit or off-ramp." "Not clarifying expectations and any guarantees up front." Two of the ${answered} answers; both from operators who had seen engagements end badly because nobody had defined how they would end well.<br><br><strong>The fix</strong><br>The contracts handle this: opt-out at week 8 to 12, 30-day notice, hire-away fee if you want to keep them. Use those clauses. Talk about the end on day one.`,
         },
         {
           n: "09",
           title: "Not giving it enough time",
-          html: "The counterweight to number 6. \"Thinking it will be done overnight.\" \"Not giving enough time to execute.\" \"Building a sustainable pipeline and generating revenue takes time.\"<br><br>This sounds like it contradicts \"half show results in 30 days.\" It does not. A measurable result in 30 days is a cleaned CRM, a working outbound sequence, a forecast that is right. Revenue follows. Operators with first results at 30 to 60 days were extended 77% of the time in our data; those with results under 30 days, 50%. The sample is small and the pattern could be an artifact, but it is consistent with what the operators are saying: <strong>the fast win is not the point. The system is.</strong>",
+          html: `The counterweight to number 6. "Thinking it will be done overnight." "Not giving enough time to execute." "Building a sustainable pipeline and generating revenue takes time."<br><br>This sounds like it contradicts "half show results in 30 days." It does not. A measurable result in 30 days is a cleaned CRM, a working outbound sequence, a forecast that is right. Revenue follows. Operators with first results at 30 to 60 days were extended ${extendedShare("30 to 60 days")} of the time in our data; those with results under 30 days, ${extendedShare("Under 30 days")}. The sample is small and the pattern could be an artifact, but it is consistent with what the operators are saying: <strong>the fast win is not the point. The system is.</strong>`,
         },
       ],
     },
     {
       t: "stats",
       items: [
-        { v: "77%", l: "extended when first results came at 30 to 60 days" },
-        { v: "50%", l: "extended when results came under 30 days" },
+        { v: extendedShare("30 to 60 days"), l: "extended when first results came at 30 to 60 days" },
+        { v: extendedShare("Under 30 days"), l: "extended when results came under 30 days" },
       ],
     },
 
-    { t: "h2", eyebrow: "Four of 74", text: "What the early terminations have in common", id: "what-the-early-terminations-have-in-common" },
+    { t: "h2", eyebrow: f.of(endedEarly, f.survey.detailed), text: "What the early terminations have in common", id: "what-the-early-terminations-have-in-common" },
     { t: "lede", html: "All four readiness failures. None a competence failure." },
     {
       t: "p",
-      html: "Of 74 engagements, four ended early, and every operator told us why. Two in their own words; the other two described.",
+      html: `Of ${f.survey.detailed} engagements, ${endedEarly} ended early, and every operator told us why. Two in their own words; the other two described.`,
     },
     {
       t: "list",
@@ -180,8 +190,8 @@ const chapter: Chapter = {
         {
           n: "After day 90",
           title: "Decide",
-          html: "In our data, 57% extend. Four of eleven direct clients expanded hours. One in 74 converted to full-time. Whatever you choose, you should be choosing it with a working system in place, which is the one outcome the full-time search never gives you.",
-          aside: "57% extend. 4 of 11 expand. 1 in 74 convert.",
+          html: `In our data, ${f.pct(f.engagements.extendedShare)} extend. ${f.contracts.expandedHours} of ${f.contracts.directClients} direct clients expanded hours. ${converted} in ${f.survey.detailed} converted to full-time. Whatever you choose, you should be choosing it with a working system in place, which is the one outcome the full-time search never gives you.`,
+          aside: `${f.pct(f.engagements.extendedShare)} extend. ${f.of(f.contracts.expandedHours, f.contracts.directClients)} expand. ${converted} in ${f.survey.detailed} convert.`,
         },
       ],
     },

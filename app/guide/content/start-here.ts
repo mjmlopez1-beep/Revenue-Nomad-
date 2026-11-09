@@ -1,4 +1,8 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+const under30 = f.ttr("Under 30 days").share;
+const midBand = f.engagements.byRevenue.find((b) => b.band === "$5M - $20M");
 
 const chapter: Chapter = {
   slug: "start-here",
@@ -6,10 +10,10 @@ const chapter: Chapter = {
   title: "Start here",
   dek: "The three roads that bring a CEO to fractional, and the short version of everything that follows",
   stats: [
-    { v: "172", l: "working fractional GTM operators" },
-    { v: "38", l: "signed engagement contracts" },
-    { v: "77", l: "inbound requests from companies" },
-    { v: "$225", l: "median hourly rate" },
+    { v: f.headline.operators, l: "working fractional GTM operators" },
+    { v: f.headline.contracts, l: "signed engagement contracts" },
+    { v: f.headline.inbound, l: "inbound requests from companies" },
+    { v: f.rates.median, l: "median hourly rate" },
   ],
   blocks: [
     {
@@ -39,13 +43,13 @@ const chapter: Chapter = {
     { t: "h2", text: "What this guide is", id: "what-this-guide-is" },
     {
       t: "p",
-      html: "This guide is about what actually happens when companies between $1 million and $200 million in revenue bring in fractional go-to-market leaders: sales, marketing, revenue operations, enablement and the new category of AI GTM. It is built on three kinds of evidence nobody else has put in one place: 172 working fractional GTM operators, through a survey, platform profiles and our pre-launch waitlist; the terms of 38 signed engagement contracts, including every one Revenue Nomad has written; and 77 inbound requests from companies asking for this kind of help. Real rates. Real hours. Real notice periods. Real asks.",
+      html: `This guide is about what actually happens when companies between $1 million and $200 million in revenue bring in fractional go-to-market leaders: sales, marketing, revenue operations, enablement and the new category of AI GTM. It is built on three kinds of evidence nobody else has put in one place: ${f.headline.operators} working fractional GTM operators, through a survey, platform profiles and our pre-launch waitlist; the terms of ${f.headline.contracts} signed engagement contracts, including every one Revenue Nomad has written; and ${f.headline.inbound} inbound requests from companies asking for this kind of help. Real rates. Real hours. Real notice periods. Real asks.`,
     },
     {
       t: "callout",
       tone: "gold",
       title: "Conflict of interest",
-      html: "I run a fractional GTM firm, so read this knowing that. I have tried to make it the guide I would want if I were on the other side of the table. That means the parts where fractional does not work are in here too, including the four engagements in our data that ended early, and why.",
+      html: `I run a fractional GTM firm, so read this knowing that. I have tried to make it the guide I would want if I were on the other side of the table. That means the parts where fractional does not work are in here too, including the ${f.survey.status.endedEarly} engagements in our data that ended early, and why.`,
     },
     {
       t: "p",
@@ -58,37 +62,37 @@ const chapter: Chapter = {
       items: [
         {
           n: "01",
-          title: "The market centers on $225 an hour, and the spread around it is wide for good reasons.",
-          html: "A fractional Sales Director for a $5 million agency, a fractional CMO for a $30 million manufacturer and a fractional CRO for a $40 million software company are not the same product and do not cost the same. The engagements in our data run from under $5,000 to over $25,000 a month. The typical one is about $8,900. A $10 million company buying a two-day-a-week leader should expect $10,000.",
+          title: `The market centers on ${f.rates.median} an hour, and the spread around it is wide for good reasons.`,
+          html: `A fractional Sales Director for a $5 million agency, a fractional CMO for a $30 million manufacturer and a fractional CRO for a $40 million software company are not the same product and do not cost the same. The engagements in our data run from under $5,000 to over $25,000 a month. The typical one is about ${f.engagements.medianMonthly}. A $10 million company buying a two-day-a-week leader should expect ${f.monthly(midBand?.medianMonthly)}.`,
         },
         {
           n: "02",
           title: "Results come fast.",
-          html: "Half of engagements showed something measurable inside 30 days. Nearly four in five inside 60. If your fractional leader is 90 days in with nothing to point to, that is not a fractional problem. That is a hiring problem.",
+          html: `Half of engagements (${f.pct(under30)}) showed something measurable inside 30 days. Four in five (${f.pct(f.engagements.resultInside60)}) inside 60. If your fractional leader is 90 days in with nothing to point to, that is not a fractional problem. That is a hiring problem.`,
         },
         {
           n: "03",
           title: "Engagements do not blow up. They grow.",
-          html: "57% ran past their initial term. 5% ended early. Of our own eleven direct clients, four expanded the leader's hours within the first few months. The thing most CEOs are afraid of, the part-timer who drifts away, is not what the data shows.",
+          html: `${f.pct(f.engagements.extendedShare)} ran past their initial term. ${f.pct(Math.round((f.survey.status.endedEarly / f.survey.detailed) * 100))} ended early. Of our own ${f.contracts.directClients} direct clients, ${f.contracts.expandedHours} expanded the leader's hours within the first few months. The thing most CEOs are afraid of, the part-timer who drifts away, is not what the data shows.`,
         },
         {
           n: "04",
           title: "Every GTM role is now available this way, and they behave differently.",
-          html: "Marketing engagements extend most often. Revenue operations engagements end on time because they are built to. AI GTM is the most in-demand role and the cheapest, for now. Chapter 6 is the field guide.",
+          html: `Marketing engagements extend most often. Revenue operations engagements end on time because they are built to. AI GTM is the most in-demand role and already prices at the market center, about ${f.category("AI GTM").median} an hour. Chapter 6 is the field guide.`,
         },
         {
           n: "05",
           title: "The thing most CEOs check first is the thing that matters least.",
-          html: "4% of operators said clients wish they had checked for big-company logos. 47% said clients wish they had checked whether the person had done it at their stage and deal size.",
-          aside: "47% vs 4%",
+          html: `${f.pct(f.wish("logos"))} of operators said clients wish they had checked for big-company logos. ${f.pct(f.wish("stage"))} said clients wish they had checked whether the person had done it at their stage and deal size.`,
+          aside: `${f.pct(f.wish("stage"))} vs ${f.pct(f.wish("logos"))}`,
         },
       ],
     },
     {
       t: "stats",
       items: [
-        { v: "47%", l: "Stage and deal size" },
-        { v: "4%", l: "Big-company logos" },
+        { v: f.pct(f.wish("stage")), l: "Stage and deal size" },
+        { v: f.pct(f.wish("logos")), l: "Big-company logos" },
       ],
     },
   ],
