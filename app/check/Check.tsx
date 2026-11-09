@@ -12,8 +12,8 @@ import "./Check.css";
 type Step = { kind: "intake" } | { kind: "question"; index: number } | { kind: "lead" } | { kind: "results"; result: CheckResult };
 
 /**
- * The 2-minute Revenue Health Check stepper. Intake (revenue and employee range), seven questions, the lead
- * form, then results from the server action. State lives here; scoring and recording happen on the server.
+ * The 2-minute Revenue Health Check stepper. Eight questions: the company's stage (revenue and employee range,
+ * styled as question one rather than a gate), then one per pillar, the lead form, then results from the server action. State lives here; scoring and recording happen on the server.
  */
 export default function Check() {
   const [step, setStep] = useState<Step>({ kind: "intake" });
@@ -41,45 +41,63 @@ export default function Check() {
 
   if (step.kind === "results") return <Results result={step.result} />;
 
+  const total = questions.length + 1; // the stage question plus one per pillar
+
   if (step.kind === "intake") {
     return (
       <form
         className="chk-card"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!revenue || !employees) return setError("Choose both so we can read your scores for your stage.");
+          if (!revenue || !employees) return setError("Pick a revenue range and an employee range so we can read your scores for your stage.");
           go({ kind: "question", index: 0 });
         }}
       >
-        <p className="rn-eyebrow">Before we start</p>
-        <h2 ref={headingRef} tabIndex={-1} className="chk-h">
-          Two things about your company
-        </h2>
-        <p className="rn-body chk-help">Your stage decides which fixes create the most lift, so the results are read against it.</p>
-        <div className="chk-selects">
-          <label className="chk-field">
-            <span>Company revenue</span>
-            <select name="revenue" value={revenue} onChange={(e) => setRevenue(e.target.value)} required>
-              <option value="">Choose a range</option>
-              {revenueRanges.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="chk-field">
-            <span>Company employees</span>
-            <select name="employees" value={employees} onChange={(e) => setEmployees(e.target.value)} required>
-              <option value="">Choose a range</option>
-              {employeeRanges.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="chk-progress">
+          <p className="rn-eyebrow" aria-live="polite">
+            Question 1 of {total}
+          </p>
+          <ol className="chk-dots" aria-hidden="true">
+            {Array.from({ length: total }, (_, i) => (
+              <li key={i} className={i === 0 ? "is-current" : ""} />
+            ))}
+          </ol>
+          <p className="chk-pillar">Your stage</p>
         </div>
+        <fieldset className="chk-fieldset">
+          <legend ref={headingRef as React.RefObject<HTMLLegendElement>} tabIndex={-1} className="chk-h">
+            Where is the company today?
+          </legend>
+          <p className="rn-body chk-help">Your stage decides which fixes create the most lift, so every score is read against it.</p>
+          <div className="chk-stage">
+            <fieldset className="chk-stage-group">
+              <legend className="chk-stage-k">Annual revenue</legend>
+              <ul className="chk-chips">
+                {revenueRanges.map((r) => (
+                  <li key={r.value}>
+                    <label className={revenue === r.value ? "chk-chip is-chosen" : "chk-chip"}>
+                      <input type="radio" name="revenue" value={r.value} checked={revenue === r.value} onChange={() => { setError(null); setRevenue(r.value); }} />
+                      <span>{r.label}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+            <fieldset className="chk-stage-group">
+              <legend className="chk-stage-k">Employees</legend>
+              <ul className="chk-chips">
+                {employeeRanges.map((r) => (
+                  <li key={r.value}>
+                    <label className={employees === r.value ? "chk-chip is-chosen" : "chk-chip"}>
+                      <input type="radio" name="employees" value={r.value} checked={employees === r.value} onChange={() => { setError(null); setEmployees(r.value); }} />
+                      <span>{r.label}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+          </div>
+        </fieldset>
         {error && (
           <p className="chk-error" role="alert">
             {error}
@@ -87,7 +105,7 @@ export default function Check() {
         )}
         <div className="chk-actions">
           <button type="submit" className="rn-btn">
-            Start the seven questions
+            Next
             <Arrow />
           </button>
         </div>
@@ -110,11 +128,11 @@ export default function Check() {
       >
         <div className="chk-progress">
           <p className="rn-eyebrow" aria-live="polite">
-            Question {step.index + 1} of {questions.length}
+            Question {step.index + 2} of {total}
           </p>
           <ol className="chk-dots" aria-hidden="true">
-            {questions.map((_, i) => (
-              <li key={i} className={i < step.index ? "is-done" : i === step.index ? "is-current" : ""} />
+            {Array.from({ length: total }, (_, i) => (
+              <li key={i} className={i < step.index + 1 ? "is-done" : i === step.index + 1 ? "is-current" : ""} />
             ))}
           </ol>
           <p className="chk-pillar">{pillarName(q.pillar)}</p>

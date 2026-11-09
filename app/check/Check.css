@@ -330,3 +330,68 @@
   text-decoration: underline;
   text-underline-offset: 4px;
 }
+
+/* Question 1: the company's stage as two chip groups, styled like the answer options. */
+.chk-stage {
+  display: grid;
+  gap: 22px;
+  margin-top: 18px;
+}
+.chk-stage-group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.chk-stage-k {
+  padding: 0;
+  margin-bottom: 10px;
+  font-size: var(--rn-text-eyebrow);
+  font-weight: 700;
+  letter-spacing: var(--rn-track-eyebrow);
+  text-transform: uppercase;
+  color: var(--rn-forest);
+}
+.chk-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chk-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1.5px solid var(--rn-line);
+  border-radius: var(--rn-radius-pill);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--rn-ink);
+  background: var(--rn-white);
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+.chk-chip:hover {
+  border-color: var(--rn-leaf-line);
+}
+.chk-chip.is-chosen {
+  border-color: var(--rn-forest);
+  background: var(--rn-forest);
+  color: var(--rn-white);
+}
+.chk-chip input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.chk-chip:has(input:focus-visible) {
+  outline: 2px solid var(--rn-forest);
+  outline-offset: 2px;
+}

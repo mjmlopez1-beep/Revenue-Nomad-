@@ -23,7 +23,8 @@ fixed each. Every result ends in Talk to us. The answers and scores go to HubSpo
 ## The flow
 
 1. `/check` intro: what it is, two minutes, seven questions, no call needed. Start.
-2. Step 0, two selects (standard fields from the product rules, single-select variants):
+2. Step 0 renders as question 1 of 8 (owner, Nov 9: "question 1 of the survey, not a gate"): the same card, progress
+   and legend as the pillar questions, with the two ranges as chip groups instead of selects:
    - Company revenue: Pre-revenue, Under $1M, $1M - $5M, $5M - $20M, $20M - $50M, $50M+
    - Company employees: 1 - 10, 11 - 50, 51 - 200, 201 - 500, 501 - 1,000, 1,000+
 3. Steps 1 to 7, one question per screen, four answers, one selected, Next (Back allowed). Progress "Question n of 7".
