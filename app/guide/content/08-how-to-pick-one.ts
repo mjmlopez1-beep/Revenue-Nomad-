@@ -1,4 +1,17 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* Figure 8.1 rows, in the order the survey reports them. Labels are the guide's; shares come from the dataset. */
+const wishLabels: Record<string, string> = {
+  stage: "They had done it at the same company stage and deal size",
+  communication: "How they communicate when they are part-time",
+  references: "References from past clients",
+  industry: "Experience in the same industry",
+  logos: "Big-name companies on the résumé",
+};
+const wishRows = [...f.survey.wishChecked].sort((a, b) => b.share - a.share);
+const wishHigh = Math.max(...wishRows.map((w) => w.share));
+const wishLow = Math.min(...wishRows.map((w) => w.share));
 
 const chapter: Chapter = {
   slug: "08-how-to-pick-one",
@@ -6,10 +19,10 @@ const chapter: Chapter = {
   title: "How to pick one: the logo trap and what to check instead",
   dek: "The resume is almost useless, and the resume is almost all you will be given",
   stats: [
-    { v: "47%", l: "say clients wish they had checked stage and deal size" },
-    { v: "4%", l: "say the same of big-name companies on the résumé", tone: "coral" },
-    { v: "46%", l: "say their current client never asked for a reference" },
-    { v: "19%", l: "have a written public review anywhere" },
+    { v: f.pct(f.wish("stage")), l: "say clients wish they had checked stage and deal size" },
+    { v: f.pct(f.wish("logos")), l: "say the same of big-name companies on the résumé", tone: "coral" },
+    { v: f.pct(f.survey.reference.neverAsked), l: "say their current client never asked for a reference" },
+    { v: f.pct(f.survey.reference.publicReview), l: "have a written public review anywhere" },
   ],
   blocks: [
     {
@@ -20,25 +33,22 @@ const chapter: Chapter = {
     { t: "h2", eyebrow: "Figure 8.1", text: "What clients wish they had checked", id: "what-clients-wish-they-had-checked" },
     {
       t: "p",
-      html: "We asked 74 operators a pointed question: what do clients most wish they had checked before hiring someone like you? They could pick more than one answer.",
+      html: `We asked ${f.survey.detailed} operators a pointed question: what do clients most wish they had checked before hiring someone like you? They could pick more than one answer.`,
     },
     {
       t: "table",
       caption: "Figure 8.1. What clients wish they had checked",
       head: ["What clients wish they had checked", "Share of operators"],
-      rows: [
-        ["They had done it at the same company stage and deal size", "47%"],
-        ["How they communicate when they are part-time", "39%"],
-        ["References from past clients", "31%"],
-        ["Experience in the same industry", "31%"],
-        ["Big-name companies on the résumé (lowest)", "4%"],
-      ],
+      rows: wishRows.map((w) => [
+        `${wishLabels[w.key] ?? w.key}${w.share === wishLow ? " (lowest)" : ""}`,
+        f.pct(w.share),
+      ]),
       firstColHeader: true,
-      note: "Operator survey, n=74, multi-select. Bars scaled to the highest value (47%).",
+      note: `Operator survey, n=${f.survey.detailed}, multi-select. Bars scaled to the highest value (${f.pct(wishHigh)}).`,
     },
     {
       t: "p",
-      html: "Read the bottom row again. The thing most CEOs look at first, where the person worked, is the thing operators themselves say matters least. <strong>4%.</strong>",
+      html: `Read the bottom row again. The thing most CEOs look at first, where the person worked, is the thing operators themselves say matters least. <strong>${f.pct(f.wish("logos"))}.</strong>`,
     },
     { t: "p", html: "The written answers are blunter." },
     {
@@ -87,13 +97,13 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "47%", l: "stage and deal size" },
-        { v: "31%", l: "industry experience" },
+        { v: f.pct(f.wish("stage")), l: "stage and deal size" },
+        { v: f.pct(f.wish("industry")), l: "industry experience" },
       ],
     },
     {
       t: "p",
-      html: "31% of operators said clients wish they had checked industry experience. 47% said stage and deal size. The operators who wrote about it were sharper:",
+      html: `${f.pct(f.wish("industry"))} of operators said clients wish they had checked industry experience. ${f.pct(f.wish("stage"))} said stage and deal size. The operators who wrote about it were sharper:`,
     },
     { t: "quote", text: "\"They only look for people in their industry.\"" },
     { t: "quote", text: "\"Too much focus on exact-fit industry and existing buyer relationships instead of skill set.\"" },
@@ -114,18 +124,18 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "39%", l: "flagged part-time communication" },
-        { v: "22%", l: "run four or more clients" },
-        { v: "20%", l: "run three" },
+        { v: f.pct(f.wish("communication")), l: "flagged part-time communication" },
+        { v: f.pct(f.survey.concurrent.fourPlus), l: "run four or more clients" },
+        { v: f.pct(f.survey.concurrent.three), l: "run three" },
       ],
     },
     {
       t: "p",
-      html: "39% flagged \"how they communicate when they are part-time.\" This is the question specific to fractional, and it is the one buyers skip because it feels awkward.",
+      html: `${f.pct(f.wish("communication"))} flagged "how they communicate when they are part-time." This is the question specific to fractional, and it is the one buyers skip because it feels awkward.`,
     },
     {
       t: "p",
-      html: "Ask it anyway. Here is why: 22% of the operators in our survey are running four or more clients at once. Another 20% are running three. That is not a red flag by itself. It is how the model works. But it means you need to know, before you sign, what Tuesday looks like. When are they in your Slack. How fast do they respond on a day they are not scheduled for you. What happens when two clients have a fire at the same time.",
+      html: `Ask it anyway. Here is why: ${f.pct(f.survey.concurrent.fourPlus)} of the operators in our survey are running four or more clients at once. Another ${f.pct(f.survey.concurrent.three)} are running three. That is not a red flag by itself. It is how the model works. But it means you need to know, before you sign, what Tuesday looks like. When are they in your Slack. How fast do they respond on a day they are not scheduled for you. What happens when two clients have a fire at the same time.`,
     },
     { t: "h3", text: "Questions that get real answers" },
     {
@@ -148,14 +158,14 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "31%", l: "say clients wish they had checked references" },
-        { v: "46%", l: "current client never asked for one" },
-        { v: "19%", l: "have a written public review" },
+        { v: f.pct(f.wish("references")), l: "say clients wish they had checked references" },
+        { v: f.pct(f.survey.reference.neverAsked), l: "current client never asked for one" },
+        { v: f.pct(f.survey.reference.publicReview), l: "have a written public review" },
       ],
     },
     {
       t: "p",
-      html: "31% of operators said clients wish they had checked references. Here is the number that goes with it: 46% of operators said their current client never asked for one. Only 19% have a written public review anywhere.",
+      html: `${f.pct(f.wish("references"))} of operators said clients wish they had checked references. Here is the number that goes with it: ${f.pct(f.survey.reference.neverAsked)} of operators said their current client never asked for one. Only ${f.pct(f.survey.reference.publicReview)} have a written public review anywhere.`,
     },
     {
       t: "p",
