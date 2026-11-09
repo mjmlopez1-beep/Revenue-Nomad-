@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed. Becomes Accepted when the founder confirms assumptions A1 to A9 in `docs/design/homepage-d-decisions.md`.
+Proposed. A1 and A3 answered by the founder on 2026-11-09 (see the decisions file); becomes Accepted when A2 and A4 to A9 are confirmed.
 
 ## Date
 
@@ -20,7 +20,8 @@ raw hex values. Nothing in the repository recorded which system wins or why.
 
 ## Decision
 
-1. Homepage D is the homepage. Homepage C is treated as history, since D is C plus additive blocks.
+1. Homepage C is the homepage (founder decision 2026-11-09, overriding the earlier assumption that D would ship),
+   plus a hero button to the 2-minute check. D's seven extra blocks were built and remain in git history.
 2. The page is rebuilt as server-rendered Next.js section components under `app/home/`, not published as the
    artboard's static HTML.
 3. The canvas palette and type become the single token set, `app/tokens.css`. Views may use only those

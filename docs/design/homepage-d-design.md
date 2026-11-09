@@ -1,6 +1,8 @@
 # Design: Homepage D, the lead engine, as the revenuenomad.com homepage
 
-Status: revised after Goldfish review (`docs/design/homepage-d-review.md`). Requirements: `docs/specs/homepage-d.md`.
+Status: revised after Goldfish review (`docs/design/homepage-d-review.md`). **2026-11-09 founder decision: Homepage C ships**, so
+rows 0, 3, 5, 8, 10, 14 and 17 below are built but not composed into the page; the hero's secondary button opens `/check`
+(`docs/specs/revenue-health-check.md`). The rest of this document stands. Requirements: `docs/specs/homepage-d.md`.
 Tickets: `docs/tickets/homepage-d/`. Copy source: `docs/design/homepage-d-content.md`.
 Visual source: the Design canvas "Revenue Nomad - Option D website",
 https://claude.ai/artifact/1CosGB9Ef1wMCrX8rt7uqh, artboards "Desktop - Homepage D, the lead engine"

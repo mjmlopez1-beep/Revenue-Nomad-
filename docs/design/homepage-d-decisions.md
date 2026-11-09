@@ -87,3 +87,16 @@ render nothing until at least one slot has a real entry?
 ➡️ Yes. An empty validation strip is worse than none.
 
 ## Frontier now empty. Decisions above are assumptions A1 to A9 for the founder to confirm.
+
+## Founder answers (2026-11-09, live session)
+
+- **A1 overridden: ship Homepage C**, with one addition from D: the hero's secondary button "Take the 2-minute
+  check" links straight to `/check`. D's seven extra blocks (research bar, firm numbers, three roads, ways to work,
+  health-check band, validation strip, newsletter) and the "$1M to $200M" lede line are removed from the page.
+  The components stay in git history.
+- **A3 confirmed**: the canvas palette and type are the design system.
+- **Hero check button goes straight to `/check`**, not to an in-page band.
+- **Build the 2-minute check now**: ask revenue range and employee range first; seven questions, one per pillar;
+  capture name and email after the questions and before results; results instantly; leads to HubSpot; the
+  pillar-by-stage weights are drafted for correction. Spec: `docs/specs/revenue-health-check.md`.
+- A2, A4 to A9 stand as assumptions.

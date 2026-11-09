@@ -40,7 +40,7 @@ const outcomes: Outcome[] = [
  */
 export default function Solutions() {
   return (
-    <section className="sol rn-section" aria-labelledby="sol-h">
+    <section id="solutions" className="sol rn-section" aria-labelledby="sol-h">
       <div className="rn-wrap">
         <p className="rn-eyebrow">Our solutions</p>
         <h2 id="sol-h" className="rn-h2 sol-h2">

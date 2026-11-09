@@ -2,10 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import Arrow from "./Arrow";
 import { hrefs } from "./content/links";
-import { facts } from "./content/numbers";
 import "./Hero.css";
 
-/** Hero (design 4.1, section 2): the page's only h1, two actions and the glass mark on its glow. */
+/** Hero (Homepage C with the check button): the page's only h1, Talk to us, Take the 2-minute check, See what we solve, and the glass mark on its glow. */
 export default function Hero() {
   return (
     <section className="hero" aria-labelledby="hero-h">
@@ -17,17 +16,21 @@ export default function Hero() {
             <span className="hero-stop">.</span>
           </h1>
           <p className="rn-lede hero-lede">
-            Revenue Nomad is a fractional leadership firm for companies between {facts.companySizeRange} in revenue. We
-            place sales, marketing and RevOps leaders who have built what you are building.
+            Revenue Nomad is a fractional leadership firm. We place sales, marketing and RevOps leaders who have built
+            what you are building.
           </p>
           <div className="hero-actions">
             <Link className="rn-btn" href={hrefs.talk}>
               Talk to us
               <Arrow />
             </Link>
-            <Link className="rn-btn rn-btn--ghost" href="#health-check">
+            <Link className="rn-btn rn-btn--ghost" href={hrefs.check}>
               Take the 2-minute check
               <Arrow />
+            </Link>
+            <Link className="rn-link hero-see" href="#solutions">
+              See what we solve
+              <Arrow size={13} />
             </Link>
           </div>
         </div>

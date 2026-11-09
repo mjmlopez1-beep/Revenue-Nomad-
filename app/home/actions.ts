@@ -19,6 +19,3 @@ export async function requestReport(formData: FormData): Promise<void> {
   redirect(hasValidEmail(formData) ? "/thanks?for=report" : "/#research");
 }
 
-export async function subscribe(formData: FormData): Promise<void> {
-  redirect(hasValidEmail(formData) ? "/thanks?for=newsletter" : "/#newsletter");
-}
