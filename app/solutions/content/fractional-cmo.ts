@@ -174,7 +174,7 @@ const page: RolePage = {
         byDay90: "A channel plan in market, with pipeline - not lead volume - as the number.",
         qa: [
           {
-            q: "Do we need a budget beyond the CMO's fee?",
+            q: "Do we need a budget beyond the CMO's rate?",
             a: "Yes. Hiring marketing leadership without a marketing budget was the second most pointed complaint in our survey. Nothing gets executed. Budget for execution, not just the leader.",
           },
           {

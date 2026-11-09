@@ -19,7 +19,7 @@ export default function SiteFooter() {
               revenue operations leaders - including fractional VPs of Sales, CMOs and RevOps leaders - with growing
               companies, a few days a week. Every leader is reviewed by the companies that hired them.
             </p>
-            <Link className="ftr-talk" href={hrefs.talk}>
+            <Link prefetch={false} className="ftr-talk" href={hrefs.talk}>
               Talk to us - we speak within {facts.responseHours}
             </Link>
           </div>
@@ -30,7 +30,7 @@ export default function SiteFooter() {
                 <ul>
                   {col.items.map((it) => (
                     <li key={it.href}>
-                      <Link href={it.href}>{it.label}</Link>
+                      <Link prefetch={false} href={it.href}>{it.label}</Link>
                     </li>
                   ))}
                 </ul>
@@ -62,8 +62,8 @@ export default function SiteFooter() {
 
         <div className="ftr-bottom">
           <p>
-            © 2026 Revenue Nomad · <Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link> ·{" "}
-            <Link href="/sitemap">Sitemap</Link>
+            © 2026 Revenue Nomad · <Link prefetch={false} href="/privacy">Privacy</Link> · <Link prefetch={false} href="/terms">Terms</Link> ·{" "}
+            <Link prefetch={false} href="/sitemap">Sitemap</Link>
           </p>
           <p className="ftr-cite">
             Hourly rates on this site come from the Revenue Nomad Rate Index -{" "}

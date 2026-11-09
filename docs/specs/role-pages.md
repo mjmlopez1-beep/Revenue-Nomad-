@@ -1,6 +1,6 @@
 # Spec: the four role pages (Hire a fractional leader)
 
-Status: IN BUILD 2026-11-09 from the Design canvas "Revenue Nomad - Option D website" artboards "Desktop - Fractional
+Status: BUILT 2026-11-09 from the Design canvas "Revenue Nomad - Option D website" artboards "Desktop - Fractional
 VP of Sales", "Desktop - Fractional CMO", "Desktop - Fractional RevOps leader" and their phone twins. There is no
 AI GTM artboard; that page follows the same template with content from the Buyer's Guide (Chapter 6 AI GTM,
 Chapter 10), the AI problem page and the Rate Index AI GTM category.
@@ -36,11 +36,26 @@ cuts, case study numbers, the one-day-a-week client.
 The owner's canvas now carries real imagery, so the homepage uses it (superseding decision A5's "no imagery"):
 thirteen monochrome client logos in the marquee and color variants on the case cards, reviewer portraits in
 In their words, abstract card art on the Solutions, Outcomes and Resources cards, the canvas's illustrative
-sample-operator photos on the For operators band (labeled sample profiles), and the glass knot as a faint
-decorative hero background. Files live under `public/home/{logos,people,cards,tiers}` and `hero-knot.webp`.
+sample-operator photos on the For operators band (labeled sample profiles), and the glass knot as the faint
+decorative background of the How it works band, where the artboard places it. Files live under `public/home/{logos,people,cards,tiers}` and `hero-knot.webp`.
 Before launch the owner confirms reviewers and clients are happy to be shown, as the canvas note says.
+
+## Deviations from the boards
+
+- Prices: the VP of Sales pill reads the signed-contract seat range ($3.9k to $12k a month) where the board said
+  "$4k - $10k"; CMO, RevOps and AI GTM quote the survey's median month ($4.5k, $9,000, $6,800) where the boards
+  said "$8k - $20k" and "$6k - $14k" with no contracts behind them.
+- "no recruiting fee" reads "no search fee"; results inside 60 days read 82% (boards said 78%); the index is 113
+  rates (boards said 137); the boards' hero spec-sheet grid (RevOps) and "At a glance" strip (CMO) fold into the
+  cost section; the "Six things" items render open rather than as accordions; the stock leader photos and the
+  keep-reading illustrations are not shipped.
+- The AI GTM page has no board: its "in practice" section quotes the Buyer's Guide, not a client, until a real AI
+  engagement quote exists.
+- Header and footer menu links no longer prefetch every route on load; the homepage's transferred weight fell from
+  1.9 MB to 1.4 MB.
 
 ## Checks
 
 `check:tokens` covers `app/solutions` and the four route folders; `check:home` runs the VP of Sales and RevOps
-pages by default.
+pages by default and passed on all four role pages and the homepage against the production build (zero axe
+violations, no horizontal scroll, page weight inside the budget, fee language clean).

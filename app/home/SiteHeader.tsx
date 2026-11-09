@@ -108,14 +108,14 @@ export default function SiteHeader() {
             </button>
             <MenuPanel id={ids.resources} groups={resourcesMenu} open={open === "resources"} />
           </div>
-          <Link className="hdr-link" href="/about">
+          <Link prefetch={false} className="hdr-link" href="/about">
             About
           </Link>
-          <Link className="hdr-link" href="/operators">
+          <Link prefetch={false} className="hdr-link" href="/operators">
             For operators
           </Link>
         </nav>
-        <Link className="rn-btn rn-btn--sm hdr-cta" href={hrefs.talk}>
+        <Link prefetch={false} className="rn-btn rn-btn--sm hdr-cta" href={hrefs.talk}>
           Talk to us
         </Link>
         <button
@@ -158,7 +158,7 @@ export default function SiteHeader() {
                 <ul>
                   {g.items.map((it) => (
                     <li key={it.href}>
-                      <Link href={it.href}>{it.label}</Link>
+                      <Link prefetch={false} href={it.href}>{it.label}</Link>
                     </li>
                   ))}
                 </ul>
@@ -167,14 +167,14 @@ export default function SiteHeader() {
             <div className="hdr-drawer-group">
               <ul>
                 <li>
-                  <Link href="/about">About</Link>
+                  <Link prefetch={false} href="/about">About</Link>
                 </li>
                 <li>
-                  <Link href="/operators">For operators</Link>
+                  <Link prefetch={false} href="/operators">For operators</Link>
                 </li>
               </ul>
             </div>
-            <Link className="rn-btn hdr-drawer-cta" href={hrefs.talk}>
+            <Link prefetch={false} className="rn-btn hdr-drawer-cta" href={hrefs.talk}>
               Talk to us
             </Link>
           </div>
@@ -193,7 +193,7 @@ function MenuPanel({ id, groups, open }: { id: string; groups: LinkGroup[]; open
           <ul>
             {g.items.map((it) => (
               <li key={it.href}>
-                <Link href={it.href}>{it.label}</Link>
+                <Link prefetch={false} href={it.href}>{it.label}</Link>
               </li>
             ))}
           </ul>
