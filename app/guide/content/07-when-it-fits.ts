@@ -1,4 +1,5 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
 
 const chapter: Chapter = {
   slug: "07-when-it-fits",
@@ -7,14 +8,14 @@ const chapter: Chapter = {
   dek: "Nobody wakes up needing a title. They wake up with a situation.",
   stats: [
     { v: "16", l: "situations we see most" },
-    { v: "74", l: "operator descriptions of why they were hired" },
-    { v: "11", l: "direct contracts" },
+    { v: String(f.survey.detailed), l: "operator descriptions of why they were hired" },
+    { v: String(f.contracts.directClients), l: "direct contracts" },
     { v: "20", l: "buyer requests" },
   ],
   blocks: [
     {
       t: "lede",
-      html: "Most buyers' guides organize by title. Nobody wakes up needing a title. They wake up with a situation. These are the sixteen we see most, drawn from 74 operator descriptions of why they were hired, 11 direct contracts, and 20 buyer requests. The first twelve are mostly about sales. The last four are where the rest of the GTM network, marketing, revenue operations and enablement, gets hired, and they are growing faster. For each: what it looks like, what the fractional leader actually does, and what to watch.",
+      html: `Most buyers' guides organize by title. Nobody wakes up needing a title. They wake up with a situation. These are the sixteen we see most, drawn from ${f.survey.detailed} operator descriptions of why they were hired, ${f.contracts.directClients} direct contracts, and 20 buyer requests. The first twelve are mostly about sales. The last four are where the rest of the GTM network, marketing, revenue operations and enablement, gets hired, and they are growing faster. For each: what it looks like, what the fractional leader actually does, and what to watch.`,
     },
 
     { t: "h2", text: "The first twelve are mostly about sales", id: "sales-situations" },
@@ -25,7 +26,7 @@ const chapter: Chapter = {
           n: "01",
           title: "The founder is stepping out of the closing seat",
           aside: "Most common trigger",
-          html: "The most common trigger in the data by a wide margin. Three of our eleven direct contracts say it almost word for word in the scope: the founder is moving to a different seat, and someone has to run revenue.<br><br><strong>What it looks like:</strong> The founder has closed every meaningful deal for years. There are two to six reps who were hired to \"help,\" and they close what the founder hands them. Pipeline is the founder's calendar.<br><br><strong>What the leader does:</strong> Documents the founder's winning motion before it walks out the door. Builds the process, the stages, the cadence. Coaches the reps to run it. In one of our contracts, Phase 1 is literally \"convert the founder's winning motion into a documented process and train the team on it.\"<br><br><strong>Watch:</strong> The founder has to actually step out. Several operators named \"owners not able to give empowerment\" as the way this one fails.",
+          html: `The most common trigger in the data by a wide margin. Three of our ${f.contracts.directClients} direct contracts say it almost word for word in the scope: the founder is moving to a different seat, and someone has to run revenue.<br><br><strong>What it looks like:</strong> The founder has closed every meaningful deal for years. There are two to six reps who were hired to \"help,\" and they close what the founder hands them. Pipeline is the founder's calendar.<br><br><strong>What the leader does:</strong> Documents the founder's winning motion before it walks out the door. Builds the process, the stages, the cadence. Coaches the reps to run it. In one of our contracts, Phase 1 is literally \"convert the founder's winning motion into a documented process and train the team on it.\"<br><br><strong>Watch:</strong> The founder has to actually step out. Several operators named "owners not able to give empowerment" as the way this one fails.`,
         },
         {
           n: "02",
@@ -57,7 +58,7 @@ const chapter: Chapter = {
         {
           n: "07",
           title: "Building or resetting a channel program",
-          html: "<strong>What it looks like:</strong> \"Needed to hit the reset button on their channel program.\" Partners who signed and never sold. Or no partners at all in a market that runs on them.<br><br><strong>What the leader does:</strong> Partner strategy, program design, enablement, the operating cadence with the partners. Three of 74 survey engagements were exactly this.<br><br><strong>Watch:</strong> Channel takes longer than direct. Plan for six months before judging.",
+          html: `<strong>What it looks like:</strong> "Needed to hit the reset button on their channel program." Partners who signed and never sold. Or no partners at all in a market that runs on them.<br><br><strong>What the leader does:</strong> Partner strategy, program design, enablement, the operating cadence with the partners. Three of ${f.survey.detailed} survey engagements were exactly this.<br><br><strong>Watch:</strong> Channel takes longer than direct. Plan for six months before judging.`,
         },
         {
           n: "08",
@@ -98,7 +99,7 @@ const chapter: Chapter = {
           n: "13",
           title: "A new CEO was just put in to fix the company",
           aside: "RevOps",
-          html: "<strong>What it looks like:</strong> A board or a private equity sponsor replaced the CEO. The new one has 90 days to tell the board what is real. The revenue number the last team reported does not reconcile with the CRM, the forecast has been missed three quarters running, and nobody can explain why. A friend who has been through it says: get a fractional head of revenue operations in before you touch anything else.<br><br><strong>What the leader does:</strong> Diagnoses before anyone reorganizes. Rebuilds the pipeline definitions, audits the data, produces the first forecast the board can trust, and tells the CEO which of the inherited sales leaders are the problem and which are victims of the system. In our data this is where revenue operations engagements at $50 million-plus companies cluster, and why RevOps carries the highest median rate of the core roles, $238 an hour.<br><br><strong>Watch:</strong> Decision rights. The new CEO has to let the fractional leader see everything and say anything, including about people the board likes. Scope it as a 60- to 90-day diagnostic with a written readout, then decide what the permanent structure should be.",
+          html: `<strong>What it looks like:</strong> A board or a private equity sponsor replaced the CEO. The new one has 90 days to tell the board what is real. The revenue number the last team reported does not reconcile with the CRM, the forecast has been missed three quarters running, and nobody can explain why. A friend who has been through it says: get a fractional head of revenue operations in before you touch anything else.<br><br><strong>What the leader does:</strong> Diagnoses before anyone reorganizes. Rebuilds the pipeline definitions, audits the data, produces the first forecast the board can trust, and tells the CEO which of the inherited sales leaders are the problem and which are victims of the system. In our data this is where revenue operations engagements at $50 million-plus companies cluster, and why RevOps prices level with sales leadership at ${f.category("Revenue Operations").median} an hour.<br><br><strong>Watch:</strong> Decision rights. The new CEO has to let the fractional leader see everything and say anything, including about people the board likes. Scope it as a 60- to 90-day diagnostic with a written readout, then decide what the permanent structure should be.`,
         },
         {
           n: "14",
@@ -116,7 +117,7 @@ const chapter: Chapter = {
           n: "16",
           title: "A second-generation owner takes over a business that never had a go-to-market function",
           aside: "Sales and marketing",
-          html: "<strong>What it looks like:</strong> A family or founder-owned business, often $10 to $50 million in revenue, often in services, distribution, manufacturing or healthcare, that grew for 20 years on relationships and reputation. The new owner is the founder's child or a long-time operator who bought the company. The relationships are aging out with the founder. There has never been a marketing plan, a CRM anyone uses, or a sales process beyond \"call the people we know.\"<br><br><strong>What the leader does:</strong> Usually two fractional leaders in sequence or in tandem: a sales leader to build the first real process and pipeline, and a marketing leader to give the company a presence beyond the founder's network. Both at 20 to 40 hours a month, because the business cannot absorb more change than that at once. Our direct clients skew exactly this way: agencies, services firms, healthcare and consulting businesses, only two of eleven in software.<br><br><strong>Watch:</strong> The founder, if still around, has to bless the change in front of the team. And the new owner should expect the first 90 days to be about seeing the business clearly for the first time, which is uncomfortable, before anything grows.",
+          html: `<strong>What it looks like:</strong> A family or founder-owned business, often $10 to $50 million in revenue, often in services, distribution, manufacturing or healthcare, that grew for 20 years on relationships and reputation. The new owner is the founder's child or a long-time operator who bought the company. The relationships are aging out with the founder. There has never been a marketing plan, a CRM anyone uses, or a sales process beyond "call the people we know."<br><br><strong>What the leader does:</strong> Usually two fractional leaders in sequence or in tandem: a sales leader to build the first real process and pipeline, and a marketing leader to give the company a presence beyond the founder's network. Both at 20 to 40 hours a month, because the business cannot absorb more change than that at once. Our direct clients skew exactly this way: agencies, services firms, healthcare and consulting businesses, only two of ${f.contracts.directClients} in software.<br><br><strong>Watch:</strong> The founder, if still around, has to bless the change in front of the team. And the new owner should expect the first 90 days to be about seeing the business clearly for the first time, which is uncomfortable, before anything grows.`,
         },
       ],
     },
@@ -134,7 +135,7 @@ const chapter: Chapter = {
         {
           n: "1",
           title: "You have not found product-market fit.",
-          html: "<em>\"They think they are ready for a full GTM launch but they haven't validated product-market fit, which makes any investment in marketing moot.\"</em><br><br>A fractional sales or marketing leader cannot sell a product the market has not said yes to. Three of the four early terminations in our data were at pre-revenue or sub-$1 million companies with expectations, or launch dates, that no leader could control.<br><br><strong>Instead:</strong> If you have fewer than ten paying customers, buy a 30-day validation project, not a leader.",
+          html: `<em>"They think they are ready for a full GTM launch but they haven't validated product-market fit, which makes any investment in marketing moot."</em><br><br>A fractional sales or marketing leader cannot sell a product the market has not said yes to. Three of the ${f.survey.status.endedEarly} early terminations in our data were at pre-revenue or sub-$1 million companies with expectations, or launch dates, that no leader could control.<br><br><strong>Instead:</strong> If you have fewer than ten paying customers, buy a 30-day validation project, not a leader.`,
         },
         {
           n: "2",
@@ -152,7 +153,7 @@ const chapter: Chapter = {
       t: "callout",
       tone: "gold",
       title: "A mismatch: you want a fractional sales rep",
-      html: "And one that is not quite an anti-pattern but is a mismatch: <strong>you want a fractional sales rep.</strong> Two of the inbound requests we received this year did. It is a real need at very small companies. It is just not what this market sells; one profile in 51 on our platform is a front-line seller. If what you need is someone to make calls, that is a different search.",
+      html: `And one that is not quite an anti-pattern but is a mismatch: <strong>you want a fractional sales rep.</strong> Two of the inbound requests we received this year did. It is a real need at very small companies. It is just not what this market sells; ${f.platform.frontLine} profile in ${f.platform.usable} on our platform is a front-line seller. If what you need is someone to make calls, that is a different search.`,
     },
 
     { t: "h2", eyebrow: "Tool", text: "The Fractional Opportunity Finder", id: "the-fractional-opportunity-finder" },

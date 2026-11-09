@@ -1,7 +1,28 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
 
 const LIGHTCAST = "https://lightcast.io/resources/blog/rise-of-fractional-leadership";
 const OBSERVER = "https://observer.com/2025/06/how-companies-are-scaling-with-fractional-leaders/";
+
+/* Whole numbers with thousands separators, for the market estimate. */
+const num = (n: number) => n.toLocaleString("en-US");
+const m = f.market;
+const spend = f.marketSpend;
+const found = f.survey.howFound;
+const mv = f.movement;
+const sharePct = (x: number, y: number) => f.pct(Math.round((x / y) * 100));
+
+/* Platform signups: the months before the August 2026 launch, and the launch months themselves. */
+const signups = f.platform.signupsByMonth;
+const preLaunch = signups.filter((s) => s.month < "2026-08");
+const preLaunchPerMonth = preLaunch.length ? Math.round(preLaunch.reduce((a, s) => a + s.n, 0) / preLaunch.length) : 0;
+const signupsIn = (month: string) => signups.find((s) => s.month === month)?.n ?? 0;
+
+/* Hours per month across the engagements described in the survey. */
+const hoursN = f.engagements.byHours.reduce((a, b) => a + b.n, 0);
+const hoursUnder = (bands: string[]) => sharePct(f.engagements.byHours.filter((b) => bands.includes(b.band)).reduce((a, b) => a + b.n, 0), hoursN);
+const under40 = hoursUnder(["Under 20", "20 - 39"]);
+const under60 = hoursUnder(["Under 20", "20 - 39", "40 - 59"]);
 
 const chapter: Chapter = {
   slug: "01-why-now",
@@ -9,10 +30,10 @@ const chapter: Chapter = {
   title: "Why this is happening now",
   dek: "The official numbers undercount this market, and the estimate, with the math shown",
   stats: [
-    { v: "~14,000", l: "US fractional GTM leaders (range 11,000 to 18,000)" },
-    { v: "~$2.8B", l: "US fractional GTM spend a year (range $2.2 to $3.6B)" },
+    { v: `~${num(m.operatorsCentral)}`, l: `US fractional GTM leaders (range ${num(m.operatorsLow)} to ${num(m.operatorsHigh)})` },
+    { v: `~${spend.central}`, l: `US fractional GTM spend a year (range ${spend.range})` },
     { v: "265%", l: "growth in \"fractional\" job titles since 2019", s: "Lightcast" },
-    { v: "1 of 74", l: "operators found a client through a job post" },
+    { v: f.of(found.jobPost, found.n), l: "operators found a client through a job post" },
   ],
   blocks: [
     {
@@ -27,7 +48,7 @@ const chapter: Chapter = {
         { v: "34,000+", l: "US \"fractional\" job titles, 2025" },
         { v: "46%", l: "of fractional postings are finance" },
         { v: "10%", l: "are marketing" },
-        { v: "59%", l: "of operators found clients by peer referral" },
+        { v: f.pct(found.peer), l: "of operators found clients by peer referral" },
       ],
     },
     {
@@ -40,15 +61,15 @@ const chapter: Chapter = {
     },
     {
       t: "p",
-      html: "That is not because fractional sales leadership is rare. It is because nobody posts a job for it. In our survey of 74 operators with a current engagement, exactly one found a client through a job post. 59% came through a peer referral, 38% through a marketplace or network, 27% through a prior colleague or employer. A market that runs on referrals is invisible to a dataset that counts postings.",
+      html: `That is not because fractional sales leadership is rare. It is because nobody posts a job for it. In our survey of ${found.n} operators with a current engagement, exactly ${found.jobPost === 1 ? "one" : found.jobPost} found a client through a job post. ${f.pct(found.peer)} came through a peer referral, ${f.pct(found.marketplace)} through a marketplace or network, ${f.pct(found.prior)} through a prior colleague or employer. A market that runs on referrals is invisible to a dataset that counts postings.`,
     },
     {
       t: "stats",
       items: [
-        { v: "59%", l: "peer referral" },
-        { v: "38%", l: "marketplace or network" },
-        { v: "27%", l: "prior colleague or employer" },
-        { v: "1", l: "job post" },
+        { v: f.pct(found.peer), l: "peer referral" },
+        { v: f.pct(found.marketplace), l: "marketplace or network" },
+        { v: f.pct(found.prior), l: "prior colleague or employer" },
+        { v: String(found.jobPost), l: "job post" },
       ],
     },
     {
@@ -57,7 +78,7 @@ const chapter: Chapter = {
       html: "So take the public growth numbers as a floor. The GTM side of fractional is growing underneath them, and most of it never shows up in a job board.",
     },
 
-    { t: "h2", eyebrow: "Market size", text: "About 14,000 leaders and $2.8 billion a year", id: "about-14000-leaders-and-28-billion-a-year" },
+    { t: "h2", eyebrow: "Market size", text: `About ${num(m.operatorsCentral)} leaders and ${spend.centralLong} a year`, id: "about-14000-leaders-and-28-billion-a-year" },
     {
       t: "p",
       html: "Nobody has counted fractional GTM leaders directly, so we built an estimate from public data and our own, and we show the math so you can argue with it.",
@@ -89,9 +110,9 @@ const chapter: Chapter = {
       t: "stats",
       items: [
         {
-          v: "~14,000",
+          v: `~${num(m.operatorsCentral)}`,
           l: "US fractional GTM leaders",
-          s: "11,000 to 18,000 fractional GTM leaders in the United States, central estimate about 14,000.",
+          s: `${num(m.operatorsLow)} to ${num(m.operatorsHigh)} fractional GTM leaders in the United States, central estimate about ${num(m.operatorsCentral)}.`,
           tone: "forest",
         },
       ],
@@ -106,8 +127,8 @@ const chapter: Chapter = {
         {
           n: "4",
           title: "What they bill",
-          html: "Operators in our survey run a median of two to three clients at a time, and the Rate Index puts the median monthly engagement at $8,900. At 2.5 clients, 12 months and a 75% utilization haircut for gaps between engagements, the typical operator bills about $200,000 a year.",
-          aside: "2.5 clients × $8,900 / mo × 12 months × 75% ≈ ~$200,000 / yr",
+          html: `Operators in our survey run a median of two to three clients at a time, and the engagements they described put the median monthly engagement at ${f.engagements.medianMonthly}. At ${m.clientsAtOnce} clients, 12 months and a ${m.utilization * 100}% utilization haircut for gaps between engagements, the typical operator bills about ${f.usd(m.annualPerOperator)} a year.`,
+          aside: `${m.clientsAtOnce} clients × ${f.engagements.medianMonthly} / mo × 12 months × ${m.utilization * 100}% ≈ ~${f.usd(m.annualPerOperator)} / yr`,
         },
       ],
     },
@@ -115,9 +136,9 @@ const chapter: Chapter = {
       t: "stats",
       items: [
         {
-          v: "~$2.8B",
+          v: `~${spend.central}`,
           l: "US fractional GTM spend",
-          s: "Across 11,000 to 18,000 operators, that is $2.2 to $3.6 billion a year in US fractional GTM spend, central estimate about $2.8 billion.",
+          s: `Across ${num(m.operatorsLow)} to ${num(m.operatorsHigh)} operators, that is ${spend.rangeLong} a year in US fractional GTM spend, central estimate about ${spend.centralLong}.`,
           tone: "forest",
         },
       ],
@@ -126,7 +147,7 @@ const chapter: Chapter = {
       t: "callout",
       tone: "leaf",
       title: "Two sanity checks",
-      html: `<strong>~35,000 companies.</strong> First, 14,000 operators at 2.5 clients each means roughly 35,000 US companies have a fractional GTM leader at any given moment. There are several hundred thousand US companies between $5 million and $200 million in revenue, so that is single-digit penetration, which is consistent with a market most CEOs still discover through a peer.<br><br><strong>9,000 - 12,000 operators.</strong> Second, the fractional job-posting data runs at roughly 1,700 postings a year (<a href="${LIGHTCAST}">Lightcast</a>), and one in 74 of our operators' engagements came through a posting. If postings are 1.5% of engagements and GTM is a third of postings, that implies roughly 35,000 GTM engagements a year. At three to four engagements per operator, that is 9,000 to 12,000 active operators in a given year, inside our range.`,
+      html: `<strong>~${num(m.operatorsCentral * m.clientsAtOnce)} companies.</strong> First, ${num(m.operatorsCentral)} operators at ${m.clientsAtOnce} clients each means roughly ${num(m.operatorsCentral * m.clientsAtOnce)} US companies have a fractional GTM leader at any given moment. There are several hundred thousand US companies between $5 million and $200 million in revenue, so that is single-digit penetration, which is consistent with a market most CEOs still discover through a peer.<br><br><strong>9,000 - 12,000 operators.</strong> Second, the fractional job-posting data runs at roughly 1,700 postings a year (<a href="${LIGHTCAST}">Lightcast</a>), and one in ${found.n} of our operators' engagements came through a posting. If postings are 1.5% of engagements and GTM is a third of postings, that implies roughly 35,000 GTM engagements a year. At three to four engagements per operator, that is 9,000 to 12,000 active operators in a given year, inside our range.`,
     },
     {
       t: "callout",
@@ -139,20 +160,20 @@ const chapter: Chapter = {
     { t: "lede", html: "The lazy assumption about fractional executives is that they are between jobs. The data does not support it." },
     {
       t: "p",
-      html: "80% of the operators we surveyed say fractional, interim or advisory GTM work is their main income. 68% had three or more paid engagements in the last 12 months; a quarter had six or more. Two in five are running three or more clients at once right now.",
+      html: `${f.pct(f.survey.mainIncomeShare)} of the operators we surveyed say fractional, interim or advisory GTM work is their main income. ${f.pct(f.survey.engagements12mo.threePlus)} had three or more paid engagements in the last 12 months; ${f.pct(f.survey.engagements12mo.sixPlus)} had six or more. Two in five are running three or more clients at once right now.`,
     },
     {
       t: "table",
       caption: "Figure 1.1. Operator income and engagements",
       head: ["Measure", "Share of operators"],
       rows: [
-        ["Fractional GTM is main income", "80%"],
-        ["3+ paid engagements in last 12 months", "68%"],
-        ["6+ paid engagements in last 12 months", "25%"],
-        ["Currently serving 3+ clients", "42%"],
+        ["Fractional GTM is main income", f.pct(f.survey.mainIncomeShare)],
+        ["3+ paid engagements in last 12 months", f.pct(f.survey.engagements12mo.threePlus)],
+        ["6+ paid engagements in last 12 months", f.pct(f.survey.engagements12mo.sixPlus)],
+        ["Currently serving 3+ clients", f.pct(f.survey.concurrent.threePlus)],
       ],
       firstColHeader: true,
-      note: "n=81.",
+      note: `n=${f.survey.responses}.`,
     },
     {
       t: "p",
@@ -164,35 +185,35 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "~3%", l: "typical rate rise over the year" },
-        { v: "1 in 3", l: "plan to raise again in 6 months" },
-        { v: "61%", l: "plan to hold" },
-        { v: "35%", l: "say demand is up" },
+        { v: `~${f.pct(mv.medianChangePct)}`, l: "typical rate rise over the year" },
+        { v: `1 in ${Math.round(mv.plan.n / mv.plan.raise)}`, l: "plan to raise again in 6 months" },
+        { v: sharePct(mv.plan.hold, mv.plan.n), l: "plan to hold" },
+        { v: sharePct(mv.demand.up, mv.demand.n), l: "say demand is up" },
       ],
     },
     {
       t: "p",
-      html: "The typical operator raised their rate about 3% over the year, the median of each operator's own change among those who recalled both numbers. Of those 60 operators, 30 raised their rate, 27 held it, and 3 cut it. One in three plans to raise again in the next six months; 61% plan to hold.",
+      html: `The typical operator raised their rate about ${f.pct(mv.medianChangePct)} over the year, the median of each operator's own change among those who recalled both numbers. Of those ${mv.n} operators, ${mv.raised} raised their rate, ${mv.held} held it, and ${mv.cut} cut it. One in ${Math.round(mv.plan.n / mv.plan.raise) === 3 ? "three" : Math.round(mv.plan.n / mv.plan.raise)} plans to raise again in the next six months; ${sharePct(mv.plan.hold, mv.plan.n)} plan to hold.`,
     },
     {
       t: "stats",
       items: [
-        { v: "30 of 60", l: "Raised" },
-        { v: "27 of 60", l: "Held" },
-        { v: "3 of 60", l: "Cut" },
+        { v: f.of(mv.raised, mv.n), l: "Raised" },
+        { v: f.of(mv.held, mv.n), l: "Held" },
+        { v: f.of(mv.cut, mv.n), l: "Cut" },
       ],
     },
     { t: "h3", text: "Demand" },
     {
       t: "p",
-      html: "That is a healthy market, not a frothy one. Rates are moving with demand, and demand is steady more than surging. Asked how demand for their work compares with 12 months ago, on a 1 to 5 scale, 35% said it is up (4 or 5), 50% said about the same, 15% said down.",
+      html: `That is a healthy market, not a frothy one. Rates are moving with demand, and demand is steady more than surging. Asked how demand for their work compares with 12 months ago, on a 1 to 5 scale, ${sharePct(mv.demand.up, mv.demand.n)} said it is up (4 or 5), ${sharePct(mv.demand.flat, mv.demand.n)} said about the same, ${sharePct(mv.demand.down, mv.demand.n)} said down.`,
     },
     {
       t: "stats",
       items: [
-        { v: "35%", l: "demand up" },
-        { v: "50%", l: "about the same" },
-        { v: "15%", l: "down" },
+        { v: sharePct(mv.demand.up, mv.demand.n), l: "demand up" },
+        { v: sharePct(mv.demand.flat, mv.demand.n), l: "about the same" },
+        { v: sharePct(mv.demand.down, mv.demand.n), l: "down" },
       ],
     },
 
@@ -200,25 +221,25 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "88%", l: "available to start now" },
-        { v: "66%", l: "say steady pipeline is the hardest part" },
+        { v: f.pct(f.platform.availableNowShare), l: "available to start now" },
+        { v: f.pct(f.survey.steadyPipelineShare), l: "say steady pipeline is the hardest part" },
       ],
     },
     {
       t: "p",
-      html: "On the Revenue Nomad platform, 88% of operators are available to start now, and nearly all within two weeks. Platform signups ran about 9 a month organically before launch in August 2026, then 17 in August and 34 in September.",
+      html: `On the Revenue Nomad platform, ${f.pct(f.platform.availableNowShare)} of operators are available to start now, and nearly all within two weeks. Platform signups ran about ${preLaunchPerMonth} a month organically before launch in August 2026, then ${signupsIn("2026-08")} in August and ${signupsIn("2026-09")} in September.`,
     },
     {
       t: "stats",
       items: [
-        { v: "~9 / month", l: "Before launch", s: "organic signups" },
-        { v: "17", l: "August 2026", s: "signups" },
-        { v: "34", l: "September 2026", s: "signups" },
+        { v: `~${preLaunchPerMonth} / month`, l: "Before launch", s: "organic signups" },
+        { v: String(signupsIn("2026-08")), l: "August 2026", s: "signups" },
+        { v: String(signupsIn("2026-09")), l: "September 2026", s: "signups" },
       ],
     },
     {
       t: "p",
-      html: "And when we asked operators the hardest part of running a fractional business, 66% said the same thing: steady pipeline. Not delivery. Not clients. Finding the next one.",
+      html: `And when we asked operators the hardest part of running a fractional business, ${f.pct(f.survey.steadyPipelineShare)} said the same thing: steady pipeline. Not delivery. Not clients. Finding the next one.`,
     },
     {
       t: "p",
@@ -239,8 +260,8 @@ const chapter: Chapter = {
         {
           n: "2",
           title: "The work itself changed",
-          html: "AI handles more of the execution. 97% of the operators we surveyed use AI in delivery; 36% say most of their delivery runs through it. A single experienced leader with good tools can now do in 40 hours what used to take a leader and two analysts. The economics of buying a fraction of someone excellent improved.",
-          aside: "97% use AI",
+          html: `AI handles more of the execution. ${f.pct(f.survey.aiUse.share)} of the operators we surveyed use AI in delivery; ${f.pct(f.survey.aiUse.most)} say most of their delivery runs through it. A single experienced leader with good tools can now do in 40 hours what used to take a leader and two analysts. The economics of buying a fraction of someone excellent improved.`,
+          aside: `${f.pct(f.survey.aiUse.share)} use AI`,
         },
         {
           n: "3",
@@ -256,22 +277,22 @@ const chapter: Chapter = {
       t: "table",
       head: ["Indicator", "Reading"],
       rows: [
-        ["US fractional GTM leaders (estimate)", "About 14,000 (range 11,000 to 18,000)"],
-        ["US fractional GTM spend (estimate)", "About $2.8 billion a year (range $2.2 to $3.6 billion)"],
-        ["Median hourly rate", "$225, as companies pay it"],
-        ["Median monthly engagement", "$8,900"],
-        ["Typical hours per month", "20 to 40 (74% of engagements at 40 or fewer)"],
-        ["Engagements with a measurable result inside 60 days", "78%"],
-        ["Operators planning to raise rates in 6 months", "32%"],
-        ["Operators reporting demand up vs. 12 months ago", "35%"],
-        ["Operators reporting demand down", "15%"],
-        ["Operators available to start now", "88%"],
-        ["Operators citing pipeline as hardest part of the business", "66%"],
-        ["Engagements extended past initial term", "57%"],
-        ["Engagements ended early", "5%"],
+        ["US fractional GTM leaders (estimate)", `About ${num(m.operatorsCentral)} (range ${num(m.operatorsLow)} to ${num(m.operatorsHigh)})`],
+        ["US fractional GTM spend (estimate)", `About ${spend.centralLong} a year (range ${spend.rangeLong})`],
+        ["Median hourly rate", `${f.rates.median}, as companies pay it`],
+        ["Median monthly engagement", f.engagements.medianMonthly],
+        ["Typical hours per month", `20 to 40 (${under40} of engagements under 40 hours, ${under60} under 60)`],
+        ["Engagements with a measurable result inside 60 days", f.pct(f.engagements.resultInside60)],
+        ["Operators planning to raise rates in 6 months", sharePct(mv.plan.raise, mv.plan.n)],
+        ["Operators reporting demand up vs. 12 months ago", sharePct(mv.demand.up, mv.demand.n)],
+        ["Operators reporting demand down", sharePct(mv.demand.down, mv.demand.n)],
+        ["Operators available to start now", f.pct(f.platform.availableNowShare)],
+        ["Operators citing pipeline as hardest part of the business", f.pct(f.survey.steadyPipelineShare)],
+        ["Engagements extended past initial term", f.pct(f.engagements.extendedShare)],
+        ["Engagements ended early", sharePct(f.survey.status.endedEarly, f.survey.status.n)],
       ],
       firstColHeader: true,
-      note: "n=132 operators (81 survey respondents, 51 platform profiles). 2027 is the baseline year for this index. Each edition will report every row against the prior year.",
+      note: `n=${f.survey.responses + f.platform.usable} operators (${f.survey.responses} survey respondents, ${f.platform.usable} platform profiles), as of ${f.asOf.long}. 2027 is the baseline year for this index. Each edition will report every row against the prior year.`,
     },
   ],
 };

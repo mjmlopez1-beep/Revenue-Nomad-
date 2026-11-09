@@ -1,4 +1,44 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* The five roles in the guide, in the author's order, with the short labels the pricing table uses. */
+const roles = [
+  { name: "Sales Leadership", short: "Sales" },
+  { name: "Marketing", short: "Marketing" },
+  { name: "Revenue Operations", short: "RevOps" },
+  { name: "Sales Enablement", short: "Enablement" },
+  { name: "AI GTM", short: "AI GTM" },
+] as const;
+
+const share = (b: { x: number; y: number }) => Math.round((b.x / b.y) * 100);
+const ofShare = (b: { x: number; y: number }) => `${share(b)}%`;
+const mean = (n: number | null) => (n == null ? "n/a" : n.toFixed(1));
+
+const sl = f.role("Sales Leadership");
+const mk = f.role("Marketing");
+const ro = f.role("Revenue Operations");
+const se = f.role("Sales Enablement");
+const ai = f.role("AI GTM");
+const cs = f.role("Customer Success & Growth");
+const pa = f.role("Partnerships");
+
+/* Figure 6.1: one row per role. Rates from the Rate Index; the rest from the survey. */
+const roleRows = roles.map((r) => {
+  const c = f.category(r.name);
+  const s = f.role(r.name);
+  return { ...r, rate: c.raw ?? 0, rateN: c.n, s, extended: share(s.extended) };
+});
+const rateHigh = Math.max(...roleRows.map((r) => r.rate));
+const rateLow = Math.min(...roleRows.map((r) => r.rate));
+const extendedHigh = Math.max(...roleRows.map((r) => r.extended));
+const demandHigh = Math.max(...roleRows.map((r) => r.s.demandMean ?? 0));
+const rateTag = (r: (typeof roleRows)[number]) =>
+  r.rate === rateHigh ? (r.rateN < f.rates.floor ? " (highest, directional)" : " (highest)") : r.rate === rateLow ? " (lowest)" : "";
+const extendedTag = (s: number) => (s === extendedHigh ? " (highest)" : s === 0 ? " (long terms)" : "");
+const demandTag = (m: number | null) => (m === demandHigh ? " (highest)" : "");
+
+/* The pricing table under AI GTM: the same five roles, highest median first. */
+const pricingRows = [...roleRows].sort((a, b) => b.rate - a.rate);
 
 const chapter: Chapter = {
   slug: "06-role-guide",
@@ -6,15 +46,15 @@ const chapter: Chapter = {
   title: "The fractional GTM role guide",
   dek: "Five roles that cost, run and go wrong differently",
   stats: [
-    { v: "42%", l: "Sales Leadership" },
-    { v: "24%", l: "Marketing" },
-    { v: "15%", l: "Revenue Operations" },
-    { v: "9%", l: "AI GTM" },
-    { v: "5%", l: "Sales Enablement" },
-    { v: "4%", l: "CS & Partnerships" },
+    { v: f.pct(sl.share), l: "Sales Leadership" },
+    { v: f.pct(mk.share), l: "Marketing" },
+    { v: f.pct(ro.share), l: "Revenue Operations" },
+    { v: f.pct(ai.share), l: "AI GTM" },
+    { v: f.pct(se.share), l: "Sales Enablement" },
+    { v: f.pct(cs.share + pa.share), l: "CS & Partnerships" },
   ],
   blocks: [
-    { t: "note", text: "Share of operators by role. Operator survey, n=74." },
+    { t: "note", text: `Share of operators by role. Operator survey, n=${f.survey.detailed}.` },
     {
       t: "lede",
       html: "\"Fractional GTM\" covers at least five different jobs. They cost different amounts, run at different hours, show results on different timelines, and go wrong in different ways.",
@@ -23,16 +63,18 @@ const chapter: Chapter = {
     { t: "h2", eyebrow: "Figure 6.1", text: "At a glance", id: "at-a-glance" },
     {
       t: "table",
-      head: ["Role", "Median rate", "Hours / mo", "Median monthly", "Demand (1 to 5)", "Extended", "n"],
+      head: ["Role", "Median rate", "Median hours / mo", "Median monthly", "Demand (1 to 5)", "Extended", "n"],
       firstColHeader: true,
-      rows: [
-        ["Sales Leadership", "$230", "20 - 40", "$7,500", "3.5", "58%", "54"],
-        ["Marketing", "$230", "40", "$9,900", "2.9", "72% (highest)", "30"],
-        ["Revenue Operations", "$238", "Under 20, or 40+", "$10,000", "3.3", "36%", "21"],
-        ["Sales Enablement", "$300 (highest)", "40", "$12,000", "3.0", "0% (long terms)", "7"],
-        ["AI GTM", "$212 (lowest)", "70", "$14,800", "3.6 (highest)", "71%", "6"],
-      ],
-      note: "Rates and monthly spend from the Revenue Nomad Rate Index; monthly is rate times hours. Hours, demand and extension from the operator survey, n=74. Bars scaled to the highest value in each column.",
+      rows: roleRows.map((r) => [
+        r.name,
+        `${f.rate(r.rate)}${rateTag(r)}`,
+        String(r.s.medianHours),
+        f.monthly(r.s.medianMonthly),
+        `${mean(r.s.demandMean)}${demandTag(r.s.demandMean)}`,
+        `${f.pct(r.extended)}${extendedTag(r.extended)}`,
+        String(r.rateN),
+      ]),
+      note: `Rates and n from the Revenue Nomad Rate Index (cuts under ${f.rates.floor} records are directional). Median monthly spend from the ${f.engagements.n} engagements described in the operator survey; hours, demand and extension from the operator survey, n=${f.survey.detailed}. Bars scaled to the highest value in each column.`,
     },
 
     { t: "h2", text: "Sales Leadership", id: "sales-leadership" },
@@ -40,10 +82,10 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "42%", l: "of operators" },
-        { v: "$230", l: "median hourly" },
-        { v: "61%", l: "result inside 30 days" },
-        { v: "58%", l: "extended" },
+        { v: f.pct(sl.share), l: "of operators" },
+        { v: f.category("Sales Leadership").median, l: "median hourly" },
+        { v: ofShare(sl.resultUnder30), l: "result inside 30 days" },
+        { v: ofShare(sl.extended), l: "extended" },
       ],
     },
     {
@@ -85,10 +127,10 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "24%", l: "of operators" },
-        { v: "40 hrs", l: "most common monthly hours" },
-        { v: "33%", l: "result inside 30 days" },
-        { v: "13 of 18", l: "extended" },
+        { v: f.pct(mk.share), l: "of operators" },
+        { v: mk.modeHours, l: "most common monthly hours" },
+        { v: ofShare(mk.resultUnder30), l: "result inside 30 days" },
+        { v: f.of(mk.extended.x, mk.extended.y), l: "extended" },
       ],
     },
     {
@@ -107,7 +149,7 @@ const chapter: Chapter = {
     { t: "h3", text: "How it runs" },
     {
       t: "p",
-      html: "Forty hours a month is the most common (7 of 18 engagements). Terms are three to six months most often. Results take longer than sales: 33% inside 30 days, 67% inside 60. But once running, marketing extends more than any other role.",
+      html: `Forty hours a month is the most common (7 of ${mk.n} engagements). Terms are three to six months most often. Results take longer than sales: ${ofShare(mk.resultUnder30)} inside 30 days, 67% inside 60. But once running, marketing extends more than any other role.`,
     },
     { t: "h3", text: "What to check" },
     {
@@ -122,14 +164,14 @@ const chapter: Chapter = {
     },
 
     { t: "h2", text: "Revenue Operations", id: "revenue-operations" },
-    { t: "lede", html: "The most project-shaped role, and the highest median rate of the core roles." },
+    { t: "lede", html: `The most project-shaped role, priced level with sales leadership at ${f.category("Revenue Operations").median}.` },
     {
       t: "stats",
       items: [
-        { v: "15%", l: "of operators" },
-        { v: "$238", l: "median hourly" },
-        { v: "$10,000", l: "median monthly" },
-        { v: "4 of 11", l: "extended" },
+        { v: f.pct(ro.share), l: "of operators" },
+        { v: f.category("Revenue Operations").median, l: "median hourly" },
+        { v: f.monthly(ro.medianMonthly), l: "median monthly" },
+        { v: f.of(ro.extended.x, ro.extended.y), l: "extended" },
       ],
     },
     {
@@ -164,10 +206,10 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "5%", l: "of operators" },
-        { v: "$300", l: "median hourly" },
-        { v: "3 of 4", l: "12-month+ terms" },
-        { v: "2 of 4", l: "results past 90 days" },
+        { v: f.pct(se.share), l: "of operators" },
+        { v: f.category("Sales Enablement").median, l: "median hourly", s: `${f.category("Sales Enablement").n} rates, directional` },
+        { v: f.of(se.term12Plus.x, se.term12Plus.y), l: "12-month+ terms" },
+        { v: f.of(se.resultOver90.x, se.resultOver90.y), l: "results past 90 days" },
       ],
     },
     {
@@ -188,14 +230,14 @@ const chapter: Chapter = {
     { t: "p", html: "Whether their content gets used. Ask to see adoption data from a prior program, not the program itself." },
 
     { t: "h2", eyebrow: "Fastest-moving", text: "AI GTM", id: "ai-gtm" },
-    { t: "lede", html: "Highest demand, priced below the core roles." },
+    { t: "lede", html: "Highest demand, priced at the market center." },
     {
       t: "stats",
       items: [
-        { v: "3.6 / 5", l: "demand score" },
-        { v: "70 hrs", l: "median hours a month" },
+        { v: `${mean(ai.demandMean)} / 5`, l: "demand score" },
+        { v: `${ai.medianHours} hrs`, l: "median hours a month" },
         { v: "6 of 20", l: "inbound asked for it" },
-        { v: "5 of 7", l: "extended" },
+        { v: f.of(ai.extended.x, ai.extended.y), l: "extended" },
       ],
     },
     {
@@ -215,29 +257,23 @@ const chapter: Chapter = {
       t: "table",
       head: ["Role", "Median rate"],
       firstColHeader: true,
-      rows: [
-        ["Enablement", "$300"],
-        ["RevOps", "$238"],
-        ["Sales", "$230"],
-        ["Marketing", "$230"],
-        ["AI GTM", "$212"],
-      ],
+      rows: pricingRows.map((r) => [r.short, f.rate(r.rate)]),
     },
     {
       t: "p",
-      html: "Demand is highest; price is not (n=6). Part of that is that the operators are younger. Part is that buyers do not yet know what to pay for a job that did not exist three years ago. <strong>That gap is closing. If you are buying this in 2027, you are buying early.</strong>",
+      html: `Demand is highest; price is not. AI GTM sits at the market median of ${f.rates.median} (n=${f.category("AI GTM").n}), no higher than sales leadership or revenue operations. Part of that is that the operators are younger. Part is that buyers do not yet know what to pay for a job that did not exist three years ago. <strong>That gap is closing. If you are buying this in 2027, you are buying early.</strong>`,
     },
     { t: "h3", text: "What to check" },
     {
       t: "p",
-      html: "Whether they have shipped something into a real revenue team's workflow, not a demo. \"AI Sales Automation\" is one of the five most common expertise tags on the platform (22 of 51 operators), so the claim is common. The proof is rarer.",
+      html: `Whether they have shipped something into a real revenue team's workflow, not a demo. "AI Sales Automation" is one of the five most common expertise tags on the platform (22 of ${f.platform.usable} operators), so the claim is common. The proof is rarer.`,
     },
 
     {
       t: "callout",
       tone: "night",
       title: "Customer Success and Partnerships",
-      html: "Together, 4% of operators. Customer Success and Growth prices around $220; Partnerships around $165 (n=5). Channel and partner experience is on 53% of platform profiles, so partner work is usually bought inside a sales leadership engagement. Three of the 74 survey engagements were channel resets.",
+      html: `Together, ${f.pct(cs.share + pa.share)} of operators. Customer Success and Growth prices around ${f.category("Customer Success & Growth").median} (n=${f.category("Customer Success & Growth").n}); Partnerships around ${f.category("Partnerships").median} (n=${f.category("Partnerships").n}); both cuts are directional. Channel and partner experience is on 53% of platform profiles, so partner work is usually bought inside a sales leadership engagement. Three of the ${f.survey.detailed} survey engagements were channel resets.`,
     },
 
     {
@@ -256,7 +292,7 @@ const chapter: Chapter = {
         ["Marketing + Sales", "When the founder was both, and is stepping out of both."],
         [
           "Any + AI GTM",
-          "Increasingly, the AI work is folded into the other roles rather than bought separately. 97% of operators already use AI in delivery.",
+          `Increasingly, the AI work is folded into the other roles rather than bought separately. ${f.pct(f.survey.aiUse.share)} of operators already use AI in delivery.`,
         ],
       ],
     },
