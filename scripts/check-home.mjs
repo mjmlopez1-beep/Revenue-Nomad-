@@ -32,7 +32,14 @@ let baseUrl = args.url;
 async function startServer() {
   const port = 3100 + Math.floor(Math.random() * 400);
   baseUrl = `http://localhost:${port}`;
-  server = spawn("npx", ["next", "dev", "-p", String(port)], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", NEXT_PUBLIC_SITE_ENV: SITE_ENV } });
+  // Spawn the Next binary directly in its own process group so the whole tree can be stopped
+  // afterwards; killing an `npx` wrapper leaves the real server running as an orphan.
+  const nextBin = require.resolve("next/dist/bin/next");
+  server = spawn(process.execPath, [nextBin, "dev", "-p", String(port)], {
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+    env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", NEXT_PUBLIC_SITE_ENV: SITE_ENV },
+  });
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     try {
@@ -140,7 +147,9 @@ try {
 } catch (e) {
   failures.push(`runner: ${e.message}`);
 } finally {
-  server?.kill("SIGTERM");
+  if (server?.pid) {
+    try { process.kill(-server.pid, "SIGTERM"); } catch { server.kill("SIGTERM"); }
+  }
 }
 if (failures.length) {
   console.error(`\ncheck:home failed (${failures.length})\n- ` + failures.join("\n- "));

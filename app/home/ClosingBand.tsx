@@ -22,28 +22,30 @@ function Check() {
 export default function ClosingBand() {
   return (
     <section className="closing" aria-labelledby="closing-h">
-      <div className="rn-wrap closing-row">
-        <div className="closing-copy">
-          <h2 id="closing-h" className="rn-h2">
-            Tell us where revenue is stuck
-          </h2>
-          <p className="closing-line">We speak within {facts.responseHours}. No fees for companies.</p>
-          <div className="closing-gets">
-            <p className="rn-eyebrow closing-kicker">The first call gets you</p>
-            <ul>
-              {gets.map((g) => (
-                <li key={g}>
-                  <Check />
-                  {g}
-                </li>
-              ))}
-            </ul>
+      <div className="rn-wrap">
+        <div className="closing-row">
+          <div className="closing-copy">
+            <h2 id="closing-h" className="rn-h2">
+              Tell us where revenue is stuck
+            </h2>
+            <p className="closing-line">We speak within {facts.responseHours}. No fees for companies.</p>
+            <div className="closing-gets">
+              <p className="rn-eyebrow closing-kicker">The first call gets you</p>
+              <ul>
+                {gets.map((g) => (
+                  <li key={g}>
+                    <Check />
+                    {g}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+          <Link className="rn-btn rn-btn--ghost" href={hrefs.talk}>
+            Talk to us
+            <Arrow />
+          </Link>
         </div>
-        <Link className="rn-btn rn-btn--ghost" href={hrefs.talk}>
-          Talk to us
-          <Arrow />
-        </Link>
       </div>
     </section>
   );
