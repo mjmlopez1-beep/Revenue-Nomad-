@@ -1,4 +1,5 @@
-/* Hero. Prefix hero-. Desktop geometry from the artboard: copy 560 wide, mark 539 wide at the right on an 860 by 700 glow. */
+/* Hero. Prefix hero-. Desktop geometry from the artboard: copy 560 wide, art 539 wide at the right on an 860 by 700 glow.
+   The art is the eight role categories drawn as blocks (RoleWheel.tsx); the glass mark it replaces is kept in public/home/. */
 .hero {
   position: relative;
   overflow: hidden;
@@ -42,7 +43,6 @@
   top: 50%;
   right: 0;
   width: min(539px, calc(100% - 580px));
-  aspect-ratio: 980 / 984;
   transform: translateY(-50%);
 }
 .hero-glow {
@@ -54,12 +54,56 @@
   background: var(--rn-hero-glow);
   pointer-events: none;
 }
-.hero-mark {
+.hero-wheel {
   position: relative;
   display: block;
   width: 100%;
   height: auto;
-  mix-blend-mode: multiply;
+  overflow: visible;
+}
+.hero-ring {
+  fill: none;
+  stroke: var(--rn-gold);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 5;
+  opacity: 0.8;
+}
+.hero-wheel .dx-face {
+  stroke: var(--rn-white);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+.hero-wheel .dx-cube--leaf .dx-face--l {
+  fill: var(--rn-leaf);
+}
+.hero-wheel .dx-cube--leaf .dx-face--r {
+  fill: var(--rn-leaf-strong);
+}
+.hero-wheel .dx-cube--leaf .dx-face--t {
+  fill: var(--rn-leaf-pale);
+}
+.hero-wheel .dx-cube--gold .dx-face--l {
+  fill: var(--rn-gold);
+}
+.hero-wheel .dx-cube--gold .dx-face--r {
+  fill: color-mix(in srgb, var(--rn-gold) 76%, var(--rn-ink));
+}
+.hero-wheel .dx-cube--gold .dx-face--t {
+  fill: color-mix(in srgb, var(--rn-gold) 55%, var(--rn-white));
+}
+.hero-wheel-l {
+  font-family: var(--rn-font-ui);
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--rn-ink);
+}
+.hero-wheel-c {
+  font-family: var(--rn-font-ui);
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: var(--rn-ink);
 }
 
 @media (max-width: 900px) {
@@ -91,8 +135,8 @@
     position: relative;
     top: auto;
     right: auto;
-    width: 255px;
-    margin: 18px auto 20px;
+    width: min(100%, 440px);
+    margin: 22px auto 16px;
     transform: none;
   }
   .hero-glow {
@@ -100,6 +144,12 @@
     top: -10px;
     width: calc(100% + 80px);
     height: calc(100% + 20px);
+  }
+  .hero-wheel-l {
+    font-size: 13.5px;
+  }
+  .hero-wheel-c {
+    font-size: 9px;
   }
 }
 @media (max-width: 480px) {

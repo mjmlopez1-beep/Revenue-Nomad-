@@ -87,3 +87,11 @@ slots, clear logos and quotes.
 Owner's gallery comment: "Feels off center." Measured at 1440: the glass mark hung 39px past the content grid's right edge
 (the artboard's `right: -39px`) and its middle sat above the copy's middle. The mark now sits inside the grid (`right: 0`)
 and is centered vertically on the copy (`app/home/Hero.css`). Phone layout unchanged.
+
+## Revision 2026-11-09 (later): the eight role categories in the hero
+
+Owner's gallery comment: "Maybe switch the right side to an illustration of our 8 role categories." The glass mark is
+replaced by `app/home/RoleWheel.tsx`: the eight Rate Index categories as isometric blocks on a dashed gold ring around one
+gold slab labeled "Revenue engine", in the Diagnostic's drawing language. Block heights follow each category's share of the
+index (Sales Leadership tallest), and the ring is ordered front to back by size so the tall blocks hide nothing. Labels are
+display names; the list and order come from `data/rate-index.json`. The glass mark file stays in `public/home/`.

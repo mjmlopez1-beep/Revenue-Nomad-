@@ -1,10 +1,10 @@
-import Image from "next/image";
 import Link from "next/link";
 import Arrow from "./Arrow";
+import RoleWheel from "./RoleWheel";
 import { hrefs } from "./content/links";
 import "./Hero.css";
 
-/** Hero (Homepage C with the check button): the page's only h1, Talk to us, Take the 2-minute check, See what we solve, and the glass mark on its glow. */
+/** Hero (Homepage C with the check button): the page's only h1, Talk to us, Take the 2-minute check, See what we solve, and the eight role categories drawn on the glow. */
 export default function Hero() {
   return (
     <section className="hero" aria-labelledby="hero-h">
@@ -36,15 +36,7 @@ export default function Hero() {
         </div>
         <div className="hero-art">
           <span className="hero-glow" aria-hidden="true" />
-          <Image
-            className="hero-mark"
-            src="/home/glass-mark.webp"
-            alt="Revenue Nomad mark in glass"
-            width={980}
-            height={984}
-            priority
-            sizes="(max-width: 900px) 255px, 539px"
-          />
+          <RoleWheel />
         </div>
       </div>
     </section>
