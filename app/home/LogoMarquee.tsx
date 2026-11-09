@@ -1,24 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { availableLogos, MIN_LOGOS, type Logo } from "./content/logos";
 import "./LogoMarquee.css";
 
 type ShippedLogo = Logo & { file: string };
 
-/** Display height by shape: wide wordmarks sit shorter than square marks, as the artboard tuned each logo by hand. */
-function displayHeight(l: ShippedLogo) {
-  if (!l.width || !l.height) return 24;
-  const ratio = l.height / l.width;
-  if (ratio >= 0.6) return 34;
-  if (ratio >= 0.3) return 26;
-  return 20;
+/** The artboard tuned each logo's rendered height by hand; it travels as CSS variables so the phone size applies under the media query. */
+function heights(l: ShippedLogo): CSSProperties {
+  const [desktop, phone] = l.display ?? [24, 22];
+  return { "--lmq-h": `${desktop}px`, "--lmq-h-sm": `${phone}px` } as CSSProperties;
 }
 
 /**
  * "Hired by teams at" logo marquee (design 4.1, section 4). Client only for the pause/play button.
- * Renders nothing until MIN_LOGOS logos have files (design decisions A5, A9: no placeholder boxes).
+ * Renders nothing until MIN_LOGOS logos have files (design decision A9: no placeholder boxes); the 13
+ * monochrome marks from the canvas ship in public/home/logos/.
  * One continuous CSS loop of about 40 seconds over a duplicated track; static rows under reduced motion.
  */
 export default function LogoMarquee({ logos = availableLogos }: { logos?: ShippedLogo[] }) {
@@ -35,7 +33,8 @@ export default function LogoMarquee({ logos = availableLogos }: { logos?: Shippe
             alt={hidden ? "" : l.name}
             width={l.width ?? 160}
             height={l.height ?? 40}
-            style={{ height: displayHeight(l) }}
+            sizes="(max-width: 900px) 140px, 180px"
+            style={heights(l)}
           />
         </span>
       ))}

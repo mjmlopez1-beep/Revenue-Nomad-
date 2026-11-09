@@ -33,7 +33,7 @@ const page: RolePage = {
   category: "Marketing",
   meta: {
     title: "Fractional CMO | Revenue Nomad",
-    description: `A senior marketing leader 1 to 3 days a week, owning positioning, the demand engine and the pipeline marketing produces. ${monthly} median. No fees for companies.`,
+    description: `A marketing leader 1 to 3 days a week, owning positioning, the demand engine and the pipeline marketing produces. ${monthly} median. No fees for companies.`,
   },
   order: ["does", "cost", "triggers", "compare", "owns", "engagements", "ninety", "practice", "pick", "leaders", "faq", "keepReading"],
 

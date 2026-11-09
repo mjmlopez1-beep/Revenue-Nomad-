@@ -69,6 +69,7 @@
 .lmq-logo {
   display: block;
   width: auto;
+  height: var(--lmq-h, 24px);
 }
 .lmq-fade {
   position: absolute;
@@ -106,6 +107,7 @@
     margin-right: 36px;
   }
   .lmq-logo {
+    height: var(--lmq-h-sm, var(--lmq-h, 22px));
     filter: grayscale(1);
     opacity: 0.8;
   }
