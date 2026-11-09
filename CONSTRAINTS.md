@@ -46,11 +46,19 @@ not a constraint.
 
 ## Measured, not yet enforced
 
+Measured 2026-11-09 with Lighthouse 12.6.1 (mobile preset, simulated throttling) against `next start` of the
+production build, on the build machine. Re-measure on the Vercel preview and update.
+
 | Metric | Today | Direction |
 |--------|-------|-----------|
-| Lighthouse performance (mobile, `/`) | measure after Phase 6 | must not fall |
-| LCP (mobile) | measure after Phase 6; target ≤ 2500 ms | must not rise |
-| CLS | measure after Phase 6; target ≤ 0.1 | must not rise |
+| Lighthouse performance (mobile, `/`) | 94 | must not fall |
+| Lighthouse accessibility / best practices / SEO | 100 / 100 / 100 | must not fall |
+| LCP (mobile) | 2.9 s (target ≤ 2.5 s; the LCP element is the hero h1, 84% render delay from render-blocking CSS and the display font; follow-up in docs/handoff.md) | must not rise |
+| CLS | 0 | must not rise |
+| Total blocking time | 150 ms | must not rise |
+| Total transfer, `/` first load (production) | 1,265 KB desktop, 1,238 KB phone | must not grow |
+| Image transfer, `/` | 47 KB desktop, 20 KB phone | must not grow |
+| First-load JS for `/` | 116 KB (`next build`) | must not grow |
 
 ## Exceptions
 
