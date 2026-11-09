@@ -14,3 +14,6 @@ data/jobs.json.tmp
 data/checks.json
 data/talk-requests.json
 data/guide-requests.json
+
+# Vercel CLI project link
+.vercel/
