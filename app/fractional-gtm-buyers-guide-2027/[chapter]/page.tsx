@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { guideFonts } from "../../guide/fonts";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -59,7 +60,7 @@ export default async function ChapterPage({ params, searchParams }: Props) {
   return (
     <>
       <SiteHeader />
-      <main id="main" className="gd gd-chapter">
+      <main id="main" className={`gd gd-chapter ${guideFonts}`}>
         <header className={`gd-chead${numbered ? "" : " gd-chead--front"}`}>
           <div className="rn-wrap">
             <div className="gd-chead-row">

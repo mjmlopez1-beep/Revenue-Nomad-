@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { guideFonts } from "../guide/fonts";
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -103,7 +104,7 @@ export default async function GuideLanding() {
   return (
     <>
       <SiteHeader />
-      <main id="main" className="gd">
+      <main id="main" className={`gd ${guideFonts}`}>
         <section className="gd-cover" aria-labelledby="gd-cover-h">
           <div className="rn-wrap">
             <p className="gd-cover-kicker">
@@ -126,7 +127,7 @@ export default async function GuideLanding() {
             </div>
             <div className="gd-cover-row">
               <p className="gd-subtitle">
-                {guide.subtitle}
+                {guide.subtitle.replace(/\.$/, "")}
                 <span className="gd-stop">.</span>
               </p>
               <div className="gd-cover-actions">

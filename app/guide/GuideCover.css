@@ -51,6 +51,9 @@
 .gcov-year {
   color: var(--rn-report-leaf);
 }
+.gcov-stop {
+  color: var(--rn-coral);
+}
 .gcov-sub {
   display: block;
   max-width: 34ch;

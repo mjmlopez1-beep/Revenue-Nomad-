@@ -92,7 +92,7 @@ function FigureCell({ html, max, total }: { html: string; max?: number; total: b
 
 function Table({ b, id }: { b: Extract<Block, { t: "table" }>; id: string }) {
   const bars = barColumns(b.head, b.rows, b.note);
-  const cap = b.caption?.match(/^(Figure [\d.]+[a-z]?)\.?\s+(.*)$/);
+  const cap = b.caption?.match(/^(Figure \d+(?:\.\d+)*[a-z]?)\.?\s+(.*)$/);
   return (
     <figure className="gd-figure">
       {b.caption && (
@@ -289,10 +289,18 @@ function group(blocks: Block[]): Group[] {
       g.head.push(b);
       return;
     }
-    if (phase !== "rest" && b.t === "stats" && g.rest.length === 0 && g.side.length === 0 && groups.length > 0) {
-      g.side.push(b);
-      phase = "intro";
-      return;
+    if (phase !== "rest" && b.t === "stats" && groups.length > 0) {
+      // A pair of tiles sits under the heading; a wider row joins the intro column when prose precedes it,
+      // otherwise it runs full width like a figure.
+      if (b.items.length <= 2 && g.side.length === 0) {
+        g.side.push(b);
+        phase = "intro";
+        return;
+      }
+      if (g.intro.length > 0) {
+        g.intro.push(b);
+        return;
+      }
     }
     if (phase !== "rest" && PROSE.has(b.t)) {
       g.intro.push(b);
@@ -316,7 +324,31 @@ export default function GuideBlocks({ blocks }: { blocks: Block[] }) {
         if (g.head.some((b) => b.t === "h2")) seenH2 = true;
         // Questions sit one level under the nearest heading so the outline never skips a level.
         const qLevel: "h2" | "h3" = seenH2 ? "h3" : "h2";
-        const render = (list: Block[], offset: number) => list.map((b, j) => <BlockView key={offset + j} b={b} i={g.start + offset + j} qLevel={qLevel} />);
+        const render = (list: Block[], offset: number) => {
+          // Two or more tinted callouts in a row share a grid, as on the boards.
+          const out: React.ReactNode[] = [];
+          for (let j = 0; j < list.length; ) {
+            const b = list[j];
+            if (b.t === "callout" && b.tone !== "night") {
+              let k = j;
+              while (k < list.length && list[k].t === "callout" && (list[k] as Extract<Block, { t: "callout" }>).tone !== "night") k++;
+              if (k - j >= 2) {
+                out.push(
+                  <div key={`cg${offset + j}`} className="gd-callout-grid">
+                    {list.slice(j, k).map((c, m) => (
+                      <BlockView key={offset + j + m} b={c} i={g.start + offset + j + m} qLevel={qLevel} />
+                    ))}
+                  </div>
+                );
+                j = k;
+                continue;
+              }
+            }
+            out.push(<BlockView key={offset + j} b={b} i={g.start + offset + j} qLevel={qLevel} />);
+            j++;
+          }
+          return out;
+        };
         const twoCol = (g.head.length > 0 || g.side.length > 0) && (g.intro.length > 0 || g.side.length > 0);
         return (
           <div key={gi} className={`gd-sec${opening ? " gd-sec--opening" : ""}${twoCol ? " gd-sec--cols" : ""}`}>
