@@ -289,7 +289,7 @@ function Results({ result }: { result: CheckResult }) {
           Talk to us about these scores
           <Arrow />
         </Link>
-        <Link className="rn-link" href="/engage/diagnostic">
+        <Link className="rn-link" href="/revenue-health-diagnostic">
           See the full Revenue Health Diagnostic
           <Arrow size={13} />
         </Link>

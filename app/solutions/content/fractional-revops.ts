@@ -273,17 +273,17 @@ const page: RolePage = {
       {
         title: "Diagnostic first",
         body: "A Revenue Health Diagnostic - a scored read across seven pillars and a prioritized roadmap in about a month.",
-        href: "/engage/diagnostic",
+        href: "/revenue-health-diagnostic",
       },
       {
         title: "Monthly fractional",
         body: `Hands-on execution at the survey's median month of ${medianMonth}, or a director cadence at about 2 days a week for $12k - $15k/month.`,
-        href: "/engage/fractional",
+        href: "/how-we-engage/fractional",
       },
       {
         title: "Converts to full time",
         body: "When the role becomes a full-time job, hire the person already doing it - with the data model, the cadence and the trust built.",
-        href: "/engage/full-time",
+        href: "/how-we-engage/full-time",
       },
     ],
     stats: [

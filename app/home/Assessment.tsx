@@ -4,7 +4,7 @@ import CubeSolid from "./CubeSolid";
 import type { Route } from "./content/links";
 import "./Assessment.css";
 
-const diagnostic: Route = "/engage/diagnostic";
+const diagnostic: Route = "/revenue-health-diagnostic";
 
 const layers = [
   { kicker: "Layer 01 · 2 of 7 pillars", title: "What it runs on", text: "Data you can trust and tools that carry the work" },

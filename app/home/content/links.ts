@@ -14,10 +14,10 @@ export const routes = {
   "/problems/pipeline": "Pipeline beyond your network",
   "/problems/forecast": "A forecast the board believes",
   "/problems/ai": "AI that pays for itself",
-  "/engage/diagnostic": "Revenue Health Diagnostic",
-  "/engage/fractional": "Monthly fractional leadership",
-  "/engage/interim": "Interim cover",
-  "/engage/full-time": "Fractional to full time",
+  "/revenue-health-diagnostic": "Revenue Health Diagnostic",
+  "/how-we-engage/fractional": "Monthly fractional leadership",
+  "/how-we-engage/interim": "Interim cover",
+  "/how-we-engage/full-time": "Fractional to full time",
   "/fractional-gtm-buyers-guide-2027": "The Fractional GTM Buyer's Guide 2027",
   "/research/rate-index": "The Rate Index",
   "/case-studies": "Case studies",
@@ -40,7 +40,7 @@ export const routes = {
 export type Route = keyof typeof routes;
 
 /** Paths the stub route serves: everything that is not a real page yet. */
-const realPages: Route[] = ["/", "/portal", "/thanks", "/check", "/talk", "/research/rate-index", "/problems/founder-led-sales", "/problems/pipeline", "/problems/forecast", "/problems/ai", "/fractional-gtm-buyers-guide-2027", "/fractional-vp-of-sales", "/fractional-cmo", "/fractional-revops", "/fractional-ai-gtm"];
+const realPages: Route[] = ["/", "/portal", "/thanks", "/check", "/talk", "/research/rate-index", "/problems/founder-led-sales", "/problems/pipeline", "/problems/forecast", "/problems/ai", "/fractional-gtm-buyers-guide-2027", "/fractional-vp-of-sales", "/fractional-cmo", "/fractional-revops", "/fractional-ai-gtm", "/revenue-health-diagnostic", "/how-we-engage/fractional", "/how-we-engage/interim", "/how-we-engage/full-time"];
 export const stubRoutes = (Object.keys(routes) as Route[]).filter((p) => !realPages.includes(p));
 
 export const hrefs = {
@@ -79,10 +79,10 @@ export const solutionsMenu: LinkGroup[] = [
   {
     title: "How we engage",
     items: [
-      { label: "Revenue Health Diagnostic", href: "/engage/diagnostic" },
-      { label: "Monthly fractional leadership", href: "/engage/fractional" },
-      { label: "Interim cover", href: "/engage/interim" },
-      { label: "Fractional to full time", href: "/engage/full-time" },
+      { label: "Revenue Health Diagnostic", href: "/revenue-health-diagnostic" },
+      { label: "Monthly fractional leadership", href: "/how-we-engage/fractional" },
+      { label: "Interim cover", href: "/how-we-engage/interim" },
+      { label: "Fractional to full time", href: "/how-we-engage/full-time" },
     ],
   },
 ];

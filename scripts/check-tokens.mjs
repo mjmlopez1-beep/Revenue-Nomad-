@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
-const targets = ["app/home", "app/check", "app/talk", "app/leads", "app/research", "app/problems", "app/page.tsx", "app/[...slug]", "app/thanks", "app/guide", "app/fractional-gtm-buyers-guide-2027", "app/solutions", "app/fractional-vp-of-sales", "app/fractional-cmo", "app/fractional-revops", "app/fractional-ai-gtm", "app/Brand.tsx"];
+const targets = ["app/home", "app/check", "app/talk", "app/leads", "app/research", "app/problems", "app/page.tsx", "app/[...slug]", "app/thanks", "app/guide", "app/fractional-gtm-buyers-guide-2027", "app/solutions", "app/fractional-vp-of-sales", "app/fractional-cmo", "app/fractional-revops", "app/fractional-ai-gtm", "app/engage", "app/how-we-engage", "app/diagnostic", "app/revenue-health-diagnostic", "app/Brand.tsx"];
 const files = [];
 function walk(p) {
   const st = statSync(p, { throwIfNoEntry: false });

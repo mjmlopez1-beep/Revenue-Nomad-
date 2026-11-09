@@ -50,7 +50,7 @@ const diagnosticCard = (body: string): FixCard => ({
   price: "Scoped to the business",
   priceNote: "30 to 60 days",
   cta: "See what the Diagnostic covers",
-  href: "/engage/diagnostic",
+  href: "/revenue-health-diagnostic",
 });
 
 export const solutions: Solution[] = [
@@ -296,7 +296,7 @@ export const solutions: Solution[] = [
         price: "Scoped to the business",
         priceNote: "30 to 60 days",
         cta: "See what the Diagnostic covers",
-        href: "/engage/diagnostic",
+        href: "/revenue-health-diagnostic",
       },
     ],
     faqs: [

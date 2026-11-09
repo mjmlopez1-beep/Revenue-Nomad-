@@ -68,8 +68,8 @@ Carry every word of the artboard into the module in artboard order; keep the aut
 no em dashes, no arrows, no emoji. The site's words: say "no search fee" (never "recruiting fee"); never
 "margin", "split", "take-home" or Revenue Nomad's own fee. Links: Talk to us `/talk`, the check `/check`, Rate
 Index `/research/rate-index`, the guide `/fractional-gtm-buyers-guide-2027`, case studies `/case-studies`,
-browse `/operators/browse`, engagement pages `/engage/fractional`, `/engage/interim`, `/engage/full-time`,
-`/engage/diagnostic`, guides `/guides/hiring-a-fractional-vp-of-sales` and `/guides/where-ai-fits-in-sales`
+browse `/operators/browse`, engagement pages `/how-we-engage/fractional`, `/how-we-engage/interim`, `/how-we-engage/full-time`,
+`/revenue-health-diagnostic`, guides `/guides/hiring-a-fractional-vp-of-sales` and `/guides/where-ai-fits-in-sales`
 (other guide slugs on the boards map to those two or to `/guides`). Sample leader photos on the boards are stock;
 leave `items` with names and text only, the template draws initials. Run `npx tsc --noEmit` before reporting;
 report every figure you could not source from the dataset and every link you remapped.

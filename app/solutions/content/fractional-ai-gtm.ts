@@ -256,12 +256,12 @@ const page: RolePage = {
       {
         title: "Monthly fractional",
         body: `Scoped to the hours the work needs, ${price} at about ${monthlyHours} hours - the median month in the engagements operators described. A defined first term of three to six months, then 30 days notice either way.`,
-        href: "/engage/fractional",
+        href: "/how-we-engage/fractional",
       },
       {
         title: "The Diagnostic first",
         body: "When you want the map before the leader. The Revenue Health Diagnostic's AI pillar maps where AI can raise seller effectiveness and GTM efficiency, with a prioritized roadmap in 30 to 60 days.",
-        href: "/engage/diagnostic",
+        href: "/revenue-health-diagnostic",
       },
       {
         title: "Inside another seat",

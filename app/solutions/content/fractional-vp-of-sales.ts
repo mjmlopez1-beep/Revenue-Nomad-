@@ -238,17 +238,17 @@ const page: RolePage = {
       {
         title: "Monthly fractional",
         body: `1 to 3 days a week at ${vpMonthly}. A defined first term of three to six months, then 30 days notice either way.`,
-        href: "/engage/fractional",
+        href: "/how-we-engage/fractional",
       },
       {
         title: "Interim cover",
         body: "The seat is empty and the search is running. An experienced leader holds the team, the pipeline and the forecast until it lands.",
-        href: "/engage/interim",
+        href: "/how-we-engage/interim",
       },
       {
         title: "Converts to full time",
         body: "When the role becomes a full-time job, hire the person already doing it - with the ramp, the trust and the playbook built.",
-        href: "/engage/full-time",
+        href: "/how-we-engage/full-time",
       },
     ],
     stats: [
