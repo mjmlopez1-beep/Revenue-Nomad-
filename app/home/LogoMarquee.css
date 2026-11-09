@@ -7,11 +7,13 @@
   font-family: var(--rn-font-ui);
 }
 .lmq-head {
+  padding: 32px 0 0;
+}
+.lmq-head-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 32px 0 0;
 }
 .lmq-h {
   margin: 0;

@@ -44,26 +44,28 @@ export default function LogoMarquee({ logos = availableLogos }: { logos?: Shippe
 
   return (
     <section className="lmq" aria-labelledby="lmq-h">
-      <div className="rn-wrap lmq-head">
-        <h2 id="lmq-h" className="lmq-h">
-          Hired by teams at
-        </h2>
-        <button
-          type="button"
-          className="lmq-toggle"
-          aria-label={paused ? "Play the logo animation" : "Pause the logo animation"}
-          onClick={() => setPaused((p) => !p)}
-        >
-          {paused ? (
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M3 1.5v9l7-4.5z" fill="currentColor" />
-            </svg>
-          ) : (
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M2.5 1.5h2.5v9H2.5zM7 1.5h2.5v9H7z" fill="currentColor" />
-            </svg>
-          )}
-        </button>
+      <div className="lmq-head">
+        <div className="rn-wrap lmq-head-row">
+          <h2 id="lmq-h" className="lmq-h">
+            Hired by teams at
+          </h2>
+          <button
+            type="button"
+            className="lmq-toggle"
+            aria-label={paused ? "Play the logo animation" : "Pause the logo animation"}
+            onClick={() => setPaused((p) => !p)}
+          >
+            {paused ? (
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M3 1.5v9l7-4.5z" fill="currentColor" />
+              </svg>
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path d="M2.5 1.5h2.5v9H2.5zM7 1.5h2.5v9H7z" fill="currentColor" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
       <div className="lmq-viewport">
         <div className="lmq-track" data-paused={paused || undefined}>

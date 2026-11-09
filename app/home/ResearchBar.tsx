@@ -24,7 +24,9 @@ export default function ResearchBar() {
           </span>
         </p>
         <Link className="rbar-link" href={hrefs.report}>
-          Read<span className="rbar-long"> the findings</span>
+          <span>
+            Read<span className="rbar-long"> the findings</span>
+          </span>
           <Arrow size={12} />
         </Link>
       </div>
