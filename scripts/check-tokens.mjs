@@ -5,7 +5,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const root = new URL("..", import.meta.url).pathname;
-const targets = ["app/home", "app/page.tsx", "app/[...slug]"];
+const targets = ["app/home", "app/page.tsx", "app/[...slug]", "app/thanks", "app/Brand.tsx"];
 const files = [];
 function walk(p) {
   const st = statSync(p, { throwIfNoEntry: false });
@@ -17,7 +17,8 @@ targets.forEach((t) => walk(join(root, t)));
 
 const hex = /#[0-9a-fA-F]{3,8}\b/g;
 const rgb = /\brgba?\(/g;
-const font = /font-family\s*:/g;
+// A font-family that names a token is fine; a literal family name is not.
+const font = /font-family\s*:(?!\s*var\(--rn-font-)/g;
 const problems = [];
 for (const f of files) {
   const text = readFileSync(f, "utf8");

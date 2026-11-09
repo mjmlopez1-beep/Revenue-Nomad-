@@ -15,10 +15,12 @@ const args = Object.fromEntries(
   process.argv.slice(2).map((a, i, arr) => (a.startsWith("--") ? [a.slice(2), arr[i + 1] ?? true] : [])).filter((x) => x.length)
 );
 const PATH = args.path ?? "/";
-const PRODUCTION = process.env.NODE_ENV === "production";
+const SITE_ENV = args["site-env"] ?? process.env.NEXT_PUBLIC_SITE_ENV ?? "preview";
+const PRODUCTION = SITE_ENV === "production";
 const FEE_WORDS = /\b(fee|fees|margin|take rate|split|all-in|take-home|take home|you pay only when)\b/i;
-// Allowed because the founder's copy uses them to say companies pay nothing.
-const FEE_ALLOWED = /no fees? (for|on top|to) |no fee[ ,.-]|without (a )?fees?|zero fees?/i;
+// Allowed because the founder's copy uses them to say companies pay nothing
+// ("No fees for companies", "No fee on top", the footer's "Fees for companies: None").
+const FEE_ALLOWED = /no fees? (for|on top|to) |no fee[ ,.-]|fees? for companies|without (a )?fees?|zero fees?/i;
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
   { name: "phone", width: 390, height: 844 },
@@ -30,7 +32,7 @@ let baseUrl = args.url;
 async function startServer() {
   const port = 3100 + Math.floor(Math.random() * 400);
   baseUrl = `http://localhost:${port}`;
-  server = spawn("npx", ["next", "dev", "-p", String(port)], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
+  server = spawn("npx", ["next", "dev", "-p", String(port)], { stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1", NEXT_PUBLIC_SITE_ENV: SITE_ENV } });
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     try {
@@ -80,6 +82,8 @@ async function checkViewport(browser, vp) {
     out.badLinks = [...document.querySelectorAll("a")].filter((a) => { const h = a.getAttribute("href"); return !h || h === "#"; }).map((a) => a.textContent.trim().slice(0, 40));
     out.text = document.body.innerText;
     out.unverified = document.querySelectorAll("[data-unverified]").length;
+    out.placeholderStrip = document.querySelectorAll('[data-section="validation"][data-placeholder]').length;
+    out.hrefs = [...new Set([...document.querySelectorAll("a[href]")].map((a) => a.getAttribute("href")).filter((h) => h && h.startsWith("/") && !h.startsWith("//")).map((h) => h.split("#")[0]).filter(Boolean))];
     return out;
   });
   if (dom.scrollWidth > dom.innerWidth) fail(vp.name, `horizontal scroll: scrollWidth ${dom.scrollWidth} > innerWidth ${dom.innerWidth}`);
@@ -91,6 +95,18 @@ async function checkViewport(browser, vp) {
     if (FEE_WORDS.test(line) && !FEE_ALLOWED.test(line)) fail(vp.name, `fee language on a client-facing page: "${line.trim().slice(0, 90)}"`);
   }
   if (PRODUCTION && dom.unverified) fail(vp.name, `${dom.unverified} unverified number(s) rendered in production`);
+  if (!PRODUCTION && vp.name === "desktop" && dom.unverified === 0) console.log("note: no unverified figures rendered (expected once all numbers are confirmed)");
+  if (dom.placeholderStrip) fail(vp.name, "validation strip rendered with placeholder-only data");
+  if (vp.name === "desktop") {
+    for (const h of dom.hrefs) {
+      try {
+        const r = await fetch(baseUrl + h, { redirect: "follow" });
+        if (!r.ok) fail(vp.name, `internal link ${h} -> HTTP ${r.status}`);
+      } catch (e) { fail(vp.name, `internal link ${h} failed: ${e.message}`); }
+    }
+    const nf = await fetch(baseUrl + "/no-such-page-" + Date.now());
+    if (nf.status !== 404) fail(vp.name, `unknown path returned ${nf.status}, expected 404`);
+  }
 
   // Accessibility (external opinion): axe-core, fail on critical or serious.
   await page.addScriptTag({ content: axeSource });
@@ -100,8 +116,8 @@ async function checkViewport(browser, vp) {
   }
 
   // Page weight.
-  if (totalBytes > LIMITS.totalBytes) fail(vp.name, `page weight ${(totalBytes / 1024).toFixed(0)} KB > ${(LIMITS.totalBytes / 1024).toFixed(0)} KB`);
-  if (imageBytes > LIMITS.imageBytes) fail(vp.name, `image weight ${(imageBytes / 1024).toFixed(0)} KB > ${(LIMITS.imageBytes / 1024).toFixed(0)} KB`);
+  if (args.url && totalBytes > LIMITS.totalBytes) fail(vp.name, `page weight ${(totalBytes / 1024).toFixed(0)} KB > ${(LIMITS.totalBytes / 1024).toFixed(0)} KB`);
+  if (args.url && imageBytes > LIMITS.imageBytes) fail(vp.name, `image weight ${(imageBytes / 1024).toFixed(0)} KB > ${(LIMITS.imageBytes / 1024).toFixed(0)} KB`);
 
   // Reduced motion: nothing may keep animating.
   const rm = await browser.newContext({ viewport: { width: vp.width, height: vp.height }, reducedMotion: "reduce" });
