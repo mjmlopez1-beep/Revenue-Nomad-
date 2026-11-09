@@ -2,7 +2,8 @@ import type { Chapter } from "./types";
 import * as f from "./figures";
 
 /* Fractional VP-level sales leader: the Chapter 3 budget (median monthly spend at a $5M - $20M company) at 40 hours a month. */
-const fractionalMonthly = f.firstClientMonthly("$5M - $20M").medianMonthly ?? 0;
+// A fractional VP at 40 hours a month, priced at the Rate Index sales-leadership median.
+const fractionalMonthly = 40 * (f.category("Sales Leadership").raw ?? 0);
 const fractionalAnnual = fractionalMonthly * 12;
 const fractionalHourly = f.rate(fractionalAnnual / (40 * 12));
 const salesMedian = f.category("Sales Leadership").median;

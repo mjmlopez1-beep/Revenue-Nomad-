@@ -27,7 +27,9 @@ const PRODUCTION = SITE_ENV === "production";
 const FEE_WORDS = /\b(fee|fees|margin|take rate|split|all-in|take-home|take home|you pay only when)\b/i;
 // Allowed because the founder's copy uses them to say companies pay nothing
 // ("No fees for companies", "No fee on top", the footer's "Fees for companies: None").
-const FEE_ALLOWED = /no fees? (for|on top|to) |no fee[ ,.-]|fees? for companies(?!\s*[:-]?\s*\d)|without (a )?fees?|zero fees?/i;
+// Third-party and contract-term fees the research names (executive search, recruiter, hire-away, fixed-fee projects)
+// are not Revenue Nomad pricing and pass; "our fee", "platform fee" and the like still fail.
+const FEE_ALLOWED = /no fees? (for|on top|to) |no fee[ ,.-]|fees? for companies(?!\s*[:-]?\s*\d)|without (a )?fees?|zero fees?|(search|recruiter|placement|hire-away|success) fees?|fixed-fee/i;
 const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
   { name: "phone", width: 390, height: 844 },

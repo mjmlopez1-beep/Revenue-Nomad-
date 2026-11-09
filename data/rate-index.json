@@ -15,6 +15,7 @@
       "p25": 180,
       "median": 250,
       "p75": 304,
+      "p90": 500,
       "topTier": {
         "floor": 400,
         "n": 16,
@@ -879,6 +880,12 @@
         "n": 2
       }
     ],
-    "expandedHours": 4
+    "expandedHours": 4,
+    "implied60Plus": {
+      "n": 3,
+      "min": 207,
+      "max": 318,
+      "median": 240
+    }
   }
 }

@@ -78,7 +78,7 @@ const chapter: Chapter = {
       html: "So take the public growth numbers as a floor. The GTM side of fractional is growing underneath them, and most of it never shows up in a job board.",
     },
 
-    { t: "h2", eyebrow: "Market size", text: `About ${num(m.operatorsCentral)} leaders and ${spend.centralLong} a year`, id: "about-14000-leaders-and-28-billion-a-year" },
+    { t: "h2", eyebrow: "Market size", text: `About ${num(m.operatorsCentral)} leaders and ${spend.centralLong} a year`, id: "market-size" },
     {
       t: "p",
       html: "Nobody has counted fractional GTM leaders directly, so we built an estimate from public data and our own, and we show the math so you can argue with it.",

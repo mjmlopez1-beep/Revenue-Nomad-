@@ -1,4 +1,12 @@
 import type { Chapter } from "./types";
+import * as f from "./figures";
+
+/* The guide's "center of gravity": first-client engagements with $1M to $20M companies. */
+const CORE_BANDS = ["$1M - $5M", "$5M - $20M"];
+const revenueBands = f.survey.firstClientRevenue;
+const topRevenueShare = Math.max(...revenueBands.map((b) => b.share));
+const directClients = f.contracts.directClients;
+const aiGtm = f.category("AI GTM");
 
 const chapter: Chapter = {
   slug: "02-who-buys",
@@ -6,7 +14,7 @@ const chapter: Chapter = {
   title: "Who buys fractional GTM, and what they are really buying",
   dek: "The center of gravity is a real business that has outgrown the way it sells",
   stats: [
-    { v: "62%", l: "of engagements are with $1M to $20M companies", tone: "forest" },
+    { v: f.pct(f.coreShare), l: "of engagements are with $1M to $20M companies", tone: "forest" },
     { v: "15 of 20", l: "inbound requesters had fewer than 100 employees" },
     { v: "1 of 20", l: "requests came from a sitting head of sales" },
     { v: "6 of 20", l: "buyers named AI directly" },
@@ -23,38 +31,29 @@ const chapter: Chapter = {
     {
       t: "stats",
       items: [
-        { v: "62%", l: "$1M to $20M revenue", tone: "forest" },
-        { v: "16%", l: "$20M to $50M" },
-        { v: "15%", l: "pre-revenue or under $1M" },
-        { v: "2 of 11", l: "direct clients are software companies" },
+        { v: f.pct(f.coreShare), l: "$1M to $20M revenue", tone: "forest" },
+        { v: f.pct(f.midShare), l: "$20M to $50M" },
+        { v: f.pct(f.smallShare), l: "pre-revenue or under $1M" },
+        { v: `2 of ${directClients}`, l: "direct clients are software companies" },
       ],
     },
     {
       t: "p",
-      html:
-        "62% of the engagements our operators described are with companies between $1 million and $20 million in revenue. Another 16% are $20 million to $50 million. Pre-revenue and sub-$1 million companies together are 15%. The center of gravity is a real business with real customers that has outgrown the way it sells.",
+      html: `${f.pct(f.coreShare)} of the engagements our operators described are with companies between $1 million and $20 million in revenue. Another ${f.pct(f.midShare)} are $20 million to $50 million. Pre-revenue and sub-$1 million companies together are ${f.pct(f.smallShare)}. The center of gravity is a real business with real customers that has outgrown the way it sells.`,
     },
     {
       t: "table",
       caption: "Figure 2.1. Engagements by client annual revenue",
       head: ["Client annual revenue", "Share of engagements"],
-      rows: [
-        ["Pre-revenue", "5%"],
-        ["Under $1M", "9%"],
-        ["$1M - $5M", "31% (center)"],
-        ["$5M - $20M", "31% (center)"],
-        ["$20M - $50M", "16%"],
-        ["$50M+", "7%"],
-      ],
+      rows: revenueBands.map((b) => [b.band, `${f.pct(b.share)}${CORE_BANDS.includes(b.band) ? " (center)" : ""}`]),
       firstColHeader: true,
-      note: "n=74. Bars scaled to the highest value in the column (31%).",
+      note: `n=${f.survey.detailed}. Bars scaled to the highest value in the column (${f.pct(topRevenueShare)}).`,
     },
     {
       t: "callout",
       tone: "leaf",
       title: "Our direct clients",
-      html:
-        "Our own direct clients tell the same story from the buyer's chair. Eleven companies. Most sit between $5 million and $50 million. Only two are what you would call a software company.",
+      html: `Our own direct clients tell the same story from the buyer's chair. ${directClients} companies. Most sit between $5 million and $50 million. Only two are what you would call a software company.`,
     },
     {
       t: "list",
@@ -73,15 +72,14 @@ const chapter: Chapter = {
     },
     {
       t: "p",
-      html:
-        "That last point deserves a pause, because it exposes a gap in the market. The network is built for software. 76% of operators on our platform list SaaS as a primary industry. 31% of the engagements in our survey are SaaS or enterprise software. But the companies actually signing contracts with us are agencies, services firms, healthcare, nonprofits. Businesses where the founder has been the closer for a decade and the sales \"team\" is two people and a spreadsheet.",
+      html: `That last point deserves a pause, because it exposes a gap in the market. The network is built for software. ${f.pct(f.platform.softwareShare)} of operators on our platform list SaaS or enterprise software as a primary industry. ${f.pct(f.survey.softwareClientShare)} of the engagements in our survey are SaaS or enterprise software. But the companies actually signing contracts with us are agencies, services firms, healthcare, nonprofits. Businesses where the founder has been the closer for a decade and the sales "team" is two people and a spreadsheet.`,
     },
     {
       t: "stats",
       items: [
-        { v: "76% SaaS", l: "Platform operators", s: "list it as a primary industry" },
-        { v: "31% SaaS", l: "Survey engagements", s: "or enterprise software" },
-        { v: "2 of 11", l: "Our direct clients", s: "are software companies", tone: "forest" },
+        { v: `${f.pct(f.platform.softwareShare)} SaaS`, l: "Platform operators", s: "list it or enterprise software as a primary industry" },
+        { v: `${f.pct(f.survey.softwareClientShare)} SaaS`, l: "Survey engagements", s: "or enterprise software" },
+        { v: `2 of ${directClients}`, l: "Our direct clients", s: "are software companies", tone: "forest" },
       ],
     },
     {
@@ -124,8 +122,7 @@ const chapter: Chapter = {
     { t: "h2", eyebrow: "Operator survey", text: "What they are buying", id: "what-they-are-buying" },
     {
       t: "p",
-      html:
-        "We asked 74 operators to describe, in a sentence, why their current client brought them in. We coded the answers. Six triggers account for nearly all of them.",
+      html: `We asked ${f.survey.detailed} operators to describe, in a sentence, why their current client brought them in. We coded the answers. Six triggers account for nearly all of them.`,
     },
     {
       t: "steps",
@@ -134,8 +131,7 @@ const chapter: Chapter = {
           n: "1",
           title: "Getting the founder out of the closing seat",
           aside: "About 1 in 4",
-          html:
-            "This is the biggest one by a wide margin, about one in four. The language is consistent: \"transition from founder-led sales to a revenue engine,\" \"move away from founder-led sales and build a system,\" \"they had a sales team but no structured sales engine.\" Three of our eleven direct contracts say it almost word for word in the scope: the founder is moving to a different seat and someone needs to run revenue.",
+          html: `This is the biggest one by a wide margin, about one in four. The language is consistent: "transition from founder-led sales to a revenue engine," "move away from founder-led sales and build a system," "they had a sales team but no structured sales engine." 3 of our ${directClients} direct contracts say it almost word for word in the scope: the founder is moving to a different seat and someone needs to run revenue.`,
         },
         {
           n: "2",
@@ -220,8 +216,7 @@ const chapter: Chapter = {
         {
           n: "2",
           title: "AI is in nearly a third of the asks.",
-          html:
-            "Six of 20 buyers named it directly: put AI into the sales process to move more deals, build a GTM motion that is AI-native from the start, map every revenue role down to the task level and find what GenAI can absorb, make a proprietary AI insight engine the thing that drives every outbound and renewal touch. Recall from Chapter 3 that AI GTM is the lowest-priced role category in the operator data. Demand is ahead of the market's ability to price it. That will correct, and probably fast.",
+          html: `Six of 20 buyers named it directly: put AI into the sales process to move more deals, build a GTM motion that is AI-native from the start, map every revenue role down to the task level and find what GenAI can absorb, make a proprietary AI insight engine the thing that drives every outbound and renewal touch. Recall from Chapter 3 that AI GTM prices at the market center in the operator data, ${aiGtm.median} an hour on ${aiGtm.n} rates, with no premium over sales leadership. Demand is ahead of the market's ability to price it. That will correct, and probably fast.`,
         },
         {
           n: "3",
@@ -240,7 +235,7 @@ const chapter: Chapter = {
         { v: "42 of 53", l: "landed on a VP of Sales or sales leader page", tone: "forest" },
         { v: "3 of 53", l: "arrived from ChatGPT or OpenAI" },
         { v: "36 of 56", l: "coded inbound requests were real buyers" },
-        { v: "1 in 51", l: "platform profiles is a front-line seller" },
+        { v: `${f.platform.frontLine} in ${f.platform.usable}`, l: "platform profiles is a front-line seller" },
       ],
     },
     {
@@ -259,8 +254,7 @@ const chapter: Chapter = {
     },
     {
       t: "p",
-      html:
-        "A few other things from the inbound requests worth knowing. Three of 53 arrived from ChatGPT or an OpenAI referral rather than Google, which matches operators in the survey who listed \"AI search\" and \"LLMs\" as a new source of clients. Two leads, both from very small companies, turned out to want a fractional sales rep, not a leader, which is a thing people ask for and almost nobody sells (one profile in 51 on our platform is a front-line seller).",
+      html: `A few other things from the inbound requests worth knowing. Three of 53 arrived from ChatGPT or an OpenAI referral rather than Google, which matches operators in the survey who listed "AI search" and "LLMs" as a new source of clients. Two leads, both from very small companies, turned out to want a fractional sales rep, not a leader, which is a thing people ask for and almost nobody sells (${f.platform.frontLine === 1 ? "one profile" : `${f.platform.frontLine} profiles`} in ${f.platform.usable} on our platform ${f.platform.frontLine === 1 ? "is" : "are"} a front-line seller).`,
     },
     {
       t: "callout",
@@ -282,9 +276,9 @@ const chapter: Chapter = {
           tone: "forest",
         },
         {
-          v: "59% vs 19%",
+          v: `${f.pct(f.survey.howFound.peer)} vs 19%`,
           l: "Operator referrals",
-          s: "Operators find clients through referral: 59% of operators got their last three clients from a peer, and only 19% through LinkedIn inbound.",
+          s: `Operators find clients through referral: ${f.pct(f.survey.howFound.peer)} of operators got their last three clients from a peer, and only 19% through LinkedIn inbound.`,
         },
       ],
     },

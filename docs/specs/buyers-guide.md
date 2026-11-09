@@ -60,6 +60,14 @@ the live data and was kept, now read from the file. Figures with no column in th
 labeled by source in the text: Lightcast, Built In and SPMB figures, the 77 inbound requests and their cuts, the
 67-operator waitlist, and the 172 unique operators (the waitlist is not in the exported tabs).
 
+Carried from the source and left for the author because the dataset has no column for them: the "about 1 in 4"
+founder-handoff trigger share in Chapter 2 (hand-coded; the build script's keyword count gives 9%), the 19% LinkedIn
+inbound share, the Figure 3.5 initial-term column, the $4,000 to $5,000 and $13,000 to $25,000 budget ranges, and
+the Chapter 1 pre-launch signup rate, which now reads about 3 a month from the platform signup dates (the source
+said 9). Anchor ids that carried old figures were renamed (`market-size`, `the-market-center`). The fee-language
+check allows third-party and contract-term fees (search, recruiter, placement, hire-away, success, fixed-fee) since
+the guide discusses them; Revenue Nomad pricing language still fails it.
+
 ## Checks
 
 `check:tokens` covers `app/guide` and the route folder. `check:home` runs the landing, "start-here" (open) and

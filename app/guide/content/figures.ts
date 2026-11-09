@@ -32,7 +32,7 @@ export const rates = {
   p25: rate(all.p25),
   p75: rate(all.p75),
   middleHalf: `${rate(all.p25)} - ${rate(all.p75)}`,
-  p90: "$500",
+  p90: rate(all.p90),
   surveyN: d.rates.surveyN,
   platformN: d.rates.platformN,
   topTier: { n: all.topTier.n, floor: usd(all.topTier.floor), max: usd(all.topTier.max), range: `${usd(all.topTier.floor)} - ${usd(all.topTier.max)}` },

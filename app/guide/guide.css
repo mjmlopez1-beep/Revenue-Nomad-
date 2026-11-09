@@ -671,7 +671,11 @@
   .gd-chapter-grid,
   .gd-gate-row,
   .gd-pager {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .gd-article,
+  .gd-side {
+    min-width: 0;
   }
   .gd-title {
     font-size: 40px;

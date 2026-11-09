@@ -238,6 +238,10 @@ const guidePlatform = {
 };
 const partner = engagements.filter((r) => r[0] !== "Revenue Nomad direct");
 const directClients = new Set(direct.map((r) => String(r[1]).replace(/\s*\(.*$/, "").trim().toLowerCase())).size;
+// Direct contracts at 60 hours a month or more, as an implied hourly rate (monthly fee / contracted hours).
+const implied = direct.map((r) => ({ hours: num(r[10]), monthly: num(r[8]) })).filter((x) => x.hours != null && x.monthly != null && x.monthly >= 1000).map((x) => ({ ...x, hourly: Math.round(x.monthly / x.hours) }));
+const sixtyPlus = implied.filter((x) => x.hours >= 60).map((x) => x.hourly);
+const implied60Plus = sixtyPlus.length ? { n: sixtyPlus.length, min: Math.min(...sixtyPlus), max: Math.max(...sixtyPlus), median: median(sixtyPlus) } : null;
 const guideContracts = {
   directClients,
   directDocuments: direct.length,
@@ -247,8 +251,10 @@ const guideContracts = {
   partnerTermMedianMonths: median(partner.map((r) => num(r[13]))),
   partnerCategories: Object.entries(partner.reduce((a, r) => ((a[r[5]] = (a[r[5]] || 0) + 1), a), {})).map(([category, n]) => ({ category, n })),
   expandedHours: direct.filter((r) => r[21] === "addendum").length,
+  implied60Plus,
 };
 const topTier = { floor: 400, n: count(rateRows, (r) => num(r[S.rate]) >= 400), max: Math.max(...rateRows.map((r) => num(r[S.rate]))) };
+const p90 = quantile(rateRows.map((r) => num(r[S.rate])), 0.9);
 const allMonthly = eng.map((x) => x.monthly).filter((m) => m != null);
 
 const out = {
@@ -258,7 +264,7 @@ const out = {
     tabs: ["The State of Fractional GTM 2027 Survey", "Platform Signups 2026", "Engagements"],
     note: "Hourly rates: operator survey answers plus Revenue Nomad platform listings appended to the survey tab (operators already in the survey are not double counted). Monthly spend, company-size and hours figures: engagements described in the operator survey (first and second client), monthly spend = hours a month x effective hourly rate. Contract ranges: Revenue Nomad direct agreements only, as billed to the company. Cuts under 10 are directional.",
   },
-  rates: { all: { ...allRates, topTier }, surveyN: surveyAnswers.length, platformN: platformListings.length, byCategory, publicationFloor: 10 },
+  rates: { all: { ...allRates, p90, topTier }, surveyN: surveyAnswers.length, platformN: platformListings.length, byCategory, publicationFloor: 10 },
   engagements: { n: eng.length, firstClientN: firstClient.length, medianMonthly: median(allMonthly), monthlyN: allMonthly.length, byRevenue, byHours, monthlyByCategory, termShare, extendedShare, resultInside60, ttrN: ttrRows.length, extendedN: extendedRows.length },
   movement: { ...movement, plan, demand },
   survey: { aiUse, demandByCategory, founderHandoff, ...guideSurvey },
