@@ -63,6 +63,7 @@ export const GROUPS: GroupDef[] = [
     fields: [
       { key: "source", label: "Source", kind: "text", gated: false, system: true },
       { key: "role", label: "Role", kind: "text", gated: false, placeholder: "Fractional VP Sales" },
+      { key: "type", label: "Type", kind: "choice", gated: false, options: ["Fractional", "Interim", "Advisory", "Project"] },
       { key: "status", label: "Status", kind: "choice", gated: false, options: ["Open role", "Active", "Ended"] },
       { key: "operator", label: "Fractional", kind: "text", gated: true, placeholder: "Who held the seat" },
       { key: "revenue", label: "Revenue stage", kind: "choice", gated: false, options: RN_REVENUE },

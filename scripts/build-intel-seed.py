@@ -157,27 +157,79 @@ for r in signup_rows:
     add_member(r.get("TF: First Name", ""), r.get("TF:Last Name", ""), r.get("Email", ""), r.get("Title", ""))
 
 # ---------- 1. published engagements (admin portal export) ----------
+# Two export shapes are understood:
+#  - full export (revenue_nomad_engagements_*.csv): Company, Role Held, Engagement Type,
+#    Company Revenue Band, Start/End Date, Currently Active, Outcomes, Published,
+#    Company Anonymous, Verification Status. Rows without a Company are success stories
+#    (handled from the signups file below).
+#  - older admin list (Engagement, Operator, Verification, Published).
+# Only published engagements are used, and an engagement the operator marked
+# "Company Anonymous" is never shown -- nor is that operator's success story about it.
 
-published = skipped = 0
+REVENUE = {"pre_revenue": "Pre-revenue", "under_1m": "< $1M", "1m_5m": "$1M–$5M",
+           "5m_20m": "$5M–$20M", "20m_50m": "$20M–$50M", "50m_plus": "$50M+"}
+ENG_TYPE = {"fractional": "Fractional", "fractional_gtm": "Fractional", "interim": "Interim",
+            "advisory": "Advisory", "project": "Project"}
+month = lambda d: d[:7] if re.match(r"^\d{4}-\d{2}", d or "") else None
+
+published = skipped_anon = skipped_unpub = 0
+anonymous_pairs = set()  # (company key, operator name key)
 with open(args.engagements, encoding="utf-8-sig") as f:
-    for r in csv.DictReader(f):
-        name = re.sub(r"\s+", " ", (r.get("Engagement") or "").strip())
-        if not name or r.get("Published", "").lower() != "true":
-            continue
-        published += 1
-        if re.match(r"^(a|an)\s", name, re.I) or len(name.split()) > 5 or GENERIC.search(name):
-            skipped += 1  # the operator anonymised it -- respect that
-            continue
-        op = (r.get("Operator") or "").strip()
-        if op.lower() not in by_name:
-            first, _, last = op.partition(" ")
-            add_member(first, last, "")
-        co, ck = company(name)
-        ek = f"{ck}_{key_for(op)}"
-        e = engagements.setdefault(ek, {"id": f"e_{ek[:56]}", "companyId": co["id"],
-                                        "fields": {"source": "Published engagement", "operator": op}, "verified": False})
-        if r.get("Verification") == "buyer_corroborated":
-            e["verified"] = True
+    eng_rows = list(csv.DictReader(f))
+full = bool(eng_rows) and "Company Anonymous" in eng_rows[0]
+# If an operator marked a company anonymous on ANY of their rows, keep the whole pair anonymous.
+if full:
+    for r in eng_rows:
+        if (r.get("Company") or "").strip() and r.get("Company Anonymous", "").upper() == "Y":
+            anonymous_pairs.add((key_for(r["Company"]), key_for(r.get("Operator") or "")))
+for r in eng_rows:
+    name = re.sub(r"\s+", " ", (r.get("Company") if full else r.get("Engagement")) or "").strip()
+    if not name:
+        continue  # full export: a success-story row
+    op = (r.get("Operator") or "").strip()
+    if full and (key_for(name), key_for(op)) in anonymous_pairs:
+        skipped_anon += 1
+        continue
+    if (r.get("Published") or "").strip().lower() not in ("true", "y", "yes"):
+        skipped_unpub += 1
+        continue
+    if re.match(r"^(a|an)\s", name, re.I) or len(name.split()) > 5 or GENERIC.search(name):
+        anonymous_pairs.add((key_for(name), key_for(op)))
+        skipped_anon += 1  # described rather than named: treat as anonymous
+        continue
+    published += 1
+    if op.lower() not in by_name:
+        first, _, last = op.partition(" ")
+        add_member(first, last, (r.get("Operator Email") or "") if full else "")
+    co, ck = company(name)
+    role = (r.get("Role Held") or "").strip() if full else ""
+    ek = f"{ck}_{key_for(op)}" + (f"_{key_for(role)[:16]}" if role else "")
+    e = engagements.get(ek)
+    if not e:
+        fields = {"source": "Published engagement", "operator": op}
+        if full:
+            if role:
+                fields["role"] = role[:200]
+            t = ENG_TYPE.get((r.get("Engagement Type") or "").strip().lower())
+            if t:
+                fields["type"] = t
+            rev = REVENUE.get((r.get("Company Revenue Band") or "").strip())
+            if rev:
+                fields["revenue"] = rev
+            if month(r.get("Start Date")):
+                fields["start"] = month(r.get("Start Date"))
+            active = (r.get("Currently Active") or "").upper() == "Y"
+            if active:
+                fields["end"], fields["status"] = "Ongoing", "Active"
+            else:
+                fields["status"] = "Ended"
+                if month(r.get("End Date")):
+                    fields["end"] = month(r.get("End Date"))
+            if (r.get("Outcomes") or "").strip():
+                fields["outcome"] = clip(r["Outcomes"], 400)
+        e = engagements[ek] = {"id": f"e_{ek[:56]}", "companyId": co["id"], "fields": fields, "verified": False}
+    if (r.get("Verification") or r.get("Verification Status")) == "buyer_corroborated":
+        e["verified"] = True
 
 # ---------- 2. member success stories (talent signups) ----------
 
@@ -193,6 +245,8 @@ if True:
             name = company_from_story(text)
             if not name:
                 continue
+            if (key_for(name), key_for(m["name"])) in anonymous_pairs:
+                continue  # the operator kept this company anonymous on their engagement
             co, ck = company(name)
             ek = f"{ck}_{key_for(m['name'])}"
             if ek in engagements:  # same company + operator as a published engagement: add the context
@@ -280,7 +334,7 @@ src = {}
 for e in engagements.values():
     src[e["fields"]["source"]] = src.get(e["fields"]["source"], 0) + 1
 print(f"members: {len(members)}")
-print(f"published engagements: {published} ({skipped} anonymised/skipped)")
+print(f"published engagements: {published} used; {skipped_anon} anonymous and {skipped_unpub} unpublished skipped")
 print(f"success stories: {stories} ({story_records} new records; stories naming no company are skipped)")
 print(f"demand scan rows: {demand_rows}")
 print(f"records by source: {src}  total: {len(engagements)}")
