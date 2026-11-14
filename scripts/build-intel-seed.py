@@ -461,6 +461,8 @@ if args.clay:
             if x.get("status") == "resolved" and x.get("confidence") in ("high", "medium") and x.get("domain"):
                 clay[x["id"]] = x
                 clay.setdefault("name:" + key_for(x.get("name") or ""), x)
+                if x.get("confidence") == "high" and x.get("clayName"):
+                    clay.setdefault("name:" + key_for(x["clayName"]), x)
     eng_count = {}
     for e in engagements.values():
         eng_count[e["companyId"]] = eng_count.get(e["companyId"], 0) + 1

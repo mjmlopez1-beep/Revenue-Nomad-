@@ -195,22 +195,31 @@ const EMPTY_STATE = (): State => ({
   profiles: {}, follows: {}, referralPaid: [],
 });
 
+/**
+ * The runtime state lives in memory (one server process) and is written to disk on every
+ * change, so reads never touch the disk and writes don't re-read it.
+ */
+let stateCache: State | null = null;
 export async function loadState(): Promise<State> {
+  if (stateCache) return stateCache;
   const s = await readJson<Partial<State>>(STATE_PATH);
-  return { ...EMPTY_STATE(), ...(s ?? {}) };
+  stateCache = { ...EMPTY_STATE(), ...(s ?? {}) };
+  return stateCache;
 }
 
 let writeLock: Promise<void> = Promise.resolve();
-/** Serialize read-modify-write cycles so concurrent requests don't clobber each other. */
+/** Serialize read-modify-write cycles. A change that throws, or fails to save, leaves the state untouched. */
 function mutate<T>(fn: (s: State, seed: Seed) => T): Promise<T> {
   const run = async () => {
-    const [state, seed] = await Promise.all([loadState(), loadSeed()]);
+    const [current, seed] = await Promise.all([loadState(), loadSeed()]);
+    const state = structuredClone(current);
     const out = fn(state, seed);
     await fs.mkdir(DATA_DIR, { recursive: true });
     const json = JSON.stringify(state);
     const tmp = STATE_PATH + ".tmp";
     await fs.writeFile(tmp, json, "utf8");
     await fs.rename(tmp, STATE_PATH);
+    stateCache = state;
     await snapshot(DATA_DIR, json);
     return out;
   };
