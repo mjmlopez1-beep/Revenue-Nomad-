@@ -18,6 +18,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { gunzipSync } from "zlib";
+import { iconDomains } from "./companyIcons";
 import { ALL_FIELDS, cleanValue, fieldDef, type Entity } from "./tableFields";
 
 /** Credits every member starts with. Set RN_STARTER_CREDITS (e.g. 50 for a pilot). */
@@ -240,6 +241,8 @@ export interface Row {
   engagementId: string;
   contactId: string | null;
   company: string;
+  /** Domain to draw the company icon from (its Website, or a looked-up domain), if known. */
+  iconDomain: string | null;
   verified: boolean;
   filled: number;
   /** Keyed `${entity}.${field}`. */
@@ -287,10 +290,19 @@ export async function buildView(token: string | null): Promise<View> {
         cells[col] = cell(nodes[entity], f);
         if (cells[col].s !== "empty") filled++;
       }
-      rows.push({ id: pid ?? e.id, companyId: c.id, engagementId: e.id, contactId: pid, company: c.name, verified: e.verified, filled, cells });
+      rows.push({ id: pid ?? e.id, companyId: c.id, engagementId: e.id, contactId: pid, company: c.name, iconDomain: null, verified: e.verified, filled, cells });
     }
   }
   rows.sort((a, b) => a.company.localeCompare(b.company) || a.engagementId.localeCompare(b.engagementId));
+
+  // Every company gets an icon: from its Website, or a background name lookup (icon only).
+  const icons = await iconDomains(
+    [...g.companies.values()].map((c) => {
+      const w = valueOf(c, s, "website");
+      return { id: c.id, name: c.name, website: w && w.status === "live" ? w.value : null };
+    }),
+  );
+  for (const r of rows) r.iconDomain = icons[r.companyId] ?? null;
 
   const reported: View["reported"] = [];
   if (isAdmin(me)) {

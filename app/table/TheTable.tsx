@@ -277,9 +277,7 @@ export default function TheTable() {
                           {cont ? (
                             <span className="tt-avatar tt-avatar-cont" aria-hidden>↳</span>
                           ) : (
-                            <span className="tt-avatar" style={{ background: `hsl(${hue(r.company)} 55% 92%)`, color: `hsl(${hue(r.company)} 45% 30%)` }}>
-                              {initials(r.company)}
-                            </span>
+                            <CompanyIcon name={r.company} domain={r.iconDomain} />
                           )}
                           <span className="tt-name">{r.company}</span>
                           {r.verified && (
@@ -409,6 +407,41 @@ export default function TheTable() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Company icon from its domain: Google's favicon service first, DuckDuckGo's as
+ * backup, initials last. Google answers unknown domains with a tiny generic
+ * globe instead of an error, so anything 16px or smaller counts as a miss.
+ */
+function CompanyIcon({ name, domain }: { name: string; domain: string | null }) {
+  const sources = useMemo(
+    () =>
+      domain
+        ? [`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`, `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`]
+        : [],
+    [domain],
+  );
+  const [idx, setIdx] = useState(0);
+  useEffect(() => setIdx(0), [domain]);
+  if (idx >= sources.length)
+    return (
+      <span className="tt-avatar" style={{ background: `hsl(${hue(name)} 55% 92%)`, color: `hsl(${hue(name)} 45% 30%)` }}>
+        {initials(name)}
+      </span>
+    );
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="tt-avatar tt-logo"
+      src={sources[idx]}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onLoad={(e) => idx === 0 && e.currentTarget.naturalWidth <= 16 && setIdx(1)}
+      onError={() => setIdx((i) => i + 1)}
+    />
   );
 }
 

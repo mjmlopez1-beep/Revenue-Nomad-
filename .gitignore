@@ -14,3 +14,5 @@ data/intel-seed.json
 data/intel-member-links.csv
 data/intel.json
 data/intel.json.tmp
+data/company-domains.json
+data/company-domains.json.tmp
