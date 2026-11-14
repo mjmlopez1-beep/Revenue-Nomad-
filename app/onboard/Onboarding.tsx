@@ -180,7 +180,7 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
               onSkip={afterFollow}
             />
           ) : (
-            <StepLink token={me.token} busy={busy} onDone={finish} />
+            <StepLink token={me.token} email={me.email} busy={busy} onDone={finish} />
           )}
         </div>
       </main>
@@ -476,7 +476,7 @@ function StepFollow({
 
 /* ---------- step 3: save your sign-in link ---------- */
 
-function StepLink({ token, busy, onDone }: { token: string; busy: boolean; onDone: () => void }) {
+function StepLink({ token, email, busy, onDone }: { token: string; email: string; busy: boolean; onDone: () => void }) {
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -504,7 +504,7 @@ function StepLink({ token, busy, onDone }: { token: string; busy: boolean; onDon
     setCopied(true);
     setTimeout(() => setCopied(false), 2400);
   };
-  const mailto = `mailto:?subject=Trading%20Post%20sign-in%20link&body=${encodeURIComponent(link)}`;
+  const mailto = `mailto:${encodeURIComponent(email)}?subject=Trading%20Post%20sign-in%20link&body=${encodeURIComponent(link)}`;
 
   return (
     <div>

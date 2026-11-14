@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.join && typeof body.join === "object") {
-    if (limited(`join:${ip}`, 8, 60 * 60_000)) return err("Too many sign-ups from here. Try again in an hour.", 429);
+    if (limited(`join:${ip}`, 30, 60 * 60_000)) return err("Too many sign-ups from here. Try again in an hour.", 429);
     try {
       const m = await joinMember(body.join.name, body.join.email, body.join.ref);
       if (emailEnabled()) {

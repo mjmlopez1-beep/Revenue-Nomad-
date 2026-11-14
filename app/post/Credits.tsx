@@ -37,7 +37,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   const invite = inviteLink(me.inviteCode);
   const signin = signInLink(me.token);
-  const mail = `mailto:?subject=${encodeURIComponent("My Trading Post sign-in link")}&body=${encodeURIComponent(
+  const mail = `mailto:${encodeURIComponent(me.email)}?subject=${encodeURIComponent("My Trading Post sign-in link")}&body=${encodeURIComponent(
     `Open this link to sign in to Trading Post on any device. Keep it private.\n\n${signin}`,
   )}`;
   return (

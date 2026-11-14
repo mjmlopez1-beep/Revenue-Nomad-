@@ -565,6 +565,7 @@ export async function buildView(token: string | null): Promise<View> {
     meRec = {
       id: me.id,
       name: me.name,
+      email: me.email,
       title: prof.title || me.title,
       function: prof.function ?? functionOf(me.title),
       goal: prof.goal ?? null,

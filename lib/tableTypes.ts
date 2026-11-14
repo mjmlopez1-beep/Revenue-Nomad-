@@ -75,6 +75,7 @@ export interface CompanyRec {
 export interface Me {
   id: string;
   name: string;
+  email: string;
   title: string;
   /** The viewer's GTM function (from onboarding or their title). */
   function: string | null;
