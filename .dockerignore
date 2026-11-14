@@ -5,3 +5,6 @@ data/jobs.json
 data/jobs.json.tmp
 *.log
 .env*
+data/intel-seed.json
+data/intel-member-links.csv
+data/intel.json

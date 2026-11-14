@@ -31,14 +31,14 @@ The groups are linked, not copies: a company has many engagements, an engagement
 | Fractional engagement | Role, Start, End | Fractional (who held the seat), Rate, Hrs/wk, Outcome |
 | Contact | Contact name, Title, Relationship (hired / worked with) | Email, Phone, LinkedIn |
 
-**Seeding.** `scripts/build-intel-seed.py` turns the engagements export into the starting records — one per published engagement, with the operator in the gated Fractional field and buyer-corroborated ones marked ✓ (already-anonymised engagements are skipped) — and writes one private sign-in link per member from the Talent Signups export.
+**Seeding.** `scripts/build-intel-seed.py` turns the engagements export (and, with `--demand`, exports of the Fractional GTM Demand Scan sheet: each scanned posting becomes an *Open role* record with its posting link and the decision maker as a contact) into the starting records — one per published engagement, with the operator in the gated Fractional field and buyer-corroborated ones marked ✓ (already-anonymised engagements are skipped) — and writes one private sign-in link per member from the Talent Signups export.
 
 ```bash
-python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv   # writes data/intel-seed.json + data/intel-member-links.csv
+python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv --demand demand-scan.csv   # writes data/intel-seed.json + data/intel-member-links.csv
 npm run dev   # open a link from intel-member-links.csv, e.g. http://localhost:3000/table?k=...
 ```
 
-`data/intel-seed.json`, `data/intel-member-links.csv` and `data/intel.json` (filled values, unlocks, credits) hold member data and are git-ignored: **never commit them** (this repo is public). Members never see who filled a value. On a server, put the seed in `RN_DATA_DIR` (or point `RN_INTEL_SEED` at it) on persistent storage (Render disk or a Docker volume); on Vercel `/tmp` resets and credits would be lost. `RN_ADMIN_EMAILS` lists who can review reports. With no seed present the page runs on labeled demo data (`/table?k=demo`).
+`data/intel-seed.json`, `data/intel-member-links.csv` and `data/intel.json` (filled values, unlocks, credits) hold member data and are git-ignored: **never commit them** (this repo is public). Members never see who filled a value. On a server, put the seed in `RN_DATA_DIR` (or point `RN_INTEL_SEED` at it) on persistent storage (Render disk or a Docker volume); on Vercel `/tmp` resets and credits would be lost. `RN_ADMIN_EMAILS` lists who can review reports; `RN_STARTER_CREDITS` sets the starting balance (default 5). On hosts where you can't place a file (Railway, Render), pass the seed as the variable `RN_INTEL_SEED_B64` instead: `python3 -c "import gzip,base64,json;print(base64.b64encode(gzip.compress(json.dumps(json.load(open('data/intel-seed.json'))).encode(),9)).decode())"`. Railway volumes are root-owned, so also set `RAILWAY_RUN_UID=0`. With no seed present the page runs on labeled demo data (`/table?k=demo`).
 
 ## Launch / Deploy
 

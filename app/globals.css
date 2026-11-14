@@ -976,3 +976,7 @@ a:hover {
   .tt-search { max-width: none; }
   .tt-pager label { display: none; }
 }
+
+/* Official logo (public/brand/logo.png) */
+.brand-logo { height: 26px; width: auto; display: block; }
+@media (max-width: 640px) { .brand-logo { height: 20px; } }

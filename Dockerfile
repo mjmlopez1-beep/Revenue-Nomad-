@@ -16,6 +16,7 @@ ENV NODE_ENV=production
 RUN addgroup -S nomad && adduser -S nomad -G nomad
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/public ./public
 COPY --from=builder /app/data/seed.json ./data/seed.json
 # Job database lives here; mount a volume at /data to persist across deploys.
 ENV RN_DATA_DIR=/data

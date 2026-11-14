@@ -46,12 +46,14 @@ export const GROUPS: GroupDef[] = [
     label: "Fractional engagement",
     fields: [
       { key: "role", label: "Role", kind: "text", gated: false, placeholder: "Fractional VP Sales" },
+      { key: "status", label: "Status", kind: "choice", gated: false, options: ["Open role", "Active", "Ended"] },
       { key: "operator", label: "Fractional", kind: "text", gated: true, placeholder: "Who held the seat" },
       { key: "start", label: "Start", kind: "month", gated: false },
       { key: "end", label: "End", kind: "text", gated: false, placeholder: "2026-06 or Ongoing" },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
       { key: "hours", label: "Hrs/wk", kind: "number", gated: true, placeholder: "15" },
       { key: "outcome", label: "Outcome", kind: "text", gated: true, placeholder: "Renewed; built team of 4" },
+      { key: "posting", label: "Posting", kind: "url", gated: false, placeholder: "Link to the job post" },
     ],
   },
   {
@@ -60,7 +62,7 @@ export const GROUPS: GroupDef[] = [
     fields: [
       { key: "name", label: "Contact", kind: "text", gated: false, placeholder: "Jane Doe" },
       { key: "title", label: "Title", kind: "text", gated: false, placeholder: "CEO" },
-      { key: "relationship", label: "Relationship", kind: "choice", gated: false, options: ["Hired the fractional", "Worked with them"] },
+      { key: "relationship", label: "Relationship", kind: "choice", gated: false, options: ["Hiring for the seat", "Hired the fractional", "Worked with them"] },
       { key: "email", label: "Email", kind: "email", gated: true, placeholder: "jane@acme.com" },
       { key: "phone", label: "Phone", kind: "phone", gated: true, placeholder: "+1 555 010 0000" },
       { key: "linkedin", label: "LinkedIn", kind: "url", gated: true, placeholder: "linkedin.com/in/…" },

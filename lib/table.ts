@@ -17,9 +17,11 @@
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { gunzipSync } from "zlib";
 import { ALL_FIELDS, cleanValue, fieldDef, type Entity } from "./tableFields";
 
-export const STARTER_CREDITS = 5;
+/** Credits every member starts with. Set RN_STARTER_CREDITS (e.g. 50 for a pilot). */
+export const STARTER_CREDITS = Math.max(0, Number.parseInt(process.env.RN_STARTER_CREDITS ?? "", 10) || 5);
 
 export interface Member {
   id: string;
@@ -130,6 +132,17 @@ export async function loadSeed(): Promise<Seed> {
     seed = await readJson<Seed>(p);
     if (seed && Array.isArray(seed.members) && Array.isArray(seed.engagements)) break;
     seed = null;
+  }
+  // Hosted deploys can carry the private seed as a variable (gzip + base64) instead of a file,
+  // so member data never has to go through git: RN_INTEL_SEED_B64.
+  if (!seed && process.env.RN_INTEL_SEED_B64) {
+    try {
+      const json = gunzipSync(Buffer.from(process.env.RN_INTEL_SEED_B64, "base64")).toString("utf8");
+      const s = JSON.parse(json) as Seed;
+      if (Array.isArray(s.members) && Array.isArray(s.engagements)) seed = s;
+    } catch {
+      console.error("RN_INTEL_SEED_B64 is set but could not be decoded; falling back to demo data.");
+    }
   }
   seedCache = { seed: seed ?? DEMO_SEED, at: Date.now() };
   return seedCache.seed;
