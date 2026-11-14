@@ -14,31 +14,30 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
-## The Table (`/table`) — one record table: enrich to earn, spend to ungate
+## The Table — the product
 
-One table. **Every row is a fractional engagement**: the company that used a fractional, the seat itself, and the people who hired or worked with the fractional. Columns are grouped **Company | Fractional engagement | Contact**.
+The site *is* The Table: `/` is the landing page, the login and the app (old `/table?k=` links redirect). Jigsaw for the fractional GTM community: every row is a fractional engagement — the company, the seat, and the people involved — and members **give** (add what's missing, verify what's right) to **get** (spend credits to unlock 🔒 fields).
 
-- **Fill an empty field → +1 credit.** Editing your own value earns nothing extra; nobody can overwrite someone else's value (they can report it).
-- **Unlock a 🔒 gated field someone else filled → 1 credit.** Unlocks are permanent. Everyone starts with 5 credits.
-- **+ Add record** (a fractional engagement at an existing or new company) and **+ contact** (another person on the same engagement → a new row) are free; fill their fields to earn.
-- **Report** a wrong value: it's hidden until an admin reviews. If removed, the filler loses that credit and everyone who unlocked it gets theirs back.
+- **Fill an empty field → +1 credit. Unlock a 🔒 field someone else filled → 1 credit.** Starting balance: `RN_STARTER_CREDITS` (default 5; 50 on the pilot).
+- **Verify** any value you can see (once per person). Values show their confirmation count (✓n) even while locked; values from Revenue Nomad's own records count as one.
+- **Report** a wrong value: hidden until an admin (`RN_ADMIN_EMAILS`) reviews; removal reverses the filler's credit and refunds unlockers.
+- **Add record** starts from the company URL: the server reads the site for the name and a suggested Revenue Nomad industry tag; the member sets revenue stage and employee count (Revenue Nomad pick lists, as they were at the time), the engagement, and the people (Reported to / Reported to me / Worked with). Everything is editable. **+ person** adds someone to any record.
+- **Join** from the landing page with name + email (new people). Revenue Nomad members sign in with their personal link (or its code); a member's email can't be claimed by joining.
+- Every row shows the company's icon (website favicon, else a background name lookup, else initials).
+- **Source** column/filter: *Published engagement*, *Member success story*, *Demand scan*, *Member added*.
 
-The groups are linked, not copies: a company has many engagements, an engagement has many contacts. Company data is filled and unlocked once and shows on every row for that company; engagement data shows on every contact row for that engagement. Fields live in `lib/tableFields.ts`:
+Companies, engagements and contacts are linked entities (company 1→n engagements 1→n contacts): company data is entered and unlocked once for every row at that company. Fields and Revenue Nomad pick lists live in `lib/tableFields.ts`.
 
-| Group | Open fields | 🔒 Gated fields |
-| --- | --- | --- |
-| Company | Website, Industry, Employees, HQ | — |
-| Fractional engagement | Role, Start, End | Fractional (who held the seat), Rate, Hrs/wk, Outcome |
-| Contact | Contact name, Title, Relationship (hired / worked with) | Email, Phone, LinkedIn |
-
-**Seeding.** `scripts/build-intel-seed.py` turns the engagements export (and, with `--demand`, exports of the Fractional GTM Demand Scan sheet: each scanned posting becomes an *Open role* record with its posting link and the decision maker as a contact) into the starting records — one per published engagement, with the operator in the gated Fractional field and buyer-corroborated ones marked ✓ (already-anonymised engagements are skipped) — and writes one private sign-in link per member from the Talent Signups export.
+**Data.** `scripts/build-intel-seed.py` aggregates Revenue Nomad's own data: published engagements (admin portal export), every company named in Talent Signup success stories (the member's words become the record's context), Fractional GTM Demand Scan exports (`--demand`), and verified websites (`--domains`). It also writes one private sign-in link per member.
 
 ```bash
-python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv --demand demand-scan.csv   # writes data/intel-seed.json + data/intel-member-links.csv
-npm run dev   # open a link from intel-member-links.csv, e.g. http://localhost:3000/table?k=...
+python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv --demand demand-scan.csv --domains domains.json
+node scripts/seal-intel-seed.mjs     # encrypts it to data/intel-seed.enc (key in data/intel-seed.key)
 ```
 
-`data/intel-seed.json`, `data/intel-member-links.csv` and `data/intel.json` (filled values, unlocks, credits) hold member data and are git-ignored: **never commit them** (this repo is public). Members never see who filled a value. On a server, put the seed in `RN_DATA_DIR` (or point `RN_INTEL_SEED` at it) on persistent storage (Render disk or a Docker volume); on Vercel `/tmp` resets and credits would be lost. **Company icons.** Every row shows its company's icon, pulled from the company's Website (Google favicons, then DuckDuckGo, then initials). Companies without a website get their domain looked up from the name in the background (cached in `RN_DATA_DIR/company-domains.json`, only accepted on an exact name match, used for the icon only and never written into the Website field); `RN_LOGO_LOOKUP=off` disables the lookup. `RN_ADMIN_EMAILS` lists who can review reports; `RN_STARTER_CREDITS` sets the starting balance (default 5). On hosts where you can't place a file (Railway, Render), pass the seed as the variable `RN_INTEL_SEED_B64` instead: `python3 -c "import gzip,base64,json;print(base64.b64encode(gzip.compress(json.dumps(json.load(open('data/intel-seed.json'))).encode(),9)).decode())"`. Railway volumes are root-owned, so also set `RAILWAY_RUN_UID=0`. With no seed present the page runs on labeled demo data (`/table?k=demo`).
+Member data never goes into git in the clear (this repo is public): `data/intel-seed.json`, `data/intel-member-links.csv`, `data/intel-seed.key` and runtime state are git-ignored. Hosts get the AES-256-GCM encrypted `data/intel-seed.enc` with the code and open it with `RN_INTEL_SEED_KEY` (the contents of `data/intel-seed.key`). Use persistent storage for `RN_DATA_DIR` (Railway volume / Render disk / Docker volume). With no seed, the page runs on labeled demo data (`/?k=demo`).
+
+The job-board crawler and prospect engine remain back-end services only (`/api/crawl`, `/api/jobs`, `/api/prospects`) — future scheduled enrichment for The Table, not part of the UI.
 
 ## Launch / Deploy
 

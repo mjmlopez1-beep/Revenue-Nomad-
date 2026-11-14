@@ -1,20 +1,7 @@
-import Link from "next/link";
-import Brand from "../Brand";
-import TheTable from "./TheTable";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "The Table — Revenue Nomad" };
-
-export default function TablePage() {
-  return (
-    <div className="container">
-      <nav className="nav">
-        <Brand />
-        <div className="nav-links">
-          <Link href="/table">The Table</Link>
-          <Link href="/portal">Operator Portal</Link>
-        </div>
-      </nav>
-      <TheTable />
-    </div>
-  );
+/** Old links pointed at /table; The Table now lives at the root. Keep the sign-in code. */
+export default async function TablePage({ searchParams }: { searchParams: Promise<{ k?: string }> }) {
+  const { k } = await searchParams;
+  redirect(k ? `/?k=${encodeURIComponent(k)}` : "/");
 }

@@ -17,3 +17,4 @@ data/intel.json.tmp
 data/company-domains.json
 data/company-domains.json.tmp
 __pycache__/
+data/intel-seed.key

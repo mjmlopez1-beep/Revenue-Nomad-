@@ -18,6 +18,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { gunzipSync } from "zlib";
+import { createDecipheriv, randomBytes } from "crypto";
 import { iconDomains } from "./companyIcons";
 import { ALL_FIELDS, cleanValue, fieldDef, type Entity } from "./tableFields";
 
@@ -80,6 +81,10 @@ export interface State {
   contacts: (Added & { engagementId: string })[];
   values: Record<string, FieldValue>; // `${entityId}.${field}`
   unlocks: Record<string, string[]>; // `${entityId}.${field}` -> member ids
+  /** Members who confirmed a value is correct, keyed like values. */
+  verifications: Record<string, string[]>;
+  /** People who joined from the landing page (members from the seed sign in with their link). */
+  members: (Member & { at: string })[];
   ledger: LedgerEntry[];
 }
 
@@ -136,9 +141,25 @@ export async function loadSeed(): Promise<Seed> {
   }
   // Hosted deploys can carry the private seed as a variable (gzip + base64) instead of a file,
   // so member data never has to go through git: RN_INTEL_SEED_B64.
-  if (!seed && process.env.RN_INTEL_SEED_B64) {
+  // Preferred on hosts: the encrypted seed that ships with the code (data/intel-seed.enc),
+  // opened with RN_INTEL_SEED_KEY. See scripts/seal-intel-seed.mjs.
+  if (!seed && process.env.RN_INTEL_SEED_KEY) {
     try {
-      const json = gunzipSync(Buffer.from(process.env.RN_INTEL_SEED_B64, "base64")).toString("utf8");
+      const raw = Buffer.from(await fs.readFile(path.join(process.cwd(), "data", "intel-seed.enc"), "utf8"), "base64");
+      const decipher = createDecipheriv("aes-256-gcm", Buffer.from(process.env.RN_INTEL_SEED_KEY, "base64"), raw.subarray(0, 12));
+      decipher.setAuthTag(raw.subarray(12, 28));
+      const plain = Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]);
+      const s = JSON.parse(gunzipSync(plain).toString("utf8")) as Seed;
+      if (Array.isArray(s.members) && Array.isArray(s.engagements)) seed = s;
+    } catch {
+      console.error("RN_INTEL_SEED_KEY is set but data/intel-seed.enc could not be opened; trying other sources.");
+    }
+  }
+  // Large seeds are split across RN_INTEL_SEED_B64, RN_INTEL_SEED_B64_2, _3 … (joined in order).
+  const b64 = [process.env.RN_INTEL_SEED_B64 ?? "", ...[2, 3, 4, 5, 6, 7, 8, 9].map((i) => process.env[`RN_INTEL_SEED_B64_${i}`] ?? "")].join("");
+  if (!seed && b64) {
+    try {
+      const json = gunzipSync(Buffer.from(b64, "base64")).toString("utf8");
       const s = JSON.parse(json) as Seed;
       if (Array.isArray(s.members) && Array.isArray(s.engagements)) seed = s;
     } catch {
@@ -151,7 +172,7 @@ export async function loadSeed(): Promise<Seed> {
 
 export async function loadState(): Promise<State> {
   const s = await readJson<Partial<State>>(STATE_PATH);
-  return { companies: [], engagements: [], contacts: [], values: {}, unlocks: {}, ledger: [], ...(s ?? {}) };
+  return { companies: [], engagements: [], contacts: [], values: {}, unlocks: {}, verifications: {}, members: [], ledger: [], ...(s ?? {}) };
 }
 
 let writeLock: Promise<void> = Promise.resolve();
@@ -191,7 +212,8 @@ function graph(seed: Seed, s: State): Graph {
   for (const c of seed.companies) g.companies.set(c.id, { id: c.id, seedFields: c.fields, name: c.fields.name ?? "" });
   for (const c of s.companies) if (!g.companies.has(c.id)) g.companies.set(c.id, { id: c.id, seedFields: { name: c.name }, name: c.name });
   for (const e of seed.engagements) g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified });
-  for (const e of s.engagements) if (!g.engagements.has(e.id)) g.engagements.set(e.id, { id: e.id, seedFields: {}, companyId: e.companyId, verified: false });
+  for (const e of s.engagements)
+    if (!g.engagements.has(e.id)) g.engagements.set(e.id, { id: e.id, seedFields: { source: "Member added" }, companyId: e.companyId, verified: false });
   for (const p of seed.contacts ?? []) g.contacts.set(p.id, { id: p.id, seedFields: p.fields, engagementId: p.engagementId });
   for (const p of s.contacts) if (!g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, engagementId: p.engagementId });
   return g;
@@ -199,8 +221,49 @@ function graph(seed: Seed, s: State): Graph {
 
 /* ---------- helpers ---------- */
 
-export const memberByToken = (seed: Seed, token: string | null | undefined) =>
-  (token && seed.members.find((m) => m.token === token)) || null;
+export const memberByToken = (seed: Seed, token: string | null | undefined, s?: State): Member | null =>
+  (token && (seed.members.find((m) => m.token === token) ?? s?.members.find((m) => m.token === token))) || null;
+
+/** Sign-in check used by the route (covers seed members and people who joined). */
+export async function memberForToken(token: string | null | undefined): Promise<Member | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return memberByToken(seed, token, s);
+}
+
+/**
+ * Join from the landing page. Anyone can join with a name and email and gets the
+ * starting credits. An email that already belongs to a Revenue Nomad member can't be
+ * claimed this way (they sign in with their personal link), so nobody can take over a
+ * member's account by typing their email.
+ */
+/** For the Add record form: is a company with this website (or name) already on The Table? */
+export async function existingCompany(domain: string | null, name: string | null) {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const g = graph(seed, s);
+  const d = domain?.replace(/^www\./, "");
+  const c =
+    (d && [...g.companies.values()].find((c) => valueOf(c, s, "website")?.value?.replace(/^www\./, "") === d)) ||
+    (name && [...g.companies.values()].find((c) => slug(c.name) === slug(name))) ||
+    null;
+  if (!c) return null;
+  const val = (k: string) => valueOf(c, s, k)?.value ?? null;
+  return { name: c.name, website: val("website"), industry: val("industry"), hq: val("hq") };
+}
+
+export async function joinMember(nameRaw: unknown, emailRaw: unknown): Promise<Member> {
+  return mutate((s, seed) => {
+    const name = String(nameRaw ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+    const email = String(emailRaw ?? "").trim().toLowerCase().slice(0, 120);
+    if (name.length < 2) throw new ActionError("Enter your name.");
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("Enter a valid email.");
+    if (seed.members.some((m) => m.email && m.email.toLowerCase() === email))
+      throw new ActionError("That email belongs to a Revenue Nomad member. Use the personal link we sent you to sign in.");
+    if (s.members.some((m) => m.email === email)) throw new ActionError("You've already joined with that email. Use your sign-in link or code.");
+    const m = { id: newId("j", name), name, email, title: "Member", token: randomBytes(12).toString("base64url"), at: new Date().toISOString() };
+    s.members.push(m);
+    return m;
+  });
+}
 
 export function isAdmin(m: Member | null): boolean {
   const admins = (process.env.RN_ADMIN_EMAILS || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
@@ -229,10 +292,11 @@ function valueOf(node: Node | undefined, s: State, field: string): FieldValue | 
 /* ---------- read model ---------- */
 
 /** What one cell looks like to the viewer. */
+/** `ver` = how many confirmations a value has (our own records count as one); `iv` = the viewer confirmed it. */
 export type Cell =
   | { s: "empty" }
-  | { s: "locked" }
-  | { s: "value"; v: string; mine?: boolean }
+  | { s: "locked"; ver: number }
+  | { s: "value"; v: string; mine?: boolean; ver: number; iv?: boolean; system?: boolean }
   | { s: "reported"; mine: boolean };
 
 export interface Row {
@@ -251,7 +315,8 @@ export interface Row {
 
 export interface View {
   demo: boolean;
-  me: { name: string; title: string; credits: number; admin: boolean } | null;
+  /** `token` lets someone who joined copy their own sign-in link. */
+  me: { name: string; title: string; credits: number; admin: boolean; token: string } | null;
   rows: Row[];
   companies: string[];
   stats: { companies: number; engagements: number; contacts: number };
@@ -260,7 +325,7 @@ export interface View {
 
 export async function buildView(token: string | null): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
-  const me = memberByToken(seed, token);
+  const me = memberByToken(seed, token, s);
   const g = graph(seed, s);
 
   const contactsByEng = new Map<string, string[]>();
@@ -269,10 +334,14 @@ export async function buildView(token: string | null): Promise<View> {
   const cell = (node: Node | undefined, f: NonNullable<ReturnType<typeof fieldDef>>): Cell => {
     const v = valueOf(node, s, f.key);
     if (!v) return { s: "empty" };
+    if (f.system) return { s: "value", v: v.value, ver: 0, system: true };
     const mine = !!me && v.by === me.id;
     if (v.status === "reported") return { s: "reported", mine };
-    if (!f.gated || mine || (me && (s.unlocks[fkey(node!.id, f.key)] ?? []).includes(me.id))) return { s: "value", v: v.value, mine };
-    return { s: "locked" };
+    const k = fkey(node!.id, f.key);
+    const vers = s.verifications[k] ?? [];
+    const ver = vers.length + (v.by === "seed" ? 1 : 0);
+    if (!f.gated || mine || (me && (s.unlocks[k] ?? []).includes(me.id))) return { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id) };
+    return { s: "locked", ver };
   };
 
   const rows: Row[] = [];
@@ -288,7 +357,7 @@ export async function buildView(token: string | null): Promise<View> {
       for (const { entity, f, col } of ALL_FIELDS) {
         if (f.identity) continue;
         cells[col] = cell(nodes[entity], f);
-        if (cells[col].s !== "empty") filled++;
+        if (cells[col].s !== "empty" && !f.system) filled++;
       }
       rows.push({ id: pid ?? e.id, companyId: c.id, engagementId: e.id, contactId: pid, company: c.name, iconDomain: null, verified: e.verified, filled, cells });
     }
@@ -319,7 +388,7 @@ export async function buildView(token: string | null): Promise<View> {
 
   return {
     demo: !!seed.demo,
-    me: me ? { name: me.name, title: me.title, credits: balance(s, me.id), admin: isAdmin(me) } : null,
+    me: me ? { name: me.name, title: me.title, credits: balance(s, me.id), admin: isAdmin(me), token: me.token } : null,
     rows,
     companies: [...g.companies.values()].map((c) => c.name).sort((a, b) => a.localeCompare(b)),
     stats: { companies: g.companies.size, engagements: g.engagements.size, contacts: g.contacts.size },
@@ -335,17 +404,29 @@ export type Action =
   /** Fill a cell on a row. For a contact field on a row with no contact yet, the contact is created. */
   | { type: "fill"; engagementId: string; contactId?: string | null; entity: Entity; field: string; value: string }
   | { type: "unlock"; entity: Entity; id: string; field: string }
-  /** New record: a fractional engagement at a company (existing or new). */
-  | { type: "add"; company: string; role?: string }
+  /**
+   * New record: a fractional engagement at a company (existing or new), with any company,
+   * engagement and person fields the member filled in the Add record form.
+   */
+  | {
+      type: "add";
+      company: string;
+      website?: string;
+      companyFields?: Record<string, string>; // industry, hq
+      engagementFields?: Record<string, string>; // role, status, revenue, employees, start, end, rate, hours, outcome, operator
+      people?: Record<string, string>[]; // name, title, relationship, email, phone, linkedin
+    }
   /** Another contact on the same engagement (a new row). */
   | { type: "addContact"; engagementId: string }
   | { type: "report"; entity: Entity; id: string; field: string }
+  /** Confirm a value you can see is correct (one confirmation per member per value). */
+  | { type: "verify"; entity: Entity; id: string; field: string }
   | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" };
 
 export async function perform(token: string | null, a: Action): Promise<{ message: string; rowId?: string }> {
   return mutate((s, seed) => {
-    const me = memberByToken(seed, token);
-    if (!me) throw new ActionError("Open The Table from your personal link to enrich and unlock.");
+    const me = memberByToken(seed, token, s);
+    if (!me) throw new ActionError("Sign in or join to add, verify and unlock.");
     const now = new Date().toISOString();
     const g = graph(seed, s);
     const nodeOf = (entity: Entity, id: string): Node => {
@@ -355,7 +436,7 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
     };
     const fieldOf = (entity: Entity, key: string) => {
       const f = fieldDef(entity, key);
-      if (!f || f.identity) throw new ActionError("That field can't be filled.");
+      if (!f || f.identity || f.system) throw new ActionError("That field can't be filled.");
       return f;
     };
     const setValue = (node: Node, entity: Entity, key: string, raw: unknown) => {
@@ -364,6 +445,7 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
       if (error) throw new ActionError(error);
       const cur = valueOf(node, s, key);
       if (cur && cur.by !== me.id) throw new ActionError("Someone already filled this field.");
+      if (cur && cur.value !== value) delete s.verifications[fkey(node.id, key)]; // confirmations were for the old value
       s.values[fkey(node.id, key)] = { value: value!, by: me.id, at: now, status: "live" };
       if (cur) return false; // editing your own value earns nothing extra
       s.ledger.push({ memberId: me.id, delta: 1, reason: "fill", ref: fkey(node.id, key), at: now });
@@ -412,21 +494,50 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
       }
       case "add": {
         const name = String(a.company ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
-        if (name.length < 2) throw new ActionError("Which company used the fractional?");
-        let company = [...g.companies.values()].find((c) => slug(c.name) === slug(name));
+        if (name.length < 2) throw new ActionError("What's the company called?");
+        // Validate everything up front so a bad field never leaves a half-made record.
+        const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
+          Object.entries(raw ?? {})
+            .filter(([, v]) => String(v ?? "").trim())
+            .map(([k, v]) => {
+              const f = fieldOf(entity, k);
+              const { value, error } = cleanValue(f, v);
+              if (error) throw new ActionError(`${f.label}: ${error}`);
+              return [k, value!] as const;
+            });
+        const site = a.website && String(a.website).trim() ? pick("company", { website: a.website })[0][1] : null;
+        const coFields = pick("company", a.companyFields);
+        const engFields = pick("engagement", a.engagementFields);
+        const people = (a.people ?? []).slice(0, 10).map((p) => pick("contact", p)).filter((p) => p.length);
+        for (const p of people) if (!p.some(([k]) => k === "name")) throw new ActionError("Each person needs a name.");
+
+        // Same company = same website, else same name.
+        const siteOf = (c: Node) => valueOf(c, s, "website")?.value?.replace(/^www\./, "");
+        let company =
+          (site && [...g.companies.values()].find((c) => siteOf(c) === site.replace(/^www\./, ""))) ||
+          [...g.companies.values()].find((c) => slug(c.name) === slug(name));
+        const isNew = !company;
         if (!company) {
           const id = newId("c", name);
           s.companies.push({ id, name, by: me.id, at: now });
           company = { id, name, seedFields: { name } };
         }
-        const id = newId("e", name);
-        s.engagements.push({ id, companyId: company.id, by: me.id, at: now });
-        let msg = `Added an engagement at ${company.name}.`;
-        if (a.role && String(a.role).trim()) {
-          setValue({ id, seedFields: {} }, "engagement", "role", a.role);
-          msg += " +1 credit for Role.";
+        let earned = 0;
+        // Company fields only fill gaps; the company row is shared by every record at that company.
+        for (const [k, v] of site ? [["website", site] as const, ...coFields] : coFields)
+          if (!valueOf(company, s, k) && setValue(company, "company", k, v)) earned++;
+        const eid = newId("e", name);
+        s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
+        const eng: Node = { id: eid, seedFields: {} };
+        for (const [k, v] of engFields) if (setValue(eng, "engagement", k, v)) earned++;
+        for (const p of people) {
+          const pid = newId("p");
+          s.contacts.push({ id: pid, engagementId: eid, by: me.id, at: now });
+          const node: Node = { id: pid, seedFields: {} };
+          for (const [k, v] of p) if (setValue(node, "contact", k, v)) earned++;
         }
-        return { message: `${msg} Fill the rest to earn more.`, rowId: id };
+        const where = isNew ? `Added ${company.name}` : `Added a record at ${company.name}`;
+        return { message: `${where}.${earned ? ` +${earned} credit${earned > 1 ? "s" : ""}.` : ""}`, rowId: eid };
       }
       case "addContact": {
         const e = g.engagements.get(a.engagementId);
@@ -453,6 +564,19 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
         s.values[k] = { ...cur, status: "reported", reportedBy: me.id };
         return { message: "Reported. It's hidden until it's reviewed." };
       }
+      case "verify": {
+        const node = nodeOf(a.entity, a.id);
+        const f = fieldOf(a.entity, a.field);
+        const k = fkey(node.id, f.key);
+        const cur = valueOf(node, s, f.key);
+        const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id);
+        if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to verify here.");
+        if (cur.by === me.id) throw new ActionError("You can't verify your own value.");
+        const list = s.verifications[k] ?? [];
+        if (list.includes(me.id)) return { message: "You already verified this." };
+        s.verifications[k] = [...list, me.id];
+        return { message: `Verified ${f.label}. Thanks — it now shows ${list.length + 1 + (cur.by === "seed" ? 1 : 0)} confirmations.` };
+      }
       case "review": {
         if (!isAdmin(me)) throw new ActionError("Admins only.");
         const k = fkey(a.id, a.field);
@@ -464,6 +588,7 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
         }
         // Wrong data: field reopens, the filler loses the credit, unlockers get theirs back.
         s.values[k] = { ...cur, status: "removed" };
+        delete s.verifications[k];
         if (cur.by !== "seed") s.ledger.push({ memberId: cur.by, delta: -1, reason: "reversal", ref: k, at: now });
         for (const m of s.unlocks[k] ?? []) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
         delete s.unlocks[k];

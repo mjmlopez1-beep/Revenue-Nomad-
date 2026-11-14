@@ -18,6 +18,8 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/data/seed.json ./data/seed.json
+# Encrypted member seed (opened at runtime with RN_INTEL_SEED_KEY)
+COPY --from=builder /app/data/intel-seed.enc ./data/intel-seed.enc
 # Job database lives here; mount a volume at /data to persist across deploys.
 ENV RN_DATA_DIR=/data
 RUN mkdir -p /data && chown -R nomad:nomad /data /app
