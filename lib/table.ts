@@ -1,100 +1,66 @@
 /**
- * The Table — a give-to-get company intelligence table for members.
+ * The Table — enrich records, earn credits, spend credits to ungate fields.
  *
- * One rule: give one, get one. Sharing a note about a company earns a credit;
- * unlocking a company's notes or asking the members who know it costs one.
+ * Three record types (companies, people, fractional history; see
+ * tableFields.ts). Filling an empty field earns 1 credit. Ungating a gated
+ * field someone else filled costs 1 credit. That's the whole model.
  *
- * Two files back it:
- *  - intel-seed.json  (private, built by scripts/build-intel-seed.py, never
- *    committed): members, companies, and which member is linked to which
- *    company, pulled from their signup success stories and engagements.
- *  - intel.json       (runtime state): notes, asks, unlocks, confirmations and
- *    the credit ledger.
- *
- * Privacy: the API never returns another member's name or email. Rows only
- * say how many members know a company and their titles.
+ * Storage:
+ *  - intel-seed.json (private, git-ignored, built by
+ *    scripts/build-intel-seed.py): members (for sign-in) and seed records.
+ *  - intel.json (runtime): added records, field values, unlocks, credit ledger.
  */
 import { promises as fs } from "fs";
 import path from "path";
+import { cleanValue, typeDef, TYPES, type RecordType } from "./tableFields";
 
-export const CATEGORIES = [
-  "Open to fractionals",
-  "Planning to hire",
-  "Who decides",
-  "Problems",
-  "How to pitch them",
-  "Needs a specialist",
-] as const;
-export type Category = (typeof CATEGORIES)[number];
-
-export const STARTER_CREDITS = 3;
-/** An ask nobody answers within this many days refunds its credit. */
-export const ASK_REFUND_DAYS = 14;
+export const STARTER_CREDITS = 5;
 
 export interface Member {
   id: string;
   name: string;
   email: string;
   title: string;
-  based: string;
   token: string;
 }
-export interface Company {
+export interface SeedRecord {
   id: string;
-  name: string;
-}
-export interface Link {
-  memberId: string;
-  companyId: string;
-  relationship: "success_story" | "engagement" | "self_added";
-  source: string;
-  evidence: string;
-  verified: boolean;
-  date: string | null;
-  status: "identified" | "confirmed";
+  type: RecordType;
+  fields: Record<string, string>;
+  verified?: boolean;
 }
 export interface Seed {
   builtAt: string;
   members: Member[];
-  companies: Company[];
-  links: Link[];
+  records: SeedRecord[];
   demo?: boolean;
 }
 
-export interface Note {
-  id: string;
-  companyId: string;
-  authorId: string;
-  category: Category;
-  text: string;
-  asOf: string; // YYYY-MM: when the author knew this to be true
-  createdAt: string;
-  status: "live" | "flagged" | "removed";
-  flaggedBy?: string;
-  flagReason?: string;
+export interface FieldValue {
+  value: string;
+  by: string; // member id, or "seed"
+  at: string;
+  status: "live" | "reported" | "removed";
+  reportedBy?: string;
 }
-export interface Ask {
+export interface AddedRecord {
   id: string;
-  companyId: string;
-  askerId: string;
-  question: string;
-  createdAt: string;
-  answeredBy: string[]; // note ids
+  type: RecordType;
+  name: string;
+  by: string;
+  at: string;
 }
 export interface LedgerEntry {
   memberId: string;
   delta: number;
-  reason: "give" | "unlock" | "ask";
+  reason: "fill" | "unlock" | "refund" | "reversal";
   ref: string;
   at: string;
 }
 export interface State {
-  notes: Note[];
-  asks: Ask[];
-  unlocks: Record<string, string[]>; // companyId -> memberIds
-  linkStatus: Record<string, "confirmed" | "removed">; // `${memberId}|${companyId}`
-  addedLinks: Link[];
-  addedCompanies: Company[];
+  records: AddedRecord[];
+  values: Record<string, FieldValue>; // `${recordId}.${field}`
+  unlocks: Record<string, string[]>; // `${recordId}.${field}` -> member ids
   ledger: LedgerEntry[];
 }
 
@@ -119,25 +85,19 @@ async function readJson<T>(file: string): Promise<T | null> {
   }
 }
 
-/** Used only when no private seed is present, so the page still works. */
+/** Used only when no private seed is present, so the page still runs. */
 const DEMO_SEED: Seed = {
   builtAt: new Date(0).toISOString(),
   demo: true,
   members: [
-    { id: "d1", name: "Demo Member", email: "", title: "VP Sales", based: "", token: "demo" },
-    { id: "d2", name: "Sample A", email: "", title: "VP RevOps", based: "", token: "demo-a" },
-    { id: "d3", name: "Sample B", email: "", title: "VP Growth", based: "", token: "demo-b" },
+    { id: "d1", name: "Demo Member", email: "", title: "VP Sales", token: "demo" },
+    { id: "d2", name: "Demo Member 2", email: "", title: "VP RevOps", token: "demo2" },
   ],
-  companies: [
-    { id: "acmerobotics", name: "Acme Robotics (sample)" },
-    { id: "globexhealth", name: "Globex Health (sample)" },
-    { id: "initechcloud", name: "Initech Cloud (sample)" },
-  ],
-  links: [
-    { memberId: "d1", companyId: "initechcloud", relationship: "success_story", source: "signup", evidence: "Initech Cloud - built the first outbound team", verified: false, date: "2025-03", status: "identified" },
-    { memberId: "d2", companyId: "acmerobotics", relationship: "engagement", source: "engagement", evidence: "Published engagement: Acme Robotics", verified: true, date: "2026-05", status: "identified" },
-    { memberId: "d3", companyId: "acmerobotics", relationship: "success_story", source: "signup", evidence: "Acme Robotics - scaled SDR team", verified: false, date: "2024-11", status: "identified" },
-    { memberId: "d3", companyId: "globexhealth", relationship: "success_story", source: "signup", evidence: "Globex Health - rebuilt the pipeline", verified: false, date: "2025-08", status: "identified" },
+  records: [
+    { id: "c_acme", type: "company", fields: { name: "Acme Robotics (sample)", website: "acme.example", usesFractionals: "Has before" } },
+    { id: "c_globex", type: "company", fields: { name: "Globex Health (sample)" } },
+    { id: "p_jane", type: "person", fields: { name: "Jane Sample", title: "CEO", company: "Acme Robotics (sample)", email: "jane@acme.example" } },
+    { id: "h_acme", type: "history", fields: { company: "Acme Robotics (sample)", role: "Fractional VP Sales", operator: "Sample Operator" }, verified: true },
   ],
 };
 
@@ -147,37 +107,27 @@ export async function loadSeed(): Promise<Seed> {
   let seed: Seed | null = null;
   for (const p of SEED_CANDIDATES) {
     seed = await readJson<Seed>(p);
-    if (seed && Array.isArray(seed.members)) break;
+    if (seed && Array.isArray(seed.members) && Array.isArray(seed.records)) break;
     seed = null;
   }
   seedCache = { seed: seed ?? DEMO_SEED, at: Date.now() };
   return seedCache.seed;
 }
 
-const EMPTY_STATE = (): State => ({
-  notes: [],
-  asks: [],
-  unlocks: {},
-  linkStatus: {},
-  addedLinks: [],
-  addedCompanies: [],
-  ledger: [],
-});
-
 export async function loadState(): Promise<State> {
-  const s = await readJson<State>(STATE_PATH);
-  return { ...EMPTY_STATE(), ...(s ?? {}) };
+  const s = await readJson<Partial<State>>(STATE_PATH);
+  return { records: [], values: {}, unlocks: {}, ledger: [], ...(s ?? {}) };
 }
 
 let writeLock: Promise<void> = Promise.resolve();
 /** Serialize read-modify-write cycles so concurrent requests don't clobber each other. */
-export function mutate<T>(fn: (s: State, seed: Seed) => T | Promise<T>): Promise<T> {
+function mutate<T>(fn: (s: State, seed: Seed) => T): Promise<T> {
   const run = async () => {
     const [state, seed] = await Promise.all([loadState(), loadSeed()]);
-    const out = await fn(state, seed);
+    const out = fn(state, seed);
     await fs.mkdir(DATA_DIR, { recursive: true });
     const tmp = STATE_PATH + ".tmp";
-    await fs.writeFile(tmp, JSON.stringify(state, null, 1), "utf8");
+    await fs.writeFile(tmp, JSON.stringify(state), "utf8");
     await fs.rename(tmp, STATE_PATH);
     return out;
   };
@@ -191,189 +141,116 @@ export function mutate<T>(fn: (s: State, seed: Seed) => T | Promise<T>): Promise
 
 /* ---------- helpers ---------- */
 
-export const companyKey = (name: string) =>
-  name
-    .toLowerCase()
-    .replace(/^the\s+/, "")
-    .replace(/\.(com|io|ai|co)$/, "")
-    .replace(/[^a-z0-9]+/g, "");
-
-const newId = (p: string) => `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-const linkKey = (m: string, c: string) => `${m}|${c}`;
-
-export function memberByToken(seed: Seed, token: string | undefined | null): Member | null {
-  if (!token) return null;
-  return seed.members.find((m) => m.token === token) ?? null;
-}
+export const memberByToken = (seed: Seed, token: string | null | undefined) =>
+  (token && seed.members.find((m) => m.token === token)) || null;
 
 export function isAdmin(m: Member | null): boolean {
-  if (!m) return false;
-  const admins = (process.env.RN_ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  return !!m.email && admins.includes(m.email.toLowerCase());
+  const admins = (process.env.RN_ADMIN_EMAILS || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+  return !!m?.email && admins.includes(m.email.toLowerCase());
 }
 
-/** All links that are still live (seed + self-added, minus ones members removed). */
-function liveLinks(seed: Seed, s: State): Link[] {
-  return [...seed.links, ...s.addedLinks]
-    .filter((l) => s.linkStatus[linkKey(l.memberId, l.companyId)] !== "removed")
-    .map((l) =>
-      s.linkStatus[linkKey(l.memberId, l.companyId)] === "confirmed" ? { ...l, status: "confirmed" as const } : l,
-    );
-}
-
-function allCompanies(seed: Seed, s: State): Company[] {
-  const seen = new Set(seed.companies.map((c) => c.id));
-  return [...seed.companies, ...s.addedCompanies.filter((c) => !seen.has(c.id))];
-}
-
-function askIsRefunded(a: Ask, now = Date.now()): boolean {
-  return a.answeredBy.length === 0 && now - Date.parse(a.createdAt) > ASK_REFUND_DAYS * 864e5;
-}
+const fkey = (recordId: string, field: string) => `${recordId}.${field}`;
+const slug = (s: string) => s.toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, "");
 
 export function balance(s: State, memberId: string): number {
   let b = STARTER_CREDITS;
   for (const e of s.ledger) if (e.memberId === memberId) b += e.delta;
-  for (const a of s.asks) if (a.askerId === memberId && askIsRefunded(a)) b += 1;
   return b;
 }
 
-const hasAccess = (s: State, memberId: string, companyId: string) =>
-  (s.unlocks[companyId] ?? []).includes(memberId);
+/** Effective value of a field: a runtime value wins over the seed value. */
+function fieldValue(seed: SeedRecord | undefined, s: State, recordId: string, field: string): FieldValue | null {
+  const v = s.values[fkey(recordId, field)];
+  if (v) return v.status === "removed" ? null : v;
+  const sv = seed?.fields[field];
+  return sv ? { value: sv, by: "seed", at: "", status: "live" } : null;
+}
 
 /* ---------- read model ---------- */
+
+/** What one cell looks like to the viewer. */
+export type Cell =
+  | { s: "empty" }
+  | { s: "locked" }
+  | { s: "value"; v: string; mine?: boolean }
+  | { s: "reported"; mine: boolean };
 
 export interface Row {
   id: string;
   name: string;
-  knownBy: number;
-  titles: string[];
   verified: boolean;
-  confirmed: number;
-  youKnow: boolean;
-  notes: number;
-  categories: string[];
-  freshest: string | null;
-  openAsks: number;
-  unlocked: boolean;
+  filled: number;
+  cells: Record<string, Cell>;
 }
 
 export interface View {
   demo: boolean;
-  me: { id: string; name: string; title: string; credits: number; admin: boolean } | null;
+  type: RecordType;
+  me: { name: string; title: string; credits: number; admin: boolean } | null;
   rows: Row[];
-  /** Notes the viewer can read, keyed by company. */
-  notes: Record<string, { id: string; category: string; text: string; asOf: string; mine: boolean; status: string }[]>;
-  /** Asks routed to the viewer because they're linked to the company. */
-  questionsForYou: { id: string; companyId: string; company: string; question: string; createdAt: string }[];
-  myAsks: { id: string; company: string; question: string; createdAt: string; answered: boolean; refunded: boolean }[];
-  /** The viewer's identified-but-unconfirmed company links, for one-tap confirm. */
-  toConfirm: { companyId: string; company: string; evidence: string }[];
-  flagged: { id: string; company: string; text: string; reason: string }[];
-  stats: { members: number; companies: number; notes: number; asks: number };
+  counts: Record<RecordType, number>;
+  reported: { recordId: string; field: string; record: string; label: string; value: string }[];
 }
 
-export async function buildView(token: string | null): Promise<View> {
+function allRecords(seed: Seed, s: State) {
+  const seedById = new Map(seed.records.map((r) => [r.id, r]));
+  const list: { id: string; type: RecordType; seed?: SeedRecord; name: string }[] = seed.records.map((r) => ({
+    id: r.id,
+    type: r.type,
+    seed: r,
+    name: r.fields[typeDef(r.type)!.identity.key] ?? "",
+  }));
+  for (const r of s.records) if (!seedById.has(r.id)) list.push({ id: r.id, type: r.type, name: r.name });
+  return list;
+}
+
+export async function buildView(token: string | null, type: RecordType): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token);
-  const members = new Map(seed.members.map((m) => [m.id, m]));
-  const companies = allCompanies(seed, s);
-  const cname = new Map(companies.map((c) => [c.id, c.name]));
-  const links = liveLinks(seed, s);
+  const def = typeDef(type)!;
+  const records = allRecords(seed, s);
 
-  const byCo = new Map<string, Link[]>();
-  for (const l of links) byCo.set(l.companyId, [...(byCo.get(l.companyId) ?? []), l]);
-  const liveNotes = s.notes.filter((n) => n.status === "live");
-  const notesByCo = new Map<string, Note[]>();
-  for (const n of liveNotes) notesByCo.set(n.companyId, [...(notesByCo.get(n.companyId) ?? []), n]);
-  const openAsks = s.asks.filter((a) => a.answeredBy.length === 0 && !askIsRefunded(a));
-
-  const rows: Row[] = [];
-  for (const c of companies) {
-    const ls = byCo.get(c.id) ?? [];
-    const ns = notesByCo.get(c.id) ?? [];
-    if (!ls.length && !ns.length && !openAsks.some((a) => a.companyId === c.id)) continue;
-    const memberIds = new Set(ls.map((l) => l.memberId));
-    const titles = [...new Set([...memberIds].map((id) => members.get(id)?.title || "Operator"))];
-    const dates = [...ns.map((n) => n.asOf), ...ls.map((l) => l.date ?? "")].filter(Boolean).sort();
-    rows.push({
-      id: c.id,
-      name: c.name,
-      knownBy: memberIds.size,
-      titles: titles.slice(0, 3),
-      verified: ls.some((l) => l.verified),
-      confirmed: new Set(ls.filter((l) => l.status === "confirmed").map((l) => l.memberId)).size,
-      youKnow: !!me && memberIds.has(me.id),
-      notes: ns.length,
-      categories: [...new Set(ns.map((n) => n.category))],
-      freshest: dates.at(-1) ?? null,
-      openAsks: openAsks.filter((a) => a.companyId === c.id).length,
-      unlocked: !!me && (hasAccess(s, me.id, c.id) || ns.every((n) => n.authorId === me.id)),
+  const rows: Row[] = records
+    .filter((r) => r.type === type)
+    .map((r) => {
+      const cells: Record<string, Cell> = {};
+      let filled = 0;
+      for (const f of def.fields) {
+        const v = fieldValue(r.seed, s, r.id, f.key);
+        if (!v) {
+          cells[f.key] = { s: "empty" };
+          continue;
+        }
+        filled++;
+        const mine = !!me && v.by === me.id;
+        if (v.status === "reported") cells[f.key] = { s: "reported", mine };
+        else if (!f.gated || mine || (me && (s.unlocks[fkey(r.id, f.key)] ?? []).includes(me.id)))
+          cells[f.key] = { s: "value", v: v.value, mine };
+        else cells[f.key] = { s: "locked" };
+      }
+      return { id: r.id, name: r.name, verified: !!r.seed?.verified, filled, cells };
     });
-  }
-  rows.sort(
-    (a, b) =>
-      b.notes - a.notes || b.openAsks - a.openAsks || b.knownBy - a.knownBy || a.name.localeCompare(b.name),
-  );
 
-  const notes: View["notes"] = {};
-  if (me) {
-    for (const n of s.notes) {
-      const mine = n.authorId === me.id;
-      if (n.status === "removed") continue;
-      if (n.status === "flagged" && !mine) continue;
-      if (!mine && !hasAccess(s, me.id, n.companyId)) continue;
-      (notes[n.companyId] ??= []).push({
-        id: n.id,
-        category: n.category,
-        text: n.text,
-        asOf: n.asOf,
-        mine,
-        status: n.status,
-      });
+  const counts = Object.fromEntries(TYPES.map((t) => [t.type, records.filter((r) => r.type === t.type).length])) as Record<RecordType, number>;
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const reported: View["reported"] = [];
+  if (isAdmin(me)) {
+    for (const [k, v] of Object.entries(s.values)) {
+      if (v.status !== "reported") continue;
+      const [recordId, field] = k.split(".");
+      const r = byId.get(recordId);
+      const f = r && typeDef(r.type)!.fields.find((x) => x.key === field);
+      if (r && f) reported.push({ recordId, field, record: r.name, label: f.label, value: v.value });
     }
   }
 
-  const myCompanies = new Set(me ? links.filter((l) => l.memberId === me.id).map((l) => l.companyId) : []);
   return {
     demo: !!seed.demo,
-    me: me
-      ? { id: me.id, name: me.name, title: me.title, credits: balance(s, me.id), admin: isAdmin(me) }
-      : null,
+    type,
+    me: me ? { name: me.name, title: me.title, credits: balance(s, me.id), admin: isAdmin(me) } : null,
     rows,
-    notes,
-    questionsForYou: me
-      ? openAsks
-          .filter((a) => a.askerId !== me.id && myCompanies.has(a.companyId))
-          .map((a) => ({ id: a.id, companyId: a.companyId, company: cname.get(a.companyId) ?? a.companyId, question: a.question, createdAt: a.createdAt }))
-      : [],
-    myAsks: me
-      ? s.asks
-          .filter((a) => a.askerId === me.id)
-          .map((a) => ({
-            id: a.id,
-            company: cname.get(a.companyId) ?? a.companyId,
-            question: a.question,
-            createdAt: a.createdAt,
-            answered: a.answeredBy.length > 0,
-            refunded: askIsRefunded(a),
-          }))
-          .reverse()
-      : [],
-    toConfirm: me
-      ? links
-          .filter((l) => l.memberId === me.id && l.status === "identified")
-          .map((l) => ({ companyId: l.companyId, company: cname.get(l.companyId) ?? l.companyId, evidence: l.evidence }))
-      : [],
-    flagged:
-      me && isAdmin(me)
-        ? s.notes
-            .filter((n) => n.status === "flagged")
-            .map((n) => ({ id: n.id, company: cname.get(n.companyId) ?? n.companyId, text: n.text, reason: n.flagReason ?? "" }))
-        : [],
-    stats: { members: seed.members.length, companies: rows.length, notes: liveNotes.length, asks: s.asks.length },
+    counts,
+    reported,
   };
 }
 
@@ -382,117 +259,96 @@ export async function buildView(token: string | null): Promise<View> {
 export class ActionError extends Error {}
 
 export type Action =
-  | { type: "give"; company: string; category: string; text: string; asOf: string; permission: boolean }
-  | { type: "unlock"; companyId: string }
-  | { type: "ask"; companyId: string; question: string }
-  | { type: "confirm"; companyId: string }
-  | { type: "remove"; companyId: string }
-  | { type: "withdraw"; noteId: string }
-  | { type: "flag"; noteId: string; reason: string }
-  | { type: "review"; noteId: string; decision: "restore" | "remove" };
+  | { type: "fill"; recordId: string; field: string; value: string }
+  | { type: "unlock"; recordId: string; field: string }
+  | { type: "add"; recordType: RecordType; name: string }
+  | { type: "report"; recordId: string; field: string }
+  | { type: "review"; recordId: string; field: string; decision: "keep" | "remove" };
 
-const str = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
-
-export async function perform(token: string | null, a: Action): Promise<{ message: string }> {
+export async function perform(token: string | null, a: Action): Promise<{ message: string; recordId?: string }> {
   return mutate((s, seed) => {
     const me = memberByToken(seed, token);
-    if (!me) throw new ActionError("Open The Table from your personal link to give and get.");
+    if (!me) throw new ActionError("Open The Table from your personal link to enrich and unlock.");
     const now = new Date().toISOString();
-    const companies = allCompanies(seed, s);
-    const exists = (id: string) => companies.some((c) => c.id === id);
-    const spend = (reason: LedgerEntry["reason"], ref: string) => {
-      if (balance(s, me.id) < 1) throw new ActionError("You're out of credits. Give one to get one.");
-      s.ledger.push({ memberId: me.id, delta: -1, reason, ref, at: now });
+    const records = allRecords(seed, s);
+    const find = (id: string) => {
+      const r = records.find((x) => x.id === id);
+      if (!r) throw new ActionError("Record not found.");
+      return r;
     };
-    const mineLink = (companyId: string) =>
-      liveLinks(seed, s).some((l) => l.memberId === me.id && l.companyId === companyId);
+    const fieldOf = (r: { type: RecordType }, key: string) => {
+      const f = typeDef(r.type)!.fields.find((x) => x.key === key);
+      if (!f) throw new ActionError("Unknown field.");
+      return f;
+    };
 
-    switch (a.type) {
-      case "give": {
-        const name = str(a.company, 80);
-        const text = str(a.text, 280);
-        const asOf = str(a.asOf, 7);
-        if (!name) throw new ActionError("Which company?");
-        if (!CATEGORIES.includes(a.category as Category)) throw new ActionError("Pick a category.");
-        if (text.length < 15) throw new ActionError("Add a specific line — at least a short sentence.");
-        if (!/^\d{4}-\d{2}$/.test(asOf)) throw new ActionError("When was this true? (month)");
-        if (!a.permission) throw new ActionError("Confirm you're allowed to share this.");
-        const id = companyKey(name);
-        if (!id) throw new ActionError("Which company?");
-        if (!exists(id)) s.addedCompanies.push({ id, name });
-        if (!mineLink(id)) {
-          s.addedLinks.push({
-            memberId: me.id, companyId: id, relationship: "self_added", source: "give",
-            evidence: "Shared a note", verified: false, date: asOf, status: "confirmed",
-          });
-        }
-        s.linkStatus[linkKey(me.id, id)] = "confirmed";
-        const note: Note = {
-          id: newId("n"), companyId: id, authorId: me.id, category: a.category as Category,
-          text, asOf, createdAt: now, status: "live",
-        };
-        s.notes.push(note);
-        s.ledger.push({ memberId: me.id, delta: 1, reason: "give", ref: note.id, at: now });
-        // A give answers every open ask on that company: askers get the notes.
-        let answered = 0;
-        for (const ask of s.asks) {
-          if (ask.companyId === id && ask.askerId !== me.id && ask.answeredBy.length === 0 && !askIsRefunded(ask)) {
-            ask.answeredBy.push(note.id);
-            s.unlocks[id] = [...new Set([...(s.unlocks[id] ?? []), ask.askerId])];
-            answered++;
-          }
-        }
-        return { message: answered ? `+1 credit. Your note answered ${answered} open ask${answered > 1 ? "s" : ""}.` : "+1 credit. Thanks for giving." };
+    switch (a?.type) {
+      case "fill": {
+        const r = find(a.recordId);
+        const f = fieldOf(r, a.field);
+        const { value, error } = cleanValue(f, a.value);
+        if (error) throw new ActionError(error);
+        const k = fkey(r.id, f.key);
+        const cur = fieldValue(r.seed, s, r.id, f.key);
+        if (cur && cur.by !== me.id) throw new ActionError("Someone already filled this field.");
+        s.values[k] = { value: value!, by: me.id, at: now, status: "live" };
+        if (cur) return { message: "Updated." }; // editing your own value earns nothing extra
+        s.ledger.push({ memberId: me.id, delta: 1, reason: "fill", ref: k, at: now });
+        return { message: `+1 credit for ${f.label}.` };
       }
       case "unlock": {
-        if (!exists(a.companyId)) throw new ActionError("Unknown company.");
-        if (hasAccess(s, me.id, a.companyId)) return { message: "Already unlocked." };
-        const others = s.notes.filter((n) => n.companyId === a.companyId && n.status === "live" && n.authorId !== me.id);
-        if (!others.length) throw new ActionError("No notes yet — ask the members who know it instead.");
-        spend("unlock", a.companyId);
-        s.unlocks[a.companyId] = [...(s.unlocks[a.companyId] ?? []), me.id];
-        return { message: "Unlocked. −1 credit." };
+        const r = find(a.recordId);
+        const f = fieldOf(r, a.field);
+        const k = fkey(r.id, f.key);
+        const cur = fieldValue(r.seed, s, r.id, f.key);
+        if (!cur || cur.status !== "live") throw new ActionError("Nothing to unlock here.");
+        if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id)) return { message: "Already visible." };
+        if (balance(s, me.id) < 1) throw new ActionError("Out of credits. Fill an empty field to earn one.");
+        s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: k, at: now });
+        s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
+        return { message: `Unlocked ${f.label}. −1 credit.` };
       }
-      case "ask": {
-        const q = str(a.question, 200);
-        if (!exists(a.companyId)) throw new ActionError("Unknown company.");
-        if (q.length < 10) throw new ActionError("What do you want to know?");
-        if (s.asks.some((x) => x.companyId === a.companyId && x.askerId === me.id && x.answeredBy.length === 0 && !askIsRefunded(x)))
-          throw new ActionError("You already have an open ask on this company.");
-        const ask: Ask = { id: newId("a"), companyId: a.companyId, askerId: me.id, question: q, createdAt: now, answeredBy: [] };
-        spend("ask", ask.id);
-        s.asks.push(ask);
-        // Seeing every note on the company comes with the ask.
-        s.unlocks[a.companyId] = [...new Set([...(s.unlocks[a.companyId] ?? []), me.id])];
-        return { message: `Asked. −1 credit, refunded if nobody answers in ${ASK_REFUND_DAYS} days.` };
+      case "add": {
+        const def = typeDef(a.recordType);
+        if (!def) throw new ActionError("Unknown table.");
+        const name = String(a.name ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+        if (name.length < 2) throw new ActionError(`Enter the ${def.identity.label.toLowerCase()}.`);
+        const prefix = { company: "c", person: "p", history: "h" }[def.type];
+        if (def.type === "company") {
+          const dupe = records.find((r) => r.type === "company" && slug(r.name) === slug(name));
+          if (dupe) return { message: `${dupe.name} is already on the table.`, recordId: dupe.id };
+        }
+        const id = `${prefix}_${slug(name).slice(0, 24)}_${Date.now().toString(36)}`;
+        s.records.push({ id, type: def.type, name, by: me.id, at: now });
+        return { message: `Added ${name}. Fill its fields to earn credits.`, recordId: id };
       }
-      case "confirm":
-      case "remove": {
-        if (!mineLink(a.companyId)) throw new ActionError("You're not listed on that company.");
-        s.linkStatus[linkKey(me.id, a.companyId)] = a.type === "confirm" ? "confirmed" : "removed";
-        return { message: a.type === "confirm" ? "Confirmed. Members can now route asks to you." : "Removed. You won't get asks about it." };
-      }
-      case "withdraw": {
-        const n = s.notes.find((x) => x.id === a.noteId && x.authorId === me.id);
-        if (!n) throw new ActionError("Note not found.");
-        n.status = "removed";
-        return { message: "Withdrawn." };
-      }
-      case "flag": {
-        const n = s.notes.find((x) => x.id === a.noteId && x.status === "live");
-        if (!n) throw new ActionError("Note not found.");
-        if (n.authorId !== me.id && !hasAccess(s, me.id, n.companyId)) throw new ActionError("Note not found.");
-        n.status = "flagged";
-        n.flaggedBy = me.id;
-        n.flagReason = str(a.reason, 200) || "No reason given";
-        return { message: "Flagged. It's hidden until it's reviewed." };
+      case "report": {
+        const r = find(a.recordId);
+        const f = fieldOf(r, a.field);
+        const k = fkey(r.id, f.key);
+        const cur = fieldValue(r.seed, s, r.id, f.key);
+        const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id);
+        if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to report here.");
+        if (cur.by === me.id) throw new ActionError("That's your own value — just edit it.");
+        s.values[k] = { ...cur, status: "reported", reportedBy: me.id };
+        return { message: "Reported. It's hidden until it's reviewed." };
       }
       case "review": {
         if (!isAdmin(me)) throw new ActionError("Admins only.");
-        const n = s.notes.find((x) => x.id === a.noteId);
-        if (!n) throw new ActionError("Note not found.");
-        n.status = a.decision === "restore" ? "live" : "removed";
-        return { message: a.decision === "restore" ? "Restored." : "Removed." };
+        const k = fkey(a.recordId, a.field);
+        const cur = s.values[k];
+        if (!cur || cur.status !== "reported") throw new ActionError("Nothing to review.");
+        if (a.decision === "keep") {
+          cur.status = "live";
+          return { message: "Kept." };
+        }
+        // Wrong data: field goes back to empty, the filler loses the credit,
+        // and everyone who paid to see it gets theirs back.
+        s.values[k] = { ...cur, status: "removed" };
+        if (cur.by !== "seed") s.ledger.push({ memberId: cur.by, delta: -1, reason: "reversal", ref: k, at: now });
+        for (const m of s.unlocks[k] ?? []) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
+        delete s.unlocks[k];
+        return { message: "Removed. Field is open to fill again." };
       }
       default:
         throw new ActionError("Unknown action.");

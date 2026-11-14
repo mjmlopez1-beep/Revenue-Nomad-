@@ -5,13 +5,18 @@ Usage:
   python3 scripts/build-intel-seed.py <Talent_Signups.csv> <engagements.csv> [out_dir]
 
 Writes (both git-ignored -- they contain member data, never commit them):
-  <out_dir>/intel-seed.json      members, companies, member->company links
-  <out_dir>/intel-member-links.csv  one private sign-in link token per member
+  <out_dir>/intel-seed.json         members (for sign-in) + seed records
+  <out_dir>/intel-member-links.csv  one private sign-in link per member
 
-out_dir defaults to ./data. Every link starts as "identified": it was pulled
-from something the member wrote (a success story or a published engagement)
-and stays unconfirmed until the member confirms it on The Table.
-Re-running keeps existing member tokens so links already sent keep working.
+Seed records:
+  - Companies: every company named in a member success story or a published
+    engagement (name only -- members enrich the rest).
+  - Fractional History: one row per published engagement, with the operator
+    in the gated Operator field. Buyer-corroborated ones are marked verified.
+Anonymised engagements ("A PE-backed medical group") are skipped.
+
+out_dir defaults to ./data. Re-running keeps existing member tokens so links
+already sent keep working.
 """
 import csv, json, os, re, secrets, sys
 from datetime import datetime, timezone
@@ -90,68 +95,40 @@ old = {}
 if os.path.exists(SEED_PATH):
     try:
         for m in json.load(open(SEED_PATH))["members"]:
-            old[m["email"]] = m["token"]
+            old[m["email"] or m["name"].lower()] = m["token"]
     except Exception:
         pass
 
-members, by_email, by_name = [], {}, {}
+members, by_key, by_name = [], {}, {}
 
 
-def add_member(first, last, email, title="", based=""):
+def add_member(first, last, email, title=""):
     email = (email or "").strip().lower()
     name = f"{first.strip()} {last.strip()}".strip()
     k = email or name.lower()
-    if k in by_email:
-        return by_email[k]
-    m = {
-        "id": f"m{len(members) + 1:04d}",
-        "name": name,
-        "email": email,
-        "title": title.strip() or "Operator",
-        "based": based.strip(),
-        "token": old.get(email) or secrets.token_urlsafe(12),
-    }
+    if k in by_key:
+        return by_key[k]
+    m = {"id": f"m{len(members) + 1:04d}", "name": name, "email": email,
+         "title": title.strip() or "Operator", "token": old.get(k) or secrets.token_urlsafe(12)}
     members.append(m)
-    by_email[k] = m
+    by_key[k] = m
     by_name[name.lower()] = m
     return m
 
 
-companies, links = {}, {}
+companies = {}  # key -> record
 
 
-def link(member, company, rel, source, evidence, verified=False, date=None):
-    k = key_for(company)
-    if not k:
-        return
-    c = companies.setdefault(k, {"id": k, "name": company})
-    lk = (member["id"], k, rel)
-    if lk in links:
-        if verified:
-            links[lk]["verified"] = True
-        return
-    links[lk] = {
-        "memberId": member["id"],
-        "companyId": k,
-        "relationship": rel,
-        "source": source,
-        "evidence": evidence[:280],
-        "verified": verified,
-        "date": date,
-        "status": "identified",
-    }
+def add_company(name):
+    k = key_for(name)
+    if k and k not in companies:
+        companies[k] = {"id": f"c_{k[:40]}", "type": "company", "fields": {"name": name}}
 
 
-stories = unlinked = 0
+stories = named = 0
 with open(SIGNUPS, encoding="utf-8-sig") as f:
     for r in csv.DictReader(f):
-        m = add_member(r.get("TF: First Name", ""), r.get("TF:Last Name", ""), r.get("Email", ""),
-                       r.get("Title", ""), r.get("TF: Based", ""))
-        when = None
-        try:
-            when = datetime.strptime(r["Submitted At"].split()[0], "%m/%d/%Y").strftime("%Y-%m")
-        except Exception:
-            pass
+        add_member(r.get("TF: First Name", ""), r.get("TF:Last Name", ""), r.get("Email", ""), r.get("Title", ""))
         for col in ("Success Story #1", "Success Story #2", "Success Story #3"):
             s = (r.get(col) or "").strip()
             if not s:
@@ -159,11 +136,10 @@ with open(SIGNUPS, encoding="utf-8-sig") as f:
             stories += 1
             c = company_from_story(s)
             if c:
-                link(m, c, "success_story", "signup", s, date=when)
-            else:
-                unlinked += 1
+                named += 1
+                add_company(c)
 
-eng_total = eng_anon = 0
+history, eng_total, eng_skipped = {}, 0, 0
 with open(ENGAGEMENTS, encoding="utf-8-sig") as f:
     for r in csv.DictReader(f):
         name = (r.get("Engagement") or "").strip()
@@ -171,43 +147,32 @@ with open(ENGAGEMENTS, encoding="utf-8-sig") as f:
             continue
         eng_total += 1
         if re.match(r"^(a|an)\s", name, re.I) or len(name.split()) > 5 or GENERIC.search(name):
-            eng_anon += 1  # already anonymised by the operator -- respect that
+            eng_skipped += 1  # already anonymised by the operator -- respect that
             continue
         op = r.get("Operator", "").strip()
-        m = by_name.get(op.lower())
-        if not m:
+        if op.lower() not in by_name:
             first, _, last = op.partition(" ")
-            m = add_member(first, last, "")
-        link(m, name, "engagement", "engagement",
-             f"Published engagement: {name}",
-             verified=r.get("Verification") == "buyer_corroborated",
-             date=(r.get("Added") or "")[:7] or None)
+            add_member(first, last, "")
+        add_company(name)
+        hk = f"{key_for(name)}_{key_for(op)}"  # dedupe repeat submissions
+        h = history.setdefault(hk, {"id": f"h_{hk[:48]}", "type": "history",
+                                     "fields": {"company": name, "operator": op}, "verified": False})
+        if r.get("Verification") == "buyer_corroborated":
+            h["verified"] = True
 
-used = {l["companyId"] for l in links.values()}
-seed = {
-    "builtAt": datetime.now(timezone.utc).isoformat(),
-    "members": members,
-    "companies": sorted((c for c in companies.values() if c["id"] in used), key=lambda c: c["name"].lower()),
-    "links": list(links.values()),
-}
+records = sorted(companies.values(), key=lambda c: c["fields"]["name"].lower()) + list(history.values())
+seed = {"builtAt": datetime.now(timezone.utc).isoformat(), "members": members, "records": records}
 json.dump(seed, open(SEED_PATH, "w"), indent=1)
 
 with open(os.path.join(OUT, "intel-member-links.csv"), "w", newline="") as f:
     w = csv.writer(f)
-    w.writerow(["name", "email", "title", "companies_listed", "link_path"])
-    counts = {}
-    for l in links.values():
-        counts[l["memberId"]] = counts.get(l["memberId"], 0) + 1
+    w.writerow(["name", "email", "title", "link_path"])
     for m in members:
-        w.writerow([m["name"], m["email"], m["title"], counts.get(m["id"], 0), f"/table?k={m['token']}"])
+        w.writerow([m["name"], m["email"], m["title"], f"/table?k={m['token']}"])
 
-multi = {}
-for l in links.values():
-    multi.setdefault(l["companyId"], set()).add(l["memberId"])
 print(f"members: {len(members)}")
-print(f"success stories: {stories} ({stories - unlinked} named a company, {unlinked} did not)")
-print(f"engagements: {eng_total} published ({eng_anon} anonymised, skipped)")
-print(f"companies: {len(seed['companies'])}  links: {len(links)}")
-print(f"companies known by 2+ members: {sum(1 for v in multi.values() if len(v) > 1)}")
-print(f"members with at least one company: {len({l['memberId'] for l in links.values()})}")
+print(f"success stories: {stories} ({named} named a company)")
+print(f"engagements: {eng_total} published, {eng_skipped} anonymised/skipped, {len(history)} history rows after dedupe "
+      f"({sum(h['verified'] for h in history.values())} buyer-verified)")
+print(f"company records: {len(companies)}")
 print(f"wrote {SEED_PATH}")

@@ -14,20 +14,31 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
-## The Table (`/table`) — give one, get one
+## The Table (`/table`) — enrich to earn, spend to ungate
 
-A plain company-intelligence table for members, in the spirit of the old Jigsaw contact exchange. Each row is a company some member knows. **Give** one specific, shareable line about a company and earn a credit; spend a credit to **Get** a company's notes or to **Ask** the members who know it. Asks get routed to those members ("Questions for you"); an answer earns them a credit and shows the note to the asker. An ask nobody answers in 14 days refunds its credit. Everyone starts with 3 credits.
+One plain data table with three tabs: **Companies**, **People** and **Fractional History**. That's the whole model:
 
-- **Seeded from real member data.** `scripts/build-intel-seed.py` reads the Talent Signups and engagements exports, pulls the company out of each success story and published engagement, and links it to the member. Every link starts as *identified*; members confirm or remove theirs on the page ("Is this you?").
-- **Private by default.** Other members only ever see how many members know a company and their titles, never names or emails. Notes are labeled member-reported with a "true as of" month, can be flagged (hidden until an admin reviews) and withdrawn by their author.
-- **Sign-in** is a personal link per member (`/table?k=TOKEN`); the builder writes them to `data/intel-member-links.csv`.
+- **Fill an empty field → +1 credit.** Editing your own value earns nothing extra; nobody can overwrite someone else's value (they can report it).
+- **Unlock a 🔒 gated field someone else filled → 1 credit.** Unlocks are permanent. Everyone starts with 5 credits.
+- **Add a row** (company, person or engagement) for free, then fill its fields to earn.
+- **Report** a wrong value: it's hidden until an admin reviews. If removed, the filler loses that credit and everyone who unlocked it gets theirs back.
+
+Fields (defined in `lib/tableFields.ts`):
+
+| Table | Open fields | 🔒 Gated fields |
+| --- | --- | --- |
+| Companies | Website, Industry, Employees, HQ | Uses fractionals, Who buys, What they need |
+| People | Title, Company | Email, Phone, LinkedIn, Open to fractionals |
+| Fractional History | Role, Start, End | Operator, Rate, Hrs/week, Outcome, Hired by |
+
+**Seeding.** `scripts/build-intel-seed.py` turns the Talent Signups and engagements exports into the starting rows: every company named in a success story or published engagement (Companies), and one Fractional History row per published engagement with the operator in the gated Operator field (buyer-corroborated ones get a ✓). Already-anonymised engagements are skipped. It also writes one private sign-in link per member.
 
 ```bash
 python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv   # writes data/intel-seed.json + data/intel-member-links.csv
 npm run dev   # open a link from intel-member-links.csv, e.g. http://localhost:3000/table?k=...
 ```
 
-`data/intel-seed.json`, `data/intel-member-links.csv` and `data/intel.json` (notes, asks, credits) hold member data and are git-ignored: **never commit them** (this repo is public). On a server, put the seed in `RN_DATA_DIR` (or point `RN_INTEL_SEED` at it) and use persistent storage (Render disk or a Docker volume) — on Vercel, `/tmp` resets and gives would be lost. Set `RN_ADMIN_EMAILS` to the emails allowed to review flagged notes. With no seed present the page runs on clearly labeled demo data (`/table?k=demo`).
+`data/intel-seed.json`, `data/intel-member-links.csv` and `data/intel.json` (filled values, unlocks, credits) hold member data and are git-ignored: **never commit them** (this repo is public). Members never see who filled a value. On a server, put the seed in `RN_DATA_DIR` (or point `RN_INTEL_SEED` at it) on persistent storage (Render disk or a Docker volume); on Vercel `/tmp` resets and credits would be lost. `RN_ADMIN_EMAILS` lists who can review reports. With no seed present the page runs on labeled demo data (`/table?k=demo`).
 
 ## Launch / Deploy
 
