@@ -1,13 +1,16 @@
 /**
  * Field definitions for Trading Post. Shared by server and client (no Node imports).
  *
- * One record = one fractional engagement, joined to the company that used the
- * fractional and the contacts who hired or worked with them. Each group's data
- * is stored once on its own entity and linked, so a company field filled on one
- * row shows on every row for that company.
+ * Three linked records: a company, the fractional engagements at that company, and
+ * the people there (decision makers at the company, or people tied to one engagement:
+ * who the fractional reported to, worked with, or who is hiring for the seat).
+ * Each value is stored once on its own record and shows everywhere it applies.
  *
- * Filling an empty field earns 1 credit. `gated` fields are locked; unlocking
- * one someone else filled costs 1 credit.
+ * Free fields describe the company and the shape of the work (function, type, start),
+ * so the free view is useful on its own. Locked fields are the intel people trade for:
+ * the exact role, status, end date, who held the seat, rate, hours, the posting, and
+ * people's names and contact details. Adding a missing fact earns 1 credit (max
+ * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
@@ -24,12 +27,29 @@ export const RN_INDUSTRIES = [
 export const RN_REVENUE = ["Pre-revenue", "< $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"];
 /** Revenue Nomad standard employee count buckets. */
 export const RN_EMPLOYEES = ["1–10", "11–50", "51–200", "201–500", "501–1,000", "1,001+"];
-/** How a contact relates to the fractional who worked there. */
-export const RELATIONSHIPS = ["Reported to", "Reported to me", "Worked with", "Hiring for the seat"];
+/** GTM functions (role categories). Free to see, so members can filter by function without unlocking the role. */
+export const FUNCTIONS = [
+  "Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "Executive", "Other",
+];
+/** How a person relates to the company or to the fractional who worked there. */
+export const RELATIONSHIPS = ["Decision maker", "Reported to", "Reported to me", "Worked with", "Hiring for the seat"];
+export const ENGAGEMENT_TYPES = ["Fractional", "Interim", "Advisory", "Project", "Full-time"];
+/** Engagement types that count as fractional work (for the fractional-friendly signal). */
+export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"];
+export const STATUSES = ["Open role", "Active", "Ended"];
+
+/** Max credits a member can earn in any rolling 24 hours. */
+export const EARN_CAP = 25;
+/** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */
+export const REFERRAL_BONUS = 10;
+/** Paid invites per member per 30 days. */
+export const REFERRAL_LIMIT = 5;
 
 export interface FieldDef {
   key: string;
   label: string;
+  /** Shorter label for table headers. */
+  short?: string;
   kind: FieldKind;
   gated: boolean;
   /** Set when the record is created; not fillable in a cell. */
@@ -38,6 +58,8 @@ export interface FieldDef {
   system?: boolean;
   options?: string[];
   placeholder?: string;
+  /** One line shown in tooltips and the add form. */
+  hint?: string;
 }
 
 export interface GroupDef {
@@ -54,7 +76,11 @@ export const GROUPS: GroupDef[] = [
       { key: "name", label: "Company", kind: "text", gated: false, identity: true },
       { key: "website", label: "Website", kind: "url", gated: false, placeholder: "acme.com" },
       { key: "industry", label: "Industry", kind: "choice", gated: false, options: RN_INDUSTRIES },
+      { key: "employees", label: "Employees", kind: "choice", gated: false, options: RN_EMPLOYEES },
+      { key: "revenue", label: "Revenue", kind: "choice", gated: false, options: RN_REVENUE },
       { key: "hq", label: "HQ", kind: "text", gated: false, placeholder: "Chicago, IL" },
+      { key: "linkedin", label: "LinkedIn", kind: "url", gated: false, placeholder: "linkedin.com/company/…" },
+      { key: "about", label: "About", kind: "text", gated: false, system: true },
     ],
   },
   {
@@ -62,24 +88,25 @@ export const GROUPS: GroupDef[] = [
     label: "Fractional engagement",
     fields: [
       { key: "source", label: "Source", kind: "text", gated: false, system: true },
-      { key: "role", label: "Role", kind: "text", gated: false, placeholder: "Fractional VP Sales" },
-      { key: "type", label: "Type", kind: "choice", gated: false, options: ["Fractional", "Interim", "Advisory", "Project"] },
-      { key: "status", label: "Status", kind: "choice", gated: false, options: ["Open role", "Active", "Ended"] },
-      { key: "operator", label: "Fractional", kind: "text", gated: true, placeholder: "Who held the seat" },
-      { key: "revenue", label: "Revenue stage", kind: "choice", gated: false, options: RN_REVENUE },
-      { key: "employees", label: "Employees", kind: "choice", gated: false, options: RN_EMPLOYEES },
+      { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The GTM function of the seat" },
+      { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title of the seat" },
+      { key: "type", label: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES },
+      { key: "status", label: "Status", kind: "choice", gated: true, options: STATUSES },
+      { key: "operator", label: "Fractional", kind: "text", gated: true, placeholder: "Who held the seat", hint: "Who held the seat" },
       { key: "start", label: "Start", kind: "month", gated: false },
-      { key: "end", label: "End", kind: "monthOrOngoing", gated: false },
+      { key: "end", label: "End", kind: "monthOrOngoing", gated: true },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
-      { key: "hours", label: "Hrs/wk", kind: "number", gated: true, placeholder: "15" },
-      { key: "posting", label: "Posting", kind: "url", gated: false, placeholder: "Link to the job post" },
+      { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: true, placeholder: "15" },
+      { key: "posting", label: "Job posting", short: "Posting", kind: "url", gated: true, placeholder: "Link to the job post" },
+      { key: "revenue", label: "Revenue at the time", short: "Revenue then", kind: "choice", gated: false, options: RN_REVENUE },
+      { key: "employees", label: "Employees at the time", short: "Employees then", kind: "choice", gated: false, options: RN_EMPLOYEES },
     ],
   },
   {
     entity: "contact",
-    label: "Contact",
+    label: "Person",
     fields: [
-      { key: "name", label: "Contact", kind: "text", gated: false, placeholder: "Jane Doe" },
+      { key: "name", label: "Name", kind: "text", gated: true, placeholder: "Jane Doe" },
       { key: "title", label: "Title", kind: "text", gated: false, placeholder: "CEO" },
       { key: "relationship", label: "Relationship", kind: "choice", gated: false, options: RELATIONSHIPS },
       { key: "email", label: "Email", kind: "email", gated: true, placeholder: "jane@acme.com" },
@@ -90,16 +117,52 @@ export const GROUPS: GroupDef[] = [
 ];
 
 export const ALL_FIELDS = GROUPS.flatMap((g) => g.fields.map((f) => ({ entity: g.entity, f, col: `${g.entity}.${f.key}` })));
-/** Columns shown after the frozen company name. */
-export const COLUMNS = ALL_FIELDS.filter((x) => !(x.entity === "company" && x.f.identity));
 /** Fields a member can fill (identity and system fields are never filled). */
 export const FILLABLE = ALL_FIELDS.filter((x) => !x.f.identity && !x.f.system);
 
-/** Where a record came from (the Source column). */
-export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added"] as const;
+/** Where a record came from. */
+export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay"] as const;
+/** Plain labels for sources in the UI. */
+export const SOURCE_LABEL: Record<string, string> = {
+  "Published engagement": "Member engagement",
+  "Member success story": "Member story",
+  "Demand scan": "Open role",
+  "Member added": "Member added",
+  Clay: "Clay",
+};
 
 export const fieldDef = (entity: string, key: string) =>
   GROUPS.find((g) => g.entity === entity)?.fields.find((f) => f.key === key);
+
+/** Best-guess GTM function from a role title ("Fractional VP Sales" -> "Sales"). */
+export function functionOf(role: string | null | undefined): string | null {
+  const r = ` ${String(role ?? "").toLowerCase()} `;
+  if (!r.trim()) return null;
+  const rules: [RegExp, string][] = [
+    [/rev ?ops|revenue operations|sales operations|sales ops|marketing operations|gtm operations|operations analyst/, "RevOps"],
+    [/enablement|training/, "Enablement"],
+    [/product marketing|\bpmm\b/, "Product Marketing"],
+    [/partner|alliances|channel|business development|\bbd\b|\bbdr\b/, "Partnerships"],
+    [/customer success|\bcs\b|account management|client success|customer experience|\bcx\b|onboarding|support|renewals/, "Customer Success"],
+    [/growth|demand gen|acquisition/, "Growth"],
+    [/marketing|\bcmo\b|brand|content|communications|\bpr\b/, "Marketing"],
+    [/sales|\bcro\b|revenue|account executive|\bae\b|\bsdr\b|commercial|go-to-market|\bgtm\b/, "Sales"],
+    [/\bceo\b|\bcoo\b|president|general manager|\bgm\b|founder|managing director|chief of staff|\bcfo\b/, "Executive"],
+  ];
+  for (const [re, fn] of rules) if (re.test(r)) return fn;
+  return null;
+}
+
+/** Map a raw employee count to the Revenue Nomad bucket. */
+export function employeesBucket(n: number | null | undefined): string | null {
+  if (n == null || !Number.isFinite(n) || n <= 0) return null;
+  if (n <= 10) return "1–10";
+  if (n <= 50) return "11–50";
+  if (n <= 200) return "51–200";
+  if (n <= 500) return "201–500";
+  if (n <= 1000) return "501–1,000";
+  return "1,001+";
+}
 
 /** Normalize and validate a value for a field. Returns the clean value or an error message. */
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
@@ -107,7 +170,7 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
   if (!v) return { error: `${f.label} is empty.` };
   switch (f.kind) {
     case "url": {
-      const u = v.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+      const u = v.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
       return /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u) ? { value: u } : { error: "That doesn't look like a web address." };
     }
     case "email":
@@ -115,12 +178,16 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     case "phone":
       return v.replace(/\D/g, "").length >= 7 ? { value: v } : { error: "That doesn't look like a phone number." };
     case "month":
-      return /^\d{4}-\d{2}$/.test(v) ? { value: v } : { error: "Use a month (YYYY-MM)." };
-    case "monthOrOngoing":
-      if (/^ongoing$/i.test(v)) return { value: "Ongoing" };
-      return /^\d{4}-\d{2}$/.test(v) ? { value: v } : { error: "Pick an end month, or Ongoing." };
+    case "monthOrOngoing": {
+      if (f.kind === "monthOrOngoing" && /^ongoing$/i.test(v)) return { value: "Ongoing" };
+      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(v)) return { error: f.kind === "month" ? "Use a month (YYYY-MM)." : "Pick an end month, or Ongoing." };
+      const now = new Date();
+      const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      if (Number(v.slice(0, 4)) < 1970 || (v.length === 4 ? v > thisMonth.slice(0, 4) : v > thisMonth)) return { error: "That date is in the future." };
+      return { value: v };
+    }
     case "number":
-      return /^\d{1,3}$/.test(v) ? { value: v } : { error: "Use a number." };
+      return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use hours per week between 1 and 80." };
     case "choice":
       return f.options?.includes(v) ? { value: v } : { error: "Pick one of the options." };
     default:
