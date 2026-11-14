@@ -14,6 +14,9 @@ operator are merged), with the operator in the gated "Fractional" field.
 Buyer-corroborated engagements are marked verified. Engagements the operator
 already anonymised ("A PE-backed medical group") are skipped -- respect that.
 
+--domains takes a JSON object of verified company websites, {"Company name": "domain.com"}
+(for example the Clay lookup); it only fills companies that have no website yet.
+
 --demand takes an export of the "Fractional GTM Demand Scan" sheet (columns:
 Company, Company Domain, Role Title, Source Link, Location, Decision Maker,
 DM Title, DM LinkedIn). Each row becomes an "Open role" engagement at that
@@ -31,6 +34,7 @@ ap.add_argument("signups")
 ap.add_argument("engagements")
 ap.add_argument("out_legacy", nargs="?", help=argparse.SUPPRESS)
 ap.add_argument("--demand", action="append", default=[], help="demand-scan CSV export (repeatable)")
+ap.add_argument("--domains", default=None, help='JSON {"Company name": "domain.com"} of verified websites (e.g. from Clay)')
 ap.add_argument("--out", default=None)
 args = ap.parse_args()
 SIGNUPS, ENGAGEMENTS = args.signups, args.engagements
@@ -150,6 +154,17 @@ for path in args.demand:
                     c["linkedin"] = re.sub(r"^https?://", "", li).rstrip("/")
                 contacts.append({"id": f"p_{ck[:30]}_{key_for(dm)[:20]}", "engagementId": f"e_{ek[:56]}", "fields": c})
 
+# ---- verified company websites (e.g. a Clay lookup) ----
+domains_set = 0
+if args.domains:
+    by_key_name = {key_for(c["fields"]["name"]): c for c in companies.values()}
+    for name, domain in json.load(open(args.domains)).items():
+        c = by_key_name.get(key_for(name))
+        domain = re.sub(r"^https?://|^www\.|/.*$", "", (domain or "").strip().lower())
+        if c and domain and "website" not in c["fields"]:
+            c["fields"]["website"] = domain
+            domains_set += 1
+
 seed = {
     "builtAt": datetime.now(timezone.utc).isoformat(),
     "members": members,
@@ -169,5 +184,5 @@ print(f"members: {len(members)}")
 print(f"engagements: {published} published, {skipped} anonymised/skipped, "
       f"{len(engagements)} records after merging repeats ({sum(e['verified'] for e in engagements.values())} buyer-verified)")
 print(f"demand scan rows: {demand_rows} -> open-role records with {len(contacts)} decision-maker contacts")
-print(f"companies: {len(companies)}")
+print(f"companies: {len(companies)} ({sum('website' in c['fields'] for c in companies.values())} with a website; {domains_set} from --domains)")
 print(f"wrote {SEED_PATH}")
