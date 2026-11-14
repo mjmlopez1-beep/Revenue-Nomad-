@@ -41,7 +41,7 @@ ap.add_argument("out_legacy", nargs="?", help=argparse.SUPPRESS)
 ap.add_argument("--demand", action="append", default=[], help="demand-scan CSV export (repeatable)")
 ap.add_argument("--domains", default=None, help='JSON {"Company name": "domain.com"} of verified websites')
 ap.add_argument("--stories", default=None, help="dir of story extraction JSON files (company, role, function, type, years per story)")
-ap.add_argument("--clay", default=None, help="dir of Clay enrichment JSON files (domain, firmographics, decision makers per company)")
+ap.add_argument("--clay", action="append", default=[], help="dir of Clay enrichment JSON files (domain, firmographics, decision makers per company)")
 ap.add_argument("--out", default=None)
 args = ap.parse_args()
 OUT = args.out or args.out_legacy or os.path.join(os.getcwd(), "data")
@@ -456,7 +456,7 @@ clay_used = clay_people = merged_by_domain = 0
 if args.clay:
     import glob
     clay = {}
-    for fp in sorted(glob.glob(os.path.join(args.clay, "*.json"))):
+    for fp in sorted(fp for d in args.clay for fp in glob.glob(os.path.join(d, "*.json"))):
         for x in json.load(open(fp)):
             if x.get("status") == "resolved" and x.get("confidence") in ("high", "medium") and x.get("domain"):
                 clay[x["id"]] = x
