@@ -1,5 +1,5 @@
 /**
- * The Table — one record table. Enrich to earn credits, spend credits to ungate.
+ * Trading Post: one record table. Enrich to earn credits, spend credits to ungate.
  *
  * A record is a fractional engagement joined to the company that used the
  * fractional and the contacts who hired or worked with them. Underneath, the
@@ -236,7 +236,7 @@ export async function memberForToken(token: string | null | undefined): Promise<
  * claimed this way (they sign in with their personal link), so nobody can take over a
  * member's account by typing their email.
  */
-/** For the Add record form: is a company with this website (or name) already on The Table? */
+/** For the Add record form: is a company with this website (or name) already on Trading Post? */
 export async function existingCompany(domain: string | null, name: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const g = graph(seed, s);
@@ -591,7 +591,7 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
           : existingEng && a.newEngagement && !kept
             ? `Added an engagement under ${company.name}`
             : existingEng
-            ? `${company.name} is already on The Table. Your details were added to its record`
+            ? `${company.name} is already on Trading Post. Your details were added to its record`
             : `Added a new engagement under ${company.name}`;
         const skipped = kept ? ` ${kept} field${kept > 1 ? "s were" : " was"} already filled and left as is (verify or report them on the row).` : "";
         return { message: `${where}.${earned ? ` +${earned} credit${earned > 1 ? "s" : ""}.` : ""}${skipped}`, rowId: eid };

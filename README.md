@@ -14,9 +14,9 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
-## The Table — the product
+## Trading Post — the product
 
-The site *is* The Table: `/` is the landing page, the login and the app (old `/table?k=` links redirect). Jigsaw for the fractional GTM community: every row is a fractional engagement — the company, the seat, and the people involved — and members **give** (add what's missing, verify what's right) to **get** (spend credits to unlock 🔒 fields).
+The site *is* Trading Post: `/` is the landing page, the login and the app (old `/table?k=` links redirect). Jigsaw for the fractional GTM community: every row is a fractional engagement — the company, the seat, and the people involved — and members **give** (add what's missing, verify what's right) to **get** (spend credits to unlock 🔒 fields).
 
 - **Fill an empty field → +1 credit. Unlock a 🔒 field someone else filled → 1 credit.** Starting balance: `RN_STARTER_CREDITS` (default 5; 50 on the pilot).
 - **Verify** any value you can see (once per person). Values show their confirmation count (✓n) even while locked; values from Revenue Nomad's own records count as one.
@@ -37,7 +37,7 @@ node scripts/seal-intel-seed.mjs     # encrypts it to data/intel-seed.enc (key i
 
 Member data never goes into git in the clear (this repo is public): `data/intel-seed.json`, `data/intel-member-links.csv`, `data/intel-seed.key` and runtime state are git-ignored. Hosts get the AES-256-GCM encrypted `data/intel-seed.enc` with the code and open it with `RN_INTEL_SEED_KEY` (the contents of `data/intel-seed.key`). Use persistent storage for `RN_DATA_DIR` (Railway volume / Render disk / Docker volume). With no seed, the page runs on labeled demo data (`/?k=demo`).
 
-The job-board crawler and prospect engine remain back-end services only (`/api/crawl`, `/api/jobs`, `/api/prospects`) — future scheduled enrichment for The Table, not part of the UI.
+The job-board crawler and prospect engine remain back-end services only (`/api/crawl`, `/api/jobs`, `/api/prospects`) — future scheduled enrichment for Trading Post, not part of the UI.
 
 ## Launch / Deploy
 

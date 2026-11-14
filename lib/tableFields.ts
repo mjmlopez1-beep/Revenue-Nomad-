@@ -1,5 +1,5 @@
 /**
- * Field definitions for The Table. Shared by server and client (no Node imports).
+ * Field definitions for Trading Post. Shared by server and client (no Node imports).
  *
  * One record = one fractional engagement, joined to the company that used the
  * fractional and the contacts who hired or worked with them. Each group's data

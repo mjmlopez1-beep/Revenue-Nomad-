@@ -870,7 +870,7 @@ a:hover {
   }
 }
 
-/* ---------- The Table (/table): fill a field, earn a credit; spend one to unlock ---------- */
+/* ---------- Trading Post (/table): fill a field, earn a credit; spend one to unlock ---------- */
 .tt { padding: 28px 0 80px; }
 .tt-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
 .tt-head h1 { font-size: 28px; letter-spacing: -0.01em; }
@@ -988,7 +988,7 @@ a:hover {
   .nav-links a { font-size: 13px; }
 }
 
-/* The Table: verification, source, sign-in */
+/* Trading Post: verification, source, sign-in */
 .tt-ver { font-size: 11px; font-weight: 700; color: var(--green); background: var(--green-pale); border: 1px solid var(--green-pale-border); border-radius: 999px; padding: 0 6px; white-space: nowrap; }
 .tt-ver.mine { background: var(--green); color: #fff; border-color: var(--green); }
 .tt-verify { color: var(--green); font-weight: 700; }
@@ -1002,7 +1002,7 @@ a:hover {
 .tt-auth-row input { font: inherit; border: 1px solid var(--border-strong); border-radius: 9px; padding: 9px 11px; flex: 1 1 160px; min-width: 0; }
 @media (max-width: 760px) { .tt-auth { grid-template-columns: 1fr; } }
 
-/* Wider canvas for The Table (less horizontal scrolling) */
+/* Wider canvas for Trading Post (less horizontal scrolling) */
 .container.container-wide { max-width: 1680px; padding: 0 24px; }
 @media (max-width: 640px) { .container.container-wide { padding: 0 16px; } }
 .tt-grid td, .tt-grid th { padding-left: 11px; padding-right: 11px; }
@@ -1030,7 +1030,7 @@ a:hover {
 .tt-ongoing.on { background: var(--green); color: #fff; border-color: var(--green); }
 .tt-addcontact { font: inherit; font-size: 12px; color: var(--green); border: 1px solid var(--green-pale-border); border-radius: 7px; padding: 2px 8px; background: var(--green-pale); cursor: pointer; white-space: nowrap; }
 
-/* ===== The Table v2: top bar, views, grouped companies ===== */
+/* ===== Trading Post v2: top bar, views, grouped companies ===== */
 .tt2 { min-height: 100vh; background: var(--bg); }
 .tt-top { background: #0c3a29; color: #fff; position: sticky; top: 0; z-index: 20; }
 .tt-top-in { max-width: 1680px; margin: 0 auto; padding: 0 24px; height: 58px; display: flex; align-items: center; gap: 16px; }
@@ -1114,7 +1114,7 @@ a:hover {
   .tt-credit-cards { grid-template-columns: 1fr; }
 }
 
-/* ===== The Table v2, Revenue Nomad design system v2 (pine / volt / ember, Figtree) ===== */
+/* ===== Trading Post v2, Revenue Nomad design system v2 (pine / volt / ember, Figtree) ===== */
 .tt2 {
   --pine: #073F2F; --pine-hover: #0E5640; --volt: #2EE59D; --volt-soft: #E8FBF2;
   --ember: #FF5A1F; --ember-soft: #FFF0E8; --ember-ink: #B23A0A; --red: #D12F4A;

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The Table. Jigsaw for the fractional GTM community.
+ * Trading Post. Jigsaw for the fractional GTM community.
  *
  * Three views over the same linked records:
  *  - Engagements (default): one row per company; its other engagements expand underneath.
@@ -300,10 +300,10 @@ export default function TheTable() {
             <img src="/brand/logo-on-dark.png" alt="Revenue Nomad" width={425} height={48} />
           </a>
           <span className="tt-top-sep" />
-          <span className="tt-top-title">The Table</span>
+          <span className="tt-top-title">Trading Post</span>
           <nav className="tt-top-nav">
             <button className={tab === "table" ? "on" : ""} onClick={() => setTab("table")}>
-              Table
+              Browse
             </button>
             {me && (
               <button className={tab === "credits" ? "on" : ""} onClick={() => setTab("credits")}>
@@ -354,12 +354,12 @@ export default function TheTable() {
             {/* ---------- page header ---------- */}
             <div className="tt-hero">
               <div>
-                <h1>The Table</h1>
+                <h1>Trading Post</h1>
                 <p className="tt-hero-stats">
                   {stats ? `${stats.companies.toLocaleString()} companies. ${stats.engagements.toLocaleString()} engagements. ${stats.contacts.toLocaleString()} contacts.` : "Loading."}
                 </p>
                 <p className="tt-hero-sub">
-                  Give what you know about fractional work and get what other operators know. Adding a missing fact earns 1 credit. Unlocking one costs 1.
+                  Bring what you know. Take what you need. Add a missing fact about fractional work to earn 1 credit, and trade 1 credit to unlock what other operators know.
                 </p>
               </div>
               {me && (
@@ -857,7 +857,7 @@ function MyCredits({ view, onBack }: { view: View; onBack: () => void }) {
   return (
     <div className="tt-credits-page">
       <button className="tt-linkbtn" onClick={onBack}>
-        ‹ Back to The Table
+        ‹ Back to Trading Post
       </button>
       <h1>My credits</h1>
       <div className="tt-credit-cards">
@@ -890,7 +890,7 @@ function MyCredits({ view, onBack }: { view: View; onBack: () => void }) {
             {view.ledger.length === 0 ? (
               <tr>
                 <td colSpan={5} className="tt-none">
-                  Nothing yet. Add a missing fact on The Table to earn your first credit.
+                  Nothing yet. Add a missing fact on Trading Post to earn your first credit.
                 </td>
               </tr>
             ) : (
@@ -944,7 +944,7 @@ function SignalFilter({ value, onChange }: { value?: string; onChange: (v: strin
 
 /**
  * Add a company in one step. Paste the website; the icon, name and industry fill in right
- * here (each editable), then one click adds the row. Already on The Table? It takes you there.
+ * here (each editable), then one click adds the row. Already on Trading Post? It takes you there.
  */
 function QuickAdd({ busy, onAdd, onGoTo }: { busy: boolean; onAdd: (p: { domain: string; name: string; industry: string }) => Promise<boolean>; onGoTo: (name: string) => void }) {
   const [url, setUrl] = useState("");
@@ -1004,7 +1004,7 @@ function QuickAdd({ busy, onAdd, onGoTo }: { busy: boolean; onAdd: (p: { domain:
           <CompanyIcon name={found.name || found.domain} domain={found.domain} />
           {found.existing ? (
             <span>
-              <b>{found.existing}</b> is already on The Table.
+              <b>{found.existing}</b> is already on Trading Post.
             </span>
           ) : (
             <>

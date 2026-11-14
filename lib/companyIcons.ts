@@ -1,5 +1,5 @@
 /**
- * Company icons for The Table.
+ * Company icons for Trading Post.
  *
  * An icon needs a domain. A company's filled-in Website is always used first.
  * For companies with no website yet, the server looks the domain up from the

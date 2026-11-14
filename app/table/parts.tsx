@@ -1,6 +1,6 @@
 "use client";
 
-/** Building blocks for The Table: cells, editors, icons, sign-in, add-record form. */
+/** Building blocks for Trading Post: cells, editors, icons, sign-in, add-record form. */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Cell } from "@/lib/table";
 import { RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, type FieldDef } from "@/lib/tableFields";
@@ -180,7 +180,7 @@ export function AddRecord({
               <b>{name || found.domain}</b>
               <div className="tt-dim tt-small">
                 {found.domain}
-                {found.existing && !forCompany ? " · already on The Table. Your engagement goes under it, no duplicate company." : ""}
+                {found.existing && !forCompany ? " · already on Trading Post. Your engagement goes under it, no duplicate company." : ""}
               </div>
               {found.description && <div className="tt-dim tt-small tt-add-desc">{found.description}</div>}
             </div>
@@ -409,7 +409,7 @@ export function AuthPanel({ busy, onDone, setToast }: { busy: boolean; onDone: (
           post({ join: { name, email } });
         }}
       >
-        <b>Join The Table</b>
+        <b>Join Trading Post</b>
         <span className="tt-dim">Start with free credits. Add what you know, confirm what&apos;s right, unlock the rest.</span>
         <div className="tt-auth-row">
           <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
