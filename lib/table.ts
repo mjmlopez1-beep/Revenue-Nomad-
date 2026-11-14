@@ -315,6 +315,8 @@ export interface Row {
 
 export interface View {
   demo: boolean;
+  /** The viewer's credit history, newest first (My credits). */
+  ledger: { at: string; delta: number; reason: string; company: string; field: string }[];
   /** `token` lets someone who joined copy their own sign-in link. */
   me: { name: string; title: string; credits: number; admin: boolean; token: string } | null;
   rows: Row[];
@@ -386,8 +388,25 @@ export async function buildView(token: string | null): Promise<View> {
     }
   }
 
+  const ledger: View["ledger"] = [];
+  if (me) {
+    const companyOf = (id: string) => {
+      if (g.companies.has(id)) return g.companies.get(id)!.name;
+      const e = g.engagements.get(id) ?? g.engagements.get(g.contacts.get(id)?.engagementId ?? "");
+      return e ? g.companies.get(e.companyId)?.name ?? "" : "";
+    };
+    for (const l of s.ledger) {
+      if (l.memberId !== me.id) continue;
+      const [id, field] = l.ref.split(".");
+      const entity: Entity = g.companies.has(id) ? "company" : g.engagements.has(id) ? "engagement" : "contact";
+      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyOf(id), field: fieldDef(entity, field)?.label ?? field });
+    }
+    ledger.reverse();
+  }
+
   return {
     demo: !!seed.demo,
+    ledger,
     me: me ? { name: me.name, title: me.title, credits: balance(s, me.id), admin: isAdmin(me), token: me.token } : null,
     rows,
     companies: [...g.companies.values()].map((c) => c.name).sort((a, b) => a.localeCompare(b)),
@@ -411,11 +430,17 @@ export type Action =
   | {
       type: "add";
       company: string;
+      /** Add to this specific engagement instead of matching one. */
+      engagementId?: string;
+      /** "+ engagement" on a company: add a new engagement unless one with the same role is there. */
+      newEngagement?: boolean;
       website?: string;
       companyFields?: Record<string, string>; // industry, hq
       engagementFields?: Record<string, string>; // role, status, revenue, employees, start, end, rate, hours, outcome, operator
       people?: Record<string, string>[]; // name, title, relationship, email, phone, linkedin
     }
+  /** A person on an engagement, with their details (the "+ person" form). */
+  | { type: "addPerson"; engagementId: string; person: Record<string, string> }
   /** Another contact on the same engagement (a new row). */
   | { type: "addContact"; engagementId: string }
   | { type: "report"; entity: Entity; id: string; field: string }
@@ -526,18 +551,65 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
         // Company fields only fill gaps; the company row is shared by every record at that company.
         for (const [k, v] of site ? [["website", site] as const, ...coFields] : coFields)
           if (!valueOf(company, s, k) && setValue(company, "company", k, v)) earned++;
-        const eid = newId("e", name);
-        s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
-        const eng: Node = { id: eid, seedFields: {} };
-        for (const [k, v] of engFields) if (setValue(eng, "engagement", k, v)) earned++;
+        // Rules: a company is one record. Under it, an engagement isn't duplicated: if this
+        // member already added one there, or one with the same role exists, the new details
+        // fill its empty fields (filled ones stay). Otherwise it's a new engagement there.
+        const role = engFields.find(([k]) => k === "role")?.[1];
+        const atCompany = [...g.engagements.values()].filter((e) => e.companyId === company!.id);
+        const existingEng = a.engagementId
+          ? atCompany.find((e) => e.id === a.engagementId)
+          : (a.newEngagement
+              ? // a blank engagement (e.g. left by a one-click company add) is filled, not stacked
+                atCompany.find((e) => Object.keys(e.seedFields).every((k) => k === "source") && !Object.keys(s.values).some((k) => k.startsWith(e.id + ".")))
+              : atCompany.find((e) => s.engagements.some((x) => x.id === e.id && x.by === me.id))) ??
+            (role ? atCompany.find((e) => slug(valueOf(e, s, "role")?.value ?? "") === slug(role)) : undefined) ??
+            (!role && !engFields.length && !a.newEngagement && !people.length ? atCompany[0] : undefined);
+        let eid: string;
+        let eng: Node;
+        let kept = 0;
+        if (existingEng) {
+          eid = existingEng.id;
+          eng = existingEng;
+          for (const [k, v] of engFields) {
+            if (valueOf(eng, s, k)) kept++;
+            else if (setValue(eng, "engagement", k, v)) earned++;
+          }
+        } else {
+          eid = newId("e", name);
+          s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
+          eng = { id: eid, seedFields: {} };
+          for (const [k, v] of engFields) if (setValue(eng, "engagement", k, v)) earned++;
+        }
         for (const p of people) {
           const pid = newId("p");
           s.contacts.push({ id: pid, engagementId: eid, by: me.id, at: now });
           const node: Node = { id: pid, seedFields: {} };
           for (const [k, v] of p) if (setValue(node, "contact", k, v)) earned++;
         }
-        const where = isNew ? `Added ${company.name}` : `Added a record at ${company.name}`;
-        return { message: `${where}.${earned ? ` +${earned} credit${earned > 1 ? "s" : ""}.` : ""}`, rowId: eid };
+        const where = isNew
+          ? `Added ${company.name}`
+          : existingEng && a.newEngagement && !kept
+            ? `Added an engagement under ${company.name}`
+            : existingEng
+            ? `${company.name} is already on The Table. Your details were added to its record`
+            : `Added a new engagement under ${company.name}`;
+        const skipped = kept ? ` ${kept} field${kept > 1 ? "s were" : " was"} already filled and left as is (verify or report them on the row).` : "";
+        return { message: `${where}.${earned ? ` +${earned} credit${earned > 1 ? "s" : ""}.` : ""}${skipped}`, rowId: eid };
+      }
+      case "addPerson": {
+        const e = g.engagements.get(a.engagementId);
+        if (!e) throw new ActionError("Record not found.");
+        const fields = Object.entries(a.person ?? {}).filter(([, v]) => String(v ?? "").trim());
+        if (!fields.some(([k]) => k === "name")) throw new ActionError("Add the person's name.");
+        for (const [k, v] of fields) {
+          const { error } = cleanValue(fieldOf("contact", k), v);
+          if (error) throw new ActionError(`${fieldDef("contact", k)!.label}: ${error}`);
+        }
+        const pid = newId("p");
+        s.contacts.push({ id: pid, engagementId: e.id, by: me.id, at: now });
+        let earned = 0;
+        for (const [k, v] of fields) if (setValue({ id: pid, seedFields: {} }, "contact", k, v)) earned++;
+        return { message: `Added ${fields.find(([k]) => k === "name")![1]}. +${earned} credit${earned > 1 ? "s" : ""}.`, rowId: pid };
       }
       case "addContact": {
         const e = g.engagements.get(a.engagementId);
@@ -560,7 +632,7 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
         const cur = valueOf(node, s, f.key);
         const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id);
         if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to report here.");
-        if (cur.by === me.id) throw new ActionError("That's your own value — just edit it.");
+        if (cur.by === me.id) throw new ActionError("That's your own value. Edit it instead.");
         s.values[k] = { ...cur, status: "reported", reportedBy: me.id };
         return { message: "Reported. It's hidden until it's reviewed." };
       }
@@ -575,7 +647,7 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
         const list = s.verifications[k] ?? [];
         if (list.includes(me.id)) return { message: "You already verified this." };
         s.verifications[k] = [...list, me.id];
-        return { message: `Verified ${f.label}. Thanks — it now shows ${list.length + 1 + (cur.by === "seed" ? 1 : 0)} confirmations.` };
+        return { message: `Verified ${f.label}. Thanks, it now shows ${list.length + 1 + (cur.by === "seed" ? 1 : 0)} confirmations.` };
       }
       case "review": {
         if (!isAdmin(me)) throw new ActionError("Admins only.");

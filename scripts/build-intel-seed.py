@@ -225,8 +225,6 @@ for r in eng_rows:
                 fields["status"] = "Ended"
                 if month(r.get("End Date")):
                     fields["end"] = month(r.get("End Date"))
-            if (r.get("Outcomes") or "").strip():
-                fields["outcome"] = clip(r["Outcomes"], 400)
         e = engagements[ek] = {"id": f"e_{ek[:56]}", "companyId": co["id"], "fields": fields, "verified": False}
     if (r.get("Verification") or r.get("Verification Status")) == "buyer_corroborated":
         e["verified"] = True
@@ -250,10 +248,9 @@ if True:
             co, ck = company(name)
             ek = f"{ck}_{key_for(m['name'])}"
             if ek in engagements:  # same company + operator as a published engagement: add the context
-                engagements[ek]["fields"].setdefault("outcome", clip(text))
                 continue
             engagements[ek] = {"id": f"e_{ek[:56]}", "companyId": co["id"], "verified": False,
-                               "fields": {"source": "Member success story", "operator": m["name"], "outcome": clip(text)}}
+                               "fields": {"source": "Member success story", "operator": m["name"]}}
             story_records += 1
 
 # ---------- 3. demand scans (open fractional roles) ----------
@@ -303,6 +300,34 @@ for path in args.demand:
                     c["linkedin"] = re.sub(r"^https?://", "", li).rstrip("/")
                 contacts.append({"id": f"p_{ck[:30]}_{key_for(dm)[:20]}", "engagementId": f"e_{ek[:56]}", "fields": c})
 
+# ---------- rule: no redundant records ----------
+# A company is a single record (companies are keyed by name, so it is never listed twice).
+# Under it, one engagement per person: when the same operator appears more than once at a
+# company (e.g. a published engagement and their own success story), keep the record with
+# the most data, fill its gaps from the others, and move their people onto it. Different
+# people's engagements at the same company are kept; the table groups them under the company.
+RANK = {"Published engagement": 0, "Demand scan": 1, "Member success story": 2}
+groups = {}
+for e in engagements.values():
+    op = key_for(e["fields"].get("operator") or "") or e["id"]  # no operator (open roles): never merged
+    groups.setdefault((e["companyId"], op), []).append(e)
+dupes_removed = 0
+for group in groups.values():
+    if len(group) < 2:
+        continue
+    group.sort(key=lambda e: (-len(e["fields"]), RANK.get(e["fields"].get("source"), 9), not e["verified"]))
+    keep, drop = group[0], group[1:]
+    for d in drop:
+        for k, v in d["fields"].items():
+            if k != "source":
+                keep["fields"].setdefault(k, v)
+        keep["verified"] = keep["verified"] or d["verified"]
+        for c in contacts:
+            if c["engagementId"] == d["id"]:
+                c["engagementId"] = keep["id"]
+        del engagements[next(k for k, v in engagements.items() if v is d)]
+        dupes_removed += 1
+
 # ---------- 4. verified websites ----------
 
 domains_set = 0
@@ -337,7 +362,7 @@ print(f"members: {len(members)}")
 print(f"published engagements: {published} used; {skipped_anon} anonymous and {skipped_unpub} unpublished skipped")
 print(f"success stories: {stories} ({story_records} new records; stories naming no company are skipped)")
 print(f"demand scan rows: {demand_rows}")
-print(f"records by source: {src}  total: {len(engagements)}")
+print(f"records by source: {src}  total: {len(engagements)} ({dupes_removed} same-person duplicates merged away)")
 print(f"companies: {len(companies)} ({sum('website' in c['fields'] for c in companies.values())} with a website; {domains_set} from --domains)")
 print(f"contacts: {len(contacts)}")
 print(f"wrote {SEED_PATH}")

@@ -72,7 +72,6 @@ export const GROUPS: GroupDef[] = [
       { key: "end", label: "End", kind: "monthOrOngoing", gated: false },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
       { key: "hours", label: "Hrs/wk", kind: "number", gated: true, placeholder: "15" },
-      { key: "outcome", label: "Outcome", kind: "text", gated: true, placeholder: "Renewed; built team of 4" },
       { key: "posting", label: "Posting", kind: "url", gated: false, placeholder: "Link to the job post" },
     ],
   },

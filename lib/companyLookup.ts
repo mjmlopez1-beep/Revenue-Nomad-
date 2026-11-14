@@ -106,5 +106,7 @@ export async function lookupCompany(rawUrl: string): Promise<LookupResult | null
     meta(html, "og:site_name") ?? meta(html, "application-name") ?? (title ? cleanTitle(decode(title), domain) : null);
   const description = meta(html, "og:description") ?? meta(html, "description");
   const industry = suggestIndustry(`${title ?? ""} ${description ?? ""}`);
-  return { domain, name: name || null, industry, description: description ? description.slice(0, 240) : null };
+  // Site unreachable or untitled: fall back to the domain's name ("acme-robotics.com" -> "Acme Robotics").
+  const fromDomain = domain.split(".")[0].split(/[-_]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return { domain, name: name || fromDomain, industry, description: description ? description.slice(0, 240) : null };
 }

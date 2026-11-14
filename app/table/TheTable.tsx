@@ -1,44 +1,100 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+/**
+ * The Table. Jigsaw for the fractional GTM community.
+ *
+ * Three views over the same linked records:
+ *  - Engagements (default): one row per company; its other engagements expand underneath.
+ *  - Companies: one row per company with its shared facts and a Signal score.
+ *  - Contacts: one row per person, with the company and engagement they belong to.
+ * Fill an empty field to earn a credit, spend a credit to unlock a locked field, confirm what's right.
+ * Styled to the Revenue Nomad design system v2 (pine, volt, ember; Figtree).
+ */
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Cell, Row, View } from "@/lib/table";
-import { COLUMNS, FILLABLE, GROUPS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, type Entity, type FieldDef } from "@/lib/tableFields";
+import { fieldDef, type Entity, type FieldDef } from "@/lib/tableFields";
+import { AddRecord, AuthPanel, CellView, CompanyIcon, hue, initials, pageList, type AddPayload } from "./parts";
 
-type Filter = "all" | "open" | "engagements" | "stories" | "verified" | "needs" | "locked" | "nocontact" | "mine";
-type Sort = { key: string; dir: 1 | -1 };
+type Mode = "engagements" | "companies" | "contacts";
+type Quick = "all" | "open" | "engagements" | "stories" | "verified" | "needs" | "locked" | "mine";
+type Col = { entity: Entity; key: string; label: string; f: FieldDef };
+type Toast = { text: string; bad?: boolean };
 
-const initials = (s: string) =>
-  s
-    .replace(/\(.*?\)/g, "")
-    .split(/\s+/)
-    .filter((w) => /[a-z0-9]/i.test(w))
-    .slice(0, 2)
-    .map((w) => w[0].toUpperCase())
-    .join("") || "?";
-const HUES = [142, 200, 265, 25, 330, 175, 45];
-const hue = (s: string) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
-const fmtMonth = (m: string) => {
-  const [y, mo] = m.split("-").map(Number);
-  return y && mo ? new Date(y, mo - 1).toLocaleString("en-US", { month: "short", year: "numeric" }) : m;
+const col = (entity: Entity, key: string, label?: string): Col => {
+  const f = fieldDef(entity, key)!;
+  return { entity, key, label: label ?? f.label, f };
 };
-const cellRank = (c: Cell) => (c.s === "value" ? 0 : c.s === "locked" ? 1 : c.s === "reported" ? 2 : 3);
+const VIEW_COLS: Record<Mode, Col[]> = {
+  engagements: [
+    col("engagement", "role"),
+    col("engagement", "operator"),
+    col("engagement", "status"),
+    col("engagement", "revenue", "Revenue"),
+    col("engagement", "employees"),
+    col("company", "industry"),
+    col("engagement", "type"),
+    col("engagement", "start"),
+    col("engagement", "end"),
+    col("engagement", "rate"),
+    col("engagement", "hours"),
+    col("engagement", "posting"),
+  ],
+  companies: [
+    col("company", "website"),
+    col("company", "industry"),
+    col("engagement", "revenue", "Revenue"),
+    col("engagement", "employees"),
+    col("company", "hq"),
+  ],
+  contacts: [col("contact", "title"), col("contact", "relationship"), col("contact", "email"), col("contact", "phone"), col("contact", "linkedin")],
+};
+const ckey = (c: Col) => `${c.entity}.${c.key}`;
+const has = (c?: Cell) => !!c && (c.s === "value" || c.s === "locked");
 const entityId = (r: Row, e: Entity) => (e === "company" ? r.companyId : e === "engagement" ? r.engagementId : r.contactId);
-const COLS = COLUMNS; // every column after the frozen company name
-const FILLABLE_COUNT = FILLABLE.length;
-const GROUP_SPANS = GROUPS.map((g) => ({ ...g, span: g.fields.filter((f) => !f.identity).length }));
+const cellText = (c?: Cell) => (c && c.s === "value" ? c.v : "");
+const PER = 25;
+
+interface CompanyGroup {
+  id: string;
+  name: string;
+  iconDomain: string | null;
+  verified: boolean;
+  /** One row per engagement, richest first. */
+  engagements: Row[];
+  /** One row per person. */
+  contacts: Row[];
+  facts: number;
+}
+
+/** Facts a company has: its own fields once, plus every engagement's and person's fields. */
+function countFacts(g: { engagements: Row[]; contacts: Row[] }): number {
+  const first = g.engagements[0];
+  if (!first) return 0;
+  let n = 0;
+  for (const [k, c] of Object.entries(first.cells)) if (k.startsWith("company.") && has(c)) n++;
+  for (const e of g.engagements) for (const [k, c] of Object.entries(e.cells)) if (k.startsWith("engagement.") && k !== "engagement.source" && has(c)) n++;
+  for (const p of g.contacts) for (const [k, c] of Object.entries(p.cells)) if (k.startsWith("contact.") && has(c)) n++;
+  return n;
+}
+const signalLevel = (n: number) => (n >= 15 ? 5 : n >= 10 ? 4 : n >= 6 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0);
 
 export default function TheTable() {
   const [view, setView] = useState<View | null>(null);
+  const [tab, setTab] = useState<"table" | "credits">("table");
+  const [mode, setMode] = useState<Mode>("engagements");
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [sort, setSort] = useState<Sort | null>(null);
+  const [quick, setQuick] = useState<Quick>("all");
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [page, setPage] = useState(0);
-  const [per, setPer] = useState(25);
-  const [editing, setEditing] = useState<string | null>(null); // `${row.id}|${col}`
-  const [adding, setAdding] = useState(false);
-  const [pin, setPin] = useState<string | null>(null); // row id to pin to the top + highlight
-  const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<string | null>(null);
+  const [adding, setAdding] = useState<null | { url?: string; forCompany?: { name: string; domain: string | null } }>(null);
+  const [personFor, setPersonFor] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const [busy, setBusy] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const authRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/table", { cache: "no-store" });
@@ -46,12 +102,12 @@ export default function TheTable() {
   }, []);
 
   useEffect(() => {
-    // Personal links look like /table?k=TOKEN: trade it for a cookie, then clean the URL.
+    // Personal links look like /?k=CODE. Trade it for a session cookie, then clean the URL.
     const k = new URLSearchParams(window.location.search).get("k");
     (async () => {
       if (k) {
         const r = await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signIn: k }) });
-        if (!r.ok) setToast({ text: "That link isn't valid.", bad: true });
+        if (!r.ok) setToast({ text: "That sign-in link isn't valid.", bad: true });
         window.history.replaceState(null, "", "/");
       }
       await load();
@@ -60,7 +116,7 @@ export default function TheTable() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3500);
+    const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -77,353 +133,636 @@ export default function TheTable() {
     }
   };
 
-  const showRow = (rowId?: string | null) => {
-    if (!rowId) return;
-    setQ("");
-    setFilter("all");
-    setPage(0);
-    setPin(rowId);
-  };
+  const me = view?.me ?? null;
+  const cols = VIEW_COLS[mode];
 
-  const rows = useMemo(() => {
-    if (!view) return [];
-    const needle = q.trim().toLowerCase();
-    let list = view.rows.filter((r) => {
-      if (needle && !r.company.toLowerCase().includes(needle) && !Object.values(r.cells).some((c) => c.s === "value" && c.v.toLowerCase().includes(needle))) return false;
+  /* ---------- group rows into companies ---------- */
+  const groups = useMemo(() => {
+    const map = new Map<string, CompanyGroup>();
+    const seenEng = new Set<string>();
+    for (const r of view?.rows ?? []) {
+      let g = map.get(r.companyId);
+      if (!g) map.set(r.companyId, (g = { id: r.companyId, name: r.company, iconDomain: r.iconDomain, verified: false, engagements: [], contacts: [], facts: 0 }));
+      if (!seenEng.has(r.engagementId)) {
+        seenEng.add(r.engagementId);
+        g.engagements.push(r);
+      }
+      if (r.contactId) g.contacts.push(r);
+      g.verified ||= r.verified;
+    }
+    for (const g of map.values()) {
+      g.engagements.sort((a, b) => b.filled - a.filled);
+      g.facts = countFacts(g);
+    }
+    return [...map.values()];
+  }, [view]);
+
+  /* ---------- filtering ---------- */
+  const rowPasses = useCallback(
+    (r: Row) => {
       const cells = Object.values(r.cells);
-      const src = r.cells["engagement.source"], st = r.cells["engagement.status"];
-      if (filter === "open") return st?.s === "value" && st.v === "Open role";
-      if (filter === "engagements") return src?.s === "value" && src.v === "Published engagement";
-      if (filter === "stories") return src?.s === "value" && src.v === "Member success story";
-      if (filter === "verified") return r.verified || cells.some((c) => (c.s === "value" || c.s === "locked") && c.ver > 1);
-      if (filter === "needs") return cells.some((c) => c.s === "empty");
-      if (filter === "locked") return cells.some((c) => c.s === "locked");
-      if (filter === "nocontact") return !r.contactId;
-      if (filter === "mine") return cells.some((c) => c.s === "value" && c.mine);
+      const src = cellText(r.cells["engagement.source"]);
+      if (quick === "open" && cellText(r.cells["engagement.status"]) !== "Open role") return false;
+      if (quick === "engagements" && src !== "Published engagement") return false;
+      if (quick === "stories" && src !== "Member success story") return false;
+      if (quick === "verified" && !(r.verified || cells.some((c) => (c.s === "value" || c.s === "locked") && c.ver > 1))) return false;
+      if (quick === "needs" && !cells.some((c) => c.s === "empty")) return false;
+      if (quick === "locked" && !cells.some((c) => c.s === "locked")) return false;
+      if (quick === "mine" && !cells.some((c) => c.s === "value" && c.mine)) return false;
+      for (const [k, want] of Object.entries(colFilters)) {
+        if (k === "_signal") continue;
+        const c = r.cells[k];
+        if (want === "__has" && !has(c)) return false;
+        if (want === "__empty" && c?.s !== "empty") return false;
+        if (want === "__locked" && c?.s !== "locked") return false;
+        if (!want.startsWith("__") && cellText(c) !== want) return false;
+      }
       return true;
-    });
+    },
+    [quick, colFilters],
+  );
+  const needle = q.trim().toLowerCase();
+  const textHit = useCallback(
+    (r: Row) => r.company.toLowerCase().includes(needle) || Object.values(r.cells).some((c) => c.s === "value" && c.v.toLowerCase().includes(needle)),
+    [needle],
+  );
+
+  const visibleGroups = useMemo(() => {
+    let list = groups
+      .map((g) => ({
+        ...g,
+        shown: g.engagements.filter((e) => rowPasses(e) && (!needle || textHit(e) || g.contacts.some((p) => p.engagementId === e.engagementId && textHit(p)))),
+      }))
+      .filter((g) => g.shown.length > 0)
+      .filter((g) => {
+        const want = colFilters["_signal"];
+        const l = signalLevel(g.facts);
+        return !want || (want === "__strong" ? l >= 4 : want === "__some" ? l === 2 || l === 3 : l <= 1);
+      });
     if (sort) {
       const { key, dir } = sort;
+      const val = (g: (typeof list)[number]): string | number =>
+        key === "_company" ? g.name : key === "_signal" ? g.facts : key === "_engs" ? g.engagements.length : key === "_contacts" ? g.contacts.length : cellText(g.shown[0].cells[key]) || (has(g.shown[0].cells[key]) ? "￿" : "");
       list = [...list].sort((a, b) => {
-        if (key === "_company") return a.company.localeCompare(b.company) * dir;
-        if (key === "_filled") return (a.filled - b.filled) * dir;
-        const ca = a.cells[key], cb = b.cells[key];
-        const r = cellRank(ca) - cellRank(cb);
-        if (r) return r * dir;
-        return ca.s === "value" && cb.s === "value" ? ca.v.localeCompare(cb.v) * dir : 0;
+        const va = val(a), vb = val(b);
+        if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+        if (!va && vb) return 1;
+        if (va && !vb) return -1;
+        return String(va).localeCompare(String(vb)) * dir;
       });
     }
-    if (pin) list = [...list.filter((r) => r.id === pin), ...list.filter((r) => r.id !== pin)];
     return list;
-  }, [view, q, filter, sort, pin]);
+  }, [groups, rowPasses, needle, textHit, sort]);
 
-  const pages = Math.max(1, Math.ceil(rows.length / per));
+  const visibleContacts = useMemo(() => groups.flatMap((g) => g.contacts).filter((r) => rowPasses(r) && (!needle || textHit(r))), [groups, rowPasses, needle, textHit]);
+
+  const total = mode === "contacts" ? visibleContacts.length : visibleGroups.length;
+  const pages = Math.max(1, Math.ceil(total / PER));
   const cur = Math.min(page, pages - 1);
-  const shown = rows.slice(cur * per, cur * per + per);
-  const me = view?.me ?? null;
+  const resetPage = () => setPage(0);
+  const toggleSort = (key: string) => setSort((s) => (s?.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
+  const sortMark = (key: string) => (sort?.key === key ? (sort.dir === 1 ? " ↑" : " ↓") : "");
 
-  const toggleSort = (key: string) =>
-    setSort((s) => (s?.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
-  const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === 1 ? "↑" : "↓") : "↕");
+  /** Distinct values a column takes, for its filter menu. */
+  const distinct = (c: Col) => {
+    const rows = c.entity === "contact" ? groups.flatMap((g) => g.contacts) : groups.flatMap((g) => g.engagements);
+    const vals = new Set<string>();
+    for (const r of rows) {
+      const v = cellText(r.cells[ckey(c)]);
+      if (v) vals.add(v);
+    }
+    return [...vals].sort().slice(0, 14);
+  };
+
+  const cell = (r: Row, c: Col) => {
+    const k = `${r.id}|${ckey(c)}`;
+    const id = entityId(r, c.entity);
+    return (
+      <CellView
+        shared={false}
+        f={c.f}
+        cell={r.cells[ckey(c)] ?? { s: "empty" }}
+        canAct={!!me}
+        busy={busy}
+        editing={editing === k}
+        onEdit={() => setEditing(k)}
+        onCancel={() => setEditing(null)}
+        onSave={async (value) => {
+          if (await act({ type: "fill", engagementId: r.engagementId, contactId: r.contactId, entity: c.entity, field: c.key, value })) setEditing(null);
+        }}
+        onUnlock={() => id && act({ type: "unlock", entity: c.entity, id, field: c.key })}
+        onVerify={() => id && act({ type: "verify", entity: c.entity, id, field: c.key })}
+        onReport={() => {
+          if (id && window.confirm(`Report ${c.label} on ${r.company} as wrong? It's hidden until it's reviewed.`)) act({ type: "report", entity: c.entity, id, field: c.key });
+        }}
+      />
+    );
+  };
+
+  const addPayload = async (payload: AddPayload) => {
+    if (await act({ type: "add", ...payload })) {
+      setAdding(null);
+    }
+  };
+  const signOut = async () => {
+    setMenu(false);
+    await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signOut: true }) });
+    setTab("table");
+    load();
+  };
+  const copyLink = () => {
+    setMenu(false);
+    if (!me) return;
+    const link = `${window.location.origin}/?k=${me.token}`;
+    navigator.clipboard?.writeText(link).then(
+      () => setToast({ text: "Your sign-in link is copied. Keep it private, it's your login." }),
+      () => window.prompt("Your private sign-in link", link),
+    );
+  };
+  const toggleExpand = (id: string) =>
+    setExpanded((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+
+  const stats = view?.stats;
+  const colSpan = cols.length + (mode === "companies" ? 4 : mode === "contacts" ? 2 : 2);
 
   return (
-    <div className="tt">
-      <header className="tt-head">
-        <div>
-          <h1>The Table</h1>
-          <p className="tt-sub">
-            Jigsaw for the fractional GTM community. Every row is a company that used a fractional (or is hiring one), the seat, and
-            the people involved. <b>Give:</b> add what&apos;s missing for 1 credit, and verify what&apos;s right. <b>Get:</b> spend 1 credit to
-            unlock a <span>🔒</span> field someone else filled.
-          </p>
-        </div>
-        {me && (
-          <div className="tt-credits" title={`Signed in as ${me.name}`}>
-            <span className="tt-credits-n">{me.credits}</span>
-            <span>credit{me.credits === 1 ? "" : "s"}</span>
+    <div className="tt2">
+      {/* ---------- top bar ---------- */}
+      <header className="tt-top">
+        <div className="tt-top-in">
+          <a href="/" className="tt-top-brand" aria-label="Revenue Nomad">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-on-dark.png" alt="Revenue Nomad" width={425} height={48} />
+          </a>
+          <span className="tt-top-sep" />
+          <span className="tt-top-title">The Table</span>
+          <nav className="tt-top-nav">
+            <button className={tab === "table" ? "on" : ""} onClick={() => setTab("table")}>
+              Table
+            </button>
+            {me && (
+              <button className={tab === "credits" ? "on" : ""} onClick={() => setTab("credits")}>
+                My credits
+              </button>
+            )}
+          </nav>
+          <div className="tt-top-right">
+            {me ? (
+              <>
+                <button className="tt-pill" onClick={() => setTab("credits")} title="Your credits">
+                  {me.credits} credit{me.credits === 1 ? "" : "s"}
+                </button>
+                <div className="tt-me">
+                  <button className="tt-me-btn" onClick={() => setMenu((m) => !m)} title={me.name} aria-haspopup="menu">
+                    {initials(me.name)}
+                  </button>
+                  {menu && (
+                    <div className="tt-menu" role="menu" onMouseLeave={() => setMenu(false)}>
+                      <div className="tt-menu-who">
+                        <b>{me.name}</b>
+                        <span>{me.title}</span>
+                      </div>
+                      <button role="menuitem" onClick={copyLink}>
+                        Copy my sign-in link
+                      </button>
+                      <button role="menuitem" onClick={signOut}>
+                        Sign out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <button className="tt-pill" onClick={() => authRef.current?.scrollIntoView({ behavior: "smooth" })}>
+                Join or sign in
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </header>
 
-      {view?.demo && (
-        <div className="tt-banner">
-          Demo data: no member seed is loaded (build it with <code>scripts/build-intel-seed.py</code>). <a href="/?k=demo">Sign in as a demo member →</a>
-        </div>
-      )}
-      {view && !me && <AuthPanel busy={busy} onDone={load} setToast={setToast} />}
-
-      {me?.admin && view && view.reported.length > 0 && (
-        <div className="tt-review">
-          <b>Reported values</b>
-          {view.reported.map((x) => (
-            <div key={`${x.id}.${x.field}`} className="tt-review-item">
-              <span>
-                {x.record} · {x.label}: <code>{x.value}</code>
-              </span>
-              <span>
-                <button className="tt-btn" onClick={() => act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "keep" })}>Keep</button>
-                <button className="tt-btn" onClick={() => act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "remove" })}>Remove</button>
-              </span>
+      <main className="tt-main">
+        {tab === "credits" && me && view ? (
+          <MyCredits view={view} onBack={() => setTab("table")} />
+        ) : (
+          <>
+            {/* ---------- page header ---------- */}
+            <div className="tt-hero">
+              <div>
+                <h1>The Table</h1>
+                <p className="tt-hero-stats">
+                  {stats ? `${stats.companies.toLocaleString()} companies. ${stats.engagements.toLocaleString()} engagements. ${stats.contacts.toLocaleString()} contacts.` : "Loading."}
+                </p>
+                <p className="tt-hero-sub">
+                  Give what you know about fractional work and get what other operators know. Adding a missing fact earns 1 credit. Unlocking one costs 1.
+                </p>
+              </div>
+              {me && (
+                <QuickAdd
+                  busy={busy}
+                  onGoTo={(name) => {
+                    setQ(name);
+                    setMode("engagements");
+                    resetPage();
+                  }}
+                  onAdd={async (p) => {
+                    const ok = await act({ type: "add", company: p.name, website: p.domain, companyFields: { industry: p.industry } });
+                    if (ok) {
+                      setQ(p.name);
+                      setMode("engagements");
+                      resetPage();
+                    }
+                    return !!ok;
+                  }}
+                />
+              )}
             </div>
-          ))}
-        </div>
-      )}
 
-      <div className="tt-card">
-        {/* Toolbar */}
-        <div className="tt-toolbar">
-          <label className="tt-search">
-            <span aria-hidden>⌕</span>
-            <input
-              placeholder="Search companies, roles, people…"
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setPage(0);
-                setPin(null);
-              }}
-            />
-          </label>
-          <label className="tt-select">
-            <span>Show:</span>
-            <select
-              value={filter}
-              onChange={(e) => {
-                setFilter(e.target.value as Filter);
-                setPage(0);
-                setPin(null);
-              }}
-            >
-              <option value="all">All records</option>
-              <option value="open">Open fractional roles</option>
-              <option value="engagements">Fractional engagements</option>
-              <option value="stories">Member success stories</option>
-              <option value="verified">Verified by members</option>
-              <option value="needs">Needs enrichment</option>
-              <option value="locked">Has locked fields</option>
-              <option value="nocontact">No contact yet</option>
-              {me && <option value="mine">I enriched</option>}
-            </select>
-          </label>
-          {view && (
-            <span className="tt-dim tt-stats">
-              {view.stats.companies} companies · {view.stats.engagements} engagements · {view.stats.contacts} contacts
-            </span>
-          )}
-          <div className="tt-spacer" />
-          {me && (
-            <button className="tt-primary" onClick={() => setAdding((a) => !a)}>
-              + Add record
-            </button>
-          )}
-        </div>
+            {view?.demo && (
+              <div className="tt-banner">
+                Demo data. No member data is loaded. <a href="/?k=demo">Sign in as a demo member</a>
+              </div>
+            )}
+            {view && !me && (
+              <div ref={authRef}>
+                <AuthPanel busy={busy} onDone={load} setToast={setToast} />
+              </div>
+            )}
 
-        {adding && view && (
-          <AddRecord
-            busy={busy}
-            onCancel={() => setAdding(false)}
-            onAdd={async (payload) => {
-              const res = await act({ type: "add", ...payload });
-              if (res) {
-                setAdding(false);
-                showRow(res.rowId);
-              }
-            }}
-          />
-        )}
-
-        {/* Header + body */}
-        <div className="tt-scroll">
-          <table className="tt-grid">
-            <thead>
-              <tr className="tt-groups">
-                <th className="tt-frozen tt-g-company" />
-                {GROUP_SPANS.map((g) => (
-                  <th key={g.entity} colSpan={g.span} className={`tt-g-${g.entity}`}>
-                    {g.label}
-                  </th>
-                ))}
-                <th />
-              </tr>
-              <tr>
-                <th className="tt-frozen" onClick={() => toggleSort("_company")}>
-                  Company <span className="tt-sort">{sortIcon("_company")}</span>
-                </th>
-                {COLS.map(({ col, f, entity }) => (
-                  <th key={col} onClick={() => toggleSort(col)} className={f === GROUPS.find((g) => g.entity === entity)!.fields.find((x) => !x.identity) ? "tt-g-start" : ""}>
-                    {f.label}
-                    {f.gated && <span className="tt-th-lock" title="Gated: 1 credit to unlock">🔒</span>} <span className="tt-sort">{sortIcon(col)}</span>
-                  </th>
-                ))}
-                <th onClick={() => toggleSort("_filled")}>
-                  Filled <span className="tt-sort">{sortIcon("_filled")}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {!view ? (
-                <tr>
-                  <td className="tt-none" colSpan={COLS.length + 2}>Loading…</td>
-                </tr>
-              ) : shown.length === 0 ? (
-                <tr>
-                  <td className="tt-none" colSpan={COLS.length + 2}>
-                    {q ? <>No records match “{q}”.</> : <>No records yet.</>}{" "}
-                    {me && (
-                      <button className="tt-linkbtn" onClick={() => setAdding(true)}>
-                        Add one →
+            {me?.admin && view && view.reported.length > 0 && (
+              <div className="tt-review">
+                <b>Reported values</b>
+                {view.reported.map((x) => (
+                  <div key={`${x.id}.${x.field}`} className="tt-review-item">
+                    <span>
+                      {x.record} · {x.label} · <code>{x.value}</code>
+                    </span>
+                    <span>
+                      <button className="tt-btn" onClick={() => act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "keep" })}>
+                        Keep
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ) : (
-                shown.map((r, i) => {
-                  // A row continuing the same engagement shares its company + engagement data.
-                  const cont = i > 0 && shown[i - 1].engagementId === r.engagementId;
-                  return (
-                    <tr key={r.id} className={`${r.id === pin ? "tt-flash" : ""} ${cont ? "tt-cont" : ""}`}>
-                      <td className="tt-frozen">
-                        <div className="tt-ident">
-                          {cont ? (
-                            <span className="tt-avatar tt-avatar-cont" aria-hidden>↳</span>
-                          ) : (
-                            <CompanyIcon name={r.company} domain={r.iconDomain} />
-                          )}
-                          <span className="tt-name">{r.company}</span>
-                          {r.verified && (
-                            <span className="tt-verified" title="Engagement corroborated by the buyer">
-                              ✓
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      {COLS.map(({ col, f, entity }) => {
-                        const id = entityId(r, entity);
-                        const key = `${r.id}|${col}`;
-                        return (
-                          <td key={col} className={`${cont && entity !== "contact" ? "tt-shared" : ""} ${f === GROUPS.find((g) => g.entity === entity)!.fields.find((x) => !x.identity) ? "tt-g-start" : ""}`}>
-                            <CellView
-                              shared={cont && entity !== "contact"}
-                              f={f}
-                              cell={r.cells[col]}
-                              canAct={!!me}
-                              busy={busy}
-                              editing={editing === key}
-                              onEdit={() => setEditing(key)}
-                              onCancel={() => setEditing(null)}
-                              onSave={async (value) => {
-                                const res = await act({ type: "fill", engagementId: r.engagementId, contactId: r.contactId, entity, field: f.key, value });
-                                if (res) {
-                                  setEditing(null);
-                                  if (res.rowId && res.rowId !== r.id && r.id === pin) setPin(res.rowId);
-                                }
-                              }}
-                              onUnlock={() => id && act({ type: "unlock", entity, id, field: f.key })}
-                              onVerify={() => id && act({ type: "verify", entity, id, field: f.key })}
-                              onReport={() => {
-                                if (id && window.confirm(`Report ${f.label} on ${r.company} as wrong? It'll be hidden until reviewed.`)) act({ type: "report", entity, id, field: f.key });
+                      <button className="tt-btn" onClick={() => act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "remove" })}>
+                        Remove
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="tt-card">
+              {/* ---------- toolbar ---------- */}
+              <div className="tt-toolbar">
+                <label className="tt-search">
+                  <span aria-hidden>⌕</span>
+                  <input
+                    placeholder="Search companies, roles, people"
+                    value={q}
+                    onChange={(e) => {
+                      setQ(e.target.value);
+                      resetPage();
+                    }}
+                  />
+                </label>
+                <select
+                  className="tt-quick"
+                  value={quick}
+                  onChange={(e) => {
+                    setQuick(e.target.value as Quick);
+                    resetPage();
+                  }}
+                  aria-label="Quick filter"
+                >
+                  <option value="all">Everything</option>
+                  <option value="open">Open fractional roles</option>
+                  <option value="engagements">Fractional engagements</option>
+                  <option value="stories">Member success stories</option>
+                  <option value="verified">Confirmed by members</option>
+                  <option value="needs">Missing intel</option>
+                  <option value="locked">Locked intel</option>
+                  {me && <option value="mine">What I added</option>}
+                </select>
+                <div className="tt-show" role="tablist" aria-label="Show">
+                  <span>Show</span>
+                  {(["companies", "engagements", "contacts"] as Mode[]).map((m) => (
+                    <button
+                      key={m}
+                      role="tab"
+                      aria-selected={mode === m}
+                      className={mode === m ? "on" : ""}
+                      onClick={() => {
+                        setMode(m);
+                        setColFilters({});
+                        setSort(null);
+                        resetPage();
+                      }}
+                    >
+                      {m[0].toUpperCase() + m.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {Object.keys(colFilters).length > 0 && (
+                <div className="tt-chips">
+                  {Object.entries(colFilters).map(([k, v]) => (
+                    <button key={k} className="tt-chip" onClick={() => setColFilters((f) => Object.fromEntries(Object.entries(f).filter(([x]) => x !== k)))}>
+                      {k === "_signal" ? "Signal" : fieldDef(k.split(".")[0], k.split(".")[1])?.label} · {v === "__has" ? "Known" : v === "__empty" ? "Missing" : v === "__locked" ? "Locked" : v === "__strong" ? "Strong" : v === "__some" ? "Some" : v === "__thin" ? "Thin" : v} ✕
+                    </button>
+                  ))}
+                  <button className="tt-linkbtn" onClick={() => setColFilters({})}>
+                    Clear filters
+                  </button>
+                </div>
+              )}
+
+              {adding && (
+                <AddRecord key={JSON.stringify(adding)} busy={busy} initialUrl={adding.url} forCompany={adding.forCompany} onCancel={() => setAdding(null)} onAdd={addPayload} />
+              )}
+
+              {/* ---------- table ---------- */}
+              <div className="tt-scroll">
+                <table className="tt-grid tt-grid2">
+                  <thead>
+                    <tr>
+                      <th className="tt-frozen">
+                        <button className="tt-th-sort" onClick={() => toggleSort("_company")}>
+                          {mode === "contacts" ? "Person" : "Company"}
+                          {sortMark("_company")}
+                        </button>
+                      </th>
+                      {mode === "contacts" && <th>Company</th>}
+                      {cols.map((c) => (
+                        <th key={ckey(c)}>
+                          <span className="tt-th">
+                            <button className="tt-th-sort" onClick={() => toggleSort(ckey(c))}>
+                              {c.label}
+                              {c.f.gated && (
+                                <span className="tt-th-lock" title="Locked. 1 credit to unlock">
+                                  🔒
+                                </span>
+                              )}
+                              {sortMark(ckey(c))}
+                            </button>
+                            <ColumnFilter
+                              col={c}
+                              value={colFilters[ckey(c)]}
+                              options={distinct(c)}
+                              onChange={(v) => {
+                                setColFilters((f) => {
+                                  const n = { ...f };
+                                  if (v) n[ckey(c)] = v;
+                                  else delete n[ckey(c)];
+                                  return n;
+                                });
+                                resetPage();
                               }}
                             />
-                          </td>
-                        );
-                      })}
-                      <td>
-                        <div className="tt-rowend">
-                          <span className="tt-meter" title={`${r.filled} of ${FILLABLE_COUNT} fields filled`}>
-                            <span style={{ width: `${(r.filled / FILLABLE_COUNT) * 100}%` }} />
                           </span>
-                          <span className="tt-meter-n">
-                            {r.filled}/{FILLABLE_COUNT}
-                          </span>
-                          {me && (
-                            <button
-                              className="tt-addcontact"
-                              disabled={busy}
-                              title="Add a person at this company: who you reported to, who reported to you, or who you worked with"
-                              onClick={async () => {
-                                const res = await act({ type: "addContact", engagementId: r.engagementId });
-                                showRow(res?.rowId);
-                              }}
-                            >
-                              + person
+                        </th>
+                      ))}
+                      {mode === "companies" && (
+                        <>
+                          <th>
+                            <button className="tt-th-sort" onClick={() => toggleSort("_engs")}>
+                              Engagements{sortMark("_engs")}
                             </button>
-                          )}
-                        </div>
-                      </td>
+                          </th>
+                          <th>
+                            <button className="tt-th-sort" onClick={() => toggleSort("_contacts")}>
+                              People{sortMark("_contacts")}
+                            </button>
+                          </th>
+                        </>
+                      )}
+                      {mode !== "contacts" && (
+                        <th>
+                          <span className="tt-th">
+                            <button className="tt-th-sort" onClick={() => toggleSort("_signal")}>
+                              Signal{sortMark("_signal")}
+                            </button>
+                            <SignalFilter
+                              value={colFilters["_signal"]}
+                              onChange={(v) => {
+                                setColFilters((f) => {
+                                  const n = { ...f };
+                                  if (v) n["_signal"] = v;
+                                  else delete n["_signal"];
+                                  return n;
+                                });
+                                resetPage();
+                              }}
+                            />
+                          </span>
+                        </th>
+                      )}
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                  </thead>
+                  <tbody>
+                    {!view ? (
+                      <tr>
+                        <td className="tt-none" colSpan={colSpan}>
+                          Loading.
+                        </td>
+                      </tr>
+                    ) : total === 0 ? (
+                      <tr>
+                        <td className="tt-none" colSpan={colSpan}>
+                          {mode === "contacts" ? "No people yet. Add someone from any engagement with + person." : "Nothing matches. Try clearing a filter."}
+                        </td>
+                      </tr>
+                    ) : mode === "contacts" ? (
+                      visibleContacts.slice(cur * PER, cur * PER + PER).map((r) => {
+                        const nm = cellText(r.cells["contact.name"]) || "?";
+                        return (
+                          <tr key={r.id}>
+                            <td className="tt-frozen">
+                              <div className="tt-ident">
+                                <span className="tt-avatar" style={{ background: `hsl(${hue(nm)} 55% 92%)`, color: `hsl(${hue(nm)} 45% 26%)` }}>
+                                  {initials(nm)}
+                                </span>
+                                <span className="tt-name">{cell(r, col("contact", "name"))}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className="tt-co-inline">
+                                <CompanyIcon name={r.company} domain={r.iconDomain} />
+                                <span>
+                                  {r.company}
+                                  {cellText(r.cells["engagement.role"]) && <span className="tt-dim tt-small"> · {cellText(r.cells["engagement.role"])}</span>}
+                                </span>
+                              </span>
+                            </td>
+                            {cols.map((c) => (
+                              <td key={ckey(c)}>{cell(r, c)}</td>
+                            ))}
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      visibleGroups.slice(cur * PER, cur * PER + PER).map((g) => {
+                        const open = expanded.has(g.id);
+                        const first = g.shown[0];
+                        const more = g.shown.slice(1);
+                        const lvl = signalLevel(g.facts);
+                        const src = cellText(first.cells["engagement.source"]);
+                        const personRow = (engagementId: string) =>
+                          personFor === engagementId && (
+                            <tr className="tt-sub-row">
+                              <td colSpan={colSpan}>
+                                <AddPerson
+                                  company={g.name}
+                                  busy={busy}
+                                  onCancel={() => setPersonFor(null)}
+                                  onAdd={async (person) => {
+                                    if (await act({ type: "addPerson", engagementId, person })) setPersonFor(null);
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          );
+                        return (
+                          <Fragment key={g.id}>
+                            <tr className="tt-co-row">
+                              <td className="tt-frozen">
+                                <div className="tt-ident">
+                                  <CompanyIcon name={g.name} domain={g.iconDomain} />
+                                  <div className="tt-co-meta">
+                                    <span className="tt-name">
+                                      {g.name}
+                                      {g.verified && (
+                                        <span className="tt-verified" title="Confirmed by the client">
+                                          ✓
+                                        </span>
+                                      )}
+                                    </span>
+                                    <span className="tt-co-sub">
+                                      {mode === "engagements" && g.engagements.length > 1 ? (
+                                        <button className="tt-engs-btn" onClick={() => toggleExpand(g.id)}>
+                                          {open ? `Hide ${g.engagements.length - 1} more` : `${g.engagements.length} engagements`} {open ? "▴" : "▾"}
+                                        </button>
+                                      ) : src ? (
+                                        <span className={`tt-src tt-src-${src.split(" ")[0].toLowerCase()}`}>{src}</span>
+                                      ) : (
+                                        <span className="tt-dim">1 engagement</span>
+                                      )}
+                                      {me && (
+                                        <>
+                                          <button
+                                            className="tt-plus tt-plus-wide"
+                                            title={`Add another fractional engagement at ${g.name}`}
+                                            onClick={() => setAdding({ forCompany: { name: g.name, domain: cellText(first.cells["company.website"]) || g.iconDomain } })}
+                                          >
+                                            + engagement
+                                          </button>
+                                          {mode === "engagements" && (
+                                            <button className="tt-plus tt-plus-wide" title="Add a person to this engagement" onClick={() => setPersonFor(personFor === first.engagementId ? null : first.engagementId)}>
+                                              + person
+                                            </button>
+                                          )}
+                                        </>
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              {cols.map((c) => (
+                                <td key={ckey(c)}>{cell(first, c)}</td>
+                              ))}
+                              {mode === "companies" && (
+                                <>
+                                  <td className="tt-num">{g.engagements.length}</td>
+                                  <td className="tt-num">{g.contacts.length}</td>
+                                </>
+                              )}
+                              <td>
+                                <span className="tt-signal" title={`${g.facts} facts known about ${g.name}, across its engagements and people`}>
+                                  <span className="tt-bars" aria-hidden>
+                                    {[1, 2, 3, 4, 5].map((i) => (
+                                      <i key={i} className={i <= lvl ? "on" : ""} style={{ height: 4 + i * 3 }} />
+                                    ))}
+                                  </span>
+                                  {g.facts} fact{g.facts === 1 ? "" : "s"}
+                                </span>
+                              </td>
+                            </tr>
+                            {mode === "engagements" && personRow(first.engagementId)}
+                            {mode === "engagements" &&
+                              open &&
+                              more.map((e, i) => (
+                                <Fragment key={e.engagementId}>
+                                  <tr className="tt-sub-row">
+                                    <td className="tt-frozen">
+                                      <div className="tt-sub-label">
+                                        ↳ Engagement {i + 2}
+                                        {cellText(e.cells["engagement.source"]) && <span className="tt-dim tt-small"> · {cellText(e.cells["engagement.source"])}</span>}
+                                        {me && (
+                                          <button className="tt-plus tt-plus-wide" onClick={() => setPersonFor(personFor === e.engagementId ? null : e.engagementId)}>
+                                            + person
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                    {cols.map((c) => (
+                                      <td key={ckey(c)}>{cell(e, c)}</td>
+                                    ))}
+                                    <td />
+                                  </tr>
+                                  {personRow(e.engagementId)}
+                                </Fragment>
+                              ))}
+                          </Fragment>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-        {/* Footer */}
-        <div className="tt-footer">
-          <span className="tt-dim">
-            {rows.length === 0 ? "No results" : `Showing ${cur * per + 1} to ${Math.min(rows.length, cur * per + per)} of ${rows.length} records`}
-          </span>
-          <div className="tt-pager">
-            <label className="tt-dim">
-              Rows per page:{" "}
-              <select
-                value={per}
-                onChange={(e) => {
-                  setPer(Number(e.target.value));
-                  setPage(0);
-                }}
-              >
-                {[25, 50, 100].map((n) => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <button className="tt-btn" disabled={cur === 0} onClick={() => setPage(cur - 1)}>
-              ‹ Previous
-            </button>
-            {pageList(cur, pages).map((p, i) =>
-              p < 0 ? (
-                <span key={`gap${i}`} className="tt-dim">…</span>
-              ) : (
-                <button key={p} className={`tt-btn tt-page ${p === cur ? "active" : ""}`} onClick={() => setPage(p)}>
-                  {p + 1}
-                </button>
-              ),
-            )}
-            <button className="tt-btn" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>
-              Next ›
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {me && (
-        <p className="tt-foot tt-dim">
-          Signed in as {me.name}. Values you fill are credited to you; other members never see who filled what.{" "}
-          <button
-            className="tt-linkbtn"
-            onClick={() => {
-              const link = `${window.location.origin}/?k=${me.token}`;
-              navigator.clipboard?.writeText(link).then(
-                () => setToast({ text: "Your sign-in link is copied. Keep it private — it's your login." }),
-                () => window.prompt("Your private sign-in link:", link),
-              );
-            }}
-          >
-            Copy my sign-in link
-          </button>
-          {" · "}
-          <button
-            className="tt-linkbtn"
-            onClick={async () => {
-              await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signOut: true }) });
-              load();
-            }}
-          >
-            Sign out
-          </button>
-        </p>
-      )}
+              {/* ---------- footer ---------- */}
+              <div className="tt-footer">
+                <span className="tt-dim">
+                  {total === 0 ? "No results" : `Showing ${cur * PER + 1} to ${Math.min(total, cur * PER + PER)} of ${total.toLocaleString()} ${mode === "contacts" ? "people" : "companies"}`}
+                </span>
+                <div className="tt-pager">
+                  <button className="tt-btn" disabled={cur === 0} onClick={() => setPage(cur - 1)}>
+                    ‹ Previous
+                  </button>
+                  {pageList(cur, pages).map((p, i) =>
+                    p < 0 ? (
+                      <span key={`gap${i}`} className="tt-dim">
+                        …
+                      </span>
+                    ) : (
+                      <button key={p} className={`tt-btn tt-page ${p === cur ? "active" : ""}`} onClick={() => setPage(p)}>
+                        {p + 1}
+                      </button>
+                    ),
+                  )}
+                  <button className="tt-btn" disabled={cur >= pages - 1} onClick={() => setPage(cur + 1)}>
+                    Next ›
+                  </button>
+                </div>
+              </div>
+              <div className="tt-legend">
+                <span>
+                  <b>+ Add</b> earns 1 credit. <b>Unlock</b> costs 1 credit and stays yours.
+                </span>
+                <span>
+                  <b className="tt-ver">✓2</b> means 2 confirmations. Revenue Nomad records count as one. Hover a fact to confirm or report it.
+                </span>
+                <span>
+                  <b>Signal</b> counts every fact a company has, across its engagements and people.
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+      </main>
 
       {toast && (
         <div className={`tt-toast ${toast.bad ? "bad" : ""}`} role="status" onClick={() => setToast(null)}>
@@ -434,449 +773,252 @@ export default function TheTable() {
   );
 }
 
-/**
- * Company icon from its domain: Google's favicon service first, DuckDuckGo's as
- * backup, initials last. Google answers unknown domains with a tiny generic
- * globe instead of an error, so anything 16px or smaller counts as a miss.
- */
-function CompanyIcon({ name, domain }: { name: string; domain: string | null }) {
-  const sources = useMemo(
-    () =>
-      domain
-        ? [`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`, `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`]
-        : [],
-    [domain],
-  );
-  const [idx, setIdx] = useState(0);
-  useEffect(() => setIdx(0), [domain]);
-  if (idx >= sources.length)
-    return (
-      <span className="tt-avatar" style={{ background: `hsl(${hue(name)} 55% 92%)`, color: `hsl(${hue(name)} 45% 30%)` }}>
-        {initials(name)}
-      </span>
-    );
+/** Funnel on a column header. Filter by filled, empty, locked, or an exact value. */
+function ColumnFilter({ col: c, value, options, onChange }: { col: Col; value?: string; options: string[]; onChange: (v: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const label = (v: string) => (v === "__has" ? "Known" : v === "__empty" ? "Missing" : v === "__locked" ? "Locked" : v);
+  const choices = ["__has", "__empty", ...(c.f.gated ? ["__locked"] : []), ...(c.f.kind === "choice" || options.length <= 14 ? options : [])];
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      className="tt-avatar tt-logo"
-      src={sources[idx]}
-      alt=""
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onLoad={(e) => idx === 0 && e.currentTarget.naturalWidth <= 16 && setIdx(1)}
-      onError={() => setIdx((i) => i + 1)}
-    />
-  );
-}
-
-/** Page numbers with gaps: 0 … 4 5 6 … 20 (-1 = gap). */
-function pageList(cur: number, pages: number): number[] {
-  if (pages <= 7) return [...Array(pages).keys()];
-  const sorted = [...new Set([0, pages - 1, cur - 1, cur, cur + 1].filter((p) => p >= 0 && p < pages))].sort((a, b) => a - b);
-  const out: number[] = [];
-  sorted.forEach((p, i) => {
-    if (i && p - sorted[i - 1] > 1) out.push(-1);
-    out.push(p);
-  });
-  return out;
-}
-
-type AddPayload = {
-  company: string;
-  website: string;
-  companyFields: Record<string, string>;
-  engagementFields: Record<string, string>;
-  people: Record<string, string>[];
-};
-type Person = { name: string; title: string; relationship: string; email: string; linkedin: string };
-const blankPerson = (): Person => ({ name: "", title: "", relationship: "", email: "", linkedin: "" });
-
-/**
- * Add record: company URL first. The lookup prefills the icon, name and a suggested
- * industry; revenue stage and employee count are picked from the Revenue Nomad lists
- * (as they were when you worked there). Every prefilled value is editable.
- */
-function AddRecord({ busy, onAdd, onCancel }: { busy: boolean; onAdd: (p: AddPayload) => void; onCancel: () => void }) {
-  const [url, setUrl] = useState("");
-  const [looking, setLooking] = useState(false);
-  const [found, setFound] = useState<{ domain: string; existing: { name: string } | null; description: string | null } | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [hq, setHq] = useState("");
-  const [eng, setEng] = useState({ role: "", status: "", revenue: "", employees: "", start: "", end: "" });
-  const [ongoing, setOngoing] = useState(false);
-  const [people, setPeople] = useState<Person[]>([]);
-  const setE = (k: keyof typeof eng) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setEng({ ...eng, [k]: e.target.value });
-
-  const lookup = async () => {
-    if (!url.trim()) return;
-    setLooking(true);
-    setErr(null);
-    try {
-      const r = await fetch(`/api/table/lookup?url=${encodeURIComponent(url)}`);
-      const j = await r.json();
-      if (!r.ok) {
-        setErr(j.error ?? "Couldn't look that up.");
-        return;
-      }
-      setFound({ domain: j.domain, existing: j.existing, description: j.description });
-      setName(j.existing?.name ?? j.name ?? "");
-      setIndustry(j.existing?.industry ?? j.industry ?? "");
-      setHq(j.existing?.hq ?? "");
-    } finally {
-      setLooking(false);
-    }
-  };
-
-  const submit = () =>
-    onAdd({
-      company: name,
-      website: found?.domain ?? "",
-      companyFields: { industry, hq },
-      engagementFields: { ...eng, end: ongoing ? "Ongoing" : eng.end },
-      people: people.filter((p) => p.name.trim()).map((p) => ({ ...p })),
-    });
-
-  return (
-    <div className="tt-add-rec">
-      <div className="tt-add-rec-head">
-        <b>Add a record</b>
-        <button type="button" className="tt-linkbtn" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-      <form
-        className="tt-add-rec-url"
-        onSubmit={(e) => {
-          e.preventDefault();
-          lookup();
-        }}
-      >
-        <input autoFocus placeholder="Company website, e.g. acme.com" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Escape" && onCancel()} />
-        <button className="tt-primary" disabled={looking || url.trim().length < 4}>
-          {looking ? "Looking up…" : found ? "Look up again" : "Look up"}
-        </button>
-      </form>
-      {err && <p className="tt-add-err">{err}</p>}
-
-      {found && (
-        <form
-          className="tt-add-rec-body"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit();
-          }}
-        >
-          <div className="tt-add-co">
-            <CompanyIcon name={name || found.domain} domain={found.domain} />
-            <div>
-              <b>{name || found.domain}</b>
-              <div className="tt-dim tt-small">
-                {found.domain}
-                {found.existing ? " · already on The Table — this adds a new record there" : ""}
-              </div>
-              {found.description && <div className="tt-dim tt-small tt-add-desc">{found.description}</div>}
-            </div>
-          </div>
-
-          <fieldset>
-            <legend>Company</legend>
-            <label>
-              Name
-              <input value={name} onChange={(e) => setName(e.target.value)} disabled={!!found.existing} />
-            </label>
-            <label>
-              Industry
-              <select value={industry} onChange={(e) => setIndustry(e.target.value)}>
-                <option value="">Pick…</option>
-                {RN_INDUSTRIES.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              HQ
-              <input value={hq} placeholder="Chicago, IL" onChange={(e) => setHq(e.target.value)} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>Fractional engagement (as it was when you worked there)</legend>
-            <label>
-              Role
-              <input value={eng.role} placeholder="Fractional VP Sales" onChange={setE("role")} />
-            </label>
-            <label>
-              Status
-              <select value={eng.status} onChange={setE("status")}>
-                <option value="">Pick…</option>
-                {["Open role", "Active", "Ended"].map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Revenue stage
-              <select value={eng.revenue} onChange={setE("revenue")}>
-                <option value="">Pick…</option>
-                {RN_REVENUE.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Employees
-              <select value={eng.employees} onChange={setE("employees")}>
-                <option value="">Pick…</option>
-                {RN_EMPLOYEES.map((o) => (
-                  <option key={o}>{o}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Start
-              <input type="month" value={eng.start} onChange={setE("start")} />
-            </label>
-            <label>
-              End
-              <span className="tt-end">
-                <input type="month" value={eng.end} disabled={ongoing} onChange={setE("end")} />
-                <label className="tt-check-inline">
-                  <input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} /> Ongoing
-                </label>
-              </span>
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>People at {name || "the company"}</legend>
-            {people.map((p, i) => {
-              const set = (k: keyof Person) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-                setPeople(people.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
-              return (
-                <div key={i} className="tt-person">
-                  <input placeholder="Name" value={p.name} onChange={set("name")} />
-                  <input placeholder="Title" value={p.title} onChange={set("title")} />
-                  <select value={p.relationship} onChange={set("relationship")}>
-                    <option value="">Relationship…</option>
-                    {RELATIONSHIPS.map((o) => (
-                      <option key={o}>{o}</option>
-                    ))}
-                  </select>
-                  <input placeholder="Email 🔒" value={p.email} onChange={set("email")} />
-                  <input placeholder="LinkedIn 🔒" value={p.linkedin} onChange={set("linkedin")} />
-                  <button type="button" className="tt-x" title="Remove" onClick={() => setPeople(people.filter((_, j) => j !== i))}>
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-            <button type="button" className="tt-btn" onClick={() => setPeople([...people, blankPerson()])}>
-              + Add a person
-            </button>
-          </fieldset>
-
-          <div className="tt-add-rec-foot">
-            <span className="tt-dim tt-small">Every field you fill earns 1 credit. Email and LinkedIn are locked for others until they spend a credit.</span>
-            <button className="tt-primary" disabled={busy || name.trim().length < 2}>
-              Add record
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
-}
-
-function CellView(props: {
-  /** Continuation row: this company/engagement cell repeats the row above, so show it quietly. */
-  shared: boolean;
-  f: FieldDef;
-  cell: Cell;
-  canAct: boolean;
-  busy: boolean;
-  editing: boolean;
-  onEdit: () => void;
-  onCancel: () => void;
-  onSave: (v: string) => void;
-  onUnlock: () => void;
-  onReport: () => void;
-  onVerify: () => void;
-}) {
-  const { f, cell, canAct, busy, editing } = props;
-  if (editing) return <Editor f={f} initial={cell.s === "value" ? cell.v : ""} busy={busy} onSave={props.onSave} onCancel={props.onCancel} />;
-  if (props.shared && cell.s !== "value") return <span className="tt-ditto" title="Same as the row above">〃</span>;
-
-  if (cell.s === "empty")
-    return canAct ? (
-      <button className="tt-add" onClick={props.onEdit} title={`Add ${f.label} · earn 1 credit`}>
-        + Add <span>+1</span>
+    <span className="tt-filter">
+      <button className={`tt-funnel ${value ? "on" : ""}`} onClick={() => setOpen((o) => !o)} title={`Filter ${c.label}`} aria-label={`Filter ${c.label}`}>
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+          <path d="M2 3h12l-4.5 5.5V13l-3 1V8.5z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+        </svg>
       </button>
-    ) : (
-      <span className="tt-empty-dash">—</span>
-    );
-
-  if (cell.s === "locked")
-    return (
-      <span className="tt-val">
-        {canAct ? (
-          <button className="tt-lock" disabled={busy} onClick={props.onUnlock} title={`Unlock ${f.label} for 1 credit`}>
-            🔒 Unlock <span>1</span>
+      {open && (
+        <div className="tt-filter-pop" onMouseLeave={() => setOpen(false)}>
+          <button
+            className={!value ? "on" : ""}
+            onClick={() => {
+              onChange(null);
+              setOpen(false);
+            }}
+          >
+            Any
           </button>
-        ) : (
-          <span className="tt-lock tt-lock-static">🔒</span>
-        )}
-        <VerBadge n={cell.ver} />
-      </span>
-    );
-
-  if (cell.s === "reported") return <span className="tt-dim tt-small">{cell.mine ? "Reported · in review" : "In review"}</span>;
-
-  const v = cell.v;
-  if (cell.system) return <span className={`tt-src tt-src-${v.split(" ")[0].toLowerCase()}`}>{v}</span>;
-  let content: React.ReactNode = v;
-  if (f.kind === "choice") content = <span className={`tt-pill tt-pill-${(f.options?.indexOf(v) ?? 0) % 4}`}>{v}</span>;
-  else if (f.kind === "url") content = <a href={`https://${v}`} target="_blank" rel="noopener noreferrer nofollow">{v.replace(/^www\./, "")}</a>;
-  else if (f.kind === "email") content = <a href={`mailto:${v}`}>{v}</a>;
-  else if (f.kind === "month" || (f.kind === "monthOrOngoing" && v !== "Ongoing")) content = fmtMonth(v);
-  else if (f.kind === "number") content = `${v} h`;
-
-  return (
-    <span className="tt-val">
-      <span className="tt-val-text" title={v}>
-        {content}
-      </span>
-      <VerBadge n={cell.ver} mine={cell.iv} />
-      {cell.mine ? (
-        <button className="tt-hover-act" onClick={props.onEdit} title="Edit your value">
-          ✎
-        </button>
-      ) : canAct ? (
-        <>
-          {!cell.iv && (
-            <button className="tt-hover-act tt-verify" disabled={busy} onClick={props.onVerify} title="This is correct — verify it">
-              ✓
+          {choices.map((v) => (
+            <button
+              key={v}
+              className={value === v ? "on" : ""}
+              onClick={() => {
+                onChange(v);
+                setOpen(false);
+              }}
+            >
+              {label(v)}
             </button>
-          )}
-          <button className="tt-hover-act" onClick={props.onReport} title="Report as wrong">
-            ⚑
-          </button>
-        </>
-      ) : null}
+          ))}
+        </div>
+      )}
     </span>
   );
 }
 
-/** How many confirmations a value has. Our own records count as one. */
-function VerBadge({ n, mine }: { n: number; mine?: boolean }) {
-  if (!n) return null;
-  return (
-    <span className={`tt-ver ${mine ? "mine" : ""}`} title={`Verified ${n}× ${mine ? "(including you)" : ""}— Revenue Nomad records count as one`}>
-      ✓{n}
-    </span>
-  );
-}
-
-/** Signed-out landing: join (anyone) or sign in with a personal link/code (members). */
-function AuthPanel({ busy, onDone, setToast }: { busy: boolean; onDone: () => void; setToast: (t: { text: string; bad?: boolean }) => void }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const post = async (body: unknown) => {
-    const r = await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) setToast({ text: j.error ?? "Something went wrong.", bad: true });
-    else {
-      setToast({ text: "You're in. Give to get." });
-      onDone();
-    }
-  };
-  return (
-    <div className="tt-auth">
-      <form
-        className="tt-auth-box"
-        onSubmit={(e) => {
-          e.preventDefault();
-          post({ join: { name, email } });
-        }}
-      >
-        <b>Join The Table</b>
-        <span className="tt-dim">Start with free credits. Add what you know, verify what&apos;s right, unlock the rest.</span>
-        <div className="tt-auth-row">
-          <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
-          <input type="email" placeholder="Work email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <button className="tt-primary" disabled={busy || name.trim().length < 2 || !email.includes("@")}>
-            Join
-          </button>
-        </div>
-      </form>
-      <form
-        className="tt-auth-box"
-        onSubmit={(e) => {
-          e.preventDefault();
-          post({ signIn: code });
-        }}
-      >
-        <b>Revenue Nomad member?</b>
-        <span className="tt-dim">Paste the personal link we sent you (or the code at the end of it).</span>
-        <div className="tt-auth-row">
-          <input placeholder="Sign-in link or code" value={code} onChange={(e) => setCode(e.target.value)} />
-          <button className="tt-btn" disabled={busy || code.trim().length < 4}>
-            Sign in
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function Editor({ f, initial, busy, onSave, onCancel }: { f: FieldDef; initial: string; busy: boolean; onSave: (v: string) => void; onCancel: () => void }) {
-  const [v, setV] = useState(initial);
-  const ref = useRef<HTMLInputElement & HTMLSelectElement>(null);
-  useEffect(() => ref.current?.focus(), []);
-  const keys = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") onCancel();
-  };
+/** Inline + person form. Who you reported to, who reported to you, or who you worked with. */
+function AddPerson({ company, busy, onAdd, onCancel }: { company: string; busy: boolean; onAdd: (p: Record<string, string>) => void; onCancel: () => void }) {
+  const [p, setP] = useState({ name: "", title: "", relationship: "", email: "", linkedin: "" });
+  const set = (k: keyof typeof p) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setP({ ...p, [k]: e.target.value });
+  const rel = fieldDef("contact", "relationship")!.options!;
   return (
     <form
-      className="tt-editor"
+      className="tt-person tt-person-inline"
       onSubmit={(e) => {
         e.preventDefault();
-        onSave(v);
+        onAdd(p);
       }}
     >
-      {f.kind === "monthOrOngoing" ? (
-        <>
-          <input ref={ref} type="month" value={v === "Ongoing" ? "" : v} onChange={(e) => setV(e.target.value)} onKeyDown={keys} />
-          <button type="button" className={`tt-btn tt-ongoing ${v === "Ongoing" ? "on" : ""}`} onClick={() => setV(v === "Ongoing" ? "" : "Ongoing")}>
-            Ongoing
+      <b>Add a person at {company}</b>
+      <input autoFocus placeholder="Name" value={p.name} onChange={set("name")} />
+      <input placeholder="Title" value={p.title} onChange={set("title")} />
+      <select value={p.relationship} onChange={set("relationship")}>
+        <option value="">Relationship</option>
+        {rel.map((o) => (
+          <option key={o}>{o}</option>
+        ))}
+      </select>
+      <input placeholder="Email (locked for others)" value={p.email} onChange={set("email")} />
+      <input placeholder="LinkedIn (locked for others)" value={p.linkedin} onChange={set("linkedin")} />
+      <button className="tt-primary" disabled={busy || p.name.trim().length < 2}>
+        Add person
+      </button>
+      <button type="button" className="tt-btn" onClick={onCancel}>
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+/** My credits. Balance and every credit earned or spent. */
+function MyCredits({ view, onBack }: { view: View; onBack: () => void }) {
+  const me = view.me!;
+  const added = view.ledger.filter((l) => l.reason === "fill").length;
+  const unlocked = view.ledger.filter((l) => l.reason === "unlock").length;
+  const what = (r: string) => (r === "fill" ? "Added" : r === "unlock" ? "Unlocked" : r === "refund" ? "Refund, the fact was removed" : r === "reversal" ? "Taken back, the fact was removed" : r);
+  return (
+    <div className="tt-credits-page">
+      <button className="tt-linkbtn" onClick={onBack}>
+        ‹ Back to The Table
+      </button>
+      <h1>My credits</h1>
+      <div className="tt-credit-cards">
+        <div>
+          <span>Balance</span>
+          <b>{me.credits}</b>
+        </div>
+        <div>
+          <span>Facts you added</span>
+          <b>{added}</b>
+        </div>
+        <div>
+          <span>Facts you unlocked</span>
+          <b>{unlocked}</b>
+        </div>
+      </div>
+      <p className="tt-dim">Every fact you add earns 1 credit. Unlocking a fact someone else added costs 1, and it stays unlocked for you.</p>
+      <div className="tt-card">
+        <table className="tt-grid tt-grid2">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>What</th>
+              <th>Company</th>
+              <th>Field</th>
+              <th>Credits</th>
+            </tr>
+          </thead>
+          <tbody>
+            {view.ledger.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="tt-none">
+                  Nothing yet. Add a missing fact on The Table to earn your first credit.
+                </td>
+              </tr>
+            ) : (
+              view.ledger.slice(0, 200).map((l, i) => (
+                <tr key={i}>
+                  <td className="tt-dim">{new Date(l.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</td>
+                  <td>{what(l.reason)}</td>
+                  <td>{l.company}</td>
+                  <td>{l.field}</td>
+                  <td className={l.delta > 0 ? "tt-plus-cr" : "tt-minus-cr"}>{l.delta > 0 ? `+${l.delta}` : l.delta}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/** Signal filter: strong, some or thin intel on the company. */
+function SignalFilter({ value, onChange }: { value?: string; onChange: (v: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const opts: [string, string][] = [
+    ["__strong", "Strong (10+ facts)"],
+    ["__some", "Some (3 to 9)"],
+    ["__thin", "Thin (0 to 2)"],
+  ];
+  return (
+    <span className="tt-filter">
+      <button className={`tt-funnel ${value ? "on" : ""}`} onClick={() => setOpen((o) => !o)} title="Filter Signal" aria-label="Filter Signal">
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden>
+          <path d="M2 3h12l-4.5 5.5V13l-3 1V8.5z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div className="tt-filter-pop" onMouseLeave={() => setOpen(false)}>
+          <button className={!value ? "on" : ""} onClick={() => (onChange(null), setOpen(false))}>
+            Any
           </button>
-        </>
-      ) : f.kind === "choice" ? (
-        <select ref={ref} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={keys}>
-          <option value="">Pick…</option>
-          {f.options!.map((o) => (
-            <option key={o}>{o}</option>
+          {opts.map(([v, l]) => (
+            <button key={v} className={value === v ? "on" : ""} onClick={() => (onChange(v), setOpen(false))}>
+              {l}
+            </button>
           ))}
-        </select>
-      ) : (
-        <input
-          ref={ref}
-          type={f.kind === "month" ? "month" : f.kind === "email" ? "email" : f.kind === "number" ? "number" : "text"}
-          placeholder={f.placeholder}
-          value={v}
-          maxLength={200}
-          onChange={(e) => setV(e.target.value)}
-          onKeyDown={keys}
-        />
+        </div>
       )}
-      <button className="tt-ok" disabled={busy || !v.trim()} title="Save (Enter)">
-        ✓
-      </button>
-      <button type="button" className="tt-x" onClick={onCancel} title="Cancel (Esc)">
-        ✕
-      </button>
+    </span>
+  );
+}
+
+/**
+ * Add a company in one step. Paste the website; the icon, name and industry fill in right
+ * here (each editable), then one click adds the row. Already on The Table? It takes you there.
+ */
+function QuickAdd({ busy, onAdd, onGoTo }: { busy: boolean; onAdd: (p: { domain: string; name: string; industry: string }) => Promise<boolean>; onGoTo: (name: string) => void }) {
+  const [url, setUrl] = useState("");
+  const [found, setFound] = useState<{ domain: string; name: string; industry: string; existing: string | null } | null>(null);
+  const [looking, setLooking] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const industries = fieldDef("company", "industry")!.options!;
+
+  useEffect(() => {
+    const u = url.trim();
+    setErr(null);
+    if (u.length < 4 || !u.includes(".")) {
+      setFound(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setLooking(true);
+      try {
+        const r = await fetch(`/api/table/lookup?url=${encodeURIComponent(u)}`);
+        const j = await r.json();
+        if (!r.ok) {
+          setErr(j.error ?? "Couldn't read that website.");
+          setFound(null);
+          return;
+        }
+        setFound({ domain: j.domain, name: j.existing?.name ?? j.name ?? "", industry: j.existing?.industry ?? j.industry ?? "", existing: j.existing?.name ?? null });
+      } finally {
+        setLooking(false);
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [url]);
+
+  return (
+    <form
+      className="tt-hero-add"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!found) return;
+        if (found.existing) return onGoTo(found.existing);
+        if (await onAdd(found)) {
+          setUrl("");
+          setFound(null);
+        }
+      }}
+    >
+      <label htmlFor="tt-add-url">Add a company. Paste its website and we fill in the rest.</label>
+      <div>
+        <input id="tt-add-url" placeholder="acme.com" value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="off" />
+        <button className="tt-primary" disabled={busy || looking || !found || (!found.existing && found.name.trim().length < 2)}>
+          {looking ? "Looking up" : found?.existing ? `Go to ${found.existing}` : "Add company"}
+        </button>
+      </div>
+      {err && <span className="tt-add-err">{err}</span>}
+      {found && (
+        <div className="tt-qa-preview">
+          <CompanyIcon name={found.name || found.domain} domain={found.domain} />
+          {found.existing ? (
+            <span>
+              <b>{found.existing}</b> is already on The Table.
+            </span>
+          ) : (
+            <>
+              <input aria-label="Company name" value={found.name} onChange={(e) => setFound({ ...found, name: e.target.value })} />
+              <select aria-label="Industry" value={found.industry} onChange={(e) => setFound({ ...found, industry: e.target.value })}>
+                <option value="">Industry</option>
+                {industries.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            </>
+          )}
+        </div>
+      )}
     </form>
   );
 }
