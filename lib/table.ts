@@ -1,18 +1,23 @@
 /**
- * The Table — enrich records, earn credits, spend credits to ungate fields.
+ * The Table — one record table. Enrich to earn credits, spend credits to ungate.
  *
- * Three record types (companies, people, fractional history; see
- * tableFields.ts). Filling an empty field earns 1 credit. Ungating a gated
- * field someone else filled costs 1 credit. That's the whole model.
+ * A record is a fractional engagement joined to the company that used the
+ * fractional and the contacts who hired or worked with them. Underneath, the
+ * three are separate linked entities (company 1→n engagements 1→n contacts) so
+ * shared data is entered once: fill a company's website on one row and every
+ * row for that company shows it; unlock it once and it's unlocked everywhere.
+ *
+ * Rows = one per contact on an engagement, or one row for an engagement that
+ * has no contact yet (its contact cells are open to fill).
  *
  * Storage:
- *  - intel-seed.json (private, git-ignored, built by
- *    scripts/build-intel-seed.py): members (for sign-in) and seed records.
- *  - intel.json (runtime): added records, field values, unlocks, credit ledger.
+ *  - intel-seed.json (private, git-ignored, scripts/build-intel-seed.py):
+ *    members (for sign-in), seed companies and engagements.
+ *  - intel.json (runtime): added entities, field values, unlocks, credit ledger.
  */
 import { promises as fs } from "fs";
 import path from "path";
-import { cleanValue, typeDef, TYPES, type RecordType } from "./tableFields";
+import { ALL_FIELDS, cleanValue, fieldDef, type Entity } from "./tableFields";
 
 export const STARTER_CREDITS = 5;
 
@@ -23,32 +28,41 @@ export interface Member {
   title: string;
   token: string;
 }
-export interface SeedRecord {
+interface SeedCompany {
   id: string;
-  type: RecordType;
+  fields: Record<string, string>;
+}
+interface SeedEngagement {
+  id: string;
+  companyId: string;
   fields: Record<string, string>;
   verified?: boolean;
+}
+interface SeedContact {
+  id: string;
+  engagementId: string;
+  fields: Record<string, string>;
 }
 export interface Seed {
   builtAt: string;
   members: Member[];
-  records: SeedRecord[];
+  companies: SeedCompany[];
+  engagements: SeedEngagement[];
+  contacts?: SeedContact[];
   demo?: boolean;
 }
 
+interface Added {
+  id: string;
+  by: string;
+  at: string;
+}
 export interface FieldValue {
   value: string;
   by: string; // member id, or "seed"
   at: string;
   status: "live" | "reported" | "removed";
   reportedBy?: string;
-}
-export interface AddedRecord {
-  id: string;
-  type: RecordType;
-  name: string;
-  by: string;
-  at: string;
 }
 export interface LedgerEntry {
   memberId: string;
@@ -58,9 +72,11 @@ export interface LedgerEntry {
   at: string;
 }
 export interface State {
-  records: AddedRecord[];
-  values: Record<string, FieldValue>; // `${recordId}.${field}`
-  unlocks: Record<string, string[]>; // `${recordId}.${field}` -> member ids
+  companies: (Added & { name: string })[];
+  engagements: (Added & { companyId: string })[];
+  contacts: (Added & { engagementId: string })[];
+  values: Record<string, FieldValue>; // `${entityId}.${field}`
+  unlocks: Record<string, string[]>; // `${entityId}.${field}` -> member ids
   ledger: LedgerEntry[];
 }
 
@@ -93,11 +109,16 @@ const DEMO_SEED: Seed = {
     { id: "d1", name: "Demo Member", email: "", title: "VP Sales", token: "demo" },
     { id: "d2", name: "Demo Member 2", email: "", title: "VP RevOps", token: "demo2" },
   ],
-  records: [
-    { id: "c_acme", type: "company", fields: { name: "Acme Robotics (sample)", website: "acme.example", usesFractionals: "Has before" } },
-    { id: "c_globex", type: "company", fields: { name: "Globex Health (sample)" } },
-    { id: "p_jane", type: "person", fields: { name: "Jane Sample", title: "CEO", company: "Acme Robotics (sample)", email: "jane@acme.example" } },
-    { id: "h_acme", type: "history", fields: { company: "Acme Robotics (sample)", role: "Fractional VP Sales", operator: "Sample Operator" }, verified: true },
+  companies: [
+    { id: "c_acme", fields: { name: "Acme Robotics (sample)", website: "acme.example", industry: "Robotics" } },
+    { id: "c_globex", fields: { name: "Globex Health (sample)" } },
+  ],
+  engagements: [
+    { id: "e_acme1", companyId: "c_acme", fields: { role: "Fractional VP Sales", operator: "Sample Operator", start: "2025-03" }, verified: true },
+    { id: "e_globex1", companyId: "c_globex", fields: { operator: "Another Operator" } },
+  ],
+  contacts: [
+    { id: "p_jane", engagementId: "e_acme1", fields: { name: "Jane Sample", title: "CEO", relationship: "Hired the fractional", email: "jane@acme.example" } },
   ],
 };
 
@@ -107,7 +128,7 @@ export async function loadSeed(): Promise<Seed> {
   let seed: Seed | null = null;
   for (const p of SEED_CANDIDATES) {
     seed = await readJson<Seed>(p);
-    if (seed && Array.isArray(seed.members) && Array.isArray(seed.records)) break;
+    if (seed && Array.isArray(seed.members) && Array.isArray(seed.engagements)) break;
     seed = null;
   }
   seedCache = { seed: seed ?? DEMO_SEED, at: Date.now() };
@@ -116,7 +137,7 @@ export async function loadSeed(): Promise<Seed> {
 
 export async function loadState(): Promise<State> {
   const s = await readJson<Partial<State>>(STATE_PATH);
-  return { records: [], values: {}, unlocks: {}, ledger: [], ...(s ?? {}) };
+  return { companies: [], engagements: [], contacts: [], values: {}, unlocks: {}, ledger: [], ...(s ?? {}) };
 }
 
 let writeLock: Promise<void> = Promise.resolve();
@@ -139,6 +160,29 @@ function mutate<T>(fn: (s: State, seed: Seed) => T): Promise<T> {
   return p;
 }
 
+/* ---------- graph ---------- */
+
+interface Node {
+  id: string;
+  seedFields: Record<string, string>;
+}
+interface Graph {
+  companies: Map<string, Node & { name: string }>;
+  engagements: Map<string, Node & { companyId: string; verified: boolean }>;
+  contacts: Map<string, Node & { engagementId: string }>;
+}
+
+function graph(seed: Seed, s: State): Graph {
+  const g: Graph = { companies: new Map(), engagements: new Map(), contacts: new Map() };
+  for (const c of seed.companies) g.companies.set(c.id, { id: c.id, seedFields: c.fields, name: c.fields.name ?? "" });
+  for (const c of s.companies) if (!g.companies.has(c.id)) g.companies.set(c.id, { id: c.id, seedFields: { name: c.name }, name: c.name });
+  for (const e of seed.engagements) g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified });
+  for (const e of s.engagements) if (!g.engagements.has(e.id)) g.engagements.set(e.id, { id: e.id, seedFields: {}, companyId: e.companyId, verified: false });
+  for (const p of seed.contacts ?? []) g.contacts.set(p.id, { id: p.id, seedFields: p.fields, engagementId: p.engagementId });
+  for (const p of s.contacts) if (!g.contacts.has(p.id)) g.contacts.set(p.id, { id: p.id, seedFields: {}, engagementId: p.engagementId });
+  return g;
+}
+
 /* ---------- helpers ---------- */
 
 export const memberByToken = (seed: Seed, token: string | null | undefined) =>
@@ -149,8 +193,9 @@ export function isAdmin(m: Member | null): boolean {
   return !!m?.email && admins.includes(m.email.toLowerCase());
 }
 
-const fkey = (recordId: string, field: string) => `${recordId}.${field}`;
+const fkey = (id: string, field: string) => `${id}.${field}`;
 const slug = (s: string) => s.toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, "");
+const newId = (p: string, name = "") => `${p}_${slug(name).slice(0, 20)}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
 export function balance(s: State, memberId: string): number {
   let b = STARTER_CREDITS;
@@ -158,11 +203,12 @@ export function balance(s: State, memberId: string): number {
   return b;
 }
 
-/** Effective value of a field: a runtime value wins over the seed value. */
-function fieldValue(seed: SeedRecord | undefined, s: State, recordId: string, field: string): FieldValue | null {
-  const v = s.values[fkey(recordId, field)];
+/** Effective value: a runtime value wins over the seed value. */
+function valueOf(node: Node | undefined, s: State, field: string): FieldValue | null {
+  if (!node) return null;
+  const v = s.values[fkey(node.id, field)];
   if (v) return v.status === "removed" ? null : v;
-  const sv = seed?.fields[field];
+  const sv = node.seedFields[field];
   return sv ? { value: sv, by: "seed", at: "", status: "live" } : null;
 }
 
@@ -177,79 +223,81 @@ export type Cell =
 
 export interface Row {
   id: string;
-  name: string;
+  companyId: string;
+  engagementId: string;
+  contactId: string | null;
+  company: string;
   verified: boolean;
   filled: number;
+  /** Keyed `${entity}.${field}`. */
   cells: Record<string, Cell>;
 }
 
 export interface View {
   demo: boolean;
-  type: RecordType;
   me: { name: string; title: string; credits: number; admin: boolean } | null;
   rows: Row[];
-  counts: Record<RecordType, number>;
-  reported: { recordId: string; field: string; record: string; label: string; value: string }[];
+  companies: string[];
+  stats: { companies: number; engagements: number; contacts: number };
+  reported: { entity: Entity; id: string; field: string; record: string; label: string; value: string }[];
 }
 
-function allRecords(seed: Seed, s: State) {
-  const seedById = new Map(seed.records.map((r) => [r.id, r]));
-  const list: { id: string; type: RecordType; seed?: SeedRecord; name: string }[] = seed.records.map((r) => ({
-    id: r.id,
-    type: r.type,
-    seed: r,
-    name: r.fields[typeDef(r.type)!.identity.key] ?? "",
-  }));
-  for (const r of s.records) if (!seedById.has(r.id)) list.push({ id: r.id, type: r.type, name: r.name });
-  return list;
-}
-
-export async function buildView(token: string | null, type: RecordType): Promise<View> {
+export async function buildView(token: string | null): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token);
-  const def = typeDef(type)!;
-  const records = allRecords(seed, s);
+  const g = graph(seed, s);
 
-  const rows: Row[] = records
-    .filter((r) => r.type === type)
-    .map((r) => {
+  const contactsByEng = new Map<string, string[]>();
+  for (const p of g.contacts.values()) contactsByEng.set(p.engagementId, [...(contactsByEng.get(p.engagementId) ?? []), p.id]);
+
+  const cell = (node: Node | undefined, f: NonNullable<ReturnType<typeof fieldDef>>): Cell => {
+    const v = valueOf(node, s, f.key);
+    if (!v) return { s: "empty" };
+    const mine = !!me && v.by === me.id;
+    if (v.status === "reported") return { s: "reported", mine };
+    if (!f.gated || mine || (me && (s.unlocks[fkey(node!.id, f.key)] ?? []).includes(me.id))) return { s: "value", v: v.value, mine };
+    return { s: "locked" };
+  };
+
+  const rows: Row[] = [];
+  for (const e of g.engagements.values()) {
+    const c = g.companies.get(e.companyId);
+    if (!c) continue;
+    const contactIds = contactsByEng.get(e.id) ?? [];
+    for (const pid of contactIds.length ? contactIds : [null]) {
+      const p = pid ? g.contacts.get(pid) : undefined;
+      const nodes: Record<Entity, Node | undefined> = { company: c, engagement: e, contact: p };
       const cells: Record<string, Cell> = {};
       let filled = 0;
-      for (const f of def.fields) {
-        const v = fieldValue(r.seed, s, r.id, f.key);
-        if (!v) {
-          cells[f.key] = { s: "empty" };
-          continue;
-        }
-        filled++;
-        const mine = !!me && v.by === me.id;
-        if (v.status === "reported") cells[f.key] = { s: "reported", mine };
-        else if (!f.gated || mine || (me && (s.unlocks[fkey(r.id, f.key)] ?? []).includes(me.id)))
-          cells[f.key] = { s: "value", v: v.value, mine };
-        else cells[f.key] = { s: "locked" };
+      for (const { entity, f, col } of ALL_FIELDS) {
+        if (f.identity) continue;
+        cells[col] = cell(nodes[entity], f);
+        if (cells[col].s !== "empty") filled++;
       }
-      return { id: r.id, name: r.name, verified: !!r.seed?.verified, filled, cells };
-    });
+      rows.push({ id: pid ?? e.id, companyId: c.id, engagementId: e.id, contactId: pid, company: c.name, verified: e.verified, filled, cells });
+    }
+  }
+  rows.sort((a, b) => a.company.localeCompare(b.company) || a.engagementId.localeCompare(b.engagementId));
 
-  const counts = Object.fromEntries(TYPES.map((t) => [t.type, records.filter((r) => r.type === t.type).length])) as Record<RecordType, number>;
-  const byId = new Map(records.map((r) => [r.id, r]));
   const reported: View["reported"] = [];
   if (isAdmin(me)) {
     for (const [k, v] of Object.entries(s.values)) {
       if (v.status !== "reported") continue;
-      const [recordId, field] = k.split(".");
-      const r = byId.get(recordId);
-      const f = r && typeDef(r.type)!.fields.find((x) => x.key === field);
-      if (r && f) reported.push({ recordId, field, record: r.name, label: f.label, value: v.value });
+      const [id, field] = k.split(".");
+      const entity: Entity = g.companies.has(id) ? "company" : g.engagements.has(id) ? "engagement" : "contact";
+      const f = fieldDef(entity, field);
+      const companyId =
+        entity === "company" ? id : entity === "engagement" ? g.engagements.get(id)?.companyId : g.engagements.get(g.contacts.get(id)?.engagementId ?? "")?.companyId;
+      if (f) reported.push({ entity, id, field, record: g.companies.get(companyId ?? "")?.name ?? "?", label: f.label, value: v.value });
     }
   }
 
   return {
     demo: !!seed.demo,
-    type,
     me: me ? { name: me.name, title: me.title, credits: balance(s, me.id), admin: isAdmin(me) } : null,
     rows,
-    counts,
+    companies: [...g.companies.values()].map((c) => c.name).sort((a, b) => a.localeCompare(b)),
+    stats: { companies: g.companies.size, engagements: g.engagements.size, contacts: g.contacts.size },
     reported,
   };
 }
@@ -259,48 +307,77 @@ export async function buildView(token: string | null, type: RecordType): Promise
 export class ActionError extends Error {}
 
 export type Action =
-  | { type: "fill"; recordId: string; field: string; value: string }
-  | { type: "unlock"; recordId: string; field: string }
-  | { type: "add"; recordType: RecordType; name: string }
-  | { type: "report"; recordId: string; field: string }
-  | { type: "review"; recordId: string; field: string; decision: "keep" | "remove" };
+  /** Fill a cell on a row. For a contact field on a row with no contact yet, the contact is created. */
+  | { type: "fill"; engagementId: string; contactId?: string | null; entity: Entity; field: string; value: string }
+  | { type: "unlock"; entity: Entity; id: string; field: string }
+  /** New record: a fractional engagement at a company (existing or new). */
+  | { type: "add"; company: string; role?: string }
+  /** Another contact on the same engagement (a new row). */
+  | { type: "addContact"; engagementId: string }
+  | { type: "report"; entity: Entity; id: string; field: string }
+  | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" };
 
-export async function perform(token: string | null, a: Action): Promise<{ message: string; recordId?: string }> {
+export async function perform(token: string | null, a: Action): Promise<{ message: string; rowId?: string }> {
   return mutate((s, seed) => {
     const me = memberByToken(seed, token);
     if (!me) throw new ActionError("Open The Table from your personal link to enrich and unlock.");
     const now = new Date().toISOString();
-    const records = allRecords(seed, s);
-    const find = (id: string) => {
-      const r = records.find((x) => x.id === id);
-      if (!r) throw new ActionError("Record not found.");
-      return r;
+    const g = graph(seed, s);
+    const nodeOf = (entity: Entity, id: string): Node => {
+      const n = (entity === "company" ? g.companies : entity === "engagement" ? g.engagements : g.contacts).get(id);
+      if (!n) throw new ActionError("Record not found.");
+      return n;
     };
-    const fieldOf = (r: { type: RecordType }, key: string) => {
-      const f = typeDef(r.type)!.fields.find((x) => x.key === key);
-      if (!f) throw new ActionError("Unknown field.");
+    const fieldOf = (entity: Entity, key: string) => {
+      const f = fieldDef(entity, key);
+      if (!f || f.identity) throw new ActionError("That field can't be filled.");
       return f;
+    };
+    const setValue = (node: Node, entity: Entity, key: string, raw: unknown) => {
+      const f = fieldOf(entity, key);
+      const { value, error } = cleanValue(f, raw);
+      if (error) throw new ActionError(error);
+      const cur = valueOf(node, s, key);
+      if (cur && cur.by !== me.id) throw new ActionError("Someone already filled this field.");
+      s.values[fkey(node.id, key)] = { value: value!, by: me.id, at: now, status: "live" };
+      if (cur) return false; // editing your own value earns nothing extra
+      s.ledger.push({ memberId: me.id, delta: 1, reason: "fill", ref: fkey(node.id, key), at: now });
+      return true;
     };
 
     switch (a?.type) {
       case "fill": {
-        const r = find(a.recordId);
-        const f = fieldOf(r, a.field);
-        const { value, error } = cleanValue(f, a.value);
-        if (error) throw new ActionError(error);
-        const k = fkey(r.id, f.key);
-        const cur = fieldValue(r.seed, s, r.id, f.key);
-        if (cur && cur.by !== me.id) throw new ActionError("Someone already filled this field.");
-        s.values[k] = { value: value!, by: me.id, at: now, status: "live" };
-        if (cur) return { message: "Updated." }; // editing your own value earns nothing extra
-        s.ledger.push({ memberId: me.id, delta: 1, reason: "fill", ref: k, at: now });
-        return { message: `+1 credit for ${f.label}.` };
+        const e = g.engagements.get(a.engagementId);
+        if (!e) throw new ActionError("Record not found.");
+        let node: Node;
+        let rowId: string | undefined;
+        if (a.entity === "company") node = nodeOf("company", e.companyId);
+        else if (a.entity === "engagement") node = e;
+        else if (a.entity === "contact") {
+          if (a.contactId) {
+            const p = g.contacts.get(a.contactId);
+            if (!p || p.engagementId !== e.id) throw new ActionError("Record not found.");
+            node = p;
+          } else {
+            fieldOf("contact", a.field); // validate before creating anything
+            const { error } = cleanValue(fieldDef("contact", a.field)!, a.value);
+            if (error) throw new ActionError(error);
+            const id = newId("p");
+            s.contacts.push({ id, engagementId: e.id, by: me.id, at: now });
+            node = { id, seedFields: {} };
+            rowId = id;
+          }
+        } else throw new ActionError("Unknown field.");
+        const f = fieldOf(a.entity, a.field);
+        const earned = setValue(node, a.entity, a.field, a.value);
+        const shared = a.entity === "company" ? " (shows on every row for this company)" : a.entity === "engagement" ? " (shows on every contact for this engagement)" : "";
+        return { message: earned ? `+1 credit for ${f.label}${shared}.` : "Updated.", rowId };
       }
       case "unlock": {
-        const r = find(a.recordId);
-        const f = fieldOf(r, a.field);
-        const k = fkey(r.id, f.key);
-        const cur = fieldValue(r.seed, s, r.id, f.key);
+        const node = nodeOf(a.entity, a.id);
+        const f = fieldOf(a.entity, a.field);
+        const k = fkey(node.id, f.key);
+        const cur = valueOf(node, s, f.key);
         if (!cur || cur.status !== "live") throw new ActionError("Nothing to unlock here.");
         if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id)) return { message: "Already visible." };
         if (balance(s, me.id) < 1) throw new ActionError("Out of credits. Fill an empty field to earn one.");
@@ -309,24 +386,42 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
         return { message: `Unlocked ${f.label}. −1 credit.` };
       }
       case "add": {
-        const def = typeDef(a.recordType);
-        if (!def) throw new ActionError("Unknown table.");
-        const name = String(a.name ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
-        if (name.length < 2) throw new ActionError(`Enter the ${def.identity.label.toLowerCase()}.`);
-        const prefix = { company: "c", person: "p", history: "h" }[def.type];
-        if (def.type === "company") {
-          const dupe = records.find((r) => r.type === "company" && slug(r.name) === slug(name));
-          if (dupe) return { message: `${dupe.name} is already on the table.`, recordId: dupe.id };
+        const name = String(a.company ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
+        if (name.length < 2) throw new ActionError("Which company used the fractional?");
+        let company = [...g.companies.values()].find((c) => slug(c.name) === slug(name));
+        if (!company) {
+          const id = newId("c", name);
+          s.companies.push({ id, name, by: me.id, at: now });
+          company = { id, name, seedFields: { name } };
         }
-        const id = `${prefix}_${slug(name).slice(0, 24)}_${Date.now().toString(36)}`;
-        s.records.push({ id, type: def.type, name, by: me.id, at: now });
-        return { message: `Added ${name}. Fill its fields to earn credits.`, recordId: id };
+        const id = newId("e", name);
+        s.engagements.push({ id, companyId: company.id, by: me.id, at: now });
+        let msg = `Added an engagement at ${company.name}.`;
+        if (a.role && String(a.role).trim()) {
+          setValue({ id, seedFields: {} }, "engagement", "role", a.role);
+          msg += " +1 credit for Role.";
+        }
+        return { message: `${msg} Fill the rest to earn more.`, rowId: id };
+      }
+      case "addContact": {
+        const e = g.engagements.get(a.engagementId);
+        if (!e) throw new ActionError("Record not found.");
+        // Reuse a blank contact on this engagement instead of stacking empty rows.
+        const blank = [...g.contacts.values()].find(
+          (p) => p.engagementId === e.id && !Object.keys(p.seedFields).length && !Object.keys(s.values).some((k) => k.startsWith(p.id + ".")),
+        );
+        if (blank) return { message: "Fill in the new contact row.", rowId: blank.id };
+        // An engagement with no contacts already shows an open contact row.
+        if (![...g.contacts.values()].some((p) => p.engagementId === e.id)) return { message: "Fill in the contact on this row.", rowId: e.id };
+        const id = newId("p");
+        s.contacts.push({ id, engagementId: e.id, by: me.id, at: now });
+        return { message: "New contact row added. Fill it to earn credits.", rowId: id };
       }
       case "report": {
-        const r = find(a.recordId);
-        const f = fieldOf(r, a.field);
-        const k = fkey(r.id, f.key);
-        const cur = fieldValue(r.seed, s, r.id, f.key);
+        const node = nodeOf(a.entity, a.id);
+        const f = fieldOf(a.entity, a.field);
+        const k = fkey(node.id, f.key);
+        const cur = valueOf(node, s, f.key);
         const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id);
         if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to report here.");
         if (cur.by === me.id) throw new ActionError("That's your own value — just edit it.");
@@ -335,15 +430,14 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
       }
       case "review": {
         if (!isAdmin(me)) throw new ActionError("Admins only.");
-        const k = fkey(a.recordId, a.field);
+        const k = fkey(a.id, a.field);
         const cur = s.values[k];
         if (!cur || cur.status !== "reported") throw new ActionError("Nothing to review.");
         if (a.decision === "keep") {
           cur.status = "live";
           return { message: "Kept." };
         }
-        // Wrong data: field goes back to empty, the filler loses the credit,
-        // and everyone who paid to see it gets theirs back.
+        // Wrong data: field reopens, the filler loses the credit, unlockers get theirs back.
         s.values[k] = { ...cur, status: "removed" };
         if (cur.by !== "seed") s.ledger.push({ memberId: cur.by, delta: -1, reason: "reversal", ref: k, at: now });
         for (const m of s.unlocks[k] ?? []) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });

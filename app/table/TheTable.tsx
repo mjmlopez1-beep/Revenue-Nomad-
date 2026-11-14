@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Cell, Row, View } from "@/lib/table";
-import { TYPES, typeDef, type FieldDef, type RecordType } from "@/lib/tableFields";
+import { FILLABLE, GROUPS, type Entity, type FieldDef } from "@/lib/tableFields";
 
-type Filter = "all" | "needs" | "locked" | "mine";
+type Filter = "all" | "needs" | "locked" | "nocontact" | "mine";
 type Sort = { key: string; dir: 1 | -1 };
 
 const initials = (s: string) =>
@@ -22,24 +22,25 @@ const fmtMonth = (m: string) => {
   return y && mo ? new Date(y, mo - 1).toLocaleString("en-US", { month: "short", year: "numeric" }) : m;
 };
 const cellRank = (c: Cell) => (c.s === "value" ? 0 : c.s === "locked" ? 1 : c.s === "reported" ? 2 : 3);
+const entityId = (r: Row, e: Entity) => (e === "company" ? r.companyId : e === "engagement" ? r.engagementId : r.contactId);
+const COLS = FILLABLE; // every column after the frozen company name
+const GROUP_SPANS = GROUPS.map((g) => ({ ...g, span: g.fields.filter((f) => !f.identity).length }));
 
 export default function TheTable() {
-  const [type, setType] = useState<RecordType>("company");
   const [view, setView] = useState<View | null>(null);
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort | null>(null);
   const [page, setPage] = useState(0);
   const [per, setPer] = useState(25);
-  const [editing, setEditing] = useState<string | null>(null); // `${rowId}.${field}`
+  const [editing, setEditing] = useState<string | null>(null); // `${row.id}|${col}`
   const [adding, setAdding] = useState(false);
-  const [flash, setFlash] = useState<string | null>(null); // row id to highlight
+  const [pin, setPin] = useState<string | null>(null); // row id to pin to the top + highlight
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  const def = typeDef(type)!;
 
-  const load = useCallback(async (t: RecordType) => {
-    const r = await fetch(`/api/table?type=${t}`, { cache: "no-store" });
+  const load = useCallback(async () => {
+    const r = await fetch("/api/table", { cache: "no-store" });
     setView(await r.json());
   }, []);
 
@@ -52,7 +53,7 @@ export default function TheTable() {
         if (!r.ok) setToast({ text: "That link isn't valid.", bad: true });
         window.history.replaceState(null, "", "/table");
       }
-      await load("company");
+      await load();
     })();
   }, [load]);
 
@@ -62,45 +63,43 @@ export default function TheTable() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const switchType = (t: RecordType) => {
-    setType(t);
-    setQ("");
-    setFilter("all");
-    setSort(null);
-    setPage(0);
-    setEditing(null);
-    setAdding(false);
-    load(t);
-  };
-
   const act = async (action: Record<string, unknown>) => {
     setBusy(true);
     try {
       const r = await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
       const j = await r.json();
       setToast({ text: j.message ?? j.error, bad: !r.ok });
-      if (r.ok) await load(type);
-      return r.ok ? (j as { recordId?: string }) : null;
+      if (r.ok) await load();
+      return r.ok ? (j as { rowId?: string }) : null;
     } finally {
       setBusy(false);
     }
   };
 
+  const showRow = (rowId?: string | null) => {
+    if (!rowId) return;
+    setQ("");
+    setFilter("all");
+    setPage(0);
+    setPin(rowId);
+  };
+
   const rows = useMemo(() => {
-    if (!view || view.type !== type) return [];
+    if (!view) return [];
     const needle = q.trim().toLowerCase();
     let list = view.rows.filter((r) => {
-      if (needle && !r.name.toLowerCase().includes(needle) && !Object.values(r.cells).some((c) => c.s === "value" && c.v.toLowerCase().includes(needle))) return false;
+      if (needle && !r.company.toLowerCase().includes(needle) && !Object.values(r.cells).some((c) => c.s === "value" && c.v.toLowerCase().includes(needle))) return false;
       const cells = Object.values(r.cells);
       if (filter === "needs") return cells.some((c) => c.s === "empty");
       if (filter === "locked") return cells.some((c) => c.s === "locked");
+      if (filter === "nocontact") return !r.contactId;
       if (filter === "mine") return cells.some((c) => c.s === "value" && c.mine);
       return true;
     });
     if (sort) {
       const { key, dir } = sort;
       list = [...list].sort((a, b) => {
-        if (key === "_name") return a.name.localeCompare(b.name) * dir;
+        if (key === "_company") return a.company.localeCompare(b.company) * dir;
         if (key === "_filled") return (a.filled - b.filled) * dir;
         const ca = a.cells[key], cb = b.cells[key];
         const r = cellRank(ca) - cellRank(cb);
@@ -108,16 +107,14 @@ export default function TheTable() {
         return ca.s === "value" && cb.s === "value" ? ca.v.localeCompare(cb.v) * dir : 0;
       });
     }
-    // Pin a just-added row to the top so you can fill it right away.
-    if (flash) list = [...list.filter((r) => r.id === flash), ...list.filter((r) => r.id !== flash)];
+    if (pin) list = [...list.filter((r) => r.id === pin), ...list.filter((r) => r.id !== pin)];
     return list;
-  }, [view, type, q, filter, sort, flash]);
+  }, [view, q, filter, sort, pin]);
 
   const pages = Math.max(1, Math.ceil(rows.length / per));
   const cur = Math.min(page, pages - 1);
   const shown = rows.slice(cur * per, cur * per + per);
   const me = view?.me ?? null;
-  const totalFields = def.fields.length;
 
   const toggleSort = (key: string) =>
     setSort((s) => (s?.key === key ? (s.dir === 1 ? { key, dir: -1 } : null) : { key, dir: 1 }));
@@ -129,7 +126,8 @@ export default function TheTable() {
         <div>
           <h1>The Table</h1>
           <p className="tt-sub">
-            Fill an empty field, earn <b>1 credit</b>. Spend <b>1 credit</b> to unlock a <span className="tt-lockword">🔒 field</span> someone else filled.
+            Every row is a fractional engagement: the company, the seat, and the people who hired or worked with the fractional. Fill an empty field, earn{" "}
+            <b>1 credit</b>. Spend <b>1 credit</b> to unlock a <span>🔒</span> field someone else filled.
           </p>
         </div>
         {me && (
@@ -151,39 +149,31 @@ export default function TheTable() {
         <div className="tt-review">
           <b>Reported values</b>
           {view.reported.map((x) => (
-            <div key={`${x.recordId}.${x.field}`} className="tt-review-item">
+            <div key={`${x.id}.${x.field}`} className="tt-review-item">
               <span>
                 {x.record} · {x.label}: <code>{x.value}</code>
               </span>
               <span>
-                <button className="tt-btn" onClick={() => act({ type: "review", recordId: x.recordId, field: x.field, decision: "keep" })}>Keep</button>
-                <button className="tt-btn" onClick={() => act({ type: "review", recordId: x.recordId, field: x.field, decision: "remove" })}>Remove</button>
+                <button className="tt-btn" onClick={() => act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "keep" })}>Keep</button>
+                <button className="tt-btn" onClick={() => act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "remove" })}>Remove</button>
               </span>
             </div>
           ))}
         </div>
       )}
 
-      <div className="tt-tabs" role="tablist">
-        {TYPES.map((t) => (
-          <button key={t.type} role="tab" aria-selected={type === t.type} className={`tt-tab ${type === t.type ? "active" : ""}`} onClick={() => switchType(t.type)}>
-            {t.label}
-            <span className="tt-tab-n">{view?.counts[t.type] ?? "·"}</span>
-          </button>
-        ))}
-      </div>
-
       <div className="tt-card">
-        {/* 1. Toolbar */}
+        {/* Toolbar */}
         <div className="tt-toolbar">
           <label className="tt-search">
             <span aria-hidden>⌕</span>
             <input
-              placeholder={`Search ${def.label.toLowerCase()}…`}
+              placeholder="Search companies, roles, people…"
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);
                 setPage(0);
+                setPin(null);
               }}
             />
           </label>
@@ -194,53 +184,65 @@ export default function TheTable() {
               onChange={(e) => {
                 setFilter(e.target.value as Filter);
                 setPage(0);
+                setPin(null);
               }}
             >
-              <option value="all">All</option>
+              <option value="all">All records</option>
               <option value="needs">Needs enrichment</option>
               <option value="locked">Has locked fields</option>
+              <option value="nocontact">No contact yet</option>
               {me && <option value="mine">I enriched</option>}
             </select>
           </label>
+          {view && (
+            <span className="tt-dim tt-stats">
+              {view.stats.companies} companies · {view.stats.engagements} engagements · {view.stats.contacts} contacts
+            </span>
+          )}
           <div className="tt-spacer" />
           {me && (
             <button className="tt-primary" onClick={() => setAdding((a) => !a)}>
-              + Add {def.singular}
+              + Add record
             </button>
           )}
         </div>
 
-        {adding && (
+        {adding && view && (
           <AddBar
-            def={def}
+            companies={view.companies}
             busy={busy}
             onCancel={() => setAdding(false)}
-            onAdd={async (name) => {
-              const res = await act({ type: "add", recordType: type, name });
+            onAdd={async (company, role) => {
+              const res = await act({ type: "add", company, role });
               if (res) {
                 setAdding(false);
-                setQ("");
-                setFilter("all");
-                setSort(null);
-                setPage(0);
-                setFlash(res.recordId ?? null);
+                showRow(res.rowId);
               }
             }}
           />
         )}
 
-        {/* 2-3. Header + body */}
+        {/* Header + body */}
         <div className="tt-scroll">
           <table className="tt-grid">
             <thead>
+              <tr className="tt-groups">
+                <th className="tt-frozen tt-g-company" />
+                {GROUP_SPANS.map((g) => (
+                  <th key={g.entity} colSpan={g.span} className={`tt-g-${g.entity}`}>
+                    {g.label}
+                  </th>
+                ))}
+                <th />
+              </tr>
               <tr>
-                <th className="tt-frozen" onClick={() => toggleSort("_name")}>
-                  {def.identity.label} <span className="tt-sort">{sortIcon("_name")}</span>
+                <th className="tt-frozen" onClick={() => toggleSort("_company")}>
+                  Company <span className="tt-sort">{sortIcon("_company")}</span>
                 </th>
-                {def.fields.map((f) => (
-                  <th key={f.key} onClick={() => toggleSort(f.key)}>
+                {COLS.map(({ col, f, entity }) => (
+                  <th key={col} onClick={() => toggleSort(col)} className={f === GROUPS.find((g) => g.entity === entity)!.fields.find((x) => !x.identity) ? "tt-g-start" : ""}>
                     {f.label}
-                    {f.gated && <span className="tt-th-lock" title="Gated: 1 credit to unlock">🔒</span>} <span className="tt-sort">{sortIcon(f.key)}</span>
+                    {f.gated && <span className="tt-th-lock" title="Gated: 1 credit to unlock">🔒</span>} <span className="tt-sort">{sortIcon(col)}</span>
                   </th>
                 ))}
                 <th onClick={() => toggleSort("_filled")}>
@@ -251,12 +253,12 @@ export default function TheTable() {
             <tbody>
               {!view ? (
                 <tr>
-                  <td className="tt-none" colSpan={totalFields + 2}>Loading…</td>
+                  <td className="tt-none" colSpan={COLS.length + 2}>Loading…</td>
                 </tr>
               ) : shown.length === 0 ? (
                 <tr>
-                  <td className="tt-none" colSpan={totalFields + 2}>
-                    {q ? <>No {def.label.toLowerCase()} match “{q}”.</> : <>No {def.label.toLowerCase()} yet.</>}{" "}
+                  <td className="tt-none" colSpan={COLS.length + 2}>
+                    {q ? <>No records match “{q}”.</> : <>No records yet.</>}{" "}
                     {me && (
                       <button className="tt-linkbtn" onClick={() => setAdding(true)}>
                         Add one →
@@ -265,61 +267,92 @@ export default function TheTable() {
                   </td>
                 </tr>
               ) : (
-                shown.map((r) => (
-                  <tr key={r.id} className={r.id === flash ? "tt-flash" : ""}>
-                    <td className="tt-frozen">
-                      <div className="tt-ident">
-                        <span className="tt-avatar" style={{ background: `hsl(${hue(r.name)} 55% 92%)`, color: `hsl(${hue(r.name)} 45% 30%)` }}>
-                          {initials(r.name)}
-                        </span>
-                        <span className="tt-name">{r.name}</span>
-                        {r.verified && (
-                          <span className="tt-verified" title="Corroborated by the buyer">
-                            ✓
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    {def.fields.map((f) => (
-                      <td key={f.key}>
-                        <CellView
-                          row={r}
-                          f={f}
-                          cell={r.cells[f.key]}
-                          canAct={!!me}
-                          busy={busy}
-                          editing={editing === `${r.id}.${f.key}`}
-                          onEdit={() => setEditing(`${r.id}.${f.key}`)}
-                          onCancel={() => setEditing(null)}
-                          onSave={async (value) => {
-                            if (await act({ type: "fill", recordId: r.id, field: f.key, value })) setEditing(null);
-                          }}
-                          onUnlock={() => act({ type: "unlock", recordId: r.id, field: f.key })}
-                          onReport={() => {
-                            if (window.confirm(`Report ${f.label} on ${r.name} as wrong? It'll be hidden until reviewed.`)) act({ type: "report", recordId: r.id, field: f.key });
-                          }}
-                        />
+                shown.map((r, i) => {
+                  // A row continuing the same engagement shares its company + engagement data.
+                  const cont = i > 0 && shown[i - 1].engagementId === r.engagementId;
+                  return (
+                    <tr key={r.id} className={`${r.id === pin ? "tt-flash" : ""} ${cont ? "tt-cont" : ""}`}>
+                      <td className="tt-frozen">
+                        <div className="tt-ident">
+                          {cont ? (
+                            <span className="tt-avatar tt-avatar-cont" aria-hidden>↳</span>
+                          ) : (
+                            <span className="tt-avatar" style={{ background: `hsl(${hue(r.company)} 55% 92%)`, color: `hsl(${hue(r.company)} 45% 30%)` }}>
+                              {initials(r.company)}
+                            </span>
+                          )}
+                          <span className="tt-name">{r.company}</span>
+                          {r.verified && (
+                            <span className="tt-verified" title="Engagement corroborated by the buyer">
+                              ✓
+                            </span>
+                          )}
+                        </div>
                       </td>
-                    ))}
-                    <td>
-                      <span className="tt-meter" title={`${r.filled} of ${totalFields} fields filled`}>
-                        <span style={{ width: `${(r.filled / totalFields) * 100}%` }} />
-                      </span>
-                      <span className="tt-meter-n">
-                        {r.filled}/{totalFields}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                      {COLS.map(({ col, f, entity }) => {
+                        const id = entityId(r, entity);
+                        const key = `${r.id}|${col}`;
+                        return (
+                          <td key={col} className={`${cont && entity !== "contact" ? "tt-shared" : ""} ${f === GROUPS.find((g) => g.entity === entity)!.fields.find((x) => !x.identity) ? "tt-g-start" : ""}`}>
+                            <CellView
+                              shared={cont && entity !== "contact"}
+                              f={f}
+                              cell={r.cells[col]}
+                              canAct={!!me}
+                              busy={busy}
+                              editing={editing === key}
+                              onEdit={() => setEditing(key)}
+                              onCancel={() => setEditing(null)}
+                              onSave={async (value) => {
+                                const res = await act({ type: "fill", engagementId: r.engagementId, contactId: r.contactId, entity, field: f.key, value });
+                                if (res) {
+                                  setEditing(null);
+                                  if (res.rowId && res.rowId !== r.id && r.id === pin) setPin(res.rowId);
+                                }
+                              }}
+                              onUnlock={() => id && act({ type: "unlock", entity, id, field: f.key })}
+                              onReport={() => {
+                                if (id && window.confirm(`Report ${f.label} on ${r.company} as wrong? It'll be hidden until reviewed.`)) act({ type: "report", entity, id, field: f.key });
+                              }}
+                            />
+                          </td>
+                        );
+                      })}
+                      <td>
+                        <div className="tt-rowend">
+                          <span className="tt-meter" title={`${r.filled} of ${COLS.length} fields filled`}>
+                            <span style={{ width: `${(r.filled / COLS.length) * 100}%` }} />
+                          </span>
+                          <span className="tt-meter-n">
+                            {r.filled}/{COLS.length}
+                          </span>
+                          {me && r.contactId && (
+                            <button
+                              className="tt-hover-act tt-addcontact"
+                              disabled={busy}
+                              title="Add another person who hired or worked with this fractional"
+                              onClick={async () => {
+                                const res = await act({ type: "addContact", engagementId: r.engagementId });
+                                showRow(res?.rowId);
+                              }}
+                            >
+                              + contact
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
-        {/* 4. Footer */}
+        {/* Footer */}
         <div className="tt-footer">
           <span className="tt-dim">
-            {rows.length === 0 ? "No results" : `Showing ${cur * per + 1} to ${Math.min(rows.length, cur * per + per)} of ${rows.length} results`}
+            {rows.length === 0 ? "No results" : `Showing ${cur * per + 1} to ${Math.min(rows.length, cur * per + per)} of ${rows.length} records`}
           </span>
           <div className="tt-pager">
             <label className="tt-dim">
@@ -362,7 +395,7 @@ export default function TheTable() {
             className="tt-linkbtn"
             onClick={async () => {
               await fetch("/api/table", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ signOut: true }) });
-              load(type);
+              load();
             }}
           >
             Sign out
@@ -382,8 +415,7 @@ export default function TheTable() {
 /** Page numbers with gaps: 0 … 4 5 6 … 20 (-1 = gap). */
 function pageList(cur: number, pages: number): number[] {
   if (pages <= 7) return [...Array(pages).keys()];
-  const set = new Set([0, pages - 1, cur - 1, cur, cur + 1].filter((p) => p >= 0 && p < pages));
-  const sorted = [...set].sort((a, b) => a - b);
+  const sorted = [...new Set([0, pages - 1, cur - 1, cur, cur + 1].filter((p) => p >= 0 && p < pages))].sort((a, b) => a - b);
   const out: number[] = [];
   sorted.forEach((p, i) => {
     if (i && p - sorted[i - 1] > 1) out.push(-1);
@@ -392,30 +424,38 @@ function pageList(cur: number, pages: number): number[] {
   return out;
 }
 
-function AddBar({ def, busy, onAdd, onCancel }: { def: ReturnType<typeof typeDef> & object; busy: boolean; onAdd: (name: string) => void; onCancel: () => void }) {
-  const [name, setName] = useState("");
+function AddBar({ companies, busy, onAdd, onCancel }: { companies: string[]; busy: boolean; onAdd: (company: string, role: string) => void; onCancel: () => void }) {
+  const [company, setCompany] = useState("");
+  const [role, setRole] = useState("");
+  const esc = (e: React.KeyboardEvent) => e.key === "Escape" && onCancel();
   return (
     <form
       className="tt-addbar"
       onSubmit={(e) => {
         e.preventDefault();
-        onAdd(name);
+        onAdd(company, role);
       }}
     >
-      <input autoFocus placeholder={`${def.identity.label} name`} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Escape" && onCancel()} />
-      <button className="tt-primary" disabled={busy || name.trim().length < 2}>
+      <input autoFocus list="tt-company-list" placeholder="Company that used a fractional" value={company} onChange={(e) => setCompany(e.target.value)} onKeyDown={esc} />
+      <input placeholder="Role, e.g. Fractional VP Sales (optional, +1)" value={role} onChange={(e) => setRole(e.target.value)} onKeyDown={esc} />
+      <button className="tt-primary" disabled={busy || company.trim().length < 2}>
         Add
       </button>
       <button type="button" className="tt-btn" onClick={onCancel}>
         Cancel
       </button>
-      <span className="tt-dim">Then fill its fields to earn credits.</span>
+      <datalist id="tt-company-list">
+        {companies.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </form>
   );
 }
 
 function CellView(props: {
-  row: Row;
+  /** Continuation row: this company/engagement cell repeats the row above, so show it quietly. */
+  shared: boolean;
   f: FieldDef;
   cell: Cell;
   canAct: boolean;
@@ -429,6 +469,7 @@ function CellView(props: {
 }) {
   const { f, cell, canAct, busy, editing } = props;
   if (editing) return <Editor f={f} initial={cell.s === "value" ? cell.v : ""} busy={busy} onSave={props.onSave} onCancel={props.onCancel} />;
+  if (props.shared && cell.s !== "value") return <span className="tt-ditto" title="Same as the row above">〃</span>;
 
   if (cell.s === "empty")
     return canAct ? (
@@ -459,7 +500,7 @@ function CellView(props: {
   else if (f.kind === "number") content = `${v} h`;
 
   return (
-    <span className={`tt-val ${f.gated ? "tt-val-gated" : ""}`}>
+    <span className="tt-val">
       <span className="tt-val-text" title={v}>
         {content}
       </span>

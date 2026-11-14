@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ActionError, buildView, loadSeed, memberByToken, perform, type Action } from "@/lib/table";
-import { typeDef, type RecordType } from "@/lib/tableFields";
 
 export const dynamic = "force-dynamic";
 
 const COOKIE = "rn_table";
 
-/** GET ?type=company|person|history — that table as the signed-in member sees it. */
+/** GET: the record table as the signed-in member sees it. */
 export async function GET(req: NextRequest) {
-  const t = req.nextUrl.searchParams.get("type") ?? "company";
-  const type = (typeDef(t)?.type ?? "company") as RecordType;
-  return NextResponse.json(await buildView(req.cookies.get(COOKIE)?.value ?? null, type));
+  return NextResponse.json(await buildView(req.cookies.get(COOKIE)?.value ?? null));
 }
 
 /**
  * POST { signIn: token }  sets the member cookie from a personal link.
  * POST { signOut: true }  clears it.
- * POST { action: {...} }  fill / unlock / add / report / review.
+ * POST { action: {...} }  fill / unlock / add / addContact / report / review.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);

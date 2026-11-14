@@ -14,24 +14,24 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
-## The Table (`/table`) — enrich to earn, spend to ungate
+## The Table (`/table`) — one record table: enrich to earn, spend to ungate
 
-One plain data table with three tabs: **Companies**, **People** and **Fractional History**. That's the whole model:
+One table. **Every row is a fractional engagement**: the company that used a fractional, the seat itself, and the people who hired or worked with the fractional. Columns are grouped **Company | Fractional engagement | Contact**.
 
 - **Fill an empty field → +1 credit.** Editing your own value earns nothing extra; nobody can overwrite someone else's value (they can report it).
 - **Unlock a 🔒 gated field someone else filled → 1 credit.** Unlocks are permanent. Everyone starts with 5 credits.
-- **Add a row** (company, person or engagement) for free, then fill its fields to earn.
+- **+ Add record** (a fractional engagement at an existing or new company) and **+ contact** (another person on the same engagement → a new row) are free; fill their fields to earn.
 - **Report** a wrong value: it's hidden until an admin reviews. If removed, the filler loses that credit and everyone who unlocked it gets theirs back.
 
-Fields (defined in `lib/tableFields.ts`):
+The groups are linked, not copies: a company has many engagements, an engagement has many contacts. Company data is filled and unlocked once and shows on every row for that company; engagement data shows on every contact row for that engagement. Fields live in `lib/tableFields.ts`:
 
-| Table | Open fields | 🔒 Gated fields |
+| Group | Open fields | 🔒 Gated fields |
 | --- | --- | --- |
-| Companies | Website, Industry, Employees, HQ | Uses fractionals, Who buys, What they need |
-| People | Title, Company | Email, Phone, LinkedIn, Open to fractionals |
-| Fractional History | Role, Start, End | Operator, Rate, Hrs/week, Outcome, Hired by |
+| Company | Website, Industry, Employees, HQ | — |
+| Fractional engagement | Role, Start, End | Fractional (who held the seat), Rate, Hrs/wk, Outcome |
+| Contact | Contact name, Title, Relationship (hired / worked with) | Email, Phone, LinkedIn |
 
-**Seeding.** `scripts/build-intel-seed.py` turns the Talent Signups and engagements exports into the starting rows: every company named in a success story or published engagement (Companies), and one Fractional History row per published engagement with the operator in the gated Operator field (buyer-corroborated ones get a ✓). Already-anonymised engagements are skipped. It also writes one private sign-in link per member.
+**Seeding.** `scripts/build-intel-seed.py` turns the engagements export into the starting records — one per published engagement, with the operator in the gated Fractional field and buyer-corroborated ones marked ✓ (already-anonymised engagements are skipped) — and writes one private sign-in link per member from the Talent Signups export.
 
 ```bash
 python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv   # writes data/intel-seed.json + data/intel-member-links.csv
