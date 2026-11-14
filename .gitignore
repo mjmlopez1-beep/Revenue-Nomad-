@@ -9,3 +9,8 @@ next-env.d.ts
 data/jobs.json
 data/jobs.json.tmp
 .DS_Store
+# The Table: private member data + runtime state -- never commit
+data/intel-seed.json
+data/intel-member-links.csv
+data/intel.json
+data/intel.json.tmp

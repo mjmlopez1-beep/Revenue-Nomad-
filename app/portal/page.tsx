@@ -10,6 +10,7 @@ export default function PortalPage() {
       <nav className="nav">
         <Brand />
         <div className="nav-links">
+          <Link href="/table">The Table</Link>
           <Link href="/portal">Operator Portal</Link>
         </div>
       </nav>

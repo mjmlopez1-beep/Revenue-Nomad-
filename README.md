@@ -14,6 +14,21 @@ Revenue Nomad crawls the web for open fractional, interim, and contract go-to-ma
 3. **Aggregate** — matches are deduped (company + title), upserted into a JSON store (`data/jobs.json`), and stale listings age out after 60 days unless you've saved them.
 4. **Operate** — the portal at `/portal` gives you search, filters (function, engagement type, source, score, remote), fit-score sorting, and a lightweight pipeline: save, mark applied, hide.
 
+## The Table (`/table`) — give one, get one
+
+A plain company-intelligence table for members, in the spirit of the old Jigsaw contact exchange. Each row is a company some member knows. **Give** one specific, shareable line about a company and earn a credit; spend a credit to **Get** a company's notes or to **Ask** the members who know it. Asks get routed to those members ("Questions for you"); an answer earns them a credit and shows the note to the asker. An ask nobody answers in 14 days refunds its credit. Everyone starts with 3 credits.
+
+- **Seeded from real member data.** `scripts/build-intel-seed.py` reads the Talent Signups and engagements exports, pulls the company out of each success story and published engagement, and links it to the member. Every link starts as *identified*; members confirm or remove theirs on the page ("Is this you?").
+- **Private by default.** Other members only ever see how many members know a company and their titles, never names or emails. Notes are labeled member-reported with a "true as of" month, can be flagged (hidden until an admin reviews) and withdrawn by their author.
+- **Sign-in** is a personal link per member (`/table?k=TOKEN`); the builder writes them to `data/intel-member-links.csv`.
+
+```bash
+python3 scripts/build-intel-seed.py Talent_Signups.csv engagements.csv   # writes data/intel-seed.json + data/intel-member-links.csv
+npm run dev   # open a link from intel-member-links.csv, e.g. http://localhost:3000/table?k=...
+```
+
+`data/intel-seed.json`, `data/intel-member-links.csv` and `data/intel.json` (notes, asks, credits) hold member data and are git-ignored: **never commit them** (this repo is public). On a server, put the seed in `RN_DATA_DIR` (or point `RN_INTEL_SEED` at it) and use persistent storage (Render disk or a Docker volume) — on Vercel, `/tmp` resets and gives would be lost. Set `RN_ADMIN_EMAILS` to the emails allowed to review flagged notes. With no seed present the page runs on clearly labeled demo data (`/table?k=demo`).
+
 ## Launch / Deploy
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fmjmlopez1-beep%2FRevenue-Nomad-)
