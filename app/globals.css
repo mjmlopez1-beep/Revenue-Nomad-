@@ -981,3 +981,9 @@ a:hover {
 .brand-logo { height: 26px; width: auto; display: block; }
 @media (max-width: 640px) { .brand-logo { height: 20px; } }
 .tt-logo { object-fit: contain; background: #fff; border: 1px solid var(--border); padding: 4px; }
+.nav-links a { white-space: nowrap; }
+@media (max-width: 640px) {
+  .nav { gap: 12px; }
+  .nav-links { gap: 14px; }
+  .nav-links a { font-size: 13px; }
+}
