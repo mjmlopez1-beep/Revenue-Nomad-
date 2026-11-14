@@ -7,6 +7,7 @@
  *      RN_BACKUP_S3_BUCKET
  *      RN_BACKUP_S3_KEY_ID / RN_BACKUP_S3_SECRET
  *      RN_BACKUP_S3_REGION    (default "auto")
+ *      RN_BACKUP_S3_PATH_STYLE=1 for path-style endpoints (default: virtual-hosted, as Railway uses)
  *    Uploaded once a day as backups/intel-YYYY-MM-DD.json, overwritten through the day
  *    by the latest state (at most once an hour).
  */
@@ -46,7 +47,7 @@ export const s3Configured = () =>
 const sha256 = (s: string | Buffer) => createHash("sha256").update(s).digest("hex");
 const hmac = (k: Buffer | string, s: string) => createHmac("sha256", k).update(s).digest();
 
-/** Minimal AWS Signature V4 PUT (path-style), enough for S3-compatible buckets. */
+/** Minimal AWS Signature V4 PUT, enough for S3-compatible buckets (virtual-hosted or path style). */
 export async function putObject(key: string, body: string): Promise<void> {
   const endpoint = new URL(process.env.RN_BACKUP_S3_ENDPOINT!);
   const bucket = process.env.RN_BACKUP_S3_BUCKET!;
@@ -56,9 +57,11 @@ export async function putObject(key: string, body: string): Promise<void> {
   const now = new Date();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
   const date = amzDate.slice(0, 8);
-  const canonicalUri = `/${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`;
+  const pathStyle = process.env.RN_BACKUP_S3_PATH_STYLE === "1";
+  const objectPath = `/${key.split("/").map(encodeURIComponent).join("/")}`;
+  const canonicalUri = pathStyle ? `/${bucket}${objectPath}` : objectPath;
   const payloadHash = sha256(body);
-  const host = endpoint.host;
+  const host = pathStyle ? endpoint.host : `${bucket}.${endpoint.host}`;
   const canonicalHeaders = `content-type:application/json\nhost:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
   const signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
   const canonicalRequest = ["PUT", canonicalUri, "", canonicalHeaders, signedHeaders, payloadHash].join("\n");
@@ -66,7 +69,7 @@ export async function putObject(key: string, body: string): Promise<void> {
   const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256(canonicalRequest)].join("\n");
   const kSigning = hmac(hmac(hmac(hmac(`AWS4${secret}`, date), region), "s3"), "aws4_request");
   const signature = createHmac("sha256", kSigning).update(stringToSign).digest("hex");
-  const r = await fetch(`${endpoint.origin}${canonicalUri}`, {
+  const r = await fetch(`${endpoint.protocol}//${host}${canonicalUri}`, {
     method: "PUT",
     headers: {
       "content-type": "application/json",
