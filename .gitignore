@@ -16,3 +16,4 @@ data/intel.json
 data/intel.json.tmp
 data/company-domains.json
 data/company-domains.json.tmp
+__pycache__/
