@@ -5,7 +5,7 @@ import type { View } from "@/lib/tableTypes";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { IconChevron, useToast } from "../ui/shared";
 import { copyText, fmtTime } from "./hooks";
-import { REASON_LABEL } from "./TopBar";
+import { ledgerWhat, ledgerWhere } from "./TopBar";
 import { useUi } from "./ui";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
@@ -162,8 +162,8 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
                     </td>
                     <td className={`num mono tp-lrow-d${l.delta > 0 ? " up" : l.delta < 0 ? " down" : ""}`}>{l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "0"}</td>
                     <td>
-                      {REASON_LABEL[l.reason] ?? l.reason}
-                      {l.reason !== "referral" && l.field ? <span className="muted"> {l.field.toLowerCase()}</span> : null}
+                      {ledgerWhat(l)}
+                      {l.company && <span className="tp-ledger-co muted">{ledgerWhere(l)}</span>}
                       {l.delta === 0 && l.reason === "fill" ? <span className="muted"> (daily max reached)</span> : null}
                     </td>
                     <td>{l.company}</td>

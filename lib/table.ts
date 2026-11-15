@@ -676,9 +676,10 @@ export async function perform(token: string | null, a: Action): Promise<{ messag
       case "fill": {
         const node = nodeOf(a.entity, a.id);
         const f = fieldOf(a.entity, a.field);
+        const wasMine = valueOf(node, s, a.field)?.by === me.id;
         const earned = setValue(node, a.entity, a.field, a.value);
         const bonus = earned || capped ? payReferral() : 0;
-        const what = `Added ${lower(f.label)}.`;
+        const what = `${wasMine ? "Updated" : "Added"} ${lower(f.label)}.`;
         return {
           message: `${what}${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
           id: node.id,

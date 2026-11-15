@@ -7,18 +7,29 @@
  *   signed in             -> TradingPost (the app)
  * Handles ?k=CODE sign-in links and ?ref=CODE invite links.
  */
-import { useCallback, useEffect, useState } from "react";
-import { ToastProvider, getView, post, useToast, type Act, type View } from "./ui/shared";
-import Landing from "./landing/Landing";
-import Onboarding from "./onboard/Onboarding";
-import TradingPost from "./post/TradingPost";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { ToastProvider, getView, patchView, post, useToast, type Act, type ActPatch, type View } from "./ui/shared";
+
+// Each screen is its own chunk: signed-out visitors never download the app, members never download the landing page.
+const loading = () => <div className="spinner-page">Loading Trading Post</div>;
+const Landing = dynamic(() => import("./landing/Landing"), { ssr: false, loading });
+const Onboarding = dynamic(() => import("./onboard/Onboarding"), { ssr: false, loading });
+const TradingPost = dynamic(() => import("./post/TradingPost"), { ssr: false, loading });
+
+/** Actions that create records: wait for the full view so the new record is there. */
+const FULL_REFRESH = new Set(["add", "addPerson", "profile"]);
 
 function App() {
   const [view, setView] = useState<View | null>(null);
   const toast = useToast();
+  // Only the newest refresh may set the view, so a slow one never undoes a later patch.
+  const gen = useRef(0);
 
   const refresh = useCallback(async () => {
-    setView(await getView());
+    const g = ++gen.current;
+    const v = await getView();
+    if (g === gen.current) setView(v);
   }, []);
 
   useEffect(() => {
@@ -46,13 +57,19 @@ function App() {
 
   const act: Act = useCallback(
     async (a, opts) => {
-      const r = await post<{ message: string; id?: string; capped?: boolean }>({ action: a });
+      gen.current++; // a refresh still in flight predates this action
+      const r = await post<{ message: string; id?: string; capped?: boolean } & ActPatch>({ action: a });
       if (r.error) {
         toast(r.error, true);
+        void refresh(); // replaces any background sync this action superseded
         return { ok: false, message: r.error };
       }
       if (!opts?.quiet && r.message) toast(r.message);
-      await refresh();
+      if (!FULL_REFRESH.has(a.type) && (r.cells || r.me)) {
+        // Show the change now; the full view syncs in the background.
+        setView((v) => (v ? patchView(v, r) : v));
+        void refresh();
+      } else await refresh();
       return { ok: true, message: r.message, id: r.id, capped: r.capped };
     },
     [refresh, toast],

@@ -5,8 +5,8 @@
  * Locked fields are never filtered by value, only by availability: "known" means the cell is
  * locked (someone added it) or visible.
  */
-import type { Cell, CompanyRec, EngagementRec, Me, PersonRec } from "@/lib/tableTypes";
-import { ENGAGEMENT_TYPES, FUNCTIONS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCE_LABEL, type Entity } from "@/lib/tableFields";
+import type { Cell, CompanyRec, EngagementRec, Friendly, Me, PersonRec } from "@/lib/tableTypes";
+import { ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCE_LABEL, type Entity } from "@/lib/tableFields";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "friendly" | "hiring" | "following" | "unlocked" | "needs";
@@ -124,8 +124,45 @@ function infoOf(c: CompanyRec): CoInfo {
   return { c, domain, fns, people, latest, engs, locked, unlockedByMe, hay: parts.join(" ").toLowerCase() };
 }
 
+/** Derived info per company object. A patched view keeps unchanged companies, so their info (and rows) keep identity too. */
+const infoCache = new WeakMap<CompanyRec, CoInfo>();
 export function deriveAll(companies: CompanyRec[]): CoInfo[] {
-  return companies.map(infoOf);
+  return companies.map((c) => {
+    let i = infoCache.get(c);
+    if (!i) {
+      i = infoOf(c);
+      infoCache.set(c, i);
+    }
+    return i;
+  });
+}
+
+/** An open role: nobody holds the seat yet. */
+export const isOpenSeat = (e: EngagementRec) => e.source === "Demand scan" || shown(e.cells.status) === "Open role";
+
+/**
+ * Fractional seats (open roles included) that started in the last two years. The server sends
+ * this as friendly.recent; until it does, it is worked out here from the free start and type.
+ */
+export function recentSeats(i: CoInfo): number {
+  if (typeof i.c.friendly.recent === "number") return i.c.friendly.recent;
+  const cutoff = Date.now() - 2 * 365 * 86_400_000;
+  return i.engs.filter((e) => {
+    const start = shown(e.cells.start);
+    if (!start || Date.parse(`${start}-01`) < cutoff) return false;
+    const type = shown(e.cells.type);
+    return isOpenSeat(e) || e.source === "Published engagement" || (!!type && FRACTIONAL_TYPES.includes(type));
+  }).length;
+}
+
+/** A plain label for how fractional friendly a company is (the score still sorts). */
+export function fitTier(f: Friendly, engs: number): { label: string; cls: string } {
+  if (f.open) return { label: "Hiring", cls: "chip-ember" };
+  if (f.fractional >= 2 || f.functions.length >= 2) return { label: "Repeat hirer", cls: "t-repeat" };
+  if (f.recent) return { label: "Recent seat", cls: "t-recent" };
+  if (f.fractional) return { label: "Past seat", cls: "t-past" };
+  if (engs > 0) return { label: "Story only", cls: "t-story" };
+  return { label: "No seats", cls: "t-none" };
 }
 
 /** One line on why a company scores the way it does. */
@@ -147,9 +184,6 @@ export function fitReason(i: CoInfo): string {
 /* ---------- filters ---------- */
 
 export interface Filters {
-  friendly: boolean;
-  hiring: boolean;
-  following: boolean;
   rateKnown: boolean;
   contactKnown: boolean;
   notMine: boolean;
@@ -168,9 +202,6 @@ export interface Filters {
 }
 
 export const EMPTY_FILTERS: Filters = {
-  friendly: false,
-  hiring: false,
-  following: false,
   rateKnown: false,
   contactKnown: false,
   notMine: false,
@@ -188,18 +219,15 @@ export const EMPTY_FILTERS: Filters = {
   relationship: [],
 };
 
-export type ToggleKey = "friendly" | "hiring" | "following" | "rateKnown" | "contactKnown" | "notMine" | "statusKnown" | "fractionalNamed" | "emailKnown";
+export type ToggleKey = "rateKnown" | "contactKnown" | "notMine" | "statusKnown" | "fractionalNamed" | "emailKnown";
 export type ListKey = "industry" | "employees" | "revenue" | "hq" | "fn" | "type" | "source" | "relationship";
 
 export const TOGGLE_LABEL: Record<ToggleKey, string> = {
-  friendly: "Fractional friendly",
-  hiring: "Hiring now",
-  following: "Following",
   rateKnown: "Rate known",
   contactKnown: "Contact known",
-  notMine: "Not yet hired my function",
+  notMine: "No seat in my function yet",
   statusKnown: "Status known",
-  fractionalNamed: "Fractional named",
+  fractionalNamed: "Seat holder named",
   emailKnown: "Email known",
 };
 export const LIST_LABEL: Record<ListKey, string> = {
@@ -232,10 +260,22 @@ export interface Row {
   p?: PersonRec;
 }
 
+const rowCache: Record<RecordType, WeakMap<CoInfo, Row[]>> = { companies: new WeakMap(), engagements: new WeakMap(), people: new WeakMap() };
 export function rowsFor(type: RecordType, infos: CoInfo[]): Row[] {
-  if (type === "companies") return infos.map((i) => ({ key: i.c.id, i }));
-  if (type === "engagements") return infos.flatMap((i) => i.engs.map((e) => ({ key: e.id, i, e })));
-  return infos.flatMap((i) => i.people.map(({ p, e }) => ({ key: p.id, i, e, p })));
+  const cache = rowCache[type];
+  return infos.flatMap((i) => {
+    let rs = cache.get(i);
+    if (!rs) {
+      rs =
+        type === "companies"
+          ? [{ key: i.c.id, i }]
+          : type === "engagements"
+            ? i.engs.map((e) => ({ key: e.id, i, e }))
+            : i.people.map(({ p, e }) => ({ key: p.id, i, e, p }));
+      cache.set(i, rs);
+    }
+    return rs;
+  });
 }
 
 const engsOf = (r: Row) => (r.e ? [r.e] : r.p ? [] : r.i.engs);
@@ -243,8 +283,11 @@ const peopleOf = (r: Row) => (r.p ? [r.p] : r.e ? r.e.people : r.i.people.map((x
 const personKnown = (p: PersonRec) => ["name", "email", "phone", "linkedin"].some((f) => known(p.cells[f]));
 
 export function friendlyCo(i: CoInfo) {
-  return i.c.friendly.tier === "High" || i.c.friendly.tier === "Medium";
+  return i.c.friendly.open > 0 || i.c.friendly.tier === "High" || i.c.friendly.tier === "Medium";
 }
+
+const isUnlocked = (c?: Cell) => !!c && c.s === "value" && !c.mine && !c.system;
+const personUnlocked = (p: PersonRec) => ["name", "email", "phone", "linkedin"].some((f) => isUnlocked(p.cells[f]));
 
 export function tabTest(tab: Tab, r: Row): boolean {
   const i = r.i;
@@ -256,9 +299,11 @@ export function tabTest(tab: Tab, r: Row): boolean {
     case "following":
       return i.c.following;
     case "unlocked":
+      if (r.p) return personUnlocked(r.p);
+      if (r.e) return ["role", "status", "operator", "end", "rate", "hours", "posting"].some((f) => isUnlocked(r.e!.cells[f])) || r.e.people.some(personUnlocked);
       return i.unlockedByMe;
     case "needs":
-      return i.c.facts.missing > 0;
+      return COMPANY_FILL.some((f) => i.c.cells[f]?.s === "empty");
     default:
       return true;
   }
@@ -298,18 +343,15 @@ export function optionTest(key: ListKey, opt: string): Test {
 
 export function toggleTest(key: ToggleKey, me: Me): Test {
   switch (key) {
-    case "friendly":
-      return (r) => friendlyCo(r.i);
-    case "hiring":
-      return (r) => r.i.c.friendly.open > 0;
-    case "following":
-      return (r) => r.i.c.following;
     case "rateKnown":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => known(e.cells.rate));
     case "contactKnown":
       return (r) => peopleOf(r).some(personKnown);
     case "notMine":
-      return (r) => !!me.function && r.i.fns.length > 0 && !r.i.fns.includes(me.function);
+      return (r) => {
+        const f = r.i.c.friendly;
+        return !!me.function && f.functions.length > 0 && !f.functions.includes(me.function) && (f.fractional > 0 || f.open > 0);
+      };
     case "statusKnown":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => known(e.cells.status));
     case "fractionalNamed":
@@ -319,7 +361,7 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
   }
 }
 
-const TOGGLES: ToggleKey[] = ["friendly", "hiring", "following", "rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
+const TOGGLES: ToggleKey[] = ["rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
 const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "fn", "type", "source", "relationship"];
 
 function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
@@ -412,18 +454,20 @@ export function activeChips(f: Filters): { id: string; label: string; clear: (f:
 
 /* ---------- sorting ---------- */
 
-export function sortRows(rows: Row[], sort: SortKey): Row[] {
+/** Sort rows. With needsFirst, the rows missing the most facts come first (the Needs facts view). */
+export function sortRows(rows: Row[], sort: SortKey, needsFirst = false): Row[] {
   const byName = (a: Row, b: Row) => a.i.c.name.localeCompare(b.i.c.name);
   const score = (r: Row) => r.i.c.friendly.score;
   const updated = (r: Row) => (r.p ? r.i.c.updatedAt : r.e ? r.e.updatedAt ?? r.i.c.updatedAt : r.i.c.updatedAt) ?? "";
-  const start = (r: Row) => (r.e ? shown(r.e.cells.start) ?? "" : "");
+  const start = (r: Row) => shown((r.e ?? r.i.latest)?.cells.start) ?? "";
   const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
     fit: (a, b) => score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byName(a, b),
     newest: (a, b) => updated(b).localeCompare(updated(a)) || start(b).localeCompare(start(a)) || score(b) - score(a) || byName(a, b),
     name: (a, b) => byName(a, b) || start(b).localeCompare(start(a)),
     engagements: (a, b) => b.i.c.engagements.length - a.i.c.engagements.length || score(b) - score(a) || byName(a, b),
   };
-  return [...rows].sort(cmp[sort]);
+  const by = cmp[sort];
+  return [...rows].sort(needsFirst ? (a, b) => b.i.c.facts.missing - a.i.c.facts.missing || by(a, b) : by);
 }
 
 /* ---------- facts to add ---------- */

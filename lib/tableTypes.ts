@@ -51,6 +51,8 @@ export interface Friendly {
   functions: string[];
   /** Members who worked there (any engagement or story). Good for intros. */
   operators: number;
+  /** Fractional seats that started in the last two years. */
+  recent?: number;
 }
 
 export interface CompanyRec {
@@ -93,6 +95,10 @@ export interface Me {
   token: string;
   inviteCode: string;
   invited: number;
+  /** Invitees whose first fact paid the invite bonus. */
+  invitesPaid?: number;
+  /** This member joined from an invite and the bonus waits for their first fact. */
+  invitePending?: boolean;
   /** Facts this member added, and unlocked. */
   added: number;
   unlocked: number;

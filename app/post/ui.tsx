@@ -11,7 +11,7 @@ import type { Cell, Me } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { AddPill, IconCheck, IconSearch, IconX, LockPill, fmtValue, hrefFor, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
-import { fmtTime, thisMonth, type Layout } from "./hooks";
+import { fieldText, fmtTime, thisMonth, type Layout } from "./hooks";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -30,10 +30,13 @@ export interface Ui {
   pulse: string | null;
   unlock: (t: FactRef) => void;
   unlockMany: (items: FactRef[]) => Promise<boolean>;
-  edit: (el: HTMLElement, t: FactRef) => void;
+  /** Open the fact editor on an element. With `initial`, it edits the member's own value. */
+  edit: (el: HTMLElement, t: FactRef, initial?: string) => void;
   fill: (t: FactRef, value: string) => Promise<boolean>;
   openCompany: (id: string, focus?: string) => void;
   openAdd: (o?: AddOpts) => void;
+  /** Up to 3 empty facts at the company that owns this record (a company, engagement or person id). */
+  addable: (id: string) => FactRef[];
 }
 
 export const UiCtx = createContext<Ui | null>(null);
@@ -57,20 +60,85 @@ export function FactValue({ t, v }: { t: FactRef; v: string }) {
   return <>{text}</>;
 }
 
+/** Numbers, dates, money and addresses are set in mono; words use the UI font. */
+const MONO_KINDS = ["number", "month", "monthOrOngoing", "url", "email", "phone"];
+const MONO_FIELDS = ["employees", "revenue", "rate"];
+export const isMonoField = (t: FactRef) => MONO_KINDS.includes(fieldDef(t.entity, t.field)?.kind ?? "") || MONO_FIELDS.includes(t.field);
+
+/** An add pill that opens the fact editor on itself. `onPick` runs first (e.g. to close the popover it sits in). */
+export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: string; onPick?: () => void }) {
+  const ui = useUi();
+  const ref = useRef<HTMLSpanElement>(null);
+  const f = fieldDef(fact.entity, fact.field);
+  return (
+    <span ref={ref} data-cell={cellKey(fact.id, fact.field)} className={ui.pulse === cellKey(fact.id, fact.field) ? "tp-pulse" : undefined}>
+      <AddPill
+        label={label ?? (f ? shortLabel(f) : fact.field)}
+        earn={!earnNote(ui.me).capped}
+        onAdd={() => {
+          if (!ref.current) return;
+          onPick?.();
+          ui.edit(ref.current, fact);
+        }}
+      />
+    </span>
+  );
+}
+
+/** Shown instead of spending at 0 credits: facts the member can add here to earn one. */
+function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string; onClose: () => void }) {
+  const ui = useUi();
+  const earn = earnNote(ui.me);
+  const facts = earn.capped ? [] : ui.addable(id);
+  return (
+    <Anchored anchor={anchor} onClose={onClose} width={280} className="tp-zero">
+      {earn.capped ? (
+        <p className="tp-zero-t">You have 0 credits, and today&apos;s earning is used up. It reopens {fmtTime(ui.me.earnResetsAt)}.</p>
+      ) : facts.length ? (
+        <>
+          <p className="tp-zero-t">You have 0 credits. Add one of these to earn 1.</p>
+          <div className="tp-zero-pills">
+            {facts.map((x) => (
+              // Phones edit in a bottom sheet, which sits under this popover: close it first.
+              <EditPill key={cellKey(x.id, x.field)} fact={x} onPick={ui.layout === "phone" ? onClose : undefined} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="tp-zero-t">You have 0 credits. Add what you know about a company to earn more.</p>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openAdd())}>
+            Add what you know
+          </button>
+        </>
+      )}
+    </Anchored>
+  );
+}
+
 /**
- * A fact in one of its states. value: plain mono text (links for urls). locked: "Unlock 1",
- * one click. empty: "+ Add +1", opens the inline editor. reported: "Under review".
+ * A fact in one of its states. value: plain text (mono for numbers, dates, links). locked:
+ * "Unlock 1", one click. empty: "+ Add +1", opens the inline editor. reported: "Under review".
  */
 export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string }) {
   const ui = useUi();
   const ref = useRef<HTMLSpanElement>(null);
+  const [zero, setZero] = useState(false);
+  const credits = ui.me.credits;
+  useEffect(() => {
+    if (zero && credits > 0) setZero(false);
+  }, [zero, credits]);
   if (!cell) return null;
   const k = cellKey(t.id, t.field);
   const cls = `tp-cell${ui.pulse === k ? " tp-pulse" : ""}`;
   switch (cell.s) {
     case "value":
       return (
-        <span className={`${cls} tp-val${ui.flash.has(k) ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`} data-cell={k} title={fmtValue(t.entity, t.field, cell.v)}>
+        <span
+          className={`${cls} tp-val${isMonoField(t) ? " mono" : ""}${ui.flash.has(k) ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`}
+          data-cell={k}
+          title={fmtValue(t.entity, t.field, cell.v)}
+        >
           <span className="tp-val-t">{render ? render(cell.v) : <FactValue t={t} v={cell.v} />}</span>
           {ui.flash.has(k) && (
             <span className="tp-flash-check" aria-label="Unlocked">
@@ -81,14 +149,15 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
       );
     case "locked":
       return (
-        <span className={cls} data-cell={k}>
-          <LockPill onUnlock={() => ui.unlock(t)} ver={cell.ver} busy={ui.busy.has(k)} />
+        <span className={cls} data-cell={k} ref={ref}>
+          <LockPill onUnlock={() => (ui.me.credits <= 0 ? setZero(true) : ui.unlock(t))} ver={cell.ver} busy={ui.busy.has(k)} />
+          {zero && credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
         </span>
       );
     case "empty":
       return (
         <span className={cls} data-cell={k} ref={ref}>
-          <AddPill label={addLabel} onAdd={() => ref.current && ui.edit(ref.current, t)} />
+          <AddPill label={addLabel} earn={!earnNote(ui.me).capped} onAdd={() => ref.current && ui.edit(ref.current, t)} />
         </span>
       );
     case "reported":
@@ -102,7 +171,40 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
 
 /* ---------- overlays ---------- */
 
-/** A popover fixed to an anchor element; follows it on scroll, flips above when there is no room. */
+/**
+ * Swallow the click that ends the tap on a scrim, so it never lands on what is underneath.
+ * Only that gesture's click: the next pointerdown (a new tap) or a moment after pointerup ends it.
+ */
+function swallowNextClick() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const done = () => {
+    window.removeEventListener("click", swallow, true);
+    window.removeEventListener("pointerdown", done, true);
+    window.removeEventListener("pointerup", up, true);
+    window.removeEventListener("pointercancel", done, true);
+    if (timer) clearTimeout(timer);
+  };
+  const swallow = (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
+    done();
+  };
+  const up = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(done, 350);
+  };
+  window.addEventListener("click", swallow, true);
+  window.addEventListener("pointerdown", done, true);
+  window.addEventListener("pointerup", up, true);
+  window.addEventListener("pointercancel", done, true);
+  timer = setTimeout(done, 1500);
+}
+
+/**
+ * A popover fixed to an anchor element; follows it on scroll, flips above when there is no room.
+ * A transparent scrim under it takes the outside tap that closes it, so that tap never also
+ * unlocks a fact or opens a record underneath (it covers the anchor too: tapping it just closes).
+ */
 export function Anchored({
   anchor,
   width = 300,
@@ -144,27 +246,28 @@ export function Anchored({
       window.removeEventListener("resize", place);
     };
   }, [anchor, width, align]);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (ref.current?.contains(t) || anchor.contains(t)) return;
-      closeRef.current();
-    };
-    const id = setTimeout(() => document.addEventListener("mousedown", h));
-    return () => {
-      clearTimeout(id);
-      document.removeEventListener("mousedown", h);
-    };
-  }, [anchor]);
   return createPortal(
-    <div
-      ref={ref}
-      className={`tp-pop ${className}`}
-      style={{ width: Math.min(width, typeof window === "undefined" ? width : window.innerWidth - 16), top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {children}
-    </div>,
+    <>
+      <div
+        className="tp-pop-scrim"
+        aria-hidden
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          swallowNextClick();
+          closeRef.current();
+        }}
+        onClick={(e) => e.stopPropagation()}
+      />
+      <div
+        ref={ref}
+        className={`tp-pop ${className}`}
+        style={{ width: Math.min(width, typeof window === "undefined" ? width : window.innerWidth - 16), top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </>,
     document.body,
   );
 }
@@ -203,9 +306,9 @@ export function earnNote(me: Me): { text: string; capped: boolean } {
   return { text: "+1 credit", capped: false };
 }
 
-export const labelFor = (f: FieldDef) => (f.key === "operator" ? "Fractional" : f.label);
-/** Short label for field lists ("Revenue then", "Hours/wk"). */
-export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Fractional" : f.key === "hours" ? "Hours/wk" : f.short ?? f.label);
+export const labelFor = (f: FieldDef) => f.label;
+/** Short label for field lists ("Held by", "Revenue then", "Hours/wk"). */
+export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.key === "hours" ? "Hours/wk" : f.short ?? f.label);
 
 /** The input for one field kind. Calls onSave with the raw value (choice and Ongoing save at once). */
 export function FieldInput({
@@ -321,15 +424,16 @@ export function FieldInput({
   );
 }
 
-/** The small editor anchored to an empty cell (a bottom sheet on phones). */
-export function FactEditor({ anchor, t, company, onClose }: { anchor: HTMLElement; t: FactRef; company: string; onClose: () => void }) {
+/** The small editor anchored to an empty cell (a bottom sheet on phones). With `initial`, it edits the member's own value. */
+export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: HTMLElement; t: FactRef; company: string; initial?: string; onClose: () => void }) {
   const ui = useUi();
   const f = fieldDef(t.entity, t.field);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initial ?? "");
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   if (!f) return null;
-  const earn = earnNote(ui.me);
+  const editing = initial !== undefined;
+  const earn = editing ? { text: "Edits earn no credit", capped: false } : earnNote(ui.me);
   const save = async (raw: string) => {
     const { error, value: clean } = cleanValue(f, raw);
     if (error) return setErr(error);
@@ -353,7 +457,7 @@ export function FactEditor({ anchor, t, company, onClose }: { anchor: HTMLElemen
   );
   const title = (
     <span>
-      Add {labelFor(f).toLowerCase()} <span className="tp-ed-co">{company}</span>
+      {editing ? "Edit" : "Add"} {fieldText(labelFor(f))} <span className="tp-ed-co">{company}</span>
     </span>
   );
   if (ui.layout === "phone")
@@ -363,7 +467,7 @@ export function FactEditor({ anchor, t, company, onClose }: { anchor: HTMLElemen
         onClose={onClose}
         footer={
           <div className="tp-ed-foot">
-            <span className={`tp-earn-note${earn.capped ? " capped" : ""}`}>{earn.text}</span>
+            <span className={`tp-earn-note${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{earn.text}</span>
             {simple && (
               <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} onClick={() => save(value)}>
                 Save
@@ -381,7 +485,14 @@ export function FactEditor({ anchor, t, company, onClose }: { anchor: HTMLElemen
       {body}
       <div className="tp-ed-foot">
         <span className="tp-ed-keys">{simple ? "Enter to save, Esc to cancel" : "Pick one, Esc to cancel"}</span>
-        <span className={`tp-earn-note${earn.capped ? " capped" : ""}`}>{saving ? "Saving" : earn.text}</span>
+        <span className="tp-ed-foot-r">
+          <span className={`tp-earn-note${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{saving ? "Saving" : earn.text}</span>
+          {simple && (
+            <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} onClick={() => save(value)}>
+              Save
+            </button>
+          )}
+        </span>
       </div>
     </Anchored>
   );

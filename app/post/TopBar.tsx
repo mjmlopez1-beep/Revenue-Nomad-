@@ -4,17 +4,27 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { LedgerRow, Me } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo } from "../ui/shared";
-import { fmtTime, plural } from "./hooks";
+import { fieldText, fmtTime, plural } from "./hooks";
 import { Anchored } from "./ui";
 
 export const REASON_LABEL: Record<string, string> = {
   fill: "Added",
   unlock: "Unlocked",
-  refund: "Refund",
-  reversal: "Removed fact",
+  refund: "Refund, removed after review",
+  reversal: "Removed after review",
   referral: "Invite bonus",
   confirm: "Confirmed by members",
 };
+
+/** "Unlocked LinkedIn", "Added seat holder", "Refund, removed after review, rate". */
+export function ledgerWhat(l: LedgerRow): string {
+  const label = REASON_LABEL[l.reason] ?? l.reason;
+  const f = l.reason !== "referral" && l.field ? fieldText(l.field) : "";
+  if (!f) return label;
+  return l.reason === "refund" || l.reason === "reversal" ? `${label}, ${f}` : `${label} ${f}`;
+}
+/** Where: "at IBM", or the other member for invite bonuses. */
+export const ledgerWhere = (l: LedgerRow) => (!l.company ? "" : l.reason === "referral" ? ` · ${l.company}` : ` at ${l.company}`);
 
 export function CreditsPill({ me, onClick, btnRef }: { me: Me; onClick: () => void; btnRef?: RefObject<HTMLButtonElement | null> }) {
   const low = me.credits <= 3;
@@ -118,8 +128,9 @@ export function CreditsPopover({
           <div key={i} className="tp-lrow">
             <span className={`mono tp-lrow-d${l.delta > 0 ? " up" : l.delta < 0 ? " down" : ""}`}>{l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "0"}</span>
             <span className="tp-lrow-t">
-              {REASON_LABEL[l.reason] ?? l.reason} {l.reason !== "referral" && l.field ? l.field.toLowerCase() : ""}
-              {l.company ? <span className="muted"> at {l.company}</span> : null}
+              {ledgerWhat(l)}
+              {l.company ? <span className="muted">{ledgerWhere(l)}</span> : null}
+              {l.delta === 0 && l.reason === "fill" && <span className="muted"> (daily max reached)</span>}
             </span>
             <span className="tp-lrow-at mono">{timeAgo(l.at)}</span>
           </div>
@@ -216,13 +227,15 @@ export function TopBar({
         }}
         autoFocus={phone && searchOpen}
       />
-      {query ? (
-        <button type="button" className="tp-search-x" aria-label="Clear search" onClick={() => (setQuery(""), phone && setSearchOpen(false))}>
-          <IconX size={14} />
-        </button>
-      ) : (
-        !phone && <kbd className="tp-kbd">/</kbd>
-      )}
+      {/* Phones close (and clear) search with the button next to the field. */}
+      {!phone &&
+        (query ? (
+          <button type="button" className="tp-search-x" aria-label="Clear search" onClick={() => setQuery("")}>
+            <IconX size={14} />
+          </button>
+        ) : (
+          <kbd className="tp-kbd">/</kbd>
+        ))}
     </label>
   );
   if (phone) {

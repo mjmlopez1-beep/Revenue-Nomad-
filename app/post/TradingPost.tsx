@@ -9,15 +9,16 @@
  *   overlays    record drawer, add modal, inline fact editor, credits popover
  *
  * Keyboard: "/" search, "f" filters, "a" add, Esc closes, J/K steps through records.
+ * Phones and tablets: the back gesture closes the top overlay before it leaves the page.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Cell } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
-  EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, rowsFor, sortRows,
-  type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, rowsFor, shown, sortRows,
+  type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
 } from "./model";
-import { useDebounced, useLayout, useStoredFlag, store, plural } from "./hooks";
+import { useLayout, useStoredFlag, store, plural } from "./hooks";
 import { UiCtx, FactEditor, Anchored, Sheet, type AddOpts, type Ui } from "./ui";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
 import { FilterPanel } from "./Filters";
@@ -50,6 +51,7 @@ function previousVisit(): string | null {
 }
 
 type DrawerState = { id: string; rowKey: string; focus: string | null };
+type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 
 export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   const me = view.me!;
@@ -68,14 +70,15 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   }));
   const [sort, setSort] = useState<SortKey>("fit");
   const [query, setQuery] = useState("");
-  const q = useDebounced(query, 120);
+  // The input stays instant; the list behind it renders when the main thread is free.
+  const q = useDeferredValue(query);
   const [limit, setLimit] = useState(PAGE);
   const [page, setPage] = useState<"table" | "credits">("table");
 
   /* ----- overlays ----- */
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
   const [addOpts, setAddOpts] = useState<AddOpts | null>(null);
-  const [editor, setEditor] = useState<{ el: HTMLElement; t: FactRef } | null>(null);
+  const [editor, setEditor] = useState<EditorState | null>(null);
   const [pop, setPop] = useState<"credits" | "menu" | null>(null);
   const [sortOpen, setSortOpen] = useState(false);
   const [sideDocked, setSideDocked] = useState(true);
@@ -92,27 +95,35 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   const menuRef = useRef<HTMLButtonElement>(null);
   const sortRef = useRef<HTMLButtonElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const frameBoxRef = useRef<HTMLDivElement>(null);
+  const fadeRef = useRef<HTMLDivElement>(null);
 
   /* ----- data ----- */
   const infos = useMemo(() => deriveAll(view.companies), [view.companies]);
   const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
-  const companyOf = useMemo(() => {
-    const m = new Map<string, string>();
+  /** Any record id (company, engagement, person) to the company that owns it. */
+  const ownerOf = useMemo(() => {
+    const m = new Map<string, CoInfo>();
     for (const i of infos) {
-      m.set(i.c.id, i.c.name);
-      for (const e of i.engs) m.set(e.id, i.c.name);
-      for (const { p } of i.people) m.set(p.id, i.c.name);
+      m.set(i.c.id, i);
+      for (const e of i.engs) m.set(e.id, i);
+      for (const { p } of i.people) m.set(p.id, i);
     }
     return m;
   }, [infos]);
+  const hasIndustry = useMemo(() => infos.some((i) => i.c.cells.industry?.s === "value"), [infos]);
   const totals = useMemo(
     () => ({ companies: infos.length, engagements: infos.reduce((n, i) => n + i.engs.length, 0), people: infos.reduce((n, i) => n + i.people.length, 0) }),
     [infos],
   );
   const allRows = useMemo(() => rowsFor(recordType, infos), [recordType, infos]);
   const { rows: filtered, facets } = useMemo(() => applyFilters(allRows, filters, tab, q, me), [allRows, filters, tab, q, me]);
-  const sorted = useMemo(() => sortRows(filtered, sort), [filtered, sort]);
+  const sorted = useMemo(() => sortRows(filtered, sort, tab === "needs"), [filtered, sort, tab]);
   const visible = useMemo(() => sorted.slice(0, limit), [sorted, limit]);
+  // Counts and sheets update on the next frame; the long list behind them follows when it can.
+  // The record type travels with its rows, so a deferred list never renders rows of another type.
+  const listData = useMemo(() => ({ type: recordType, rows: visible }), [recordType, visible]);
+  const list = useDeferredValue(listData);
   const nFilters = activeCount(filters);
   const chips = activeChips(filters);
 
@@ -129,6 +140,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   });
 
   /* ----- actions ----- */
+  const firstUnlock = me.unlocked === 0;
   const unlock = useCallback(
     async (t: FactRef) => {
       const k = cellKey(t.id, t.field);
@@ -140,6 +152,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         return n;
       });
       if (r.ok) {
+        if (firstUnlock) toast("Unlocked. It stays visible to you. Add a fact to earn the credit back.");
         setPulse((p) => (p === k ? null : p));
         setFlash((s) => new Set(s).add(k));
         setTimeout(() => setFlash((s) => {
@@ -149,7 +162,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         }), 2200);
       }
     },
-    [act],
+    [act, firstUnlock, toast],
   );
   const unlockMany = useCallback(
     async (items: FactRef[]) => {
@@ -169,10 +182,22 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     async (t: FactRef, value: string) => (await act({ type: "fill", entity: t.entity, id: t.id, field: t.field, value })).ok,
     [act],
   );
-  const edit = useCallback((el: HTMLElement, t: FactRef) => {
+  const edit = useCallback((el: HTMLElement, t: FactRef, initial?: string) => {
     setPop(null);
-    setEditor({ el, t });
+    setEditor({ el, t, initial });
   }, []);
+  /** Empty facts that earn a credit at the company owning a record: company facts first, then free engagement facts. */
+  const addable = useCallback(
+    (id: string): FactRef[] => {
+      const i = ownerOf.get(id);
+      if (!i) return [];
+      const out: FactRef[] = [];
+      for (const f of COMPANY_FILL) if (i.c.cells[f]?.s === "empty") out.push({ entity: "company", id: i.c.id, field: f });
+      for (const e of i.engs) for (const f of ["function", "type", "start"]) if (e.cells[f]?.s === "empty") out.push({ entity: "engagement", id: e.id, field: f });
+      return out.slice(0, 3);
+    },
+    [ownerOf],
+  );
   const sortedRef = useRef(sorted);
   sortedRef.current = sorted;
   const openCompany = useCallback((id: string, focus?: string) => {
@@ -207,27 +232,38 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     copy(inviteLink(me.inviteCode), `Invite link copied. You both get ${REFERRAL_BONUS} credits when they add their first fact.`);
   }, [copy, me.inviteCode]);
 
-  /** Find the first locked (or empty) fact the current view shows, followed companies first. */
+  /**
+   * The fact the guided steps point at. Adding: free company facts only (industry, size, HQ,
+   * revenue), never a guess at a role, rate or who held a seat. Unlocking: the seat holder
+   * first for intro seekers, else the role. Followed companies first, then seats in the
+   * member's own function, then the current sort.
+   */
   const firstFact = useCallback(
     (want: Cell["s"]): { t: FactRef; row: Row; idx: number } | null => {
-      const order = [...sorted.map((r, idx) => ({ r, idx }))].sort((a, b) => Number(b.r.i.c.following) - Number(a.r.i.c.following));
+      const fnOf = (r: Row) => shown((r.e ?? r.i.latest)?.cells.function);
+      const mineFn = (r: Row) => (me.function && fnOf(r) === me.function ? 1 : 0);
+      const order = sorted
+        .map((r, idx) => ({ r, idx }))
+        .sort((a, b) => Number(b.r.i.c.following) - Number(a.r.i.c.following) || mineFn(b.r) - mineFn(a.r) || a.idx - b.idx);
+      const lockedFields = me.goal === "intro" ? ["operator", "role", "rate"] : ["role", "operator", "rate"];
       for (const { r, idx } of order) {
         const cands: [FactRef, Cell | undefined][] = [];
-        if (recordType === "companies") {
-          const e = r.i.latest;
-          if (e) for (const f of phone ? ["role", "rate", "operator"] : ["role", "operator", "rate"]) cands.push([{ entity: "engagement", id: e.id, field: f }, e.cells[f]]);
-          if (!phone) for (const f of ["industry", "employees", "revenue", "hq"]) cands.push([{ entity: "company", id: r.i.c.id, field: f }, r.i.c.cells[f]]);
-        } else if (recordType === "engagements" && r.e) {
-          for (const f of ["role", "operator", "rate", "status", "start", "end", "hours", "posting"]) cands.push([{ entity: "engagement", id: r.e.id, field: f }, r.e.cells[f]]);
+        if (want === "empty") {
+          for (const f of ["industry", "employees", "hq", "revenue"]) cands.push([{ entity: "company", id: r.i.c.id, field: f }, r.i.c.cells[f]]);
         } else if (r.p) {
-          for (const f of ["name", "email", "title", "relationship", "linkedin", "phone"]) cands.push([{ entity: "contact", id: r.p.id, field: f }, r.p.cells[f]]);
+          for (const f of ["name", "email", "linkedin", "phone"]) cands.push([{ entity: "contact", id: r.p.id, field: f }, r.p.cells[f]]);
+        } else {
+          const e = r.e ?? r.i.latest;
+          // A phone company card shows the role, then the rate (or who held the seat when no rate is on file).
+          const onCard = (f: string) => !phone || r.e || f === "role" || (f === "rate" ? e?.cells.rate?.s !== "empty" || e?.cells.operator?.s === "empty" : e?.cells.rate?.s === "empty" && e?.cells.operator?.s !== "empty");
+          if (e) for (const f of lockedFields) if (onCard(f)) cands.push([{ entity: "engagement", id: e.id, field: f }, e.cells[f]]);
         }
         const hit = cands.find(([, c]) => c?.s === want);
         if (hit) return { t: hit[0], row: r, idx };
       }
       return null;
     },
-    [sorted, recordType, phone],
+    [sorted, me.function, me.goal, phone],
   );
   const showFact = useCallback(
     (want: "locked" | "empty") => {
@@ -241,8 +277,9 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
       if (hit.idx >= limit) setLimit(hit.idx + 1);
       const k = cellKey(hit.t.id, hit.t.field);
       setTimeout(() => {
-        const el = document.querySelector<HTMLElement>(`[data-cell="${k}"]`);
-        el?.scrollIntoView({ block: "center", inline: "center" });
+        // Company cells are not on screen in the Engagements and People views (or on phone cards): use the row.
+        const el = document.querySelector<HTMLElement>(`[data-cell="${k}"]`) ?? document.querySelector<HTMLElement>(`[data-row="${hit.row.key}"]`);
+        el?.scrollIntoView({ block: "center", inline: "nearest" });
         if (want === "locked") {
           setPulse(k);
           setTimeout(() => setPulse((p) => (p === k ? null : p)), 6000);
@@ -252,24 +289,55 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     [firstFact, limit, toast, phone],
   );
 
-  /* ----- keyboard ----- */
+  /* ----- closing overlays: Esc, the back gesture ----- */
   const toggleFilters = useCallback(() => {
     if (layout === "desktop") setSideDocked((x) => !x);
     else setSideOverlay((x) => !x);
   }, [layout]);
+  /** Close the overlay on top. */
+  const closeTop = useCallback(() => {
+    if (editor) setEditor(null);
+    else if (pop) setPop(null);
+    else if (sortOpen) setSortOpen(false);
+    else if (addOpts) setAddOpts(null);
+    else if (drawer) setDrawer(null);
+    else if (sideOverlay) setSideOverlay(false);
+    else if (page !== "table") setPage("table");
+  }, [editor, pop, sortOpen, addOpts, drawer, sideOverlay, page]);
+  const closeTopRef = useRef(closeTop);
+  closeTopRef.current = closeTop;
+  // Phones and tablets: one history entry while anything is open, so back closes it instead of leaving.
+  const skipPop = useRef(false);
+  useEffect(() => {
+    if (layout === "desktop") return;
+    const open = !!(editor || pop || sortOpen || addOpts || drawer || sideOverlay || page !== "table");
+    const ours = window.history.state?.tp === 1;
+    if (open && !ours) window.history.pushState({ tp: 1 }, "");
+    else if (!open && ours) {
+      skipPop.current = true;
+      window.history.back();
+    }
+  }, [editor, pop, sortOpen, addOpts, drawer, sideOverlay, page, layout]);
+  useEffect(() => {
+    const onPop = () => {
+      if (skipPop.current) {
+        skipPop.current = false;
+        return;
+      }
+      closeTopRef.current(); // if another overlay is still open, the effect above pushes a new entry
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  /* ----- keyboard ----- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       const typing = !!el?.closest("input, textarea, select, [contenteditable='true']");
       if (e.key === "Escape") {
         if (el === searchRef.current) return;
-        if (editor) setEditor(null);
-        else if (pop) setPop(null);
-        else if (sortOpen) setSortOpen(false);
-        else if (addOpts) setAddOpts(null);
-        else if (drawer) setDrawer(null);
-        else if (sideOverlay) setSideOverlay(false);
-        else if (page !== "table") setPage("table");
+        closeTop();
         return;
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -293,16 +361,43 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editor, pop, sortOpen, addOpts, drawer, sideOverlay, page, toggleFilters, openAdd, step]);
+  }, [closeTop, addOpts, editor, drawer, page, toggleFilters, openAdd, step]);
 
   // Closing overlays that no longer fit the layout.
   useEffect(() => {
     if (layout === "desktop") setSideOverlay(false);
   }, [layout]);
 
+  // A fade on the table's right edge while columns remain to the right.
+  const showTable = page === "table" && !phone;
+  const noRows = sorted.length === 0;
+  useEffect(() => {
+    const el = frameRef.current;
+    const box = frameBoxRef.current;
+    if (!showTable || !el || !box) return;
+    const check = () => {
+      box.classList.toggle("more-right", el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+      const fade = fadeRef.current;
+      if (fade) {
+        // Keep the fade inside the borders and clear of scrollbars.
+        fade.style.right = `${Math.max(1, el.offsetWidth - el.clientWidth - 1)}px`;
+        fade.style.bottom = `${Math.max(1, el.offsetHeight - el.clientHeight - 1)}px`;
+      }
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => {
+      el.removeEventListener("scroll", check);
+      ro.disconnect();
+    };
+  }, [showTable, list, noRows]);
+
   const ui: Ui = useMemo(
-    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd }),
-    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd],
+    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable }),
+    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable],
   );
 
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
@@ -321,14 +416,40 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   };
 
   /* ----- pieces ----- */
+  const checklist = (
+    <Checklist
+      me={me}
+      vertical={phone}
+      onUnlock={() => showFact("locked")}
+      onAdd={() => showFact("empty")}
+      onInvite={invite}
+      onDismiss={hideCheck}
+    />
+  );
+
+  // One slot for guidance: credits running out, then a waiting invite bonus, then the checklist, then the first-visit strip.
   const banners = (
     <div className="tp-banners">
-      {me.credits <= 0 || capped ? (
+      {me.credits <= 3 || capped ? (
         <CreditBanner me={me} onShowAdd={() => showFact("empty")} onInvite={invite} />
+      ) : me.invitePending && me.added === 0 ? (
+        <Strip
+          tone="volt"
+          actions={
+            <button type="button" className="btn btn-sm btn-pine" onClick={() => showFact("empty")}>
+              Show facts I can add
+            </button>
+          }
+        >
+          Add your first fact to get your {REFERRAL_BONUS} invite credits.
+        </Strip>
+      ) : !checkOff ? (
+        checklist
       ) : (
-        !introOff && (
+        !introOff &&
+        me.added + me.unlocked === 0 && (
           <Strip tone="volt" onClose={hideIntro}>
-            You have <span className="mono">{me.credits}</span> credits. Unlock a fact for 1. Add one and earn 1, up to {me.earnCap} a day.
+            You have {plural(me.credits, "credit")}. Unlock a fact for 1. Add one and earn 1, up to {me.earnCap} a day.
           </Strip>
         )
       )}
@@ -345,17 +466,6 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         </Strip>
       )}
     </div>
-  );
-
-  const checklist = !checkOff && (
-    <Checklist
-      me={me}
-      vertical={phone}
-      onUnlock={() => showFact("locked")}
-      onAdd={() => showFact("empty")}
-      onInvite={invite}
-      onDismiss={hideCheck}
-    />
   );
 
   const sortMenu = (
@@ -409,7 +519,15 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   );
 
   const empty = sorted.length === 0 && (
-    <NoResults q={q.trim()} filtered={nFilters > 0 || tab !== "all"} onClear={clearAll} onAdd={() => openAdd({ query: q.trim() || undefined })} />
+    <NoResults
+      q={q.trim()}
+      tab={tab}
+      noun={noun[1]}
+      filtered={nFilters > 0}
+      onClear={clearAll}
+      onBrowse={() => setTab("all")}
+      onAdd={() => openAdd({ query: q.trim() || undefined })}
+    />
   );
   const more = sorted.length > limit && (
     <button type="button" className="tp-more-btn" onClick={() => setLimit((l) => l + PAGE)}>
@@ -417,7 +535,8 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     </button>
   );
 
-  const filterPanel = (head?: React.ReactNode) => <FilterPanel f={filters} setF={setFilters} facets={facets} me={me} head={head} />;
+  const filterPanel = (head?: React.ReactNode) => <FilterPanel f={filters} setF={setFilters} facets={facets} me={me} head={head} hasIndustry={hasIndustry} />;
+  const qt = q.trim();
 
   /* ----- layout ----- */
   return (
@@ -447,20 +566,37 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         ) : phone ? (
           <main className="tp-main tp-main-phone">
             {banners}
+            {recordSwitch}
             <div className="tp-pchips">
               <button type="button" className={`chip tp-pchip tp-pfilter${nFilters ? " chip-on" : ""}`} onClick={() => setSideOverlay(true)}>
                 <IconFilter size={13} /> Filters{nFilters ? ` (${nFilters})` : ""}
               </button>
               {tabs}
             </div>
-            {checklist}
             <div className="tp-pcount">
               <span>
-                <span className="mono">{sorted.length}</span> {sorted.length === 1 ? noun[0] : noun[1]}
+                {qt && tab !== "all" ? (
+                  <>
+                    <span className="mono">{sorted.length}</span> of <span className="mono">{facets.tabs.all}</span> matching <span className="tp-q">{qt}</span>{" "}
+                    <button type="button" className="tp-flink" onClick={() => setTab("all")}>
+                      Show all
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="mono">{sorted.length}</span> {sorted.length === 1 ? noun[0] : noun[1]}
+                    {qt && (
+                      <>
+                        {" "}
+                        matching <span className="tp-q">{qt}</span>
+                      </>
+                    )}
+                  </>
+                )}
               </span>
               {sortMenu}
             </div>
-            {empty || <CardList type={recordType} rows={visible} me={me} onOpen={openRow} />}
+            {empty || <CardList type={list.type} rows={list.rows} me={me} onOpen={openRow} />}
             {more}
           </main>
         ) : (
@@ -491,18 +627,16 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
                   </button>
                 )}
                 {recordSwitch}
-                <span className="tp-toolbar-sp" />
-                {checklist}
               </div>
               <div className="tp-toolbar">
                 {tabs}
                 <span className="tp-toolbar-sp" />
                 <span className="tp-count">
                   <span className="mono">{sorted.length}</span> {sorted.length === 1 ? noun[0] : noun[1]}
-                  {q.trim() && (
+                  {qt && (
                     <>
                       {" "}
-                      matching <span className="tp-q">{q.trim()}</span>
+                      matching <span className="tp-q">{qt}</span>
                     </>
                   )}
                 </span>
@@ -515,18 +649,21 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
                       {c.label} <IconX size={11} />
                     </button>
                   ))}
-                  <button type="button" className="tp-flink" onClick={clearAll}>
+                  <button type="button" className="tp-flink" onClick={() => setFilters(EMPTY_FILTERS)}>
                     Clear all
                   </button>
                 </div>
               )}
-              <div className="tp-frame" ref={frameRef}>
-                {empty || (
-                  <>
-                    <DataTable type={recordType} rows={visible} me={me} selected={drawer?.rowKey ?? null} onOpen={openRow} newSince={since.at} />
-                    {more}
-                  </>
-                )}
+              <div className="tp-frame-box" ref={frameBoxRef}>
+                <div className="tp-frame" ref={frameRef}>
+                  {empty || (
+                    <>
+                      <DataTable type={list.type} rows={list.rows} me={me} selected={drawer?.rowKey ?? null} onOpen={openRow} newSince={since.at} />
+                      {more}
+                    </>
+                  )}
+                </div>
+                <div className="tp-frame-fade" ref={fadeRef} aria-hidden />
               </div>
             </main>
           </div>
@@ -573,10 +710,6 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
               </div>
             }
           >
-            <div className="tp-fgroup">
-              <h3 className="tp-fgroup-h">Show</h3>
-              {recordSwitch}
-            </div>
             {filterPanel(null)}
           </Sheet>
         )}
@@ -592,7 +725,16 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
           />
         )}
         {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
-        {editor && <FactEditor anchor={editor.el} t={editor.t} company={companyOf.get(editor.t.id) ?? ""} onClose={() => setEditor(null)} />}
+        {editor && (
+          <FactEditor
+            key={`${editor.t.id}.${editor.t.field}`}
+            anchor={editor.el}
+            t={editor.t}
+            initial={editor.initial}
+            company={ownerOf.get(editor.t.id)?.c.name ?? ""}
+            onClose={() => setEditor(null)}
+          />
+        )}
         {pop === "credits" && creditsRef.current && (
           <CreditsPopover
             me={me}

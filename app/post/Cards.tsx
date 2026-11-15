@@ -6,8 +6,8 @@ import type { Me } from "@/lib/tableTypes";
 import { SOURCE_LABEL } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconStar, fmtMonth, val } from "../ui/shared";
 import type { Row } from "./model";
-import { FactCell, useUi } from "./ui";
-import { Fit, FnChips } from "./Tables";
+import { FactCell, earnNote, useUi } from "./ui";
+import { Fit, FnChips, HeldBy } from "./Tables";
 
 function Head({ r, right }: { r: Row; right?: React.ReactNode }) {
   const i = r.i;
@@ -50,11 +50,10 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} right={<Fit i={i} />} />
-      <div className="tp-pcard-line mono">{line.length ? line.join(" · ") : <span className="tp-faint">Industry, size and HQ not on file</span>}</div>
-      {(i.fns.length > 0 || c.friendly.open > 0) && (
+      <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">Industry, size and HQ not on file</span>}</div>
+      {i.fns.length > 0 && (
         <div className="tp-pcard-fns">
-          {c.friendly.open > 0 && <span className="chip chip-ember">Hiring now</span>}
-          <FnChips i={i} me={me} max={3} />
+          <FnChips i={i} mine={me.function} max={3} />
         </div>
       )}
       <div className="tp-pfacts">
@@ -68,20 +67,20 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
                 <FactCell t={{ entity: "engagement", id: e.id, field: "rate" }} cell={e.cells.rate} />
               </Fact>
             ) : (
-              <Fact label="Fractional">
-                <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} />
+              <Fact label="Held by">
+                <HeldBy e={e} />
               </Fact>
             )}
           </>
         ) : (
           <Fact label="Seat">
-            <AddPill label="Add seat" onAdd={() => ui.openAdd({ companyId: c.id, mode: "engagement" })} />
+            <AddPill label="Add seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: c.id, mode: "engagement" })} />
           </Fact>
         )}
       </div>
       {miss > 0 && (
         <div className="tp-pcard-miss">
-          {miss} fact{miss > 1 ? "s" : ""} missing{room ? `, earn ${Math.min(miss, room)}` : ""}
+          {miss} fact{miss > 1 ? "s" : ""} missing{room && !earnNote(me).capped ? `, earn ${Math.min(miss, room)}` : ""}
         </div>
       )}
     </article>
@@ -105,8 +104,8 @@ const EngCard = memo(function EngCard({ r, onOpen }: { r: Row; onOpen: (r: Row) 
         <Fact label="Role">
           <FactCell t={t("role")} cell={e.cells.role} />
         </Fact>
-        <Fact label="Fractional">
-          <FactCell t={t("operator")} cell={e.cells.operator} />
+        <Fact label="Held by">
+          <HeldBy e={e} />
         </Fact>
         <Fact label="Rate">
           <FactCell t={t("rate")} cell={e.cells.rate} />

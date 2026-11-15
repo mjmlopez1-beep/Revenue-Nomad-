@@ -5,12 +5,71 @@
  * lock and add pills, value formatting and a small icon set.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Action, Cell, View } from "@/lib/tableTypes";
+import type { Action, Cell, Me, PersonRec, View } from "@/lib/tableTypes";
 import { fieldDef, type Entity } from "@/lib/tableFields";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
 export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean };
 export type Act = (a: Action, opts?: { quiet?: boolean }) => Promise<ActResult>;
+
+/** One cell an action changed. */
+export type CellPatch = { id: string; field: string; cell: Cell; entity?: string };
+/** What a POST may return besides its message: the changed cells (a list, or keyed "id.field") and the member's new numbers. */
+export type ActPatch = { cells?: CellPatch[] | Record<string, Cell> | null; me?: Partial<Me> | null };
+
+/**
+ * Apply an action's changes to the view without a refetch. Only the companies that own a
+ * changed cell get new objects (along the path to the cell); every other company keeps its
+ * identity, so memoized rows can skip rendering.
+ */
+export function patchView(v: View, r: ActPatch): View {
+  const me = r.me && v.me ? { ...v.me, ...r.me } : v.me;
+  const list: CellPatch[] = Array.isArray(r.cells)
+    ? r.cells
+    : r.cells
+      ? Object.entries(r.cells).map(([k, cell]) => {
+          const dot = k.lastIndexOf(".");
+          return { id: k.slice(0, dot), field: k.slice(dot + 1), cell };
+        })
+      : [];
+  const byId = new Map<string, CellPatch[]>();
+  for (const c of list) {
+    if (!c || !c.id || !c.field || !c.cell) continue;
+    const l = byId.get(c.id);
+    if (l) l.push(c);
+    else byId.set(c.id, [c]);
+  }
+  if (!byId.size) return me === v.me ? v : { ...v, me };
+  const setCells = (cells: Record<string, Cell>, id: string) => {
+    const ch = byId.get(id);
+    if (!ch) return cells;
+    const next = { ...cells };
+    for (const c of ch) next[c.field] = c.cell;
+    return next;
+  };
+  const personHit = (p: PersonRec) => byId.has(p.id);
+  const patchPerson = (p: PersonRec) => (personHit(p) ? { ...p, cells: setCells(p.cells, p.id) } : p);
+  let changed = false;
+  const companies = v.companies.map((c) => {
+    const engHit = c.engagements.some((e) => byId.has(e.id) || e.people.some(personHit));
+    const pplHit = c.people.some(personHit);
+    if (!byId.has(c.id) && !engHit && !pplHit) return c;
+    changed = true;
+    return {
+      ...c,
+      cells: setCells(c.cells, c.id),
+      people: pplHit ? c.people.map(patchPerson) : c.people,
+      engagements: engHit
+        ? c.engagements.map((e) =>
+            byId.has(e.id) || e.people.some(personHit)
+              ? { ...e, cells: setCells(e.cells, e.id), people: e.people.some(personHit) ? e.people.map(patchPerson) : e.people }
+              : e,
+          )
+        : c.engagements,
+    };
+  });
+  return { ...v, me, companies: changed ? companies : v.companies };
+}
 
 /* ---------- API ---------- */
 
@@ -40,7 +99,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const push = useCallback((text: string, err?: boolean) => {
     const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-2), { id, text, err }]);
+    setToasts((t) => [...t.slice(-1), { id, text, err }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), err ? 6000 : 4200);
   }, []);
   return (
@@ -160,11 +219,12 @@ export function LockPill({ onUnlock, ver, label = "Unlock", busy }: { onUnlock?:
   );
 }
 
-/** A missing fact. Adding it earns 1 credit. */
-export function AddPill({ onAdd, label = "Add" }: { onAdd: () => void; label?: string }) {
+/** A missing fact. Adding it earns 1 credit (no badge once today's earning cap is reached). */
+export function AddPill({ onAdd, label = "Add", earn = true }: { onAdd: () => void; label?: string; earn?: boolean }) {
   return (
     <button type="button" className="add" onClick={(e) => (e.stopPropagation(), onAdd())}>
-      + {label} <span className="plus1">+1</span>
+      + {label}
+      {earn && <span className="plus1">+1</span>}
     </button>
   );
 }
