@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Trading Post · Revenue Nomad",
-  description: "Give to get: the shared record of fractional GTM engagements, open roles and the people behind them.",
+  description: "Give to get. The shared record of fractional GTM engagements, open roles and the people behind them.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

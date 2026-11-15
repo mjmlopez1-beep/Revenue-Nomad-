@@ -26,6 +26,13 @@ html:has(.lp) {
 }
 
 /* ---------- link-style buttons ---------- */
+/* 44px tall tap target, text stays on the line it sits in. */
+.lp-linkbtn,
+.lp-foot-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 .lp-linkbtn {
   padding: 0;
   border: 0;
@@ -100,8 +107,9 @@ html:has(.lp) {
   gap: 8px;
 }
 .lp-nav-signin {
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
+  white-space: nowrap;
   border: 0;
   border-radius: var(--r-btn);
   background: transparent;
@@ -113,7 +121,7 @@ html:has(.lp) {
   background: rgba(255, 255, 255, 0.1);
 }
 .lp-nav-get {
-  min-height: 36px;
+  min-height: 44px;
 }
 
 /* ---------- hero ---------- */
@@ -152,6 +160,22 @@ html:has(.lp) {
   margin-top: 32px;
   max-width: 520px;
 }
+/* Invited visitors: who invited them and the bonus waiting, right above the form. */
+.lp-invited {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 28px;
+  padding: 7px 14px;
+  border-radius: 16px;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.lp-invited + .lp-hero-form {
+  margin-top: 14px;
+}
 .lp-hero-terms {
   margin-top: 14px;
   font-size: 12.5px;
@@ -187,6 +211,16 @@ html:has(.lp) {
 .lp-join-btn.btn-lg {
   min-height: 52px;
   padding: 0 22px;
+}
+/* The join forms sit on pine bands: a lighter pine with a hairline keeps the pine button visible there. */
+.lp-join-btn.btn-pine {
+  background: var(--pine-hover);
+  border-color: rgba(255, 255, 255, 0.36);
+  color: #fff;
+}
+.lp-join-btn.btn-pine:hover {
+  background: #136b50;
+  border-color: rgba(255, 255, 255, 0.5);
 }
 .lp-join-who {
   display: flex;
@@ -309,42 +343,46 @@ html:has(.lp) {
   margin-right: 6px;
   color: var(--faint);
 }
-.lp-fit {
+/* Evidence chips, as the app draws them: ember for an open role, pine for a recent seat, grey for a past one. */
+.lp-tier {
   flex: none;
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  column-gap: 6px;
-  row-gap: 4px;
-  justify-items: end;
-}
-.lp-fit-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.lp-tier::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.lp-tier.is-hiring {
+  border-color: #ffc9b0;
+  background: var(--ember-soft);
+  color: var(--ember-ink);
+}
+.lp-tier.is-recent {
+  border-color: var(--pine-14);
+  background: var(--pine-8);
+  color: var(--pine);
+}
+.lp-tier.is-past {
   color: var(--muted);
 }
-.lp-fit-v {
-  font-size: 22px;
-  font-weight: 500;
-  color: var(--pine);
-  line-height: 1;
-}
-.lp-fit .lp-fitbar {
-  grid-column: 1 / -1;
-}
-.lp-fitbar {
-  display: inline-flex;
-  gap: 2px;
-}
-.lp-fitbar i {
-  display: block;
-  width: 9px;
-  height: 5px;
-  border-radius: 2px;
-  background: var(--line);
-}
-.lp-fitbar i.on {
-  background: var(--pine);
+.lp-rec-name .lp-tier {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 11.5px;
 }
 .lp-rec-sec {
   padding: 14px 20px;
@@ -697,10 +735,6 @@ html:has(.lp) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.lp-uv-score {
-  font-size: 13px;
-  color: var(--pine);
-}
 .lp-uv-k {
   font-size: 12px;
   font-weight: 700;
@@ -958,9 +992,10 @@ html:has(.lp) {
   font-size: 22px;
 }
 .lp-dialog-x.btn {
-  width: 36px;
+  width: 44px;
+  height: 44px;
   padding: 0;
-  margin-right: -8px;
+  margin-right: -10px;
   color: var(--muted);
 }
 .lp-dialog-sub {
@@ -1004,6 +1039,19 @@ html:has(.lp) {
   margin-top: 8px;
   font-size: 13.5px;
   color: var(--red);
+}
+.lp-dialog-help {
+  margin-top: 12px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.lp-dialog-help a {
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
 }
 .lp-dialog-ok {
   margin-top: 18px;

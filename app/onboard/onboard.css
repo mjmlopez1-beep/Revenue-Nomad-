@@ -1,6 +1,7 @@
 /*
  * Trading Post first-run onboarding. Classes are prefixed ob-.
- * One centered card on the off-white page; pine for selection, volt for the primary button.
+ * One centered card on the off-white page, the same width on every step; pine for selection
+ * and for Continue (navigation), volt only where credits are earned.
  */
 
 .ob {
@@ -53,14 +54,11 @@
 }
 .ob-card {
   width: 100%;
-  max-width: 600px;
+  max-width: 720px;
   padding: 28px 32px 28px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--surface);
-}
-.ob-card-wide {
-  max-width: 720px;
 }
 
 /* progress */
@@ -142,7 +140,7 @@
   gap: 8px;
 }
 .ob-chip {
-  height: 38px;
+  min-height: 44px;
   padding: 0 14px;
   border-radius: var(--r-btn);
   border: 1px solid var(--line-strong);
@@ -224,7 +222,7 @@
 }
 .ob-back,
 .ob-skip {
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 4px;
   border: 0;
   background: none;
@@ -256,18 +254,18 @@
 }
 .ob-search-input.input {
   min-height: 46px;
-  padding: 0 40px 0 40px;
+  padding: 0 48px 0 40px;
   font-size: 15px;
 }
 .ob-search-clear {
   position: absolute;
-  right: 6px;
+  right: 1px;
   top: 50%;
   transform: translateY(-50%);
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: var(--r-btn);
   background: none;
@@ -366,14 +364,21 @@
   font-size: 9.5px;
 }
 .ob-picked-chip button {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 5px;
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
+}
+/* 44px hit area around the 32px button. */
+.ob-picked-chip button::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
 }
 .ob-picked-chip button:hover {
   background: rgba(255, 255, 255, 0.14);
@@ -466,46 +471,45 @@
   font-size: 12px;
   color: var(--faint);
 }
-.ob-fit {
+/* Evidence chip, as the app draws it: ember for an open role, pine for a recent seat, grey for a past one. */
+.ob-tier {
   flex: none;
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  column-gap: 5px;
-  row-gap: 3px;
-  justify-items: end;
-}
-.ob-fit-k {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.ob-fit-v {
-  font-size: 16px;
-  line-height: 1;
-  color: var(--pine);
-}
-.ob-fitbar {
-  grid-column: 1 / -1;
   display: inline-flex;
-  gap: 2px;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: var(--r-chip);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
-.ob-fitbar i {
-  display: block;
-  width: 7px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--line);
+.ob-tier::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
-.ob-fitbar i.on {
-  background: var(--pine);
+.ob-tier.is-hiring {
+  border-color: #ffc9b0;
+  background: var(--ember-soft);
+  color: var(--ember-ink);
+}
+.ob-tier.is-recent {
+  border-color: var(--pine-14);
+  background: var(--pine-8);
+  color: var(--pine);
 }
 .ob-follow {
   flex: none;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
+  min-height: 44px;
   padding: 0 12px;
   border-radius: var(--r-btn);
   border: 1px solid var(--line-strong);
@@ -569,8 +573,10 @@
   color: var(--volt-ink);
 }
 .ob-mailme {
-  display: inline-block;
-  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
   font-size: 14px;
   font-weight: 700;
   color: var(--pine);
@@ -591,8 +597,7 @@
   .ob-main {
     padding: 4px 0 0;
   }
-  .ob-card,
-  .ob-card-wide {
+  .ob-card {
     max-width: none;
     padding: 20px 16px 16px;
     border-radius: 0;
@@ -605,7 +610,6 @@
     font-size: 23px;
   }
   .ob-chip {
-    height: 40px;
     padding: 0 12px;
   }
   .ob-sugg {
@@ -630,8 +634,10 @@
   .ob-foot-follow {
     row-gap: 6px;
   }
+  /* Back stays on phones, first in the row, so the seat and goal can still be changed. */
   .ob-foot-follow .ob-back {
-    display: none;
+    order: 0;
+    min-height: 44px;
   }
   .ob-foot-follow .ob-next.btn {
     flex: 1 0 100%;

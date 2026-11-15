@@ -16,16 +16,12 @@ function Lock({ label }: { label?: string }) {
   );
 }
 
-/** Five-segment fit bar, filled to `score`. */
-export function FitBar({ score }: { score: number }) {
-  const on = Math.max(1, Math.round(score / 20));
-  return (
-    <span className="lp-fitbar" aria-hidden>
-      {[0, 1, 2, 3, 4].map((i) => (
-        <i key={i} className={i < on ? "on" : ""} />
-      ))}
-    </span>
-  );
+type Tier = "hiring" | "recent" | "past";
+const TIER_LABEL: Record<Tier, string> = { hiring: "Hiring", recent: "Recent seat", past: "Past seat" };
+
+/** The evidence chip the app shows instead of a score: hiring now, a recent seat, or a past one. */
+function TierChip({ tier }: { tier: Tier }) {
+  return <span className={`lp-tier is-${tier}`}>{TIER_LABEL[tier]}</span>;
 }
 
 function Mark({ text, hue }: { text: string; hue: number }) {
@@ -36,8 +32,11 @@ function Mark({ text, hue }: { text: string; hue: number }) {
   );
 }
 
-/** Hero visual: one company record with open firmographics and locked intel, plus the credits meter. */
-export function HeroRecord() {
+/**
+ * Hero visual: one company record with open firmographics and locked intel, plus the credits meter.
+ * `credits` is the meter balance (the real starter balance plus the 7 earned today it shows).
+ */
+export function HeroRecord({ credits }: { credits: number }) {
   return (
     <figure className="lp-visual" aria-label="Example record on Trading Post">
       <div className="lp-rec">
@@ -46,17 +45,13 @@ export function HeroRecord() {
           <div className="lp-rec-id">
             <div className="lp-rec-name">
               Northwind Health <span className="chip chip-ember lp-chip-xs">Hiring now</span>
+              <TierChip tier="recent" />
             </div>
             <div className="lp-rec-meta mono">
               <span>Health Care</span>
               <span>51–200</span>
               <span>$5M–$20M</span>
             </div>
-          </div>
-          <div className="lp-fit">
-            <span className="lp-fit-k">Fit</span>
-            <span className="lp-fit-v mono">82</span>
-            <FitBar score={82} />
           </div>
         </div>
 
@@ -138,7 +133,7 @@ export function HeroRecord() {
           <span className="lp-meter-coin">
             <IconCoin size={14} />
           </span>
-          <span className="mono lp-meter-num">50</span>
+          <span className="mono lp-meter-num">{credits}</span>
           <span className="lp-meter-unit">credits</span>
           <span className="lp-plus mono">+1</span>
         </div>
@@ -195,19 +190,18 @@ export function StepDemoConfirm() {
 /* ---------- use cases ---------- */
 
 export function UseFriendly() {
-  const rows: [string, string, number, number][] = [
-    ["Northwind Health", "NH", 200, 82],
-    ["Juniper Freight", "JF", 25, 64],
-    ["Alder Labs", "AL", 152, 41],
+  const rows: [string, string, number, Tier][] = [
+    ["Northwind Health", "NH", 200, "hiring"],
+    ["Juniper Freight", "JF", 25, "recent"],
+    ["Alder Labs", "AL", 152, "past"],
   ];
   return (
     <div className="lp-uv" aria-hidden>
-      {rows.map(([name, mark, h, score]) => (
+      {rows.map(([name, mark, h, tier]) => (
         <div key={name} className="lp-uv-row">
           <Mark text={mark} hue={h} />
           <span className="lp-uv-name">{name}</span>
-          <span className="mono lp-uv-score">{score}</span>
-          <FitBar score={score} />
+          <TierChip tier={tier} />
         </div>
       ))}
     </div>

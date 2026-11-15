@@ -5,7 +5,7 @@
  * credit, the rules, and one join form (email, then name) in the hero and at the end.
  * The product visual is static HTML; there is no clickable table here.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
 import { Brand, IconCheck, IconLock, type View } from "../ui/shared";
 import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
@@ -20,22 +20,23 @@ export interface LandingProps {
   onSignedIn: () => Promise<void> | void;
 }
 
-/** Pilot starter balance (the server's RN_STARTER_CREDITS default). */
-const STARTER = 50;
+/** The server's default starter balance, used only if the view predates stats.starter. */
+const STARTER_FALLBACK = 5;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-const FREE = ["Company and website", "Size and revenue", "GTM functions hired", "Fit score", "People's titles"];
+const FREE = ["Company and website", "Size and revenue", "GTM functions hired", "Engagement type and start", "People's titles"];
 const LOCKED = ["Exact role", "Status", "Who held the seat", "Rate", "Hours per week", "Names and contact details"];
 
-const FAQ: [string, string][] = [
+/** The questions, with the starter balance the server actually gives. */
+const faq = (starter: number): [string, string][] => [
   [
     "Where does the data come from?",
     "Revenue Nomad published engagements, member success stories and our own scans for open fractional roles. Members add the rest, one fact at a time.",
   ],
   [
     "Is my own engagement data shown?",
-    "Anonymous engagements are never shown. Facts you add carry no name, and locked details stay locked until a member spends a credit on them.",
+    "Published engagements show who held the seat behind a lock, so another member pays 1 credit to see your name. Anonymous engagements are never shown, and facts you add carry no name.",
   ],
   [
     "What happens when a fact is wrong?",
@@ -45,14 +46,45 @@ const FAQ: [string, string][] = [
     `Why can I only earn ${EARN_CAP} credits a day?`,
     "So the table fills with things people know, not guesses made for points. Add carefully, not quickly.",
   ],
-  ["Does it cost anything?", `No. The pilot is free and you start with ${STARTER} credits. Unlocking only ever costs credits.`],
+  ["Does it cost anything?", `No. The pilot is free and you start with ${starter} credits. Unlocking only ever costs credits.`],
 ];
+
+/**
+ * First name of the member whose invite link brought this visitor here. Root saves the
+ * ?ref= code as localStorage tp_ref; the server answers GET ?ref=CODE with { inviter }.
+ * A bad code, no code or blocked storage shows nothing.
+ */
+function useInviter(): string | null {
+  const [inviter, setInviter] = useState<string | null>(null);
+  useEffect(() => {
+    let ref: string | null = null;
+    try {
+      ref = localStorage.getItem("tp_ref");
+    } catch {
+      ref = null;
+    }
+    if (!ref) return;
+    const ctl = new AbortController();
+    fetch(`/api/table?ref=${encodeURIComponent(ref)}`, { cache: "no-store", signal: ctl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { inviter?: unknown } | null) => {
+        const name = typeof j?.inviter === "string" ? j.inviter.trim() : "";
+        if (name) setInviter(name);
+      })
+      .catch(() => {});
+    return () => ctl.abort();
+  }, []);
+  return inviter;
+}
 
 export default function Landing({ view, onSignedIn }: LandingProps) {
   const [signIn, setSignIn] = useState<{ open: boolean; note: string | null }>({ open: false, note: null });
   const heroForm = useRef<HTMLDivElement>(null);
   const finalForm = useRef<HTMLDivElement>(null);
   const s = view.stats;
+  // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 5).
+  const starter = (s as { starter?: number }).starter ?? STARTER_FALLBACK;
+  const inviter = useInviter();
 
   /** Take the visitor to the nearest join form and focus it (email, or name once the email is in). */
   const toJoin = useCallback(() => {
@@ -69,7 +101,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   // Open roles are the strongest proof once there are enough of them; until then show fractional-friendly companies.
   const proof: [number, string][] = [
     [s.companies, "companies"],
-    [s.engagements, "fractional engagements"],
+    [s.engagements, "engagements on file"],
     s.openRoles >= 10 ? [s.openRoles, "open roles"] : [s.fractionalFriendly, "fractional-friendly companies"],
     [s.members, "members"],
   ];
@@ -93,7 +125,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               Sign in
             </button>
             <button type="button" className="btn btn-primary lp-nav-get" onClick={toJoin}>
-              Get {STARTER} credits
+              Get {starter} credits
             </button>
           </div>
         </div>
@@ -105,15 +137,20 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
               <p className="lp-eyebrow mono">Trading Post by Revenue Nomad</p>
-              <h1 className="lp-h1">See who hires fractionals, for which seat, at what rate</h1>
+              <h1 className="lp-h1">See who hires fractionals and for which seat</h1>
               <p className="lp-hero-sub">
                 The shared record of fractional GTM work. Add what you know, unlock what you need.
               </p>
+              {inviter ? (
+                <p className="lp-invited">
+                  {inviter} invited you. Add one fact and you both get {REFERRAL_BONUS} credits.
+                </p>
+              ) : null}
               <div className="lp-hero-form" ref={heroForm}>
-                <JoinForm emailOn={view.email} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" />
+                <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" />
               </div>
               <p className="lp-hero-terms mono">
-                {STARTER} credits to start · earn up to {EARN_CAP} a day · free pilot
+                {starter} credits to start · earn up to {EARN_CAP} a day · free pilot
               </p>
               <p className="lp-hero-member">
                 Revenue Nomad member?{" "}
@@ -123,7 +160,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               </p>
             </div>
             <div className="lp-hero-visual">
-              <HeroRecord />
+              <HeroRecord credits={starter + 7} />
             </div>
           </div>
         </section>
@@ -190,7 +227,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               <article className="lp-use">
                 <UseFriendly />
                 <h3>Find fractional-friendly companies</h3>
-                <p>See which companies hire fractionals, how often and for which seats. Each one gets a fit score.</p>
+                <p>See which companies hire fractionals, for which seats and how recently the last one started.</p>
               </article>
               <article className="lp-use">
                 <UseAdjacent />
@@ -211,7 +248,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
           <div className="lp-wrap">
             <div className="lp-sec-head">
               <h2 className="lp-h2">What is free and what you trade for</h2>
-              <p className="lp-lead">The free view tells you if a company is worth a look. Credits get you the facts that win the work.</p>
+              <p className="lp-lead">The free view tells you if a company is worth a look. Credits get you the facts that tell you where to pitch.</p>
             </div>
             <div className="lp-split">
               <div className="lp-col">
@@ -259,12 +296,12 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               <div className="lp-rules-head">
                 <h2 className="lp-h2">The rules in plain words</h2>
                 <button type="button" className="btn btn-primary btn-lg" onClick={toJoin}>
-                  Get {STARTER} credits
+                  Get {starter} credits
                 </button>
               </div>
               <dl className="lp-rules-grid">
                 <div>
-                  <dt className="mono">{STARTER}</dt>
+                  <dt className="mono">{starter}</dt>
                   <dd>credits to start. The pilot is free.</dd>
                 </div>
                 <div>
@@ -289,7 +326,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
           <div className="lp-wrap lp-faq-wrap">
             <h2 className="lp-h2">Questions</h2>
             <div className="lp-faq">
-              {FAQ.map(([q, a]) => (
+              {faq(starter).map(([q, a]) => (
                 <details key={q} className="lp-qa">
                   <summary>
                     <span>{q}</span>
@@ -307,7 +344,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
           <div className="lp-wrap lp-final-in">
             <h2 className="lp-h2">Add one thing you know. See what the rest of us know.</h2>
             <div className="lp-final-form" ref={finalForm}>
-              <JoinForm emailOn={view.email} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
+              <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
             </div>
             <p className="lp-hero-terms mono">Takes about 20 seconds to add your first fact</p>
           </div>
@@ -331,7 +368,15 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         </div>
       </footer>
 
-      <SignIn open={signIn.open} note={signIn.note} onClose={closeSignIn} emailOn={view.email} onSignedIn={onSignedIn} onJoin={toJoin} />
+      <SignIn
+        open={signIn.open}
+        note={signIn.note}
+        onClose={closeSignIn}
+        emailOn={view.email}
+        starter={starter}
+        onSignedIn={onSignedIn}
+        onJoin={toJoin}
+      />
     </div>
   );
 }

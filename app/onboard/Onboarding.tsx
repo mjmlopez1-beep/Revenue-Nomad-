@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./onboard.css";
 import { Brand, CompanyLogo, IconCheck, IconCoin, IconLink, IconPlus, IconSearch, IconX, val, type Act, type View } from "../ui/shared";
-import { FUNCTIONS } from "@/lib/tableFields";
+import { FRACTIONAL_TYPES, FUNCTIONS } from "@/lib/tableFields";
 import { GOALS, type CompanyRec } from "@/lib/tableTypes";
 
 export interface OnboardingProps {
@@ -24,7 +24,7 @@ type Goal = (typeof GOALS)[number]["key"];
 const FOLLOW_TARGET = 3;
 
 const GOAL_HINT: Record<Goal, string> = {
-  friendly: "We start you on the companies with the highest fit scores.",
+  friendly: "We start you on companies that hired fractionals, your seat first.",
   adjacent: "We start you on companies that hired other GTM functions fractionally.",
   intro: "We start you on companies where fellow members held a seat.",
 };
@@ -37,39 +37,64 @@ function metaOf(c: CompanyRec): string {
   return parts.join(" · ");
 }
 
+/** A fractional seat started within this many months counts as recent. */
+const RECENT_MONTHS = 24;
+const SUGGESTIONS = 6;
+
+/** A seat of a fractional type (or a published engagement), as the server counts friendly.fractional. */
+const fractionalSeat = (e: CompanyRec["engagements"][number]) =>
+  e.source === "Published engagement" || FRACTIONAL_TYPES.includes(val(e.cells.type) ?? "");
+
+/**
+ * The evidence chip for a company, in place of a fit number: an open role now, a fractional
+ * seat that started recently, or one on file from before. Null when there is no seat on file.
+ * Same labels as the app's chip (app/post/model fitTier once that lands on this branch).
+ */
+function fitTier(c: CompanyRec): { label: string; cls: string; rank: number } | null {
+  const f = c.friendly;
+  if (f.open > 0) return { label: "Hiring", cls: "is-hiring", rank: 3 };
+  const cut = new Date();
+  cut.setMonth(cut.getMonth() - RECENT_MONTHS);
+  const since = cut.toISOString().slice(0, 7);
+  const recent = c.engagements.some((e) => {
+    const start = val(e.cells.start);
+    return !!start && /^\d{4}-\d{2}/.test(start) && start >= since && fractionalSeat(e);
+  });
+  if (recent) return { label: "Recent seat", cls: "is-recent", rank: 2 };
+  if (f.fractional > 0) return { label: "Past seat", cls: "is-past", rank: 1 };
+  return null;
+}
+
 /** Six suggestions that match what the member came for. */
 function suggest(companies: CompanyRec[], goal: Goal | null, fn: string | null): { title: string; list: CompanyRec[] } {
+  const rank = new Map(companies.map((c) => [c.id, fitTier(c)?.rank ?? 0]));
+  // Many companies tie on score, so recent evidence breaks the tie before name order does.
   const byScore = (a: CompanyRec, b: CompanyRec) =>
     b.friendly.score - a.friendly.score ||
+    (rank.get(b.id) ?? 0) - (rank.get(a.id) ?? 0) ||
     b.engagements.length - a.engagements.length ||
     Number(!!b.iconDomain) - Number(!!a.iconDomain) ||
     a.name.localeCompare(b.name);
+  const fnBonus = (c: CompanyRec) => (fn && c.friendly.functions.includes(fn) ? 1 : 0);
+  /** Companies with no functions on file say little; keep them only to fill the six. */
+  const withFunctions = (list: CompanyRec[]) => {
+    const kept = list.filter((c) => c.friendly.functions.length > 0);
+    return kept.length >= SUGGESTIONS ? kept : list;
+  };
   let pool = companies.slice();
-  let title = "Highest fit scores";
+  let title = "Fractional-friendly companies";
   if (goal === "adjacent") {
     const adj = pool.filter((c) => c.friendly.functions.length && (!fn || !c.friendly.functions.includes(fn)));
-    pool = (adj.length >= 6 ? adj : pool).sort((a, b) => b.friendly.functions.length - a.friendly.functions.length || byScore(a, b));
+    pool = (adj.length >= SUGGESTIONS ? adj : pool).sort((a, b) => b.friendly.functions.length - a.friendly.functions.length || byScore(a, b));
     title = fn ? `Hired other functions, not ${fn} yet` : "Hired fractionals in other functions";
   } else if (goal === "intro") {
-    pool.sort((a, b) => b.friendly.operators - a.friendly.operators || byScore(a, b));
+    pool = withFunctions(pool).sort((a, b) => b.friendly.operators - a.friendly.operators || byScore(a, b));
     title = "Where members held a seat";
-  } else pool.sort(byScore);
-  return { title, list: pool.slice(0, 6) };
-}
-
-function Fit({ score }: { score: number }) {
-  const on = score > 0 ? Math.max(1, Math.round(score / 20)) : 0;
-  return (
-    <span className="ob-fit" title={`Fit score ${score} of 100`}>
-      <span className="ob-fit-k">Fit</span>
-      <span className="mono ob-fit-v">{score}</span>
-      <span className="ob-fitbar" aria-hidden>
-        {[0, 1, 2, 3, 4].map((i) => (
-          <i key={i} className={i < on ? "on" : ""} />
-        ))}
-      </span>
-    </span>
-  );
+  } else {
+    pool = withFunctions(pool).sort((a, b) => fnBonus(b) - fnBonus(a) || byScore(a, b));
+    if (pool[0] && fnBonus(pool[0])) title = `Hired a fractional ${fn} before`;
+  }
+  return { title, list: pool.slice(0, SUGGESTIONS) };
 }
 
 function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; name: string }) {
@@ -151,7 +176,7 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
       </header>
 
       <main className="ob-main">
-        <div className={`ob-card${step === 2 ? " ob-card-wide" : ""}`} ref={cardRef}>
+        <div className="ob-card" ref={cardRef}>
           <div className="ob-progress">
             <div className="ob-dots" role="img" aria-label={`Step ${step} of ${total}`}>
               {Array.from({ length: total }, (_, i) => (
@@ -208,7 +233,7 @@ function StepQuestions({
         if (ready) onNext();
       }}
     >
-      <p className="ob-welcome">Welcome, {first}. Two questions and you are in.</p>
+      <p className="ob-welcome">Welcome, {first}. Two quick questions.</p>
 
       <fieldset className="ob-q">
         <legend className="ob-h" tabIndex={-1} data-step-h>
@@ -253,7 +278,7 @@ function StepQuestions({
 
       <div className="ob-foot">
         <span className="ob-foot-note">{ready ? "" : fn ? "Pick what you want first" : goal ? "Pick your seat" : "Pick one of each"}</span>
-        <button type="submit" className="btn btn-primary btn-lg ob-next" disabled={!ready}>
+        <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
           Continue
         </button>
       </div>
@@ -425,6 +450,7 @@ function StepFollow({
       <ul className="ob-sugg">
         {sugg.list.map((c) => {
           const on = follows.includes(c.id);
+          const tier = fitTier(c);
           return (
             <li key={c.id} className={`ob-co${on ? " ob-co-on" : ""}`}>
               <div className="ob-co-top">
@@ -435,7 +461,7 @@ function StepFollow({
                   </span>
                   <span className="ob-co-meta mono">{metaOf(c) || "New on Trading Post"}</span>
                 </div>
-                <Fit score={c.friendly.score} />
+                {tier ? <span className={`ob-tier ${tier.cls}`}>{tier.label}</span> : null}
               </div>
               <div className="ob-co-bottom">
                 <span className="ob-co-fns">
@@ -466,7 +492,7 @@ function StepFollow({
         <span className="ob-foot-note mono" aria-live="polite">
           {left ? `${left} more` : `${follows.length} following`}
         </span>
-        <button type="button" className="btn btn-primary btn-lg ob-next" disabled={left > 0 || busy} onClick={onNext}>
+        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={left > 0 || busy} onClick={onNext}>
           {busy ? "Saving" : last ? "Go to Trading Post" : "Continue"}
         </button>
       </div>
@@ -532,7 +558,7 @@ function StepLink({ token, email, busy, onDone }: { token: string; email: string
 
       <div className="ob-foot">
         <span className="ob-foot-note" />
-        <button type="button" className="btn btn-primary btn-lg ob-next" onClick={onDone} disabled={busy}>
+        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onDone} disabled={busy}>
           {busy ? "Opening" : "Go to Trading Post"}
         </button>
       </div>
