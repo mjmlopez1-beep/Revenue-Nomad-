@@ -9,11 +9,15 @@ import { useEffect, useId, useRef, useState } from "react";
 import { IconX, post } from "../ui/shared";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+/** Where a member without email sign-in asks for a lost link. Inlined at build time; unset shows nothing. */
+const SUPPORT = (process.env.NEXT_PUBLIC_RN_SUPPORT_EMAIL ?? "").trim();
 
 export interface SignInProps {
   open: boolean;
   onClose: () => void;
   emailOn: boolean;
+  /** Credits a new member starts with (the server's stats.starter). */
+  starter: number;
   /** Why the panel opened, e.g. the join form found a member email. */
   note: string | null;
   onSignedIn: () => Promise<void> | void;
@@ -21,7 +25,7 @@ export interface SignInProps {
   onJoin: () => void;
 }
 
-export default function SignIn({ open, onClose, emailOn, note, onSignedIn, onJoin }: SignInProps) {
+export default function SignIn({ open, onClose, emailOn, starter, note, onSignedIn, onJoin }: SignInProps) {
   const [code, setCode] = useState("");
   const [codeErr, setCodeErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -145,6 +149,12 @@ export default function SignIn({ open, onClose, emailOn, note, onSignedIn, onJoi
               {codeErr}
             </p>
           ) : null}
+          {!emailOn && SUPPORT ? (
+            <p className="lp-dialog-help">
+              Lost your link? Email <a href={`mailto:${SUPPORT}?subject=${encodeURIComponent("Trading Post sign-in link")}`}>{SUPPORT}</a> and
+              we will send it.
+            </p>
+          ) : null}
         </form>
 
         {emailOn ? (
@@ -193,7 +203,7 @@ export default function SignIn({ open, onClose, emailOn, note, onSignedIn, onJoi
         <div className="lp-dialog-foot">
           New to Trading Post?{" "}
           <button type="button" className="lp-linkbtn lp-linkbtn-ink" onClick={onJoin}>
-            Get 50 credits
+            Get {starter} credits
           </button>
         </div>
       </div>

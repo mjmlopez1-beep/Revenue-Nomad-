@@ -22,6 +22,8 @@ function readRef(): string | undefined {
 export interface JoinFormProps {
   /** Email sign-in is on: joining emails a link instead of signing in here. */
   emailOn: boolean;
+  /** Credits a new member starts with (the server's stats.starter). */
+  starter: number;
   onSignedIn: () => Promise<void> | void;
   /** The email belongs to an existing member. Opens the sign-in panel. */
   onMember: (message: string) => void;
@@ -29,7 +31,7 @@ export interface JoinFormProps {
   place: "hero" | "final";
 }
 
-export default function JoinForm({ emailOn, onSignedIn, onMember, place }: JoinFormProps) {
+export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place }: JoinFormProps) {
   const [step, setStep] = useState<"email" | "name" | "sent">("email");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -137,7 +139,7 @@ export default function JoinForm({ emailOn, onSignedIn, onMember, place }: JoinF
             aria-describedby={error ? `${id}-err` : undefined}
             maxLength={80}
           />
-          <button type="submit" className="btn btn-primary btn-lg lp-join-btn" disabled={busy}>
+          <button type="submit" className="btn btn-pine btn-lg lp-join-btn" disabled={busy}>
             {busy ? (emailOn ? "Sending" : "Opening") : emailOn ? "Email me my link" : "Open Trading Post"}
           </button>
         </div>
@@ -168,7 +170,7 @@ export default function JoinForm({ emailOn, onSignedIn, onMember, place }: JoinF
           aria-describedby={error ? `${id}-err` : undefined}
         />
         <button type="submit" className="btn btn-primary btn-lg lp-join-btn">
-          Get 50 credits
+          Get {starter} credits
         </button>
       </div>
       {err}
