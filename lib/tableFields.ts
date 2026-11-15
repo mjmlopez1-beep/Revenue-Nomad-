@@ -10,7 +10,7 @@
  * so the free view is useful on its own. Locked fields are the intel people trade for:
  * the exact role, status, end date, who held the seat, rate, hours, the posting, and
  * people's names and contact details. Adding a missing fact earns 1 credit (max
- * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
+ * EARN_CAP from fills per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
@@ -38,7 +38,7 @@ export const ENGAGEMENT_TYPES = ["Fractional", "Interim", "Advisory", "Project",
 export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"];
 export const STATUSES = ["Open role", "Active", "Ended"];
 
-/** Max credits a member can earn in any rolling 24 hours. */
+/** Max credits a member can earn from adding facts in any rolling 24 hours. Only fills count toward it; invite and confirmation bonuses are paid in full on top. */
 export const EARN_CAP = 25;
 /** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */
 export const REFERRAL_BONUS = 10;
@@ -131,8 +131,19 @@ export const SOURCE_LABEL: Record<string, string> = {
   Clay: "Clay",
 };
 
-export const fieldDef = (entity: string, key: string) =>
-  GROUPS.find((g) => g.entity === entity)?.fields.find((f) => f.key === key);
+const FIELD_BY_KEY = new Map<string, FieldDef>(ALL_FIELDS.map((x) => [`${x.entity}.${x.f.key}`, x.f]));
+export const fieldDef = (entity: string, key: string): FieldDef | undefined => FIELD_BY_KEY.get(`${entity}.${key}`);
+
+/**
+ * Control and bidi-override characters (they can visually reverse nearby text), removed
+ * from anything a member types. Line breaks and tabs become spaces first.
+ */
+const INVISIBLE = /[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩﻿]/g;
+export const stripInvisible = (raw: unknown) =>
+  String(raw ?? "").normalize("NFC").replace(/[\t\n\r\v\f]/g, " ").replace(INVISIBLE, "");
+
+const RATE_RE =
+  /[$€£]|\d\s*k\b|\/\s*(hr|h|hour|day|wk|week|mo|month|yr|year|project)\b|\bper\b|\b(hourly|daily|weekly|monthly|annual|retainer|project|usd|eur|gbp)\b/i;
 
 /** Best-guess GTM function from a role title ("Fractional VP Sales" -> "Sales"). */
 export function functionOf(role: string | null | undefined): string | null {
@@ -166,7 +177,7 @@ export function employeesBucket(n: number | null | undefined): string | null {
 
 /** Normalize and validate a value for a field. Returns the clean value or an error message. */
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
-  const v = String(raw ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+  const v = stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, 200);
   if (!v) return { error: `${f.label} is empty.` };
   switch (f.kind) {
     case "url": {
@@ -191,6 +202,7 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     case "choice":
       return f.options?.includes(v) ? { value: v } : { error: "Pick one of the options." };
     default:
+      if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       return v.length >= 2 ? { value: v } : { error: "Too short." };
   }
 }

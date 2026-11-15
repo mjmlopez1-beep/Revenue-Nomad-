@@ -13,6 +13,9 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Pilot starter credits (the landing page promises 50) and a heap that fits a 512 MB plan.
+ENV RN_STARTER_CREDITS=50
+ENV NODE_OPTIONS=--max-old-space-size=320
 RUN addgroup -S nomad && adduser -S nomad -G nomad
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

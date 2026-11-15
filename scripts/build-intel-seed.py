@@ -146,6 +146,21 @@ def add_member(first, last, email, title=""):
 
 companies, engagements, contacts = {}, {}, []
 
+# Rows filed under a project or a street address instead of the client company. Each key
+# (key_for of the Company value) maps to the real client company's name when the source row
+# names one, or to None to drop the engagement. None of these rows names its client.
+NOT_COMPANIES = {
+    "301wosborn": None,  # an office-to-residential conversion for a broker
+    "trianglegrandavenue": None,  # a creative-district plan for a group of brokers
+    "greensburgkansasrebuild": None,  # a town's rebuild program
+}
+not_companies_dropped = 0
+
+
+def client_company(name):
+    """The company an engagement attaches to: the name, the client named instead of a project or address, or None (drop it)."""
+    return NOT_COMPANIES.get(key_for(name), name)
+
 
 def company(name):
     ck = key_for(name)
@@ -198,6 +213,10 @@ for r in eng_rows:
     if re.match(r"^(a|an)\s", name, re.I) or len(name.split()) > 5 or GENERIC.search(name):
         anonymous_pairs.add((key_for(name), key_for(op)))
         skipped_anon += 1  # described rather than named: treat as anonymous
+        continue
+    name = client_company(name)
+    if not name:
+        not_companies_dropped += 1
         continue
     published += 1
     if op.lower() not in by_name:
@@ -261,6 +280,10 @@ for r in signup_rows:
             continue
         if (key_for(name), key_for(m["name"])) in anonymous_pairs:
             continue  # the operator kept this company anonymous on their engagement
+        name = client_company(name)
+        if not name:
+            not_companies_dropped += 1
+            continue
         co, ck = company(name)
         ek = f"{ck}_{key_for(m['name'])}"
         fields = {"source": "Member success story", "operator": m["name"]}
@@ -302,6 +325,10 @@ for path in args.demand:
             if not name:
                 continue
             demand_rows += 1
+            name = client_company(name)
+            if not name:
+                not_companies_dropped += 1
+                continue
             co, ck = company(name)
             domain = (r.get("Company Domain") or "").strip().lower()
             if domain and "website" not in co["fields"]:
@@ -560,6 +587,7 @@ print(f"members: {len(members)}")
 print(f"published engagements: {published} used; {skipped_anon} anonymous and {skipped_unpub} unpublished skipped")
 print(f"success stories: {stories} ({story_records} new records; stories naming no company are skipped)")
 print(f"demand scan rows: {demand_rows}")
+print(f"not companies (projects and addresses, NOT_COMPANIES): {not_companies_dropped} engagements dropped")
 print(f"records by source: {src}  total: {len(engagements)} ({dupes_removed} same-person duplicates merged away)")
 print(f"companies: {len(companies)} ({sum('website' in c['fields'] for c in companies.values())} with a website; {domains_set} from --domains)")
 print(f"contacts: {len(contacts)} ({clay_people} decision makers from Clay)")

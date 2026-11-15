@@ -2341,6 +2341,10 @@
 .tp-review-v {
   overflow-wrap: anywhere;
 }
+.tp-review-who {
+  display: block;
+  margin-top: 2px;
+}
 .tp-ledger-scroll {
   overflow-x: auto;
   margin-top: 8px;

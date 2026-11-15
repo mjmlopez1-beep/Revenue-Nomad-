@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { promisify } from "util";
+import { gzip } from "zlib";
 import {
-  ActionError, buildView, exportState, isAdmin, joinMember, memberByEmail, memberForToken, perform, type Action,
+  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, perform, type Action,
 } from "@/lib/table";
 import { emailEnabled, sendEmail, signInEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
@@ -8,6 +10,7 @@ import { clientIp, limited } from "@/lib/rateLimit";
 export const dynamic = "force-dynamic";
 
 const COOKIE = "rn_table";
+const gz = promisify(gzip);
 
 function withSession(req: NextRequest, res: NextResponse, token: string) {
   res.cookies.set(COOKIE, token, {
@@ -27,22 +30,37 @@ const origin = (req: NextRequest) =>
 
 const err = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
 
+/** JSON, gzipped when the client accepts it (Next doesn't compress route handlers). */
+async function sendJson(req: NextRequest, data: unknown, extra: Record<string, string> = {}) {
+  const body = JSON.stringify(data);
+  const headers: Record<string, string> = { "content-type": "application/json", "cache-control": "no-store", vary: "Accept-Encoding", ...extra };
+  if (body.length > 2048 && /\bgzip\b/.test(req.headers.get("accept-encoding") ?? "")) {
+    return new NextResponse(new Uint8Array(await gz(body, { level: 6 })), { headers: { ...headers, "content-encoding": "gzip" } });
+  }
+  return new NextResponse(body, { headers });
+}
+
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
+ * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?export=1    admins: download the runtime state (a backup).
  */
 export async function GET(req: NextRequest) {
+  const ip = clientIp(req);
+  if (limited(`get:${ip}`, 120, 60_000)) return err("Slow down a little.", 429);
   const token = req.cookies.get(COOKIE)?.value ?? null;
+  const ref = req.nextUrl.searchParams.get("ref");
+  if (ref !== null) {
+    if (limited(`ref:${ip}`, 30, 60_000)) return err("Slow down a little.", 429);
+    return NextResponse.json({ inviter: await inviterName(ref) }, { headers: { "cache-control": "no-store" } });
+  }
   if (req.nextUrl.searchParams.get("export")) {
     if (!isAdmin(await memberForToken(token))) return err("Admins only.", 403);
-    return new NextResponse(JSON.stringify(await exportState()), {
-      headers: {
-        "content-type": "application/json",
-        "content-disposition": `attachment; filename="trading-post-${new Date().toISOString().slice(0, 10)}.json"`,
-      },
+    return sendJson(req, await exportState(), {
+      "content-disposition": `attachment; filename="trading-post-${new Date().toISOString().slice(0, 10)}.json"`,
     });
   }
-  return NextResponse.json(await buildView(token));
+  return sendJson(req, await buildView(token));
 }
 
 /**
@@ -51,7 +69,7 @@ export async function GET(req: NextRequest) {
  * POST { join: { name, email, ref } } join. With email switched on, we email a sign-in link
  *                                     (that's the email check); without it, you're in at once.
  * POST { signOut: true }              sign out.
- * POST { action: {...} }              see Action in lib/tableTypes.ts.
+ * POST { action: {...} }              see Action and ActionResult in lib/tableTypes.ts.
  */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -61,8 +79,9 @@ export async function POST(req: NextRequest) {
   if (typeof body.signIn === "string") {
     if (limited(`signin:${ip}`, 30, 10 * 60_000)) return err("Too many tries. Wait a few minutes.", 429);
     const raw = body.signIn.trim();
-    const token = raw.match(/[?&]k=([^&#\s]+)/)?.[1] ?? raw;
-    const m = await memberForToken(token);
+    // Tokens are base64url, so a link copied with a trailing "." or inside <…> still works.
+    const token = raw.match(/[?&]k=([A-Za-z0-9_-]+)/)?.[1] ?? raw.replace(/[^A-Za-z0-9_-]/g, "");
+    const m = token ? await memberForToken(token) : null;
     if (!m) return err("That sign-in link or code isn't valid.", 401);
     return withSession(req, NextResponse.json({ ok: true }), m.token);
   }
@@ -80,9 +99,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.join && typeof body.join === "object") {
-    if (limited(`join:${ip}`, 30, 60 * 60_000)) return err("Too many sign-ups from here. Try again in an hour.", 429);
+    if (limited(`join:${ip}`, 10, 60 * 60_000)) return err("Too many sign-ups from here. Try again in an hour.", 429);
     try {
-      const m = await joinMember(body.join.name, body.join.email, body.join.ref);
+      const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip);
       if (emailEnabled()) {
         const e = signInEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(m.token)}`);
         await sendEmail(m.email, e.subject, e.text, e.html);

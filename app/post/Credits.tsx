@@ -3,7 +3,7 @@
 /** "My credits": balance, earning, invite link, personal sign-in link, full ledger, admin review. */
 import type { View } from "@/lib/tableTypes";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
-import { IconChevron, useToast } from "../ui/shared";
+import { IconChevron, timeAgo, useToast } from "../ui/shared";
 import { copyText, fmtTime } from "./hooks";
 import { REASON_LABEL } from "./TopBar";
 import { useUi } from "./ui";
@@ -121,9 +121,17 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
             <div key={`${r.id}.${r.field}`} className="tp-review-row">
               <span className="tp-review-what">
                 <strong>{r.record}</strong> <span className="muted">{r.label}</span>
+                <span className="tp-small muted tp-review-who">
+                  Added by {r.addedBy}
+                  {r.reporters.length > 0 && ` · reported by ${r.reporters.join(", ")}`}
+                  {r.reportedAt && ` · ${timeAgo(r.reportedAt)}`}
+                </span>
               </span>
               <span className="mono tp-review-v">{r.value}</span>
               <span className="tp-review-acts">
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => ui.openCompany(r.companyId)}>
+                  Open record
+                </button>
                 <button type="button" className="btn btn-sm" onClick={() => ui.act({ type: "review", entity: r.entity, id: r.id, field: r.field, decision: "keep" })}>
                   Keep
                 </button>

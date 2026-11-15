@@ -10,7 +10,8 @@ import type { Entity } from "./tableFields";
  * - locked: someone added it; unlocking costs 1 credit. Never carries the value.
  * - value: visible. `mine` = the viewer added it; `ver` = confirmations (our own
  *   records count as one); `iv` = the viewer confirmed it; `system` = set by the system.
- * - reported: hidden until an admin reviews it.
+ * - reported: under review. Two members' reports hide a fact for everyone until an admin
+ *   reviews it; one report hides it only for that reporter (`mine` is then false).
  */
 export type Cell =
   | { s: "empty" }
@@ -51,6 +52,8 @@ export interface Friendly {
   functions: string[];
   /** Members who worked there (any engagement or story). Good for intros. */
   operators: number;
+  /** Fractional engagements that started in the last two years. */
+  recent: number;
 }
 
 export interface CompanyRec {
@@ -92,7 +95,12 @@ export interface Me {
   /** Personal sign-in link token, and invite code for referrals. */
   token: string;
   inviteCode: string;
+  /** Members who joined from my invite link. */
   invited: number;
+  /** Invites that paid out (the invitee added a first fact). */
+  invitesPaid: number;
+  /** I joined from an invite and the bonus is still waiting for my first fact. */
+  invitePending: boolean;
   /** Facts this member added, and unlocked. */
   added: number;
   unlocked: number;
@@ -111,9 +119,38 @@ export interface View {
   me: Me | null;
   /** Signed out: companies come back with every gated cell locked and people names hidden. */
   companies: CompanyRec[];
-  stats: { companies: number; engagements: number; people: number; fractionalFriendly: number; openRoles: number; members: number; facts: number };
+  stats: {
+    companies: number;
+    engagements: number;
+    people: number;
+    fractionalFriendly: number;
+    openRoles: number;
+    members: number;
+    facts: number;
+    /** Credits a new member starts with. */
+    starter: number;
+  };
   ledger: LedgerRow[];
-  reported: { entity: Entity; id: string; field: string; record: string; label: string; value: string }[];
+  /**
+   * Admins: reported facts. A fact is hidden for everyone once two members report it; until
+   * then only its reporter sees it as under review.
+   */
+  reported: {
+    entity: Entity;
+    id: string;
+    field: string;
+    record: string;
+    label: string;
+    value: string;
+    /** The company the record is on (for "Open record"). */
+    companyId: string;
+    /** Who added the fact: a member's name, or "Seed data". */
+    addedBy: string;
+    /** Names of the members who reported it. */
+    reporters: string[];
+    /** ISO time of the latest report. */
+    reportedAt: string | null;
+  }[];
   /** Whether sign-in emails can be sent (an email provider is configured). */
   email: boolean;
 }
@@ -149,6 +186,20 @@ export type Action =
   /** Confirm a value you can see is correct (one confirmation per member per value). */
   | { type: "verify"; entity: Entity; id: string; field: string }
   | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" };
+
+/**
+ * What POST { action } returns. `cells` are the cells the action changed, as the actor now
+ * sees them (ids are the public ids the view uses), and `me` is the actor's new counts, so
+ * the client can update the screen without waiting for a full GET.
+ */
+export type ActionResult = {
+  message: string;
+  /** The record the action touched (a public id). */
+  id?: string;
+  capped?: boolean;
+  cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
+  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "added" | "unlocked">;
+};
 
 export const GOALS = [
   { key: "friendly", label: "Find fractional-friendly companies" },

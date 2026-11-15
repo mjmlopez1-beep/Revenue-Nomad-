@@ -17,23 +17,28 @@ import { createHash, createHmac } from "crypto";
 
 const KEEP_DAYS = 14;
 let lastUpload = 0;
+/** The day whose snapshot is already on disk, so later writes that day skip the disk checks. */
+let snappedDay: string | null = null;
 
 export async function snapshot(dataDir: string, json: string): Promise<void> {
   const day = new Date().toISOString().slice(0, 10);
-  const dir = path.join(dataDir, "backups");
-  const file = path.join(dir, `intel-${day}.json`);
-  try {
-    await fs.mkdir(dir, { recursive: true });
-    // First write of the day keeps the start-of-day state; later writes refresh a "latest" copy.
+  if (snappedDay !== day) {
+    const dir = path.join(dataDir, "backups");
+    const file = path.join(dir, `intel-${day}.json`);
     try {
-      await fs.access(file);
-    } catch {
-      await fs.writeFile(file, json, "utf8");
-      const files = (await fs.readdir(dir)).filter((f) => /^intel-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
-      for (const old of files.slice(0, Math.max(0, files.length - KEEP_DAYS))) await fs.unlink(path.join(dir, old)).catch(() => {});
+      await fs.mkdir(dir, { recursive: true });
+      // The first write of the day keeps the start-of-day state.
+      try {
+        await fs.access(file);
+      } catch {
+        await fs.writeFile(file, json, "utf8");
+        const files = (await fs.readdir(dir)).filter((f) => /^intel-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+        for (const old of files.slice(0, Math.max(0, files.length - KEEP_DAYS))) await fs.unlink(path.join(dir, old)).catch(() => {});
+      }
+      snappedDay = day;
+    } catch (e) {
+      console.error("backup snapshot failed", e);
     }
-  } catch (e) {
-    console.error("backup snapshot failed", e);
   }
   if (s3Configured() && Date.now() - lastUpload > 60 * 60 * 1000) {
     lastUpload = Date.now();

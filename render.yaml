@@ -10,6 +10,21 @@ services:
         value: "22"
       - key: RN_DATA_DIR
         value: /var/data
+      # Pilot: 50 starter credits (the landing page promises this number).
+      - key: RN_STARTER_CREDITS
+        value: "50"
+      # Keeps the V8 heap well inside the starter plan's 512 MB.
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=320
+      # Secret for the public engagement and person ids (random 32 bytes, generated once by Render).
+      - key: RN_ID_SECRET
+        generateValue: true
+      # Client IP for the rate limits. By default the rightmost X-Forwarded-For entry is used.
+      # Before relying on it: set RN_LOG_IP_HEADERS=1, send one request with a forged
+      # "X-Forwarded-For: 1.2.3.4", read the logged headers, then either set
+      # RN_CLIENT_IP_HEADER to the header Render overwrites (e.g. true-client-ip) or
+      # RN_TRUSTED_PROXY_HOPS to the number of proxies that append to X-Forwarded-For,
+      # and remove RN_LOG_IP_HEADERS.
     disk:
       name: revenue-nomad-data
       mountPath: /var/data
