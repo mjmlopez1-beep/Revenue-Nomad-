@@ -57,6 +57,11 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
             <span className="tp-stat-of"> / {me.earnCap}</span>
           </div>
           <div className="tp-stat-l">{capped ? `Earned today. Reopens ${fmtTime(me.earnResetsAt)}` : "Earned in the last 24 hours"}</div>
+          {me.held > 0 && (
+            <div className="tp-stat-l">
+              {me.held} bonus credit{me.held > 1 ? "s" : ""} held, paid as your daily room opens
+            </div>
+          )}
           <div className={`tp-bar${capped ? " capped" : ""}`}>
             <span style={{ width: `${Math.min(100, (me.earned24h / me.earnCap) * 100)}%` }} />
           </div>
@@ -72,7 +77,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
       </div>
       <div className="tp-rules">
         <p>
-          <span className="tp-plus mono">+1</span> Add a missing fact. Up to {me.earnCap} a day.
+          <span className="tp-plus mono">+1</span> Add a missing fact. Up to {me.earnCap} earned a day, bonuses included.
         </p>
         <p>
           <span className="tp-minus mono">−1</span> Unlock a fact. It stays unlocked for you.

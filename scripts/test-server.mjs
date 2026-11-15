@@ -294,14 +294,14 @@ section("economy", async () => {
   a = vA2.me;
   const vB2 = await B.view();
   b = vB2.me;
-  check("capped A still gets +10 for the invite", a.credits === STARTER + 25 + 10, a.credits);
+  // The cap covers every credit earned: capped A's invite bonus is held, not paid or lost.
+  check("capped A's invite bonus is held, not paid", a.credits === STARTER + 25 && a.held === 10, { credits: a.credits, held: a.held });
   check("A stays at 25 of 25 earned", a.earned24h === 25, a.earned24h);
   check("A invitesPaid 1", a.invitesPaid === 1, a.invitesPaid);
   check("B invitePending false after the first fact", b.invitePending === false, b);
-  check("after 5 fills plus an invite, B's meter reads 5 of 25", b.earned24h === 5 && b.credits === STARTER + 5 + 10, b);
-  const aRef = vA2.ledger.find((l) => l.reason === "referral");
+  check("after 5 fills plus an invite, B's meter reads 15 of 25", b.earned24h === 15 && b.credits === STARTER + 5 + 10 && b.held === 0, b);
   const bRef = vB2.ledger.find((l) => l.reason === "referral");
-  check("A's ledger names B", aRef?.company === "Ben" && aRef?.delta === 10, aRef);
+  check("A's ledger has no referral row while it is held", !vA2.ledger.some((l) => l.reason === "referral"), vA2.ledger.slice(0, 3));
   check("B's ledger names A", bRef?.company === "Ada" && bRef?.delta === 10, bRef);
 
   // Same network: no invite bonus.
@@ -311,10 +311,10 @@ section("economy", async () => {
   const b2f = await B2.act(fillAct(pickEmpty(b2v, 1)[0]));
   const a3 = (await A.view()).me;
   const b2 = (await B2.view()).me;
-  check("same-network invite pays no bonus to either", !/Invite bonus/.test(b2f.json?.message ?? "") && a3.credits === a.credits && b2.credits === STARTER + 1, { msg: b2f.json?.message, a: a3.credits, b2: b2.credits });
+  check("same-network invite pays no bonus to either", !/Invite bonus/.test(b2f.json?.message ?? "") && a3.credits === a.credits && a3.held === a.held && b2.credits === STARTER + 1, { msg: b2f.json?.message, a: a3.credits, b2: b2.credits });
   check("A's invited count ignores the same-network join", a3.invited === 1, a3.invited);
 
-  // Confirmations pay a capped member in full.
+  // A confirmation bonus for a capped member is held too.
   const C = await member("Cal Tester", ip(33));
   const D = await member("Dee Tester", ip(34));
   shared.C = C;
@@ -323,7 +323,7 @@ section("economy", async () => {
   const c1 = await C.act({ type: "verify", entity: factX.entity, id: factX.id, field: factX.field });
   const d1 = await D.act({ type: "verify", entity: factX.entity, id: factX.id, field: factX.field });
   const a4 = (await A.view()).me;
-  check("two confirmations pay a capped member +1", c1.status === 200 && d1.status === 200 && a4.credits === before + 1 && a4.earned24h === 25, { c1: c1.json?.message, d1: d1.json?.message, before, after: a4.credits, earned: a4.earned24h });
+  check("two confirmations hold +1 for a capped member", c1.status === 200 && d1.status === 200 && a4.credits === before && a4.held === 11 && a4.earned24h === 25, { c1: c1.json?.message, d1: d1.json?.message, before, after: a4.credits, held: a4.held, earned: a4.earned24h });
   check("confirm result has the new ver and iv", d1.json?.cells?.[0]?.cell?.iv === true && d1.json?.cells?.[0]?.cell?.ver === 2, d1.json?.cells);
   shared.A = A;
   shared.B = B;

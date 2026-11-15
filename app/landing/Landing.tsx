@@ -83,7 +83,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   const finalForm = useRef<HTMLDivElement>(null);
   const s = view.stats;
   // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 5).
-  const starter = (s as { starter?: number }).starter ?? STARTER_FALLBACK;
+  const starter = s.starter ?? STARTER_FALLBACK;
   const inviter = useInviter();
 
   /** Take the visitor to the nearest join form and focus it (email, or name once the email is in). */

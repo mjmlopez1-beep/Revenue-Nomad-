@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./onboard.css";
 import { Brand, CompanyLogo, IconCheck, IconCoin, IconLink, IconPlus, IconSearch, IconX, val, type Act, type View } from "../ui/shared";
-import { FRACTIONAL_TYPES, FUNCTIONS } from "@/lib/tableFields";
+import { FUNCTIONS } from "@/lib/tableFields";
 import { GOALS, type CompanyRec } from "@/lib/tableTypes";
 
 export interface OnboardingProps {
@@ -37,29 +37,17 @@ function metaOf(c: CompanyRec): string {
   return parts.join(" · ");
 }
 
-/** A fractional seat started within this many months counts as recent. */
-const RECENT_MONTHS = 24;
 const SUGGESTIONS = 6;
-
-/** A seat of a fractional type (or a published engagement), as the server counts friendly.fractional. */
-const fractionalSeat = (e: CompanyRec["engagements"][number]) =>
-  e.source === "Published engagement" || FRACTIONAL_TYPES.includes(val(e.cells.type) ?? "");
 
 /**
  * The evidence chip for a company, in place of a fit number: an open role now, a fractional
  * seat that started recently, or one on file from before. Null when there is no seat on file.
- * Same labels as the app's chip (app/post/model fitTier once that lands on this branch).
+ * Same labels as the app's chip (app/post/model fitTier), with a rank for sorting.
  */
 function fitTier(c: CompanyRec): { label: string; cls: string; rank: number } | null {
   const f = c.friendly;
   if (f.open > 0) return { label: "Hiring", cls: "is-hiring", rank: 3 };
-  const cut = new Date();
-  cut.setMonth(cut.getMonth() - RECENT_MONTHS);
-  const since = cut.toISOString().slice(0, 7);
-  const recent = c.engagements.some((e) => {
-    const start = val(e.cells.start);
-    return !!start && /^\d{4}-\d{2}/.test(start) && start >= since && fractionalSeat(e);
-  });
+  const recent = f.recent > 0;
   if (recent) return { label: "Recent seat", cls: "is-recent", rank: 2 };
   if (f.fractional > 0) return { label: "Past seat", cls: "is-past", rank: 1 };
   return null;

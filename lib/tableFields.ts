@@ -10,7 +10,7 @@
  * so the free view is useful on its own. Locked fields are the intel people trade for:
  * the exact role, status, end date, who held the seat, rate, hours, the posting, and
  * people's names and contact details. Adding a missing fact earns 1 credit (max
- * EARN_CAP from fills per rolling 24 hours); unlocking a locked fact someone else added costs 1.
+ * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
@@ -38,7 +38,7 @@ export const ENGAGEMENT_TYPES = ["Fractional", "Interim", "Advisory", "Project",
 export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"];
 export const STATUSES = ["Open role", "Active", "Ended"];
 
-/** Max credits a member can earn from adding facts in any rolling 24 hours. Only fills count toward it; invite and confirmation bonuses are paid in full on top. */
+/** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;
 /** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */
 export const REFERRAL_BONUS = 10;

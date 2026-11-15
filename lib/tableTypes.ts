@@ -91,6 +91,8 @@ export interface Me {
   earnCap: number;
   /** When earning reopens if at the cap (ISO), else null. */
   earnResetsAt: string | null;
+  /** Bonus credits earned at the cap and waiting for room under it (paid automatically). */
+  held: number;
   admin: boolean;
   /** Personal sign-in link token, and invite code for referrals. */
   token: string;
@@ -198,7 +200,7 @@ export type ActionResult = {
   id?: string;
   capped?: boolean;
   cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
-  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "added" | "unlocked">;
+  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked">;
 };
 
 export const GOALS = [

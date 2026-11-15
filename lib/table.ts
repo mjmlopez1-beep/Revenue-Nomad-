@@ -7,8 +7,9 @@
  *   reported to, worked with, or who is hiring for the seat)
  * A value is stored once on its record and shows everywhere it applies.
  *
- * Credits: adding a missing fact earns 1 (max EARN_CAP per rolling 24 hours; only fills
- * count toward the cap, so invite and confirmation bonuses are always paid in full);
+ * Credits: adding a missing fact earns 1. A member can earn at most EARN_CAP credits in any
+ * rolling 24 hours, counting fills, invite bonuses and confirmation bonuses alike. A bonus
+ * that doesn't fit under the cap is held (State.held) and paid as room opens, never lost;
  * unlocking a locked fact someone else added costs 1. Members can confirm or report facts;
  * a fact two members report is hidden until an admin reviews it. An admin review can
  * remove a bad fact, which takes the credit back from whoever added it and refunds
@@ -122,6 +123,8 @@ export interface State {
   referralPaid: string[];
   /** Every report, for the daily report limit and the admin review list. */
   reportLog: { memberId: string; ref: string; at: string }[];
+  /** Bonus credits earned while at the daily cap, paid as the rolling window frees room. */
+  held: { memberId: string; delta: number; reason: "referral" | "confirm"; ref: string; at: string }[];
 }
 
 /* ---------- storage ---------- */
@@ -204,7 +207,7 @@ export async function loadSeed(): Promise<Seed> {
 
 const EMPTY_STATE = (): State => ({
   companies: [], engagements: [], contacts: [], values: {}, unlocks: {}, verifications: {}, members: [], ledger: [],
-  profiles: {}, follows: {}, referralPaid: [], reportLog: [],
+  profiles: {}, follows: {}, referralPaid: [], reportLog: [], held: [],
 });
 
 /**
@@ -218,13 +221,14 @@ export async function loadState(): Promise<State> {
   if (stateCache) return stateCache;
   stateLoading ??= (async () => {
     const s: State = { ...EMPTY_STATE(), ...((await readJson<Partial<State>>(STATE_PATH)) ?? {}) };
-    // One-time repair, safe to leave in place (it only touches 0 rows): invite and confirmation
-    // bonuses used to go through the daily earning cap, which recorded 0 for a capped member
-    // and then never paid them. They are paid in full now.
+    // One-time repair, safe to leave in place (it only touches 0 rows): a capped invite or
+    // confirmation bonus used to be recorded as 0 and never paid. Hold it instead, so it is
+    // paid as the member's daily room opens.
+    s.held ??= [];
     for (const l of s.ledger) {
-      if (l.delta !== 0) continue;
-      if (l.reason === "referral") l.delta = REFERRAL_BONUS;
-      else if (l.reason === "confirm") l.delta = 1;
+      if (l.delta !== 0 || (l.reason !== "referral" && l.reason !== "confirm")) continue;
+      if (!s.held.some((h) => h.memberId === l.memberId && h.ref === l.ref && h.reason === l.reason))
+        s.held.push({ memberId: l.memberId, delta: l.reason === "referral" ? REFERRAL_BONUS : 1, reason: l.reason, ref: l.ref, at: l.at });
     }
     stateCache = s;
     return s;
@@ -442,8 +446,8 @@ const newId = (p: string, name = "") => `${p}_${slug(name).slice(0, 20)}${Date.n
 const DAY = 24 * 60 * 60 * 1000;
 /** Label in running text: "role", but "HQ" and "LinkedIn" keep their capitals. */
 const lower = (label: string) => (/[A-Z]/.test(label.slice(1)) ? label : label.toLowerCase());
-/** Ledger reasons that count toward the daily earning cap. Invite and confirmation bonuses don't. */
-const EARNING = new Set(["fill"]);
+/** Ledger reasons that count toward the daily earning cap: everything a member earns. */
+const EARNING = new Set(["fill", "referral", "confirm"]);
 /** Max facts a member can unlock per rolling 24 hours (stops scraping). */
 const UNLOCK_DAILY_MAX = 100;
 /** The same limit in an account's first 24 hours (throwaway accounts). */
@@ -459,7 +463,7 @@ export function balance(s: State, memberId: string): number {
   return b;
 }
 
-/** Credits earned from fills in the rolling 24 hours before `nowMs`, and when earning reopens if at the cap. */
+/** Credits earned in the rolling 24 hours before `nowMs`, and when earning reopens if at the cap. */
 function earning(s: State, memberId: string, nowMs: number): { earned: number; resetsAt: string | null } {
   const recent = s.ledger
     .filter((l) => l.memberId === memberId && l.delta > 0 && EARNING.has(l.reason) && nowMs - Date.parse(l.at) < DAY)
@@ -473,6 +477,37 @@ function earning(s: State, memberId: string, nowMs: number): { earned: number; r
   }
   return { earned, resetsAt: null };
 }
+
+/**
+ * Pay a bonus within the member's daily room. Whatever doesn't fit is held and paid later
+ * by releaseHeld. Returns what was paid now.
+ */
+function grant(s: State, memberId: string, delta: number, reason: "referral" | "confirm", ref: string, now: string): number {
+  const room = Math.max(0, EARN_CAP - earning(s, memberId, Date.parse(now)).earned);
+  const pay = Math.min(delta, room);
+  if (pay > 0) s.ledger.push({ memberId, delta: pay, reason, ref, at: now });
+  if (delta > pay) s.held.push({ memberId, delta: delta - pay, reason, ref, at: now });
+  return pay;
+}
+
+/** Pay held bonuses, oldest first, as far as the member's daily room allows. */
+function releaseHeld(s: State, memberId: string, now: string): void {
+  if (!s.held.some((h) => h.memberId === memberId)) return;
+  const keep: State["held"] = [];
+  for (const h of s.held) {
+    if (h.memberId !== memberId) {
+      keep.push(h);
+      continue;
+    }
+    const room = Math.max(0, EARN_CAP - earning(s, memberId, Date.parse(now)).earned);
+    const pay = Math.min(h.delta, room);
+    if (pay > 0) s.ledger.push({ memberId, delta: pay, reason: h.reason, ref: h.ref, at: now });
+    if (h.delta > pay) keep.push({ ...h, delta: h.delta - pay });
+  }
+  s.held = keep;
+}
+
+const heldFor = (s: State, memberId: string) => s.held.reduce((n, h) => n + (h.memberId === memberId ? h.delta : 0), 0);
 
 /** Effective value: a runtime value wins over the seed value. */
 function valueOf(node: Node | undefined, s: State, field: string): FieldValue | null {
@@ -767,7 +802,13 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const joinedById = new Map(s.members.map((m) => [m.id, m]));
     let added = 0;
     let unlocked = 0;
-    let invitesPaid = 0;
+    // Invitees whose first fact earned me the bonus (paid, or held under the cap).
+    const paidInvitees = new Set<string>();
+    const inviteeOf = (ref: string) => {
+      const id = ref.slice(0, Math.max(0, ref.indexOf(".")));
+      return joinedById.get(id)?.referredBy === me.id ? id : null;
+    };
+    for (const h of s.held) if (h.memberId === me.id && h.reason === "referral" && inviteeOf(h.ref)) paidInvitees.add(inviteeOf(h.ref)!);
     for (const l of s.ledger) {
       if (l.memberId !== me.id) continue;
       if (l.reason === "fill") added++;
@@ -777,7 +818,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       const field = dot < 0 ? "" : l.ref.slice(dot + 1);
       if (l.reason === "referral") {
         // The ref names the other member: the invitee on the inviter's row, and the other way round.
-        if (l.delta > 0 && joinedById.get(id)?.referredBy === me.id) invitesPaid++;
+        if (l.delta > 0 && inviteeOf(l.ref)) paidInvitees.add(id);
         ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: nameOf.has(id) ? firstName(nameOf.get(id)!) : "", field: "Invite bonus" });
         continue;
       }
@@ -799,11 +840,12 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       earned24h: earned,
       earnCap: EARN_CAP,
       earnResetsAt: resetsAt,
+      held: heldFor(s, me.id),
       admin: isAdmin(me),
       token: me.token,
       inviteCode: inviteCode(me.id),
       invited: s.members.filter((m) => m.referredBy === me.id).length,
-      invitesPaid,
+      invitesPaid: paidInvitees.size,
       invitePending: !!joinedMe?.referredBy && !s.referralPaid.includes(me.id),
       added,
       unlocked,
@@ -845,6 +887,8 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
     if (!me) throw new ActionError("Join or sign in to add, confirm and unlock.");
     const now = new Date().toISOString();
     const nowMs = Date.parse(now);
+    // Bonuses held at the cap are paid first, as the rolling window frees room.
+    releaseHeld(s, me.id, now);
     const g = graph(seed, s);
     // Public id -> internal id, for every engagement and person.
     const fromPub = new Map<string, string>();
@@ -878,7 +922,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       s.ledger.push({ memberId: me.id, delta: d, reason: "fill", ref, at: now });
       return d;
     };
-    /** The invite bonus, paid in full to both once the invitee adds a first fact (it doesn't count toward the cap). */
+    /** The invite bonus, to both once the invitee adds a first fact. It counts toward the cap; any excess is held. */
     const payReferral = () => {
       const joined = s.members.find((m) => m.id === me.id);
       if (!joined?.referredBy || s.referralPaid.includes(me.id)) return 0;
@@ -886,10 +930,9 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       const recent = s.ledger.filter(
         (l) => l.memberId === joined.referredBy && l.reason === "referral" && l.delta > 0 && nowMs - Date.parse(l.at) < 30 * DAY,
       ).length;
-      if (recent < REFERRAL_LIMIT)
-        s.ledger.push({ memberId: joined.referredBy!, delta: REFERRAL_BONUS, reason: "referral", ref: `${me.id}.referral`, at: now });
-      s.ledger.push({ memberId: me.id, delta: REFERRAL_BONUS, reason: "referral", ref: `${joined.referredBy}.referral`, at: now });
-      return REFERRAL_BONUS;
+      const held = (id: string) => s.held.filter((h) => h.memberId === id && h.reason === "referral" && nowMs - Date.parse(h.at) < 30 * DAY).length;
+      if (recent + held(joined.referredBy) < REFERRAL_LIMIT) grant(s, joined.referredBy, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
+      return grant(s, me.id, REFERRAL_BONUS, "referral", `${joined.referredBy}.referral`, now);
     };
     /** Set a value. Returns credits earned (0 when editing your own value or at the daily cap). */
     const setValue = (node: Node, entity: Entity, key: string, raw: unknown): number => {
@@ -1143,10 +1186,10 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
           const n = list.length + 1 + (cur.by === "seed" ? 1 : 0);
-          // The member who added a fact earns +1 once two other members confirm it (paid once per
-          // fact, in full: it doesn't count toward the daily cap).
-          if (cur.by !== "seed" && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === k))
-            s.ledger.push({ memberId: cur.by, delta: 1, reason: "confirm", ref: k, at: now });
+          // The member who added a fact earns +1 once two other members confirm it (once per fact;
+          // it counts toward the daily cap and is held if the author is at it).
+          if (cur.by !== "seed" && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === k) && !s.held.some((h) => h.reason === "confirm" && h.ref === k))
+            grant(s, cur.by, 1, "confirm", k, now);
           return { message: `Confirmed ${lower(f.label)}. ${n} confirmation${n > 1 ? "s" : ""} now.`, cells: [changed(a.entity, node, f.key)] };
         }
         case "review": {
@@ -1168,6 +1211,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
             const paid = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && (l.reason === "fill" || l.reason === "confirm")).reduce((n, l) => n + l.delta, 0);
             const back = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && l.reason === "reversal").reduce((n, l) => n + l.delta, 0);
             if (paid + back > 0) s.ledger.push({ memberId: cur.by, delta: -(paid + back), reason: "reversal", ref: k, at: now });
+            s.held = s.held.filter((h) => !(h.reason === "confirm" && h.ref === k));
           }
           for (const m of s.unlocks[k] ?? []) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
           delete s.unlocks[k];
@@ -1188,7 +1232,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       else if (l.reason === "unlock") unlocked++;
     }
     const { earned, resetsAt } = earning(s, me.id, nowMs);
-    return { ...out, me: { credits: balance(s, me.id), earned24h: earned, earnResetsAt: resetsAt, added, unlocked } };
+    return { ...out, me: { credits: balance(s, me.id), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked } };
   });
 }
 

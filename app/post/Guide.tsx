@@ -115,7 +115,7 @@ export function CreditBanner({ me, onShowAdd, onInvite }: { me: Me; onShowAdd: (
   if (capped)
     return (
       <Strip tone="ember">
-        You earned today&apos;s {me.earnCap}. Earning reopens at {fmtTime(me.earnResetsAt)}. Facts you add still count when others confirm them.
+        You earned today&apos;s {me.earnCap}. Earning reopens at {fmtTime(me.earnResetsAt)}. Facts you add now still earn a bonus, held until your room opens, when others confirm them.
       </Strip>
     );
   return null;

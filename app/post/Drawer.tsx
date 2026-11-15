@@ -356,7 +356,7 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
   return (
     <section className="tp-dsec">
       <h3 className="tp-dsec-h">{earn.capped ? "Missing company facts" : `Add these and earn up to ${plural(n, "credit")}`}</h3>
-      {earn.capped && <p className="tp-small muted">You hit today&apos;s {ui.me.earnCap}. Facts you add still count when others confirm them.</p>}
+      {earn.capped && <p className="tp-small muted">You hit today&apos;s {ui.me.earnCap}. Facts you add now still earn a bonus, held until your room opens, when others confirm them.</p>}
       {pills}
     </section>
   );
