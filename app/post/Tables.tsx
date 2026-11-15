@@ -4,45 +4,51 @@
 import { memo, type ReactNode } from "react";
 import type { EngagementRec, Me } from "@/lib/tableTypes";
 import { SOURCE_LABEL } from "@/lib/tableFields";
-import { AddPill, CompanyLogo, IconStar } from "../ui/shared";
-import { type CoInfo, type Row } from "./model";
-import { FactCell, useUi } from "./ui";
+import { AddPill, CompanyLogo, IconStar, fmtMonth } from "../ui/shared";
+import { fitReason, fitTier, isOpenSeat, recentSeats, shown, type CoInfo, type Row } from "./model";
+import { FactCell, earnNote, useUi } from "./ui";
 
+/** How fractional friendly a company is, as a plain label. Hover for the reason and the score. */
 export function Fit({ i, big }: { i: CoInfo; big?: boolean }) {
-  const { score, tier } = i.c.friendly;
-  const segs = Math.ceil(score / 20);
+  const f = i.c.friendly;
+  const { label, cls } = fitTier({ ...f, recent: recentSeats(i) }, i.c.engagements.length);
   return (
-    <span className={`tp-fit${big ? " tp-fit-big" : ""}`} title={`Fit ${score} of 100`}>
-      <span className="mono tp-fit-n">{score}</span>
-      <span className={`tp-segs t-${(tier ?? "none").toLowerCase()}`} aria-hidden>
-        {[0, 1, 2, 3, 4].map((k) => (
-          <span key={k} className={k < segs ? "on" : ""} />
-        ))}
-      </span>
-      {tier && <span className="tp-fit-t">{tier}</span>}
+    <span className={`chip tp-tier ${cls}${big ? " tp-tier-big" : ""}`} title={`${fitReason(i).replace(/\.$/, "")}. Score ${f.score} of 100`}>
+      {label}
     </span>
   );
 }
 
-export function FnChips({ i, me, max = 3 }: { i: CoInfo; me: Me; max?: number }) {
-  const mine = me.function;
-  const fns = mine && i.fns.includes(mine) ? [mine, ...i.fns.filter((f) => f !== mine)] : i.fns;
-  const showMine = !!mine && i.fns.length > 0 && !i.fns.includes(mine);
+/**
+ * GTM functions hired fractionally (the member's own first), then functions only member stories
+ * mention (muted), then "No Sales yet" when they hired other functions but not the member's.
+ */
+export function FnChips({ i, mine, max = 3 }: { i: CoInfo; mine: string | null; max?: number }) {
+  const fr = i.c.friendly.functions;
+  const ordered = mine && fr.includes(mine) ? [mine, ...fr.filter((f) => f !== mine)] : fr;
+  const all = [...ordered.map((f) => ({ f, story: false })), ...i.fns.filter((f) => !fr.includes(f)).map((f) => ({ f, story: true }))];
+  const showMine = !!mine && fr.length > 0 && !fr.includes(mine);
   return (
     <span className="tp-fns">
-      {fns.slice(0, max).map((f) => (
-        <span key={f} className="chip tp-fn">
+      {all.slice(0, max).map(({ f, story }) => (
+        <span key={f} className={`chip tp-fn${story ? " tp-fn-story" : f === mine ? " tp-fn-me" : ""}`} title={story ? "From member stories" : undefined}>
           {f}
         </span>
       ))}
-      {fns.length > max && <span className="tp-more mono">+{fns.length - max}</span>}
+      {all.length > max && <span className="tp-more mono">+{all.length - max}</span>}
       {showMine && (
-        <span className="chip tp-fn-mine" title={`No ${mine} seat on file here yet. They hired other GTM functions fractionally.`}>
-          {mine}?
+        <span className="chip tp-fn-gap" title={`No ${mine} seat on file. They hired other GTM functions fractionally.`}>
+          No {mine} yet
         </span>
       )}
     </span>
   );
+}
+
+/** Who held the seat. An open role has nobody yet, so it never asks for a name. */
+export function HeldBy({ e }: { e: EngagementRec }) {
+  if (isOpenSeat(e) && e.cells.operator?.s === "empty") return <span className="chip chip-ember tp-open">Open seat</span>;
+  return <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} />;
 }
 
 function CompanyName({ i, following }: { i: CoInfo; following?: boolean }) {
@@ -69,27 +75,27 @@ const Faint = ({ children = "0" }: { children?: ReactNode }) => <span className=
 function SeatCell({ i }: { i: CoInfo }) {
   const ui = useUi();
   const e = i.latest;
-  if (!e) return <AddPill label="Add seat" onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
-  const fn = e.cells.function;
+  if (!e) return <AddPill label="Add seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
+  const start = shown(e.cells.start);
   return (
     <span className="tp-seat">
-      {fn?.s === "value" && <span className="tp-seat-fn">{fn.v}</span>}
       <FactCell t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} addLabel="Add role" />
+      {start && <span className="mono tp-faint">{fmtMonth(start)}</span>}
     </span>
   );
 }
 
-function FunctionsCell({ i, me }: { i: CoInfo; me: Me }) {
+function FunctionsCell({ i, mine }: { i: CoInfo; mine: string | null }) {
   const ui = useUi();
-  if (i.fns.length) return <FnChips i={i} me={me} />;
+  if (i.fns.length) return <FnChips i={i} mine={mine} />;
   const e = i.engs.find((x) => x.cells.function?.s === "empty");
   if (e) return <FactCell t={{ entity: "engagement", id: e.id, field: "function" }} cell={e.cells.function} />;
-  return <AddPill label="Add seat" onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
+  return <AddPill label="Add seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
 }
 
 function PeopleCell({ i }: { i: CoInfo }) {
   const ui = useUi();
-  if (!i.people.length) return <AddPill label="Add person" onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "person" })} />;
+  if (!i.people.length) return <AddPill label="Add person" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "person" })} />;
   const dm = i.people.find(({ p }) => p.cells.relationship?.s === "value" && p.cells.relationship.v === "Decision maker") ?? i.people[0];
   const title = dm.p.cells.title?.s === "value" ? dm.p.cells.title.v : "Person";
   return (
@@ -101,7 +107,7 @@ function PeopleCell({ i }: { i: CoInfo }) {
   );
 }
 
-const CompanyRow = memo(function CompanyRow({ r, me, sel, onOpen, isNew }: { r: Row; me: Me; sel: boolean; onOpen: (r: Row) => void; isNew: boolean }) {
+const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew }: { r: Row; mine: string | null; sel: boolean; onOpen: (r: Row) => void; isNew: boolean }) {
   const i = r.i;
   const c = i.c;
   const e = i.latest;
@@ -112,17 +118,16 @@ const CompanyRow = memo(function CompanyRow({ r, me, sel, onOpen, isNew }: { r: 
         {isNew && <span className="tp-new" title="New facts since your last visit" />}
       </td>
       <td>
+        <SeatCell i={i} />
+      </td>
+      <td>{e ? <HeldBy e={e} /> : <Faint>·</Faint>}</td>
+      <td>{e ? <FactCell t={{ entity: "engagement", id: e.id, field: "rate" }} cell={e.cells.rate} /> : <Faint>·</Faint>}</td>
+      <td>
         <Fit i={i} />
       </td>
       <td>
-        <FunctionsCell i={i} me={me} />
+        <FunctionsCell i={i} mine={mine} />
       </td>
-      <td className="num">{c.friendly.open ? <span className="chip chip-ember tp-open">Hiring <span className="mono">{c.friendly.open}</span></span> : <Faint />}</td>
-      <td>
-        <SeatCell i={i} />
-      </td>
-      <td>{e ? <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} /> : <Faint>·</Faint>}</td>
-      <td>{e ? <FactCell t={{ entity: "engagement", id: e.id, field: "rate" }} cell={e.cells.rate} /> : <Faint>·</Faint>}</td>
       <td>
         <PeopleCell i={i} />
       </td>
@@ -159,7 +164,9 @@ const EngRow = memo(function EngRow({ r, sel, onOpen }: { r: Row; sel: boolean; 
       <td>
         <FactCell t={t("status")} cell={e.cells.status} render={(v) => <span className={`tp-status s-${v.split(" ")[0].toLowerCase()}`}>{v}</span>} />
       </td>
-      <td>{cellOf("operator")}</td>
+      <td>
+        <HeldBy e={e} />
+      </td>
       <td>{cellOf("start")}</td>
       <td>{cellOf("end")}</td>
       <td>{cellOf("rate")}</td>
@@ -199,12 +206,11 @@ const PersonRow = memo(function PersonRow({ r, sel, onOpen }: { r: Row; sel: boo
 const HEAD: Record<string, { label: string; cls?: string }[]> = {
   companies: [
     { label: "Company", cls: "tp-sticky w-co" },
+    { label: "Latest seat", cls: "w-seat" },
+    { label: "Held by", cls: "w-op" },
+    { label: "Rate", cls: "w-rate" },
     { label: "Fit", cls: "w-fit" },
     { label: "Functions hired", cls: "w-fns" },
-    { label: "Open roles", cls: "num w-open" },
-    { label: "Latest seat", cls: "w-seat" },
-    { label: "Fractional", cls: "w-op" },
-    { label: "Rate", cls: "w-rate" },
     { label: "People", cls: "w-ppl" },
     { label: "Industry", cls: "w-ind" },
     { label: "Employees", cls: "w-emp" },
@@ -217,7 +223,7 @@ const HEAD: Record<string, { label: string; cls?: string }[]> = {
     { label: "Role", cls: "w-role" },
     { label: "Type", cls: "w-type" },
     { label: "Status", cls: "w-status" },
-    { label: "Fractional", cls: "w-op" },
+    { label: "Held by", cls: "w-op" },
     { label: "Start", cls: "w-date" },
     { label: "End", cls: "w-date" },
     { label: "Rate", cls: "w-rate" },
@@ -266,7 +272,7 @@ export function DataTable({
       <tbody>
         {rows.map((r) =>
           type === "companies" ? (
-            <CompanyRow key={r.key} r={r} me={me} sel={selected === r.key} onOpen={onOpen} isNew={!!newSince && !!r.i.c.updatedAt && r.i.c.updatedAt > newSince && r.i.c.following} />
+            <CompanyRow key={r.key} r={r} mine={me.function} sel={selected === r.key} onOpen={onOpen} isNew={!!newSince && !!r.i.c.updatedAt && r.i.c.updatedAt > newSince && r.i.c.following} />
           ) : type === "engagements" ? (
             <EngRow key={r.key} r={r} sel={selected === r.key} onOpen={onOpen} />
           ) : (

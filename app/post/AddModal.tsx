@@ -40,10 +40,11 @@ function Chips({ options, value, onPick, label }: { options: string[]; value: st
 }
 
 function Lbl({ text, filled, htmlFor }: { text: string; filled: boolean; htmlFor?: string }) {
+  const ui = useUi();
   return (
     <label className="tp-lbl" htmlFor={htmlFor}>
       {text}
-      {filled && <span className="tp-plus1 mono">+1</span>}
+      {filled && !earnNote(ui.me).capped && <span className="tp-plus1 mono">+1</span>}
     </label>
   );
 }
@@ -75,6 +76,7 @@ function NewCompany({
     }
   }, [lookup, initialName]);
   const n = [website, industry, employees, revenue].filter(Boolean).length;
+  const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
   const submit = async () => {
     if (name.trim().length < 2) return setErr("What's the company called?");
     if (website) {
@@ -125,7 +127,7 @@ function NewCompany({
       {err && <p className="tp-ed-err">{err}</p>}
       <div className="tp-modal-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>
-          {busy ? "Adding" : "Add company"} {n > 0 && <span className="mono">+{n}</span>}
+          {busy ? "Adding" : "Add company"} {n > 0 && room > 0 && <span className="mono">+{Math.min(n, room)}</span>}
         </button>
         <span className="tp-small muted">Then add a seat or a person there.</span>
       </div>
@@ -165,7 +167,7 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
     const f = fieldDef("engagement", k)!;
     return (
       <div className="tp-form-row">
-        <Lbl text={k === "operator" ? "Fractional who held the seat" : f.label} filled={!!v[k]?.trim()} htmlFor={`tp-ef-${k}`} />
+        <Lbl text={k === "operator" ? "Who held the seat" : f.label} filled={!!v[k]?.trim()} htmlFor={`tp-ef-${k}`} />
         <input
           id={`tp-ef-${k}`}
           className={`input${mono ? " mono" : ""}`}
@@ -224,7 +226,7 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
       {err && <p className="tp-ed-err">{err}</p>}
       <div className="tp-modal-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>
-          {busy ? "Adding" : "Add engagement"} {filled.length > 0 && <span className="mono">+{Math.min(filled.length, room)}</span>}
+          {busy ? "Adding" : "Add engagement"} {filled.length > 0 && room > 0 && <span className="mono">+{Math.min(filled.length, room)}</span>}
         </button>
         <span className="tp-small muted">{room ? `Each field earns 1. ${plural(room, "credit")} left to earn today.` : earnNote(ui.me).text}</span>
       </div>
@@ -242,6 +244,7 @@ function PersonForm({ i, engagementId, onDone }: { i: CoInfo; engagementId?: str
   const [busy, setBusy] = useState(false);
   const set = (k: string) => (x: string) => (setV((o) => ({ ...o, [k]: x })), setErr(null));
   const filled = PERSON_ORDER.filter((k) => v[k]?.trim());
+  const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
   const submit = async () => {
     if (!v.name?.trim()) return setErr("Add the person's name.");
     const person: Record<string, string> = {};
@@ -287,6 +290,7 @@ function PersonForm({ i, engagementId, onDone }: { i: CoInfo; engagementId?: str
         {txt("email", true, "email")}
         {txt("linkedin", true)}
       </div>
+      <div className="tp-form-2">{txt("phone", true, "tel")}</div>
       {i.engs.length > 0 && (
         <div className="tp-form-row">
           <label className="tp-lbl" htmlFor="tp-pf-seat">
@@ -305,7 +309,7 @@ function PersonForm({ i, engagementId, onDone }: { i: CoInfo; engagementId?: str
       {err && <p className="tp-ed-err">{err}</p>}
       <div className="tp-modal-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>
-          {busy ? "Adding" : "Add person"} {filled.length > 0 && <span className="mono">+{filled.length}</span>}
+          {busy ? "Adding" : "Add person"} {filled.length > 0 && room > 0 && <span className="mono">+{Math.min(filled.length, room)}</span>}
         </button>
         <span className="tp-small muted">Names and contact details stay locked for others until they unlock them.</span>
       </div>
@@ -326,7 +330,13 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
   const [looking, setLooking] = useState(false);
   const dq = useDebounced(q, 400);
   const inputRef = useRef<HTMLInputElement>(null);
+  const doneRef = useRef<HTMLDivElement>(null);
+  // After adding, bring the success panel into view (the form above it was scrolled).
+  useEffect(() => {
+    if (done) doneRef.current?.scrollIntoView({ block: "nearest" });
+  }, [done]);
   const i = selected ? infos.find((x) => x.c.id === selected) ?? null : null;
+  const capped = earnNote(ui.me).capped;
 
   const matches = useMemo(() => {
     const s = q.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "");
@@ -405,7 +415,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                       <span className="mono tp-small muted">{m.domain ?? plural(m.c.engagements.length, "engagement")}</span>
                     </span>
                     <span className="tp-match-miss tp-small">
-                      {m.c.facts.missing} missing <span className="tp-plus1 mono">+{m.c.facts.missing}</span>
+                      {m.c.facts.missing} missing {!capped && <span className="tp-plus1 mono">+{m.c.facts.missing}</span>}
                     </span>
                   </button>
                 ))}
@@ -422,7 +432,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                     <span className="mono tp-small muted">{m.domain ?? `${plural(m.c.engagements.length, "engagement")}`}</span>
                   </span>
                   <span className="tp-match-miss tp-small">
-                    {m.c.facts.missing} missing <span className="tp-plus1 mono">+{m.c.facts.missing}</span>
+                    {m.c.facts.missing} missing {!capped && <span className="tp-plus1 mono">+{m.c.facts.missing}</span>}
                   </span>
                 </button>
               ))}
@@ -483,32 +493,43 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
               Change
             </button>
           </div>
-          {done && (
-            <div className="tp-done" role="status">
-              <IconCheck size={14} /> {done}
-              <span className="tp-done-acts">
-                <button type="button" className="tp-tbtn tp-tbtn-strong" onClick={() => (ui.openCompany(i.c.id), onClose())}>
+          {done ? (
+            <div className="tp-done-panel">
+              <div className="tp-done" role="status" ref={doneRef}>
+                <IconCheck size={14} /> {done}
+              </div>
+              <div className="tp-done-acts">
+                <button type="button" className="btn btn-primary" onClick={() => (setDone(null), setMode("engagement"))}>
+                  Add another engagement
+                </button>
+                <button type="button" className="btn" onClick={() => (setDone(null), setMode("person"))}>
+                  Add a person there
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => (ui.openCompany(i.c.id), onClose())}>
                   Open record
                 </button>
-              </span>
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="tp-seg" role="tablist" aria-label="What to add">
+                {(
+                  [
+                    ["engagement", "Engagement"],
+                    ["person", "Person"],
+                    ...(missingCo ? ([["facts", `Company facts ${missingCo}`]] as const) : []),
+                  ] as [AddMode, string][]
+                ).map(([k, label]) => (
+                  <button key={k} type="button" role="tab" aria-selected={mode === k} className={`tp-seg-b${mode === k ? " on" : ""}`} onClick={() => setMode(k)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {mode === "engagement" && <EngagementForm i={i} onDone={(n) => setDone(`Engagement added with ${plural(n, "fact")}.`)} />}
+              {mode === "person" && <PersonForm i={i} engagementId={opts.engagementId} onDone={(n) => setDone(`Person added with ${plural(n, "fact")}.`)} />}
+              {mode === "facts" && (missingCo ? <MissingFacts i={i} /> : <p className="tp-small muted">Every company fact is on file.</p>)}
+            </>
           )}
-          <div className="tp-seg" role="tablist" aria-label="What to add">
-            {(
-              [
-                ["engagement", "+ engagement"],
-                ["person", "+ person"],
-                ...(missingCo ? ([["facts", `Company facts ${missingCo}`]] as const) : []),
-              ] as [AddMode, string][]
-            ).map(([k, label]) => (
-              <button key={k} type="button" role="tab" aria-selected={mode === k} className={`tp-seg-b${mode === k ? " on" : ""}`} onClick={() => setMode(k)}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {mode === "engagement" && <EngagementForm i={i} onDone={(n) => setDone(`Engagement added with ${plural(n, "fact")}.`)} />}
-          {mode === "person" && <PersonForm i={i} engagementId={opts.engagementId} onDone={(n) => setDone(`Person added with ${plural(n, "fact")}.`)} />}
-          {mode === "facts" && (missingCo ? <MissingFacts i={i} /> : <p className="tp-small muted">Every company fact is on file.</p>)}
         </div>
       )}
     </>

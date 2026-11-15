@@ -92,7 +92,7 @@ export const GROUPS: GroupDef[] = [
       { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title of the seat" },
       { key: "type", label: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES },
       { key: "status", label: "Status", kind: "choice", gated: true, options: STATUSES },
-      { key: "operator", label: "Fractional", kind: "text", gated: true, placeholder: "Who held the seat", hint: "Who held the seat" },
+      { key: "operator", label: "Seat holder", kind: "text", gated: true, placeholder: "Who held the seat", hint: "Who held the seat" },
       { key: "start", label: "Start", kind: "month", gated: false },
       { key: "end", label: "End", kind: "monthOrOngoing", gated: true },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },

@@ -96,6 +96,9 @@ export function fmtTime(iso: string | null | undefined): string {
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/** A field label in running text: lowercase, except labels with inner capitals (HQ, LinkedIn). Same rule as lower() in lib/table.ts. */
+export const fieldText = (f: string) => (/[A-Z]/.test(f.slice(1)) ? f : f.toLowerCase());
+
 /** This month as YYYY-MM (the max for month inputs). */
 export const thisMonth = () => {
   const d = new Date();

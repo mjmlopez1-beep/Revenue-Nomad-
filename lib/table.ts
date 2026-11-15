@@ -926,12 +926,13 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const node = nodeOf(a.entity, a.id);
           const f = fieldOf(a.entity, a.field);
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
+          const wasMine = valueOf(node, s, f.key)?.by === me.id;
           const earned = setValue(node, a.entity, f.key, a.value);
           const bonus = earned || capped ? payReferral() : 0;
           const cells = [changed(a.entity, node, f.key)];
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
           return {
-            message: `Added ${lower(f.label)}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
+            message: `${wasMine ? "Updated" : "Added"} ${lower(f.label)}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
             id: outId(a.entity, node.id),
             capped,
             cells,

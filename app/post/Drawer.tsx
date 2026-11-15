@@ -8,25 +8,21 @@
 import { useEffect, useRef, useState } from "react";
 import type { Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
-import {
-  AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, fmtMonth, hrefFor, timeAgo, val,
-} from "../ui/shared";
-import { COMPANY_FILL, ENG_FIELDS, cellKey, fitReason, lockedInEngagement, lockedOf, shown, type CoInfo, type FactRef } from "./model";
-import { FactCell, earnNote, shortLabel, useUi } from "./ui";
+import { CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
+import { COMPANY_FILL, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, shown, type CoInfo, type FactRef } from "./model";
+import { EditPill, FactCell, earnNote, shortLabel, useUi } from "./ui";
 import { Fit } from "./Tables";
 import { plural } from "./hooks";
+
+/** The team inbox that brokers intros (read at build time). Without it, the intro link only drafts the email. */
+const INTRO_TO = process.env.NEXT_PUBLIC_RN_INTRO_EMAIL ?? "";
 
 /* ---------- small pieces ---------- */
 
 function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
   const ui = useUi();
   const [reporting, setReporting] = useState(false);
-  if (cell.s === "locked")
-    return cell.ver > 0 ? (
-      <span className="tp-ver mono" title={`Confirmed by ${plural(cell.ver, "member")}`}>
-        <IconCheck size={11} /> {cell.ver}
-      </span>
-    ) : null;
+  // Locked: nothing here. The lock pill's title already says how many confirmed it.
   if (cell.s !== "value" || cell.system) return null;
   const canCheck = !cell.mine;
   return (
@@ -37,6 +33,11 @@ function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
         </span>
       )}
       {cell.mine && <span className="tp-yours">Yours</span>}
+      {cell.mine && (
+        <button type="button" className="tp-tbtn" onClick={(e) => ui.edit(e.currentTarget, t, cell.v)}>
+          Edit
+        </button>
+      )}
       {canCheck && !reporting && (
         <span className="tp-meta-acts">
           {cell.iv ? (
@@ -78,12 +79,23 @@ function FieldRow({ t, cell, label }: { t: FactRef; cell: Cell; label: string })
   );
 }
 
-/** Known and locked fields as a list; the empty ones as a compact row of add pills. */
-function FieldList({ entity, id, cells, fields }: { entity: Entity; id: string; cells: Record<string, Cell>; fields: string[] }) {
+/** Empty fields people add most often come first. */
+const EMPTY_FIRST = ["role", "rate", "status"];
+const emptyRank = (f: string) => (EMPTY_FIRST.includes(f) ? EMPTY_FIRST.indexOf(f) : EMPTY_FIRST.length);
+
+/**
+ * Known and locked fields as a list; the empty ones as a compact row of add pills (three,
+ * then "N more to add"). An open seat never asks who held it or when it ended.
+ */
+function FieldList({ entity, id, cells, fields, openSeat }: { entity: Entity; id: string; cells: Record<string, Cell>; fields: string[]; openSeat?: boolean }) {
   const ui = useUi();
-  const refs = useRef<Record<string, HTMLSpanElement | null>>({});
   const present = fields.filter((f) => cells[f] && cells[f].s !== "empty");
-  const empty = fields.filter((f) => cells[f]?.s === "empty");
+  const empty = fields
+    .filter((f) => cells[f]?.s === "empty" && !(openSeat && (f === "operator" || f === "end")))
+    .sort((a, b) => emptyRank(a) - emptyRank(b));
+  const pulseHidden = empty.slice(3).some((f) => ui.pulse === cellKey(id, f));
+  const [more, setMore] = useState(pulseHidden);
+  const all = more || pulseHidden;
   return (
     <>
       {present.length > 0 && (
@@ -95,11 +107,14 @@ function FieldList({ entity, id, cells, fields }: { entity: Entity; id: string; 
       )}
       {empty.length > 0 && (
         <div className="tp-missing-row">
-          {empty.map((f) => (
-            <span key={f} ref={(el) => void (refs.current[f] = el)} data-cell={cellKey(id, f)} className={ui.pulse === cellKey(id, f) ? "tp-pulse" : ""}>
-              <AddPill label={shortLabel(fieldDef(entity, f)!)} onAdd={() => refs.current[f] && ui.edit(refs.current[f]!, { entity, id, field: f })} />
-            </span>
+          {(all ? empty : empty.slice(0, 3)).map((f) => (
+            <EditPill key={f} fact={{ entity, id, field: f }} />
           ))}
+          {empty.length > 3 && !all && (
+            <button type="button" className="tp-tbtn" onClick={() => setMore(true)}>
+              {empty.length - 3} more to add
+            </button>
+          )}
         </div>
       )}
     </>
@@ -112,7 +127,8 @@ function UnlockAll({ items, label, small }: { items: FactRef[]; label?: (n: numb
   const [busy, setBusy] = useState(false);
   const n = items.length;
   if (!n) return null;
-  const short = ui.me.credits < n;
+  // Not enough credits: say what is missing (touch screens never show a disabled button's title).
+  if (ui.me.credits < n) return <span className="tp-unlockall tp-unlock-short tp-small muted">Need {plural(n - ui.me.credits, "more credit", "more credits")}</span>;
   const run = async () => {
     if (n > 10 && !confirm) return setConfirm(true);
     setBusy(true);
@@ -123,13 +139,7 @@ function UnlockAll({ items, label, small }: { items: FactRef[]; label?: (n: numb
   const text = confirm ? `Spend ${n} credits` : label ? label(n) : `Unlock all (${n} credit${n > 1 ? "s" : ""})`;
   return (
     <span className="tp-unlockall">
-      <button
-        type="button"
-        className={`btn btn-pine${small ? " btn-sm" : ""}`}
-        disabled={busy || short}
-        title={short ? `You have ${ui.me.credits} credits. Add facts to earn more.` : `${n} locked fact${n > 1 ? "s" : ""}, 1 credit each`}
-        onClick={run}
-      >
+      <button type="button" className={`btn btn-pine${small ? " btn-sm" : ""}`} disabled={busy} title={`${n} locked fact${n > 1 ? "s" : ""}, 1 credit each`} onClick={run}>
         {busy ? "Unlocking" : text}
       </button>
       {confirm && (
@@ -151,8 +161,10 @@ function PersonCard({ p }: { p: PersonRec }) {
   return (
     <div className="tp-person" id={`tp-d-${p.id}`}>
       <div className="tp-person-top">
-        <span className="tp-person-title">{title ?? <FactCell t={t("title")} cell={p.cells.title} addLabel="Title" />}</span>
-        {rel ? <span className="chip">{rel}</span> : <FactCell t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
+        <span className="tp-person-id">
+          <span className="tp-person-title">{title ?? <FactCell t={t("title")} cell={p.cells.title} addLabel="Title" />}</span>
+          {rel ? <span className="chip">{rel}</span> : <FactCell t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
+        </span>
         {locked.length > 1 && <UnlockAll items={locked} small label={(n) => `Unlock all (${n})`} />}
       </div>
       <FieldList entity="contact" id={p.id} cells={p.cells} fields={["name", "email", "linkedin", "phone"]} />
@@ -167,6 +179,7 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
   const [busy, setBusy] = useState(false);
   const set = (k: string) => (x: string) => setV((o) => ({ ...o, [k]: x }));
   const filled = Object.values(v).filter((x) => x.trim()).length;
+  const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
   const submit = async () => {
     if (!v.name?.trim()) return setErr("Add the person's name.");
     for (const [k, x] of Object.entries(v)) {
@@ -205,6 +218,10 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
           <span className="tp-lbl">LinkedIn</span>
           <input className="input mono" placeholder={fld("linkedin").placeholder} value={v.linkedin ?? ""} onChange={(e) => set("linkedin")(e.target.value)} />
         </label>
+        <label>
+          <span className="tp-lbl">Phone</span>
+          <input className="input mono" type="tel" inputMode="tel" placeholder={fld("phone").placeholder} value={v.phone ?? ""} onChange={(e) => set("phone")(e.target.value)} />
+        </label>
       </div>
       <span className="tp-lbl">Relationship</span>
       <div className="tp-chips">
@@ -217,7 +234,7 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
       {err && <p className="tp-ed-err">{err}</p>}
       <div className="tp-pform-foot">
         <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
-          Add person {filled > 0 && <span className="mono">+{filled}</span>}
+          Add person {filled > 0 && room > 0 && <span className="mono">+{Math.min(filled, room)}</span>}
         </button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>
           Cancel
@@ -229,7 +246,21 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
 
 /* ---------- engagements ---------- */
 
-function EngagementCard({ e, company, companyId, focus }: { e: EngagementRec; company: string; companyId: string; focus: boolean }) {
+function EngagementCard({
+  e,
+  company,
+  companyId,
+  focus,
+  hideUnlockAll,
+}: {
+  e: EngagementRec;
+  company: string;
+  companyId: string;
+  focus: boolean;
+  /** The drawer's own Unlock all already covers every locked fact here. */
+  hideUnlockAll?: boolean;
+}) {
+  const ui = useUi();
   const [adding, setAdding] = useState(false);
   const t = (field: string) => ({ entity: "engagement" as const, id: e.id, field });
   const fn = e.cells.function;
@@ -239,9 +270,16 @@ function EngagementCard({ e, company, companyId, focus }: { e: EngagementRec; co
   const locked = lockedInEngagement(e);
   const start = shown(e.cells.start);
   const subject = op ? `Intro to ${op} about ${company}` : "";
-  const body = op
-    ? `Hi,\n\nCould you introduce me to ${op}? They held ${role ? `the ${role} seat` : "a fractional seat"} at ${company} and I would like to hear how it went.\n\nThanks`
-    : "";
+  const seat = role ? `the ${role} seat` : "a fractional seat";
+  const intro = op
+    ? INTRO_TO
+      ? `mailto:${INTRO_TO}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
+          `Please introduce me (${ui.me.name}) to ${op}, who held ${seat} at ${company}.`,
+        )}`
+      : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
+          `Hi,\n\nCould you introduce me to ${op}? They held ${seat} at ${company} and I would like to hear how it went.\n\nThanks`,
+        )}`
+    : null;
   return (
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>
       <div className="tp-eng-top">
@@ -256,13 +294,13 @@ function EngagementCard({ e, company, companyId, focus }: { e: EngagementRec; co
       <div className="tp-eng-chips">
         {fn?.s === "value" ? <span className="chip tp-fn">{fn.v}</span> : <FactCell t={t("function")} cell={fn} addLabel="Function" />}
         {type?.s === "value" ? <span className="chip">{type.v}</span> : <FactCell t={t("type")} cell={type} addLabel="Type" />}
-        {locked.length > 1 && (
+        {locked.length > 1 && !hideUnlockAll && (
           <span className="tp-eng-unlock">
             <UnlockAll items={locked} small label={(n) => `Unlock all (${n})`} />
           </span>
         )}
       </div>
-      <FieldList entity="engagement" id={e.id} cells={e.cells} fields={ENG_FIELDS} />
+      <FieldList entity="engagement" id={e.id} cells={e.cells} fields={ENG_FIELDS} openSeat={isOpenSeat(e)} />
       {e.people.length > 0 && (
         <div className="tp-eng-people">
           <div className="tp-sublabel">People on this seat</div>
@@ -275,13 +313,16 @@ function EngagementCard({ e, company, companyId, focus }: { e: EngagementRec; co
         <AddPersonForm companyId={companyId} engagementId={e.id} onDone={() => setAdding(false)} />
       ) : (
         <div className="tp-eng-foot">
-          <button type="button" className="tp-tbtn tp-tbtn-strong" onClick={() => setAdding(true)}>
-            <IconPlus size={12} /> person
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAdding(true)}>
+            <IconPlus size={13} /> Add someone on this seat
           </button>
-          {op && (
-            <a className="tp-intro" href={`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}>
-              Ask for an intro <IconExternal size={11} />
-            </a>
+          {intro && (
+            <span className="tp-intro-w">
+              <a className="tp-intro" href={intro}>
+                {INTRO_TO ? "Ask for an intro" : "Draft an intro email"} <IconExternal size={11} />
+              </a>
+              {!INTRO_TO && <span className="tp-small muted">Send it to someone who knows them.</span>}
+            </span>
           )}
         </div>
       )}
@@ -291,51 +332,9 @@ function EngagementCard({ e, company, companyId, focus }: { e: EngagementRec; co
 
 /* ---------- missing company facts ---------- */
 
-function InlineFact({ t, onSaved }: { t: FactRef; onSaved?: () => void }) {
-  const ui = useUi();
-  const f = fieldDef(t.entity, t.field)!;
-  const [v, setV] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const save = async (raw: string) => {
-    if (!raw.trim()) return;
-    const { error, value } = cleanValue(f, raw);
-    if (error) return setErr(error);
-    setErr(null);
-    const ok = await ui.fill(t, value!);
-    if (ok) onSaved?.();
-  };
-  const id = `tp-if-${t.id}-${t.field}`;
-  return (
-    <div className="tp-ifact" data-cell={cellKey(t.id, t.field)}>
-      <label className="tp-ifact-l" htmlFor={id}>
-        {f.label}
-      </label>
-      {f.kind === "choice" ? (
-        <select id={id} className="select" value="" onChange={(e) => save(e.target.value)}>
-          <option value="">Pick one</option>
-          {f.options!.map((o) => (
-            <option key={o}>{o}</option>
-          ))}
-        </select>
-      ) : (
-        <input
-          id={id}
-          className={`input${f.kind === "text" ? "" : " mono"}`}
-          placeholder={f.placeholder ?? ""}
-          value={v}
-          onChange={(e) => (setV(e.target.value), setErr(null))}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              save(v);
-            } else if (e.key === "Tab" && !e.shiftKey && v.trim()) save(v);
-          }}
-        />
-      )}
-      <span className="tp-plus1 mono">+1</span>
-      {err && <span className="tp-ed-err tp-ifact-err">{err}</span>}
-    </div>
-  );
+/** A missing company fact: the same add pill as everywhere else, opening the shared fact editor. */
+function InlineFact({ t }: { t: FactRef }) {
+  return <EditPill fact={t} label={fieldDef(t.entity, t.field)!.label} />;
 }
 
 export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?: boolean; skip?: string[] }) {
@@ -345,19 +344,20 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
   const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
   const earn = earnNote(ui.me);
   const n = Math.min(fields.length, room);
+  const pills = (
+    <div className="tp-missing-row">
+      {fields.map((f) => (
+        <InlineFact key={f} t={{ entity: "company", id: i.c.id, field: f }} />
+      ))}
+    </div>
+  );
+  // Without a title it sits in the drawer header, where the summary line would be.
+  if (!title) return <div className="tp-dmissing">{pills}</div>;
   return (
     <section className="tp-dsec">
-      {title && (
-        <h3 className="tp-dsec-h">
-          {earn.capped ? "Missing company facts" : `Add these and earn up to ${plural(n, "credit")}`}
-        </h3>
-      )}
+      <h3 className="tp-dsec-h">{earn.capped ? "Missing company facts" : `Add these and earn up to ${plural(n, "credit")}`}</h3>
       {earn.capped && <p className="tp-small muted">You hit today&apos;s {ui.me.earnCap}. Facts you add still count when others confirm them.</p>}
-      <div className="tp-ifacts">
-        {fields.map((f) => (
-          <InlineFact key={f} t={{ entity: "company", id: i.c.id, field: f }} />
-        ))}
-      </div>
+      {pills}
     </section>
   );
 }
@@ -397,15 +397,19 @@ export function Drawer({
   const website = val(c.cells.website);
   const linkedin = val(c.cells.linkedin);
   const about = val(c.cells.about);
-  const line = ["industry", "employees", "revenue", "hq"].map((k) => val(c.cells[k])).filter(Boolean) as string[];
+  const emp = val(c.cells.employees);
+  const rev = val(c.cells.revenue);
+  const line = [val(c.cells.industry), emp && `${emp} employees`, rev && `${rev} revenue`, val(c.cells.hq)].filter(Boolean) as string[];
+  // Functions hired fractionally, the member's own first; functions only member stories mention, muted.
   const fnCounts = new Map<string, number>();
   for (const e of i.engs) {
     const fn = shown(e.cells.function);
     if (fn) fnCounts.set(fn, (fnCounts.get(fn) ?? 0) + 1);
   }
-  for (const fn of i.fns) if (!fnCounts.has(fn)) fnCounts.set(fn, 1);
   const mine = ui.me.function;
-  const fnList = [...fnCounts.entries()].sort((a, b) => (a[0] === mine ? -1 : b[0] === mine ? 1 : b[1] - a[1]));
+  const hired = [...c.friendly.functions].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : (fnCounts.get(b) ?? 0) - (fnCounts.get(a) ?? 0)));
+  const storyFns = i.fns.filter((f) => !c.friendly.functions.includes(f));
+  const gap = !!mine && hired.length > 0 && !hired.includes(mine);
   const sources = [...new Set(i.engs.map((e) => SOURCE_LABEL[e.source] ?? e.source))];
   const follow = () => ui.act({ type: "follow", companyId: c.id, on: !c.following });
 
@@ -474,7 +478,7 @@ export function Drawer({
           </div>
           {!phone && followBtn}
         </header>
-        <div className={`tp-dline${line.length ? " mono" : " tp-dline-empty"}`}>{line.length ? line.join(" · ") : "Industry, size and HQ not on file yet"}</div>
+        {line.length ? <div className="tp-dline">{line.join(" · ")}</div> : <MissingFacts i={i} title={false} skip={["website", "linkedin"]} />}
         <div className="tp-dfit">
           <Fit i={i} big />
           <span className="tp-dfit-r">{fitReason(i)}</span>
@@ -486,22 +490,28 @@ export function Drawer({
             <p className="tp-about">{about}</p>
           </section>
         )}
-        {fnList.length > 0 && (
+        {(hired.length > 0 || storyFns.length > 0) && (
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">Functions hired</h3>
             <div className="tp-chips">
-              {fnList.map(([fn, n]) => (
+              {hired.map((fn) => (
                 <span key={fn} className={`chip tp-fn${fn === mine ? " tp-fn-me" : ""}`}>
-                  {fn} <span className="mono tp-cnt">{n}</span>
+                  {fn} {fnCounts.get(fn) ? <span className="mono tp-cnt">{fnCounts.get(fn)}</span> : null}
                 </span>
               ))}
-              {mine && !fnCounts.has(mine) && (
-                <span className="chip tp-fn-mine" title={`No ${mine} seat on file here yet`}>
-                  {mine}?
+              {storyFns.map((fn) => (
+                <span key={fn} className="chip tp-fn tp-fn-story" title="From member stories">
+                  {fn} {fnCounts.get(fn) ? <span className="mono tp-cnt">{fnCounts.get(fn)}</span> : null}
+                </span>
+              ))}
+              {gap && (
+                <span className="chip tp-fn-gap" title={`No ${mine} seat on file. They hired other GTM functions fractionally.`}>
+                  No {mine} yet
                 </span>
               )}
             </div>
-            {mine && !fnCounts.has(mine) && <p className="tp-small muted tp-mt6">No {mine} seat on file here yet. They hired other GTM functions, so {mine} may be next.</p>}
+            {gap && <p className="tp-small muted tp-mt6">No {mine} seat on file. They hired other GTM functions fractionally.</p>}
+            {storyFns.length > 0 && <p className="tp-small muted tp-mt6">Muted ones come from member stories.</p>}
           </section>
         )}
         <section className="tp-dsec">
@@ -510,10 +520,17 @@ export function Drawer({
           </h3>
           {i.engs.length === 0 && <p className="tp-small muted">No one has added an engagement here yet. Be first and earn up to 10 credits.</p>}
           {i.engs.map((e) => (
-            <EngagementCard key={e.id} e={e} company={c.name} companyId={c.id} focus={focus === e.id} />
+            <EngagementCard
+              key={e.id}
+              e={e}
+              company={c.name}
+              companyId={c.id}
+              focus={focus === e.id}
+              hideUnlockAll={lockedInEngagement(e).length === i.locked.length}
+            />
           ))}
-          <button type="button" className="btn btn-sm tp-addeng" onClick={() => ui.openAdd({ companyId: c.id, mode: "engagement" })}>
-            <IconPlus size={13} /> engagement
+          <button type="button" className="btn btn-sm btn-ghost tp-addeng" onClick={() => ui.openAdd({ companyId: c.id, mode: "engagement" })}>
+            <IconPlus size={13} /> Add engagement
           </button>
         </section>
         <section className="tp-dsec">
@@ -527,12 +544,12 @@ export function Drawer({
           {addingPerson ? (
             <AddPersonForm companyId={c.id} engagementId={null} onDone={() => setAddingPerson(false)} />
           ) : (
-            <button type="button" className="btn btn-sm" onClick={() => setAddingPerson(true)}>
-              <IconPlus size={13} /> person
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAddingPerson(true)}>
+              <IconPlus size={13} /> Add decision maker
             </button>
           )}
         </section>
-        <MissingFacts i={i} skip={["website", "linkedin"]} />
+        {line.length > 0 && <MissingFacts i={i} skip={["website", "linkedin"]} />}
         <footer className="tp-dfoot">
           {sources.length > 0 && <span>From {sources.join(", ").toLowerCase()}</span>}
           {c.updatedAt && <span>Updated {timeAgo(c.updatedAt)}</span>}
@@ -543,6 +560,7 @@ export function Drawer({
       </div>
       {phone && (
         <div className="tp-rsheet-bar">
+          <span className="tp-rsheet-bal mono muted">{plural(ui.me.credits, "credit")}</span>
           {i.locked.length > 0 ? (
             <UnlockAll items={i.locked} label={(n) => `Unlock all (${n})`} />
           ) : (

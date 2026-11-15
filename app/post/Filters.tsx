@@ -60,7 +60,7 @@ function ChipSet({ k, f, setF, counts, label = (o: string) => o, options }: { k:
   );
 }
 
-function Industry({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; counts: Record<string, number> }) {
+function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filters) => void; counts: Record<string, number>; hasIndustry: boolean }) {
   const [q, setQ] = useState("");
   const [all, setAll] = useState(false);
   const opts = LIST_OPTIONS.industry
@@ -96,7 +96,9 @@ function Industry({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void;
             </button>
           );
         })}
-        {!list.length && !q && <p className="tp-fnote">No industries on file yet. Add one to a company to filter by it.</p>}
+        {!list.length && !q && (
+          <p className="tp-fnote">{hasIndustry ? "No industries in these results." : "No industries on file yet. Add one to a company to filter by it."}</p>
+        )}
       </div>
       {!q && (
         <button type="button" className="tp-flink" onClick={() => setAll(!all)}>
@@ -147,12 +149,15 @@ export function FilterPanel({
   facets,
   me,
   head,
+  hasIndustry = true,
 }: {
   f: Filters;
   setF: (f: Filters) => void;
   facets: Facets;
   me: Me;
   head?: ReactNode;
+  /** Whether any company has an industry on file (else the empty note invites adding one). */
+  hasIndustry?: boolean;
 }) {
   const n = activeCount(f);
   const t = facets.toggles;
@@ -172,16 +177,17 @@ export function FilterPanel({
         </div>
       )}
       <Group title="Quick">
-        <Toggle k="friendly" f={f} setF={setF} n={t.friendly} />
-        <Toggle k="hiring" f={f} setF={setF} n={t.hiring} />
-        <Toggle k="following" f={f} setF={setF} n={t.following} />
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />
         <Toggle k="contactKnown" f={f} setF={setF} n={t.contactKnown} />
         {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} />}
-        {me.function && <p className="tp-fnote">Not yet hired my function shows companies that hired other GTM seats but not {me.function} yet.</p>}
+        {me.function && (
+          <p className="tp-fnote">
+            No seat in my function yet shows companies that hired other GTM functions fractionally but have no {me.function} seat on file.
+          </p>
+        )}
       </Group>
       <Group title="Company">
-        <Industry f={f} setF={setF} counts={l.industry} />
+        <Industry f={f} setF={setF} counts={l.industry} hasIndustry={hasIndustry} />
         <div className="tp-fblock">
           <div className="tp-flabel">Employees</div>
           <ChipSet k="employees" f={f} setF={setF} counts={l.employees} options={LIST_OPTIONS.employees} />
@@ -194,7 +200,7 @@ export function FilterPanel({
         <div className="tp-fblock">
           <div className="tp-flabel">Fit score</div>
           <div className="tp-fchips">
-            {FIT_STEPS.map((s) => (
+            {FIT_STEPS.filter((s) => s === 0 || facets.fit[s] || f.fitMin === s).map((s) => (
               <button
                 key={s}
                 type="button"
