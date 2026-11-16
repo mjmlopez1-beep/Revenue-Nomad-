@@ -9,14 +9,14 @@
  * from the account menu or the ? key) and the Undo toast's host.
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
-import type { LedgerRow, Me } from "@/lib/tableTypes";
+import type { LedgerRow, Me, View } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
-export type Contact = { support: string | null; intro?: string | null } | null | undefined;
+export type Contact = View["contact"] | null;
 
 const capOf = (me: Me) => !!me.earnResetsAt || me.earned24h >= me.earnCap;
 const signInLink = (token: string) => `${window.location.origin}/?k=${token}`;

@@ -20,7 +20,7 @@
  * phone it is modal: Tab stays inside and the page behind is inert.
  */
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import type { Action, Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
+import type { Action, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
 import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
@@ -31,10 +31,7 @@ import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 
 /** Where members reach Revenue Nomad (View.contact, read from the server at run time). */
-export interface Contact {
-  support: string | null;
-  intro: string | null;
-}
+export type Contact = NonNullable<View["contact"]>;
 
 /* ---------- what the whole record shares ---------- */
 

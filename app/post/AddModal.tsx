@@ -776,7 +776,7 @@ const PAID_PERSON = ["name", "email", "phone", "linkedin"];
 const paidCell = (c: Cell | undefined) => c?.s === "value" && !c.mine && !c.system && c.from !== "posting";
 /** The member paid to see something at this company (a hidden company they unlocked, a seat holder, a contact). */
 const paidHere = (x: CoInfo) =>
-  !!(x.c as { unlocked?: boolean }).unlocked ||
+  !!x.c.unlocked ||
   x.engs.some((e) => !e.yours && PAID_SEAT.some((f) => paidCell(e.cells[f]))) ||
   x.people.some(({ p }) => PAID_PERSON.some((f) => paidCell(p.cells[f])));
 

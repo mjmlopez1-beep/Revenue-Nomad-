@@ -94,9 +94,6 @@ const isUnlocked = (c?: Cell) => !!c && c.s === "value" && !c.mine && !c.system;
  */
 const engUnlocked = (e: EngagementRec) => !e.yours && ENG_GATED.some((f) => !(f === "posting" && e.closed) && isUnlocked(e.cells[f]));
 const startOf = (e: EngagementRec) => shown(e.cells.start) ?? "";
-/** Fields sent by the server from this round on (optional in the contract until it lands). */
-type CompanyNext = CompanyRec & { unlocked?: boolean };
-type FriendlyNext = Friendly & { hiring?: string[] };
 
 export function engagementsNewest(c: CompanyRec): EngagementRec[] {
   return [...c.engagements].sort((a, b) => {
@@ -183,7 +180,7 @@ function infoOf(c: CompanyRec): CoInfo {
   const website = shown(c.cells.website);
   const domain = website ? hostOf(website) : c.iconDomain;
   const engs = engagementsNewest(c);
-  const f = c.friendly as FriendlyNext;
+  const f = c.friendly;
   // What is on file for each function. The server sends open-role functions apart (friendly.hiring)
   // from this round on. Until then they are in friendly.functions, and a seat's own cells tell them apart.
   const openFns = new Set(engs.filter(isOpenRole).map(fnOfSeat).filter((x): x is string => !!x));
@@ -219,7 +216,7 @@ function infoOf(c: CompanyRec): CoInfo {
   ];
   const personGated = ["name", "email", "phone", "linkedin"];
   const unlockedByMe =
-    !!(c as CompanyNext).unlocked || engs.some(engUnlocked) || people.some(({ p }) => personGated.some((g) => p.cells[g] && isUnlocked(p.cells[g])));
+    !!c.unlocked || engs.some(engUnlocked) || people.some(({ p }) => personGated.some((g) => p.cells[g] && isUnlocked(p.cells[g])));
   const nameHay = [c.name, domain ?? ""].join(" ").toLowerCase();
   const parts: string[] = [nameHay, ...fns, ...textOf(c.cells)];
   for (const e of engs) parts.push(...textOf(e.cells));

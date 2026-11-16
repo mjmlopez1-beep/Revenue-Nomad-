@@ -5,17 +5,13 @@
  */
 import type { View } from "../ui/shared";
 
-export interface Contact {
-  /** Where a member asks for a lost sign-in link or anything else. */
-  support: string | null;
-  /** Where a member asks for an intro to a seat holder. */
-  intro: string | null;
-}
+/** `support`: where a member asks for a lost sign-in link or anything else. `intro`: where a member asks for an intro to a seat holder. */
+export type Contact = NonNullable<View["contact"]>;
 
 const clean = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : null);
 
 export function contactOf(view: View | null | undefined): Contact {
-  const c = (view as (View & { contact?: Partial<Contact> | null }) | null | undefined)?.contact;
+  const c = view?.contact;
   return { support: clean(c?.support), intro: clean(c?.intro) };
 }
 

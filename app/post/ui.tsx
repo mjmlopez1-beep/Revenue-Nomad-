@@ -1173,7 +1173,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       ? `Added ${sayField(f)}. No credit this time, because you've earned today's ${ui.me.earnCap}. You can earn again ${atTime(resets)}.`
       : r.message || `Added ${sayField(f)}.`;
     // "retract" takes the member's own new fact back, with its credit, if nobody unlocked or confirmed it yet.
-    showUndo(said, () => ui.act({ type: "retract", entity: t.entity, id: t.id, field: t.field } as unknown as Action));
+    showUndo(said, () => ui.act({ type: "retract", entity: t.entity, id: t.id, field: t.field }));
     onClose();
   };
   const simple = f.kind !== "choice";
