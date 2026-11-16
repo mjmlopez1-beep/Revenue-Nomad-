@@ -1,0 +1,451 @@
+/**
+ * Tests for the weekly scan collector (lib/scan) and the digest email (lib/digest.ts).
+ * No network: postings are fixtures, and the board parser reads a saved copy of its markup.
+ *
+ *   npx tsx scripts/test-scan.mts                    run the checks (exits 1 on any failure)
+ *   npx tsx scripts/test-scan.mts --samples <dir>    also write two rendered digest emails there
+ *   npx tsx scripts/test-scan.mts --live             one real scan, printing what each source returned
+ */
+import { mkdirSync, writeFileSync } from "fs";
+import path from "path";
+import { cleanCompany, cleanTitle, companyDomain, isRealCompany, roleKey } from "../lib/scan/clean";
+import { collectOpenRoles, dedupeRoles, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
+import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
+import { renderDigest } from "../lib/digest";
+import { ENGAGEMENT_TYPES, FUNCTIONS } from "../lib/tableFields";
+import type { DigestData, ScanRole } from "../lib/scanTypes";
+
+const args = process.argv.slice(2);
+
+if (args.includes("--live")) {
+  const started = Date.now();
+  const res = await collectOpenRoles();
+  console.log(`Live scan took ${((Date.now() - started) / 1000).toFixed(1)}s and found ${res.roles.length} roles`);
+  for (const s of res.sources) console.log(`  ${s.source}: fetched ${s.fetched}, matched ${s.matched}${s.error ? `, error: ${s.error}` : ""}`);
+  for (const r of res.roles.slice(0, 15)) {
+    console.log(`  ${r.postedAt?.slice(0, 10) ?? "no date   "}  ${r.company} | ${r.title} | ${r.function ?? "?"} | ${r.type} | ${r.rate ?? "no rate"} | ${r.hoursPerWeek ?? "?"} hrs | ${r.domain ?? "no domain"} | ${r.source}`);
+  }
+  process.exit(0);
+}
+
+let passed = 0;
+let failed = 0;
+function check(name: string, ok: boolean, detail?: unknown) {
+  if (ok) passed++;
+  else failed++;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || detail === undefined ? "" : `\n      got ${typeof detail === "string" ? detail : JSON.stringify(detail)}`}`);
+}
+const eq = (name: string, got: unknown, want: unknown) => check(name, JSON.stringify(got) === JSON.stringify(want), got);
+
+const NOW = Date.parse("2026-11-16T12:00:00Z");
+const daysAgo = (n: number) => new Date(NOW - n * 86_400_000).toISOString();
+const job = (over: Partial<ScanRawJob>): ScanRawJob => ({
+  title: "Fractional VP of Sales",
+  company: "Acme Robotics",
+  url: "https://remotive.com/remote-jobs/sales/fractional-vp-of-sales-1",
+  source: "remotive",
+  postedAt: daysAgo(5),
+  description: "We are hiring a fractional VP of Sales to own pipeline and revenue.",
+  ...over,
+});
+
+/* ---------- collector: what gets through ---------- */
+console.log("\nCollector");
+
+const vp = screenJob(
+  job({
+    title: "Fractional VP of Sales (Remote)",
+    company: "Acme Robotics, Inc.",
+    description: "<p>Acme Robotics is hiring a fractional VP of Sales for 15 hrs/week at $175/hr.</p><p>More about us at https://www.acmerobotics.com/about</p>",
+  }),
+  NOW
+);
+check("keeps a fractional VP Sales listing", !!vp.role, vp);
+eq("  company is cleaned", vp.role?.company, "Acme Robotics");
+eq("  title is cleaned", vp.role?.title, "Fractional VP of Sales");
+eq("  key is company and title, squeezed", vp.role?.key, "acmerobotics::fractionalvpofsales");
+eq("  function is Sales", vp.role?.function, "Sales");
+eq("  type is Fractional", vp.role?.type, "Fractional");
+eq("  rate comes from the posting", vp.role?.rate, "$175/hr");
+eq("  hours a week come from the posting", vp.role?.hoursPerWeek, 15);
+eq("  domain is the company's own site", vp.role?.domain, "acmerobotics.com");
+eq("  postedAt is an ISO date", vp.role?.postedAt, daysAgo(5));
+eq("  source and link are kept", [vp.role?.source, vp.role?.url], ["remotive", "https://remotive.com/remote-jobs/sales/fractional-vp-of-sales-1"]);
+
+eq(
+  "drops a full-time role",
+  screenJob(job({ title: "VP of Sales", company: "Globex", description: "Full-time role with health insurance, a 401k and a base salary. Own pipeline and revenue." }), NOW).skip,
+  "bar"
+);
+eq(
+  "drops a full-time role that only mentions fractional people in passing",
+  screenJob(
+    job({
+      title: "VP of Marketing",
+      company: "Initech",
+      description: "Lead our go-to-market and demand gen. You will manage agencies and fractional designers. Full-time, with health insurance and a 401k.",
+    }),
+    NOW
+  ).skip,
+  "full-time"
+);
+check(
+  "keeps a role whose body says the role itself is fractional",
+  !!screenJob(job({ title: "Head of Marketing", company: "Hooli", description: "This is a fractional role. You will lead marketing and demand gen for our go-to-market team." }), NOW).role
+);
+const salesy = "Work closely with our sales and marketing leaders on pipeline, revenue and go-to-market plans. 10 hrs/week.";
+for (const title of ["Fractional CFO", "Fractional CTO", "Fractional COO", "Fractional Head of People", "Fractional General Counsel", "Fractional Product Manager", "Fractional Head of Operations"]) {
+  eq(`drops a seat outside GTM even when the body talks about sales: ${title}`, screenJob(job({ title, description: salesy }), NOW).skip, "not-gtm");
+}
+for (const [title, fn] of [["Fractional Sales Engineer", "Sales"], ["Fractional GTM Engineer", "AI GTM"], ["Fractional Marketing Operations Lead", "RevOps"], ["Fractional Product Marketing Manager", "Product Marketing"], ["Fractional CEO", "Executive"]]) {
+  eq(`keeps a GTM seat with a technical or executive word in the title: ${title}`, screenJob(job({ title, description: salesy }), NOW).role?.function, fn);
+}
+eq("drops a discussion", screenJob(job({ kind: "discussion", title: "Ask HN: anyone hiring a fractional CMO?", company: "someuser" }), NOW).skip, "discussion");
+eq("drops a stale posting (75 days old)", screenJob(job({ postedAt: daysAgo(75) }), NOW).skip, "stale");
+check("keeps a posting 59 days old", !!screenJob(job({ postedAt: daysAgo(59) }), NOW).role);
+const undated = screenJob(job({ postedAt: undefined }), NOW);
+check("keeps a posting with no date, with postedAt null", !!undated.role && undated.role.postedAt === null, undated);
+eq("a date in the future is treated as no date", screenJob(job({ postedAt: daysAgo(-30) }), NOW).role?.postedAt, null);
+
+for (const name of ["Unknown", "Confidential", "Stealth", "Stealth Startup", "Confidential Company", "N/A", "See listing", "A Series B Fintech Startup", "Early-stage B2B SaaS company"]) {
+  eq(`drops a nameless company: ${name}`, screenJob(job({ company: name }), NOW).skip, "company");
+}
+eq(
+  "drops a recruiter posting for an unnamed client",
+  screenJob(job({ company: "Hartwell Partners", description: "Our client is a Series B SaaS company seeking a fractional VP of Sales to own pipeline." }), NOW).skip,
+  "company"
+);
+eq("drops a recruiter by name", screenJob(job({ company: "Apex Executive Search" }), NOW).skip, "company");
+for (const name of ["Remotive", "We Work Remotely", "Fractional Jobs", "Toptal", "Dynamite Jobs"]) {
+  eq(`drops a job board as the company: ${name}`, screenJob(job({ company: name }), NOW).skip, "company");
+}
+check("keeps an agency that talks about its clients in general", !!screenJob(job({ company: "Brightline", description: "Fractional VP of Sales. You will help our clients grow pipeline." }), NOW).role);
+
+/* ---------- collector: dedupe, order, cap ---------- */
+
+const twoBoards = rolesFromRaw(
+  [
+    job({ title: "Fractional CMO - Remote", company: "Northwind LLC", source: "remoteok", url: "https://remoteok.com/remote-jobs/1", postedAt: daysAgo(2), description: "Fractional CMO to lead marketing." }),
+    job({
+      title: "Fractional CMO",
+      company: "Northwind",
+      source: "weworkremotely",
+      url: "https://weworkremotely.com/remote-jobs/northwind-fractional-cmo",
+      postedAt: daysAgo(4),
+      description: "Fractional CMO to lead marketing. 10 hrs/week at $150/hr.",
+    }),
+  ],
+  NOW
+);
+eq("dedupes the same role from two boards", twoBoards.length, 1);
+eq("  keeps the posting with the most detail", [twoBoards[0]?.source, twoBoards[0]?.rate, twoBoards[0]?.hoursPerWeek], ["weworkremotely", "$150/hr", 10]);
+eq("  both postings share one key", twoBoards[0]?.key, "northwind::fractionalcmo");
+
+const role = (over: Partial<ScanRole>): ScanRole => ({
+  key: "a::b", company: "A", domain: null, title: "B", function: null, type: "Fractional", url: "https://x.test/1", source: "one", postedAt: null, rate: null, hoursPerWeek: null, ...over,
+});
+const merged = dedupeRoles([role({ source: "one", rate: "$150/hr" }), role({ source: "two", domain: "a.com", hoursPerWeek: 12, function: "Sales" })]);
+eq("the kept posting takes facts it lacks from its duplicate", [merged.length, merged[0].source, merged[0].rate, merged[0].domain, merged[0].hoursPerWeek], [1, "two", "$150/hr", "a.com", 12]);
+
+const many = rolesFromRaw(
+  Array.from({ length: 75 }, (_, i) => job({ company: `Company ${i}`, postedAt: i % 10 === 0 ? undefined : daysAgo(i % 50) })),
+  NOW
+);
+eq(`caps the result at ${MAX_ROLES} roles`, many.length, 60);
+check(
+  "sorts newest first, postings with no date last",
+  many.every((r, i) => i === 0 || (many[i - 1].postedAt ?? "") >= (r.postedAt ?? "")),
+  many.map((r) => r.postedAt?.slice(0, 10))
+);
+eq("every key is unique", new Set(many.map((r) => r.key)).size, many.length);
+
+/* ---------- collector: names and titles ---------- */
+console.log("\nNames and titles");
+
+const companies: [string, string][] = [
+  ["Acme Robotics, Inc.", "Acme Robotics"],
+  ["Acme Inc", "Acme"],
+  ["Northwind LLC", "Northwind"],
+  ["Northwind, L.L.C.", "Northwind"],
+  ["Globex Ltd.", "Globex"],
+  ["Globex Pty Ltd", "Globex"],
+  ["Initech Corp.", "Initech"],
+  ["Umbrella GmbH", "Umbrella"],
+  ["Hooli (YC W24)", "Hooli"],
+  ["  Stark   Industries.  ", "Stark Industries"],
+  ["Wayne &amp; Sons", "Wayne & Sons"],
+  ["Copper Kettle Co", "Copper Kettle Co"],
+  ["acme-robotics", "Acme Robotics"],
+  ["Tidewater AG", "Tidewater"],
+];
+for (const [raw, want] of companies) eq(`company "${raw}"`, cleanCompany(raw), want);
+
+const titles: [string, string, string?][] = [
+  ["Fractional VP of Sales (Remote)", "Fractional VP of Sales"],
+  ["Fractional CMO - Remote", "Fractional CMO"],
+  ["Fractional CMO – Remote, US", "Fractional CMO"],
+  ["Fractional Head of Marketing | New York, NY", "Fractional Head of Marketing"],
+  ["Fractional CRO, Remote (US only)", "Fractional CRO"],
+  ["Interim CMO (Part-time, Remote)", "Interim CMO"],
+  ["Fractional VP Sales - San Francisco, CA", "Fractional VP Sales"],
+  ["[Remote] Fractional Head of Growth", "Fractional Head of Growth"],
+  ["Remote Fractional CMO", "Fractional CMO"],
+  ["Fractional RevOps Lead (20 hrs/week)", "Fractional RevOps Lead"],
+  ["Fractional Head of Sales / Remote / $150-200/hr", "Fractional Head of Sales"],
+  ["Fractional Sales Leader (m/f/d)", "Fractional Sales Leader"],
+  ["Fractional CMO (Remote, US) - 20 hrs/week", "Fractional CMO"],
+  ["Fractional CMO - Healthcare", "Fractional CMO - Healthcare"],
+  ["Fractional VP of Sales - B2B SaaS", "Fractional VP of Sales - B2B SaaS"],
+  ["VP, Sales and Marketing", "VP, Sales and Marketing"],
+  ["VP Sales, EMEA", "VP Sales, EMEA"],
+  ["Fractional Go-to-Market Lead - Remote", "Fractional Go-to-Market Lead"],
+  ["Fractional CMO at Northwind", "Fractional CMO", "Northwind"],
+  ["Northwind: Fractional CMO", "Fractional CMO", "Northwind"],
+  ["Fractional CMO | Northwind | Remote", "Fractional CMO", "Northwind"],
+  ["Hiring: Fractional CMO", "Fractional CMO"],
+  ["Fractional Head of Sales &amp; Partnerships", "Fractional Head of Sales & Partnerships"],
+];
+for (const [raw, want, company] of titles) eq(`title "${raw}"`, cleanTitle(raw, company), want);
+
+eq("key squeezes everything but letters and digits", roleKey("Acme & Sons", "Fractional VP, Sales (EMEA)"), "acmesons::fractionalvpsalesemea");
+check("a real company name passes", isRealCompany("A Place for Mom") && isRealCompany("Acme Robotics") && isRealCompany("Fieldstone Talent"));
+
+eq("domain: the board's own company link is trusted", companyDomain("Pebble", { companyUrl: "https://heypebble.example/" }), "heypebble.example");
+eq("domain: www is dropped", companyDomain("Northwind", { companyUrl: "https://www.northwind.example/" }), "northwind.example");
+eq("domain: never the job board's", companyDomain("Remotive", { url: "https://remotive.com/remote-jobs/1", companyUrl: "https://remotive.com/company/acme" }), null);
+eq("domain: never the applicant tracking system's", companyDomain("Acme", { url: "https://boards.greenhouse.io/acme/jobs/1", text: "Apply at https://jobs.lever.co/acme/1" }), null);
+eq("domain: a careers page on the company's own site counts", companyDomain("Acme", { url: "https://careers.acme.co.uk/jobs/1?gh_jid=1" }), "acme.co.uk");
+eq("domain: a link to some other company does not count", companyDomain("Acme", { text: "We use https://www.bigcrm.example every day" }), null);
+eq("domain: a generic word shared with the name does not count", companyDomain("Global Health Solutions", { text: "Read more at https://health.com" }), null);
+eq("domain: a trailing word like Labs can be left out", companyDomain("Acme Labs", { text: "Visit www.acme.com." }), "acme.com");
+eq("domain: an email at the company's domain counts", companyDomain("Northwind", { text: "Send a note to jobs@getnorthwind.com" }), "getnorthwind.com");
+eq("domain: none given", companyDomain("Northwind", { url: "https://weworkremotely.com/remote-jobs/northwind-cmo", text: "Fractional CMO" }), null);
+
+/* ---------- collector: functions and types ---------- */
+console.log("\nFunctions and types");
+
+const none = { functions: [] };
+const fns: [string, string | null][] = [
+  ["Fractional VP of Sales", "Sales"],
+  ["Fractional CRO", "Sales"],
+  ["Interim CMO", "Marketing"],
+  ["Fractional Head of Demand Gen", "Growth"],
+  ["Fractional RevOps Lead", "RevOps"],
+  ["Fractional Head of Customer Success", "Customer Success"],
+  ["Fractional Head of Partnerships", "Partnerships"],
+  ["Fractional Product Marketing Lead", "Product Marketing"],
+  ["Fractional Sales Enablement Lead", "Enablement"],
+  ["Fractional AI GTM Lead", "AI GTM"],
+  ["Fractional Wizard", null],
+];
+for (const [title, want] of fns) eq(`function of "${title}"`, roleFunction(title, none), want);
+eq("function falls back to the board's label", roleFunction("Account Director", none, "Sales"), "Sales");
+eq("function falls back to the crawler's tag", roleFunction("Fractional Leader", { functions: ["GTM Leadership", "Marketing"] }), "Marketing");
+eq("the crawler's GTM Leadership tag maps to Sales", roleFunction("Fractional Leader", { functions: ["GTM Leadership"] }), "Sales");
+check("every function is one of FUNCTIONS", fns.every(([t]) => roleFunction(t, none) === null || FUNCTIONS.includes(roleFunction(t, none)!)));
+
+const types: [string, string, string][] = [
+  ["Fractional VP of Sales", "", "Fractional"],
+  ["Interim CMO", "A fractional engagement for six months.", "Interim"],
+  ["Sales Advisor", "", "Advisory"],
+  ["Advisory Board Member, GTM", "", "Advisory"],
+  ["Marketing Consultant", "", "Project"],
+  ["Head of Growth (Contract)", "", "Project"],
+  ["Head of Marketing", "A six month project to rebuild demand gen.", "Project"],
+  ["Head of Marketing", "This is a fractional role.", "Fractional"],
+  ["Part-time Head of Customer Success", "", "Fractional"],
+];
+for (const [title, body, want] of types) eq(`type of "${title}"${body ? " with body wording" : ""}`, roleType(title, body), want);
+check("every type is one of ENGAGEMENT_TYPES", types.every(([t, b]) => ENGAGEMENT_TYPES.includes(roleType(t, b))));
+
+const consultant = screenJob(job({ title: "Marketing Consultant, 20 hrs/week (Contract)", company: "Vandelay", description: "Contract marketing role, 20 hrs/week, $8,000 per month." }), NOW);
+eq("a contract role comes through as Project with its monthly rate", [consultant.role?.type, consultant.role?.function, consultant.role?.rate, consultant.role?.hoursPerWeek], ["Project", "Marketing", "$8,000/mo", 20]);
+const interim = screenJob(job({ title: "Head of Sales (Interim)", description: "Lead the sales team and own pipeline for six months." }), NOW);
+eq("a note the title loses in cleaning still sets the type", [interim.role?.title, interim.role?.type], ["Head of Sales", "Interim"]);
+eq("days a week become hours", screenJob(job({ description: "Fractional VP of Sales, 2 days per week." }), NOW).role?.hoursPerWeek, 16);
+eq("a range of hours becomes its middle", screenJob(job({ description: "Fractional VP of Sales, 10-20 hours per week." }), NOW).role?.hoursPerWeek, 15);
+eq("'paid hourly' with no number is not a rate", screenJob(job({ description: "Fractional VP of Sales, paid hourly." }), NOW).role?.rate, null);
+
+/* ---------- collector: the Fractional Jobs board ---------- */
+console.log("\nFractional Jobs board");
+
+// The board's card markup, as served in November 2026 (class names and structure kept, content trimmed).
+const card = (o: { company: string; role: string; slug: string; site?: string; hours: string; rate: string; where: string; fn: string; date: string }) => `
+<div role="listitem" class="job-item w-dyn-item"><div class="job-item_flex"><div class="star_component"><div tabindex="0" role="button" class="fs_modal-1_button-2"><div class="star_img"><img src="https://cdn.example/star.svg" alt="" class="object-fit"></div></div></div>
+<div class="job-item_content"><div class="job-item_job-info"><div class="job-item_name_url"><div class="text-size-regular text-inline"><h3 class="text-size-regular text-inline">${o.company}</h3><h3 class="text-size-regular text-inline">&nbsp;-&nbsp;</h3><h3 class="text-size-regular text-inline">${o.role}</h3><h3 class="text-size-regular text-inline">&nbsp;</h3></div>
+<div class="text-inline"><div class="text-inline${o.site ? "" : " w-condition-invisible"}">(</div><a data-clean="remove-http" href="${o.site ?? "#"}" target="_blank" class="job-item_company-link w-inline-block${o.site ? "" : " w-condition-invisible"}">${o.site ? o.site.replace("https://", "") : ""}</a><div class="text-inline${o.site ? "" : " w-condition-invisible"}">)</div></div>
+<a href="/jobs/${o.slug}" target="_blank" class="job-item_link-to-job w-inline-block"></a></div>
+<div class="job-item_more-info"><div class="text-inline">${o.hours}</div><div class="text-inline">&nbsp;|&nbsp;</div><div class="text-inline">${o.rate}</div><div class="text-inline">&nbsp;|&nbsp;</div><div class="text-inline">${o.where}</div>
+<div class="hide"><div fs-cmsfilter-field="function">${o.fn}</div><div class="syndicated w-condition-invisible">Syndicated</div><div class="date">${o.date}</div><div class="job-id">${o.slug}</div></div></div></div>
+<div class="job-item_date"><div class="text-inline">added&nbsp;</div><div class="post-date text-inline">2 days ago</div></div></div></div></div>`;
+const boardHtml = `<html><body><div class="jobs-filter_collection-item w-dyn-item"><span fs-cmsfilter-field="function">Engineering</span></div><div class="w-dyn-list"><div role="list" class="w-dyn-items">${[
+  card({ company: "Kestrel Freight", role: "Head of Marketing", slug: "head-of-marketing-at-kestrel-freight", site: "https://kestrelfreight.example/", hours: "10 - 15 hrs", rate: "$100 - $125 / hr", where: "Remote (USA only)", fn: "Marketing", date: "November 13, 2026" }),
+  card({ company: "A Financial Services SaaS Startup", role: "Sales Lead", slug: "sales-lead-at-a-financial-services-saas-startup", hours: "15 - 20 hrs", rate: "$5K - $8K / mo + commission", where: "Remote (USA only)", fn: "Sales", date: "November 13, 2026" }),
+  card({ company: "Tallybook", role: "Controller", slug: "controller-at-tallybook", site: "https://www.tallybook.example/", hours: "16 hrs", rate: "$8K - $11K / mo", where: "Hybrid (Raleigh-Durham only)", fn: "Finance", date: "November 9, 2026" }),
+  card({ company: "Harborview Health", role: "Account Director", slug: "account-director-at-harborview-health", site: "https://www.harborviewhealth.example/", hours: "40 hrs", rate: "$90 - $110 / hr", where: "Remote", fn: "Sales", date: "November 10, 2026" }),
+  card({ company: "Pebble", role: "Business Development Lead", slug: "business-development-lead-at-pebble", site: "https://heypebble.example/", hours: "8 - 12 hrs", rate: "$6K - $9K / mo", where: "Remote", fn: "Sales", date: "November 8, 2026" }),
+].join("")}</div></div><footer><a href="/blog/what-is-fractional-work">What is fractional work?</a></footer></body></html>`;
+
+const parsed = parseFractionalJobs(boardHtml);
+eq("reads every card on the page", parsed.length, 5);
+eq("  company and role come from the headline", [parsed[0]?.company, parsed[0]?.title], ["Kestrel Freight", "Head of Marketing"]);
+eq("  link, date and company site", [parsed[0]?.url, parsed[0]?.postedAt, parsed[0]?.companyUrl], ["https://www.fractionaljobs.io/jobs/head-of-marketing-at-kestrel-freight", "2026-11-13T00:00:00.000Z", "https://kestrelfreight.example/"]);
+eq("  hours, rate and the board's function", [parsed[0]?.hoursPerWeek, parsed[0]?.rate, parsed[0]?.functionHint], [13, "$100 - $125 / hr", "Marketing"]);
+eq("  an unnamed company has no site link", parsed[1]?.companyUrl, undefined);
+// One card exactly as a rendering crawler returned it on 2026-11-15 (links made absolute, unnamed company).
+const servedCard = `<div role="listitem" class="job-item w-dyn-item"><div class="job-item_flex"><div class="star_component"><div tabindex="0" role="button" aria-roledescription="open-modal-trigger" aria-controls="fs-modal-1-popup" aria-haspopup="dialog" aria-expanded="false" data-w-id="9e108133-0d83-1535-4f7b-7f859e2881ab" class="fs_modal-1_button-2"><div data-w-id="9e108133-0d83-1535-4f7b-7f859e2881ac" class="star_img" style="width: 1.25rem; height: 1.25rem;"><img src="https://cdn.prod.website-files.com/6578c49d9871fac26dd7700e/661a6911701485a8909acb22_star.svg" loading="lazy" alt="" class="object-fit" width="300" height="150"></div><div class="star_componenet-line"></div></div></div><div class="job-item_not-syndicated"><div class="job-item_purple-dot"></div></div><div class="job-item_content"><div class="job-item_job-info"><div class="job-item_name_url"><div class="text-size-regular text-inline"><h3 class="text-size-regular text-inline">A Financial Services SaaS Startup</h3><h3 class="text-size-regular text-inline">&nbsp;-&nbsp;</h3><h3 class="text-size-regular text-inline">Sales Lead</h3><h3 class="text-size-regular text-inline">&nbsp;</h3></div><div class="text-inline"><div class="text-inline w-condition-invisible">(</div><a data-clean="remove-http" href="https://www.fractionaljobs.io/#" class="job-item_company-link w-inline-block w-condition-invisible"></a><div class="text-inline w-condition-invisible">)</div></div><a href="https://www.fractionaljobs.io/jobs/sales-lead-at-a-financial-services-saas-startup" target="_blank" class="job-item_link-to-job w-inline-block"></a></div><div class="job-item_more-info"><div class="text-inline">15 - 20 hrs</div><div class="text-inline">&nbsp;|&nbsp;</div><div class="text-inline">$5K - $8K / mo + commission</div><div class="text-inline">&nbsp;|&nbsp;</div><div class="text-inline">Remote (USA only)</div><div class="hide"><div fs-cmsfilter-field="function">Sales</div><div class="syndicated w-condition-invisible">Syndicated</div><div class="date">November 13, 2026</div><div class="job-id">sales-lead-at-a-financial-services-saas-startup</div></div></div></div><div class="job-item_date"><div class="text-inline">added&nbsp;</div><div class="post-date text-inline">2 days ago</div></div></div></div></div>`;
+const served = parseFractionalJobs(servedCard)[0];
+eq(
+  "reads a card exactly as served",
+  [served?.company, served?.title, served?.url, served?.hoursPerWeek, served?.rate, served?.location, served?.functionHint, served?.postedAt, served?.companyUrl],
+  ["A Financial Services SaaS Startup", "Sales Lead", "https://www.fractionaljobs.io/jobs/sales-lead-at-a-financial-services-saas-startup", 18, "$5K - $8K / mo + commission", "Remote (USA only)", "Sales", "2026-11-13T00:00:00.000Z", undefined]
+);
+eq("hours text: a range, one number, none", [hoursFromText("15 - 20 hrs"), hoursFromText("16 hrs"), hoursFromText("Remote")], [18, 16, null]);
+eq("an empty or changed page gives no cards, not an error", parseFractionalJobs("<html><body><a href='/jobs/x'></a></body></html>").length, 0);
+
+const boardRoles = rolesFromRaw(parsed, NOW);
+eq("keeps the GTM roles at named companies", boardRoles.map((r) => `${r.company} | ${r.title}`), ["Kestrel Freight | Head of Marketing", "Pebble | Business Development Lead"]);
+eq("  with the board's facts", [boardRoles[0]?.function, boardRoles[0]?.type, boardRoles[0]?.rate, boardRoles[0]?.hoursPerWeek, boardRoles[0]?.domain], ["Marketing", "Fractional", "$100–$125/hr", 13, "kestrelfreight.example"]);
+eq("  a company site that differs from the name is still taken from the board", [boardRoles[1]?.domain, boardRoles[1]?.rate, boardRoles[1]?.function], ["heypebble.example", "$6K–$9K/mo", "Partnerships"]);
+eq("  drops the unnamed company", screenJob(parsed[1], NOW).skip, "company");
+eq("  drops the finance seat", screenJob(parsed[2], NOW).skip, "bar");
+eq("  drops the 40 hour a week seat", screenJob(parsed[3], NOW).skip, "bar");
+
+/* ---------- collector: sources ---------- */
+console.log("\nSources");
+
+const scan = await collectOpenRoles({
+  now: NOW,
+  timeoutMs: 150,
+  sources: [
+    { name: "good", fetchJobs: async () => [job({}), job({ company: "Confidential" }), job({ kind: "discussion" })] },
+    { name: "broken", fetchJobs: async () => { throw new Error("HTTP 403 from example.com"); } },
+    { name: "hung", fetchJobs: () => new Promise<ScanRawJob[]>(() => {}) },
+    { name: "throws-early", fetchJobs: () => { throw new Error("bad setup"); } },
+    { name: "garbage", fetchJobs: async () => [null, { title: 5 }, job({ company: "Second Co" })] as unknown as ScanRawJob[] },
+  ],
+});
+eq("one failing source does not fail the scan", scan.roles.map((r) => r.company).sort(), ["Acme Robotics", "Second Co"]);
+eq("every source is reported", scan.sources.map((s) => s.source), ["good", "broken", "hung", "throws-early", "garbage"]);
+eq("  fetched and matched are counted", [scan.sources[0].fetched, scan.sources[0].matched, scan.sources[0].error], [3, 1, undefined]);
+eq("  a failed source carries its error", [scan.sources[1].fetched, scan.sources[1].matched, scan.sources[1].error], [0, 0, "HTTP 403 from example.com"]);
+check("  a hung source times out", /timed out/i.test(scan.sources[2].error ?? ""), scan.sources[2]);
+eq("  a source that throws before fetching is reported too", scan.sources[3].error, "bad setup");
+eq("  malformed postings are skipped", [scan.sources[4].fetched, scan.sources[4].matched], [3, 1]);
+const empty = await collectOpenRoles({ sources: [], now: NOW });
+eq("no sources gives an empty result", empty, { roles: [], sources: [], seenKeys: [] });
+const overCap = await collectOpenRoles({
+  now: NOW,
+  max: 3,
+  sources: [{ name: "big", fetchJobs: async () => Array.from({ length: 5 }, (_, i) => job({ company: `Company ${i}`, postedAt: daysAgo(i + 1) })) }],
+});
+eq("past the cap, seenKeys still lists every role that passed", [overCap.roles.length, overCap.seenKeys.length, overCap.roles[0]?.company], [3, 5, "Company 0"]);
+eq("malformed postings do not break rolesFromRaw", rolesFromRaw([null, job({})] as unknown as ScanRawJob[], NOW).length, 1);
+
+/* ---------- digest ---------- */
+console.log("\nDigest");
+
+const base: DigestData = {
+  name: "Maya Okafor",
+  email: "maya@example.com",
+  function: "Sales",
+  newRoles: 12,
+  newRolesMine: 4,
+  newRolesMineHidden: 3,
+  byFunction: [
+    { function: "Sales", n: 4 },
+    { function: "Marketing", n: 3 },
+    { function: "RevOps", n: 3 },
+    { function: "Customer Success", n: 2 },
+  ],
+  closedRoles: 5,
+  seatFactsMissing: 9,
+  credits: 12,
+  appUrl: "https://table-pilot.up.railway.app/?k=abc123&tab=roles",
+  unsubscribeUrl: "https://table-pilot.up.railway.app/api/table?unsubscribe=tok_123&m=1",
+};
+const digest = (over: Partial<DigestData> = {}) => renderDigest({ ...base, ...over });
+
+eq("subject: roles in the member's function", digest().subject, "4 new Sales roles this week");
+eq("subject: one role in the member's function", digest({ newRolesMine: 1, newRolesMineHidden: 1 }).subject, "1 new Sales role this week");
+eq("subject: none in the member's function", digest({ newRolesMine: 0, newRolesMineHidden: 0 }).subject, "12 new fractional roles this week");
+eq("subject: one role overall", digest({ newRoles: 1, newRolesMine: 0, newRolesMineHidden: 0 }).subject, "1 new fractional role this week");
+eq("subject: member has no function", digest({ function: null, newRolesMine: 0, newRolesMineHidden: 0 }).subject, "12 new fractional roles this week");
+eq("subject: a two word function", digest({ function: "Customer Success", newRolesMine: 2 }).subject, "2 new Customer Success roles this week");
+eq("subject: nothing new", digest({ newRoles: 0, newRolesMine: 0, newRolesMineHidden: 0, byFunction: [] }).subject, "No new fractional roles this week");
+
+const d = digest();
+check("greets by first name", d.text.startsWith("Hi Maya,") && d.html.includes("Hi Maya,"));
+check("says how many of those companies are hidden", d.text.includes("3 of those companies are hidden") && d.html.includes("3 of those companies are hidden"));
+check("lists functions with counts", ["Sales  4", "Marketing  3", "RevOps  3", "Customer Success  2"].every((l) => d.text.includes(l)), d.text);
+check("says how many roles closed", d.text.includes("5 roles closed this week") && d.html.includes("5 roles closed this week"));
+check("has the seats line", d.text.includes("Your seats are missing 9 facts. Each one earns a credit.") && d.html.includes("Your seats are missing 9 facts. Each one earns a credit."));
+check("no seats line when nothing is missing", !/seats are missing/.test(digest({ seatFactsMissing: 0 }).text + digest({ seatFactsMissing: 0 }).html));
+check("one missing fact reads right", digest({ seatFactsMissing: 1 }).text.includes("Your seats are missing 1 fact. It earns a credit."));
+check("shows the credit balance", d.text.includes("You have 12 credits.") && d.html.includes("You have 12 credits."));
+check("one credit reads right", digest({ credits: 1 }).text.includes("You have 1 credit."));
+check("one closed role reads right", digest({ closedRoles: 1 }).text.includes("1 role closed this week. Its company is visible again."));
+check("all hidden reads right", digest({ newRolesMineHidden: 4 }).text.includes("All 4 companies are hidden."));
+check("has one button to the app", (d.html.match(/See this week&#39;s roles/g) ?? []).length === 1 && d.html.includes('href="https://table-pilot.up.railway.app/?k=abc123&amp;tab=roles"'), d.html.match(/<a [^>]*>/g));
+check("text has the app link", d.text.includes("See this week's roles\nhttps://table-pilot.up.railway.app/?k=abc123&tab=roles"));
+check("unsubscribe link is in the text", d.text.includes(base.unsubscribeUrl));
+check("unsubscribe link is in the HTML", d.html.includes('href="https://table-pilot.up.railway.app/api/table?unsubscribe=tok_123&amp;m=1"') && />Unsubscribe<\/a>/.test(d.html));
+check("says why they got it", d.text.includes("because you are a Trading Post member") && d.html.includes("because you are a Trading Post member"));
+check("header says Trading Post on pine", /bgcolor="#073F2F"[^>]*>Trading Post</.test(d.html));
+check("button is volt with pine text", /bgcolor="#2EE59D"[^>]*><a [^>]*color:#073F2F/.test(d.html));
+eq("ember is used once, on the count", (d.html.match(/#FF5A1F/gi) ?? []).length, 1);
+check("max width is 560px", d.html.includes("max-width:560px"));
+check("layout uses tables and inline styles only", !/<style|<link|<script|class=/i.test(d.html) && d.html.includes('role="presentation"'));
+check("system fonts only", !/Figtree|googleapis|@font-face/i.test(d.html));
+
+process.env.RN_EMAIL_FOOTER = 'Revenue Nomad <b>LLC</b>, 1 Main St & "Suite" 2';
+const hostile = digest({
+  name: '<script>alert("x")</script> Smith',
+  function: 'Sales & "Ops" <i>',
+  byFunction: [{ function: "<img src=x onerror=alert(1)>", n: 2 }, { function: 'Sales & "Ops" <i>', n: 4 }],
+  appUrl: 'https://example.com/?a=1&b="2"><script>',
+  unsubscribeUrl: "https://example.com/u?t=<tok>&x='1'",
+});
+check("HTML is escaped: no raw tags from data", !/<script|<img|<i>|<b>/i.test(hostile.html), hostile.html.match(/<(script|img|i|b)[ >][^\n]{0,60}/i)?.[0]);
+check("HTML is escaped: name, function, footer", hostile.html.includes("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;") && hostile.html.includes("Sales &amp; &quot;Ops&quot; &lt;i&gt;") && hostile.html.includes("Revenue Nomad &lt;b&gt;LLC&lt;/b&gt;, 1 Main St &amp; &quot;Suite&quot; 2"));
+check("HTML is escaped: links cannot break out of the attribute", !/href="[^"]*"[^ >]/.test(hostile.html) && hostile.html.includes("&lt;tok&gt;&amp;x=&#39;1&#39;"), hostile.html.match(/href="[^"]*"[^ >][^\n]{0,40}/)?.[0]);
+check("footer line from RN_EMAIL_FOOTER is in the text", hostile.text.includes('Revenue Nomad <b>LLC</b>, 1 Main St & "Suite" 2'));
+check("a link that is not a web link is left out", !digest({ appUrl: "javascript:alert(1)" }).html.includes("javascript:"));
+delete process.env.RN_EMAIL_FOOTER;
+check("no footer line when RN_EMAIL_FOOTER is not set", !digest().html.includes("Revenue Nomad"));
+
+const sparse = [
+  digest(),
+  digest({ function: null, newRolesMine: 0, newRolesMineHidden: 0 }),
+  digest({ newRoles: 0, newRolesMine: 0, newRolesMineHidden: 0, byFunction: [], closedRoles: 0, seatFactsMissing: 0, credits: 0 }),
+  digest({ name: "", function: "Other", newRolesMine: 3 }),
+  renderDigest({ name: "Sam", email: "s@example.com", appUrl: base.appUrl, unsubscribeUrl: base.unsubscribeUrl } as unknown as DigestData),
+  renderDigest({ ...base, newRoles: NaN, newRolesMine: undefined, byFunction: null, credits: -4, closedRoles: null } as unknown as DigestData),
+];
+check("never prints undefined, null or NaN", sparse.every((r) => !/undefined|null|NaN/.test(r.subject + r.text + r.html)), sparse.map((r) => (r.subject + r.text + r.html).match(/.{0,40}(undefined|null|NaN).{0,20}/)?.[0]));
+check("an empty name still gets a greeting", sparse[3].text.startsWith("Hi there,"));
+check("the Other bucket gets the general subject", sparse[3].subject === "12 new fractional roles this week", sparse[3].subject);
+check("a zero balance says how to earn", sparse[2].text.includes("You have 0 credits. Every fact you add earns one."));
+
+// Brand voice: no em dashes, no semicolons, no colons in running copy (links aside).
+const copy = sparse.map((r) => r.subject + "\n" + r.text).join("\n").split("\n").filter((l) => !/^https?:\/\//.test(l));
+check("copy has no em dash, semicolon or colon", copy.every((l) => !/[—;:]/.test(l)), copy.filter((l) => /[—;:]/.test(l)));
+check("copy has no banned words", !/\b(unlock the power|seamless|leverage|insights|supercharge|elevate|streamline|robust|journey|buyers?|talent)\b/i.test(copy.join("\n")));
+check("never names a company", !/Acme|Northwind|Kestrel/.test(sparse.map((r) => r.text + r.html).join("")));
+
+const samples = args.indexOf("--samples");
+if (samples >= 0 && args[samples + 1]) {
+  const dir = args[samples + 1];
+  mkdirSync(dir, { recursive: true });
+  process.env.RN_EMAIL_FOOTER = "Revenue Nomad, 100 Example Street, Suite 1, Anytown, USA";
+  const a = digest();
+  const b = digest({ name: "Dev Patel", function: "Marketing", newRoles: 7, newRolesMine: 0, newRolesMineHidden: 0, byFunction: [{ function: "Sales", n: 4 }, { function: "RevOps", n: 2 }, { function: "Customer Success", n: 1 }], closedRoles: 1, seatFactsMissing: 0, credits: 0 });
+  writeFileSync(path.join(dir, "digest-roles-in-function.html"), a.html);
+  writeFileSync(path.join(dir, "digest-roles-in-function.txt"), `Subject: ${a.subject}\n\n${a.text}\n`);
+  writeFileSync(path.join(dir, "digest-none-in-function.html"), b.html);
+  writeFileSync(path.join(dir, "digest-none-in-function.txt"), `Subject: ${b.subject}\n\n${b.text}\n`);
+  console.log(`\nWrote 2 sample emails to ${dir}`);
+}
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);
