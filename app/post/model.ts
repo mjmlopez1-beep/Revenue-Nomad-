@@ -9,6 +9,7 @@ import type { Cell, CompanyRec, EngagementRec, Friendly, Me, PersonRec } from "@
 import {
   BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
   RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
+  REFERRAL_BONUS,
 } from "@/lib/tableFields";
 
 export type RecordType = "companies" | "engagements" | "people";
@@ -25,7 +26,7 @@ export const TABS: { key: Tab; label: string; hint?: string }[] = [
   { key: "needs", label: "Needs facts" },
 ];
 export const SORTS: { key: SortKey; label: string }[] = [
-  { key: "fit", label: "Best fit" },
+  { key: "fit", label: "Most fractional-friendly" },
   { key: "newest", label: "Recently updated" },
   { key: "name", label: "Company name" },
   { key: "engagements", label: "Most seats" },
@@ -102,7 +103,8 @@ const informative = (e: EngagementRec) => Object.values(e.cells).filter(known).l
 
 /** Engagement facts that cost a credit (status and hours per week are free). Same list as the gated fields in lib/tableFields.ts. */
 export const ENG_GATED = ["role", "operator", "end", "sourced", "rate", "posting"];
-const isUnlocked = (c?: Cell) => !!c && c.s === "value" && !c.mine && !c.system;
+/** The member paid a credit to see this value. A free value (an open role's title, a posting, our records' system facts) never counts. */
+const isUnlocked = (c?: Cell) => !!c && c.s === "value" && !!c.paid;
 /**
  * The member spent a credit on this engagement. Their own seat is free to them, and the posting of
  * a role that closed is free for everyone (the link no longer leads to a job), so neither counts.
@@ -712,8 +714,9 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
     case "notMine":
       // They hired fractionals in other functions, and none in the member's own.
       return (r) => {
+        // A company with an open role in the member's function is hiring that seat now, so it is not "no seat yet".
         const h = r.i.fnState.hired;
-        return !!me.function && h.length > 0 && !h.includes(me.function);
+        return !!me.function && h.length > 0 && !h.includes(me.function) && !r.i.fnState.hiring.includes(me.function);
       };
     case "statusKnown":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => known(e.cells.status));
@@ -822,7 +825,10 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
   for (const s of FIT_STEPS) fit[s] = fitBase.filter((r) => r.i.c.friendly.score >= s).length;
   const tabBase = rows.filter((r) => pass(r, cs, "tab"));
   const tabs = {} as Record<Tab, number>;
-  for (const t of TABS) tabs[t.key] = t.key === "all" ? tabBase.length : tabBase.filter((r) => tabTest(t.key, r)).length;
+  // Following counts companies on every list: following one company with five seats reads 1, not 5.
+  for (const t of TABS)
+    tabs[t.key] =
+      t.key === "all" ? tabBase.length : t.key === "following" ? new Set(tabBase.filter((r) => tabTest(t.key, r)).map((r) => r.i.c.id)).size : tabBase.filter((r) => tabTest(t.key, r)).length;
   return { rows: result, facets: { toggles, lists, fit, tabs } };
 }
 
@@ -963,4 +969,46 @@ export function newRolesFor(infos: CoInfo[], fn: string | null): { roles: number
     if (i.c.hidden) hidden++;
   }
   return { roles, hidden };
+}
+
+
+/* ---------- Get started ---------- */
+
+export interface CheckStep {
+  key: "unlock" | "give" | "invite";
+  done: boolean;
+  label: string;
+  hint: string;
+}
+
+/**
+ * The three Get started steps and the "Fill in your seats" nudge. Step 1 ticks only once the
+ * member paid to see who held a seat (or, looking for roles, a hidden company). Step 2 ticks on
+ * their first fact, anywhere. A step in `stuck` (done before, in this browser) stays done.
+ */
+export function checkSteps(
+  me: Pick<Me, "goal" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "invited" | "invitesPaid">,
+  o: { seatsHeld: number; seatsLeft: number; earn: number; addLabel?: string; stuck?: Set<string> },
+): { steps: CheckStep[]; nudge: { label: string; hint: string } | null } {
+  const paid = me.invitesPaid ?? 0;
+  const holders = me.holdersUnlocked ?? me.unlocked;
+  const companies = me.companiesUnlocked ?? 0;
+  const roles = me.goal === "roles";
+  const giveDone = me.added > 0;
+  const left = o.seatsLeft;
+  const raw: CheckStep[] = [
+    { key: "unlock", done: roles ? holders + companies > 0 : holders > 0, label: roles ? "See who is hiring" : "See who held a seat", hint: "costs 1 credit" },
+    o.seatsHeld > 0 && !giveDone
+      ? { key: "give", done: false, label: "Fill in your seats", hint: o.earn > 0 ? "1 credit each" : `${left} left to fill` }
+      : { key: "give", done: giveDone, label: o.addLabel ?? "Add a fact", hint: "earns 1 credit" },
+    // Done once an invitee's first fact paid the bonus, not when they merely joined.
+    { key: "invite", done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `${REFERRAL_BONUS} credits each` },
+  ];
+  const steps = raw.map((x) => ({ ...x, done: x.done || !!o.stuck?.has(x.key) }));
+  // Filling in their seats is its own nudge once step 2 is done: it never takes the step's place.
+  const nudge =
+    o.seatsHeld > 0 && left > 0 && steps[1].done
+      ? { label: "Fill in your seats", hint: o.earn >= left ? `${left} left, 1 credit each` : o.earn > 0 ? `${left} left, earns up to ${o.earn}` : `${left} left to fill` }
+      : null;
+  return { steps, nudge };
 }

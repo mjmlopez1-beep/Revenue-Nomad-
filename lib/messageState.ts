@@ -56,7 +56,8 @@ export interface StoredSignIn {
   id: string;
   memberId: string;
   code: string;
-  purpose: "signin" | "join";
+  /** "message": the link in a message email. It signs in once and opens the conversation (7 days, no code). */
+  purpose: "signin" | "join" | "message";
   exp: string;
   tries: number;
 }

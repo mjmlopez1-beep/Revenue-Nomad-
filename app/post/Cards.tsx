@@ -115,7 +115,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
   const start = e && !e.opened ? val(e.cells.start) : null;
   const when = [type, start && `since ${fmtMonth(start)}`].filter(Boolean).join(" · ");
   // One more row when it carries something: who held the seat (or that it's open), else the rate.
-  const held = e && (e.yours || (isOpenRole(e) && e.cells.operator?.s === "empty") || shownCell(e.cells.operator));
+  const held = e && (e.yours || e.claimable || (isOpenRole(e) && e.cells.operator?.s === "empty") || shownCell(e.cells.operator));
   const rate = e && !held && shownCell(e.cells.rate);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>

@@ -828,6 +828,15 @@
 .tp-zero .btn {
   justify-self: start;
 }
+/* The ways to earn a credit, one button each, the first one primary. */
+.tp-zero-ways {
+  display: grid;
+  gap: 8px;
+}
+.tp-zero .tp-zero-ways .btn {
+  justify-self: stretch;
+  justify-content: center;
+}
 .tp-zero-pills {
   display: flex;
   flex-wrap: wrap;
@@ -1900,6 +1909,12 @@ body:has(.tp-drawer) .pro-foot {
 /* An open role has nobody in the seat yet. Quiet text: the dot on its date carries the ember. */
 .tp-open {
   color: var(--muted);
+}
+/* A seat Revenue Nomad found whose holder has not joined: said in words, not a dash. */
+.tp-notyet {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
 }
 .tp-src {
   font-size: 13px;
@@ -6271,4 +6286,142 @@ div.tp-pcard-when {
 }
 .tp-qtypes .chip.none {
   color: var(--faint);
+}
+
+/* Get started: "Fill in your seats" is a nudge beside the steps once step 2 is done, never a step that goes back to undone. */
+.tp-check-nudge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-btn);
+  background: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--pine);
+  white-space: nowrap;
+}
+.tp-check-nudge:hover {
+  background: var(--surface-2);
+}
+.tp-check-card.vertical .tp-check-nudge {
+  display: flex;
+  width: calc(100% - 16px);
+  min-height: 44px;
+  margin-top: 8px;
+  justify-content: space-between;
+}
+
+/* A job posting or other web address: one line, cut with an ellipsis (the full address is the tooltip). */
+.tp-link-1 {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+/* ---------- phones: 44px tap targets everywhere (batch 1) ---------- */
+/* View chips and the list switcher are 44px tall themselves, not only through a larger hit area. */
+.tp-phone .tp-pchip,
+.tp-phone .tp-ptype {
+  height: 44px;
+}
+.tp-phone .tp-pchips-scroll {
+  padding-block: 0;
+  margin-block: 0;
+}
+.tp-phone .tp-pchip::after,
+.tp-phone .tp-ptype::after,
+.tp-phone .tp-pchips-scroll .tp-pchip::after {
+  inset: 0;
+}
+/* Filter chips and links in the filters sheet. */
+.tp-sheet .tp-rtype-b,
+.tp-sheet .tp-psort-o,
+.tp-sheet .tp-flink,
+.tp-sheet .tp-fgroup-h {
+  min-height: 44px;
+}
+.tp-sheet .tp-flink {
+  display: inline-flex;
+  align-items: center;
+}
+/* Add pills, Confirm and Report, Show more: in a phone list, a record and a sheet. */
+.tp-phone .add,
+.tp-rsheet .add,
+.tp-sheet .add,
+.tp-phone .tp-tbtn,
+.tp-rsheet .tp-tbtn,
+.tp-sheet .tp-tbtn {
+  min-height: 44px;
+}
+.tp-rsheet .tp-frow-btn {
+  min-height: 44px;
+}
+/* A card's name is a 44px button; the negative margin keeps the card's rhythm. */
+.tp-phone .tp-pcard-open {
+  min-height: 44px;
+  margin-block: -10px;
+  display: inline-flex;
+  align-items: center;
+}
+/* Clear search: a 44px target whatever the box around it. */
+.tp-phone .tp-search-x,
+.tp-phone .tp-search.tp-search-list .tp-search-x {
+  width: 44px;
+  height: 44px;
+  margin-right: -8px;
+}
+/* The unread badge sits inside the menu button on a phone, so the screen edge never cuts it. */
+.tp-top-phone .tp-badge-dot {
+  top: 2px;
+  right: 2px;
+}
+/* The credits pill: the word gives way to a coin at the narrowest widths, never to a bare number. */
+.tp-credits-i {
+  display: none;
+}
+@media (max-width: 340px) {
+  .tp-top-phone .tp-credits-i {
+    display: inline-flex;
+    opacity: 0.8;
+  }
+  .tp-top-phone .tp-credits {
+    gap: 4px;
+  }
+}
+/* The floating "Add what you know" never covers the last card: the list ends with room for it. */
+.tp-phone .tp-main-phone {
+  padding-bottom: 112px;
+}
+/* A phone's sticky record bar: "Unlock company · 1 credit" with a small line under it fits at 320. */
+.tp-uc-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  height: auto;
+  padding-block: 6px;
+  white-space: normal;
+}
+.tp-uc-bar .tp-ua-two {
+  display: grid;
+  justify-items: center;
+  line-height: 18px;
+}
+.tp-uc-bar .tp-ua-cost {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: rgba(255, 255, 255, 0.82);
+}
+.tp-phone .tp-pchip {
+  min-width: 44px;
+  justify-content: center;
+}
+.tp-top-phone .tp-brand-phone {
+  min-width: 44px;
 }

@@ -1244,12 +1244,14 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
   const fromScan = v.by === "scan" && !(key === "status" && v.value === "Active");
   const from = v.by === "seed" ? ({ from: "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
-  if (!f.gated || mine || free || (me && (s.unlocks[k] ?? []).includes(me.id))) {
-    const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from };
+  const paid = !!me && !mine && !!f.gated && (s.unlocks[k] ?? []).includes(me.id);
+  if (!f.gated || mine || free || paid) {
+    const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from, ...(paid ? { paid: true } : {}) };
     if (key === "operator" && idx) {
       // "Member" only for someone on Trading Post now: a seed member we invited who never signed in is just a name.
       const m = seatHolder(s, idx, node!.id, v);
       if (m && (m.id === me?.id || signedIn(s, idx, m.id))) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
+      if (mine && entity === "engagement" && (node as EngNode).source === SEAT_SCAN) out.claimed = true;
     }
     return out;
   }
@@ -1367,6 +1369,9 @@ export async function existingCompany(domain: string | null, name: string | null
 const SEAT_SCAN = "Seat scan";
 /** Seat-scan seats a member can claim in any rolling 24 hours. */
 const SEAT_CLAIM_DAILY_MAX = 3;
+/** Unclaimed seats a member can check ("Is this you?") in any rolling 24 hours. Kept in memory: a restart resets it. */
+const CLAIM_PREVIEW_DAILY_MAX = 40;
+const claimPreviews = new Map<string, number[]>();
 /** Sources whose seats are fractional work whatever their type. A "Member added" seat is too, while it has no type (see friendliness). */
 const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan", SEAT_SCAN]);
 
@@ -1809,10 +1814,16 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       return joinedById.get(id)?.referredBy === me.id ? id : null;
     };
     for (const h of s.held) if (h.memberId === me.id && h.reason === "referral" && inviteeOf(h.ref)) paidInvitees.add(inviteeOf(h.ref)!);
+    let holdersUnlocked = 0;
+    let companiesUnlocked = 0;
     for (const l of s.ledger) {
       if (l.memberId !== me.id) continue;
       if (l.reason === "fill" && !l.undone) added++;
-      if (l.reason === "unlock") unlocked++;
+      if (l.reason === "unlock") {
+        unlocked++;
+        if (l.ref.endsWith(".operator")) holdersUnlocked++;
+        else if (l.ref.endsWith(".identity")) companiesUnlocked++;
+      }
       const dot = l.ref.indexOf(".");
       const id = dot < 0 ? l.ref : l.ref.slice(0, dot);
       const field = dot < 0 ? "" : l.ref.slice(dot + 1);
@@ -1872,6 +1883,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       invitePending: !!joinedMe?.referredBy && !s.referralPaid.includes(me.id),
       added,
       unlocked,
+      holdersUnlocked,
+      companiesUnlocked,
       digest: !prof.digestOff,
       unread: unreadCount(s, me.id),
       messageEmail: !prof.messageEmailOff,
@@ -2643,7 +2656,8 @@ export async function perform(token: string | null, a: Action, origin?: string, 
       }
       // A seat holder can correct what our records or the scan say about their own seat.
       // What another member added still needs a report.
-      const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
+      // Its function is the holder's to fix whoever set it (a wrong function skews their benchmarks).
+      const correction = !!cur && entity === "engagement" && (isSystem(cur.by) || key === "function") && ownSeat(node.id);
       // An open role the scan follows keeps the posting's status while it is listed: its holder
       // can't close it for everyone by editing it (taking the role, or the posting coming down, does).
       if (correction && key === "status" && tracks().get(node.id) && !tracks().get(node.id)!.closedAt) throw new ActionError(LISTED_STATUS);
@@ -2827,7 +2841,7 @@ export async function perform(token: string | null, a: Action, origin?: string, 
                 left > 0
                   ? `You can unlock ${left} more today. ${limit}`
                   : firstDay
-                    ? `New accounts can unlock ${NEW_MEMBER_UNLOCK_MAX} facts on day one. Your ${bal} credit${bal === 1 ? " is" : "s are"} here tomorrow.`
+                    ? `You've unlocked ${NEW_MEMBER_UNLOCK_MAX} facts today, the day-one limit. Your ${bal} credit${bal === 1 ? " is" : "s are"} here tomorrow.`
                     : `You've reached today's unlock limit. ${limit}`,
               );
             }
@@ -3295,6 +3309,14 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           if (!e) throw new ActionError(gone("engagement"));
           if (e.source !== SEAT_SCAN) throw new ActionError("Only seats Revenue Nomad found can be claimed. To add a seat you held, use Add.");
           mustSee(e.companyId);
+          if (a.preview) {
+            // "Is this you?": the seat's title and dates, so the member checks it before claiming. Only an unclaimed seat, a few dozen a day.
+            if (valueOf(e, s, "operator")) throw new ActionError(SEAT_TAKEN);
+            const seen = (claimPreviews.get(me.id) ?? []).filter((t) => nowMs - t < DAY);
+            if (seen.length >= CLAIM_PREVIEW_DAILY_MAX) throw new ActionError("You've checked a lot of seats today. Try again tomorrow, or add the seat you held.");
+            claimPreviews.set(me.id, [...seen, nowMs]);
+            return { message: "", id: pubId(e.id), claim: { role: live(e, s, "role"), function: live(e, s, "function"), start: live(e, s, "start"), end: live(e, s, "end"), status: live(e, s, "status") } };
+          }
           setValue(e, "engagement", "operator", me.name, me);
           return {
             message: "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.",
@@ -3307,8 +3329,9 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           const e = g.engagements.get(inId("engagement", a.engagementId));
           if (!e || !linkedSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
           s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
-          // A name a member put on the seat is hidden for everyone until an admin decides. A name
-          // from our own records may be another person with that name, so it only unlinks.
+          // A name a member put on the seat is hidden for everyone until an admin decides. So is a
+          // name from our own records: we matched it by name, so it may be someone else's, and
+          // nobody can unlock it (or buy it) while an admin checks. Removing it refunds whoever had.
           const k = fkey(e.id, "operator");
           const cur = valueOf(e, s, "operator");
           const wasClosed = !!tracks().get(e.id)?.closedAt;
@@ -3316,7 +3339,8 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           // admin removal would (the credit it earned goes back), so the seat is free for whoever took it.
           // A seat from the seat scan they claimed goes back the same way (it is unclaimed again).
           const ownClaim = !!cur && cur.by === me.id && cur.memberId === me.id && (tracks().has(e.id) || e.source === SEAT_SCAN);
-          const hide = !!cur && !isSystem(cur.by) && !ownClaim;
+          const fromRecords = !!cur && cur.by === "seed" && !ownClaim;
+          const hide = !!cur && (!isSystem(cur.by) || fromRecords) && !ownClaim;
           let reopened = false;
           if (cur && ownClaim) {
             removeFact(k, cur);
@@ -3324,11 +3348,14 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           } else if (cur && hide) {
             s.values[k] = { ...cur, status: "reported", reporters: [...new Set([...(cur.reporters ?? []), me.id])], reportedBy: me.id };
             s.reportLog.push({ memberId: me.id, ref: k, at: now });
+            // Nobody can see the name now, so whoever paid to see it gets the credit back at once.
+            if (fromRecords) refundUnlockers(k);
             // Whatever else the same member put on that seat behind a lock (a rate, an end date) goes to review with the name.
+            // (What our records say about the seat itself stays: only the name may be someone else's.)
             for (const field of ENG_GATED) {
               const fk = fkey(e.id, field);
               const fv = s.values[fk];
-              if (field === "operator" || !fv || fv.status !== "live" || fv.by !== cur.by) continue;
+              if (field === "operator" || !fv || fv.status !== "live" || fv.by !== cur.by || isSystem(fv.by)) continue;
               s.values[fk] = { ...fv, status: "reported", reporters: [...new Set([...(fv.reporters ?? []), me.id])], reportedBy: me.id };
             }
             // If naming them closed an open role, it is open again.
@@ -3336,7 +3363,9 @@ export async function perform(token: string | null, a: Action, origin?: string, 
             if (reopened) tracksNow = null;
           }
           return {
-            message: `Got it. That seat is no longer linked to you.${ownClaim ? " Your name is off it." : hide ? " Members won't see the name on that seat until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
+            message: fromRecords
+              ? `Got it. Your name is off that seat. We'll check our records.${reopened ? " The role is open again." : ""}`
+              : `Got it. That seat is no longer linked to you.${ownClaim ? " Your name is off it." : hide ? " Members won't see the name on that seat until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
             id: pubId(e.id),
             cells: [...ENG_GATED, "status"].map((f) => changed("engagement", e, f)),
           };
@@ -3432,16 +3461,22 @@ export async function perform(token: string | null, a: Action, origin?: string, 
     // The actor's new counts, so the client can update the top bar at once.
     let added = 0;
     let unlocked = 0;
+    let holdersUnlocked = 0;
+    let companiesUnlocked = 0;
     for (const l of s.ledger) {
       if (l.memberId !== me.id) continue;
       if (l.reason === "fill" && !l.undone) added++;
-      else if (l.reason === "unlock") unlocked++;
+      else if (l.reason === "unlock") {
+        unlocked++;
+        if (l.ref.endsWith(".operator")) holdersUnlocked++;
+        else if (l.ref.endsWith(".identity")) companiesUnlocked++;
+      }
     }
     const { earned, resetsAt } = earning(s, me.id, nowMs);
     return {
       ...out,
       me: {
-        ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked,
+        ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked, holdersUnlocked, companiesUnlocked,
         unlocksLeft: unlockRoom(s, me.id, nowMs).left, sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };

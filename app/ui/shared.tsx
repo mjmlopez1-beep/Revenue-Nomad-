@@ -460,3 +460,7 @@ export const IconBriefcase = ({ size = 14 }: { size?: number }) => svg(<><rect x
 export const IconCoin = ({ size = 14 }: { size?: number }) => svg(<><circle cx="12" cy="12" r="9" /><path d="M12 7v10M9 9.5c0-1 1.3-1.8 3-1.8s3 .8 3 1.8-1.3 1.6-3 2-3 1-3 2 1.3 1.8 3 1.8 3-.8 3-1.8" /></>, size);
 export const IconMenu = ({ size = 18 }: { size?: number }) => svg(<path d="M4 7h16M4 12h16M4 17h16" />, size);
 export const IconExternal = ({ size = 12 }: { size?: number }) => svg(<><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>, size);
+export const IconPencil = ({ size = 12 }: { size?: number }) => svg(<><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>, size);
+
+/** A refusal that is a limit, not a mistake (today's unlocks are used up): a calm notice, never a red toast. */
+export const calmRefusal = (msg: string) => /^You've unlocked \d+ facts today|^You've reached today's unlock limit|^You can unlock \d+ more today/.test(msg);

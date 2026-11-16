@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import type { LedgerRow, Me, View } from "@/lib/tableTypes";
-import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
+import { Brand, IconCoin, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
@@ -64,6 +64,9 @@ export function CreditsPill({ me, onClick, btnRef, quiet }: { me: Me; onClick: (
         aria-label={`You have ${plural(me.credits, "credit")}${owed > 0 ? ` and owe ${owed}` : ""}. Show where they came from.`}
         title={owed > 0 ? owedText(owed) : me.credits <= 0 ? "You're out of credits. Add a fact you know and you earn one." : me.credits <= 3 ? "You're running low. Add a fact you know and you earn a credit." : undefined}
       >
+        <span className="tp-credits-i" aria-hidden>
+          <IconCoin size={14} />
+        </span>
         <span className="num tp-credits-n">{me.credits}</span>
         <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
         {delta && (

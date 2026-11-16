@@ -15,7 +15,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Action, Cell, Me } from "@/lib/tableTypes";
-import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
+import { REFERRAL_BONUS, cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { readRate } from "@/lib/rates";
@@ -72,6 +72,8 @@ export interface Ui {
   openPage: (p: AppPage) => void;
   /** View.contact: where members write for help (support) and for an intro to a seat holder (intro). */
   contact: { support: string | null; intro: string | null } | null;
+  /** Share or copy the member's invite link (the zero-credits sheet offers it). */
+  invite?: () => void;
 }
 
 /** Said on an empty seat fact to anyone but the seat holder. */
@@ -136,12 +138,23 @@ export function useAllFlags(): Flags {
 export function FactValue({ t, v }: { t: FactRef; v: string }) {
   const href = hrefFor(t.entity, t.field, v);
   const text = fmtValue(t.entity, t.field, v);
-  if (href)
+  if (href) {
+    const shown = text.replace(/^https?:\/\//, "").replace(/^www\./, "");
+    // A web address stays on one line and ends in an ellipsis; the whole of it is in the tooltip.
+    const url = fieldDef(t.entity, t.field)?.kind === "url";
     return (
-      <a className="tp-link" href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-        {text.replace(/^https?:\/\//, "").replace(/^www\./, "")}
+      <a
+        className={`tp-link${url ? " tp-link-1" : ""}`}
+        href={href}
+        title={url ? shown : undefined}
+        target={href.startsWith("http") ? "_blank" : undefined}
+        rel="noreferrer"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {shown}
       </a>
     );
+  }
   // The column header or the row label already says "a week".
   if (t.entity === "engagement" && t.field === "hours") return <>{v}</>;
   return <>{text}</>;
@@ -257,19 +270,32 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
   const owed = ui.me.owed ?? 0;
   const phone = ui.layout === "phone";
   const title = "You're out of credits";
-  const primary = earn.capped
-    ? null
-    : ui.seats.missing > 0
-      ? { label: `Fill in your ${one ? "seat" : "seats"}`, go: () => (onClose(), ui.openSeats()) }
-      : { label: "Add a seat you held", go: () => (onClose(), ui.openAdd({ mode: "engagement", mine: true })) };
+  /*
+   * The ways to earn, in order: the member's own seats (claim them, or fill in what is missing),
+   * a seat they held that isn't here, an invite. Pro comes last. Today's earning cap leaves only
+   * the invite, whose bonus waits until tomorrow if it has to.
+   */
+  const ways: { label: string; go: () => void }[] = [];
+  if (!earn.capped) {
+    ways.push(
+      ui.seats.missing > 0
+        ? { label: `Fill in your ${one ? "seat" : "seats"}`, go: () => (onClose(), ui.openSeats()) }
+        : { label: "Claim your seats", go: () => (onClose(), ui.openSeats()) },
+    );
+    ways.push({ label: "Add a seat you held", go: () => (onClose(), ui.openAdd({ mode: "engagement", mine: true })) });
+  }
+  if (ui.invite) {
+    const invite = ui.invite;
+    ways.push({ label: `Invite a fractional (+${REFERRAL_BONUS} each)`, go: () => (onClose(), invite()) });
+  }
   const lead = earn.capped
     ? `You've earned today's ${ui.me.earnCap}. You can earn again ${atTime(ui.me.earnResetsAt)}.`
     : ui.seats.missing > 0
       ? `${plural(ui.seats.missing, "thing is", "things are")} still missing on your ${one ? "seat" : "seats"}. Each one you add earns a credit.`
-      : "Add a seat you held, with what you know about it. Each fact you add earns a credit.";
+      : "Each fact you add about a seat you held earns a credit. Find yours, or add one that isn't here.";
   const pills = facts.length > 0 && (
     <>
-      <p className="tp-small muted">{primary ? "Or, if you know this company, add one of these." : "If you know this company, add one of these."}</p>
+      <p className="tp-small muted">If you know this company, add one of these.</p>
       <div className="tp-zero-pills">
         {facts.map((x) => (
           // Phones edit in a bottom sheet, which would sit under this one: close it first.
@@ -282,10 +308,14 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
     <>
       <p className="tp-zero-t">{lead}</p>
       {owed > 0 && <p className="tp-small">{owedText(owed)}</p>}
-      {!phone && primary && (
-        <button type="button" className="btn btn-primary btn-sm" onClick={primary.go}>
-          {primary.label}
-        </button>
+      {ways.length > 0 && (
+        <div className="tp-zero-ways">
+          {ways.map((w, k) => (
+            <button key={w.label} type="button" className={`btn${k === 0 ? " btn-primary" : ""}${phone ? " btn-lg" : " btn-sm"}`} onClick={w.go}>
+              {w.label}
+            </button>
+          ))}
+        </div>
       )}
       {pills}
       <Pro where="zero_credits" variant="line" />
@@ -293,18 +323,7 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
   );
   if (phone)
     return (
-      <Sheet
-        title={title}
-        onClose={onClose}
-        className="tp-zero-sheet"
-        footer={
-          primary && (
-            <button type="button" className="btn btn-primary btn-lg tp-grow" onClick={primary.go}>
-              {primary.label}
-            </button>
-          )
-        }
-      >
+      <Sheet title={title} onClose={onClose} className="tp-zero-sheet">
         <div className="tp-zero">{body}</div>
       </Sheet>
     );
@@ -323,11 +342,11 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
  * is added to the label where one lock stands for more ("Unlock company"). At the day's unlock
  * limit (Me.unlocksLeft 0, credits left) it reads "Unlocks again tomorrow".
  */
-function Lock({ onUnlock, ver, from, what, noun, busy, later }: { onUnlock: () => void; ver: number; from?: string; what: string; noun?: string; busy?: boolean; later?: boolean }) {
-  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : `Unlock ${what} for 1 credit`;
+function Lock({ onUnlock, ver, from, what, noun, busy, later, broke }: { onUnlock: () => void; ver: number; from?: string; what: string; noun?: string; busy?: boolean; later?: boolean; broke?: boolean }) {
+  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : broke ? `Earn a credit to unlock ${what}` : `Unlock ${what} for 1 credit`;
   const more = ver > 0 ? ` Confirmed by ${plural(ver, "member")}.` : from && FROM_SAY[from] ? ` ${FROM_SAY[from]}.` : "";
   return (
-    <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
+    <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}${broke ? " broke" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
       <span className="lock-rest" aria-hidden>
         <IconLock />
         <span className="lock-mask" />
@@ -336,6 +355,8 @@ function Lock({ onUnlock, ver, from, what, noun, busy, later }: { onUnlock: () =
         <IconLock />
         {later ? (
           <span>Unlocks again tomorrow</span>
+        ) : broke && !busy ? (
+          <span>Earn a credit to unlock</span>
         ) : (
           <>
             <span>
@@ -433,6 +454,7 @@ export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef
             noun={t.field === "identity" ? "company" : undefined}
             busy={flags.busy}
             later={later}
+            broke={credits <= 0}
           />
           {zero && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
         </span>
@@ -886,7 +908,7 @@ export function FactSheet({ t, cell, label, company, onClose }: { t: FactRef; ce
   const [busy, setBusy] = useState(false);
   if (cell.s !== "value") return null;
   const canCheck = !cell.mine && !cell.member?.you && !cell.system;
-  const source = cell.ver > 0 ? `Confirmed by ${plural(cell.ver, "member")}` : cell.from && FROM_SAY[cell.from] ? FROM_SAY[cell.from] : cell.mine ? "You added this" : null;
+  const source = cell.ver > 0 ? `Confirmed by ${plural(cell.ver, "member")}` : cell.from && FROM_SAY[cell.from] ? FROM_SAY[cell.from] : cell.mine ? (cell.claimed ? "You claimed this" : "You added this") : null;
   const run = async (a: Action) => {
     setBusy(true);
     const r = await ui.act(a);

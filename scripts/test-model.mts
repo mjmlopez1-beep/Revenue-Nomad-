@@ -13,7 +13,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
-  fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
+  checkSteps, fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
 let passed = 0;
@@ -112,7 +112,7 @@ const unlockedTab = (e: EngagementRec) => {
 };
 const hoursOnly = unlockedTab(eng({ hours: val("15"), role: LOCKED }, { source: "Published engagement" }));
 check("someone else's hours showing is not an unlock", !hoursOnly.eng && !hoursOnly.company, hoursOnly);
-const roleSeen = unlockedTab(eng({ role: val("Fractional CRO"), hours: val("15") }, { source: "Published engagement" }));
+const roleSeen = unlockedTab(eng({ role: val("Fractional CRO", { paid: true }), hours: val("15") }, { source: "Published engagement" }));
 check("a role the member paid to see is", roleSeen.eng && roleSeen.company, roleSeen);
 const followed = unlockedTab(eng({ status: val("Open role"), role: LOCKED }, { opened: "2026-11-03", closed: null }));
 check("a followed role's free status is not an unlock", !followed.eng && !followed.company, followed);
@@ -128,6 +128,28 @@ const seat = unlockedTab(eng({ operator: val("Jane Smith", { member: { title: "F
 check("the member's own seat, free to them, is not an unlock", !seat.eng && !seat.company, seat);
 const own = unlockedTab(eng({ role: val("Fractional CRO", { mine: true }) }, { source: "Member added" }));
 check("a fact the member added is not an unlock", !own.eng && !own.company, own);
+// Free values on a brand-new account: an open role's free title, a posting, our records' facts. None was paid for.
+const freeTitle = unlockedTab(eng({ status: val("Open role", { system: true }), role: val("Fractional CMO", { from: "posting" }), posting: val("https://jobs.example.com/2", { from: "posting" }) }, { opened: "2026-11-03", closed: null }));
+check("an open role's free title and posting are not an unlock", !freeTitle.eng && !freeTitle.company, freeTitle);
+const recordsName = unlockedTab(eng({ operator: val("Jane Smith", { from: "records" }) }, { source: "Published engagement" }));
+check("a value showing without a paid flag is not an unlock", !recordsName.eng && !recordsName.company, recordsName);
+{
+  // A fresh account counts 0 in Unlocked, and each real unlock moves it by one.
+  const fresh = [0, 1, 2].map(() => co("Fresh", [eng({ role: val("Fractional CRO", { from: "posting" }), operator: LOCKED }, { source: "Published engagement" })]));
+  const tabN = (cs: CompanyRec[]) => applyFilters(rowsFor("companies", deriveAll(cs)), EMPTY_FILTERS, "all", "", me).facets.tabs.unlocked;
+  const n0 = tabN(fresh);
+  const paid1 = fresh.map((c, k) => (k === 0 ? { ...c, engagements: [{ ...c.engagements[0], cells: { ...c.engagements[0].cells, operator: val("Jane Smith", { paid: true }) } }] } : c));
+  const n1 = tabN(paid1);
+  const paid2 = paid1.map((c, k) => (k === 1 ? ({ ...c, unlocked: true } as CompanyRec) : c));
+  check("a fresh account has Unlocked 0, and each unlock moves it by one", n0 === 0 && n1 === 1 && tabN(paid2) === 2, { n0, n1, n2: tabN(paid2) });
+}
+{
+  // Following counts companies, whatever the list shows.
+  const a = { ...co("Followed", [1, 2, 3, 4, 5].map(() => eng({ role: LOCKED }, { source: "Published engagement" }))), following: true } as CompanyRec;
+  const b = co("Not followed", [eng({ role: LOCKED }, { source: "Published engagement" })]);
+  const seatsTabs = applyFilters(rowsFor("engagements", deriveAll([a, b])), EMPTY_FILTERS, "all", "", me).facets.tabs;
+  check("Following counts 1 company with 5 seats as 1 on the seats list", seatsTabs.following === 1, seatsTabs.following);
+}
 
 /* ---------- Hiring now lists open roles ---------- */
 
@@ -250,6 +272,12 @@ check("a fact the member added is not an unlock", !own.eng && !own.company, own)
   check("no 'No Sales yet' next to a Sales story", !gap(i) && !gap(j));
   const notMine = (x: typeof i) => toggleTest("notMine", me)({ key: x.c.id, i: x });
   check("No Sales seat yet: hired other functions, none in Sales", notMine(j) && !notMine(deriveAll([co("Only open", [eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })])])[0]));
+  {
+    // A company hiring a Sales seat right now is not "No Sales seat yet".
+    const hiringSales = co("Hiring sales", [eng({ function: val("Marketing"), status: val("Ended") }, { source: "Member added" }), eng({ function: val("Sales"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })]);
+    const h = deriveAll([hiringSales])[0];
+    check("No Sales seat yet leaves out a company with an open Sales role", h.fnState.hiring.includes("Sales") && !notMine(h), h.fnState);
+  }
   check("a catch-all function is not named in labels", notMineLabel("Executive") === "No seat in your function yet" && notMineLabel("Sales") === "No Sales seat yet" && namedFn("Other") === null);
 }
 
@@ -424,6 +452,28 @@ const later = new Date();
 later.setHours(23, 59, 0, 0);
 const tomorrow = new Date(Date.now() + 86_400_000);
 check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(later.toISOString())) && /^tomorrow at \d/.test(atTime(tomorrow.toISOString())) && atTime(null) === "within 24 hours", [atTime(later.toISOString()), atTime(tomorrow.toISOString())]);
+
+/* ---------- Get started ---------- */
+
+{
+  const base = { goal: "friendly", added: 0, unlocked: 0, holdersUnlocked: 0, companiesUnlocked: 0, invited: 0, invitesPaid: 0 } as const;
+  const n = (r: ReturnType<typeof checkSteps>) => r.steps.filter((x) => x.done).length;
+  const coOnly = checkSteps({ ...base, unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
+  check("a company unlock does not tick See who held a seat", !coOnly.steps[0].done && coOnly.steps[0].label === "See who held a seat", coOnly.steps[0]);
+  const holder = checkSteps({ ...base, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
+  check("unlocking a seat holder ticks it", holder.steps[0].done);
+  const roles = checkSteps({ ...base, goal: "roles", unlocked: 1, companiesUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0 });
+  check("looking for roles, a hidden company ticks See who is hiring", roles.steps[0].done && roles.steps[0].label === "See who is hiring");
+  // 2 of 3, then a seat added: never back to 1 of 3.
+  const before = checkSteps({ ...base, added: 3, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 0, seatsLeft: 0, earn: 0, addLabel: "Add a seat you held" });
+  const after = checkSteps({ ...base, added: 4, unlocked: 1, holdersUnlocked: 1 }, { seatsHeld: 1, seatsLeft: 6, earn: 6 });
+  check("adding a seat keeps step 2 done (2 of 3 stays 2 of 3)", n(before) === 2 && n(after) === 2 && after.steps[1].done, [n(before), n(after), after.steps[1]]);
+  check("Fill in your seats is a separate nudge once step 2 is done", !!after.nudge && after.nudge.label === "Fill in your seats" && after.steps[1].label !== "Fill in your seats", after.nudge);
+  const sticky = checkSteps({ ...base }, { seatsHeld: 0, seatsLeft: 0, earn: 0, stuck: new Set(["unlock", "give"]) });
+  check("a step done before stays done", n(sticky) === 2);
+  const fresh = checkSteps({ ...base }, { seatsHeld: 2, seatsLeft: 8, earn: 8 });
+  check("with seats and nothing added, step 2 starts on the seats and there is no nudge yet", fresh.steps[1].label === "Fill in your seats" && !fresh.steps[1].done && !fresh.nudge);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

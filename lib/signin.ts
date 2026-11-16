@@ -42,27 +42,40 @@ function memberById(seed: Seed, s: State, id: string): Member | null {
 }
 
 /** Using a link or code made for joining proves the address. */
-function finish(s: State, memberId: string, purpose: "signin" | "join") {
+function finish(s: State, memberId: string, purpose: "signin" | "join" | "message") {
   if (purpose !== "join") return;
   const j = s.members.find((x) => x.id === memberId);
   if (j) j.proven = true;
 }
 
-/** A new one-time link and code for a member. Returns the token and the code (only their hashes are kept). */
-export async function createSignIn(memberId: string, purpose: "signin" | "join"): Promise<{ token: string; code: string }> {
+/** How long the link in a message email works. It still works only once. */
+export const MESSAGE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Message-email links a member can have waiting at once (one per conversation an hour at most). */
+const MESSAGE_LIVE_MAX = 10;
+
+/**
+ * Put a new one-time link (and code) for a member into the state, inside a change already
+ * under way. Links of each kind are capped apart, so a message email never pushes out the
+ * sign-in link the member just asked for.
+ */
+export function addSignIn(s: State, memberId: string, purpose: "signin" | "join" | "message", nowMs = Date.now()): { token: string; code: string } {
   const token = `o${randomBytes(24).toString("base64url")}`;
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
-  await T.mutate((s) => {
-    const nowMs = Date.now();
-    cleanup(s, nowMs);
-    s.signins ??= [];
-    const id = hashToken(token);
-    const mine = s.signins.filter((x) => x.memberId === memberId).sort((a, b) => a.exp.localeCompare(b.exp));
-    const drop = new Set(mine.slice(0, Math.max(0, mine.length - (LIVE_MAX - 1))).map((x) => x.id));
-    s.signins = s.signins.filter((x) => !drop.has(x.id));
-    s.signins.push({ id, memberId, code: hashCode(id, code), purpose, exp: new Date(nowMs + SIGNIN_TTL_MS).toISOString(), tries: 0 });
-  });
+  cleanup(s, nowMs);
+  s.signins ??= [];
+  const id = hashToken(token);
+  const msg = purpose === "message";
+  const cap = msg ? MESSAGE_LIVE_MAX : LIVE_MAX;
+  const mine = s.signins.filter((x) => x.memberId === memberId && (x.purpose === "message") === msg).sort((a, b) => a.exp.localeCompare(b.exp));
+  const drop = new Set(mine.slice(0, Math.max(0, mine.length - (cap - 1))).map((x) => x.id));
+  s.signins = s.signins.filter((x) => !drop.has(x.id));
+  s.signins.push({ id, memberId, code: hashCode(id, code), purpose, exp: new Date(nowMs + (msg ? MESSAGE_LINK_TTL_MS : SIGNIN_TTL_MS)).toISOString(), tries: 0 });
   return { token, code };
+}
+
+/** A new one-time link and code for a member. Returns the token and the code (only their hashes are kept). */
+export async function createSignIn(memberId: string, purpose: "signin" | "join"): Promise<{ token: string; code: string }> {
+  return T.mutate((s) => addSignIn(s, memberId, purpose));
 }
 
 /** Use a one-time link. The member it signs in (with their personal token), or null when it expired, was used or never existed. */
@@ -92,7 +105,8 @@ export async function redeemCode(emailRaw: string, codeRaw: string): Promise<Mem
   if (!who) return null;
   return T.mutate((s, seed) => {
     cleanup(s, Date.now());
-    const live = (s.signins ?? []).filter((x) => x.memberId === who.id);
+    // A message email carries no code, so its link is never one a typed code can open.
+    const live = (s.signins ?? []).filter((x) => x.memberId === who.id && x.purpose !== "message");
     if (!live.length) return null;
     const hit = live.find((x) => same(x.code, hashCode(x.id, code)));
     if (hit) {

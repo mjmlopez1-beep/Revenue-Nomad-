@@ -30,6 +30,8 @@ export interface LandingProps {
   onSignedIn: () => Promise<void> | void;
   /** A personal link (?k=) that did not sign the visitor in: Sign in opens with this message. */
   signInError?: string | null;
+  /** Sign in opens at once with this note (a link to a message, followed while signed out). */
+  signInNote?: string | null;
 }
 
 /** The server's default starter balance, used until the view arrives (or if it predates stats.starter). */
@@ -64,7 +66,7 @@ function lookups(intro: string | null): { title: string; body: string; cost: str
     },
     {
       title: "What the seat pays",
-      body: "See median monthly and hourly rates by function and client revenue. They start from Revenue Nomad's Rate Index and grow as members share rates. A number shows only once at least 5 different people have a rate in the group, and it never says who they are.",
+      body: "See median monthly and hourly rates by function and client revenue. They start from Revenue Nomad's Rate Index and grow as members share rates. A number shows only once 5 people have a rate in the group, or 20 where survey data is included. It never says who they are.",
       cost: null,
     },
     {
@@ -155,9 +157,13 @@ function Count({ n }: { n: number | undefined }) {
 
 type SignInState = { open: boolean; note: string | null; tone: "info" | "error" };
 
-export default function Landing({ view, onSignedIn, signInError = null }: LandingProps) {
+export default function Landing({ view, onSignedIn, signInError = null, signInNote = null }: LandingProps) {
   const [signIn, setSignIn] = useState<SignInState>(() =>
-    signInError ? { open: true, note: signInFailText(signInError, "clicked"), tone: "error" } : { open: false, note: null, tone: "info" },
+    signInError
+      ? { open: true, note: signInFailText(signInError, "clicked"), tone: "error" }
+      : signInNote
+        ? { open: true, note: signInNote, tone: "info" }
+        : { open: false, note: null, tone: "info" },
   );
   const heroForm = useRef<HTMLDivElement>(null);
   const finalForm = useRef<HTMLDivElement>(null);
@@ -433,7 +439,7 @@ export default function Landing({ view, onSignedIn, signInError = null }: Landin
             <h2 className="lp-h2">
               Get <span className="num">{starter}</span> credits and look around
             </h2>
-            <p className="lp-final-sub">It takes an email and your name. The pilot is free.</p>
+            <p className="lp-final-sub">It takes your email. The pilot is free.</p>
             <div className="lp-final-form" ref={finalForm}>
               <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
             </div>

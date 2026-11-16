@@ -31,6 +31,10 @@ export type Cell =
       iv?: boolean;
       system?: boolean;
       from?: "records" | "posting";
+      /** The viewer spent a credit to see this value (it counts in their Unlocked list). Free values never carry it. */
+      paid?: boolean;
+      /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
+      claimed?: boolean;
       /**
        * Seat holder only: the name belongs to a Trading Post member who has signed in (their
        * title; `you` when it's the viewer). Left out for a member who never signed in, the same
@@ -211,6 +215,9 @@ export interface Me {
   /** Facts this member added, and unlocked. */
   added: number;
   unlocked: number;
+  /** Seat holders (who held a seat) and hidden companies this member paid to see, for Get started. */
+  holdersUnlocked?: number;
+  companiesUnlocked?: number;
   /** Weekly email of new open roles (on unless they turned it off). */
   digest: boolean;
   /** Asked to be told when Pro is ready. */
@@ -543,7 +550,11 @@ export type Action =
    * they add there earn as usual. The claim earns nothing. 3 per rolling 24 hours. "This isn't me"
    * gives it back.
    */
-  | { type: "claimSeat"; engagementId: string }
+  /**
+   * Claim a seat from the seat scan. `preview`: claim nothing, return what the seat says (its
+   * title, function and dates, as `claim`) so the member can check it is theirs first.
+   */
+  | { type: "claimSeat"; engagementId: string; preview?: boolean }
   /** "This isn't me": unlink the viewer from a seat matched to them by name. */
   | { type: "notMine"; engagementId: string }
   /**
@@ -588,10 +599,12 @@ export type ActionResult = {
   id?: string;
   capped?: boolean;
   cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
-  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "owed" | "unlocksLeft" | "sellEarnLeft">;
+  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "holdersUnlocked" | "companiesUnlocked" | "owed" | "unlocksLeft" | "sellEarnLeft">;
   /** Message actions: the conversation as the viewer now sees it, and their unread count. */
   conversation?: ConversationRec;
   unread?: number;
+  /** claimSeat with `preview`: what the unclaimed seat says, for "Is this you?". */
+  claim?: { role: string | null; function: string | null; start: string | null; end: string | null; status: string | null };
 };
 
 export const GOALS = [

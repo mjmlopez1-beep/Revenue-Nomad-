@@ -720,10 +720,12 @@ button.ys-yours:hover {
   font-family: var(--font-num);
 }
 .my .my-m {
-  flex: 1 1 92px;
+  flex: 1 1 96px;
+  min-width: 96px;
 }
 .my .my-y {
-  flex: 1 1 84px;
+  flex: 1 1 88px;
+  min-width: 88px;
 }
 .my .select:disabled {
   opacity: 0.5;
@@ -1196,4 +1198,61 @@ button.ys-yours:hover {
   .tp-zero .btn {
     min-height: 44px;
   }
+}
+
+/* The function on a seat the member holds is theirs to fix: the chip is a button with a small pencil. */
+.ys-fn-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.ys-fn-b svg {
+  opacity: 0.6;
+}
+.ys-fn-b:hover,
+.ys-fn-b:focus-visible {
+  border-color: var(--pine);
+}
+.ys-fn-b:hover svg,
+.ys-fn-b:focus-visible svg {
+  opacity: 1;
+}
+/* "Is Marketing right for this seat?" asked once for a function from our records. */
+.ys-fncheck {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+}
+.ys-fncheck p {
+  font-weight: 600;
+}
+.ys-fncheck-acts {
+  display: flex;
+  gap: 8px;
+}
+.ys-fncheck .ys-chip {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+/* Phones: every control on a seat card is a 44px target. */
+.tp-phone .ys-fn-b,
+.tp-phone .ys-fncheck .ys-chip,
+.tp-phone .ys-kv-b,
+.tp-phone .ys-later-b,
+.tp-phone .ys-skip,
+.tp-phone .ys-more,
+.tp-phone .ys-notme {
+  min-height: 44px;
+}
+.tp-phone .ys-fncheck .ys-chip {
+  height: 44px;
+  padding: 0 14px;
 }

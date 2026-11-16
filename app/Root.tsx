@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
-import { ToastProvider, fetchView, patchView, post, useToast, type Act, type ActPatch, type View, type ViewResult } from "./ui/shared";
+import { ToastProvider, calmRefusal, fetchView, patchView, post, useToast, type Act, type ActPatch, type View, type ViewResult } from "./ui/shared";
 import type { TradingPostProps } from "./post/TradingPost";
 
 /* ---------- loading: the shape of what is coming, not a line of gray text ---------- */
@@ -163,6 +163,10 @@ if (typeof window !== "undefined") {
 /** Actions that create records: wait for the full view so the new record is there. */
 const FULL_REFRESH = new Set(["add", "addPerson", "profile", "adminRemoveMember"]);
 
+/** Sign in's note for a visitor who followed a message email's link while signed out. */
+const MESSAGE_NOTE = "Sign in to read your message.";
+const MESSAGE_LINK_USED = "That link was already used, or it's more than 7 days old. Sign in to read your message.";
+
 const NETWORK = "We couldn't reach Trading Post. Check your connection and try again.";
 
 /**
@@ -201,6 +205,10 @@ function App() {
   const [failed, setFailed] = useState<string | null>(null);
   // A ?k= sign-in link that failed: the landing page opens Sign in with this message.
   const [signInError, setSignInError] = useState<string | null>(null);
+  // A link to a conversation (?p=messages, from a message email). Signed out, Sign in opens with a note.
+  // Signed in by that email's one-time link, the member goes straight to it, skipping onboarding for this visit.
+  const [toMessage] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("p") === "messages");
+  const fromMessageLink = useRef(false);
   // A visitor (as far as this browser knows) gets the landing page before the view arrives.
   const [guest, setGuest] = useState(false);
   const toast = useToast();
@@ -289,7 +297,10 @@ function App() {
       if (!k && lastSawVisitor()) setGuest(true);
       if (k) {
         const r = await post({ signIn: k });
-        if (r.error) setSignInError(r.error);
+        const toThread = url.searchParams.get("p") === "messages";
+        // A message email's link lasts 7 days, not the 20 minutes a sign-in email's link does.
+        if (r.error) setSignInError(toThread && /expired or was already used/.test(r.error) ? MESSAGE_LINK_USED : r.error);
+        else if (toThread) fromMessageLink.current = true;
       }
       if (k || ref) {
         url.searchParams.delete("k");
@@ -322,7 +333,7 @@ function App() {
       if (flip) setView((v) => (v ? { ...v, companies: v.companies.map((c) => (c.id === flip.companyId ? { ...c, following: flip.on } : c)) } : v));
       const r = await post<{ message: string; id?: string; capped?: boolean } & ActPatch>({ action: a });
       if (r.error) {
-        if (!opts?.silentError) toast(r.error, true);
+        if (!opts?.silentError) toast(r.error, !calmRefusal(r.error));
         sync(); // replaces any background sync this action superseded, and undoes a flip that failed
         return { ok: false, message: r.error };
       }
@@ -357,7 +368,7 @@ function App() {
     skipped.current = true;
   }, []);
 
-  const onboarding = !!view?.me && !view.me.onboarded;
+  const onboarding = !!view?.me && !view.me.onboarded && !fromMessageLink.current && !toMessage;
   useEffect(() => {
     if (onboarding) firstRun.current = true;
   }, [onboarding]);
@@ -371,11 +382,11 @@ function App() {
         </button>
       </Skeleton>
     ) : guest ? (
-      <Landing view={null} onSignedIn={refresh} />
+      <Landing view={null} onSignedIn={refresh} signInNote={toMessage ? MESSAGE_NOTE : null} />
     ) : (
       <Skeleton />
     );
-  if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} />;
+  if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} signInNote={toMessage ? MESSAGE_NOTE : null} />;
   if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} onSkip={onSkip} />;
   // Straight from onboarding, a member with seats under their name starts on those seats.
   const start = firstRun.current && !skipped.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;

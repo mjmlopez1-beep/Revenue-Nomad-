@@ -26,10 +26,10 @@
  * be turned off from the account menu (WCAG 2.1.4), for speech input and for anyone who
  * types into the page by accident.
  */
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Cell } from "@/lib/tableTypes";
 import type { Me } from "@/lib/tableTypes";
-import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, useToast, type Act, type View } from "../ui/shared";
+import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, calmRefusal, useToast, type Act, type View } from "../ui/shared";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows,
@@ -198,7 +198,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /* ----- the place: from the address bar, else the member's onboarding answers ----- */
   const [place0] = useState(() => readPlace(me));
   const [recordType, setRecordType] = useState<RecordType>(place0.t);
-  const [tab, setTab] = useState<Tab>(place0.v);
+  const [tabPicked, setTabPicked] = useState<Tab>(place0.v);
   const [filters, setFilters] = useState<Filters>(place0.f);
   const [sortPicked, setSort] = useState<SortKey>(place0.s);
   // The sort in use: one this list can't use (Most seats, carried over to People) reads as Best fit.
@@ -207,6 +207,18 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [query, setQuery] = useState(place0.q);
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
+  /*
+   * A search covers the whole table: while one is typed the view is All, whatever view was
+   * remembered, so a company the member knows never shows 0 because of the view. Picking a view
+   * while searching narrows the search to it. Clearing the search brings the remembered view back.
+   */
+  const searching = !!query.trim();
+  const [searchTab, setSearchTab] = useState<Tab | null>(null);
+  useEffect(() => {
+    if (!searching) setSearchTab(null);
+  }, [searching]);
+  const tab: Tab = searching ? searchTab ?? "all" : tabPicked;
+  const setTab = useCallback((t: Tab) => (searching ? setSearchTab(t) : setTabPicked(t)), [searching]);
   const [limit, setLimit] = useState(PAGE);
   const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? "table"));
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
@@ -476,7 +488,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     if (!r.ok) {
       // Out of credits on the server (the balance here was behind another tab): the zero-credits popover says what to add, not a red toast.
       if (opts?.onWall && /^You're out of credits/.test(r.message)) opts.onWall();
-      else toast(r.message, true);
+      else toast(r.message, !calmRefusal(r.message));
       return;
     }
     // A plain unlock speaks through the cell. One that bought more (the company, the role, the posting and the rate) or cost nothing says so.
@@ -710,7 +722,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const navOpen = page !== "table" || !!drawer;
   const overlayOpen = layout !== "desktop" && !!(editor || pop || sortOpen || addOpts || sideOverlay);
   const depth = (navOpen ? 1 : 0) + (overlayOpen ? 1 : 0);
-  const url = placeUrl(me, { t: recordType, v: tab, s: sort, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page });
+  const url = placeUrl(me, { t: recordType, v: tabPicked, s: sort, f: filters, q: query, c: recordOpen ? drawer!.id : null, p: page });
   const urlRef = useRef(url);
   urlRef.current = url;
   const depthRef = useRef(depth);
@@ -757,7 +769,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   useEffect(() => {
     if (linked) {
       try {
-        window.history.replaceState({ ...window.history.state, tpd: 0 }, "", placeUrl(me, { t: recordType, v: tab, s: sort, f: filters, q: query, c: null, p: "table" }));
+        window.history.replaceState({ ...window.history.state, tpd: 0 }, "", placeUrl(me, { t: recordType, v: tabPicked, s: sort, f: filters, q: query, c: null, p: "table" }));
       } catch {}
     }
     // A link to a company opens its record (the landing page showed for anyone signed out). Find its row for "3 of 72".
@@ -955,6 +967,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       openSeats,
       openPage,
       contact,
+      invite,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const ui: Ui = useMemo(() => mkUi(me), [me, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, holdsSeat, seatStats, openSeats, openPage, contact]);
@@ -1303,6 +1316,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       {scan.lastOkAt ? `Last scan ${fmtStamp(scan.lastOkAt)}.` : scan.lastRunAt ? "The last scan could not read the job boards." : "The first check runs this week."}
     </p>
   );
+  // Following counts companies. On the seats or people list, say how many rows that is ("5 seats at 1 company").
+  const followCos = tab === "following" && recordType !== "companies" ? new Set(sorted.map((r) => r.i.c.id)).size : 0;
+  const followLine = followCos > 0 && (
+    <p className="tp-scanline">
+      {plural(sorted.length, noun[0], noun[1])} at {plural(followCos, "company", "companies")}
+    </p>
+  );
   /** "72 companies", said again to screen readers when it changes. */
   const countText = `${plural(sorted.length, noun[0], noun[1])}${qt ? ` matching ${qt}` : ""}`;
   const skip = (e: React.MouseEvent) => {
@@ -1437,6 +1457,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               {countText}
             </p>
             {scanLine}
+            {followLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
               {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} />}
             </div>
@@ -1509,6 +1530,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 </div>
               )}
               {scanLine}
+              {followLine}
               <div className="tp-frame-box" ref={frameBoxRef}>
                 <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
                   {empty || (

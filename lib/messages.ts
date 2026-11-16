@@ -16,6 +16,7 @@ import { ActionError, isAdmin, loadSeed, loadState, memberByToken, tableInternal
 import { HIDDEN_COMPANY, functionOf } from "./tableFields";
 import { MAIL, emailEnabled, escHtml, footerNote, mailButton, mailH, mailP, mailShell, oneLine, sendEmail } from "./email";
 import { sideOf, unreadCount, unreadIn, type StoredConversation } from "./messageState";
+import { addSignIn } from "./signin";
 import type { Action, ActionResult, ConversationRec, MessageRec } from "./tableTypes";
 
 const HOUR = 60 * 60 * 1000;
@@ -128,6 +129,7 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
   const link = oneLine(o.link);
   const subject = `${first} sent you a message on Trading Post about ${about}`;
   const why = "You get at most one of these an hour for each conversation. Turn them off in Your credits on Trading Post.";
+  const noReply = "Replies to this email don't reach them. Reply on Trading Post.";
   const from = "Trading Post is a free pilot from Revenue Nomad.";
   const note = footerNote();
   const text = [
@@ -135,7 +137,10 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
     "",
     snippet,
     "",
-    `Read it and reply on Trading Post: ${link}`,
+    `Read it and reply on Trading Post with this link. It signs you in once and works for 7 days.`,
+    link,
+    "",
+    noReply,
     "",
     "--",
     why,
@@ -146,7 +151,8 @@ export function messageEmail(o: { from: string; company: string; holder: boolean
     mailH(`${escHtml(first)} sent you a message`),
     mailP(`About ${escHtml(about)}.`, "margin-bottom:24px;"),
     `<p style="margin:0 0 24px;padding:12px 16px;border-left:3px solid ${MAIL.volt};background:${MAIL.page};font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${escHtml(snippet)}</p>`,
-    mailButton(link, "Read and reply", "margin:0 0 8px"),
+    mailButton(link, "Read and reply", "margin:0 0 16px"),
+    mailP(escHtml(noReply), `margin-bottom:0;font-size:14px;line-height:20px;color:${MAIL.muted};`),
   ].join("\n");
   const html = mailShell({ title: subject, preheader: snippet.slice(0, 120), body, footer: [escHtml(why), escHtml(from), note ? escHtml(note) : ""] });
   return { subject, text, html };
@@ -205,7 +211,9 @@ export async function performMessage(token: string | null, a: MessageAction, ori
         const tracks = T.tracksOf(seed, s);
         const hidden = T.identityHidden(g, s, idx, tracks, other, c.about.companyId);
         const company = hidden ? "a company that is hiring" : g.companies.get(c.about.companyId)?.name ?? "";
-        const mail = messageEmail({ from: T.firstName(me.name), company, holder: otherId === c.b, text, link: `${base}/?p=messages&m=${encodeURIComponent(c.id)}` });
+        // The button signs them in once (7 days) and opens this conversation, as a sign-in email's link does.
+        const { token: once } = addSignIn(s, otherId, "message", nowMs);
+        const mail = messageEmail({ from: T.firstName(me.name), company, holder: otherId === c.b, text, link: `${base}/?k=${encodeURIComponent(once)}&p=messages&m=${encodeURIComponent(c.id)}` });
         notify = { to: other.email, ...mail };
       }
       return { message: "Sent.", convId: c.id, notify };

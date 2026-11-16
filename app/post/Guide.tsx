@@ -2,9 +2,9 @@
 
 /** The Get started checklist and the one-line strip (first visit, an invite bonus waiting, running low, since your last visit). */
 import type { Me } from "@/lib/tableTypes";
-import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { IconCheck, IconX } from "../ui/shared";
-import { plural } from "./hooks";
+import { plural, store } from "./hooks";
+import { checkSteps, type CheckStep } from "./model";
 
 export function Checklist({
   me,
@@ -34,33 +34,15 @@ export function Checklist({
   /** What step 2 does for a member with no seats ("Add a seat you held", or "Add a fact" when a company they know has a gap). */
   addLabel?: string;
 }) {
-  const paid = me.invitesPaid ?? 0;
-  /*
-   * A member with seats on file gives there first: it is what they know best. The step is done
-   * only once nothing is missing on them, so one answer never reads as finished, and the hint
-   * says how many are left and what they earn today.
-   */
-  const left = seatsLeft ?? 0;
-  const earn = seats ?? 0;
-  const give =
-    seatsHeld && onSeats
-      ? {
-          done: left === 0,
-          label: "Fill in your seats",
-          hint: left === 0 ? "all filled in" : earn >= left ? `${left} left, 1 credit each` : earn > 0 ? `${left} left, earns up to ${earn}` : `${left} left to fill`,
-          go: onSeats,
-          open: true,
-          more: true,
-        }
-      : { done: me.added > 0, label: addLabel ?? "Add a fact", hint: "earns 1 credit", go: onAdd, open: false, more: false };
-  // The first unlock shows what a credit buys: who held a seat (who is hiring for an open role, for a member looking for roles).
-  const unlockLabel = me.goal === "roles" ? "See who is hiring" : "See who held a seat";
-  const steps = [
-    { done: me.unlocked > 0, label: unlockLabel, hint: "costs 1 credit", go: onUnlock, open: false, more: false },
-    give,
-    // Done once an invitee's first fact paid the bonus, not when they merely joined.
-    { done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `${REFERRAL_BONUS} credits each`, go: onInvite, open: true, more: false },
-  ];
+  // A done step stays done in this browser, so the count never goes backwards (a refund, a removed fact).
+  const doneKey = `tp_check_done_${me.id}`;
+  const stuck = new Set((store.get(doneKey) ?? "").split(",").filter(Boolean));
+  const plan = checkSteps(me, { seatsHeld: onSeats ? seatsHeld ?? 0 : 0, seatsLeft: seatsLeft ?? 0, earn: seats ?? 0, addLabel, stuck });
+  const go: Record<CheckStep["key"], () => void> = { unlock: onUnlock, give: plan.steps[1].label === "Fill in your seats" && onSeats ? onSeats : onAdd, invite: onInvite };
+  const steps = plan.steps.map((x) => ({ ...x, go: go[x.key], open: x.key === "invite" }));
+  const nudge = plan.nudge;
+  const nowDone = steps.filter((x) => x.done).map((x) => x.key);
+  if (nowDone.some((k) => !stuck.has(k))) store.set(doneKey, nowDone.join(","));
   const n = steps.filter((s) => s.done).length;
   const next = steps.findIndex((s) => !s.done);
   // Dismissable at any time; the X sits at the end of the row (top right on phones).
@@ -81,7 +63,7 @@ export function Checklist({
       <ol className="tp-steps">
         {steps.map((s, k) => (
           <li key={k}>
-            <button type="button" className={`tp-step${s.done ? " done" : ""}${s.done && s.more ? " ys-more" : ""}${k === next ? " next" : ""}`} onClick={s.go} disabled={s.done && !s.open}>
+            <button type="button" className={`tp-step${s.done ? " done" : ""}${k === next ? " next" : ""}`} onClick={s.go} disabled={s.done && !s.open}>
               <span className="tp-step-dot" aria-hidden>
                 {s.done ? <IconCheck size={11} /> : <span className="num">{k + 1}</span>}
               </span>
@@ -100,6 +82,12 @@ export function Checklist({
           </li>
         ))}
       </ol>
+      {nudge && (
+        <button type="button" className="tp-check-nudge" onClick={onSeats}>
+          <span className="tp-step-l">{nudge.label}</span>
+          <span className="tp-step-h num">{nudge.hint}</span>
+        </button>
+      )}
       {!vertical && close}
     </section>
   );

@@ -572,16 +572,44 @@ section("seat", async () => {
   const late = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "sourced", value: "Referral" });
   check("and takes no more facts from her", late.status === 400 && late.json?.error === HOLDER_ONLY, late.json);
 
-  // On a name from our own records it only unlinks, as before.
+  // On a name from our own records it takes the name off the seat for everyone, and an admin checks it.
   const sm = seedHolders[seedHolders.length - 1];
   const S = sm ? new Client("Seed Holder", nextIp(), sm.token) : null;
   const sv = S ? await S.view() : null;
   if (!sv?.me) return skip("seed seat holder: this isn't me", "no seed file the server knows");
   const own = sv.companies.flatMap((c) => c.engagements).find((e) => e.yours && e.cells.operator?.s === "value" && !e.cells.operator.mine);
   if (!own) return skip("seed seat holder: this isn't me", "that seed member has no seat from our records");
+  // The seat holder fixes a wrong function on their own seat, even one from our records. Nobody else can.
+  if (own.cells.function?.s === "value") {
+    const newFn = own.cells.function.v === "Sales" ? "Marketing" : "Sales";
+    const fix = await S.act({ type: "fill", entity: "engagement", id: own.id, field: "function", value: newFn });
+    const seen = engOf(await U.view(), own.id)?.cells.function;
+    check("the seat holder can change the function on their own seat", fix.status === 200 && engOf(await S.view(), own.id)?.cells.function?.v === newFn && (!seen || seen.v === newFn), fix.json);
+    const uFix = await U.act({ type: "fill", entity: "engagement", id: own.id, field: "function", value: "RevOps" });
+    check("another member can't change it", uFix.status === 400, uFix.json);
+  }
+  // Una paid to see the name before the seat holder said it isn't them.
+  const uBefore = (await U.view()).me.credits;
+  const uSeen = engOf(await U.view(), own.id);
+  const uBuy = !uSeen || uSeen.company.hidden ? null : await U.act({ type: "unlock", entity: "engagement", id: own.id, field: "operator" });
+  const uPaid = uBuy?.status === 200;
+  if (uPaid) check("unlocking a seat holder counts in Me.holdersUnlocked (Get started step 1)", uBuy.json?.me?.holdersUnlocked >= 1 && (await U.view()).me.holdersUnlocked >= 1, uBuy.json?.me);
   const sNot = await S.act({ type: "notMine", engagementId: own.id });
+  check("this isn't me on a name from our records says so", sNot.status === 200 && sNot.json?.message === "Got it. Your name is off that seat. We'll check our records.", { status: sNot.status, msg: sNot.json?.message });
   const others = engOf(await U.view(), own.id)?.cells.operator;
-  check("this isn't me on a name from our records only unlinks", sNot.status === 200 && sNot.json?.message === "Got it. That seat is no longer linked to you." && others?.s === "locked", { status: sNot.status, others: others?.s });
+  check("the name is hidden for everyone, so nobody can buy it", others?.s === "reported", others?.s);
+  if (uPaid) check("whoever paid to see the name gets the credit back at once", (await U.view()).me.credits === uBefore, { uBefore, now: (await U.view()).me.credits });
+  const W = await member("Wes Watcher");
+  const wBuy = await W.act({ type: "unlock", entity: "engagement", id: own.id, field: "operator" });
+  check("a new member can't unlock it", wBuy.status === 400 && (await W.view()).me.credits === STARTER, wBuy.json);
+  check("the seat is no longer theirs", engOf(await S.view(), own.id)?.yours !== true);
+  const adm2 = await admin();
+  if (!adm2) return skip("seed seat holder: admin review", "no admin account");
+  const row = (await adm2.view()).reported.find((r) => r.id === own.id && r.field === "operator");
+  check("it is in the admin review list as from our records", !!row && row.hidden === true && row.addedBy === "Revenue Nomad records", row && { hidden: row.hidden, addedBy: row.addedBy });
+  const rm = await adm2.act({ type: "review", entity: "engagement", id: own.id, field: "operator", decision: "remove" });
+  const uAfter = (await U.view()).me.credits;
+  check("removing it refunds whoever had unlocked it", rm.status === 200 && (uSeen?.company.hidden ? true : uPaid && uAfter === uBefore), { rm: rm.status, uPaid, uBefore, uAfter });
 });
 
 // LOGIC-14: who may report, and what a confirmation count means.

@@ -251,12 +251,20 @@ if (up) {
 
   // Claiming
   const before = await credits(ann);
+  // "Is this you?": the seat's title, function and dates, before anything is claimed.
+  r = await ann.act({ type: "claimSeat", engagementId: s0.id, preview: true });
+  const pv = r.json?.claim;
+  check("a claim preview shows the seat's title, function and dates", r.status === 200 && !!pv && typeof pv.role === "string" && !!pv.function && "start" in pv && pv.end === "Ongoing", r.json);
+  check("the preview claims nothing and costs nothing", !!seatAt(await ann.view(), "Corvid Freight").claimable && (await credits(ann)) === before);
   r = await ann.act({ type: "claimSeat", engagementId: s0.id });
   check("a member claims a seat", r.status === 200 && /It's yours/.test(r.json?.message ?? ""), r.json);
   check("the claim earns nothing", (await credits(ann)) === before);
   let av = await ann.view();
   let mineSeat = seatAt(av, "Corvid Freight");
   check("the claimed seat is theirs (Your seats), with their name and the you tag", mineSeat.yours && mineSeat.cells.operator.s === "value" && mineSeat.cells.operator.v === "Annika Claimworth" && !!mineSeat.cells.operator.member?.you && !mineSeat.claimable, mineSeat);
+  check("the claimed seat says You claimed this (Cell.claimed)", mineSeat.cells.operator.s === "value" && mineSeat.cells.operator.claimed === true && mineSeat.cells.operator.mine === true, mineSeat.cells.operator);
+  r = await bob.act({ type: "claimSeat", engagementId: s0.id, preview: true });
+  check("a claimed seat has no preview", r.status === 400 && /already claimed/.test(r.json?.error ?? ""), r.json);
   check("its role is free for them now", mineSeat.cells.role.s === "value");
   r = await ann.act({ type: "fill", entity: "engagement", id: s0.id, field: "rate", value: "$9k/mo" });
   check("a fact they add after claiming earns as usual", r.status === 200 && (await credits(ann)) === before + 1, r.json);

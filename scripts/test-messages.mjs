@@ -170,7 +170,23 @@ async function main() {
   const m0 = toHana[0];
   check("its subject names the sender and the seat", m0?.subject === "Sal sent you a message on Trading Post about your seat at Acme Robotics", m0?.subject);
   check("it quotes the first 200 characters", !!m0 && m0.text.includes(opener.slice(0, 120)) && !m0.text.includes(opener.slice(0, 260)) && m0.text.includes("…"), m0?.text.slice(0, 300));
-  check("it links to the conversation", !!m0 && m0.text.includes(`https://post.example.com/?p=messages&m=${convId}`) && m0.html.includes("Read and reply"));
+  // The button carries a one-time sign-in link that opens the conversation.
+  const once = m0?.text.match(/https:\/\/post\.example\.com\/\?k=(o[A-Za-z0-9_-]{32})&p=messages&m=([^\s]+)/);
+  check("it links to the conversation with a one-time sign-in link", !!once && once[2] === encodeURIComponent(convId) && m0.html.includes("Read and reply") && m0.html.includes(`?k=${once[1]}&amp;p=messages`), m0?.text.slice(-500));
+  check("the footer says replies to the email don't reach them", !!m0 && m0.text.includes("Replies to this email don't reach them. Reply on Trading Post.") && m0.html.includes("Replies to this email don&#39;t reach them") || m0?.html.includes("Replies to this email don't reach them"));
+  check("the text version says link, not button", !!m0 && /link/.test(m0.text) && !/button/i.test(m0.text), m0?.text);
+  {
+    const si = await import("../lib/signin");
+    const rec = (await t.loadState()).signins?.find((x) => x.purpose === "message");
+    const days = rec ? (Date.parse(rec.exp) - Date.now()) / DAY : 0;
+    check("the link lasts 7 days", days > 6.9 && days <= 7.01, days);
+    const who = once ? await si.redeemLink(once[1]) : null;
+    check("the link signs in the member it went to", who?.token === HANA, who?.id);
+    const twice = once ? await si.redeemLink(once[1]) : null;
+    check("and works only once", twice === null);
+    const code = await si.redeemCode("hana.holder@example.com", "000000");
+    check("a typed code never opens a message link", code === null);
+  }
   check("replies go to the support address, never a member's", !!m0 && m0.replyTo === "hello@example.org" && outbox.every((m) => m.replyTo === "hello@example.org"), m0?.replyTo);
   check("it never shows an email address", !!m0 && !EMAILS.some((e) => (m0.subject + m0.text + m0.html).includes(e)));
   const toSal = outbox.filter((m) => m.to === "sal.starter@example.com");

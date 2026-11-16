@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Sign-in panel. Members paste their personal link or the code at the end of it.
- * With an email provider on, they can also ask for a one-time link by email, and type the
- * 6-digit code from that email (for opening Trading Post on another device).
+ * Sign-in panel. With an email provider on, it leads with a one-time link by email (and the
+ * 6-digit code from that email, for opening Trading Post on another device); pasting a personal
+ * link or the code at the end of it is the second way in. Without email, pasting is the only way.
  * A dialog on desktop, a bottom sheet on phones. It always says where to get a lost link:
  * the support address when the server sends one, otherwise the member who invited them.
  * Opening it adds a history entry, so the back gesture closes it instead of leaving the site.
@@ -89,7 +89,7 @@ function LostLink({ support, emailOn }: { support: string | null; emailOn: boole
     );
   return (
     <p className="lp-dialog-help">
-      Can&apos;t find your link? Ask the member who invited you to send your link again.{emailOn ? " Or get it by email below." : ""}
+      {emailOn ? "No email from us? Check spam, or ask the member who invited you to send your link again." : "Can't find your link? Ask the member who invited you to send your link again."}
     </p>
   );
 }
@@ -107,6 +107,9 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
   const [digitsBusy, setDigitsBusy] = useState(false);
   const digitsRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  /** With email on, pasting a link or code is folded under "Paste a link or code instead". */
+  const [pasteOpen, setPasteOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const id = useId();
   const leave = useBackCloses(open, onClose);
@@ -220,126 +223,146 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
             {note}
           </p>
         ) : (
-          <p className="lp-dialog-sub">Paste your personal link, or the code at the end of it. There is no password.</p>
+          <p className="lp-dialog-sub">
+            {emailOn ? "We email you a link that signs you in. There is no password." : "Paste your personal link, or the code at the end of it. There is no password."}
+          </p>
         )}
 
-        <form onSubmit={signIn} noValidate className="lp-dialog-form">
-          <label className="lp-field-label" htmlFor={`${id}-code`}>
-            Your sign-in link or code
-          </label>
-          <div className="lp-dialog-row">
-            <input
-              ref={inputRef}
-              id={`${id}-code`}
-              className="input lp-dialog-input"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              placeholder="Paste it here"
-              value={code}
-              onChange={(e) => {
-                setCode(e.target.value);
-                if (codeErr) setCodeErr(null);
-              }}
-              aria-invalid={!!codeErr}
-              aria-describedby={codeErr ? `${id}-code-err` : undefined}
-            />
-            <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={busy} aria-busy={busy}>
-              {busy ? "Signing in" : "Sign in"}
-            </button>
-          </div>
-          {codeErr ? (
-            <p className="lp-field-err" id={`${id}-code-err`} role="alert">
-              {codeErr}
-            </p>
-          ) : null}
-          <LostLink support={support} emailOn={emailOn} />
-        </form>
+        {/* With email on, the email link comes first. Pasting a link or code is the second way in. */}
+        {emailOn &&
+          (mailState === "sent" ? (
+            <form onSubmit={signInWithCode} noValidate className="lp-dialog-form">
+              <p className="lp-dialog-ok" role="status">
+                If that email is on Trading Post, a link is on its way. It works once, for 20 minutes. Check spam if it doesn&apos;t show up.
+              </p>
+              <label className="lp-field-label" htmlFor={`${id}-digits`}>
+                On another device? Type the 6-digit code from the email
+              </label>
+              <div className="lp-dialog-row">
+                <input
+                  ref={digitsRef}
+                  id={`${id}-digits`}
+                  className="input lp-dialog-input lp-code-input num"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  maxLength={7}
+                  placeholder="123456"
+                  value={digits}
+                  onChange={(e) => {
+                    setDigits(e.target.value);
+                    if (digitsErr) setDigitsErr(null);
+                  }}
+                  aria-invalid={!!digitsErr}
+                  aria-describedby={digitsErr ? `${id}-digits-err` : undefined}
+                />
+                <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={digitsBusy} aria-busy={digitsBusy}>
+                  {digitsBusy ? "Signing in" : "Sign in"}
+                </button>
+              </div>
+              {digitsErr ? (
+                <p className="lp-field-err" id={`${id}-digits-err`} role="alert">
+                  {digitsErr}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="lp-linkbtn"
+                onClick={() => {
+                  setMailState("idle");
+                  setDigits("");
+                  setDigitsErr(null);
+                }}
+              >
+                Use a different email
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={emailLink} noValidate className="lp-dialog-form">
+              <label className="lp-field-label" htmlFor={`${id}-mail`}>
+                Email me a sign-in link
+              </label>
+              <div className="lp-dialog-row">
+                <input
+                  ref={inputRef}
+                  id={`${id}-mail`}
+                  className="input lp-dialog-input"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="The email you use with Revenue Nomad"
+                  value={mail}
+                  onChange={(e) => {
+                    setMail(e.target.value);
+                    if (mailErr) setMailErr(null);
+                  }}
+                  aria-invalid={!!mailErr}
+                  aria-describedby={mailErr ? `${id}-mail-err` : undefined}
+                />
+                <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={mailState === "busy"} aria-busy={mailState === "busy"}>
+                  {mailState === "busy" ? "Sending" : "Email me a link"}
+                </button>
+              </div>
+              {mailErr ? (
+                <p className="lp-field-err" id={`${id}-mail-err`} role="alert">
+                  {mailErr}
+                </p>
+              ) : null}
+            </form>
+          ))}
 
-        {emailOn ? (
+        {emailOn && !pasteOpen ? (
           <>
             <hr className="lp-or" />
-            {mailState === "sent" ? (
-              <form onSubmit={signInWithCode} noValidate className="lp-dialog-form">
-                <p className="lp-dialog-ok" role="status">
-                  If that email is on Trading Post, a link is on its way. It works once, for 20 minutes. Check spam if it doesn&apos;t show up.
-                </p>
-                <label className="lp-field-label" htmlFor={`${id}-digits`}>
-                  On another device? Type the 6-digit code from the email
-                </label>
-                <div className="lp-dialog-row">
-                  <input
-                    ref={digitsRef}
-                    id={`${id}-digits`}
-                    className="input lp-dialog-input lp-code-input num"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    pattern="[0-9]*"
-                    maxLength={7}
-                    placeholder="123456"
-                    value={digits}
-                    onChange={(e) => {
-                      setDigits(e.target.value);
-                      if (digitsErr) setDigitsErr(null);
-                    }}
-                    aria-invalid={!!digitsErr}
-                    aria-describedby={digitsErr ? `${id}-digits-err` : undefined}
-                  />
-                  <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={digitsBusy} aria-busy={digitsBusy}>
-                    {digitsBusy ? "Signing in" : "Sign in"}
-                  </button>
-                </div>
-                {digitsErr ? (
-                  <p className="lp-field-err" id={`${id}-digits-err`} role="alert">
-                    {digitsErr}
-                  </p>
-                ) : null}
-                <button
-                  type="button"
-                  className="lp-linkbtn"
-                  onClick={() => {
-                    setMailState("idle");
-                    setDigits("");
-                    setDigitsErr(null);
-                  }}
-                >
-                  Use a different email
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={emailLink} noValidate className="lp-dialog-form">
-                <label className="lp-field-label" htmlFor={`${id}-mail`}>
-                  Or email me a sign-in link
-                </label>
-                <div className="lp-dialog-row">
-                  <input
-                    id={`${id}-mail`}
-                    className="input lp-dialog-input"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    placeholder="The email you joined with"
-                    value={mail}
-                    onChange={(e) => {
-                      setMail(e.target.value);
-                      if (mailErr) setMailErr(null);
-                    }}
-                    aria-invalid={!!mailErr}
-                    aria-describedby={mailErr ? `${id}-mail-err` : undefined}
-                  />
-                  <button type="submit" className="btn lp-dialog-btn" disabled={mailState === "busy"} aria-busy={mailState === "busy"}>
-                    {mailState === "busy" ? "Sending" : "Email me a link"}
-                  </button>
-                </div>
-                {mailErr ? (
-                  <p className="lp-field-err" id={`${id}-mail-err`} role="alert">
-                    {mailErr}
-                  </p>
-                ) : null}
-              </form>
-            )}
+            <button
+              type="button"
+              className="lp-linkbtn lp-paste-toggle"
+              aria-expanded={false}
+              onClick={() => {
+                setPasteOpen(true);
+                setTimeout(() => codeRef.current?.focus(), 30);
+              }}
+            >
+              Paste a link or code instead
+            </button>
           </>
-        ) : null}
+        ) : (
+          <>
+            {emailOn && <hr className="lp-or" />}
+            <form onSubmit={signIn} noValidate className="lp-dialog-form">
+              <label className="lp-field-label" htmlFor={`${id}-code`}>
+                {emailOn ? "Or paste your sign-in link or code" : "Your sign-in link or code"}
+              </label>
+              <div className="lp-dialog-row">
+                <input
+                  ref={emailOn ? codeRef : inputRef}
+                  id={`${id}-code`}
+                  className="input lp-dialog-input"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  placeholder="Paste it here"
+                  value={code}
+                  onChange={(e) => {
+                    setCode(e.target.value);
+                    if (codeErr) setCodeErr(null);
+                  }}
+                  aria-invalid={!!codeErr}
+                  aria-describedby={codeErr ? `${id}-code-err` : undefined}
+                />
+                <button type="submit" className={`btn ${emailOn ? "" : "btn-pine "}lp-dialog-btn`} disabled={busy} aria-busy={busy}>
+                  {busy ? "Signing in" : "Sign in"}
+                </button>
+              </div>
+              {codeErr ? (
+                <p className="lp-field-err" id={`${id}-code-err`} role="alert">
+                  {codeErr}
+                </p>
+              ) : null}
+            </form>
+          </>
+        )}
+        <LostLink support={support} emailOn={emailOn} />
 
         <div className="lp-dialog-foot">
           New here?{" "}

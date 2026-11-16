@@ -493,7 +493,7 @@ section("limit", async () => {
   const r24 = await L.act({ type: "unlockMany", items: locked.slice(1, 25) });
   check("a new account can unlock 25 facts on day one", r24.status === 200 && r24.json?.me?.unlocksLeft === 0 && r24.json?.me?.credits === 5, r24.json?.me ?? r24.json);
   const r26 = await L.act({ type: "unlock", ...locked[25] });
-  check("past 25 the refusal names the limit and the credits that wait", r26.status === 400 && r26.json?.error === "New accounts can unlock 25 facts on day one. Your 5 credits are here tomorrow.", r26.json);
+  check("past 25 the refusal names the limit and the credits that wait", r26.status === 400 && r26.json?.error === "You've unlocked 25 facts today, the day-one limit. Your 5 credits are here tomorrow.", r26.json);
   const many = await L.act({ type: "unlockMany", items: locked.slice(25, 29) });
   check("unlock all gets the same answer", many.status === 400 && many.json?.error === r26.json?.error, many.json);
   const lv = await L.view();
@@ -503,7 +503,7 @@ section("limit", async () => {
   await One.act(fillAct(pickEmpty(v, 1)[0]));
   await One.act({ type: "unlockMany", items: locked.slice(0, 25) });
   const one = await One.act({ type: "unlock", ...locked[25] });
-  check("one credit left reads as one credit", one.json?.error === "New accounts can unlock 25 facts on day one. Your 1 credit is here tomorrow.", one.json);
+  check("one credit left reads as one credit", one.json?.error === "You've unlocked 25 facts today, the day-one limit. Your 1 credit is here tomorrow.", one.json);
 
   // At 0 credits the out-of-credits answer wins, and the wall is counted.
   const adm = await admin();

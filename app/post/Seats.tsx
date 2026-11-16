@@ -18,9 +18,9 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Cell, EngagementRec } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
-import { CompanyLogo, IconCheck, LockedName, IconChevron, IconPlus, fmtValue } from "../ui/shared";
+import { CompanyLogo, IconCheck, LockedName, IconChevron, IconPencil, IconPlus, fmtValue } from "../ui/shared";
 import { COMPANY_GTM, SEAT_ASK, cellKey, shown, type CoInfo, type FactRef, type SeatInfo } from "./model";
-import { BENCH_RATE_HELP, atTime, plural } from "./hooks";
+import { BENCH_RATE_HELP, atTime, plural, store } from "./hooks";
 import { earnRoom } from "./NextMove";
 import { MonthYear } from "./MonthYear";
 import { RateWho, shortLabel, useUi, type RateChoice } from "./ui";
@@ -353,6 +353,14 @@ function SeatCard({
   const fn = shown(e.cells.function);
   const role = shown(e.cells.role);
   const name = i.c.hidden ? "this company" : i.c.name;
+  // A function from our records may be wrong (it decides which benchmarks the seat counts in), so it is asked about once.
+  const fnFromRecords = e.cells.function?.s === "value" && e.cells.function.from === "records";
+  const fnKey = `tp_fn_ok_${e.id}`;
+  const [fnOk, setFnOk] = useState(() => store.get(fnKey) === "1");
+  const fnAsked = () => {
+    store.set(fnKey, "1");
+    setFnOk(true);
+  };
   const benchOf = (f: string) => (f === "rate" ? saved[cellKey(e.id, f)]?.bench ?? bench : undefined);
   const active_ = isActive(e);
 
@@ -421,9 +429,11 @@ function SeatCard({
   // A fact the job posting gave on a role that is still listed stays up for others while it is listed.
   const listedPosting = rep?.cell?.s === "value" && rep.cell.from === "posting" && !!e.opened && !e.closed;
 
+  // A name from our own records: saying "this isn't me" takes it off the seat for everyone while we check.
+  const fromRecords = e.cells.operator?.s === "value" && e.cells.operator.from === "records";
   const remove = async () => {
     setBusy(true);
-    const r = await ui.act({ type: "notMine", engagementId: e.id }, { quiet: true });
+    const r = await ui.act({ type: "notMine", engagementId: e.id }, { quiet: !fromRecords });
     setBusy(false);
     if (r.ok) onGone(e.id, r.message);
   };
@@ -456,7 +466,23 @@ function SeatCard({
           <span className="ys-co-name">{i.c.hidden ? <LockedName seed={i.c.id} /> : name}</span>
         </button>
         <span className="ys-seat-what">
-          {fn && <span className="chip tp-fn">{fn}</span>}
+          {fn && (
+            <button
+              type="button"
+              className={`chip tp-fn ys-fn-b${reask === "e.function" ? " chip-on" : ""}`}
+              aria-pressed={reask === "e.function"}
+              aria-label={`Function, ${fn}. Change it`}
+              title="Change the function"
+              onClick={() => {
+                setReporting(null);
+                setReask(reask === "e.function" ? null : "e.function");
+                fnAsked();
+              }}
+            >
+              {fn}
+              <IconPencil size={11} />
+            </button>
+          )}
           {role && (
             <span className="ys-role" title={role}>
               {role}
@@ -563,6 +589,27 @@ function SeatCard({
               )}
             </div>
           )}
+          {fn && fnFromRecords && !fnOk && reask !== "e.function" && (
+            <div className="ys-fncheck" role="group" aria-label="Check the function">
+              <p>Is {fn} right for this seat?</p>
+              <div className="ys-fncheck-acts">
+                <button type="button" className="chip tp-chipbtn ys-chip" onClick={fnAsked}>
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  className="chip tp-chipbtn ys-chip"
+                  onClick={() => {
+                    setReporting(null);
+                    setReask("e.function");
+                    fnAsked();
+                  }}
+                >
+                  Change it
+                </button>
+              </div>
+            </div>
+          )}
           {active ? (
             <div className={`ys-q${editing ? " again" : ""}`} key={`${editing ? "again:" : ""}${active.key}`} ref={qRef} data-ask={cellKey(active.t.id, active.t.field)}>
               <div className="ys-q-top">
@@ -619,9 +666,13 @@ function SeatCard({
           <footer className="ys-seat-foot">
             {confirm ? (
               <>
-                <span>Take this seat off your list? We matched it by name, so it may be someone else&apos;s.</span>
+                <span>
+                  {fromRecords
+                    ? "Take your name off this seat? We matched it by name, so it may be someone else's. Nobody will see your name on it."
+                    : "Take this seat off your list? We matched it by name, so it may be someone else's."}
+                </span>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={remove}>
-                  {busy ? "Removing" : "Remove this seat"}
+                  {busy ? "Removing" : fromRecords ? "Take my name off" : "Remove this seat"}
                 </button>
                 <button type="button" className="btn btn-sm btn-ghost" disabled={busy} onClick={() => setConfirm(false)}>
                   Keep it

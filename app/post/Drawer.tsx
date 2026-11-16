@@ -21,9 +21,9 @@
  */
 import { MessageButton } from "./Messages";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import type { Action, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
+import type { Action, ActionResult, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
-import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
+import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, post, timeAgo, val } from "../ui/shared";
 import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
@@ -90,6 +90,7 @@ const SOURCE_SAY: Record<string, string> = {
   "Demand scan": "job postings",
   "Member added": "what members added",
   Clay: "Revenue Nomad research",
+  "Seat scan": "Revenue Nomad research",
 };
 /** A role still open: the scan follows it and it has not closed, or it is marked Open role. */
 const openRole = (e: EngagementRec) => (e.opened ? !e.closed : isOpenSeat(e));
@@ -152,8 +153,10 @@ function factInfo(t: FactRef, cell: Cell, ui: Ui, own: boolean, listed: boolean,
   const reportBlocked = canCheck && !gated && !own && ui.me.added === 0;
   const admin = !!v && ui.me.admin && !v.from;
   // The member's own fact can be edited, except a name they put on an open role ("This isn't me" on Your seats undoes that).
-  const canEdit = !!v?.mine && !fixed;
-  const source = !v ? "" : v.from === "records" ? "From Revenue Nomad records" : v.from === "posting" ? "From the job posting" : v.mine ? "You added this" : "Added by a member";
+  // A seat holder can also fix the function on their own seat, whoever set it (our records included).
+  const ownFn = own && t.entity === "engagement" && t.field === "function";
+  const canEdit = (!!v?.mine || (!!v && ownFn)) && !fixed;
+  const source = !v ? "" : v.from === "records" ? "From Revenue Nomad records" : v.from === "posting" ? "From the job posting" : v.mine ? (v.claimed ? "You claimed this" : "You added this") : "Added by a member";
   const confirmHelp = v && !v.from ? "Two confirmations earn the member who added it a credit." : "It tells other members this still holds.";
   const back = gated && !own ? " You get the credit back if we remove it." : "";
   const reportHelp = own
@@ -243,7 +246,7 @@ function Meta({ t, cell, f, step, setStep }: { t: FactRef; cell: Cell; f: FactIn
     <span className="tp-meta">
       <span className="tp-meta-info">
         <Provenance cell={cell} source={f.source} />
-        {cell.mine && <span className="tp-yours">You added this</span>}
+        {cell.mine && <span className="tp-yours">{cell.claimed ? "You claimed this" : "You added this"}</span>}
       </span>
       {f.canEdit && (
         <button type="button" className="tp-tbtn" onClick={(e) => ui.edit(e.currentTarget, t, cell.v)}>
@@ -427,7 +430,7 @@ function FieldRow({
         <span className="tp-frow-v">
           {value}
           {note}
-          {cell.s === "value" && cell.mine && <span className="tp-frow-cap">You added this</span>}
+          {cell.s === "value" && cell.mine && <span className="tp-frow-cap">{cell.claimed ? "You claimed this" : "You added this"}</span>}
         </span>
         {(tap || (cell.s === "value" && cell.ver > 0)) && (
           <span className="tp-meta" aria-hidden>
@@ -444,7 +447,7 @@ function FieldRow({
             type="button"
             className="tp-frow-btn"
             aria-haspopup="dialog"
-            aria-label={`${label}, ${text}. ${f.canEdit ? "You added this. Open to edit it." : f.canCheck ? "Open to confirm or report it." : "Open it."}`}
+            aria-label={`${label}, ${text}. ${f.canEdit ? (cell.s === "value" && cell.mine ? "You added this. Open to edit it." : "Open to edit it.") : f.canCheck ? "Open to confirm or report it." : "Open it."}`}
             onClick={() => setSheet(true)}
           />
         )}
@@ -701,9 +704,13 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
   if (cost > can)
     return (
       <span className="tp-unlockall tp-unlock-short tp-small muted">
-        {left < ui.me.credits
-          ? `Unlock all takes ${plural(cost, "credit")}. You can unlock ${left} more today.`
-          : `Unlock all takes ${plural(cost, "credit")}. You have ${ui.me.credits}.`}
+        {left === 0 && ui.me.credits > 0
+          ? "Unlocks again tomorrow"
+          : ui.me.credits <= 0
+            ? "Earn a credit to unlock"
+            : left < ui.me.credits
+              ? `Unlock all takes ${plural(cost, "credit")}. You can unlock ${left} more today.`
+              : `Unlock all takes ${plural(cost, "credit")}. You have ${ui.me.credits}.`}
       </span>
     );
   const go = async () => {
@@ -944,15 +951,16 @@ function Reach({ name, member, seat, engagementId, seatName }: { name: string; m
   if (!intro && !li && !member) return null;
   return (
     <div className="tp-reach">
+      {/* Only members can be messaged. For anyone else, finding them on LinkedIn is the next step, and an intro is the fallback. */}
       {member && <MessageButton engagementId={engagementId} name={name} company={env.company} seat={seatName} />}
-      {intro && !member && (
-        <a className="btn btn-sm" href={intro}>
-          Ask for an intro
+      {li && (
+        <a className={member ? "tp-intro" : "btn btn-sm btn-primary"} href={li} target="_blank" rel="noreferrer">
+          Find them on LinkedIn <IconExternal size={11} />
         </a>
       )}
-      {li && (
-        <a className={intro || member ? "tp-intro" : "btn btn-sm"} href={li} target="_blank" rel="noreferrer">
-          Find them on LinkedIn <IconExternal size={11} />
+      {intro && !member && (
+        <a className="tp-intro" href={intro}>
+          Ask for an intro
         </a>
       )}
     </div>
@@ -1004,16 +1012,43 @@ function ClaimRole({ id }: { id: string }) {
  * A seat Revenue Nomad found that nobody holds on Trading Post yet. Its fractional claims it:
  * their name goes on it (behind the usual lock) and it moves to Your seats.
  */
+/** "Fractional CMO at Acme, Mar 2025 to now": what an unclaimed seat says, for the member to check before claiming it. */
+export function claimLine(c: NonNullable<ActionResult["claim"]>, company: string, fallback: string): string {
+  const what = c.role ?? (c.function ? `A ${c.function} seat` : `The ${fallback} seat`);
+  const ongoing = !c.end || c.end === "Ongoing";
+  const when = c.start
+    ? ongoing
+      ? c.status === "Ended"
+        ? `from ${fmtMonth(c.start)}`
+        : `${fmtMonth(c.start)} to now`
+      : `${fmtMonth(c.start)} to ${fmtMonth(c.end!)}`
+    : !ongoing
+      ? `until ${fmtMonth(c.end!)}`
+      : "";
+  return `${what} at ${company}${c.role && c.function && !c.role.toLowerCase().includes(c.function.toLowerCase()) ? ` (${c.function})` : ""}${when ? `, ${when}` : ""}`;
+}
+
 function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: string }) {
   const ui = useUi();
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<NonNullable<ActionResult["claim"]> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const cancel = () => {
     setAsk(false);
     setTimeout(() => btn.current?.focus({ preventScroll: true }));
   };
   useEscape(ask, cancel);
+  // Before claiming, the seat's title, function and dates, so the member can check it is theirs.
+  const check = async () => {
+    setAsk(true);
+    if (info) return;
+    setErr(null);
+    const r = await post<ActionResult>({ action: { type: "claimSeat", engagementId: id, preview: true } });
+    if (r.error || !r.claim) setErr(r.error || "We couldn't load this seat. Try again.");
+    else setInfo(r.claim);
+  };
   const claim = async () => {
     setBusy(true);
     await ui.act({ type: "claimSeat", engagementId: id });
@@ -1023,23 +1058,29 @@ function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: s
   if (ask)
     return (
       <div className="tp-frow-ask tp-claim-ask" role="group" aria-label="Claim this seat">
-        <p>
-          Claim the {seat} seat at {company} as yours? Other members will see your name on it, behind a 1 credit lock.
-        </p>
+        {err ? (
+          <p role="alert">{err}</p>
+        ) : info ? (
+          <p>
+            <b>Is this you?</b> {claimLine(info, company, seat)}. Claim it? Other members will see your name on it, behind a 1 credit lock.
+          </p>
+        ) : (
+          <p aria-busy="true">Checking the seat</p>
+        )}
         <span className="tp-frow-ask-acts">
-          <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy} aria-busy={busy} onClick={claim}>
+          <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy || !info} aria-busy={busy} onClick={claim}>
             {busy ? "Saving" : "Yes, it's my seat"}
           </button>
           <button type="button" className="btn btn-sm btn-ghost" onClick={cancel}>
-            Cancel
+            {info ? "Not me" : "Cancel"}
           </button>
         </span>
       </div>
     );
   return (
     <div className="tp-claim">
-      <span className="tp-small muted">The seat holder isn't on Trading Post yet.</span>
-      <button ref={btn} type="button" className="btn btn-sm" onClick={() => setAsk(true)}>
+      <span className="tp-small muted">Not on Trading Post yet.</span>
+      <button ref={btn} type="button" className="btn btn-sm" onClick={check}>
         Is this your seat? Claim it
       </button>
     </div>
@@ -1174,26 +1215,39 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
  * Unlock a hidden company's open role for 1 credit: the record's one action until it is
  * unlocked. Pine, because it spends. At 0 credits it shows how to earn one instead (and counts the wall).
  */
-function UnlockCompany({ id, label }: { id: string; label: string }) {
+function UnlockCompany({ id, label, bar }: { id: string; label: string; bar?: boolean }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
   const busy = ui.busy.has(cellKey(id, "identity"));
+  const broke = ui.me.credits <= 0;
+  // Today's unlocks are used up and credits are left: the button says when, and spends nothing.
+  const later = !broke && ui.me.unlocksLeft === 0;
+  const text = busy ? "Unlocking" : later ? "Unlocks again tomorrow" : broke ? "Earn a credit to unlock" : label;
   return (
     <>
       <button
         ref={ref}
         type="button"
-        className="btn btn-pine"
-        disabled={busy}
+        className={`btn btn-pine${bar ? " tp-uc-bar" : ""}`}
+        disabled={busy || later}
         aria-busy={busy}
+        aria-label={busy || later || broke ? text : `${UNLOCK_ROLE_SAY}. Posting and rate included.`}
         onClick={() => {
           if (ui.me.credits > 0) return ui.unlock({ entity: "company", id, field: "identity" });
           sendSignal("wall", "identity");
           setZero(true);
         }}
       >
-        {busy ? "Unlocking" : label}
+        {bar && !busy && !later && !broke ? (
+          // A phone's sticky bar: the price on one line, what comes with it on a small second line.
+          <span className="tp-ua-two">
+            <span>{UNLOCK_ROLE_SHORT}</span>
+            <span className="tp-ua-cost">Posting and rate included</span>
+          </span>
+        ) : (
+          text
+        )}
       </button>
       {zero && ui.me.credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={id} onClose={() => setZero(false)} />}
     </>
@@ -1202,6 +1256,8 @@ function UnlockCompany({ id, label }: { id: string; label: string }) {
 
 const COMPANY_ROWS = ["website", "linkedin", "industry", "employees", "revenue", "hq"];
 const UNLOCK_ROLE = "Unlock company, posting and rate · 1 credit";
+const UNLOCK_ROLE_SHORT = "Unlock company · 1 credit";
+const UNLOCK_ROLE_SAY = "Unlock company for 1 credit";
 
 export function Drawer({
   i,
@@ -1574,7 +1630,7 @@ export function Drawer({
             </span>
             {c.hidden ? (
               // One action while the name is hidden, as on desktop. The facts unlock after it.
-              <UnlockCompany id={c.id} label={UNLOCK_ROLE} />
+              <UnlockCompany id={c.id} label={UNLOCK_ROLE} bar />
             ) : (
               <>
                 {plan.items.length > 0 ? <UnlockAll plan={plan} bar /> : <span className="tp-rsheet-none">Nothing locked here</span>}

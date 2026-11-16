@@ -31,7 +31,7 @@ export function faqItems(starter: number): [string, string][] {
     ],
     [
       "What happens to a rate I share?",
-      "A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or you can share a rate for the benchmarks only. Then it counts in the medians and is never shown with your name or the seat. A benchmark shows a number only once at least 5 different people have a rate in it, and it never says who they are.",
+      "A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or you can share a rate for the benchmarks only. Then it counts in the medians and is never shown with your name or the seat. A benchmark shows a number only once 5 people have a rate in it, or 20 where survey data is included. It never says who they are.",
     ],
     [
       "What if something is wrong?",
