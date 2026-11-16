@@ -12,7 +12,8 @@ import { ALL_FIELDS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
 import { ledgerLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
-  EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, activeChips, activeCount, applyFilters, daysListed, deriveAll, hasRoleDates, isOpenSeat, rowsFor, tabTest,
+  EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
+  listedDays, lockedInEngagement, namedFn, notMineLabel, placeWords, rowsFor, searchWords, sortRows, tabTest, toggleTest,
 } from "../app/post/model";
 
 let passed = 0;
@@ -103,11 +104,8 @@ check("days listed: across the daylight saving change", daysListed("2026-10-30",
 /* ---------- unlocked by me, with hours per week free ---------- */
 
 const gated = GROUPS.find((g) => g.entity === "engagement")!.fields.filter((f) => f.gated).map((f) => f.key);
-// Status is free on the server now. app/post/model.ts still lists it until the client round drops it
-// (and with it the "status unlocked on an undated seat" check below). Nothing else may differ.
-const appGated = ENG_GATED.filter((f) => f !== "status");
-check("the app's gated list matches the field definitions", JSON.stringify([...appGated].sort()) === JSON.stringify([...gated].sort()), { app: ENG_GATED, fields: gated });
-check("hours per week is not in it", !ENG_GATED.includes("hours"));
+check("the app's gated list matches the field definitions", JSON.stringify([...ENG_GATED].sort()) === JSON.stringify([...gated].sort()), { app: ENG_GATED, fields: gated });
+check("hours per week and status are not in it", !ENG_GATED.includes("hours") && !ENG_GATED.includes("status"));
 const unlockedTab = (e: EngagementRec) => {
   const i = deriveAll([co("X", [e])])[0];
   return { eng: tabTest("unlocked", { key: e.id, i, e }), company: tabTest("unlocked", { key: i.c.id, i }) };
@@ -119,11 +117,145 @@ check("a role the member paid to see is", roleSeen.eng && roleSeen.company, role
 const followed = unlockedTab(eng({ status: val("Open role"), role: LOCKED }, { opened: "2026-11-03", closed: null }));
 check("a followed role's free status is not an unlock", !followed.eng && !followed.company, followed);
 const undated = unlockedTab(eng({ status: val("Active") }, { source: "Published engagement" }));
-check("a status unlocked on an undated seat is", undated.eng && undated.company, undated);
+check("a status showing is not an unlock (status is free)", !undated.eng && !undated.company, undated);
+const closedPosting = unlockedTab(eng({ status: val("Closed", { system: true }), posting: val("https://jobs.example.com/1", { from: "posting" }) }, { opened: "2026-10-01", closed: "2026-10-20" }));
+check("a closed role's free posting is not an unlock", !closedPosting.eng && !closedPosting.company, closedPosting);
+{
+  const hiddenPaid = { ...co("Paid Co", [eng({ role: LOCKED }, { opened: "2026-11-03", closed: null })]), unlocked: true } as CompanyRec;
+  check("a hidden company the member paid to see is in Unlocked (CompanyRec.unlocked)", tabTest("unlocked", { key: hiddenPaid.id, i: deriveAll([hiddenPaid])[0] }));
+}
 const seat = unlockedTab(eng({ operator: val("Jane Smith", { member: { title: "Fractional CRO", you: true } }), rate: val("$8k/mo") }, { source: "Published engagement", yours: true }));
 check("the member's own seat, free to them, is not an unlock", !seat.eng && !seat.company, seat);
 const own = unlockedTab(eng({ role: val("Fractional CRO", { mine: true }) }, { source: "Member added" }));
 check("a fact the member added is not an unlock", !own.eng && !own.company, own);
+
+/* ---------- Hiring now lists open roles ---------- */
+
+{
+  const open = eng({ status: val("Open role", { system: true }), function: val("Sales") }, { opened: "2026-11-03", closed: null });
+  const past = [1, 2, 3, 4].map(() => eng({ function: val("Sales"), type: val("Fractional") }, { source: "Published engagement" }));
+  const c = co("Busy Co", [open, ...past], [person()]);
+  const i = deriveAll([c])[0];
+  const seatRows = rowsFor("engagements", [i]);
+  check("Hiring now, seats: only the open role, not the company's past seats", seatRows.filter((r) => tabTest("hiring", r)).map((r) => r.e!.id).join() === open.id);
+  check("Hiring now, companies: the company", tabTest("hiring", { key: c.id, i }));
+}
+
+/* ---------- search reads the row ---------- */
+
+{
+  const mk = eng({ function: val("Marketing"), role: val("Fractional CMO"), source: val("Member success story", { system: true }) }, { source: "Member success story" });
+  const sales = eng({ function: val("Sales"), role: LOCKED }, { source: "Published engagement" });
+  const c = co("Supersend", [mk, sales], [person()]);
+  c.cells = { ...c.cells, website: val("https://www.supersend.io"), about: val("We help phone teams hone their outreach."), industry: val("Software") };
+  const i = deriveAll([c])[0];
+  const seats = (q: string) => applyFilters(rowsFor("engagements", [i]), EMPTY_FILTERS, "all", q, me).rows.map((r) => r.e!.id);
+  check("a seat search matches that seat, not every seat at the company", seats("marketing").join() === mk.id, seats("marketing"));
+  check("a seat search reads the company name and domain", seats("supersend").length === 2);
+  check("a seat search reads the company's industry", seats("software").length === 2);
+  const cos = (q: string) => applyFilters(rowsFor("companies", [i]), EMPTY_FILTERS, "all", q, me).rows.length;
+  check("a pasted address finds the company", cos("https://www.supersend.io/pricing") === 1 && cos("www.supersend.io") === 1 && cos("supersend.io/") === 1);
+  check("the About text and the source are not searched", cos("hone") === 0 && cos("member story") === 0 && cos("success") === 0);
+  check("a locked role is not searched", seats("cro").length === 0);
+  check("searchWords keeps plain words", JSON.stringify(searchWords("  VP Sales ")) === JSON.stringify(["vp", "sales"]));
+  const people = applyFilters(rowsFor("people", [i]), EMPTY_FILTERS, "all", "ceo", me).rows.length;
+  check("a person search reads that person's title", people === 1);
+  // Ranking: rows whose company name matches come first.
+  const a = deriveAll([co("Acme Sales Tools", [])])[0];
+  const b = deriveAll([{ ...co("Zed Corp", []), cells: { ...co("x", []).cells, industry: val("Sales tools") } }])[0];
+  const ranked = sortRows(rowsFor("companies", [b, a]), "name", false, "sales");
+  check("search ranks name matches first", ranked[0].i === a, ranked.map((r) => r.i.c.name));
+}
+
+/* ---------- Open now leaves out a role the last scan did not see ---------- */
+
+{
+  const seen = eng({ status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  const unseen = eng({ status: val("Open role", { system: true }) }, { opened: "2026-10-03", closed: null, unseen: true });
+  const i = deriveAll([co("Seen Co", [seen]), co("Unseen Co", [unseen])]);
+  const open = applyFilters(rowsFor("engagements", i), { ...EMPTY_FILTERS, roleState: ["Open now"] }, "all", "", me).rows.map((r) => r.e!.id);
+  check("Open now: the role the last scan listed, not the unseen one", open.join() === seen.id, open);
+  check("an unseen role is still an open role (Hiring now)", tabTest("hiring", rowsFor("engagements", i).find((r) => r.e === unseen)!));
+  check("days listed from the full times", listedDays(eng({}, { opened: "2026-11-03", closed: "2026-11-05", openedAt: "2026-11-03T23:00:00Z", closedAt: "2026-11-05T01:00:00Z" })) === 1);
+}
+
+/* ---------- what Unlock all buys, one entry per purchase ---------- */
+
+{
+  const role = eng({ role: LOCKED, posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  const past = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
+  const visible = deriveAll([co("Seen Co", [role, past])])[0];
+  const fields = (refs: { field: string }[]) => refs.map((t) => t.field).sort().join();
+  check("an open role's role and posting are one purchase", fields(lockedInEngagement(role)) === "rate,role");
+  check("Unlock all at a visible company: role, rate and the past seat's two", visible.locked.length === 4, visible.locked);
+  const role2 = eng({ role: LOCKED, posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  const past2 = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
+  const hc = { ...co("Hidden", [role2, past2]), hidden: true } as CompanyRec;
+  hc.cells = { ...hc.cells, website: LOCKED, linkedin: LOCKED, about: LOCKED };
+  const hidden = deriveAll([hc])[0];
+  check("Unlock all at a hidden company: the company (with the role and posting), the rate, the past seat's two", fields(hidden.locked) === "identity,operator,rate,role", hidden.locked);
+  check("at a hidden company the open role's role and posting are quiet on a row", !!coverOf(hidden, role2, "role") && !!coverOf(hidden, role2, "posting") && !!coverOf(hidden, role2, "rate"));
+  check("at a visible company only the posting is quiet while the role is locked", coverOf(visible, role, "role") === null && !!coverOf(visible, role, "posting"));
+  check("an open role nobody holds can't have a start or end yet", isUnheldOpenRole(role) && !isUnheldOpenRole(past) && NOT_YET_ON_OPEN_ROLE.join() === "start,end,reason,sourced");
+}
+
+/* ---------- functions: hired, hiring now, and stories ---------- */
+
+{
+  const story = eng({ function: val("Sales") }, { source: "Member success story" });
+  const openMk = eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  const added = eng({ function: val("RevOps") }, { source: "Member added" });
+  const closedPosting = eng({ function: val("Growth"), status: val("Closed", { system: true }) }, { opened: "2026-10-03", closed: "2026-10-20" });
+  // The server before this round counted open roles and postings in functions, and missed a member-added seat with no type.
+  const c = co("Mix Co", [story, openMk, added, closedPosting]);
+  c.friendly = { ...c.friendly, functions: ["Marketing", "Growth"] };
+  const i = deriveAll([c])[0];
+  check("a member-added seat is a hire, whatever its type", i.fnState.hired.includes("RevOps"), i.fnState);
+  check("an open role's function is hiring, not hired", i.fnState.hiring.join() === "Marketing" && !i.fnState.hired.includes("Marketing"), i.fnState);
+  check("a member story's function is a story", i.fnState.story.includes("Sales"), i.fnState);
+  const newServer = co("New Co", [story, openMk, added]);
+  newServer.friendly = { ...newServer.friendly, functions: ["RevOps"], hiring: ["Marketing"] } as typeof newServer.friendly;
+  const j = deriveAll([newServer])[0];
+  check("with friendly.hiring from the server", j.fnState.hired.join() === "RevOps" && j.fnState.hiring.join() === "Marketing" && j.fnState.story.join() === "Sales", j.fnState);
+  // "No Sales yet" shows only when nothing on file names Sales (FnChips): never next to a Sales chip.
+  const gap = (x: typeof i) => x.fnState.hired.length > 0 && !x.fns.includes("Sales");
+  check("no 'No Sales yet' next to a Sales story", !gap(i) && !gap(j));
+  const notMine = (x: typeof i) => toggleTest("notMine", me)({ key: x.c.id, i: x });
+  check("No Sales seat yet: hired other functions, none in Sales", notMine(j) && !notMine(deriveAll([co("Only open", [eng({ function: val("Marketing"), status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null })])])[0]));
+  check("a catch-all function is not named in labels", notMineLabel("Executive") === "No seat in your function yet" && notMineLabel("Sales") === "No Sales seat yet" && namedFn("Other") === null);
+}
+
+/* ---------- HQ by place ---------- */
+
+{
+  const at = (hq: string) => {
+    const c = co(hq, []);
+    c.cells = { ...c.cells, hq: val(hq) };
+    return c;
+  };
+  const i = deriveAll(["San Francisco, California", "Los Angeles, CA", "Venice , Ca", "Austin, TX", "LA Metro", "New York, NY"].map(at));
+  const hq = (q: string[]) => applyFilters(rowsFor("companies", i), { ...EMPTY_FILTERS, hq: q }, "all", "", me).rows.map((r) => r.i.c.name).join("|");
+  check("california catches every spelling", hq(["california"]) === "San Francisco, California|Los Angeles, CA|Venice , Ca", hq(["california"]));
+  check("a state code reads as the state", hq(["CA"]) === hq(["california"]) && hq(["texas"]) === "Austin, TX");
+  check("a picked HQ still matches itself and its other spellings", hq(["Austin, TX"]) === "Austin, TX" && hq(["New York, NY"]) === "New York, NY");
+  check("LA in a name is not Louisiana", hq(["louisiana"]) === "");
+  check("placeWords spells codes out", placeWords("Venice , Ca").join(" ") === "venice california");
+}
+
+/* ---------- sorting by a column ---------- */
+
+{
+  const sized = (name: string, employees: string | null, revenue: string | null, start: string | null) => {
+    const c = co(name, start ? [eng({ start: val(start) }, { source: "Published engagement" })] : []);
+    c.cells = { ...c.cells, ...(employees ? { employees: val(employees) } : {}), ...(revenue ? { revenue: val(revenue) } : {}) };
+    return c;
+  };
+  const i = deriveAll([sized("Small", "1–10", "$50M+", "2024-01"), sized("Big", "1,001+", "Under $1M", "2026-03"), sized("Unknown", null, null, null), sized("Mid", "51–200", "$5M–$20M", "2025-06")]);
+  const by = (k: "employees" | "revenue" | "start") => sortRows(rowsFor("companies", i), k).map((r) => r.i.c.name).join();
+  check("most employees first, unknown last", by("employees") === "Big,Mid,Small,Unknown", by("employees"));
+  check("most revenue first, unknown last", by("revenue") === "Small,Mid,Big,Unknown", by("revenue"));
+  check("latest start first", by("start") === "Big,Mid,Small,Unknown", by("start"));
+}
 
 /* ---------- the credit history, as sentences ---------- */
 

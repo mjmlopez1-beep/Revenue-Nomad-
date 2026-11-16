@@ -903,6 +903,45 @@
 .tp-fnote-end {
   margin-top: 12px;
 }
+/* Seat and People start folded: the rail opens on the filters most members use. */
+.tp-filters section.tp-fgroup:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+.tp-ffold > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  margin: 0 -6px 8px;
+  padding: 0 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+.tp-ffold > summary::-webkit-details-marker {
+  display: none;
+}
+.tp-ffold > summary svg {
+  color: var(--muted);
+}
+.tp-ffold > summary:hover {
+  background: var(--surface-2);
+}
+.tp-ffold:not([open]) {
+  padding-bottom: 8px;
+}
+.tp-ffold:not([open]) > summary {
+  margin-bottom: 0;
+}
+/* "Anywhere in california": the typed place, first in the HQ list. */
+.tp-fplace b {
+  font-weight: 600;
+  color: var(--ink);
+}
+/* Phones: the filter sheet's search fields are 16px, so iOS doesn't zoom the page on focus. */
+.tp-sheet .tp-fsearch input {
+  font-size: 16px;
+}
 
 /* ---------- content header ---------- */
 .tp-banners {
@@ -1788,6 +1827,120 @@
   font-size: 13px;
   line-height: 18px;
   color: var(--muted);
+}
+
+/*
+ * Only a lock's own box spends a credit. Its "Unlock · 1 credit" label is drawn over the cell
+ * (and in a narrow column over the next one), so the label never takes a click: a pointer on the
+ * neighbor's text, or on a hidden company's name, opens the record. On touch screens the label
+ * sits inside the button, so a tap on it still lands on the button.
+ */
+.tp-table .lock-cta {
+  pointer-events: none;
+}
+/* The "+1" on an empty cell shows on its row only. Every fact earns the same 1 credit, so 100 of them say nothing. */
+.tp-table .add .plus1 {
+  opacity: 0;
+}
+.tp-table tr:focus-within .add .plus1,
+.tp-table .add:focus-visible .plus1 {
+  opacity: 1;
+}
+@media (hover: none) {
+  .tp-table .add .plus1 {
+    opacity: 1;
+  }
+}
+/* The latest seat's role truncates (its tooltip has it all), so a long title never shifts every column. */
+.tp-table-companies .tp-stack .tp-cell {
+  max-width: 152px;
+}
+.w-fn {
+  min-width: 112px;
+}
+.w-listed {
+  min-width: 168px;
+}
+.tp-role-line {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: nowrap;
+}
+.tp-table-hiring .tp-stack .tp-cell {
+  max-width: 200px;
+}
+/*
+ * A locked fact that another control buys (an open role's posting comes with its role; at a
+ * hidden company everything comes through Unlock company or the record): the lock at rest, never a button.
+ */
+.tp-covered,
+.tp-lockwait {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 13px;
+  cursor: inherit;
+}
+.tp-covered .lock-mask,
+.tp-lockwait .lock-mask {
+  width: 36px;
+  background: var(--surface-2);
+}
+/* Today's unlocks are used up: in a table the lock rests, and its tooltip says when. Cards say it in words. */
+.tp-table .tp-lockwait-t {
+  display: none;
+}
+.tp-lockwait-t {
+  color: var(--muted);
+}
+.tp-pfact .tp-lockwait .lock-mask {
+  display: none;
+}
+/* An open role in a function with no hire on file yet: the same outline chip, and it says so. */
+.tp-fn-hiring .tp-fn-tag {
+  font-weight: 400;
+  color: var(--muted);
+}
+/* A role the last clean scan didn't list: still open on file, so no live dot. */
+.tp-role-date.unseen {
+  color: var(--muted);
+}
+/* A column header that sorts: the header's own text, a chevron when it is the sort in use. */
+.tp-th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+.tp-th-sort svg {
+  opacity: 0;
+  transition: opacity var(--t);
+}
+.tp-th-sort:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.tp-th-sort:hover svg {
+  opacity: 0.5;
+}
+.tp-th-sort.on {
+  color: var(--ink);
+}
+.tp-th-sort.on svg {
+  opacity: 1;
+}
+th.num .tp-th-sort {
+  flex-direction: row-reverse;
 }
 
 /* ---------- inline editor ---------- */
@@ -4212,26 +4365,12 @@
     padding-left: 9px;
   }
 }
+/*
+ * Touch screens (tablets): no unlock on the row at all. A paying button under the name would be
+ * a stray tap away from opening the record, so the row opens the record and its bar holds the unlock.
+ */
 @media (hover: none) {
-  .tp-co-hidden.in-table .tp-co-dom {
-    display: none;
-  }
   .tp-co-hidden.in-table .tp-cell {
-    position: static;
-    transform: none;
-  }
-  .tp-co-hidden.in-table button.lock {
-    width: auto;
-    height: 18px;
-  }
-  /* Under "Hidden company" the label can be short: "Unlock · 1 credit". */
-  .tp-co-hidden.in-table .lock-cta {
-    height: auto;
-    padding-left: 0;
-    font-size: 12.5px;
-  }
-  .tp-co-hidden.in-table .lock-cta svg,
-  .tp-co-hidden.in-table .lock-noun {
     display: none;
   }
 }
@@ -4251,6 +4390,40 @@
   font-size: 14px;
   line-height: 20px;
   color: var(--body-ink);
+}
+/*
+ * A hidden company's card: what is held back, as quiet text and never a button. The card opens
+ * the record, whose sticky bar has the one unlock.
+ */
+.tp-pcard-hidden {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.tp-pcard-hidden svg {
+  flex: none;
+  color: var(--muted);
+}
+.tp-pcard-hidden-cost {
+  color: var(--muted);
+}
+/* The latest seat's type and start month, under the function chips. */
+div.tp-pcard-when {
+  margin-top: 8px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+/* A card leads with its own facts, so its rows read at 13.5px like the rest of the card. */
+.tp-pfact .tp-covered,
+.tp-pfact .tp-lockwait {
+  font-size: 13.5px;
 }
 
 /* ---------- rate benchmarks ---------- */

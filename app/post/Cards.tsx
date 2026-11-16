@@ -2,15 +2,19 @@
 
 /**
  * Phone card list: one card per company, engagement or person. A label on the left, the fact
- * on the right, one tap each (44px rows). A locked fact reads "Unlock · 1 credit" in plain
- * pine text, so a card with three of them stays calm.
+ * on the right, one tap each (44px rows). A card shows a fact row only when it says something
+ * about this record: a value, the member's own seat, an open seat, or the one lock worth a tap
+ * (the role, the name). What every card would repeat stays off the card.
+ *
+ * The card itself opens the record, and a tap meant for it never spends a credit. A hidden
+ * company's card has no unlock button at all: its record's sticky bar holds the one unlock.
  */
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
-import { AddPill, CompanyLogo, IconStar, fmtMonth, val } from "../ui/shared";
-import type { Row } from "./model";
-import { FactCell, YourSeat, earnNote, useUi } from "./ui";
-import { Fit, FnChips, HeldBy, HiddenCompany, UnlockCompanyCell } from "./Tables";
+import { AddPill, CompanyLogo, IconLock, IconStar, fmtMonth, val } from "../ui/shared";
+import { coverOf, isOpenRole, isUnheldOpenRole, type Row, type Tab } from "./model";
+import { YourSeat, earnNote, useUi } from "./ui";
+import { Fit, FnChips, HeldBy, HiddenCompany, RowFact } from "./Tables";
 import { RoleDate } from "./RoleDate";
 
 function Head({ r, right, bare }: { r: Row; right?: React.ReactNode; bare?: boolean }) {
@@ -50,27 +54,41 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-/** A hidden company's one unlock, listed first with the card's other facts. */
-function CompanyFact({ r }: { r: Row }) {
-  if (!r.i.c.hidden) return null;
+/**
+ * What a hidden company's card holds back, as plain text. Not a button: the card opens the
+ * record, and the record's sticky bar has "Unlock this role · 1 credit".
+ */
+function HiddenLine() {
   return (
-    <Fact label="Company">
-      <UnlockCompanyCell i={r.i} />
-    </Fact>
+    <div className="tp-pcard-hidden">
+      <IconLock />
+      <span>
+        Company, role and job posting <span className="tp-pcard-hidden-cost">· 1 credit together</span>
+      </span>
+    </div>
   );
 }
 
-const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: Me; onOpen: (r: Row) => void }) {
+const shownCell = (c: { s: string } | undefined) => !!c && c.s !== "empty" && c.s !== "locked";
+
+const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean }) {
   const ui = useUi();
   const i = r.i;
   const c = i.c;
-  const e = i.latest;
+  const open = i.engs.find(isOpenRole) ?? null;
+  // A hidden company is about its open role. Any other company leads with its latest seat.
+  const e = c.hidden ? open ?? i.latest : i.latest;
   const emp = val(c.cells.employees);
   const line = [val(c.cells.industry), emp && `${emp} employees`, val(c.cells.hq)].filter(Boolean);
   const miss = c.facts.missing;
-  // The Held by fact below already reads Your seat when the latest seat is theirs.
-  const heldShown = !!e && e.cells.rate?.s === "empty" && e.cells.operator?.s !== "empty";
-  const own = heldShown && e?.yours ? undefined : i.engs.find((x) => x.yours);
+  const own = i.engs.find((x) => x.yours);
+  // The free facts of the latest seat that tell it apart: its type and when it started.
+  const type = e && val(e.cells.type);
+  const start = e && !e.opened ? val(e.cells.start) : null;
+  const when = [type, start && `since ${fmtMonth(start)}`].filter(Boolean).join(" · ");
+  // One more row when it carries something: who held the seat (or that it's open), else the rate.
+  const held = e && (e.yours || (isOpenRole(e) && e.cells.operator?.s === "empty") || shownCell(e.cells.operator));
+  const rate = e && !held && shownCell(e.cells.rate);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       {/* The line under the header already gives a hidden company's industry, size and region. */}
@@ -82,36 +100,42 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
           <FnChips i={i} mine={me.function} max={own ? 2 : 3} />
         </div>
       )}
-      {e?.opened && (
+      {e?.opened ? (
         <div className="tp-pcard-role">
           <RoleDate e={e} />
         </div>
+      ) : (
+        when && <div className="tp-pcard-when num">{when}</div>
       )}
-      <div className="tp-pfacts">
-        <CompanyFact r={r} />
-        {e ? (
-          <>
-            <Fact label="Role">
-              <FactCell t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} />
+      {c.hidden ? (
+        <HiddenLine />
+      ) : (
+        <div className="tp-pfacts">
+          {e ? (
+            <>
+              <Fact label={isOpenRole(e) ? "Open role" : "Role"}>
+                <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} cover={coverOf(i, e, "role")} />
+              </Fact>
+              {held && (
+                <Fact label="Held by">
+                  <HeldBy e={e} />
+                </Fact>
+              )}
+              {rate && (
+                <Fact label={isUnheldOpenRole(e) ? "Posted rate" : "Rate"}>
+                  <RowFact t={{ entity: "engagement", id: e.id, field: "rate" }} cell={e.cells.rate} />
+                </Fact>
+              )}
+            </>
+          ) : (
+            <Fact label="Seat">
+              <AddPill label="Add a seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: c.id, mode: "engagement" })} />
             </Fact>
-            {c.hidden && e.cells.rate?.s === "empty" ? null : e.cells.rate?.s !== "empty" || e.cells.operator?.s === "empty" ? (
-              <Fact label="Rate">
-                <FactCell t={{ entity: "engagement", id: e.id, field: "rate" }} cell={e.cells.rate} />
-              </Fact>
-            ) : (
-              <Fact label="Held by">
-                <HeldBy e={e} />
-              </Fact>
-            )}
-          </>
-        ) : (
-          <Fact label="Seat">
-            <AddPill label="Add a seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: c.id, mode: "engagement" })} />
-          </Fact>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       {/* Facts at a hidden company can't be added until it is unlocked, so the card doesn't offer them. */}
-      {miss > 0 && !c.hidden && (
+      {showMiss && miss > 0 && !c.hidden && (
         <div className="tp-pcard-miss">
           <span className="num">{miss}</span> {miss === 1 ? "thing" : "things"} still missing here.{earnNote(me).capped ? "" : miss === 1 ? " Add it and earn a credit." : " Add one and earn a credit."}
         </div>
@@ -122,39 +146,56 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
 
 const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpen: (r: Row) => void }) {
   const e = r.e!;
+  const i = r.i;
   const t = (field: string) => ({ entity: "engagement" as const, id: e.id, field });
   const fn = val(e.cells.function);
   const type = val(e.cells.type);
   const start = val(e.cells.start);
+  const openRole = isOpenRole(e);
+  // The rate row only when there is a rate to see or unlock (adding one is in the record).
+  const rate = e.cells.rate?.s === "value" || (e.cells.rate?.s === "locked" && !i.c.hidden);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} />
       <div className="tp-pcard-fns">
-        {fn ? <span className={`chip tp-fn${fn === me.function ? " tp-fn-me" : ""}`}>{fn}</span> : <FactCell t={t("function")} cell={e.cells.function} addLabel="Function" />}
+        {fn ? <span className={`chip tp-fn${fn === me.function ? " tp-fn-me" : ""}`}>{fn}</span> : <RowFact t={t("function")} cell={e.cells.function} addLabel="Function" />}
         {type ? <span className="chip tp-fn">{type}</span> : null}
         {start && !e.opened && <span className="num tp-pcard-when">{fmtMonth(start)}</span>}
         <RoleDate e={e} />
       </div>
-      <div className="tp-pfacts">
-        <CompanyFact r={r} />
-        <Fact label="Role">
-          <FactCell t={t("role")} cell={e.cells.role} />
-        </Fact>
-        <Fact label="Held by">
-          <HeldBy e={e} />
-        </Fact>
-        {!(r.i.c.hidden && e.cells.rate?.s === "empty") && (
-          <Fact label="Rate">
-            <FactCell t={t("rate")} cell={e.cells.rate} />
+      {i.c.hidden ? (
+        <>
+          <HiddenLine />
+          {e.cells.rate?.s === "value" && (
+            <div className="tp-pfacts">
+              <Fact label="Posted rate">
+                <RowFact t={t("rate")} cell={e.cells.rate} />
+              </Fact>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="tp-pfacts">
+          <Fact label={openRole ? "Open role" : "Role"}>
+            <RowFact t={t("role")} cell={e.cells.role} cover={coverOf(i, e, "role")} />
           </Fact>
-        )}
-      </div>
+          <Fact label="Held by">
+            <HeldBy e={e} />
+          </Fact>
+          {rate && (
+            <Fact label={isUnheldOpenRole(e) ? "Posted rate" : "Rate"}>
+              <RowFact t={t("rate")} cell={e.cells.rate} />
+            </Fact>
+          )}
+        </div>
+      )}
     </article>
   );
 });
 
 const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r: Row) => void }) {
   const p = r.p!;
+  const i = r.i;
   const t = (field: string) => ({ entity: "contact" as const, id: p.id, field });
   const title = val(p.cells.title);
   const rel = val(p.cells.relationship);
@@ -162,17 +203,17 @@ const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r:
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} />
       <div className="tp-pcard-fns">
-        {title ? <span className="tp-pcard-title">{title}</span> : <FactCell t={t("title")} cell={p.cells.title} addLabel="Title" />}
-        {rel ? <span className="chip tp-fn">{rel}</span> : <FactCell t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
+        {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} cell={p.cells.title} addLabel="Title" />}
+        {rel ? <span className="chip tp-fn">{rel}</span> : <RowFact t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
       </div>
+      {/* At a hidden company the name is a quiet lock: the card opens the record, which unlocks it. */}
       <div className="tp-pfacts">
-        <CompanyFact r={r} />
         <Fact label="Name">
-          <FactCell t={t("name")} cell={p.cells.name} />
+          <RowFact t={t("name")} cell={p.cells.name} cover={coverOf(i, r.e, "name")} />
         </Fact>
-        {!(r.i.c.hidden && p.cells.email?.s === "empty") && (
+        {p.cells.email?.s !== "empty" && p.cells.email && (
           <Fact label="Email">
-            <FactCell t={t("email")} cell={p.cells.email} />
+            <RowFact t={t("email")} cell={p.cells.email} cover={coverOf(i, r.e, "email")} />
           </Fact>
         )}
       </div>
@@ -180,12 +221,14 @@ const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r:
   );
 });
 
-export function CardList({ type, rows, me, onOpen }: { type: "companies" | "engagements" | "people"; rows: Row[]; me: Me; onOpen: (r: Row) => void }) {
+export function CardList({ type, rows, me, onOpen, tab }: { type: "companies" | "engagements" | "people"; rows: Row[]; me: Me; onOpen: (r: Row) => void; tab?: Tab }) {
+  // "N things still missing here" belongs to Needs facts. Without the tab, every card keeps it.
+  const miss = !tab || tab === "needs";
   return (
     <div className="tp-cards">
       {rows.map((r) =>
         type === "companies" ? (
-          <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} />
+          <CompanyCard key={r.key} r={r} me={me} onOpen={onOpen} miss={miss} />
         ) : type === "engagements" ? (
           <EngCard key={r.key} r={r} me={me} onOpen={onOpen} />
         ) : (
