@@ -1123,8 +1123,15 @@ html:has(.lp) {
     height: 56px;
     gap: 8px;
   }
+  /* The logo keeps its own shape: it never shrinks to make room for the buttons. */
+  .lp-nav-brand {
+    flex: none;
+  }
   .lp-nav-brand img {
     height: 15px !important;
+    width: auto !important;
+    max-width: none;
+    flex: none;
   }
   .lp-nav-product {
     display: none;
@@ -1214,6 +1221,10 @@ html:has(.lp) {
   .lp-demo {
     padding: 16px;
   }
+  /* The label takes its own line, so what you do and what you get stay together on the next one (no lone "+1"). */
+  .lp-demo-k {
+    flex-basis: 100%;
+  }
   .lp-mx-row {
     padding: 24px 16px;
   }
@@ -1262,6 +1273,11 @@ html:has(.lp) {
   }
 }
 @media (max-width: 380px) {
+  /* Too narrow for the whole logo beside Sign in and the button: the mark alone, as in the app's top bar, never a squashed logo. */
+  .lp-nav-brand {
+    width: 16px;
+    overflow: hidden;
+  }
   .lp-nav-signin,
   .lp-nav-get.btn {
     font-size: 13.5px;

@@ -1146,10 +1146,11 @@ button.ys-yours:hover {
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
+/* At the foot of Hiring now the card spans the table frame in the one card style (white, 1px line), not a page-colored box at an odd width. */
 .pro-foot .pro-card {
   margin-top: 0;
-  max-width: 760px;
-  background: var(--bg);
+  max-width: none;
+  background: var(--surface);
 }
 .tp-phone .pro-foot {
   position: static;

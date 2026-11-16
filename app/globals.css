@@ -648,11 +648,11 @@ button.add:active {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--r-chip, 6px);
   border: 1px solid var(--line);
   background: #fff;
   object-fit: contain;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   overflow: hidden;
 }

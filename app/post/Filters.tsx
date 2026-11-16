@@ -343,7 +343,7 @@ export function FilterPanel({
         <Toggle k="emailKnown" f={f} setF={setF} n={t.emailKnown} />
         <ListBlock k="relationship" title="Relationship" f={f} setF={setF} counts={l.relationship} />
       </Fold>
-      <p className="tp-fnote tp-fnote-end">A filter can tell that a locked fact is on file. It never reads what the fact says.</p>
+      <p className="tp-fnote tp-fnote-end">Filters show which seats have a rate or a name on file. They never show the rate or the name.</p>
     </div>
   );
 }

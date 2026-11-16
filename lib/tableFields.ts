@@ -200,10 +200,11 @@ export const FILLABLE = ALL_FIELDS.filter((x) => !x.f.identity && !x.f.system);
 export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay"] as const;
 /** Plain labels for sources in the UI. */
 export const SOURCE_LABEL: Record<string, string> = {
-  "Published engagement": "Member seat",
+  // Two names a member can tell apart: the seat holder published it, or another member added it.
+  "Published engagement": "Published by the seat holder",
   "Member success story": "Member story",
   "Demand scan": "Job posting",
-  "Member added": "Member added",
+  "Member added": "Added by a member",
   Clay: "Revenue Nomad research",
 };
 

@@ -8,7 +8,7 @@
  * Also here, because the top bar is always on screen: "Questions and feedback" (the help sheet,
  * from the account menu or the ? key) and the Undo toast's host.
  */
-import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import type { LedgerRow, Me, View } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
@@ -62,7 +62,7 @@ export function CreditsPill({ me, onClick, btnRef, quiet }: { me: Me; onClick: (
         aria-haspopup="dialog"
         aria-expanded={false}
         aria-label={`You have ${plural(me.credits, "credit")}${owed > 0 ? ` and owe ${owed}` : ""}. Show where they came from.`}
-        title={owed > 0 ? owedText(owed) : me.credits <= 3 ? "You're running low. Add a fact you know and you earn a credit." : undefined}
+        title={owed > 0 ? owedText(owed) : me.credits <= 0 ? "You're out of credits. Add a fact you know and you earn one." : me.credits <= 3 ? "You're running low. Add a fact you know and you earn a credit." : undefined}
       >
         <span className="num tp-credits-n">{me.credits}</span>
         <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
@@ -81,12 +81,13 @@ export function CreditsPill({ me, onClick, btnRef, quiet }: { me: Me; onClick: (
 
 /**
  * What the member earned today, out of the daily limit: "Earned 11 of 25 today". Nothing at 0
- * earned, so a new member never reads it as credits used. At the limit the bar is full and the
+ * earned (an empty slot of the same width), so a new member never reads it as credits used. At the limit the bar is full and the
  * time earning opens again is in the title and the credits popover, so the bar keeps its width.
  */
 export function EarnMeter({ me, onClick, compact }: { me: Me; onClick: () => void; compact?: boolean }) {
   const capped = capOf(me);
-  if (!capped && me.earned24h <= 0) return null;
+  // Nothing earned yet: the meter's slot stays, empty, so the search beside it does not jump on the first credit earned.
+  if (!capped && me.earned24h <= 0) return <span className="tp-meter tp-meter-slot" aria-hidden />;
   const pct = capped ? 100 : Math.min(100, (me.earned24h / me.earnCap) * 100);
   const n = capped ? me.earnCap : me.earned24h;
   return (
@@ -193,7 +194,7 @@ export const openHelp = () => setHelp(true);
 const APP_HELP: [string, string][] = [
   [
     "Can I take back something I added?",
-    "Yes, for 10 seconds. Press Undo on the message that says it was added, and the credit goes back too. After that you can edit it from the company's record.",
+    "A fact you add in the table or a record shows Undo for 10 seconds, and the credit goes back too. After that you can edit it from the company's record. A seat or person you add through Add what you know can be edited from the company's record.",
   ],
 ];
 
@@ -452,6 +453,7 @@ export function TopBar({
   contact,
   emailOn,
   starter,
+  listSwitch,
 }: {
   me: Me;
   query: string;
@@ -471,6 +473,8 @@ export function TopBar({
   emailOn?: boolean;
   /** View.stats.starter: the credits a new member starts with, for the help sheet's answers. */
   starter?: number;
+  /** Phones, on the table: what to list (Companies, Seats, People), as the list's title after the mark. */
+  listSwitch?: ReactNode;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const hosts = (
@@ -531,14 +535,13 @@ export function TopBar({
               </span>
               <span className="tp-wordmark">Trading Post</span>
             </button>
+            {listSwitch}
             <div className="tp-top-right">
               <button type="button" className="tp-iconbtn" aria-label="Search" onClick={() => setSearchOpen(true)}>
                 <IconSearch size={18} />
               </button>
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
-              <button type="button" className="tp-iconbtn tp-iconbtn-volt" aria-label="Add what you know" onClick={onAdd}>
-                <IconPlus size={18} />
-              </button>
+              {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
               <button ref={menuRef} type="button" className="tp-iconbtn" aria-label="Menu" aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>
                 <IconMenu />
               </button>
@@ -560,8 +563,9 @@ export function TopBar({
       </button>
       <div className="tp-top-mid">{search}</div>
       <div className="tp-top-right">
-        <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
+        {/* The meter's slot is first, so with nothing earned yet its room is the gap after the search, not a hole between the balance and Add. */}
         <EarnMeter me={me} onClick={onCredits} />
+        <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
         <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>

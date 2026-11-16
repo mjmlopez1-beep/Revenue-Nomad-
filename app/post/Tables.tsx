@@ -15,13 +15,13 @@
  *   - an open role's role and posting are one purchase: the posting is quiet while the role is locked.
  * A lock's label never takes clicks (post.css), so only the lock's own box spends.
  */
-import { memo, useContext, useRef, type ReactNode } from "react";
+import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconChevron, IconLock, IconStar, fmtMonth } from "../ui/shared";
 import {
   COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
 } from "./model";
-import { FactCell, UiCtx, YourSeat, earnNote, useUi, type AppPage, type Ui } from "./ui";
+import { Anchored, FactCell, UiCtx, YourSeat, earnNote, useCellUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 
 /**
@@ -43,8 +43,8 @@ export function Fit({ i, big, hot }: { i: CoInfo; big?: boolean; hot?: boolean }
 /**
  * GTM functions at a company: the ones hired fractionally (the member's own first), then the
  * ones with an open role and no hire yet ("Sales · hiring"), then the ones only member stories
- * mention (muted). "No Sales yet" follows when they hired other functions and nothing on file
- * names the member's, so a row never says "Sales" and "No Sales yet" together. `gap` false
+ * mention (muted). "No Sales seat yet" follows when they hired other functions and nothing on file
+ * names the member's, so a row never says "Sales" and "No Sales seat yet" together. `gap` false
  * leaves it out (the "No Sales seat yet" filter already says it).
  */
 export function FnChips({ i, mine, max = 3, gap = true }: { i: CoInfo; mine: string | null; max?: number; gap?: boolean }) {
@@ -99,7 +99,7 @@ export function NoSeatYet({ fn }: { fn: string }) {
   const named = namedFn(fn);
   return (
     <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other GTM functions. ${named ? `No ${named} seat` : "No seat in your function"} is on file yet.`}>
-      {named ? `No ${named} yet` : "None in your function yet"}
+      {named ? `No ${named} seat yet` : "No seat in your function yet"}
     </span>
   );
 }
@@ -118,7 +118,7 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
 
 /** The one unlock for a hidden company: its name, website, LinkedIn and About, and the role and posting of its open roles. */
 export function UnlockCompanyCell({ i }: { i: CoInfo }) {
-  const ui = useUi();
+  const ui = useCellUi();
   // Today's unlocks are used up: the hidden logo already shows the lock, and its record says when.
   if (ui.me.unlocksLeft === 0 && ui.me.credits > 0) return null;
   return <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />;
@@ -165,6 +165,7 @@ export function RowFact({
   addLabel,
   cover,
   own,
+  at,
 }: {
   t: FactRef;
   cell: Cell | undefined;
@@ -173,8 +174,10 @@ export function RowFact({
   cover?: string | null;
   /** A company the member added or holds a seat at: its answers always earn (no 5 a day limit). */
   own?: boolean;
+  /** The company's name, for the button names where the row does not show it next to them (phone cards). */
+  at?: string;
 }) {
-  const ui = useUi();
+  const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
   if (cell?.s === "locked") {
     if (cover) return <Covered title={cover} />;
@@ -187,7 +190,7 @@ export function RowFact({
       </span>
     );
   }
-  return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} />;
+  return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} at={at} />;
 }
 
 /**
@@ -201,7 +204,7 @@ export function RowFact({
  * `bare` leaves out the industry, size and region line where the same facts are printed right under it.
  */
 export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare?: boolean }) {
-  const ui = useUi();
+  const ui = useCellUi();
   const teaser = !bare && <span className="tp-co-dom">{i.teaser || "Hiring a fractional now"}</span>;
   if (big)
     return (
@@ -264,7 +267,7 @@ const NOT_YET = "This role is still open, so it has no start or end yet.";
 
 /** The latest seat: the role, and under it when it started (or since when the role is open). */
 function SeatCell({ i }: { i: CoInfo }) {
-  const ui = useUi();
+  const ui = useCellUi();
   const e = i.latest;
   if (!e) return <AddPill label="Add a seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
   const start = shown(e.cells.start);
@@ -277,7 +280,7 @@ function SeatCell({ i }: { i: CoInfo }) {
 }
 
 function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: boolean }) {
-  const ui = useUi();
+  const ui = useCellUi();
   if (i.fns.length) return <FnChips i={i} mine={mine} gap={gap} />;
   const e = i.engs.find((x) => x.cells.function?.s === "empty");
   if (e) return <RowFact t={{ entity: "engagement", id: e.id, field: "function" }} cell={e.cells.function} />;
@@ -286,7 +289,7 @@ function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: 
 
 /** The decision maker on file (else the first person): title, then the name, then how many more. */
 function PeopleCell({ i }: { i: CoInfo }) {
-  const ui = useUi();
+  const ui = useCellUi();
   if (!i.people.length) {
     if (i.c.hidden) return <None title="Unlock the company first, then you can add who hired here." />;
     return <AddPill label="Add a person" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "person" })} />;
@@ -474,18 +477,54 @@ export function useOpenPage(): ((p: AppPage) => void) | null {
   return ui?.openPage ?? null;
 }
 
+const AZ: SortKey[] = ["name", "fn", "title", "hq"];
+
+/**
+ * What a short column header means, for a click, a tap or the keyboard (a title tooltip never
+ * shows on focus or touch). A small "?" after the header opens it.
+ */
+function HeadTip({ label, tip }: { label: string; tip: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className="tp-th-tip"
+        aria-label={`What ${label} means`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((x) => !x);
+        }}
+      >
+        <span aria-hidden>?</span>
+      </button>
+      {open && ref.current && (
+        <Anchored anchor={ref.current} onClose={() => setOpen(false)} width={280} className="tp-th-pop" label={label}>
+          <p>
+            <b>{label}</b>. {tip.replace(/\.?$/, ".")}
+          </p>
+        </Anchored>
+      )}
+    </>
+  );
+}
+
 /** Column headers, in sentence case. `num` right-aligns the column. `tip` says what a short header means. `rates` links to Rate benchmarks. */
 const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: SortKey; rates?: boolean }[]> = {
   companies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
     { label: "Latest seat", cls: "w-seat", sort: "start" },
-    { label: "Functions hired", cls: "w-fns" },
+    { label: "Functions hired", cls: "w-fns", tip: "The functions this company hired a fractional for. A dashed chip means none in your function is on file yet." },
     { label: "Industry", cls: "w-ind" },
     { label: "Employees", cls: "w-emp num", sort: "employees" },
     { label: "Revenue", cls: "w-rev num", sort: "revenue" },
-    { label: "HQ", cls: "w-hq" },
-    { label: "Fit", cls: "w-fit", tip: "How often they hire fractionals", sort: "fit" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat" },
+    { label: "HQ", cls: "w-hq", sort: "hq" },
+    { label: "Fit", cls: "w-fit", tip: "How often this company hires fractionals. It counts the fractional seats on file, how recent they are and how many functions they cover.", sort: "fit" },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Their name costs 1 credit to see." },
     { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl", tip: "The decision maker on file" },
   ],
@@ -499,16 +538,16 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Industry", cls: "w-ind" },
     { label: "Employees", cls: "w-emp num", sort: "employees" },
     { label: "Revenue", cls: "w-rev num", sort: "revenue" },
-    { label: "HQ", cls: "w-hq" },
+    { label: "HQ", cls: "w-hq", sort: "hq" },
     { label: "People", cls: "w-ppl", tip: "The decision maker on file" },
   ],
   engagements: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Function", cls: "w-fn" },
+    { label: "Function", cls: "w-fn", sort: "fn" },
     { label: "Role", cls: "w-role" },
     { label: "Type", cls: "w-type" },
     { label: "Status", cls: "w-status" },
-    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat" },
+    { label: "Held by", cls: "w-op", tip: "The fractional who held the seat. Their name costs 1 credit to see." },
     { label: "Start", cls: "w-date", sort: "start" },
     { label: "End", cls: "w-date" },
     { label: "Rate", cls: "w-rate num", rates: true },
@@ -517,7 +556,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
   ],
   hiringEngagements: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Function", cls: "w-fn" },
+    { label: "Function", cls: "w-fn", sort: "fn" },
     { label: "Role", cls: "w-role" },
     { label: "Type", cls: "w-type" },
     { label: "Listed", cls: "w-listed", tip: "When we first saw the job posting, or the day it was posted" },
@@ -527,7 +566,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
   ],
   people: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
-    { label: "Title", cls: "w-title" },
+    { label: "Title", cls: "w-title", sort: "title" },
     { label: "Relationship", cls: "w-rel", tip: "Their part in hiring the fractional" },
     { label: "Name", cls: "w-name" },
     { label: "LinkedIn", cls: "w-li" },
@@ -559,7 +598,7 @@ export function DataTable({
   newSince: string | null;
   /** The view tab. Hiring now gets its own columns. Without it, a list of open roles alone does. */
   tab?: Tab;
-  /** The "No Sales seat yet" filter is on, so rows leave out their "No Sales yet" chip. */
+  /** The "No Sales seat yet" filter is on, so rows leave out their "No Sales seat yet" chip. */
   notMine?: boolean;
   /** The sort in use, and how to change it from a column header (headers stay plain text without it). */
   sort?: SortKey;
@@ -572,8 +611,10 @@ export function DataTable({
   const head: ReactNode = HEAD[key].map((h) => {
     const by = onSort && h.sort;
     const on = !!by && sort === h.sort;
+    // Names, functions, titles and places go A to Z. Everything else highest or newest first.
+    const az = !!h.sort && AZ.includes(h.sort);
     return (
-      <th key={h.label} className={h.cls} scope="col" title={h.tip} aria-sort={on ? (h.sort === "name" ? "ascending" : "descending") : undefined}>
+      <th key={h.label} className={h.cls} scope="col" title={h.tip} aria-sort={on ? (az ? "ascending" : "descending") : undefined}>
         {h.rates && openPage ? (
           // Where rates show, the medians are one click away (LOGIC-7).
           <button type="button" className="tp-th-sort tp-th-link" onClick={() => openPage("rates")} title="See rate benchmarks: medians by function and client revenue">
@@ -584,11 +625,12 @@ export function DataTable({
         ) : by ? (
           <button type="button" className={`tp-th-sort${on ? " on" : ""}`} onClick={() => onSort(by)} title={h.tip ? `${h.tip}. Sort by this column.` : "Sort by this column"}>
             {h.label}
-            <IconChevron size={12} dir={h.sort === "name" ? "up" : "down"} />
+            <IconChevron size={12} dir={az ? "up" : "down"} />
           </button>
         ) : (
           h.label
         )}
+        {h.tip && <HeadTip label={h.label} tip={h.tip} />}
       </th>
     );
   });

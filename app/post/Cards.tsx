@@ -13,16 +13,34 @@ import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconLock, IconStar, fmtMonth, val } from "../ui/shared";
 import { coverOf, isOpenRole, isUnheldOpenRole, type Row, type Tab } from "./model";
-import { YourSeat, earnNote, useUi } from "./ui";
-import { Fit, FnChips, HeldBy, HiddenCompany, RowFact } from "./Tables";
+import { YourSeat, earnNote, useCellUi } from "./ui";
+import { Fit, FnChips, HeldBy, RowFact } from "./Tables";
 import { RoleDate } from "./RoleDate";
 
-function Head({ r, right, bare }: { r: Row; right?: React.ReactNode; bare?: boolean }) {
+/**
+ * The card's title is a heading with a button in it, so a keyboard (a desktop at 200% zoom gets
+ * these cards) can reach and open every record. A tap anywhere on the card does the same.
+ */
+function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (r: Row) => void }) {
   const i = r.i;
+  const open = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onOpen(r);
+  };
   if (i.c.hidden)
     return (
       <div className="tp-pcard-top">
-        <HiddenCompany i={i} bare={bare} />
+        <span className="tp-co tp-co-hidden">
+          <CompanyLogo name="" domain={null} hidden />
+          <span className="tp-co-text">
+            <h3 className="tp-pcard-h">
+              <button type="button" className="tp-pcard-open tp-co-name" onClick={open} title="This company has an open role, so its name is hidden until you unlock it.">
+                <span className="tp-hidden-name">Hidden company</span>
+                <span className="sr-only">. Open the record to see what unlocking it shows.</span>
+              </button>
+            </h3>
+          </span>
+        </span>
         {right}
       </div>
     );
@@ -30,14 +48,18 @@ function Head({ r, right, bare }: { r: Row; right?: React.ReactNode; bare?: bool
     <div className="tp-pcard-top">
       <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />
       <div className="tp-pcard-name">
-        <span className="tp-co-name" title={i.c.name}>
-          <span className="tp-co-name-t">{i.c.name}</span>
-          {i.c.following && (
-            <span className="tp-co-star" title="You follow this company">
-              <IconStar size={11} filled />
-            </span>
-          )}
-        </span>
+        <h3 className="tp-pcard-h">
+          <button type="button" className="tp-pcard-open tp-co-name" title={i.c.name} onClick={open}>
+            <span className="tp-co-name-t">{i.c.name}</span>
+            {i.c.following && (
+              <span className="tp-co-star" title="You follow this company">
+                <IconStar size={11} filled />
+                <span className="sr-only">, followed</span>
+              </span>
+            )}
+            <span className="sr-only">. Open the record.</span>
+          </button>
+        </h3>
         {i.domain && <span className="tp-co-dom mono">{i.domain}</span>}
       </div>
       {right}
@@ -72,9 +94,10 @@ function HiddenLine() {
 const shownCell = (c: { s: string } | undefined) => !!c && c.s !== "empty" && c.s !== "locked";
 
 const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }: { r: Row; me: Me; onOpen: (r: Row) => void; miss: boolean }) {
-  const ui = useUi();
+  const ui = useCellUi();
   const i = r.i;
   const c = i.c;
+  const at = c.hidden ? "the hidden company" : c.name;
   const open = i.engs.find(isOpenRole) ?? null;
   // A hidden company is about its open role. Any other company leads with its latest seat.
   const e = c.hidden ? open ?? i.latest : i.latest;
@@ -92,7 +115,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       {/* The line under the header already gives a hidden company's industry, size and region. */}
-      <Head r={r} right={<Fit i={i} />} bare />
+      <Head r={r} right={<Fit i={i} />} onOpen={onOpen} />
       <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">No industry, size or HQ on file yet</span>}</div>
       {(i.fns.length > 0 || own) && (
         <div className="tp-pcard-fns">
@@ -114,7 +137,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
           {e ? (
             <>
               <Fact label={isOpenRole(e) ? "Open role" : "Role"}>
-                <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} cover={coverOf(i, e, "role")} />
+                <RowFact t={{ entity: "engagement", id: e.id, field: "role" }} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} />
               </Fact>
               {held && (
                 <Fact label="Held by">
@@ -123,7 +146,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
               )}
               {rate && (
                 <Fact label={isUnheldOpenRole(e) ? "Posted rate" : "Rate"}>
-                  <RowFact t={{ entity: "engagement", id: e.id, field: "rate" }} cell={e.cells.rate} />
+                  <RowFact t={{ entity: "engagement", id: e.id, field: "rate" }} at={at} cell={e.cells.rate} />
                 </Fact>
               )}
             </>
@@ -147,6 +170,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
 const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpen: (r: Row) => void }) {
   const e = r.e!;
   const i = r.i;
+  const at = i.c.hidden ? "the hidden company" : i.c.name;
   const t = (field: string) => ({ entity: "engagement" as const, id: e.id, field });
   const fn = val(e.cells.function);
   const type = val(e.cells.type);
@@ -156,9 +180,9 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
   const rate = e.cells.rate?.s === "value" || (e.cells.rate?.s === "locked" && !i.c.hidden);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
-      <Head r={r} />
+      <Head r={r} onOpen={onOpen} />
       <div className="tp-pcard-fns">
-        {fn ? <span className={`chip tp-fn${fn === me.function ? " tp-fn-me" : ""}`}>{fn}</span> : <RowFact t={t("function")} cell={e.cells.function} addLabel="Function" />}
+        {fn ? <span className={`chip tp-fn${fn === me.function ? " tp-fn-me" : ""}`}>{fn}</span> : <RowFact t={t("function")} at={at} cell={e.cells.function} addLabel="Function" />}
         {type ? <span className="chip tp-fn">{type}</span> : null}
         {start && !e.opened && <span className="num tp-pcard-when">{fmtMonth(start)}</span>}
         <RoleDate e={e} />
@@ -169,7 +193,7 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
           {e.cells.rate?.s === "value" && (
             <div className="tp-pfacts">
               <Fact label="Posted rate">
-                <RowFact t={t("rate")} cell={e.cells.rate} />
+                <RowFact t={t("rate")} at={at} cell={e.cells.rate} />
               </Fact>
             </div>
           )}
@@ -177,14 +201,14 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
       ) : (
         <div className="tp-pfacts">
           <Fact label={openRole ? "Open role" : "Role"}>
-            <RowFact t={t("role")} cell={e.cells.role} cover={coverOf(i, e, "role")} />
+            <RowFact t={t("role")} at={at} cell={e.cells.role} cover={coverOf(i, e, "role")} />
           </Fact>
           <Fact label="Held by">
             <HeldBy e={e} />
           </Fact>
           {rate && (
             <Fact label={isUnheldOpenRole(e) ? "Posted rate" : "Rate"}>
-              <RowFact t={t("rate")} cell={e.cells.rate} />
+              <RowFact t={t("rate")} at={at} cell={e.cells.rate} />
             </Fact>
           )}
         </div>
@@ -196,24 +220,25 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
 const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r: Row) => void }) {
   const p = r.p!;
   const i = r.i;
+  const at = i.c.hidden ? "the hidden company" : i.c.name;
   const t = (field: string) => ({ entity: "contact" as const, id: p.id, field });
   const title = val(p.cells.title);
   const rel = val(p.cells.relationship);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
-      <Head r={r} />
+      <Head r={r} onOpen={onOpen} />
       <div className="tp-pcard-fns">
-        {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} cell={p.cells.title} addLabel="Title" />}
-        {rel ? <span className="chip tp-fn">{rel}</span> : <RowFact t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
+        {title ? <span className="tp-pcard-title">{title}</span> : <RowFact t={t("title")} at={at} cell={p.cells.title} addLabel="Title" />}
+        {rel ? <span className="chip tp-fn">{rel}</span> : <RowFact t={t("relationship")} at={at} cell={p.cells.relationship} addLabel="Relationship" />}
       </div>
       {/* At a hidden company the name is a quiet lock: the card opens the record, which unlocks it. */}
       <div className="tp-pfacts">
         <Fact label="Name">
-          <RowFact t={t("name")} cell={p.cells.name} cover={coverOf(i, r.e, "name")} />
+          <RowFact t={t("name")} at={at} cell={p.cells.name} cover={coverOf(i, r.e, "name")} />
         </Fact>
         {p.cells.email?.s !== "empty" && p.cells.email && (
           <Fact label="Email">
-            <RowFact t={t("email")} cell={p.cells.email} cover={coverOf(i, r.e, "email")} />
+            <RowFact t={t("email")} at={at} cell={p.cells.email} cover={coverOf(i, r.e, "email")} />
           </Fact>
         )}
       </div>

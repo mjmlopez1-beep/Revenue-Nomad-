@@ -378,7 +378,7 @@ section("economy", async () => {
   let a = (await A.view()).me;
   check("A earned 25 of 25 after 25 fills", a.earned24h === 25 && a.credits === STARTER + 25, a);
   const capped = await A.act(fillAct(fills[25]));
-  check("a fill at the cap says so, without Saved.", capped.status === 200 && /You've reached the limit of 25 credits earned in 24 hours, so this one earned nothing\./.test(capped.json?.message) && !/Saved\./.test(capped.json?.message), capped.json?.message);
+  check("a fill at the cap says so, without Saved.", capped.status === 200 && /No credit this time, because you've earned today's 25\./.test(capped.json?.message) && !/Saved\./.test(capped.json?.message), capped.json?.message);
   check("toast after a normal fill says what was added and what it earned", /^Added [^:]+\. You earned 1 credit\.$/.test(lastMsg), lastMsg);
 
   // Invite: the landing can name the inviter.

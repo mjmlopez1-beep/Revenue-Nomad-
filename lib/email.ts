@@ -46,6 +46,8 @@ export const MAIL = {
   volt: "#2EE59D",
   voltSoft: "#E8FBF2",
   ember: "#FF5A1F",
+  /** Ember text on white (the full ember is for dots and fills). */
+  emberInk: "#B23A0A",
   ink: "#0A1A13",
   body: "#28322D",
   muted: "#5B6661",

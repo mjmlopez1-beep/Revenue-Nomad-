@@ -302,7 +302,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
         {capped && <div className="cr-stat-sub">That is the daily limit. You can earn again {atTime(me.earnResetsAt)}.</div>}
         {me.held > 0 && (
           <div className="cr-stat-sub">
-            {plural(me.held, "bonus credit is", "bonus credits are")} held. {me.held === 1 ? "It is" : "They are"} paid when you have room.
+            {plural(me.held, "bonus credit is", "bonus credits are")} waiting. You get {me.held === 1 ? "it" : "them"} once you&apos;re under today&apos;s {me.earnCap}.
           </div>
         )}
       </div>

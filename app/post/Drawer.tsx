@@ -6,7 +6,7 @@
  * every seat, people, and the company's own details.
  *
  * One primary action. A hidden company has "Unlock this role" and nothing else to press until
- * it is unlocked. Any other company has Add what you know, with Unlock all beside it as an
+ * it is unlocked. Any other company has Add to this company, with Unlock all beside it as an
  * outline button, once per record. The solid ember "Hiring now" chip lives here, in the header,
  * and nowhere else.
  *
@@ -123,6 +123,13 @@ function AddFact({ t, label }: { t: FactRef; label?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const k = cellKey(t.id, t.field);
   const f = fieldDef(t.entity, t.field);
+  // The member's own rate, shared for the benchmarks only: not missing, and not on the seat either.
+  if (t.entity === "engagement" && t.field === "rate" && ui.me.benchRates?.some((b) => b.engagementId === t.id))
+    return (
+      <span data-cell={k} className="tp-benchonly" title="You shared this rate for the benchmarks only. It is never shown with your name or the seat. Your seats can put it on the seat.">
+        Rate in the benchmarks only
+      </span>
+    );
   return (
     <span ref={ref} data-cell={k} className={ui.pulse === k ? "tp-pulse" : undefined}>
       <AddPill label={label ?? (f ? shortLabel(f) : t.field)} earn={earnsNow(ui, env, t)} onAdd={() => ref.current && ui.edit(ref.current, t)} />
@@ -668,8 +675,13 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const inSheet = env.touch;
-  useEscape(ask && !inSheet, () => setAsk(false));
-  useEscape(ask && inSheet, () => setAsk(false), sheetRef);
+  // Esc, Cancel and a tap beside the sheet all put focus back on the button that asked.
+  const cancel = () => {
+    setAsk(false);
+    setTimeout(() => btnRef.current?.focus({ preventScroll: true }));
+  };
+  useEscape(ask && !inSheet, cancel);
+  useEscape(ask && inSheet, cancel, sheetRef);
   if (!plan.items.length) return null;
   const { facts, cost } = plan;
   const left = ui.me.unlocksLeft ?? Infinity;
@@ -682,10 +694,6 @@ function UnlockAll({ plan, bar }: { plan: Plan; bar?: boolean }) {
           : `Unlock all takes ${plural(cost, "credit")}. You have ${ui.me.credits}.`}
       </span>
     );
-  const cancel = () => {
-    setAsk(false);
-    setTimeout(() => btnRef.current?.focus({ preventScroll: true }));
-  };
   const go = async () => {
     setBusy(true);
     await ui.unlockMany(plan.items);
@@ -790,15 +798,22 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
   const [busy, setBusy] = useState(false);
   const [discard, setDiscard] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const keepRef = useRef<HTMLButtonElement>(null);
   const set = (k: string) => (x: string) => (setV((o) => ({ ...o, [k]: x })), setDiscard(false));
   const filled = Object.values(v).filter((x) => x.trim()).length;
   const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
+  // The question takes focus when it shows (autoFocus does not fire on a re-render inside the form). Keep editing is the default.
+  useEffect(() => {
+    if (discard) keepRef.current?.focus({ preventScroll: true });
+  }, [discard]);
+  const keep = () => {
+    setDiscard(false);
+    setTimeout(() => formRef.current?.querySelector<HTMLInputElement>("input")?.focus());
+  };
   // Esc closes this form before the record. With something typed it asks first, and a second Esc keeps editing.
   useEscape(true, () => {
-    if (discard) {
-      setDiscard(false);
-      formRef.current?.querySelector<HTMLInputElement>("input")?.focus();
-    } else if (filled > 0) setDiscard(true);
+    if (discard) keep();
+    else if (filled > 0) setDiscard(true);
     else onDone();
   });
   const submit = async () => {
@@ -819,6 +834,8 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
       ref={formRef}
       className="tp-pform"
       aria-label="Add a person"
+      // cleanValue checks each field and says what is wrong in the form's own words, not the browser's.
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -862,10 +879,10 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
       {discard ? (
         <div className="tp-pform-foot tp-pform-discard" role="group" aria-label="Discard what you typed?">
           <span className="tp-small">Discard what you typed?</span>
-          <button type="button" className="btn btn-sm tp-btn-red" autoFocus onClick={onDone}>
+          <button type="button" className="btn btn-sm tp-btn-red" onClick={onDone}>
             Discard
           </button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDiscard(false)}>
+          <button ref={keepRef} type="button" className="btn btn-ghost btn-sm" onClick={keep}>
             Keep editing
           </button>
         </div>
@@ -1277,8 +1294,9 @@ export function Drawer({
         <UnlockCompany id={c.id} label={UNLOCK_ROLE} />
       ) : (
         <>
+          {/* The top bar's "Add what you know" starts from a search. This one adds to the company on screen. */}
           <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
-            <IconPlus size={14} /> Add what you know
+            <IconPlus size={14} /> Add to this company
           </button>
           <UnlockAll plan={plan} />
         </>

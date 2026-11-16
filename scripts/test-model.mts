@@ -13,7 +13,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
-  fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, tabTest, toggleTest,
+  fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, tabTest, toggleTest,
 } from "../app/post/model";
 
 let passed = 0;
@@ -255,6 +255,25 @@ check("a fact the member added is not an unlock", !own.eng && !own.company, own)
   check("most employees first, unknown last", by("employees") === "Big,Mid,Small,Unknown", by("employees"));
   check("most revenue first, unknown last", by("revenue") === "Small,Mid,Big,Unknown", by("revenue"));
   check("latest start first", by("start") === "Big,Mid,Small,Unknown", by("start"));
+}
+
+/* ---------- each list sorts by its own facts (DESK-17) ---------- */
+
+{
+  const withFn = (name: string, fn: string | null, hq: string | null, title: string | null) => {
+    const c = co(name, [eng(fn ? { function: val(fn) } : {}, { source: "Published engagement" })]);
+    if (hq) c.cells = { ...c.cells, hq: val(hq) };
+    if (title) c.people = [{ ...person(), cells: { ...person().cells, title: val(title) } }];
+    return c;
+  };
+  const i = deriveAll([withFn("Zed", "RevOps", "Austin, TX", "VP Sales"), withFn("Amp", "Marketing", null, "CEO"), withFn("Mid", null, "Boston, MA", null)]);
+  const names = (t: "companies" | "engagements" | "people", k: Parameters<typeof sortRows>[1]) => sortRows(rowsFor(t, i), k).map((r) => r.i.c.name).join();
+  check("seats sort by function A to Z, none last", names("engagements", "fn") === "Amp,Zed,Mid", names("engagements", "fn"));
+  check("people sort by title A to Z", names("people", "title") === "Amp,Zed", names("people", "title"));
+  check("companies sort by HQ A to Z, none last", names("companies", "hq") === "Zed,Mid,Amp", names("companies", "hq"));
+  check("People has no Most seats or Latest start, and Seats has no Most seats", !sortsFor("people").some((s) => s.key === "engagements" || s.key === "start") && !sortsFor("engagements").some((s) => s.key === "engagements"), sortsFor("people").map((s) => s.key));
+  check("a sort the list can't use reads as Best fit", sortFor("people", "engagements") === "fit" && sortFor("engagements", "fn") === "fn");
+  check("the name sort says it sorts by the company", SORTS.find((s) => s.key === "name")?.label === "Company name");
 }
 
 /* ---------- ties break on the row, never its name ---------- */

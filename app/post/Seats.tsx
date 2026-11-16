@@ -23,7 +23,7 @@ import { COMPANY_GTM, SEAT_ASK, cellKey, shown, type CoInfo, type FactRef, type 
 import { BENCH_RATE_HELP, atTime, plural } from "./hooks";
 import { earnRoom } from "./NextMove";
 import { MonthYear } from "./MonthYear";
-import { shortLabel, useUi } from "./ui";
+import { RateWho, shortLabel, useUi, type RateChoice } from "./ui";
 import "./seats.css";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -38,37 +38,8 @@ const OWN_STATUSES = ["Active", "Ended"];
 
 /* ---------- shared with the Add form ---------- */
 
-/** Who sees a rate the member charged: members who unlock it on the seat, or the benchmarks only. */
-export type RateChoice = "record" | "bench";
-export const RATE_WHO: Record<RateChoice, { title: string; line: string }> = {
-  record: { title: "Members who unlock it", line: "It goes on this seat. A member spends 1 credit to see it, and 1 more to see your name." },
-  bench: { title: "Only the benchmarks", line: "It counts in the medians on Rate benchmarks and is never shown with your name or the seat. You can remove it there any time." },
-};
-
-/** The two choices for a rate on a seat the member held. Used here and in "Add a seat you held". */
-export function RateWho({ value, onChange, disabled }: { value: RateChoice | null; onChange: (w: RateChoice) => void; disabled?: boolean }) {
-  const ui = useUi();
-  const name = useId();
-  const option = (k: RateChoice) => (
-    <label className={`ys-who-o${value === k ? " on" : ""}`}>
-      <input type="radio" name={name} checked={value === k} disabled={disabled} onChange={() => onChange(k)} />
-      <span className="ys-who-t">
-        <b>{RATE_WHO[k].title}</b>
-        <span>{RATE_WHO[k].line}</span>
-      </span>
-    </label>
-  );
-  return (
-    <div className="ys-who" role="radiogroup" aria-labelledby={`${name}l`}>
-      <span className="ys-who-l" id={`${name}l`}>
-        Who can see it?
-      </span>
-      {option("record")}
-      {option("bench")}
-      {value === "bench" && ui.me.invitePending && <p className="ys-who-note">Your invite bonus comes with your first fact on a record, so it isn&apos;t paid for this one.</p>}
-    </div>
-  );
-}
+/** Who sees a rate the member charged. It lives in ui.tsx, so the table's and the record's rate editor ask the same question. */
+export { RATE_WHO, RateWho, type RateChoice } from "./ui";
 
 /** Reasons that only fit a sales seat go last on other seats, and the ones that fit any seat go first. */
 const SALES_SIDE = ["Sales", "RevOps", "Executive", "AI GTM"];

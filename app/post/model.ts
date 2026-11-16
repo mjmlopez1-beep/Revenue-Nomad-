@@ -13,7 +13,7 @@ import {
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "friendly" | "hiring" | "following" | "unlocked" | "needs";
-export type SortKey = "fit" | "newest" | "name" | "engagements" | "start" | "employees" | "revenue";
+export type SortKey = "fit" | "newest" | "name" | "engagements" | "start" | "employees" | "revenue" | "fn" | "title" | "hq";
 
 export const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
@@ -26,12 +26,24 @@ export const TABS: { key: Tab; label: string }[] = [
 export const SORTS: { key: SortKey; label: string }[] = [
   { key: "fit", label: "Best fit" },
   { key: "newest", label: "Recently updated" },
-  { key: "name", label: "Name" },
+  { key: "name", label: "Company name" },
   { key: "engagements", label: "Most seats" },
   { key: "start", label: "Latest start" },
+  { key: "fn", label: "Function" },
+  { key: "title", label: "Title" },
   { key: "employees", label: "Most employees" },
   { key: "revenue", label: "Most revenue" },
+  { key: "hq", label: "HQ" },
 ];
+/** The sorts that mean something for each list: a seat sorts by its own start and function, a person by their title. */
+const SORTS_BY_TYPE: Record<RecordType, SortKey[]> = {
+  companies: ["fit", "newest", "name", "engagements", "start", "employees", "revenue", "hq"],
+  engagements: ["fit", "newest", "name", "start", "fn", "employees", "revenue"],
+  people: ["fit", "newest", "name", "title", "hq"],
+};
+export const sortsFor = (t: RecordType) => SORTS.filter((s) => SORTS_BY_TYPE[t].includes(s.key));
+/** A sort the list can't use (Most seats, carried over to People) reads as Best fit there. */
+export const sortFor = (t: RecordType, s: SortKey): SortKey => (SORTS_BY_TYPE[t].includes(s) ? s : "fit");
 export const RECORD_TYPES: { key: RecordType; label: string }[] = [
   { key: "companies", label: "Companies" },
   { key: "engagements", label: "Seats" },
@@ -763,6 +775,15 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean): Row[] {
   };
   const emp = band(RN_EMPLOYEES, "employees");
   const rev = band(RN_REVENUE, "revenue");
+  // A to Z on a free fact the row shows. Rows without it go last.
+  const text = (get: (r: Row) => string | null) => (a: Row, b: Row) => {
+    const x = get(a);
+    const y = get(b);
+    return x && y ? x.localeCompare(y) : x ? -1 : y ? 1 : 0;
+  };
+  const byFn = text((r) => shown((r.e ?? r.i.latest)?.cells.function));
+  const byTitle = text((r) => (r.p ? shown(r.p.cells.title) : null));
+  const byHq = text((r) => shown(r.i.c.cells.hq));
   // The last tie breaks on the row's own id, never its name: unlocking a hidden company changes its
   // name, and the row must not move while its record is open (only the Name sort reads names).
   const byKey = (a: Row, b: Row) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
@@ -774,6 +795,9 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean): Row[] {
     start: (a, b) => start(b).localeCompare(start(a)) || score(b) - score(a) || byKey(a, b),
     employees: (a, b) => emp(b) - emp(a) || score(b) - score(a) || byKey(a, b),
     revenue: (a, b) => rev(b) - rev(a) || score(b) - score(a) || byKey(a, b),
+    fn: (a, b) => byFn(a, b) || start(b).localeCompare(start(a)) || byKey(a, b),
+    title: (a, b) => byTitle(a, b) || score(b) - score(a) || byKey(a, b),
+    hq: (a, b) => byHq(a, b) || score(b) - score(a) || byKey(a, b),
   };
   const by = cmp[sort];
   return [...rows].sort(needsFirst ? (a, b) => b.i.c.facts.missing - a.i.c.facts.missing || by(a, b) : by);

@@ -688,10 +688,10 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
       {i.engs.length > 0 && (
         <div className="tp-form-row">
           <label className="tp-lbl" htmlFor="tp-pf-seat">
-            They belong to
+            Where they fit
           </label>
           <select id="tp-pf-seat" className="select" value={draft.seat} onChange={(e) => setDraft((d) => ({ ...d, seat: e.target.value }))}>
-            <option value="">The company, as a decision maker</option>
+            <option value="">The company as a whole</option>
             {i.engs.map((e) => (
               <option key={e.id} value={e.id}>
                 {seatLabel(e)}
@@ -1001,9 +1001,11 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
   const doneLine = (d: Done, company: string) => {
     const rest = restOf(d.message, company);
     const now = gained > 0 ? ` You have ${me.credits} now.` : "";
-    if (rest) return `${rest}${now}`;
+    // The server says "No credit this time, because you've earned today's 25." The time earning opens again is the member's own clock.
+    const again = d.capped && me.earnResetsAt && /earned today's/.test(`${rest ?? ""}`) ? ` You can earn again ${atTime(me.earnResetsAt)}.` : "";
+    if (rest) return `${rest}${now}${again}`;
     if (gained > 0) return `You earned ${plural(gained, "credit")}.${now}`;
-    if (d.capped) return `${plural(d.n, "answer")} saved. No credit this time, because you've already earned today's ${me.earnCap}.`;
+    if (d.capped) return `${plural(d.n, "answer")} saved. No credit this time, because you've earned today's ${me.earnCap}.${me.earnResetsAt ? ` You can earn again ${atTime(me.earnResetsAt)}.` : ""}`;
     return `${plural(d.n, "answer")} saved.`;
   };
   const body = (

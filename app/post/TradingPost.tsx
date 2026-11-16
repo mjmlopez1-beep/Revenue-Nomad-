@@ -31,12 +31,12 @@ import type { Cell } from "@/lib/tableTypes";
 import type { Me } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconPlus, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
-  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
-import { UiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
+import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
@@ -85,6 +85,12 @@ const PAGES: Page[] = ["seats", "credits", "rates", "metrics"];
 const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics" };
 const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
+
+/** Phones: the view chips fade out at whichever edge has more to scroll to, so a chip cut at the edge reads as more, not as a broken label. */
+function chipEdges(el: HTMLElement) {
+  el.dataset.start = String(el.scrollLeft <= 2);
+  el.dataset.end = String(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
+}
 
 /**
  * Filters as one short query value: only what differs from no filters, "~" between them. A
@@ -187,7 +193,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [recordType, setRecordType] = useState<RecordType>(place0.t);
   const [tab, setTab] = useState<Tab>(place0.v);
   const [filters, setFilters] = useState<Filters>(place0.f);
-  const [sort, setSort] = useState<SortKey>(place0.s);
+  const [sortPicked, setSort] = useState<SortKey>(place0.s);
+  // The sort in use: one this list can't use (Most seats, carried over to People) reads as Best fit.
+  const sort = sortFor(recordType, sortPicked);
+  const sortList = sortsFor(recordType);
   const [query, setQuery] = useState(place0.q);
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
@@ -205,6 +214,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [pop, setPop] = useState<"credits" | "menu" | null>(null);
   const [sortOpen, setSortOpen] = useState(false);
+  /** Phones: the "Companies" chip's menu (what to list), in the sticky row. */
+  const [typeOpen, setTypeOpen] = useState(false);
   const [sideDocked, setSideDocked] = useState(true);
   const [sideOverlay, setSideOverlay] = useState(false);
   // Unlocking, just unlocked and pointed-at cells live in a store (cellFlags), so the Ui context keeps its identity and only those cells render again.
@@ -219,12 +230,35 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const creditsRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const sortRef = useRef<HTMLButtonElement>(null);
+  const typeRef = useRef<HTMLButtonElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const frameBoxRef = useRef<HTMLDivElement>(null);
   const fadeRef = useRef<HTMLDivElement>(null);
   /** Just above the list's controls: where a new list starts when the window scrolls. */
   const listTopRef = useRef<HTMLDivElement>(null);
 
+  /*
+   * Rows and cells read `me` for a few yes-or-no facts only (any credits, unlocks left today,
+   * earning open, the pick-list limit, a fact of their own yet). They get a Ui whose `me` changes
+   * when one of those changes, so an unlock that takes 25 credits to 24 re-renders the one cell
+   * it opened, not every row on screen (PERF-2). Everything else reads the full Ui.
+   */
+  const earnShut = !!me.earnResetsAt || me.earned24h >= me.earnCap;
+  const cellKeyOfMe = [
+    me.credits > 0,
+    me.unlocksLeft === 0,
+    earnShut,
+    me.earnResetsAt ?? "",
+    me.sellEarnLeft === 0,
+    me.added === 0,
+    me.function ?? "",
+    !!me.admin,
+    !!me.proInterest,
+    me.owed ?? 0,
+    (me.benchRates ?? []).map((b) => b.engagementId ?? "").join(","),
+  ].join("|");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cellMe = useMemo(() => me, [cellKeyOfMe]);
   /* ----- data ----- */
   const infos = useMemo(() => deriveAll(view.companies), [view.companies]);
   const byId = useMemo(() => new Map(infos.map((i) => [i.c.id, i])), [infos]);
@@ -238,6 +272,12 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     }
     return m;
   }, [infos]);
+  /** A rate typed on a seat the member held: the editor asks who can see it (decision 18). */
+  const ownRateOf = (t: FactRef) => {
+    if (t.entity !== "engagement" || t.field !== "rate") return undefined;
+    const e = ownerOf.get(t.id)?.engs.find((x) => x.id === t.id);
+    return e?.yours ? { pricing: shown(e.cells.pricing) ?? null } : undefined;
+  };
   const hasIndustry = useMemo(() => infos.some((i) => i.c.cells.industry?.s === "value"), [infos]);
   const hasRoles = useMemo(() => infos.some(hasRoleDates), [infos]);
   const totals = useMemo(
@@ -266,11 +306,12 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   );
   /** The filters that apply to this view. */
   const eff = tab === "all" ? filters : unpreset;
-  const { rows: filtered, facets: facets0 } = useMemo(() => applyFilters(allRows, eff, tab, q, me), [allRows, eff, tab, q, me]);
+  // Filters read only the member's function from `me` (cellMe changes with it): a new balance doesn't recount the table.
+  const { rows: filtered, facets: facets0 } = useMemo(() => applyFilters(allRows, eff, tab, q, cellMe), [allRows, eff, tab, q, cellMe]);
   // With the preset on, All counts with it and every other view without it.
   const otherTabs = useMemo(
-    () => (presetOn.length ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, me).facets.tabs : null),
-    [presetOn, allRows, tab, unpreset, filters, q, me],
+    () => (presetOn.length ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, cellMe).facets.tabs : null),
+    [presetOn, allRows, tab, unpreset, filters, q, cellMe],
   );
   const facets = useMemo(
     () => (otherTabs ? { ...facets0, tabs: tab === "all" ? { ...otherTabs, all: facets0.tabs.all } : { ...facets0.tabs, all: otherTabs.all } } : facets0),
@@ -341,11 +382,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     const b = row.getBoundingClientRect();
     // Clear of the faded right edge (24px), and never under the Filters button on the left.
     if (a.right > b.right - 24) row.scrollLeft += a.right - b.right + 24;
-    else if (a.left < b.left) row.scrollLeft -= b.left - a.left + 8;
+    else if (a.left < b.left) row.scrollLeft -= b.left - a.left + 24;
+    chipEdges(row);
   }, [tab, phone, page]);
 
   /* ----- a page opens at its top; the table comes back where it was ----- */
-  const tableY = useRef(0);
+  // Where the table was scrolled to, while this load has seen it. Null after a reload on a page: then the table's own history entry says (tpY).
+  const tableY = useRef<number | null>(page === "table" ? 0 : null);
   const pageNow = useRef(page);
   useEffect(() => {
     try {
@@ -360,7 +403,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   useLayoutEffect(() => {
     if (pageNow.current === page) return;
     pageNow.current = page;
-    window.scrollTo(0, page === "table" ? tableY.current : 0);
+    const saved = typeof window.history.state?.tpY === "number" ? (window.history.state.tpY as number) : 0;
+    window.scrollTo(0, page === "table" ? tableY.current ?? saved : 0);
     // Say where we are: the page's own heading takes focus, and the tab title follows.
     const h = document.querySelector<HTMLElement>(page === "table" ? "#tp-h1" : ".tp-main-page h1");
     if (h) {
@@ -370,11 +414,31 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   }, [page]);
 
   // Followed companies with news since the last visit (frozen at load).
+  // Bonuses paid since then (an invite, two confirmations): nothing else says they came (WORD-9).
   const [since] = useState(() => {
     const prev = previousVisit();
-    if (!prev) return { at: null as string | null, n: 0 };
-    return { at: prev, n: view.companies.filter((c) => c.following && c.updatedAt && c.updatedAt > prev).length };
+    if (!prev) return { at: null as string | null, n: 0, invite: 0, confirm: 0 };
+    const paid = (r: string) => view.ledger.filter((l) => l.reason === r && l.delta > 0 && l.at > prev);
+    return {
+      at: prev,
+      n: view.companies.filter((c) => c.following && c.updatedAt && c.updatedAt > prev).length,
+      invite: paid("referral").reduce((n, l) => n + l.delta, 0),
+      confirm: paid("confirm").length,
+    };
   });
+  const [bonusOff, setBonusOff] = useState(false);
+  // A visit ends when the member leaves the page, so "since your last visit" means while they were away (not what they saw happen here).
+  useEffect(() => {
+    const left = (e: Event) => {
+      if (e.type === "pagehide" || document.visibilityState === "hidden") store.set("tp_last_visit", new Date().toISOString());
+    };
+    document.addEventListener("visibilitychange", left);
+    window.addEventListener("pagehide", left);
+    return () => {
+      document.removeEventListener("visibilitychange", left);
+      window.removeEventListener("pagehide", left);
+    };
+  }, []);
 
   /*
    * ----- actions -----
@@ -640,6 +704,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         replaceSoon.current = null;
       }
       if (want > cur) {
+        // Leaving the table: its entry keeps where it was scrolled, so Back finds the place even after a reload on the page or record.
+        if (cur === 0 && tableY.current !== null) window.history.replaceState({ ...window.history.state, tpY: tableY.current }, "");
         for (let d = cur + 1; d <= want; d++) window.history.pushState({ tpd: d }, "", urlRef.current);
       } else if (want < cur) {
         // Closed from the page (X, Esc, a tap outside): take our entries off the stack.
@@ -817,9 +883,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const support = view.contact?.support ?? null;
   const intro = view.contact?.intro ?? null;
   const contact = useMemo(() => ({ support, intro }), [support, intro]);
-  const ui: Ui = useMemo(
-    () => ({
-      me,
+  const mkUi = (m: Me): Ui => ({
+      me: m,
       act,
       layout,
       // Read when a component renders. A change re-renders the cells it concerns (useCellFlags) and this shell, never the whole table.
@@ -844,9 +909,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       openSeats,
       openPage,
       contact,
-    }),
-    [me, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats, openPage, contact],
-  );
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ui: Ui = useMemo(() => mkUi(me), [me, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats, openPage, contact]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cellUi: Ui = useMemo(() => mkUi(cellMe), [cellMe, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats, openPage, contact]);
 
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
   const drawerPos = drawer ? sorted.findIndex((r) => r.key === drawer.rowKey) : -1;
@@ -983,6 +1050,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           </Strip>
         )
       )}
+      {(since.invite > 0 || since.confirm > 0) && !bonusOff && <Strip onClose={() => setBonusOff(true)}>{bonusText(since.invite, since.confirm)}</Strip>}
       {since.n > 0 && !sinceOff && (
         <Strip
           onClose={() => setSinceOff(true)}
@@ -1005,7 +1073,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       </button>
       {sortOpen && sortRef.current && (
         <Anchored anchor={sortRef.current} onClose={() => setSortOpen(false)} width={200} className="tp-menu" align="end">
-          {SORTS.map((s) => (
+          {sortList.map((s) => (
             <button
               key={s.key}
               type="button"
@@ -1032,9 +1100,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </div>
   );
 
-  const tabs = (
-    <nav className={phone ? "tp-pchips-scroll" : "tp-tabs"} aria-label="Views">
-      {TABS.map((t) => (
+  const viewButtons = TABS.map((t) => (
         <button
           key={t.key}
           type="button"
@@ -1046,7 +1112,29 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           {/* The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
           <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{facets.tabs[t.key]}</span>
         </button>
-      ))}
+      ));
+  // Phones: what to list (Companies, Seats or People, a short menu) is the list's title in the top bar, so it needs no row of its own (decision 16).
+  const typeSwitch =
+    phone && page === "table" ? (
+      <button
+        ref={typeRef}
+        type="button"
+        className="tp-ptype"
+        onClick={() => setTypeOpen((x) => !x)}
+        aria-haspopup="menu"
+        aria-expanded={typeOpen}
+        aria-label={`Listing ${TYPE_TITLE[recordType].toLowerCase()}. Change what to list`}
+      >
+        <span>{TYPE_TITLE[recordType]}</span> <IconChevron size={12} />
+      </button>
+    ) : null;
+  const tabs = phone ? (
+    <nav className="tp-pchips-scroll" aria-label="Views" onScroll={(e) => chipEdges(e.currentTarget)}>
+      {viewButtons}
+    </nav>
+  ) : (
+    <nav className="tp-tabs" aria-label="Views">
+      {viewButtons}
     </nav>
   );
 
@@ -1105,6 +1193,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   /* ----- layout ----- */
   return (
     <UiCtx.Provider value={ui}>
+      <CellUiCtx.Provider value={cellUi}>
       <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}`}>
         {page === "table" && (
           <a href="#tp-results" className="tp-skip" onClick={skip}>
@@ -1130,6 +1219,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           contact={contact}
           emailOn={view.email}
           starter={view.stats?.starter}
+          listSwitch={typeSwitch}
         />
 
         {page === "credits" ? (
@@ -1153,16 +1243,36 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             <h1 id="tp-h1" className="sr-only">
               {TYPE_TITLE[recordType]}
             </h1>
-            {banners}
-            {recordSwitch}
+            {/* While searching, the results come straight under the field: nothing between them (DSGNP-5). */}
+            {qt ? null : banners}
             <div ref={listTopRef} className="tp-listtop" aria-hidden />
-            {/* One sticky row: Filters (sort and record type live in its sheet) and the views, each with its count. */}
+            {/*
+              One sticky row: what to list (Companies, Seats or People, a menu), Filters (sort lives in its sheet) and the views,
+              each with its count. The record type sits here, not in a row of its own, so the first card starts higher (decision 16).
+            */}
             <div className="tp-pchips">
               <button type="button" className={`chip tp-pchip tp-pfilter${nFilters ? " chip-on" : ""}`} onClick={() => setSideOverlay(true)} aria-label={`Sort and filter${nFilters ? `, ${plural(nFilters, "filter")} on` : ""}`}>
                 <IconFilter size={13} /> Filters{nFilters ? ` (${nFilters})` : ""}
               </button>
               {tabs}
             </div>
+            {typeOpen && typeRef.current && (
+              <Anchored anchor={typeRef.current} onClose={() => setTypeOpen(false)} width={240} className="tp-menu" label="What to list">
+                {RECORD_TYPES.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={recordType === t.key}
+                    className={`tp-menu-item${recordType === t.key ? " on" : ""}`}
+                    onClick={() => (setRecordType(t.key), setTypeOpen(false))}
+                  >
+                    <span>{t.label}</span>
+                    <span className="tp-menu-hint num">{totals[t.key]}</span>
+                  </button>
+                ))}
+              </Anchored>
+            )}
             {qt && (
               <div className="tp-pcount">
                 <span>
@@ -1187,10 +1297,16 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             </p>
             {scanLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
-              {empty || <CardList type={list.type} rows={list.rows} me={me} onOpen={openRow} tab={tab} />}
+              {empty || <CardList type={list.type} rows={list.rows} me={cellMe} onOpen={openRow} tab={tab} />}
             </div>
             {more}
             {proFoot}
+            {/* The main action, labeled and in thumb reach (DSGNP-8). Not while searching: the keyboard has that space. */}
+            {!recordOpen && !qt && (
+              <button type="button" className="btn btn-primary tp-fab" onClick={() => openAdd()}>
+                <IconPlus size={18} /> Add what you know
+              </button>
+            )}
           </main>
         ) : (
           <div className="tp-body">
@@ -1259,7 +1375,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                       <DataTable
                         type={list.type}
                         rows={list.rows}
-                        me={me}
+                        me={cellMe}
                         selected={drawer?.rowKey ?? null}
                         onOpen={openRow}
                         newSince={since.at}
@@ -1328,7 +1444,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 Sort
               </h3>
               <div className="tp-psort-opts" role="radiogroup" aria-labelledby="tp-psort-h">
-                {SORTS.map((s) => (
+                {sortList.map((s) => (
                   <button key={s.key} type="button" role="radio" aria-checked={sort === s.key} className={`chip tp-psort-o${sort === s.key ? " chip-on" : ""}`} onClick={() => setSort(s.key)}>
                     {s.label}
                   </button>
@@ -1358,6 +1474,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             t={editor.t}
             initial={editor.initial}
             company={ownerOf.get(editor.t.id)?.c.name ?? ""}
+            ownRate={ownRateOf(editor.t)}
             onClose={() => setEditor(null)}
           />
         )}
@@ -1406,6 +1523,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           />
         )}
       </div>
+      </CellUiCtx.Provider>
     </UiCtx.Provider>
   );
 }
@@ -1442,12 +1560,23 @@ function SidePanel({ onClose, children }: { onClose: () => void; children: React
  * member's seats, a company they know, or the form for a seat they held). `inCard` draws it
  * as the last line of the next-move card.
  */
+/** "Since your last visit you earned 10 credits from an invite and 2 from confirmations." */
+function bonusText(invite: number, confirm: number) {
+  const parts = [
+    invite > 0 ? `${plural(invite, "credit")} from an invite` : "",
+    confirm > 0 ? `${invite > 0 ? confirm : plural(confirm, "credit")} from ${confirm === 1 ? "a confirmation" : "confirmations"}` : "",
+  ].filter(Boolean);
+  return `Since your last visit you earned ${parts.join(" and ")}.`;
+}
+
 function CreditLine({ me, onShowAdd, label, inCard }: { me: Me; onShowAdd: () => void; label: string; inCard?: boolean }) {
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   let text: string;
   let action = true;
   if (capped) {
-    text = `${me.credits <= 0 ? `You're out of credits, and you've earned today's ${me.earnCap}.` : `You've earned today's ${me.earnCap} credits.`} You can earn again ${atTime(me.earnResetsAt)}.`;
+    // A bonus that came in while the member was at the limit waits: say so, or it arrives without a word.
+    const held = me.held > 0 ? ` ${plural(me.held, "bonus credit is", "bonus credits are")} waiting for then.` : "";
+    text = `${me.credits <= 0 ? `You're out of credits, and you've earned today's ${me.earnCap}.` : `You've earned today's ${me.earnCap} credits.`} You can earn again ${atTime(me.earnResetsAt)}.${held}`;
     action = false;
   } else if (me.credits > 3) return null;
   else text = `${me.credits <= 0 ? "You're out of credits." : `You have ${plural(me.credits, "credit")} left.`} Add a fact you know and you earn one${me.credits <= 0 ? " back" : ""}.`;

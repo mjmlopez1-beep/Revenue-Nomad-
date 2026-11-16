@@ -18,7 +18,8 @@ import type { Action, Cell, Me } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
-import { atTime, fieldText, plural, type Layout } from "./hooks";
+import { readRate } from "@/lib/rates";
+import { BENCH_RATE_HELP, atTime, fieldText, plural, type Layout } from "./hooks";
 import { owedLine } from "./ledger";
 import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
@@ -75,6 +76,17 @@ export const UiCtx = createContext<Ui | null>(null);
 export function useUi(): Ui {
   const u = useContext(UiCtx);
   if (!u) throw new Error("UiCtx missing");
+  return u;
+}
+/**
+ * The Ui for what renders inside every row and cell. Its `me` is the member as of the last change
+ * a cell can show (any credits left, unlocks left today, earning open, the pick-list limit): the
+ * balance going from 25 to 24 does not re-render the table. Read the balance itself with useUi.
+ */
+export const CellUiCtx = createContext<Ui | null>(null);
+export function useCellUi(): Ui {
+  const u = useContext(CellUiCtx);
+  if (!u) throw new Error("CellUiCtx missing");
   return u;
 }
 
@@ -180,7 +192,7 @@ function AddBtn({ label, what, earn, onAdd }: { label: string; what: string; ear
 
 /** An add pill that opens the fact editor on itself. `onPick` runs first (e.g. to close the popover it sits in). */
 export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: string; onPick?: () => void }) {
-  const ui = useUi();
+  const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
   const f = fieldDef(fact.entity, fact.field);
   const { pulse } = useCellFlags(cellKey(fact.id, fact.field));
@@ -202,7 +214,7 @@ export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: strin
 
 /** "Your seat": the member is the linked seat holder. Opens that seat on the Your seats page. */
 export function YourSeat({ id }: { id: string }) {
-  const ui = useUi();
+  const ui = useCellUi();
   return (
     <button type="button" className="chip ys-yours" title="This seat is yours. Open it to fill in what's missing." onClick={(e) => (e.stopPropagation(), ui.openSeats(id))}>
       Your seat
@@ -350,8 +362,9 @@ let focusNext: { k: string; box: Element | null; until: number } | null = null;
  * opens the inline editor. reported: "Under review".
  * After an unlock or a save, keyboard focus lands on the value it revealed (tabIndex -1).
  */
-export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string }) {
-  const ui = useUi();
+/** `at`: the company's name, for the lock's and the add button's names where the row does not say it (phone cards). */
+export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string; at?: string }) {
+  const ui = useCellUi();
   const ref = useRef<HTMLSpanElement>(null);
   const refocus = useRef(false);
   const [zero, setZero] = useState(false);
@@ -411,7 +424,7 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
             }}
             ver={cell.ver}
             from={cell.from}
-            what={factWhat(t)}
+            what={at ? `${factWhat(t)} at ${at}` : factWhat(t)}
             noun={t.field === "identity" ? "company" : undefined}
             busy={flags.busy}
             later={later}
@@ -427,9 +440,16 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
             –
           </span>
         );
+      // The member's own rate, shared for the benchmarks only: not on the seat, and not missing either.
+      if (t.entity === "engagement" && t.field === "rate" && ui.me.benchRates?.some((b) => b.engagementId === t.id))
+        return (
+          <span className={`${cls} tp-none tp-benchonly`} data-cell={k} title="You shared this rate for the benchmarks only. It is never shown with your name or the seat. Your seats can put it on the seat.">
+            Benchmarks only
+          </span>
+        );
       return (
         <span className={cls} data-cell={k} ref={ref}>
-          <AddBtn label={addLabel} what={factWhat(t)} earn={earnsNow(ui.me, t)} onAdd={() => ref.current && ui.edit(ref.current, t)} />
+          <AddBtn label={addLabel} what={at ? `${factWhat(t)} at ${at}` : factWhat(t)} earn={earnsNow(ui.me, t)} onAdd={() => ref.current && ui.edit(ref.current, t)} />
         </span>
       );
     case "reported":
@@ -615,7 +635,7 @@ export function Anchored({
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   const kind = role ?? (className.split(" ").includes("tp-menu") ? "menu" : "dialog");
-  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number; width: number } | null>(null);
   useLayer(ref, {
     onEscape: () => closeRef.current(),
     tab: kind === "menu" ? "close" : "trap",
@@ -634,15 +654,18 @@ export function Anchored({
       const r = anchor.getBoundingClientRect();
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      const w = Math.min(width, vw - 16);
+      // Phones: the popover spans the page's 16px gutters, like the cards under it. Wider screens keep its own width, 8px from the edge at most.
+      const narrow = vw < 600;
+      const g = narrow ? 16 : 8;
+      const w = narrow ? vw - 2 * g : Math.min(width, vw - 2 * g);
       const h = ref.current?.scrollHeight ?? 200;
       let left = align === "end" ? r.right - w : r.left;
-      left = Math.max(8, Math.min(left, vw - w - 8));
+      left = Math.max(g, Math.min(left, vw - w - g));
       let top = r.bottom + 6;
       if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
       // Still too tall for either side: keep it on screen and let it scroll.
       top = Math.max(8, Math.min(top, vh - Math.min(h, vh - 16) - 8));
-      setPos({ top, left, maxHeight: vh - 16 });
+      setPos({ top, left, maxHeight: vh - 16, width: w });
     };
     place();
     window.addEventListener("scroll", place, true);
@@ -674,7 +697,7 @@ export function Anchored({
         tabIndex={-1}
         className={`tp-pop ${className}`}
         style={{
-          width: Math.min(width, typeof window === "undefined" ? width : window.innerWidth - 16),
+          width: pos?.width ?? Math.min(width, typeof window === "undefined" ? width : window.innerWidth - 16),
           top: pos?.top ?? -9999,
           left: pos?.left ?? -9999,
           maxHeight: pos?.maxHeight,
@@ -1222,12 +1245,59 @@ export function SeatHolderInput({
   );
 }
 
+/** Who sees a rate the member charged: members who unlock it on the seat, or the benchmarks only. */
+export type RateChoice = "record" | "bench";
+export const RATE_WHO: Record<RateChoice, { title: string; line: string }> = {
+  record: { title: "Members who unlock it", line: "It goes on this seat. A member spends 1 credit to see it, and 1 more to see your name." },
+  bench: { title: "Only the benchmarks", line: "It counts in the medians on Rate benchmarks and is never shown with your name or the seat. You can remove it there any time." },
+};
+
+/** The two choices for a rate on a seat the member held: Your seats, "Add a seat you held", and the rate editor below on the member's own seat. */
+export function RateWho({ value, onChange, disabled }: { value: RateChoice | null; onChange: (w: RateChoice) => void; disabled?: boolean }) {
+  const ui = useUi();
+  const name = useId();
+  const option = (k: RateChoice) => (
+    <label className={`ys-who-o${value === k ? " on" : ""}`}>
+      <input type="radio" name={name} checked={value === k} disabled={disabled} onChange={() => onChange(k)} />
+      <span className="ys-who-t">
+        <b>{RATE_WHO[k].title}</b>
+        <span>{RATE_WHO[k].line}</span>
+      </span>
+    </label>
+  );
+  return (
+    <div className="ys-who" role="radiogroup" aria-labelledby={`${name}l`}>
+      <span className="ys-who-l" id={`${name}l`}>
+        Who can see it?
+      </span>
+      {option("record")}
+      {option("bench")}
+      {value === "bench" && ui.me.invitePending && <p className="ys-who-note">Your invite bonus comes with your first fact on a record, so it isn&apos;t paid for this one.</p>}
+    </div>
+  );
+}
+
 /**
  * The small editor anchored to an empty cell (a bottom sheet on phones). With `initial`, it
  * edits the member's own value. A new fact can be taken back for 10 seconds from its toast.
  * Escape or a tap outside with something typed asks before it throws it away.
  */
-export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: HTMLElement; t: FactRef; company: string; initial?: string; onClose: () => void }) {
+export function FactEditor({
+  anchor,
+  t,
+  company,
+  initial,
+  ownRate,
+  onClose,
+}: {
+  anchor: HTMLElement;
+  t: FactRef;
+  company: string;
+  initial?: string;
+  /** The rate on a seat the member held: they pick who can see it, as on Your seats. `pricing` reads a rate typed without a unit. */
+  ownRate?: { pricing: string | null };
+  onClose: () => void;
+}) {
   const ui = useUi();
   const f = fieldDef(t.entity, t.field);
   const [value, setValue] = useState(initial ?? "");
@@ -1235,14 +1305,17 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [who, setWho] = useState<RateChoice | null>(null);
   const hid = useId();
   const eid = useId();
   const keepRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (asking) keepRef.current?.focus();
   }, [asking]);
   if (!f) return null;
   const editing = initial !== undefined;
+  const choose = !!ownRate && !editing;
   const earns = !editing && earnsNow(ui.me, t);
   const capped = !editing && earnNote(ui.me).capped;
   const note = editing
@@ -1254,12 +1327,31 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
         : "No credit for this one today";
   const seat = t.entity === "engagement" && t.field === "operator";
   const dirty = !saving && value.trim() !== "" && value.trim() !== (initial ?? "").trim();
-  const tryClose = () => (dirty ? setAsking(true) : onClose());
+  // Back to the field from "Throw away what you typed?".
+  const keep = () => {
+    setAsking(false);
+    requestAnimationFrame(() => bodyRef.current?.querySelector<HTMLElement>("input, select, button")?.focus({ preventScroll: true }));
+  };
+  // Esc and a click outside: with the question up they mean Keep editing (the top layer closes first), else ask before throwing text away.
+  const tryClose = () => (asking ? keep() : dirty ? setAsking(true) : onClose());
   // After a save the add button is gone: the cell takes focus once it shows the value (see focusNext).
   const focusValue = () => (focusNext = { k: cellKey(t.id, t.field), box: anchor.closest(".tp-drawer, .tp-rsheet"), until: Date.now() + 4000 });
   const save = async (raw: string, member: string | null = memberId) => {
     const { error, value: clean } = cleanValue(f, raw);
     if (error) return setErr(error);
+    if (choose && !who) return setErr("Pick who can see your rate.");
+    if (choose && who === "bench") {
+      // The medians need a monthly or an hourly figure. With no unit typed, the seat's pricing model decides.
+      const read = readRate(raw.trim(), ownRate?.pricing ?? null);
+      if (!read) return setErr(BENCH_RATE_HELP);
+      setErr(null);
+      setSaving(true);
+      // Not quiet: the answer says when the rate starts to count, and about an invite bonus.
+      const r = await ui.act({ type: "benchRate", engagementId: t.id, pricing: read.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: raw.trim() });
+      setSaving(false);
+      if (r.ok) onClose();
+      return;
+    }
     setErr(null);
     setSaving(true);
     if (editing) {
@@ -1284,7 +1376,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
   const simple = f.kind !== "choice";
   const aria: FieldAria = { "aria-labelledby": hid, "aria-invalid": err ? true : undefined, "aria-describedby": err ? eid : undefined };
   const body = (
-    <>
+    <div ref={bodyRef} className="tp-ed-body">
       {seat ? (
         <SeatHolderInput
           value={value}
@@ -1299,7 +1391,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       ) : (
         <FieldInput f={f} value={value} onChange={(v) => (setValue(v), setErr(null))} onSave={(v) => save(v)} autoFocus big={ui.layout === "phone"} aria={aria} />
       )}
-      {f.hint && f.hint !== f.placeholder && <p className="tp-ed-hint">{f.hint}</p>}
+      {choose ? <RateWho value={who} onChange={(w) => (setWho(w), setErr(null))} disabled={saving} /> : f.hint && f.hint !== f.placeholder && <p className="tp-ed-hint">{f.hint}</p>}
       {capped && <p className="tp-ed-hint">{earnNote(ui.me).text}.</p>}
       {!capped && !editing && !earns && <p className="tp-ed-hint">Only 5 answers for a company&apos;s industry, size, revenue or how they sell earn a credit each day. This one still saves.</p>}
       {err && (
@@ -1307,7 +1399,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
           {err}
         </p>
       )}
-    </>
+    </div>
   );
   const ask = asking && (
     <div className="tp-ed-ask" role="group" aria-label="Throw away what you typed?">
@@ -1316,7 +1408,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
         <button type="button" className="btn btn-sm" onClick={onClose}>
           Throw it away
         </button>
-        <button ref={keepRef} type="button" className="btn btn-sm btn-pine" onClick={() => setAsking(false)}>
+        <button ref={keepRef} type="button" className="btn btn-sm btn-pine" onClick={keep}>
           Keep editing
         </button>
       </span>
@@ -1333,6 +1425,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       )}
     </span>
   );
+  const saveLabel = choose && who === "bench" ? "Share for the benchmarks" : "Save";
   const noteCls = `tp-earn-note num${capped || (!editing && !earns) ? " capped" : ""}${editing ? " muted" : ""}`;
   if (ui.layout === "phone")
     return (
@@ -1345,7 +1438,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
               <span className={noteCls}>{note}</span>
               {simple && (
                 <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
-                  {saving ? "Saving" : "Save"}
+                  {saving ? "Saving" : saveLabel}
                 </button>
               )}
             </div>
@@ -1356,7 +1449,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       </Sheet>
     );
   return (
-    <Anchored anchor={anchor} onClose={tryClose} width={f.kind === "choice" || seat ? 320 : 300} className="tp-editor" labelledBy={hid}>
+    <Anchored anchor={anchor} onClose={tryClose} width={choose ? 360 : f.kind === "choice" || seat ? 320 : 300} className="tp-editor" labelledBy={hid}>
       <div className="tp-ed-head">{title}</div>
       {body}
       {ask || (
@@ -1366,7 +1459,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
             <span className={noteCls}>{saving && !simple ? "Saving" : note}</span>
             {simple && (
               <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
-                {saving ? "Saving" : "Save"}
+                {saving ? "Saving" : saveLabel}
               </button>
             )}
           </span>

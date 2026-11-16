@@ -2559,9 +2559,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
       // Under the daily cap, so the reason was the pick-list limit: say that, and what still earns.
       if (sellCapped && earning(s, me.id, nowMs).earned < EARN_CAP)
         return ` Only ${SELL_EARN_MAX} answers for ${PICKS} earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
-      const r = earning(s, me.id, nowMs).resetsAt;
-      const hrs = r ? Math.max(1, Math.ceil((Date.parse(r) - nowMs) / 3_600_000)) : 24;
-      return ` You've reached the limit of ${EARN_CAP} credits earned in 24 hours, so ${some ? "the rest" : "this one"} earned nothing. You can earn again in about ${hrs} hour${hrs === 1 ? "" : "s"}.`;
+      // The limit has one name everywhere ("earned today"). The client adds when earning opens again (Me.earnResetsAt), in the member's own time zone.
+      return ` No credit ${some ? "for the rest" : "this time"}, because you've earned today's ${EARN_CAP}.`;
     };
     const credits = (n: number) => (n ? ` You earned ${n} credit${n > 1 ? "s" : ""}.` : "");
     const bonusNote = (n: number) => (n ? ` Your invite bonus added ${n} more.` : "");

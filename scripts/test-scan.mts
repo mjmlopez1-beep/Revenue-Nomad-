@@ -380,7 +380,7 @@ eq("subject: nothing new", digest({ newRoles: 0, newRolesMine: 0, newRolesMineHi
 
 const d = digest();
 check("greets by first name", d.text.startsWith("Hi Maya,") && d.html.includes("Hi Maya,"));
-check("says how many of those companies are hidden", d.text.includes("3 of those companies are hidden") && d.html.includes("3 of those companies are hidden"));
+check("says how many of the companies are hidden", d.text.includes("3 of the 4 companies are hidden") && d.html.includes("3 of the 4 companies are hidden"));
 check("lists functions with counts", ["Sales  4", "Marketing  3", "RevOps  3", "Customer Success  2"].every((l) => d.text.includes(l)), d.text);
 check("says how many roles closed", d.text.includes("5 roles closed this week") && d.html.includes("5 roles closed this week"));
 check("has the seats line", d.text.includes("9 things are still missing on your seats. Add one and you earn a credit.") && d.html.includes("9 things are still missing on your seats. Add one and you earn a credit."));

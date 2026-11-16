@@ -51,7 +51,8 @@ export function pickMove(me: Me, seats: { n: number; missing: number }, newRoles
   const canFill = seats.missing > 0 && earnRoom(me) > 0;
   if (canFill && me.added < 3 && !off.has("seats")) return "seats";
   if (canFill && me.credits <= 3 && !off.has("low")) return "low";
-  if (newRoles > 0 && me.function && !off.has("roles")) return "roles";
+  // New roles cost a credit to see. At 0 the card would send the member somewhere they can't pay for: the credit line, with its way to earn, leads instead.
+  if (newRoles > 0 && me.function && me.credits > 0 && !off.has("roles")) return "roles";
   return null;
 }
 

@@ -46,8 +46,8 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     if (hidden === 0) lead = mine === 1 ? "You can already see the company." : mine === 2 ? "You can already see both companies." : `You can already see all ${mine} companies.`;
     else if (mine === 1) lead = "The company is hidden. Unlock it for 1 credit to see who is hiring.";
     else if (hidden === mine) lead = `All ${mine} companies are hidden. Unlock one for 1 credit to see who is hiring.`;
-    else if (hidden === 1) lead = "1 of those companies is hidden. Unlock it for 1 credit to see who is hiring.";
-    else lead = `${hidden} of those companies are hidden. Unlock one for 1 credit to see who is hiring.`;
+    else if (hidden === 1) lead = `1 of the ${mine} companies is hidden. Unlock it for 1 credit to see who is hiring.`;
+    else lead = `${hidden} of the ${mine} companies are hidden. Unlock one for 1 credit to see who is hiring.`;
   } else if (newRoles > 0) {
     const none = fn && fn !== "Other" ? (newRoles === 1 ? `It is not in ${fn}. ` : `None are in ${fn}. `) : "";
     lead = `${none}${newRoles === 1 ? "The" : "Each"} company stays hidden until you unlock it for 1 credit.`;
@@ -106,11 +106,12 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   /* ---- HTML ---- */
 
   const num = "font-variant-numeric:tabular-nums;";
-  // The one ember element: the count of roles that are live this week.
+  // The one ember element: a 10px dot before the count of roles live this week. The count itself is ember-ink, the ember for text on white.
   const hero =
     heroCount > 0
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px"><tr>
-<td valign="middle" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${MAIL.ember}">${heroCount}</td>
+<td valign="middle" style="padding:0 8px 0 0;font-size:0;line-height:0"><span style="display:inline-block;width:10px;height:10px;border-radius:5px;background:${MAIL.ember}"></span></td>
+<td valign="middle" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${MAIL.emberInk}">${heroCount}</td>
 <td valign="middle" style="font-family:${MAIL.font};font-size:22px;line-height:26px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">${esc(heroLabel)}</td>
 </tr></table>`
       : `<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">No new fractional roles this week</p>`;
