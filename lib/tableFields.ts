@@ -6,9 +6,9 @@
  * who the fractional reported to, worked with, or who is hiring for the seat).
  * Each value is stored once on its own record and shows everywhere it applies.
  *
- * Free fields describe the company and the shape of the work (function, type, start,
+ * Free fields describe the company and the shape of the work (function, type, status, start,
  * hours per week), so the free view is useful on its own. Locked fields are the intel
- * people trade for: the exact role, status, end date, who held the seat, rate, the
+ * people trade for: the exact role, end date, who held the seat, rate, the
  * posting, and people's names and contact details. Adding a missing fact earns 1 credit (max
  * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
@@ -128,14 +128,14 @@ export const GROUPS: GroupDef[] = [
       { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The part of GTM this seat covers.", say: "the function" },
       { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title, the way the client wrote it.", say: "the role" },
       { key: "type", label: "Type of work", short: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES, say: "the type of work" },
-      { key: "status", label: "Status", kind: "choice", gated: true, options: STATUSES, hint: "Open role means the client is hiring for this seat now.", say: "the status" },
+      { key: "status", label: "Status", kind: "choice", gated: false, options: STATUSES, hint: "Open role means the client is hiring for this seat now.", say: "the status" },
       {
         key: "operator",
         label: "Seat holder",
         kind: "text",
         gated: true,
         placeholder: "First and last name",
-        hint: "The person's first and last name, like Jane Smith. If they're a member, pick them from the list.",
+        hint: "The person's first and last name, like Jane Smith. If they've signed in to Trading Post, pick them from the list.",
         say: "the seat holder",
       },
       { key: "start", label: "Start month", short: "Start", kind: "month", gated: false, hint: "The month the work started.", say: "the start month" },
@@ -258,14 +258,119 @@ export function employeesBucket(n: number | null | undefined): string | null {
 /** A person's first and last name: two or more words of letters (with ' - . allowed), no digits or emails. */
 export const PERSON_NAME_RE = /^(?=.{3,60}$)\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
 
+/** Half of a character pair on its own (what a cut in the middle of an emoji leaves behind). */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+/** Text with no half characters in it, so it can always be shown, encoded and stored. */
+export const wellFormed = (s: string) => s.replace(LONE_SURROGATE, "");
+/** The first `max` units of a text, never ending in half a character. */
+export const cut = (s: string, max: number) => wellFormed(s.slice(0, max));
+/** What a member typed, tidied: invisible characters out, spaces collapsed, cut to `max` whole characters. */
+export const tidy = (raw: unknown, max: number) => cut(stripInvisible(raw).trim().replace(/\s+/g, " "), max).trim();
+
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+/** "3/2025", "2025-3", "Mar 2025", "March 2025" and "2025-03-15" as "2025-03". Anything else comes back as it was. */
+function asMonth(v: string): string {
+  const ym = (y: string, m: number) => (m >= 1 && m <= 12 ? `${y}-${String(m).padStart(2, "0")}` : v);
+  let m = v.match(/^(\d{1,2})[/-](\d{4})$/);
+  if (m) return ym(m[2], Number(m[1]));
+  m = v.match(/^(\d{4})[/-](\d{1,2})(?:-\d{1,2})?$/);
+  if (m) return ym(m[1], Number(m[2]));
+  m = v.match(/^([A-Za-z]{3,9})\.?,? (\d{4})$/);
+  if (m) {
+    const word = m[1].toLowerCase();
+    return ym(m[2], MONTHS.findIndex((full) => word === full.slice(0, 3) || (word.length > 3 && full.startsWith(word))) + 1);
+  }
+  return v;
+}
+/** The latest moment that is "now" somewhere on Earth: members ahead of UTC are already in the next month. */
+const AHEAD_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * Hosts that many companies share (social profiles, site builders, job boards). A website there
+ * keeps its path, and two companies are never matched by the host alone: linkedin.com/company/a
+ * and linkedin.com/company/b are two companies. A subdomain counts too (sites.google.com).
+ */
+const SHARED_HOSTS = [
+  "linkedin.com", "twitter.com", "x.com", "facebook.com", "fb.com", "instagram.com", "threads.net", "tiktok.com", "youtube.com",
+  "github.com", "gitlab.com", "medium.com", "google.com", "notion.site", "notion.so", "linktr.ee", "wellfound.com", "angel.co",
+  "crunchbase.com", "about.me", "behance.net", "dribbble.com", "producthunt.com", "ycombinator.com", "glassdoor.com", "indeed.com",
+  "lever.co", "greenhouse.io", "ashbyhq.com", "workable.com", "bit.ly", "wix.com", "squarespace.com", "carrd.co",
+];
+export const isSharedHost = (host: string) => SHARED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+/**
+ * What two company websites are compared by, never shown: the host ("acme.com"), or on a shared
+ * host the host and the path ("linkedin.com/company/acme"). Null when there is nothing to match
+ * on (no host, or a shared host with no path).
+ */
+export function siteKey(raw: unknown): string | null {
+  const s = String(raw ?? "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  const cut = s.search(/[/?#]/);
+  const host = (cut < 0 ? s : s.slice(0, cut)).toLowerCase();
+  if (!/^[\w-]+(\.[\w-]+)*\.[a-z]{2,}$/.test(host)) return null;
+  if (!isSharedHost(host)) return host;
+  const pathPart = (cut < 0 ? "" : s.slice(cut)).split(/[?#]/)[0].replace(/\/+$/, "").toLowerCase();
+  return pathPart ? host + pathPart : null;
+}
+
+/** Query parameters that only say where a click came from. A long link loses these first. */
+const TRACKING_PARAM = /^(utm_.*|gclid|gbraid|wbraid|dclid|fbclid|msclkid|mc_[ce]id|igshid|_hs(enc|mi)|hsctatracking|trk|trkinfo|refid|trackingid|lipi|ref|ref_?src|referrer|from|src|source|tk|si|spm|campaign|medium|cmpid|sc_cid|gh_src|lever-(source|origin)|lever-source\[\]|mkt_tok|_ga|_gl|yclid|ttclid|share_id)$/i;
+/** Query parameters that say which job a link is for. When a link is still too long, only these stay. */
+const JOB_PARAM = /^(jk|vjk|gh_jid|currentjobid|jobid|job_?id|jid|id|posting_?id|req(uisition)?_?id|pid|position_?id|opening_?id|ashby_jid|lever_?id)$/i;
+/** A query with some parameters left out (`keep` says which stay). Keeps their order and how they were written. */
+function keepParams(query: string, keep: (name: string) => boolean): string {
+  return query
+    .split("&")
+    .filter((p) => p && keep(decodeURIComponentSafe(p.split("=")[0])))
+    .join("&");
+}
+const decodeURIComponentSafe = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+/**
+ * A link over 200 characters: drop the tracking codes, then, if it is still too long, every
+ * parameter that does not name the job. The path and a fragment (a hash-routed page) stay.
+ */
+function shortenLink(u: string): string {
+  const hash = u.indexOf("#");
+  const frag = hash < 0 ? "" : u.slice(hash);
+  const rest = hash < 0 ? u : u.slice(0, hash);
+  const q = rest.indexOf("?");
+  if (q < 0) return u;
+  const base = rest.slice(0, q).replace(/\/$/, "");
+  const join = (query: string) => `${base}${query ? `?${query}` : ""}${frag}`;
+  let out = join(keepParams(rest.slice(q + 1), (n) => !TRACKING_PARAM.test(n)));
+  if (out.length > 200) out = join(keepParams(rest.slice(q + 1), (n) => JOB_PARAM.test(n)));
+  return out;
+}
+
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
-  const v = stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, 200);
+  // The app only ever sends text (or a number for hours). Anything else is not a value.
+  if (raw !== null && raw !== undefined && typeof raw !== "string" && typeof raw !== "number") return { error: "Type this in as text." };
+  const whole = stripInvisible(raw).trim().replace(/\s+/g, " ");
+  if (!whole) return { error: "It's still empty. Add something first." };
+  if (f.kind === "url") {
+    let u = wellFormed(whole).replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
+    // A link too long to keep whole loses its tracking codes, never the part that names the job.
+    if (u.length > 200) u = shortenLink(u);
+    if (u.length > 200) return { error: "That link is too long. Paste the short link." };
+    if (!/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u)) return { error: "That doesn't look like a web address. Paste the whole thing, like acme.com." };
+    // The host never depends on case. A company's website is its host and nothing after it,
+    // except on a host many companies share (linkedin.com/company/acme), where the path names the company.
+    const slash = u.indexOf("/");
+    const host = (slash < 0 ? u : u.slice(0, slash)).toLowerCase();
+    if (f.key === "website") {
+      const pathPart = slash < 0 ? "" : u.slice(slash).split(/[?#]/)[0].replace(/\/+$/, "");
+      return { value: isSharedHost(host) && pathPart ? host + pathPart : host };
+    }
+    return { value: slash < 0 ? host : host + u.slice(slash) };
+  }
+  const v = cut(whole, 200).trim();
   if (!v) return { error: "It's still empty. Add something first." };
   switch (f.kind) {
-    case "url": {
-      const u = v.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
-      return /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u) ? { value: u } : { error: "That doesn't look like a web address. Paste the whole thing, like acme.com." };
-    }
     case "email":
       return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v) ? { value: v.toLowerCase() } : { error: "That doesn't look like an email address. Check it for a typo." };
     case "phone":
@@ -273,12 +378,13 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     case "month":
     case "monthOrOngoing": {
       if (f.kind === "monthOrOngoing" && /^ongoing$/i.test(v)) return { value: "Ongoing" };
-      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(v)) return { error: f.kind === "month" ? "Use a year and month, like 2025-03." : "Pick the month it ended, or Ongoing if it's still going." };
-      const now = new Date();
-      const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      if (Number(v.slice(0, 4)) < 1970) return { error: "That's too far back. Pick a month from 1970 on." };
-      if (v.length === 4 ? v > thisMonth.slice(0, 4) : v > thisMonth) return { error: "That month hasn't happened yet. Pick this month or earlier." };
-      return { value: v };
+      const m = asMonth(v);
+      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(m)) return { error: f.kind === "month" ? "Use a year and month, like 2025-03." : "Pick the month it ended, or Ongoing if it's still going." };
+      if (Number(m.slice(0, 4)) < 1970) return { error: "That's too far back. Pick a month from 1970 on." };
+      // Compared with the month that has already started somewhere on Earth, so nobody ahead of UTC is refused.
+      const thisMonth = new Date(Date.now() + AHEAD_MS).toISOString().slice(0, 7);
+      if (m.length === 4 ? m > thisMonth.slice(0, 4) : m > thisMonth) return { error: "That month hasn't happened yet. Pick this month or earlier." };
+      return { value: m };
     }
     case "number":
       return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use a whole number from 1 to 80." };
@@ -287,6 +393,9 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
+      // Two letters is a title ("GM", "AE", "VP"), and so is one Han, Kana or Hangul character (営業).
+      if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 2 && !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(v))
+        return { error: "Use the seat's title, like Fractional VP Sales." };
       return v.length >= 2 ? { value: v } : { error: "That's too short. Use at least 2 characters." };
   }
 }

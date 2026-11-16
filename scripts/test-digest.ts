@@ -135,6 +135,12 @@ async function main() {
   check("without RN_PUBLIC_URL or a request origin nothing is sent", (await t.sendDigests(at(21))) === 0 && outbox.length === 0);
   check("with a request origin the links use it", (await t.sendDigests(at(21), "https://origin.example.com/")) === 3 && outbox.every((x) => x.text.includes("https://origin.example.com/")), outbox.length);
   check("no request went anywhere but the mail provider", otherCalls === 0, otherCalls);
+
+  // "Email me my link" finds a member the way joining does: one Gmail inbox is one account.
+  await t.joinMember("Gia Gmail", "gia.mail+post@gmail.com");
+  const found = await Promise.all(["gia.mail+post@gmail.com", "GiaMail@googlemail.com", "g.i.a.mail+x@gmail.com"].map((e) => t.memberByEmail(e)));
+  check("another spelling of a member's Gmail address finds the same member", found.every((m) => m?.name === "Gia Gmail"), found.map((m) => m?.name ?? null));
+  check("a different address finds nobody, and other domains compare as typed", (await t.memberByEmail("gia.mail@example.com")) === null && (await t.memberByEmail("s.al@example.com")) === null && (await t.memberByEmail("SAL@example.com"))?.name === "Sal Sales");
 }
 
 main()

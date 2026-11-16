@@ -47,6 +47,10 @@ export interface ScanApplyResult {
   closed: number;
   reopened: number;
   companiesAdded: number;
+  /** New roles left for a later run because this one had already opened its limit. */
+  overCap?: number;
+  /** Unlocks paid back because the role they paid for had closed (made after it was last seen listed). */
+  refunded?: number;
 }
 
 /** Everything one member's weekly email needs. No other member's data. */

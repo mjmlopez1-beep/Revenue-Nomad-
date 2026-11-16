@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { lookupCompany, normalizeDomain } from "@/lib/companyLookup";
 import { limited } from "@/lib/rateLimit";
 import { existingCompany, memberForToken } from "@/lib/table";
+import { guarded } from "@/lib/apiGuard";
 
 export const dynamic = "force-dynamic";
 
 /** GET ?url=acme.com — prefill for the Add record form (signed-in members only). */
-export async function GET(req: NextRequest) {
+export const GET = guarded(async (req: NextRequest) => {
   const token = req.cookies.get("rn_table")?.value ?? null;
   if (!(await memberForToken(token))) {
     return NextResponse.json({ error: "You're signed out. Sign in again to add a company." }, { status: 401 });
@@ -18,4 +19,4 @@ export async function GET(req: NextRequest) {
   const found = await lookupCompany(url);
   const existing = await existingCompany(domain, found?.name ?? null);
   return NextResponse.json({ domain, name: found?.name ?? null, industry: found?.industry ?? null, description: found?.description ?? null, existing });
-}
+});

@@ -8,14 +8,20 @@ import type { Entity } from "./tableFields";
  * What one field looks like to the viewer.
  * - empty: nobody has added it yet (adding it earns a credit)
  * - locked: someone added it; unlocking costs 1 credit. Never carries the value.
- * - value: visible. `mine` = the viewer added it; `ver` = confirmations (our own
- *   records count as one); `iv` = the viewer confirmed it; `system` = set by the system.
+ * - value: visible. `mine` = the viewer added it; `ver` = confirmations by members (a fact
+ *   from our own records or the scan with none has ver 0); `iv` = the viewer confirmed it;
+ *   `system` = set by the system.
+ * - `from` (on value and locked): where a fact nobody added by hand came from. "records" is
+ *   Revenue Nomad's own records (the seed), "posting" is the job posting the weekly scan read.
+ *   Left out on a fact a member added.
  * - reported: under review. Two members' reports hide a fact for everyone until an admin
- *   reviews it; one report hides it only for that reporter (`mine` is then false).
+ *   reviews it; one report hides it only for that reporter (`mine` is then false). A report
+ *   by the seat holder on their own seat, and "This isn't me" on a name a member added, hide
+ *   the fact for everyone at once.
  */
 export type Cell =
   | { s: "empty" }
-  | { s: "locked"; ver: number }
+  | { s: "locked"; ver: number; from?: "records" | "posting" }
   | {
       s: "value";
       v: string;
@@ -23,6 +29,7 @@ export type Cell =
       ver: number;
       iv?: boolean;
       system?: boolean;
+      from?: "records" | "posting";
       /** Seat holder only: the name belongs to a Trading Post member (their title; `you` when it's the viewer). */
       member?: { title: string; you?: boolean };
     }
@@ -60,6 +67,21 @@ export interface EngagementRec {
    */
   opened?: string | null;
   closed?: string | null;
+  /**
+   * The same two moments as full ISO times, to show in the viewer's own time zone. `opened` is
+   * the day the scan first saw the posting, which is not the day it was posted.
+   */
+  openedAt?: string | null;
+  closedAt?: string | null;
+  /** The ISO day the job board says the role was posted, when it gives one. */
+  posted?: string | null;
+  /** ISO time a scan last saw the posting listed. */
+  lastSeen?: string | null;
+  /**
+   * Still open on file, but a clean scan of its board has run since it was last seen and did
+   * not list it ("Not seen in the last scan"). Left out of ScanSummary.openNow.
+   */
+  unseen?: boolean;
 }
 
 export interface Friendly {
@@ -85,6 +107,7 @@ export interface CompanyRec {
    * The company has an active open role and the viewer hasn't unlocked it: `name` is
    * HIDDEN_COMPANY, website, LinkedIn and About come back locked, HQ is cut to its region and
    * there is no logo. Unlock with { type: "unlock", entity: "company", id, field: "identity" }.
+   * That one credit also opens the role and the posting of each open role there.
    */
   hidden?: boolean;
   /** Domain to draw the logo from (Website, or a looked-up domain). */
@@ -113,7 +136,21 @@ export interface Me {
   /** What they came for (onboarding). */
   goal: string | null;
   onboarded: boolean;
+  /** Never negative. When the ledger is below zero (a fact was removed after its credit was spent) the shortfall is in `owed`. */
   credits: number;
+  /** Credits owed when the ledger is below zero, else 0. Earning pays it off first. */
+  owed?: number;
+  /**
+   * Unlocks left today under the daily limit: 100 in any 24 hours, 25 in an account's first 24
+   * hours (null = no limit in play). Lower than `credits` means the limit binds before the balance.
+   */
+  unlocksLeft?: number | null;
+  /**
+   * Company pick-list answers (industry, employees, revenue and the four under "How they sell")
+   * that can still earn a credit today: 5 a day. Not counted on a company the member added or
+   * holds a seat at.
+   */
+  sellEarnLeft?: number;
   /** Credits earned in the last 24 hours, and the cap. */
   earned24h: number;
   earnCap: number;
@@ -160,20 +197,50 @@ export interface LedgerRow {
   field: string;
 }
 
-/** One benchmark cell: values only once at least `min` rates are on file, so none can be traced back. */
+/**
+ * One benchmark figure. It counts people, not rows: a member counts once per group however many
+ * rates they have in it (with the middle of them), a Rate Index row counts once, and so does a
+ * record of ours. Amounts are rounded: dollars a month to the nearest 250 and dollars an hour to
+ * the nearest 5, or to the nearest 1,000 and 25 while the figure has fewer than
+ * `Benchmarks.rangeN` contributors.
+ *
+ * Only contributors who count are in a figure at all: seed members, our records, Rate Index rows,
+ * and joined accounts that proved their email or had a fact confirmed by two members. A viewer's
+ * own rates are left out of the figures that viewer sees (`withoutYours`).
+ */
 export interface RateStat {
+  /**
+   * Different contributors. When `median` is sent: everyone in the figure. Below the floor:
+   * the contributors counted toward `min`, for the progress line ("3 of 5"), so `min - n` more
+   * are needed. Rates shared privately and rates on records are counted apart (the larger count
+   * is sent): a private rate joins a figure only with 5 private ones in it.
+   */
   n: number;
-  /** Rates this group needs before it shows numbers: 5, or 20 when it includes Rate Index data. */
+  /** Trusted contributors this figure needs before it shows numbers: 5, or 20 when it counts Rate Index data. */
   min: number;
+  /**
+   * This figure includes Rate Index data (when shown), or is counting toward the 20 (when not).
+   * False when it is, or will be, made from member rates and our own records alone.
+   */
+  indexed?: boolean;
+  /**
+   * The middle half. Sent only when the figure has at least `Benchmarks.rangeN` trusted
+   * contributors (and 10 private ones, when it includes private rates). Check for it, not for `n`.
+   */
   p25?: number;
   median?: number;
   p75?: number;
+  /**
+   * The viewer has a rate in this group, and it is left out of what they see here (n included),
+   * so nothing they share can move a number they can read. Other members' figures include it.
+   */
+  withoutYours?: boolean;
 }
 export interface BenchmarkRow {
   function: string;
   /** Client revenue band at the time of the seat (RN_REVENUE), or "All". */
   revenue: string;
-  /** The group includes points from Revenue Nomad's Rate Index (survey and contract data). */
+  /** Either figure on the row is `indexed` (see RateStat). A group with a few survey rows and no figure counting them is not. */
   indexed: boolean;
   /** Monthly retainers, in dollars a month. */
   monthly: RateStat;
@@ -183,6 +250,8 @@ export interface BenchmarkRow {
 export interface Benchmarks {
   /** The floor for a group with no Rate Index data (5). Each RateStat carries its own `min`. */
   minN: number;
+  /** Trusted contributors a figure needs before its range (p25 to p75) is sent: 10. Below it, the median alone. */
+  rangeN?: number;
   /** Rates on file that could be read as monthly or hourly. */
   total: number;
   rows: BenchmarkRow[];
@@ -209,7 +278,8 @@ export interface View {
   ledger: LedgerRow[];
   /**
    * Admins: reported facts. A fact is hidden for everyone once two members report it; until
-   * then only its reporter sees it as under review.
+   * then only its reporter sees it as under review. A seat holder's report on their own seat, and
+   * "This isn't me" on a name a member added, hide the fact at once and are listed here too.
    */
   reported: {
     entity: Entity;
@@ -239,7 +309,13 @@ export interface View {
 
 export interface ScanSummary {
   lastRunAt: string | null;
-  /** Open roles on file now, opened in the last 7 days, and closed in the last 30. */
+  /** The last run in which at least one job board answered cleanly. This is the "last scan" members see. */
+  lastOkAt?: string | null;
+  /**
+   * Open roles on file now (not counting those a clean scan no longer saw), opened in the last
+   * 7 days (first seen this week, and posted in the last 14 days when the board gives a date),
+   * and closed in the last 30.
+   */
   openNow: number;
   opened7: number;
   closed30: number;
@@ -254,6 +330,20 @@ export interface AdminStats {
   credits: { atZero: number; low: number; median: number };
   /** Facts added and unlocked, all time and in the last 7 days. */
   activity: { adds: number; unlocks: number; adds7: number; unlocks7: number };
+  /**
+   * The 20 members with the most facts added in the last 7 days, most first. Counts facts on
+   * records that still stand (a removed fact drops out). `privateRates` is how many
+   * benchmark-only rates the member has on file, never an amount. `memberId` is a public id.
+   */
+  recentAdds?: { memberId: string; name: string; adds24h: number; adds7: number; privateRates: number; lastAt: string | null }[];
+  /**
+   * Members who picked themselves as the seat holder of an open role in the last 30 days, newest
+   * first. `closed`: the claim closed the role for everyone (the account counts: a seed member,
+   * a proven email, or a fact two members confirmed). Otherwise the name was kept and the role
+   * stayed open. `standing`: the name is still on the seat. `company` is the real name (admins
+   * see every company). `memberId` and `engagementId` are public ids.
+   */
+  roleClaims?: { memberId: string; name: string; company: string; engagementId: string; at: string; closed: boolean; standing: boolean }[];
   /** Members who hit zero credits while trying to unlock, and how many times. */
   walls: { members: number; hits: number };
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
@@ -261,6 +351,12 @@ export interface AdminStats {
   topUnlocked: { field: string; n: number }[];
   topAdded: { field: string; n: number }[];
   scan: { lastRunAt: string | null; openNow: number; opened7: number; closed30: number; sources: { source: string; fetched: number; matched: number; error?: string }[] };
+  /**
+   * Each job board the scan reads. `healthy` is false when its last run failed, matched nothing,
+   * or matched under half of `baseline` (its last healthy count). Roles from a board that is not
+   * healthy are never closed on its word.
+   */
+  boards?: { source: string; healthy: boolean; lastOkAt: string | null; baseline: number }[];
   digest: { enabled: boolean; lastSentAt: string | null; sent: number; optedOut: number };
   /** Members linked to a seat on file, and facts still missing on those seats. */
   seats: { linkedMembers: number; factsMissing: number };
@@ -272,7 +368,11 @@ export type Action =
   /** `memberId` (seat holder only): the member picked from the search, which links the seat to them. */
   | { type: "fill"; entity: Entity; id: string; field: string; value: string; memberId?: string }
   | { type: "unlock"; entity: Entity; id: string; field: string }
-  /** Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. */
+  /**
+   * Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. A hidden
+   * company is one purchase with the role and posting of each open role there: asking for the
+   * company (`identity`), such a role or such a posting buys all of them for 1 credit.
+   */
   | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[] }
   /**
    * Add a company (one click from a URL) and optionally an engagement and people there.
@@ -301,9 +401,14 @@ export type Action =
   /** Confirm a value you can see is correct (one confirmation per member per value). */
   | { type: "verify"; entity: Entity; id: string; field: string }
   | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" }
+  /** Admins: remove a fact a member added, with no report needed. Credits go back the way a review removal does. */
+  | { type: "adminRemove"; entity: Entity; id: string; field: string }
+  /** Admins: remove every fact this member added (`memberId` is a public id), their benchmark-only rates and the empty records left behind. */
+  | { type: "adminRemoveMember"; memberId: string }
   /**
-   * Share a rate for the benchmarks only. It counts in the medians and is never shown on a
-   * record or to another member. Earns 1 credit (inside the daily cap). One per seat.
+   * Share a rate for the benchmarks only. It counts in the medians and is never shown with the
+   * member's name or the seat. Earns 1 credit (inside the daily cap). One per seat, at most 3
+   * that aren't tied to a seat the member holds, and at most 5 saved in any 24 hours.
    */
   | { type: "benchRate"; engagementId?: string; function?: string; pricing: "Monthly retainer" | "Hourly"; rate: string; revenue?: string }
   | { type: "benchRateRemove"; id: string }
@@ -329,7 +434,7 @@ export type ActionResult = {
   id?: string;
   capped?: boolean;
   cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
-  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked">;
+  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "owed" | "unlocksLeft" | "sellEarnLeft">;
 };
 
 export const GOALS = [

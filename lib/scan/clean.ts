@@ -2,6 +2,7 @@
  * Cleaning for the weekly scan: company names, role titles, the dedupe key, and the company's
  * own website. Pure string work with no Node imports, so it runs anywhere and tests fast.
  */
+import { cut } from "../tableFields";
 
 /** Text with tags stripped, entities decoded and whitespace collapsed. */
 export function plain(raw: unknown): string {
@@ -34,6 +35,16 @@ function codePoint(n: number): string {
 /** Lowercase letters and digits only. "Acme Robotics, Inc." and "ACME robotics" squeeze to the same thing. */
 export const squeeze = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 
+/**
+ * A name as it is compared, never as it is shown or stored: Latin accents dropped, lowercase,
+ * letters and digits of any script kept. "Société Générale" and "Societe Generale" match, and a
+ * name in Cyrillic or Japanese keeps a key of its own. Only the Latin accents go (U+0300 to
+ * U+036F): in Hindi, Thai, Bengali or Tamil a vowel is written as a mark, and काम and कम are two
+ * words. Empty for a name with no letter or digit.
+ */
+export const textKey = (s: string) =>
+  String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]+/g, "").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "").replace(/^\p{M}+/u, "");
+
 /** The posting's stable key: company and title, squeezed and joined by "::". The same role on two boards shares it. */
 export function roleKey(company: string, title: string): string {
   return `${squeeze(company)}::${squeeze(title)}`;
@@ -61,8 +72,16 @@ export function cleanCompany(raw: unknown): string {
   }
   // A bare slug from an applicant tracking system ("acme-robotics") reads better capitalized.
   if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s)) s = s.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-  return s.slice(0, 80).trim();
+  return cut(s, 80).trim();
 }
+
+/**
+ * The key two spellings of one company share, used only to match them: legal suffixes and
+ * bracketed notes go first (cleanCompany), then a leading "The", then textKey. "Acme Robotics,
+ * Inc.", "ACME robotics (YC W24)" and "The Acme Robotics" are one company. Never match on an
+ * empty key: that is a name with no letter or digit in it.
+ */
+export const companyKey = (name: unknown) => textKey(cleanCompany(name).replace(/^the\s+/i, ""));
 
 /** Stand-ins a board uses when the company is not named. */
 const NO_NAME = new Set(
@@ -211,7 +230,7 @@ export function cleanTitle(raw: unknown, company?: string): string {
     }
     if (s === before) break;
   }
-  return s.replace(/\s+/g, " ").slice(0, 120).trim();
+  return cut(s.replace(/\s+/g, " "), 120).trim();
 }
 
 /* ---------- the company's own website ---------- */

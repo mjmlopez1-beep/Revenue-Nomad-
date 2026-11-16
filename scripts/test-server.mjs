@@ -8,7 +8,8 @@
  * confirms and reports facts, and it stores test scans that open and close roles. Start that
  * server on a fresh RN_DATA_DIR with RN_STARTER_CREDITS=25, RN_ADMIN_EMAILS=admin-qa@example.com,
  * RN_SCAN_TEST=1 and RN_CRON_SECRET=qa-cron (the last two let the scan checks store results
- * without reading a job board; without them those checks are skipped).
+ * without reading a job board; without them those checks are skipped). The cron secret also
+ * lets the tests create the admin account, which the join form alone refuses.
  *
  * Optional environment:
  *   ADMIN_EMAIL    admin account to join (default admin-qa@example.com)
@@ -104,9 +105,10 @@ class Client {
   }
 }
 
-async function join(name, ipAddr, { ref, email } = {}) {
+async function join(name, ipAddr, { ref, email, headers } = {}) {
   const r = await call("POST", "/api/table", {
     ipAddr,
+    headers,
     body: { join: { name, email: email ?? `qa+${RUN}-${name.toLowerCase().replace(/\W+/g, "")}-${Math.random().toString(36).slice(2, 7)}@example.com`, ref } },
   });
   const token = (r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean) ?? null;
@@ -162,6 +164,25 @@ function seedClient(n, ipAddr) {
   const holders = new Set(seedHolders.map((m) => m.id));
   const m = seedFile.members.filter((x) => x.token && !holders.has(x.id)).slice(-n)[0];
   return m ? new Client("Seed Member", ipAddr, m.token) : null;
+}
+
+/**
+ * Make a joined member's word count (lib/table.ts trustOf): they add a free fact and two seed
+ * members confirm it. A claim on an open role closes it only from an account that counts.
+ * Takes companies from the end of the list, away from the ones other checks use. Returns
+ * whether it could (it needs the seed file the server runs on).
+ */
+let vouchN = 0;
+async function vouch(who) {
+  const a = seedClient(40, ip(236));
+  const b = seedClient(41, ip(237));
+  if (!a || !b) return false;
+  const v = await who.view();
+  const c = [...v.companies].reverse().filter((x) => !x.hidden && !x.mine && x.cells.hq?.s === "empty")[vouchN++];
+  if (!c) return false;
+  const fill = await who.act({ type: "fill", entity: "company", id: c.id, field: "hq", value: "Austin, TX" });
+  const ok = [await a.act({ type: "verify", entity: "company", id: c.id, field: "hq" }), await b.act({ type: "verify", entity: "company", id: c.id, field: "hq" })];
+  return fill.status === 200 && ok.every((r) => r.status === 200);
 }
 
 /** Store a test scan (the server must run with RN_SCAN_TEST=1 and RN_CRON_SECRET). */
@@ -232,12 +253,15 @@ function pickEmpty(view, n, { free = false, entity } = {}) {
   if (out.length < n) throw new Error(`only ${out.length} empty cells left`);
   return out;
 }
-/** n locked facts. A hidden company's website, LinkedIn and About are one unlock between them, so company cells are left out. */
+/**
+ * n locked facts that cost 1 credit each. A hidden company is one unlock with its website, LinkedIn and
+ * About and with the role and posting of its open roles, so company cells and hidden companies are left out.
+ */
 const pickLocked = (view, n) => {
   const out = [];
   for (const x of cellsOf(view)) {
     if (out.length >= n) break;
-    if (x.cell.s === "locked" && x.entity !== "company") out.push({ entity: x.entity, id: x.id, field: x.field });
+    if (x.cell.s === "locked" && x.entity !== "company" && !x.company.hidden) out.push({ entity: x.entity, id: x.id, field: x.field });
   }
   return out;
 };
@@ -253,7 +277,8 @@ async function admin() {
   if (shared.admin !== undefined) return shared.admin;
   const email = process.env.ADMIN_EMAIL || "admin-qa@example.com";
   if (process.env.ADMIN_TOKEN) return (shared.admin = new Client("Admin Qa", ip(250), process.env.ADMIN_TOKEN));
-  const { client } = await join("Admin Qa", ip(250), { email });
+  // An admin address joins only with the server's cron secret while email sign-in is off.
+  const { client } = await join("Admin Qa", ip(250), { email, headers: { "x-cron-secret": CRON_SECRET } });
   if (client) await client.act({ type: "profile", function: "Sales", goal: "friendly" });
   return (shared.admin = client);
 }
@@ -418,15 +443,16 @@ section("ip", async () => {
 section("unlock", async () => {
   const N = await member("Neo Tester", ip(40));
   const v = await N.view();
-  const locked = pickLocked(v, 25);
+  // The first-day limit equals the starter credits (25), so a new account can spend all of them.
+  const locked = pickLocked(v, 27);
   const r18 = await N.act({ type: "unlockMany", items: locked.slice(0, 18) });
   check("a new account unlocks 18", r18.status === 200 && r18.json?.me?.credits === STARTER - 18, r18.json);
-  const r5 = await N.act({ type: "unlockMany", items: locked.slice(18, 23) });
-  check("new account: 18 + 5 says how many are left and what the limit is", r5.json?.error === "You can unlock 2 more today. New accounts can unlock 20 facts in their first 24 hours, then 100 a day.", r5.json);
-  const r2 = await N.act({ type: "unlockMany", items: locked.slice(18, 20) });
-  check("new account unlocks 2 more (20)", r2.status === 200, r2.json);
-  const r21 = await N.act({ type: "unlock", ...locked[20] });
-  check("new account is refused its 21st unlock", r21.json?.error === "You've reached today's unlock limit. New accounts can unlock 20 facts in their first 24 hours, then 100 a day.", r21.json);
+  const r8 = await N.act({ type: "unlockMany", items: locked.slice(18, 26) });
+  check("new account: 18 + 8 says how many are left and what the limit is", r8.json?.error === "You can unlock 7 more today. New accounts can unlock 25 facts in their first 24 hours, then 100 a day.", r8.json);
+  const r7 = await N.act({ type: "unlockMany", items: locked.slice(18, 25) });
+  check("new account unlocks 7 more (25)", r7.status === 200 && r7.json?.me?.credits === 0, r7.json);
+  const r26 = await N.act({ type: "unlock", ...locked[25] });
+  check("new account's 26th unlock is refused for credits, not the limit", r26.json?.error === "You're out of credits. Add a missing fact to earn one.", r26.json);
 
   const S = process.env.SEED_TOKEN ? new Client("Seed Member", ip(41), process.env.SEED_TOKEN) : seedClient(1, ip(41));
   const sv = S ? await S.view() : null;
@@ -453,10 +479,10 @@ section("reports", async () => {
   await C.act(fillAct(pickEmpty(cv, 1)[0]));
   await D.act(fillAct(pickEmpty(cv, 1)[0]));
   const targets = [];
-  // Seed facts (confirmed by our own records, ver >= 1) that no test in this run touched.
+  // Seed facts (from our own records) that no test in this run touched.
   for (const x of cellsOf(cv)) {
     if (x.entity !== "company" || !["hq", "industry", "employees", "revenue"].includes(x.field) || claimed.has(`${x.id}.${x.field}`)) continue;
-    if (x.cell.s === "value" && !x.cell.mine && !x.cell.system && x.cell.ver >= 1 && !x.company.mine) targets.push(x);
+    if (x.cell.s === "value" && !x.cell.mine && !x.cell.system && x.cell.from === "records" && !x.company.mine) targets.push(x);
     if (targets.length >= 12) break;
   }
   const t = targets[0];
@@ -685,7 +711,10 @@ section("hidden", async () => {
   const v2 = await H.view();
   const c2 = v2.companies.find((x) => x.id === c.id);
   check("unlocking a company costs 1 credit and reveals it", un.status === 200 && v2.me.credits === before - 1 && c2 && !c2.hidden && c2.name !== "Hidden company", { msg: un.json, credits: [before, v2.me.credits], name: c2?.name });
-  check("the answer names the company and the price", !!c2 && un.json?.message === `Unlocked ${c2.name} for 1 credit.`, un.json?.message);
+  // The same credit opens the role and the posting of its open roles, and the answer names them too.
+  const boughtWith = (c2?.engagements ?? []).some((e) => e.cells.role?.s === "value" || e.cells.posting?.s === "value");
+  const named = (un.json?.message ?? "").startsWith(`Unlocked ${c2?.name}`) && un.json?.message.endsWith(" for 1 credit.");
+  check("the answer names the company, what came with it and the price", !!c2 && named && (!boughtWith || /, the role|, the posting| and the (role|posting)/.test(un.json?.message ?? "")), un.json?.message);
   const again = await H.act({ type: "unlockMany", items: [{ entity: "company", id: c.id, field: "identity" }, { entity: "company", id: c.id, field: "website" }] });
   check("unlocking it again costs nothing", again.status === 200 && (await H.view()).me.credits === before - 1, again.json);
   check("and says no credits were spent", again.json?.message === "You can already see all of these, so no credits were spent.", again.json?.message);
@@ -701,10 +730,12 @@ section("hidden", async () => {
   // The ledger never names a hidden company.
   const L = await member("Lea Ledger", ip(82));
   const lv = await L.view();
-  const h2 = lv.companies.find((x) => x.hidden && x.engagements.some((e) => e.cells.role?.s === "locked"));
+  // A person's name: the role of an open role now comes with the company, which would unhide it.
+  const peopleAt = (x) => [...x.people, ...x.engagements.flatMap((e) => e.people)];
+  const h2 = lv.companies.find((x) => x.hidden && peopleAt(x).some((p) => p.cells.name?.s === "locked"));
   if (h2) {
-    const e = h2.engagements.find((x) => x.cells.role?.s === "locked");
-    await L.act({ type: "unlock", entity: "engagement", id: e.id, field: "role" });
+    const p = peopleAt(h2).find((x) => x.cells.name?.s === "locked");
+    await L.act({ type: "unlock", entity: "contact", id: p.id, field: "name" });
     const lv2 = await L.view();
     check("the ledger says Hidden company for an unlock there", lv2.ledger[0]?.company === "Hidden company", lv2.ledger[0]);
   }
@@ -735,7 +766,7 @@ section("gtm", async () => {
   const ae = (await G.view()).companies.find((c) => c.id === host2.id).engagements.find((x) => x.id === ai.json?.id);
   check("an AI role title files the seat under AI GTM", ai.status === 200 && ae?.cells.function?.v === "AI GTM", ae?.cells.function);
   const oa = (await (await member("Ola Other", ip(91))).view()).companies.find((c) => c.id === host2.id).engagements.find((x) => x.id === ai.json?.id);
-  check("hours per week are free; status Closed and the new hire reason are accepted", oa?.cells.hours?.v === "10" && oa.cells.reason?.v === "Move off founder-led sales" && oa.cells.status?.s === "locked", oa?.cells);
+  check("hours per week and status are free; status Closed and the new hire reason are accepted", oa?.cells.hours?.v === "10" && oa.cells.reason?.v === "Move off founder-led sales" && oa.cells.status?.v === "Closed", oa?.cells);
 });
 
 section("benchmarks", async () => {
@@ -765,9 +796,12 @@ section("benchmarks", async () => {
   const addRate = (who, host, fn, rev, extra) =>
     who.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { function: fn, ...(rev === "All" ? {} : { revenue: rev }), ...extra } });
 
-  // The plain floor: a group with no Rate Index data shows numbers at 5 rates.
+  // A floor counts people, and a new account's rate does not count toward it yet, so the
+  // rates below come from seed members, one each (scripts/test-bench.mjs has the full rules).
+  const T = seedFile ? Array.from({ length: 10 }, (_, i) => seedClient(11 + i, ip(170 + i))).filter(Boolean) : [];
+  // The plain floor: a group with no Rate Index data shows numbers at 5 contributors.
   const plain = rows.find((r) => !r.indexed && r.revenue !== "All" && r.monthly.n === 0) ?? rows.find((r) => !r.indexed && r.monthly.n < 5);
-  if (plain) {
+  if (plain && T.length === 10) {
     const rates = ["$6k/mo", "$8k/mo", "$9k per month", "$10k/mo", "$12,000 monthly"];
     const need = 5 - plain.monthly.n;
     for (let i = 0; i < need; i++) {
@@ -775,15 +809,15 @@ section("benchmarks", async () => {
         const pre = rowOf(await R.view(), plain.function, plain.revenue).monthly;
         check("a group with 4 rates shows no numbers", pre.median === undefined && pre.n === 4, pre);
       }
-      await addRate(R, hosts[10 + i], plain.function, plain.revenue, { pricing: "Monthly retainer", rate: rates[i] });
+      await addRate(T[i], hosts[10 + i], plain.function, plain.revenue, { pricing: "Monthly retainer", rate: rates[i] });
     }
     const m = rowOf(await R.view(), plain.function, plain.revenue).monthly;
-    check("5 rates show a median and middle half", m.n === 5 && m.min === 5 && typeof m.median === "number" && m.p25 <= m.median && m.median <= m.p75, m);
-  } else skip("plain floor of 5", "every group already has Rate Index data or 5 rates");
+    check("5 contributors show a median, and the range waits for 10", m.n === 5 && m.min === 5 && typeof m.median === "number" && m.p25 === undefined && m.p75 === undefined, m);
+  } else skip("plain floor of 5", T.length === 10 ? "every group already has Rate Index data or 5 rates" : "no seed file the server knows");
 
   // The Rate Index floor: a group with Rate Index data shows numbers only at 20 rates.
   const idx = rows.find((r) => r.indexed && r.revenue !== "All" && r.hourly.min === 20 && r.hourly.n >= 10 && r.hourly.n < 20);
-  if (idx) {
+  if (idx && T.length === 10 && idx.hourly.n >= 15) {
     const I = await member("Ina Index", ip(94));
     check("a Rate Index group below 20 shows no numbers", idx.hourly.median === undefined && idx.hourly.min === 20, idx.hourly);
     const need = 20 - idx.hourly.n;
@@ -792,39 +826,45 @@ section("benchmarks", async () => {
         const pre = rowOf(await I.view(), idx.function, idx.revenue).hourly;
         check("a Rate Index group with 19 rates still shows no numbers", pre.n === 19 && pre.median === undefined, pre);
       }
-      await addRate(I, hosts[20], idx.function, idx.revenue, { pricing: "Hourly", rate: `$${140 + i * 5}/hr` });
+      await addRate(T[5 + i], hosts[20], idx.function, idx.revenue, { pricing: "Hourly", rate: `$${140 + i * 5}/hr` });
     }
     const h = rowOf(await I.view(), idx.function, idx.revenue).hourly;
-    check("a Rate Index group shows numbers at 20 rates", h.n === 20 && h.min === 20 && typeof h.median === "number" && h.p25 <= h.median && h.median <= h.p75, h);
+    // Once it shows, the count also takes in rates from new accounts that were waiting.
+    check("a Rate Index group shows numbers at 20 rates", h.n >= 20 && h.min === 20 && typeof h.median === "number" && h.p25 <= h.median && h.median <= h.p75, h);
     check("that group is marked as including Rate Index data", rowOf(await I.view(), idx.function, idx.revenue).indexed === true);
   } else skip("Rate Index floor of 20", "the seed has no Rate Index group with 10 to 19 hourly rates (add a small rateIndex to the test seed)");
   if (seedFile?.rateIndex?.length) {
     check("Rate Index points count in the benchmarks", rows.some((r) => r.indexed) && v.benchmarks.total >= seedFile.rateIndex.length, v.benchmarks.total);
-    // An index entry with hours a month gives a monthly point too.
-    const withHours = seedFile.rateIndex.filter((x) => x.hours && x.hourly * x.hours >= 1000 && x.hourly * x.hours <= 150000).length;
-    const monthlyAll = rows.filter((r) => r.revenue === "All").reduce((n, r) => n + r.monthly.n, 0);
-    check("Rate Index entries with hours a month give monthly points", monthlyAll >= withHours, { monthlyAll, withHours });
+    // An index entry with hours a month gives a monthly point too (counted where the figure counts Rate Index data).
+    const idxAll = rows.filter((r) => r.revenue === "All" && r.monthly.indexed);
+    const withHours = seedFile.rateIndex.filter((x) => idxAll.some((r) => r.function === x.fn) && x.hours && x.hourly * x.hours >= 1000 && x.hourly * x.hours <= 150000).length;
+    const monthlyAll = idxAll.reduce((n, r) => n + r.monthly.n, 0);
+    check("Rate Index entries with hours a month give monthly points", idxAll.length > 0 && monthlyAll >= withHours, { monthlyAll, withHours });
   } else skip("Rate Index totals", "the seed here has no rateIndex");
 
   // Hours on the record give the other kind too: $150/hr at 10 hours a week is about $6,500 a month.
-  const D = await member("Dov Derived", ip(95));
+  if (T.length < 10) return skip("hours and revenue band checks", "no seed file the server knows");
+  const D = T[8];
   const dFn = "Executive";
   const dRev = "Pre-revenue";
-  const before = rowOf(await D.view(), dFn, dRev);
-  const beforeAll = rowOf(await D.view(), dFn, "All");
+  // (Seen by another member: a member's own rates are left out of the benchmarks they see.)
+  const before = rowOf(await R.view(), dFn, dRev);
+  const beforeAll = rowOf(await R.view(), dFn, "All");
   const der = await addRate(D, hosts[30], dFn, dRev, { pricing: "Hourly", rate: "$150/hr", hours: "10" });
-  const after = rowOf(await D.view(), dFn, dRev);
+  const after = rowOf(await R.view(), dFn, dRev);
   check("an hourly rate with hours a week counts as hourly and as monthly", der.status === 200 && after.hourly.n === before.hourly.n + 1 && after.monthly.n === before.monthly.n + 1, { before, after });
-  check("it counts in the All row too", rowOf(await D.view(), dFn, "All").hourly.n === beforeAll.hourly.n + 1);
-  const mo = await addRate(D, hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" });
-  const after2 = rowOf(await D.view(), dFn, dRev);
+  check("it counts in the All row too", rowOf(await R.view(), dFn, "All").hourly.n === beforeAll.hourly.n + 1);
+  const own = rowOf(await D.view(), dFn, dRev);
+  check("the member who shared it sees the group without their own rate, and is told so", own.hourly.n === before.hourly.n && own.hourly.withoutYours === true, own.hourly);
+  const mo = await addRate(T[9], hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" });
+  const after2 = rowOf(await R.view(), dFn, dRev);
   check("a monthly rate with no hours counts once", mo.status === 200 && after2.monthly.n === after.monthly.n + 1 && after2.hourly.n === after.hourly.n, after2);
   // The band comes from the engagement's revenue at the time, else the company's.
   const coBand = hosts.find((c) => c.cells.revenue?.s === "value" && c.cells.revenue.v !== dRev && !c.mine);
   if (coBand) {
-    const b0 = rowOf(await D.view(), dFn, coBand.cells.revenue.v).monthly.n;
+    const b0 = rowOf(await R.view(), dFn, coBand.cells.revenue.v).monthly.n;
     await D.act({ type: "add", company: coBand.name, newEngagement: true, engagementFields: { function: dFn, pricing: "Monthly retainer", rate: "$7k/mo" } });
-    check("with no revenue on the seat, the company's revenue band is used", rowOf(await D.view(), dFn, coBand.cells.revenue.v).monthly.n === b0 + 1);
+    check("with no revenue on the seat, the company's revenue band is used", rowOf(await R.view(), dFn, coBand.cells.revenue.v).monthly.n === b0 + 1);
   }
 });
 
@@ -844,7 +884,7 @@ section("seats", async () => {
   });
   const eid = add.json?.id;
   if (add.status !== 200 || !eid) return fail("seats: add a seat for Yara", add.json);
-  const GATED = ["role", "status", "operator", "end", "sourced", "rate", "posting"];
+  const GATED = ["role", "operator", "end", "sourced", "rate", "posting"];
   const vy = await Y.view();
   const ey = engOf(vy, eid);
   check("the seat holder's engagement comes back as yours", ey?.yours === true, ey?.yours);
@@ -872,20 +912,25 @@ section("seats", async () => {
   const host3 = v0.companies.filter((c) => !c.hidden && c.friendly.open === 0)[42];
   const blank = await T.act({ type: "add", company: host3.name, newEngagement: true, engagementFields: { function: "Marketing", type: "Advisory" } });
   const viaFill = await Y.act({ type: "fill", entity: "engagement", id: blank.json?.id, field: "operator", value: "anything", memberId: "me" });
-  check('fill with memberId "me" links the seat to the viewer', viaFill.status === 200 && viaFill.json?.cells?.[0]?.cell?.member?.you === true && engOf(await Y.view(), blank.json?.id)?.yours === true, viaFill.json);
+  check('fill with memberId "me" links the seat to the viewer', viaFill.status === 200 && viaFill.json?.cells?.[0]?.cell?.member?.you === true, viaFill.json);
+  // On a seat somebody else made, naming yourself is not enough to see it free: another member confirms the name first.
+  check("on a seat another member made, naming yourself does not make it yours yet", engOf(await Y.view(), blank.json?.id)?.yours === false, engOf(await Y.view(), blank.json?.id)?.yours);
+  await U.act({ type: "unlock", entity: "engagement", id: blank.json?.id, field: "operator" });
+  const vouchName = await U.act({ type: "verify", entity: "engagement", id: blank.json?.id, field: "operator" });
+  check("once another member confirms the name, it is", vouchName.status === 200 && engOf(await Y.view(), blank.json?.id)?.yours === true, vouchName.json);
 
   // "This isn't me".
   const not = await Y.act({ type: "notMine", engagementId: eid });
   const ey2 = engOf(await Y.view(), eid);
   check("notMine unlinks the seat", not.status === 200 && ey2?.yours === false, { not: not.json?.message, yours: ey2?.yours });
-  check("after notMine the seat is locked for them like anyone else", GATED.every((k) => ey2?.cells[k]?.s === "locked"), ey2 && GATED.map((k) => ey2.cells[k]?.s));
-  check("notMine returns the cells as they now look", not.json?.cells?.find((c) => c.field === "operator")?.cell?.s === "locked", not.json?.cells?.map((c) => [c.field, c.cell.s]));
+  check("after notMine the name a member added is under review, with the other locked facts that member put on the seat", GATED.every((k) => ey2?.cells[k]?.s === "reported"), ey2 && GATED.map((k) => ey2.cells[k]?.s));
+  check("notMine returns the cells as they now look", not.json?.cells?.find((c) => c.field === "operator")?.cell?.s === "reported", not.json?.cells?.map((c) => [c.field, c.cell.s]));
   const again = await Y.act({ type: "notMine", engagementId: eid });
   check("notMine on a seat that isn't yours is refused", again.status === 400 && again.json?.error === "That seat isn't linked to you.", again.json);
   const unl = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "operator" });
-  check("after notMine nobody sees the name as that member", unl.status === 200 && unl.json?.cells?.[0]?.cell?.s === "value" && !unl.json.cells[0].cell.member, unl.json?.cells?.[0]);
-  const pay = await Y.act({ type: "unlock", entity: "engagement", id: eid, field: "role" });
-  check("after notMine unlocking a fact there costs a credit again", pay.status === 200 && pay.json?.me?.unlocked === 1, pay.json);
+  check("after notMine nobody can buy the name a member put on that seat", unl.status === 400 && unl.json?.error === "Nothing here is locked, so no credit was spent." && engOf(await U.view(), eid)?.cells.operator?.s === "reported", unl.json);
+  const pay = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
+  check("nor the rate that member put there", pay.status === 400 && pay.json?.error === "Nothing here is locked, so no credit was spent.", pay.json);
 
   // A real linked seat holder from the seed: free to see, and they can correct our own records.
   const sm = seedHolders[0];
@@ -897,7 +942,7 @@ section("seats", async () => {
   check("every gated fact on a seed member's own seats is visible or empty", own.every((e) => GATED.every((k) => e.cells[k]?.s !== "locked")));
   check("their own seats cost them nothing", sv.me.credits === STARTER && sv.me.unlocked === 0, sv.me.credits);
   check("their company is not hidden from them", own.every((e) => !e.company.hidden));
-  const seat = own.find((e) => e.cells.function?.s === "value" && !e.cells.function.mine && e.cells.function.ver >= 1);
+  const seat = own.find((e) => e.cells.function?.s === "value" && !e.cells.function.mine && e.cells.function.from === "records");
   if (seat) {
     const next = seat.cells.function.v === "Other" ? "Sales" : "Other";
     const fix = await S.act({ type: "fill", entity: "engagement", id: seat.id, field: "function", value: next });
@@ -932,7 +977,7 @@ section("benchrate", async () => {
   const vm = await M.view();
   const mineRates = vm.me.benchRates ?? [];
   check("Me.benchRates lists it", mineRates.length === 1 && mineRates[0].id === first.json?.id && mineRates[0].kind === "monthly" && mineRates[0].amount === 7777 && mineRates[0].function === "Executive" && mineRates[0].engagementId === null, mineRates);
-  check("it counts in its benchmark group", rowOf(vm, "Executive", "Under $1M").monthly.n === n0 + 1);
+  check("a new account's rate does not count toward its group's floor yet", rowOf(vm, "Executive", "Under $1M").monthly.n === n0);
   check("the ledger row names no record", vm.ledger[0]?.reason === "fill" && vm.ledger[0]?.field === "Private rate" && vm.ledger[0]?.company === "" && vm.ledger[0]?.delta === 1, vm.ledger[0]);
   const hourly = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$185/hr" });
   const two = (await M.view()).me.benchRates;
@@ -947,17 +992,18 @@ section("benchrate", async () => {
   const notYours = await M.act({ type: "benchRate", engagementId: foreign.id, pricing: "Hourly", rate: "$150/hr" });
   check("a private rate on a seat that isn't yours is refused", notYours.status === 400 && notYours.json?.error === "You can only share a rate for a seat you held or added.", notYours.json);
   const hosts = v.companies.filter((c) => !c.hidden && c.friendly.open === 0);
-  const seatA = await M.act({ type: "add", company: hosts[50].name, newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", revenue: "$5M–$20M" } });
-  const r0 = rowOf(await M.view(), "RevOps", "$5M–$20M").hourly.n;
+  // A seat you added counts as tied to you once it has a role and names you (a blank one counts toward the 3).
+  const seatA = await M.act({ type: "add", company: hosts[50].name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "RevOps", type: "Fractional", revenue: "$5M–$20M", role: "Fractional RevOps lead", operator: "typed over" } });
+  const t0 = (await M.view()).benchmarks.total;
   const onSeat = await M.act({ type: "benchRate", engagementId: seatA.json?.id, pricing: "Hourly", rate: "$200/hr", function: "Marketing", revenue: "$50M+" });
   const vm2 = await M.view();
   const tied = vm2.me.benchRates.find((b) => b.engagementId === seatA.json?.id);
-  check("a private rate on a seat you added takes its function and revenue from the record", onSeat.status === 200 && tied?.function === "RevOps" && tied.kind === "hourly" && tied.amount === 200 && rowOf(vm2, "RevOps", "$5M–$20M").hourly.n === r0 + 1, { onSeat: onSeat.json, tied });
+  check("a private rate on a seat you added takes its function and revenue from the record", onSeat.status === 200 && tied?.function === "RevOps" && tied.kind === "hourly" && tied.amount === 200 && vm2.benchmarks.total === t0 + 1, { onSeat: onSeat.json, tied });
   const dup = await M.act({ type: "benchRate", engagementId: seatA.json?.id, pricing: "Hourly", rate: "$210/hr" });
   check("one private rate per seat", dup.status === 400 && dup.json?.error === "You already shared a rate for this seat. Remove it first to share a different one.", dup.json);
-  // Adding the public rate later doesn't count the same member twice.
+  // Adding the public rate later doesn't count the same member twice (it replaces the private one, leaving 3).
   await M.act({ type: "fill", entity: "engagement", id: seatA.json?.id, field: "rate", value: "$200/hr" });
-  check("a member's private and public rate on one seat count once", rowOf(await M.view(), "RevOps", "$5M–$20M").hourly.n === r0 + 1);
+  check("a member's private and public rate on one seat count once", (await M.view()).benchmarks.total === t0 + 1);
   const seatB = await M.act({ type: "add", company: hosts[51].name, newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", rate: "$9k/mo" } });
   const pub = await M.act({ type: "benchRate", engagementId: seatB.json?.id, pricing: "Monthly retainer", rate: "$9k/mo" });
   check("a private rate is refused when your rate is already on the seat", pub.status === 400 && /already on this seat/.test(pub.json?.error ?? ""), pub.json);
@@ -970,10 +1016,10 @@ section("benchrate", async () => {
   if (adm) {
     const aRaw = await call("GET", "/api/table", { token: adm.token, ipAddr: adm.ip });
     check("an admin's view has no trace of them either", aRaw.json?.me?.benchRates?.length === 0 && !ids.some((id) => aRaw.text.includes(id)) && !aRaw.text.includes("7777"));
-    check("the admin's pilot metrics only count them", aRaw.json?.admin?.benchmarks?.privateRates >= 4, aRaw.json?.admin?.benchmarks);
+    check("the admin's pilot metrics only count them", aRaw.json?.admin?.benchmarks?.privateRates >= 3, aRaw.json?.admin?.benchmarks);
     const exp = await call("GET", "/api/table?export=1", { token: adm.token, ipAddr: adm.ip });
     const out = exp.json?.benchRates ?? [];
-    check("the admin export carries private rates without who shared them or where", exp.status === 200 && out.length >= 4 && out.every((b) => !("by" in b) && !("id" in b) && !("engagementId" in b)), out[0] && Object.keys(out[0]));
+    check("the admin export carries private rates without who shared them or where", exp.status === 200 && out.length >= 3 && out.every((b) => !("by" in b) && !("id" in b) && !("engagementId" in b)), out[0] && Object.keys(out[0]));
   } else skip("admin benchRate privacy", "no admin account");
   const steal = await O.act({ type: "benchRateRemove", id: first.json?.id });
   check("another member can't remove it", steal.status === 400 && steal.json?.error === "We couldn't find that rate. It may already be removed.", steal.json);
@@ -990,11 +1036,11 @@ section("benchrate", async () => {
   const refill = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$7k/mo" });
   check("after removing one there is room for another", refill.status === 200, refill.json);
 
-  // A private rate is a first fact like any other: it pays the invite bonus.
+  // A private rate is not a fact on a record: the invite bonus waits for the first one that is.
   const inviter = (await O.view()).me.inviteCode;
   const N = await member("Nia Newbie", ip(122), { ref: inviter });
   const nb = await N.act({ type: "benchRate", pricing: "Hourly", rate: "$160/hr" });
-  check("a private rate as a first fact pays the invite bonus", nb.status === 200 && /Your invite bonus added 10 more\./.test(nb.json?.message ?? "") && nb.json?.me?.credits === STARTER + 11, nb.json);
+  check("a private rate as a first fact leaves the invite bonus waiting", nb.status === 200 && !/invite bonus/i.test(nb.json?.message ?? "") && nb.json?.me?.credits === STARTER + 1 && (await N.view()).me.invitePending === true, nb.json);
 });
 
 section("pilot", async () => {
@@ -1090,7 +1136,8 @@ section("settings", async () => {
   const h = (x) => createHmac("sha256", key).update(x).digest("base64url");
   const m = `${ev.me.id[0]}_${h(ev.me.id).slice(0, 12)}`;
   const sig = h(`unsubscribe:${ev.me.id}`).slice(0, 22);
-  const bad = await call("GET", `/api/table/unsubscribe?m=${m}&s=${sig.slice(0, 21)}x`, { ipAddr: ip(141) });
+  // A last character that differs from the real one (a fixed "x" matched it once in 64 runs).
+  const bad = await call("GET", `/api/table/unsubscribe?m=${m}&s=${sig.slice(0, 21)}${sig[21] === "x" ? "y" : "x"}`, { ipAddr: ip(141) });
   check("a bad signature is refused", bad.status === 400 && /didn't work/.test(bad.text) && (await E.view()).me.digest === true, bad.status);
   const none = await call("GET", "/api/table/unsubscribe", { ipAddr: ip(141) });
   const wrong = await call("GET", `/api/table/unsubscribe?m=j_AAAAAAAAAAAA&s=${sig}`, { ipAddr: ip(141) });
@@ -1113,6 +1160,9 @@ section("scan", async () => {
   const adm = await admin();
   const V = await member("Val Viewer", ip(160));
   const G = await member("Gil Guest", ip(161));
+  // Their claims on open roles below close them, so their word must count.
+  const counted = (await vouch(V)) && (await vouch(G));
+  if (!counted) return skip("scan checks", "needs the seed file the server runs on (two seed members vouch for the claimers)");
   const t0 = Date.now();
   const at = (days) => new Date(t0 + days * DAY_MS).toISOString();
   const v0 = await V.view();
@@ -1150,11 +1200,11 @@ section("scan", async () => {
     check("a company the scan added is hidden from members too", v1.companies.find((c) => c.id === newCo?.id)?.hidden === true);
     check("pilot metrics carry the scan's sources", av.admin.scan.sources.some((x) => x.source === board && x.fetched === 12 && x.matched === 2) && av.admin.scan.openNow === v1.scan.openNow, av.admin.scan);
   }
-  // Scan values behave like our own records: one confirmation, and members can't overwrite them.
+  // Scan values behave like our own records: they say where they came from, and members can't overwrite them.
   const un = await G.act({ type: "unlockMany", items: [{ entity: "company", id: host.id, field: "identity" }, { entity: "engagement", id: e2.id, field: "role" }] });
   const roleCell = un.json?.cells?.find((c) => c.field === "role")?.cell;
-  check("a scan value counts as one confirmation", un.status === 200 && roleCell?.v === "Interim CMO" && roleCell.ver === 1 && roleCell.mine === false, un.json);
-  check("an unlock says what it cost", /^Unlocked (2 facts for 2 credits|the role for 1 credit)\.$/.test(un.json?.message ?? ""), un.json?.message);
+  check("a scan value says it came from the posting, with no confirmation yet", un.status === 200 && roleCell?.v === "Interim CMO" && roleCell.ver === 0 && roleCell.from === "posting" && roleCell.mine === false, un.json);
+  check("an unlock says what it bought and what it cost", un.json?.message === `Unlocked ${host.name}, the role and the posting for 1 credit.`, un.json?.message);
   const over = await G.act({ type: "fill", entity: "engagement", id: e2.id, field: "role", value: "Interim Chief Marketing Officer" });
   check("a member can't overwrite a scan value", over.status === 400 && /already there/.test(over.json?.error ?? ""), over.json);
   const noUnlock = await G.act({ type: "unlock", entity: "engagement", id: e2.id, field: "status" });
@@ -1174,11 +1224,16 @@ section("scan", async () => {
   check("a role unseen for 9 days stays open", exact(s3.json?.result?.closed, 0) && (await stillOpenHere()), s3.json);
   // A board outage closes nothing, and neither does another board's clean run.
   const s4 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0, error: "timeout" }], now: at(14) });
-  const s5 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0 }, { source: "other-board", fetched: 30, matched: 0 }], now: at(14) });
+  const s5 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0 }, { source: "other-board", fetched: 30, matched: 3 }], now: at(14) });
   check("a board outage closes nothing", s4.json?.result?.closed === 0 && exact(s5.json?.result?.closed, 0), [s4.json, s5.json]);
-  check("the roles are still open after the outage", (await stillOpenHere()) && (!seedQuiet || (await V.view()).scan.openNow === v1.scan.openNow));
-  // Close: unseen for more than 10 days, in a clean run of its board.
-  const s6 = await scanPost({ roles: [], sources: [{ source: board, fetched: 9, matched: 0 }], now: at(14) });
+  // Since day 12 the board answered without them, so they are not counted in open now (and day 12 was a clean run of a small board).
+  check("the roles are still open after the outage, and left out of open now", (await stillOpenHere()) && (!seedQuiet || (await V.view()).scan.openNow === v1.scan.openNow - 2), (await V.view()).scan);
+  // Close: two clean runs of its board miss it, and it has been unseen for more than 10 days. A run
+  // is clean only when the board matched something, so another role on the board stays listed.
+  const keeper = { ...role1, key: `qakeeper${RUN}:cro`, company: `Qa Keeper Co ${RUN}`, domain: null, title: "Fractional CRO", url: `https://jobs.example.com/qa/${RUN}/keeper` };
+  const missRun = [{ source: board, fetched: 9, matched: 1 }];
+  await scanPost({ roles: [keeper], sources: missRun, now: at(13) }); // the first miss closes nothing (scripts/scan-scenarios.mts checks that)
+  const s6 = await scanPost({ roles: [keeper], sources: missRun, now: at(14) });
   check("a role unseen for more than 10 days closes", exact(s6.json?.result?.closed, 2), s6.json);
   const v6 = await V.view();
   const h6 = v6.companies.find((c) => c.id === host.id);
@@ -1186,7 +1241,8 @@ section("scan", async () => {
   check("a closed role carries the day it closed and status Closed", e6?.closed === dayOf(t0 + 14 * DAY_MS) && e6.opened === dayOf(t0) && e6.cells.status?.s === "value" && e6.cells.status.v === "Closed", { closed: e6?.closed, status: e6?.cells.status });
   check("a closed role is not open: the company shows again", h6?.hidden === false && h6.name === host.name && h6.friendly.open === 0, { hidden: h6?.hidden, open: h6?.friendly.open });
   check("the history stays on the record", !!e6 && e6.source === "Demand scan" && e6.cells.function?.v === "Marketing");
-  if (seedQuiet) check("stats and the scan summary follow", v6.stats.openRoles === v0.stats.openRoles && v6.scan.openNow === v0.scan.openNow && v6.scan.closed30 === v0.scan.closed30 + 2, { stats: v6.stats.openRoles, scan: v6.scan });
+  // One more open role than at the start: the one that stayed listed.
+  if (seedQuiet) check("stats and the scan summary follow", v6.stats.openRoles === v0.stats.openRoles + 1 && v6.scan.openNow === v0.scan.openNow + 1 && v6.scan.closed30 === v0.scan.closed30 + 2, { stats: v6.stats.openRoles, scan: v6.scan });
   else skip("stats after closing", "the seed is old enough that its own open roles closed during this test");
   if (adm) check("the company the scan added shows too", (await V.view()).companies.find((c) => c.id === newCo?.id)?.hidden === false);
 
@@ -1216,7 +1272,8 @@ section("scan", async () => {
   const role3 = { ...role2, key: `${RUN}:host:revops`, title: "Fractional RevOps Lead", url: `https://jobs.example.com/qa/${RUN}/3` };
   await scanPost({ roles: [role3], sources: cleanRun, now: at(16) });
   const e3 = (await V.view()).companies.find((c) => c.id === host.id)?.engagements.find((e) => e.source === "Demand scan" && e.id !== e2.id && !e.closed);
-  const byId = await V.act({ type: "fill", entity: "engagement", id: e3?.id, field: "operator", value: "Jo Filled" });
+  // Only the member who took the role can name its seat holder, once a day: V took one above, so G takes this one.
+  const byId = await G.act({ type: "fill", entity: "engagement", id: e3?.id, field: "operator", value: "Gil Guest", memberId: "me" });
   check("a seat-holder fill on an open role returns the new status too", byId.status === 200 && byId.json?.cells?.find((c) => c.field === "status")?.cell?.v === "Active", byId.json?.cells?.map((c) => [c.field, c.cell.v]));
 
   // The seat-holder exemption from hiding, and notMine taking it away.
@@ -1240,7 +1297,7 @@ section("scan", async () => {
     const late = Math.max(t0 + 17 * DAY_MS, built + 37 * DAY_MS);
     const s9 = await scanPost({ roles: [], sources: [{ source: "other-board", fetched: 0, matched: 0, error: "down" }], now: new Date(late).toISOString() });
     check("a scan where every board failed doesn't close seed roles", s9.json?.result?.closed === 0, s9.json);
-    const s10 = await scanPost({ roles: [], sources: [{ source: "other-board", fetched: 30, matched: 0 }], now: new Date(late).toISOString() });
+    const s10 = await scanPost({ roles: [], sources: [{ source: "other-board", fetched: 30, matched: 3 }], now: new Date(late).toISOString() });
     const lv = await V.view();
     const after = seedOpen.map((e) => engOf(lv, e.id));
     check("seed roles close 35 days after the seed was built", s10.json?.result?.closed >= stillOpen.length && after.every((e) => e?.closed && e.cells.status?.v === "Closed"), { closed: s10.json?.result?.closed, n: stillOpen.length });

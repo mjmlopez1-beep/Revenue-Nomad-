@@ -6,8 +6,10 @@
  *   npx tsx scripts/test-scan.mts --samples <dir>    also write the rendered emails there (two weekly, one sign-in)
  *   npx tsx scripts/test-scan.mts --live             one real scan, printing what each source returned
  */
+import { spawnSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { cleanCompany, cleanTitle, companyDomain, isRealCompany, roleKey } from "../lib/scan/clean";
 import { collectOpenRoles, dedupeRoles, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
@@ -334,13 +336,14 @@ check("  a hung source times out", /timed out/i.test(scan.sources[2].error ?? ""
 eq("  a source that throws before fetching is reported too", scan.sources[3].error, "bad setup");
 eq("  malformed postings are skipped", [scan.sources[4].fetched, scan.sources[4].matched], [3, 1]);
 const empty = await collectOpenRoles({ sources: [], now: NOW });
-eq("no sources gives an empty result", empty, { roles: [], sources: [], seenKeys: [] });
+eq("no sources gives an empty result", empty, { roles: [], all: [], sources: [], seenKeys: [] });
 const overCap = await collectOpenRoles({
   now: NOW,
   max: 3,
   sources: [{ name: "big", fetchJobs: async () => Array.from({ length: 5 }, (_, i) => job({ company: `Company ${i}`, postedAt: daysAgo(i + 1) })) }],
 });
 eq("past the cap, seenKeys still lists every role that passed", [overCap.roles.length, overCap.seenKeys.length, overCap.roles[0]?.company], [3, 5, "Company 0"]);
+eq("  and `all` hands every one of them over, newest first", overCap.all?.map((r) => r.company), ["Company 0", "Company 1", "Company 2", "Company 3", "Company 4"]);
 eq("malformed postings do not break rolesFromRaw", rolesFromRaw([null, job({})] as unknown as ScanRawJob[], NOW).length, 1);
 
 /* ---------- digest ---------- */
@@ -454,6 +457,34 @@ check("tables and inline styles only, system fonts", !/<style|<link|<script|clas
 check("says to keep the link private and what to do if they did not ask", si.text.includes("It works like a password.") && si.text.includes("If it wasn't you, ignore this email."));
 const siCopy = (si.subject + "\n" + si.text).split("\n").filter((l) => !/^https?:\/\//.test(l));
 check("copy has no em dash, semicolon or colon", siCopy.every((l) => !/[—;:]/.test(l)), siCopy.filter((l) => /[—;:]/.test(l)));
+
+/* ---------- scans stored on a table (applyScan in lib/table.ts) ---------- */
+
+// Each scenario in scripts/scan-scenarios.mts runs in its own process on a made-up seed and an
+// empty data folder: the server module keeps its state in memory, and each one needs a fresh table.
+const scenarioFile = path.join(path.dirname(fileURLToPath(import.meta.url)), "scan-scenarios.mts");
+const SCENARIOS: [string, string][] = [
+  ["cap", "The cap of 60 a run"],
+  ["health", "A board that reads but matches nothing"],
+  ["baseline", "A board that got smaller"],
+  ["dates", "What a role's dates say"],
+  ["refunds", "Unlocks on a role that had closed"],
+  ["names", "One company, one record"],
+  ["small", "A board that lists one role"],
+  ["claimgone", "This isn't me on a role whose posting is long gone"],
+];
+for (const [name, title] of SCENARIOS) {
+  console.log(`\nStored scans: ${title}`);
+  const run = spawnSync(process.execPath, [...process.execArgv, scenarioFile, name], { encoding: "utf8", timeout: 180_000 });
+  const out = run.stdout ?? "";
+  const lines = out.split("\n").filter((l) => l && !l.startsWith("##"));
+  if (lines.length) console.log(lines.join("\n"));
+  const result = out.match(/^##RESULT (\d+) (\d+)$/m);
+  if (result) {
+    passed += Number(result[1]);
+    failed += Number(result[2]);
+  } else check(`scenario ${name} ran to the end`, false, (run.stderr || String(run.error ?? "no output")).slice(-600));
+}
 
 const samples = args.indexOf("--samples");
 if (samples >= 0 && args[samples + 1]) {

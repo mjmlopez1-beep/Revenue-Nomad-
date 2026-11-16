@@ -3,6 +3,7 @@ import { readdirSync } from "fs";
 import path from "path";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { unsubscribe } from "@/lib/table";
+import { guarded, isBusy, isDown } from "@/lib/apiGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -70,14 +71,29 @@ ${status === 200 ? CHECK : ""}<h1>${title}</h1>
     { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
   );
 
+/** While Trading Post cannot serve, the link answers 503 with a page, and nothing is changed. */
+const paused = (e: unknown) => (isDown(e) || isBusy(e) ? page("Try this link again in a few minutes", "Trading Post is paused while we fix a problem on our side. Your weekly email setting has not changed yet.", 503) : null);
+
 /**
  * GET ?m=<public member id>&s=<signature>: the unsubscribe link in the weekly email. Turns the
  * email off for that member. No sign-in needed; the signature is the proof.
  */
-export async function GET(req: NextRequest) {
+export const GET = guarded(async (req: NextRequest) => {
   if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return page("Too many tries in one minute", "Wait a minute, then open the link from your email again.", 429);
   const q = req.nextUrl.searchParams;
   if (!(await unsubscribe(q.get("m"), q.get("s"))))
     return page("That link didn't work", "It may have been cut off in your email. You can turn the weekly email off yourself under Your credits.", 400);
   return page("You're unsubscribed", "We won't send you the weekly email of new open roles again. If you change your mind, turn it back on under Your credits.");
-}
+}, paused);
+
+/**
+ * POST to the same address: the one-click unsubscribe a mail app sends when the member presses
+ * its own unsubscribe button (the weekly email carries List-Unsubscribe and
+ * List-Unsubscribe-Post). The signature in the address is the proof, as for GET. No page: the
+ * mail app only reads the status.
+ */
+export const POST = guarded(async (req: NextRequest) => {
+  if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return new NextResponse(null, { status: 429 });
+  const q = req.nextUrl.searchParams;
+  return new NextResponse(null, { status: (await unsubscribe(q.get("m"), q.get("s"))) ? 200 : 400, headers: { "cache-control": "no-store" } });
+});

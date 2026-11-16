@@ -103,7 +103,10 @@ check("days listed: across the daylight saving change", daysListed("2026-10-30",
 /* ---------- unlocked by me, with hours per week free ---------- */
 
 const gated = GROUPS.find((g) => g.entity === "engagement")!.fields.filter((f) => f.gated).map((f) => f.key);
-check("the app's gated list matches the field definitions", JSON.stringify([...ENG_GATED].sort()) === JSON.stringify([...gated].sort()), { app: ENG_GATED, fields: gated });
+// Status is free on the server now. app/post/model.ts still lists it until the client round drops it
+// (and with it the "status unlocked on an undated seat" check below). Nothing else may differ.
+const appGated = ENG_GATED.filter((f) => f !== "status");
+check("the app's gated list matches the field definitions", JSON.stringify([...appGated].sort()) === JSON.stringify([...gated].sort()), { app: ENG_GATED, fields: gated });
 check("hours per week is not in it", !ENG_GATED.includes("hours"));
 const unlockedTab = (e: EngagementRec) => {
   const i = deriveAll([co("X", [e])])[0];
