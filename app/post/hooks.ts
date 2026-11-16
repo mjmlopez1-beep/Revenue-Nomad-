@@ -1,6 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+/**
+ * A function that keeps one identity for the life of the component and always runs the
+ * newest version of `fn`. Memoized rows and the Ui context can hold it without re-rendering,
+ * and it never keeps an old render's view alive (callbacks that close over older callbacks
+ * chain old tables together in memory).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useStable<T extends (...args: any[]) => any>(fn: T): T {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useCallback(((...args: Parameters<T>) => ref.current(...args)) as T, []);
+}
 
 /** Live media query (client only; Trading Post renders after the first fetch). */
 export function useMedia(query: string): boolean {
@@ -20,9 +33,15 @@ export function useMedia(query: string): boolean {
 }
 
 export type Layout = "phone" | "tablet" | "desktop";
-/** phone < 768, tablet 768 to 1279 (filters as an overlay), desktop 1280 and up. */
+/**
+ * The phone layout: narrower than 768, or a touch screen under 600 tall (a phone on its side,
+ * where the table's small targets and a popover taller than the screen don't work). Same test
+ * as the phone rules in post.css.
+ */
+export const PHONE_QUERY = "(max-width: 767px), (pointer: coarse) and (max-height: 599px)";
+/** phone (see PHONE_QUERY), tablet 768 to 1279 (filters as an overlay), desktop 1280 and up. */
 export function useLayout(): Layout {
-  const phone = useMedia("(max-width: 767px)");
+  const phone = useMedia(PHONE_QUERY);
   const desktop = useMedia("(min-width: 1280px)");
   return phone ? "phone" : desktop ? "desktop" : "tablet";
 }

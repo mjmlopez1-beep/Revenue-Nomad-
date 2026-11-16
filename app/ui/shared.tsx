@@ -73,9 +73,30 @@ export function patchView(v: View, r: ActPatch): View {
 
 /* ---------- API ---------- */
 
+/** The raw answer of GET /api/table. It can be an error body ({ error }): prefer fetchView. */
 export async function getView(): Promise<View> {
   const r = await fetch("/api/table", { cache: "no-store" });
   return r.json();
+}
+
+/**
+ * GET /api/table, read safely. Any answer without a table in it (a 503 while the server is
+ * busy or paused, a 429, a page from a proxy) comes back as `error`, never as a view, with the
+ * seconds the server asked us to wait (Retry-After) when it sent them. Throws only when the
+ * network is down.
+ */
+export type ViewResult = { view: View; error?: undefined } | { view: null; error: string; status: number; retryAfter: number | null };
+export async function fetchView(): Promise<ViewResult> {
+  const r = await fetch("/api/table", { cache: "no-store" });
+  const j = (await r.json().catch(() => null)) as (View & { error?: string }) | null;
+  if (r.ok && j && j.stats) return { view: j };
+  const wait = Number(r.headers.get("Retry-After"));
+  return {
+    view: null,
+    error: (j && typeof j.error === "string" && j.error) || "Trading Post did not load. Check your connection and try again.",
+    status: r.status,
+    retryAfter: Number.isFinite(wait) && wait > 0 ? wait : null,
+  };
 }
 
 /** POST to /api/table. Returns the JSON body, with `error` set on failure. */
@@ -91,8 +112,14 @@ export async function post<T = Record<string, unknown>>(body: unknown): Promise<
 
 /* ---------- toasts ---------- */
 
-type Toast = { id: number; text: string; err?: boolean };
-const ToastCtx = createContext<(text: string, err?: boolean) => void>(() => {});
+/**
+ * A toast can carry one action ("Undo") and its own time on screen. The action closes the
+ * toast when tapped. Without opts a toast is text only, as before.
+ */
+export type ToastOpts = { action?: { label: string; onClick: () => void }; ms?: number };
+type Toast = { id: number; text: string; err?: boolean; action?: ToastOpts["action"] };
+export type ToastFn = (text: string, err?: boolean, opts?: ToastOpts) => void;
+const ToastCtx = createContext<ToastFn>(() => {});
 export const useToast = () => useContext(ToastCtx);
 
 /**
@@ -104,18 +131,36 @@ export const toastMs = (text: string, err?: boolean) =>
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const push = useCallback((text: string, err?: boolean) => {
-    const id = Date.now() + Math.random();
-    setToasts((t) => [...t.slice(-1), { id, text, err }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), toastMs(text, err));
-  }, []);
+  const drop = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const push = useCallback<ToastFn>(
+    (text, err, opts) => {
+      const id = Date.now() + Math.random();
+      setToasts((t) => [...t.slice(-1), { id, text, err, action: opts?.action }]);
+      setTimeout(() => drop(id), opts?.ms ?? toastMs(text, err));
+    },
+    [drop],
+  );
   return (
     <ToastCtx.Provider value={push}>
       {children}
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast${t.err ? " toast-err" : ""}`}>
+          <div key={t.id} className={`toast${t.err ? " toast-err" : ""}${t.action ? " toast-has-act" : ""}`}>
             {t.text}
+            {t.action && (
+              <button
+                type="button"
+                className="toast-act"
+                // The toast stack ignores the pointer so it never blocks the page; its one button takes it.
+                style={{ pointerEvents: "auto", marginLeft: 8, padding: "0 4px", minHeight: 32, border: 0, background: "none", color: "inherit", font: "inherit", fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}
+                onClick={() => {
+                  drop(t.id);
+                  t.action!.onClick();
+                }}
+              >
+                {t.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -233,13 +278,29 @@ export function CompanyLogo({ name, domain, size = "md", hidden }: { name: strin
  * `noun` is added to the label where one lock stands for more ("Unlock company"). A tight
  * spot can hide it (.lock-noun).
  */
-export function LockPill({ onUnlock, ver, what, noun, busy }: { onUnlock: () => void; ver?: number; what?: string; noun?: string; busy?: boolean }) {
+export function LockPill({
+  onUnlock,
+  ver,
+  what,
+  noun,
+  busy,
+  from,
+}: {
+  onUnlock: () => void;
+  ver?: number;
+  what?: string;
+  noun?: string;
+  busy?: boolean;
+  /** Where a fact with no member confirmations came from (Cell.from). */
+  from?: "records" | "posting";
+}) {
   const say = `Unlock ${what ?? "this"} for 1 credit`;
+  const source = from === "records" ? "From Revenue Nomad records." : from === "posting" ? "From the job posting." : "";
   return (
     <button
       type="button"
       className={`lock${busy ? " busy" : ""}`}
-      title={ver ? `${say}. Confirmed by ${ver} ${ver === 1 ? "member" : "members"}.` : say}
+      title={ver ? `${say}. Confirmed by ${ver} ${ver === 1 ? "member" : "members"}.` : source ? `${say}. ${source}` : say}
       aria-label={busy ? "Unlocking" : say}
       disabled={busy}
       onClick={(e) => (e.stopPropagation(), onUnlock())}
@@ -260,10 +321,13 @@ export function LockPill({ onUnlock, ver, what, noun, busy }: { onUnlock: () => 
   );
 }
 
-/** A missing fact. Adding it earns 1 credit (no badge once today's earning cap is reached). */
-export function AddPill({ onAdd, label = "Add", earn = true }: { onAdd: () => void; label?: string; earn?: boolean }) {
+/**
+ * A missing fact. Adding it earns 1 credit (no badge once today's earning cap is reached).
+ * `what` names the fact for screen readers ("the HQ"): "Add the HQ. Earns 1 credit."
+ */
+export function AddPill({ onAdd, label = "Add", earn = true, what }: { onAdd: () => void; label?: string; earn?: boolean; what?: string }) {
   return (
-    <button type="button" className="add" onClick={(e) => (e.stopPropagation(), onAdd())}>
+    <button type="button" className="add" aria-label={what ? `Add ${what}.${earn ? " Earns 1 credit." : ""}` : undefined} onClick={(e) => (e.stopPropagation(), onAdd())}>
       + {label}
       {earn && <span className="plus1">+1</span>}
     </button>

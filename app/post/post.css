@@ -201,6 +201,29 @@
   text-align: center;
   color: var(--muted);
 }
+/* "Skip to the table": the first Tab stop, seen only while it has focus. */
+.tp-skip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 200;
+  padding: 10px 14px;
+  border-radius: var(--r-btn);
+  background: var(--volt);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+.tp-skip:focus {
+  transform: none;
+}
+/* Where the skip link lands. A mouse click there shows no ring. */
+#tp-results:focus:not(:focus-visible) {
+  outline: none;
+}
 
 /* ---------- top bar ---------- */
 .tp-top {
@@ -1110,6 +1133,45 @@
 .tp-sortbtn-l {
   font-weight: 400;
   color: var(--muted);
+}
+/* The next-move card with the credit line as its last line: one pine block, one ember edge, one volt button. */
+.tp-move {
+  display: grid;
+}
+.tp-move.has-note .nm-card {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.tp-move-note {
+  margin: 0;
+  padding: 10px 16px 12px;
+  border-left: 6px solid var(--ember);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  background: var(--pine);
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 14px;
+  line-height: 20px;
+}
+/* A link on pine: volt, because it leads to earning. */
+.tp-move-link {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--volt);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.tp-move-link:hover {
+  color: #fff;
+}
+/* Just above the list's controls: a new list scrolls back up to here. */
+.tp-listtop {
+  height: 0;
 }
 
 /* ---------- checklist (one row on desktop, a card on phones) ---------- */
@@ -3539,9 +3601,9 @@
   line-height: 1.15;
 }
 @media (max-width: 360px) {
-  /* Too narrow for label and count side by side: stack all three the same way. */
-  .tp-phone .tp-rtype-b {
-    flex-direction: column;
+  /* Too narrow for label and count side by side: the views below carry the counts. */
+  .tp-phone .tp-rtype-b .tp-cnt {
+    display: none;
   }
 }
 /* Tap targets of at least 44px (40px for chips). */
@@ -3552,7 +3614,7 @@
 .tp-phone .tp-back {
   min-height: 44px;
 }
-@media (max-width: 767px) {
+@media (max-width: 767px), (pointer: coarse) and (max-height: 599px) {
   .tp-menu .tp-menu-item {
     min-height: 44px;
   }
@@ -3946,11 +4008,113 @@
   height: 40px;
 }
 .tp-phone .tp-main-page {
-  padding: 16px 16px 48px;
+  padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
 }
 /* Phone sections carry their own 16px gutters (the tablet padding must not add a second one). */
 .tp-phone .tp-main-phone {
-  padding: 0 0 48px;
+  padding: 0 env(safe-area-inset-right) 48px env(safe-area-inset-left);
+}
+/* A phone on its side: the notch takes the side of the screen (viewport-fit=cover in layout.tsx). */
+.tp-top-phone {
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(6px, env(safe-area-inset-right));
+}
+.tp-rsheet,
+.tp-sheet {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/*
+ * Phones: the first card starts high (200px or less at 390x844, 300 or less under a next-move
+ * card). The record type is one 44px row, the views carry their counts in the sticky row, and
+ * Sort and the record type also sit in the Filters sheet, reachable at any scroll.
+ */
+.tp-phone .tp-rtype {
+  padding: 2px;
+}
+.tp-phone .tp-rtype-b {
+  position: relative;
+  min-height: 38px;
+}
+/* The hit area reaches the row's full 44px. */
+.tp-phone .tp-rtype-b::after {
+  content: "";
+  position: absolute;
+  inset: -3px 0;
+}
+.tp-presults {
+  padding-top: 12px;
+}
+.tp-phone .tp-pcount {
+  padding: 8px 16px 0;
+}
+.tp-sheet-body .tp-psort {
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tp-sheet-body .tp-psort .tp-rtype {
+  margin: 0;
+  width: 100%;
+}
+.tp-psort-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tp-psort-o {
+  height: 40px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+/* The next-move card on a phone: the title, then the chip beside the button. The reason is left out. */
+.tp-phone .tp-banners .nm-card {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  min-height: 0;
+  padding: 10px 12px 12px;
+}
+.tp-phone .tp-banners .nm-t {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding-right: 32px;
+}
+.tp-phone .tp-banners .nm-h {
+  font-size: 16px;
+  line-height: 24px;
+}
+.tp-phone .tp-banners .nm-p {
+  display: none;
+}
+.tp-phone .tp-banners .nm-chip {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: center;
+}
+.tp-phone .tp-banners .nm-go {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 40px;
+  margin: 0;
+}
+.tp-phone .tp-banners .nm-x {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+}
+.tp-phone .tp-move-note {
+  padding: 8px 12px 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
+/* A phone on its side has little height: the record type lives only in the Filters sheet. */
+@media (pointer: coarse) and (max-height: 599px) and (orientation: landscape) {
+  .tp-phone .tp-main-phone > .tp-rtype {
+    display: none;
+  }
 }
 
 /* Touch screens: no keyboard hints. */
