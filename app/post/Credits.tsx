@@ -16,6 +16,7 @@ import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Pro, useUi } from "./ui";
 import { WeeklyEmail } from "./Settings";
+import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
@@ -257,7 +258,7 @@ function Review({ view }: { view: View }) {
 
 /* ---------- the page ---------- */
 
-export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) {
+export function MyCredits({ view, onBack, onUseInClaude }: { view: View; onBack: () => void; onUseInClaude?: () => void }) {
   const ui = useUi();
   const me = ui.me;
   const phone = ui.layout === "phone";
@@ -423,6 +424,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           {rulesCard}
           {signinCard}
           {view.scan?.digest && <WeeklyEmail />}
+          <ConnectedApps onHowTo={onUseInClaude} />
         </>
       ) : (
         <>
@@ -432,6 +434,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
             {signinCard}
           </div>
           {view.scan?.digest && <WeeklyEmail />}
+          <ConnectedApps onHowTo={onUseInClaude} />
           {review}
           {history}
         </>

@@ -59,6 +59,8 @@ serve server node scripts/test-server.mjs
 serve rules node scripts/test-rules.mjs
 serve credits node scripts/test-credits.mjs
 serve integration node scripts/test-integration.mjs
+# The Claude connector. RN_MCP_TEST=1: 2-second tokens for one test app, a short refresh grace, and metadata documents over http on localhost.
+RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 run scan npx tsx scripts/test-scan.mts
 run digest npx tsx scripts/test-digest.ts
 run model npx tsx scripts/test-model.mts

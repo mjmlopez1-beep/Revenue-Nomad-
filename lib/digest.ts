@@ -64,6 +64,15 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   // A list with one line that repeats the headline adds nothing.
   const showList = newRoles > 0 && shown.length > 0 && !(shown.length === 1 && rest === 0 && shown[0].n === heroCount);
 
+  // Saved searches with new matches this week, most first. Names only, never a company.
+  const alerts = (Array.isArray(d.alerts) ? d.alerts : [])
+    .map((a) => ({ name: oneLine(a?.name).slice(0, 120), n: count(a?.n) }))
+    .filter((a) => a.name && a.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 10);
+  const alertsTitle = "Your saved searches";
+  const alertNew = (n: number) => `${n} new`;
+
   const closedLine =
     closed === 0 ? "" : closed === 1 ? "1 role closed this week. Its company is visible again." : `${closed} roles closed this week. Their companies are visible again.`;
   const seatsLine =
@@ -92,6 +101,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     heroCount > 0 ? `${heroCount} ${heroLabel.replace(" this week", " opened this week")}.${lead ? " " + lead : ""}` : `No new fractional roles opened this week. ${lead}`,
     ...(appUrl ? ["", cta, appUrl] : []),
     ...(showList ? ["", listTitle, ...shown.map((r) => `  ${r.function}  ${r.n}`), ...(rest ? [`  ${restLabel}  ${rest}`] : [])] : []),
+    ...(alerts.length ? ["", alertsTitle, ...alerts.map((a) => `  ${a.name}  ${alertNew(a.n)}`)] : []),
     ...(closedLine ? ["", closedLine] : []),
     ...(seatsLine ? ["", seatsLine] : []),
     "",
@@ -127,6 +137,13 @@ ${shown.map((r) => `<tr>${cell(esc(r.function), "left", r.function === fn)}${cel
 </table>`
     : "";
 
+  const alertList = alerts.length
+    ? `<p style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${alertsTitle}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-bottom:1px solid ${MAIL.line}">
+${alerts.map((a) => `<tr>${cell(esc(a.name), "left", false)}${cell(alertNew(a.n), "right", true)}</tr>`).join("\n")}
+</table>`
+    : "";
+
   const seats = seatsLine
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr>
 <td bgcolor="${MAIL.voltSoft}" style="padding:12px 16px;border-radius:8px;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${esc(seatsLine)}</td>
@@ -140,6 +157,7 @@ ${shown.map((r) => `<tr>${cell(esc(r.function), "left", r.function === fn)}${cel
     lead ? mailP(esc(lead), appUrl ? "margin-bottom:24px;" : "margin-bottom:32px;") : "",
     appUrl ? mailButton(appUrl, cta, "margin:0 0 32px") : "",
     list,
+    alertList,
     closedLine ? mailP(esc(closedLine)) : "",
     seats,
     mailP(esc(creditsLine), "margin-bottom:0;"),

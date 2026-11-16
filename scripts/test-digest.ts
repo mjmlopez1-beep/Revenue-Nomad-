@@ -83,9 +83,21 @@ async function main() {
   await t.perform("tok-opal", { type: "settings", digest: false });
   await t.applyScan({ roles: [role(1, "Acme Robotics", "Fractional VP Sales", "Sales"), role(2, "Beta Co", "Fractional Head of Sales", "Sales"), role(3, "Gamma Co", "Fractional CMO", "Marketing")], sources: clean }, at(0));
 
+  // Saved searches (the Claude connector's alerts): Mo has one that matches this week's Marketing role and one that doesn't.
+  await t.updateConnector((c) => {
+    c.alerts.m2 = [
+      { id: "al_1", name: "Fractional Marketing roles", function: "Marketing", createdAt: at(0) },
+      { id: "al_2", name: "RevOps roles in Texas", function: "RevOps", hq: "Texas", createdAt: at(0) },
+    ];
+  });
   const list = await t.digestList(at(0), BASE);
   const sal = list.find((x) => x.memberId === "m1")?.data;
   const mo = list.find((x) => x.memberId === "m2")?.data;
+  check("a saved search with new matches is in that member's email data", JSON.stringify(mo?.alerts) === JSON.stringify([{ name: "Fractional Marketing roles", n: 1 }]), mo?.alerts);
+  check("a member without saved searches has none", Array.isArray(sal?.alerts) && sal!.alerts!.length === 0, sal?.alerts);
+  const moMail = (await import("../lib/digest")).renderDigest(mo!);
+  check("the email lists the saved search and its new roles", moMail.text.includes("Your saved searches\n  Fractional Marketing roles  1 new") && moMail.html.includes("Fractional Marketing roles") && !moMail.text.includes("RevOps roles in Texas"), moMail.text);
+  check("the email never names the company of a saved search's match", !moMail.text.includes("Gamma Co") && !moMail.html.includes("Gamma Co"));
   check("everyone with an email who hasn't opted out is on the list", list.map((x) => x.memberId).sort().join() === "m1,m2,m4,m6", list.map((x) => x.memberId));
   delete process.env.RN_DIGEST_ALL;
   const signedIn = (await t.digestList(at(0), BASE)).map((x) => x.memberId);

@@ -1,0 +1,209 @@
+/* The Claude connector in the app: "Use it in Claude" (uc-) and Connected apps on Your credits (ca-). */
+
+.uc-lead {
+  margin: 0 0 8px;
+  max-width: 680px;
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--body-ink);
+}
+.uc-address {
+  margin-top: 20px;
+}
+.uc-addr-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.uc-addr {
+  flex: 1;
+  min-width: 0;
+}
+.uc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.uc-grid .tp-card {
+  margin-top: 0;
+}
+.uc-where {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.uc-steps {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.uc-steps li::marker {
+  font-family: var(--font);
+  font-weight: 700;
+  color: var(--pine);
+  font-variant-numeric: tabular-nums;
+}
+.uc-tip {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.uc-code {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+}
+.uc-code code {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.uc-asks {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.uc-ask {
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 21px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.uc-block code {
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+.uc-ask:hover {
+  border-color: var(--pine);
+  background: var(--row-hover);
+}
+.uc-note {
+  border-left: 4px solid var(--volt);
+}
+.uc-page {
+  padding-bottom: 32px;
+}
+
+.ca-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ca-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ca-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.ca-what {
+  display: grid;
+  min-width: 0;
+}
+.ca-name {
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ca-meta {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ca-ask {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ca-q {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.uc-ask:focus-visible,
+.ca-link:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 899px) {
+  .uc-grid,
+  .uc-asks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .uc-lead {
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .uc-addr-row {
+    flex-direction: column;
+  }
+  .uc-addr {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .uc-addr-row .btn,
+  .uc-code .btn,
+  .ca-row .btn {
+    min-height: 44px;
+  }
+  .ca-row {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 600px) {
+  .ca-ask {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .ca-q {
+    flex-basis: 100%;
+  }
+}

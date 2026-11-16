@@ -1,0 +1,704 @@
+/**
+ * What each connector tool does, as the member. Every read comes from the member's own view of
+ * the table (lib/mcp/view.ts) and every change goes through perform() in lib/table.ts, the path
+ * the app uses, so credits, limits, hidden companies and the seat-holder rules are the app's.
+ *
+ * A locked fact never carries its value here either: it reads "locked, 1 credit to unlock".
+ * Results are small JSON objects with each record's public id for follow-up calls.
+ */
+import { randomBytes } from "crypto";
+import { ActionError, connectorState, digestEnabled, inviteCode, perform, updateConnector, type Member } from "../table";
+import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
+import { FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
+import {
+  EMPTY_FILTERS, applyFilters, fitReason, fitTier, isOpenRole, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  type CoInfo, type FactRef, type Filters,
+} from "@/app/post/model";
+import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
+import { forgetView, memberView, type MemberView } from "./view";
+
+export interface Ctx {
+  member: Member;
+  /** The public address, for links. */
+  origin: string;
+}
+export type ToolOut = Record<string, unknown>;
+
+/** A tool's answer that explains a problem to the model (sent with isError). */
+export class ToolProblem extends Error {}
+
+/* ---------- how cells read ---------- */
+
+export const LOCKED = "locked, 1 credit to unlock";
+const LOCKED_ROLE = "locked, 1 credit opens this open role's title, job posting and posted rate together";
+const LOCKED_WITH_COMPANY = "hidden with the company, 1 credit unlocks the company and this";
+const REVIEW = "under review";
+
+/** Output keys (what a model reads and sends back) and the field each one is. */
+const COMPANY_KEYS: Record<string, string> = {
+  website: "website", industry: "industry", employees: "employees", revenue: "revenue", hq: "hq", linkedin: "linkedin", about: "about",
+  business_model: "businessModel", sales_motion: "motion", deal_size: "dealSize", sales_cycle: "salesCycle",
+};
+const SEAT_KEYS: Record<string, string> = {
+  function: "function", role: "role", type: "type", status: "status", seat_holder: "operator", start: "start", end: "end", why_hired: "reason",
+  sourced: "sourced", pricing: "pricing", rate: "rate", hours: "hours", posting: "posting", revenue_then: "revenue", employees_then: "employees",
+};
+const PERSON_KEYS: Record<string, string> = { name: "name", title: "title", relationship: "relationship", email: "email", phone: "phone", linkedin: "linkedin" };
+const outKey = (keys: Record<string, string>, field: string) => Object.keys(keys).find((k) => keys[k] === field) ?? field;
+/** A field from what a model sent: the output key ("seat_holder") or the field itself ("operator"). */
+const fieldFrom = (keys: Record<string, string>, raw: string) => keys[raw] ?? (Object.values(keys).includes(raw) ? raw : null);
+
+function read(c: Cell | undefined, locked = LOCKED): string | undefined {
+  if (!c || c.s === "empty") return undefined;
+  if (c.s === "locked") return locked;
+  if (c.s === "reported") return REVIEW;
+  return c.v;
+}
+
+/** Cells as {key: value}, empty ones left out. */
+function readAll(cells: Record<string, Cell>, keys: Record<string, string>, lockedFor: (field: string) => string = () => LOCKED): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, field] of Object.entries(keys)) {
+    const v = read(cells[field], lockedFor(field));
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+const missingOf = (cells: Record<string, Cell>, keys: Record<string, string>, skip: string[] = []) =>
+  Object.entries(keys).filter(([, f]) => cells[f]?.s === "empty" && !skip.includes(f)).map(([k]) => k);
+
+/* ---------- records ---------- */
+
+const fitOf = (i: CoInfo) => fitTier(i.c.friendly, i.engs.length, !!lastClosedPosting(i)).label;
+
+function companySummary(i: CoInfo): ToolOut {
+  const c = i.c;
+  return {
+    id: c.id,
+    name: c.name,
+    ...(c.hidden ? { hidden: true, hidden_note: "Hidden while it has an open role. Unlock the company for 1 credit to see its name, and its open roles come with it." } : {}),
+    ...readAll(c.cells, { industry: "industry", employees: "employees", revenue: "revenue", hq: "hq" }),
+    fit: fitOf(i),
+    fit_score: c.friendly.score,
+    why: fitReason(i),
+    functions_hired: i.fnState.hired,
+    ...(i.fnState.hiring.length ? { hiring_now: i.fnState.hiring } : {}),
+    seats: i.engs.length,
+    ...(c.friendly.open ? { open_roles: c.friendly.open } : {}),
+    ...(c.friendly.operators ? { fellow_fractionals: c.friendly.operators } : {}),
+    ...(c.following ? { following: true } : {}),
+    locked_facts: i.locked.length,
+  };
+}
+
+const dayOfIso = (iso: string | null | undefined) => (iso ? iso.slice(0, 10) : undefined);
+
+function personOut(p: PersonRec, seatId?: string | null): ToolOut {
+  return { id: p.id, ...(seatId ? { seat_id: seatId } : {}), ...readAll(p.cells, PERSON_KEYS) };
+}
+
+function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
+  const open = isOpenRole(e);
+  const lockedFor = (field: string) => (open && ["role", "posting", "rate"].includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
+  const facts = readAll(e.cells, SEAT_KEYS, lockedFor);
+  const holder = e.cells.operator;
+  if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Trading Post${holder.member.title ? `, ${holder.member.title}` : ""})`;
+  if (open && facts.rate) (facts.posted_rate = facts.rate), delete facts.rate;
+  if (open && facts.hours) (facts.posted_hours = facts.hours), delete facts.hours;
+  const intro = mv.view.contact?.intro;
+  return {
+    id: e.id,
+    ...(open ? { open_role: true } : {}),
+    ...(e.yours ? { yours: true } : {}),
+    ...facts,
+    ...(e.opened ? { listed_since: dayOfIso(e.openedAt ?? e.opened) } : {}),
+    ...(e.posted ? { posted: e.posted } : {}),
+    ...(e.closed ? { closed: dayOfIso(e.closedAt ?? e.closed) } : {}),
+    ...(e.unseen ? { note: "Not seen in the last scan of its job board, so it may have closed." } : {}),
+    ...(holder?.s === "value" && !e.yours
+      ? {
+          reach_them: {
+            linkedin_search: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(holder.v)}`,
+            ...(intro ? { ask_revenue_nomad_for_an_intro: intro } : {}),
+          },
+        }
+      : {}),
+    ...(e.people.length ? { people: e.people.map((p) => personOut(p)) } : {}),
+    ...(e.yours ? { you_can_add: missingOf(e.cells, SEAT_KEYS, open ? ["start", "end", "reason", "sourced"] : []) } : {}),
+  };
+}
+
+/** The ways in: fellow fractionals who held a seat there, and the people who hired or managed them. */
+function warmPaths(i: CoInfo): ToolOut[] {
+  const out: ToolOut[] = [];
+  for (const e of i.engs) {
+    const h = e.cells.operator;
+    if (!h || h.s === "empty" || e.yours) continue;
+    const when = [shown(e.cells.start), shown(e.cells.end)].filter(Boolean).join(" to ");
+    out.push({
+      who: `Fractional who held the ${shown(e.cells.function) ?? ""} seat${when ? ` (${when})` : ""}`.replace("the  seat", "a seat"),
+      name: read(h),
+      seat_id: e.id,
+      ...(h.s === "locked" ? { unlock: { entity: "seat", id: e.id, field: "seat_holder" } } : {}),
+    });
+  }
+  const ranked = ["Hiring for the seat", "Reported to", "Decision maker", "Worked with", "Reported to me"];
+  const people = i.people
+    .filter(({ p }) => p.cells.name && p.cells.name.s !== "empty")
+    .sort((a, b) => ranked.indexOf(shown(a.p.cells.relationship) ?? "") - ranked.indexOf(shown(b.p.cells.relationship) ?? ""));
+  for (const { p, e } of people) {
+    const rel = shown(p.cells.relationship);
+    out.push({
+      who: [shown(p.cells.title), rel ? rel.toLowerCase() : null, e && shown(e.cells.function) ? `on the ${shown(e.cells.function)} seat` : null].filter(Boolean).join(", ") || "A person at the company",
+      name: read(p.cells.name),
+      person_id: p.id,
+      ...(p.cells.name.s === "locked" ? { unlock: { entity: "person", id: p.id, field: "name" } } : {}),
+    });
+  }
+  return out.slice(0, 10);
+}
+
+/** What unlocking everything here would buy: one entry per purchase (an open role's three facts are one). */
+const purchases = (i: CoInfo) => i.locked.length;
+
+function companyOut(i: CoInfo, mv: MemberView): ToolOut {
+  const c = i.c;
+  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "hidden until you unlock the company (1 credit)" : LOCKED));
+  return {
+    ...companySummary(i),
+    ...facts,
+    ...(c.hidden ? {} : { you_can_add: missingOf(c.cells, COMPANY_KEYS, ["about"]) }),
+    seats: i.engs.map((e) => seatOut(e, i, mv)),
+    ...(c.people.length ? { people: c.people.map((p) => personOut(p)) } : {}),
+    warm_paths: warmPaths(i),
+    locked: purchases(i)
+      ? { purchases: purchases(i), note: `Up to ${purchases(i)} credit${purchases(i) > 1 ? "s" : ""} to unlock everything here. Call unlock with field "everything" (without confirm) for the exact cost.` }
+      : "Nothing here is locked for you.",
+  };
+}
+
+/* ---------- finding things ---------- */
+
+function companyInfo(mv: MemberView, raw: unknown): CoInfo {
+  const id = String(raw ?? "").trim();
+  const byId = mv.byId.get(id);
+  if (byId) return byId;
+  // A name works too, for companies the member can see (a hidden company has no name to match).
+  const lc = id.toLowerCase();
+  const named = lc ? mv.infos.filter((i) => !i.c.hidden && (i.c.name.toLowerCase() === lc || i.domain === lc.replace(/^https?:\/\//, "").replace(/^www\./, ""))) : [];
+  if (named.length === 1) return named[0];
+  if (named.length > 1) throw new ToolProblem(`More than one company is called that. Use one of these ids: ${named.map((i) => i.c.id).join(", ")}`);
+  throw new ToolProblem("No company with that id or name. Use search_companies to find it, then pass its id.");
+}
+function seatInfo(mv: MemberView, raw: unknown): { i: CoInfo; e: EngagementRec } {
+  const id = String(raw ?? "");
+  const i = mv.bySeat.get(id);
+  const e = i?.engs.find((x) => x.id === id);
+  if (!i || !e) throw new ToolProblem("No seat with that id. Use get_company to see a company's seats and their ids.");
+  return { i, e };
+}
+function personInfo(mv: MemberView, raw: unknown): { i: CoInfo; p: PersonRec } {
+  const id = String(raw ?? "");
+  const i = mv.byPerson.get(id);
+  const p = i?.people.find((x) => x.p.id === id)?.p;
+  if (!i || !p) throw new ToolProblem("No person with that id. Use get_company to see the people at a company.");
+  return { i, p };
+}
+
+/** A pick-list value in the list's own spelling, or a clear problem. */
+function listValue(name: string, list: readonly string[], raw: unknown): string {
+  const v = pickFrom(list, raw);
+  if (!v) throw new ToolProblem(`${name} "${String(raw).slice(0, 40)}" isn't one of: ${list.join(", ")}`);
+  return v;
+}
+const listValues = (name: string, list: readonly string[], raw: unknown) =>
+  raw === undefined || raw === null ? [] : (Array.isArray(raw) ? raw : [raw]).filter((x) => x !== "").map((x) => listValue(name, list, x));
+
+const roleFacts = (i: CoInfo, e: EngagementRec): RoleFacts => ({
+  function: shown(e.cells.function),
+  industry: shown(i.c.cells.industry),
+  employees: shown(i.c.cells.employees),
+  revenue: shown(i.c.cells.revenue),
+  hq: shown(i.c.cells.hq),
+  pastHires: i.c.friendly.fractional,
+});
+
+const clampLimit = (raw: unknown, def: number, max: number) => Math.max(1, Math.min(max, Math.floor(Number(raw) || def)));
+
+export interface SearchArgs {
+  query?: string;
+  function?: string;
+  function_hired?: string;
+  no_function_yet?: string;
+  fractional_friendly?: boolean;
+  hiring_now?: boolean;
+  industry?: string[];
+  employees?: string[];
+  revenue?: string[];
+  hq?: string;
+  business_model?: string;
+  sales_motion?: string;
+  deal_size?: string;
+  sales_cycle?: string;
+  following?: boolean;
+  unlocked?: boolean;
+  sort?: "fit" | "newest" | "name" | "employees" | "revenue";
+  limit?: number;
+  offset?: number;
+}
+
+export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const me = mv.view.me!;
+  const f: Filters = structuredClone(EMPTY_FILTERS);
+  f.industry = listValues("industry", RN_INDUSTRIES, a.industry);
+  f.employees = listValues("employees", RN_EMPLOYEES, a.employees);
+  f.revenue = listValues("revenue", RN_REVENUE, a.revenue);
+  if (a.business_model) f.businessModel = [listValue("business_model", BUSINESS_MODELS, a.business_model)];
+  if (a.sales_motion) f.motion = [listValue("sales_motion", RN_MOTIONS, a.sales_motion)];
+  if (a.deal_size) f.dealSize = [listValue("deal_size", RN_DEAL_SIZES, a.deal_size)];
+  if (a.sales_cycle) f.salesCycle = [listValue("sales_cycle", RN_SALES_CYCLES, a.sales_cycle)];
+  if (a.hq?.trim()) f.hq = [a.hq.trim().slice(0, 60)];
+  if (a.function) f.fn = [listValue("function", FUNCTIONS, a.function)];
+  const hired = a.function_hired ? listValue("function_hired", FUNCTIONS, a.function_hired) : null;
+  const notYet = a.no_function_yet ? listValue("no_function_yet", FUNCTIONS, a.no_function_yet) : null;
+  const tab = a.hiring_now ? "hiring" : a.following ? "following" : a.unlocked ? "unlocked" : a.fractional_friendly ? "friendly" : "all";
+  const q = String(a.query ?? "").slice(0, 200);
+  let rows = applyFilters(rowsFor("companies", mv.infos), f, tab, q, me).rows;
+  // The tab covers one of these; the others are checked here.
+  if (a.hiring_now && a.fractional_friendly) rows = rows.filter((r) => r.i.c.friendly.fractional > 0);
+  if (a.following && tab !== "following") rows = rows.filter((r) => r.i.c.following);
+  if (a.unlocked && tab !== "unlocked") rows = rows.filter((r) => r.i.unlockedByMe);
+  if (hired) rows = rows.filter((r) => r.i.fnState.hired.includes(hired));
+  // "No Marketing yet": they hired fractionals in other functions and none in this one (the app's "No Marketing seat yet").
+  if (notYet) rows = rows.filter((r) => r.i.fnState.hired.length > 0 && !r.i.fnState.hired.includes(notYet) && !r.i.fnState.hiring.includes(notYet));
+  const sort = a.sort && ["fit", "newest", "name", "employees", "revenue"].includes(a.sort) ? a.sort : "fit";
+  rows = sortRows(rows, sort, false, q);
+  const limit = clampLimit(a.limit, 10, 25);
+  const offset = Math.max(0, Math.floor(Number(a.offset) || 0));
+  const page = rows.slice(offset, offset + limit);
+  return {
+    total: rows.length,
+    showing: page.length,
+    ...(offset + page.length < rows.length ? { next_offset: offset + page.length } : {}),
+    companies: page.map((r) => companySummary(r.i)),
+    ...(rows.length === 0
+      ? { note: q ? "Nothing matched. Search reads company names, functions and industries, and the facts you can see. Names, roles and rates stay locked until unlocked, so search can't read them." : "Nothing matched these filters. Try fewer." }
+      : {}),
+  };
+}
+
+export async function getCompany(ctx: Ctx, a: { company: string }): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  return companyOut(companyInfo(mv, a.company), mv);
+}
+
+export interface RoleArgs {
+  function?: string;
+  since_days?: number;
+  industry?: string[];
+  employees?: string[];
+  revenue?: string[];
+  hq?: string;
+  fractional_friendly?: boolean;
+  limit?: number;
+}
+
+function openRoles(mv: MemberView, a: RoleArgs) {
+  const fn = a.function ? listValue("function", FUNCTIONS, a.function) : undefined;
+  const { criteria, problems } = cleanCriteria({ function: fn, industry: a.industry, employees: a.employees, revenue: a.revenue, hq: a.hq, fractional_friendly: a.fractional_friendly });
+  if (problems.length) throw new ToolProblem(problems.join(". "));
+  const days = a.since_days === undefined || a.since_days === null ? null : Math.max(1, Math.min(365, Math.floor(Number(a.since_days) || 7)));
+  const since = days ? new Date(Date.now() - days * 86_400_000).toISOString() : null;
+  const alert: SavedSearch = { id: "", name: "", createdAt: "", ...criteria };
+  const out: { i: CoInfo; e: EngagementRec; at: string }[] = [];
+  for (const i of mv.infos)
+    for (const e of i.engs) {
+      if (!isOpenRole(e)) continue;
+      const at = e.openedAt ?? e.opened ?? "";
+      if (since && (!at || at < since)) continue;
+      if (!alertMatches(alert, roleFacts(i, e))) continue;
+      out.push({ i, e, at });
+    }
+  out.sort((x, y) => y.at.localeCompare(x.at));
+  return { roles: out, criteria, days };
+}
+
+function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
+  const lockedRole = i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
+  const facts = readAll(e.cells, { function: "function", role: "role", type: "type", status: "status", posted_rate: "rate", posted_hours: "hours", posting: "posting" }, (f) =>
+    ["role", "posting", "rate"].includes(f) ? lockedRole : LOCKED,
+  );
+  return {
+    seat_id: e.id,
+    company_id: i.c.id,
+    company: i.c.name,
+    ...(i.c.hidden ? { company_hidden: true, about_the_company: i.teaser || undefined } : {}),
+    ...facts,
+    ...(e.opened ? { listed_since: dayOfIso(e.openedAt ?? e.opened) } : {}),
+    ...(e.posted ? { posted: e.posted } : {}),
+    ...(e.unseen ? { note: "Not seen in the last scan of its job board, so it may have closed." } : {}),
+    ...(i.c.friendly.fractional ? { past_fractional_hires: i.c.friendly.fractional } : {}),
+    unlock: i.c.hidden
+      ? { cost: "1 credit opens the company and its open roles", call: { entity: "company", id: i.c.id, field: "identity" } }
+      : e.cells.role?.s === "locked" || e.cells.posting?.s === "locked" || e.cells.rate?.s === "locked"
+        ? { cost: "1 credit opens the role, the posting and the posted rate", call: { entity: "seat", id: e.id, field: "role" } }
+        : "nothing locked",
+  };
+}
+
+export async function listOpenRoles(ctx: Ctx, a: RoleArgs): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const { roles, days } = openRoles(mv, a);
+  const limit = clampLimit(a.limit, 15, 40);
+  return {
+    total: roles.length,
+    showing: Math.min(limit, roles.length),
+    ...(days ? { opened_in_the_last_days: days } : {}),
+    roles: roles.slice(0, limit).map(({ i, e }) => roleOut(i, e)),
+    ...(mv.view.scan?.lastOkAt ? { last_scan: dayOfIso(mv.view.scan.lastOkAt) } : {}),
+  };
+}
+
+/* ---------- rates ---------- */
+
+const statOut = (s: RateStat, unit: string): ToolOut =>
+  s.median !== undefined
+    ? { median: s.median, ...(s.p25 !== undefined ? { middle_half: [s.p25, s.p75] } : {}), people: s.n, unit, ...(s.withoutYours ? { note: "Your own rates are left out of what you see." } : {}) }
+    : { shows_at: s.min, people_so_far: s.n, note: `Needs ${Math.max(0, s.min - s.n)} more before it shows a number.` };
+
+export async function rateBenchmarks(ctx: Ctx, a: { function?: string; revenue?: string }): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const b = mv.view.benchmarks;
+  if (!b) return { note: "Rate benchmarks aren't available right now." };
+  const fn = a.function ? listValue("function", FUNCTIONS, a.function) : null;
+  const rev = a.revenue ? (pickFrom(["All", ...RN_REVENUE], a.revenue) ?? listValue("revenue", RN_REVENUE, a.revenue)) : null;
+  const asked = b.rows.filter((r) => (!fn || r.function === fn) && (!rev || r.revenue === rev));
+  // Groups nobody is in yet say nothing, unless they are all there is.
+  const live = asked.filter((r) => r.monthly.n > 0 || r.hourly.n > 0);
+  const rows = live.length ? live : asked;
+  return {
+    about: "What fractionals charge, by GTM function and the client's revenue at the time. Monthly retainers in dollars a month, hourly rates in dollars an hour. Each person counts once.",
+    rows: rows.map((r) => ({ function: r.function, client_revenue: r.revenue, monthly: statOut(r.monthly, "dollars a month"), hourly: statOut(r.hourly, "dollars an hour") })),
+    ...(rows.length ? {} : { note: "No group matches. Leave revenue out to see every band, or use revenue All." }),
+  };
+}
+
+/* ---------- account ---------- */
+
+function emailNote(mv: MemberView): string {
+  if (!digestEnabled()) return "Email isn't set up on Trading Post yet, so alerts don't arrive by email. Ask what's new any time: list_open_roles with since_days 7 shows this week's open roles.";
+  if (!mv.view.me!.digest) return "Your weekly email is off, so new matches won't be emailed. Turn it on in Your credits on Trading Post.";
+  return "New matches come in your weekly email after each scan.";
+}
+
+export async function myAccount(ctx: Ctx): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const me = mv.view.me!;
+  const seats = mySeats(mv.infos, me);
+  const alerts = (await connectorState()).alerts[ctx.member.id] ?? [];
+  return {
+    name: me.name,
+    ...(me.function ? { function: me.function } : {}),
+    credits: me.credits,
+    ...(me.owed ? { owed: me.owed } : {}),
+    earned_today: `${me.earned24h} of ${me.earnCap}`,
+    ...(me.earnResetsAt ? { earning_opens_again_at: me.earnResetsAt } : {}),
+    ...(me.unlocksLeft !== null && me.unlocksLeft !== undefined ? { unlocks_left_today: me.unlocksLeft } : {}),
+    ...(me.sellEarnLeft !== undefined ? { pick_list_answers_that_still_earn_today: me.sellEarnLeft } : {}),
+    facts_added: me.added,
+    facts_unlocked: me.unlocked,
+    how_credits_work: "Adding a missing fact earns 1 credit (up to 25 a day). Seeing a fact someone else added costs 1. Your own seats are free to you.",
+    seats_on_file: seats.map((s) => ({ seat_id: s.e.id, company_id: s.i.c.id, company: s.i.c.name, function: shown(s.e.cells.function), missing: s.missing.map((f) => outKey(SEAT_KEYS, f)) })),
+    following: mv.infos.filter((i) => i.c.following).map((i) => ({ id: i.c.id, name: i.c.name })),
+    saved_searches: alerts.length,
+    weekly_email: emailNote(mv),
+    invite_link: `${ctx.origin}/?ref=${inviteCode(ctx.member.id)}`,
+  };
+}
+
+/* ---------- unlocking ---------- */
+
+const ENTITY: Record<string, Entity> = { company: "company", seat: "engagement", engagement: "engagement", person: "contact", contact: "contact" };
+
+function unlockItems(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; target: { entity: Entity; id: string } } {
+  const found = unlockFind(mv, entityRaw, id, fieldRaw);
+  return { ...found, target: { entity: ENTITY[entityRaw], id: found.id } };
+}
+function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: string): { items: FactRef[]; what: string; id: string } {
+  const entity = ENTITY[entityRaw];
+  if (!entity) throw new ToolProblem('entity must be "company", "seat" or "person".');
+  const all = fieldRaw === "everything" || fieldRaw === "all";
+  if (entity === "company") {
+    const i = companyInfo(mv, id);
+    if (all) return { items: i.locked, what: `everything locked at ${i.c.name}`, id: i.c.id };
+    const field = ["identity", "name"].includes(fieldRaw) ? "identity" : fieldFrom(COMPANY_KEYS, fieldRaw);
+    if (!field) throw new ToolProblem(`On a company, field is "everything", "identity" (a hidden company's name) or one of: ${Object.keys(COMPANY_KEYS).join(", ")}`);
+    if (field === "identity" || (i.c.hidden && ["website", "linkedin", "about"].includes(field)))
+      return { items: i.c.hidden ? [{ entity: "company", id: i.c.id, field: "identity" }] : [], what: "the company and its open roles", id: i.c.id };
+    return { items: i.c.cells[field]?.s === "locked" ? [{ entity: "company", id: i.c.id, field }] : [], what: `the ${outKey(COMPANY_KEYS, field)}`, id: i.c.id };
+  }
+  if (entity === "engagement") {
+    const { e } = seatInfo(mv, id);
+    if (all) return { items: lockedInEngagement(e), what: "everything locked on this seat", id: e.id };
+    const field = fieldFrom(SEAT_KEYS, fieldRaw);
+    if (!field) throw new ToolProblem(`On a seat, field is "everything" or one of: ${Object.keys(SEAT_KEYS).join(", ")}`);
+    return { items: e.cells[field]?.s === "locked" ? [{ entity: "engagement", id: e.id, field }] : [], what: `the ${outKey(SEAT_KEYS, field)}`, id: e.id };
+  }
+  const { p } = personInfo(mv, id);
+  if (all) return { items: lockedOf("contact", p.id, p.cells), what: "everything locked about this person", id: p.id };
+  const field = fieldFrom(PERSON_KEYS, fieldRaw);
+  if (!field) throw new ToolProblem(`On a person, field is "everything" or one of: ${Object.keys(PERSON_KEYS).join(", ")}`);
+  return { items: p.cells[field]?.s === "locked" ? [{ entity: "contact", id: p.id, field }] : [], what: `the person's ${field}`, id: p.id };
+}
+
+/** One record, read fresh after a change, to show what the member can now see. */
+async function afterChange(ctx: Ctx, entity: Entity, id: string): Promise<ToolOut | undefined> {
+  forgetView(ctx.member.id);
+  const mv = await memberView(ctx.member);
+  if (entity === "company") {
+    const i = mv.byId.get(id);
+    return i ? { company: companyOut(i, mv) } : undefined;
+  }
+  if (entity === "engagement") {
+    const i = mv.bySeat.get(id);
+    const e = i?.engs.find((x) => x.id === id);
+    return i && e ? { company: { id: i.c.id, name: i.c.name }, seat: seatOut(e, i, mv) } : undefined;
+  }
+  const i = mv.byPerson.get(id);
+  const p = i?.people.find((x) => x.p.id === id);
+  return i && p ? { company: { id: i.c.id, name: i.c.name }, person: personOut(p.p, p.e?.id) } : undefined;
+}
+
+export async function unlock(ctx: Ctx, a: { entity: string; id: string; field: string; confirm?: boolean }): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const me = mv.view.me!;
+  const { items, what, target } = unlockItems(mv, String(a.entity ?? ""), String(a.id ?? ""), String(a.field ?? ""));
+  if (!items.length) return { spent: 0, message: `Nothing to unlock: you can already see ${what}, or nobody has added it yet.`, credits: me.credits };
+  const capped = items.slice(0, 60);
+  const action: Action = capped.length === 1 ? { type: "unlock", ...capped[0] } : { type: "unlockMany", items: capped };
+  const more = items.length > capped.length ? ` This covers the first 60 of ${items.length}. Unlock again for the rest.` : "";
+  try {
+    if (!a.confirm) {
+      const r = await perform(ctx.member.token, action, ctx.origin, { dryRun: true });
+      const cost = r.spent ?? 0;
+      return {
+        confirmed: false,
+        would_spend: cost,
+        credits_now: me.credits,
+        would_open: what,
+        message: `${cost === 0 ? "This costs nothing." : `This would spend ${cost} credit${cost > 1 ? "s" : ""}.`} Nothing was spent.${more}`,
+        next: "Ask the member if they want to spend this. Only if they say yes, call unlock again with the same arguments and confirm: true.",
+      };
+    }
+    const r = await perform(ctx.member.token, action, ctx.origin);
+    const shownNow = await afterChange(ctx, target.entity, target.id);
+    return { confirmed: true, message: r.message + more, credits_left: r.me?.credits, ...(r.me?.unlocksLeft != null ? { unlocks_left_today: r.me.unlocksLeft } : {}), ...shownNow };
+  } catch (e) {
+    if (e instanceof ActionError) throw new ToolProblem(e.message);
+    throw e;
+  }
+}
+
+/* ---------- adding ---------- */
+
+async function act(ctx: Ctx, action: Action) {
+  try {
+    const r = await perform(ctx.member.token, action, ctx.origin);
+    forgetView(ctx.member.id);
+    return r;
+  } catch (e) {
+    if (e instanceof ActionError) throw new ToolProblem(e.message);
+    throw e;
+  }
+}
+const creditsLine = (r: Awaited<ReturnType<typeof perform>>) => ({ credits: r.me?.credits, ...(r.me ? { earned_today: r.me.earned24h } : {}) });
+
+const PICKS: Record<string, readonly string[]> = {
+  industry: RN_INDUSTRIES, employees: RN_EMPLOYEES, revenue: RN_REVENUE, businessModel: BUSINESS_MODELS, motion: RN_MOTIONS, dealSize: RN_DEAL_SIZES, salesCycle: RN_SALES_CYCLES,
+};
+
+export async function addCompanyFact(ctx: Ctx, a: { company: string; field: string; value: string }): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const i = companyInfo(mv, a.company);
+  const field = fieldFrom(COMPANY_KEYS, String(a.field ?? ""));
+  if (!field || field === "about") throw new ToolProblem(`field is one of: ${Object.keys(COMPANY_KEYS).filter((k) => k !== "about").join(", ")}`);
+  const value = PICKS[field] ? listValue(outKey(COMPANY_KEYS, field), PICKS[field], a.value) : String(a.value ?? "");
+  const r = await act(ctx, { type: "fill", entity: "company", id: i.c.id, field, value });
+  return { message: r.message, ...creditsLine(r) };
+}
+
+export async function addPerson(
+  ctx: Ctx,
+  a: { company: string; seat_id?: string; name: string; title?: string; relationship?: string; email?: string; phone?: string; linkedin?: string },
+): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const i = companyInfo(mv, a.company);
+  if (a.seat_id && !i.engs.some((e) => e.id === a.seat_id)) throw new ToolProblem("That seat isn't at this company. Use get_company to see its seats.");
+  const person: Record<string, string> = { name: String(a.name ?? "") };
+  for (const k of ["title", "email", "phone", "linkedin"] as const) if (a[k]) person[k] = String(a[k]);
+  if (a.relationship) person.relationship = listValue("relationship", RELATIONSHIPS, a.relationship);
+  const r = await act(ctx, { type: "addPerson", companyId: i.c.id, engagementId: a.seat_id ?? null, person });
+  return { message: r.message, person_id: r.id, ...creditsLine(r) };
+}
+
+export interface SeatArgs {
+  company?: string;
+  website?: string;
+  seat_id?: string;
+  function?: string;
+  role?: string;
+  type?: string;
+  status?: string;
+  start?: string;
+  end?: string;
+  why_hired?: string;
+  sourced?: string;
+  pricing?: string;
+  rate?: string;
+  rate_visibility?: "members" | "benchmarks_only";
+  hours?: string | number;
+  revenue_then?: string;
+  employees_then?: string;
+}
+
+const SEAT_PICKS: Record<string, readonly string[]> = {
+  function: FUNCTIONS, type: ENGAGEMENT_TYPES, status: STATUSES, reason: HIRE_REASONS, sourced: SOURCED_VIA, pricing: PRICING_MODELS, revenue: RN_REVENUE, employees: RN_EMPLOYEES,
+};
+
+function seatFields(a: SeatArgs): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, field] of Object.entries(SEAT_KEYS)) {
+    if (field === "operator" || field === "posting" || field === "rate") continue;
+    const raw = (a as Record<string, unknown>)[k];
+    if (raw === undefined || raw === null || raw === "") continue;
+    out[field] = SEAT_PICKS[field] ? listValue(k, SEAT_PICKS[field], raw) : String(raw);
+  }
+  return out;
+}
+
+export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const me = mv.view.me!;
+  const fields = seatFields(a);
+  const rate = a.rate !== undefined && a.rate !== null && String(a.rate).trim() ? String(a.rate).trim() : null;
+  if (rate && !a.rate_visibility)
+    throw new ToolProblem(
+      'Ask the member who can see this rate, then send rate_visibility. "members": members who unlock it see it on the seat. "benchmarks_only": it only counts in the rate benchmarks and is never shown with their name or the seat.',
+    );
+  const pricing = fields.pricing ?? null;
+  const shareBench = async (engagementId: string) => {
+    if (!rate || a.rate_visibility !== "benchmarks_only") return null;
+    const kind = pricing === "Hourly" || /\/\s*h(ou)?r|hourly|an hour|per hour/i.test(rate) ? "Hourly" : "Monthly retainer";
+    const r = await act(ctx, { type: "benchRate", engagementId, pricing: kind, rate });
+    return r.message;
+  };
+
+  if (a.seat_id) {
+    // Facts on a seat already on file. Only its seat holder may add them (the app's rule): perform says so otherwise.
+    const { e } = seatInfo(mv, a.seat_id);
+    const msgs: string[] = [];
+    let last: Awaited<ReturnType<typeof perform>> | null = null;
+    const todo = Object.entries(fields);
+    if (rate && a.rate_visibility === "members") todo.push(["rate", rate]);
+    if (!todo.length && !rate) throw new ToolProblem("Send at least one fact about the seat.");
+    for (const [field, value] of todo) {
+      last = await act(ctx, { type: "fill", entity: "engagement", id: e.id, field, value });
+      msgs.push(last.message);
+    }
+    const bench = await shareBench(e.id);
+    if (bench) msgs.push(bench);
+    return { message: msgs.join(" "), seat_id: e.id, ...(last ? creditsLine(last) : {}) };
+  }
+
+  if (!a.company) throw new ToolProblem("Send the company (its name, or the id from search_companies), or seat_id to add facts to a seat of yours already on file.");
+  let name = String(a.company).trim();
+  let website = a.website;
+  const known = mv.byId.get(name);
+  if (known) {
+    if (known.c.hidden) throw new ToolProblem("That company is hidden for you, so send its real name in company instead of the id.");
+    name = known.c.name;
+    website ??= shown(known.c.cells.website) ?? undefined;
+  }
+  if (!fields.function && !fields.role) throw new ToolProblem("Add the seat's function or its role too, so members can tell what the work was.");
+  if (rate && a.rate_visibility === "members") fields.rate = rate;
+  // The member names themselves as the seat holder: the only seat a member can add (SEAT_SELF_ONLY).
+  const r = await act(ctx, {
+    type: "add",
+    company: name,
+    ...(website ? { website } : {}),
+    newEngagement: true,
+    engagementFields: { ...fields, operator: me.name },
+    operatorMemberId: "me",
+  });
+  const bench = r.id ? await shareBench(r.id) : null;
+  return { message: [r.message, bench].filter(Boolean).join(" "), seat_id: r.id, ...creditsLine(r) };
+}
+
+export async function followCompany(ctx: Ctx, a: { company: string; on?: boolean }): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const i = companyInfo(mv, a.company);
+  const r = await act(ctx, { type: "follow", companyId: i.c.id, on: a.on !== false });
+  return { message: r.message };
+}
+
+/* ---------- alerts ---------- */
+
+export interface AlertArgs {
+  action: "save" | "list" | "delete";
+  id?: string;
+  name?: string;
+  function?: string;
+  industry?: string[];
+  employees?: string[];
+  revenue?: string[];
+  hq?: string;
+  fractional_friendly?: boolean;
+}
+
+export async function alerts(ctx: Ctx, a: AlertArgs): Promise<ToolOut> {
+  const mv = await memberView(ctx.member);
+  const mine = (await connectorState()).alerts[ctx.member.id] ?? [];
+  const counts = (x: SavedSearch) => {
+    const all = openRoles(mv, { function: x.function, industry: x.industry, employees: x.employees, revenue: x.revenue, hq: x.hq, fractional_friendly: x.fractionalFriendly });
+    const week = all.roles.filter((r) => r.at >= new Date(Date.now() - 7 * 86_400_000).toISOString()).length;
+    return { all, week };
+  };
+  const show = (x: SavedSearch) => {
+    const { all, week } = counts(x);
+    const { id, name, createdAt, ...criteria } = x;
+    return { id, name, criteria, saved: dayOfIso(createdAt), open_now: all.roles.length, new_this_week: week };
+  };
+  if (a.action === "list") return { saved_searches: mine.map(show), delivery: emailNote(mv) };
+  if (a.action === "delete") {
+    const gone = await updateConnector((c) => {
+      const list = c.alerts[ctx.member.id] ?? [];
+      const next = list.filter((x) => x.id !== a.id);
+      c.alerts[ctx.member.id] = next;
+      return next.length < list.length;
+    });
+    if (!gone) throw new ToolProblem("No saved search with that id. Use alerts with action list to see them.");
+    return { message: "Deleted that saved search." };
+  }
+  if (a.action !== "save") throw new ToolProblem('action is "save", "list" or "delete".');
+  const { criteria, problems } = cleanCriteria(a);
+  if (problems.length) throw new ToolProblem(problems.join(". "));
+  if (!Object.keys(criteria).length) throw new ToolProblem("Say what to look for: a function, an industry, a size, a revenue band or a place.");
+  if (mine.length >= ALERT_MAX) throw new ToolProblem(`You have ${ALERT_MAX} saved searches, which is the most. Delete one first.`);
+  const saved: SavedSearch = {
+    id: `al_${randomBytes(6).toString("base64url")}`,
+    name: String(a.name ?? "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 100) || describeAlert(criteria),
+    ...criteria,
+    createdAt: new Date().toISOString(),
+  };
+  await updateConnector((c) => {
+    c.alerts[ctx.member.id] = [...(c.alerts[ctx.member.id] ?? []), saved].slice(-ALERT_MAX);
+  });
+  const { all } = counts(saved);
+  return {
+    message: `Saved "${saved.name}".`,
+    saved_search: show(saved),
+    open_now: all.roles.slice(0, 5).map(({ i, e }) => roleOut(i, e)),
+    delivery: emailNote(mv),
+  };
+}

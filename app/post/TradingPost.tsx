@@ -46,6 +46,7 @@ import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
 import { AddModal } from "./AddModal";
 import { MyCredits, inviteLink, signInLink, useCopy, useShareInvite } from "./Credits";
+import { UseInClaude } from "./UseInClaude";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
 import { fmtStamp } from "./RoleDate";
@@ -77,12 +78,12 @@ function previousVisit(): string | null {
 /** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
-type Page = "table" | "credits" | "rates" | "seats" | "metrics";
+type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "claude";
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics"];
-const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics" };
+const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "claude"];
+const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", claude: "Use it in Claude" };
 const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -1341,7 +1342,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
 
         {page === "credits" ? (
           <main className="tp-main tp-main-page">
-            <MyCredits view={view} onBack={() => setPage("table")} />
+            <MyCredits view={view} onBack={() => setPage("table")} onUseInClaude={() => setPage("claude")} />
+          </main>
+        ) : page === "claude" ? (
+          <main className="tp-main tp-main-page">
+            <UseInClaude onBack={() => setPage("table")} onCredits={() => setPage("credits")} />
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
@@ -1622,6 +1627,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
+              { label: "Use it in Claude", onClick: () => (setDrawer(null), setPage("claude")) },
               ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
