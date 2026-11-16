@@ -2,14 +2,16 @@
 
 /**
  * First run, under 30 seconds. One calm card:
- *   1. Two questions, one tap each (seat, goal).
+ *   1. Two questions, one tap each (seat, what they are looking for).
  *   2. Follow 3 companies (type-ahead plus 6 suggestions picked from the answers).
- *   3. Save your sign-in link (only for members who joined here while email sign-in is off).
+ *   3. Keep your sign-in link (only for members who joined here while email sign-in is off).
  * Finishing sends the follows, then the profile last (which marks the member onboarded).
+ * The last button names where the member lands: their seats when a seat on file carries
+ * their name (Root opens the app there), otherwise the table.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconCheck, IconCoin, IconLink, IconPlus, IconSearch, IconX, val, type Act, type View } from "../ui/shared";
+import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconPlus, IconSearch, IconX, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import { GOALS, type CompanyRec } from "@/lib/tableTypes";
 
@@ -23,41 +25,60 @@ export interface OnboardingProps {
 type Goal = (typeof GOALS)[number]["key"];
 const FOLLOW_TARGET = 3;
 
-const GOAL_HINT: Record<Goal, string> = {
-  friendly: "We start you on companies that hired fractionals, your seat first.",
-  adjacent: "We start you on companies that hired other GTM functions fractionally.",
-  intro: "We start you on companies where fellow members held a seat.",
+/** Functions that read naturally in "no Sales seat yet". The catch-alls do not. */
+const named = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive" ? fn : null);
+
+/**
+ * What each answer is called here, and what the table opens on because of it (the app reads
+ * the stored key: its first tab and filters follow from it).
+ */
+const GOAL_COPY: Record<Goal, { label: string; opens: (fn: string | null) => string }> = {
+  friendly: {
+    label: "Companies that hire fractionals",
+    opens: () => "The table opens on the companies that hire fractionals most.",
+  },
+  adjacent: {
+    label: "Companies that have not hired my function yet",
+    opens: (fn) =>
+      named(fn)
+        ? `The table opens on companies that hired other GTM functions and have no ${fn} seat on file.`
+        : "The table opens on companies that hired other GTM functions and have no seat in yours on file.",
+  },
+  intro: {
+    label: "A fractional who held the seat and can tell me about it",
+    opens: () => "The table opens on seats where the seat holder is on file.",
+  },
 };
 
-/** One line about a company that works for sparse and rich records. */
+/**
+ * One line about a company that works for sparse and rich records: industry, size, and the
+ * seats on file with how recent they are ("1 recent seat", "3 seats, 2 recent", "2 past seats").
+ */
 function metaOf(c: CompanyRec): string {
   const parts = [val(c.cells.industry), val(c.cells.employees)].filter(Boolean) as string[];
   const n = c.engagements.length;
-  if (n) parts.push(`${n} engagement${n > 1 ? "s" : ""}`);
+  const f = c.friendly;
+  if (n === 1) parts.push(f.recent > 0 ? "1 recent seat" : f.fractional > 0 ? "1 past seat" : "1 seat");
+  else if (n > 1) parts.push(f.recent > 0 ? `${n} seats, ${Math.min(n, f.recent)} recent` : f.fractional > 0 ? `${n} past seats` : `${n} seats`);
   return parts.join(" · ");
 }
 
 const SUGGESTIONS = 6;
 
 /**
- * The evidence chip for a company, in place of a fit number: an open role now, a fractional
- * seat that started recently, or one on file from before. Null when there is no seat on file.
- * Same labels as the app's chip (app/post/model fitTier), with a rank for sorting.
+ * How strong the evidence is that a company hires fractionals, for sorting: an open role
+ * now, a fractional seat that started recently, or one on file from before.
  */
-function fitTier(c: CompanyRec): { label: string; cls: string; rank: number } | null {
+function fitRank(c: CompanyRec): number {
   const f = c.friendly;
-  if (f.open > 0) return { label: "Hiring", cls: "is-hiring", rank: 3 };
-  const recent = f.recent > 0;
-  if (recent) return { label: "Recent seat", cls: "is-recent", rank: 2 };
-  if (f.fractional > 0) return { label: "Past seat", cls: "is-past", rank: 1 };
-  return null;
+  return f.open > 0 ? 3 : f.recent > 0 ? 2 : f.fractional > 0 ? 1 : 0;
 }
 
 /** Six suggestions that match what the member came for. */
 function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { title: string; list: CompanyRec[] } {
   // Hidden companies (an open role, not yet unlocked) have no name to follow by.
   const companies = all.filter((c) => !c.hidden);
-  const rank = new Map(companies.map((c) => [c.id, fitTier(c)?.rank ?? 0]));
+  const rank = new Map(companies.map((c) => [c.id, fitRank(c)]));
   // Many companies tie on score, so recent evidence breaks the tie before name order does.
   const byScore = (a: CompanyRec, b: CompanyRec) =>
     b.friendly.score - a.friendly.score ||
@@ -72,17 +93,17 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { tit
     return kept.length >= SUGGESTIONS ? kept : list;
   };
   let pool = companies.slice();
-  let title = "Fractional-friendly companies";
+  let title = "Companies that hire fractionals";
   if (goal === "adjacent") {
     const adj = pool.filter((c) => c.friendly.functions.length && (!fn || !c.friendly.functions.includes(fn)));
     pool = (adj.length >= SUGGESTIONS ? adj : pool).sort((a, b) => b.friendly.functions.length - a.friendly.functions.length || byScore(a, b));
-    title = fn ? `Hired other functions, not ${fn} yet` : "Hired fractionals in other functions";
+    title = named(fn) ? `No ${fn} seat on file yet` : "Hired fractionals in other functions";
   } else if (goal === "intro") {
     pool = withFunctions(pool).sort((a, b) => b.friendly.operators - a.friendly.operators || byScore(a, b));
-    title = "Where members held a seat";
+    title = "A member held a seat here";
   } else {
     pool = withFunctions(pool).sort((a, b) => fnBonus(b) - fnBonus(a) || byScore(a, b));
-    if (pool[0] && fnBonus(pool[0])) title = `Hired a fractional ${fn} before`;
+    if (pool[0] && fnBonus(pool[0]) && named(fn)) title = `Hired a fractional in ${fn}`;
   }
   return { title, list: pool.slice(0, SUGGESTIONS) };
 }
@@ -102,6 +123,25 @@ function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; na
   );
 }
 
+/**
+ * The hand-off on the last step, for a member with seats on file under their name: what is
+ * waiting and why it is worth doing first. Nothing for everyone else (they go to the table).
+ */
+function SeatsNext({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <p className="ob-next-up">
+      <span className="ob-next-icon" aria-hidden>
+        <IconBriefcase size={16} />
+      </span>
+      <span>
+        <strong>{n === 1 ? "1 seat on file carries your name." : `${n} seats on file carry your name.`}</strong> You see everything on{" "}
+        {n === 1 ? "it" : "them"} free, and each thing you fill in earns a credit.
+      </span>
+    </p>
+  );
+}
+
 export default function Onboarding({ view, act, onDone }: OnboardingProps) {
   const me = view.me!;
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
@@ -115,6 +155,9 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
   const [busy, setBusy] = useState(false);
   const followsSent = useRef(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  // Seats on file that carry this member's name. When there are any, that is where they go next.
+  const mySeats = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours).length, 0), [view.companies]);
+  const lastLabel = mySeats ? `Fill in your ${mySeats === 1 ? "seat" : "seats"}` : "Open the table";
 
   // New step: start at the top of the card, and move focus to its heading for screen readers.
   useEffect(() => {
@@ -156,12 +199,17 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
   return (
     <div className="ob">
       <header className="ob-top">
-        <Brand />
-        <span className="ob-credits" title="Your balance">
+        <span className="ob-brand">
+          <Brand />
+          <span className="ob-product">Trading Post</span>
+        </span>
+        <span className="ob-credits num" title="Your balance">
           <span className="ob-coin" aria-hidden>
             <IconCoin size={13} />
           </span>
-          <span className="mono">{me.credits}</span> credits
+          <span>
+            <strong>{me.credits}</strong> credits
+          </span>
         </span>
       </header>
 
@@ -173,8 +221,8 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
                 <i key={i} className={i + 1 === step ? "now" : i + 1 < step ? "done" : ""} />
               ))}
             </div>
-            <span className="ob-step mono">
-              {step} of {total}
+            <span className="ob-step num" aria-hidden>
+              Step {step} of {total}
             </span>
           </div>
 
@@ -189,13 +237,14 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
               follows={follows}
               toggle={toggle}
               busy={busy}
-              last={!linkStep}
+              nextLabel={linkStep ? "Get my sign-in link" : lastLabel}
+              handoff={linkStep ? null : <SeatsNext n={mySeats} />}
               onBack={() => setStep(1)}
               onNext={afterFollow}
               onSkip={afterFollow}
             />
           ) : (
-            <StepLink token={me.token} email={me.email} busy={busy} onDone={finish} />
+            <StepLink token={me.token} email={me.email} busy={busy} nextLabel={lastLabel} handoff={<SeatsNext n={mySeats} />} onDone={finish} />
           )}
         </div>
       </main>
@@ -223,12 +272,13 @@ function StepQuestions({
         if (ready) onNext();
       }}
     >
-      <p className="ob-welcome">Welcome, {first}. Two quick questions.</p>
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
+        Welcome, {first}
+      </h1>
+      <p className="ob-sub">Two answers decide what you see first. After that you pick a few companies to follow.</p>
 
       <fieldset className="ob-q">
-        <legend className="ob-h" tabIndex={-1} data-step-h>
-          Which seat do you hold?
-        </legend>
+        <legend className="ob-h">Which seat do you hold?</legend>
         <div className="ob-chips" role="radiogroup" aria-label="Your GTM function">
           {FUNCTIONS.map((f) => (
             <button
@@ -243,12 +293,12 @@ function StepQuestions({
             </button>
           ))}
         </div>
-        <p className="ob-hint">We flag companies that hired other GTM functions but not yours yet.</p>
+        <p className="ob-hint">We use it to point out open roles in your function and companies that have not hired it yet.</p>
       </fieldset>
 
       <fieldset className="ob-q">
-        <legend className="ob-h">What do you want first?</legend>
-        <div className="ob-goals" role="radiogroup" aria-label="What you want first">
+        <legend className="ob-h">What are you looking for first?</legend>
+        <div className="ob-goals" role="radiogroup" aria-label="What you are looking for first">
           {GOALS.map((g) => (
             <button
               key={g.key}
@@ -259,17 +309,20 @@ function StepQuestions({
               onClick={() => setGoal(g.key)}
             >
               <span className="ob-radio" aria-hidden />
-              {g.label}
+              {GOAL_COPY[g.key].label}
             </button>
           ))}
         </div>
-        <p className="ob-hint">{goal ? GOAL_HINT[goal] : "Your first view opens on what you pick."}</p>
+        <p className="ob-hint">{goal ? GOAL_COPY[goal].opens(fn) : "The table opens on what you pick. Everything else is one filter away."}</p>
       </fieldset>
 
+      <div className="ob-grow" />
       <div className="ob-foot">
-        <span className="ob-foot-note">{ready ? "" : fn ? "Pick what you want first" : goal ? "Pick your seat" : "Pick one of each"}</span>
+        <span className="ob-foot-note" aria-live="polite">
+          {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your seat" : "Pick one answer for each"}
+        </span>
         <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
-          Continue
+          Show companies to follow
         </button>
       </div>
     </form>
@@ -279,7 +332,7 @@ function StepQuestions({
 /* ---------- step 2: follow 3 companies ---------- */
 
 function StepFollow({
-  companies, byId, fn, goal, follows, toggle, busy, last, onBack, onNext, onSkip,
+  companies, byId, fn, goal, follows, toggle, busy, nextLabel, handoff, onBack, onNext, onSkip,
 }: {
   companies: CompanyRec[];
   byId: Map<string, CompanyRec>;
@@ -288,7 +341,10 @@ function StepFollow({
   follows: string[];
   toggle: (id: string) => void;
   busy: boolean;
-  last: boolean;
+  /** What the main button does next (get the sign-in link, or open the app). */
+  nextLabel: string;
+  /** Shown above the buttons when this is the last step: where the member goes next. */
+  handoff: ReactNode;
   onBack: () => void;
   onNext: () => void;
   onSkip: () => void;
@@ -337,10 +393,10 @@ function StepFollow({
 
   return (
     <div>
-      <h1 className="ob-h ob-h-lg" tabIndex={-1} data-step-h>
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
         Follow {FOLLOW_TARGET} companies you know
       </h1>
-      <p className="ob-sub">We show you what changes there. Following is free.</p>
+      <p className="ob-sub">They get their own tab, and we point out what is new there each time you come back. Following is free.</p>
 
       <div className="ob-search" ref={boxRef}>
         <span className="ob-search-icon" aria-hidden>
@@ -350,6 +406,7 @@ function StepFollow({
           ref={inputRef}
           className="input ob-search-input"
           placeholder={`Search ${companies.length.toLocaleString("en-US")} companies`}
+          aria-label="Search companies"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -400,7 +457,7 @@ function StepFollow({
                     <CompanyLogo name={c.name} domain={c.iconDomain} />
                     <span className="ob-result-id">
                       <span className="ob-result-name">{c.name}</span>
-                      <span className="ob-result-meta mono">{metaOf(c)}</span>
+                      <span className="ob-result-meta">{metaOf(c)}</span>
                     </span>
                     <span className={`ob-result-act${on ? " on" : ""}`}>
                       {on ? <IconCheck size={13} /> : <IconPlus size={13} />}
@@ -410,7 +467,7 @@ function StepFollow({
                 );
               })
             ) : (
-              <li className="ob-result-empty">No company called {q.trim()} yet. You can add it once you are in.</li>
+              <li className="ob-result-empty">Nothing called {q.trim()} is on file yet. You can add it once you are in.</li>
             )}
           </ul>
         ) : null}
@@ -424,7 +481,7 @@ function StepFollow({
             return (
               <span key={id} className="ob-picked-chip">
                 <CompanyLogo name={c.name} domain={c.iconDomain} />
-                {c.name}
+                <span className="ob-picked-name">{c.name}</span>
                 <button type="button" aria-label={`Unfollow ${c.name}`} onClick={() => toggle(id)}>
                   <IconX size={12} />
                 </button>
@@ -435,13 +492,13 @@ function StepFollow({
       ) : null}
 
       <div className="ob-sugg-head">
-        <span>Suggested for you</span>
+        <h2>Suggested for you</h2>
         <span className="ob-sugg-why">{sugg.title}</span>
       </div>
       <ul className="ob-sugg">
         {sugg.list.map((c) => {
           const on = follows.includes(c.id);
-          const tier = fitTier(c);
+          const meta = metaOf(c);
           return (
             <li key={c.id} className={`ob-co${on ? " ob-co-on" : ""}`}>
               <div className="ob-co-top">
@@ -450,21 +507,30 @@ function StepFollow({
                   <span className="ob-co-name" title={c.name}>
                     {c.name}
                   </span>
-                  <span className="ob-co-meta mono">{metaOf(c) || "New on Trading Post"}</span>
+                  <span className="ob-co-meta" title={meta || undefined}>
+                    {meta || "New on Trading Post"}
+                  </span>
                 </div>
-                {tier ? <span className={`ob-tier ${tier.cls}`}>{tier.label}</span> : null}
               </div>
               <div className="ob-co-bottom">
                 <span className="ob-co-fns">
                   {c.friendly.functions.length ? (
-                    c.friendly.functions.slice(0, 3).map((f) => (
-                      <span key={f} className={`chip ob-chip-sm${f === fn ? " chip-volt" : ""}`}>
+                    c.friendly.functions.slice(0, 2).map((f) => (
+                      <span key={f} className={`chip ob-chip-sm${f === fn ? " ob-chip-mine" : ""}`}>
                         {f}
                       </span>
                     ))
                   ) : (
                     <span className="ob-co-none">No functions on file yet</span>
                   )}
+                  {c.friendly.functions.length > 2 ? <span className="ob-co-more num">+{c.friendly.functions.length - 2}</span> : null}
+                  {/* An open role: a row repeats, so the dot is the only ember it carries. */}
+                  {c.friendly.open > 0 ? (
+                    <span className="ob-tier">
+                      <i className="ob-dot" aria-hidden />
+                      Hiring now
+                    </span>
+                  ) : null}
                 </span>
                 <FollowBtn on={on} name={c.name} onClick={() => toggle(c.id)} />
               </div>
@@ -473,6 +539,9 @@ function StepFollow({
         })}
       </ul>
 
+      {handoff}
+
+      <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
         <button type="button" className="ob-back" onClick={onBack}>
           Back
@@ -480,20 +549,29 @@ function StepFollow({
         <button type="button" className="ob-skip" onClick={onSkip} disabled={busy}>
           Skip for now
         </button>
-        <span className="ob-foot-note mono" aria-live="polite">
-          {left ? `${left} more` : `${follows.length} following`}
+        <span className="ob-foot-note num" aria-live="polite">
+          {left ? `Follow ${left} more` : `Following ${follows.length}`}
         </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={left > 0 || busy} onClick={onNext}>
-          {busy ? "Saving" : last ? "Go to Trading Post" : "Continue"}
+        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={left > 0 || busy} aria-busy={busy} onClick={onNext}>
+          {busy ? "Saving" : nextLabel}
         </button>
       </div>
     </div>
   );
 }
 
-/* ---------- step 3: save your sign-in link ---------- */
+/* ---------- step 3: keep your sign-in link ---------- */
 
-function StepLink({ token, email, busy, onDone }: { token: string; email: string; busy: boolean; onDone: () => void }) {
+function StepLink({
+  token, email, busy, nextLabel, handoff, onDone,
+}: {
+  token: string;
+  email: string;
+  busy: boolean;
+  nextLabel: string;
+  handoff: ReactNode;
+  onDone: () => void;
+}) {
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -525,13 +603,10 @@ function StepLink({ token, email, busy, onDone }: { token: string; email: string
 
   return (
     <div>
-      <span className="ob-linkicon" aria-hidden>
-        <IconLink size={18} />
-      </span>
-      <h1 className="ob-h ob-h-lg" tabIndex={-1} data-step-h>
-        Save your sign-in link
+      <h1 className="ob-title" tabIndex={-1} data-step-h>
+        Keep your sign-in link
       </h1>
-      <p className="ob-sub">You will need it on other devices. There is no password.</p>
+      <p className="ob-sub">This link is how you sign in. There is no password, so save it where you will find it again.</p>
 
       <div className="ob-linkbox">
         <div ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>
@@ -539,18 +614,21 @@ function StepLink({ token, email, busy, onDone }: { token: string; email: string
         </div>
         <button type="button" className={`btn ob-copy${copied ? " ob-copy-done" : ""}`} onClick={copy}>
           {copied ? <IconCheck size={14} /> : null}
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : "Copy link"}
         </button>
       </div>
       <a className="ob-mailme" href={mailto}>
         Email it to myself
       </a>
-      <p className="ob-hint">Anyone with this link can sign in as you. Keep it to yourself.</p>
+      <p className="ob-hint ob-hint-flush">Anyone with this link can sign in as you. Keep it to yourself.</p>
 
+      {handoff}
+
+      <div className="ob-grow" />
       <div className="ob-foot">
         <span className="ob-foot-note" />
-        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onDone} disabled={busy}>
-          {busy ? "Opening" : "Go to Trading Post"}
+        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onDone} disabled={busy} aria-busy={busy}>
+          {busy ? "Opening" : nextLabel}
         </button>
       </div>
     </div>

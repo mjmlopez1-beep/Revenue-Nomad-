@@ -3,6 +3,7 @@
 /**
  * Inline join. Email first (one field, one button), then the name field opens in place.
  * Without an email provider the member is signed in at once; with one, we email a link.
+ * Each step says what happens next, and the name step says what other members will see.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { post } from "../ui/shared";
@@ -29,9 +30,11 @@ export interface JoinFormProps {
   onMember: (message: string) => void;
   /** Where the form sits (hero or the closing call to action). */
   place: "hero" | "final";
+  /** Helper line under the email field (what joining costs). The name step has its own. */
+  hint?: string;
 }
 
-export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place }: JoinFormProps) {
+export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place, hint }: JoinFormProps) {
   const [step, setStep] = useState<"email" | "name" | "sent">("email");
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -48,7 +51,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
     e.preventDefault();
     const v = email.trim();
     if (!EMAIL_RE.test(v)) {
-      setError({ text: v ? "That email doesn't look right. Check it and try again." : "Enter your email to get started." });
+      setError({ text: v ? "That doesn't look like an email address. Check it for a typo." : "Type your email first." });
       return;
     }
     setEmail(v);
@@ -61,7 +64,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
     if (busy) return;
     const n = name.trim();
     if (n.length < 2) {
-      setError({ text: "Enter your full name." });
+      setError({ text: "Add your first and last name." });
       return;
     }
     setBusy(true);
@@ -91,10 +94,11 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
 
   if (step === "sent")
     return (
-      <div className="lp-join-sent" role="status">
+      <div className="lp-join-sent" role="status" data-place={place}>
         <p className="lp-join-sent-h">Check your inbox</p>
         <p>
-          We sent a sign-in link to <strong>{email}</strong>.
+          We sent a sign-in link to <strong className="mono">{email}</strong>. Open it and you are in. It can take a minute, and it sometimes
+          lands in spam.
         </p>
         <button type="button" className="lp-linkbtn" onClick={reset}>
           Use a different email
@@ -116,43 +120,51 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
   if (step === "name")
     return (
       <form className="lp-join" onSubmit={submitName} noValidate data-place={place}>
-        <div className="lp-join-who">
-          <span className="mono">{email}</span>
-          <button type="button" className="lp-linkbtn" onClick={reset}>
-            Change
-          </button>
-        </div>
+        <label className="lp-join-label" htmlFor={`${id}-name`}>
+          Your first and last name
+        </label>
         <div className="lp-join-row">
-          <label className="sr-only" htmlFor={`${id}-name`}>
-            Your name
-          </label>
           <input
             ref={nameRef}
             id={`${id}-name`}
             className="input lp-join-input"
             name="name"
             autoComplete="name"
-            placeholder="Your full name"
+            placeholder="Jane Smith"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError(null);
+            }}
             aria-invalid={!!error}
-            aria-describedby={error ? `${id}-err` : undefined}
+            aria-describedby={error ? `${id}-err ${id}-help` : `${id}-help`}
             maxLength={80}
           />
-          <button type="submit" className="btn btn-pine btn-lg lp-join-btn" disabled={busy}>
-            {busy ? (emailOn ? "Sending" : "Opening") : emailOn ? "Email me my link" : "Open Trading Post"}
+          <button type="submit" className="btn btn-primary btn-lg lp-join-btn" disabled={busy} aria-busy={busy}>
+            {busy ? (emailOn ? "Sending your link" : "Opening") : emailOn ? "Email me my link" : "Open Trading Post"}
           </button>
         </div>
         {err}
+        <p className="lp-join-help" id={`${id}-help`}>
+          Use the name you work under. Members see it on seats you held. Your email is never shown.
+        </p>
+        <p className="lp-join-who">
+          <span>
+            Joining as <span className="mono">{email}</span>
+          </span>
+          <button type="button" className="lp-linkbtn" onClick={reset}>
+            Change email
+          </button>
+        </p>
       </form>
     );
 
   return (
     <form className="lp-join" onSubmit={submitEmail} noValidate data-place={place}>
+      <label className="lp-join-label" htmlFor={`${id}-email`}>
+        Your email
+      </label>
       <div className="lp-join-row">
-        <label className="sr-only" htmlFor={`${id}-email`}>
-          Work email
-        </label>
         <input
           id={`${id}-email`}
           className="input lp-join-input"
@@ -160,20 +172,25 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
           name="email"
           inputMode="email"
           autoComplete="email"
-          placeholder="you@company.com"
+          placeholder="you@yourfirm.com"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
             if (error) setError(null);
           }}
           aria-invalid={!!error}
-          aria-describedby={error ? `${id}-err` : undefined}
+          aria-describedby={error ? `${id}-err` : hint ? `${id}-help` : undefined}
         />
-        <button type="submit" className="btn btn-primary btn-lg lp-join-btn">
+        <button type="submit" className="btn btn-primary btn-lg lp-join-btn num">
           Get {starter} credits
         </button>
       </div>
       {err}
+      {hint ? (
+        <p className="lp-join-help" id={`${id}-help`}>
+          {hint}
+        </p>
+      ) : null}
     </form>
   );
 }

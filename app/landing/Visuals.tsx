@@ -1,239 +1,175 @@
 "use client";
 
 /**
- * Static product visuals for the landing page, drawn in HTML and CSS with the app's own
- * pills and chips. Every company here is fictional; none of it is member data.
+ * Static product visuals for the landing page, drawn in HTML and CSS. Every company here is
+ * fictional; none of it is member data. Nothing in here is clickable.
+ *
+ * A fact is drawn in one of three states, the same three the app has: a value you can see,
+ * a locked one (a small lock and a masked bar), and a missing one you can add for a credit.
  */
-import { IconCheck, IconCoin, IconLock, IconUsers } from "../ui/shared";
+import type { ReactNode } from "react";
+import { IconCheck, IconLock, IconPlus, IconUsers } from "../ui/shared";
 
-/** A locked fact as the app draws it, not clickable. */
-function Lock({ label }: { label?: string }) {
+/** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. */
+function Locked({ w = 72 }: { w?: number }) {
   return (
-    <span className="lock">
-      <IconLock /> {label ? <>{label} </> : null}
-      <span className="lock-cost">1</span>
+    <span className="lp-locked">
+      <IconLock size={12} />
+      <i style={{ width: w }} />
     </span>
   );
 }
 
-type Tier = "hiring" | "recent" | "past";
-const TIER_LABEL: Record<Tier, string> = { hiring: "Hiring", recent: "Recent seat", past: "Past seat" };
-
-/** The evidence chip the app shows instead of a score: hiring now, a recent seat, or a past one. */
-function TierChip({ tier }: { tier: Tier }) {
-  return <span className={`lp-tier is-${tier}`}>{TIER_LABEL[tier]}</span>;
+/** The same locked fact as it looks under the pointer: one tap, one credit. */
+function Unlock() {
+  return (
+    <span className="lp-unlock">
+      <IconLock size={12} />
+      Unlock
+      <span className="lp-unlock-cost num">1 credit</span>
+    </span>
+  );
 }
 
-function Mark({ text, hue }: { text: string; hue: number }) {
+/** A missing fact: add it and earn a credit. */
+function Add() {
   return (
-    <span className="lp-mark" style={{ background: `hsl(${hue} 50% 92%)`, color: `hsl(${hue} 45% 26%)` }}>
-      {text}
+    <span className="lp-add">
+      <IconPlus size={12} />
+      Add
+      <span className="lp-add-earn num">+1</span>
     </span>
+  );
+}
+
+/** How many members confirmed a value. */
+function Confirmed({ n }: { n: number }) {
+  return (
+    <span className="lp-ver num">
+      <IconCheck size={12} />
+      {n}
+    </span>
+  );
+}
+
+function Row({ k, children }: { k: string; children: ReactNode }) {
+  return (
+    <div className="lp-row">
+      <dt>{k}</dt>
+      <dd>{children}</dd>
+    </div>
   );
 }
 
 /**
- * Hero visual: one company record with open firmographics and locked intel, plus the credits meter.
- * `credits` is the meter balance (the real starter balance plus the 7 earned today it shows).
+ * Hero visual: one company record with an open role and a seat someone held. It shows the
+ * three states side by side, and carries the page's one "Hiring now" chip.
  */
-export function HeroRecord({ credits }: { credits: number }) {
+export function HeroRecord() {
   return (
-    <figure className="lp-visual" aria-label="Example record on Trading Post">
-      <div className="lp-rec">
+    <figure className="lp-visual">
+      <div className="lp-rec" aria-hidden>
         <div className="lp-rec-head">
-          <Mark text="NH" hue={200} />
+          <span className="lp-mark">AL</span>
           <div className="lp-rec-id">
-            <div className="lp-rec-name">
-              Northwind Health <span className="chip chip-ember lp-chip-xs">Hiring now</span>
-              <TierChip tier="recent" />
-            </div>
-            <div className="lp-rec-meta mono">
-              <span>Health Care</span>
-              <span>51–200</span>
-              <span>$5M–$20M</span>
+            <div className="lp-rec-name">Alder Labs</div>
+            <div className="lp-rec-meta num">
+              Software · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
             </div>
           </div>
-        </div>
-
-        <div className="lp-rec-sec">
-          <div className="lp-rec-k">Functions hired</div>
-          <div className="lp-chiprow">
-            <span className="chip">
-              Sales <span className="mono lp-n">2</span>
-            </span>
-            <span className="chip">
-              RevOps <span className="mono lp-n">1</span>
-            </span>
-          </div>
+          <span className="lp-hiring">Hiring now</span>
         </div>
 
         <div className="lp-rec-sec">
           <div className="lp-rec-k">
-            Engagement <span className="mono lp-rec-sub">Sales · Fractional · since Mar 2025</span>
+            <span>RevOps seat · Fractional</span>
+            <span className="lp-rec-when num">Open since Nov 3</span>
           </div>
           <dl className="lp-rows">
-            <div>
-              <dt>Role</dt>
-              <dd>
-                <Lock label="Unlock" />
-              </dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>
-                <Lock />
-              </dd>
-            </div>
-            <div>
-              <dt>Rate</dt>
-              <dd>
-                <span className="lp-ver mono" title="Confirmed by 3 members">
-                  <IconCheck size={11} />3
-                </span>
-                <Lock />
-              </dd>
-            </div>
-            <div>
-              <dt>Who held the seat</dt>
-              <dd>
-                <Lock />
-              </dd>
-            </div>
-            <div>
-              <dt>Hours per week</dt>
-              <dd>
-                <span className="add">
-                  + Add <span className="plus1">+1</span>
-                </span>
-              </dd>
-            </div>
+            <Row k="Role">
+              <Locked w={96} />
+            </Row>
+            <Row k="Job posting">
+              <Unlock />
+            </Row>
           </dl>
         </div>
 
         <div className="lp-rec-sec">
-          <div className="lp-rec-k">Decision maker</div>
+          <div className="lp-rec-k">
+            <span>Sales seat · Fractional</span>
+            <span className="lp-rec-when num">Mar 2024 to Aug 2025</span>
+          </div>
+          <dl className="lp-rows">
+            <Row k="Role">
+              <span className="lp-val">Fractional VP Sales</span>
+            </Row>
+            <Row k="Rate">
+              <Confirmed n={3} />
+              <span className="lp-val num">$9k/mo</span>
+            </Row>
+            <Row k="Seat holder">
+              <Locked w={84} />
+            </Row>
+            <Row k="Hours per week">
+              <Add />
+            </Row>
+          </dl>
+        </div>
+
+        <div className="lp-rec-sec">
+          <div className="lp-rec-k">
+            <span>Hiring contact</span>
+          </div>
           <div className="lp-person">
-            <span className="lp-avatar" aria-hidden>
+            <span className="lp-avatar">
               <IconUsers size={13} />
             </span>
             <span className="lp-person-title">Chief Revenue Officer</span>
-            <Lock label="Name" />
+            <Locked w={56} />
           </div>
         </div>
-
-        <div className="lp-rec-foot">
-          <span className="btn btn-pine btn-sm lp-static">
-            Unlock all<span className="mono lp-unlock-n"> · 5 credits</span>
-          </span>
-        </div>
       </div>
-
-      <div className="lp-meter">
-        <div className="lp-meter-top">
-          <span className="lp-meter-coin">
-            <IconCoin size={14} />
-          </span>
-          <span className="mono lp-meter-num">{credits}</span>
-          <span className="lp-meter-unit">credits</span>
-          <span className="lp-plus mono">+1</span>
-        </div>
-        <div className="lp-meter-bar">
-          <i style={{ width: "28%" }} />
-        </div>
-        <div className="lp-meter-cap mono">7 of 25 earned today</div>
-      </div>
+      <figcaption className="lp-visual-cap">
+        An example record. While a company has an open role, its name stays hidden until you unlock it.
+      </figcaption>
     </figure>
   );
 }
 
-/* ---------- how it works: one small before and after per step ---------- */
+/* ---------- how credits work: one small before and after per card ---------- */
 
-export function StepDemoAdd() {
+export function DemoAdd() {
   return (
     <div className="lp-demo" aria-hidden>
-      <span className="lp-demo-k">Rate</span>
-      <span className="add">
-        + Add <span className="plus1">+1</span>
-      </span>
+      <span className="lp-demo-k">Hours per week</span>
+      <Add />
       <span className="lp-demo-arrow">→</span>
-      <span className="mono lp-demo-v">$9k/mo</span>
-      <span className="lp-plus mono">+1</span>
+      <span className="lp-demo-v num">15</span>
+      <span className="lp-plus num">+1</span>
     </div>
   );
 }
 
-export function StepDemoUnlock() {
+export function DemoUnlock() {
   return (
     <div className="lp-demo" aria-hidden>
-      <span className="lp-demo-k">Role</span>
-      <Lock label="Unlock" />
+      <span className="lp-demo-k">Rate</span>
+      <Unlock />
       <span className="lp-demo-arrow">→</span>
-      <span className="mono lp-demo-v">Fractional VP Sales</span>
+      <span className="lp-demo-v num">$9k/mo</span>
     </div>
   );
 }
 
-export function StepDemoConfirm() {
+export function DemoConfirm() {
   return (
     <div className="lp-demo" aria-hidden>
       <span className="lp-demo-k">Rate</span>
-      <span className="mono lp-demo-v">$9k/mo</span>
-      <span className="lp-ver mono">
-        <IconCheck size={11} />3
-      </span>
+      <span className="lp-demo-v num">$9k/mo</span>
+      <Confirmed n={3} />
       <span className="lp-demo-btn">Confirm</span>
       <span className="lp-demo-btn lp-demo-btn-quiet">Report</span>
-    </div>
-  );
-}
-
-/* ---------- use cases ---------- */
-
-export function UseFriendly() {
-  const rows: [string, string, number, Tier][] = [
-    ["Northwind Health", "NH", 200, "hiring"],
-    ["Juniper Freight", "JF", 25, "recent"],
-    ["Alder Labs", "AL", 152, "past"],
-  ];
-  return (
-    <div className="lp-uv" aria-hidden>
-      {rows.map(([name, mark, h, tier]) => (
-        <div key={name} className="lp-uv-row">
-          <Mark text={mark} hue={h} />
-          <span className="lp-uv-name">{name}</span>
-          <TierChip tier={tier} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function UseAdjacent() {
-  return (
-    <div className="lp-uv" aria-hidden>
-      <div className="lp-uv-k">Hired fractionally</div>
-      <div className="lp-chiprow">
-        <span className="chip">Marketing</span>
-        <span className="chip">RevOps</span>
-        <span className="chip chip-outline">Sales not yet</span>
-      </div>
-      <div className="lp-uv-note mono">Your seat is the gap</div>
-    </div>
-  );
-}
-
-export function UseIntro() {
-  return (
-    <div className="lp-uv" aria-hidden>
-      <div className="lp-uv-row">
-        <span className="lp-uv-name">Who held the seat</span>
-        <Lock label="Unlock" />
-      </div>
-      <div className="lp-uv-row">
-        <span className="lp-uv-name">Reported to</span>
-        <Lock />
-      </div>
-      <div className="lp-uv-note mono">2 members worked here</div>
     </div>
   );
 }
