@@ -3,14 +3,15 @@
 /**
  * Sign-in panel. Members paste their personal link or the code at the end of it.
  * With an email provider on, they can also ask for the link by email.
- * A dialog on desktop, a bottom sheet on phones.
+ * A dialog on desktop, a bottom sheet on phones. It always says where to get a lost link:
+ * the support address when the server sends one, otherwise the member who invited them.
+ * Opening it adds a history entry, so the back gesture closes it instead of leaving the site.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { IconX, post } from "../ui/shared";
+import { mailto, signInFailText } from "./contact";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
-/** Where a member without email sign-in asks for a lost link. Inlined at build time; unset shows nothing. */
-const SUPPORT = (process.env.NEXT_PUBLIC_RN_SUPPORT_EMAIL ?? "").trim();
 
 export interface SignInProps {
   open: boolean;
@@ -18,14 +19,81 @@ export interface SignInProps {
   emailOn: boolean;
   /** Credits a new member starts with (the server's stats.starter). */
   starter: number;
-  /** Why the panel opened, e.g. the join form found a member email. */
+  /** Why the panel opened, e.g. the join form found a member email, or a sign-in link failed. */
   note: string | null;
+  /** "error" when the note says something went wrong (a link that didn't work). */
+  noteTone?: "info" | "error";
+  /** Where to ask for a lost link (View.contact.support), or null. */
+  support: string | null;
   onSignedIn: () => Promise<void> | void;
   /** "New here?" goes back to the join form. */
   onJoin: () => void;
 }
 
-export default function SignIn({ open, onClose, emailOn, starter, note, onSignedIn, onJoin }: SignInProps) {
+/**
+ * While the panel is open it owns one history entry: back closes it, and closing it any other
+ * way takes the entry back off. `leave()` takes it off before the page changes underneath
+ * (a successful sign-in), so the app never sees a stray back step.
+ */
+function useBackCloses(open: boolean, onClose: () => void) {
+  const close = useRef(onClose);
+  close.current = onClose;
+  const ours = useRef(false);
+  useEffect(() => {
+    if (!open) return;
+    window.history.pushState({ lpSignIn: 1 }, "");
+    ours.current = true;
+    const onPop = () => {
+      ours.current = false;
+      close.current();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      if (ours.current && window.history.state?.lpSignIn) window.history.back();
+      ours.current = false;
+    };
+  }, [open]);
+  return () =>
+    new Promise<void>((done) => {
+      if (!ours.current || !window.history.state?.lpSignIn) return done();
+      ours.current = false;
+      const finish = () => {
+        window.removeEventListener("popstate", finish);
+        clearTimeout(t);
+        done();
+      };
+      const t = setTimeout(finish, 500);
+      window.addEventListener("popstate", finish);
+      window.history.back();
+    });
+}
+
+/** Where a member without their link gets a new one. Shown in the panel at all times. */
+function LostLink({ support, emailOn }: { support: string | null; emailOn: boolean }) {
+  const href = support ? mailto(support, "Trading Post sign-in link") : null;
+  if (support)
+    return (
+      <p className="lp-dialog-help">
+        Can&apos;t find your link? Email{" "}
+        {href ? (
+          <a className="mono" href={href}>
+            {support}
+          </a>
+        ) : (
+          <span className="mono">{support}</span>
+        )}{" "}
+        and we&apos;ll send you a new one.
+      </p>
+    );
+  return (
+    <p className="lp-dialog-help">
+      Can&apos;t find your link? Ask the member who invited you to send your link again.{emailOn ? " Or get it by email below." : ""}
+    </p>
+  );
+}
+
+export default function SignIn({ open, onClose, emailOn, starter, note, noteTone = "info", support, onSignedIn, onJoin }: SignInProps) {
   const [code, setCode] = useState("");
   const [codeErr, setCodeErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,6 +103,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const id = useId();
+  const leave = useBackCloses(open, onClose);
 
   useEffect(() => {
     if (!open) return;
@@ -82,9 +151,10 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
     const r = await post({ signIn: v });
     if (r.error) {
       setBusy(false);
-      setCodeErr(r.error);
+      setCodeErr(signInFailText(r.error, "pasted"));
       return;
     }
+    await leave();
     await onSignedIn();
     setBusy(false);
   };
@@ -118,7 +188,9 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
           </button>
         </div>
         {note ? (
-          <p className="lp-dialog-note">{note}</p>
+          <p className={`lp-dialog-note${noteTone === "error" ? " lp-dialog-note-err" : ""}`} role={noteTone === "error" ? "alert" : undefined}>
+            {note}
+          </p>
         ) : (
           <p className="lp-dialog-sub">Paste your personal link, or the code at the end of it. There is no password.</p>
         )}
@@ -153,15 +225,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
               {codeErr}
             </p>
           ) : null}
-          {!emailOn && SUPPORT ? (
-            <p className="lp-dialog-help">
-              Can&apos;t find your link? Email{" "}
-              <a className="mono" href={`mailto:${SUPPORT}?subject=${encodeURIComponent("Trading Post sign-in link")}`}>
-                {SUPPORT}
-              </a>{" "}
-              and we&apos;ll send it again.
-            </p>
-          ) : null}
+          <LostLink support={support} emailOn={emailOn} />
         </form>
 
         {emailOn ? (
@@ -208,7 +272,15 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
 
         <div className="lp-dialog-foot">
           New here?{" "}
-          <button type="button" className="lp-linkbtn lp-linkbtn-ink num" onClick={onJoin}>
+          <button
+            type="button"
+            className="lp-linkbtn lp-linkbtn-ink num"
+            onClick={async () => {
+              // Off the history entry first, so its scroll restore can't undo the scroll to the form.
+              await leave();
+              onJoin();
+            }}
+          >
             Join and get {starter} credits
           </button>
         </div>

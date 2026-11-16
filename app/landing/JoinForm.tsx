@@ -7,6 +7,7 @@
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { post } from "../ui/shared";
+import { PERSON_NAME_RE } from "@/lib/tableFields";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 /** Server errors that mean "this email already has an account, use your link". */
@@ -62,9 +63,10 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
   const submitName = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    const n = name.trim();
-    if (n.length < 2) {
-      setError({ text: "Add your first and last name." });
+    // The same test a seat holder's name gets, so the member can be matched to seats they held.
+    const n = name.trim().replace(/\s+/g, " ");
+    if (!PERSON_NAME_RE.test(n)) {
+      setError({ text: "Add your first and last name, like Jane Smith." });
       return;
     }
     setBusy(true);

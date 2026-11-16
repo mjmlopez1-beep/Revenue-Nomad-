@@ -2,18 +2,23 @@
 
 /**
  * First run, under 30 seconds. One calm card:
- *   1. Two questions, one tap each (seat, what they are looking for).
- *   2. Follow 3 companies (type-ahead plus 6 suggestions picked from the answers).
+ *   1. What Trading Post is and what a credit buys, then two questions, one tap each (seat,
+ *      what they are looking for). A member with seats on file hears where those came from and
+ *      who can see their name, since most of them arrive by personal link and skip the landing page.
+ *   2. Follow companies (type-ahead plus 6 suggestions, the member's own seat companies first).
+ *      Optional: the main button works with none followed.
  *   3. Keep your sign-in link (only for members who joined here while email sign-in is off).
- * Finishing sends the follows, then the profile last (which marks the member onboarded).
- * The last button names where the member lands: their seats when a seat on file carries
- * their name (Root opens the app there), otherwise the table.
+ * Each step is a history entry and the answers are kept for the tab, so back steps back and a
+ * reload comes back to the same step. Finishing sends the follows, then the profile last
+ * (which marks the member onboarded). The last button names where the member lands: their
+ * seats when a seat on file carries their name (Root opens the app there), otherwise the table.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, val, type Act, type View } from "../ui/shared";
+import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, post, useToast, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import { GOALS, type CompanyRec } from "@/lib/tableTypes";
+import { contactOf, mailto } from "../landing/contact";
 
 export interface OnboardingProps {
   view: View;
@@ -23,7 +28,6 @@ export interface OnboardingProps {
 }
 
 type Goal = (typeof GOALS)[number]["key"];
-const FOLLOW_TARGET = 3;
 
 /** Functions that read naturally in "no Sales seat yet". The catch-alls do not. */
 const named = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive" ? fn : null);
@@ -42,6 +46,37 @@ const GOAL_OPENS: Record<Goal, (fn: string | null) => string> = {
   intro: () => "The table opens on seats where the seat holder is on file.",
 };
 
+/* ---------- where the member is: history entry and tab storage ---------- */
+
+/** The tab keeps the answers, so a reload on step 2 still has the step 1 answers it needs. */
+const SAVE_KEY = "tp_ob";
+interface Saved {
+  id: string;
+  step: number;
+  fn: string | null;
+  goal: Goal | null;
+  follows: string[];
+}
+function readSaved(id: string): Partial<Saved> {
+  try {
+    const s = JSON.parse(sessionStorage.getItem(SAVE_KEY) || "null");
+    return s && s.id === id ? s : {};
+  } catch {
+    return {};
+  }
+}
+function writeSaved(s: Saved | null) {
+  try {
+    if (s) sessionStorage.setItem(SAVE_KEY, JSON.stringify(s));
+    else sessionStorage.removeItem(SAVE_KEY);
+  } catch {}
+}
+/** The step this history entry holds, or 0 when it holds none. */
+function entryStep(): number {
+  const n = Number(window.history.state?.ob);
+  return Number.isInteger(n) && n >= 1 ? n : 0;
+}
+
 /**
  * One line about a company that works for sparse and rich records: industry, size, and the
  * seats on file with how recent they are ("1 recent seat", "3 seats, 2 recent", "2 past seats").
@@ -55,6 +90,9 @@ function metaOf(c: CompanyRec): string {
   return parts.join(" · ");
 }
 
+/** The member held a seat here (the seat on file carries their name). */
+const isMine = (c: CompanyRec) => c.engagements.some((e) => e.yours);
+
 const SUGGESTIONS = 6;
 
 /**
@@ -66,10 +104,14 @@ function fitRank(c: CompanyRec): number {
   return f.open > 0 ? 3 : f.recent > 0 ? 2 : f.fractional > 0 ? 1 : 0;
 }
 
-/** Six suggestions that match what the member came for. */
+/**
+ * Six suggestions. The companies where the member held a seat come first (they know those),
+ * then companies that match what the member came for.
+ */
 function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { title: string; list: CompanyRec[] } {
   // Hidden companies (an open role, not yet unlocked) have no name to follow by.
   const companies = all.filter((c) => !c.hidden);
+  const own = companies.filter(isMine);
   const rank = new Map(companies.map((c) => [c.id, fitRank(c)]));
   // Many companies tie on score, so recent evidence breaks the tie before name order does.
   const byScore = (a: CompanyRec, b: CompanyRec) =>
@@ -84,7 +126,7 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { tit
     const kept = list.filter((c) => c.friendly.functions.length > 0);
     return kept.length >= SUGGESTIONS ? kept : list;
   };
-  let pool = companies.slice();
+  let pool = companies.filter((c) => !isMine(c));
   let title = "Companies that hire fractionals";
   if (goal === "adjacent") {
     const adj = pool.filter((c) => c.friendly.functions.length && (!fn || !c.friendly.functions.includes(fn)));
@@ -97,7 +139,8 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { tit
     pool = withFunctions(pool).sort((a, b) => fnBonus(b) - fnBonus(a) || byScore(a, b));
     if (pool[0] && fnBonus(pool[0]) && named(fn)) title = `Hired a fractional in ${fn}`;
   }
-  return { title, list: pool.slice(0, SUGGESTIONS) };
+  if (own.length) title = own.length >= SUGGESTIONS ? "Where you held a seat" : "Where you held a seat, then more";
+  return { title, list: [...own, ...pool].slice(0, SUGGESTIONS) };
 }
 
 function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; name: string }) {
@@ -117,8 +160,9 @@ function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; na
 }
 
 /**
- * The hand-off on the last step, for a member with seats on file under their name: what is
- * waiting and why it is worth doing first. Nothing for everyone else (they go to the table).
+ * For a member with seats on file under their name: what is waiting and why it is worth doing
+ * first. Shown on the follow step above the list (and on the link step), so it is the first
+ * thing they read there. Nothing for everyone else (they go to the table).
  */
 function SeatsNext({ n }: { n: number }) {
   if (!n) return null;
@@ -137,47 +181,117 @@ function SeatsNext({ n }: { n: number }) {
 
 export default function Onboarding({ view, act, onDone }: OnboardingProps) {
   const me = view.me!;
+  const toast = useToast();
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
   const linkStep = me.id.startsWith("j_") && !view.email;
   const total = linkStep ? 3 : 2;
+  const { support } = contactOf(view);
 
-  const [step, setStep] = useState(1);
-  const [fn, setFn] = useState<string | null>(me.function && FUNCTIONS.includes(me.function) ? me.function : null);
-  const [goal, setGoal] = useState<Goal | null>((GOALS.find((g) => g.key === me.goal)?.key as Goal) ?? null);
-  const [follows, setFollows] = useState<string[]>(() => view.companies.filter((c) => c.following).map((c) => c.id));
+  // Answers kept from earlier in this tab (a reload), else what the server already knows.
+  const [init] = useState(() => {
+    const saved = readSaved(me.id);
+    const known = new Set(view.companies.map((c) => c.id));
+    const fn = (saved.fn && FUNCTIONS.includes(saved.fn) ? saved.fn : null) ?? (me.function && FUNCTIONS.includes(me.function) ? me.function : null);
+    const goal = ((GOALS.find((g) => g.key === saved.goal) ?? GOALS.find((g) => g.key === me.goal))?.key as Goal | undefined) ?? null;
+    const follows = Array.isArray(saved.follows) ? saved.follows.filter((id) => known.has(id)) : view.companies.filter((c) => c.following).map((c) => c.id);
+    const want = entryStep() || saved.step || 1;
+    return { fn, goal, follows, step: fn && goal ? Math.min(Math.max(1, want), total) : 1 };
+  });
+  const [step, setStep] = useState(init.step);
+  const [fn, setFn] = useState<string | null>(init.fn);
+  const [goal, setGoal] = useState<Goal | null>(init.goal);
+  const [follows, setFollows] = useState<string[]>(init.follows);
   const [busy, setBusy] = useState(false);
-  const followsSent = useRef(false);
+  // What the server has been told, so going back and forth sends only the changes.
+  const sent = useRef(new Set(view.companies.filter((c) => c.following).map((c) => c.id)));
+  const rewinding = useRef(false);
   const cardRef = useRef<HTMLDivElement>(null);
   // Seats on file that carry this member's name. When there are any, that is where they go next.
   const mySeats = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours).length, 0), [view.companies]);
   const lastLabel = mySeats ? `Fill in your ${mySeats === 1 ? "seat" : "seats"}` : "Open the table";
+  // Step 2 and 3 need both answers. If they are missing (storage was cleared), ask again.
+  const shown = step > 1 && (!fn || !goal) ? 1 : step;
+
+  // This page's history entry holds the step: back steps back, forward steps forward, and a
+  // reload comes back to it.
+  useEffect(() => {
+    if (entryStep() !== init.step) window.history.replaceState({ ob: init.step }, "");
+    const onPop = () => {
+      if (rewinding.current) return;
+      setStep(Math.min(Math.max(1, entryStep() || 1), total));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [init.step, total]);
+
+  useEffect(() => writeSaved({ id: me.id, step, fn, goal, follows }), [me.id, step, fn, goal, follows]);
 
   // New step: start at the top of the card, and move focus to its heading for screen readers.
   useEffect(() => {
     cardRef.current?.querySelector<HTMLElement>("[data-step-h]")?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
-  }, [step]);
+  }, [shown]);
+
+  const forward = (n: number) => {
+    setStep(n);
+    window.history.pushState({ ob: n }, "");
+  };
+  const back = () => {
+    if (step > 1 && entryStep() === step) window.history.back();
+    else setStep((s) => Math.max(1, s - 1));
+  };
+  /** Take the step entries back off history before the app opens, so back in the app never lands on a step. */
+  const rewind = () =>
+    new Promise<void>((done) => {
+      const n = entryStep();
+      if (n <= 1) return done();
+      rewinding.current = true;
+      const end = () => {
+        window.removeEventListener("popstate", end);
+        clearTimeout(t);
+        rewinding.current = false;
+        done();
+      };
+      const t = setTimeout(end, 600);
+      window.addEventListener("popstate", end);
+      window.history.go(-(n - 1));
+    });
 
   const byId = useMemo(() => new Map(view.companies.map((c) => [c.id, c])), [view.companies]);
   const toggle = (id: string) => setFollows((f) => (f.includes(id) ? f.filter((x) => x !== id) : [...f, id]));
 
+  /** Send the follow changes at once, side by side. The profile action after them brings back the view. */
   const sendFollows = async () => {
-    if (followsSent.current) return;
-    followsSent.current = true;
-    const already = new Set(view.companies.filter((c) => c.following).map((c) => c.id));
-    for (const id of follows) if (!already.has(id)) await act({ type: "follow", companyId: id, on: true }, { quiet: true });
-    for (const id of already) if (!follows.includes(id)) await act({ type: "follow", companyId: id, on: false }, { quiet: true });
+    const want = new Set(follows);
+    const ops = [
+      ...[...want].filter((id) => !sent.current.has(id)).map((id) => ({ id, on: true })),
+      ...[...sent.current].filter((id) => !want.has(id)).map((id) => ({ id, on: false })),
+    ];
+    const errors = await Promise.all(
+      ops.map(async ({ id, on }) => {
+        const r = await post({ action: { type: "follow", companyId: id, on } });
+        if (r.error) return r.error;
+        if (on) sent.current.add(id);
+        else sent.current.delete(id);
+        return null;
+      }),
+    );
+    const err = errors.find(Boolean);
+    if (err) toast(err, true);
   };
 
   const finish = async () => {
     if (busy) return;
     setBusy(true);
     await sendFollows();
+    await rewind();
     const r = await act({ type: "profile", function: fn ?? undefined, goal: goal ?? undefined }, { quiet: true });
     if (!r.ok) {
       setBusy(false);
+      if (step > 1 && entryStep() !== step) window.history.pushState({ ob: step }, "");
       return;
     }
+    writeSaved(null);
     await onDone();
   };
 
@@ -186,7 +300,7 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
     setBusy(true);
     await sendFollows();
     setBusy(false);
-    setStep(3);
+    forward(3);
   };
 
   return (
@@ -209,19 +323,28 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
       <main className="ob-main">
         <div className="ob-card" ref={cardRef}>
           <div className="ob-progress">
-            <div className="ob-dots" role="img" aria-label={`Step ${step} of ${total}`}>
+            <div className="ob-dots" role="img" aria-label={`Step ${shown} of ${total}`}>
               {Array.from({ length: total }, (_, i) => (
-                <i key={i} className={i + 1 === step ? "now" : i + 1 < step ? "done" : ""} />
+                <i key={i} className={i + 1 === shown ? "now" : i + 1 < shown ? "done" : ""} />
               ))}
             </div>
             <span className="ob-step num" aria-hidden>
-              Step {step} of {total}
+              Step {shown} of {total}
             </span>
           </div>
 
-          {step === 1 ? (
-            <StepQuestions first={first} fn={fn} setFn={setFn} goal={goal} setGoal={setGoal} onNext={() => setStep(2)} />
-          ) : step === 2 ? (
+          {shown === 1 ? (
+            <StepQuestions
+              first={first}
+              seats={mySeats}
+              credits={me.credits}
+              fn={fn}
+              setFn={setFn}
+              goal={goal}
+              setGoal={setGoal}
+              onNext={() => forward(2)}
+            />
+          ) : shown === 2 ? (
             <StepFollow
               companies={view.companies}
               byId={byId}
@@ -232,12 +355,19 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
               busy={busy}
               nextLabel={linkStep ? "Get my sign-in link" : lastLabel}
               handoff={linkStep ? null : <SeatsNext n={mySeats} />}
-              onBack={() => setStep(1)}
+              onBack={back}
               onNext={afterFollow}
-              onSkip={afterFollow}
             />
           ) : (
-            <StepLink token={me.token} email={me.email} busy={busy} nextLabel={lastLabel} handoff={<SeatsNext n={mySeats} />} onDone={finish} />
+            <StepLink
+              token={me.token}
+              email={me.email}
+              support={support}
+              busy={busy}
+              nextLabel={lastLabel}
+              handoff={<SeatsNext n={mySeats} />}
+              onDone={finish}
+            />
           )}
         </div>
       </main>
@@ -245,12 +375,15 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
   );
 }
 
-/* ---------- step 1: two questions ---------- */
+/* ---------- step 1: what this is, then two questions ---------- */
 
 function StepQuestions({
-  first, fn, setFn, goal, setGoal, onNext,
+  first, seats, credits, fn, setFn, goal, setGoal, onNext,
 }: {
   first: string;
+  /** Seats on file that carry the member's name. */
+  seats: number;
+  credits: number;
   fn: string | null;
   setFn: (f: string) => void;
   goal: Goal | null;
@@ -268,7 +401,26 @@ function StepQuestions({
       <h1 className="ob-title" tabIndex={-1} data-step-h>
         Welcome, {first}
       </h1>
-      <p className="ob-sub">Two answers decide what you see first. After that you pick a few companies to follow.</p>
+      <p className="ob-sub">
+        Trading Post is where fractional GTM leaders share which companies hired fractionals, for which seat, who held it and what it paid.
+        {seats
+          ? ` We started it from the fractional work you published on Revenue Nomad, so ${
+              seats === 1 ? "1 seat already carries" : `${seats} seats already carry`
+            } your name. Other members see your name on a seat only after they spend 1 credit.`
+          : null}
+      </p>
+      <p className="ob-credit-note">
+        <span className="ob-coin" aria-hidden>
+          <IconCoin size={13} />
+        </span>
+        <span>
+          You have{" "}
+          <strong className="num">
+            {credits} {credits === 1 ? "credit" : "credits"}
+          </strong>
+          . A credit shows you one thing another member added, like who held a seat or an open role. Adding what you know earns credits back.
+        </span>
+      </p>
 
       <fieldset className="ob-q">
         <legend className="ob-h">Which GTM function do you work in?</legend>
@@ -312,7 +464,7 @@ function StepQuestions({
       <div className="ob-grow" />
       <div className="ob-foot">
         <span className="ob-foot-note" aria-live="polite">
-          {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your function" : "Pick one answer for each"}
+          {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your function" : "Two answers decide what you see first"}
         </span>
         <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
           Show companies to follow
@@ -322,10 +474,10 @@ function StepQuestions({
   );
 }
 
-/* ---------- step 2: follow 3 companies ---------- */
+/* ---------- step 2: follow companies (optional) ---------- */
 
 function StepFollow({
-  companies, byId, fn, goal, follows, toggle, busy, nextLabel, handoff, onBack, onNext, onSkip,
+  companies, byId, fn, goal, follows, toggle, busy, nextLabel, handoff, onBack, onNext,
 }: {
   companies: CompanyRec[];
   byId: Map<string, CompanyRec>;
@@ -336,11 +488,10 @@ function StepFollow({
   busy: boolean;
   /** What the main button does next (get the sign-in link, or open the app). */
   nextLabel: string;
-  /** Shown above the buttons when this is the last step: where the member goes next. */
+  /** For a member with seats on file: where they go next. Shown first, above the list. */
   handoff: ReactNode;
   onBack: () => void;
   onNext: () => void;
-  onSkip: () => void;
 }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -380,16 +531,19 @@ function StepFollow({
     inputRef.current?.focus();
   };
 
-  const left = Math.max(0, FOLLOW_TARGET - follows.length);
   const extra = follows.filter((id) => !sugg.list.some((c) => c.id === id));
   const showList = open && q.trim().length > 0;
 
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Follow {FOLLOW_TARGET} companies you know
+        {goal === "roles" ? "Follow companies you want to hear from" : "Follow companies you know"}
       </h1>
-      <p className="ob-sub">They get their own tab, and we point out what is new there each time you come back. Following is free.</p>
+      <p className="ob-sub">
+        They get their own tab, and we point out what&apos;s new there each time you come back. Following costs nothing, and you can skip it.
+      </p>
+
+      {handoff}
 
       <div className="ob-search" ref={boxRef}>
         <span className="ob-search-icon" aria-hidden>
@@ -450,7 +604,7 @@ function StepFollow({
                     <CompanyLogo name={c.name} domain={c.iconDomain} />
                     <span className="ob-result-id">
                       <span className="ob-result-name">{c.name}</span>
-                      <span className="ob-result-meta">{metaOf(c)}</span>
+                      <span className="ob-result-meta">{isMine(c) ? ["Your seat", metaOf(c)].filter(Boolean).join(" · ") : metaOf(c)}</span>
                     </span>
                     <span className={`ob-result-act${on ? " on" : ""}`}>
                       <IconStar size={13} filled={on} />
@@ -492,6 +646,7 @@ function StepFollow({
         {sugg.list.map((c) => {
           const on = follows.includes(c.id);
           const meta = metaOf(c);
+          const mine = isMine(c);
           return (
             <li key={c.id} className={`ob-co${on ? " ob-co-on" : ""}`}>
               <div className="ob-co-top">
@@ -507,16 +662,18 @@ function StepFollow({
               </div>
               <div className="ob-co-bottom">
                 <span className="ob-co-fns">
+                  {/* An attribute, so an outline chip: the member held a seat here. */}
+                  {mine ? <span className="chip ob-your-seat">Your seat</span> : null}
                   {c.friendly.functions.length ? (
-                    c.friendly.functions.slice(0, 2).map((f) => (
+                    c.friendly.functions.slice(0, mine ? 1 : 2).map((f) => (
                       <span key={f} className={`chip${f === fn ? " ob-chip-mine" : ""}`}>
                         {f}
                       </span>
                     ))
-                  ) : (
+                  ) : mine ? null : (
                     <span className="ob-co-none">No functions on file yet</span>
                   )}
-                  {c.friendly.functions.length > 2 ? <span className="ob-co-more num">+{c.friendly.functions.length - 2}</span> : null}
+                  {c.friendly.functions.length > (mine ? 1 : 2) ? <span className="ob-co-more num">+{c.friendly.functions.length - (mine ? 1 : 2)}</span> : null}
                   {/* An open role: a row repeats, so the dot is the only ember it carries. */}
                   {c.friendly.open > 0 ? (
                     <span className="ob-tier">
@@ -532,20 +689,15 @@ function StepFollow({
         })}
       </ul>
 
-      {handoff}
-
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">
         <button type="button" className="ob-back" onClick={onBack}>
           Back
         </button>
-        <button type="button" className="ob-skip" onClick={onSkip} disabled={busy}>
-          Skip for now
-        </button>
         <span className="ob-foot-note num" aria-live="polite">
-          {left ? `Follow ${left} more` : `Following ${follows.length}`}
+          {follows.length ? `Following ${follows.length}` : "You can follow companies later too"}
         </span>
-        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={left > 0 || busy} aria-busy={busy} onClick={onNext}>
+        <button type="button" className="btn btn-pine btn-lg ob-next" disabled={busy} aria-busy={busy} onClick={onNext}>
           {busy ? "Saving" : nextLabel}
         </button>
       </div>
@@ -556,10 +708,12 @@ function StepFollow({
 /* ---------- step 3: keep your sign-in link ---------- */
 
 function StepLink({
-  token, email, busy, nextLabel, handoff, onDone,
+  token, email, support, busy, nextLabel, handoff, onDone,
 }: {
   token: string;
   email: string;
+  /** Where a member asks for a new link (View.contact.support), or null. */
+  support: string | null;
   busy: boolean;
   nextLabel: string;
   handoff: ReactNode;
@@ -567,6 +721,8 @@ function StepLink({
 }) {
   const [link, setLink] = useState("");
   const [copied, setCopied] = useState(false);
+  // Copy (or email it) first: until then, saving the link is the main action and moving on is not.
+  const [kept, setKept] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   useEffect(() => setLink(`${window.location.origin}/?k=${token}`), [token]);
 
@@ -590,9 +746,11 @@ function StepLink({
       } catch {}
     }
     setCopied(true);
+    setKept(true);
     setTimeout(() => setCopied(false), 2400);
   };
-  const mailto = `mailto:${encodeURIComponent(email)}?subject=Trading%20Post%20sign-in%20link&body=${encodeURIComponent(link)}`;
+  const mailMe = `mailto:${encodeURIComponent(email)}?subject=Trading%20Post%20sign-in%20link&body=${encodeURIComponent(link)}`;
+  const supportHref = support ? mailto(support, "Trading Post sign-in link") : null;
 
   return (
     <div>
@@ -605,22 +763,41 @@ function StepLink({
         <div ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>
           {link}
         </div>
-        <button type="button" className={`btn ob-copy${copied ? " ob-copy-done" : ""}`} onClick={copy}>
+        <button type="button" className={`btn ob-copy${copied ? " ob-copy-done" : kept ? "" : " btn-pine"}`} onClick={copy}>
           {copied ? <IconCheck size={14} /> : null}
           {copied ? "Copied" : "Copy link"}
         </button>
       </div>
-      <a className="ob-mailme" href={mailto}>
+      <a className="ob-mailme" href={mailMe} onClick={() => setKept(true)}>
         Email it to myself
       </a>
       <p className="ob-hint ob-hint-flush">Anyone with this link can sign in as you. Keep it to yourself.</p>
+      <p className="ob-hint">
+        {support ? (
+          <>
+            If you lose it, email{" "}
+            {supportHref ? (
+              <a className="mono ob-help-link" href={supportHref}>
+                {support}
+              </a>
+            ) : (
+              <span className="mono">{support}</span>
+            )}{" "}
+            and we&apos;ll send you a new one.
+          </>
+        ) : (
+          "Without it there is no way back in, so save it before you go on."
+        )}
+      </p>
 
       {handoff}
 
       <div className="ob-grow" />
       <div className="ob-foot">
-        <span className="ob-foot-note" />
-        <button type="button" className="btn btn-pine btn-lg ob-next" onClick={onDone} disabled={busy} aria-busy={busy}>
+        <span className="ob-foot-note" aria-live="polite">
+          {kept ? "" : "Copy your link first"}
+        </span>
+        <button type="button" className={`btn btn-lg ob-next${kept ? " btn-pine" : ""}`} onClick={onDone} disabled={busy} aria-busy={busy}>
           {busy ? "Opening" : nextLabel}
         </button>
       </div>
