@@ -6,7 +6,7 @@ import type { Me } from "@/lib/tableTypes";
 import { SOURCE_LABEL } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconStar, fmtMonth, val } from "../ui/shared";
 import type { Row } from "./model";
-import { FactCell, earnNote, useUi } from "./ui";
+import { FactCell, YourSeat, earnNote, useUi } from "./ui";
 import { Fit, FnChips, HeldBy, HiddenCompany } from "./Tables";
 
 function Head({ r, right }: { r: Row; right?: React.ReactNode }) {
@@ -54,13 +54,17 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
   const line = ["industry", "employees", "hq"].map((k) => val(c.cells[k])).filter(Boolean);
   const room = Math.max(0, me.earnCap - me.earned24h);
   const miss = c.facts.missing;
+  // The Held by fact below already reads Your seat when the latest seat is theirs.
+  const heldShown = !!e && e.cells.rate?.s === "empty" && e.cells.operator?.s !== "empty";
+  const own = heldShown && e?.yours ? undefined : i.engs.find((x) => x.yours);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
       <Head r={r} right={<Fit i={i} />} />
       <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">Industry, size and HQ not on file</span>}</div>
-      {i.fns.length > 0 && (
+      {(i.fns.length > 0 || own) && (
         <div className="tp-pcard-fns">
-          <FnChips i={i} mine={me.function} max={3} />
+          {own && <YourSeat id={own.id} />}
+          <FnChips i={i} mine={me.function} max={own ? 2 : 3} />
         </div>
       )}
       <div className="tp-pfacts">

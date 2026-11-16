@@ -9,8 +9,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
 import { CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
-import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, shown, type CoInfo, type FactRef } from "./model";
-import { EditPill, FactCell, earnNote, shortLabel, useUi } from "./ui";
+import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
+import { EditPill, FactCell, Pro, YourSeat, ZeroCredits, earnNote, shortLabel, useUi } from "./ui";
+import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany } from "./Tables";
 import { plural } from "./hooks";
 
@@ -24,7 +25,8 @@ function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
   const [reporting, setReporting] = useState(false);
   // Locked: nothing here. The lock pill's title already says how many confirmed it.
   if (cell.s !== "value" || cell.system) return null;
-  const canCheck = !cell.mine;
+  // Their own name on their own seat is not theirs to confirm or report ("This isn't me" on Your seats unlinks it).
+  const canCheck = !cell.mine && !cell.member?.you;
   return (
     <span className="tp-meta">
       {cell.ver > 0 && (
@@ -271,9 +273,11 @@ function EngagementCard({
   const role = shown(e.cells.role);
   const locked = lockedInEngagement(e);
   const start = shown(e.cells.start);
+  const toFill = e.yours ? seatMissingCount(e, ui.me) : 0;
   const subject = op ? `Intro to ${op} about ${company}` : "";
   const seat = role ? `the ${role} seat` : "a fractional seat";
-  const intro = op
+  // Nobody needs an intro to themselves.
+  const intro = op && !e.yours
     ? INTRO_TO
       ? `mailto:${INTRO_TO}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
           `Please introduce me (${ui.me.name}) to ${op}${opMember ? " (a Trading Post member)" : ""}, who held ${seat} at ${company}.`,
@@ -286,6 +290,7 @@ function EngagementCard({
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>
       <div className="tp-eng-top">
         <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>
+        {e.yours && <YourSeat id={e.id} />}
         {e.verified && (
           <span className="tp-verified">
             <IconCheck size={11} /> Confirmed by the client
@@ -303,6 +308,11 @@ function EngagementCard({
         )}
       </div>
       <FieldList entity="engagement" id={e.id} cells={e.cells} fields={ENG_FIELDS} openSeat={isOpenSeat(e)} />
+      {toFill > 0 && (
+        <button type="button" className="ys-fill-link" onClick={() => ui.openSeats(e.id)}>
+          Fill in {toFill} missing
+        </button>
+      )}
       {e.people.length > 0 && (
         <div className="tp-eng-people">
           <div className="tp-sublabel">People on this seat</div>
@@ -368,6 +378,30 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
 
 /* ---------- the drawer ---------- */
 
+/** Unlock a hidden company for 1 credit. At 0 credits it shows how to earn one instead (and counts the wall). */
+function UnlockCompany({ id, label }: { id: string; label: string }) {
+  const ui = useUi();
+  const ref = useRef<HTMLButtonElement>(null);
+  const [zero, setZero] = useState(false);
+  return (
+    <>
+      <button
+        ref={ref}
+        type="button"
+        className="btn btn-primary"
+        onClick={() => {
+          if (ui.me.credits > 0) return ui.unlock({ entity: "company", id, field: "identity" });
+          sendSignal("wall", "identity");
+          setZero(true);
+        }}
+      >
+        {label}
+      </button>
+      {zero && ui.me.credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={id} onClose={() => setZero(false)} />}
+    </>
+  );
+}
+
 export function Drawer({
   i,
   focus,
@@ -420,9 +454,7 @@ export function Drawer({
   const actions = (
     <div className="tp-dactions">
       {c.hidden ? (
-        <button type="button" className="btn btn-primary" onClick={() => ui.unlock({ entity: "company", id: c.id, field: "identity" })}>
-          Unlock company · 1 credit
-        </button>
+        <UnlockCompany id={c.id} label="Unlock company · 1 credit" />
       ) : (
         <>
           <UnlockAll items={i.locked} />
@@ -508,6 +540,11 @@ export function Drawer({
           <span className="tp-dfit-r">{fitReason(i)}</span>
         </div>
         {!phone && actions}
+        {c.hidden && (
+          <div className="pro-under">
+            <Pro where="hidden_company" variant="line" />
+          </div>
+        )}
         {about && (
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">About</h3>
@@ -597,9 +634,7 @@ export function Drawer({
             <span className="tp-small muted">Nothing locked here</span>
           )}
           {c.hidden ? (
-            <button type="button" className="btn btn-primary" onClick={() => ui.unlock({ entity: "company", id: c.id, field: "identity" })}>
-              Unlock company
-            </button>
+            <UnlockCompany id={c.id} label="Unlock company" />
           ) : (
             <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
               <IconPlus size={14} /> Add

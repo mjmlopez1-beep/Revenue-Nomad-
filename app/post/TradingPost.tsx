@@ -5,7 +5,8 @@
  *
  *   top bar     search, credits, earn meter, "Add what you know", account menu
  *   sidebar     filters with counts (overlay under 1280px, bottom sheet on phones)
- *   content     record type, views, active filter chips, the table (cards on phones)
+ *   content     the next-move card or Get started, record type, views, active filter chips, the table (cards on phones)
+ *   pages       Your seats, My credits, Rate benchmarks (each replaces the table)
  *   overlays    record drawer, add modal, inline fact editor, credits popover
  *
  * Keyboard: "/" search, "f" filters, "a" add, Esc closes, J/K steps through records.
@@ -15,11 +16,14 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import type { Cell } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
-  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, rowsFor, shown, sortRows,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, mySeats, newRolesFor, rowsFor, seatsMissing,
+  shown, sortRows,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
 } from "./model";
 import { useLayout, useStoredFlag, store, plural } from "./hooks";
-import { UiCtx, FactEditor, Anchored, Sheet, type AddOpts, type Ui } from "./ui";
+import { UiCtx, FactEditor, Anchored, Pro, Sheet, type AddOpts, type Ui } from "./ui";
+import { Seats } from "./Seats";
+import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
@@ -74,7 +78,9 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
   const [limit, setLimit] = useState(PAGE);
-  const [page, setPage] = useState<"table" | "credits" | "rates">("table");
+  const [page, setPage] = useState<"table" | "credits" | "rates" | "seats">("table");
+  const [seatFocus, setSeatFocus] = useState<string | null>(null);
+  const [moveOff, dismissMove] = useMoveDismissals();
 
   /* ----- overlays ----- */
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
@@ -117,6 +123,9 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     () => ({ companies: infos.length, engagements: infos.reduce((n, i) => n + i.engs.length, 0), people: infos.reduce((n, i) => n + i.people.length, 0) }),
     [infos],
   );
+  // The member's own seats (they are the linked seat holder) and what is missing on them.
+  const seats = useMemo(() => mySeats(infos, me), [infos, me]);
+  const seatStats = useMemo(() => ({ n: seats.length, missing: seatsMissing(seats) }), [seats]);
   const allRows = useMemo(() => rowsFor(recordType, infos), [recordType, infos]);
   const { rows: filtered, facets } = useMemo(() => applyFilters(allRows, filters, tab, q, me), [allRows, filters, tab, q, me]);
   const sorted = useMemo(() => sortRows(filtered, sort, tab === "needs"), [filtered, sort, tab]);
@@ -208,6 +217,13 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     const row = rows.find((r) => r.i.c.id === id && (!focus || r.key === focus)) ?? rows.find((r) => r.i.c.id === id);
     setDrawer({ id, rowKey: row?.key ?? id, focus: focus ?? null });
     setPage("table");
+  }, []);
+  const openSeats = useCallback((engagementId?: string) => {
+    setEditor(null);
+    setPop(null);
+    setDrawer(null);
+    setSeatFocus(engagementId ?? null);
+    setPage("seats");
   }, []);
   /** A record at a company whose name is hidden until the member unlocks it. */
   const isHidden = useCallback((id: string) => !!ownerOf.get(id)?.c.hidden, [ownerOf]);
@@ -408,8 +424,8 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   }, [showTable, list, noRows]);
 
   const ui: Ui = useMemo(
-    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden }),
-    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden],
+    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seats: seatStats, openSeats }),
+    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats],
   );
 
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
@@ -436,15 +452,46 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
       onAdd={() => showFact("empty")}
       onInvite={invite}
       onDismiss={hideCheck}
+      seats={Math.min(seatStats.missing, earnRoom(me))}
+      onSeats={() => openSeats()}
     />
   );
 
-  // One slot for guidance: credits running out, then a waiting invite bonus, then the checklist, then the first-visit strip.
+  // The guidance slot holds one thing: credits running out, then a waiting invite bonus, then Get started, then the first-visit strip.
+  const guide: "credits" | "invite" | "check" | "intro" | null =
+    me.credits <= 3 || capped ? "credits" : me.invitePending && me.added === 0 ? "invite" : !checkOff ? "check" : !introOff && me.added + me.unlocked === 0 ? "intro" : null;
+  // The next-move card: the single most urgent thing. Never together with Get started, whose second step points at the seats instead.
+  // The roles card has done its job once the member is looking at Hiring now.
+  const picked = guide === "check" ? null : pickMove(me, seatStats, view.scan?.mine7 ?? 0, moveOff);
+  const move = picked === "roles" && tab === "hiring" ? null : picked;
+  const newRoles = move === "roles" ? newRolesFor(infos, me.function) : { roles: 0, hidden: 0 };
+  const seeOpenRoles = () => {
+    setPage("table");
+    setDrawer(null);
+    setQuery("");
+    setRecordType("engagements");
+    setTab("hiring");
+    setSort("newest");
+    setFilters({ ...EMPTY_FILTERS, fn: me.function ? [me.function] : [] });
+  };
+
   const banners = (
     <div className="tp-banners">
-      {me.credits <= 3 || capped ? (
-        <CreditBanner me={me} onShowAdd={() => showFact("empty")} onInvite={invite} />
-      ) : me.invitePending && me.added === 0 ? (
+      {move && (
+        <NextMove
+          kind={move}
+          me={me}
+          seats={seatStats}
+          roles={{ n: view.scan?.mine7 ?? 0, hidden: newRoles.hidden }}
+          onSeats={() => openSeats()}
+          onRoles={seeOpenRoles}
+          onDismiss={dismissMove}
+        />
+      )}
+      {guide === "credits" ? (
+        // When the card already says to fill in the seats, the strip would say it twice.
+        move === "roles" || !move ? <CreditBanner me={me} onShowAdd={() => showFact("empty")} onInvite={invite} quiet={!!move} /> : null
+      ) : guide === "invite" ? (
         <Strip
           tone="volt"
           actions={
@@ -455,11 +502,11 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         >
           Add your first fact to get your {REFERRAL_BONUS} invite credits.
         </Strip>
-      ) : !checkOff ? (
+      ) : guide === "check" ? (
         checklist
       ) : (
-        !introOff &&
-        me.added + me.unlocked === 0 && (
+        guide === "intro" &&
+        !move && (
           <Strip tone="volt" onClose={hideIntro}>
             You have {plural(me.credits, "credit")}. Unlock a fact for 1. Add one and earn 1, up to {me.earnCap} a day.
           </Strip>
@@ -547,6 +594,13 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     </button>
   );
 
+  // Hiring now lists a company the member can't see yet: the place to ask who wants more.
+  const proFoot = tab === "hiring" && sorted.some((r) => r.i.c.hidden) && (
+    <div className="pro-foot">
+      <Pro where="hiring_tab" />
+    </div>
+  );
+
   const filterPanel = (head?: React.ReactNode) => <FilterPanel f={filters} setF={setFilters} facets={facets} me={me} head={head} hasIndustry={hasIndustry} />;
   const qt = q.trim();
 
@@ -578,6 +632,10 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
             <Benchmarks view={view} onBack={() => setPage("table")} />
+          </main>
+        ) : page === "seats" ? (
+          <main className="tp-main tp-main-page ys-main">
+            <Seats seats={seats} focus={seatFocus} onBack={() => setPage("table")} />
           </main>
         ) : phone ? (
           <main className="tp-main tp-main-phone">
@@ -614,6 +672,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
             </div>
             {empty || <CardList type={list.type} rows={list.rows} me={me} onOpen={openRow} />}
             {more}
+            {proFoot}
           </main>
         ) : (
           <div className="tp-body">
@@ -676,6 +735,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
                     <>
                       <DataTable type={list.type} rows={list.rows} me={me} selected={drawer?.rowKey ?? null} onOpen={openRow} newSince={since.at} />
                       {more}
+                      {proFoot}
                     </>
                   )}
                 </div>
@@ -767,6 +827,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
             onClose={() => setPop(null)}
             items={[
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
+              { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} to fill` : undefined, onClick: () => openSeats() },
               { label: "My credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },

@@ -6,7 +6,7 @@ import type { EngagementRec, Me } from "@/lib/tableTypes";
 import { SOURCE_LABEL } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconStar, fmtMonth } from "../ui/shared";
 import { fitReason, fitTier, isOpenSeat, recentSeats, shown, type CoInfo, type Row } from "./model";
-import { FactCell, earnNote, useUi } from "./ui";
+import { FactCell, YourSeat, earnNote, useUi } from "./ui";
 
 /** How fractional friendly a company is, as a plain label. Hover for the reason and the score. */
 export function Fit({ i, big }: { i: CoInfo; big?: boolean }) {
@@ -47,6 +47,7 @@ export function FnChips({ i, mine, max = 3 }: { i: CoInfo; mine: string | null; 
 
 /** Who held the seat. An open role has nobody yet, so it never asks for a name. */
 export function HeldBy({ e }: { e: EngagementRec }) {
+  if (e.yours) return <YourSeat id={e.id} />;
   if (isOpenSeat(e) && e.cells.operator?.s === "empty") return <span className="chip chip-ember tp-open">Open seat</span>;
   return <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} />;
 }

@@ -532,3 +532,57 @@ export const COMPANY_FILL = ["website", "industry", "employees", "revenue", "hq"
 export const ENG_FIELDS = ["role", "status", "operator", "start", "end", "reason", "sourced", "pricing", "rate", "hours", "posting", "revenue", "employees"];
 /** How the company sells (Revenue Nomad's standard lists), shown as its own block. */
 export const COMPANY_GTM = ["businessModel", "motion", "dealSize", "salesCycle"];
+
+/* ---------- your seats ---------- */
+
+/** What a seat holder is asked for on their own seat, in the order the Your seats page asks. */
+export const SEAT_ASK = ["function", "role", "type", "status", "start", "end", "reason", "sourced", "pricing", "rate", "hours", "revenue", "employees"];
+
+export interface SeatInfo {
+  i: CoInfo;
+  e: EngagementRec;
+  /** Facts still empty on the seat (the rate is not missing once it was shared for the benchmarks only). */
+  missing: string[];
+  /** Empty "How they sell" facts at the company, listed under the member's first seat there. */
+  coMissing: string[];
+}
+
+/** Facts still empty on a seat. `priv` holds the seats whose rate the member shared for the benchmarks only. */
+const seatMissing = (e: EngagementRec, priv: Set<string | null>) => SEAT_ASK.filter((f) => e.cells[f]?.s === "empty" && !(f === "rate" && priv.has(e.id)));
+/** How many facts the member can still add on one of their own seats. */
+export const seatMissingCount = (e: EngagementRec, me: Me) => seatMissing(e, new Set((me.benchRates ?? []).map((b) => b.engagementId))).length;
+
+/** The seats the viewer holds (EngagementRec.yours) and what is still missing on each. */
+export function mySeats(infos: CoInfo[], me: Me): SeatInfo[] {
+  const priv = new Set((me.benchRates ?? []).map((b) => b.engagementId));
+  const out: SeatInfo[] = [];
+  for (const i of infos) {
+    let first = true;
+    for (const e of i.engs) {
+      if (!e.yours) continue;
+      const missing = seatMissing(e, priv);
+      const coMissing = first && !i.c.hidden ? COMPANY_GTM.filter((f) => i.c.cells[f]?.s === "empty") : [];
+      first = false;
+      out.push({ i, e, missing, coMissing });
+    }
+  }
+  return out;
+}
+
+/** Facts a member can still add across their seats. */
+export const seatsMissing = (seats: SeatInfo[]) => seats.reduce((n, s) => n + s.missing.length + s.coMissing.length, 0);
+
+/** Open roles in a function first seen in the last 7 days, and how many of their companies are still hidden. */
+export function newRolesFor(infos: CoInfo[], fn: string | null): { roles: number; hidden: number } {
+  if (!fn) return { roles: 0, hidden: 0 };
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  let roles = 0;
+  let hidden = 0;
+  for (const i of infos) {
+    const n = i.engs.filter((e) => !!e.opened && !e.closed && e.opened >= since && shown(e.cells.function) === fn).length;
+    if (!n) continue;
+    roles += n;
+    if (i.c.hidden) hidden++;
+  }
+  return { roles, hidden };
+}
