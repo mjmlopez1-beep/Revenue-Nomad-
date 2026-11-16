@@ -9,6 +9,7 @@ import { emailEnabled, sendEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
+import { packView } from "@/lib/viewWire";
 import { tidy, wellFormed } from "@/lib/tableFields";
 import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
 import { listConversations, unreadFor } from "@/lib/messages";
@@ -111,9 +112,10 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
  */
 type Built = { body: string; packed: Map<Enc, Promise<Uint8Array<ArrayBuffer>>> };
 const viewFlights = new Map<string, { p: Promise<Built>; started: number | null }>();
-const builtView = (token: string | null, enc: Enc | null, asMember = false) =>
-  shared(viewFlights, `${token ?? ""}${asMember ? "|member" : ""}`, stateVersion, async (): Promise<Built> => {
-    const body = JSON.stringify(await buildView(token, { asMember }));
+const builtView = (token: string | null, enc: Enc | null, asMember = false, packed = false) =>
+  shared(viewFlights, `${token ?? ""}${asMember ? "|member" : ""}${packed ? "|packed" : ""}`, stateVersion, async (): Promise<Built> => {
+    const view = await buildView(token, { asMember });
+    const body = JSON.stringify(packed ? packView(view) : view);
     const built: Built = { body, packed: new Map() };
     if (enc && body.length > MIN_COMPRESS) {
       const p = compress(body, enc);
@@ -138,6 +140,7 @@ async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
  * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?export=1    admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
+ * GET ?compact=1   the table without its empty cells (lib/viewWire.ts). The page asks for this.
  *                  Anyone else gets their own view, as without it.
  *
  * See also POST /api/table/scan (the weekly scan, for a cron), GET /api/table/unsubscribe and
@@ -183,7 +186,9 @@ export const GET = guarded(async (req: NextRequest) => {
   const enc = encodingFor(req);
   // An admin's "See it as a member". buildView ignores it for anyone who is not an admin.
   const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";
-  return viewAnswer(await builtView(token, enc, asMember), enc);
+  // ?compact=1 (the page asks for it): empty cells left out, put back by unpackView (lib/viewWire.ts).
+  const packed = req.nextUrl.searchParams.get("compact") === "1";
+  return viewAnswer(await builtView(token, enc, asMember, packed), enc);
 });
 
 /** The request body as JSON, or null when it is not JSON. "too large" past MAX_BODY, whatever Content-Length says. */

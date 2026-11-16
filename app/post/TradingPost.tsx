@@ -339,7 +339,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const searchCounts = useMemo(() => {
     if (!q.trim()) return null;
     const out = {} as Record<RecordType, number>;
-    for (const t of RECORD_TYPES) out[t.key] = t.key === recordType ? filtered.length : applyFilters(rowsFor(t.key, infos), eff, tab, q, cellMe).rows.length;
+    for (const t of RECORD_TYPES) out[t.key] = t.key === recordType ? filtered.length : applyFilters(rowsFor(t.key, infos), eff, tab, q, cellMe, true).rows.length;
     return out;
   }, [q, recordType, filtered, infos, eff, tab, cellMe]);
   // Name matches come first while searching (decision 13).

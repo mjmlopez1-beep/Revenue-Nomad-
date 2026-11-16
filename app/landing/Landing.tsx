@@ -47,7 +47,7 @@ function lookups(intro: string | null): { title: string; body: string; cost: str
     },
     {
       title: "Companies that hire fractionals",
-      body: "See which companies brought in a fractional, for which GTM function and how recently the last seat started.",
+      body: "See which companies brought in a fractional, for which function and how recently the last seat started.",
       cost: null,
     },
     {
@@ -248,7 +248,7 @@ export default function Landing({ view, onSignedIn, signInError = null }: Landin
               )}
               <h1 className="lp-h1">See who hires fractionals and for which seat</h1>
               <p className="lp-hero-sub">
-                Trading Post is the shared record of fractional GTM work. It shows which companies hired a fractional, for which seat, who held it
+                Trading Post is the shared record of fractional work. It shows which companies hired a fractional, for which seat, who held it
                 and what it paid.
               </p>
               {inviter ? (

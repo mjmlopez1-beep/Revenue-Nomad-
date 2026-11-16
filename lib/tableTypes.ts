@@ -65,6 +65,12 @@ export interface EngagementRec {
    */
   yours: boolean;
   /**
+   * A seat Revenue Nomad found (source "Seat scan") that nobody holds yet: its fractional is not
+   * on Trading Post yet. The seat holder cell is empty and is never added to ("Not on Trading
+   * Post yet"). A member who held it claims it ("claimSeat"). Left out on every other seat.
+   */
+  claimable?: boolean;
+  /**
    * Open roles found by the weekly scan (and open roles from the seed): the day the posting
    * was first seen and the day it stopped being listed (ISO dates). Free to see and to filter on.
    * Both are left out on a seat that was never listed as an open role; `closed` is null while
@@ -455,6 +461,11 @@ export interface AdminStats {
    * see every company). `memberId` and `engagementId` are public ids.
    */
   roleClaims?: { memberId: string; name: string; company: string; engagementId: string; at: string; closed: boolean; standing: boolean }[];
+  /**
+   * Seats from the seat scan a member claimed as theirs in the last 30 days, newest first.
+   * `standing`: their name is still on the seat (not released or removed). Public ids.
+   */
+  seatClaims?: { memberId: string; name: string; company: string; engagementId: string; at: string; standing: boolean }[];
   /** Members who hit zero credits while trying to unlock, and how many times. */
   walls: { members: number; hits: number };
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
@@ -526,6 +537,13 @@ export type Action =
    */
   | { type: "benchRate"; engagementId?: string; function?: string; pricing: "Monthly retainer" | "Hourly"; rate: string; revenue?: string }
   | { type: "benchRateRemove"; id: string }
+  /**
+   * "Is this your seat? Claim it": a seat Revenue Nomad found (EngagementRec.claimable) becomes the
+   * viewer's. Their name goes on it (behind the usual lock), it shows on Your seats, and the facts
+   * they add there earn as usual. The claim earns nothing. 3 per rolling 24 hours. "This isn't me"
+   * gives it back.
+   */
+  | { type: "claimSeat"; engagementId: string }
   /** "This isn't me": unlink the viewer from a seat matched to them by name. */
   | { type: "notMine"; engagementId: string }
   /**

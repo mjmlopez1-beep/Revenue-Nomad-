@@ -61,7 +61,7 @@ import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
 import { companyKey, textKey } from "./scan/clean";
 import {
-  ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
+  ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, siteKey, type Entity,
 } from "./tableFields";
 import type {
@@ -260,6 +260,12 @@ export interface State extends MessagingState {
    * trustOf). Rows older than 30 days are dropped.
    */
   roleClaims?: { memberId: string; engagementId: string; at: string; closed?: boolean }[];
+  /**
+   * Seats from the seat scan (source "Seat scan") a member claimed as theirs ("claimSeat"), for
+   * the limit of SEAT_CLAIM_DAILY_MAX per rolling 24 hours and the admin's list. A released claim
+   * still counts toward the limit. Rows older than 30 days are dropped.
+   */
+  seatClaims?: { memberId: string; engagementId: string; at: string }[];
   /** Each member's last visit (written at most once per 6 hours). */
   seen: Record<string, string>;
   scan: ScanState;
@@ -1095,10 +1101,13 @@ function trustOf(seed: Seed, s: State): (memberId: string) => boolean {
  */
 function seatOwner(
   s: State, idx: MemberIndex, trusted: (memberId: string) => boolean, tracks: Tracks, engId: string, v: FieldValue | null, createdBy: string | undefined,
+  scanSeat = false,
 ): Member | null {
   const m = seatHolder(s, idx, engId, v);
   if (!m || !v) return null;
   if (isSystem(v.by) || v.by !== m.id || createdBy === m.id) return m;
+  // A seat from the seat scan has nobody on it until its fractional claims it (claimSeat): the claim makes it theirs.
+  if (scanSeat && v.memberId === m.id) return m;
   if ((s.verifications[fkey(engId, "operator")] ?? []).some((x) => x !== m.id)) return m;
   return trusted(m.id) && tracks.has(engId) ? m : null;
 }
@@ -1167,6 +1176,8 @@ function selfHeld(s: State, engId: string): boolean {
 /** Empty fillable facts on an engagement (each earns its seat holder a credit). */
 const ENG_FILLABLE = FILLABLE.filter((x) => x.entity === "engagement").map((x) => x.f.key);
 const ENG_GATED = ALL_FIELDS.filter((x) => x.entity === "engagement" && x.f.gated).map((x) => x.f.key);
+/** Every engagement field a member sees on a seat. */
+const ENG_KEYS = ALL_FIELDS.filter((x) => x.entity === "engagement" && !x.f.identity).map((x) => x.f.key);
 function missingOnSeat(e: Node, s: State): number {
   let n = 0;
   for (const k of ENG_FILLABLE) {
@@ -1348,8 +1359,16 @@ export async function existingCompany(domain: string | null, name: string | null
   return { id: pubId(c.id), name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
 }
 
+/**
+ * Current fractional seats Revenue Nomad found (scripts/add-seat-scan.mjs). They come with no
+ * seat holder: the people did not share them with us, so no name is stored. A member claims one
+ * as theirs (claimSeat), and from then on it is their seat like any other.
+ */
+const SEAT_SCAN = "Seat scan";
+/** Seat-scan seats a member can claim in any rolling 24 hours. */
+const SEAT_CLAIM_DAILY_MAX = 3;
 /** Sources whose seats are fractional work whatever their type. A "Member added" seat is too, while it has no type (see friendliness). */
-const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan"]);
+const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan", SEAT_SCAN]);
 
 /* ---------- open roles the weekly scan follows ---------- */
 
@@ -1644,7 +1663,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       const cells: Record<string, Cell> = {};
       // The seat holder sees their own seat free (see seatOwner for who counts as its holder).
       const op = valueOf(e, s, "operator");
-      const yours = !!me && seatOwner(s, idx, trusted, tracks, e.id, op, madeBy.get(e.id))?.id === me.id;
+      const yours = !!me && seatOwner(s, idx, trusted, tracks, e.id, op, madeBy.get(e.id), e.source === SEAT_SCAN)?.id === me.id;
       const track = tracks.get(e.id);
       if (yours) ownSeatAt.add(c.id);
       if (yours || (!!me && seatHolder(s, idx, e.id, op)?.id === me.id)) holdsSeat = true;
@@ -1666,6 +1685,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       if (myAdds.has(e.id) || ePeopleNodes.some((p) => myAdds.has(p.id))) mine = true;
       return {
         id: pubId(e.id), source: e.source, verified: e.verified, cells, people: ePeople, updatedAt: eu, yours,
+        // A seat from the seat scan with nobody on it: its holder is not on Trading Post yet, and they can claim it.
+        ...(e.source === SEAT_SCAN && !op ? { claimable: true } : {}),
         ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null, ...roleTimes(track) } : {}),
       };
     });
@@ -2044,6 +2065,20 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
           standing: !!op && op.status !== "removed" && op.by === c.memberId && op.memberId === c.memberId,
         };
       }),
+    seatClaims: (s.seatClaims ?? [])
+      .filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP && idx.byId.has(c.memberId) && g.engagements.has(c.engagementId))
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .map((c) => {
+        const op = s.values[fkey(c.engagementId, "operator")];
+        return {
+          memberId: pubId(c.memberId),
+          name: idx.byId.get(c.memberId)!.name,
+          company: g.companies.get(g.engagements.get(c.engagementId)!.companyId)?.name ?? "",
+          engagementId: pubId(c.engagementId),
+          at: c.at,
+          standing: !!op && op.status === "live" && op.by === c.memberId && op.memberId === c.memberId,
+        };
+      }),
     walls: { members: walled.size, hits },
     pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
     topUnlocked: top("unlock"),
@@ -2306,6 +2341,8 @@ export const SEAT_HOLDER_ONLY = "Only the person who held this seat can add this
 const LISTED_STATUS = "This role is still listed, so its status comes from the posting.";
 /** A seat added, or a seat holder named, for anyone but the member themselves. */
 export const SEAT_SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
+/** Claiming a seat-scan seat that a member already claimed. */
+const SEAT_TAKEN = "Another member already claimed this seat. If it's yours, report the seat holder and an admin will look at it.";
 
 /**
  * `dryRun` (the connector's "what would this cost"): the action runs on a copy of the state and
@@ -2354,6 +2391,8 @@ export async function perform(token: string | null, a: Action, origin?: string, 
     /** Accounts that count (trustOf), worked out once per action. */
     let trustNow: ((memberId: string) => boolean) | null = null;
     const trusted = (memberId: string) => (trustNow ??= trustOf(seed, s))(memberId);
+    /** A seat from the seat scan: nobody holds it until its fractional claims it. */
+    const isScanSeat = (engId: string) => g.engagements.get(engId)?.source === SEAT_SCAN;
     /** The seat-holder name on this seat resolves to the viewer (and they haven't said it isn't theirs). */
     const linkedSeat = (engId: string) => seatHolder(s, memberIndex(seed, s), engId, valueOf(g.engagements.get(engId), s, "operator"))?.id === me.id;
     /**
@@ -2361,10 +2400,10 @@ export async function perform(token: string | null, a: Action, origin?: string, 
      * claimed earlier in this action counts): the only member who adds facts about it.
      */
     const holdsSeat = (node: Node) =>
-      seatOwner(s, memberIndex(seed, s), trusted, tracks(), node.id, valueOf(node, s, "operator"), s.engagements.find((x) => x.id === node.id)?.by)?.id === me.id;
+      seatOwner(s, memberIndex(seed, s), trusted, tracks(), node.id, valueOf(node, s, "operator"), s.engagements.find((x) => x.id === node.id)?.by, isScanSeat(node.id))?.id === me.id;
     /** The viewer holds this seat as its owner: they see it free, correct it and hide a fact on it at once (see seatOwner). */
     const ownSeat = (engId: string) =>
-      seatOwner(s, memberIndex(seed, s), trusted, tracks(), engId, valueOf(g.engagements.get(engId), s, "operator"), s.engagements.find((x) => x.id === engId)?.by)?.id === me.id;
+      seatOwner(s, memberIndex(seed, s), trusted, tracks(), engId, valueOf(g.engagements.get(engId), s, "operator"), s.engagements.find((x) => x.id === engId)?.by, isScanSeat(engId))?.id === me.id;
     /** Companies whose pick lists this member fills without the daily limits: one they added, or one where they hold a seat. */
     const pickFree = new Map<string, boolean>();
     const exemptPick = (companyId: string) => {
@@ -2572,6 +2611,13 @@ export async function perform(token: string | null, a: Action, origin?: string, 
       if (error && linked && linked.id === me.id && typeof raw === "string" && raw.trim()) ({ value, error } = cleanValue(f, raw));
       if (error) throw new ActionError(`${f.label}. ${error}`);
       const cur = valueOf(node, s, key);
+      // Claiming a seat from the seat scan: once, by its own fractional, a few a day, and for no credit (see claimSeat).
+      const scanClaim = entity === "engagement" && key === "operator" && isScanSeat(node.id) && cur?.by !== me.id;
+      if (scanClaim) {
+        if (cur) throw new ActionError(SEAT_TAKEN);
+        if ((s.seatClaims ?? []).filter((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY).length >= SEAT_CLAIM_DAILY_MAX)
+          throw new ActionError(`You can claim ${SEAT_CLAIM_DAILY_MAX} seats in 24 hours. Claim the next one tomorrow.`);
+      }
       // A seat holder can correct what our records or the scan say about their own seat.
       // What another member added still needs a report.
       const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
@@ -2607,6 +2653,10 @@ export async function perform(token: string | null, a: Action, origin?: string, 
       const fillsRole = claimsRole && trusted(me.id);
       if (claimsRole && !fillsRole) claimKept = true;
       s.values[k] = { value: value!, by: me.id, at: now, status: "live", ...(linked ? { memberId: linked.id } : {}) };
+      if (scanClaim) {
+        s.seatClaims = [...(s.seatClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now }];
+        return 0; // a claim earns nothing by itself; the facts added after it earn as usual
+      }
       if (claimsRole)
         s.roleClaims = [...(s.roleClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now, closed: fillsRole }];
       if (fillsRole) {
@@ -3210,6 +3260,19 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           if (paid > 0) s.ledger.push({ memberId: me.id, delta: -paid, reason: "reversal", ref, at: now });
           return { message: `Removed your rate from the benchmarks.${paid > 0 ? ` The ${paid === 1 ? "credit" : `${paid} credits`} it earned came off your balance.` : ""}` };
         }
+        case "claimSeat": {
+          // "Is this your seat? Claim it": a seat from the seat scan, with nobody on it yet, becomes the viewer's.
+          const e = g.engagements.get(inId("engagement", a.engagementId));
+          if (!e) throw new ActionError(gone("engagement"));
+          if (e.source !== SEAT_SCAN) throw new ActionError("Only seats Revenue Nomad found can be claimed. To add a seat you held, use Add.");
+          mustSee(e.companyId);
+          setValue(e, "engagement", "operator", me.name, me);
+          return {
+            message: "It's yours. Other members see your name on it behind a 1 credit lock. Fill in what you know on Your seats.",
+            id: pubId(e.id),
+            cells: ENG_KEYS.map((f) => changed("engagement", e, f)),
+          };
+        }
         case "notMine": {
           // "This isn't me": a seat matched to this member by name that they never held.
           const e = g.engagements.get(inId("engagement", a.engagementId));
@@ -3222,7 +3285,8 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           const wasClosed = !!tracks().get(e.id)?.closedAt;
           // Their own claim on an open role the scan follows: taking it back clears the name, as an
           // admin removal would (the credit it earned goes back), so the seat is free for whoever took it.
-          const ownClaim = !!cur && cur.by === me.id && cur.memberId === me.id && tracks().has(e.id);
+          // A seat from the seat scan they claimed goes back the same way (it is unclaimed again).
+          const ownClaim = !!cur && cur.by === me.id && cur.memberId === me.id && (tracks().has(e.id) || e.source === SEAT_SCAN);
           const hide = !!cur && !isSystem(cur.by) && !ownClaim;
           let reopened = false;
           if (cur && ownClaim) {
@@ -3616,7 +3680,8 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
         if (clean) put(eng.id, field, clean);
       };
       fill("role", title);
-      fill("function", raw.function && FUNCTIONS.includes(raw.function) ? raw.function : functionOf(title));
+      // The weekly scan is for GTM roles: a function outside GTM from a board reads from the title instead.
+      fill("function", raw.function && (GTM_FUNCTIONS.includes(raw.function) || raw.function === "Executive" || raw.function === "Other") ? raw.function : functionOf(title));
       fill("type", raw.type && ENGAGEMENT_TYPES.includes(raw.type) ? raw.type : /\binterim\b/i.test(title) ? "Interim" : /\bfractional\b/i.test(title) ? "Fractional" : null);
       if (adopted) put(eng.id, "status", "Open role");
       else fill("status", "Open role");

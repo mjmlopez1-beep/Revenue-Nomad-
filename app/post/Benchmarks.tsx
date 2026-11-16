@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Rate benchmarks: what fractionals charge by GTM function and client revenue. The medians
+ * Rate benchmarks: what fractionals charge by function and client revenue. The medians
  * come from rates on seats, rates members shared for the benchmarks only, and Revenue Nomad's
  * Rate Index. Every figure counts people, not rates: each person counts once however many
  * rates they have in a group. A figure shows a median once 5 different people are in it

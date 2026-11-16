@@ -452,7 +452,8 @@ export const LIST_OPTIONS: Record<Exclude<ListKey, "hq">, string[]> = {
   roleState: ROLE_STATES,
   fn: FUNCTIONS,
   type: ENGAGEMENT_TYPES,
-  source: Object.keys(SOURCE_LABEL),
+  // One option per label: Revenue Nomad's research covers people (Clay) and seats (Seat scan) alike.
+  source: Object.keys(SOURCE_LABEL).filter((k, i, all) => all.findIndex((x) => SOURCE_LABEL[x] === SOURCE_LABEL[k]) === i),
   relationship: RELATIONSHIPS,
 };
 
@@ -558,11 +559,13 @@ export function hayOf(r: Row): string {
 export function searchTest(q: string): Test | null {
   const toks = searchWords(q);
   if (!toks.length) return null;
+  // The About text is long prose, so a word there counts only from its start ("pharma" finds "pharmaceutical", "one" does not find "phone").
+  // One pattern per word, made once for every row.
+  const starts = toks.map((t) => new RegExp(`(?:^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   return (r) => {
     const h = hayOf(r);
     const about = r.i.aboutHay;
-    // The About text is long prose, so a word there counts only from its start ("pharma" finds "pharmaceutical", "one" does not find "phone").
-    return toks.every((t) => h.includes(t) || (!!about && new RegExp(`(?:^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(about)));
+    return toks.every((t, n) => h.includes(t) || (!!about && starts[n].test(about)));
   };
 }
 
@@ -645,10 +648,42 @@ export function optionTest(key: ListKey, opt: string): Test {
       // Open now: the posting was listed at the last clean scan of its board. A role the last scan
       // did not see is still open on file, but in neither chip.
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => !!e.opened && (opt === "Closed" ? !!e.closed : !e.closed && !e.unseen));
-    case "source":
-      return (r) => (r.p ? r.p.source === opt : engsOf(r).some((e) => e.source === opt));
+    case "source": {
+      const same = (src: string) => src === opt || (!!SOURCE_LABEL[src] && SOURCE_LABEL[src] === SOURCE_LABEL[opt]);
+      return (r) => (r.p ? same(r.p.source) : engsOf(r).some((e) => same(e.source)));
+    }
     case "relationship":
       return (r) => peopleOf(r).some((p) => shown(p.cells.relationship) === opt);
+  }
+}
+
+/**
+ * The values a row has for a list whose options match by equality (what optionTest compares
+ * against), so the facet counts read each row once instead of once per option. Null for the
+ * lists optionTest matches another way (HQ by place, role state, source by label).
+ */
+const BY_VALUE = new Set<ListKey>(["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle", "reason", "pricing", "type", "fn", "relationship"]);
+function valuesOf(key: ListKey, r: Row): (string | null)[] | null {
+  switch (key) {
+    case "industry":
+    case "employees":
+    case "revenue":
+    case "businessModel":
+    case "motion":
+    case "dealSize":
+    case "salesCycle":
+      return [shown(r.i.c.cells[key])];
+    case "reason":
+    case "pricing":
+      return (r.p ? r.i.engs : engsOf(r)).map((e) => shown(e.cells[key]));
+    case "type":
+      return (r.p ? r.i.engs : engsOf(r)).map((e) => shown(e.cells.type));
+    case "fn":
+      return r.e ? [shown(r.e.cells.function)] : r.i.fns;
+    case "relationship":
+      return peopleOf(r).map((p) => shown(p.cells.relationship));
+    default:
+      return null;
   }
 }
 
@@ -693,7 +728,22 @@ function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   return out;
 }
 
-const pass = (r: Row, cs: Clause[], except?: string) => cs.every((c) => c.group === except || c.test(r));
+/** Every clause failed by more than one group: no single group lifted makes the row pass. */
+const MANY = "\u0000many";
+/**
+ * Which clause group a row fails: null when it passes them all, the group when it fails only that
+ * one, MANY otherwise. Worked out once per row, so counting each group with its own selection
+ * lifted (the facets) never runs the same test twice.
+ */
+const failsOf = (r: Row, cs: Clause[]): string | null => {
+  let bad: string | null = null;
+  for (const c of cs) {
+    if (c.group === bad || c.test(r)) continue;
+    if (bad !== null) return MANY;
+    bad = c.group;
+  }
+  return bad;
+};
 
 export interface Facets {
   toggles: Record<ToggleKey, number>;
@@ -703,8 +753,19 @@ export interface Facets {
 }
 
 /** Filtered rows plus counts for every filter option (each group counted with its own selection lifted). */
-export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: Me): { rows: Row[]; facets: Facets } {
+export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: Me): { rows: Row[]; facets: Facets };
+/** `rowsOnly`: just the rows, no facet counts (the search counts of the other lists need only how many). */
+export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: Me, rowsOnly: true): { rows: Row[] };
+export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: Me, rowsOnly = false): { rows: Row[]; facets?: Facets } {
   const cs = clauses(f, tab, q, me);
+  if (rowsOnly) return { rows: rows.filter((r) => failsOf(r, cs) === null) };
+  const fails = new Map<Row, string | null>();
+  for (const r of rows) fails.set(r, failsOf(r, cs));
+  /** The row passes every clause, leaving out the group `except`. */
+  const pass = (r: Row, _cs: Clause[], except?: string) => {
+    const bad = fails.get(r)!;
+    return bad === null || bad === except;
+  };
   const result = rows.filter((r) => pass(r, cs));
   const toggles = {} as Record<ToggleKey, number>;
   for (const k of TOGGLES) {
@@ -722,6 +783,14 @@ export function applyFilters(rows: Row[], f: Filters, tab: Tab, q: string, me: M
         const v = shown(r.i.c.cells.hq);
         if (v) counts[v] = (counts[v] ?? 0) + 1;
       }
+    } else if (BY_VALUE.has(k)) {
+      // Each row once: every option it has counts one (the same as optionTest per option).
+      const n = new Map<string, number>(LIST_OPTIONS[k as Exclude<ListKey, "hq">].map((o) => [o, 0]));
+      for (const r of base) {
+        const vs = valuesOf(k, r)!;
+        for (const v of vs.length === 1 ? vs : new Set(vs)) if (v !== null && n.has(v)) n.set(v, n.get(v)! + 1);
+      }
+      for (const [o, c] of n) counts[o] = c;
     } else {
       for (const opt of LIST_OPTIONS[k]) {
         const t = optionTest(k, opt);

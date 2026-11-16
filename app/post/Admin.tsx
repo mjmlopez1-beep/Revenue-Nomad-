@@ -376,15 +376,19 @@ function RecentAdds({ rows }: { rows: RecentAdd[] }) {
 }
 
 type RoleClaim = NonNullable<AdminStats["roleClaims"]>[number];
-const claimState = (c: RoleClaim) => (!c.standing ? "Name since removed" : c.closed ? "Closed the role" : "Name kept, role still open");
+const claimState = (c: RoleClaim, seats: boolean) =>
+  seats ? (c.standing ? "Name on the seat" : "Released or removed") : !c.standing ? "Name since removed" : c.closed ? "Closed the role" : "Name kept, role still open";
 const claimKey = (c: RoleClaim) => `${c.engagementId}.${c.memberId}.${c.at}`;
 
-function RoleClaims({ rows }: { rows: RoleClaim[] }) {
+/** Open roles members said they took, or (`seats`) seats Revenue Nomad found that members claimed as theirs. */
+function RoleClaims({ rows, seats = false }: { rows: RoleClaim[]; seats?: boolean }) {
   const phone = useUi().layout === "phone";
   return (
-    <Card title="Open roles members said they took" span={6}>
+    <Card title={seats ? "Seats members claimed" : "Open roles members said they took"} span={6}>
       {rows.length === 0 ? (
-        <p className="tp-small muted">Nobody has picked themselves as the seat holder of an open role in the last 30 days.</p>
+        <p className="tp-small muted">
+          {seats ? "Nobody has claimed a seat Revenue Nomad found in the last 30 days." : "Nobody has picked themselves as the seat holder of an open role in the last 30 days."}
+        </p>
       ) : (
         <>
           {phone ? (
@@ -396,7 +400,7 @@ function RoleClaims({ rows }: { rows: RoleClaim[] }) {
                     {c.company && <span className="tp-pm-item-at"> at {c.company}</span>}
                   </div>
                   <div className="tp-pm-item-l">
-                    {claimState(c)}. {stamp(c.at, "–")}.
+                    {claimState(c, seats)}. {stamp(c.at, "–")}.
                   </div>
                 </li>
               ))}
@@ -418,7 +422,7 @@ function RoleClaims({ rows }: { rows: RoleClaim[] }) {
                       <th scope="row">{c.name}</th>
                       <td>{c.company || "–"}</td>
                       <td>{stamp(c.at, "–")}</td>
-                      <td className={c.standing && c.closed ? undefined : "tp-pm-quiet"}>{claimState(c)}</td>
+                      <td className={c.standing && c.closed ? undefined : "tp-pm-quiet"}>{claimState(c, seats)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -562,6 +566,7 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
 
         {a.recentAdds && <RecentAdds rows={a.recentAdds} />}
         {a.roleClaims && <RoleClaims rows={a.roleClaims} />}
+        {a.seatClaims && <RoleClaims rows={a.seatClaims.map((c) => ({ ...c, closed: false }))} seats />}
 
         <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
 

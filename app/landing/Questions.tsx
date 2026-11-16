@@ -19,7 +19,7 @@ export function faqItems(starter: number): [string, string][] {
   return [
     [
       "Where does all of this come from?",
-      "From fractional work members published on Revenue Nomad, member success stories and a weekly check for open fractional GTM roles. Members add the rest, one fact at a time.",
+      "From fractional work members published on Revenue Nomad, member success stories, our own research into current fractional seats and a weekly check for open fractional GTM roles. Members add the rest, one fact at a time.",
     ],
     [
       "Who can add what?",

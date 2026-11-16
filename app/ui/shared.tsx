@@ -7,6 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Action, Cell, Me, PersonRec, View } from "@/lib/tableTypes";
 import { fieldDef, type Entity } from "@/lib/tableFields";
+import { unpackView } from "@/lib/viewWire";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
 export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean };
@@ -81,8 +82,9 @@ export function patchView(v: View, r: ActPatch): View {
 
 /** The raw answer of GET /api/table. It can be an error body ({ error }): prefer fetchView. */
 export async function getView(): Promise<View> {
-  const r = await fetch("/api/table", { cache: "no-store" });
-  return r.json();
+  const r = await fetch("/api/table?compact=1", { cache: "no-store" });
+  const j = await r.json();
+  return j && Array.isArray(j.companies) ? unpackView(j) : j;
 }
 
 /**
@@ -93,9 +95,10 @@ export async function getView(): Promise<View> {
  */
 export type ViewResult = { view: View; error?: undefined } | { view: null; error: string; status: number; retryAfter: number | null };
 export async function fetchView(): Promise<ViewResult> {
-  const r = await fetch("/api/table", { cache: "no-store" });
+  // Without its empty cells on the wire (lib/viewWire.ts), put back here.
+  const r = await fetch("/api/table?compact=1", { cache: "no-store" });
   const j = (await r.json().catch(() => null)) as (View & { error?: string }) | null;
-  if (r.ok && j && j.stats) return { view: j };
+  if (r.ok && j && j.stats) return { view: Array.isArray(j.companies) ? unpackView(j) : j };
   const wait = Number(r.headers.get("Retry-After"));
   return {
     view: null,
@@ -197,10 +200,17 @@ const HUES = [152, 200, 265, 230, 330, 175, 48];
 export const hue = (s: string) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
 
 /** "2024-03" -> "Mar 2024", "2024" -> "2024", "Ongoing" stays. */
+/** "2025-03" as "Mar 2025". Kept once worked out: a table of a few thousand seats asks for the same months over and over. */
+const monthText = new Map<string, string>();
 export const fmtMonth = (m: string) => {
   if (/^\d{4}$/.test(m)) return m;
-  const [y, mo] = m.split("-").map(Number);
-  return y && mo ? new Date(y, mo - 1).toLocaleString("en-US", { month: "short", year: "numeric" }) : m;
+  let out = monthText.get(m);
+  if (out === undefined) {
+    const [y, mo] = m.split("-").map(Number);
+    out = y && mo ? new Date(y, mo - 1).toLocaleString("en-US", { month: "short", year: "numeric" }) : m;
+    if (monthText.size < 5000) monthText.set(m, out);
+  }
+  return out;
 };
 
 /** Display text for a visible value. */

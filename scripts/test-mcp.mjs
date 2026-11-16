@@ -63,7 +63,9 @@ async function call(method, path, { cookie, ipAddr, body, form, headers = {}, re
     h["content-type"] = "application/json";
     payload = JSON.stringify(body);
   }
-  const r = await fetch(path.startsWith("http") ? path : BASE + path, { method, headers: h, body: payload, redirect });
+  const go = () => fetch(path.startsWith("http") ? path : BASE + path, { method, headers: h, body: payload, redirect });
+  // A kept-alive connection the server closed while this script was busy fails once; a new one goes through.
+  const r = await go().catch(() => go());
   const text = await r.text();
   let json = null;
   try {
@@ -143,11 +145,13 @@ async function rpc(access, method, params, { version = "2025-06-18", headers = {
 
 /** Everything member A's tools returned, to search for values A must not see. */
 const seenByA = [];
+/** What A's tool calls sent: a word A typed itself (an alert named "Fractional VP Sales") is no leak when it comes back. */
+const sentByA = [];
 let aAccess = null;
 async function tool(access, name, args = {}) {
   const r = await rpc(access, "tools/call", { name, arguments: args });
   const text = r.json?.result?.content?.[0]?.text ?? "";
-  if (access === aAccess) seenByA.push(text);
+  if (access === aAccess) seenByA.push(text), sentByA.push(JSON.stringify(args));
   let out = null;
   try {
     out = JSON.parse(text);
@@ -397,13 +401,21 @@ async function main() {
       ...seedFile.members.flatMap((m) => [m.token, m.email]),
       ...seedFile.companies.map((c) => c.fields.name),
       ...(seedFile.contacts ?? []).flatMap((p) => [p.fields.name, p.fields.email, p.fields.phone, p.fields.linkedin]),
-      ...seedFile.engagements.flatMap((e) => [e.fields.operator, e.fields.rate, e.fields.posting, e.fields.role]),
+      // A title that is only a word and a function ("Fractional Marketing", from the seat scan) says nothing, and the tools write such words themselves (an alert's name).
+      ...seedFile.engagements.flatMap((e) => [e.fields.operator, e.fields.rate, e.fields.posting, /^(Fractional|Interim)\s+[A-Za-z&/-]+$/i.test(e.fields.role ?? "") ? null : e.fields.role]),
     ].filter((w) => typeof w === "string" && w.length >= 6);
-    for (const w of words) {
+    // Every string the app view shows, to skip the slow substring search for most words (a seed of a few thousand companies).
+    const shownStrings = new Set();
+    const walk = (x) => {
+      if (typeof x === "string") shownStrings.add(x);
+      else if (x && typeof x === "object") for (const y of Object.values(x)) walk(y);
+    };
+    walk(av0);
+    for (const w of new Set(words)) {
       secretWords.add(w);
       seedWords.push(w);
       // Anything A's own app view shows is allowed. The rest is locked or hidden for A.
-      if (!aJson0.includes(w) && !aJson0.includes(JSON.stringify(w).slice(1, -1))) forbidden.add(w);
+      if (!shownStrings.has(w) && !aJson0.includes(w) && !aJson0.includes(JSON.stringify(w).slice(1, -1))) forbidden.add(w);
     }
   }
   check("setup: what B added is locked for A in the app", !aJson0.includes(personName) && !aJson0.includes(bRate) && !aJson0.includes(hiddenName));
@@ -643,7 +655,9 @@ async function main() {
   /* one more pass for leaks, over everything A's tools returned */
   {
     const all = seenByA.join("\n");
-    const leaks = [...forbidden].filter((w) => w !== personName && w !== hiddenName && w !== hiddenSite && w !== "$9,876/mo" && all.includes(w));
+    // What A's app shows now, after the unlocks: a title many seats share ("Fractional CMO") is A's to see once A paid for one of them.
+    const aJsonNow = JSON.stringify(await A.view());
+    const leaks = [...forbidden].filter((w) => w !== personName && w !== hiddenName && w !== hiddenSite && w !== "$9,876/mo" && all.includes(w) && !aJsonNow.includes(w) && !sentByA.some((x) => x.includes(w)));
     check("still no leak after A's unlocks (only what A paid for shows)", leaks.length === 0, leaks.length ? `${leaks.length} leaked` : undefined);
   }
 }

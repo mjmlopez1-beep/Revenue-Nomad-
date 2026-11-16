@@ -292,7 +292,7 @@ export function FilterPanel({
         {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} label={notMineLabel(me.function)} />}
         {me.function && (
           <p className="tp-fnote">
-            Companies that hired fractionals in other GTM functions and have no {namedFn(me.function) ? `${me.function} seat` : "seat in your function"} on file.
+            Companies that hired fractionals in other functions and have no {namedFn(me.function) ? `${me.function} seat` : "seat in your function"} on file.
           </p>
         )}
       </Group>

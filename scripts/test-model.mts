@@ -363,6 +363,32 @@ check(
   check("owed reads in credits and clears with adds", owedLine(0) === null && owedLine(undefined) === null && owedLine(1) === "You owe 1 credit. A fact you added was removed after you spent what it earned. The next fact you add clears it." && /The next 3 facts you add clear it\.$/.test(owedLine(3) ?? ""));
 }
 
+/* ---------- facet counts: each row read once, the same counts as one test per option ---------- */
+
+{
+  const many = deriveAll([
+    ...companies,
+    co("Seat Scan Co", [eng({ function: val("Finance"), type: val("Fractional"), status: val("Active") }, { source: "Seat scan" })]),
+    co("Two Fns Co", [eng({ function: val("Sales"), type: val("Fractional") }, { source: "Published engagement" }), eng({ function: val("People"), type: val("Interim") }, { source: "Member added" })]),
+  ]);
+  let off = 0;
+  for (const type of ["companies", "engagements", "people"] as const) {
+    const rows = rowsFor(type, many);
+    for (const f of [EMPTY_FILTERS, { ...EMPTY_FILTERS, fn: ["Sales"] }, { ...EMPTY_FILTERS, type: ["Fractional"], roleState: ["Closed"] }]) {
+      const { facets } = applyFilters(rows, f, "all", "", me);
+      for (const [k, opts] of Object.entries(LIST_OPTIONS)) {
+        // Each group counted with its own selection lifted.
+        const lifted = applyFilters(rows, { ...f, [k]: [] }, "all", "", me).rows;
+        for (const o of opts) if (facets.lists[k as keyof typeof facets.lists][o] !== lifted.filter((r) => applyFilters([r], { ...EMPTY_FILTERS, [k]: [o] }, "all", "", me).rows.length).length) off++;
+      }
+    }
+  }
+  check("facet counts match one test per option", off === 0, off);
+  const src = applyFilters(rowsFor("engagements", many), { ...EMPTY_FILTERS, source: ["Clay"] }, "all", "", me).rows;
+  check("one Revenue Nomad research source option covers seat-scan seats", LIST_OPTIONS.source.filter((s) => s === "Clay" || s === "Seat scan").length === 1 && src.length === 1);
+  check("rowsOnly gives the same rows", applyFilters(rowsFor("companies", many), EMPTY_FILTERS, "all", "co", me, true).rows.length === applyFilters(rowsFor("companies", many), EMPTY_FILTERS, "all", "co", me).rows.length);
+}
+
 /* ---------- when earning opens again ---------- */
 
 const later = new Date();

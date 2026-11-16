@@ -41,7 +41,7 @@ export function Fit({ i, big, hot }: { i: CoInfo; big?: boolean; hot?: boolean }
 }
 
 /**
- * GTM functions at a company: the ones hired fractionally (the member's own first), then the
+ * Functions at a company: the ones hired fractionally (the member's own first), then the
  * ones with an open role and no hire yet ("Sales · hiring"), then the ones only member stories
  * mention (muted). "No Sales seat yet" follows when they hired other functions and nothing on file
  * names the member's, so a row never says "Sales" and "No Sales seat yet" together. `gap` false
@@ -98,7 +98,7 @@ const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a postin
 export function NoSeatYet({ fn }: { fn: string }) {
   const named = namedFn(fn);
   return (
-    <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other GTM functions. ${named ? `No ${named} seat` : "No seat in your function"} is on file yet.`}>
+    <span className="chip chip-outline tp-fn-gap" title={`They hired fractionals in other functions. ${named ? `No ${named} seat` : "No seat in your function"} is on file yet.`}>
       {named ? `No ${named} seat yet` : "No seat in your function yet"}
     </span>
   );
@@ -107,6 +107,13 @@ export function NoSeatYet({ fn }: { fn: string }) {
 /** Who held the seat. An open role has nobody yet, so it never asks for a name. */
 export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }) {
   if (e.yours) return <YourSeat id={e.id} />;
+  // A seat Revenue Nomad found: its holder isn't a member yet, so there is no name to add or unlock. They claim it in the record.
+  if (e.claimable)
+    return (
+      <span className="tp-none" title="Not on Trading Post yet">
+        –
+      </span>
+    );
   if (isOpenRole(e) && e.cells.operator?.s === "empty")
     return (
       <span className="tp-open" title="Nobody holds this seat yet">

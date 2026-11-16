@@ -19,7 +19,7 @@
  */
 import type { JobFunction, RawJob } from "../types";
 import type { ScanCollectResult, ScanRole, ScanScreenedOut, ScanSourceResult } from "../scanTypes";
-import { ENGAGEMENT_TYPES, FUNCTIONS, cut, functionOf } from "../tableFields";
+import { ENGAGEMENT_TYPES, GTM_FUNCTIONS, cut, functionOf } from "../tableFields";
 import { scoreJob, workSignal, type ScoredTags, type WorkSignal } from "../crawler/score";
 import * as remotive from "../crawler/sources/remotive";
 import * as remoteok from "../crawler/sources/remoteok";
@@ -122,7 +122,9 @@ const HINT_FUNCTION: Record<string, string> = {
   gtm: "Sales",
 };
 const AI_GTM = /\b(?:ai|genai|gen ai)\b.*\b(?:gtm|go[\s-]?to[\s-]?market)\b|\b(?:gtm|go[\s-]?to[\s-]?market)\b.*\b(?:ai|genai)\b|\bgtm engineer/i;
-const known = (fn: string | null | undefined) => (fn && FUNCTIONS.includes(fn) ? fn : null);
+/** The functions a scanned role can be in: the weekly scan is for GTM roles, so Finance, Technology and the like never come from it. */
+const SCAN_FUNCTIONS = [...GTM_FUNCTIONS, "Executive", "Other"];
+const known = (fn: string | null | undefined) => (fn && SCAN_FUNCTIONS.includes(fn) ? fn : null);
 
 export function roleFunction(title: string, tags: Pick<ScoredTags, "functions">, hint?: string): string | null {
   if (AI_GTM.test(title) && known("AI GTM")) return "AI GTM";
@@ -130,7 +132,7 @@ export function roleFunction(title: string, tags: Pick<ScoredTags, "functions">,
   if (fromTitle) return fromTitle;
   if (hint) {
     const h = hint.trim();
-    const fromHint = known(FUNCTIONS.find((f) => f.toLowerCase() === h.toLowerCase())) ?? known(HINT_FUNCTION[h.toLowerCase()]) ?? known(functionOf(h));
+    const fromHint = known(SCAN_FUNCTIONS.find((f) => f.toLowerCase() === h.toLowerCase())) ?? known(HINT_FUNCTION[h.toLowerCase()]) ?? known(functionOf(h));
     if (fromHint && fromHint !== "Other") return fromHint;
   }
   const specific = tags.functions.find((t) => t !== "GTM Leadership") ?? tags.functions[0];

@@ -53,10 +53,13 @@ export const HIRE_REASONS = [
 export const PRICING_MODELS = ["Monthly retainer", "Hourly", "Project fee", "Equity and cash"];
 /** Revenue Nomad standard employee count buckets. */
 export const RN_EMPLOYEES = ["1–10", "11–50", "51–200", "201–500", "501–1,000", "1,001+"];
-/** GTM functions (role categories). Free to see, so members can filter by function without unlocking the role. */
-export const FUNCTIONS = [
-  "Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "AI GTM", "Executive", "Other",
-];
+/** The GTM functions. The weekly scan of open roles looks for these alone. */
+export const GTM_FUNCTIONS = ["Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "AI GTM"];
+/**
+ * Every function a seat can be in (role categories): the GTM ones first, then the rest of the
+ * fractional work on file. Free to see, so members can filter by function without unlocking the role.
+ */
+export const FUNCTIONS = [...GTM_FUNCTIONS, "Technology", "Finance", "Operations", "People", "Product", "Legal", "Executive", "Other"];
 /** How a person relates to the company or to the fractional who worked there. */
 export const RELATIONSHIPS = ["Decision maker", "Reported to", "Reported to me", "Worked with", "Hiring for the seat"];
 export const ENGAGEMENT_TYPES = ["Fractional", "Interim", "Advisory", "Project", "Full-time"];
@@ -127,7 +130,7 @@ export const GROUPS: GroupDef[] = [
     label: "Fractional engagement",
     fields: [
       { key: "source", label: "Source", kind: "text", gated: false, system: true, say: "the source" },
-      { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The part of GTM this seat covers.", say: "the function" },
+      { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The function this seat covers.", say: "the function" },
       { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title, the way the client wrote it.", say: "the role" },
       { key: "type", label: "Type of work", short: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES, say: "the type of work" },
       { key: "status", label: "Status", kind: "choice", gated: false, options: STATUSES, hint: "Open role means the client is hiring for this seat now.", say: "the status" },
@@ -197,7 +200,7 @@ export const ALL_FIELDS = GROUPS.flatMap((g) => g.fields.map((f) => ({ entity: g
 export const FILLABLE = ALL_FIELDS.filter((x) => !x.f.identity && !x.f.system);
 
 /** Where a record came from. */
-export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay"] as const;
+export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay", "Seat scan"] as const;
 /** Plain labels for sources in the UI. */
 export const SOURCE_LABEL: Record<string, string> = {
   // Two names a member can tell apart: the seat holder published it, or another member added it.
@@ -206,6 +209,8 @@ export const SOURCE_LABEL: Record<string, string> = {
   "Demand scan": "Job posting",
   "Member added": "Added by a member",
   Clay: "Revenue Nomad research",
+  // Current fractional seats Revenue Nomad found. Nobody holds one on Trading Post until its fractional claims it.
+  "Seat scan": "Revenue Nomad research",
 };
 
 const FIELD_BY_KEY = new Map<string, FieldDef>(ALL_FIELDS.map((x) => [`${x.entity}.${x.f.key}`, x.f]));

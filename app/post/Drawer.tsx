@@ -1000,9 +1000,55 @@ function ClaimRole({ id }: { id: string }) {
   );
 }
 
+/**
+ * A seat Revenue Nomad found that nobody holds on Trading Post yet. Its fractional claims it:
+ * their name goes on it (behind the usual lock) and it moves to Your seats.
+ */
+function ClaimSeat({ id, seat, company }: { id: string; seat: string; company: string }) {
+  const ui = useUi();
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const btn = useRef<HTMLButtonElement>(null);
+  const cancel = () => {
+    setAsk(false);
+    setTimeout(() => btn.current?.focus({ preventScroll: true }));
+  };
+  useEscape(ask, cancel);
+  const claim = async () => {
+    setBusy(true);
+    await ui.act({ type: "claimSeat", engagementId: id });
+    setBusy(false);
+    setAsk(false);
+  };
+  if (ask)
+    return (
+      <div className="tp-frow-ask tp-claim-ask" role="group" aria-label="Claim this seat">
+        <p>
+          Claim the {seat} seat at {company} as yours? Other members will see your name on it, behind a 1 credit lock.
+        </p>
+        <span className="tp-frow-ask-acts">
+          <button type="button" className="btn btn-sm btn-primary" autoFocus disabled={busy} aria-busy={busy} onClick={claim}>
+            {busy ? "Saving" : "Yes, it's my seat"}
+          </button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={cancel}>
+            Cancel
+          </button>
+        </span>
+      </div>
+    );
+  return (
+    <div className="tp-claim">
+      <span className="tp-small muted">The seat holder isn't on Trading Post yet.</span>
+      <button ref={btn} type="button" className="btn btn-sm" onClick={() => setAsk(true)}>
+        Is this your seat? Claim it
+      </button>
+    </div>
+  );
+}
+
 const ENG_ROWS = ["function", "type", ...ENG_FIELDS];
 
-function EngagementCard({ e, companyId, focus }: { e: EngagementRec; companyId: string; focus: boolean }) {
+function EngagementCard({ e, companyId, company, focus }: { e: EngagementRec; companyId: string; company: string; focus: boolean }) {
   const ui = useUi();
   const [adding, setAdding] = useState(false);
   const op = shown(e.cells.operator);
@@ -1055,6 +1101,7 @@ function EngagementCard({ e, companyId, focus }: { e: EngagementRec; companyId: 
         fixed={open ? ["operator"] : []}
       />
       {vacant && !hidden && !e.yours && <ClaimRole id={e.id} />}
+      {e.claimable && !hidden && !e.yours && <ClaimSeat id={e.id} seat={role ?? (shown(e.cells.function) ? `${shown(e.cells.function)}` : "fractional")} company={company} />}
       {toFill > 0 && (
         <button type="button" className="ys-fill-link" onClick={() => ui.openSeats(e.id)}>
           Fill in the {toFill === 1 ? "one thing" : `${toFill} things`} missing on your seat
@@ -1467,7 +1514,7 @@ export function Drawer({
                 ))}
                 {gap && <NoSeatYet fn={mine} />}
               </div>
-              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other GTM functions. {mineNamed ? `No ${mineNamed} seat` : "No seat in your function"} is on file yet.</p>}
+              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other functions. {mineNamed ? `No ${mineNamed} seat` : "No seat in your function"} is on file yet.</p>}
               {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked story come from member stories or a posting that came down. No seat is on file for them yet.</p>}
             </section>
           )}
@@ -1477,7 +1524,7 @@ export function Drawer({
             </h3>
             {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
             {i.engs.map((e) => (
-              <EngagementCard key={e.id} e={e} companyId={c.id} focus={focus === e.id} />
+              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.name} focus={focus === e.id} />
             ))}
             {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
             {!c.hidden && (

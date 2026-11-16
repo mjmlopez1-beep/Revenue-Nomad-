@@ -18,11 +18,11 @@ export const PER_MINUTE = 60;
 export const PER_DAY = 2000;
 
 const list = (xs: readonly string[]) => xs.join(", ");
-const fn = z.string().describe(`A GTM function: ${list(FUNCTIONS)}`);
+const fn = z.string().describe(`A function: ${list(FUNCTIONS)}`);
 const many = (what: string, xs: readonly string[]) => z.array(z.string()).describe(`${what}, any of: ${list(xs)}`);
 const company = z.string().describe("The company's id (from search_companies or list_open_roles). A visible company's exact name or domain also works.");
 
-export const INSTRUCTIONS = `Trading Post is a give-to-get table of companies that hire fractional GTM leaders (sales, marketing, RevOps, customer success and more), run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
+export const INSTRUCTIONS = `Trading Post is a give-to-get table of companies that hire fractional leaders (sales, marketing, RevOps, customer success, finance, technology and more), run by Revenue Nomad for its members. It records which companies hired fractionals, for which seat, who held each seat, what it paid, who the decision makers are, and which fractional roles are open now. You act as the signed-in member.
 
 How the table works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts (company basics, a seat's function, type, status, start, why they hired) are always visible.
@@ -134,7 +134,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Rate benchmarks",
       description:
-        "What fractionals charge, by GTM function and the client's revenue band at the time: the median and the middle half for monthly retainers (dollars a month) and hourly rates (dollars an hour), with how many people each figure counts. A group shows numbers only once enough people are in it. Free.",
+        "What fractionals charge, by function and the client's revenue band at the time: the median and the middle half for monthly retainers (dollars a month) and hourly rates (dollars an hour), with how many people each figure counts. A group shows numbers only once enough people are in it. Free.",
       inputSchema: {
         function: fn.optional(),
         revenue: z.string().optional().describe(`Client revenue band: All, ${list(RN_REVENUE)}`),
@@ -217,11 +217,12 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Add my seat",
       description:
-        "Add a seat the member held themselves (a fractional engagement), or facts on one of their own seats already on file (seat_id from my_account). Members can only add their own seats: the seat holder is always the member. Each new fact earns 1 credit. Needs a function or a role. If they give a rate, ask who may see it and send rate_visibility.",
+        "Add a seat the member held themselves (a fractional engagement), or facts on one of their own seats already on file (seat_id from my_account). Members can only add their own seats: the seat holder is always the member. Each new fact earns 1 credit. Needs a function or a role. If they give a rate, ask who may see it and send rate_visibility. A seat Revenue Nomad found that nobody holds yet (claimable in get_company) becomes theirs with seat_id and claim: true, after they say it is theirs.",
       inputSchema: {
         company: z.string().optional().describe("The company's name (or id). Not needed with seat_id."),
         website: z.string().optional(),
-        seat_id: z.string().optional().describe("One of the member's own seats, to add what is missing."),
+        seat_id: z.string().optional().describe("One of the member's own seats, to add what is missing. Or, with claim, a seat nobody holds yet (marked claimable)."),
+        claim: z.boolean().optional().describe("With seat_id: claim a seat Revenue Nomad found as the member's own. Their name goes on it, behind a 1 credit lock for others. Ask them first. Earns nothing by itself, 3 a day."),
         function: fn.optional(),
         role: z.string().optional().describe("The exact title, like Fractional VP Marketing."),
         type: z.string().optional().describe(list(ENGAGEMENT_TYPES)),

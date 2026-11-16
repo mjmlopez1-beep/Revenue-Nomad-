@@ -103,6 +103,8 @@ function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
   const facts = readAll(e.cells, SEAT_KEYS, lockedFor);
   const holder = e.cells.operator;
   if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Trading Post${holder.member.title ? `, ${holder.member.title}` : ""})`;
+  // A seat Revenue Nomad found: no name is on file, and its fractional can claim it.
+  if (e.claimable) facts.seat_holder = "Not on Trading Post yet";
   if (open && facts.rate) (facts.posted_rate = facts.rate), delete facts.rate;
   if (open && facts.hours) (facts.posted_hours = facts.hours), delete facts.hours;
   const intro = mv.view.contact?.intro;
@@ -125,6 +127,7 @@ function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
       : {}),
     ...(e.people.length ? { people: e.people.map((p) => personOut(p)) } : {}),
     ...(e.yours ? { you_can_add: missingOf(e.cells, SEAT_KEYS, open ? ["start", "end", "reason", "sourced"] : []) } : {}),
+    ...(e.claimable && !e.yours ? { claimable: "If this is the member's own seat, add_my_seat with this seat_id and claim: true makes it theirs (ask them first)." } : {}),
   };
 }
 
@@ -378,7 +381,7 @@ export async function rateBenchmarks(ctx: Ctx, a: { function?: string; revenue?:
   const live = asked.filter((r) => r.monthly.n > 0 || r.hourly.n > 0);
   const rows = live.length ? live : asked;
   return {
-    about: "What fractionals charge, by GTM function and the client's revenue at the time. Monthly retainers in dollars a month, hourly rates in dollars an hour. Each person counts once.",
+    about: "What fractionals charge, by function and the client's revenue at the time. Monthly retainers in dollars a month, hourly rates in dollars an hour. Each person counts once.",
     rows: rows.map((r) => ({ function: r.function, client_revenue: r.revenue, monthly: statOut(r.monthly, "dollars a month"), hourly: statOut(r.hourly, "dollars an hour") })),
     ...(rows.length ? {} : { note: "No group matches. Leave revenue out to see every band, or use revenue All." }),
   };
@@ -546,6 +549,8 @@ export interface SeatArgs {
   company?: string;
   website?: string;
   seat_id?: string;
+  /** With seat_id: claim a seat Revenue Nomad found (claimable) as the member's own. */
+  claim?: boolean;
   function?: string;
   role?: string;
   type?: string;
@@ -601,7 +606,13 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
     let last: Awaited<ReturnType<typeof perform>> | null = null;
     const todo = Object.entries(fields);
     if (rate && a.rate_visibility === "members") todo.push(["rate", rate]);
-    if (!todo.length && !rate) throw new ToolProblem("Send at least one fact about the seat.");
+    // A seat Revenue Nomad found, with nobody on it: claiming it makes it the member's, and then their facts go in.
+    if (a.claim) {
+      if (!e.claimable) throw new ToolProblem(e.yours ? "That seat is already the member's." : "Only a seat Revenue Nomad found that nobody has claimed can be claimed.");
+      last = await act(ctx, { type: "claimSeat", engagementId: e.id });
+      msgs.push(last.message);
+    } else if (e.claimable) throw new ToolProblem("Nobody holds this seat yet. If it is the member's own, ask them, then send claim: true.");
+    if (!todo.length && !rate && !a.claim) throw new ToolProblem("Send at least one fact about the seat.");
     for (const [field, value] of todo) {
       last = await act(ctx, { type: "fill", entity: "engagement", id: e.id, field, value });
       msgs.push(last.message);

@@ -626,7 +626,8 @@ section("gzip", async () => {
   const plain = await as(null);
   console.log(`  member view: ${(plain.body.length / 1024).toFixed(0)} KB raw, ${(z.body.length / 1024).toFixed(1)} KB gzip, ${(b.body.length / 1024).toFixed(1)} KB brotli`);
   check("brotli is smaller than gzip", b.body.length < z.body.length, [b.body.length, z.body.length]);
-  check("the compressed view is under 200 KB", z.body.length < 200 * 1024 && b.body.length < 200 * 1024, [z.body.length, b.body.length]);
+  // The private seed holds about 3,300 companies since the seat scan (about 240 KB brotli, 310 KB gzip in full; the page asks for ?compact=1).
+  check("the compressed view is under 400 KB", z.body.length < 400 * 1024 && b.body.length < 400 * 1024, [z.body.length, b.body.length]);
   check("both say the same thing", JSON.stringify(bv?.me) === JSON.stringify(zv?.me) && bv?.companies?.length === zv?.companies?.length, [bv?.companies?.length, zv?.companies?.length]);
   check("vary: Accept-Encoding", /accept-encoding/i.test(String(b.headers.vary ?? "")) && /accept-encoding/i.test(String(z.headers.vary ?? "")));
   check("not compressed when not accepted", !plain.headers["content-encoding"] && !!JSON.parse(plain.body.toString("utf8")).companies);
@@ -848,7 +849,7 @@ section("benchmarks", async () => {
   check("signed-out views carry no benchmarks", !anon.json?.benchmarks);
   const REVENUE = ["All", "Pre-revenue", "Under $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"];
   const fns = [...new Set(rows.map((r) => r.function))];
-  check("a row for every function, AI GTM included", fns.length === 11 && fns.includes("AI GTM"), fns);
+  check("a row for every function, AI GTM and Finance included", fns.length === 17 && fns.includes("AI GTM") && fns.includes("Finance"), fns);
   check(
     "each function has a row for All and for every client revenue band",
     fns.every((fn) => REVENUE.every((rev) => rows.filter((r) => r.function === fn && r.revenue === rev).length === 1)) && rows.length === fns.length * REVENUE.length,

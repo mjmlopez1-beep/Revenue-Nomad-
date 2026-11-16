@@ -67,6 +67,8 @@ run messages npx tsx scripts/test-messages.mjs
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
 run bench npx tsx scripts/test-bench.mjs
+# The seat scan (scripts/add-seat-scan.mjs) and claiming its seats, on a made-up seed, with its own server.
+run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts
 
 echo

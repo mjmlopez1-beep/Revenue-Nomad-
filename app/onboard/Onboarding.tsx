@@ -46,8 +46,8 @@ const GOAL_OPENS: Record<Goal, (fn: string | null) => string> = {
   friendly: () => "The table opens on the companies that hire fractionals most.",
   adjacent: (fn) =>
     named(fn)
-      ? `The table opens on companies that hired other GTM functions and have no ${fn} seat on file.`
-      : "The table opens on companies that hired other GTM functions and have no seat in yours on file.",
+      ? `The table opens on companies that hired fractionals in other functions and have no ${fn} seat on file.`
+      : "The table opens on companies that hired fractionals in other functions and have no seat in yours on file.",
   intro: () => "The table opens on seats where the seat holder is on file.",
 };
 
@@ -98,7 +98,7 @@ function metaOf(c: CompanyRec): string {
 /** The member held a seat here (the seat on file carries their name). */
 const isMine = (c: CompanyRec) => c.engagements.some((e) => e.yours);
 /**
- * Every GTM function on file at a company: the ones it hired fractionally, then the ones with an
+ * Every function on file at a company: the ones it hired fractionally, then the ones with an
  * open role and no hire yet (friendly.hiring). "Hired in other functions" reads hires alone.
  */
 const fnsOf = (c: CompanyRec) => [...c.friendly.functions, ...(c.friendly.hiring ?? []).filter((f) => !c.friendly.functions.includes(f))];
@@ -438,7 +438,7 @@ function StepQuestions({
         Welcome, {first}
       </h1>
       <p className="ob-sub">
-        Trading Post is where fractional GTM leaders share which companies hired fractionals, for which seat, who held it and what it paid.
+        Trading Post is where fractional leaders share which companies hired fractionals, for which seat, who held it and what it paid.
         {seats
           ? ` ${
               published === seats
@@ -463,8 +463,8 @@ function StepQuestions({
       </p>
 
       <fieldset className="ob-q">
-        <legend className="ob-h">Which GTM function do you work in?</legend>
-        <div className="ob-chips" role="radiogroup" aria-label="Your GTM function">
+        <legend className="ob-h">Which function do you work in?</legend>
+        <div className="ob-chips" role="radiogroup" aria-label="Your function">
           {FUNCTIONS.map((f) => (
             <button
               key={f}
