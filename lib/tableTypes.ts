@@ -193,11 +193,32 @@ export interface LedgerRow {
   field: string;
 }
 
-/** One benchmark cell: values only once at least `min` rates are on file, so none can be traced back. */
+/**
+ * One benchmark figure. It counts people, not rows: a member counts once per group however many
+ * rates they have in it (with the middle of them), a Rate Index row counts once, and so does a
+ * record of ours. Amounts are rounded: dollars a month to the nearest 250, dollars an hour to
+ * the nearest 5.
+ */
 export interface RateStat {
+  /**
+   * Different contributors. When `median` is sent: everyone in the figure. Below the floor:
+   * the trusted contributors counted toward `min`, for the progress line ("3 of 5"), so
+   * `min - n` more are needed. A joined account under 7 days old is not trusted yet, so its rate
+   * does not move this count. Rates shared privately and rates on records are counted apart
+   * (the larger count is sent): a private rate joins a figure only with 5 private ones in it.
+   */
   n: number;
-  /** Rates this group needs before it shows numbers: 5, or 20 when it includes Rate Index data. */
+  /** Trusted contributors this figure needs before it shows numbers: 5, or 20 when it counts Rate Index data. */
   min: number;
+  /**
+   * This figure includes Rate Index data (when shown), or is counting toward the 20 (when not).
+   * False when it is, or will be, made from member rates and our own records alone.
+   */
+  indexed?: boolean;
+  /**
+   * The middle half. Sent only when the figure has at least `Benchmarks.rangeN` trusted
+   * contributors (and 10 private ones, when it includes private rates). Check for it, not for `n`.
+   */
   p25?: number;
   median?: number;
   p75?: number;
@@ -206,7 +227,7 @@ export interface BenchmarkRow {
   function: string;
   /** Client revenue band at the time of the seat (RN_REVENUE), or "All". */
   revenue: string;
-  /** The group includes points from Revenue Nomad's Rate Index (survey and contract data). */
+  /** Either figure on the row is `indexed` (see RateStat). A group with a few survey rows and no figure counting them is not. */
   indexed: boolean;
   /** Monthly retainers, in dollars a month. */
   monthly: RateStat;
@@ -216,6 +237,8 @@ export interface BenchmarkRow {
 export interface Benchmarks {
   /** The floor for a group with no Rate Index data (5). Each RateStat carries its own `min`. */
   minN: number;
+  /** Trusted contributors a figure needs before its range (p25 to p75) is sent: 10. Below it, the median alone. */
+  rangeN?: number;
   /** Rates on file that could be read as monthly or hourly. */
   total: number;
   rows: BenchmarkRow[];
@@ -359,8 +382,9 @@ export type Action =
   /** Admins: remove every fact this member added (`memberId` is a public id), their benchmark-only rates and the empty records left behind. */
   | { type: "adminRemoveMember"; memberId: string }
   /**
-   * Share a rate for the benchmarks only. It counts in the medians and is never shown on a
-   * record or to another member. Earns 1 credit (inside the daily cap). One per seat.
+   * Share a rate for the benchmarks only. It counts in the medians and is never shown with the
+   * member's name or the seat. Earns 1 credit (inside the daily cap). One per seat, at most 3
+   * that aren't tied to a seat the member holds, and at most 5 saved in any 24 hours.
    */
   | { type: "benchRate"; engagementId?: string; function?: string; pricing: "Monthly retainer" | "Hourly"; rate: string; revenue?: string }
   | { type: "benchRateRemove"; id: string }

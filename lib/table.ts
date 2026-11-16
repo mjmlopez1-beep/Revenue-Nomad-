@@ -1766,55 +1766,146 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
 
 /* ---------- rate benchmarks ---------- */
 
-/** A group shows numbers only with at least this many rates in it. */
+/** A group shows numbers only with rates from at least this many trusted contributors. */
 export const BENCHMARK_MIN_N = 5;
-/** A group that includes Rate Index data needs this many (the survey promised groups of 20). */
+/** A figure that includes Rate Index data needs this many (the survey promised groups of 20). */
 export const BENCHMARK_INDEX_MIN_N = 20;
+/** The range (p25 to p75) is sent only at this many trusted contributors. Below it, the median alone. */
+export const BENCHMARK_RANGE_N = 10;
+/** A joined account's rates count toward a group's floor once the account is this old. */
+const BENCH_TRUST_AGE = 7 * DAY;
+/** What leaves the server is rounded: dollars a month to the nearest 250, dollars an hour to the nearest 5. */
+const BENCH_ROUND = { monthly: 250, hourly: 5 } as const;
 
-/** `index` marks a point from the Rate Index. */
-type RatePoint = { fn: string; revenue: string | null; kind: "monthly" | "hourly"; amount: number; index: boolean };
+/**
+ * Whose rates count toward a group's floor: seed members, and joined accounts at least 7 days
+ * old. Joining takes only an email, so a new account's rate can't help a group reach its floor.
+ */
+function benchTrust(seed: Seed, s: State, nowMs: number): (memberId: string) => boolean {
+  const seedIds = new Set(seed.members.map((m) => m.id));
+  const joinedAt = new Map(s.members.map((m) => [m.id, Date.parse(m.at)]));
+  return (id) => seedIds.has(id) || nowMs - (joinedAt.get(id) ?? Infinity) >= BENCH_TRUST_AGE;
+}
 
-function rateStat(pts: RatePoint[]): RateStat {
-  const min = pts.some((p) => p.index) ? BENCHMARK_INDEX_MIN_N : BENCHMARK_MIN_N;
-  if (pts.length < min) return { n: pts.length, min };
-  const s = pts.map((p) => p.amount).sort((a, b) => a - b);
-  const q = (p: number) => {
-    const i = (s.length - 1) * p;
-    const lo = Math.floor(i);
-    return Math.round(s[lo] + (s[Math.min(lo + 1, s.length - 1)] - s[lo]) * (i - lo));
-  };
-  return { n: s.length, min, p25: q(0.25), median: q(0.5), p75: q(0.75) };
+/** Benchmark-only rates on file per member (a count, never an amount), for the admin's list of recent adds. */
+export function benchRateCounts(s: State): Map<string, number> {
+  const n = new Map<string, number>();
+  for (const b of s.benchRates) n.set(b.by, (n.get(b.by) ?? 0) + 1);
+  return n;
+}
+
+/**
+ * One rate. `who` is its contributor: "m:<member id>" for a rate a member shared or put on a
+ * record, "r:<engagement id>" for a rate from our own records, "x:<row>" for a Rate Index row.
+ * `index` marks a point from the Rate Index. `trusted` contributors count toward the floor.
+ * `priv` marks a rate shared for the benchmarks only (a rate on a record is not private: any
+ * member can unlock it for a credit).
+ */
+type RatePoint = { fn: string; revenue: string | null; kind: "monthly" | "hourly"; amount: number; index: boolean; who: string; trusted: boolean; priv: boolean };
+
+const quantile = (sorted: number[], p: number) => {
+  const i = (sorted.length - 1) * p;
+  const lo = Math.floor(i);
+  return sorted[lo] + (sorted[Math.min(lo + 1, sorted.length - 1)] - sorted[lo]) * (i - lo);
+};
+
+/**
+ * One benchmark figure, counted in people and not in rows. Each contributor counts once, with
+ * the middle of their rates in the group, so one account can never fill a group or pad it.
+ *
+ * A figure is the first of these that holds:
+ *  - with Rate Index data, when the Rate Index rows and the trusted contributors together
+ *    reach 20 (the survey promised groups of 20)
+ *  - from member rates and our own records, when 5 trusted members shared a rate privately.
+ *    The survey rows are left out, so survey data never shows in a group under 20.
+ *  - from rates on records alone, when those come from 5 trusted contributors.
+ * A rate on a record is no cover for a private one, because any member can unlock it for a
+ * credit and take it out of the sum. So private rates and survey rows join a figure only as a
+ * crowd of 5 of their own (a median over 4 unlocked rates and 1 private one would give the
+ * private one away), and the range needs 10 of them. Until then they wait.
+ *
+ * Rates from accounts that are not trusted yet join a figure only once it shows without them,
+ * and all of them together weigh as one contributor (the middle of their rates). So any number
+ * of throwaway accounts moves a figure no further than one member can.
+ * Below the floor, `n` and `min` describe the nearest floor ("3 of 5").
+ */
+function rateStat(pts: RatePoint[], kind: "monthly" | "hourly"): RateStat {
+  const by = new Map<string, { amounts: number[]; index: boolean; trusted: boolean; priv: boolean }>();
+  for (const p of pts) {
+    const c = by.get(p.who);
+    if (c) c.amounts.push(p.amount), (c.priv ||= p.priv);
+    else by.set(p.who, { amounts: [p.amount], index: p.index, trusted: p.trusted, priv: p.priv });
+  }
+  const all = [...by.values()].map((c) => ({ ...c, amount: quantile(c.amounts.sort((a, b) => a - b), 0.5) }));
+  const own = all.filter((c) => !c.index);
+  const open = own.filter((c) => !c.priv);
+  const trustedIn = (xs: typeof all) => xs.filter((c) => c.trusted).length;
+  const survey = all.length - own.length;
+  const openT = trustedIn(open);
+  const privT = trustedIn(own) - openT;
+  const indexed = survey > 0 && survey + privT + openT >= BENCHMARK_INDEX_MIN_N && survey + privT >= BENCHMARK_MIN_N;
+  const used = indexed ? all : privT >= BENCHMARK_MIN_N ? own : openT >= BENCHMARK_MIN_N ? open : null;
+  if (!used) {
+    const viaIndex = survey > 0 && BENCHMARK_INDEX_MIN_N - survey <= BENCHMARK_MIN_N;
+    return viaIndex ? { n: survey + privT + openT, min: BENCHMARK_INDEX_MIN_N, indexed: true } : { n: Math.max(privT, openT), min: BENCHMARK_MIN_N, indexed: false };
+  }
+  const s = used.filter((c) => c.trusted).map((c) => c.amount);
+  const trusted = s.length;
+  const fresh = used.filter((c) => !c.trusted).map((c) => c.amount).sort((a, b) => a - b);
+  if (fresh.length) s.push(quantile(fresh, 0.5));
+  s.sort((a, b) => a - b);
+  const unit = BENCH_ROUND[kind];
+  const q = (p: number) => Math.round(quantile(s, p) / unit) * unit;
+  const stat: RateStat = { n: trusted + fresh.length, min: indexed ? BENCHMARK_INDEX_MIN_N : BENCHMARK_MIN_N, indexed, median: q(0.5) };
+  // The private rates and survey rows in the figure (none when it is made of rates on records alone).
+  const hidden = used === open ? 0 : privT + (indexed ? survey : 0);
+  if (trusted >= BENCHMARK_RANGE_N && (hidden === 0 || hidden >= BENCHMARK_RANGE_N)) (stat.p25 = q(0.25)), (stat.p75 = q(0.75));
+  return stat;
 }
 
 /** Weeks in a month, for turning hours a week into a monthly figure. */
 const WEEKS_A_MONTH = 52 / 12;
 const inRange = (kind: "monthly" | "hourly", amount: number) => (kind === "hourly" ? amount >= 25 && amount <= 1500 : amount >= 1000 && amount <= 150_000);
 
-let benchCache: { seed: Seed; s: State; b: Benchmarks } | null = null;
+/** `at`: an account turns trusted with time alone, so the kept result is rebuilt every 10 minutes. */
+let benchCache: { seed: Seed; s: State; b: Benchmarks; at: number } | null = null;
 
 /**
  * Benchmarks by function and client revenue band, from three places: every live rate on a
  * record (whoever unlocked it), rates members shared for the benchmarks only, and Revenue
- * Nomad's Rate Index. Only totals leave the server. The same for every viewer, so it is
- * kept until the state or the seed changes.
+ * Nomad's Rate Index. Only medians and ranges leave the server, counted in people (see
+ * rateStat) and rounded. The same for every viewer, so it is kept until the state or the seed
+ * changes.
  */
 function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
-  if (benchCache && benchCache.s === s && benchCache.seed === seed) return benchCache.b;
+  const nowMs = Date.now();
+  if (benchCache && benchCache.s === s && benchCache.seed === seed && nowMs - benchCache.at < 10 * 60 * 1000) return benchCache.b;
   const pts: RatePoint[] = [];
   let total = 0;
+  const trustedMember = benchTrust(seed, s, nowMs);
   /** One rate: its own point, and the other kind too when the hours a month are known. */
-  const add = (fnRaw: string | null, revenueRaw: string | null, r: { kind: "monthly" | "hourly"; amount: number }, hoursMonth: number | null, index: boolean) => {
+  const add = (fnRaw: string | null, revenueRaw: string | null, r: { kind: "monthly" | "hourly"; amount: number }, hoursMonth: number | null, index: boolean, who: string, trusted: boolean, priv = false) => {
     const fn = fnRaw && FUNCTIONS.includes(fnRaw) ? fnRaw : functionOf(fnRaw) ?? "Other";
     const revenue = revenueRaw && RN_REVENUE.includes(revenueRaw) ? revenueRaw : null;
     total++;
-    pts.push({ fn, revenue, kind: r.kind, amount: r.amount, index });
+    pts.push({ fn, revenue, kind: r.kind, amount: r.amount, index, who, trusted, priv });
     if (!hoursMonth || hoursMonth <= 0) return;
     const other = r.kind === "hourly" ? ("monthly" as const) : ("hourly" as const);
     const amount = Math.round(r.kind === "hourly" ? r.amount * hoursMonth : r.amount / hoursMonth);
-    if (inRange(other, amount)) pts.push({ fn, revenue, kind: other, amount, index });
+    if (inRange(other, amount)) pts.push({ fn, revenue, kind: other, amount, index, who, trusted, priv });
   };
   const hoursMonthOf = (e: Node) => {
     const h = Number(live(e, s, "hours"));
+    return Number.isFinite(h) && h > 0 ? h * WEEKS_A_MONTH : null;
+  };
+  /**
+   * Hours for a rate shared for the benchmarks only: the member's own figure, or ours. Hours
+   * someone else put on the seat are left out. Anyone can fill and then edit that fact, so it
+   * would let them slide the member's point along the other kind's figure and read the rate off it.
+   */
+  const ownHoursMonth = (e: Node, by: string) => {
+    const v = valueOf(e, s, "hours");
+    const h = v && (v.by === by || isSystem(v.by)) ? Number(v.value) : NaN;
     return Number.isFinite(h) && h > 0 ? h * WEEKS_A_MONTH : null;
   };
   const revenueOf = (e: EngNode) => live(e, s, "revenue") ?? live(g.companies.get(e.companyId), s, "revenue");
@@ -1828,36 +1919,37 @@ function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
     const r = readRate(v.value, live(e, s, "pricing"));
     if (!r) continue;
     publicBy.set(e.id, v.by);
-    add(fnOf(e, s), revenueOf(e), r, hoursMonthOf(e), false);
+    // The contributor is whoever put the rate there: a member, or the record itself when it is ours.
+    const ours = isSystem(v.by);
+    add(fnOf(e, s), revenueOf(e), r, hoursMonthOf(e), false, ours ? `r:${e.id}` : `m:${v.by}`, ours || trustedMember(v.by));
   }
   for (const b of s.benchRates) {
     const e = b.engagementId ? g.engagements.get(b.engagementId) : undefined;
     // The same member's rate is already on the record: count it once.
     if (e && publicBy.get(e.id) === b.by) continue;
-    add(b.fn, b.revenue, { kind: b.kind, amount: b.amount }, e ? hoursMonthOf(e) : null, false);
+    add(b.fn, b.revenue, { kind: b.kind, amount: b.amount }, e ? ownHoursMonth(e, b.by) : null, false, `m:${b.by}`, trustedMember(b.by), true);
   }
-  for (const x of seed.rateIndex ?? []) {
+  for (const [i, x] of (seed.rateIndex ?? []).entries()) {
     const hourly = Number(x?.hourly);
     if (!inRange("hourly", hourly)) continue;
     const hours = Number(x.hours);
-    add(String(x.fn ?? ""), x.revenue ?? null, { kind: "hourly", amount: Math.round(hourly) }, Number.isFinite(hours) && hours > 0 ? hours : null, true);
+    add(String(x.fn ?? ""), x.revenue ?? null, { kind: "hourly", amount: Math.round(hourly) }, Number.isFinite(hours) && hours > 0 ? hours : null, true, `x:${i}`, true);
   }
 
   const rows: BenchmarkRow[] = [];
   for (const fn of FUNCTIONS) {
     const mine = pts.filter((p) => p.fn === fn);
-    const row = (revenue: string, xs: RatePoint[]): BenchmarkRow => ({
-      function: fn,
-      revenue,
-      indexed: xs.some((p) => p.index),
-      monthly: rateStat(xs.filter((p) => p.kind === "monthly")),
-      hourly: rateStat(xs.filter((p) => p.kind === "hourly")),
-    });
+    const row = (revenue: string, xs: RatePoint[]): BenchmarkRow => {
+      const monthly = rateStat(xs.filter((p) => p.kind === "monthly"), "monthly");
+      const hourly = rateStat(xs.filter((p) => p.kind === "hourly"), "hourly");
+      // Marked Rate Index only when a figure shows survey data or is counting toward the 20.
+      return { function: fn, revenue, indexed: !!(monthly.indexed || hourly.indexed), monthly, hourly };
+    };
     rows.push(row("All", mine));
     for (const revenue of RN_REVENUE) rows.push(row(revenue, mine.filter((p) => p.revenue === revenue)));
   }
-  const b = { minN: BENCHMARK_MIN_N, total, rows };
-  if (s === stateCache) benchCache = { seed, s, b };
+  const b = { minN: BENCHMARK_MIN_N, rangeN: BENCHMARK_RANGE_N, total, rows };
+  if (s === stateCache) benchCache = { seed, s, b, at: nowMs };
   return b;
 }
 
@@ -1882,6 +1974,8 @@ function addSignal(s: State, memberId: string, name: string, where: string, now:
 
 /** Private rates not tied to a seat that one member can share. */
 const BENCH_UNATTACHED_MAX = 3;
+/** Private rates one member can save per rolling 24 hours, counting ones removed since (each save can move a median). */
+const BENCH_DAILY_MAX = 5;
 const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
 
 export async function perform(token: string | null, a: Action, origin?: string): Promise<ActionResult> {
@@ -2530,6 +2624,22 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const r = readRate(stripInvisible(a.rate).trim().slice(0, 60), a.pricing === "Hourly" || a.pricing === "Monthly retainer" ? a.pricing : null);
           if (!r) throw new ActionError(RATE_HELP);
           const mine = s.benchRates.filter((b) => b.by === me.id);
+          // Every save writes a "fill" row for bench.<id>, paid or not, and removing the rate keeps it.
+          const savedToday = s.ledger.filter((l) => l.memberId === me.id && l.reason === "fill" && l.ref.startsWith("bench.") && nowMs - Date.parse(l.at) < DAY).length;
+          if (savedToday >= BENCH_DAILY_MAX) throw new ActionError(`You can share ${BENCH_DAILY_MAX} rates for the benchmarks a day. Share the next one tomorrow.`);
+          /**
+           * Tied to a seat: one the member holds, or one they added that has a role and names
+           * them as its seat holder. A blank seat they made up doesn't count.
+           */
+          const tied = (engId: string | null) => {
+            if (!engId) return false;
+            if (ownSeat(engId)) return true;
+            const e = g.engagements.get(engId);
+            if (!e || !s.engagements.some((x) => x.id === engId && x.by === me.id) || !live(e, s, "role")) return false;
+            if ((s.notMine[me.id] ?? []).includes(engId)) return false;
+            const op = valueOf(e, s, "operator");
+            return !!op && op.status === "live" && (op.memberId ? op.memberId === me.id : normName(op.value) === normName(me.name));
+          };
           let engagementId: string | null = null;
           let fn: string | null;
           let revenue: string | null;
@@ -2554,15 +2664,21 @@ export async function perform(token: string | null, a: Action, origin?: string):
             fn = askedFn ?? myFn;
             if (!fn) throw new ActionError("Pick a function from the list.");
             revenue = askedRevenue;
-            if (mine.filter((b) => !b.engagementId).length >= BENCH_UNATTACHED_MAX)
-              throw new ActionError(`You can share ${BENCH_UNATTACHED_MAX} rates that aren't tied to a seat. Remove one to share another.`);
           }
+          if (!tied(engagementId) && mine.filter((b) => !tied(b.engagementId)).length >= BENCH_UNATTACHED_MAX)
+            throw new ActionError(
+              engagementId
+                ? `You can share ${BENCH_UNATTACHED_MAX} rates that aren't tied to a seat you held. This seat counts as yours once it has a role and names you as the seat holder.`
+                : `You can share ${BENCH_UNATTACHED_MAX} rates that aren't tied to a seat. Remove one to share another.`,
+            );
           const id = `b_${randomBytes(9).toString("base64url")}`;
           s.benchRates.push({ id, by: me.id, engagementId, fn, kind: r.kind, amount: r.amount, revenue: revenue && RN_REVENUE.includes(revenue) ? revenue : null, at: now });
           const earned = awardFill(`bench.${id}`);
           if (!earned) capped = true;
           const bonus = payReferral();
-          return { message: `Added to the benchmarks. Nobody sees your rate.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`, id, capped };
+          // A new account's rate can't help a group reach its floor (see benchTrust), so say when it starts to.
+          const young = benchTrust(seed, s, nowMs)(me.id) ? "" : " Until your account is 7 days old it counts only in groups that already show numbers.";
+          return { message: `Added to the benchmarks. Your rate is never shown with your name or the seat.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}${young}`, id, capped };
         }
         case "benchRateRemove": {
           const i = s.benchRates.findIndex((b) => b.id === String(a.id) && b.by === me.id);
