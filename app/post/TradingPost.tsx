@@ -16,8 +16,8 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import type { Cell } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
-  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, mySeats, newRolesFor, rowsFor, seatsMissing,
-  shown, sortRows,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, hasRoleDates, mySeats, newRolesFor, rowsFor,
+  seatsMissing, shown, sortRows,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
 } from "./model";
 import { useLayout, useStoredFlag, store, plural } from "./hooks";
@@ -32,6 +32,8 @@ import { Drawer } from "./Drawer";
 import { AddModal } from "./AddModal";
 import { MyCredits, inviteLink, signInLink, useCopy } from "./Credits";
 import { Benchmarks } from "./Benchmarks";
+import { Admin } from "./Admin";
+import { fmtStamp } from "./RoleDate";
 import { Checklist, CreditBanner, NoResults, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import "./post.css";
@@ -58,7 +60,7 @@ function previousVisit(): string | null {
 type DrawerState = { id: string; rowKey: string; focus: string | null };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 
-export default function TradingPost({ view, act, signOut }: TradingPostProps) {
+export default function TradingPost({ view, act, refresh, signOut }: TradingPostProps) {
   const me = view.me!;
   const layout = useLayout();
   const phone = layout === "phone";
@@ -78,7 +80,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
   const [limit, setLimit] = useState(PAGE);
-  const [page, setPage] = useState<"table" | "credits" | "rates" | "seats">("table");
+  const [page, setPage] = useState<"table" | "credits" | "rates" | "seats" | "metrics">("table");
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
   const [moveOff, dismissMove] = useMoveDismissals();
 
@@ -119,6 +121,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     return m;
   }, [infos]);
   const hasIndustry = useMemo(() => infos.some((i) => i.c.cells.industry?.s === "value"), [infos]);
+  const hasRoles = useMemo(() => infos.some(hasRoleDates), [infos]);
   const totals = useMemo(
     () => ({ companies: infos.length, engagements: infos.reduce((n, i) => n + i.engs.length, 0), people: infos.reduce((n, i) => n + i.people.length, 0) }),
     [infos],
@@ -391,6 +394,11 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [closeTop, addOpts, editor, drawer, page, toggleFilters, openAdd, step]);
 
+  // Pilot metrics are for admins: without the admin block there is nothing to show.
+  useEffect(() => {
+    if (page === "metrics" && !view.admin) setPage("table");
+  }, [page, view.admin]);
+
   // Closing overlays that no longer fit the layout.
   useEffect(() => {
     if (layout === "desktop") setSideOverlay(false);
@@ -601,7 +609,15 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     </div>
   );
 
-  const filterPanel = (head?: React.ReactNode) => <FilterPanel f={filters} setF={setFilters} facets={facets} me={me} head={head} hasIndustry={hasIndustry} />;
+  const filterPanel = (head?: React.ReactNode) => (
+    <FilterPanel f={filters} setF={setFilters} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} />
+  );
+  // Hiring now: say how fresh the open roles are.
+  const scanLine = tab === "hiring" && view.scan && (
+    <p className="tp-scanline">
+      Open roles are scanned weekly. {view.scan.lastRunAt ? `Last scan ${fmtStamp(view.scan.lastRunAt)}.` : "The first scan runs this week."}
+    </p>
+  );
   const qt = q.trim();
 
   /* ----- layout ----- */
@@ -631,7 +647,11 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
-            <Benchmarks view={view} onBack={() => setPage("table")} />
+            <Benchmarks view={view} refresh={refresh} onBack={() => setPage("table")} />
+          </main>
+        ) : page === "metrics" && view.admin ? (
+          <main className="tp-main tp-main-page">
+            <Admin view={view} refresh={refresh} onBack={() => setPage("table")} />
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
@@ -670,6 +690,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
               </span>
               {sortMenu}
             </div>
+            {scanLine}
             {empty || <CardList type={list.type} rows={list.rows} me={me} onOpen={openRow} />}
             {more}
             {proFoot}
@@ -729,6 +750,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
                   </button>
                 </div>
               )}
+              {scanLine}
               <div className="tp-frame-box" ref={frameBoxRef}>
                 <div className="tp-frame" ref={frameRef}>
                   {empty || (
@@ -830,6 +852,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} to fill` : undefined, onClick: () => openSeats() },
               { label: "My credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
+              ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. Keep it private.") },
               { label: "Sign out", onClick: () => void signOut() },

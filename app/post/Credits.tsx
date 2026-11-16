@@ -7,6 +7,7 @@ import { IconChevron, timeAgo, useToast } from "../ui/shared";
 import { copyText, fmtTime } from "./hooks";
 import { ledgerWhat, ledgerWhere } from "./TopBar";
 import { Pro, useUi } from "./ui";
+import { WeeklyEmail } from "./Settings";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
 export const signInLink = (token: string) => `${window.location.origin}/?k=${token}`;
@@ -116,6 +117,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           }
         />
       </div>
+      {view.email && <WeeklyEmail />}
       {me.admin && (
         <section className="tp-card">
           <h3 className="tp-card-h">

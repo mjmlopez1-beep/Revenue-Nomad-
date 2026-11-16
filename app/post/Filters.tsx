@@ -161,6 +161,7 @@ export function FilterPanel({
   me,
   head,
   hasIndustry = true,
+  hasRoles = false,
 }: {
   f: Filters;
   setF: (f: Filters) => void;
@@ -169,6 +170,8 @@ export function FilterPanel({
   head?: ReactNode;
   /** Whether any company has an industry on file (else the empty note invites adding one). */
   hasIndustry?: boolean;
+  /** Whether any role on file carries open and closed dates (the weekly scan follows it). */
+  hasRoles?: boolean;
 }) {
   const n = activeCount(f);
   const t = facets.toggles;
@@ -197,6 +200,14 @@ export function FilterPanel({
           </p>
         )}
       </Group>
+      {(hasRoles || f.roleState.length > 0) && (
+        <Group title="Open roles">
+          <div className="tp-fblock">
+            <ChipSet k="roleState" f={f} setF={setF} counts={l.roleState} options={LIST_OPTIONS.roleState} />
+          </div>
+          <p className="tp-fnote">Open now means the posting was still up at the last weekly scan. Closed roles keep their dates.</p>
+        </Group>
+      )}
       <Group title="Company">
         <Industry f={f} setF={setF} counts={l.industry} hasIndustry={hasIndustry} />
         <div className="tp-fblock">

@@ -8,6 +8,7 @@ import { AddPill, CompanyLogo, IconStar, fmtMonth, val } from "../ui/shared";
 import type { Row } from "./model";
 import { FactCell, YourSeat, earnNote, useUi } from "./ui";
 import { Fit, FnChips, HeldBy, HiddenCompany } from "./Tables";
+import { RoleDate } from "./RoleDate";
 
 function Head({ r, right }: { r: Row; right?: React.ReactNode }) {
   const i = r.i;
@@ -67,6 +68,11 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
           <FnChips i={i} mine={me.function} max={own ? 2 : 3} />
         </div>
       )}
+      {e?.opened && (
+        <div className="tp-pcard-role">
+          <RoleDate e={e} />
+        </div>
+      )}
       <div className="tp-pfacts">
         {e ? (
           <>
@@ -105,11 +111,12 @@ const EngCard = memo(function EngCard({ r, onOpen }: { r: Row; onOpen: (r: Row) 
   const type = val(e.cells.type);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
-      <Head r={r} right={<span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>} />
+      <Head r={r} right={e.opened ? undefined : <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>} />
       <div className="tp-pcard-fns">
         {fn ? <span className="chip tp-fn">{fn}</span> : <FactCell t={t("function")} cell={e.cells.function} addLabel="Function" />}
         {type ? <span className="chip">{type}</span> : null}
         {val(e.cells.start) && <span className="mono tp-small muted">{fmtMonth(val(e.cells.start)!)}</span>}
+        <RoleDate e={e} />
       </div>
       <div className="tp-pfacts">
         <Fact label="Role">

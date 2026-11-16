@@ -13,6 +13,7 @@ import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, 
 import { EditPill, FactCell, Pro, YourSeat, ZeroCredits, earnNote, shortLabel, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany } from "./Tables";
+import { RoleDate, statusText } from "./RoleDate";
 import { plural } from "./hooks";
 
 /** The team inbox that brokers intros (read at build time). Without it, the intro link only drafts the email. */
@@ -74,7 +75,7 @@ function FieldRow({ t, cell, label }: { t: FactRef; cell: Cell; label: string })
     <div className="tp-frow">
       <span className="tp-frow-l">{label}</span>
       <span className="tp-frow-v">
-        <FactCell t={t} cell={cell} />
+        <FactCell t={t} cell={cell} render={t.entity === "engagement" && t.field === "status" ? statusText : undefined} />
       </span>
       <Meta t={t} cell={cell} />
     </div>
@@ -289,7 +290,7 @@ function EngagementCard({
   return (
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>
       <div className="tp-eng-top">
-        <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>
+        {e.opened ? <RoleDate e={e} /> : <span className="tp-src">{SOURCE_LABEL[e.source] ?? e.source}</span>}
         {e.yours && <YourSeat id={e.id} />}
         {e.verified && (
           <span className="tp-verified">

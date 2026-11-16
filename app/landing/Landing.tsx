@@ -25,8 +25,8 @@ const STARTER_FALLBACK = 5;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-const FREE = ["Company and website", "Size and revenue", "GTM functions hired", "Engagement type and start", "People's titles"];
-const LOCKED = ["Exact role", "Status", "Who held the seat", "Rate", "Hours per week", "Names and contact details"];
+const FREE = ["Company and website", "Size and revenue", "GTM functions hired", "Engagement type and start", "Hours per week", "People's titles"];
+const LOCKED = ["Exact role", "Status", "Who held the seat", "Rate", "Names and contact details"];
 
 /** The questions, with the starter balance the server actually gives. */
 const faq = (starter: number): [string, string][] => [
