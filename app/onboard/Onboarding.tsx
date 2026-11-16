@@ -213,9 +213,23 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   // Seats on file that carry this member's name. When there are any, that is where they go next.
   const mySeats = useMemo(() => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours).length, 0), [view.companies]);
+  // Of those, the ones we matched to work they published with us (the rest a member added with their name on it).
+  const published = useMemo(
+    () => view.companies.reduce((n, c) => n + c.engagements.filter((e) => e.yours && (e.source === "Published engagement" || e.source === "Member success story")).length, 0),
+    [view.companies],
+  );
   const lastLabel = mySeats ? `Fill in your ${mySeats === 1 ? "seat" : "seats"}` : "Open the table";
   // Step 2 and 3 need both answers. If they are missing (storage was cleared), ask again.
   const shown = step > 1 && (!fn || !goal) ? 1 : step;
+
+  // Each step opens at its top, so the browser never brings back an old scroll. That matters most
+  // when finishing takes history back to the first step's entry: the app must open at its top, not
+  // where the first step was scrolled. The mode is kept per entry, so it is set before any is left.
+  useEffect(() => {
+    try {
+      window.history.scrollRestoration = "manual";
+    } catch {}
+  }, []);
 
   // This page's history entry holds the step: back steps back, forward steps forward, and a
   // reload comes back to it.
@@ -290,6 +304,7 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
     setBusy(true);
     await sendFollows();
     await rewind();
+    window.scrollTo(0, 0);
     const r = await act({ type: "profile", function: fn ?? undefined, goal: goal ?? undefined }, { quiet: true });
     if (!r.ok) {
       setBusy(false);
@@ -342,6 +357,7 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
             <StepQuestions
               first={first}
               seats={mySeats}
+              published={published}
               credits={me.credits}
               fn={fn}
               setFn={setFn}
@@ -383,11 +399,13 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
 /* ---------- step 1: what this is, then two questions ---------- */
 
 function StepQuestions({
-  first, seats, credits, fn, setFn, goal, setGoal, onNext,
+  first, seats, published, credits, fn, setFn, goal, setGoal, onNext,
 }: {
   first: string;
   /** Seats on file that carry the member's name. */
   seats: number;
+  /** How many of them we matched to fractional work they published on Revenue Nomad. */
+  published: number;
   credits: number;
   fn: string | null;
   setFn: (f: string) => void;
@@ -409,9 +427,13 @@ function StepQuestions({
       <p className="ob-sub">
         Trading Post is where fractional GTM leaders share which companies hired fractionals, for which seat, who held it and what it paid.
         {seats
-          ? ` We started it from the fractional work you published on Revenue Nomad, so ${
-              seats === 1 ? "1 seat already carries" : `${seats} seats already carry`
-            } your name. Other members see your name on a seat only after they spend 1 credit.`
+          ? ` ${
+              published === seats
+                ? `We started it from the fractional work you published on Revenue Nomad, so ${seats === 1 ? "1 seat already carries" : `${seats} seats already carry`} your name.`
+                : published > 0
+                  ? `${seats} seats already carry your name. We matched ${published} to the fractional work you published on Revenue Nomad, and members added the rest.`
+                  : `Members have already put your name on ${seats === 1 ? "1 seat" : `${seats} seats`}.`
+            } Other members see your name on a seat only after they spend 1 credit.`
           : null}
       </p>
       <p className="ob-credit-note">

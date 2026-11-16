@@ -388,6 +388,12 @@
   gap: 8px;
   width: 100%;
 }
+/* Under 420px the two choices stack, so each line reads in full instead of in three-word scraps. */
+@media (max-width: 419px) {
+  .ys-who {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .ys-who-l {
   grid-column: 1 / -1;
   font-size: 13.5px;

@@ -496,7 +496,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // Phones and tablets open the share sheet (Messages, WhatsApp, LinkedIn). It copies the link where there is none.
   const invite = useStable(() => {
     if (phone || touch) void shareInvite(inviteLink(me.inviteCode));
-    else copy(inviteLink(me.inviteCode), `Invite link copied. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat.`);
+    else copy(inviteLink(me.inviteCode), `Invite link copied. You both get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat.`);
   });
 
   /**

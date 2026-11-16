@@ -2146,11 +2146,6 @@ th.num .tp-th-link {
 .tp-th-link:focus-visible svg {
   opacity: 1;
 }
-/* Phone cards: at 320 a "No Marketing yet" chip no longer pushes the card wider than the screen. The chips wrap. */
-.tp-pcard .tp-fns {
-  flex-wrap: wrap;
-  min-width: 0;
-}
 
 /* ---------- inline editor ---------- */
 .tp-editor {
@@ -2604,9 +2599,10 @@ th.num .tp-th-link {
 }
 /*
  * Confirm and Report: there for the keyboard at all times, seen on the row's hover and focus.
- * In the 440px record they take their own room at the end of the row, so they never sit over
- * the value (a seat holder's "Member" tag ends there). In the narrower record (under 1280) that
- * room would squeeze a name into broken words, so they show over the end of the row instead.
+ * In the 440px record they share one grid cell with the note on where the fact came from, so the
+ * value keeps its room and is never covered (a seat holder's "Member" tag ends there): on hover
+ * they show over the note. Under 1280 the record is wider than its rows need, so they show over
+ * the end of the row instead.
  */
 .tp-meta-acts {
   position: absolute;
@@ -2622,13 +2618,39 @@ th.num .tp-th-link {
   pointer-events: none;
   transition: opacity var(--t);
 }
+.tp-meta-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tp-meta-info:empty {
+  display: none;
+}
 @media (min-width: 1280px) {
+  .tp-drawer .tp-meta {
+    display: inline-grid;
+    grid-auto-flow: column;
+    column-gap: 8px;
+  }
+  .tp-drawer .tp-meta-info,
+  .tp-drawer .tp-meta-acts {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: end;
+  }
   .tp-drawer .tp-meta-acts {
     position: static;
     transform: none;
-    margin-left: auto;
-    padding-left: 0;
-    background: none;
+    padding-left: 8px;
+  }
+  .tp-drawer .tp-frow:hover .tp-meta-info,
+  .tp-drawer .tp-frow:focus-within .tp-meta-info {
+    visibility: hidden;
+  }
+  /* An Edit button keeps its own place after them (an admin's own fact has Edit and Remove). */
+  .tp-drawer .tp-meta > .tp-tbtn {
+    grid-row: 1;
+    grid-column: 2;
   }
 }
 .tp-frow:hover .tp-meta-acts,
@@ -4357,6 +4379,10 @@ button.tp-fs-row:active {
 .tp-help .tp-help-more .lp-qa:first-child {
   border-top: 0;
 }
+/* The app's own questions continue the landing page's list, with no gap between the two. */
+.tp-help .tp-help-more {
+  margin-top: -8px;
+}
 .tp-help .lp-faq:first-of-type .lp-qa:last-child {
   border-bottom: 1px solid var(--line);
 }
@@ -5389,6 +5415,17 @@ button.tp-fsheet-row:disabled {
   margin-right: 5px;
   color: var(--faint);
 }
+/* In a record a name keeps its line: "Member" wraps under it instead of squeezing it into two lines. */
+.tp-frow-v .tp-val:has(> .tp-member-badge) {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.tp-drawer .tp-frow-v .tp-val:has(> .tp-member-badge) .tp-member-badge {
+  flex-basis: 100%;
+}
+.tp-drawer .tp-frow-v .tp-val:has(> .tp-member-badge) .tp-member-badge::before {
+  content: none;
+}
 
 /* ---------- hidden company (active open role, not unlocked) ---------- */
 /* One locked thing: the lock sits where the logo would be. */
@@ -5403,6 +5440,10 @@ button.tp-fsheet-row:disabled {
 .tp-hidden-name {
   color: var(--muted);
   font-weight: 600;
+  /* Truncates like a company name, so a chip beside it on a 320px card never cuts it off mid-letter. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .tp-co-hidden .tp-co-dom {
   color: var(--muted);

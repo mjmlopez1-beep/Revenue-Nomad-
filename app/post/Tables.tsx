@@ -21,7 +21,7 @@ import { AddPill, CompanyLogo, IconChevron, IconLock, IconStar, fmtMonth } from 
 import {
   COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
 } from "./model";
-import { FactCell, UiCtx, YourSeat, earnNote, useUi, type Ui } from "./ui";
+import { FactCell, UiCtx, YourSeat, earnNote, useUi, type AppPage, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 
 /**
@@ -465,14 +465,12 @@ const PersonRow = memo(function PersonRow({ r, sel, onOpen }: { r: Row; sel: boo
   );
 });
 
-/** A page of the app the shell can open (Rate benchmarks from where rates show). */
-export type AppPage = "rates" | "credits" | "seats" | "metrics";
 /**
- * Ui.openPage, when the shell offers it (LOGIC-7). Null until then, so the links that use it
- * stay off the screen instead of doing nothing.
+ * Ui.openPage (LOGIC-7), for the "Rate benchmarks" links where rates show. Null outside the
+ * app's Ui provider, so the links stay off the screen instead of doing nothing.
  */
 export function useOpenPage(): ((p: AppPage) => void) | null {
-  const ui = useContext(UiCtx) as (Ui & { openPage?: (p: AppPage) => void }) | null;
+  const ui = useContext(UiCtx);
   return ui?.openPage ?? null;
 }
 

@@ -440,8 +440,8 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
           title={
             cell.mine
               ? "Another member reported this one of yours. An admin will take a look."
-              : // The reporter's own report, when the server marks it (byMe). Otherwise the line reads true for anyone.
-                (cell as { byMe?: boolean }).byMe
+              : // The reporter's own report (the server marks it byMe). Otherwise the line reads true for anyone.
+                cell.byMe
                 ? "You reported this. We'll review it."
                 : "This was reported as wrong. It stays hidden until an admin reviews it."
           }

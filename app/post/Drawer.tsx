@@ -229,10 +229,14 @@ function RowAsk({ t, f, step, onDone }: { t: FactRef; f: FactInfo; step: Exclude
 function Meta({ t, cell, f, step, setStep }: { t: FactRef; cell: Cell; f: FactInfo; step: Step; setStep: (s: Step) => void }) {
   const ui = useUi();
   if (cell.s !== "value" || cell.system) return null;
+  // Where the fact came from and Confirm and Report share one place at the end of the row: in the
+  // 440px record the buttons show over that note on hover, so they never squeeze or cover the value.
   return (
     <span className="tp-meta">
-      <Provenance cell={cell} source={f.source} />
-      {cell.mine && <span className="tp-yours">You added this</span>}
+      <span className="tp-meta-info">
+        <Provenance cell={cell} source={f.source} />
+        {cell.mine && <span className="tp-yours">You added this</span>}
+      </span>
       {f.canEdit && (
         <button type="button" className="tp-tbtn" onClick={(e) => ui.edit(e.currentTarget, t, cell.v)}>
           Edit
@@ -1146,7 +1150,7 @@ export function Drawer({
   const env: DrawerEnv = {
     touch,
     phone,
-    contact: contact ?? (ui as Ui & { contact?: Contact | null }).contact ?? null,
+    contact: contact ?? ui.contact ?? null,
     company: c.hidden ? "this company" : c.name,
     hidden: !!c.hidden,
     exempt: pickExempt(i),

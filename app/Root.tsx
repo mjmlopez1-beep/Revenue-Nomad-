@@ -340,6 +340,10 @@ function App() {
 
   const signOut = useCallback(async () => {
     await post({ signOut: true });
+    // The app's place (?c=, ?p= and the rest) is the member's. The landing page starts clean.
+    try {
+      window.history.replaceState(null, "", window.location.pathname);
+    } catch {}
     await refresh();
   }, [refresh]);
 
