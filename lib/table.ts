@@ -58,6 +58,7 @@ import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
 import { emailEnabled, sendEmail } from "./email";
 import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
+import { removeScreenedOut } from "./scan/remove";
 import { companyKey, textKey } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
@@ -145,9 +146,11 @@ export interface LedgerEntry {
   at: string;
   /**
    * closed (refunds): the scan found the role had closed, and this unlock was made after its
-   * posting was last seen. retract (reversals): the member took back a fact they had added.
+   * posting was last seen. removed (refunds): the scan took the role off the table, a full-time
+   * job an older screen had let in (lib/scan/remove.ts). retract (reversals): the member took
+   * back a fact they had added.
    */
-  why?: "closed" | "retract";
+  why?: "closed" | "removed" | "retract";
   /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
   undone?: true;
 }
@@ -1794,8 +1797,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
         continue;
       }
       // A credit back for an unlock on a role that had already closed (applyScan).
-      if (l.reason === "refund" && l.why === "closed") {
-        ledger.push({ at: l.at, delta: l.delta, reason: CLOSED_REFUND, company: companyNameOf(id), field: "" });
+      if (l.reason === "refund" && (l.why === "closed" || l.why === "removed")) {
+        ledger.push({ at: l.at, delta: l.delta, reason: l.why === "closed" ? CLOSED_REFUND : REMOVED_REFUND, company: companyNameOf(id), field: "" });
         continue;
       }
       // A fact the member took back (retract): "Took back the HQ", then "at Acme".
@@ -1881,6 +1884,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
 const BENCH_LABEL = "Private rate";
 /** The ledger line for an unlock paid back because the role had closed. The company follows it ("… at Acme"). */
 const CLOSED_REFUND = "Refund for a role that had closed";
+/** A role the scan took off the table: a full-time job an older screen had let in (lib/scan/remove.ts). */
+const REMOVED_REFUND = "Refund for a full-time job we took off the list";
 const fieldLabel = (entity: Entity, field: string) =>
   entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
 /** The same for a row in the credit history. A person's fields say so: "Person email", not "Email". */
@@ -3626,7 +3631,26 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
       res.opened++;
     }
 
-    const sources: ScanSourceResult[] = (Array.isArray(found?.sources) ? found.sources : []).slice(0, 50).map((x) => ({
+    // A role the scan added that a board still lists but the screen now leaves out (not fractional
+    // work) is taken off the table, not closed, and its unlocks are paid back (lib/scan/remove.ts).
+    const { removed, refunded: refundedOnRemove } = removeScreenedOut(s, found?.screenedOut, {
+      seen,
+      keyOfUrl: (u) => keyOfUrl.get(urlKey(cleanValue(def("posting"), u.trim()).value ?? "")),
+      engagementCompany: g.engagements,
+      contactCompany: g.contacts,
+      seedCompanies: new Set(seed.companies.map((c) => c.id)),
+      isOpen: (id) => !!g.engagements.get(id) && openNow(g.engagements.get(id)!),
+      now,
+    });
+    refunded += refundedOnRemove;
+    for (const id of removed) {
+      const co = g.engagements.get(id)?.companyId ?? "";
+      engsAt.set(co, (engsAt.get(co) ?? []).filter((e) => e.id !== id));
+      keyOfEng.delete(id);
+      g.engagements.delete(id);
+    }
+
+    const sources: ScanSourceResult[] =(Array.isArray(found?.sources) ? found.sources : []).slice(0, 50).map((x) => ({
       source: squeeze(x?.source, 60) || "unknown",
       fetched: Math.max(0, Math.round(Number(x?.fetched) || 0)),
       matched: Math.max(0, Math.round(Number(x?.matched) || 0)),
@@ -3715,7 +3739,7 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
     s.scan.lastRunAt = now;
     s.scan.lastOkAt = clean.size ? now : okBefore;
     s.scan.sources = sources;
-    return { ...res, overCap, refunded };
+    return { ...res, overCap, refunded, removed: removed.size };
   });
 }
 
@@ -3740,12 +3764,12 @@ export function runScan(origin?: string, from: { collect?: () => ReturnType<type
       // Tests never reach a job board.
       const found = from.collect ? await from.collect() : process.env.RN_SCAN_TEST === "1" ? { roles: [], all: [], sources: [] } : await collectOpenRoles();
       // Every role that passed the screen, not the capped list: a role still posted must be seen to stay open.
-      const result = await applyScan({ roles: found.all, sources: found.sources }, from.now);
+      const result = await applyScan({ roles: found.all, sources: found.sources, screenedOut: "screenedOut" in found ? found.screenedOut : [] }, from.now);
       const digests = await sendDigests(result.at, origin).catch((e) => (console.error("digest failed", e), 0));
       const failed = found.sources.filter((x) => x.error).length;
       console.log(
         `scan: ${found.all.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
-          `closed ${result.closed}, reopened ${result.reopened}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
+          `closed ${result.closed}, reopened ${result.reopened}, removed ${result.removed ?? 0}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
           `unlocks paid back ${result.refunded ?? 0}, emails ${digests}, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
       return { result, sources: found.sources, digests };

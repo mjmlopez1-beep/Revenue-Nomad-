@@ -16,6 +16,7 @@ import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fraction
 import { renderDigest } from "../lib/digest";
 import { signInEmail } from "../lib/email";
 import { ENGAGEMENT_TYPES, FUNCTIONS } from "../lib/tableFields";
+import { MIN_SCORE, scoreJob } from "../lib/crawler/score";
 import type { DigestData, ScanRole } from "../lib/scanTypes";
 
 const args = process.argv.slice(2);
@@ -78,7 +79,7 @@ eq("  source and link are kept", [vp.role?.source, vp.role?.url], ["remotive", "
 eq(
   "drops a full-time role",
   screenJob(job({ title: "VP of Sales", company: "Globex", description: "Full-time role with health insurance, a 401k and a base salary. Own pipeline and revenue." }), NOW).skip,
-  "bar"
+  "full-time"
 );
 eq(
   "drops a full-time role that only mentions fractional people in passing",
@@ -92,6 +93,97 @@ eq(
   ).skip,
   "full-time"
 );
+
+/* ---------- the owner's rule: fractional, interim, freelance or contract work, in GTM ---------- */
+console.log("\nOnly fractional, interim, freelance or contract work");
+
+// The posting the owner found in Hiring now: a remote full-time AE job on We Work Remotely.
+const gong = (description: string, over: Partial<ScanRawJob> = {}) =>
+  job({ title: "Commercial Account Executive", company: "Gong", source: "weworkremotely", url: "https://weworkremotely.com/remote-jobs/gong-io-commercial-account-executive", description, ...over });
+const gongFull = screenJob(
+  gong(
+    "<p>Gong is hiring a Commercial Account Executive to own the full sales cycle and build pipeline.</p>" +
+      "<ul><li>Be a trusted advisor to revenue leaders</li><li>Run a consultative sales process</li><li>Negotiate and manage customer contracts and renewals</li></ul>" +
+      "<p>This is a remote role. If you live near a hub, join us 3 days a week in our office.</p>" +
+      "<p>The salary band is $120,000 - $150,000 a year plus commission, with health insurance, a 401(k), and an equity package.</p>"
+  ),
+  NOW
+);
+eq("drops the Gong Commercial Account Executive posting", gongFull.skip, "full-time");
+eq("  and names its key, so a role an older scan added can be taken back", gongFull.skip && gongFull.key, "gong::commercialaccountexecutive");
+// Each way a posting like that used to get through, alone, with no full-time tell to catch it.
+const ae = "Gong is hiring a Commercial Account Executive to own the full sales cycle and build pipeline.";
+const paths: [string, string][] = [
+  ["a trusted advisor line", `${ae} Be a trusted advisor to customers.`],
+  ["advisory wording", `${ae} Take an advisory approach with every account.`],
+  ["consultative selling", `${ae} Run a consultative sales process with prospects.`],
+  ["a consulting background", `${ae} A background in management consulting is a plus.`],
+  ["3 days a week in the office", `${ae} Hybrid, 3 days a week in our office.`],
+  ["hours a week of travel", `${ae} Expect about 10 hours a week of travel.`],
+  ["an hourly pay rate", `${ae} Pay starts at $40/hr plus commission.`],
+  ["customer contracts", `${ae} Negotiate and close contracts, and manage customer contracts.`],
+  ["contract negotiation", `${ae} You will own contract negotiation with procurement.`],
+  ["contract value", `${ae} Grow annual contract value and renewals.`],
+  ["a 12-month contract value", `${ae} Our customers sign a 12-month contract on average.`],
+  ["remote", `${ae} This is a remote role, work from anywhere in the US.`],
+  ["part-time", `${ae} A part-time schedule is possible.`],
+  ["months of ramp", `${ae} Ramp to full quota in 6 months.`],
+  ["contractors we work with", `${ae} You will work with our fractional CFO and a team of contractors.`],
+  ["an interim goal", `${ae} In the interim, you will shadow our top sellers.`],
+  ["someone else's fractional seat", `${ae} You will report to the fractional CRO.`],
+];
+for (const [why, body] of paths) eq(`drops a full-time AE job whose only signal is ${why}`, screenJob(gong(body), NOW).skip, "full-time");
+eq("drops a part-time SDR", screenJob(job({ title: "Part-time SDR", company: "Pipewell", description: "Book meetings for our sales team. 20 hours per week at $25/hr." }), NOW).skip, "full-time");
+eq(
+  "drops an hourly customer support rep",
+  screenJob(job({ title: "Customer Support Representative (Hourly)", company: "Helpwise", description: "Answer customer success tickets. Paid hourly at $22/hr, 30 hours a week." }), NOW).skip,
+  "full-time"
+);
+for (const title of ["Sales Consultant", "Sales Advisor", "Customer Success Advisor", "Marketing Consultant", "Contract Manager, Sales", "Account Executive, Contract Renewals", "Remote Account Executive"]) {
+  eq(`drops a title whose only signal is a job word: ${title}`, screenJob(job({ title, company: "Quillfield", description: "Own pipeline and revenue for our sales team." }), NOW).skip, "full-time");
+}
+eq(
+  "a body that says the role is fractional still loses to a full-time tell",
+  screenJob(job({ title: "Head of Marketing", company: "Hooli", description: "This is a fractional role. Full-time hours expected, with health insurance." }), NOW).skip,
+  "full-time"
+);
+
+const keeps: [string, Partial<ScanRawJob>, string, number | null][] = [
+  ["Fractional CMO", { title: "Fractional CMO", description: "Lead marketing for our go-to-market team." }, "Fractional", null],
+  ["Interim VP Sales", { title: "Interim VP Sales", description: "Lead the sales team while we hire." }, "Interim", null],
+  ["Freelance Growth Marketer", { title: "Freelance Growth Marketer", description: "Run paid acquisition and lifecycle campaigns." }, "Project", null],
+  ["Contract Demand Gen Manager (6 months)", { title: "Contract Demand Gen Manager (6 months)", description: "Build our demand gen engine." }, "Project", null],
+  ["a (Contract) note", { title: "Head of Growth (Contract)", description: "Own growth." }, "Project", null],
+  ["a 1099 title", { title: "RevOps Lead, 1099", description: "Own our HubSpot and revenue operations." }, "Project", null],
+  ["an advisor seat", { title: "Advisor, GTM", description: "Advise our founders on go-to-market." }, "Advisory", null],
+  ["a fractional title with full-time words around it", { title: "Interim VP Sales", description: "Lead sales. Our full-time staff get health insurance." }, "Interim", null],
+  ["a body-only fractional engagement", { title: "Head of Demand Generation", description: "This is a fractional engagement, 15 hours a week." }, "Fractional", 15],
+  ["a body-only contract position", { title: "Head of Marketing", description: "This is a contract position. Lead our demand gen." }, "Project", null],
+  ["a body-only freelance engagement", { title: "Growth Marketer", description: "A freelance engagement to run paid acquisition and lifecycle campaigns." }, "Project", null],
+  ["a body-only interim VP", { title: "VP of Marketing", description: "We need an interim VP of Marketing to lead demand gen while we search." }, "Interim", null],
+  ["a body-only 6-month contract", { title: "Head of Sales", description: "A 6-month contract to rebuild our outbound sales motion." }, "Project", null],
+  ["a body-only first fractional hire", { title: "Head of Marketing", description: "We are hiring our first fractional CMO to lead demand gen." }, "Fractional", null],
+  ["a body that is open to a fractional engagement", { title: "Head of Sales", description: "We are open to a fractional engagement for the right sales leader." }, "Fractional", null],
+  ["a body-only 1099 contractor", { title: "Sales Enablement Lead", description: "You will be a 1099 contractor working with our sales team." }, "Project", null],
+  ["a fractional board listing", { title: "Head of Sales", source: "fractionaljobs", fractionalBoard: true, hoursPerWeek: 12, description: "Fractional role listed on Fractional Jobs. Function: Sales." }, "Fractional", 12],
+];
+for (const [why, over, type, hours] of keeps) {
+  const r = screenJob(job({ company: "Kestrel Labs", ...over }), NOW);
+  eq(`keeps ${why}, typed ${type}`, [!!r.role, r.role?.type, hours === null ? null : r.role?.hoursPerWeek], [true, type, hours]);
+}
+eq("a fractional board listing with nothing in its text still counts", !!screenJob(job({ title: "Head of Sales", source: "fractionaljobs", fractionalBoard: true, description: "Function: Sales." }), NOW).role, true);
+const crawlerSays = (title: string, description: string) => {
+  const t = scoreJob({ title, description, company: "X", url: "", source: "" });
+  return t.isFractional && t.score >= MIN_SCORE;
+};
+eq(
+  "the crawler's bar follows the same rule",
+  [crawlerSays("Commercial Account Executive", paths.map(([, b]) => b).join(" ")), crawlerSays("Freelance Growth Marketer", "Run paid acquisition."), crawlerSays("Fractional CMO", "Lead marketing.")],
+  [false, true, true]
+);
+
+const screened = await collectOpenRoles({ now: NOW, sources: [{ name: "weworkremotely", fetchJobs: async () => [gong(ae + " Be a trusted advisor."), job({ title: "Fractional CMO", company: "Northwind" })] }] });
+eq("the collector lists what it screened out as not fractional", [screened.roles.length, screened.screenedOut?.map((x) => [x.key, x.source])], [1, [["gong::commercialaccountexecutive", "weworkremotely"]]]);
 check(
   "keeps a role whose body says the role itself is fractional",
   !!screenJob(job({ title: "Head of Marketing", company: "Hooli", description: "This is a fractional role. You will lead marketing and demand gen for our go-to-market team." }), NOW).role
@@ -312,7 +404,7 @@ eq("  with the board's facts", [boardRoles[0]?.function, boardRoles[0]?.type, bo
 eq("  a company site that differs from the name is still taken from the board", [boardRoles[1]?.domain, boardRoles[1]?.rate, boardRoles[1]?.function], ["heypebble.example", "$6K–$9K/mo", "Partnerships"]);
 eq("  drops the unnamed company", screenJob(parsed[1], NOW).skip, "company");
 eq("  drops the finance seat", screenJob(parsed[2], NOW).skip, "bar");
-eq("  drops the 40 hour a week seat", screenJob(parsed[3], NOW).skip, "bar");
+eq("  drops the 40 hour a week seat", screenJob(parsed[3], NOW).skip, "full-time");
 
 /* ---------- collector: sources ---------- */
 console.log("\nSources");
@@ -336,7 +428,7 @@ check("  a hung source times out", /timed out/i.test(scan.sources[2].error ?? ""
 eq("  a source that throws before fetching is reported too", scan.sources[3].error, "bad setup");
 eq("  malformed postings are skipped", [scan.sources[4].fetched, scan.sources[4].matched], [3, 1]);
 const empty = await collectOpenRoles({ sources: [], now: NOW });
-eq("no sources gives an empty result", empty, { roles: [], all: [], sources: [], seenKeys: [] });
+eq("no sources gives an empty result", empty, { roles: [], all: [], sources: [], seenKeys: [], screenedOut: [] });
 const overCap = await collectOpenRoles({
   now: NOW,
   max: 3,
@@ -472,6 +564,7 @@ const SCENARIOS: [string, string][] = [
   ["names", "One company, one record"],
   ["small", "A board that lists one role"],
   ["claimgone", "This isn't me on a role whose posting is long gone"],
+  ["notfractional", "A full-time job an older screen let in, listed again"],
 ];
 for (const [name, title] of SCENARIOS) {
   console.log(`\nStored scans: ${title}`);

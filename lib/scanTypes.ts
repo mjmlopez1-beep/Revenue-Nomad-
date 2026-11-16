@@ -34,9 +34,22 @@ export interface ScanSourceResult {
   error?: string;
 }
 
+/** A listing a board answered with, left out because the work is not fractional, interim, freelance or contract. */
+export interface ScanScreenedOut {
+  key: string;
+  url: string;
+  source: string;
+}
+
 export interface ScanCollectResult {
   roles: ScanRole[];
   sources: ScanSourceResult[];
+  /**
+   * Listings left out because the work is not fractional. A role the scan added earlier that one
+   * of these matches is removed (it was let in by an older, looser screen). Optional: a result
+   * without it removes nothing.
+   */
+  screenedOut?: ScanScreenedOut[];
 }
 
 /** What applying a scan changed. */
@@ -49,8 +62,13 @@ export interface ScanApplyResult {
   companiesAdded: number;
   /** New roles left for a later run because this one had already opened its limit. */
   overCap?: number;
-  /** Unlocks paid back because the role they paid for had closed (made after it was last seen listed). */
+  /** Unlocks paid back: on a role that had closed (made after it was last seen listed), and every one on a removed role. */
   refunded?: number;
+  /**
+   * Roles the scan had added that a board still lists but that are not fractional work by the
+   * current screen. They are taken off the table (not closed), and their unlocks paid back.
+   */
+  removed?: number;
 }
 
 /** Everything one member's weekly email needs. No other member's data. */

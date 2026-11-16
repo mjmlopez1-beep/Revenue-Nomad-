@@ -3,7 +3,7 @@
  * scripts/test-scan.mts starts each scenario in its own process, because the server module
  * keeps its state in memory and every scenario needs a fresh table. To run one by hand:
  *
- *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone>
+ *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone|notfractional>
  *
  * It runs on a made-up seed in a temporary data folder. No network, and nothing from the real
  * seed. Prints PASS and FAIL lines, then "##RESULT <passed> <failed>".
@@ -386,7 +386,92 @@ async function claimgone() {
   );
 }
 
-const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone };
+/**
+ * A full-time job an older, looser screen let in (the Gong AE posting from We Work Remotely). When
+ * a board lists it again and the screen now leaves it out, the scan's role is removed, not
+ * closed, and every unlock of it is paid back. Roles from our records are not touched.
+ */
+async function notfractional() {
+  const now = REAL_NOW;
+  const wwr = "weworkremotely";
+  // What the old screen let through: a full-time AE job, alone at its company, and one at a company with a real fractional role too.
+  const G = sr("Gongish Revenue", "Commercial Account Executive", { source: wwr, url: "https://weworkremotely.com/remote-jobs/gongish-commercial-account-executive" });
+  const H1 = sr("Halfway Health", "Commercial Account Executive", { source: wwr, url: "https://weworkremotely.com/remote-jobs/halfway-commercial-account-executive" });
+  const H2 = sr("Halfway Health", "Fractional CMO", { source: wwr });
+  const K = sr("Keepwell Labs", "Fractional VP Sales", { source: wwr });
+  const old = await scan([G, H1, H2, K], [{ source: wwr, fetched: 40, matched: 4 }], now - 2 * DAY);
+  eq("an old-style scan opened the full-time jobs with the rest", [old.opened, old.companiesAdded], [4, 3]);
+  const v0 = await admin();
+  const gco = companyOf(v0, "Gongish Revenue")!.id;
+  const geng = roleOf(v0, "Gongish Revenue")!.id;
+  const hco = companyOf(v0, "Halfway Health")!.id;
+  const heng = roleOf(v0, "Halfway Health", 0)!.id; // opened first, before the CMO role
+  // Sal buys the Gongish company, the AE job its only open role. Mo asks for Halfway's AE role and
+  // posting, which is one purchase of the Halfway company. Cy buys the Keepwell company.
+  await unlockAll("tok-sal", [{ entity: "company", id: gco, field: "identity" }, { entity: "engagement", id: geng, field: "role" }]);
+  await unlockAll("tok-mo", [{ entity: "engagement", id: heng, field: "role" }, { entity: "engagement", id: heng, field: "posting" }]);
+  await unlockAll("tok-cy", [{ entity: "company", id: companyOf(v0, "Keepwell Labs")!.id, field: "identity" }]);
+  const spent = { sal: 25 - (await credits("tok-sal")), mo: 25 - (await credits("tok-mo")), cy: 25 - (await credits("tok-cy")) };
+  eq("each of them paid one credit", spent, { sal: 1, mo: 1, cy: 1 });
+  check("Mo's purchase was the Halfway company", (await t.buildView("tok-mo")).companies.find((c) => c.id === hco)?.unlocked === true);
+
+  // The board lists all four again. The two AE postings fail the screen now.
+  const ae = (company: string, url: string): ScanRawJob => ({
+    kind: "listing",
+    title: "Commercial Account Executive",
+    company,
+    url,
+    source: wwr,
+    postedAt: iso(now - 3 * DAY),
+    description: "Own the full sales cycle and build pipeline. Be a trusted advisor to customers, run a consultative process and manage customer contracts. Remote, 3 days a week in our office.",
+  });
+  const fractional = (company: string, title: string): ScanRawJob => ({ kind: "listing", title, company, url: `https://jobs.example.com/${encodeURIComponent(company)}/${encodeURIComponent(title)}`, source: wwr, description: `${title} to lead marketing and sales.` });
+  const listing = [ae("Gongish Revenue", G.url), ae("Halfway Health, Inc.", H1.url), fractional("Halfway Health", "Fractional CMO"), fractional("Keepwell Labs", "Fractional VP Sales")];
+  const run = await t.runScan(undefined, { collect: () => collectOpenRoles({ sources: [{ name: wwr, fetchJobs: async () => listing }], now }), now: iso(now) });
+  eq("the re-scan removes both, closes nothing and keeps the fractional roles open", [run.result.removed, run.result.closed, run.result.stillOpen, run.result.opened], [2, 0, 2, 0]);
+
+  const v1 = await admin();
+  eq("the company the scan added for the AE job is gone with it", companyOf(v1, "Gongish Revenue"), undefined);
+  const halfway = companyOf(v1, "Halfway Health")?.engagements ?? [];
+  eq("Halfway Health keeps only its fractional role, still open, and nothing of the AE job", [halfway.length, halfway[0]?.id === heng, halfway[0]?.closed ?? null], [1, false, null]);
+  check("no role anywhere turned into Closed history", !v1.companies.some((c) => c.engagements.some((e) => e.closed || (e.cells.status?.s === "value" && e.cells.status.v === "Closed"))));
+  const seedRole = roleOf(v1, "Seedrole Systems");
+  eq("the role from our records is still there, still open", [!!seedRole, seedRole?.closed ?? null], [true, null]);
+  eq("Sal has his credit back: the AE job was the Gongish company's only open role", await credits("tok-sal"), 25);
+  eq("Halfway still has an open role, so Mo's company unlock stands, and Cy's Keepwell one too", [await credits("tok-mo"), await credits("tok-cy")], [24, 24]);
+  const rows = (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "refund");
+  check("the refund is a line in his ledger that says why", rows.length === 0 && (await t.buildView("tok-sal")).ledger.filter((l) => l.reason === "Refund for a full-time job we took off the list" && l.delta === 1).length === 1, (await t.buildView("tok-sal")).ledger);
+
+  const again = await t.runScan(undefined, { collect: () => collectOpenRoles({ sources: [{ name: wwr, fetchJobs: async () => listing }], now: now + HOUR }), now: iso(now + HOUR) });
+  eq("the same scan again removes nothing and pays nothing twice", [again.result.removed, again.result.refunded, await credits("tok-sal")], [0, 0, 25]);
+
+  // A posting matched by its link alone, a seed role and a role a member took as their own are never removed.
+  const L = sr("Linkonly Co", "Account Executive", { source: wwr, url: "https://weworkremotely.com/remote-jobs/linkonly-ae" });
+  const M = sr("Mineco", "Commercial Account Executive", { source: wwr });
+  await scan([L, M, H2, K], [{ source: wwr, fetched: 40, matched: 4 }], now + 2 * HOUR);
+  const meng = roleOf(await admin(), "Mineco")!.id;
+  await t.perform("tok-mo", { type: "add", company: "Mineco", engagementId: meng, operatorMemberId: "me", engagementFields: { operator: "Mo Marketing" } } as never);
+  const r = await t.applyScan(
+    {
+      roles: [H2, K],
+      sources: [{ source: wwr, fetched: 40, matched: 2 }],
+      screenedOut: [
+        { key: "linkonlyco::accountexecutiveremote", url: "https://www.weworkremotely.com/remote-jobs/linkonly-ae/", source: wwr },
+        { key: "seed:e_seedrole_open", url: "", source: wwr },
+        { key: roleKey("Seedrole Systems", "Fractional CRO"), url: "", source: wwr },
+        { key: M.key, url: M.url, source: wwr },
+      ],
+    },
+    iso(now + 3 * HOUR),
+  );
+  const v2 = await admin();
+  eq("by its link alone it goes, the seed role and the taken seat stay", [r.removed, !!companyOf(v2, "Linkonly Co"), !!roleOf(v2, "Seedrole Systems"), !!roleOf(v2, "Mineco")], [1, false, true, true]);
+  // Without a screenedOut list (an older caller), nothing is removed.
+  const none = await t.applyScan({ roles: [H2, K], sources: [{ source: wwr, fetched: 40, matched: 2 }] }, iso(now + 4 * HOUR));
+  eq("a scan result with no screened-out list removes nothing", none.removed, 0);
+}
+
+const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone, notfractional };
 const name = process.argv[2] ?? "";
 try {
   if (!SCENARIOS[name]) throw new Error(`unknown scenario "${name}". One of: ${Object.keys(SCENARIOS).join(", ")}`);
