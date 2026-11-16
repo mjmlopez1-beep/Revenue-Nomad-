@@ -139,8 +139,13 @@ export interface LedgerEntry {
   reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust";
   ref: string;
   at: string;
-  /** Refunds only. closed: the scan found the role had closed, and this unlock was made after its posting was last seen. */
-  why?: "closed";
+  /**
+   * closed (refunds): the scan found the role had closed, and this unlock was made after its
+   * posting was last seen. retract (reversals): the member took back a fact they had added.
+   */
+  why?: "closed" | "retract";
+  /** A fill the member took back (retract). It no longer counts as earned today, or as a fact they added. */
+  undone?: true;
 }
 interface Profile {
   function?: string;
@@ -821,7 +826,7 @@ export function balance(s: State, memberId: string): number {
 /** Credits earned in the rolling 24 hours before `nowMs`, and when earning reopens if at the cap. */
 function earning(s: State, memberId: string, nowMs: number): { earned: number; resetsAt: string | null } {
   const recent = s.ledger
-    .filter((l) => l.memberId === memberId && l.delta > 0 && EARNING.has(l.reason) && nowMs - Date.parse(l.at) < DAY)
+    .filter((l) => l.memberId === memberId && l.delta > 0 && EARNING.has(l.reason) && !l.undone && nowMs - Date.parse(l.at) < DAY)
     .sort((a, b) => a.at.localeCompare(b.at));
   const earned = recent.reduce((n, l) => n + l.delta, 0);
   if (earned < EARN_CAP) return { earned, resetsAt: null };
@@ -900,8 +905,9 @@ function sellToday(s: State, memberId: string, nowMs: number, exempt: (companyId
   let earned = 0;
   for (const l of fillsToday(s, memberId, nowMs)) {
     if (!isPickRef(l.ref) || exempt(refRecord(l.ref))) continue;
+    // A taken-back answer still counts as saved (the backstop), but frees its earning place.
     saved++;
-    if (l.delta > 0) earned++;
+    if (l.delta > 0 && !l.undone) earned++;
   }
   return { saved, earned };
 }
@@ -1141,6 +1147,13 @@ function missingOnSeat(e: Node, s: State): number {
 }
 
 /**
+ * A member who has signed in at least once: a joined account (joining signs you in), a visit, an
+ * onboarding answer or a network on file. A seed member we only invited has none of these. The
+ * seat holder picker lists only these members, and only these get the "Member" tag on a seat.
+ */
+const signedIn = (s: State, idx: MemberIndex, id: string) => idx.joinedAt.has(id) || !!s.seen[id] || !!s.profiles[id] || !!s.ips?.[id]?.length;
+
+/**
  * Members whose name matches a search, for the seat-holder picker. Signed-in members only, and
  * it lists only members who have signed in themselves (a visit, a profile, or a joined
  * account) plus the searcher, so the picker is not a directory of everyone we invited. A seat
@@ -1154,11 +1167,9 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
   const words = normName(String(q ?? "").slice(0, 60)).split(" ").filter(Boolean);
   if (!words.length || words.join("").length < 2) return [];
   const idx = memberIndex(seed, s);
-  const joined = new Set(s.members.map((m) => m.id));
-  const signedIn = (id: string) => id === me.id || joined.has(id) || !!s.seen[id] || !!s.profiles[id] || !!s.ips?.[id]?.length;
   const hits: { m: Member; score: number }[] = [];
   for (const m of idx.all) {
-    if (!signedIn(m.id)) continue;
+    if (m.id !== me.id && !signedIn(s, idx, m.id)) continue;
     const parts = normName(m.name).split(" ");
     // Every typed word must start one of the name's words ("jan sm" finds Jane Smith).
     if (!words.every((w) => parts.some((p) => p.startsWith(w)))) continue;
@@ -1192,8 +1203,9 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (!f.gated || mine || free || (me && (s.unlocks[k] ?? []).includes(me.id))) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from };
     if (key === "operator" && idx) {
+      // "Member" only for someone on Trading Post now: a seed member we invited who never signed in is just a name.
       const m = seatHolder(s, idx, node!.id, v);
-      if (m) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
+      if (m && (m.id === me?.id || signedIn(s, idx, m.id))) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
     }
     return out;
   }
@@ -1206,6 +1218,9 @@ export function isAdmin(m: Member | null): boolean {
 }
 
 /* ---------- joining ---------- */
+
+/** A first and last name: two or more words of letters (' - . allowed), no digits, emoji or email. PERSON_NAME_RE without its 60-character cap. */
+const JOIN_NAME_RE = /^\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
 
 /**
  * Join with a name and email. An email that already belongs to a member can't be claimed
@@ -1235,7 +1250,8 @@ export async function joinMember(
   return mutate((s, seed) => {
     const name = stripInvisible(nameRaw).trim().replace(/\s+/g, " ").slice(0, 80);
     const email = stripInvisible(emailRaw).trim().toLowerCase().slice(0, 120);
-    if (name.length < 2) throw new ActionError("Add your first and last name.");
+    // The shape a seat holder's name must have (PERSON_NAME_RE, up to the 80 characters a name keeps), so the member can be matched to the seats they held.
+    if (name.length < 3 || !JOIN_NAME_RE.test(name)) throw new ActionError("Add your first and last name.");
     if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("That doesn't look like an email address. Check it for a typo.");
     const inbox = inboxKey(email);
     const seedMember = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
@@ -1299,6 +1315,7 @@ export async function existingCompany(domain: string | null, name: string | null
   return { id: pubId(c.id), name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
 }
 
+/** Sources whose seats are fractional work whatever their type. A "Member added" seat is too, while it has no type (see friendliness). */
 const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan"]);
 
 /* ---------- open roles the weekly scan follows ---------- */
@@ -1421,33 +1438,50 @@ function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me
   return true;
 }
 
+/**
+ * How fractional-friendly a company is, from its seats. Only a hire counts as one: an open role is
+ * a posting, so its function goes in `hiring` and not in `functions`, and a posting that came down
+ * with nobody named as its seat holder counts in neither (it still shows they went looking, which
+ * scores like an open role). A seat a member added counts as fractional unless its type says
+ * otherwise.
+ */
 function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, engs: EngNode[], operators: Set<string>): Friendly {
   let fractional = 0;
   let open = 0;
   let recent = 0;
   let stories = 0;
+  let postings = 0;
   const functions = new Set<string>();
+  const hiring = new Set<string>();
   const now = Date.now();
   for (const e of engs) {
     const type = live(e, s, "type");
-    const isOpen = isOpenRole(e, s, tracks);
-    const isFractional = isOpen || SOURCE_FRACTIONAL.has(e.source) || (!!type && FRACTIONAL_TYPES.includes(type));
-    if (isOpen) open++;
-    if (isFractional) {
-      if (!isOpen) fractional++;
-      const fn = live(e, s, "function") ?? functionOf(live(e, s, "role"));
+    const fn = live(e, s, "function") ?? functionOf(live(e, s, "role"));
+    if (isOpenRole(e, s, tracks)) {
+      open++;
+      if (fn) hiring.add(fn);
+      continue;
+    }
+    if (e.source === "Demand scan" && !live(e, s, "operator")) {
+      postings++;
+      continue;
+    }
+    const bySource = SOURCE_FRACTIONAL.has(e.source) || (e.source === "Member added" && !type);
+    if (bySource || (!!type && FRACTIONAL_TYPES.includes(type))) {
+      fractional++;
       if (fn) functions.add(fn);
       const start = live(e, s, "start");
       if (start && now - Date.parse(`${start}-01`) < 2 * 365 * DAY) recent++;
     } else stories++;
   }
-  // An open role is the strongest signal there is: on its own it makes a company Medium.
+  // An open role is the strongest signal there is: on its own it makes a company Medium. So does a
+  // posting that came down (they went looking for a fractional), though neither is a hire.
   const score = Math.min(
     100,
-    Math.min(40, fractional * 20) + Math.min(20, functions.size * 10) + (fractional >= 2 ? 15 : 0) + (recent ? 15 : 0) + (open ? 30 : 0) + (stories && !fractional && !open ? 5 : 0),
+    Math.min(40, fractional * 20) + Math.min(20, functions.size * 10) + (fractional >= 2 ? 15 : 0) + (recent ? 15 : 0) + (open || postings ? 30 : 0) + (stories && !fractional && !open && !postings ? 5 : 0),
   );
   const tier = score >= 60 ? "High" : score >= 30 ? "Medium" : score > 0 ? "Low" : null;
-  return { score, tier, fractional, open, functions: [...functions], operators: operators.size, recent };
+  return { score, tier, fractional, open, functions: [...functions], hiring: [...hiring], operators: operators.size, recent };
 }
 
 /**
@@ -1460,12 +1494,20 @@ let statsCache: { s: State; seed: Seed; stats: View["stats"]; at: number } | nul
 const STATS_FRESH = 60 * 60 * 1000;
 let anonBuild: { s: State; seed: Seed; p: Promise<View> } | null = null;
 
+/** One address from the environment, or null when it is not set or is not an email address. */
+const addressIn = (raw: string | undefined) => {
+  const v = String(raw ?? "").trim();
+  return /^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i.test(v) ? v : null;
+};
+/** View.contact: read at run time, so a build never drops the addresses and a change needs only a restart. */
+export const contactInfo = (): NonNullable<View["contact"]> => ({ support: addressIn(process.env.RN_SUPPORT_EMAIL), intro: addressIn(process.env.RN_INTRO_EMAIL) });
+
 export async function buildView(token: string | null): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (me) return fullView(seed, s, me);
   if (statsCache && statsCache.s === s && statsCache.seed === seed && Date.now() - statsCache.at < STATS_FRESH)
-    return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled() };
+    return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo() };
   if (!anonBuild || anonBuild.s !== s || anonBuild.seed !== seed) {
     const p = fullView(seed, s, null);
     anonBuild = { s, seed, p };
@@ -1621,6 +1663,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       facts,
       updatedAt,
       mine,
+      // Paid to see it while it was hidden (Unlock company, or its open role's title or posting: one purchase, recorded on the company).
+      ...(me && (s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) ? { unlocked: true } : {}),
     });
   }
   companies.sort((a, b) => b.friendly.score - a.friendly.score || a.name.localeCompare(b.name));
@@ -1681,7 +1725,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     for (const h of s.held) if (h.memberId === me.id && h.reason === "referral" && inviteeOf(h.ref)) paidInvitees.add(inviteeOf(h.ref)!);
     for (const l of s.ledger) {
       if (l.memberId !== me.id) continue;
-      if (l.reason === "fill") added++;
+      if (l.reason === "fill" && !l.undone) added++;
       if (l.reason === "unlock") unlocked++;
       const dot = l.ref.indexOf(".");
       const id = dot < 0 ? l.ref : l.ref.slice(0, dot);
@@ -1705,6 +1749,11 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       // A credit back for an unlock on a role that had already closed (applyScan).
       if (l.reason === "refund" && l.why === "closed") {
         ledger.push({ at: l.at, delta: l.delta, reason: CLOSED_REFUND, company: companyNameOf(id), field: "" });
+        continue;
+      }
+      // A fact the member took back (retract): "Took back the HQ", then "at Acme".
+      if (l.reason === "reversal" && l.why === "retract") {
+        ledger.push({ at: l.at, delta: l.delta, reason: `Took back ${say(entityOf(id), field)}`, company: companyNameOf(id), field: "" });
         continue;
       }
       ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: ledgerLabel(entityOf(id), field) });
@@ -1772,6 +1821,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     ledger,
     reported,
     email: emailEnabled(),
+    contact: contactInfo(),
     ...(me && scan ? { benchmarks: benchmarks(seed, g, s, me.id), scan } : {}),
     ...(me && scan && isAdmin(me) ? { admin: adminStats(seed, s, g, idx, nowMs, scan, entityOf) } : {}),
   };
@@ -1844,7 +1894,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
   const top = (reason: "fill" | "unlock") => {
     const n = new Map<string, number>();
     for (const l of s.ledger) {
-      if (l.reason !== reason) continue;
+      if (l.reason !== reason || l.undone) continue;
       const dot = l.ref.indexOf(".");
       const id = l.ref.slice(0, dot);
       const field = l.ref.slice(dot + 1);
@@ -1860,7 +1910,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
   let unlocks7 = 0;
   for (const l of s.ledger) {
     const recent = nowMs - Date.parse(l.at) < WEEK;
-    if (l.reason === "fill") (adds++, recent && adds7++);
+    if (l.reason === "fill" && !l.undone) (adds++, recent && adds7++);
     else if (l.reason === "unlock") (unlocks++, recent && unlocks7++);
   }
 
@@ -2177,6 +2227,25 @@ const UNKNOWN_ACTION = "That didn't go through. Refresh the page and try again."
 /** A fact an admin took off the table (review, or adminRemove): what happened to the credits. */
 const REMOVED = "Removed. Anyone who unlocked it got their credit back, and it can be added again.";
 
+/* What a seat can't say at once (see seatCheck in perform). */
+const OPEN_NO_DATES = "This role is still open, so it has no start or end yet.";
+const OPEN_NO_HIRE = "This role is still open, so nobody has been hired for it yet.";
+const OPEN_NO_END = "This role is still open, so it has no end yet.";
+const END_BEFORE_START = "The end month can't be before the start.";
+const ACTIVE_NO_END = "An active seat has no end month yet. Pick Ongoing, or change the status to Ended.";
+const ENDED_NOT_ACTIVE = "This seat has an end month, so it isn't active. Pick Ended, or change the end month.";
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** The refusal for an end before the month the scan first saw the role ("Nov 2026"). */
+const endBeforeListed = (firstSeen: string) =>
+  `The end month can't be before ${MONTH_NAMES[Number(firstSeen.slice(5, 7)) - 1] ?? ""} ${firstSeen.slice(0, 4)}, when the role was first listed.`.replace("  ", " ");
+/** Month `a` ("2025-03", or a year alone) ends before month `b` starts. A year alone compares by year. */
+const monthBefore = (a: string, b: string) => (a.length === 4 || b.length === 4 ? a.slice(0, 4) < b.slice(0, 4) : a < b);
+
+/** An Add that found everything it sent already on file. */
+const NOTHING_NEW = "Nothing new was added.";
+/** A seat needs to say what the work was. A name alone is not a seat. */
+const SEAT_NEEDS_WHAT = "Add the seat's function or its role too, so members can tell what the work was.";
+
 export async function perform(token: string | null, a: Action, origin?: string): Promise<ActionResult> {
   if (a?.type === "scanNow") {
     if (!isAdmin(await memberForToken(token))) throw new ActionError("Only admins can start a scan.");
@@ -2276,14 +2345,16 @@ export async function perform(token: string | null, a: Action, origin?: string):
      * everyone who paid to see it gets the credit back. A role that closed because a member
      * took it reopens when that member's name is the fact removed.
      */
-    const removeFact = (k: string, cur: FieldValue) => {
+    const removeFact = (k: string, cur: FieldValue, why?: "retract"): number => {
       s.values[k] = { ...cur, status: "removed" };
       delete s.values[k].reporters;
       delete s.verifications[k];
+      let taken = 0;
       if (!isSystem(cur.by)) {
         const paid = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && (l.reason === "fill" || l.reason === "confirm")).reduce((n, l) => n + l.delta, 0);
         const back = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && l.reason === "reversal").reduce((n, l) => n + l.delta, 0);
-        if (paid + back > 0) s.ledger.push({ memberId: cur.by, delta: -(paid + back), reason: "reversal", ref: k, at: now });
+        taken = Math.max(0, paid + back);
+        if (taken > 0) s.ledger.push({ memberId: cur.by, delta: -taken, reason: "reversal", ref: k, at: now, ...(why ? { why } : {}) });
         s.held = s.held.filter((h) => !(h.reason === "confirm" && h.ref === k));
       }
       refundUnlockers(k);
@@ -2292,6 +2363,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
         reopenIfUnheld(s, k.slice(0, dot), now);
         tracksNow = null; // it may have reopened, or closed for good when its posting was long gone
       }
+      return taken;
     };
     /** A rate this member shared for the benchmarks only on this seat moves to the record when they add it there. It was paid once. */
     let movedRate = false;
@@ -2370,9 +2442,48 @@ export async function perform(token: string | null, a: Action, origin?: string):
       if (recent < REFERRAL_LIMIT) grant(s, inviter, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
       return grant(s, me.id, REFERRAL_BONUS, "referral", `${inviter}.referral`, now);
     };
-    /** Set a value. Returns credits earned (0 when editing your own value or at the daily cap). */
-    /** Set a value. `member` (seat holder only) links it to a member, whose name becomes the value. */
-    const setValue = (node: Node, entity: Entity, key: string, raw: unknown, member: Member | null = null): number => {
+    /**
+     * What a seat can't say at once (FIRST-4, DESK-10). An open role nobody holds has no start,
+     * end, reason or sourcing yet. An end can't come before the start, or before the role was
+     * first listed, and an active seat has no dated end. `pending` holds the other fields the same
+     * action saves. A locked end the member can't see is never compared against, so a refusal
+     * gives nothing away about it.
+     */
+    const seatCheck = (node: Node, key: string, value: string, pending: Record<string, string>) => {
+      const track = tracks().get(node.id);
+      const val = (k: string) => (k === key ? value : pending[k] ?? live(node, s, k));
+      const status = val("status");
+      const open = track ? !track.closedAt : status === "Open role" || (!status && g.engagements.get(node.id)?.source === "Demand scan");
+      if (open && !val("operator")) {
+        if (key === "start" || key === "end") throw new ActionError(OPEN_NO_DATES);
+        if (key === "reason" || key === "sourced") throw new ActionError(OPEN_NO_HIRE);
+      }
+      const dated = (v: string | null): v is string => !!v && v !== "Ongoing";
+      if (key === "end" && dated(value)) {
+        if (open) throw new ActionError(OPEN_NO_END);
+        if (status === "Active") throw new ActionError(ACTIVE_NO_END);
+        const start = val("start");
+        if (start && monthBefore(value, start)) throw new ActionError(END_BEFORE_START);
+        if (track && monthBefore(value, track.firstSeen.slice(0, 7))) throw new ActionError(endBeforeListed(track.firstSeen));
+      }
+      if (key !== "start" && !(key === "status" && value === "Active")) return;
+      const end = val("end");
+      if (!dated(end)) return;
+      const ev = valueOf(node, s, "end");
+      const seesEnd =
+        pending.end !== undefined || !fieldDef("engagement", "end")!.gated || (!!ev && (ev.by === me.id || (s.unlocks[fkey(node.id, "end")] ?? []).includes(me.id))) || freeFor("engagement", node.id, "end");
+      if (!seesEnd) return;
+      if (key === "start" && monthBefore(end, value)) throw new ActionError(END_BEFORE_START);
+      // An end saved in the same action is checked on its own turn ("An active seat has no end month yet").
+      if (key === "status" && pending.end === undefined) throw new ActionError(ENDED_NOT_ACTIVE);
+    };
+
+    /**
+     * Set a value. Returns credits earned (0 when editing your own value or at the daily cap).
+     * `member` (seat holder only) links it to a member, whose name becomes the value. `pending`:
+     * the other engagement fields the same action saves (see seatCheck).
+     */
+    const setValue = (node: Node, entity: Entity, key: string, raw: unknown, member: Member | null = null, pending: Record<string, string> = {}): number => {
       const f = fieldOf(entity, key);
       const linked = key === "operator" ? member : null;
       const { value, error } = cleanValue(f, linked ? linked.name : raw);
@@ -2383,6 +2494,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
       const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
       if (cur && cur.by !== me.id && !correction)
         throw new ActionError(`${capital(say(entity, key))} is already there. Confirm it if it's right, or report it if it's wrong.`);
+      if (entity === "engagement") seatCheck(node, key, value!, pending);
       // Picking yourself takes back an earlier "This isn't me" on this seat.
       const relink = key === "operator" && linked?.id === me.id && (s.notMine[me.id] ?? []).includes(node.id);
       // The same seat holder again changes nothing: say so rather than "Updated".
@@ -2424,6 +2536,11 @@ export async function perform(token: string | null, a: Action, origin?: string):
       if (entity === "engagement" && key === "role" && !valueOf(node, s, "function")) {
         const fn = functionOf(value);
         if (fn) s.values[fkey(node.id, "function")] = { value: fn, by: me.id, at: now, status: "live" };
+      }
+      // A dated end means the seat ended. With no status given, it says so (no extra credit: it is the same answer).
+      if (entity === "engagement" && key === "end" && value !== "Ongoing" && !valueOf(node, s, "status") && pending.status === undefined) {
+        s.values[fkey(node.id, "status")] = { value: "Ended", by: me.id, at: now, status: "live" };
+        alsoChanged.push({ entity, node, field: "status" });
       }
       if (cur) return 0; // editing your own value, or correcting your seat, earns nothing extra
       if (entity === "engagement" && key === "rate" && movePrivateRate(node.id, k)) return 0; // already paid as a benchmark-only rate
@@ -2668,6 +2785,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
           let eid: string | null = null;
           let kept = 0;
           let engNew = false;
+          let seatOnFile = false;
           if (wantEng || a.newEngagement || engFields.length) {
             const role = engFields.find(([k]) => k === "role")?.[1];
             const atCompany = [...g.engagements.values()].filter((e) => e.companyId === company!.id);
@@ -2680,21 +2798,28 @@ export async function perform(token: string | null, a: Action, origin?: string):
               ? atCompany.find((e) => e.id === wantEng)
               : (a.newEngagement ? atCompany.find(isBlank) : atCompany.find((e) => s.engagements.some((x) => x.id === e.id && x.by === me.id))) ??
                 (roleKey ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && textKey(live(e, s, "role") ?? "") === roleKey) : undefined);
+            // A new seat (or a blank one) has to say what the work was: a name alone is not a seat.
+            if ((!existing || isBlank(existing)) && !engFields.some(([k]) => k === "function" || k === "role")) throw new ActionError(SEAT_NEEDS_WHAT);
             let eng: Node;
             if (existing) {
               eid = existing.id;
               eng = existing;
+              // What this Add saves, checked together (an end before the start, a start on an open role): see seatCheck.
+              const pending = Object.fromEntries(engFields.filter(([k]) => !valueOf(existing, s, k)));
               for (const [k, v] of engFields) {
                 if (valueOf(eng, s, k)) kept++;
-                else earned += setValue(eng, "engagement", k, v, seatPick);
+                else earned += setValue(eng, "engagement", k, v, seatPick, pending);
               }
             } else {
               eid = newId("e", name);
               engNew = true;
               s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
               eng = { id: eid, seedFields: {} };
-              for (const [k, v] of engFields) earned += setValue(eng, "engagement", k, v, seatPick);
+              const pending = Object.fromEntries(engFields);
+              for (const [k, v] of engFields) earned += setValue(eng, "engagement", k, v, seatPick, pending);
             }
+            // Everything sent about the seat was on file already.
+            seatOnFile = !engNew && engFields.length > 0 && kept === engFields.length;
           }
           for (const p of people) {
             const pid = newId("p");
@@ -2703,14 +2828,20 @@ export async function perform(token: string | null, a: Action, origin?: string):
             for (const [k, v] of p) earned += setValue(node, "contact", k, v);
           }
           const bonus = earned || capped || movedRate ? payReferral() : 0;
+          const savedSome = !!(earned || capped || movedRate || people.length);
+          // Nothing new went in: say so plainly (the old wording said a seat was added).
+          const nothing = !isNew && !engNew && !savedSome;
           const where = isNew
             ? `Added ${companyName}`
             : engNew
               ? `Added a seat at ${companyName}`
-              : earned || capped || people.length
+              : savedSome
                 ? `${companyName} was already on Trading Post, so we added what you know to it`
-                : `${companyName} is already on Trading Post`; // nothing new went in (the old wording said it had)
-          const skipped = kept ? (kept > 1 ? ` ${kept} facts were already there, so we left them as they were.` : " 1 fact was already there, so we left it as it was.") : "";
+                : seatOnFile
+                  ? `That seat at ${companyName} is already on file. ${NOTHING_NEW.slice(0, -1)}`
+                  : `${companyName} is already on Trading Post. ${NOTHING_NEW.slice(0, -1)}`;
+          const skipped =
+            kept && !(nothing && seatOnFile) ? (kept > 1 ? ` ${kept} facts were already there, so we left them as they were.` : " 1 fact was already there, so we left it as it was.") : "";
           const leftOut = picksLeftOut
             ? ` You've added ${SELL_SAVE_MAX} answers today for ${PICKS}, so ${picksLeftOut === 1 ? "one of those wasn't" : `${picksLeftOut} of those weren't`} saved. Add ${picksLeftOut === 1 ? "it" : "them"} tomorrow.`
             : "";
@@ -2785,7 +2916,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
           if (cur.by === me.id) throw new ActionError("You added this one. Edit it instead of reporting it.");
           if (cur.kept?.includes(me.id)) throw new ActionError("An admin reviewed this fact and kept it, so you can't report it again.");
           // A rate shared for the benchmarks only is not a fact on a record, so it doesn't count here.
-          if (!paid && !own && !s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0 && !l.ref.startsWith("bench.")))
+          if (!paid && !own && !s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0 && !l.undone && !l.ref.startsWith("bench.")))
             throw new ActionError("Reporting opens once you've added a fact of your own. Add one first.");
           if (s.reportLog.filter((r) => r.memberId === me.id && nowMs - Date.parse(r.at) < DAY).length >= REPORT_DAILY_MAX)
             throw new ActionError(`You've reported ${REPORT_DAILY_MAX} facts in 24 hours, which is the limit. Try again tomorrow.`);
@@ -3023,6 +3154,47 @@ export async function perform(token: string | null, a: Action, origin?: string):
             cells: [...ENG_GATED, "status"].map((f) => changed("engagement", e, f)),
           };
         }
+        case "retract": {
+          // Undo: the member takes back a fact they added, while nobody else has paid for it or vouched for it.
+          const node = nodeOf(a.entity, a.id);
+          const f = fieldOf(a.entity, a.field);
+          const k = fkey(node.id, f.key);
+          const cur = valueOf(node, s, f.key);
+          if (!cur || cur.by !== me.id) throw new ActionError("There's nothing of yours here to take back.");
+          // The fill that added it. A correction of our records on their own seat, or a value filled in from another answer, has none.
+          const row = s.ledger.findLast((l) => l.memberId === me.id && l.ref === k && l.reason === "fill" && !l.undone);
+          if (!row) throw new ActionError("You can only take back a fact you added. Edit this one instead.");
+          if ((s.unlocks[k] ?? []).some((m) => m !== me.id)) throw new ActionError("Someone already unlocked this, so it stays. You can still edit it.");
+          if ((s.verifications[k] ?? []).length) throw new ActionError("Someone already confirmed this, so it stays. You can still edit it.");
+          // The invite bonus paid on this fact (it pays with the first fact on a record, in the same change).
+          const paidInvite =
+            s.referralPaid.includes(me.id) &&
+            (s.ledger.some((l) => l.memberId === me.id && l.reason === "referral" && l.at === row.at) || s.held.some((h) => h.memberId === me.id && h.reason === "referral" && h.at === row.at));
+          if (paidInvite) throw new ActionError("This fact paid your invite bonus, so it stays. You can still edit it.");
+          const statusBefore = a.entity === "engagement" ? live(node, s, "status") : null;
+          const taken = removeFact(k, cur, "retract");
+          row.undone = true;
+          const cells = [changed(a.entity, node, f.key)];
+          // What this fact filled in on its own goes with it: the function read from a role, the status "Ended" a dated end set.
+          const derived = a.entity === "engagement" ? (f.key === "role" ? "function" : f.key === "end" ? "status" : null) : null;
+          if (derived) {
+            const dk = fkey(node.id, derived);
+            const dv = s.values[dk];
+            if (dv && dv.by === me.id && dv.status !== "removed" && dv.at === cur.at && !s.ledger.some((l) => l.memberId === me.id && l.ref === dk && l.reason === "fill")) {
+              s.values[dk] = { ...dv, status: "removed" };
+              delete s.verifications[dk];
+              cells.push(changed(a.entity, node, derived));
+            }
+          }
+          // Taking back your own name on an open role you took reopens it.
+          const reopened = f.key === "operator" && statusBefore !== "Open role" && live(node, s, "status") === "Open role";
+          if (f.key === "operator") cells.push(changed(a.entity, node, "status"));
+          return {
+            message: `Took back ${say(a.entity, f.key)}.${taken ? ` The ${taken === 1 ? "credit" : `${taken} credits`} it earned came off your balance.` : ""}${reopened ? " The role is open again." : ""}`,
+            id: outId(a.entity, node.id),
+            cells,
+          };
+        }
         case "signal": {
           const name = String(a.name);
           if (!SIGNAL_NAMES.has(name)) throw new ActionError(UNKNOWN_ACTION);
@@ -3066,7 +3238,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
     let unlocked = 0;
     for (const l of s.ledger) {
       if (l.memberId !== me.id) continue;
-      if (l.reason === "fill") added++;
+      if (l.reason === "fill" && !l.undone) added++;
       else if (l.reason === "unlock") unlocked++;
     }
     const { earned, resetsAt } = earning(s, me.id, nowMs);

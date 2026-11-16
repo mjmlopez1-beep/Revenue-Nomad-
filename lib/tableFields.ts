@@ -40,8 +40,10 @@ export const SOURCED_VIA = ["Referral", "Investor intro", "Former colleague", "I
 export const HIRE_REASONS = [
   "Move off founder-led sales",
   "Build the first sales motion",
+  "Build the function from scratch",
   "Scale an existing team",
   "Replace a departed leader",
+  "Cover while hiring full-time",
   "Fix RevOps or the GTM stack",
   "Launch a new market or product",
   "Turn around missed targets",
@@ -202,7 +204,7 @@ export const SOURCE_LABEL: Record<string, string> = {
   "Member success story": "Member story",
   "Demand scan": "Job posting",
   "Member added": "Member added",
-  Clay: "Clay",
+  Clay: "Revenue Nomad research",
 };
 
 const FIELD_BY_KEY = new Map<string, FieldDef>(ALL_FIELDS.map((x) => [`${x.entity}.${x.f.key}`, x.f]));

@@ -30,7 +30,11 @@ export type Cell =
       iv?: boolean;
       system?: boolean;
       from?: "records" | "posting";
-      /** Seat holder only: the name belongs to a Trading Post member (their title; `you` when it's the viewer). */
+      /**
+       * Seat holder only: the name belongs to a Trading Post member who has signed in (their
+       * title; `you` when it's the viewer). Left out for a member who never signed in, the same
+       * test the seat holder picker uses, so "Member" always means someone on Trading Post now.
+       */
       member?: { title: string; you?: boolean };
     }
   | { s: "reported"; mine: boolean };
@@ -88,16 +92,26 @@ export interface Friendly {
   /** 0 to 100. */
   score: number;
   tier: "High" | "Medium" | "Low" | null;
-  /** Engagements of a fractional type (Fractional, Interim, Advisory, Project) or published by a member. */
+  /**
+   * Seats held fractionally: a fractional type (Fractional, Interim, Advisory, Project), a seat a
+   * member published, or a seat a member added with no type. Open roles and postings that came
+   * down with no seat holder named are not hires and are not counted.
+   */
   fractional: number;
   /** Open fractional roles (demand scans or status Open role). */
   open: number;
-  /** Distinct GTM functions hired fractionally. */
+  /** Distinct GTM functions hired fractionally (the seats counted in `fractional`). */
   functions: string[];
   /** Members who worked there (any engagement or story). Good for intros. */
   operators: number;
   /** Fractional engagements that started in the last two years. */
   recent: number;
+  /**
+   * GTM functions of the open roles there now. An open role is a posting, not a hire, so its
+   * function is here and not in `functions` (show these as "Hiring now"). A posting that closed
+   * with nobody named as its seat holder counts in neither list. Empty when nothing is open.
+   */
+  hiring?: string[];
 }
 
 export interface CompanyRec {
@@ -124,6 +138,12 @@ export interface CompanyRec {
   updatedAt: string | null;
   /** The viewer added something here. */
   mine: boolean;
+  /**
+   * The viewer paid to see this company while it was hidden (Unlock company, or the role or the
+   * posting of its open role, which is the same purchase). Left out otherwise, also for a company
+   * the viewer sees because they added to it or held a seat there.
+   */
+  unlocked?: boolean;
 }
 
 export interface Me {
@@ -299,6 +319,13 @@ export interface View {
   }[];
   /** Whether sign-in emails can be sent (an email provider is configured). */
   email: boolean;
+  /**
+   * Where a person can write to Revenue Nomad, read from RN_SUPPORT_EMAIL and RN_INTRO_EMAIL at
+   * run time (never baked into a build). `support`: sign-in help, questions and feedback.
+   * `intro`: asking for an intro to a seat holder. Null when not set. Sent signed out too, for
+   * the sign-in screens.
+   */
+  contact?: { support: string | null; intro: string | null };
   /** Rate benchmarks by function and client revenue band. Sent to signed-in members only. */
   benchmarks?: Benchmarks;
   /** The weekly scan of open fractional GTM roles. Sent to signed-in members only. */
@@ -414,6 +441,14 @@ export type Action =
   | { type: "benchRateRemove"; id: string }
   /** "This isn't me": unlink the viewer from a seat matched to them by name. */
   | { type: "notMine"; engagementId: string }
+  /**
+   * Take back a fact the viewer added (the Undo on the toast, or reopening an answer on Your
+   * seats). Allowed while no other member has unlocked or confirmed it: the field opens again and
+   * the credit it earned comes off the balance (ledger row "Took back the HQ"). A fact that paid
+   * the invite bonus stays (edit it instead), and so does a correction of our records on the
+   * viewer's own seat (it earned nothing).
+   */
+  | { type: "retract"; entity: Entity; id: string; field: string }
   /**
    * Product signals for the pilot: hitting zero credits on an unlock ("wall"), seeing the Pro
    * offer ("pro_view") and asking to hear about Pro ("pro_interest"). `where` names the place.

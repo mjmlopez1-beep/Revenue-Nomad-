@@ -32,7 +32,7 @@
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createServer } from "node:net";
-import { gunzipSync } from "node:zlib";
+import { brotliDecompressSync, gunzipSync } from "node:zlib";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createHmac } from "node:crypto";
 
@@ -330,9 +330,16 @@ section("ids", async () => {
 
   // Add an engagement, a person on it, and details into it, all by public id.
   const co = v.companies.find((c) => c.engagements.length > 0 && c.cells.website?.s === "value");
-  const add = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { type: "Advisory", start: "2024-03" } });
+  // A new seat says what the work was (a function or a role): a type and a start alone are refused.
+  const vague = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { type: "Advisory", start: "2024-03" } });
+  check(
+    "a new seat with no function or role is refused, and says what to add",
+    vague.status === 400 && vague.json?.error === "Add the seat's function or its role too, so members can tell what the work was.",
+    vague.json,
+  );
+  const add = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { function: "Enablement", type: "Advisory", start: "2024-03" } });
   check("add engagement returns a public id", add.status === 200 && /^e_[A-Za-z0-9_-]{12}$/.test(add.json?.id ?? ""), add.json);
-  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Trading Post, so we added what you know to it)\. You earned 2 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
+  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Trading Post, so we added what you know to it)\. You earned 3 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
   const eid = add.json?.id;
   const addP = await m.act({ type: "addPerson", companyId: co.id, engagementId: eid, person: { name: "Quinn Qa", title: "CEO" } });
   check("add person on that engagement", addP.status === 200 && /^p_[A-Za-z0-9_-]{12}$/.test(addP.json?.id ?? ""), addP.json);
@@ -341,7 +348,10 @@ section("ids", async () => {
   check("add details into the engagement by id", into.status === 200 && into.json?.id === eid, into.json);
   check("details added to a company that is already there say so", /^.+ was already on Trading Post, so we added what you know to it\. You earned 1 credit\.$/.test(into.json?.message ?? ""), into.json?.message);
   const same = await m.act({ type: "add", company: co.name, engagementId: eid, engagementFields: { hours: "20" } });
-  check("a fact that is already there is left alone, and the answer says so", same.status === 200 && /^.+ is already on Trading Post\. 1 fact was already there, so we left it as it was\.$/.test(same.json?.message ?? ""), same.json?.message);
+  // DESK-11: an Add that saves nothing says so, instead of "Seat added".
+  check("a fact that is already there is left alone, and the answer says nothing new was added", same.status === 200 && /^That seat at .+ is already on file\. Nothing new was added\.$/.test(same.json?.message ?? ""), same.json?.message);
+  const coOnly = await m.act({ type: "add", company: co.name });
+  check("an Add of a company that is already there, with nothing else, says nothing new was added", coOnly.status === 200 && /^.+ is already on Trading Post\. Nothing new was added\.$/.test(coOnly.json?.message ?? ""), coOnly.json?.message);
   const v2 = await m.view();
   const c2 = v2.companies.find((c) => c.id === co.id);
   const e2 = c2?.engagements.find((e) => e.id === eid);
@@ -433,7 +443,8 @@ section("ip", async () => {
   for (let i = 1; i <= 12; i++) {
     const rr = await call("POST", "/api/table", {
       headers: { "x-forwarded-for": `198.51.100.${i}, ${proxy}` },
-      body: { join: { name: `Xff Person ${i}`, email: `qa+${RUN}-xff${i}@example.com` } },
+      // A first and last name of letters (join refuses a name with digits in it, as a seat holder's name does).
+      body: { join: { name: `Xff Person${String.fromCharCode(96 + i)}`, email: `qa+${RUN}-xff${i}@example.com` } },
     });
     codes.push(rr.status);
   }
@@ -573,19 +584,30 @@ section("stats", async () => {
 
 section("gzip", async () => {
   const m = await member("Gus Gzip", ip(80));
-  const z = await rawGet("/api/table", { "accept-encoding": "gzip, deflate, br", cookie: `rn_table=${m.token}`, "x-forwarded-for": m.ip });
-  let parsed = null;
-  try {
-    parsed = JSON.parse(gunzipSync(z.body).toString("utf8"));
-  } catch {
-    /* not gzip */
-  }
-  check("GET is gzipped when accepted", z.headers["content-encoding"] === "gzip" && !!parsed?.companies?.length, z.headers["content-encoding"]);
-  console.log(`  gzipped view: ${(z.body.length / 1024).toFixed(0)} KB`);
-  check("gzipped view is under 200 KB", z.body.length < 200 * 1024, z.body.length);
-  check("vary: Accept-Encoding", /accept-encoding/i.test(String(z.headers.vary ?? "")));
-  const plain = await rawGet("/api/table", { cookie: `rn_table=${m.token}`, "x-forwarded-for": m.ip });
-  check("not gzipped when not accepted", !plain.headers["content-encoding"] && !!JSON.parse(plain.body.toString("utf8")).companies);
+  const as = (enc) => rawGet("/api/table", { ...(enc ? { "accept-encoding": enc } : {}), cookie: `rn_table=${m.token}`, "x-forwarded-for": m.ip });
+  const parse = (body, unpack) => {
+    try {
+      return JSON.parse(unpack(body).toString("utf8"));
+    } catch {
+      return null;
+    }
+  };
+  // PERF-8: brotli when the browser takes it (every current browser does over https), gzip otherwise.
+  const b = await as("gzip, deflate, br");
+  const bv = parse(b.body, brotliDecompressSync);
+  check("GET is brotli when accepted", b.headers["content-encoding"] === "br" && !!bv?.companies?.length, b.headers["content-encoding"]);
+  const z = await as("gzip, deflate");
+  const zv = parse(z.body, gunzipSync);
+  check("GET is gzipped when brotli isn't accepted", z.headers["content-encoding"] === "gzip" && !!zv?.companies?.length, z.headers["content-encoding"]);
+  const refused = await as("br;q=0, gzip");
+  check("a coding the client refuses with q=0 is not used", refused.headers["content-encoding"] === "gzip", refused.headers["content-encoding"]);
+  const plain = await as(null);
+  console.log(`  member view: ${(plain.body.length / 1024).toFixed(0)} KB raw, ${(z.body.length / 1024).toFixed(1)} KB gzip, ${(b.body.length / 1024).toFixed(1)} KB brotli`);
+  check("brotli is smaller than gzip", b.body.length < z.body.length, [b.body.length, z.body.length]);
+  check("the compressed view is under 200 KB", z.body.length < 200 * 1024 && b.body.length < 200 * 1024, [z.body.length, b.body.length]);
+  check("both say the same thing", JSON.stringify(bv?.me) === JSON.stringify(zv?.me) && bv?.companies?.length === zv?.companies?.length, [bv?.companies?.length, zv?.companies?.length]);
+  check("vary: Accept-Encoding", /accept-encoding/i.test(String(b.headers.vary ?? "")) && /accept-encoding/i.test(String(z.headers.vary ?? "")));
+  check("not compressed when not accepted", !plain.headers["content-encoding"] && !!JSON.parse(plain.body.toString("utf8")).companies);
 });
 
 section("result", async () => {
@@ -625,6 +647,13 @@ section("join", async () => {
   // The server answers a bad name or email in the same words the join form uses for its own checks.
   const { r: noName } = await join("J", ip(103));
   check("a one-letter name: 'Add your first and last name.'", noName.status === 400 && noName.json?.error === "Add your first and last name.", noName.json);
+  // DESK-24: the label asks for a first and last name, and a seat links to a member by that name.
+  const { r: oneWord } = await join("Robin", ip(103));
+  check("a one-word name is refused: 'Add your first and last name.'", oneWord.status === 400 && oneWord.json?.error === "Add your first and last name.", oneWord.json);
+  const { r: digits } = await join("Robin 2000", ip(103));
+  check("a name with digits in it is refused the same way", digits.status === 400 && digits.json?.error === "Add your first and last name.", digits.json);
+  const { r: accented } = await join("Zoë O'Brien-Núñez", ip(103));
+  check("a first and last name with accents, an apostrophe and a hyphen joins", accented.status === 200, accented.json);
   const { r: badMail } = await join("Bad Email", ip(103), { email: "not-an-email" });
   check("a bad email: the join form's own words", badMail.status === 400 && badMail.json?.error === "That doesn't look like an email address. Check it for a typo.", badMail.json);
   const m = await member("Sid Signin", ip(101));
@@ -1313,7 +1342,8 @@ section("scan", async () => {
 
 section("load", async () => {
   const accounts = [];
-  for (let i = 0; i < 50; i++) accounts.push(await member(`Load Tester${i}`, ip(150 + Math.floor(i / 10))));
+  // Names of letters only (join refuses digits in a name): Load Testeraa, Load Testerab, ...
+  for (let i = 0; i < 50; i++) accounts.push(await member(`Load Tester${String.fromCharCode(97 + Math.floor(i / 26), 97 + (i % 26))}`, ip(150 + Math.floor(i / 10))));
   const v = await accounts[0].view();
   const empties = pickEmpty(v, 50);
   const locked = pickLocked(v, 50);

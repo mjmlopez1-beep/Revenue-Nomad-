@@ -571,7 +571,8 @@ section("picker", async () => {
     const v = await T.view();
     const add = await T.act({ type: "add", company: hostsOf(v)[hostN++].name, newEngagement: true, engagementFields: { function: "Sales", type: "Advisory", operator: quiet.name } });
     const eng = (await T.view()).companies.flatMap((c) => c.engagements).find((e) => e.id === add.json?.id);
-    check("typing their exact full name still links the seat to them", add.status === 200 && !!eng?.cells.operator?.member && eng.cells.operator.member.you === false, { status: add.status, linked: !!eng?.cells.operator?.member });
+    // Decision 2 (round 5): the "Member" tag means someone on Trading Post now, so it waits for their first sign-in.
+    check("a seed member who never signed in carries no Member tag on a seat", add.status === 200 && eng?.cells.operator?.s === "value" && !eng.cells.operator.member, { status: add.status, tagged: !!eng?.cells.operator?.member });
     // A sweep by two-letter prefixes finds no seed member who hasn't signed in.
     const signedIn = new Set([0, 1, 2].map((n) => seedMember(n)?.name));
     const seedNames = new Set(seedFile.members.map((m) => m.name));
@@ -586,6 +587,10 @@ section("picker", async () => {
     check("until they visit, nobody else finds them", !(await names(T, self.name)).includes(self.name));
     await seedSignIn(quiet, nextIp());
     check("once a seed member signs in, they are listed", (await names(T, quiet.name)).includes(quiet.name));
+    // Their exact name linked the seat all along: once they have signed in it shows as a Member's, and it is theirs.
+    const tagged = (await T.view()).companies.flatMap((c) => c.engagements).find((e) => e.id === add.json?.id)?.cells.operator;
+    const theirs = (await new Client("Seed Member", nextIp(), quiet.token).view()).companies.flatMap((c) => c.engagements).find((e) => e.id === add.json?.id);
+    check("typing their exact full name still links the seat to them", !!tagged?.member && tagged.member.you === false && theirs?.yours === true, { tagged: !!tagged?.member, yours: theirs?.yours });
   } else skip("seed member picker checks", "no seed file the server knows");
 
   // 30 searches a minute per member.
