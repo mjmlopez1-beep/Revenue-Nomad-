@@ -29,7 +29,8 @@ came from (the Source column):
 (e.g. a Clay lookup); it only fills companies that have no website yet.
 
 out defaults to ./data. Re-running keeps existing member tokens so links
-already sent keep working.
+already sent keep working, and keeps the Rate Index points (rateIndex, added by
+scripts/add-rate-index.mjs) so rate benchmarks survive a rebuild.
 """
 import argparse, csv, json, os, re, secrets
 from datetime import datetime, timezone
@@ -120,9 +121,13 @@ def clip(text, n=280):
 # ---------- members ----------
 
 old = {}
+old_rate_index = None  # Rate Index points added by scripts/add-rate-index.mjs, carried over on a rebuild
 if os.path.exists(SEED_PATH):
     try:
-        for m in json.load(open(SEED_PATH))["members"]:
+        prev = json.load(open(SEED_PATH))
+        if isinstance(prev.get("rateIndex"), list) and prev["rateIndex"]:
+            old_rate_index = prev["rateIndex"]
+        for m in prev["members"]:
             old[m["email"] or m["name"].lower()] = m["token"]
     except Exception:
         pass
@@ -572,6 +577,8 @@ seed = {
     "engagements": list(engagements.values()),
     "contacts": contacts,
 }
+if old_rate_index:
+    seed["rateIndex"] = old_rate_index
 json.dump(seed, open(SEED_PATH, "w"), indent=1)
 
 with open(os.path.join(OUT, "intel-member-links.csv"), "w", newline="") as f:
@@ -592,4 +599,5 @@ print(f"records by source: {src}  total: {len(engagements)} ({dupes_removed} sam
 print(f"companies: {len(companies)} ({sum('website' in c['fields'] for c in companies.values())} with a website; {domains_set} from --domains)")
 print(f"contacts: {len(contacts)} ({clay_people} decision makers from Clay)")
 print(f"clay: {clay_used} companies enriched; {merged_by_domain} merged as same-domain duplicates")
+print(f"rate index: {len(old_rate_index or [])} points carried over" + ("" if old_rate_index else " (run scripts/add-rate-index.mjs to add them)"))
 print(f"wrote {SEED_PATH}")
