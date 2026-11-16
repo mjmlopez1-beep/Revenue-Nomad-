@@ -91,6 +91,8 @@ export interface CoInfo {
   teaser: string;
   /** What search reads on a company row: its name, domain and what the member can see there. */
   hay: string;
+  /** The company's About text (lowercase), when the member can see it. Matched by word start. */
+  aboutHay: string;
   /** The company's name and domain alone (search ranks these matches first). */
   nameHay: string;
 }
@@ -243,7 +245,7 @@ function infoOf(c: CompanyRec): CoInfo {
   const teaser = c.hidden
     ? [shown(c.cells.industry), shown(c.cells.employees) && `${shown(c.cells.employees)} employees`, shown(c.cells.hq)].filter(Boolean).join(" · ")
     : "";
-  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay };
+  return { c, domain, fns, fnState: { hired, hiring, story }, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase(), nameHay, aboutHay: (c.cells.about?.s === "value" ? c.cells.about.v : "").toLowerCase() };
 }
 
 /** Derived info per company object. A patched view keeps unchanged companies, so their info (and rows) keep identity too. */
@@ -558,7 +560,9 @@ export function searchTest(q: string): Test | null {
   if (!toks.length) return null;
   return (r) => {
     const h = hayOf(r);
-    return toks.every((t) => h.includes(t));
+    const about = r.i.aboutHay;
+    // The About text is long prose, so a word there counts only from its start ("pharma" finds "pharmaceutical", "one" does not find "phone").
+    return toks.every((t) => h.includes(t) || (!!about && new RegExp(`(?:^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(about)));
   };
 }
 

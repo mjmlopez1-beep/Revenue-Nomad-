@@ -155,7 +155,13 @@ check("a fact the member added is not an unlock", !own.eng && !own.company, own)
   check("a seat search reads the company's industry", seats("software").length === 2);
   const cos = (q: string) => applyFilters(rowsFor("companies", [i]), EMPTY_FILTERS, "all", q, me).rows.length;
   check("a pasted address finds the company", cos("https://www.supersend.io/pricing") === 1 && cos("www.supersend.io") === 1 && cos("supersend.io/") === 1);
-  check("the About text and the source are not searched", cos("hone") === 0 && cos("member story") === 0 && cos("success") === 0);
+  check("the About text is searched by the start of a word", cos("outreach") === 1 && cos("outre") === 1 && cos("utreach") === 0 && cos("one") === 0);
+  check("the source is not searched", cos("member story") === 0 && cos("success") === 0);
+  {
+    const h = co("Hidden Pharma", [eng({ status: val("Open role", { system: true }), function: val("Sales") }, { opened: "2026-11-03", closed: null })]);
+    h.cells = { ...h.cells, about: LOCKED };
+    check("a hidden company's locked About is not searched", applyFilters(rowsFor("companies", deriveAll([h])), EMPTY_FILTERS, "all", "pharmaceutical", me).rows.length === 0);
+  }
   check("a locked role is not searched", seats("cro").length === 0);
   check("searchWords keeps plain words", JSON.stringify(searchWords("  VP Sales ")) === JSON.stringify(["vp", "sales"]));
   const people = applyFilters(rowsFor("people", [i]), EMPTY_FILTERS, "all", "ceo", me).rows.length;
