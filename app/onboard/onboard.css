@@ -1,7 +1,13 @@
 /*
  * Trading Post first-run onboarding. Classes are prefixed ob-.
- * One centered card on the off-white page, the same width on every step; pine for selection
- * and for Continue (navigation), volt only where credits are earned.
+ * One centered card on the off-white page, the same width on every step. Pine for selection
+ * and for the one button that moves on. No volt and no ember here, except the ember dot on a
+ * suggested company with an open role.
+ *
+ * Type: step title 28/34, question 18, body 16, hints and meta 13.5. Weights 400, 700, 800,
+ * with chips at 600. Numbers use the text face with tabular figures (.num). Mono is only on
+ * the sign-in link.
+ * Spacing steps: 4, 8, 12, 16, 24, 32.
  */
 
 .ob {
@@ -9,38 +15,88 @@
   background: var(--bg);
   display: flex;
   flex-direction: column;
+  font-size: 16px;
+  line-height: 24px;
 }
+.ob :focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+.ob .input:focus {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+  border-color: var(--pine);
+  box-shadow: none;
+}
+.ob .btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+/* Loading: the label says what is happening and a small ring turns beside it. */
+.ob .btn[aria-busy="true"] {
+  cursor: progress;
+}
+.ob .btn[aria-busy="true"]::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: ob-spin 0.7s linear infinite;
+}
+@keyframes ob-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- top bar ---------- */
 .ob-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   height: 64px;
-  padding: 0 28px;
+  padding: 0 32px;
+}
+.ob-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.ob-product {
+  padding-left: 12px;
+  border-left: 1px solid var(--line-strong);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
 }
 .ob-credits {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 32px;
-  padding: 0 12px 0 5px;
+  padding: 0 12px 0 4px;
   border-radius: 16px;
   border: 1px solid var(--line);
   background: var(--surface);
   font-size: 13.5px;
-  font-weight: 600;
+  line-height: 20px;
   color: var(--muted);
+  white-space: nowrap;
 }
-.ob-credits .mono {
-  font-size: 14px;
-  font-weight: 500;
+.ob-credits strong {
+  font-weight: 800;
   color: var(--ink);
 }
 .ob-coin {
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--pine);
   color: var(--volt);
@@ -55,13 +111,13 @@
 .ob-card {
   width: 100%;
   max-width: 720px;
-  padding: 28px 32px 28px;
-  border-radius: 12px;
+  padding: 32px;
+  border-radius: var(--r-card);
   border: 1px solid var(--line);
   background: var(--surface);
 }
 
-/* progress */
+/* ---------- progress ---------- */
 .ob-progress {
   display: flex;
   align-items: center;
@@ -70,7 +126,7 @@
 }
 .ob-dots {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 .ob-dots i {
   display: block;
@@ -88,45 +144,50 @@
   background: var(--pine);
 }
 .ob-step {
-  font-size: 12px;
-  color: var(--faint);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
 }
 
-/* type */
-.ob-welcome {
-  margin-bottom: 22px;
-  font-size: 15px;
+/* ---------- type ---------- */
+.ob-title {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.ob-title:focus {
+  outline: none;
+}
+.ob-sub {
+  margin-top: 8px;
+  max-width: 36em;
   color: var(--muted);
+  text-wrap: pretty;
 }
 .ob-h {
   padding: 0;
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
   letter-spacing: -0.01em;
-}
-.ob-h:focus {
-  outline: none;
-}
-.ob-h-lg {
-  font-size: 26px;
-  letter-spacing: -0.02em;
-}
-.ob-sub {
-  margin-top: 6px;
-  font-size: 15px;
-  color: var(--muted);
+  color: var(--ink);
 }
 .ob-hint {
-  margin-top: 10px;
-  font-size: 13px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  line-height: 20px;
   color: var(--muted);
 }
+.ob-hint-flush {
+  margin-top: 0;
+}
 
-/* step 1 */
+/* ---------- step 1 ---------- */
 .ob-q {
-  margin: 0 0 26px;
+  margin: 32px 0 0;
   padding: 0;
   border: 0;
   min-width: 0;
@@ -134,27 +195,34 @@
 .ob-q legend {
   margin-bottom: 12px;
 }
+/* Four across, so the eleven functions fill three rows and none sits alone. */
 .ob-chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 .ob-chip {
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 8px;
+  white-space: nowrap;
   border-radius: var(--r-btn);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   font-size: 14px;
-  font-weight: 600;
+  line-height: 20px;
+  font-weight: 700;
   color: var(--ink);
   transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .ob-chip:hover {
   border-color: var(--pine);
 }
+.ob-chip:active {
+  background: var(--surface-2);
+}
 .ob-chip-on,
-.ob-chip-on:hover {
+.ob-chip-on:hover,
+.ob-chip-on:active {
   background: var(--pine);
   border-color: var(--pine);
   color: #fff;
@@ -168,21 +236,26 @@
   align-items: center;
   gap: 12px;
   min-height: 48px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: var(--r-btn);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   text-align: left;
   font-size: 15px;
-  font-weight: 600;
+  line-height: 24px;
+  font-weight: 700;
   color: var(--ink);
   transition: background 0.12s, border-color 0.12s;
 }
 .ob-goal:hover {
   border-color: var(--pine);
 }
+.ob-goal:active {
+  background: var(--surface-2);
+}
 .ob-goal-on,
-.ob-goal-on:hover {
+.ob-goal-on:hover,
+.ob-goal-on:active {
   border-color: var(--pine);
   background: var(--pine-8);
 }
@@ -198,54 +271,94 @@
   border: 5px solid var(--pine);
 }
 
-/* footer */
+/* ---------- footer ---------- */
 .ob-foot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
-  margin-top: 28px;
-  padding-top: 20px;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
   border-top: 1px solid var(--line);
 }
 .ob-foot-note {
   margin-right: auto;
-  font-size: 13px;
-  color: var(--faint);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
 }
 .ob-foot-follow .ob-foot-note {
   margin-right: 0;
-  color: var(--muted);
 }
 .ob-next.btn {
-  min-width: 140px;
+  min-width: 160px;
 }
 .ob-back,
 .ob-skip {
   min-height: 44px;
   padding: 0 4px;
   border: 0;
+  border-radius: 4px;
   background: none;
   font-size: 14px;
-  font-weight: 600;
+  line-height: 20px;
+  font-weight: 700;
   color: var(--muted);
 }
 .ob-back:hover,
 .ob-skip:hover {
   color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ob-skip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 .ob-skip {
   margin-right: auto;
 }
+/* On phones this takes up the slack, so the footer sits at the bottom of the screen on a short step. */
+.ob-grow {
+  display: none;
+}
+/* Last step, for a member with seats under their name: what is waiting next. */
+.ob-next-up {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  border-radius: var(--r-btn);
+  background: var(--pine-8);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ob-next-up strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+.ob-next-icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  height: 20px;
+  color: var(--pine);
+}
+.ob-next-up + .ob-grow + .ob-foot {
+  margin-top: 24px;
+}
 
-/* step 2: search */
+/* ---------- step 2: search ---------- */
 .ob-search {
   position: relative;
-  margin-top: 20px;
+  margin-top: 24px;
 }
 .ob-search-icon {
   position: absolute;
-  left: 14px;
+  left: 16px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--faint);
@@ -253,13 +366,13 @@
   display: flex;
 }
 .ob-search-input.input {
-  min-height: 46px;
-  padding: 0 48px 0 40px;
-  font-size: 15px;
+  min-height: 48px;
+  padding: 0 48px 0 44px;
+  font-size: 16px;
 }
 .ob-search-clear {
   position: absolute;
-  right: 1px;
+  right: 2px;
   top: 50%;
   transform: translateY(-50%);
   display: grid;
@@ -279,21 +392,29 @@
   z-index: 10;
   left: 0;
   right: 0;
-  top: calc(100% + 6px);
+  top: calc(100% + 4px);
   margin: 0;
-  padding: 6px;
+  padding: 4px;
   list-style: none;
   border-radius: var(--r-card);
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--overlay-shadow);
+  animation: ob-pop 0.15s ease-out;
+}
+@keyframes ob-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 .ob-result {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 10px;
-  border-radius: var(--r-btn);
+  min-height: 48px;
+  padding: 4px 12px;
+  border-radius: var(--r-chip);
   cursor: pointer;
 }
 .ob-result-hi {
@@ -307,6 +428,7 @@
 }
 .ob-result-name {
   font-size: 14px;
+  line-height: 20px;
   font-weight: 700;
   color: var(--ink);
   white-space: nowrap;
@@ -314,7 +436,8 @@
   text-overflow: ellipsis;
 }
 .ob-result-meta {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -326,51 +449,61 @@
   align-items: center;
   gap: 4px;
   font-size: 13px;
+  line-height: 20px;
   font-weight: 700;
   color: var(--pine);
 }
 .ob-result-act.on {
-  color: var(--volt-ink);
+  color: var(--muted);
 }
 .ob-result-empty {
-  padding: 12px 10px;
+  padding: 12px;
   font-size: 14px;
+  line-height: 20px;
   color: var(--muted);
 }
 
 .ob-picked {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   margin-top: 12px;
 }
 .ob-picked-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 32px;
-  padding: 0 4px 0 4px;
-  border-radius: var(--r-btn);
+  padding: 0 0 0 4px;
+  border-radius: var(--r-chip);
   background: var(--pine);
   color: #fff;
   font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   max-width: 100%;
+}
+.ob-picked-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .ob-picked-chip .logo {
   width: 24px;
   height: 24px;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: 9.5px;
 }
 .ob-picked-chip button {
   position: relative;
+  flex: none;
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--r-chip);
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
 }
@@ -385,19 +518,24 @@
   color: #fff;
 }
 
-/* step 2: suggestions */
+/* ---------- step 2: suggestions ---------- */
 .ob-sugg-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin: 24px 0 10px;
-  font-size: 13px;
+  margin: 24px 0 12px;
+}
+.ob-sugg-head h2 {
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 700;
+  letter-spacing: 0;
   color: var(--ink);
 }
 .ob-sugg-why {
-  font-weight: 500;
+  font-size: 13.5px;
+  line-height: 20px;
   color: var(--muted);
   text-align: right;
 }
@@ -407,13 +545,13 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 .ob-co {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
+  padding: 16px;
   border-radius: var(--r-card);
   border: 1px solid var(--line);
   background: var(--surface);
@@ -426,7 +564,7 @@
 .ob-co-top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 .ob-co-id {
@@ -436,15 +574,18 @@
   flex-direction: column;
 }
 .ob-co-name {
-  font-size: 14.5px;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .ob-co-meta {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -455,71 +596,74 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: auto;
 }
 .ob-co-fns {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-}
-.ob-chip-sm.chip {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 12px;
-}
-.ob-co-none {
-  font-size: 12px;
-  color: var(--faint);
-}
-/* Evidence chip, as the app draws it: ember for an open role, pine for a recent seat, grey for a past one. */
-.ob-tier {
-  flex: none;
-  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 9px;
-  border-radius: var(--r-chip);
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
-.ob-tier::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
+/* One chip system: 6px corner, 13px, 600. Outline is an attribute, fill is a state. */
+.ob-chip-sm.chip {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
 }
-.ob-tier.is-hiring {
-  border-color: #ffc9b0;
-  background: var(--ember-soft);
-  color: var(--ember-ink);
-}
-.ob-tier.is-recent {
-  border-color: var(--pine-14);
+/* The member's own function. */
+.ob-chip-mine.chip {
+  border-color: transparent;
   background: var(--pine-8);
   color: var(--pine);
 }
+.ob-co-none,
+.ob-co-more,
+.ob-tier {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ob-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* An open role: the dot is the only ember a row carries. */
+.ob-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ember);
+}
+/* The same width followed or not, so a card does not shift when it is tapped. */
 .ob-follow {
   flex: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  gap: 4px;
+  min-width: 112px;
   min-height: 44px;
   padding: 0 12px;
   border-radius: var(--r-btn);
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 700;
   color: var(--ink);
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
 .ob-follow:hover {
   border-color: var(--pine);
+}
+.ob-follow:active {
+  background: var(--surface-2);
 }
 .ob-follow-on,
 .ob-follow-on:hover {
@@ -527,46 +671,38 @@
   border-color: var(--pine);
   color: #fff;
 }
-
-/* step 3: sign-in link */
-.ob-linkicon {
-  display: inline-grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  margin-bottom: 14px;
-  border-radius: 10px;
-  background: var(--pine-8);
-  color: var(--pine);
+.ob-follow-on:active {
+  background: var(--pine-hover);
 }
+
+/* ---------- step 3: sign-in link ---------- */
 .ob-linkbox {
   display: flex;
   gap: 8px;
-  margin-top: 22px;
+  margin-top: 24px;
 }
 .ob-linkbox-text {
   flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
-  min-height: 46px;
-  padding: 10px 14px;
+  min-height: 48px;
+  padding: 12px 16px;
   border-radius: var(--r-btn);
   border: 1px solid var(--line);
   background: var(--surface-2);
   font-size: 13.5px;
-  line-height: 1.4;
+  line-height: 20px;
   color: var(--ink);
   overflow-wrap: anywhere;
   user-select: all;
 }
 .ob-linkbox-text:focus {
-  outline: none;
   border-color: var(--pine);
 }
 .ob-copy.btn {
-  min-height: 46px;
-  min-width: 96px;
+  min-height: 48px;
+  min-width: 112px;
 }
 .ob-copy-done.btn {
   border-color: var(--volt-ink);
@@ -577,12 +713,17 @@
   align-items: center;
   min-height: 44px;
   margin-top: 4px;
+  border-radius: 4px;
   font-size: 14px;
+  line-height: 20px;
   font-weight: 700;
   color: var(--pine);
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
+}
+.ob-mailme:hover {
+  text-decoration-thickness: 2px;
 }
 
 /* ---------- phones ---------- */
@@ -594,20 +735,51 @@
   .ob-top img {
     height: 15px !important;
   }
+  .ob-product {
+    display: none;
+  }
   .ob-main {
-    padding: 4px 0 0;
+    padding: 0;
   }
   .ob-card {
+    display: flex;
+    flex-direction: column;
     max-width: none;
-    padding: 20px 16px 16px;
+    padding: 24px 16px 0;
     border-radius: 0;
     border-left: 0;
     border-right: 0;
     border-bottom: 0;
-    min-height: calc(100vh - 60px);
+    min-height: calc(100vh - 56px);
+    min-height: calc(100dvh - 56px);
   }
-  .ob-h-lg {
-    font-size: 23px;
+  /* The step fills the card and its footer goes to the bottom. */
+  .ob-card > :last-child {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .ob-card > :last-child > * {
+    flex: none;
+  }
+  .ob-card > :last-child > .ob-grow {
+    display: block;
+    flex: 1;
+    min-height: 24px;
+  }
+  .ob-mailme {
+    align-self: flex-start;
+  }
+  .ob-title {
+    font-size: 24px;
+    line-height: 30px;
+  }
+  .ob-q {
+    margin-top: 24px;
+  }
+  .ob-chips {
+    display: flex;
+    flex-wrap: wrap;
   }
   .ob-chip {
     padding: 0 12px;
@@ -618,30 +790,31 @@
   }
   .ob-co {
     padding: 12px;
-    gap: 10px;
   }
-  .ob-foot {
+  .ob-sugg-head {
+    flex-direction: column;
+    gap: 0;
+  }
+  .ob-sugg-why {
+    text-align: left;
+  }
+  /* The button that moves on stays within thumb reach. */
+  .ob-foot,
+  .ob-next-up + .ob-grow + .ob-foot {
     position: sticky;
     bottom: 0;
-    margin: 24px -16px 0;
+    margin: 0 -16px;
     padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
     background: var(--surface);
     flex-wrap: wrap;
+    gap: 8px 16px;
   }
   .ob-next.btn {
     flex: 1;
   }
-  .ob-foot-follow {
-    row-gap: 6px;
-  }
-  /* Back stays on phones, first in the row, so the seat and goal can still be changed. */
+  /* Back stays on phones, first in the row, so the seat and the answer can still be changed. */
   .ob-foot-follow .ob-back {
     order: 0;
-    min-height: 44px;
-  }
-  .ob-foot-follow .ob-next.btn {
-    flex: 1 0 100%;
-    order: 3;
   }
   .ob-foot-follow .ob-skip {
     order: 1;
@@ -649,15 +822,35 @@
   .ob-foot-follow .ob-foot-note {
     order: 2;
   }
+  .ob-foot-follow .ob-next.btn {
+    flex: 1 0 100%;
+    order: 3;
+  }
   .ob-foot > .ob-foot-note:empty {
     display: none;
+  }
+  .ob-foot > .ob-foot-note:not(:empty) + .ob-next.btn {
+    flex: 1 0 100%;
   }
   .ob-linkbox {
     flex-direction: column;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ob-dots i {
+  .ob-dots i,
+  .ob-chip,
+  .ob-goal,
+  .ob-follow,
+  .ob-co {
     transition: none;
+  }
+  .ob-results {
+    animation: none;
+  }
+  .ob .btn[aria-busy="true"]::before {
+    animation-duration: 2s;
+  }
+  .ob .btn:active:not(:disabled) {
+    transform: none;
   }
 }

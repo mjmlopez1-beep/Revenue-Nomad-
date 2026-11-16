@@ -74,7 +74,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
     if (busy) return;
     const v = code.trim();
     if (!v) {
-      setCodeErr("Paste your sign-in link or the code at the end of it.");
+      setCodeErr("Paste your link first, or the code at the end of it.");
       return;
     }
     setBusy(true);
@@ -94,7 +94,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
     if (mailState === "busy") return;
     const v = mail.trim();
     if (!EMAIL_RE.test(v)) {
-      setMailErr("Enter the email you joined with.");
+      setMailErr("Type the email you joined with.");
       return;
     }
     setMailErr(null);
@@ -117,11 +117,15 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
             <IconX />
           </button>
         </div>
-        {note ? <p className="lp-dialog-note">{note}</p> : <p className="lp-dialog-sub">Revenue Nomad member? Use the personal link we sent you.</p>}
+        {note ? (
+          <p className="lp-dialog-note">{note}</p>
+        ) : (
+          <p className="lp-dialog-sub">Paste your personal link, or the code at the end of it. There is no password.</p>
+        )}
 
         <form onSubmit={signIn} noValidate className="lp-dialog-form">
           <label className="lp-field-label" htmlFor={`${id}-code`}>
-            Paste your sign-in link or code
+            Your sign-in link or code
           </label>
           <div className="lp-dialog-row">
             <input
@@ -131,7 +135,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}
-              placeholder="Link or code"
+              placeholder="Paste it here"
               value={code}
               onChange={(e) => {
                 setCode(e.target.value);
@@ -140,7 +144,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
               aria-invalid={!!codeErr}
               aria-describedby={codeErr ? `${id}-code-err` : undefined}
             />
-            <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={busy}>
+            <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={busy} aria-busy={busy}>
               {busy ? "Signing in" : "Sign in"}
             </button>
           </div>
@@ -151,25 +155,26 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
           ) : null}
           {!emailOn && SUPPORT ? (
             <p className="lp-dialog-help">
-              Lost your link? Email <a href={`mailto:${SUPPORT}?subject=${encodeURIComponent("Trading Post sign-in link")}`}>{SUPPORT}</a> and
-              we will send it.
+              Can&apos;t find your link? Email{" "}
+              <a className="mono" href={`mailto:${SUPPORT}?subject=${encodeURIComponent("Trading Post sign-in link")}`}>
+                {SUPPORT}
+              </a>{" "}
+              and we will send it again.
             </p>
           ) : null}
         </form>
 
         {emailOn ? (
           <>
-            <div className="lp-or">
-              <span>or</span>
-            </div>
+            <hr className="lp-or" />
             {mailState === "sent" ? (
               <p className="lp-dialog-ok" role="status">
-                If that email is a member, a link is on its way.
+                If that email has an account, your link is on its way. Give it a minute, and check spam if it does not show up.
               </p>
             ) : (
               <form onSubmit={emailLink} noValidate className="lp-dialog-form">
                 <label className="lp-field-label" htmlFor={`${id}-mail`}>
-                  Email me a sign-in link
+                  Or get your link by email
                 </label>
                 <div className="lp-dialog-row">
                   <input
@@ -178,20 +183,21 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
                     type="email"
                     inputMode="email"
                     autoComplete="email"
-                    placeholder="you@company.com"
+                    placeholder="The email you joined with"
                     value={mail}
                     onChange={(e) => {
                       setMail(e.target.value);
                       if (mailErr) setMailErr(null);
                     }}
                     aria-invalid={!!mailErr}
+                    aria-describedby={mailErr ? `${id}-mail-err` : undefined}
                   />
-                  <button type="submit" className="btn lp-dialog-btn" disabled={mailState === "busy"}>
-                    {mailState === "busy" ? "Sending" : "Send link"}
+                  <button type="submit" className="btn lp-dialog-btn" disabled={mailState === "busy"} aria-busy={mailState === "busy"}>
+                    {mailState === "busy" ? "Sending" : "Email my link"}
                   </button>
                 </div>
                 {mailErr ? (
-                  <p className="lp-field-err" role="alert">
+                  <p className="lp-field-err" id={`${id}-mail-err`} role="alert">
                     {mailErr}
                   </p>
                 ) : null}
@@ -201,9 +207,9 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
         ) : null}
 
         <div className="lp-dialog-foot">
-          New to Trading Post?{" "}
-          <button type="button" className="lp-linkbtn lp-linkbtn-ink" onClick={onJoin}>
-            Get {starter} credits
+          New here?{" "}
+          <button type="button" className="lp-linkbtn lp-linkbtn-ink num" onClick={onJoin}>
+            Join and get {starter} credits
           </button>
         </div>
       </div>

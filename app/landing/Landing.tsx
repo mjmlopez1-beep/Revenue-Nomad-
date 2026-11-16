@@ -1,17 +1,19 @@
 "use client";
 
 /**
- * Trading Post landing page (signed out): what it is, what is free and what costs a
- * credit, the rules, and one join form (email, then name) in the hero and at the end.
- * The product visual is static HTML; there is no clickable table here.
+ * Trading Post landing page (signed out). In order: what it is and what it costs (hero, with
+ * the join form), the numbers, what you can look up, how credits work, exactly which fields
+ * are free and which cost a credit, questions, and the join form again.
+ * One display heading. One volt button in view at a time: the join form's when a form is on
+ * screen, the nav's when none is. The product visual is static HTML.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
-import { Brand, IconCheck, IconLock, type View } from "../ui/shared";
-import { EARN_CAP, REFERRAL_BONUS } from "@/lib/tableFields";
+import { Brand, IconLock, type View } from "../ui/shared";
+import { EARN_CAP, GROUPS, REFERRAL_BONUS, type Entity } from "@/lib/tableFields";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
-import { HeroRecord, StepDemoAdd, StepDemoConfirm, StepDemoUnlock, UseAdjacent, UseFriendly, UseIntro } from "./Visuals";
+import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 
 export interface LandingProps {
   /** Signed-out view: only `stats` and `email` are filled; companies is empty. */
@@ -25,28 +27,107 @@ const STARTER_FALLBACK = 5;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-const FREE = ["Company and website", "Size and revenue", "GTM functions hired", "Engagement type and start", "Hours per week", "People's titles"];
-const LOCKED = ["Exact role", "Status", "Who held the seat", "Rate", "Names and contact details"];
+/**
+ * A count in tabular figures. This face's tabular set makes the comma as wide as a digit
+ * ("1 , 024"), so the separators go back to their normal width.
+ */
+function Num({ n }: { n: number }) {
+  const groups = fmt(n).split(",");
+  return (
+    <span className="num">
+      {groups.map((g, i) => (
+        <Fragment key={i}>
+          {i ? <span className="lp-sep">,</span> : null}
+          {g}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/** What a member comes here to look up, and what each one costs. */
+const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
+  {
+    title: "Open fractional roles",
+    body: "We check for open fractional GTM roles every week and date each one, so you can tell a fresh opening from a stale one. The company stays hidden until you unlock it.",
+    cost: "1 credit for the company",
+  },
+  {
+    title: "Companies that hire fractionals",
+    body: "See which companies brought in a fractional, for which GTM function and how recently the last seat started.",
+    cost: null,
+  },
+  {
+    title: "Companies yet to hire your function",
+    body: "A company that hired a fractional CMO and a RevOps lead may need sales next. One filter shows the ones that have not hired your function.",
+    cost: null,
+  },
+  {
+    title: "The fractional who held the seat",
+    body: "Unlock the seat holder's name and ask how it went before your first call. Most seat holders are members.",
+    cost: "1 credit",
+  },
+  {
+    title: "What the seat pays",
+    body: "See median monthly and hourly rates by function and client revenue. They come from Revenue Nomad's Rate Index and the rates members share, and no single rate can be traced.",
+    cost: null,
+  },
+  {
+    title: "Who does the hiring",
+    body: "See who makes the hiring call at each company. Titles are free. A name, an email or a LinkedIn profile costs a credit each.",
+    cost: "1 credit each",
+  },
+];
+
+/**
+ * Free and locked fields, read from the field definitions so this page can't drift from what
+ * the table does. `more` adds what is not a field: the dates on an open role (free) and the
+ * one unlock that reveals a hidden company.
+ */
+const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[]; note?: string }[] = (
+  [
+    { entity: "company", label: "The company", freeFirst: ["Name"], note: "While a company has an open role, its name, website and LinkedIn are hidden. One credit shows all three." },
+    { entity: "engagement", label: "The seat", freeLast: ["Open and closed dates"] },
+    { entity: "contact", label: "A hiring contact" },
+  ] as { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[]
+).map((row) => {
+  const fields = (GROUPS.find((g) => g.entity === row.entity)?.fields ?? []).filter((f) => !f.identity && !f.system);
+  return {
+    entity: row.entity,
+    label: row.label,
+    free: [...(row.freeFirst ?? []), ...fields.filter((f) => !f.gated).map((f) => f.label), ...(row.freeLast ?? [])],
+    locked: fields.filter((f) => f.gated).map((f) => f.label),
+    note: row.note,
+  };
+});
 
 /** The questions, with the starter balance the server actually gives. */
 const faq = (starter: number): [string, string][] => [
   [
-    "Where does the data come from?",
-    "Revenue Nomad published engagements, member success stories and our own scans for open fractional roles. Members add the rest, one fact at a time.",
+    "Where do the records come from?",
+    "Engagements members published on Revenue Nomad, member success stories and a weekly check for open fractional GTM roles. Members add the rest, one thing at a time.",
   ],
   [
-    "Is my own engagement data shown?",
-    "Published engagements show who held the seat behind a lock, so another member pays 1 credit to see your name. Anonymous engagements are never shown, and facts you add carry no name.",
+    "What will other members see about me?",
+    "Your name and title, on seats you held, behind a lock that costs them a credit. Members can also find you by name when they add a seat you held. Your email is never shown, and what you add does not say who added it. Engagements a member marked anonymous are left out.",
   ],
   [
-    "What happens when a fact is wrong?",
-    "Report it and it is hidden until we review it. If we remove it, the member who added it loses that credit and everyone who unlocked it gets theirs back.",
+    "What happens to a rate I share?",
+    "A rate you add to a seat sits behind a lock like any other locked field. You can also share one for the benchmarks only. That one counts in the medians and is never shown to anyone.",
+  ],
+  [
+    "What if something is wrong?",
+    "Report it. After two reports it is hidden from everyone until we review it. If we remove it, the member who added it loses that credit and everyone who unlocked it gets theirs back.",
   ],
   [
     `Why can I only earn ${EARN_CAP} credits a day?`,
-    "So the table fills with things people know, not guesses made for points. Add carefully, not quickly.",
+    "A cap takes away the reason to guess. Invite and confirmation bonuses count toward it. Anything over the cap is held and paid as room opens.",
   ],
-  ["Does it cost anything?", `No. The pilot is free and you start with ${starter} credits. Unlocking only ever costs credits.`],
+  ["Is there a limit on unlocking?", "A new account can unlock 20 things in its first 24 hours and 100 a day after that."],
+  [
+    "What does it cost?",
+    `Nothing. The pilot is free and you start with ${starter} credits. If you run low, add something you know or invite a fractional you trust.`,
+  ],
 ];
 
 /**
@@ -77,6 +158,24 @@ function useInviter(): string | null {
   return inviter;
 }
 
+/** True while either join form is on screen. The nav button is the primary action only when neither is. */
+function useFormInView(...refs: React.RefObject<HTMLElement | null>[]): boolean {
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const seen = new Map<Element, boolean>();
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) seen.set(e.target, e.isIntersecting);
+      setInView([...seen.values()].some(Boolean));
+    });
+    for (const r of refs) if (r.current) io.observe(r.current);
+    return () => io.disconnect();
+    // The refs are stable for the life of the page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return inView;
+}
+
 export default function Landing({ view, onSignedIn }: LandingProps) {
   const [signIn, setSignIn] = useState<{ open: boolean; note: string | null }>({ open: false, note: null });
   const heroForm = useRef<HTMLDivElement>(null);
@@ -85,6 +184,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 5).
   const starter = s.starter ?? STARTER_FALLBACK;
   const inviter = useInviter();
+  const formInView = useFormInView(heroForm, finalForm);
 
   /** Take the visitor to the nearest join form and focus it (email, or name once the email is in). */
   const toJoin = useCallback(() => {
@@ -98,13 +198,14 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   const openSignIn = useCallback((note: string | null = null) => setSignIn({ open: true, note }), []);
   const closeSignIn = useCallback(() => setSignIn({ open: false, note: null }), []);
 
-  // Open roles are the strongest proof once there are enough of them; until then show fractional-friendly companies.
   const proof: [number, string][] = [
     [s.companies, "companies"],
-    [s.engagements, "engagements on file"],
-    s.openRoles >= 10 ? [s.openRoles, "open roles"] : [s.fractionalFriendly, "fractional-friendly companies"],
+    [s.engagements, "seats on file"],
+    [s.people, "contacts"],
     [s.members, "members"],
   ];
+
+  const joinHint = "The pilot is free. A credit shows you one locked thing, like a rate or a name. Add something you know and you earn one back.";
 
   return (
     <div className="lp">
@@ -115,16 +216,16 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
             <span className="lp-nav-product">Trading Post</span>
           </a>
           <nav className="lp-nav-links" aria-label="Sections">
-            <a href="#how">How it works</a>
-            <a href="#why">Use cases</a>
-            <a href="#rules">Rules</a>
-            <a href="#faq">FAQ</a>
+            <a href="#inside">What you can look up</a>
+            <a href="#credits">How credits work</a>
+            <a href="#free">What&apos;s free</a>
+            <a href="#faq">Questions</a>
           </nav>
           <div className="lp-nav-cta">
             <button type="button" className="lp-nav-signin" onClick={() => openSignIn()}>
               Sign in
             </button>
-            <button type="button" className="btn btn-primary lp-nav-get" onClick={toJoin}>
+            <button type="button" className={`btn num lp-nav-get${formInView ? "" : " btn-primary"}`} onClick={toJoin}>
               Get {starter} credits
             </button>
           </div>
@@ -136,31 +237,38 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         <section className="lp-hero">
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
-              <p className="lp-eyebrow mono">Trading Post by Revenue Nomad</p>
+              {s.openRoles > 0 ? (
+                <p className="lp-live">
+                  <span className="lp-dot" aria-hidden />
+                  <span>
+                    <Num n={s.openRoles} /> open fractional {s.openRoles === 1 ? "role" : "roles"} right now
+                  </span>
+                </p>
+              ) : (
+                <p className="lp-live lp-live-quiet">A free pilot from Revenue Nomad</p>
+              )}
               <h1 className="lp-h1">See who hires fractionals and for which seat</h1>
               <p className="lp-hero-sub">
-                The shared record of fractional GTM work. Add what you know, unlock what you need.
+                Trading Post is the shared record of fractional GTM work. It shows which companies hired a fractional, for which seat, who held it
+                and what it paid.
               </p>
               {inviter ? (
                 <p className="lp-invited">
-                  {inviter} invited you. Add one fact and you both get {REFERRAL_BONUS} credits.
+                  {inviter} invited you. Add one thing you know and you both get <span className="num">{REFERRAL_BONUS}</span> credits.
                 </p>
               ) : null}
               <div className="lp-hero-form" ref={heroForm}>
-                <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" />
+                <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" hint={joinHint} />
               </div>
-              <p className="lp-hero-terms mono">
-                {starter} credits to start · earn up to {EARN_CAP} a day · free pilot
-              </p>
               <p className="lp-hero-member">
-                Revenue Nomad member?{" "}
+                Already a member?{" "}
                 <button type="button" className="lp-linkbtn" onClick={() => openSignIn()}>
                   Sign in with your link
                 </button>
               </p>
             </div>
             <div className="lp-hero-visual">
-              <HeroRecord credits={starter + 7} />
+              <HeroRecord />
             </div>
           </div>
         </section>
@@ -172,74 +280,85 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               {proof.map(([n, label]) => (
                 <div key={label} className="lp-proof-item">
                   <dt className="lp-proof-label">{label}</dt>
-                  <dd className="lp-proof-num mono">{fmt(n)}</dd>
+                  <dd className="lp-proof-num">
+                    <Num n={n} />
+                  </dd>
                 </div>
               ))}
             </dl>
-            <p className="lp-proof-note">Seeded from Revenue Nomad engagements and member stories. Members add the rest.</p>
+            <p className="lp-proof-note">
+              It starts from engagements members published on Revenue Nomad, member stories and a weekly check for open roles. Members add the rest.
+            </p>
           </div>
         </section>
 
-        {/* ---------- how it works ---------- */}
-        <section className="lp-sec lp-sec-tint" id="how">
+        {/* ---------- what you can look up ---------- */}
+        <section className="lp-sec lp-sec-tint" id="inside">
           <div className="lp-wrap">
             <div className="lp-sec-head">
-              <h2 className="lp-h2">Give what you know. Get what you need.</h2>
-              <p className="lp-lead">One currency. Every fact earns or costs 1 credit.</p>
+              <h2 className="lp-h2">What you can look up</h2>
             </div>
-            <ol className="lp-steps">
-              <li className="lp-step">
-                <StepDemoAdd />
-                <div className="lp-step-body">
-                  <span className="lp-step-n mono">01</span>
-                  <h3>Add what you know, earn 1 credit</h3>
-                  <p>Fill an empty fact on a company you worked with. It takes about 20 seconds.</p>
-                </div>
-              </li>
-              <li className="lp-step">
-                <StepDemoUnlock />
-                <div className="lp-step-body">
-                  <span className="lp-step-n mono">02</span>
-                  <h3>Unlock what you need, 1 credit</h3>
-                  <p>Spend a credit to see a locked fact someone else added. It stays unlocked for you.</p>
-                </div>
-              </li>
-              <li className="lp-step">
-                <StepDemoConfirm />
-                <div className="lp-step-body">
-                  <span className="lp-step-n mono">03</span>
-                  <h3>Confirm and keep it accurate</h3>
-                  <p>Confirm facts you know are right. Report the wrong ones and they come down, with credits refunded.</p>
-                </div>
-              </li>
-            </ol>
+            <ul className="lp-uses">
+              {LOOKUPS.map((u) => (
+                <li key={u.title} className="lp-use">
+                  <h3>{u.title}</h3>
+                  <p>{u.body}</p>
+                  {u.cost ? (
+                    <span className="chip lp-cost lp-cost-locked">
+                      <IconLock size={12} />
+                      <span className="num">{u.cost}</span>
+                    </span>
+                  ) : (
+                    <span className="chip lp-cost">Free</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
-        {/* ---------- use cases ---------- */}
-        <section className="lp-sec" id="why">
+        {/* ---------- how credits work ---------- */}
+        <section className="lp-sec" id="credits">
           <div className="lp-wrap">
             <div className="lp-sec-head">
-              <h2 className="lp-h2">Why fractionals use it</h2>
-              <p className="lp-lead">Three questions it answers before your next pitch.</p>
+              <h2 className="lp-h2">How credits work</h2>
+              <p className="lp-lead">
+                You start with <span className="num">{starter}</span>. Add something you know and you earn a credit. Spend a credit to see something
+                another member added.
+              </p>
             </div>
-            <div className="lp-uses">
-              <article className="lp-use">
-                <UseFriendly />
-                <h3>Find fractional-friendly companies</h3>
-                <p>See which companies hire fractionals, for which seats and how recently the last one started.</p>
-              </article>
-              <article className="lp-use">
-                <UseAdjacent />
-                <h3>See who hired other GTM functions</h3>
-                <p>A company that brought in a fractional CMO and RevOps lead may need sales next. Spot the gap and pitch it.</p>
-              </article>
-              <article className="lp-use">
-                <UseIntro />
-                <h3>Find a fractional for an intro or intel</h3>
-                <p>Unlock who held the seat and ask for an intro, or the real story before your first call.</p>
-              </article>
-            </div>
+            <ul className="lp-steps">
+              <li className="lp-step">
+                <DemoAdd />
+                <div className="lp-step-body">
+                  <h3>Add what you know</h3>
+                  <p>
+                    Fill in something missing on a company you worked with, like the rate or the hours. Each one earns a credit, up to{" "}
+                    <span className="num">{EARN_CAP}</span> a day.
+                  </p>
+                </div>
+              </li>
+              <li className="lp-step">
+                <DemoUnlock />
+                <div className="lp-step-body">
+                  <h3>Unlock what you need</h3>
+                  <p>One credit shows you one locked thing, such as a rate or a seat holder&apos;s name. It stays unlocked for you.</p>
+                </div>
+              </li>
+              <li className="lp-step">
+                <DemoConfirm />
+                <div className="lp-step-body">
+                  <h3>Confirm or report</h3>
+                  <p>Confirm what you know is right. Report what is wrong and we review it. If we remove it, your credit comes back.</p>
+                </div>
+              </li>
+            </ul>
+            <p className="lp-invite">
+              <span className="lp-plus num">+{REFERRAL_BONUS}</span>
+              <span>
+                Invite a fractional you trust. You each get <span className="num">{REFERRAL_BONUS}</span> credits when they add their first thing.
+              </span>
+            </p>
           </div>
         </section>
 
@@ -247,82 +366,58 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         <section className="lp-sec lp-sec-tint" id="free">
           <div className="lp-wrap">
             <div className="lp-sec-head">
-              <h2 className="lp-h2">What is free and what you trade for</h2>
-              <p className="lp-lead">The free view tells you if a company is worth a look. Credits get you the facts that tell you where to pitch.</p>
+              <h2 className="lp-h2">What&apos;s free and what costs a credit</h2>
+              <p className="lp-lead">Everything on a seat you held is free to you.</p>
             </div>
-            <div className="lp-split">
-              <div className="lp-col">
-                <div className="lp-col-head">
-                  <h3>Free to see</h3>
-                  <span className="chip chip-volt">Free</span>
-                </div>
-                <ul className="lp-list">
-                  {FREE.map((x) => (
-                    <li key={x}>
-                      <span className="lp-tick" aria-hidden>
-                        <IconCheck size={13} />
-                      </span>
-                      {x}
-                    </li>
-                  ))}
-                </ul>
+            <div className="lp-matrix" role="table" aria-label="Free and locked fields">
+              <div className="lp-mx-head" role="row">
+                <span role="columnheader" className="sr-only">
+                  Record
+                </span>
+                <span role="columnheader" className="lp-mx-col">
+                  Free to see
+                </span>
+                <span role="columnheader" className="lp-mx-col">
+                  <IconLock size={13} /> <span className="num">1 credit each</span>
+                </span>
               </div>
-              <div className="lp-col lp-col-locked">
-                <div className="lp-col-head">
-                  <h3>Trade for</h3>
-                  <span className="lock">
-                    <IconLock /> <span className="lock-cost">1</span> credit each
-                  </span>
+              {MATRIX.map((row) => (
+                <div key={row.entity} className="lp-mx-row" role="row">
+                  <h3 role="rowheader">{row.label}</h3>
+                  <div role="cell" className="lp-mx-cell">
+                    <span className="lp-mx-label">Free to see</span>
+                    <ul className="lp-chiprow">
+                      {row.free.map((x) => (
+                        <li key={x} className="chip">
+                          {x}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div role="cell" className="lp-mx-cell">
+                    <span className="lp-mx-label">
+                      <span className="num">1 credit each</span>
+                    </span>
+                    {row.locked.length ? (
+                      <ul className="lp-chiprow">
+                        {row.locked.map((x) => (
+                          <li key={x} className="chip lp-chip-locked">
+                            <IconLock size={11} />
+                            {x}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {row.note ? <p className="lp-mx-note">{row.note}</p> : null}
+                  </div>
                 </div>
-                <ul className="lp-list">
-                  {LOCKED.map((x) => (
-                    <li key={x}>
-                      <span className="lp-lockicon" aria-hidden>
-                        <IconLock size={13} />
-                      </span>
-                      {x}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ---------- rules ---------- */}
-        <section className="lp-sec" id="rules">
-          <div className="lp-wrap">
-            <div className="lp-rules">
-              <div className="lp-rules-head">
-                <h2 className="lp-h2">The rules in plain words</h2>
-                <button type="button" className="btn btn-primary btn-lg" onClick={toJoin}>
-                  Get {starter} credits
-                </button>
-              </div>
-              <dl className="lp-rules-grid">
-                <div>
-                  <dt className="mono">{starter}</dt>
-                  <dd>credits to start. The pilot is free.</dd>
-                </div>
-                <div>
-                  <dt className="mono">{EARN_CAP}</dt>
-                  <dd>most you can earn in a day. Each fact you add earns 1.</dd>
-                </div>
-                <div>
-                  <dt className="mono">{REFERRAL_BONUS}</dt>
-                  <dd>credits each for you and a fractional you invite, once they add a fact.</dd>
-                </div>
-                <div>
-                  <dt className="mono">100%</dt>
-                  <dd>back when a fact you unlocked is removed as wrong.</dd>
-                </div>
-              </dl>
+              ))}
             </div>
           </div>
         </section>
 
         {/* ---------- FAQ ---------- */}
-        <section className="lp-sec lp-sec-tint" id="faq">
+        <section className="lp-sec" id="faq">
           <div className="lp-wrap lp-faq-wrap">
             <h2 className="lp-h2">Questions</h2>
             <div className="lp-faq">
@@ -342,11 +437,13 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         {/* ---------- final CTA ---------- */}
         <section className="lp-final">
           <div className="lp-wrap lp-final-in">
-            <h2 className="lp-h2">Add one thing you know. See what the rest of us know.</h2>
+            <h2 className="lp-h2">
+              Get <span className="num">{starter}</span> credits and look around
+            </h2>
+            <p className="lp-final-sub">It takes an email and your name. The pilot is free.</p>
             <div className="lp-final-form" ref={finalForm}>
               <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
             </div>
-            <p className="lp-hero-terms mono">Takes about 20 seconds to add your first fact</p>
           </div>
         </section>
       </main>
@@ -355,10 +452,10 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         <div className="lp-wrap lp-foot-in">
           <div className="lp-foot-brand">
             <Brand />
-            <span>Trading Post is a Revenue Nomad pilot.</span>
+            <span>Trading Post is a free pilot from Revenue Nomad.</span>
           </div>
           <div className="lp-foot-links">
-            <a href="https://revenuenomad.com" target="_blank" rel="noopener noreferrer">
+            <a className="mono" href="https://revenuenomad.com" target="_blank" rel="noopener noreferrer">
               revenuenomad.com
             </a>
             <button type="button" className="lp-linkbtn lp-linkbtn-ink" onClick={() => openSignIn()}>
