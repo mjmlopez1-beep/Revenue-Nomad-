@@ -335,7 +335,7 @@ export default function Landing({ view, onSignedIn, signInError = null }: Landin
                 <div className="lp-step-body">
                   <h3>Add what you know</h3>
                   <p>
-                    Add something missing on a company you worked with, like the rate or the hours a week. Each fact earns a credit, up to{" "}
+                    Add a seat you held, with its rate and hours a week, or something missing on a company, like its HQ or size. Each fact earns a credit, up to{" "}
                     <span className="num">{EARN_CAP}</span> a day.
                   </p>
                 </div>

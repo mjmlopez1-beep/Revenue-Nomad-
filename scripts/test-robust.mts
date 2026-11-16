@@ -23,6 +23,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** A seat in an Add names the member as its holder: members add only seats they held (the server writes their own name). */
+const asHolder = (extra: Record<string, unknown>) =>
+  extra.engagementFields ? { ...extra, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", ...(extra.engagementFields as Record<string, unknown>) } } : extra;
 const THIS = fileURLToPath(import.meta.url);
 const ROOT = path.dirname(path.dirname(THIS));
 const args = process.argv.slice(2);
@@ -241,7 +244,7 @@ const CHILDREN: Record<string, () => Promise<void>> = {
   async add() {
     const t: Table = await import("../lib/table");
     const stats = async () => (await t.buildView("tok-a")).stats.companies;
-    const add = (company: string, extra: Record<string, unknown> = {}) => attempt(() => t.perform("tok-a", { type: "add", company, ...extra } as never));
+    const add = (company: string, extra: Record<string, unknown> = {}) => attempt(() => t.perform("tok-a", { type: "add", company, ...asHolder(extra) } as never));
     const adminCompany = async (name: string) => (await t.buildView("tok-ada")).companies.find((c) => c.name === name);
     const n0 = await stats();
 
@@ -274,7 +277,9 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     eq("a company name cut at 80 never ends in half a character", [well(cutName), cutName?.length], [true, 79]);
 
     // Fields.
-    const seat = (await t.buildView("tok-a")).companies.find((c) => c.name === "Fillco 1")!.engagements[0];
+    // A seat Ann held (only its holder adds facts to a seat).
+    const own = await add("Fillco 1", { newEngagement: true, engagementFields: { function: "Marketing" } });
+    const seat = { id: own.ok ? (own.v as { id: string }).id : "" };
     const fill = (field: string, value: unknown) => attempt(() => t.perform("tok-a", { type: "fill", entity: "engagement", id: seat.id, field, value } as never));
     const one = await fill("role", "a");
     const digits = await fill("role", "1 2345");
@@ -314,7 +319,7 @@ const CHILDREN: Record<string, () => Promise<void>> = {
   /** Company websites on hosts many companies share, names in scripts that write vowels as marks, and short role titles (repair round). */
   async addMore() {
     const t: Table = await import("../lib/table");
-    const add = (company: string, extra: Record<string, unknown> = {}) => attempt(() => t.perform("tok-a", { type: "add", company, ...extra } as never));
+    const add = (company: string, extra: Record<string, unknown> = {}) => attempt(() => t.perform("tok-a", { type: "add", company, ...asHolder(extra) } as never));
     const adminCompany = async (name: string) => (await t.buildView("tok-ada")).companies.find((c) => c.name === name);
     const count = async () => (await t.buildView("tok-a")).stats.companies;
 
@@ -343,7 +348,7 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     eq("an accented and an unaccented Latin spelling are still one record", (await count()) - n1, 5);
 
     const seat = (await t.buildView("tok-a")).companies.find((c) => c.name === "Fillco 2")!;
-    const made = await attempt(() => t.perform("tok-a", { type: "add", company: "Fillco 2", newEngagement: true, engagementFields: { function: "Sales" } } as never));
+    const made = await attempt(() => t.perform("tok-a", { type: "add", company: "Fillco 2", newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Ann Adder", function: "Sales" } } as never));
     const engId = made.ok ? made.v.id : null;
     const fill = (value: string) => attempt(() => t.perform("tok-a", { type: "fill", entity: "engagement", id: engId, field: "role", value } as never));
     const ok: string[] = [];

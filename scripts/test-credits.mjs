@@ -275,7 +275,7 @@ section("sell", async () => {
   check("the 6th saves and earns nothing", sixth.status === 200 && sixth.json?.cells?.[0]?.cell?.s === "value" && sixth.json?.me?.credits === STARTER + 5 && sixth.json?.capped === true, sixth.json);
   check(
     "its message says why, and what still earns",
-    /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day, so this one didn't earn\. A role, a rate or who held the seat still earns\.$/.test(sixth.json?.message ?? "") && !/hit today's max/.test(sixth.json?.message ?? ""),
+    /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day, so this one didn't earn\. An HQ, a website, a person or a fact on your own seat still earns\.$/.test(sixth.json?.message ?? "") && !/hit today's max/.test(sixth.json?.message ?? ""),
     sixth.json?.message,
   );
   const other = await F.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
@@ -288,7 +288,7 @@ section("sell", async () => {
   const over = await F.act(fillAct(sells[20]));
   check(
     "the 21st in a day is refused until tomorrow",
-    over.status === 400 && over.json?.error === "You've added 20 answers today for a company's industry, size, revenue or how they sell. Add more tomorrow. A role, a rate or who held the seat can go in now.",
+    over.status === 400 && over.json?.error === "You've added 20 answers today for a company's industry, size, revenue or how they sell. Add more tomorrow. An HQ, a website, a person or a fact on your own seat can go in now.",
     over.json,
   );
   const v2 = await F.view();
@@ -567,12 +567,10 @@ section("picker", async () => {
   if (quiet && self) {
     const names = async (who, q) => ((await who.people(q)).json?.members ?? []).map((m) => m.name);
     check("a seed member who never signed in is not listed, even by full name", !(await names(T, quiet.name)).includes(quiet.name));
-    // Their exact name still links a seat to them when it is saved.
+    // Members add only seats they held: typing someone else's exact name doesn't make a seat for them.
     const v = await T.view();
     const add = await T.act({ type: "add", company: hostsOf(v)[hostN++].name, newEngagement: true, engagementFields: { function: "Sales", type: "Advisory", operator: quiet.name } });
-    const eng = (await T.view()).companies.flatMap((c) => c.engagements).find((e) => e.id === add.json?.id);
-    // Decision 2 (round 5): the "Member" tag means someone on Trading Post now, so it waits for their first sign-in.
-    check("a seed member who never signed in carries no Member tag on a seat", add.status === 200 && eng?.cells.operator?.s === "value" && !eng.cells.operator.member, { status: add.status, tagged: !!eng?.cells.operator?.member });
+    check("a seat named for another member is refused", add.status === 400 && add.json?.error === "You can add seats you held. Pick yourself as the seat holder.", add.json);
     // A sweep by two-letter prefixes finds no seed member who hasn't signed in.
     const signedIn = new Set([0, 1, 2].map((n) => seedMember(n)?.name));
     const seedNames = new Set(seedFile.members.map((m) => m.name));
@@ -587,10 +585,7 @@ section("picker", async () => {
     check("until they visit, nobody else finds them", !(await names(T, self.name)).includes(self.name));
     await seedSignIn(quiet, nextIp());
     check("once a seed member signs in, they are listed", (await names(T, quiet.name)).includes(quiet.name));
-    // Their exact name linked the seat all along: once they have signed in it shows as a Member's, and it is theirs.
-    const tagged = (await T.view()).companies.flatMap((c) => c.engagements).find((e) => e.id === add.json?.id)?.cells.operator;
-    const theirs = (await new Client("Seed Member", nextIp(), quiet.token).view()).companies.flatMap((c) => c.engagements).find((e) => e.id === add.json?.id);
-    check("typing their exact full name still links the seat to them", !!tagged?.member && tagged.member.you === false && theirs?.yours === true, { tagged: !!tagged?.member, yours: theirs?.yours });
+
   } else skip("seed member picker checks", "no seed file the server knows");
 
   // 30 searches a minute per member.

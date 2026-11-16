@@ -152,7 +152,7 @@ export function CreditsPopover({
         </p>
         {owed && <p className="tp-credpop-warn">{owed}</p>}
         {unlocks && <p>{unlocks}</p>}
-        {!capped && me.sellEarnLeft === 0 && <p>Answers for a company&apos;s industry, size, revenue or how they sell earn no more credits today. A role, a rate or who held a seat still earns.</p>}
+        {!capped && me.sellEarnLeft === 0 && <p>Answers for a company&apos;s industry, size, revenue or how they sell earn no more credits today. An HQ, a website, a person or a fact on your own seat still earns.</p>}
       </div>
       <div className="tp-credpop-ledger">
         {ledger.length === 0 && <p className="muted tp-small">Nothing yet. Each credit you earn or spend is listed here.</p>}
@@ -200,6 +200,7 @@ const APP_HELP: [string, string][] = [
 
 const KEYS: [string, string][] = [
   ["/", "Search"],
+  ["Ctrl K", "Search, from anywhere"],
   ["F", "Show or hide the filters"],
   ["A", "Add what you know"],
   ["J  K", "Next and previous record, with a record open"],
@@ -328,6 +329,10 @@ export interface MenuItem {
   label: string;
   onClick: () => void;
   hint?: string;
+  /** The page the member is on (the table, from the menu's first item). */
+  current?: boolean;
+  /** A switch: on or off (an admin's "See it as a member"). */
+  checked?: boolean;
 }
 
 /**
@@ -401,8 +406,10 @@ export function AvatarMenu({
             <button
               key={it.label}
               type="button"
-              role="menuitem"
-              className="tp-menu-item"
+              role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"}
+              aria-checked={it.checked === undefined ? undefined : it.checked}
+              aria-current={it.current ? "page" : undefined}
+              className={`tp-menu-item${it.checked ? " on" : ""}${it.current ? " here" : ""}`}
               onClick={() => {
                 it.onClick();
                 onClose();
@@ -454,6 +461,7 @@ export function TopBar({
   emailOn,
   starter,
   listSwitch,
+  searchInList,
 }: {
   me: Me;
   query: string;
@@ -475,6 +483,8 @@ export function TopBar({
   starter?: number;
   /** Phones, on the table: what to list (Companies, Seats, People), as the list's title after the mark. */
   listSwitch?: ReactNode;
+  /** Phones, on the table: the search is a field at the top of the list, so the bar has no search of its own. */
+  searchInList?: boolean;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const hosts = (
@@ -490,8 +500,8 @@ export function TopBar({
         ref={searchRef}
         className="tp-bare"
         type="search"
-        placeholder={phone ? "Search" : "Search companies, functions, industries"}
-        aria-label="Search companies, functions and industries"
+        placeholder={phone ? "Search" : "Search companies, seats and people"}
+        aria-label="Search companies, seats and people"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
@@ -510,14 +520,14 @@ export function TopBar({
             <IconX size={14} />
           </button>
         ) : (
-          <kbd className="tp-kbd" title="Press / to search">
+          <kbd className="tp-kbd" title="Press / or Ctrl K to search">
             /
           </kbd>
         ))}
     </label>
   );
   if (phone) {
-    const open = searchOpen || !!query;
+    const open = !searchInList && (searchOpen || !!query);
     return (
       <header className="tp-top tp-top-phone">
         {open ? (
@@ -537,9 +547,11 @@ export function TopBar({
             </button>
             {listSwitch}
             <div className="tp-top-right">
-              <button type="button" className="tp-iconbtn" aria-label="Search" onClick={() => setSearchOpen(true)}>
-                <IconSearch size={18} />
-              </button>
+              {!searchInList && (
+                <button type="button" className="tp-iconbtn" aria-label="Search" onClick={() => setSearchOpen(true)}>
+                  <IconSearch size={18} />
+                </button>
+              )}
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
               {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
               <button ref={menuRef} type="button" className="tp-iconbtn" aria-label="Menu" aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>

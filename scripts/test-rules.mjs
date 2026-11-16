@@ -247,7 +247,10 @@ const NEED_SEED = "needs the seed file the server runs on (two seed members vouc
 const sections = {};
 const section = (name, fn) => (sections[name] = fn);
 
-const STILL_OPEN = "This role is still open. If you took it, pick yourself as the seat holder.";
+/** Naming anyone but yourself as a seat holder, an open role included (members add only seats they held). */
+const SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
+/** A fact about a seat from anyone but its holder. */
+const HOLDER_ONLY = "Only the person who held this seat can add this.";
 
 // LOGIC-1, ECON-2: naming a seat holder must not close an open role for everyone.
 section("role", async () => {
@@ -280,14 +283,14 @@ section("role", async () => {
   // A made-up name, three ways.
   await A.act({ type: "unlock", entity: "company", id: coId, field: "identity" });
   const made = await name(A, "Jane Madeup");
-  check("a made-up seat holder on an open role is refused", made.status === 400 && made.json?.error === STILL_OPEN, made.json);
+  check("a made-up seat holder on an open role is refused", made.status === 400 && made.json?.error === SELF_ONLY, made.json);
   check("the role is still open for everyone after it", isOpen(await look(B)), await look(B));
   const typed = await name(A, "Ann Attacker");
-  check("typing your own name without picking yourself is refused too", typed.status === 400 && typed.json?.error === STILL_OPEN, typed.json);
+  check("typing your own name without picking yourself is refused too", typed.status === 400 && typed.json?.error === SELF_ONLY, typed.json);
   const other = await name(A, "Bo Bystander", await A.pick("Bo Bystander"));
-  check("picking another member on an open role is refused", other.status === 400 && other.json?.error === STILL_OPEN, other.json);
+  check("picking another member on an open role is refused", other.status === 400 && other.json?.error === SELF_ONLY, other.json);
   const viaAdd = await A.act({ type: "add", company: coName, engagementId: eid, engagementFields: { operator: "Jane Madeup" } });
-  check("a made-up name through Add on the open role is refused", viaAdd.status === 400 && viaAdd.json?.error === STILL_OPEN, viaAdd.json);
+  check("a made-up name through Add on the open role is refused", viaAdd.status === 400 && viaAdd.json?.error === SELF_ONLY, viaAdd.json);
   check("after four tries the role is open and the company hidden", isOpen(await look(B)), await look(B));
   check("refused tries earn nothing", (await look(A)).credits === STARTER - 1, (await look(A)).credits);
 
@@ -327,7 +330,7 @@ section("role", async () => {
   check("the seat is theirs, and the role is closed for everyone", a1.yours === true && isClosed(await look(B)), [a1, await look(B)]);
   check("the Active status a claim sets is not marked as coming from the posting", (await look(B)).from === undefined, (await look(B)).from);
   const rename = await name(A, "Jane Madeup");
-  check("they can't rename the seat holder to someone else afterwards", rename.status === 400 && /You took this open role/.test(rename.json?.error ?? ""), rename.json);
+  check("they can't rename the seat holder to someone else afterwards", rename.status === 400 && rename.json?.error === SELF_ONLY, rename.json);
   const s2 = await scanPost(listed);
   check("a posting that lingers doesn't reopen a role somebody holds", s2.json?.result?.reopened === 0 && isClosed(await look(B)), s2.json);
 
@@ -367,7 +370,7 @@ section("role", async () => {
   check("nothing is left waiting for the admin, and the claim's credit is taken back", !row && (await look(F)).credits === STARTER + 2, [row, (await look(F)).credits]);
   // The old way to keep it closed: unlink, then rename the seat holder to someone who isn't a member.
   const swap = await F.act({ type: "fill", entity: "engagement", id: eid, field: "operator", value: "Jane Madeup" });
-  check("after this isn't me they can't put another name on the role", swap.status === 400 && swap.json?.error === STILL_OPEN && isOpen(await look(B)), swap.json);
+  check("after this isn't me they can't put another name on the role", swap.status === 400 && swap.json?.error === SELF_ONLY && isOpen(await look(B)), swap.json);
   await adm.act({ type: "review", entity: "engagement", id: eid, field: "operator", decision: "remove" });
   check("removing a name that already came off leaves the role open", isOpen(await look(B)), await look(B));
 
@@ -397,7 +400,7 @@ section("role", async () => {
   const seedTry = await H.act({ type: "fill", entity: "engagement", id: se.id, field: "operator", value: "Jane Madeup" });
   const bv = await B.view();
   const seedAfter = engOf(bv, se.id);
-  check("a made-up name on a seed open role is refused, and it stays open", seedTry.status === 400 && seedTry.json?.error === STILL_OPEN && seedAfter?.closed === null && seedAfter.company.hidden === true && bv.stats.openRoles === b0.open, { status: seedTry.status, closed: seedAfter?.closed, hidden: seedAfter?.company.hidden });
+  check("a made-up name on a seed open role is refused, and it stays open", seedTry.status === 400 && seedTry.json?.error === SELF_ONLY && seedAfter?.closed === null && seedAfter.company.hidden === true && bv.stats.openRoles === b0.open, { status: seedTry.status, closed: seedAfter?.closed, hidden: seedAfter?.company.hidden });
 });
 
 // ECON-1: confirm and report must not hand over a hidden company's website, LinkedIn or HQ.
@@ -435,7 +438,7 @@ section("hidden", async () => {
   check("and its full HQ comes back", hq.status === 200 && hq.json?.cells?.[0]?.cell?.v === "Leaktown, TX", hq.json);
 });
 
-// LOGIC-2: a hidden company, the role and the posting of its open role are one purchase.
+// LOGIC-2: a hidden company, the role, the posting and the posted rate of its open role are one purchase.
 section("bundle", async () => {
   if (!(await canScan())) return skip("unlock company checks", NEED_SCAN);
   const adm = await admin();
@@ -446,30 +449,29 @@ section("bundle", async () => {
   await scanPost({ roles: [p], sources: [{ source: board, fetched: 10, matched: 1 }] });
   const co = companyNamed(await adm.view(), coName);
   const eid = co.engagements[0].id;
-  const BOUGHT = `Unlocked ${coName}, the role and the posting for 1 credit.`;
+  const BOUGHT = `Unlocked ${coName}, the role, the posting and the posted rate for 1 credit.`;
   const seen = async (who) => {
     const v = await who.view();
     const c = v.companies.find((x) => x.id === co.id);
     const e = c.engagements.find((x) => x.id === eid);
     return { hidden: c.hidden, name: c.name === coName, role: e.cells.role?.s, posting: e.cells.posting?.s, rate: e.cells.rate?.s, holder: e.cells.operator?.s, website: c.cells.website?.s, credits: v.me.credits, unlocked: v.me.unlocked, ledger: v.ledger.length };
   };
-  const whole = (x, spent) => x.hidden === false && x.name && x.role === "value" && x.posting === "value" && x.website === "value" && x.credits === STARTER - spent;
+  const whole = (x, spent) => x.hidden === false && x.name && x.role === "value" && x.posting === "value" && x.rate === "value" && x.website === "value" && x.credits === STARTER - spent;
 
   const M0 = await member("Nil Nopay");
   const before = await seen(M0);
   check("before paying, the company is hidden and role, posting and rate are locked", before.hidden === true && before.role === "locked" && before.posting === "locked" && before.rate === "locked", before);
 
-  // Each of the three ways in costs 1 credit and opens all three.
-  for (const [n, field, entity, id] of [["Pia Posting", "posting", "engagement", eid], ["Rui Role", "role", "engagement", eid], ["Ida Identity", "identity", "company", co.id]]) {
+  // Each of the four ways in costs 1 credit and opens all of it.
+  for (const [n, field, entity, id] of [["Pia Posting", "posting", "engagement", eid], ["Rui Role", "role", "engagement", eid], ["Rae Rate", "rate", "engagement", eid], ["Ida Identity", "identity", "company", co.id]]) {
     const M = await member(n);
     const r = await M.act({ type: "unlock", entity, id, field });
     const got = (f) => r.json?.cells?.find((x) => x.id === eid && x.field === f)?.cell;
     check(`unlocking the ${field === "identity" ? "company" : field} of an open role at a hidden company costs 1 credit and names what it bought`, r.status === 200 && r.json?.message === BOUGHT && r.json?.me?.credits === STARTER - 1 && r.json.me.unlocked === 1, r.json?.error ?? r.json?.message);
-    check(`it returns the role and the posting (asked for the ${field === "identity" ? "company" : field})`, got("role")?.v === "Fractional VP Sales" && got("posting")?.s === "value" && r.json?.cells?.some((x) => x.id === co.id && x.field === "website" && x.cell.s === "value"), r.json?.cells?.map((x) => [x.field, x.cell.s]));
+    check(`it returns the role, the posting and the rate (asked for the ${field === "identity" ? "company" : field})`, got("role")?.v === "Fractional VP Sales" && got("posting")?.s === "value" && got("rate")?.v === "$150/hr" && r.json?.cells?.some((x) => x.id === co.id && x.field === "website" && x.cell.s === "value"), r.json?.cells?.map((x) => [x.field, x.cell.s]));
     const after = await seen(M);
-    check(`afterwards the company, role and posting show, for one ledger row (asked for the ${field === "identity" ? "company" : field})`, whole(after, 1) && after.unlocked === 1 && after.ledger === 1, after);
-    check("rate and seat holder stay separate", after.rate === "locked", after);
-    for (const f of [["engagement", eid, "role"], ["engagement", eid, "posting"], ["company", co.id, "identity"]]) {
+    check(`afterwards the company, role, posting and rate show, for one ledger row (asked for the ${field === "identity" ? "company" : field})`, whole(after, 1) && after.unlocked === 1 && after.ledger === 1, after);
+    for (const f of [["engagement", eid, "role"], ["engagement", eid, "posting"], ["engagement", eid, "rate"], ["company", co.id, "identity"]]) {
       const twice = await M.act({ type: "unlock", entity: f[0], id: f[1], field: f[2] });
       if (twice.json?.error !== "Nothing here is locked, so no credit was spent.") fail(`a second unlock of ${f[2]} buys nothing`, twice.json);
     }
@@ -479,9 +481,23 @@ section("bundle", async () => {
   // unlockMany never charges twice for parts of one purchase.
   const U = await member("Uli Unlockall");
   const many = await U.act({ type: "unlockMany", items: [{ entity: "company", id: co.id, field: "identity" }, { entity: "engagement", id: eid, field: "role" }, { entity: "engagement", id: eid, field: "posting" }, { entity: "engagement", id: eid, field: "rate" }] });
-  check("unlockMany charges the company, role and posting once, and the rate on top", many.status === 200 && many.json?.me?.credits === STARTER - 2 && many.json?.message === `Unlocked ${coName}, the role and the posting, plus 1 more fact, for 2 credits.`, many.json?.error ?? many.json?.message);
+  check("unlockMany charges the company, role, posting and rate once", many.status === 200 && many.json?.me?.credits === STARTER - 1 && many.json?.message === BOUGHT, many.json?.error ?? many.json?.message);
   const uAfter = await seen(U);
-  check("all four show afterwards", whole(uAfter, 2) && uAfter.rate === "value", uAfter);
+  check("all four show afterwards", whole(uAfter, 1), uAfter);
+
+  // At a company the member can see, the posted rate is part of the open role's one purchase too.
+  const S = await member("Sid Seer");
+  await S.act({ type: "add", company: coName, companyFields: { hq: "Austin, TX" } });
+  const sBefore = await seen(S);
+  const sRate = await S.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
+  const sGot = (f) => sRate.json?.cells?.find((x) => x.id === eid && x.field === f)?.cell;
+  check(
+    "a member who sees the company pays 1 for the posted rate, and the role and the posting come with it",
+    sBefore.hidden === false && sRate.status === 200 && sRate.json?.message === "Unlocked the role, the posting and the posted rate for 1 credit." && sRate.json?.me?.credits === sBefore.credits - 1 && sGot("role")?.s === "value" && sGot("posting")?.s === "value" && sGot("rate")?.v === "$150/hr",
+    [sBefore.hidden, sRate.json?.error ?? sRate.json?.message],
+  );
+  const sRole = await S.act({ type: "unlock", entity: "engagement", id: eid, field: "role" });
+  check("  and the role is not sold again", sRole.json?.error === "Nothing here is locked, so no credit was spent.", sRole.json);
 
   // The role that came with the company was not paid for on its own: removing it refunds nothing.
   const V = await member("Val Viewer");
@@ -501,7 +517,7 @@ section("status", async () => {
   const U = await member("Uwe Onlooker");
   const v0 = await T.view();
   const h = host(v0);
-  const add = await T.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Sales", type: "Fractional", role: "Fractional VP Sales", status: "Ended", start: "2024-02", end: "2025-01" } });
+  const add = await T.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: T.name, function: "Sales", type: "Fractional", role: "Fractional VP Sales", status: "Ended", start: "2024-02", end: "2025-01" } });
   const uv = await U.view();
   const e = engOf(uv, add.json?.id);
   check("status is free to see on a seat another member added", add.status === 200 && e?.cells.status?.s === "value" && e.cells.status.v === "Ended", e?.cells.status);
@@ -521,39 +537,36 @@ section("seat", async () => {
   const T = await member("Tom Teller");
   const U = await member("Una Other");
   const h = host(await T.view());
-  // T pins a seat with a rate on Yara. She has added nothing and unlocked nothing.
-  const add = await T.act({
+  // Only the seat holder adds a seat: T can't pin one on Yara, by picking her or by typing her name.
+  const picked = await T.act({
     type: "add", company: h.name, newEngagement: true, operatorMemberId: await T.pick("Yara Yours"),
+    engagementFields: { function: "Sales", type: "Fractional", role: "Fractional VP Sales", operator: "Yara Yours", rate: "$2k/mo" },
+  });
+  const typed = await T.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Sales", operator: "Yara Yours" } });
+  check("a member can't add a seat another member held", picked.json?.error === SELF_ONLY && typed.json?.error === SELF_ONLY, [picked.json, typed.json]);
+  // Yara adds the seat she held.
+  const add = await Y.act({
+    type: "add", company: h.name, newEngagement: true, operatorMemberId: "me",
     engagementFields: { function: "Sales", type: "Fractional", role: "Fractional VP Sales", operator: "Yara Yours", rate: "$2k/mo" },
   });
   const eid = add.json?.id;
   if (add.status !== 200 || !eid) return fail("seat: add a seat for Yara", add.json);
   check("the seat shows as hers", engOf(await Y.view(), eid)?.yours === true);
-  const rep = await Y.act({ type: "report", entity: "engagement", id: eid, field: "rate" });
-  check("the seat holder can report a fact on her own seat with no fact added and no unlock", rep.status === 200 && rep.json?.message === "Reported. It's hidden for everyone until an admin reviews it." && rep.json?.me?.credits === STARTER && rep.json.me.unlocked === 0, rep.json);
-  check("her one report hides it for everyone at once", engOf(await U.view(), eid)?.cells.rate?.s === "reported" && engOf(await T.view(), eid)?.cells.rate?.s === "reported", engOf(await U.view(), eid)?.cells.rate);
+  const tEnd = await T.act({ type: "fill", entity: "engagement", id: eid, field: "end", value: "2025-01" });
+  const uWhy = await U.act({ type: "fill", entity: "engagement", id: eid, field: "reason", value: "Build the function from scratch" });
+  const tAdd = await T.act({ type: "add", company: h.name, engagementId: eid, engagementFields: { sourced: "Referral" } });
+  check("nobody but the seat holder adds a fact to it, in a cell or through Add", [tEnd, uWhy, tAdd].every((r) => r.status === 400 && r.json?.error === HOLDER_ONLY), [tEnd.json, uWhy.json, tAdd.json]);
+  const yWhy = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "reason", value: "Build the function from scratch" });
+  check("she can", yWhy.status === 200, yWhy.json);
   const buy = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
-  check("nobody can buy it while it waits for review", buy.json?.error === "Nothing here is locked, so no credit was spent.", buy.json);
-  if (adm) {
-    const row = (await adm.view()).reported.find((r) => r.id === eid && r.field === "rate");
-    check("it is in the admin's review list under her name", !!row && row.reporters.join() === "Yara Yours" && row.addedBy === "Tom Teller", row);
-  }
+  check("others still unlock what she added", buy.status === 200 && buy.json?.cells?.[0]?.cell?.v === "$2k/mo", buy.json);
 
-  // "This isn't me" on a name a member added hides the name for everyone until an admin decides.
+  // "This isn't me" on a seat she added herself takes her name off it.
   const not = await Y.act({ type: "notMine", engagementId: eid });
-  check("this isn't me says the name is hidden until an admin reviews it", not.status === 200 && /^Got it\. That seat is no longer linked to you\. The name on that seat is hidden for everyone until an admin reviews it\.$/.test(not.json?.message ?? ""), not.json?.message ?? not.json);
-  check("it returns the seat holder as under review", not.json?.cells?.find((c) => c.field === "operator")?.cell?.s === "reported", not.json?.cells?.map((c) => [c.field, c.cell.s]));
+  check("this isn't me on her own seat unlinks it and sends the name to review", not.status === 200 && /^Got it\. That seat is no longer linked to you\./.test(not.json?.message ?? ""), not.json?.message ?? not.json);
   check("the seat is no longer hers", engOf(await Y.view(), eid)?.yours === false);
-  check("the name is hidden for everyone", engOf(await U.view(), eid)?.cells.operator?.s === "reported" && engOf(await T.view(), eid)?.cells.operator?.s === "reported", engOf(await U.view(), eid)?.cells.operator);
-  const buyName = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "operator" });
-  check("nobody can buy her name on that seat", buyName.json?.error === "Nothing here is locked, so no credit was spent." && (await U.view()).me.credits === STARTER, buyName.json);
-  if (adm) {
-    const row = (await adm.view()).reported.find((r) => r.id === eid && r.field === "operator");
-    check("the admin decides: the name is in the review list", !!row && row.reporters.join() === "Yara Yours" && row.value === "Yara Yours", row);
-    await adm.act({ type: "review", entity: "engagement", id: eid, field: "operator", decision: "keep" });
-    const kept = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "operator" });
-    check("if the admin keeps it, it sells again without the member link", kept.status === 200 && kept.json?.cells?.[0]?.cell?.v === "Yara Yours" && !kept.json.cells[0].cell.member && engOf(await Y.view(), eid)?.yours === false, kept.json?.cells?.[0]);
-  }
+  const late = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "sourced", value: "Referral" });
+  check("and takes no more facts from her", late.status === 400 && late.json?.error === HOLDER_ONLY, late.json);
 
   // On a name from our own records it only unlinks, as before.
   const sm = seedHolders[seedHolders.length - 1];
@@ -682,8 +695,8 @@ section("admin", async () => {
   const K = await member("Kit Keen");
   const coName = `Qa Junk Co ${RUN}`;
   const add = await J.act({
-    type: "add", company: coName, companyFields: { industry: "SaaS", hq: "Austin, TX" },
-    engagementFields: { function: "Sales", type: "Fractional", role: "Fractional VP Sales", pricing: "Monthly retainer", rate: "$9k/mo" },
+    type: "add", company: coName, companyFields: { industry: "SaaS", hq: "Austin, TX" }, operatorMemberId: "me",
+    engagementFields: { operator: J.name, function: "Sales", type: "Fractional", role: "Fractional VP Sales", pricing: "Monthly retainer", rate: "$9k/mo" },
     people: [{ name: "Pat Junk", title: "CEO" }],
   });
   if (add.status !== 200) return fail("admin: add a made-up company", add.json);
@@ -691,7 +704,7 @@ section("admin", async () => {
   await J.act(elsewhere);
   await J.act({ type: "benchRate", pricing: "Hourly", rate: "$150/hr", function: "Sales" });
   const j0 = (await J.view()).me;
-  check("the member earned for every fact", j0.credits === STARTER + 11 && j0.benchRates.length === 1, { credits: j0.credits, bench: j0.benchRates.length });
+  check("the member earned for every fact", j0.credits === STARTER + 12 && j0.benchRates.length === 1, { credits: j0.credits, bench: j0.benchRates.length });
   const kv = await K.view();
   const junk = companyNamed(kv, coName);
   const eid = junk.engagements[0].id;
@@ -718,7 +731,7 @@ section("admin", async () => {
   const unknown = await adm.act({ type: "adminRemoveMember", memberId: "j_AAAAAAAAAAAA" });
   check("an unknown member is refused", unknown.status === 400 && unknown.json?.error === "We couldn't find that member. Refresh the page and try again.", unknown.json);
   const all = await adm.act({ type: "adminRemoveMember", memberId: await adm.pick("Jay Junk") });
-  check("adminRemoveMember says what it removed", all.status === 200 && all.json?.message === "Removed 9 facts, 1 private rate and 3 empty records that Jay Junk added. The credits they earned came off their balance, and anyone who unlocked them got their credit back.", all.json?.error ?? all.json?.message);
+  check("adminRemoveMember says what it removed", all.status === 200 && all.json?.message === "Removed 10 facts, 1 private rate and 3 empty records that Jay Junk added. The credits they earned came off their balance, and anyone who unlocked them got their credit back.", all.json?.error ?? all.json?.message);
   const j1 = await J.view();
   check("every credit the member earned is taken back", j1.me.credits === STARTER && j1.me.benchRates.length === 0, { credits: j1.me.credits, bench: j1.me.benchRates.length });
   const av = await adm.view();
@@ -826,14 +839,20 @@ section("twin", async () => {
   check("the new account holds none of those seats", mine1.every((e) => engOf(xv, e.id)?.yours !== true));
   const xNot = await X.act({ type: "notMine", engagementId: own?.id });
   check("and can't say This isn't me on them", xNot.status === 400 && xNot.json?.error === "That seat isn't linked to you.", xNot.json);
-  // Someone puts a rate on the member's seat. The member still hides it at once.
+  // Nobody else can put a fact on the member's seat. What our records say there, the member still hides at once.
   const Z = await member("Zoe Stranger");
   const zv = await Z.view();
-  const target = mine1.find((e) => e.cells.rate?.s === "empty" && !e.company.hidden && engOf(zv, e.id) && !engOf(zv, e.id).company.hidden);
-  if (!target) return skip("twin: the holder's report", "the member's seats all have a rate or a hidden company");
-  const put = await Z.act({ type: "fill", entity: "engagement", id: target.id, field: "rate", value: "$2k/mo" });
-  const rep = await S.act({ type: "report", entity: "engagement", id: target.id, field: "rate" });
-  check("the holder's report on a fact on their own seat still hides it for everyone", put.status === 200 && rep.status === 200 && rep.json?.message === "Reported. It's hidden for everyone until an admin reviews it." && engOf(await Z.view(), target.id)?.cells.rate?.s === "reported", [put.json?.error, rep.json]);
+  const empty = mine1.find((e) => e.cells.rate?.s === "empty" && !e.company.hidden && engOf(zv, e.id) && !engOf(zv, e.id).company.hidden);
+  if (empty) {
+    const put = await Z.act({ type: "fill", entity: "engagement", id: empty.id, field: "rate", value: "$2k/mo" });
+    check("a stranger can't put a rate on the member's seat", put.status === 400 && put.json?.error === HOLDER_ONLY, put.json);
+  }
+  const FREE_SEAT = ["function", "type", "start", "reason", "pricing"];
+  const target = mine1.find((e) => !e.company.hidden && engOf(zv, e.id) && FREE_SEAT.some((f) => e.cells[f]?.s === "value" && e.cells[f].from === "records"));
+  if (!target) return skip("twin: the holder's report", "the member's seats have no free fact from our records");
+  const field = FREE_SEAT.find((f) => target.cells[f]?.s === "value" && target.cells[f].from === "records");
+  const rep = await S.act({ type: "report", entity: "engagement", id: target.id, field });
+  check("the holder's report on a fact on their own seat still hides it for everyone", rep.status === 200 && rep.json?.message === "Reported. It's hidden for everyone until an admin reviews it." && engOf(await Z.view(), target.id)?.cells[field]?.s === "reported", rep.json);
   const not = await S.act({ type: "notMine", engagementId: own.id });
   check("and This isn't me still works for them", not.status === 200, not.json);
 });
@@ -851,13 +870,13 @@ section("repair", async () => {
   const P = await member("Pre Registrar");
   const hostCo = host(await P.view());
   // (A title of its own: Add puts details into a seat there with the same title.)
-  const fake = await P.act({ type: "add", company: hostCo.name, newEngagement: true, engagementFields: { function: "Sales", role: `Fractional Sales Lead ${RUN}`, status: "Open role" } });
+  const fake = await P.act({ type: "add", company: hostCo.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: P.name, function: "Sales", role: `Fractional Sales Lead ${RUN}`, status: "Open role" } });
   const bv = await B.view();
   check("a member-added open role does not hide a company that was free a minute before (N3)", fake.status === 200 && companyNamed(bv, hostCo.name)?.hidden === false && engOf(bv, fake.json?.id)?.cells.status?.v === "Open role", { status: fake.status, hidden: companyNamed(bv, hostCo.name)?.hidden, msg: fake.json?.message, cell: engOf(bv, fake.json?.id)?.cells.status });
 
   // N1: a member adds the role before the scan finds it, then marks it ended.
   const preName = `Qa Prereg Co ${RUN}`;
-  const pre = await P.act({ type: "add", company: preName, engagementFields: { function: "Marketing", role: "Fractional VP Marketing", status: "Open role" } });
+  const pre = await P.act({ type: "add", company: preName, operatorMemberId: "me", engagementFields: { operator: P.name, function: "Marketing", role: "Fractional VP Marketing", status: "Open role" } });
   const listed = { roles: [posting("prereg", preName, "Fractional VP Marketing", board), keep], sources: [{ source: board, fetched: 10, matched: 2 }] };
   await scanPost(listed);
   const adopted = engOf(await B.view(), pre.json?.id);
@@ -885,18 +904,19 @@ section("repair", async () => {
   const rows = (await adm.view()).reported.filter((r) => r.id === re);
   check("  the admin's review list still has both, with both reporters", rows.length === 2 && rows.every((r) => r.reporters.length === 2), rows.map((r) => [r.field, r.reporters.length]));
 
-  // N4: naming yourself on a seat somebody else made, with no holder on it.
+  // N4: naming yourself on a seat somebody else made and holds.
   const Mk = await member("Max Maker");
   const mHost = host(await Mk.view());
-  const made = await Mk.act({ type: "add", company: mHost.name, newEngagement: true, engagementFields: { function: "Sales", role: "Fractional VP Sales", rate: "$8k/mo", end: "2024-06", sourced: "Referral" } });
+  const made = await Mk.act({ type: "add", company: mHost.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: Mk.name, function: "Sales", role: "Fractional VP Sales", rate: "$8k/mo", end: "2024-06", sourced: "Referral" } });
   const Sn = await member("Sid Selfnamer");
   const self = await Sn.act({ type: "fill", entity: "engagement", id: made.json?.id, field: "operator", value: "x", memberId: "me" });
   const sSeat = engOf(await Sn.view(), made.json?.id);
-  check("naming yourself on someone else's seat shows you none of its locked facts free (N4)", self.status === 200 && sSeat?.yours === false && sSeat.cells.rate?.s === "locked" && (await Sn.view()).me.credits === STARTER + 1, [self.json?.error, sSeat?.yours, sSeat?.cells.rate?.s]);
+  const sFill = await Sn.act({ type: "fill", entity: "engagement", id: made.json?.id, field: "hours", value: "10" });
+  check("naming yourself on someone else's seat is refused and shows you none of its locked facts free (N4)", self.status === 400 && sFill.json?.error === HOLDER_ONLY && sSeat?.yours === false && sSeat.cells.rate?.s === "locked" && (await Sn.view()).me.credits === STARTER, [self.json?.error, sFill.json?.error, sSeat?.yours, sSeat?.cells.rate?.s]);
   const sRep = await Sn.act({ type: "report", entity: "engagement", id: made.json?.id, field: "end" });
   check("  and gives no power to hide them for everyone", sRep.status === 400 && engOf(await B.view(), made.json?.id)?.cells.end?.s === "locked", [sRep.json, engOf(await B.view(), made.json?.id)?.cells.end?.s]);
 
-  // N7: a seat made up about a member, with a rate. The member says This isn't me before reporting anything.
+  // N7: a seat made up about a member can't be added at all: members add only seats they held.
   const Tg = await member("Tia Target");
   await Tg.view();
   const Iv = await member("Ivo Inventor");
@@ -905,10 +925,7 @@ section("repair", async () => {
     type: "add", company: iHost.name, newEngagement: true, operatorMemberId: await Iv.pick("Tia Target"),
     engagementFields: { function: "Sales", role: "Fractional VP Sales", operator: "Tia Target", rate: "$1k/mo" },
   });
-  const tNot = await Tg.act({ type: "notMine", engagementId: inv.json?.id });
-  const third = engOf(await B.view(), inv.json?.id);
-  const buy = await B.act({ type: "unlock", entity: "engagement", id: inv.json?.id, field: "rate" });
-  check("after This isn't me, the rate the same member put on that seat is hidden for everyone too (N7)", inv.status === 200 && tNot.status === 200 && third?.cells.operator?.s === "reported" && third.cells.rate?.s === "reported" && buy.json?.error === "Nothing here is locked, so no credit was spent.", [inv.json?.error, tNot.json?.error, third?.cells.operator?.s, third?.cells.rate?.s, buy.json]);
+  check("a seat made up about another member is refused (N7)", inv.status === 400 && inv.json?.error === SELF_ONLY, inv.json);
 });
 
 /* ---------- round 5 ---------- */
@@ -940,19 +957,20 @@ section("dates", async () => {
     ["reason", "Build the function from scratch", OPEN_NO_HIRE],
     ["sourced", "Referral", OPEN_NO_HIRE],
   ]) {
+    // Nobody holds it, so nobody adds facts to it: the posting's facts come from the scan.
     const r = await fill(D, eid, field, value);
-    check(`an open role nobody holds refuses ${field} ${value}`, r.status === 400 && r.json?.error === want, r.json);
+    check(`an open role nobody holds refuses ${field} ${value} (${want === OPEN_NO_DATES ? "no dates yet" : "nobody hired yet"}, and only a seat holder adds facts)`, r.status === 400 && r.json?.error === HOLDER_ONLY, r.json);
   }
   const viaAdd = await D.act({ type: "add", company: coName, engagementId: eid, engagementFields: { start: "2025-01", hours: "10" } });
-  check("the same through Add, and nothing else in that Add is saved", viaAdd.status === 400 && viaAdd.json?.error === OPEN_NO_DATES && engOf(await D.view(), eid)?.cells.hours?.s === "empty", viaAdd.json);
+  check("the same through Add, and nothing else in that Add is saved", viaAdd.status === 400 && viaAdd.json?.error === HOLDER_ONLY && engOf(await D.view(), eid)?.cells.hours?.s === "empty", viaAdd.json);
   const rate = await fill(D, eid, "rate", "$150/hr");
   const hours = await fill(D, eid, "hours", "20");
-  check("a posted rate and posted hours still go in on an open role", rate.status === 200 && hours.status === 200, [rate.json, hours.json]);
-  check("refused guesses earned nothing", (await D.view()).me.credits === STARTER - 1 + 2, (await D.view()).me.credits);
+  check("members don't add a posted rate or hours to an open role nobody holds", rate.json?.error === HOLDER_ONLY && hours.json?.error === HOLDER_ONLY, [rate.json, hours.json]);
+  check("refused guesses earned nothing", (await D.view()).me.credits === STARTER - 1, (await D.view()).me.credits);
 
   // Any seat: the end can't come before the start.
   const h = host(await D.view());
-  const seat = (fields) => D.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", ...fields } });
+  const seat = (fields) => D.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: D.name, function: "Growth", ...fields } });
   const backwards = await seat({ role: `Fractional Growth Lead ${RUN}`, start: "2025-03", end: "2023-01" });
   check("an Add with the end before the start is refused", backwards.status === 400 && backwards.json?.error === END_BEFORE_START, backwards.json);
   const sameYear = await seat({ role: `Growth Advisor ${RUN}`, start: "2024-05", end: "2024" });
@@ -991,13 +1009,13 @@ section("dates", async () => {
 
   // A locked end is never compared, so a refusal can't be used to guess it.
   const O = await member("Ola Othermember");
-  const noStart = await D.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", role: `Growth Lead Two ${RUN}`, end: "2024-02" } });
+  const noStart = await D.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: D.name, function: "Growth", role: `Growth Lead Two ${RUN}`, end: "2024-02" } });
   const o = engOf(await O.view(), noStart.json?.id);
   const guess = await fill(O, noStart.json?.id, "start", "2025-01");
-  check("another member's start is not checked against an end they can't see", o?.cells.end?.s === "locked" && guess.status === 200, [o?.cells.end?.s, guess.json]);
+  check("another member's start is refused for who they are, never checked against an end they can't see", o?.cells.end?.s === "locked" && guess.status === 400 && guess.json?.error === HOLDER_ONLY, [o?.cells.end?.s, guess.json]);
 
   // A role somebody holds can have its dates.
-  const held = await D.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", role: `Growth Head ${RUN}`, status: "Open role", operator: "Pat Holder" } });
+  const held = await D.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Growth", role: `Growth Head ${RUN}`, status: "Open role", operator: D.name } });
   const hs = await fill(D, held.json?.id, "start", "2025-01");
   const he = await fill(D, held.json?.id, "end", "2025-02");
   check("an open role with a seat holder takes a start, but not an end while it is open", hs.status === 200 && he.status === 400 && he.json?.error === OPEN_NO_END, [hs.json, he.json]);
@@ -1035,29 +1053,26 @@ section("retract", async () => {
       .filter((c) => !c.hidden && c.friendly.open === 0 && !/^Qa /.test(c.name))
       .flatMap((c) => c.engagements)
       .find((x) => x.cells.role?.s === "empty" && x.cells.function?.s === "value" && !x.cells.function.system && !x.yours) ?? null;
-  const seat = await R.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Marketing", role: `Fractional CMO ${RUN}` } });
+  const seat = await R.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: R.name, function: "Marketing", role: `Fractional CMO ${RUN}` } });
   const sid = seat.json?.id;
   const un = await O.act({ type: "unlock", entity: "engagement", id: sid, field: "role" });
   const r3 = await back(R, { entity: "engagement", id: sid, field: "role" });
   check("a fact another member unlocked can't be taken back", un.status === 200 && r3.status === 400 && r3.json?.error === "Someone already unlocked this, so it stays. You can still edit it.", [un.json?.message, r3.json]);
 
-  // A role takes the function it filled in with it.
+  // A seat from our records that someone else holds takes no role from this member, so there is nothing to take back.
   if (e) {
     const fr = await R.act({ type: "fill", entity: "engagement", id: e.id, field: "role", value: "Fractional VP Sales" });
-    const filledFn = engOf(await R.view(), e.id)?.cells.function;
     const r4 = await back(R, { entity: "engagement", id: e.id, field: "role" });
-    const after = engOf(await R.view(), e.id);
-    check("taking back a role you added works", fr.status === 200 && r4.status === 200 && after?.cells.role?.s === "empty", [fr.json, r4.json]);
-    check("the function it filled in is untouched when it was already there", filledFn?.v === after?.cells.function?.v, [filledFn, after?.cells.function]);
+    check("a role on a seat they don't hold is refused, and there is nothing to take back", fr.json?.error === HOLDER_ONLY && r4.status === 400 && engOf(await R.view(), e.id)?.cells.role?.s === "empty", [fr.json, r4.json]);
   } else skip("role on a seed seat", "no seat with a function and no role on the host");
-  const bare = await R.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { type: "Fractional", role: `Fractional Head of Partnerships ${RUN}` } });
+  const bare = await R.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: R.name, type: "Fractional", role: `Fractional Head of Partnerships ${RUN}` } });
   const bid = bare.json?.id;
   const bareFn = engOf(await R.view(), bid)?.cells.function;
   const r5 = await back(R, { entity: "engagement", id: bid, field: "role" });
   const bareAfter = engOf(await R.view(), bid);
   check("a function read from the role goes with the role", bareFn?.v === "Partnerships" && r5.status === 200 && bareAfter?.cells.function?.s === "empty" && r5.json?.cells?.some((c) => c.field === "function"), [bareFn, bareAfter?.cells.function, r5.json]);
   // An end takes the Ended it set with it.
-  const endSeat = await R.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", role: `Growth Lead Retract ${RUN}` } });
+  const endSeat = await R.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: R.name, function: "Growth", role: `Growth Lead Retract ${RUN}` } });
   await R.act({ type: "fill", entity: "engagement", id: endSeat.json?.id, field: "end", value: "2024-01" });
   const r6 = await back(R, { entity: "engagement", id: endSeat.json?.id, field: "end" });
   const es = engOf(await R.view(), endSeat.json?.id);
@@ -1099,8 +1114,8 @@ section("company", async () => {
 
   // A seat a member added with no type is a fractional seat. One typed Full-time is not.
   const M = await member("Mo Maker");
-  const plain = await M.act({ type: "add", company: `Qa Untyped Co ${RUN}`, engagementFields: { function: "Marketing" } });
-  const full = await M.act({ type: "add", company: `Qa Fulltime Co ${RUN}`, engagementFields: { function: "Marketing", type: "Full-time" } });
+  const plain = await M.act({ type: "add", company: `Qa Untyped Co ${RUN}`, operatorMemberId: "me", engagementFields: { operator: M.name, function: "Marketing" } });
+  const full = await M.act({ type: "add", company: `Qa Fulltime Co ${RUN}`, operatorMemberId: "me", engagementFields: { operator: M.name, function: "Marketing", type: "Full-time" } });
   const mv = await M.view();
   const pf = companyNamed(mv, `Qa Untyped Co ${RUN}`)?.friendly;
   const ff = companyNamed(mv, `Qa Fulltime Co ${RUN}`)?.friendly;
@@ -1156,12 +1171,12 @@ section("wire", async () => {
   check("a company the member created is marked added for them", made.status === 200 && mine?.added === true, { status: made.status, added: mine?.added });
   check("and for nobody else", !!theirs && theirs.added === undefined, theirs && { added: theirs.added });
   const h = host(await A.view());
-  check("a company the member only added a seat to is not", (await A.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Sales", type: "Fractional" } })).status === 200 && companyNamed(await A.view(), h.name)?.added === undefined);
+  check("a company the member only added a seat to is not", (await A.act({ type: "add", company: h.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: A.name, function: "Sales", type: "Fractional" } })).status === 200 && companyNamed(await A.view(), h.name)?.added === undefined);
 
   // "Add a seat you held" (operatorMemberId "me") with the title of somebody else's seat makes the member's own seat.
   const host2 = host(await A.view());
   const role = "Fractional Head of RevOps";
-  const other = await A.act({ type: "add", company: host2.name, newEngagement: true, engagementFields: { function: "RevOps", role, type: "Fractional", operator: "Ola Other" } });
+  const other = await A.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "RevOps", role, type: "Fractional", operator: A.name } });
   const otherId = other.json?.id;
   const own = await B.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "RevOps", role, type: "Fractional", operator: "Bea Bystander", start: "2024-02" } });
   const bv = await B.view();
@@ -1169,7 +1184,7 @@ section("wire", async () => {
   check("a seat you held with the same title as another member's seat is its own seat", other.status === 200 && own.status === 200 && !!own.json?.id && own.json.id !== otherId && /^Added a seat at /.test(own.json?.message ?? ""), { other: other.status, own: own.json?.message, same: own.json?.id === otherId });
   check("it is yours at once, with your name on it", ownSeat?.yours === true && ownSeat.cells.operator?.v === "Bea Bystander", ownSeat && { yours: ownSeat.yours });
   const av = await A.view();
-  check("the other member's seat keeps its own seat holder and start", engOf(av, otherId)?.cells.operator?.v === "Ola Other" && engOf(av, otherId)?.cells.start?.s === "empty", engOf(av, otherId)?.cells.start);
+  check("the other member's seat keeps its own seat holder and start", engOf(av, otherId)?.cells.operator?.v === A.name && engOf(av, otherId)?.cells.start?.s === "empty", engOf(av, otherId)?.cells.start);
   const bench = await B.act({ type: "benchRate", engagementId: own.json?.id, pricing: "Monthly retainer", rate: "$9k/mo" });
   check("a private rate on that seat goes in", bench.status === 200, bench.json);
   const again = await B.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { role, operator: "Bea Bystander" } });
@@ -1244,9 +1259,13 @@ section("closed", async () => {
   const of = companyNamed(await adm.view(), one)?.friendly;
   check("a closed posting with no seat holder counts in neither functions nor fractional seats", of?.functions.length === 0 && of?.fractional === 0 && of?.hiring?.length === 0 && of?.open === 0, of);
   check("it still says they went looking for a fractional (Medium)", of?.tier === "Medium", of);
-  // DESK-10: an end can't come before the month the role was first listed.
+  // DESK-10: an end can't come before the month the role was first listed. Only its seat holder adds one.
+  const early0 = await N.act({ type: "fill", entity: "engagement", id: ze.id, field: "end", value: "2020-01" });
+  check("nobody but a seat holder adds an end to a closed role", early0.json?.error === HOLDER_ONLY, early0.json);
+  if (!(await vouch(N))) return skip("end before the role was listed", NEED_SEED);
+  const took = await N.act({ type: "fill", entity: "engagement", id: ze.id, field: "operator", value: "x", memberId: "me" });
   const early = await N.act({ type: "fill", entity: "engagement", id: ze.id, field: "end", value: "2020-01" });
-  check("an end before the role was first listed is refused, and says when that was", early.status === 400 && /^The end month can't be before [A-Z][a-z]{2} \d{4}, when the role was first listed\.$/.test(early.json?.error ?? ""), early.json);
+  check("an end before the role was first listed is refused, and says when that was", took.status === 200 && early.status === 400 && /^The end month can't be before [A-Z][a-z]{2} \d{4}, when the role was first listed\.$/.test(early.json?.error ?? ""), [took.json?.error, early.json]);
 });
 
 /* ---------- run ---------- */

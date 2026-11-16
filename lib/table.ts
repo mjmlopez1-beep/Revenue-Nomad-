@@ -21,9 +21,10 @@
  *
  * Hidden companies: a company with an open role the scan follows (or one from our records)
  * keeps its name, website, LinkedIn, logo and About behind "Unlock company" (1 credit); see
- * identityHidden() and hidesCompany(). The same credit opens the role and the posting of each
- * open role there, whichever of them was asked for. Where the company is not hidden, the role
- * and the posting of an open role are still one purchase.
+ * identityHidden() and hidesCompany(). The same credit opens the role, the posting and the posted
+ * rate of each open role there, whichever of them was asked for (hours a week are free). Where
+ * the company is not hidden, the role, the posting and the rate of an open role are still one
+ * purchase (BUNDLE_FIELDS).
  *
  * Your seats: the member a seat-holder name resolves to can say "this isn't me"; see
  * seatHolder(). When the name is good evidence (our records, another member, the seat's maker,
@@ -888,9 +889,9 @@ const PICKS = "a company's industry, size, revenue or how they sell";
 /** Facts a member can add to records per rolling 24 hours, not counting their own seats (a backstop against a flood). */
 const FILL_DAILY_MAX = 150;
 /** What still earns once the pick-list answers have stopped. */
-const SELL_STILL_EARNS = "A role, a rate or who held the seat still earns.";
+const SELL_STILL_EARNS = "An HQ, a website, a person or a fact on your own seat still earns.";
 /** The refusal past SELL_SAVE_MAX pick-list answers in a day. */
-const SELL_FULL = `You've added ${SELL_SAVE_MAX} answers today for ${PICKS}. Add more tomorrow. A role, a rate or who held the seat can go in now.`;
+const SELL_FULL = `You've added ${SELL_SAVE_MAX} answers today for ${PICKS}. Add more tomorrow. An HQ, a website, a person or a fact on your own seat can go in now.`;
 
 const refField = (ref: string) => ref.slice(ref.lastIndexOf(".") + 1);
 const refRecord = (ref: string) => ref.slice(0, Math.max(0, ref.lastIndexOf(".")));
@@ -1398,7 +1399,7 @@ function hidesCompany(e: EngNode, s: State, tracks: Tracks): boolean {
   if (!isOpenRole(e, s, tracks)) return false;
   return tracks.has(e.id) || isSystem(valueOf(e, s, "status")?.by ?? "seed");
 }
-/** The member holds the role or the posting of this open role (paid for it, or added it): it was bought once, with whatever else that purchase opens. */
+/** The member holds the role, the posting or the rate of this open role (paid for it, or added it): it was bought once, with whatever else that purchase opens. */
 function holdsOpenRole(s: State, me: Member, e: Node): boolean {
   return BUNDLE_FIELDS.some((field) => {
     const v = valueOf(e, s, field);
@@ -1413,8 +1414,12 @@ const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boole
 /** One company cell as a member sees it while the company is hidden: identity facts locked, HQ cut to its region. */
 const hideIdentity = (key: string, c: Cell): Cell =>
   c.s !== "value" ? c : IDENTITY_FIELDS.has(key) ? { s: "locked", ver: 0 } : key === "hq" ? { ...c, v: hqRegion(c.v) } : c;
-/** What "Unlock company" opens on each open role at a hidden company, for the same credit. */
-const BUNDLE_FIELDS = ["role", "posting"];
+/**
+ * One purchase on an open role: its role, its job posting and its posted rate. "Unlock company"
+ * opens all three on each open role at a hidden company for the same credit. (Hours a week are
+ * free, so they need no unlock.)
+ */
+const BUNDLE_FIELDS = ["role", "posting", "rate"];
 /** The posting of a role the scan closed (the listing came down) is free to see: the link no longer leads to a job. */
 const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !== "filled";
 
@@ -1428,7 +1433,7 @@ function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me
   if (!me || isAdmin(me)) return false;
   const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
   if (!engs.some((e) => hidesCompany(e, s, tracks))) return false;
-  // Paid for an open role's title or posting there already (say while the role was closed): the company came with it.
+  // Paid for an open role's title, posting or rate there already (say while the role was closed): the company came with it.
   if (engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e))) return false;
   if ((s.unlocks[fkey(companyId, "identity")] ?? []).includes(me.id)) return false;
   if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return false;
@@ -1503,10 +1508,15 @@ const addressIn = (raw: string | undefined) => {
 /** View.contact: read at run time, so a build never drops the addresses and a change needs only a restart. */
 export const contactInfo = (): NonNullable<View["contact"]> => ({ support: addressIn(process.env.RN_SUPPORT_EMAIL), intro: addressIn(process.env.RN_INTRO_EMAIL) });
 
-export async function buildView(token: string | null): Promise<View> {
+/**
+ * The table as `token`'s member sees it. `asMember`: an admin asked to see it the way members do
+ * ("See it as a member"): hidden companies stay hidden, and there is no review list or pilot
+ * metrics. It changes nothing for anyone who is not an admin. Actions still run as the admin.
+ */
+export async function buildView(token: string | null, opts: { asMember?: boolean } = {}): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
-  if (me) return fullView(seed, s, me);
+  if (me) return fullView(seed, s, me, !!opts.asMember && isAdmin(me));
   if (statsCache && statsCache.s === s && statsCache.seed === seed && Date.now() - statsCache.at < STATS_FRESH)
     return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled(), contact: contactInfo() };
   if (!anonBuild || anonBuild.s !== s || anonBuild.seed !== seed) {
@@ -1517,8 +1527,10 @@ export async function buildView(token: string | null): Promise<View> {
   return anonBuild.p;
 }
 
-async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> {
+async function fullView(seed: Seed, s: State, me: Member | null, asMember = false): Promise<View> {
   const g = graph(seed, s);
+  /** The viewer is an admin and sees the admin's view (not "See it as a member"). */
+  const admin = isAdmin(me) && !asMember;
   const nowMs = Date.now();
 
   /** Live facts hidden only for this viewer (they reported them): still facts for the stats. */
@@ -1572,13 +1584,14 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
   let peopleCount = 0;
   for (const c of g.companies.values()) {
     const facts = { known: 0, locked: 0, missing: 0 };
-    const count = (cells: Record<string, Cell>, defs: typeof COMPANY_F) => {
+    /** `addable`: an empty fact here is one the viewer can add (a seat's facts are its holder's alone). */
+    const count = (cells: Record<string, Cell>, defs: typeof COMPANY_F, addable = true) => {
       for (const f of defs) {
         if (f.system) continue;
         const x = cells[f.key];
         if (x.s === "value") facts.known++;
         else if (x.s === "locked") facts.locked++;
-        else if (x.s === "empty") facts.missing++;
+        else if (x.s === "empty" && addable) facts.missing++;
       }
     };
     const toPerson = (p: PersonNode): PersonRec => {
@@ -1611,7 +1624,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         const fn = functionOf(live(e, s, "role"));
         if (fn) cells.function = { s: "value", v: fn, ver: 0, system: true };
       }
-      count(cells, ENG_F);
+      // Only the seat holder adds facts about a seat, so its empty facts are missing for them alone.
+      count(cells, ENG_F, yours);
       const opName = live(e, s, "operator");
       if (opName) operators.add(opName.toLowerCase());
       const ePeopleNodes = people.filter((p) => p.engagementId === e.id);
@@ -1636,7 +1650,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     // Same rule as identityHidden(), from what this loop already knows (that one scans every value).
     const hidden =
       !!me &&
-      !isAdmin(me) &&
+      !admin &&
       engs.some((e) => hidesCompany(e, s, tracks)) &&
       !engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e)) &&
       !mine &&
@@ -1686,7 +1700,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const cid = companyIdOf(id);
     return hiddenIds.has(cid) ? HIDDEN_COMPANY : g.companies.get(cid)?.name ?? "";
   };
-  if (isAdmin(me)) {
+  if (admin) {
     const lastReport = new Map<string, string>();
     for (const r of s.reportLog) if (r.at > (lastReport.get(r.ref) ?? "")) lastReport.set(r.ref, r.at);
     for (const [k, v] of Object.entries(s.values)) {
@@ -1782,7 +1796,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       earnCap: EARN_CAP,
       earnResetsAt: resetsAt,
       held: heldFor(s, me.id),
-      admin: isAdmin(me),
+      admin,
+      ...(asMember ? { asMember: true } : {}),
       token: me.token,
       inviteCode: inviteCode(me.id),
       invited: s.members.filter((m) => m.referredBy === me.id).length,
@@ -1828,7 +1843,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     email: emailEnabled(),
     contact: contactInfo(),
     ...(me && scan ? { benchmarks: benchmarks(seed, g, s, me.id), scan } : {}),
-    ...(me && scan && isAdmin(me) ? { admin: adminStats(seed, s, g, idx, nowMs, scan, entityOf) } : {}),
+    ...(me && scan && admin ? { admin: adminStats(seed, s, g, idx, nowMs, scan, entityOf) } : {}),
   };
 }
 
@@ -2250,6 +2265,12 @@ const monthBefore = (a: string, b: string) => (a.length === 4 || b.length === 4 
 const NOTHING_NEW = "Nothing new was added.";
 /** A seat needs to say what the work was. A name alone is not a seat. */
 const SEAT_NEEDS_WHAT = "Add the seat's function or its role too, so members can tell what the work was.";
+/** A fact about a seat from anyone but its holder (see holdsSeat in perform). */
+export const SEAT_HOLDER_ONLY = "Only the person who held this seat can add this.";
+/** A status edit on an open role the scan still lists. */
+const LISTED_STATUS = "This role is still listed, so its status comes from the posting.";
+/** A seat added, or a seat holder named, for anyone but the member themselves. */
+export const SEAT_SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
 
 export async function perform(token: string | null, a: Action, origin?: string): Promise<ActionResult> {
   if (a?.type === "scanNow") {
@@ -2291,6 +2312,12 @@ export async function perform(token: string | null, a: Action, origin?: string):
     const trusted = (memberId: string) => (trustNow ??= trustOf(seed, s))(memberId);
     /** The seat-holder name on this seat resolves to the viewer (and they haven't said it isn't theirs). */
     const linkedSeat = (engId: string) => seatHolder(s, memberIndex(seed, s), engId, valueOf(g.engagements.get(engId), s, "operator"))?.id === me.id;
+    /**
+     * The viewer holds this seat as its owner, read from the state as it is now (so a seat made or
+     * claimed earlier in this action counts): the only member who adds facts about it.
+     */
+    const holdsSeat = (node: Node) =>
+      seatOwner(s, memberIndex(seed, s), trusted, tracks(), node.id, valueOf(node, s, "operator"), s.engagements.find((x) => x.id === node.id)?.by)?.id === me.id;
     /** The viewer holds this seat as its owner: they see it free, correct it and hide a fact on it at once (see seatOwner). */
     const ownSeat = (engId: string) =>
       seatOwner(s, memberIndex(seed, s), trusted, tracks(), engId, valueOf(g.engagements.get(engId), s, "operator"), s.engagements.find((x) => x.id === engId)?.by)?.id === me.id;
@@ -2491,12 +2518,22 @@ export async function perform(token: string | null, a: Action, origin?: string):
     const setValue = (node: Node, entity: Entity, key: string, raw: unknown, member: Member | null = null, pending: Record<string, string> = {}): number => {
       const f = fieldOf(entity, key);
       const linked = key === "operator" ? member : null;
-      const { value, error } = cleanValue(f, linked ? linked.name : raw);
+      // Only the seat holder adds facts about a seat, and the only seat holder a member can name is
+      // themselves (a seat they held, or an open role they took). Admins too: they review and remove.
+      if (entity === "engagement") {
+        if (key === "operator" ? linked?.id !== me.id : !holdsSeat(node)) throw new ActionError(key === "operator" ? SEAT_SELF_ONLY : SEAT_HOLDER_ONLY);
+      }
+      // Picking yourself writes your own name. One on file under a single word takes the first and last name typed instead.
+      let { value, error } = cleanValue(f, linked ? linked.name : raw);
+      if (error && linked && linked.id === me.id && typeof raw === "string" && raw.trim()) ({ value, error } = cleanValue(f, raw));
       if (error) throw new ActionError(`${f.label}. ${error}`);
       const cur = valueOf(node, s, key);
       // A seat holder can correct what our records or the scan say about their own seat.
       // What another member added still needs a report.
       const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
+      // An open role the scan follows keeps the posting's status while it is listed: its holder
+      // can't close it for everyone by editing it (taking the role, or the posting coming down, does).
+      if (correction && key === "status" && tracks().get(node.id) && !tracks().get(node.id)!.closedAt) throw new ActionError(LISTED_STATUS);
       if (cur && cur.by !== me.id && !correction)
         throw new ActionError(`${capital(say(entity, key))} is already there. Confirm it if it's right, or report it if it's wrong.`);
       if (entity === "engagement") seatCheck(node, key, value!, pending);
@@ -2601,8 +2638,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
           };
           /**
            * Unlock company: one purchase for the name, website, LinkedIn, logo and About of a
-           * hidden company, and the role and posting of each open role there. Asking for any
-           * part of it buys the whole, once.
+           * hidden company, and the role, posting and rate of each open role there. Asking for
+           * any part of it buys the whole, once.
            */
           const bundle = (company: Node) => {
             const k = fkey(company.id, "identity");
@@ -2614,9 +2651,9 @@ export async function perform(token: string | null, a: Action, origin?: string):
             return !!v && v.status === "live" && (v.by === me.id || (s.unlocks[fkey(node.id, field)] ?? []).includes(me.id));
           };
           /**
-           * An open role at a company the member can see: its role and its posting are one purchase
-           * as well, whoever the member is. One credit buys both, and a member who already holds one
-           * of the two gets the other at no charge.
+           * An open role at a company the member can see: its role, its posting and its rate are one
+           * purchase as well, whoever the member is. One credit buys all three, and a member who
+           * already holds one of them gets the rest at no charge.
            */
           const pairs = new Set<string>();
           const free: { node: Node; field: string }[] = [];
@@ -2640,7 +2677,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
               }
               if (pairs.has(eng.id)) continue;
               pairs.add(eng.id);
-              if (has(eng, f.key === "role" ? "posting" : "role")) free.push({ node, field: f.key });
+              if (BUNDLE_FIELDS.some((x) => x !== f.key && has(eng, x))) free.push({ node, field: f.key });
               else todo.push({ k, node, entity: it.entity, field: f.key, pair: true });
               continue;
             }
@@ -2690,7 +2727,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
             if (cur.by !== me.id && !(s.unlocks[k] ?? []).includes(me.id)) s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
             return true;
           };
-          // What came with each purchase: a company's open roles (role and posting), the other half of an open role, and halves already paid for.
+          // What came with each purchase: a company's open roles (role, posting and rate), the rest of an open role, and open roles already paid for.
           const companies = todo.filter((t) => t.field === "identity");
           const came: { node: Node; field: string }[] = [];
           for (const t of companies) {
@@ -2700,25 +2737,22 @@ export async function perform(token: string | null, a: Action, origin?: string):
             }
           }
           const paired = todo.filter((t) => t.pair);
-          for (const t of paired) {
-            const other = t.field === "role" ? "posting" : "role";
-            if (give(t.node, other)) came.push({ node: t.node, field: other });
-          }
-          for (const x of free) if (give(x.node, x.field)) came.push(x);
+          for (const t of paired) for (const other of BUNDLE_FIELDS) if (other !== t.field && give(t.node, other)) came.push({ node: t.node, field: other });
+          for (const x of free) for (const field of BUNDLE_FIELDS) if (!has(x.node, field) && give(x.node, field)) came.push({ node: x.node, field });
           const others = todo.length - companies.length - paired.length;
-          // "for 1 credit", or nothing when the member had already paid for the other half of an open role.
+          // "for 1 credit", or nothing when the member had already paid for part of an open role.
           const price = need ? ` for ${need} credit${need > 1 ? "s" : ""}` : "";
           const noCharge = need ? "" : " You had already paid for this open role, so no credit was spent.";
           const companyName = (t: { node: Node }) => g.companies.get(t.node.id)?.name ?? "the company";
           let message = todo.length === 1 ? `Unlocked ${say(todo[0].entity, todo[0].field)}${price}.` : `Unlocked ${need} facts${price}.`;
           if (paired.length || free.length || (companies.length && came.length)) {
-            // Name what the credit bought: "Acme, the role and the posting".
+            // Name what the credit bought: "Acme, the role, the posting and the posted rate".
             const opened = new Set([...paired, ...came].filter((x) => BUNDLE_FIELDS.includes(x.field)).map((x) => `${x.node.id}.${x.field}`));
             const n = (field: string, one: string, many: string) => {
               const c = [...opened].filter((k) => k.endsWith(`.${field}`)).length;
               return c === 1 ? [`the ${one}`] : c ? [`${c} ${many}`] : [];
             };
-            const parts = [...(companies.length ? [companies.length === 1 ? companyName(companies[0]) : `${companies.length} companies`] : []), ...n("role", "role", "roles"), ...n("posting", "posting", "postings")];
+            const parts = [...(companies.length ? [companies.length === 1 ? companyName(companies[0]) : `${companies.length} companies`] : []), ...n("role", "role", "roles"), ...n("posting", "posting", "postings"), ...n("rate", "posted rate", "posted rates")];
             const bought = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? `${need} facts`;
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""},` : ""}${price}.${noCharge}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${companyName(todo[0])}${price}.`;
@@ -2748,7 +2782,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
               });
           const site = a.website && String(a.website).trim() ? pick("company", { website: a.website })[0][1] : null;
           const coFields = pick("company", a.companyFields).filter(([k]) => k !== "website");
-          const engFields = pick("engagement", a.engagementFields);
+          // The seat holder goes in first: the seat's other facts are theirs to add (see setValue).
+          const engFields = pick("engagement", a.engagementFields).sort(([x], [y]) => Number(y === "operator") - Number(x === "operator"));
           const seatPick = engFields.some(([k]) => k === "operator") ? pickedMember(a.operatorMemberId) : null;
           const people = (a.people ?? []).slice(0, 10).map((p) => pick("contact", p)).filter((p) => p.length);
           for (const p of people) if (!p.some(([k]) => k === "name")) throw new ActionError("Each person needs a name.");
@@ -2822,6 +2857,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
                 else earned += setValue(eng, "engagement", k, v, seatPick, pending);
               }
             } else {
+              // A new seat is one the member held: they name themselves as its holder.
+              if (seatPick?.id !== me.id || !engFields.some(([k]) => k === "operator")) throw new ActionError(SEAT_SELF_ONLY);
               eid = newId("e", name);
               engNew = true;
               s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
@@ -3068,7 +3105,9 @@ export async function perform(token: string | null, a: Action, origin?: string):
            */
           const tied = (engId: string | null) => {
             if (!engId) return false;
-            if (ownSeat(engId)) return true;
+            // A seat from our records or the scan that they hold. One they made themselves needs a role too (a blank one is a throwaway).
+            const madeIt = s.engagements.some((x) => x.id === engId && x.by === me.id);
+            if (!madeIt && ownSeat(engId)) return true;
             const e = g.engagements.get(engId);
             if (!e || !s.engagements.some((x) => x.id === engId && x.by === me.id) || !live(e, s, "role")) return false;
             if ((s.notMine[me.id] ?? []).includes(engId)) return false;
@@ -3362,7 +3401,7 @@ const urlKey = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replac
  * (its baseline, which a run that is not clean never changes). An open role closes when its own
  * board has been clean and missed it on 2 scans at least 12 hours apart and it was last listed
  * more than 10 days ago. So an outage, a board that reads but matches nothing, and two scans on
- * one day all close nothing. When a role closes, unlocks of its role and posting (and of its
+ * one day all close nothing. When a role closes, unlocks of its role, posting and rate (and of its
  * company, if no open role is left there) made after it was last listed are paid back.
  * `nowIso` is the scan's time (tests pass one to move the clock).
  */
@@ -3589,6 +3628,7 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
       for (const r of closedNow) {
         since.set(fkey(r.engagementId, "role"), r.lastSeen);
         since.set(fkey(r.engagementId, "posting"), r.lastSeen);
+        since.set(fkey(r.engagementId, "rate"), r.lastSeen);
         // The company too, when this left it with no open role. It was last known to be hiring when any of its roles was last seen.
         if ((engsAt.get(r.companyId) ?? []).some(openNow)) continue;
         const last = Object.values(roles).filter((x) => x.companyId === r.companyId).map((x) => x.lastSeen).sort().pop();

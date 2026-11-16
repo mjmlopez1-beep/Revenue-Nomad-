@@ -186,16 +186,18 @@ check("a fact the member added is not an unlock", !own.eng && !own.company, own)
   const past = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
   const visible = deriveAll([co("Seen Co", [role, past])])[0];
   const fields = (refs: { field: string }[]) => refs.map((t) => t.field).sort().join();
-  check("an open role's role and posting are one purchase", fields(lockedInEngagement(role)) === "rate,role");
-  check("Unlock all at a visible company: role, rate and the past seat's two", visible.locked.length === 4, visible.locked);
+  check("an open role's role, posting and rate are one purchase", fields(lockedInEngagement(role)) === "role");
+  check("Unlock all at a visible company: the open role once and the past seat's two", visible.locked.length === 3, visible.locked);
   const role2 = eng({ role: LOCKED, posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   const past2 = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
   const hc = { ...co("Hidden", [role2, past2]), hidden: true } as CompanyRec;
   hc.cells = { ...hc.cells, website: LOCKED, linkedin: LOCKED, about: LOCKED };
   const hidden = deriveAll([hc])[0];
-  check("Unlock all at a hidden company: the company (with the role and posting), the rate, the past seat's two", fields(hidden.locked) === "identity,operator,rate,role", hidden.locked);
+  check("Unlock all at a hidden company: the company (with the role, posting and rate) and the past seat's two", fields(hidden.locked) === "identity,operator,role", hidden.locked);
   check("at a hidden company the open role's role and posting are quiet on a row", !!coverOf(hidden, role2, "role") && !!coverOf(hidden, role2, "posting") && !!coverOf(hidden, role2, "rate"));
-  check("at a visible company only the posting is quiet while the role is locked", coverOf(visible, role, "role") === null && !!coverOf(visible, role, "posting"));
+  check("at a visible company the posting and the rate are quiet while the role is locked", coverOf(visible, role, "role") === null && !!coverOf(visible, role, "posting") && !!coverOf(visible, role, "rate"));
+  const rateOnly = eng({ role: val("Fractional CMO"), posting: val("https://jobs.example.com/x"), rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  check("an open role with only its rate locked: the rate's lock is the one that spends", coverOf(deriveAll([co("Rate Co", [rateOnly])])[0], rateOnly, "rate") === null && fields(lockedInEngagement(rateOnly)) === "rate");
   check("an open role nobody holds can't have a start or end yet", isUnheldOpenRole(role) && !isUnheldOpenRole(past) && NOT_YET_ON_OPEN_ROLE.join() === "start,end,reason,sourced");
 }
 

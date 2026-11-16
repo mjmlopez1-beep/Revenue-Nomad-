@@ -118,9 +118,38 @@
   background: var(--pine);
 }
 .ob-step {
+  margin-left: 12px;
+  margin-right: auto;
   font-size: 13px;
   line-height: 20px;
   color: var(--muted);
+}
+/* "Skip to the table": quiet, on every step. The main button stays the one action. */
+.ob-skip {
+  min-height: 44px;
+  margin: -12px -4px -12px 12px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+}
+.ob-skip:hover {
+  color: var(--pine);
+  text-decoration-color: currentColor;
+}
+.ob-skip:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+.ob-skip:disabled {
+  opacity: 0.6;
 }
 
 /* ---------- type ---------- */

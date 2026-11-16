@@ -11,8 +11,8 @@
  *
  * Credits are never spent by a stray click. A row has at most one paying control per purchase:
  *   - a hidden company's row spends only through the lock on its logo (Unlock company, which also
- *     opens the role and the posting of its open roles). Its other locks are quiet and open the record.
- *   - an open role's role and posting are one purchase: the posting is quiet while the role is locked.
+ *     opens the role, posting and rate of its open roles). Its other locks are quiet and open the record.
+ *   - an open role's role, posting and rate are one purchase: only the first lock spends, the others are quiet.
  * A lock's label never takes clicks (post.css), so only the lock's own box spends.
  */
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
@@ -116,7 +116,7 @@ export function HeldBy({ e, cover }: { e: EngagementRec; cover?: string | null }
   return <RowFact t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} cover={cover} />;
 }
 
-/** The one unlock for a hidden company: its name, website, LinkedIn and About, and the role and posting of its open roles. */
+/** The one unlock for a hidden company: its name, website, LinkedIn and About, and the role, posting and rate of its open roles. */
 export function UnlockCompanyCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
   // Today's unlocks are used up: the hidden logo already shows the lock, and its record says when.
@@ -269,7 +269,7 @@ const NOT_YET = "This role is still open, so it has no start or end yet.";
 function SeatCell({ i }: { i: CoInfo }) {
   const ui = useCellUi();
   const e = i.latest;
-  if (!e) return <AddPill label="Add a seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
+  if (!e) return <AddPill label="Add your seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
   const start = shown(e.cells.start);
   return (
     <span className="tp-stack">
@@ -284,7 +284,7 @@ function FunctionsCell({ i, mine, gap }: { i: CoInfo; mine: string | null; gap: 
   if (i.fns.length) return <FnChips i={i} mine={mine} gap={gap} />;
   const e = i.engs.find((x) => x.cells.function?.s === "empty");
   if (e) return <RowFact t={{ entity: "engagement", id: e.id, field: "function" }} cell={e.cells.function} />;
-  return <AddPill label="Add a seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
+  return <AddPill label="Add your seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: i.c.id, mode: "engagement" })} />;
 }
 
 /** The decision maker on file (else the first person): title, then the name, then how many more. */

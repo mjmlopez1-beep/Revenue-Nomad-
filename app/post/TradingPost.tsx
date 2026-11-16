@@ -29,7 +29,7 @@
 import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Cell } from "@/lib/tableTypes";
 import type { Me } from "@/lib/tableTypes";
-import { IconChevron, IconFilter, IconPlus, IconX, useToast, type Act, type View } from "../ui/shared";
+import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows,
@@ -85,6 +85,8 @@ const PAGES: Page[] = ["seats", "credits", "rates", "metrics"];
 const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics" };
 const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
+/** Each list's noun, one and many ("4 seats match"). */
+const TYPE_NOUN: Record<RecordType, [string, string]> = { companies: ["company", "companies"], engagements: ["seat", "seats"], people: ["person", "people"] };
 
 /** Phones: the view chips fade out at whichever edge has more to scroll to, so a chip cut at the edge reads as more, not as a broken label. */
 function chipEdges(el: HTMLElement) {
@@ -324,6 +326,17 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     if (took.length) setPreset((p) => p.filter((k) => !took.includes(k)));
     setFilters({ ...nf, ...Object.fromEntries(presetOn.filter((k) => !took.includes(k)).map((k) => [k, true])) } as Filters);
   };
+  /**
+   * Universal search: while a search is typed, how many of each list (companies, seats, people)
+   * match it in this view, so one tap moves to the list that has results. Search reads only what
+   * the member can see, never a locked value (applyFilters).
+   */
+  const searchCounts = useMemo(() => {
+    if (!q.trim()) return null;
+    const out = {} as Record<RecordType, number>;
+    for (const t of RECORD_TYPES) out[t.key] = t.key === recordType ? filtered.length : applyFilters(rowsFor(t.key, infos), eff, tab, q, cellMe).rows.length;
+    return out;
+  }, [q, recordType, filtered, infos, eff, tab, cellMe]);
   // Name matches come first while searching (decision 13).
   const sortedLive = useMemo(() => sortRows(filtered, sort, tab === "needs", q), [filtered, sort, tab, q]);
   /*
@@ -459,7 +472,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       else toast(r.message, true);
       return;
     }
-    // A plain unlock speaks through the cell. One that bought more (the company, the role and the posting) or cost nothing says so.
+    // A plain unlock speaks through the cell. One that bought more (the company, the role, the posting and the rate) or cost nothing says so.
     const plain = /^Unlocked [^,]+ for 1 credit\.$/.test(r.message) && !/ and /.test(r.message);
     if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message);
     else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.");
@@ -492,7 +505,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     if (!i || i.c.hidden) return [];
     const out: FactRef[] = [];
     for (const f of COMPANY_FILL) if (i.c.cells[f]?.s === "empty") out.push({ entity: "company", id: i.c.id, field: f });
-    for (const e of i.engs) for (const f of ["function", "type", "start"]) if (e.cells[f]?.s === "empty") out.push({ entity: "engagement", id: e.id, field: f });
+    // A seat's facts are its holder's to add: only the member's own seats here.
+    for (const e of i.engs) if (e.yours) for (const f of ["function", "type", "start"]) if (e.cells[f]?.s === "empty") out.push({ entity: "engagement", id: e.id, field: f });
     return out.slice(0, 3);
   });
   const openCompany = useStable((id: string, focus?: string) => {
@@ -522,6 +536,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   });
   /** A record at a company whose name is hidden until the member unlocks it. */
   const isHidden = useStable((id: string) => !!ownerOf.get(id)?.c.hidden);
+  /** The member holds this seat: only the seat holder adds facts about a seat. */
+  const holdsSeat = useStable((id: string) => !!ownerOf.get(id)?.engs.some((e) => e.id === id && e.yours));
   const openAdd = useStable((o?: AddOpts) => {
     setEditor(null);
     setPop(null);
@@ -591,7 +607,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       } else if (r.p) {
         for (const f of ["name", "email", "linkedin", "phone"]) cands.push([{ entity: "contact", id: r.p.id, field: f }, r.p.cells[f]]);
       } else if (r.i.c.hidden) {
-        // Looking for roles: the hidden company's lock opens it with its open role and the posting, for 1 credit.
+        // Looking for roles: the hidden company's lock opens it with its open role, the posting and the rate, for 1 credit.
         cands.push([{ entity: "company", id: r.i.c.id, field: "identity" }, { s: "locked", ver: 0 }]);
       } else {
         // An open role in the member's function, else the latest seat. (A phone card shows its role only: pointAt opens the record for the rest.)
@@ -797,6 +813,21 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     }
   });
 
+  /** Put the cursor in the search, on the table (a page or a phone's full-screen record closes first). */
+  const focusSearch = useStable(() => {
+    const go = () => {
+      const el = searchRef.current;
+      if (!el) return;
+      el.focus();
+      el.select();
+    };
+    if (page !== "table" || (phone && drawer)) {
+      setDrawer(null);
+      setPage("table");
+      setTimeout(go, 60);
+    } else go();
+  });
+
   /* ----- keyboard ----- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -814,11 +845,18 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         closeTop();
         return;
       }
+      // Cmd+K or Ctrl+K: the search, from anywhere (a modifier shortcut, so it stays on with the single-letter ones off).
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k" && !e.defaultPrevented) {
+        if (s.addOpts || s.editor) return;
+        e.preventDefault();
+        focusSearch();
+        return;
+      }
       if (typing || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
       if (s.addOpts || s.editor || s.keysOff) return;
       if (e.key === "/") {
         e.preventDefault();
-        searchRef.current?.focus();
+        focusSearch();
       } else if (e.key === "f" && s.page === "table") {
         e.preventDefault();
         toggleFilters();
@@ -905,15 +943,16 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       openAdd,
       addable,
       isHidden,
+      holdsSeat,
       seats: seatStats,
       openSeats,
       openPage,
       contact,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const ui: Ui = useMemo(() => mkUi(me), [me, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats, openPage, contact]);
+  const ui: Ui = useMemo(() => mkUi(me), [me, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, holdsSeat, seatStats, openSeats, openPage, contact]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const cellUi: Ui = useMemo(() => mkUi(cellMe), [cellMe, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats, openPage, contact]);
+  const cellUi: Ui = useMemo(() => mkUi(cellMe), [cellMe, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, holdsSeat, seatStats, openSeats, openPage, contact]);
 
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
   const drawerPos = drawer ? sorted.findIndex((r) => r.key === drawer.rowKey) : -1;
@@ -926,6 +965,15 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     document.title = `${docTitle} · Trading Post`;
   }, [docTitle]);
 
+  /** An admin's "See it as a member": a cookie the server reads (only for admins), then the table again. */
+  const seeAsMember = (on: boolean) => {
+    try {
+      document.cookie = on ? "rn_as_member=1; path=/; max-age=86400; samesite=lax" : "rn_as_member=; path=/; max-age=0; samesite=lax";
+    } catch {}
+    setDrawer(null);
+    if (on && page === "metrics") setPage("table");
+    void refresh();
+  };
   const goHome = () => {
     setPage("table");
     setDrawer(null);
@@ -1090,14 +1138,65 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     </>
   );
 
+  // While searching, each list's count is its matches, so one tap moves to the list that has them.
   const recordSwitch = (
-    <div className="tp-rtype" role="group" aria-label="What to list">
+    <div className={`tp-rtype${searchCounts ? " searching" : ""}`} role="group" aria-label={searchCounts ? "Matches in each list" : "What to list"}>
       {RECORD_TYPES.map((t) => (
-        <button key={t.key} type="button" aria-pressed={recordType === t.key} className={`tp-rtype-b${recordType === t.key ? " on" : ""}`} onClick={() => setRecordType(t.key)}>
-          {t.label} <span className="num tp-cnt">{totals[t.key]}</span>
+        <button
+          key={t.key}
+          type="button"
+          aria-pressed={recordType === t.key}
+          className={`tp-rtype-b${recordType === t.key ? " on" : ""}${searchCounts && !searchCounts[t.key] ? " none" : ""}`}
+          onClick={() => setRecordType(t.key)}
+          title={searchCounts ? `${plural(searchCounts[t.key], TYPE_NOUN[t.key][0], TYPE_NOUN[t.key][1])} match ${q.trim()}` : undefined}
+        >
+          {t.label} <span className="num tp-cnt">{searchCounts ? searchCounts[t.key] : totals[t.key]}</span>
         </button>
       ))}
     </div>
+  );
+  /** Phones, while searching: the matches in each list, one tap to switch. */
+  const searchTypes = searchCounts && (
+    <div className="tp-qtypes" role="group" aria-label="Matches in each list">
+      {RECORD_TYPES.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          aria-pressed={recordType === t.key}
+          className={`chip tp-pchip${recordType === t.key ? " chip-on" : ""}${!searchCounts[t.key] ? " none" : ""}`}
+          onClick={() => setRecordType(t.key)}
+        >
+          {t.label} <span className="num tp-cnt">{searchCounts[t.key]}</span>
+        </button>
+      ))}
+    </div>
+  );
+  /** The search as a field at the top of the list on phones. */
+  const listSearch = phone && page === "table" && (
+    <label className="tp-search tp-search-list">
+      <IconSearch size={16} />
+      <input
+        ref={searchRef}
+        className="tp-bare"
+        type="search"
+        placeholder="Search companies, seats and people"
+        aria-label="Search companies, seats and people"
+        value={query}
+        enterKeyHint="search"
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setQuery("");
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      {query && (
+        <button type="button" className="tp-search-x" aria-label="Clear search" onClick={() => (setQuery(""), searchRef.current?.focus())}>
+          <IconX size={14} />
+        </button>
+      )}
+    </label>
   );
 
   const viewButtons = TABS.map((t) => (
@@ -1153,6 +1252,15 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onSearchAll={searchAll}
       onBrowse={clearAll}
       onAdd={() => openAdd()}
+      elsewhere={
+        searchCounts
+          ? RECORD_TYPES.filter((t) => t.key !== recordType && searchCounts[t.key] > 0).map((t) => ({
+              n: searchCounts[t.key],
+              noun: TYPE_NOUN[t.key],
+              go: () => setRecordType(t.key),
+            }))
+          : []
+      }
     />
   );
   const more = sorted.length > limit && (
@@ -1220,7 +1328,16 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           emailOn={view.email}
           starter={view.stats?.starter}
           listSwitch={typeSwitch}
+          searchInList={phone && page === "table"}
         />
+        {me.asMember && (
+          <div className="tp-asmember" role="status">
+            <span>You&apos;re seeing what members see.</span>
+            <button type="button" onClick={() => seeAsMember(false)}>
+              Switch back
+            </button>
+          </div>
+        )}
 
         {page === "credits" ? (
           <main className="tp-main tp-main-page">
@@ -1243,7 +1360,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             <h1 id="tp-h1" className="sr-only">
               {TYPE_TITLE[recordType]}
             </h1>
-            {/* While searching, the results come straight under the field: nothing between them (DSGNP-5). */}
+            {/* The search is a real field at the top of the list. While searching, the results come straight under it (DSGNP-5). */}
+            {listSearch}
+            {searchTypes}
             {qt ? null : banners}
             <div ref={listTopRef} className="tp-listtop" aria-hidden />
             {/*
@@ -1497,6 +1616,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             emailOn={view.email}
             contact={contact}
             items={[
+              // The way back to the table from any page. Marked while the member is on it.
+              { label: "The table", current: page === "table", onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
@@ -1504,6 +1625,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
+              // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
+              ...(me.admin || me.asMember ? [{ label: "See it as a member", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
               // Single-letter shortcuts can be switched off (speech input, stray keys). Not offered on touch screens, which have none.
               ...(!touch
                 ? [
@@ -1617,7 +1740,10 @@ function Empty({
   onClearSearch,
   onSearchAll,
   onBrowse,
+  elsewhere = [],
 }: {
+  /** While searching: the other lists that have matches (one tap moves there). */
+  elsewhere?: { n: number; noun: [string, string]; go: () => void }[];
   q: string;
   tab: Tab;
   noun: string;
@@ -1632,7 +1758,14 @@ function Empty({
   let h: string;
   let p: string;
   let actions: { label: string; go: () => void; kind?: "pine" | "add" }[];
-  if (q && narrowed) {
+  const say = (x: { n: number; noun: [string, string] }) => plural(x.n, x.noun[0], x.noun[1]);
+  if (q && elsewhere.length) {
+    // Universal search: nothing in this list, but another list has it.
+    h = `No ${noun} match ${q}`;
+    const list = elsewhere.map(say);
+    p = `${list.length > 1 ? `${list[0]} and ${list[1]}` : list[0]} ${elsewhere.length === 1 && elsewhere[0].n === 1 ? "does" : "do"}.`;
+    actions = elsewhere.map((x, k) => ({ label: `See ${say(x)}`, go: x.go, ...(k === 0 ? { kind: "pine" as const } : {}) }));
+  } else if (q && narrowed) {
     h = `Nothing in this view matches ${q}`;
     p = `Your ${filtered ? "filters" : "view"} may be hiding it. Search all ${noun} instead.`;
     actions = [

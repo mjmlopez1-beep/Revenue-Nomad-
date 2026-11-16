@@ -85,7 +85,7 @@ function HiddenLine() {
     <div className="tp-pcard-hidden">
       <IconLock />
       <span>
-        Company, role and job posting <span className="tp-pcard-hidden-cost">· 1 credit together</span>
+        Company, role, posting and rate <span className="tp-pcard-hidden-cost">· 1 credit together</span>
       </span>
     </div>
   );
@@ -152,7 +152,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
             </>
           ) : (
             <Fact label="Seat">
-              <AddPill label="Add a seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: c.id, mode: "engagement" })} />
+              <AddPill label="Add your seat" earn={!earnNote(ui.me).capped} onAdd={() => ui.openAdd({ companyId: c.id, mode: "engagement" })} />
             </Fact>
           )}
         </div>

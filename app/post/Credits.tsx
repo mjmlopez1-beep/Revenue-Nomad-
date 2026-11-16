@@ -277,7 +277,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
   const share = phone && canShare();
   const rules: [string, "plus" | "minus" | "flat", string][] = [
     [String(starter), "flat", `You start with ${starter} credits.`],
-    ["+1", "plus", "You add a fact that's missing, like a role, a rate, who held a seat or a hiring contact."],
+    ["+1", "plus", "You add a fact that's missing. On a seat you held that's the role, the rate or the hours. On any company it's facts like the HQ or size, or a hiring contact."],
     ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on. A hidden company comes with its open role for 1 credit."],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact to a company or a seat. They get ${REFERRAL_BONUS} too.`],

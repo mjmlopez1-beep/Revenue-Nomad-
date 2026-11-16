@@ -347,10 +347,15 @@ function App() {
     await refresh();
   }, [refresh]);
 
+  /** Skipped onboarding ("Skip to the table"): the app opens on the table, even with seats on file. */
+  const skipped = useRef(false);
   /** Onboarding's last step: its profile action already reloaded the view, so a second download in the same breath is skipped. */
   const onboarded = useCallback(async () => {
     if (Date.now() - lastLoad.current > 1500) await refresh();
   }, [refresh]);
+  const onSkip = useCallback(() => {
+    skipped.current = true;
+  }, []);
 
   const onboarding = !!view?.me && !view.me.onboarded;
   useEffect(() => {
@@ -371,9 +376,9 @@ function App() {
       <Skeleton />
     );
   if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} />;
-  if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} />;
+  if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} onSkip={onSkip} />;
   // Straight from onboarding, a member with seats under their name starts on those seats.
-  const start = firstRun.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;
+  const start = firstRun.current && !skipped.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;
   return <TradingPost view={view} act={act} refresh={refresh} signOut={signOut} start={start} />;
 }
 

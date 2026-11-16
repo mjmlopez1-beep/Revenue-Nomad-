@@ -41,7 +41,7 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
               : `No credit. You had already earned ${earnCap} today.`,
       };
     case "unlock":
-      // A hidden company is one purchase with the role and posting of its open roles.
+      // A hidden company is one purchase with the role, posting and rate of its open roles.
       return { text: l.field === HIDDEN_COMPANY ? `Unlocked ${l.company && l.company !== HIDDEN_COMPANY ? l.company : "a hidden company"} and its open role` : `Unlocked ${thing(l.field)}${at}` };
     case "refund":
       return { text: `Refund for ${thing(l.field)}${at}, removed after review` };

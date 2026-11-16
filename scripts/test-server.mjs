@@ -239,12 +239,17 @@ const SAMPLE = {
 const FREE = new Set(["company.hq", "company.linkedin", "company.industry", "company.employees", "company.revenue", "engagement.type", "engagement.start", "engagement.revenue", "engagement.employees", "contact.title", "contact.relationship"]);
 const claimed = new Set();
 /** n empty cells nobody in this run has picked yet. */
-function pickEmpty(view, n, { free = false, entity } = {}) {
+/** A company's pick-list answers: only 5 earn a day, so the checks that count credits leave them out unless asked. */
+const PICKS = new Set(["company.industry", "company.employees", "company.revenue"]);
+function pickEmpty(view, n, { free = false, entity, picks = false } = {}) {
   const out = [];
   for (const x of cellsOf(view)) {
     if (out.length >= n) break;
     const col = `${x.entity}.${x.field}`;
     if (x.cell.s !== "empty" || !SAMPLE[col] || (free && !FREE.has(col)) || (entity && x.entity !== entity) || x.company.hidden) continue;
+    // Only the seat holder adds facts about a seat: another member's seat is never picked.
+    if (x.entity === "engagement" && !x.eng?.yours) continue;
+    if (!picks && PICKS.has(col)) continue;
     const k = `${x.id}.${x.field}`;
     if (claimed.has(k)) continue;
     claimed.add(k);
@@ -265,6 +270,15 @@ const pickLocked = (view, n) => {
   }
   return out;
 };
+/**
+ * A seat the member held, added by them with themselves as its holder (only the seat holder adds
+ * facts about a seat). Returns its public id. `company` defaults to a new test company.
+ */
+async function seatOf(m, fields = {}, company = `Qa Seat Co ${RUN} ${m.first}`) {
+  const r = await m.act({ type: "add", company, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: m.name, function: "Sales", ...fields } });
+  if (r.status !== 200 || !r.json?.id) throw new Error(`seat for ${m.first}: ${r.json?.error}`);
+  return r.json.id;
+}
 const fillAct = (t) => ({ type: "fill", entity: t.entity, id: t.id, field: t.field, value: t.value });
 
 /* ---------- sections ---------- */
@@ -337,9 +351,14 @@ section("ids", async () => {
     vague.status === 400 && vague.json?.error === "Add the seat's function or its role too, so members can tell what the work was.",
     vague.json,
   );
-  const add = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { function: "Enablement", type: "Advisory", start: "2024-03" } });
+  // Members add seats they held: a seat for someone else, or with nobody named, is refused (only the seat holder adds a seat).
+  const SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
+  const noHolder = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { function: "Enablement", type: "Advisory" } });
+  const forOther = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { function: "Enablement", operator: "Other Person" } });
+  check("a new seat with no seat holder, or with someone else as its holder, is refused", noHolder.json?.error === SELF_ONLY && forOther.json?.error === SELF_ONLY, [noHolder.json, forOther.json]);
+  const add = await m.act({ type: "add", company: co.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: m.name, function: "Enablement", type: "Advisory", start: "2024-03" } });
   check("add engagement returns a public id", add.status === 200 && /^e_[A-Za-z0-9_-]{12}$/.test(add.json?.id ?? ""), add.json);
-  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Trading Post, so we added what you know to it)\. You earned 3 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
+  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Trading Post, so we added what you know to it)\. You earned 4 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
   const eid = add.json?.id;
   const addP = await m.act({ type: "addPerson", companyId: co.id, engagementId: eid, person: { name: "Quinn Qa", title: "CEO" } });
   check("add person on that engagement", addP.status === 200 && /^p_[A-Za-z0-9_-]{12}$/.test(addP.json?.id ?? ""), addP.json);
@@ -537,10 +556,13 @@ section("reports", async () => {
 section("fields", async () => {
   const m = await member("Fin Fields", ip(60));
   const v = await m.view();
-  const eng = v.companies.flatMap((c) => c.engagements).find((e) => e.cells.rate?.s === "empty" && e.cells.hours?.s === "empty" && !claimed.has(`${e.id}.rate`) && !claimed.has(`${e.id}.hours`));
-  if (!eng) return fail("an engagement with empty rate and hours");
-  claimed.add(`${eng.id}.rate`);
-  claimed.add(`${eng.id}.hours`);
+  // Only the seat holder adds facts about a seat: someone else's seat refuses them.
+  const other = v.companies.flatMap((c) => (c.hidden ? [] : c.engagements)).find((e) => !e.yours && e.cells.rate?.s === "empty");
+  if (other) {
+    const no = await m.act({ type: "fill", entity: "engagement", id: other.id, field: "rate", value: "$8k/mo" });
+    check("a rate on someone else's seat is refused: only the seat holder adds it", no.status === 400 && no.json?.error === "Only the person who held this seat can add this.", no.json);
+  }
+  const eng = { id: await seatOf(m) };
   for (const bad of ["Test value", "Austin, TX", "123"]) {
     const r = await m.act({ type: "fill", entity: "engagement", id: eng.id, field: "rate", value: bad });
     check(`rate refuses '${bad}'`, r.json?.error === "Rate. Use a rate like $8k/mo or $150/hr.", r.json);
@@ -677,35 +699,32 @@ section("seat", async () => {
   const short = await call("GET", "/api/table?people=s", { token: T.token, ipAddr: T.ip });
   check("a one-letter search returns nothing", short.json?.members?.length === 0, short.json);
 
-  // Fresh engagements to fill (the few empty seat holders on file are open roles).
+  // Members add seats they held. A seat for another member is refused, picked from the search or typed.
+  const SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
+  const HOLDER_ONLY = "Only the person who held this seat can add this.";
   const v0 = await T.view();
-  const hosts = v0.companies.filter((c) => !c.hidden).slice(-3);
-  const seats = [];
-  for (const c of hosts) {
-    const r = await T.act({ type: "add", company: c.name, newEngagement: true, engagementFields: { function: "Marketing", type: "Advisory", start: "2024-06" } });
-    if (r.status !== 200 || !r.json?.id) return fail("seat: add engagement", r.json);
-    seats.push({ id: r.json.id });
-  }
-  const one = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "Jane" });
-  check("a one-word seat holder is refused with a first-and-last-name message", one.status === 400 && /first and last name/.test(one.json?.error ?? ""), one.json);
-  const mail = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "jane@acme.com" });
-  check("an email as seat holder is refused", mail.status === 400, mail.json);
-  const bogus = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "Sana Seatholder", memberId: "m_notamember1" });
-  check("an unknown member id is refused", bogus.status === 400 && /isn't on Trading Post/.test(bogus.json?.error ?? ""), bogus.json);
-  const linked = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "whatever typed", memberId: hit?.id });
-  const c0 = linked.json?.cells?.[0]?.cell;
-  check("picking a member saves their name and links the seat", linked.status === 200 && c0?.v === "Sana Seatholder" && c0?.member && c0.member.you === false, linked.json);
-  const typed = await T.act({ type: "fill", entity: "engagement", id: seats[1].id, field: "operator", value: "sana  seatholder" });
-  const c1 = typed.json?.cells?.[0]?.cell;
-  check("typing a member's exact name links it too", typed.status === 200 && !!c1?.member, typed.json);
-  const other = await T.act({ type: "fill", entity: "engagement", id: seats[2].id, field: "operator", value: "Jean-Luc O'Neill" });
-  const c2 = other.json?.cells?.[0]?.cell;
-  check("a non-member full name saves without a member link", other.status === 200 && c2?.s === "value" && !c2.member, other.json);
+  const host = v0.companies.filter((c) => !c.hidden).slice(-1)[0];
+  const picked = await T.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: hit?.id, engagementFields: { operator: "Sana Seatholder", function: "Marketing" } });
+  const typedIn = await T.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { operator: "sana  seatholder", function: "Marketing" } });
+  const nonMember = await T.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { operator: "Jean-Luc O'Neill", function: "Marketing" } });
+  check("a seat for someone else is refused, picked, typed or not a member", [picked, typedIn, nonMember].every((r) => r.status === 400 && r.json?.error === SELF_ONLY), [picked.json, typedIn.json, nonMember.json]);
+  // Sana adds a seat she held: it is linked to her and hers at once.
+  const own = await S.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Sana Seatholder", function: "Marketing", type: "Advisory", start: "2024-06" } });
+  if (own.status !== 200 || !own.json?.id) return fail("seat: add engagement", own.json);
+  const seats = [{ id: own.json.id }];
+  const rename = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "Jean-Luc O'Neill" });
+  const pickHer = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "x", memberId: hit?.id });
+  check("nobody else can name a seat holder on it", rename.json?.error === SELF_ONLY && pickHer.json?.error === SELF_ONLY, [rename.json, pickHer.json]);
+  const rate = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "rate", value: "$8k/mo" });
+  const end = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "end", value: "2025-01" });
+  check("nobody else can add a fact to her seat", rate.json?.error === HOLDER_ONLY && end.json?.error === HOLDER_ONLY, [rate.json, end.json]);
+  const hers = await S.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "rate", value: "$8k/mo" });
+  check("the seat holder can", hers.status === 200, hers.json);
   // The linked member sees "You" on their own seat without unlocking it.
   const vS = await S.view();
   let mine = null;
   for (const x of cellsOf(vS)) if (x.id === seats[0].id && x.field === "operator") mine = x.cell;
-  check("the linked member sees the seat as theirs, free", mine?.member?.you === true && vS.me.credits === STARTER && vS.me.unlocked === 0, { mine, credits: vS.me.credits });
+  check("the linked member sees the seat as theirs, free", mine?.member?.you === true && vS.me.unlocked === 0, { mine, unlocked: vS.me.unlocked });
   const un = await S.act({ type: "unlock", entity: "engagement", id: seats[0].id, field: "operator" });
   check("there is nothing to unlock on your own seat", un.json?.error === "Nothing here is locked, so no credit was spent.", un.json);
   // Locked cells never carry the member link.
@@ -740,7 +759,7 @@ section("hidden", async () => {
   const v2 = await H.view();
   const c2 = v2.companies.find((x) => x.id === c.id);
   check("unlocking a company costs 1 credit and reveals it", un.status === 200 && v2.me.credits === before - 1 && c2 && !c2.hidden && c2.name !== "Hidden company", { msg: un.json, credits: [before, v2.me.credits], name: c2?.name });
-  // The same credit opens the role and the posting of its open roles, and the answer names them too.
+  // The same credit opens the role, the posting and the rate of its open roles, and the answer names them too.
   const boughtWith = (c2?.engagements ?? []).some((e) => e.cells.role?.s === "value" || e.cells.posting?.s === "value");
   const named = (un.json?.message ?? "").startsWith(`Unlocked ${c2?.name}`) && un.json?.message.endsWith(" for 1 credit.");
   check("the answer names the company, what came with it and the price", !!c2 && named && (!boughtWith || /, the role|, the posting| and the (role|posting)/.test(un.json?.message ?? "")), un.json?.message);
@@ -751,7 +770,7 @@ section("hidden", async () => {
   const K = await member("Kai Knows", ip(81));
   const kv = await K.view();
   check("the company is still hidden for another member", kv.companies.find((x) => x.id === c.id)?.hidden === true);
-  const add = await K.act({ type: "add", company: c2.name, newEngagement: true, engagementFields: { function: "Sales", type: "Fractional", start: "2025-01" } });
+  const add = await K.act({ type: "add", company: c2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: K.name, function: "Sales", type: "Fractional", start: "2025-01" } });
   const kc = (await K.view()).companies.find((x) => x.id === c.id);
   check("adding by typing the real name works and reveals it to that member", add.status === 200 && kc && !kc.hidden, { add: add.json, hidden: kc?.hidden });
   const fake = await K.act({ type: "add", company: "Hidden company", newEngagement: true, engagementFields: { function: "Sales" } });
@@ -770,6 +789,28 @@ section("hidden", async () => {
   }
 });
 
+// "See it as a member": an admin's view built as a member's, from a query param or a cookie. Nobody else gets anything from it.
+section("asmember", async () => {
+  const adm = await admin();
+  if (!adm) return skip("see it as a member", "no admin account (set ADMIN_TOKEN)");
+  const plain = await adm.view();
+  const viaParam = await call("GET", "/api/table?as=member", { token: adm.token, ipAddr: adm.ip });
+  const viaCookie = await call("GET", "/api/table", { ipAddr: adm.ip, headers: { cookie: `rn_table=${adm.token}; rn_as_member=1` } });
+  const hiddenIn = (v) => (v?.companies ?? []).filter((c) => c.hidden).length;
+  check("an admin sees every company by name", hiddenIn(plain) === 0 && plain.me.admin === true && !plain.me.asMember && !!plain.admin, { hidden: hiddenIn(plain), admin: plain.me.admin });
+  for (const [how, r] of [["?as=member", viaParam], ["the cookie", viaCookie]]) {
+    const v = r.json;
+    check(`with ${how} the admin's view is a member's: not an admin, no review list, no pilot metrics`, r.status === 200 && v?.me?.admin === false && v.me.asMember === true && !v.admin && v.reported.length === 0, { status: r.status, admin: v?.me?.admin, asMember: v?.me?.asMember, metrics: !!v?.admin });
+    const open = (v?.companies ?? []).filter((c) => c.friendly.open > 0 && !c.mine && !c.unlocked);
+    if (open.length) check(`  and a company with an open role is hidden in it (${how})`, open.some((c) => c.hidden && c.name === "Hidden company"), open.length);
+  }
+  check("the admin's own view is back to an admin's after it", (await adm.view()).me.admin === true);
+  const m = await member("Mo Member", ip(95));
+  const own = await m.view();
+  const tried = await call("GET", "/api/table?as=member", { token: m.token, ipAddr: m.ip });
+  check("a member asking for it gets their own view, unchanged", tried.status === 200 && tried.json?.me?.admin === false && !tried.json.me.asMember && tried.json.companies.length === own.companies.length && hiddenIn(tried.json) === hiddenIn(own), tried.json?.me?.asMember);
+});
+
 section("gtm", async () => {
   const G = await member("Gia Gtm", ip(90));
   const v = await G.view();
@@ -783,7 +824,7 @@ section("gtm", async () => {
   check("a deal size outside the list is refused", bad.status === 400, bad.json);
   check("revenue uses the standard 'Under $1M' label", !JSON.stringify(v.companies.map((c) => c.cells.revenue)).includes("< $1M"));
   const host = v.companies.filter((c) => !c.hidden && c.id !== co.id)[3];
-  const add = await G.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { function: "Sales", reason: "Build the first sales motion", sourced: "Investor intro", pricing: "Monthly retainer" } });
+  const add = await G.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: G.name, function: "Sales", reason: "Build the first sales motion", sourced: "Investor intro", pricing: "Monthly retainer" } });
   const e = (await G.view()).companies.find((c) => c.id === host.id).engagements.find((x) => x.id === add.json?.id);
   check("an engagement takes why they hired, how it was sourced and pricing model", add.status === 200 && e?.cells.reason?.v === "Build the first sales motion" && e?.cells.sourced?.v === "Investor intro" && e?.cells.pricing?.v === "Monthly retainer", e?.cells);
   const other = await (await member("Oli Other", ip(91))).view();
@@ -791,7 +832,7 @@ section("gtm", async () => {
   check("how it was sourced is locked for others; why hired and pricing are free", oe?.cells.sourced?.s === "locked" && oe?.cells.reason?.s === "value" && oe?.cells.pricing?.s === "value", oe?.cells);
   // New this round: hours are free, AI roles have their own function, and two new pick-list values.
   const host2 = v.companies.filter((c) => !c.hidden && c.id !== co.id)[4];
-  const ai = await G.act({ type: "add", company: host2.name, newEngagement: true, engagementFields: { role: "Fractional AI SDR Lead", hours: "10", reason: "Move off founder-led sales", status: "Closed" } });
+  const ai = await G.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: G.name, role: "Fractional AI SDR Lead", hours: "10", reason: "Move off founder-led sales", status: "Closed" } });
   const ae = (await G.view()).companies.find((c) => c.id === host2.id).engagements.find((x) => x.id === ai.json?.id);
   check("an AI role title files the seat under AI GTM", ai.status === 200 && ae?.cells.function?.v === "AI GTM", ae?.cells.function);
   const oa = (await (await member("Ola Other", ip(91))).view()).companies.find((c) => c.id === host2.id).engagements.find((x) => x.id === ai.json?.id);
@@ -823,7 +864,8 @@ section("benchmarks", async () => {
   const rowOf = (view, fn, rev) => view.benchmarks.rows.find((r) => r.function === fn && r.revenue === rev);
   const hosts = v.companies.filter((c) => !c.hidden);
   const addRate = (who, host, fn, rev, extra) =>
-    who.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { function: fn, ...(rev === "All" ? {} : { revenue: rev }), ...extra } });
+    // A rate goes on a seat the member held (their name as its holder: the server writes their own name).
+    who.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", function: fn, ...(rev === "All" ? {} : { revenue: rev }), ...extra } });
 
   // A floor counts people, and a new account's rate does not count toward it yet, so the
   // rates below come from seed members, one each (scripts/test-bench.mjs has the full rules).
@@ -885,14 +927,16 @@ section("benchmarks", async () => {
   check("it counts in the All row too", rowOf(await R.view(), dFn, "All").hourly.n === beforeAll.hourly.n + 1);
   const own = rowOf(await D.view(), dFn, dRev);
   check("the member who shared it sees the group without their own rate, and is told so", own.hourly.n === before.hourly.n && own.hourly.withoutYours === true, own.hourly);
-  const mo = await addRate(T[9], hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" });
+  // (A seat holder name is a first and last name: a seed member on file under one word is skipped.)
+  let mo = null;
+  for (const who of [T[9], T[7], T[6], T[4], T[3]]) if ((mo = await addRate(who, hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" })).status === 200) break;
   const after2 = rowOf(await R.view(), dFn, dRev);
-  check("a monthly rate with no hours counts once", mo.status === 200 && after2.monthly.n === after.monthly.n + 1 && after2.hourly.n === after.hourly.n, after2);
+  check("a monthly rate with no hours counts once", mo.status === 200 && after2.monthly.n === after.monthly.n + 1 && after2.hourly.n === after.hourly.n, [mo.json?.error ?? mo.json?.message, after2]);
   // The band comes from the engagement's revenue at the time, else the company's.
   const coBand = hosts.find((c) => c.cells.revenue?.s === "value" && c.cells.revenue.v !== dRev && !c.mine);
   if (coBand) {
     const b0 = rowOf(await R.view(), dFn, coBand.cells.revenue.v).monthly.n;
-    await D.act({ type: "add", company: coBand.name, newEngagement: true, engagementFields: { function: dFn, pricing: "Monthly retainer", rate: "$7k/mo" } });
+    await D.act({ type: "add", company: coBand.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", function: dFn, pricing: "Monthly retainer", rate: "$7k/mo" } });
     check("with no revenue on the seat, the company's revenue band is used", rowOf(await R.view(), dFn, coBand.cells.revenue.v).monthly.n === b0 + 1);
   }
 });
@@ -905,9 +949,12 @@ section("seats", async () => {
   const host = v0.companies.filter((c) => !c.hidden && c.friendly.open === 0)[40];
   const found = await call("GET", "/api/table?people=" + encodeURIComponent("yara yours"), { token: T.token, ipAddr: T.ip });
   const pick = found.json?.members?.find((m) => m.name === "Yara Yours");
-  // T adds a seat Yara held, with gated facts on it.
-  const add = await T.act({
-    type: "add", company: host.name, newEngagement: true, operatorMemberId: pick?.id,
+  // Only the seat holder adds a seat: T can't add one for Yara.
+  const forYara = await T.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: pick?.id, engagementFields: { function: "Sales", operator: "Yara Yours", rate: "$9k/mo" } });
+  check("a member can't add a seat someone else held", forYara.status === 400 && forYara.json?.error === "You can add seats you held. Pick yourself as the seat holder.", forYara.json);
+  // Yara adds a seat she held, with gated facts on it.
+  const add = await Y.act({
+    type: "add", company: host.name, newEngagement: true, operatorMemberId: "me",
     engagementFields: { function: "Sales", type: "Fractional", role: "Fractional VP Sales", status: "Ended", operator: "Yara Yours", start: "2024-02", end: "2025-01", sourced: "Referral", rate: "$9k/mo", posting: "example.com/jobs/yara" },
     people: [{ name: "Pat Person", title: "CEO", relationship: "Reported to", email: "pat.person@example.com" }],
   });
@@ -918,48 +965,38 @@ section("seats", async () => {
   const ey = engOf(vy, eid);
   check("the seat holder's engagement comes back as yours", ey?.yours === true, ey?.yours);
   check("every gated fact on your own seat is visible", GATED.every((k) => ey?.cells[k]?.s === "value"), GATED.map((k) => ey?.cells[k]?.s));
-  check("seeing your own seat costs nothing and records no unlock", vy.me.credits === STARTER && vy.me.unlocked === 0 && vy.ledger.length === 0, { credits: vy.me.credits, unlocked: vy.me.unlocked });
+  check("your own seat records no unlock", vy.me.unlocked === 0 && !vy.ledger.some((l) => l.reason === "unlock"), { unlocked: vy.me.unlocked });
   check("your own seat's seat holder says it is you", ey?.cells.operator?.member?.you === true, ey?.cells.operator);
-  check("people on your seat stay locked", ey?.people.length === 1 && ey.people[0].cells.name?.s === "locked" && ey.people[0].cells.email?.s === "locked", ey?.people[0]?.cells);
   const eu = engOf(await U.view(), eid);
   check("another member's view has yours false and the gated facts locked", eu?.yours === false && GATED.every((k) => eu.cells[k]?.s === "locked"), eu && GATED.map((k) => eu.cells[k]?.s));
-  check("the member who added the seat is not its holder", engOf(await T.view(), eid)?.yours === false);
-  // What another member added still needs a report: the holder can't overwrite it.
-  const over = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "role", value: "Fractional CRO" });
-  check("a seat holder can't overwrite a fact another member added", over.status === 400 && /already there/.test(over.json?.error ?? ""), over.json);
-  const conf = await Y.act({ type: "verify", entity: "engagement", id: eid, field: "rate" });
-  check("a seat holder can confirm a gated fact on their seat without unlocking it", conf.status === 200, conf.json);
+  // Nobody else adds to it. People on it stay open to everyone.
+  const tFill = await T.act({ type: "fill", entity: "engagement", id: eid, field: "hours", value: "12" });
+  const tInto = await T.act({ type: "add", company: host.name, engagementId: eid, engagementFields: { hours: "12" } });
+  check("another member can't add a fact to the seat, in the cell or through Add", tFill.json?.error === "Only the person who held this seat can add this." && tInto.json?.error === "Only the person who held this seat can add this.", [tFill.json, tInto.json]);
+  const tPerson = await T.act({ type: "addPerson", companyId: engOf(await T.view(), eid)?.company.id, engagementId: eid, person: { name: "Rob Reporter", title: "CRO" } });
+  check("anyone can still add a person tied to the seat", tPerson.status === 200, tPerson.json);
+  const conf = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
+  const conf2 = await U.act({ type: "verify", entity: "engagement", id: eid, field: "rate" });
+  check("others can still unlock and confirm a fact on it", conf.status === 200 && conf2.status === 200, [conf.json, conf2.json]);
   // The holder fills what's missing and earns for it.
   const miss = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "hours", value: "12" });
-  check("a seat holder earns for filling a missing fact on their seat", miss.status === 200 && miss.json?.me?.credits === STARTER + 1, miss.json);
+  check("a seat holder earns for filling a missing fact on their seat", miss.status === 200 && miss.json?.me?.credits === vy.me.credits + 1, miss.json);
 
-  // "me": add a seat you held without knowing your own public id.
+  // "me": the seat holder name is the viewer's own, whatever was typed.
   const host2 = v0.companies.filter((c) => !c.hidden && c.friendly.open === 0)[41];
   const mine = await Y.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Sales", type: "Interim", operator: "typed over" } });
   const em = engOf(await Y.view(), mine.json?.id);
   check('add with operatorMemberId "me" links the seat to the viewer', mine.status === 200 && em?.yours === true && em.cells.operator?.v === "Yara Yours" && em.cells.operator.member?.you === true, { add: mine.json, yours: em?.yours });
-  const host3 = v0.companies.filter((c) => !c.hidden && c.friendly.open === 0)[42];
-  const blank = await T.act({ type: "add", company: host3.name, newEngagement: true, engagementFields: { function: "Marketing", type: "Advisory" } });
-  const viaFill = await Y.act({ type: "fill", entity: "engagement", id: blank.json?.id, field: "operator", value: "anything", memberId: "me" });
-  check('fill with memberId "me" links the seat to the viewer', viaFill.status === 200 && viaFill.json?.cells?.[0]?.cell?.member?.you === true, viaFill.json);
-  // On a seat somebody else made, naming yourself is not enough to see it free: another member confirms the name first.
-  check("on a seat another member made, naming yourself does not make it yours yet", engOf(await Y.view(), blank.json?.id)?.yours === false, engOf(await Y.view(), blank.json?.id)?.yours);
-  await U.act({ type: "unlock", entity: "engagement", id: blank.json?.id, field: "operator" });
-  const vouchName = await U.act({ type: "verify", entity: "engagement", id: blank.json?.id, field: "operator" });
-  check("once another member confirms the name, it is", vouchName.status === 200 && engOf(await Y.view(), blank.json?.id)?.yours === true, vouchName.json);
 
   // "This isn't me".
   const not = await Y.act({ type: "notMine", engagementId: eid });
   const ey2 = engOf(await Y.view(), eid);
   check("notMine unlinks the seat", not.status === 200 && ey2?.yours === false, { not: not.json?.message, yours: ey2?.yours });
-  check("after notMine the name a member added is under review, with the other locked facts that member put on the seat", GATED.every((k) => ey2?.cells[k]?.s === "reported"), ey2 && GATED.map((k) => ey2.cells[k]?.s));
-  check("notMine returns the cells as they now look", not.json?.cells?.find((c) => c.field === "operator")?.cell?.s === "reported", not.json?.cells?.map((c) => [c.field, c.cell.s]));
+  check("notMine returns the cells as they now look", Array.isArray(not.json?.cells) && not.json.cells.some((c) => c.field === "operator"), not.json?.cells?.map((c) => [c.field, c.cell.s]));
   const again = await Y.act({ type: "notMine", engagementId: eid });
   check("notMine on a seat that isn't yours is refused", again.status === 400 && again.json?.error === "That seat isn't linked to you.", again.json);
-  const unl = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "operator" });
-  check("after notMine nobody can buy the name a member put on that seat", unl.status === 400 && unl.json?.error === "Nothing here is locked, so no credit was spent." && engOf(await U.view(), eid)?.cells.operator?.s === "reported", unl.json);
-  const pay = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
-  check("nor the rate that member put there", pay.status === 400 && pay.json?.error === "Nothing here is locked, so no credit was spent.", pay.json);
+  const after = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "reason", value: "Build the first sales motion" });
+  check("after notMine, the seat takes no more facts from them", after.status === 400, after.json);
 
   // A real linked seat holder from the seed: free to see, and they can correct our own records.
   const sm = seedHolders[0];
@@ -1033,7 +1070,7 @@ section("benchrate", async () => {
   // Adding the public rate later doesn't count the same member twice (it replaces the private one, leaving 3).
   await M.act({ type: "fill", entity: "engagement", id: seatA.json?.id, field: "rate", value: "$200/hr" });
   check("a member's private and public rate on one seat count once", (await M.view()).benchmarks.total === t0 + 1);
-  const seatB = await M.act({ type: "add", company: hosts[51].name, newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", rate: "$9k/mo" } });
+  const seatB = await M.act({ type: "add", company: hosts[51].name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: M.name, function: "RevOps", type: "Fractional", rate: "$9k/mo" } });
   const pub = await M.act({ type: "benchRate", engagementId: seatB.json?.id, pricing: "Monthly retainer", rate: "$9k/mo" });
   check("a private rate is refused when your rate is already on the seat", pub.status === 400 && /already on this seat/.test(pub.json?.error ?? ""), pub.json);
 
@@ -1234,8 +1271,16 @@ section("scan", async () => {
   const roleCell = un.json?.cells?.find((c) => c.field === "role")?.cell;
   check("a scan value says it came from the posting, with no confirmation yet", un.status === 200 && roleCell?.v === "Interim CMO" && roleCell.ver === 0 && roleCell.from === "posting" && roleCell.mine === false, un.json);
   check("an unlock says what it bought and what it cost", un.json?.message === `Unlocked ${host.name}, the role and the posting for 1 credit.`, un.json?.message);
+  if (adm && newCo) {
+    // The posted rate is part of the same purchase: its lock buys the company, the role and the posting too.
+    const e1 = newCo.engagements[0];
+    const ur = await G.act({ type: "unlock", entity: "engagement", id: e1.id, field: "rate" });
+    const rateCell = ur.json?.cells?.find((c) => c.id === e1.id && c.field === "rate")?.cell;
+    const roleBack = ur.json?.cells?.find((c) => c.id === e1.id && c.field === "role")?.cell;
+    check("unlocking an open role's posted rate buys the company, the role and the posting with it, for 1 credit", ur.status === 200 && ur.json?.message === `Unlocked ${coName}, the role, the posting and the posted rate for 1 credit.` && rateCell?.v === "$150/hr" && roleBack?.v === "Fractional VP Sales", ur.json?.error ?? ur.json?.message);
+  }
   const over = await G.act({ type: "fill", entity: "engagement", id: e2.id, field: "role", value: "Interim Chief Marketing Officer" });
-  check("a member can't overwrite a scan value", over.status === 400 && /already there/.test(over.json?.error ?? ""), over.json);
+  check("a member can't overwrite a scan value", over.status === 400 && /already there|Only the person who held this seat/.test(over.json?.error ?? ""), over.json);
   const noUnlock = await G.act({ type: "unlock", entity: "engagement", id: e2.id, field: "status" });
   check("there is nothing to unlock on a followed role's status", noUnlock.json?.error === "Nothing here is locked, so no credit was spent.", noUnlock.json);
 
@@ -1310,12 +1355,13 @@ section("scan", async () => {
   const role4 = { key: `qahidden${RUN}:cs`, company: coH, domain: null, title: "Fractional Head of Customer Success", function: "Customer Success", type: "Fractional", url: `https://jobs.example.com/qa/${RUN}/4`, source: board, postedAt: null, rate: null, hoursPerWeek: null };
   await scanPost({ roles: [role4], sources: cleanRun, now: at(16) });
   const Z = await member("Zed Seatholder", ip(163));
-  const zSeat = await G.act({ type: "add", company: coH, newEngagement: true, engagementFields: { function: "Sales", type: "Fractional", operator: "Zed Seatholder" } });
+  const zSeat = await Z.act({ type: "add", company: coH, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Sales", type: "Fractional", operator: "Zed Seatholder" } });
   const zc = (await Z.view()).companies.find((c) => c.engagements.some((e) => e.id === zSeat.json?.id));
   check("a company with an open role is not hidden from a member who held a seat there", zc?.hidden === false && zc.name === coH && zc.friendly.open === 1, { hidden: zc?.hidden, open: zc?.friendly.open });
   await Z.act({ type: "notMine", engagementId: zSeat.json?.id });
   const zc2 = (await Z.view()).companies.find((c) => c.id === zc?.id);
-  check("after notMine the company is hidden from them like anyone else", zc2?.hidden === true && zc2.name === "Hidden company", { hidden: zc2?.hidden });
+  // Members add only seats they held, so the seat came from Zed: the facts Zed added there keep the company in view, as for anyone who added there.
+  check("after notMine the company stays in view for the member who added facts there", zc2?.hidden === false, { hidden: zc2?.hidden });
 
   // Open roles from the seed close 35 days after the seed was built, unless a scan sees them.
   if (seedOpen.length) {

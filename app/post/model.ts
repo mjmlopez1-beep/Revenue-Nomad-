@@ -82,8 +82,8 @@ export interface CoInfo {
   engs: EngagementRec[];
   /**
    * Every locked fact at the company (for Unlock all), one entry per purchase: a hidden company's
-   * identity also buys the role and posting of each open role there, and an open role's role and
-   * posting are one purchase, so the length is what Unlock all costs.
+   * identity also buys the role, posting and rate of each open role there, and an open role's
+   * role, posting and rate are one purchase, so the length is what Unlock all costs.
    */
   locked: FactRef[];
   unlockedByMe: boolean;
@@ -126,10 +126,15 @@ export function lockedOf(entity: Entity, id: string, cells: Record<string, Cell>
 }
 
 /**
- * An open role for the purpose of buying it: its role and its posting are one purchase (and at a
- * hidden company, Unlock company buys both). A role the scan follows is open until it closes.
+ * An open role for the purpose of buying it: its role, its posting and its posted rate are one
+ * purchase (and at a hidden company, Unlock company buys all three). A role the scan follows is
+ * open until it closes.
  */
 export const isOpenRole = (e: EngagementRec) => (e.opened ? !e.closed : isOpenSeat(e));
+/** What one credit opens on an open role, together. Same list as BUNDLE_FIELDS in lib/table.ts. */
+export const OPEN_ROLE_BUNDLE = ["role", "posting", "rate"];
+/** The one lock that spends for an open role: the first of its role, posting and rate still locked. */
+export const bundleLead = (e: EngagementRec) => OPEN_ROLE_BUNDLE.find((f) => e.cells[f]?.s === "locked") ?? null;
 /** An open role nobody holds yet: it has no start, end, why hired or how sourced. */
 export const isUnheldOpenRole = (e: EngagementRec) => isOpenRole(e) && (!e.cells.operator || e.cells.operator.s === "empty");
 /** Facts an open role nobody holds can't have yet. Shown as a quiet dash, never "+ Add". */
@@ -137,16 +142,17 @@ export const NOT_YET_ON_OPEN_ROLE = ["start", "end", "reason", "sourced"];
 
 /**
  * Why a locked fact in a list row or card is not its own paying control, or null when it is. At
- * a hidden company the row spends only through Unlock company (which also buys the role and the
- * posting of its open roles); its other locks are unlocked in the record. On an open role the
- * posting comes with the role (one purchase), so only the role's lock spends.
+ * a hidden company the row spends only through Unlock company (which also buys the role, the
+ * posting and the posted rate of its open roles); its other locks are unlocked in the record. On
+ * an open role the role, posting and rate are one purchase, so only the first lock spends.
  */
 export function coverOf(i: CoInfo, e: EngagementRec | null | undefined, field: string): string | null {
   if (i.c.hidden) {
-    if (e && isOpenRole(e) && (field === "role" || field === "posting")) return "Comes with the company. Unlock the company for 1 credit and you see its name, the role and the job posting.";
+    if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field))
+      return "Comes with the company. Unlock the company for 1 credit and you see its name, the role, the job posting and the posted rate.";
     return "Open the record to unlock this.";
   }
-  if (e && field === "posting" && isOpenRole(e) && e.cells.role?.s === "locked") return "Comes with the role. One credit opens the role and its job posting.";
+  if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field) && bundleLead(e) !== field) return "Comes with this open role. One credit opens the role, the job posting and the posted rate.";
   return null;
 }
 
@@ -159,12 +165,13 @@ export function listedDays(e: EngagementRec): number {
 }
 
 /**
- * Locked facts on one seat and its people, one entry per purchase. An open role's role and
- * posting are one purchase: the posting is left out while the role is in the list.
+ * Locked facts on one seat and its people, one entry per purchase. An open role's role, posting
+ * and rate are one purchase: only the first of them still locked is in the list.
  */
 export function lockedInEngagement(e: EngagementRec): FactRef[] {
   let own = lockedOf("engagement", e.id, e.cells);
-  if (isOpenRole(e) && own.some((t) => t.field === "role")) own = own.filter((t) => t.field !== "posting");
+  const lead = isOpenRole(e) ? bundleLead(e) : null;
+  if (lead) own = own.filter((t) => t.field === lead || !OPEN_ROLE_BUNDLE.includes(t.field));
   return [...own, ...e.people.flatMap((p) => lockedOf("contact", p.id, p.cells))];
 }
 
@@ -214,11 +221,11 @@ function infoOf(c: CompanyRec): CoInfo {
     [...engs].sort((a, b) => informative(b) - informative(a))[0] ??
     null;
   // A hidden company's website, LinkedIn and About are one unlock: the company itself. That
-  // credit also opens the role and the posting of each open role there.
+  // credit also opens the role, the posting and the posted rate of each open role there.
   const coLocked = lockedOf("company", c.id, c.cells).filter((t) => !(c.hidden && ["website", "linkedin", "about"].includes(t.field)));
   const engLocked = engs.flatMap((e) => {
     const all = lockedInEngagement(e);
-    return c.hidden && isOpenRole(e) ? all.filter((t) => !(t.entity === "engagement" && (t.field === "role" || t.field === "posting"))) : all;
+    return c.hidden && isOpenRole(e) ? all.filter((t) => !(t.entity === "engagement" && OPEN_ROLE_BUNDLE.includes(t.field))) : all;
   });
   const locked = [
     ...(c.hidden ? [{ entity: "company" as const, id: c.id, field: "identity" }] : []),

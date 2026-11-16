@@ -23,7 +23,7 @@ import { Fragment, createContext, useContext, useEffect, useRef, useState, type 
 import type { Action, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
-import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
+import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet, storyTitle } from "./Tables";
@@ -474,23 +474,30 @@ function FieldRow({
   );
 }
 
+/** How the one row for an open role's locked role, posting and rate names its parts. */
+const GROUP_LABEL: Record<string, [string, string]> = { role: ["Role", "the role"], posting: ["posting", "the job posting"], rate: ["rate", "the posted rate"] };
+
 /**
- * An open role's role and posting are one purchase: one row, one lock, one price. The server
- * opens both for the 1 credit (and the company with them while it is hidden).
+ * An open role's role, posting and rate are one purchase: one row, one lock, one price. The
+ * server opens all of them for the 1 credit (and the company with them while it is hidden).
+ * `fields` are the ones still locked, in order.
  */
-function RoleAndPosting({ id, hidden }: { id: string; hidden: boolean }) {
+function OpenRoleLock({ id, hidden, fields }: { id: string; hidden: boolean; fields: string[] }) {
   const ui = useUi();
-  const t = { entity: "engagement" as const, id, field: "role" };
+  const lead = fields[0];
+  const t = { entity: "engagement" as const, id, field: lead };
   const ref = useRef<HTMLSpanElement>(null);
   const [zero, setZero] = useState(false);
-  const busy = ui.busy.has(cellKey(id, "role")) || ui.busy.has(cellKey(id, "posting"));
+  const busy = fields.some((f) => ui.busy.has(cellKey(id, f)));
+  const names = fields.map((f) => GROUP_LABEL[f]?.[1] ?? f);
+  const label = listOf(fields.map((f, k) => (k === 0 ? (GROUP_LABEL[f]?.[0] ?? f).replace(/^./, (x) => x.toUpperCase()) : GROUP_LABEL[f]?.[0] ?? f)));
   return (
     <div className="tp-frow">
-      <span className="tp-frow-l">Role and posting</span>
+      <span className="tp-frow-l">{label}</span>
       <span className="tp-frow-v">
-        <span className="tp-cell" data-cell={cellKey(id, "role")} ref={ref}>
+        <span className="tp-cell" data-cell={cellKey(id, lead)} ref={ref}>
           <LockPill
-            what={hidden ? "the company, this role and its job posting" : "the role and its job posting"}
+            what={listOf(hidden ? ["the company", ...names] : names)}
             busy={busy}
             onUnlock={() => {
               if (ui.me.credits > 0) return ui.unlock(t);
@@ -539,7 +546,8 @@ function FieldList({
   render?: Record<string, (v: string) => ReactNode>;
   notes?: Record<string, ReactNode>;
   after?: Record<string, ReactNode>;
-  pair?: [string, string];
+  /** Fields that unlock together (an open role's role, posting and rate): one row while two or more are locked. */
+  pair?: string[];
   own?: boolean;
   listed?: boolean;
   /** A line over the add pills: what adding them earns today. */
@@ -548,10 +556,13 @@ function FieldList({
   fixed?: string[];
 }) {
   const ui = useUi();
-  const paired = !!pair && cells[pair[0]]?.s === "locked" && cells[pair[1]]?.s === "locked";
-  const present = fields.filter((f) => cells[f] && cells[f].s !== "empty" && !(paired && f === pair![1]));
+  const group = (pair ?? []).filter((f) => cells[f]?.s === "locked");
+  const paired = group.length >= 2;
+  const present = fields.filter((f) => cells[f] && cells[f].s !== "empty" && !(paired && group.includes(f) && f !== group[0]));
+  // A seat's facts are added by its holder alone.
+  const othersSeat = entity === "engagement" && !ui.holdsSeat(id);
   const empty = fields
-    .filter((f) => cells[f]?.s === "empty" && !noAdd.includes(f) && !ui.isHidden(id))
+    .filter((f) => cells[f]?.s === "empty" && !noAdd.includes(f) && !ui.isHidden(id) && !othersSeat)
     .sort((a, b) => emptyRank(a) - emptyRank(b));
   const pulseHidden = empty.slice(3).some((f) => ui.pulse === cellKey(id, f));
   const [more, setMore] = useState(pulseHidden);
@@ -562,8 +573,8 @@ function FieldList({
         <div className="tp-flist-d">
           {present.map((f) => (
             <Fragment key={f}>
-              {paired && f === pair![0] ? (
-                <RoleAndPosting id={id} hidden={ui.isHidden(id)} />
+              {paired && f === group[0] ? (
+                <OpenRoleLock id={id} hidden={ui.isHidden(id)} fields={group} />
               ) : (
                 <FieldRow
                   t={{ entity, id, field: f }}
@@ -620,7 +631,7 @@ interface Plan {
   items: FactRef[];
   /** Locked facts it opens. */
   facts: number;
-  /** Credits it costs: each hidden company and each open role (its role and posting) is one purchase. */
+  /** Credits it costs: each hidden company and each open role (its role, posting and rate) is one purchase. */
   cost: number;
   what: string;
 }
@@ -640,7 +651,7 @@ function planOf(i: CoInfo): Plan {
       continue;
     }
     const e = t.entity === "engagement" ? engs.get(t.id) : undefined;
-    if (e && (t.field === "role" || t.field === "posting") && openRole(e)) {
+    if (e && OPEN_ROLE_BUNDLE.includes(t.field) && openRole(e)) {
       if (i.c.hidden) {
         if (!company) cost++;
         company = true;
@@ -648,8 +659,8 @@ function planOf(i: CoInfo): Plan {
       }
       if (pairs.has(e.id)) continue;
       pairs.add(e.id);
-      // A member who already sees one half gets the other at no charge.
-      if (e.cells[t.field === "role" ? "posting" : "role"]?.s !== "value") cost++;
+      // A member who already sees part of the open role gets the rest at no charge.
+      if (!OPEN_ROLE_BUNDLE.some((f) => f !== t.field && e.cells[f]?.s === "value")) cost++;
       continue;
     }
     cost++;
@@ -1029,7 +1040,7 @@ function EngagementCard({ e, companyId, focus }: { e: EngagementRec; companyId: 
         render={{ function: fnRender, type: (v) => <span className="chip tp-fn">{v}</span>, status: statusText }}
         notes={closed ? { posting: <span className="tp-frow-note">Closed {closedOn(e)}</span> } : {}}
         after={reach ? { operator: reach } : {}}
-        pair={open ? ["role", "posting"] : undefined}
+        pair={open ? OPEN_ROLE_BUNDLE : undefined}
         own={e.yours}
         listed={open}
         fixed={open ? ["operator"] : []}
@@ -1402,7 +1413,7 @@ export function Drawer({
           </div>
           {c.hidden && (
             <p className="tp-hidden-note">
-              This company is hiring a fractional now. Unlock it for 1 credit to see the company, the role and the posting. Rate and contacts unlock separately. The company shows for everyone once the role closes.
+              This company is hiring a fractional now. Unlock it for 1 credit to see the company, the role, the posting and the posted rate. Contacts unlock separately. The company shows for everyone once the role closes.
             </p>
           )}
           {!phone && actions}
@@ -1462,7 +1473,7 @@ export function Drawer({
             {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
             {!c.hidden && (
               <button type="button" className="btn btn-sm btn-ghost tp-addlink tp-addeng" onClick={() => ui.openAdd({ companyId: c.id, mode: "engagement" })}>
-                <IconPlus size={13} /> Add a seat
+                <IconPlus size={13} /> Add a seat you held
               </button>
             )}
           </section>

@@ -643,6 +643,54 @@
   border-bottom: 2px solid var(--pine);
   transform: rotate(-45deg);
 }
+/* The page the member is on ("The table"): pine, with a small pine dot at the end of the row. */
+.tp-menu-item.here {
+  color: var(--pine);
+  font-weight: 700;
+}
+.tp-menu-item.here::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--pine);
+}
+/* An admin seeing the table as a member: one quiet line under the top bar, with the way back. */
+.tp-asmember {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--pine-8);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--ink);
+}
+.tp-asmember button {
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.tp-asmember button:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .tp-asmember button {
+    min-height: 44px;
+  }
+}
 .tp-menu-hint {
   font-size: 12.5px;
   font-weight: 600;
@@ -6138,4 +6186,56 @@ div.tp-pcard-when {
 .tp-phone .tp-pm-table,
 .tp-sheet .tp-ftoggle {
   font-size: 13.5px;
+}
+
+/* ---------- universal search ---------- */
+/* While searching, a list with no matches steps back: its count reads 0 in a quieter ink. */
+.tp-rtype-b.none {
+  color: var(--faint);
+}
+.tp-rtype.searching .tp-rtype-b:not(.none):not(.on) .tp-cnt {
+  color: var(--pine);
+  font-weight: 700;
+}
+/* Phones: the search is a real field at the top of the list, light on the page. */
+.tp-search.tp-search-list {
+  max-width: none;
+  width: auto;
+  height: 44px;
+  margin: 12px 16px 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+.tp-search.tp-search-list:hover {
+  background: var(--surface);
+}
+.tp-search.tp-search-list input {
+  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 16px;
+}
+.tp-search.tp-search-list input::placeholder {
+  color: var(--faint);
+}
+.tp-search.tp-search-list .tp-search-x {
+  width: 32px;
+  height: 32px;
+}
+/* Phones, while searching: the matches in each list, one tap to switch. */
+.tp-qtypes {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tp-qtypes .chip {
+  min-height: 36px;
+  flex: none;
+}
+.tp-qtypes .chip.none {
+  color: var(--faint);
 }

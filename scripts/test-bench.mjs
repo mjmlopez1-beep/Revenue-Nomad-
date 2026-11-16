@@ -133,11 +133,14 @@ const unitFor = (kind, n) => (n < 10 ? (kind === "monthly" ? 1000 : 25) : kind =
 /** Every number a benchmarks block sends, to look for a rate that should not be there. */
 const numbersIn = (b) => b.rows.flatMap((r) => [r.monthly, r.hourly]).flatMap((s) => [s.median, s.p25, s.p75]).filter((x) => x !== undefined);
 const ONLOOKER = S(50);
-/** A made-up company with one seat, as the attack scripts made them. Returns the seat's id. */
+/**
+ * A made-up company with one seat, as the attack scripts made them. Returns the seat's id. Members
+ * add only seats they held, so the seat names the member as its holder (the server writes their name).
+ */
 let made = 0;
 async function madeUpSeat(token, fn, revenue, extra = {}, top = {}) {
   made++;
-  const r = await act(token, { type: "add", company: `Zz Made Up Co ${two(made)}`, newEngagement: true, companyFields: { revenue }, engagementFields: { function: fn, ...extra }, ...top });
+  const r = await act(token, { type: "add", company: `Zz Made Up Co ${two(made)}`, newEngagement: true, companyFields: { revenue }, operatorMemberId: "me", engagementFields: { operator: "Seat Holder", function: fn, ...extra }, ...top });
   return r.ok ? r.id : null;
 }
 
@@ -421,11 +424,11 @@ async function madeUpSeat(token, fn, revenue, extra = {}, top = {}) {
   check("rates on seats the member holds are accepted past the 3, each for 1 credit", s1.ok && s2.ok && s2.me.credits === 30, [s1.error, s2.error, s2.me?.credits]);
   const placed = await stat(ONLOOKER, "AI GTM", "Under $1M", "hourly");
   check("they take the seat's function and the company's revenue band, as one contributor", placed.n === 1 && !shown(placed), placed);
-  // Hours turn an hourly rate into a monthly point too. Anyone can fill and edit hours on a seat,
-  // so for a private rate only the member's own hours count.
+  // Hours turn an hourly rate into a monthly point too. Only the seat holder adds hours to a seat,
+  // and for a private rate only the member's own hours count.
   const theirs = await act(S(42), { type: "fill", entity: "engagement", id: own[0].id, field: "hours", value: "10" });
   const moved = await stat(ONLOOKER, "AI GTM", "Under $1M", "monthly");
-  check("hours another member puts on the seat make no monthly point from a private hourly rate", theirs.ok && moved.n === 0, { theirs: theirs.error, moved });
+  check("another member can't put hours on the seat, so no monthly point comes from a private hourly rate", !theirs.ok && theirs.error === "Only the person who held this seat can add this." && moved.n === 0, { theirs: theirs.error, moved });
   const ownHours = await act(OWNER.token, { type: "fill", entity: "engagement", id: own[1].id, field: "hours", value: "10" });
   const derived = await stat(ONLOOKER, "AI GTM", "Under $1M", "monthly");
   check("the member's own hours do", ownHours.ok && derived.n === 1, { ownHours: ownHours.error, derived });

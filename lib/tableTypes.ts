@@ -122,7 +122,7 @@ export interface CompanyRec {
    * The company has an active open role and the viewer hasn't unlocked it: `name` is
    * HIDDEN_COMPANY, website, LinkedIn and About come back locked, HQ is cut to its region and
    * there is no logo. Unlock with { type: "unlock", entity: "company", id, field: "identity" }.
-   * That one credit also opens the role and the posting of each open role there.
+   * That one credit also opens the role, the posting and the posted rate of each open role there.
    */
   hidden?: boolean;
   /** Domain to draw the logo from (Website, or a looked-up domain). */
@@ -184,7 +184,15 @@ export interface Me {
   earnResetsAt: string | null;
   /** Bonus credits earned at the cap and waiting for room under it (paid automatically). */
   held: number;
+  /** An admin (RN_ADMIN_EMAILS). False while an admin sees the table as a member (`asMember`). */
   admin: boolean;
+  /**
+   * An admin who switched on "See it as a member": this view was built as if they were not an
+   * admin (hidden companies hidden, no review list, no pilot metrics). Their actions still run
+   * as the admin. Set with the cookie rn_as_member=1 or GET /api/table?as=member; ignored for
+   * anyone who is not an admin.
+   */
+  asMember?: boolean;
   /** Personal sign-in link token, and invite code for referrals. */
   token: string;
   inviteCode: string;
@@ -409,8 +417,9 @@ export type Action =
   | { type: "unlock"; entity: Entity; id: string; field: string }
   /**
    * Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. A hidden
-   * company is one purchase with the role and posting of each open role there: asking for the
-   * company (`identity`), such a role or such a posting buys all of them for 1 credit.
+   * company is one purchase with the role, posting and rate of each open role there: asking for
+   * the company (`identity`), or such a role, posting or rate, buys all of them for 1 credit. At a
+   * company the member can see, an open role's role, posting and rate are one purchase too.
    */
   | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[] }
   /**

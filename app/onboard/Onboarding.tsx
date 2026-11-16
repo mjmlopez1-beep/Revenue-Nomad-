@@ -25,6 +25,11 @@ export interface OnboardingProps {
   act: Act;
   /** Call when the member finishes (after the profile action marks them onboarded). */
   onDone: () => Promise<void> | void;
+  /**
+   * Called first when the member picks "Skip to the table", before the profile action reloads
+   * the view: the app then opens on the table, not on their seats.
+   */
+  onSkip?: () => void;
 }
 
 type Goal = (typeof GOALS)[number]["key"];
@@ -184,7 +189,7 @@ function SeatsNext({ n }: { n: number }) {
   );
 }
 
-export default function Onboarding({ view, act, onDone }: OnboardingProps) {
+export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProps) {
   const me = view.me!;
   const toast = useToast();
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
@@ -299,9 +304,14 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
     if (err) toast(err, true);
   };
 
-  const finish = async () => {
+  /**
+   * Finish with what is answered so far. `skip`: "Skip to the table", from any step. The profile
+   * action marks the member onboarded either way, so a reload never brings them back here.
+   */
+  const finish = async (skip = false) => {
     if (busy) return;
     setBusy(true);
+    if (skip) onSkip?.();
     await sendFollows();
     await rewind();
     window.scrollTo(0, 0);
@@ -351,6 +361,9 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
             <span className="ob-step num" aria-hidden>
               Step {shown} of {total}
             </span>
+            <button type="button" className="ob-skip" onClick={() => finish(true)} disabled={busy}>
+              Skip to the table
+            </button>
           </div>
 
           {shown === 1 ? (
@@ -387,7 +400,7 @@ export default function Onboarding({ view, act, onDone }: OnboardingProps) {
               busy={busy}
               nextLabel={lastLabel}
               handoff={<SeatsNext n={mySeats} />}
-              onDone={finish}
+              onDone={() => finish()}
             />
           )}
         </div>

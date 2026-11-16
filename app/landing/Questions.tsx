@@ -22,8 +22,12 @@ export function faqItems(starter: number): [string, string][] {
       "From fractional work members published on Revenue Nomad, member success stories and a weekly check for open fractional GTM roles. Members add the rest, one fact at a time.",
     ],
     [
+      "Who can add what?",
+      "A seat is added by the person who held it, and only they add facts about it, like the role, the rate or the hours a week. Every member can add company facts, like the website, HQ or size, and people, like who hired for a seat.",
+    ],
+    [
       "What will other members see about me?",
-      "Your name and title show on seats you held, behind a lock that costs a member 1 credit. Members can also find you by name when they add a seat you held. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
+      "Your name and title show on seats you held, behind a lock that costs a member 1 credit. Only you can add a seat you held, and only you add facts about it. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
     ],
     [
       "What happens to a rate I share?",

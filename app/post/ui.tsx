@@ -60,6 +60,8 @@ export interface Ui {
   openAdd: (o?: AddOpts) => void;
   /** The record belongs to a company hidden until the member unlocks it (no adding there). */
   isHidden: (id: string) => boolean;
+  /** The member holds this seat (EngagementRec.yours): only its holder adds facts about a seat. */
+  holdsSeat: (engagementId: string) => boolean;
   /** Up to 3 empty facts at the company that owns this record (a company, engagement or person id). */
   addable: (id: string) => FactRef[];
   /** The member's own seats: how many, and the facts still missing on them. */
@@ -71,6 +73,9 @@ export interface Ui {
   /** View.contact: where members write for help (support) and for an intro to a seat holder (intro). */
   contact: { support: string | null; intro: string | null } | null;
 }
+
+/** Said on an empty seat fact to anyone but the seat holder. */
+export const SEAT_HOLDER_ONLY = "Only the seat holder can add this";
 
 export const UiCtx = createContext<Ui | null>(null);
 export function useUi(): Ui {
@@ -438,6 +443,13 @@ export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef
         return (
           <span className={`${cls} tp-none`} data-cell={k} title="This company is hidden. Unlock it for 1 credit, then you can add this.">
             –
+          </span>
+        );
+      // Only the seat holder adds facts about a seat: anyone else sees a quiet dash.
+      if (t.entity === "engagement" && !ui.holdsSeat(t.id))
+        return (
+          <span className={`${cls} tp-none`} data-cell={k} title={SEAT_HOLDER_ONLY}>
+            –<span className="sr-only">{SEAT_HOLDER_ONLY}</span>
           </span>
         );
       // The member's own rate, shared for the benchmarks only: not on the seat, and not missing either.

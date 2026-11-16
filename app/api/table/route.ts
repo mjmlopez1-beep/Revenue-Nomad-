@@ -14,6 +14,8 @@ import { tidy, wellFormed } from "@/lib/tableFields";
 export const dynamic = "force-dynamic";
 
 const COOKIE = "rn_table";
+/** "See it as a member": an admin's view built as a member's (buildView's asMember). Does nothing for anyone else. */
+const AS_MEMBER_COOKIE = "rn_as_member";
 const gz = promisify(gzip);
 const br = promisify(brotliCompress);
 /** The largest request body a POST may carry. The biggest real one (Add with ten people) is a few KB. */
@@ -88,9 +90,9 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
  */
 type Built = { body: string; packed: Map<Enc, Promise<Uint8Array<ArrayBuffer>>> };
 const viewFlights = new Map<string, { p: Promise<Built>; started: number | null }>();
-const builtView = (token: string | null, enc: Enc | null) =>
-  shared(viewFlights, token ?? "", stateVersion, async (): Promise<Built> => {
-    const body = JSON.stringify(await buildView(token));
+const builtView = (token: string | null, enc: Enc | null, asMember = false) =>
+  shared(viewFlights, `${token ?? ""}${asMember ? "|member" : ""}`, stateVersion, async (): Promise<Built> => {
+    const body = JSON.stringify(await buildView(token, { asMember }));
     const built: Built = { body, packed: new Map() };
     if (enc && body.length > MIN_COMPRESS) {
       const p = compress(body, enc);
@@ -112,6 +114,8 @@ async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?export=1    admins: download the runtime state (a backup).
+ * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
+ *                  Anyone else gets their own view, as without it.
  *
  * See also POST /api/table/scan (the weekly scan, for a cron), GET /api/table/unsubscribe and
  * GET /api/health. Every handler answers 503 while Trading Post cannot serve (lib/apiGuard.ts).
@@ -145,7 +149,9 @@ export const GET = guarded(async (req: NextRequest) => {
   if (token) void touch(token, ip).catch((e) => console.error("last seen not saved", e));
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
   const enc = encodingFor(req);
-  return viewAnswer(await builtView(token, enc), enc);
+  // An admin's "See it as a member". buildView ignores it for anyone who is not an admin.
+  const asMember = req.cookies.get(AS_MEMBER_COOKIE)?.value === "1" || req.nextUrl.searchParams.get("as") === "member";
+  return viewAnswer(await builtView(token, enc, asMember), enc);
 });
 
 /** The request body as JSON, or null when it is not JSON. "too large" past MAX_BODY, whatever Content-Length says. */

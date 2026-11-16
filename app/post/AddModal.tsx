@@ -1143,14 +1143,14 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                 ) : (
                   <>
                     <button type="button" className="am-next-b primary" onClick={() => (setDone(null), setMode(done.what === "seat" ? "person" : "engagement"))}>
-                      <b>{done.what === "seat" ? "Add a person there" : "Add a seat there"}</b>
+                      <b>{done.what === "seat" ? "Add a person there" : "Add a seat you held there"}</b>
                       <span>
-                        {done.what === "seat" ? "Who hired for the seat, or who it reported to." : "A fractional seat you held or know about."}
+                        {done.what === "seat" ? "Who hired for the seat, or who it reported to." : "A fractional seat you held at this company."}
                         {capped ? "" : " 1 credit for each answer."}
                       </span>
                     </button>
                     <button type="button" className="am-next-b" onClick={() => (setDone(null), setMode(done.what === "seat" ? "engagement" : "person"))}>
-                      <b>{done.what === "seat" ? "Add another seat" : "Add another person"}</b>
+                      <b>{done.what === "seat" ? "Add another seat you held" : "Add another person"}</b>
                       <span>Also at {i.c.name}.</span>
                     </button>
                     <button type="button" className="am-next-b" onClick={() => (setDone(null), setSelected(null), setQ(""), setTimeout(() => inputRef.current?.focus()))}>
@@ -1176,7 +1176,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
               <div className="tp-seg" role="tablist" aria-label="What to add">
                 {(
                   [
-                    ["engagement", seatDirty && mode !== "engagement" ? "A seat (draft)" : "A seat"],
+                    ["engagement", seatDirty && mode !== "engagement" ? "A seat you held (draft)" : "A seat you held"],
                     ["person", personDirty && mode !== "person" ? "A person (draft)" : "A person"],
                     ...(missingCo ? ([["facts", ui.layout === "phone" ? `Company (${missingCo})` : `Company details (${missingCo})`]] as const) : []),
                   ] as [AddMode, string][]
@@ -1186,7 +1186,8 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                   </button>
                 ))}
               </div>
-              {mode === "engagement" && <EngagementForm i={i} draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} />}
+              {/* Members add only seats they held: the seat form is always "A seat you held". */}
+              {mode === "engagement" && <EngagementForm i={i} mine draft={seat} setDraft={setSeat} onDone={(s) => setDone({ ...s, what: "seat" })} />}
               {mode === "person" && <PersonForm i={i} draft={person} setDraft={setPerson} onDone={(s) => setDone({ ...s, what: "person" })} />}
               {mode === "facts" && (missingCo ? <MissingFacts i={i} /> : <p className="am-note">Every company detail is filled in.</p>)}
             </>
