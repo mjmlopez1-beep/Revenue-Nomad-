@@ -16,7 +16,16 @@ import type { Entity } from "./tableFields";
 export type Cell =
   | { s: "empty" }
   | { s: "locked"; ver: number }
-  | { s: "value"; v: string; mine?: boolean; ver: number; iv?: boolean; system?: boolean }
+  | {
+      s: "value";
+      v: string;
+      mine?: boolean;
+      ver: number;
+      iv?: boolean;
+      system?: boolean;
+      /** Seat holder only: the name belongs to a Trading Post member (their title; `you` when it's the viewer). */
+      member?: { title: string; you?: boolean };
+    }
   | { s: "reported"; mine: boolean };
 
 export interface PersonRec {
@@ -159,7 +168,8 @@ export interface View {
 
 export type Action =
   /** Add a missing fact to a company, engagement or person. */
-  | { type: "fill"; entity: Entity; id: string; field: string; value: string }
+  /** `memberId` (seat holder only): the member picked from the search, which links the seat to them. */
+  | { type: "fill"; entity: Entity; id: string; field: string; value: string; memberId?: string }
   | { type: "unlock"; entity: Entity; id: string; field: string }
   /** Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. */
   | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[] }
@@ -177,6 +187,8 @@ export type Action =
       /** Force a new engagement under the company (unless an empty one is there to fill). */
       newEngagement?: boolean;
       engagementFields?: Record<string, string>;
+      /** The member picked as the seat holder (with engagementFields.operator). */
+      operatorMemberId?: string;
       people?: Record<string, string>[];
     }
   /** Add a person at a company, optionally tied to one engagement. */

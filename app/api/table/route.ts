@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { gzip } from "zlib";
 import {
-  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, perform, type Action,
+  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, perform, searchMembers, type Action,
 } from "@/lib/table";
 import { emailEnabled, sendEmail, signInEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
@@ -42,13 +42,20 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
+ * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?export=1    admins: download the runtime state (a backup).
  */
 export async function GET(req: NextRequest) {
   const ip = clientIp(req);
-  if (limited(`get:${ip}`, 120, 60_000)) return err("Slow down a little.", 429);
   const token = req.cookies.get(COOKIE)?.value ?? null;
+  // The seat-holder picker searches as you type, so it has its own limit (per member).
+  const people = req.nextUrl.searchParams.get("people");
+  if (people !== null) {
+    if (limited(`people:${token ?? ip}`, 120, 60_000)) return err("Slow down a little.", 429);
+    return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
+  }
+  if (limited(`get:${ip}`, 120, 60_000)) return err("Slow down a little.", 429);
   const ref = req.nextUrl.searchParams.get("ref");
   if (ref !== null) {
     if (limited(`ref:${ip}`, 30, 60_000)) return err("Slow down a little.", 429);

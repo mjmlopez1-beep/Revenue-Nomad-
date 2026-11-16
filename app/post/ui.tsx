@@ -9,7 +9,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { createPortal } from "react-dom";
 import type { Cell, Me } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
-import { AddPill, IconCheck, IconSearch, IconX, LockPill, fmtValue, hrefFor, type Act } from "../ui/shared";
+import { AddPill, IconCheck, IconSearch, IconX, LockPill, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { fieldText, fmtTime, thisMonth, type Layout } from "./hooks";
 
@@ -32,7 +32,8 @@ export interface Ui {
   unlockMany: (items: FactRef[]) => Promise<boolean>;
   /** Open the fact editor on an element. With `initial`, it edits the member's own value. */
   edit: (el: HTMLElement, t: FactRef, initial?: string) => void;
-  fill: (t: FactRef, value: string) => Promise<boolean>;
+  /** `memberId` (seat holder only) links the seat to a member picked in SeatHolderInput. */
+  fill: (t: FactRef, value: string, memberId?: string | null) => Promise<boolean>;
   openCompany: (id: string, focus?: string) => void;
   openAdd: (o?: AddOpts) => void;
   /** Up to 3 empty facts at the company that owns this record (a company, engagement or person id). */
@@ -140,6 +141,7 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
           title={fmtValue(t.entity, t.field, cell.v)}
         >
           <span className="tp-val-t">{render ? render(cell.v) : <FactValue t={t} v={cell.v} />}</span>
+          {cell.member && <MemberBadge m={cell.member} />}
           {ui.flash.has(k) && (
             <span className="tp-flash-check" aria-label="Unlocked">
               <IconCheck size={12} />
@@ -424,29 +426,190 @@ export function FieldInput({
   );
 }
 
+/** "Member" next to a seat holder who is on Trading Post (or "You"). */
+export function MemberBadge({ m }: { m: { title: string; you?: boolean } }) {
+  return (
+    <span className="tp-member-badge" title={m.you ? "This is you" : `Trading Post member${m.title ? ` · ${m.title}` : ""}`}>
+      {m.you ? "You" : "Member"}
+    </span>
+  );
+}
+
+export interface MemberHit {
+  id: string;
+  name: string;
+  title: string;
+  you: boolean;
+}
+
+/** Members whose name matches, as you type (debounced). */
+function useMemberSearch(q: string, off: boolean): { hits: MemberHit[]; done: boolean } {
+  const [state, setState] = useState<{ q: string; hits: MemberHit[] }>({ q: "", hits: [] });
+  const query = q.trim();
+  useEffect(() => {
+    if (off || query.replace(/\s/g, "").length < 2) return;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`/api/table?people=${encodeURIComponent(query)}`, { signal: ctl.signal, cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : { members: [] }))
+        .then((j: { members?: MemberHit[] }) => setState({ q: query, hits: j.members ?? [] }))
+        .catch(() => {});
+    }, 160);
+    return () => {
+      clearTimeout(timer);
+      ctl.abort();
+    };
+  }, [query, off]);
+  if (off || query.replace(/\s/g, "").length < 2) return { hits: [], done: false };
+  return { hits: state.q === query ? state.hits : [], done: state.q === query };
+}
+
+/**
+ * Who held the seat: a first and last name, matched against Trading Post members as you type.
+ * Picking a member links the seat to that person (`memberId`); typing again unlinks it.
+ */
+export function SeatHolderInput({
+  value,
+  memberId,
+  onChange,
+  onPick,
+  onEnter,
+  autoFocus,
+  big,
+  id,
+}: {
+  value: string;
+  memberId: string | null;
+  onChange: (value: string, memberId: string | null) => void;
+  /** A member was picked from the list. */
+  onPick?: (m: MemberHit) => void;
+  /** Enter with nothing highlighted (save what was typed). */
+  onEnter?: () => void;
+  autoFocus?: boolean;
+  big?: boolean;
+  id?: string;
+}) {
+  const [hi, setHi] = useState(-1);
+  const [picked, setPicked] = useState<MemberHit | null>(null);
+  const linked = memberId && picked?.id === memberId ? picked : null;
+  const { hits, done } = useMemberSearch(value, !!linked);
+  const pick = (m: MemberHit) => {
+    setPicked(m);
+    setHi(-1);
+    onChange(m.name, m.id);
+    onPick?.(m);
+  };
+  const words = value.trim().split(/\s+/).filter(Boolean).length;
+  return (
+    <div className="tp-seat">
+      <input
+        id={id}
+        className={`input${big ? " tp-input-big" : ""}`}
+        autoFocus={autoFocus}
+        autoComplete="off"
+        placeholder="First and last name"
+        aria-autocomplete="list"
+        aria-expanded={hits.length > 0}
+        value={value}
+        onChange={(e) => {
+          setHi(-1);
+          onChange(e.target.value, null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" && hits.length) {
+            e.preventDefault();
+            setHi((h) => Math.min(hits.length - 1, h + 1));
+          } else if (e.key === "ArrowUp" && hits.length) {
+            e.preventDefault();
+            setHi((h) => Math.max(-1, h - 1));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (hi >= 0 && hits[hi]) pick(hits[hi]);
+            else onEnter?.();
+          }
+        }}
+      />
+      {linked ? (
+        <div className="tp-seat-linked">
+          <span className="tp-seat-av" style={{ background: `hsl(${hue(linked.name)} 45% 90%)`, color: `hsl(${hue(linked.name)} 45% 28%)` }}>
+            {initials(linked.name)}
+          </span>
+          <span className="tp-seat-who">
+            <b>{linked.you ? "You" : linked.name}</b>
+            <span>Trading Post member{linked.title ? ` · ${linked.title}` : ""}</span>
+          </span>
+          <button type="button" className="tp-seat-x" aria-label="Unlink member" onClick={() => onChange(value, null)}>
+            <IconX size={14} />
+          </button>
+        </div>
+      ) : hits.length > 0 ? (
+        <div className="tp-seat-list" role="listbox" aria-label="Members on Trading Post">
+          <div className="tp-seat-cap">Members on Trading Post</div>
+          {hits.map((m, i) => (
+            <button
+              key={m.id}
+              type="button"
+              role="option"
+              aria-selected={i === hi}
+              className={`tp-seat-opt${i === hi ? " on" : ""}`}
+              onMouseEnter={() => setHi(i)}
+              onClick={() => pick(m)}
+            >
+              <span className="tp-seat-av" style={{ background: `hsl(${hue(m.name)} 45% 90%)`, color: `hsl(${hue(m.name)} 45% 28%)` }}>
+                {initials(m.name)}
+              </span>
+              <span className="tp-seat-who">
+                <b>{m.name}</b>
+                <span>{m.you ? "You" : m.title || "Member"}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        done &&
+        words >= 2 && <p className="tp-seat-none">No member by that name. You can still add them.</p>
+      )}
+    </div>
+  );
+}
+
 /** The small editor anchored to an empty cell (a bottom sheet on phones). With `initial`, it edits the member's own value. */
 export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: HTMLElement; t: FactRef; company: string; initial?: string; onClose: () => void }) {
   const ui = useUi();
   const f = fieldDef(t.entity, t.field);
   const [value, setValue] = useState(initial ?? "");
+  const [memberId, setMemberId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   if (!f) return null;
   const editing = initial !== undefined;
   const earn = editing ? { text: "Edits earn no credit", capped: false } : earnNote(ui.me);
-  const save = async (raw: string) => {
+  const seat = t.entity === "engagement" && t.field === "operator";
+  const save = async (raw: string, member: string | null = memberId) => {
     const { error, value: clean } = cleanValue(f, raw);
     if (error) return setErr(error);
     setErr(null);
     setSaving(true);
-    const ok = await ui.fill(t, clean!);
+    const ok = await ui.fill(t, clean!, seat ? member : undefined);
     setSaving(false);
     if (ok) onClose();
   };
   const simple = f.kind !== "choice";
   const body = (
     <>
-      <FieldInput f={f} value={value} onChange={(v) => (setValue(v), setErr(null))} onSave={save} autoFocus big={ui.layout === "phone"} />
+      {seat ? (
+        <SeatHolderInput
+          value={value}
+          memberId={memberId}
+          onChange={(v, m) => (setValue(v), setMemberId(m), setErr(null))}
+          onPick={(m) => save(m.name, m.id)}
+          onEnter={() => save(value)}
+          autoFocus
+          big={ui.layout === "phone"}
+        />
+      ) : (
+        <FieldInput f={f} value={value} onChange={(v) => (setValue(v), setErr(null))} onSave={(v) => save(v)} autoFocus big={ui.layout === "phone"} />
+      )}
       {f.hint && f.hint !== f.placeholder && <p className="tp-ed-hint">{f.hint}</p>}
       {err && (
         <p className="tp-ed-err" role="alert">
@@ -480,7 +643,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       </Sheet>
     );
   return (
-    <Anchored anchor={anchor} onClose={onClose} width={f.kind === "choice" ? 320 : 300} className="tp-editor">
+    <Anchored anchor={anchor} onClose={onClose} width={f.kind === "choice" || seat ? 320 : 300} className="tp-editor">
       <div className="tp-ed-head">{title}</div>
       {body}
       <div className="tp-ed-foot">

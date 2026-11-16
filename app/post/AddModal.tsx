@@ -12,7 +12,7 @@ import {
 } from "@/lib/tableFields";
 import { CompanyLogo, IconCheck, IconSearch, IconX, fmtMonth, val } from "../ui/shared";
 import { COMPANY_FILL, shown, type CoInfo } from "./model";
-import { Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
+import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
 import { MissingFacts } from "./Drawer";
 import { plural, thisMonth, useDebounced } from "./hooks";
 
@@ -142,6 +142,7 @@ const ENG_ORDER = ["function", "role", "type", "status", "start", "end", "rate",
 function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void }) {
   const ui = useUi();
   const [v, setV] = useState<Record<string, string>>({});
+  const [seatMember, setSeatMember] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: string) => (x: string) => (setV((o) => ({ ...o, [k]: x })), setErr(null));
@@ -156,10 +157,18 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
       fields[k] = value!;
     }
     setBusy(true);
-    const r = await ui.act({ type: "add", company: i.c.name, website: shown(i.c.cells.website) ?? undefined, newEngagement: true, engagementFields: fields });
+    const r = await ui.act({
+      type: "add",
+      company: i.c.name,
+      website: shown(i.c.cells.website) ?? undefined,
+      newEngagement: true,
+      engagementFields: fields,
+      ...(fields.operator && seatMember ? { operatorMemberId: seatMember } : {}),
+    });
     setBusy(false);
     if (r.ok) {
       setV({});
+      setSeatMember(null);
       onDone(filled.length);
     }
   };
@@ -222,7 +231,15 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
         {txt("rate", true)}
         {txt("hours", true, "number")}
       </div>
-      {txt("operator")}
+      <div className="tp-form-row">
+        <Lbl text="Who held the seat" filled={!!v.operator?.trim()} htmlFor="tp-ef-operator" />
+        <SeatHolderInput
+          id="tp-ef-operator"
+          value={v.operator ?? ""}
+          memberId={seatMember}
+          onChange={(x, m) => (set("operator")(x), setSeatMember(m))}
+        />
+      </div>
       {err && <p className="tp-ed-err">{err}</p>}
       <div className="tp-modal-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>

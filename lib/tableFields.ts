@@ -92,7 +92,14 @@ export const GROUPS: GroupDef[] = [
       { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title of the seat" },
       { key: "type", label: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES },
       { key: "status", label: "Status", kind: "choice", gated: true, options: STATUSES },
-      { key: "operator", label: "Seat holder", kind: "text", gated: true, placeholder: "Who held the seat", hint: "Who held the seat" },
+      {
+        key: "operator",
+        label: "Seat holder",
+        kind: "text",
+        gated: true,
+        placeholder: "First and last name",
+        hint: "The person's first and last name, like Jane Smith. If they're a member, pick them from the list.",
+      },
       { key: "start", label: "Start", kind: "month", gated: false },
       { key: "end", label: "End", kind: "monthOrOngoing", gated: true },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
@@ -176,6 +183,9 @@ export function employeesBucket(n: number | null | undefined): string | null {
 }
 
 /** Normalize and validate a value for a field. Returns the clean value or an error message. */
+/** A person's first and last name: two or more words of letters (with ' - . allowed), no digits or emails. */
+export const PERSON_NAME_RE = /^(?=.{3,60}$)\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
+
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
   const v = stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, 200);
   if (!v) return { error: `${f.label} is empty.` };
@@ -203,6 +213,7 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
       return f.options?.includes(v) ? { value: v } : { error: "Pick one of the options." };
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
+      if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
       return v.length >= 2 ? { value: v } : { error: "Too short." };
   }
 }

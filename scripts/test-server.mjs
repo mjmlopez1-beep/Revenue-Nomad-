@@ -533,6 +533,53 @@ section("join", async () => {
   check("a wrong code gets 401", wrong.status === 401, wrong.status);
 });
 
+section("seat", async () => {
+  const S = await member("Sana Seatholder", ip(70));
+  const T = await member("Theo Tester", ip(71));
+  const anon = await call("GET", "/api/table?people=sana", { ipAddr: ip(72) });
+  check("signed-out member search returns nothing", anon.status === 200 && Array.isArray(anon.json?.members) && anon.json.members.length === 0, anon.json);
+  const found = await call("GET", "/api/table?people=" + encodeURIComponent("sana sea"), { token: T.token, ipAddr: T.ip });
+  const hit = found.json?.members?.find((m) => m.name === "Sana Seatholder");
+  check("member search finds a member by first-name and last-name prefixes", !!hit && !("email" in hit) && !/sana/i.test(hit.id), found.json);
+  const short = await call("GET", "/api/table?people=s", { token: T.token, ipAddr: T.ip });
+  check("a one-letter search returns nothing", short.json?.members?.length === 0, short.json);
+
+  const vT = await T.view();
+  const seats = [];
+  for (const x of cellsOf(vT)) if (x.entity === "engagement" && x.field === "operator" && x.cell.s === "empty" && !claimed.has(`${x.id}.operator`)) {
+    claimed.add(`${x.id}.operator`);
+    seats.push(x);
+    if (seats.length >= 3) break;
+  }
+  if (seats.length < 3) return fail("seat: need 3 empty seat-holder cells", seats.length);
+  const one = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "Jane" });
+  check("a one-word seat holder is refused with a first-and-last-name message", one.status === 400 && /first and last name/.test(one.json?.error ?? ""), one.json);
+  const mail = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "jane@acme.com" });
+  check("an email as seat holder is refused", mail.status === 400, mail.json);
+  const bogus = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "Sana Seatholder", memberId: "m_notamember1" });
+  check("an unknown member id is refused", bogus.status === 400 && /isn't on Trading Post/.test(bogus.json?.error ?? ""), bogus.json);
+  const linked = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "whatever typed", memberId: hit?.id });
+  const c0 = linked.json?.cells?.[0]?.cell;
+  check("picking a member saves their name and links the seat", linked.status === 200 && c0?.v === "Sana Seatholder" && c0?.member && c0.member.you === false, linked.json);
+  const typed = await T.act({ type: "fill", entity: "engagement", id: seats[1].id, field: "operator", value: "sana  seatholder" });
+  const c1 = typed.json?.cells?.[0]?.cell;
+  check("typing a member's exact name links it too", typed.status === 200 && !!c1?.member, typed.json);
+  const other = await T.act({ type: "fill", entity: "engagement", id: seats[2].id, field: "operator", value: "Jean-Luc O'Neill" });
+  const c2 = other.json?.cells?.[0]?.cell;
+  check("a non-member full name saves without a member link", other.status === 200 && c2?.s === "value" && !c2.member, other.json);
+  // The linked member sees "You" once they unlock it.
+  const un = await S.act({ type: "unlock", entity: "engagement", id: seats[0].id, field: "operator" });
+  const vS = await S.view();
+  let mine = null;
+  for (const x of cellsOf(vS)) if (x.id === seats[0].id && x.field === "operator") mine = x.cell;
+  check("the linked member sees the seat as theirs after unlocking", un.status === 200 && mine?.member?.you === true, { un: un.json, mine });
+  // Locked cells never carry the member link.
+  const vT2 = await (await member("Uma Viewer", ip(73))).view();
+  let locked = null;
+  for (const x of cellsOf(vT2)) if (x.id === seats[0].id && x.field === "operator") locked = x.cell;
+  check("a locked seat holder carries no member hint", locked?.s === "locked" && !("member" in locked), locked);
+});
+
 section("load", async () => {
   const accounts = [];
   for (let i = 0; i < 50; i++) accounts.push(await member(`Load Tester${i}`, ip(150 + Math.floor(i / 10))));

@@ -3067,3 +3067,121 @@
     display: none;
   }
 }
+
+/* ---------- seat holder picker ---------- */
+.tp-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+.tp-seat > * {
+  width: 100%;
+  box-sizing: border-box;
+}
+.tp-seat-list {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+  max-height: 248px;
+  overflow-y: auto;
+}
+.tp-seat-cap {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 10px 4px;
+}
+.tp-seat-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+.tp-seat-opt.on,
+.tp-seat-opt:focus-visible {
+  background: var(--pine-8);
+}
+.tp-seat-av {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.tp-seat-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.tp-seat-who b {
+  font-weight: 600;
+  font-size: 14px;
+}
+.tp-seat-who span {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-seat-linked {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px 8px 10px;
+  border: 1px solid var(--volt);
+  background: var(--volt-soft);
+  border-radius: 10px;
+}
+.tp-seat-linked .tp-seat-who {
+  flex: 1;
+}
+.tp-seat-x {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tp-seat-x:hover {
+  background: var(--pine-8);
+  color: var(--ink);
+}
+.tp-seat-none {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tp-member-badge {
+  flex: none;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  border: 1px solid rgba(46, 229, 157, 0.45);
+  vertical-align: 1px;
+}

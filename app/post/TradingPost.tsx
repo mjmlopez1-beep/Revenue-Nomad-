@@ -179,7 +179,8 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     [act],
   );
   const fill = useCallback(
-    async (t: FactRef, value: string) => (await act({ type: "fill", entity: t.entity, id: t.id, field: t.field, value })).ok,
+    async (t: FactRef, value: string, memberId?: string | null) =>
+      (await act({ type: "fill", entity: t.entity, id: t.id, field: t.field, value, ...(memberId ? { memberId } : {}) })).ok,
     [act],
   );
   const edit = useCallback((el: HTMLElement, t: FactRef, initial?: string) => {

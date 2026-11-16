@@ -266,6 +266,8 @@ function EngagementCard({
   const fn = e.cells.function;
   const type = e.cells.type;
   const op = shown(e.cells.operator);
+  const opCell = e.cells.operator;
+  const opMember = opCell?.s === "value" && opCell.member && !opCell.member.you;
   const role = shown(e.cells.role);
   const locked = lockedInEngagement(e);
   const start = shown(e.cells.start);
@@ -274,7 +276,7 @@ function EngagementCard({
   const intro = op
     ? INTRO_TO
       ? `mailto:${INTRO_TO}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-          `Please introduce me (${ui.me.name}) to ${op}, who held ${seat} at ${company}.`,
+          `Please introduce me (${ui.me.name}) to ${op}${opMember ? " (a Trading Post member)" : ""}, who held ${seat} at ${company}.`,
         )}`
       : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
           `Hi,\n\nCould you introduce me to ${op}? They held ${seat} at ${company} and I would like to hear how it went.\n\nThanks`,

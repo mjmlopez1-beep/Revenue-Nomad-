@@ -92,6 +92,8 @@ export interface FieldValue {
   /** Members who reported this value. One report hides it only for that member. */
   reporters?: string[];
   reportedBy?: string;
+  /** Seat holder only: the member this name was linked to when it was added. */
+  memberId?: string;
 }
 export interface LedgerEntry {
   memberId: string;
@@ -523,7 +525,65 @@ const live = (node: Node | undefined, s: State, field: string) => {
 };
 
 /** One field as `me` sees it. */
-function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string): Cell {
+/* ---------- members as seat holders ---------- */
+
+/** Names compare without case, accents, punctuation or extra spaces. */
+export const normName = (n: string) =>
+  n.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s'-]/g, " ").replace(/\s+/g, " ").trim();
+
+interface MemberIndex {
+  byId: Map<string, Member>;
+  byName: Map<string, Member[]>;
+  all: Member[];
+}
+let memberIndexCache: { seed: Seed; s: State; idx: MemberIndex } | null = null;
+/** Every member (seed and joined), by id and by normalized name. Rebuilt when the state changes. */
+function memberIndex(seed: Seed, s: State): MemberIndex {
+  if (memberIndexCache && memberIndexCache.seed === seed && memberIndexCache.s === s) return memberIndexCache.idx;
+  const all = [...seed.members, ...s.members].filter((m) => m.name?.trim());
+  const byId = new Map(all.map((m) => [m.id, m]));
+  const byName = new Map<string, Member[]>();
+  for (const m of all) {
+    const k = normName(m.name);
+    byName.set(k, [...(byName.get(k) ?? []), m]);
+  }
+  const idx = { byId, byName, all };
+  memberIndexCache = { seed, s, idx };
+  return idx;
+}
+
+/**
+ * The member a seat-holder value points to: the one picked when it was added, else the one
+ * member whose name matches exactly (two members with the same name match neither).
+ */
+function seatMember(idx: MemberIndex, v: FieldValue): Member | null {
+  if (v.memberId) return idx.byId.get(v.memberId) ?? null;
+  const same = idx.byName.get(normName(v.value)) ?? [];
+  return same.length === 1 ? same[0] : null;
+}
+
+/** Members whose name matches a search, for the seat-holder picker. Signed-in members only. */
+export async function searchMembers(token: string | null, q: string): Promise<{ id: string; name: string; title: string; you: boolean }[]> {
+  const seed = await loadSeed();
+  const s = await loadState();
+  const me = memberByToken(seed, token, s);
+  if (!me) return [];
+  const words = normName(String(q ?? "").slice(0, 60)).split(" ").filter(Boolean);
+  if (!words.length || words.join("").length < 2) return [];
+  const idx = memberIndex(seed, s);
+  const hits: { m: Member; score: number }[] = [];
+  for (const m of idx.all) {
+    const parts = normName(m.name).split(" ");
+    // Every typed word must start one of the name's words ("jan sm" finds Jane Smith).
+    if (!words.every((w) => parts.some((p) => p.startsWith(w)))) continue;
+    const exact = normName(m.name) === words.join(" ");
+    hits.push({ m, score: (exact ? 0 : 1) * 10 + (parts[0].startsWith(words[0]) ? 0 : 1) });
+  }
+  hits.sort((a, b) => a.score - b.score || a.m.name.localeCompare(b.m.name));
+  return hits.slice(0, 8).map(({ m }) => ({ id: pubId(m.id), name: m.name, title: m.title ?? "", you: m.id === me.id }));
+}
+
+function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex): Cell {
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
@@ -535,7 +595,14 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   const k = fkey(node!.id, f.key);
   const vers = s.verifications[k] ?? [];
   const ver = vers.length + (v.by === "seed" ? 1 : 0);
-  if (!f.gated || mine || (me && (s.unlocks[k] ?? []).includes(me.id))) return { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id) };
+  if (!f.gated || mine || (me && (s.unlocks[k] ?? []).includes(me.id))) {
+    const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id) };
+    if (key === "operator" && idx) {
+      const m = seatMember(idx, v);
+      if (m) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
+    }
+    return out;
+  }
   return { s: "locked", ver };
 }
 
@@ -654,8 +721,9 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
 
   /** Live facts hidden only for this viewer (they reported them): still facts for the stats. */
   let hiddenForMe = 0;
+  const idx = memberIndex(seed, s);
   const cell = (node: Node | undefined, entity: Entity, key: string): Cell => {
-    const c = cellOf(s, me, node, entity, key);
+    const c = cellOf(s, me, node, entity, key, idx);
     if (c.s === "reported" && !c.mine && me && valueOf(node, s, key)?.status === "live") hiddenForMe++;
     return c;
   };
@@ -914,7 +982,15 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       return f;
     };
     /** A changed cell for the result, as the actor now sees it. */
-    const changed = (entity: Entity, node: Node, field: string) => ({ entity, id: outId(entity, node.id), field, cell: cellOf(s, me, node, entity, field) });
+    const changed = (entity: Entity, node: Node, field: string) => ({ entity, id: outId(entity, node.id), field, cell: cellOf(s, me, node, entity, field, memberIndex(seed, s)) });
+    /** The member a picker choice names (a public member id), or null. */
+    const pickedMember = (raw: unknown): Member | null => {
+      if (raw === undefined || raw === null || raw === "") return null;
+      const wanted = String(raw);
+      const m = memberIndex(seed, s).all.find((x) => pubId(x.id) === wanted);
+      if (!m) throw new ActionError("That member isn't on Trading Post.");
+      return m;
+    };
     let capped = false;
     /** Pay a fill, within the rolling 24 hour cap. Records a 0 entry when capped (so a later reversal knows). */
     const awardFill = (ref: string) => {
@@ -935,16 +1011,18 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       return grant(s, me.id, REFERRAL_BONUS, "referral", `${joined.referredBy}.referral`, now);
     };
     /** Set a value. Returns credits earned (0 when editing your own value or at the daily cap). */
-    const setValue = (node: Node, entity: Entity, key: string, raw: unknown): number => {
+    /** Set a value. `member` (seat holder only) links it to a member, whose name becomes the value. */
+    const setValue = (node: Node, entity: Entity, key: string, raw: unknown, member: Member | null = null): number => {
       const f = fieldOf(entity, key);
-      const { value, error } = cleanValue(f, raw);
+      const linked = key === "operator" ? member : null;
+      const { value, error } = cleanValue(f, linked ? linked.name : raw);
       if (error) throw new ActionError(`${f.label}. ${error}`);
       const cur = valueOf(node, s, key);
       if (cur && cur.by !== me.id) throw new ActionError(`${f.label} is already filled. Confirm or report it instead.`);
-      if (cur && cur.value === value) return 0; // unchanged (and any reports on it stand)
+      if (cur && cur.value === value && cur.memberId === linked?.id) return 0; // unchanged (and any reports on it stand)
       const k = fkey(node.id, key);
-      if (cur) delete s.verifications[k]; // confirmations were for the old value
-      s.values[k] = { value: value!, by: me.id, at: now, status: "live" };
+      if (cur && cur.value !== value) delete s.verifications[k]; // confirmations were for the old value
+      s.values[k] = { value: value!, by: me.id, at: now, status: "live", ...(linked ? { memberId: linked.id } : {}) };
       // Auto-fill the free Function from a new role.
       if (entity === "engagement" && key === "role" && !valueOf(node, s, "function")) {
         const fn = functionOf(value);
@@ -970,7 +1048,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const f = fieldOf(a.entity, a.field);
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
           const wasMine = valueOf(node, s, f.key)?.by === me.id;
-          const earned = setValue(node, a.entity, f.key, a.value);
+          const earned = setValue(node, a.entity, f.key, a.value, f.key === "operator" ? pickedMember(a.memberId) : null);
           const bonus = earned || capped ? payReferral() : 0;
           const cells = [changed(a.entity, node, f.key)];
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
@@ -1035,6 +1113,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const site = a.website && String(a.website).trim() ? pick("company", { website: a.website })[0][1] : null;
           const coFields = pick("company", a.companyFields).filter(([k]) => k !== "website");
           const engFields = pick("engagement", a.engagementFields);
+          const seatHolder = engFields.some(([k]) => k === "operator") ? pickedMember(a.operatorMemberId) : null;
           const people = (a.people ?? []).slice(0, 10).map((p) => pick("contact", p)).filter((p) => p.length);
           for (const p of people) if (!p.some(([k]) => k === "name")) throw new ActionError("Each person needs a name.");
           const wantEng = a.engagementId ? inId("engagement", a.engagementId) : null;
@@ -1078,14 +1157,14 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
               eng = existing;
               for (const [k, v] of engFields) {
                 if (valueOf(eng, s, k)) kept++;
-                else earned += setValue(eng, "engagement", k, v);
+                else earned += setValue(eng, "engagement", k, v, seatHolder);
               }
             } else {
               eid = newId("e", name);
               engNew = true;
               s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
               eng = { id: eid, seedFields: {} };
-              for (const [k, v] of engFields) earned += setValue(eng, "engagement", k, v);
+              for (const [k, v] of engFields) earned += setValue(eng, "engagement", k, v, seatHolder);
             }
           }
           for (const p of people) {
