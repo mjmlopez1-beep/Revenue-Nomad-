@@ -8,7 +8,8 @@
  * confirms and reports facts, and it stores test scans that open and close roles. Start that
  * server on a fresh RN_DATA_DIR with RN_STARTER_CREDITS=25, RN_ADMIN_EMAILS=admin-qa@example.com,
  * RN_SCAN_TEST=1 and RN_CRON_SECRET=qa-cron (the last two let the scan checks store results
- * without reading a job board; without them those checks are skipped).
+ * without reading a job board; without them those checks are skipped). The cron secret also
+ * lets the tests create the admin account, which the join form alone refuses.
  *
  * Optional environment:
  *   ADMIN_EMAIL    admin account to join (default admin-qa@example.com)
@@ -104,9 +105,10 @@ class Client {
   }
 }
 
-async function join(name, ipAddr, { ref, email } = {}) {
+async function join(name, ipAddr, { ref, email, headers } = {}) {
   const r = await call("POST", "/api/table", {
     ipAddr,
+    headers,
     body: { join: { name, email: email ?? `qa+${RUN}-${name.toLowerCase().replace(/\W+/g, "")}-${Math.random().toString(36).slice(2, 7)}@example.com`, ref } },
   });
   const token = (r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean) ?? null;
@@ -253,7 +255,8 @@ async function admin() {
   if (shared.admin !== undefined) return shared.admin;
   const email = process.env.ADMIN_EMAIL || "admin-qa@example.com";
   if (process.env.ADMIN_TOKEN) return (shared.admin = new Client("Admin Qa", ip(250), process.env.ADMIN_TOKEN));
-  const { client } = await join("Admin Qa", ip(250), { email });
+  // An admin address joins only with the server's cron secret while email sign-in is off.
+  const { client } = await join("Admin Qa", ip(250), { email, headers: { "x-cron-secret": CRON_SECRET } });
   if (client) await client.act({ type: "profile", function: "Sales", goal: "friendly" });
   return (shared.admin = client);
 }
@@ -411,15 +414,16 @@ section("ip", async () => {
 section("unlock", async () => {
   const N = await member("Neo Tester", ip(40));
   const v = await N.view();
-  const locked = pickLocked(v, 25);
+  // The first-day limit equals the starter credits (25), so a new account can spend all of them.
+  const locked = pickLocked(v, 27);
   const r18 = await N.act({ type: "unlockMany", items: locked.slice(0, 18) });
   check("a new account unlocks 18", r18.status === 200 && r18.json?.me?.credits === STARTER - 18, r18.json);
-  const r5 = await N.act({ type: "unlockMany", items: locked.slice(18, 23) });
-  check("new account: 18 + 5 says 'You can unlock 2 more today.'", r5.json?.error === "You can unlock 2 more today.", r5.json);
-  const r2 = await N.act({ type: "unlockMany", items: locked.slice(18, 20) });
-  check("new account unlocks 2 more (20)", r2.status === 200, r2.json);
-  const r21 = await N.act({ type: "unlock", ...locked[20] });
-  check("new account is refused its 21st unlock", r21.json?.error === "You hit today's unlock limit. It resets within 24 hours.", r21.json);
+  const r8 = await N.act({ type: "unlockMany", items: locked.slice(18, 26) });
+  check("new account: 18 + 8 says 'You can unlock 7 more today.'", r8.json?.error === "You can unlock 7 more today.", r8.json);
+  const r7 = await N.act({ type: "unlockMany", items: locked.slice(18, 25) });
+  check("new account unlocks 7 more (25)", r7.status === 200 && r7.json?.me?.credits === 0, r7.json);
+  const r26 = await N.act({ type: "unlock", ...locked[25] });
+  check("new account's 26th unlock is refused for credits, not the limit", r26.json?.error === "You're out of credits. Add a missing fact to earn one.", r26.json);
 
   const S = process.env.SEED_TOKEN ? new Client("Seed Member", ip(41), process.env.SEED_TOKEN) : seedClient(1, ip(41));
   const sv = S ? await S.view() : null;
@@ -975,11 +979,11 @@ section("benchrate", async () => {
   const refill = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$7k/mo" });
   check("after removing one there is room for another", refill.status === 200, refill.json);
 
-  // A private rate is a first fact like any other: it pays the invite bonus.
+  // A private rate is not a fact on a record: the invite bonus waits for the first one that is.
   const inviter = (await O.view()).me.inviteCode;
   const N = await member("Nia Newbie", ip(122), { ref: inviter });
   const nb = await N.act({ type: "benchRate", pricing: "Hourly", rate: "$160/hr" });
-  check("a private rate as a first fact pays the invite bonus", nb.status === 200 && /Invite bonus \+10\./.test(nb.json?.message ?? "") && nb.json?.me?.credits === STARTER + 11, nb.json);
+  check("a private rate as a first fact leaves the invite bonus waiting", nb.status === 200 && !/Invite bonus/.test(nb.json?.message ?? "") && nb.json?.me?.credits === STARTER + 1 && (await N.view()).me.invitePending === true, nb.json);
 });
 
 section("pilot", async () => {
