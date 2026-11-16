@@ -13,9 +13,9 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# Pilot starter credits (the landing page promises 50). Heap: 1 GB held 100 concurrent members
-# (peak RSS about 700 MB); 320 MB ran out of memory at that load. Needs a 1 GB+ container.
-ENV RN_STARTER_CREDITS=50
+# Pilot starter credits (the landing page shows whatever this is). Heap: 1 GB held 100 concurrent
+# members (peak RSS about 700 MB); 320 MB ran out of memory at that load. Needs a 1 GB+ container.
+ENV RN_STARTER_CREDITS=25
 ENV NODE_OPTIONS=--max-old-space-size=1024
 RUN addgroup -S nomad && adduser -S nomad -G nomad
 COPY --from=builder /app/.next/standalone ./

@@ -22,6 +22,17 @@
  * Hidden companies: a company with an active open role keeps its name, website, LinkedIn,
  * logo and About behind "Unlock company" (1 credit); see identityHidden().
  *
+ * Your seats: the member a seat-holder name resolves to sees their own seat free, can correct
+ * what the seed or the scan say about it, and can say "this isn't me"; see seatHolder().
+ *
+ * Weekly scan: open roles come in from job boards with the day they were first seen, close
+ * (with the date) when a clean scan stops listing them, and reopen if listed again; see
+ * applyScan(). Their facts are owned by "scan" and behave like seed facts. After a scan,
+ * sendDigests() emails the week's new roles.
+ *
+ * Benchmark-only rates (State.benchRates) count in the rate benchmarks and are never sent to
+ * anyone but the member who shared them, admins included.
+ *
  * Storage:
  *  - intel-seed.json (private, git-ignored, scripts/build-intel-seed.py): members (for
  *    sign-in), seed companies, engagements and people. Shipped encrypted as
@@ -32,21 +43,28 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { gunzipSync } from "zlib";
-import { createDecipheriv, createHash, createHmac, randomBytes } from "crypto";
+import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { iconDomains } from "./companyIcons";
 import { readRate } from "./rates";
 import { snapshot } from "./backup";
-import { emailEnabled } from "./email";
+import { emailEnabled, sendEmail } from "./email";
+import { renderDigest } from "./digest";
+import { collectOpenRoles } from "./scan/collect";
 import {
-  ALL_FIELDS, EARN_CAP, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf, stripInvisible,
-  HIDDEN_COMPANY, LEGACY_VALUES, RN_EMPLOYEES, type Entity,
+  ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
+  stripInvisible, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, type Entity,
 } from "./tableFields";
-import type { Action, ActionResult, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec, View } from "./tableTypes";
+import type {
+  Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
+  ScanSummary, View,
+} from "./tableTypes";
+import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
-/** Credits every member starts with. Set RN_STARTER_CREDITS (50 for the pilot). */
-export const STARTER_CREDITS = Math.max(0, Number.parseInt(process.env.RN_STARTER_CREDITS ?? "", 10) || 5);
+/** Credits every member starts with (25 unless RN_STARTER_CREDITS says otherwise). */
+const starterEnv = Number.parseInt(process.env.RN_STARTER_CREDITS ?? "", 10);
+export const STARTER_CREDITS = Number.isFinite(starterEnv) && starterEnv >= 0 ? starterEnv : 25;
 
 export interface Member {
   id: string;
@@ -79,6 +97,11 @@ export interface Seed {
   companies: SeedCompany[];
   engagements: SeedEngagement[];
   contacts?: SeedContact[];
+  /**
+   * Revenue Nomad's Rate Index (survey and contract rates), for the benchmarks only. `hours` is
+   * hours per MONTH (or null), `revenue` an RN_REVENUE label (or null). Never shown one by one.
+   */
+  rateIndex?: { fn: string; hourly: number; hours: number | null; revenue: string | null }[];
   demo?: boolean;
 }
 
@@ -89,7 +112,7 @@ interface Added {
 }
 export interface FieldValue {
   value: string;
-  by: string; // member id, or "seed"
+  by: string; // member id, "seed", or "scan" (the weekly scan; treated like seed)
   at: string;
   /** reported: hidden for everyone (two or more members reported it) until an admin reviews it. */
   status: "live" | "reported" | "removed";
@@ -102,7 +125,8 @@ export interface FieldValue {
 export interface LedgerEntry {
   memberId: string;
   delta: number;
-  reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm";
+  /** adjust: a one-time balance correction (ref "starter.floor"). */
+  reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust";
   ref: string;
   at: string;
 }
@@ -111,10 +135,47 @@ interface Profile {
   goal?: string;
   title?: string;
   onboarded?: boolean;
+  /** Turned the weekly email off (My credits, or the unsubscribe link). */
+  digestOff?: boolean;
+  /** Asked to hear about Pro. */
+  proInterest?: boolean;
+}
+/** One open role the weekly scan follows: when it was first and last listed, and when it closed. */
+interface RoleTrack {
+  engagementId: string;
+  companyId: string;
+  firstSeen: string;
+  lastSeen: string;
+  closedAt: string | null;
+  /** scan: the posting came down. filled: a member named the seat holder (a later scan won't reopen it). */
+  closedBy?: "scan" | "filled";
+  url: string;
+  /** The board that last listed it, or "seed" for open roles that came with the seed. */
+  source: string;
+  postedAt?: string | null;
+}
+interface ScanState {
+  lastRunAt: string | null;
+  /** Per-source results of the last run. */
+  sources: ScanSourceResult[];
+  /** Keyed by the posting's key (company and title). */
+  roles: Record<string, RoleTrack>;
+}
+interface StoredBenchRate {
+  id: string;
+  by: string;
+  engagementId: string | null;
+  fn: string;
+  kind: "monthly" | "hourly";
+  amount: number;
+  revenue: string | null;
+  at: string;
 }
 export interface State {
+  /** `by` is a member id, or "scan" for a company the weekly scan added. */
   companies: (Added & { name: string })[];
-  engagements: (Added & { companyId: string })[];
+  /** `source` is set for engagements the weekly scan added ("Demand scan"). */
+  engagements: (Added & { companyId: string; source?: string })[];
   contacts: (Added & { engagementId: string | null; companyId?: string })[];
   values: Record<string, FieldValue>; // `${entityId}.${field}`
   unlocks: Record<string, string[]>; // `${entityId}.${field}` -> member ids
@@ -131,6 +192,19 @@ export interface State {
   reportLog: { memberId: string; ref: string; at: string }[];
   /** Bonus credits earned while at the daily cap, paid as the rolling window frees room. */
   held: { memberId: string; delta: number; reason: "referral" | "confirm"; ref: string; at: string }[];
+  /** Rates shared for the benchmarks only. Never sent to anyone but the member who shared them. */
+  benchRates: StoredBenchRate[];
+  /** Product signals for the pilot (walls hit, Pro offer seen, Pro interest). Newest 20,000. */
+  signals: { memberId: string; name: string; where: string; at: string }[];
+  /** "This isn't me": engagement ids a member said they never held, by member id. */
+  notMine: Record<string, string[]>;
+  /** Each member's last visit (written at most once per 6 hours). */
+  seen: Record<string, string>;
+  scan: ScanState;
+  /** Weekly email: last run, emails sent in all, and each member's last one. */
+  digest: { lastSentAt: string | null; sent: number; members: Record<string, string> };
+  /** One-time changes already applied. starterFloor: the starter balance the floor was last applied at. */
+  flags: { starterFloor?: number };
 }
 
 /* ---------- storage ---------- */
@@ -218,6 +292,8 @@ export async function loadSeed(): Promise<Seed> {
 const EMPTY_STATE = (): State => ({
   companies: [], engagements: [], contacts: [], values: {}, unlocks: {}, verifications: {}, members: [], ledger: [],
   profiles: {}, follows: {}, referralPaid: [], reportLog: [], held: [],
+  benchRates: [], signals: [], notMine: {}, seen: {}, scan: { lastRunAt: null, sources: [], roles: {} },
+  digest: { lastSentAt: null, sent: 0, members: {} }, flags: {},
 });
 
 /**
@@ -245,6 +321,16 @@ export async function loadState(): Promise<State> {
       if (!s.held.some((h) => h.memberId === l.memberId && h.ref === l.ref && h.reason === l.reason))
         s.held.push({ memberId: l.memberId, delta: l.reason === "referral" ? REFERRAL_BONUS : 1, reason: l.reason, ref: l.ref, at: l.at });
     }
+    // Starter credits went down (50 to 25): nobody starts in debt. Anyone the lower starter
+    // would leave below 0 gets one row lifting them to 0. Runs once per lowering.
+    if (s.flags.starterFloor === undefined || STARTER_CREDITS < s.flags.starterFloor) {
+      const sums = new Map<string, number>();
+      for (const l of s.ledger) sums.set(l.memberId, (sums.get(l.memberId) ?? 0) + l.delta);
+      const at = new Date().toISOString();
+      for (const [memberId, sum] of sums)
+        if (STARTER_CREDITS + sum < 0) s.ledger.push({ memberId, delta: -(STARTER_CREDITS + sum), reason: "adjust", ref: "starter.floor", at });
+    }
+    s.flags.starterFloor = STARTER_CREDITS;
     stateCache = s;
     return s;
   })();
@@ -387,7 +473,8 @@ function graph(seed: Seed, s: State): Graph {
   for (const e of seed.engagements)
     g.engagements.set(e.id, { id: e.id, seedFields: e.fields, companyId: e.companyId, verified: !!e.verified, source: e.fields.source ?? "Member added" });
   for (const e of s.engagements)
-    if (!g.engagements.has(e.id)) g.engagements.set(e.id, { id: e.id, seedFields: {}, companyId: e.companyId, verified: false, source: "Member added" });
+    if (!g.engagements.has(e.id))
+      g.engagements.set(e.id, { id: e.id, seedFields: e.source ? { source: e.source } : {}, companyId: e.companyId, verified: false, source: e.source ?? "Member added" });
   const companyOfEng = (eid: string | null | undefined) => (eid ? g.engagements.get(eid)?.companyId : undefined);
   for (const p of seed.contacts ?? []) {
     const companyId = p.companyId ?? companyOfEng(p.engagementId);
@@ -532,12 +619,13 @@ function valueOf(node: Node | undefined, s: State, field: string): FieldValue | 
   const sv = node.seedFields[field];
   return sv ? { value: sv, by: "seed", at: "", status: "live" } : null;
 }
+/** Values from our own records (the seed) or the weekly scan: nobody earned a credit for them. */
+const isSystem = (by: string) => by === "seed" || by === "scan";
 const live = (node: Node | undefined, s: State, field: string) => {
   const v = valueOf(node, s, field);
   return v && v.status === "live" ? v.value : null;
 };
 
-/** One field as `me` sees it. */
 /* ---------- members as seat holders ---------- */
 
 /** Names compare without case, accents, punctuation or extra spaces. */
@@ -575,6 +663,30 @@ function seatMember(idx: MemberIndex, v: FieldValue): Member | null {
   return same.length === 1 ? same[0] : null;
 }
 
+/**
+ * The member who holds this seat: the live seat-holder value resolves to them and they have
+ * not said "this isn't me" (State.notMine). Their own seat is free for them to see and fix.
+ */
+function seatHolder(s: State, idx: MemberIndex, engId: string, v: FieldValue | null): Member | null {
+  if (!v || v.status !== "live") return null;
+  const m = seatMember(idx, v);
+  return m && !(s.notMine[m.id] ?? []).includes(engId) ? m : null;
+}
+
+/** Empty fillable facts on an engagement (each earns its seat holder a credit). */
+const ENG_FILLABLE = FILLABLE.filter((x) => x.entity === "engagement").map((x) => x.f.key);
+const ENG_GATED = ALL_FIELDS.filter((x) => x.entity === "engagement" && x.f.gated).map((x) => x.f.key);
+function missingOnSeat(e: Node, s: State): number {
+  let n = 0;
+  for (const k of ENG_FILLABLE) {
+    if (valueOf(e, s, k)) continue;
+    // Function shows as filled when the role gives it away.
+    if (k === "function" && functionOf(live(e, s, "role"))) continue;
+    n++;
+  }
+  return n;
+}
+
 /** Members whose name matches a search, for the seat-holder picker. Signed-in members only. */
 export async function searchMembers(token: string | null, q: string): Promise<{ id: string; name: string; title: string; you: boolean }[]> {
   const seed = await loadSeed();
@@ -596,7 +708,11 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
   return hits.slice(0, 8).map(({ m }) => ({ id: pubId(m.id), name: m.name, title: m.title ?? "", you: m.id === me.id }));
 }
 
-function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex): Cell {
+/**
+ * One field as `me` sees it. `free` shows a gated fact without an unlock: a seat holder's own
+ * seat, or the status of a role the weekly scan follows (its dates already say it).
+ */
+function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false): Cell {
   const f = fieldDef(entity, key)!;
   const v = valueOf(node, s, f.key);
   if (!v) return { s: "empty" };
@@ -607,11 +723,11 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (me && v.reporters?.includes(me.id)) return { s: "reported", mine: false };
   const k = fkey(node!.id, f.key);
   const vers = s.verifications[k] ?? [];
-  const ver = vers.length + (v.by === "seed" ? 1 : 0);
-  if (!f.gated || mine || (me && (s.unlocks[k] ?? []).includes(me.id))) {
+  const ver = vers.length + (isSystem(v.by) ? 1 : 0);
+  if (!f.gated || mine || free || (me && (s.unlocks[k] ?? []).includes(me.id))) {
     const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id) };
     if (key === "operator" && idx) {
-      const m = seatMember(idx, v);
+      const m = seatHolder(s, idx, node!.id, v);
       if (m) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
     }
     return out;
@@ -655,6 +771,7 @@ export async function joinMember(nameRaw: unknown, emailRaw: unknown, ref?: unkn
       ...(referrer && !sameNetwork ? { referredBy: referrer.id } : {}),
     };
     s.members.push(m);
+    memberIndexCache = null; // the draft changed in place: later jobs in this batch must see the new member
     return m;
   });
 }
@@ -676,8 +793,49 @@ export async function existingCompany(domain: string | null, name: string | null
 
 const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan"]);
 
-/** An open fractional seat right now: status Open role, or a scanned posting nobody has marked filled. */
-function isOpenRole(e: EngNode, s: State): boolean {
+/* ---------- open roles the weekly scan follows ---------- */
+
+type Tracks = Map<string, RoleTrack & { key: string }>;
+const iso = (raw: string | null | undefined, fallback: string) => {
+  const t = Date.parse(String(raw ?? ""));
+  return Number.isFinite(t) ? new Date(t).toISOString() : fallback;
+};
+/** Open roles that came with the seed and are not in State.scan.roles yet, as tracks dated from the seed's build. */
+function seedTracks(seed: Seed, s: State): (RoleTrack & { key: string })[] {
+  const known = new Set(Object.values(s.scan.roles).map((r) => r.engagementId));
+  const built = iso(seed.builtAt, new Date(0).toISOString());
+  const out: (RoleTrack & { key: string })[] = [];
+  for (const e of seed.engagements) {
+    if (e.fields.source !== "Demand scan" || known.has(e.id) || (e.fields.status ?? "Open role") !== "Open role") continue;
+    out.push({ key: `seed:${e.id}`, engagementId: e.id, companyId: e.companyId, firstSeen: built, lastSeen: built, closedAt: null, url: e.fields.posting ?? "", source: "seed" });
+  }
+  return out;
+}
+/** Every followed role by engagement id, seed roles included. */
+function buildTracks(seed: Seed, s: State): Tracks {
+  const t: Tracks = new Map();
+  for (const [key, r] of Object.entries(s.scan.roles)) t.set(r.engagementId, { ...r, key });
+  for (const r of seedTracks(seed, s)) t.set(r.engagementId, r);
+  return t;
+}
+let tracksCache: { seed: Seed; s: State; t: Tracks } | null = null;
+/** buildTracks, kept for the committed state (a draft inside mutate() changes in place, so it is never cached). */
+function tracksOf(seed: Seed, s: State): Tracks {
+  if (s !== stateCache) return buildTracks(seed, s);
+  if (!tracksCache || tracksCache.s !== s || tracksCache.seed !== seed) tracksCache = { seed, s, t: buildTracks(seed, s) };
+  return tracksCache.t;
+}
+/** Write the seed's open roles into State.scan.roles (first scan, or the first change to one). */
+function keepSeedTracks(seed: Seed, s: State): void {
+  for (const { key, ...r } of seedTracks(seed, s)) s.scan.roles[key] = r;
+}
+
+/**
+ * An open fractional seat right now: status Open role, or a scanned posting nobody has marked
+ * filled. A followed role that closed (the posting came down, or the seat was filled) is not open.
+ */
+function isOpenRole(e: EngNode, s: State, tracks: Tracks): boolean {
+  if (tracks.get(e.id)?.closedAt) return false;
   const status = live(e, s, "status");
   return status ? status === "Open role" : e.source === "Demand scan";
 }
@@ -693,23 +851,20 @@ const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boole
  * because the name alone is enough to find the role. It stays visible to admins, to members
  * who unlocked it or added anything there, and to the member who held a seat there.
  */
-function identityHidden(g: Graph, s: State, idx: MemberIndex, me: Member | null, companyId: string): boolean {
+function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me: Member | null, companyId: string): boolean {
   if (!me || isAdmin(me)) return false;
   const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
-  if (!engs.some((e) => isOpenRole(e, s))) return false;
+  if (!engs.some((e) => isOpenRole(e, s, tracks))) return false;
   if ((s.unlocks[fkey(companyId, "identity")] ?? []).includes(me.id)) return false;
   if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return false;
   const ids = new Set<string>([companyId, ...engs.map((e) => e.id)]);
   for (const p of g.contacts.values()) if (p.companyId === companyId) ids.add(p.id);
   for (const [k, v] of Object.entries(s.values)) if (v.by === me.id && ids.has(k.slice(0, k.lastIndexOf(".")))) return false;
-  for (const e of engs) {
-    const v = valueOf(e, s, "operator");
-    if (v && v.status === "live" && seatMember(idx, v)?.id === me.id) return false;
-  }
+  for (const e of engs) if (seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id) return false;
   return true;
 }
 
-function friendliness(g: Graph, s: State, companyId: string, engs: EngNode[], operators: Set<string>): Friendly {
+function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, engs: EngNode[], operators: Set<string>): Friendly {
   let fractional = 0;
   let open = 0;
   let recent = 0;
@@ -718,8 +873,7 @@ function friendliness(g: Graph, s: State, companyId: string, engs: EngNode[], op
   const now = Date.now();
   for (const e of engs) {
     const type = live(e, s, "type");
-    const status = live(e, s, "status");
-    const isOpen = isOpenRole(e, s);
+    const isOpen = isOpenRole(e, s, tracks);
     const isFractional = isOpen || SOURCE_FRACTIONAL.has(e.source) || (!!type && FRACTIONAL_TYPES.includes(type));
     if (isOpen) open++;
     if (isFractional) {
@@ -768,8 +922,9 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
   /** Live facts hidden only for this viewer (they reported them): still facts for the stats. */
   let hiddenForMe = 0;
   const idx = memberIndex(seed, s);
-  const cell = (node: Node | undefined, entity: Entity, key: string): Cell => {
-    const c = cellOf(s, me, node, entity, key, idx);
+  const tracks = tracksOf(seed, s);
+  const cell = (node: Node | undefined, entity: Entity, key: string, free = false): Cell => {
+    const c = cellOf(s, me, node, entity, key, idx, free);
     if (c.s === "reported" && !c.mine && me && valueOf(node, s, key)?.status === "live") hiddenForMe++;
     return c;
   };
@@ -830,9 +985,14 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const operators = new Set<string>();
     let updatedAt = touched(c.id);
     let mine = myAdds.has(c.id);
+    let holdsSeat = false;
     const engRecs: EngagementRec[] = engs.map((e) => {
       const cells: Record<string, Cell> = {};
-      for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key);
+      // The seat holder sees their own seat free. A followed role's status is free for everyone.
+      const yours = !!me && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id;
+      const track = tracks.get(e.id);
+      if (yours) holdsSeat = true;
+      for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours || (!!track && f.key === "status"));
       // Function is free; derive it from the role when nobody set it.
       if (cells.function.s === "empty") {
         const fn = functionOf(live(e, s, "role"));
@@ -846,7 +1006,10 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       const eu = maxIso(touched(e.id), ...ePeopleNodes.map((p) => touched(p.id)));
       updatedAt = maxIso(updatedAt, eu);
       if (myAdds.has(e.id) || ePeopleNodes.some((p) => myAdds.has(p.id))) mine = true;
-      return { id: pubId(e.id), source: e.source, verified: e.verified, cells, people: ePeople, updatedAt: eu };
+      return {
+        id: pubId(e.id), source: e.source, verified: e.verified, cells, people: ePeople, updatedAt: eu, yours,
+        ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null } : {}),
+      };
     });
     const coPeopleNodes = people.filter((p) => !p.engagementId || !g.engagements.has(p.engagementId));
     const coPeople = coPeopleNodes.map(toPerson);
@@ -861,14 +1024,11 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const hidden =
       !!me &&
       !isAdmin(me) &&
-      engs.some((e) => isOpenRole(e, s)) &&
+      engs.some((e) => isOpenRole(e, s, tracks)) &&
       !mine &&
       !(s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) &&
       !s.companies.some((x) => x.id === c.id && x.by === me.id) &&
-      !engs.some((e) => {
-        const v = valueOf(e, s, "operator");
-        return !!v && v.status === "live" && seatMember(idx, v)?.id === me.id;
-      });
+      !holdsSeat;
     if (hidden) {
       hiddenIds.add(c.id);
       for (const k of IDENTITY_FIELDS) if (cells[k]?.s === "value") cells[k] = { s: "locked", ver: 0 };
@@ -881,7 +1041,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       hidden,
       iconDomain: hidden ? null : icons[c.id] ?? null,
       cells,
-      friendly: friendliness(g, s, c.id, engs, operators),
+      friendly: friendliness(g, s, tracks, c.id, engs, operators),
       engagements: engRecs,
       people: coPeople,
       following: following.has(c.id),
@@ -924,7 +1084,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         label: f.label,
         value: v.value,
         companyId: pubId(companyIdOf(id)),
-        addedBy: v.by === "seed" ? "Seed data" : memberName(v.by),
+        addedBy: v.by === "seed" ? "Seed data" : v.by === "scan" ? "Weekly scan" : memberName(v.by),
         reporters: (v.reporters ?? (v.reportedBy ? [v.reportedBy] : [])).map(memberName),
         reportedAt: lastReport.get(k) ?? null,
       });
@@ -959,7 +1119,17 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: nameOf.has(id) ? firstName(nameOf.get(id)!) : "", field: "Invite bonus" });
         continue;
       }
-      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: fieldDef(entityOf(id), field)?.label ?? field });
+      // A rate shared for the benchmarks only: no record to name. Taking it back reads "Removed".
+      if (id === "bench") {
+        ledger.push({ at: l.at, delta: l.delta, reason: l.reason === "reversal" ? "Removed" : l.reason, company: "", field: BENCH_LABEL });
+        continue;
+      }
+      // The one-time lift to 0 when starter credits went down.
+      if (l.reason === "adjust") {
+        ledger.push({ at: l.at, delta: l.delta, reason: "Balance reset to zero", company: "", field: "" });
+        continue;
+      }
+      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: fieldLabel(entityOf(id), field) });
     }
     ledger.reverse();
     const prof = s.profiles[me.id] ?? {};
@@ -986,6 +1156,12 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       invitePending: !!joinedMe?.referredBy && !s.referralPaid.includes(me.id),
       added,
       unlocked,
+      digest: !prof.digestOff,
+      proInterest: !!prof.proInterest,
+      // Only the viewer's own. Nobody else's private rate ever leaves the server.
+      benchRates: s.benchRates
+        .filter((b) => b.by === me.id)
+        .map((b): BenchRate => ({ id: b.id, engagementId: b.engagementId ? pubId(b.engagementId) : null, function: b.fn, kind: b.kind, amount: b.amount })),
     };
   }
 
@@ -1002,6 +1178,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     starter: STARTER_CREDITS,
   };
   statsCache = { s, seed, stats };
+  const scan = me ? scanSummary(g, s, tracks, nowMs, meRec?.function ?? null) : null;
   return {
     demo: !!seed.demo,
     me: meRec,
@@ -1011,7 +1188,120 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     ledger,
     reported,
     email: emailEnabled(),
-    ...(me ? { benchmarks: benchmarks(g, s) } : {}),
+    ...(me && scan ? { benchmarks: benchmarks(seed, g, s), scan } : {}),
+    ...(me && scan && isAdmin(me) ? { admin: adminStats(seed, s, g, idx, nowMs, scan, entityOf) } : {}),
+  };
+}
+
+/** How a ledger row or a stats line names a field. */
+const BENCH_LABEL = "Rate (benchmarks only)";
+const fieldLabel = (entity: Entity, field: string) =>
+  entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
+
+/* ---------- the weekly scan, as numbers ---------- */
+
+const WEEK = 7 * DAY;
+
+/** The function an engagement counts under. */
+const fnOf = (e: Node, s: State) => live(e, s, "function") ?? functionOf(live(e, s, "role"));
+
+function scanSummary(g: Graph, s: State, tracks: Tracks, nowMs: number, myFunction: string | null): ScanSummary {
+  let openNow = 0;
+  let opened7 = 0;
+  let closed30 = 0;
+  let mine7 = 0;
+  for (const e of g.engagements.values()) {
+    if (isOpenRole(e, s, tracks)) openNow++;
+    const t = tracks.get(e.id);
+    if (!t) continue;
+    if (t.closedAt) {
+      if (nowMs - Date.parse(t.closedAt) < 30 * DAY) closed30++;
+    } else if (nowMs - Date.parse(t.firstSeen) < WEEK && isOpenRole(e, s, tracks)) {
+      opened7++;
+      if (myFunction && fnOf(e, s) === myFunction) mine7++;
+    }
+  }
+  return { lastRunAt: s.scan.lastRunAt, openNow, opened7, closed30, mine7 };
+}
+
+/* ---------- pilot metrics (admins) ---------- */
+
+const digestOn = () => emailEnabled() && process.env.RN_DIGEST !== "0";
+
+function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: number, scan: ScanSummary, entityOf: (id: string) => Entity): AdminStats {
+  // Balances of everyone who has shown up: joined, signed in, onboarded or in the ledger.
+  const sums = new Map<string, number>();
+  for (const l of s.ledger) sums.set(l.memberId, (sums.get(l.memberId) ?? 0) + l.delta);
+  const active = new Set<string>([...sums.keys(), ...Object.keys(s.seen), ...Object.keys(s.profiles), ...s.members.map((m) => m.id)]);
+  const balances = [...active].filter((id) => idx.byId.has(id)).map((id) => STARTER_CREDITS + (sums.get(id) ?? 0)).sort((a, b) => a - b);
+  const median = balances.length ? balances[Math.floor((balances.length - 1) / 2)] : STARTER_CREDITS;
+  const seenWithin = (ms: number) => Object.values(s.seen).filter((at) => nowMs - Date.parse(at) < ms).length;
+
+  const top = (reason: "fill" | "unlock") => {
+    const n = new Map<string, number>();
+    for (const l of s.ledger) {
+      if (l.reason !== reason) continue;
+      const dot = l.ref.indexOf(".");
+      const id = l.ref.slice(0, dot);
+      const field = l.ref.slice(dot + 1);
+      const entity = entityOf(id);
+      const label = id === "bench" ? BENCH_LABEL : entity === "contact" ? `Person ${lower(fieldLabel(entity, field))}` : fieldLabel(entity, field);
+      n.set(label, (n.get(label) ?? 0) + 1);
+    }
+    return [...n].map(([field, count]) => ({ field, n: count })).sort((a, b) => b.n - a.n || a.field.localeCompare(b.field)).slice(0, 8);
+  };
+  let adds = 0;
+  let unlocks = 0;
+  let adds7 = 0;
+  let unlocks7 = 0;
+  for (const l of s.ledger) {
+    const recent = nowMs - Date.parse(l.at) < WEEK;
+    if (l.reason === "fill") (adds++, recent && adds7++);
+    else if (l.reason === "unlock") (unlocks++, recent && unlocks7++);
+  }
+
+  const walled = new Set<string>();
+  let hits = 0;
+  let views = 0;
+  const byWhere: Record<string, number> = {};
+  for (const x of s.signals) {
+    if (x.name === "wall") {
+      hits++;
+      walled.add(x.memberId);
+    } else if (x.name === "pro_view") views++;
+    else if (x.name === "pro_interest") byWhere[x.where] = (byWhere[x.where] ?? 0) + 1;
+  }
+
+  const linked = new Set<string>();
+  let factsMissing = 0;
+  let memberRates = 0;
+  for (const e of g.engagements.values()) {
+    const holder = seatHolder(s, idx, e.id, valueOf(e, s, "operator"));
+    if (holder) {
+      linked.add(holder.id);
+      factsMissing += missingOnSeat(e, s);
+    }
+    const rate = live(e, s, "rate");
+    if (rate && readRate(rate, live(e, s, "pricing"))) memberRates++;
+  }
+  return {
+    members: {
+      total: seed.members.length + s.members.length,
+      joined: s.members.length,
+      onboarded: Object.values(s.profiles).filter((p) => p.onboarded).length,
+      active7: seenWithin(WEEK),
+      active30: seenWithin(30 * DAY),
+    },
+    credits: { atZero: balances.filter((b) => b <= 0).length, low: balances.filter((b) => b >= 1 && b <= 3).length, median },
+    activity: { adds, unlocks, adds7, unlocks7 },
+    walls: { members: walled.size, hits },
+    pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
+    topUnlocked: top("unlock"),
+    topAdded: top("fill"),
+    scan: { lastRunAt: scan.lastRunAt, openNow: scan.openNow, opened7: scan.opened7, closed30: scan.closed30, sources: s.scan.sources },
+    digest: { enabled: digestOn(), lastSentAt: s.digest.lastSentAt, sent: s.digest.sent, optedOut: Object.values(s.profiles).filter((p) => p.digestOff).length },
+    seats: { linkedMembers: linked.size, factsMissing },
+    benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
   };
 }
 
@@ -1019,53 +1309,129 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
 
 /** A group shows numbers only with at least this many rates in it. */
 export const BENCHMARK_MIN_N = 5;
+/** A group that includes Rate Index data needs this many (the survey promised groups of 20). */
+export const BENCHMARK_INDEX_MIN_N = 20;
 
-function rateStat(xs: number[]): RateStat {
-  if (xs.length < BENCHMARK_MIN_N) return { n: xs.length };
-  const s = [...xs].sort((a, b) => a - b);
+/** `index` marks a point from the Rate Index. */
+type RatePoint = { fn: string; revenue: string | null; kind: "monthly" | "hourly"; amount: number; index: boolean };
+
+function rateStat(pts: RatePoint[]): RateStat {
+  const min = pts.some((p) => p.index) ? BENCHMARK_INDEX_MIN_N : BENCHMARK_MIN_N;
+  if (pts.length < min) return { n: pts.length, min };
+  const s = pts.map((p) => p.amount).sort((a, b) => a - b);
   const q = (p: number) => {
     const i = (s.length - 1) * p;
     const lo = Math.floor(i);
     return Math.round(s[lo] + (s[Math.min(lo + 1, s.length - 1)] - s[lo]) * (i - lo));
   };
-  return { n: s.length, p25: q(0.25), median: q(0.5), p75: q(0.75) };
+  return { n: s.length, min, p25: q(0.25), median: q(0.5), p75: q(0.75) };
 }
 
-/** Benchmarks from every live rate on file, whoever unlocked it: only totals leave the server. */
-function benchmarks(g: Graph, s: State): Benchmarks {
-  type Pt = { fn: string; size: string; kind: "monthly" | "hourly"; amount: number };
-  const pts: Pt[] = [];
+/** Weeks in a month, for turning hours a week into a monthly figure. */
+const WEEKS_A_MONTH = 52 / 12;
+const inRange = (kind: "monthly" | "hourly", amount: number) => (kind === "hourly" ? amount >= 25 && amount <= 1500 : amount >= 1000 && amount <= 150_000);
+
+let benchCache: { seed: Seed; s: State; b: Benchmarks } | null = null;
+
+/**
+ * Benchmarks by function and client revenue band, from three places: every live rate on a
+ * record (whoever unlocked it), rates members shared for the benchmarks only, and Revenue
+ * Nomad's Rate Index. Only totals leave the server. The same for every viewer, so it is
+ * kept until the state or the seed changes.
+ */
+function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
+  if (benchCache && benchCache.s === s && benchCache.seed === seed) return benchCache.b;
+  const pts: RatePoint[] = [];
+  let total = 0;
+  /** One rate: its own point, and the other kind too when the hours a month are known. */
+  const add = (fnRaw: string | null, revenueRaw: string | null, r: { kind: "monthly" | "hourly"; amount: number }, hoursMonth: number | null, index: boolean) => {
+    const fn = fnRaw && FUNCTIONS.includes(fnRaw) ? fnRaw : functionOf(fnRaw) ?? "Other";
+    const revenue = revenueRaw && RN_REVENUE.includes(revenueRaw) ? revenueRaw : null;
+    total++;
+    pts.push({ fn, revenue, kind: r.kind, amount: r.amount, index });
+    if (!hoursMonth || hoursMonth <= 0) return;
+    const other = r.kind === "hourly" ? ("monthly" as const) : ("hourly" as const);
+    const amount = Math.round(r.kind === "hourly" ? r.amount * hoursMonth : r.amount / hoursMonth);
+    if (inRange(other, amount)) pts.push({ fn, revenue, kind: other, amount, index });
+  };
+  const hoursMonthOf = (e: Node) => {
+    const h = Number(live(e, s, "hours"));
+    return Number.isFinite(h) && h > 0 ? h * WEEKS_A_MONTH : null;
+  };
+  const revenueOf = (e: EngNode) => live(e, s, "revenue") ?? live(g.companies.get(e.companyId), s, "revenue");
+
+  const publicBy = new Map<string, string>(); // engagement id -> who added its live public rate
   for (const e of g.engagements.values()) {
     const v = valueOf(e, s, "rate");
     if (!v || v.status !== "live") continue;
     const r = readRate(v.value, live(e, s, "pricing"));
     if (!r) continue;
-    const fn = live(e, s, "function") ?? functionOf(live(e, s, "role")) ?? "Other";
-    const co = g.companies.get(e.companyId);
-    const size = live(e, s, "employees") ?? (co ? live(co, s, "employees") : null) ?? "Unknown";
-    pts.push({ fn, size, ...r });
+    publicBy.set(e.id, v.by);
+    add(fnOf(e, s), revenueOf(e), r, hoursMonthOf(e), false);
   }
+  for (const b of s.benchRates) {
+    const e = b.engagementId ? g.engagements.get(b.engagementId) : undefined;
+    // The same member's rate is already on the record: count it once.
+    if (e && publicBy.get(e.id) === b.by) continue;
+    add(b.fn, b.revenue, { kind: b.kind, amount: b.amount }, e ? hoursMonthOf(e) : null, false);
+  }
+  for (const x of seed.rateIndex ?? []) {
+    const hourly = Number(x?.hourly);
+    if (!inRange("hourly", hourly)) continue;
+    const hours = Number(x.hours);
+    add(String(x.fn ?? ""), x.revenue ?? null, { kind: "hourly", amount: Math.round(hourly) }, Number.isFinite(hours) && hours > 0 ? hours : null, true);
+  }
+
   const rows: BenchmarkRow[] = [];
   for (const fn of FUNCTIONS) {
     const mine = pts.filter((p) => p.fn === fn);
-    const row = (size: string, xs: Pt[]): BenchmarkRow => ({
+    const row = (revenue: string, xs: RatePoint[]): BenchmarkRow => ({
       function: fn,
-      size,
-      monthly: rateStat(xs.filter((p) => p.kind === "monthly").map((p) => p.amount)),
-      hourly: rateStat(xs.filter((p) => p.kind === "hourly").map((p) => p.amount)),
+      revenue,
+      size: revenue, // deprecated name, kept until the app reads `revenue`
+      indexed: xs.some((p) => p.index),
+      monthly: rateStat(xs.filter((p) => p.kind === "monthly")),
+      hourly: rateStat(xs.filter((p) => p.kind === "hourly")),
     });
     rows.push(row("All", mine));
-    for (const size of RN_EMPLOYEES) rows.push(row(size, mine.filter((p) => p.size === size)));
+    for (const revenue of RN_REVENUE) rows.push(row(revenue, mine.filter((p) => p.revenue === revenue)));
   }
-  return { minN: BENCHMARK_MIN_N, total: pts.length, rows };
+  const b = { minN: BENCHMARK_MIN_N, total, rows };
+  if (s === stateCache) benchCache = { seed, s, b };
+  return b;
 }
 
 /* ---------- actions ---------- */
 
 export class ActionError extends Error {}
 
-export async function perform(token: string | null, a: Action): Promise<ActionResult> {
-  return mutate((s, seed): ActionResult => {
+/** Signals one member can send in 24 hours. More are dropped without a word. */
+const SIGNAL_DAILY_MAX = 200;
+const SIGNAL_KEEP = 20_000;
+const SIGNAL_NAMES = new Set(["wall", "pro_view", "pro_interest"]);
+/** Record a product signal, inside the member's daily limit. Returns whether it was kept. */
+function addSignal(s: State, memberId: string, name: string, where: string, now: string): boolean {
+  const nowMs = Date.parse(now);
+  let today = 0;
+  for (let i = s.signals.length - 1; i >= 0 && nowMs - Date.parse(s.signals[i].at) < DAY; i--) if (s.signals[i].memberId === memberId) today++;
+  if (today >= SIGNAL_DAILY_MAX) return false;
+  s.signals.push({ memberId, name, where, at: now });
+  if (s.signals.length > SIGNAL_KEEP) s.signals.splice(0, s.signals.length - SIGNAL_KEEP);
+  return true;
+}
+
+/** Private rates not tied to a seat that one member can share. */
+const BENCH_UNATTACHED_MAX = 3;
+const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
+
+export async function perform(token: string | null, a: Action, origin?: string): Promise<ActionResult> {
+  if (a?.type === "scanNow") {
+    if (!isAdmin(await memberForToken(token))) throw new ActionError("Admins only.");
+    // In the background: a scan reads several job boards and can take a while.
+    void runScan(origin).catch((e) => console.error("scan failed", e));
+    return { message: "Scan started." };
+  }
+  const out = await mutate((s, seed): ActionResult & { refused?: string } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("Join or sign in to add, confirm and unlock.");
     const now = new Date().toISOString();
@@ -1073,6 +1439,11 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
     // Bonuses held at the cap are paid first, as the rolling window frees room.
     releaseHeld(s, me.id, now);
     const g = graph(seed, s);
+    // Followed roles, rebuilt after a change to them (the draft changes in place).
+    let tracksNow: Tracks | null = null;
+    const tracks = () => (tracksNow ??= buildTracks(seed, s));
+    /** A refusal that still keeps what it recorded (a throw would drop the whole change). */
+    const refusal: { message: string | null } = { message: null };
     // Public id -> internal id, for every engagement and person.
     const fromPub = new Map<string, string>();
     for (const id of g.engagements.keys()) fromPub.set(pubId(id), id);
@@ -1087,7 +1458,12 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
     const idx0 = memberIndex(seed, s);
     const companyOf = (entity: Entity, id: string) =>
       entity === "company" ? id : entity === "engagement" ? g.engagements.get(id)?.companyId ?? "" : g.contacts.get(id)?.companyId ?? "";
-    const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, me, companyId);
+    const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId);
+    /** The viewer holds this seat (and hasn't said it isn't theirs). */
+    const ownSeat = (engId: string) => seatHolder(s, memberIndex(seed, s), engId, valueOf(g.engagements.get(engId), s, "operator"))?.id === me.id;
+    /** Gated facts this member sees without an unlock: their own seat, and a followed role's status. */
+    const freeFor = (entity: Entity, id: string, field: string) =>
+      entity === "engagement" && ((field === "status" && tracks().has(id)) || ownSeat(id));
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
       if (hiddenFor(companyId)) throw new ActionError("Unlock this company first (1 credit) to add facts here.");
@@ -1104,16 +1480,21 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       return f;
     };
     /** A changed cell for the result, as the actor now sees it. */
-    const changed = (entity: Entity, node: Node, field: string) => ({ entity, id: outId(entity, node.id), field, cell: cellOf(s, me, node, entity, field, memberIndex(seed, s)) });
-    /** The member a picker choice names (a public member id), or null. */
+    const changed = (entity: Entity, node: Node, field: string) => ({
+      entity, id: outId(entity, node.id), field, cell: cellOf(s, me, node, entity, field, memberIndex(seed, s), freeFor(entity, node.id, field)),
+    });
+    /** The member a picker choice names (a public member id, or "me" for the viewer), or null. */
     const pickedMember = (raw: unknown): Member | null => {
       if (raw === undefined || raw === null || raw === "") return null;
       const wanted = String(raw);
+      if (wanted === "me") return me;
       const m = memberIndex(seed, s).all.find((x) => pubId(x.id) === wanted);
       if (!m) throw new ActionError("That member isn't on Trading Post.");
       return m;
     };
     let capped = false;
+    /** Cells a fill changed besides its own (a filled open role's status). */
+    const alsoChanged: { entity: Entity; node: Node; field: string }[] = [];
     /** Pay a fill, within the rolling 24 hour cap. Records a 0 entry when capped (so a later reversal knows). */
     const awardFill = (ref: string) => {
       const d = EARN_CAP - earning(s, me.id, nowMs).earned > 0 ? 1 : 0;
@@ -1140,17 +1521,32 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       const { value, error } = cleanValue(f, linked ? linked.name : raw);
       if (error) throw new ActionError(`${f.label}. ${error}`);
       const cur = valueOf(node, s, key);
-      if (cur && cur.by !== me.id) throw new ActionError(`${f.label} is already filled. Confirm or report it instead.`);
-      if (cur && cur.value === value && cur.memberId === linked?.id) return 0; // unchanged (and any reports on it stand)
+      // A seat holder can correct what our records or the scan say about their own seat.
+      // What another member added still needs a report.
+      const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
+      if (cur && cur.by !== me.id && !correction) throw new ActionError(`${f.label} is already filled. Confirm or report it instead.`);
+      if (cur && cur.value === value && (correction || cur.memberId === linked?.id)) return 0; // unchanged (and any reports on it stand)
       const k = fkey(node.id, key);
       if (cur && cur.value !== value) delete s.verifications[k]; // confirmations were for the old value
+      const eng = entity === "engagement" ? g.engagements.get(node.id) : undefined;
+      // Naming who took an open role our records or the scan posted fills it.
+      const fillsRole = !!eng && key === "operator" && !cur && isOpenRole(eng, s, tracks()) && isSystem(valueOf(eng, s, "status")?.by ?? "seed");
       s.values[k] = { value: value!, by: me.id, at: now, status: "live", ...(linked ? { memberId: linked.id } : {}) };
+      if (fillsRole) {
+        keepSeedTracks(seed, s);
+        const sk = fkey(node.id, "status");
+        delete s.verifications[sk];
+        s.values[sk] = { value: "Active", by: "scan", at: now, status: "live" };
+        for (const r of Object.values(s.scan.roles)) if (r.engagementId === node.id && !r.closedAt) (r.closedAt = now), (r.closedBy = "filled");
+        tracksNow = null;
+        alsoChanged.push({ entity, node, field: "status" });
+      }
       // Auto-fill the free Function from a new role.
       if (entity === "engagement" && key === "role" && !valueOf(node, s, "function")) {
         const fn = functionOf(value);
         if (fn) s.values[fkey(node.id, "function")] = { value: fn, by: me.id, at: now, status: "live" };
       }
-      if (cur) return 0; // editing your own value earns nothing extra
+      if (cur) return 0; // editing your own value, or correcting your seat, earns nothing extra
       const d = awardFill(k);
       if (!d) capped = true;
       return d;
@@ -1170,11 +1566,13 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           mustSee(companyOf(a.entity, node.id));
           const f = fieldOf(a.entity, a.field);
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
-          const wasMine = valueOf(node, s, f.key)?.by === me.id;
+          // Already filled means an edit of your own fact or a correction on your own seat (anything else is refused).
+          const wasMine = !!valueOf(node, s, f.key);
           const earned = setValue(node, a.entity, f.key, a.value, f.key === "operator" ? pickedMember(a.memberId) : null);
           const bonus = earned || capped ? payReferral() : 0;
           const cells = [changed(a.entity, node, f.key)];
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
+          for (const c of alsoChanged) cells.push(changed(c.entity, c.node, c.field));
           return {
             message: `${wasMine ? "Updated" : "Added"} ${lower(f.label)}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
             id: outId(a.entity, node.id),
@@ -1199,6 +1597,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
             const cur = valueOf(node, s, f.key);
             if (!cur || cur.status !== "live") continue;
             if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id) || todo.some((t) => t.k === k)) continue;
+            if (freeFor(it.entity, node.id, f.key)) continue; // your own seat, or a followed role's status: already visible
             todo.push({ k, node, entity: it.entity, field: f.key });
           }
           if (!todo.length) {
@@ -1212,10 +1611,13 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const left = Math.max(0, max - unlockedToday);
           const bal = balance(s, me.id);
           // Credits first, unless the daily limit binds as tightly (earning more wouldn't help then).
-          if (bal < todo.length && bal < left)
-            throw new ActionError(
-              bal ? `That needs ${todo.length} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.",
-            );
+          if (bal < todo.length && bal < left) {
+            const msg = bal ? `That needs ${todo.length} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.";
+            // The wall: counted for the pilot, so the refusal is returned (a throw would drop the count).
+            if (!addSignal(s, me.id, "wall", "server", now)) throw new ActionError(msg);
+            refusal.message = msg;
+            return { message: "" };
+          }
           if (todo.length > left) throw new ActionError(left > 0 ? `You can unlock ${left} more today.` : "You hit today's unlock limit. It resets within 24 hours.");
           for (const t of todo) {
             s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: t.k, at: now });
@@ -1246,7 +1648,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const site = a.website && String(a.website).trim() ? pick("company", { website: a.website })[0][1] : null;
           const coFields = pick("company", a.companyFields).filter(([k]) => k !== "website");
           const engFields = pick("engagement", a.engagementFields);
-          const seatHolder = engFields.some(([k]) => k === "operator") ? pickedMember(a.operatorMemberId) : null;
+          const seatPick = engFields.some(([k]) => k === "operator") ? pickedMember(a.operatorMemberId) : null;
           const people = (a.people ?? []).slice(0, 10).map((p) => pick("contact", p)).filter((p) => p.length);
           for (const p of people) if (!p.some(([k]) => k === "name")) throw new ActionError("Each person needs a name.");
           const wantEng = a.engagementId ? inId("engagement", a.engagementId) : null;
@@ -1290,14 +1692,14 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
               eng = existing;
               for (const [k, v] of engFields) {
                 if (valueOf(eng, s, k)) kept++;
-                else earned += setValue(eng, "engagement", k, v, seatHolder);
+                else earned += setValue(eng, "engagement", k, v, seatPick);
               }
             } else {
               eid = newId("e", name);
               engNew = true;
               s.engagements.push({ id: eid, companyId: company.id, by: me.id, at: now });
               eng = { id: eid, seedFields: {} };
-              for (const [k, v] of engFields) earned += setValue(eng, "engagement", k, v, seatHolder);
+              for (const [k, v] of engFields) earned += setValue(eng, "engagement", k, v, seatPick);
             }
           }
           for (const p of people) {
@@ -1376,7 +1778,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const f = fieldOf(a.entity, a.field);
           const k = fkey(node.id, f.key);
           const cur = valueOf(node, s, f.key);
-          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id);
+          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to report here.");
           if (cur.by === me.id) throw new ActionError("That's your own fact. Edit it instead.");
           if (!s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0)) throw new ActionError("Add a fact before you report one.");
@@ -1393,16 +1795,16 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const f = fieldOf(a.entity, a.field);
           const k = fkey(node.id, f.key);
           const cur = valueOf(node, s, f.key);
-          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id);
+          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee || cur.reporters?.includes(me.id)) throw new ActionError("Nothing to confirm here.");
           if (cur.by === me.id) throw new ActionError("You can't confirm your own fact.");
           const list = s.verifications[k] ?? [];
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
-          const n = list.length + 1 + (cur.by === "seed" ? 1 : 0);
+          const n = list.length + 1 + (isSystem(cur.by) ? 1 : 0);
           // The member who added a fact earns +1 once two other members confirm it (once per fact;
           // it counts toward the daily cap and is held if the author is at it).
-          if (cur.by !== "seed" && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === k) && !s.held.some((h) => h.reason === "confirm" && h.ref === k))
+          if (!isSystem(cur.by) && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === k) && !s.held.some((h) => h.reason === "confirm" && h.ref === k))
             grant(s, cur.by, 1, "confirm", k, now);
           return { message: `Confirmed ${lower(f.label)}. ${n} confirmation${n > 1 ? "s" : ""} now.`, cells: [changed(a.entity, node, f.key)] };
         }
@@ -1421,7 +1823,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           s.values[k] = { ...cur, status: "removed" };
           delete s.values[k].reporters;
           delete s.verifications[k];
-          if (cur.by !== "seed") {
+          if (!isSystem(cur.by)) {
             const paid = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && (l.reason === "fill" || l.reason === "confirm")).reduce((n, l) => n + l.delta, 0);
             const back = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && l.reason === "reversal").reduce((n, l) => n + l.delta, 0);
             if (paid + back > 0) s.ledger.push({ memberId: cur.by, delta: -(paid + back), reason: "reversal", ref: k, at: now });
@@ -1431,12 +1833,99 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           delete s.unlocks[k];
           return { message: "Removed. The field is open to fill again." };
         }
+        case "benchRate": {
+          // A rate for the benchmarks only: it counts in the medians and is never on a record.
+          const r = readRate(stripInvisible(a.rate).trim().slice(0, 60), a.pricing === "Hourly" || a.pricing === "Monthly retainer" ? a.pricing : null);
+          if (!r) throw new ActionError(RATE_HELP);
+          const mine = s.benchRates.filter((b) => b.by === me.id);
+          let engagementId: string | null = null;
+          let fn: string | null;
+          let revenue: string | null;
+          const given = (list: string[], raw: unknown, error: string) => {
+            if (raw === undefined || raw === null || raw === "") return null;
+            if (!list.includes(String(raw))) throw new ActionError(error);
+            return String(raw);
+          };
+          const askedFn = given(FUNCTIONS, a.function, "Pick a function from the list.");
+          const askedRevenue = given(RN_REVENUE, a.revenue, "Pick a revenue range from the list.");
+          const myFn = s.profiles[me.id]?.function ?? functionOf(s.profiles[me.id]?.title || me.title);
+          if (a.engagementId) {
+            const e = g.engagements.get(inId("engagement", a.engagementId));
+            if (!e) throw new ActionError("Record not found.");
+            if (!ownSeat(e.id) && !s.engagements.some((x) => x.id === e.id && x.by === me.id)) throw new ActionError("You can share a rate for a seat you held or added.");
+            if (valueOf(e, s, "rate")?.by === me.id) throw new ActionError("Your rate is already on this seat, so it already counts in the benchmarks.");
+            if (mine.some((b) => b.engagementId === e.id)) throw new ActionError("You already shared a rate for this seat.");
+            engagementId = e.id;
+            fn = fnOf(e, s) ?? askedFn ?? myFn ?? "Other";
+            revenue = live(e, s, "revenue") ?? live(g.companies.get(e.companyId), s, "revenue") ?? askedRevenue;
+          } else {
+            fn = askedFn ?? myFn;
+            if (!fn) throw new ActionError("Pick a function from the list.");
+            revenue = askedRevenue;
+            if (mine.filter((b) => !b.engagementId).length >= BENCH_UNATTACHED_MAX)
+              throw new ActionError(`You can share ${BENCH_UNATTACHED_MAX} rates that aren't tied to a seat. Remove one to share another.`);
+          }
+          const id = `b_${randomBytes(9).toString("base64url")}`;
+          s.benchRates.push({ id, by: me.id, engagementId, fn, kind: r.kind, amount: r.amount, revenue: revenue && RN_REVENUE.includes(revenue) ? revenue : null, at: now });
+          const earned = awardFill(`bench.${id}`);
+          if (!earned) capped = true;
+          const bonus = payReferral();
+          return { message: `Added to the benchmarks. Nobody sees your rate.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`, id, capped };
+        }
+        case "benchRateRemove": {
+          const i = s.benchRates.findIndex((b) => b.id === String(a.id) && b.by === me.id);
+          if (i < 0) throw new ActionError("Rate not found.");
+          const ref = `bench.${s.benchRates[i].id}`;
+          s.benchRates.splice(i, 1);
+          // Take back the credit it earned.
+          const paid = s.ledger.filter((l) => l.memberId === me.id && l.ref === ref).reduce((n, l) => n + l.delta, 0);
+          if (paid > 0) s.ledger.push({ memberId: me.id, delta: -paid, reason: "reversal", ref, at: now });
+          return { message: `Removed your rate from the benchmarks.${paid > 0 ? ` −${paid} credit.` : ""}` };
+        }
+        case "notMine": {
+          // "This isn't me": a seat matched to this member by name that they never held.
+          const e = g.engagements.get(inId("engagement", a.engagementId));
+          if (!e || !ownSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
+          s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
+          return { message: "Got it. That seat is no longer linked to you.", id: pubId(e.id), cells: ENG_GATED.map((k) => changed("engagement", e, k)) };
+        }
+        case "signal": {
+          const name = String(a.name);
+          if (!SIGNAL_NAMES.has(name)) throw new ActionError("Unknown action.");
+          const where = String(a.where ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "unknown";
+          if (name === "pro_interest") {
+            // Once per member.
+            if (!s.profiles[me.id]?.proInterest) {
+              s.profiles[me.id] = { ...(s.profiles[me.id] ?? {}), proInterest: true };
+              addSignal(s, me.id, name, where, now);
+            }
+            return { message: "You're on the list." };
+          }
+          // The server already counted a refused unlock. The app's own "wall" for the same
+          // moment would count it twice, so it is dropped (a wall the app shows without
+          // asking the server is kept).
+          const counted =
+            name === "wall" && s.signals.some((x) => x.memberId === me.id && x.name === "wall" && x.where === "server" && nowMs - Date.parse(x.at) < 10_000);
+          if (!counted) addSignal(s, me.id, name, where, now);
+          return { message: "" };
+        }
+        case "settings": {
+          if (typeof a.digest === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.digest) delete p.digestOff;
+            else p.digestOff = true;
+            s.profiles[me.id] = p;
+            return { message: a.digest ? "Weekly email is on." : "Weekly email is off." };
+          }
+          return { message: "Saved." };
+        }
         default:
           throw new ActionError("Unknown action.");
       }
     };
 
     const out = run();
+    if (refusal.message) return { message: "", refused: refusal.message };
     // The actor's new counts, so the client can update the top bar at once.
     let added = 0;
     let unlocked = 0;
@@ -1448,9 +1937,378 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
     const { earned, resetsAt } = earning(s, me.id, nowMs);
     return { ...out, me: { credits: balance(s, me.id), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked } };
   });
+  if (out.refused) throw new ActionError(out.refused);
+  return out;
 }
 
-/** Admin export of the runtime state (for backups and audits). */
-export async function exportState(): Promise<State> {
-  return loadState();
+/**
+ * Admin export of the runtime state (for backups and audits). Rates shared for the benchmarks
+ * only go out without who shared them or which seat they are about: no admin view shows a
+ * member's private rate. (The daily snapshots on the data volume keep the full state.)
+ */
+export async function exportState(): Promise<Omit<State, "benchRates"> & { benchRates: Pick<StoredBenchRate, "fn" | "kind" | "amount" | "revenue">[] }> {
+  const s = await loadState();
+  return { ...s, benchRates: s.benchRates.map(({ fn, kind, amount, revenue }) => ({ fn, kind, amount, revenue })) };
+}
+
+/* ---------- last seen ---------- */
+
+const SEEN_EVERY = 6 * 60 * 60 * 1000;
+const seenAt = new Map<string, number>();
+
+/** Record a member's visit (for the pilot's active counts). Written at most once per 6 hours per member. */
+export async function touch(token: string | null | undefined): Promise<void> {
+  if (!token) return;
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const me = memberByToken(seed, token, s);
+  if (!me) return;
+  const now = Date.now();
+  const last = seenAt.get(me.id) ?? Date.parse(s.seen[me.id] ?? "");
+  if (Number.isFinite(last) && now - last < SEEN_EVERY) return;
+  seenAt.set(me.id, now);
+  await mutate((d) => {
+    d.seen[me.id] = new Date(now).toISOString();
+  });
+}
+
+/* ---------- the weekly scan: open roles, opened and closed with dates ---------- */
+
+/** A followed role closes when a clean scan of its board hasn't listed it for this long. */
+const CLOSE_AFTER = 10 * DAY;
+/** Open roles that came with the seed close this long after the seed was built, unless a scan sees them. */
+const SEED_ROLE_LIFE = 35 * DAY;
+/** Whatever the board's health, nothing stays open this long unseen (as long as some board answered). */
+const STALE_AFTER = 60 * DAY;
+const SCAN_MAX_ROLES = 2000;
+
+const squeeze = (raw: unknown, max: number) => stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, max);
+/** "https://www.Acme.com/jobs" -> "acme.com", or null. */
+const hostOf = (raw: unknown) => {
+  const h = String(raw ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0];
+  return /^[\w-]+(\.[\w-]+)*\.[a-z]{2,}$/.test(h) ? h : null;
+};
+const urlKey = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#]+$/, "");
+
+/**
+ * Store one scan. A posting seen again stays open; a closed one seen again reopens; a new one
+ * gets its company (matched by website, then by name, else added) and an engagement whose
+ * facts belong to "scan". An open role the scan did not see closes once its board has answered
+ * cleanly and it was last listed more than 10 days ago, so a board outage closes nothing.
+ * `nowIso` is the scan's time (tests pass one to move the clock).
+ */
+export async function applyScan(found: ScanCollectResult, nowIso?: string): Promise<ScanApplyResult> {
+  return mutate((s, seed): ScanApplyResult => {
+    const now = iso(nowIso, new Date().toISOString());
+    const nowMs = Date.parse(now);
+    const g = graph(seed, s);
+    keepSeedTracks(seed, s);
+    const roles = s.scan.roles;
+    const res: ScanApplyResult = { at: now, opened: 0, stillOpen: 0, closed: 0, reopened: 0, companiesAdded: 0 };
+
+    const keyOfEng = new Map<string, string>();
+    const keyOfUrl = new Map<string, string>();
+    for (const [k, r] of Object.entries(roles)) {
+      keyOfEng.set(r.engagementId, k);
+      if (r.url) keyOfUrl.set(urlKey(r.url), k);
+    }
+    const byHost = new Map<string, CompanyNode>();
+    const byName = new Map<string, CompanyNode>();
+    for (const c of g.companies.values()) {
+      const h = hostOf(live(c, s, "website"));
+      if (h && !byHost.has(h)) byHost.set(h, c);
+      if (!byName.has(slug(c.name))) byName.set(slug(c.name), c);
+    }
+    const engsAt = new Map<string, EngNode[]>();
+    for (const e of g.engagements.values()) engsAt.set(e.companyId, [...(engsAt.get(e.companyId) ?? []), e]);
+
+    const def = (k: string) => fieldDef("engagement", k)!;
+    const put = (id: string, field: string, value: string) => {
+      const k = fkey(id, field);
+      if (s.values[k]?.value !== value) delete s.verifications[k]; // confirmations were for the old value
+      s.values[k] = { value, by: "scan", at: now, status: "live" };
+    };
+    const roleSlug = (e: Node) => slug(live(e, s, "role") ?? "");
+    const openNow = (e: EngNode) => {
+      const k = keyOfEng.get(e.id);
+      if (k && roles[k].closedAt) return false;
+      const status = live(e, s, "status");
+      return status ? status === "Open role" : e.source === "Demand scan";
+    };
+
+    const seen = new Set<string>();
+    for (const raw of (Array.isArray(found?.roles) ? found.roles : []).slice(0, SCAN_MAX_ROLES)) {
+      const company = squeeze(raw?.company, 80);
+      const title = squeeze(raw?.title, 120);
+      if (company.length < 2 || title.length < 2 || company.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) continue;
+      // A link too long to store whole loses its query string (tracking codes) rather than its end.
+      const link = String(raw.url ?? "").trim();
+      const url = cleanValue(def("posting"), link.length > 200 ? link.split(/[?#]/)[0] : link).value ?? "";
+      const source = squeeze(raw.source, 60) || "scan";
+      const key = squeeze(raw.key, 200) || `${slug(company)}:${slug(title)}`;
+      const domain = hostOf(raw.domain);
+      let co = (domain ? byHost.get(domain) : undefined) ?? byName.get(slug(company));
+
+      // The same posting: by its key, by its link, or the same title on a followed role at that company.
+      let k = roles[key] ? key : url ? keyOfUrl.get(urlKey(url)) : undefined;
+      if (!k && co) k = (engsAt.get(co.id) ?? []).filter((e) => keyOfEng.has(e.id) && roleSlug(e) === slug(title)).map((e) => keyOfEng.get(e.id))[0];
+      if (k && !g.engagements.has(roles[k].engagementId)) {
+        delete roles[k]; // its record is gone (the seed was rebuilt)
+        k = undefined;
+      }
+      if (k) {
+        if (seen.has(k)) continue; // the same role on two boards
+        seen.add(k);
+        const r = roles[k];
+        r.lastSeen = now;
+        r.source = source;
+        if (url) r.url = url;
+        if (!r.closedAt) res.stillOpen++;
+        else if (r.closedBy !== "filled") {
+          // Listed again: reopen. (A role a member filled stays filled while the posting lingers.)
+          r.closedAt = null;
+          delete r.closedBy;
+          put(r.engagementId, "status", "Open role");
+          res.reopened++;
+        }
+        continue;
+      }
+
+      if (!co) {
+        const id = newId("c", company);
+        s.companies.push({ id, name: company, by: "scan", at: now });
+        co = { id, seedFields: { name: company }, name: company };
+        g.companies.set(id, co);
+        byName.set(slug(company), co);
+        res.companiesAdded++;
+      }
+      if (domain && !valueOf(co, s, "website")) {
+        put(co.id, "website", domain);
+        if (!byHost.has(domain)) byHost.set(domain, co);
+      }
+      // An open role a member already added under this title becomes the followed one.
+      let e = (engsAt.get(co.id) ?? []).find((x) => !keyOfEng.has(x.id) && openNow(x) && roleSlug(x) === slug(title));
+      if (!e) {
+        const id = newId("e", company);
+        s.engagements.push({ id, companyId: co.id, by: "scan", at: now, source: "Demand scan" });
+        e = { id, seedFields: { source: "Demand scan" }, companyId: co.id, verified: false, source: "Demand scan" };
+        g.engagements.set(id, e);
+        engsAt.set(co.id, [...(engsAt.get(co.id) ?? []), e]);
+      }
+      const eng = e;
+      /** Fill a gap with what the posting says. Whatever is already on the record stays. */
+      const fill = (field: string, value: unknown) => {
+        if (value === null || value === undefined || value === "" || valueOf(eng, s, field)) return;
+        const clean = cleanValue(def(field), value).value;
+        if (clean) put(eng.id, field, clean);
+      };
+      fill("role", title);
+      fill("function", raw.function && FUNCTIONS.includes(raw.function) ? raw.function : functionOf(title));
+      fill("type", raw.type && ENGAGEMENT_TYPES.includes(raw.type) ? raw.type : /\binterim\b/i.test(title) ? "Interim" : /\bfractional\b/i.test(title) ? "Fractional" : null);
+      fill("status", "Open role");
+      fill("posting", url);
+      fill("rate", raw.rate);
+      const hours = Math.round(Number(raw.hoursPerWeek));
+      if (hours >= 1 && hours <= 80) fill("hours", String(hours));
+      roles[key] = { engagementId: eng.id, companyId: co.id, firstSeen: now, lastSeen: now, closedAt: null, url, source, postedAt: raw.postedAt ? iso(raw.postedAt, "") || null : null };
+      keyOfEng.set(eng.id, key);
+      if (url) keyOfUrl.set(urlKey(url), key);
+      seen.add(key);
+      res.opened++;
+    }
+
+    const sources: ScanSourceResult[] = (Array.isArray(found?.sources) ? found.sources : []).slice(0, 50).map((x) => ({
+      source: squeeze(x?.source, 60) || "unknown",
+      fetched: Math.max(0, Math.round(Number(x?.fetched) || 0)),
+      matched: Math.max(0, Math.round(Number(x?.matched) || 0)),
+      ...(x?.error ? { error: squeeze(x.error, 200) } : {}),
+    }));
+    // Boards that answered with listings. Only their roles can close on the 10-day rule.
+    const clean = new Set(sources.filter((x) => !x.error && x.fetched > 0).map((x) => x.source));
+    for (const [k, r] of Object.entries(roles)) {
+      if (r.closedAt || seen.has(k)) continue;
+      const e = g.engagements.get(r.engagementId);
+      if (!e) continue;
+      const unseen = nowMs - Date.parse(r.lastSeen);
+      const due =
+        r.source === "seed" ? clean.size > 0 && unseen > SEED_ROLE_LIFE : (clean.has(r.source) && unseen > CLOSE_AFTER) || (clean.size > 0 && unseen > STALE_AFTER);
+      if (!due) continue;
+      r.closedAt = now;
+      r.closedBy = "scan";
+      const status = live(e, s, "status");
+      if (!status || status === "Open role") put(e.id, "status", "Closed");
+      res.closed++;
+    }
+    s.scan.lastRunAt = now;
+    s.scan.sources = sources;
+    return res;
+  });
+}
+
+export interface ScanRun {
+  result: ScanApplyResult;
+  sources: ScanSourceResult[];
+  /** Weekly emails sent after this scan. */
+  digests: number;
+}
+let scanFlight: Promise<ScanRun> | null = null;
+let scanTriedAt = 0;
+
+/** Scan the job boards, store what was found, then send the weekly email. One at a time: a second call joins the first. */
+export function runScan(origin?: string): Promise<ScanRun> {
+  scanFlight ??= (async () => {
+    const t0 = Date.now();
+    scanTriedAt = t0;
+    try {
+      // Tests never reach a job board.
+      const found = process.env.RN_SCAN_TEST === "1" ? { roles: [], sources: [] } : await collectOpenRoles();
+      const result = await applyScan(found);
+      const digests = await sendDigests(result.at, origin).catch((e) => (console.error("digest failed", e), 0));
+      const failed = found.sources.filter((x) => x.error).length;
+      console.log(
+        `scan: ${found.roles.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
+          `closed ${result.closed}, reopened ${result.reopened}, companies added ${result.companiesAdded}, emails ${digests}, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+      );
+      return { result, sources: found.sources, digests };
+    } finally {
+      scanFlight = null;
+    }
+  })();
+  return scanFlight;
+}
+
+/**
+ * Start a scan in the background when one is due: RN_SCAN=1, and the last run is more than 7
+ * days old (or there is none). A run where every board failed is tried again after 6 hours.
+ * Called on page loads, so it must stay cheap: at most one try an hour.
+ */
+export async function maybeScan(origin?: string): Promise<void> {
+  if (process.env.RN_SCAN !== "1" || scanFlight || Date.now() - scanTriedAt < 60 * 60_000) return;
+  const s = await loadState();
+  const age = Date.now() - Date.parse(s.scan.lastRunAt ?? "");
+  const allFailed = s.scan.sources.length > 0 && !s.scan.sources.some((x) => !x.error && x.fetched > 0);
+  if (Number.isFinite(age) && age < (allFailed ? 6 * 60 * 60_000 : WEEK)) return;
+  scanTriedAt = Date.now();
+  void runScan(origin).catch((e) => console.error("scan failed", e));
+}
+
+/* ---------- the weekly email ---------- */
+
+const unsubSig = (memberId: string) => createHmac("sha256", ID_KEY).update(`unsubscribe:${memberId}`).digest("base64url").slice(0, 22);
+
+/** The unsubscribe link sets digestOff for the member it was signed for. False when the link isn't valid. */
+export async function unsubscribe(m: unknown, sig: unknown): Promise<boolean> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const member = memberIndex(seed, s).all.find((x) => pubId(x.id) === String(m ?? ""));
+  if (!member) return false;
+  const want = Buffer.from(unsubSig(member.id));
+  const got = Buffer.from(String(sig ?? ""));
+  if (want.length !== got.length || !timingSafeEqual(want, got)) return false;
+  await mutate((d) => {
+    d.profiles[member.id] = { ...(d.profiles[member.id] ?? {}), digestOff: true };
+  });
+  return true;
+}
+
+let digestRunning = false;
+
+/**
+ * What each member's weekly email would say right now: one entry per member with an email
+ * who hasn't turned it off and hasn't had one in the last 6 days. Empty in a week with no new
+ * open roles. Server-side only (it holds every member's email).
+ */
+export async function digestList(nowIso: string | undefined, base: string): Promise<{ memberId: string; data: DigestData }[]> {
+  const now = iso(nowIso, new Date().toISOString());
+  const nowMs = Date.parse(now);
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  const g = graph(seed, s);
+  const idx = memberIndex(seed, s);
+  const tracks = tracksOf(seed, s);
+
+  const fresh: EngNode[] = [];
+  let closedRoles = 0;
+  const missing = new Map<string, number>();
+  for (const e of g.engagements.values()) {
+    const holder = seatHolder(s, idx, e.id, valueOf(e, s, "operator"));
+    if (holder) missing.set(holder.id, (missing.get(holder.id) ?? 0) + missingOnSeat(e, s));
+    const t = tracks.get(e.id);
+    if (!t) continue;
+    if (t.closedAt) {
+      if (nowMs - Date.parse(t.closedAt) < WEEK) closedRoles++;
+    } else if (nowMs - Date.parse(t.firstSeen) < WEEK && isOpenRole(e, s, tracks)) fresh.push(e);
+  }
+  if (!fresh.length) return [];
+  const count = new Map<string, number>();
+  for (const e of fresh) {
+    const fn = fnOf(e, s) ?? "Other";
+    count.set(fn, (count.get(fn) ?? 0) + 1);
+  }
+  const byFunction = [...count].map(([fn, n]) => ({ function: fn, n })).sort((a, b) => b.n - a.n || a.function.localeCompare(b.function));
+
+  const out: { memberId: string; data: DigestData }[] = [];
+  for (const m of idx.all) {
+    if (!m.email || !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(m.email)) continue;
+    const prof = s.profiles[m.id] ?? {};
+    if (prof.digestOff) continue;
+    const last = Date.parse(s.digest.members[m.id] ?? "");
+    if (Number.isFinite(last) && nowMs - last < 6 * DAY) continue;
+    const fn = prof.function ?? functionOf(prof.title || m.title);
+    const mine = fn ? fresh.filter((e) => fnOf(e, s) === fn) : [];
+    out.push({
+      memberId: m.id,
+      data: {
+        name: m.name,
+        email: m.email,
+        function: fn,
+        newRoles: fresh.length,
+        newRolesMine: mine.length,
+        newRolesMineHidden: mine.filter((e) => identityHidden(g, s, idx, tracks, m, e.companyId)).length,
+        byFunction,
+        closedRoles,
+        seatFactsMissing: missing.get(m.id) ?? 0,
+        credits: balance(s, m.id),
+        appUrl: base,
+        unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
+      },
+    });
+  }
+  return out;
+}
+
+/**
+ * Email every member who wants it the week's new open roles. Dormant until email is set up
+ * (and off with RN_DIGEST=0). Nothing goes out in a week with no new roles, and nobody gets
+ * two inside 6 days. One at a time; a failed send is logged and the rest go on.
+ * Returns how many were sent.
+ */
+export async function sendDigests(nowIso?: string, origin?: string): Promise<number> {
+  if (!digestOn() || digestRunning) return 0;
+  const base = (process.env.RN_PUBLIC_URL || origin || "").replace(/\/$/, "");
+  if (!base) {
+    console.error("weekly email not sent: set RN_PUBLIC_URL so it can link back");
+    return 0;
+  }
+  digestRunning = true;
+  try {
+    const now = iso(nowIso, new Date().toISOString());
+    let sent = 0;
+    for (const { memberId, data } of await digestList(now, base)) {
+      try {
+        // Someone may have unsubscribed while the run was going.
+        if ((await loadState()).profiles[memberId]?.digestOff) continue;
+        const mail = renderDigest(data);
+        if (!(await sendEmail(data.email, mail.subject, mail.text, mail.html))) continue;
+        sent++;
+        await mutate((draft) => {
+          draft.digest.members[memberId] = now;
+          draft.digest.sent++;
+          draft.digest.lastSentAt = now;
+        });
+      } catch (e) {
+        console.error("weekly email failed for one member", e);
+      }
+    }
+    return sent;
+  } finally {
+    digestRunning = false;
+  }
 }

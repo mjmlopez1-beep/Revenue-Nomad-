@@ -10,9 +10,9 @@ services:
         value: "22"
       - key: RN_DATA_DIR
         value: /var/data
-      # Pilot: 50 starter credits (the landing page promises this number).
+      # Pilot: 25 starter credits (the landing page shows this number).
       - key: RN_STARTER_CREDITS
-        value: "50"
+        value: "25"
       # Keeps the V8 heap well inside the starter plan's 512 MB.
       - key: NODE_OPTIONS
         value: --max-old-space-size=320

@@ -192,6 +192,11 @@ export function functionOf(role: string | null | undefined): string | null {
   const r = ` ${String(role ?? "").toLowerCase()} `;
   if (!r.trim()) return null;
   const rules: [RegExp, string][] = [
+    // AI roles first: "AI SDR" and "GTM engineer" would otherwise read as Sales.
+    [
+      /\bgtm engineer|go[- ]to[- ]market engineer|\bai[- ]?(native|first|led|powered)\b.*\b(gtm|go[- ]to[- ]market|sales|marketing|revenue|growth)|\bai[\s-]+(gtm|go[- ]to[- ]market|sdrs?|bdrs?|sales|revenue|rev ?ops|marketing|growth|outbound|prospecting|automation|agents?|workflows?|enablement|operations|ops)\b|\b(gtm|go[- ]to[- ]market|sales|revenue|marketing|growth|outbound) ai\b/,
+      "AI GTM",
+    ],
     [/rev ?ops|revenue operations|sales operations|sales ops|marketing operations|gtm operations|operations analyst/, "RevOps"],
     [/enablement|training/, "Enablement"],
     [/product marketing|\bpmm\b/, "Product Marketing"],

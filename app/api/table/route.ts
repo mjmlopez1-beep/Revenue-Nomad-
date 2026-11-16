@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
 import { gzip } from "zlib";
 import {
-  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, memberByEmail, memberForToken, perform, searchMembers, type Action,
+  ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, type Action,
 } from "@/lib/table";
 import { emailEnabled, sendEmail, signInEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
@@ -45,6 +45,8 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?export=1    admins: download the runtime state (a backup).
+ *
+ * See also POST /api/table/scan (the weekly scan, for a cron) and GET /api/table/unsubscribe.
  */
 export async function GET(req: NextRequest) {
   const ip = clientIp(req);
@@ -67,6 +69,10 @@ export async function GET(req: NextRequest) {
       "content-disposition": `attachment; filename="trading-post-${new Date().toISOString().slice(0, 10)}.json"`,
     });
   }
+  // Neither holds the page up: the visit is noted (at most once per 6 hours per member), and a
+  // weekly scan starts in the background when one is due (only with RN_SCAN=1).
+  if (token) void touch(token).catch((e) => console.error("last seen not saved", e));
+  void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
   return sendJson(req, await buildView(token));
 }
 
@@ -130,7 +136,7 @@ export async function POST(req: NextRequest) {
   const token = req.cookies.get(COOKIE)?.value ?? null;
   if (limited(`act:${token ?? ip}`, 240, 60_000)) return err("Slow down a little.", 429);
   try {
-    return NextResponse.json(await perform(token, body.action as Action));
+    return NextResponse.json(await perform(token, body.action as Action, origin(req)));
   } catch (e) {
     if (e instanceof ActionError) return err(e.message);
     throw e;
