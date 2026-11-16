@@ -499,14 +499,24 @@ if args.clay:
     for e in engagements.values():
         eng_count[e["companyId"]] = eng_count.get(e["companyId"], 0) + 1
     by_domain = {}
+    by_key = {key_for(c["fields"]["name"]): c for c in companies.values()}
     for ck, c in list(companies.items()):
         x = clay.get(c["id"]) or clay.get("name:" + key_for(c["fields"]["name"]))
         if not x:
             continue
         domain = clean_url(x["domain"]).lower()
+        # A lookup that came back with another company's site (the domain names a different
+        # company on file, not this one) belongs to that company, e.g. "Lang" -> mangopay.com.
+        stem = key_for(domain.split(".")[0])
+        owner = by_key.get(stem)
+        if stem and stem not in key_for(c["fields"]["name"]) and owner is not None and owner is not c and "_clay" not in owner:
+            c = owner
+        prev = c.get("_domain")
+        if prev and c["id"] in [companies[k]["id"] for k in by_domain.get(prev, [])]:
+            by_domain[prev] = [k for k in by_domain[prev] if companies[k] is not c]
         c["_clay"] = x
         c["_domain"] = domain
-        by_domain.setdefault(domain, []).append(ck)
+        by_domain.setdefault(domain, []).append(next(k for k, v in companies.items() if v is c))
     # same domain = same company
     for domain, keys in by_domain.items():
         if len(keys) < 2:
