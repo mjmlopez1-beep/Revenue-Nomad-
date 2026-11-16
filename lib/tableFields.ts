@@ -38,6 +38,7 @@ export const BUSINESS_MODELS = ["B2B", "B2C", "B2B2C"];
 export const SOURCED_VIA = ["Referral", "Investor intro", "Former colleague", "Inbound", "Platform or marketplace", "Recruiter", "Cold outreach"];
 /** What the client hired the fractional to do. */
 export const HIRE_REASONS = [
+  "Move off founder-led sales",
   "Build the first sales motion",
   "Scale an existing team",
   "Replace a departed leader",
@@ -52,14 +53,15 @@ export const PRICING_MODELS = ["Monthly retainer", "Hourly", "Project fee", "Equ
 export const RN_EMPLOYEES = ["1–10", "11–50", "51–200", "201–500", "501–1,000", "1,001+"];
 /** GTM functions (role categories). Free to see, so members can filter by function without unlocking the role. */
 export const FUNCTIONS = [
-  "Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "Executive", "Other",
+  "Sales", "Marketing", "RevOps", "Customer Success", "Partnerships", "Growth", "Product Marketing", "Enablement", "AI GTM", "Executive", "Other",
 ];
 /** How a person relates to the company or to the fractional who worked there. */
 export const RELATIONSHIPS = ["Decision maker", "Reported to", "Reported to me", "Worked with", "Hiring for the seat"];
 export const ENGAGEMENT_TYPES = ["Fractional", "Interim", "Advisory", "Project", "Full-time"];
 /** Engagement types that count as fractional work (for the fractional-friendly signal). */
 export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"];
-export const STATUSES = ["Open role", "Active", "Ended"];
+/** "Closed" is an open role whose posting came down (the weekly scan sets it, with a date). */
+export const STATUSES = ["Open role", "Active", "Ended", "Closed"];
 
 /** What a company with an active open role is called until the member unlocks it (1 credit). */
 export const HIDDEN_COMPANY = "Hidden company";
@@ -136,7 +138,7 @@ export const GROUPS: GroupDef[] = [
       { key: "sourced", label: "How it was sourced", short: "Sourced via", kind: "choice", gated: true, options: SOURCED_VIA, hint: "How the client found the fractional" },
       { key: "pricing", label: "Pricing model", short: "Pricing", kind: "choice", gated: false, options: PRICING_MODELS },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
-      { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: true, placeholder: "15" },
+      { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: false, placeholder: "15" },
       { key: "posting", label: "Job posting", short: "Posting", kind: "url", gated: true, placeholder: "Link to the job post" },
       { key: "revenue", label: "Revenue at the time", short: "Revenue then", kind: "choice", gated: false, options: RN_REVENUE },
       { key: "employees", label: "Employees at the time", short: "Employees then", kind: "choice", gated: false, options: RN_EMPLOYEES },

@@ -19,3 +19,6 @@ data/company-domains.json.tmp
 __pycache__/
 data/intel-seed.key
 .claude/worktrees/
+
+# private data exports (rates, surveys). Never commit.
+data/*.private.*

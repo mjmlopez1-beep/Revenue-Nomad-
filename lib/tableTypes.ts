@@ -47,6 +47,17 @@ export interface EngagementRec {
   people: PersonRec[];
   /** ISO time of the newest fact on this engagement (for "new" badges). */
   updatedAt: string | null;
+  /**
+   * The viewer is the linked seat holder. Every fact on their own seat is visible to them
+   * without credits, and they are the best person to fill in what's missing ("Your seats").
+   */
+  yours?: boolean;
+  /**
+   * Open roles found by the weekly scan (and open roles from the seed): the day the posting
+   * was first seen and the day it stopped being listed (ISO dates). Free to see and to filter on.
+   */
+  opened?: string | null;
+  closed?: string | null;
 }
 
 export interface Friendly {
@@ -121,6 +132,22 @@ export interface Me {
   /** Facts this member added, and unlocked. */
   added: number;
   unlocked: number;
+  /** Weekly email of new open roles (on unless they turned it off). */
+  digest?: boolean;
+  /** Asked to be told when Pro is ready. */
+  proInterest?: boolean;
+  /** Rates this member shared for the benchmarks only. Never shown on a record or to anyone else. */
+  benchRates?: BenchRate[];
+}
+
+export interface BenchRate {
+  id: string;
+  /** The seat it is about, when shared from one of the member's own seats. */
+  engagementId: string | null;
+  function: string;
+  kind: "monthly" | "hourly";
+  /** Dollars a month or dollars an hour. */
+  amount: number;
 }
 
 export interface LedgerRow {
@@ -134,14 +161,20 @@ export interface LedgerRow {
 /** One benchmark cell: values only once at least `minN` rates are on file, so none can be traced back. */
 export interface RateStat {
   n: number;
+  /** Rates this group needs before it shows numbers: 5, or 20 when it includes Rate Index data. */
+  min?: number;
   p25?: number;
   median?: number;
   p75?: number;
 }
 export interface BenchmarkRow {
   function: string;
-  /** Company size band at the time of the seat, or "All". */
-  size: string;
+  /** Deprecated: use `revenue`. Kept until the client moves over. */
+  size?: string;
+  /** Client revenue band at the time of the seat (RN_REVENUE), or "All". */
+  revenue?: string;
+  /** The group includes points from Revenue Nomad's Rate Index (survey and contract data). */
+  indexed?: boolean;
   /** Monthly retainers, in dollars a month. */
   monthly: RateStat;
   /** Hourly rates, in dollars an hour. */
@@ -193,8 +226,40 @@ export interface View {
   }[];
   /** Whether sign-in emails can be sent (an email provider is configured). */
   email: boolean;
-  /** Rate benchmarks by function and company size (signed in only). */
+  /** Rate benchmarks by function and client revenue band (signed in only). */
   benchmarks?: Benchmarks;
+  /** The weekly scan of open fractional GTM roles (signed in only). */
+  scan?: ScanSummary;
+  /** Pilot metrics. Admins only. */
+  admin?: AdminStats;
+}
+
+export interface ScanSummary {
+  lastRunAt: string | null;
+  /** Open roles on file now, opened in the last 7 days, and closed in the last 30. */
+  openNow: number;
+  opened7: number;
+  closed30: number;
+  /** Open roles in the viewer's function that opened in the last 7 days. */
+  mine7: number;
+}
+
+export interface AdminStats {
+  members: { total: number; joined: number; onboarded: number; active7: number; active30: number };
+  credits: { atZero: number; low: number; median: number };
+  /** Facts added and unlocked, all time and in the last 7 days. */
+  activity: { adds: number; unlocks: number; adds7: number; unlocks7: number };
+  /** Members who hit zero credits while trying to unlock, and how many times. */
+  walls: { members: number; hits: number };
+  /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
+  pro: { interested: number; views: number; byWhere: Record<string, number> };
+  topUnlocked: { field: string; n: number }[];
+  topAdded: { field: string; n: number }[];
+  scan: { lastRunAt: string | null; openNow: number; opened7: number; closed30: number; sources: { source: string; fetched: number; matched: number; error?: string }[] };
+  digest: { enabled: boolean; lastSentAt: string | null; sent: number; optedOut: number };
+  /** Members linked to a seat on file, and facts still missing on those seats. */
+  seats: { linkedMembers: number; factsMissing: number };
+  benchmarks: { memberRates: number; privateRates: number; indexRates: number };
 }
 
 export type Action =
@@ -230,7 +295,23 @@ export type Action =
   | { type: "report"; entity: Entity; id: string; field: string }
   /** Confirm a value you can see is correct (one confirmation per member per value). */
   | { type: "verify"; entity: Entity; id: string; field: string }
-  | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" };
+  | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" }
+  /**
+   * Share a rate for the benchmarks only. It counts in the medians and is never shown on a
+   * record or to another member. Earns 1 credit (inside the daily cap). One per seat.
+   */
+  | { type: "benchRate"; engagementId?: string; function?: string; pricing: "Monthly retainer" | "Hourly"; rate: string; revenue?: string }
+  | { type: "benchRateRemove"; id: string }
+  /** "This isn't me": unlink the viewer from a seat matched to them by name. */
+  | { type: "notMine"; engagementId: string }
+  /**
+   * Product signals for the pilot: hitting zero credits on an unlock ("wall"), seeing the Pro
+   * offer ("pro_view") and asking to hear about Pro ("pro_interest"). `where` names the place.
+   */
+  | { type: "signal"; name: "wall" | "pro_view" | "pro_interest"; where: string }
+  | { type: "settings"; digest?: boolean }
+  /** Admins: run the open-role scan now. */
+  | { type: "scanNow" };
 
 /**
  * What POST { action } returns. `cells` are the cells the action changed, as the actor now
