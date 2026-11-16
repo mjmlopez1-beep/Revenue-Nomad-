@@ -6,6 +6,9 @@
  * are free and which cost a credit, questions, and the join form again.
  * One display heading. One volt button in view at a time: the join form's when a form is on
  * screen, the nav's when none is. The product visual is static HTML.
+ *
+ * It renders before the view arrives (`view` null): everything but the counts is fixed copy,
+ * so the page is up at once and the counts fill in when the view lands.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
@@ -13,53 +16,64 @@ import { Brand, IconLock, Num, type View } from "../ui/shared";
 import { EARN_CAP, GROUPS, REFERRAL_BONUS, type Entity } from "@/lib/tableFields";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
+import { Questions } from "./Questions";
+import { contactOf, mailto, signInFailText } from "./contact";
 import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
 
 export interface LandingProps {
-  /** Signed-out view: only `stats` and `email` are filled; companies is empty. */
-  view: View;
+  /**
+   * Signed-out view: only `stats`, `email` and `contact` are filled; companies is empty.
+   * Null while it loads: the page shows at once and the counts fill in when it arrives.
+   */
+  view: View | null;
   /** Call after a successful join (no email provider) or sign-in, to load the signed-in view. */
   onSignedIn: () => Promise<void> | void;
+  /** A personal link (?k=) that did not sign the visitor in: Sign in opens with this message. */
+  signInError?: string | null;
 }
 
-/** The server's default starter balance, used only if the view predates stats.starter. */
+/** The server's default starter balance, used until the view arrives (or if it predates stats.starter). */
 const STARTER_FALLBACK = 25;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
 /** What a member comes here to look up, and what each one costs. */
-const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
-  {
-    title: "Open fractional roles",
-    body: "We check for open fractional GTM roles every week and date each one, so you can tell a new role from one that has sat for months. The company stays hidden until you unlock it.",
-    cost: "1 credit for the company",
-  },
-  {
-    title: "Companies that hire fractionals",
-    body: "See which companies brought in a fractional, for which GTM function and how recently the last seat started.",
-    cost: null,
-  },
-  {
-    title: "Companies yet to hire your function",
-    body: "A company that hired a fractional CMO and a RevOps lead may need sales next. One filter shows the ones that have not hired your function.",
-    cost: null,
-  },
-  {
-    title: "The fractional who held the seat",
-    body: "Unlock the seat holder's name and ask how it went before your first call. Most seat holders are members.",
-    cost: "1 credit",
-  },
-  {
-    title: "What the seat pays",
-    body: "See median monthly and hourly rates by function and client revenue. They come from Revenue Nomad's Rate Index and the rates members share. A median shows only with enough rates behind it, so nobody can pick out yours.",
-    cost: null,
-  },
-  {
-    title: "Who does the hiring",
-    body: "See who makes the hiring call at each company. Titles are free. A name, an email, a phone number or a LinkedIn profile is 1 credit each.",
-    cost: "1 credit each",
-  },
-];
+function lookups(intro: string | null): { title: string; body: string; cost: string | null }[] {
+  return [
+    {
+      title: "Open fractional roles",
+      body: "We check for open fractional GTM roles every week and date each one, so you can tell a new role from one that has sat for months. The company stays hidden until you unlock it, and that one credit also shows the role and the job posting.",
+      cost: "1 credit",
+    },
+    {
+      title: "Companies that hire fractionals",
+      body: "See which companies brought in a fractional, for which GTM function and how recently the last seat started.",
+      cost: null,
+    },
+    {
+      title: "Companies yet to hire your function",
+      body: "A company that hired a fractional CMO and a RevOps lead may need sales next. One filter shows the ones that have not hired your function.",
+      cost: null,
+    },
+    {
+      title: "The fractional who held the seat",
+      body: intro
+        ? "Unlock who held the seat, then ask us for an intro or find them on LinkedIn, and hear how it went before your first call. Most seat holders are Revenue Nomad members."
+        : "Unlock who held the seat, then find them on LinkedIn and hear how it went before your first call. Most seat holders are Revenue Nomad members.",
+      cost: "1 credit",
+    },
+    {
+      title: "What the seat pays",
+      body: "See median monthly and hourly rates by function and client revenue. They start from Revenue Nomad's Rate Index and grow as members share rates. A number shows only once at least 5 different people have a rate in the group, and it never says who they are.",
+      cost: null,
+    },
+    {
+      title: "Who does the hiring",
+      body: "See who makes the hiring call at each company. Titles are free. A name or a LinkedIn profile is 1 credit each, and so is an email or a phone number once a member adds one.",
+      cost: "1 credit each",
+    },
+  ];
+}
 
 /**
  * Free and locked fields, read from the field definitions so this page can't drift from what
@@ -68,7 +82,12 @@ const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
  */
 const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[]; note?: string }[] = (
   [
-    { entity: "company", label: "The company", freeFirst: ["Name"], note: "While a company has an open role, its name, website and LinkedIn are hidden. One credit unlocks all three. When the role closes, they show for everyone again." },
+    {
+      entity: "company",
+      label: "The company",
+      freeFirst: ["Name"],
+      note: "While a company has an open role, its name, website and LinkedIn are hidden. One credit shows the company, the role and the job posting together. When the role closes, the company shows for everyone again.",
+    },
     { entity: "engagement", label: "The seat", freeLast: ["Open and closed dates"] },
     { entity: "contact", label: "A hiring contact" },
   ] as { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[]
@@ -82,35 +101,6 @@ const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[];
     note: row.note,
   };
 });
-
-/** The questions, with the starter balance the server actually gives. */
-const faq = (starter: number): [string, string][] => [
-  [
-    "Where does all of this come from?",
-    "From fractional work members published on Revenue Nomad, member success stories and a weekly check for open fractional GTM roles. Members add the rest, one fact at a time.",
-  ],
-  [
-    "What will other members see about me?",
-    "Your name and title show on seats you held, behind a lock that costs a member 1 credit. Members can also find you by name when they add a seat you held. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
-  ],
-  [
-    "What happens to a rate I share?",
-    "A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or you can share a rate privately. Then it counts in the medians and nobody sees it, on the seat or anywhere else.",
-  ],
-  [
-    "What if something is wrong?",
-    "Report it. After two reports it is hidden from everyone until we review it. If we remove it, the member who added it loses that credit and everyone who unlocked it gets theirs back.",
-  ],
-  [
-    `Why can I only earn ${EARN_CAP} credits a day?`,
-    `So nobody has a reason to add guesses for credits. Invite and confirmation bonuses count toward the ${EARN_CAP}. A bonus that would take you past it is held and paid when you have room.`,
-  ],
-  ["Is there a limit on unlocking?", "Yes. A new account can unlock 20 facts in its first 24 hours and 100 a day after that."],
-  [
-    "What does it cost?",
-    `Nothing. The pilot is free and you start with ${starter} credits. If you run low, add something you know or invite a fractional you trust.`,
-  ],
-];
 
 /**
  * First name of the member whose invite link brought this visitor here. Root saves the
@@ -158,38 +148,56 @@ function useFormInView(...refs: React.RefObject<HTMLElement | null>[]): boolean 
   return inView;
 }
 
-export default function Landing({ view, onSignedIn }: LandingProps) {
-  const [signIn, setSignIn] = useState<{ open: boolean; note: string | null }>({ open: false, note: null });
+/** A count, or a quiet bar the size of one while the view is on its way. */
+function Count({ n }: { n: number | undefined }) {
+  return typeof n === "number" ? <Num>{fmt(n)}</Num> : <span className="lp-skel" aria-label="Loading" />;
+}
+
+type SignInState = { open: boolean; note: string | null; tone: "info" | "error" };
+
+export default function Landing({ view, onSignedIn, signInError = null }: LandingProps) {
+  const [signIn, setSignIn] = useState<SignInState>(() =>
+    signInError ? { open: true, note: signInFailText(signInError, "clicked"), tone: "error" } : { open: false, note: null, tone: "info" },
+  );
   const heroForm = useRef<HTMLDivElement>(null);
   const finalForm = useRef<HTMLDivElement>(null);
-  const s = view.stats;
+  // An answer without stats (an error body) is treated like one that hasn't arrived.
+  const s = view?.stats ?? null;
+  const emailOn = !!view?.email;
+  const { support, intro } = contactOf(view);
   // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 25).
-  const starter = s.starter ?? STARTER_FALLBACK;
+  const starter = s?.starter ?? STARTER_FALLBACK;
   // Roles first seen in the last 7 days. A server that predates the count falls back to what is open now.
-  const opened = s.openedWeek ?? 0;
+  const opened = s?.openedWeek ?? 0;
   const inviter = useInviter();
   const formInView = useFormInView(heroForm, finalForm);
 
+  // A failed ?k= link that arrives after the page is up opens Sign in with the message too.
+  useEffect(() => {
+    if (signInError) setSignIn({ open: true, note: signInFailText(signInError, "clicked"), tone: "error" });
+  }, [signInError]);
+
   /** Take the visitor to the nearest join form and focus it (email, or name once the email is in). */
   const toJoin = useCallback(() => {
-    setSignIn({ open: false, note: null });
+    setSignIn({ open: false, note: null, tone: "info" });
     const mid = window.innerHeight / 2;
     const dist = (el: HTMLElement | null) => (el ? Math.abs(el.getBoundingClientRect().top + el.offsetHeight / 2 - mid) : Infinity);
     const target = dist(finalForm.current) < dist(heroForm.current) ? finalForm.current : heroForm.current;
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
     setTimeout(() => target?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true }), 350);
   }, []);
-  const openSignIn = useCallback((note: string | null = null) => setSignIn({ open: true, note }), []);
-  const closeSignIn = useCallback(() => setSignIn({ open: false, note: null }), []);
+  const openSignIn = useCallback((note: string | null = null) => setSignIn({ open: true, note, tone: "info" }), []);
+  const closeSignIn = useCallback(() => setSignIn({ open: false, note: null, tone: "info" }), []);
 
-  const proof: [number, string][] = [
-    [s.companies, "companies"],
-    [s.engagements, "seats on file"],
-    [s.people, "hiring contacts"],
-    [s.members, "members"],
+  const proof: [number | undefined, string][] = [
+    [s?.companies, "companies"],
+    [s?.engagements, "seats on file"],
+    [s?.people, "hiring contacts"],
+    [s?.members, "members"],
   ];
 
-  const joinHint = "The pilot is free. A credit unlocks one fact, like a rate or a name. Add something you know and you earn one back.";
+  const joinHint = "The pilot is free. A credit shows you one thing another member added, like who held a seat. Add something you know and you earn one back.";
+  const supportHref = support ? mailto(support, "Trading Post question") : null;
 
   return (
     <div className="lp">
@@ -228,7 +236,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                     <Num>{fmt(opened)}</Num> new fractional {opened === 1 ? "role" : "roles"} this week
                   </span>
                 </p>
-              ) : s.openRoles > 0 ? (
+              ) : s && s.openRoles > 0 ? (
                 <p className="lp-live">
                   <span className="live-dot live-dot-lg" aria-hidden />
                   <span>
@@ -244,12 +252,15 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                 and what it paid.
               </p>
               {inviter ? (
-                <p className="lp-invited">
-                  {inviter} invited you. Add one fact you know and you each get <span className="num">{REFERRAL_BONUS}</span> credits.
-                </p>
+                <div className="lp-invited">
+                  <p>
+                    {inviter} invited you. Add one fact to a company or a seat and you both get <span className="num">{REFERRAL_BONUS}</span> credits.
+                  </p>
+                  <p className="lp-invited-small">Invites from the same network earn no bonus.</p>
+                </div>
               ) : null}
               <div className="lp-hero-form" ref={heroForm}>
-                <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" hint={joinHint} />
+                <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="hero" hint={joinHint} />
               </div>
               <p className="lp-hero-member">
                 Already a member?{" "}
@@ -265,14 +276,14 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         </section>
 
         {/* ---------- proof ---------- */}
-        <section className="lp-proof" aria-label="Trading Post in numbers">
+        <section className="lp-proof" aria-label="Trading Post in numbers" aria-busy={!s}>
           <div className="lp-wrap">
             <dl className="lp-proof-grid">
               {proof.map(([n, label]) => (
                 <div key={label} className="lp-proof-item">
                   <dt className="lp-proof-label">{label}</dt>
                   <dd className="lp-proof-num">
-                    <Num>{fmt(n)}</Num>
+                    <Count n={n} />
                   </dd>
                 </div>
               ))}
@@ -290,7 +301,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               <h2 className="lp-h2">What you can look up</h2>
             </div>
             <ul className="lp-uses">
-              {LOOKUPS.map((u) => (
+              {lookups(intro).map((u) => (
                 <li key={u.title} className="lp-use">
                   <h3>{u.title}</h3>
                   <p>{u.body}</p>
@@ -333,7 +344,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                 <DemoUnlock />
                 <div className="lp-step-body">
                   <h3>Unlock what you need</h3>
-                  <p>One credit unlocks one fact, such as a rate or a seat holder&apos;s name. It stays unlocked for you.</p>
+                  <p>One credit unlocks one fact, such as who held a seat or the rate. It stays unlocked for you.</p>
                 </div>
               </li>
               <li className="lp-step">
@@ -347,7 +358,8 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
             <p className="lp-invite">
               <span className="lp-plus num">+{REFERRAL_BONUS}</span>
               <span>
-                Invite a fractional you trust. You each get <span className="num">{REFERRAL_BONUS}</span> credits when they add their first fact.
+                Invite a fractional you trust. You each get <span className="num">{REFERRAL_BONUS}</span> credits when they add their first fact to a company
+                or a seat.
               </span>
             </p>
           </div>
@@ -358,7 +370,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
           <div className="lp-wrap">
             <div className="lp-sec-head">
               <h2 className="lp-h2">What&apos;s free and what costs a credit</h2>
-              <p className="lp-lead">Everything on a seat you held is free to you.</p>
+              <p className="lp-lead">Everything on a seat you held is free to you, and so are the rate benchmarks.</p>
             </div>
             <div className="lp-matrix" role="table" aria-label="Free and locked fields">
               <div className="lp-mx-head" role="row">
@@ -411,17 +423,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         <section className="lp-sec" id="faq">
           <div className="lp-wrap lp-faq-wrap">
             <h2 className="lp-h2">Questions</h2>
-            <div className="lp-faq">
-              {faq(starter).map(([q, a]) => (
-                <details key={q} className="lp-qa">
-                  <summary>
-                    <span>{q}</span>
-                    <span className="lp-qa-icon" aria-hidden />
-                  </summary>
-                  <p>{a}</p>
-                </details>
-              ))}
-            </div>
+            <Questions starter={starter} support={support} />
           </div>
         </section>
 
@@ -433,7 +435,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
             </h2>
             <p className="lp-final-sub">It takes an email and your name. The pilot is free.</p>
             <div className="lp-final-form" ref={finalForm}>
-              <JoinForm emailOn={view.email} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
+              <JoinForm emailOn={emailOn} starter={starter} onSignedIn={onSignedIn} onMember={openSignIn} place="final" />
             </div>
           </div>
         </section>
@@ -446,6 +448,11 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
             <span>Trading Post is a free pilot from Revenue Nomad.</span>
           </div>
           <div className="lp-foot-links">
+            {support && supportHref ? (
+              <a className="mono" href={supportHref}>
+                {support}
+              </a>
+            ) : null}
             <a className="mono" href="https://revenuenomad.com" target="_blank" rel="noopener noreferrer">
               revenuenomad.com
             </a>
@@ -459,8 +466,10 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
       <SignIn
         open={signIn.open}
         note={signIn.note}
+        noteTone={signIn.tone}
+        support={support}
         onClose={closeSignIn}
-        emailOn={view.email}
+        emailOn={emailOn}
         starter={starter}
         onSignedIn={onSignedIn}
         onJoin={toJoin}

@@ -214,11 +214,19 @@ html:has(.lp) {
   color: #fff;
   padding: 64px 0;
 }
+/*
+ * Both columns hang from the top, so the join form can grow a line (the name step, an error)
+ * without moving the headline or the example card. The copy starts a little lower so it sits
+ * level with the card's first section, as it did when it was centered.
+ */
 .lp-hero-in {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 480px);
   gap: 64px;
-  align-items: center;
+  align-items: start;
+}
+.lp-hero-copy {
+  padding-top: 24px;
 }
 /* The one live signal: how many roles are open right now. */
 .lp-live {
@@ -258,8 +266,23 @@ html:has(.lp) {
   line-height: 20px;
   font-weight: 700;
 }
+.lp-invited-small {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
 .lp-invited + .lp-hero-form {
   margin-top: 16px;
+}
+/* A count on its way: a quiet bar the height of the figure, replaced by the number. */
+.lp-skel {
+  display: inline-block;
+  width: 3.2ch;
+  height: 0.72em;
+  border-radius: 4px;
+  background: var(--line);
+  vertical-align: baseline;
 }
 .lp-hero-member {
   margin-top: 12px;
@@ -407,6 +430,15 @@ html:has(.lp) {
   color: hsl(200 45% 26%);
   font-size: 14px;
   font-weight: 800;
+}
+/* A hidden company, as the app draws one: a lock where the logo would be, the name in gray. */
+.lp-mark-hidden {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.lp-rec-name.lp-rec-name-hidden {
+  color: var(--muted);
 }
 .lp-rec-id {
   min-width: 0;
@@ -782,66 +814,6 @@ html:has(.lp) {
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
   gap: 48px;
 }
-.lp-faq {
-  border-top: 1px solid var(--line);
-}
-.lp-qa {
-  border-bottom: 1px solid var(--line);
-}
-.lp-qa summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 56px;
-  padding: 16px 0;
-  font-weight: 700;
-  font-size: 17px;
-  line-height: 24px;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-  cursor: pointer;
-  list-style: none;
-  border-radius: 4px;
-}
-.lp-qa summary:hover {
-  color: var(--pine);
-}
-.lp-qa summary::-webkit-details-marker {
-  display: none;
-}
-.lp-qa-icon {
-  position: relative;
-  flex: none;
-  width: 14px;
-  height: 14px;
-}
-.lp-qa-icon::before,
-.lp-qa-icon::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  width: 14px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--pine);
-  transition: transform 0.15s;
-}
-.lp-qa-icon::after {
-  transform: rotate(90deg);
-}
-.lp-qa[open] .lp-qa-icon::after {
-  transform: rotate(0deg);
-}
-.lp-qa p {
-  padding: 0 32px 24px 0;
-  max-width: 42em;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 24px;
-}
-
 /* final CTA */
 .lp-final {
   background: var(--pine);
@@ -961,6 +933,12 @@ html:has(.lp) {
   line-height: 20px;
   font-weight: 700;
 }
+/* A link that didn't work: red owns errors. */
+.lp-dialog-note.lp-dialog-note-err {
+  background: #fff1f3;
+  color: #9e1c33;
+  font-weight: 600;
+}
 .lp-dialog-form {
   margin-top: 24px;
 }
@@ -1065,6 +1043,9 @@ html:has(.lp) {
   .lp-hero-in {
     grid-template-columns: minmax(0, 1fr);
     gap: 48px;
+  }
+  .lp-hero-copy {
+    padding-top: 0;
   }
   .lp-hero-visual {
     max-width: 520px;
@@ -1237,13 +1218,6 @@ html:has(.lp) {
   }
   .lp-invite {
     align-items: flex-start;
-  }
-  .lp-qa summary {
-    font-size: 16px;
-  }
-  .lp-qa p {
-    padding-right: 0;
-    font-size: 15px;
   }
   .lp-final {
     padding: 48px 0;

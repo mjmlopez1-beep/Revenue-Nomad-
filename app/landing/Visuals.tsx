@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Static product visuals for the landing page, drawn in HTML and CSS. Every company here is
- * fictional; none of it is member data. Nothing in here is clickable.
+ * Static product visuals for the landing page, drawn in HTML and CSS. Every company and person
+ * here is made up; none of it is member data. Nothing in here is clickable.
  *
  * A fact is drawn in one of three states, the same three the app has: a value you can see,
  * a locked one (a small lock and a masked bar), and a missing one you can add for a credit.
@@ -61,17 +61,22 @@ function Row({ k, children }: { k: string; children: ReactNode }) {
 }
 
 /**
- * Hero visual: one company record with an open role and a seat someone held. It shows the
- * three states side by side, and carries the page's one "Hiring now" chip.
+ * Hero visual: one company record as a member first meets it. It has an open role, so the
+ * company is hidden, as it is in the app, and one unlock shows the company, the role and the
+ * posting. A seat a member held shows the three states side by side: a fact someone unlocked
+ * (who held the seat, confirmed by 3), a locked one (the rate) and a missing one (hours).
+ * It carries the page's one "Hiring now" chip.
  */
 export function HeroRecord() {
   return (
     <figure className="lp-visual">
       <div className="lp-rec" aria-hidden>
         <div className="lp-rec-head">
-          <span className="lp-mark">AL</span>
+          <span className="lp-mark lp-mark-hidden">
+            <IconLock size={16} />
+          </span>
           <div className="lp-rec-id">
-            <div className="lp-rec-name">Alder Labs</div>
+            <div className="lp-rec-name lp-rec-name-hidden">Hidden company</div>
             <div className="lp-rec-meta num">
               Software · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
             </div>
@@ -103,11 +108,11 @@ export function HeroRecord() {
             <Row k="Role">
               <span className="lp-val">Fractional VP Sales</span>
             </Row>
-            <Row k="Rate">
-              <Confirmed n={3} />
-              <span className="lp-val num">$9k/mo</span>
-            </Row>
             <Row k="Seat holder">
+              <Confirmed n={3} />
+              <span className="lp-val">Dana Whitfield</span>
+            </Row>
+            <Row k="Rate">
               <Locked w={84} />
             </Row>
             <Row k="Hours a week">
@@ -130,7 +135,8 @@ export function HeroRecord() {
         </div>
       </div>
       <figcaption className="lp-visual-cap">
-        An example company, shown unlocked. While a company has an open role, its name stays hidden until you unlock it.
+        An example record. A company with an open role stays hidden until you unlock it, and that 1 credit shows the company, the role and the
+        posting.
       </figcaption>
     </figure>
   );
@@ -153,10 +159,10 @@ export function DemoAdd() {
 export function DemoUnlock() {
   return (
     <div className="lp-demo" aria-hidden>
-      <span className="lp-demo-k">Rate</span>
+      <span className="lp-demo-k">Seat holder</span>
       <Unlock />
       <span className="lp-demo-arrow">→</span>
-      <span className="lp-demo-v num">$9k/mo</span>
+      <span className="lp-demo-v">Dana Whitfield</span>
     </div>
   );
 }
@@ -164,8 +170,8 @@ export function DemoUnlock() {
 export function DemoConfirm() {
   return (
     <div className="lp-demo" aria-hidden>
-      <span className="lp-demo-k">Rate</span>
-      <span className="lp-demo-v num">$9k/mo</span>
+      <span className="lp-demo-k">Role</span>
+      <span className="lp-demo-v">Fractional VP Sales</span>
       <Confirmed n={3} />
       <span className="lp-demo-btn">Confirm</span>
       <span className="lp-demo-btn lp-demo-btn-quiet">Report</span>

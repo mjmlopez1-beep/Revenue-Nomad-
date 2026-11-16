@@ -1,0 +1,92 @@
+/*
+ * The questions (app/landing/Questions.tsx): open-and-close rows with a plus that turns into a
+ * minus. Used on the landing page and in the app's "Questions and feedback" sheet, so these
+ * rules live apart from landing.css.
+ */
+.lp-faq {
+  border-top: 1px solid var(--line);
+}
+.lp-qa {
+  border-bottom: 1px solid var(--line);
+}
+.lp-qa summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 16px 0;
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 24px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+  border-radius: 4px;
+}
+.lp-qa summary:hover {
+  color: var(--pine);
+}
+.lp-qa summary::-webkit-details-marker {
+  display: none;
+}
+.lp-qa-icon {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.lp-qa-icon::before,
+.lp-qa-icon::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--pine);
+  transition: transform 0.15s;
+}
+.lp-qa-icon::after {
+  transform: rotate(90deg);
+}
+.lp-qa[open] .lp-qa-icon::after {
+  transform: rotate(0deg);
+}
+.lp-qa p {
+  padding: 0 32px 24px 0;
+  max-width: 42em;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 24px;
+}
+.lp-faq-more {
+  padding: 16px 0 0;
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--muted);
+}
+.lp-faq-more a {
+  color: var(--pine);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .lp-qa summary {
+    font-size: 16px;
+  }
+  .lp-qa p {
+    padding-right: 0;
+    font-size: 15px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-qa-icon::before,
+  .lp-qa-icon::after {
+    transition: none;
+  }
+}
