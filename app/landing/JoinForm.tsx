@@ -2,7 +2,8 @@
 
 /**
  * Inline join. Email first (one field, one button), then the name field opens in place.
- * Without an email provider the member is signed in at once; with one, we email a link.
+ * Without an email provider the member is signed in at once; with one, we email a one-time
+ * link to finish joining, with a 6-digit code for finishing on another device.
  * Each step says what happens next, and the name step says what other members will see.
  */
 import { useEffect, useId, useRef, useState } from "react";
@@ -41,6 +42,9 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
   const [name, setName] = useState("");
   const [error, setError] = useState<{ text: string; member?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  /** The 6-digit code from the email, for finishing on another device. */
+  const [code, setCode] = useState("");
+  const [codeErr, setCodeErr] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const id = useId();
 
@@ -94,14 +98,60 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
     setError(null);
   };
 
+  const submitCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    const v = code.replace(/\D/g, "");
+    if (v.length !== 6) return setCodeErr("Type the 6 digits from the email.");
+    setBusy(true);
+    setCodeErr(null);
+    const r = await post({ signInCode: { email, code: v } });
+    if (r.error) {
+      setBusy(false);
+      return setCodeErr(r.error);
+    }
+    await onSignedIn();
+    setBusy(false);
+  };
+
   if (step === "sent")
     return (
       <div className="lp-join-sent" role="status" data-place={place}>
         <p className="lp-join-sent-h">Check your inbox</p>
         <p>
-          We sent a sign-in link to <strong className="mono">{email}</strong>. Open it and you&apos;re in. It can take a minute, and it sometimes
-          lands in spam.
+          We sent a link to <strong className="mono">{email}</strong>. Open it and you&apos;re in. It works once, for 20 minutes. It can take a minute,
+          and it sometimes lands in spam.
         </p>
+        <form className="lp-join-code" onSubmit={submitCode} noValidate>
+          <label className="lp-join-label" htmlFor={`${id}-code`}>
+            Opening it on another device? Type the 6-digit code from the email here
+          </label>
+          <div className="lp-join-row">
+            <input
+              id={`${id}-code`}
+              className="input lp-join-input num"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={7}
+              placeholder="123456"
+              value={code}
+              onChange={(e) => {
+                setCode(e.target.value);
+                if (codeErr) setCodeErr(null);
+              }}
+              aria-invalid={!!codeErr}
+              aria-describedby={codeErr ? `${id}-code-err` : undefined}
+            />
+            <button type="submit" className="btn btn-primary btn-lg lp-join-btn" disabled={busy} aria-busy={busy}>
+              {busy ? "Opening" : "Open Trading Post"}
+            </button>
+          </div>
+          {codeErr && (
+            <div className="lp-join-err" role="alert" id={`${id}-code-err`}>
+              <span>{codeErr}</span>
+            </div>
+          )}
+        </form>
         <button type="button" className="lp-linkbtn" onClick={reset}>
           Use a different email
         </button>

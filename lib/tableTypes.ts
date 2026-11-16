@@ -211,6 +211,68 @@ export interface Me {
   proInterest: boolean;
   /** Rates this member shared for the benchmarks only. Never shown on a record or to anyone else. */
   benchRates: BenchRate[];
+  /** Conversations with a message the member hasn't read yet (Messages). */
+  unread?: number;
+  /** An email when a member messages them (on unless they turned it off). Sent only while email is on. */
+  messageEmail?: boolean;
+}
+
+/* ---------- messages between members ---------- */
+
+/** One message in a conversation. `mine`: the viewer wrote it. Never carries an email address or a member id. */
+export interface MessageRec {
+  id: string;
+  mine: boolean;
+  at: string;
+  text: string;
+  /** The viewer reported this message (it goes to the admins' review list). */
+  reported?: boolean;
+  /** An admin removed it after a report. `text` is then empty. */
+  removed?: boolean;
+}
+
+/**
+ * A conversation between two members about one seat. GET /api/table?messages=1 returns the
+ * viewer's own, newest first. `started`: the viewer started it (they unlocked the seat holder);
+ * otherwise the viewer is the seat holder it was about. Ids are public ids.
+ */
+export interface ConversationRec {
+  id: string;
+  started: boolean;
+  /** The other member: name and title. Never their email or phone. */
+  with: { name: string; first: string; title: string };
+  about: {
+    companyId: string;
+    engagementId: string;
+    /** The company as the viewer sees it ("Hidden company" while it is hidden for them). */
+    company: string;
+    /** The seat as the viewer can see it: its role, else its function, else null. */
+    seat: string | null;
+    /** "2023 to 2024", "2023 to now", or null. */
+    years: string | null;
+  };
+  messages: MessageRec[];
+  /** Messages from the other member the viewer hasn't read. */
+  unread: number;
+  status: "open" | "closed";
+  /** Who closed it ("Not now", or a block). */
+  closedBy?: "you" | "them";
+  /** The viewer blocked the other member. */
+  blocked?: boolean;
+  /** The viewer can send a message here now. */
+  canSend: boolean;
+  updatedAt: string;
+}
+
+/** Admins: a reported message. Only that one message, never the rest of its conversation. */
+export interface ReportedMessage {
+  id: string;
+  text: string;
+  /** Who wrote it and who reported it (names). */
+  from: string;
+  reporter: string;
+  at: string;
+  reportedAt: string;
 }
 
 export interface BenchRate {
@@ -352,6 +414,8 @@ export interface View {
   scan?: ScanSummary;
   /** Pilot metrics. Admins only. */
   admin?: AdminStats;
+  /** Admins: messages members reported, waiting for a decision. */
+  reportedMessages?: ReportedMessage[];
 }
 
 export interface ScanSummary {
@@ -408,6 +472,8 @@ export interface AdminStats {
   /** Members linked to a seat on file, and facts still missing on those seats. */
   seats: { linkedMembers: number; factsMissing: number };
   benchmarks: { memberRates: number; privateRates: number; indexRates: number };
+  /** Messages between members, counts only (admins never read conversations). */
+  messages?: { started: number; replied3d: number; closed: number; blocked: number; reported: number };
 }
 
 export type Action =
@@ -475,7 +541,21 @@ export type Action =
    * offer ("pro_view") and asking to hear about Pro ("pro_interest"). `where` names the place.
    */
   | { type: "signal"; name: "wall" | "pro_view" | "pro_interest"; where: string }
-  | { type: "settings"; digest?: boolean }
+  | { type: "settings"; digest?: boolean; messageEmail?: boolean }
+  /**
+   * Messages between members (lib/messages.ts). Start one with the holder of a seat the viewer
+   * can see (unlocked, or free) who has signed in. `engagementId` and `conversationId` are public ids.
+   */
+  | { type: "message.start"; engagementId: string; text: string }
+  | { type: "message.send"; conversationId: string; text: string }
+  /** "Not now": closes it. The other side sees that they aren't taking intros right now. */
+  | { type: "message.close"; conversationId: string }
+  /** Block (or unblock) the other member: they can't start a conversation with the viewer, and this one closes. */
+  | { type: "message.block"; conversationId: string; on?: boolean }
+  | { type: "message.report"; conversationId: string; messageId: string }
+  | { type: "message.read"; conversationId: string }
+  /** Admins: decide on a reported message. */
+  | { type: "message.review"; reportId: string; decision: "keep" | "remove" }
   /** Admins: run the open-role scan now. */
   | { type: "scanNow" };
 
@@ -491,6 +571,9 @@ export type ActionResult = {
   capped?: boolean;
   cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
   me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "owed" | "unlocksLeft" | "sellEarnLeft">;
+  /** Message actions: the conversation as the viewer now sees it, and their unread count. */
+  conversation?: ConversationRec;
+  unread?: number;
 };
 
 export const GOALS = [

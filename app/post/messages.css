@@ -1,0 +1,487 @@
+/* ---------- messages (app/post/Messages.tsx) ---------- */
+
+/* The unread badge: on the avatar, the phone's menu button and the Messages menu item. Volt on pine, so ember stays for live roles. */
+.tp-has-badge {
+  position: relative;
+}
+.tp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  margin-left: auto;
+  border-radius: 10px;
+  background: var(--volt);
+  color: var(--pine);
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.tp-badge-dot {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 18px;
+  box-shadow: 0 0 0 2px var(--pine);
+}
+
+.ms-page {
+  max-width: 1120px;
+}
+.ms-wrap {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  height: calc(100vh - 56px - 150px);
+  min-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.ms-list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+.ms-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  font: inherit;
+  color: var(--body-ink);
+  cursor: pointer;
+}
+.ms-row:hover {
+  background: var(--row-hover);
+}
+.ms-row.on {
+  background: var(--row-on);
+  box-shadow: inset 3px 0 0 var(--pine);
+}
+.ms-row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.ms-av {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--pine-8);
+  color: var(--pine);
+  font-size: 12px;
+  font-weight: 700;
+}
+.ms-row-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.ms-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.ms-row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-row-when {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ms-row-about,
+.ms-row-last {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-row.unread .ms-row-last {
+  color: var(--ink);
+  font-weight: 600;
+}
+.ms-dot {
+  flex: none;
+  align-self: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--pine);
+  color: #fff;
+  font-size: 12px;
+  line-height: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+.ms-closed {
+  flex: none;
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ms-thread {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+.ms-thread-none {
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.ms-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  flex: none;
+}
+.ms-head-main {
+  flex: 1;
+  min-width: 0;
+}
+.ms-head-name {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.ms-head-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ms-head-acts {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.ms-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--pine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ms-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 14px;
+  line-height: 20px;
+}
+.ms-ask p {
+  flex: 1 1 320px;
+  margin: 0;
+}
+.ms-ask-acts {
+  display: flex;
+  gap: 8px;
+}
+.ms-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ms-context {
+  align-self: center;
+  max-width: 520px;
+  margin: 0 0 4px;
+  padding: 8px 12px;
+  border-radius: var(--r-btn);
+  background: var(--pine-8);
+  color: var(--pine);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  text-wrap: balance;
+}
+.ms-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: min(560px, 85%);
+}
+.ms-msg.mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+.ms-bubble {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ms-msg.mine .ms-bubble {
+  border-color: transparent;
+  background: var(--volt-soft);
+}
+.ms-bubble.removed {
+  color: var(--muted);
+  font-style: italic;
+}
+.ms-msg-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  min-height: 20px;
+}
+.ms-msg-meta {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+}
+.ms-report {
+  border: 0;
+  padding: 0 2px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t);
+}
+.ms-msg:hover .ms-report,
+.ms-report:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .ms-report {
+    opacity: 1;
+    min-height: 32px;
+  }
+}
+.ms-note {
+  align-self: center;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.ms-reply {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 4px 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  flex: none;
+}
+.ms-input {
+  width: 100%;
+  min-height: 44px;
+  max-height: 180px;
+  resize: vertical;
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  padding: 10px 12px;
+}
+.ms-send {
+  min-height: 44px;
+}
+.ms-reply-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.ms-reply-note.bad {
+  color: var(--red);
+}
+.ms-empty {
+  max-width: 520px;
+  padding: 32px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.ms-empty h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.ms-empty p {
+  margin: 0 0 16px;
+  color: var(--body-ink);
+}
+
+/* Phones: the list fills the page, a conversation fills the screen with the reply box at the bottom. */
+.tp-phone .ms-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+}
+.tp-phone .ms-row {
+  min-height: 76px;
+}
+.tp-phone .ms-row:last-child {
+  border-bottom: 0;
+}
+.ms-thread-phone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  height: 100dvh;
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.ms-thread-phone:focus {
+  outline: none;
+}
+.ms-thread-phone .ms-head {
+  padding: max(8px, env(safe-area-inset-top)) 8px 8px 4px;
+  flex-wrap: wrap;
+}
+.ms-thread-phone .ms-head-back {
+  width: 44px;
+  height: 44px;
+  color: var(--pine);
+}
+.ms-thread-phone .ms-head-acts .btn {
+  min-height: 44px;
+}
+.ms-thread-phone .ms-reply {
+  position: sticky;
+  bottom: 0;
+  padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+}
+.ms-thread-phone .ms-input {
+  font-size: 16px;
+  resize: none;
+}
+.ms-thread-phone .ms-msg {
+  max-width: 88%;
+}
+
+/* The compose sheet. */
+.ms-compose-form {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+.ms-compose-about {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ms-compose-input {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  font: inherit;
+  font-size: 16px;
+  line-height: 24px;
+  padding: 10px 12px;
+}
+.ms-compose-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+}
+@media (min-width: 768px) {
+  .ms-compose {
+    width: min(560px, calc(100vw - 32px));
+  }
+}
+
+/* Admins: reported messages. */
+.ms-reports {
+  margin-top: 16px;
+}
+.ms-report-row {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.ms-report-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+.ms-report-who {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ms-report-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tp-set-ask {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}

@@ -8,8 +8,19 @@
  * RN_EMAIL_FROM    e.g. "Trading Post <post@revenuenomad.com>" (domain verified in Resend)
  * RN_PUBLIC_URL    e.g. "https://post.revenuenomad.com" (used to build links)
  * RN_EMAIL_FOOTER  optional line for the footer, such as the sender's postal address
+ * RN_EMAIL_REPLY_TO optional, e.g. "hello@revenuenomad.com": sent as Resend's reply_to, so a reply reaches
+ *                  the team (the mail can go out from another address, such as hello@mail.revenuenomad.com).
+ *                  Every email uses it, message emails too: a reply never goes to a member's address.
+ * RN_EMAIL_API_URL optional, for tests: where email goes instead of Resend's API (a local mock that catches it)
  */
 export const emailEnabled = () => !!process.env.RESEND_API_KEY && !!process.env.RN_EMAIL_FROM;
+/** Resend's API, unless RN_EMAIL_API_URL points at a local mock. */
+/** RN_EMAIL_REPLY_TO, when it holds one plain address. */
+const replyTo = () => {
+  const v = process.env.RN_EMAIL_REPLY_TO?.trim() ?? "";
+  return /^[^\s@<>,]+@[^\s@<>,]+\.[a-z]{2,}$/i.test(v) ? v : null;
+};
+const emailApiUrl = () => process.env.RN_EMAIL_API_URL?.trim() || "https://api.resend.com/emails";
 
 /**
  * `unsubscribeUrl` (the weekly email): sent as List-Unsubscribe with one-click
@@ -21,10 +32,10 @@ export async function sendEmail(to: string, subject: string, text: string, html:
   const unsub = /^https?:\/\/[^\s<>]+$/.test(opts.unsubscribeUrl ?? "") ? opts.unsubscribeUrl : undefined;
   const headers = unsub ? { headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {};
   try {
-    const r = await fetch("https://api.resend.com/emails", {
+    const r = await fetch(emailApiUrl(), {
       method: "POST",
       headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: process.env.RN_EMAIL_FROM, to: [to], subject, text, html, ...headers }),
+      body: JSON.stringify({ from: process.env.RN_EMAIL_FROM, to: [to], subject, text, html, ...(replyTo() ? { reply_to: replyTo() } : {}), ...headers }),
     });
     if (!r.ok) console.error("email send failed", r.status, (await r.text()).slice(0, 200));
     return r.ok;

@@ -61,6 +61,8 @@ serve credits node scripts/test-credits.mjs
 serve integration node scripts/test-integration.mjs
 run scan npx tsx scripts/test-scan.mts
 run digest npx tsx scripts/test-digest.ts
+run messages npx tsx scripts/test-messages.mjs
+run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
 run bench npx tsx scripts/test-bench.mjs
 run robust env ROBUST_PORT="$PORT" npx tsx scripts/test-robust.mts

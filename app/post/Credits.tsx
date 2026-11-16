@@ -15,7 +15,8 @@ import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
 import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Pro, useUi } from "./ui";
-import { WeeklyEmail } from "./Settings";
+import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
+import { ReportedMessages } from "./Messages";
 import "./pages.css";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
@@ -257,7 +258,7 @@ function Review({ view }: { view: View }) {
 
 /* ---------- the page ---------- */
 
-export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) {
+export function MyCredits({ view, onBack, refresh }: { view: View; onBack: () => void; refresh?: () => Promise<void> }) {
   const ui = useUi();
   const me = ui.me;
   const phone = ui.layout === "phone";
@@ -397,15 +398,23 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           <button type="button" className="btn btn-sm" onClick={() => copy(signin, "Sign-in link copied. Keep it to yourself.")}>
             Copy link
           </button>
-          <a className="btn btn-sm btn-ghost" href={mail}>
-            Email it to myself
-          </a>
+          {!view.email && (
+            <a className="btn btn-sm btn-ghost" href={mail}>
+              Email it to myself
+            </a>
+          )}
+          <SignInActions emailOn={view.email} refresh={refresh} />
         </>
       }
     />
   );
   const history = <History ledger={view.ledger} credits={me.credits} owed={owed} starter={starter} earnCap={me.earnCap} first={phone ? 5 : 25} />;
-  const review = me.admin && <Review view={view} />;
+  const review = me.admin && (
+    <>
+      <Review view={view} />
+      <ReportedMessages list={view.reportedMessages ?? []} refresh={refresh} />
+    </>
+  );
 
   return (
     <div className="tp-page cr-page">
@@ -423,6 +432,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           {rulesCard}
           {signinCard}
           {view.scan?.digest && <WeeklyEmail />}
+          {view.email && <MessageEmail />}
         </>
       ) : (
         <>
@@ -432,6 +442,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
             {signinCard}
           </div>
           {view.scan?.digest && <WeeklyEmail />}
+          {view.email && <MessageEmail />}
           {review}
           {history}
         </>

@@ -333,6 +333,8 @@ export interface MenuItem {
   current?: boolean;
   /** A switch: on or off (an admin's "See it as a member"). */
   checked?: boolean;
+  /** A count that needs the member (unread messages). Shown as a badge when above 0. */
+  badge?: number;
 }
 
 /**
@@ -417,6 +419,11 @@ export function AvatarMenu({
             >
               <span>{it.label}</span>
               {it.hint && <span className="tp-menu-hint num">{it.hint}</span>}
+              {!!it.badge && (
+                <span className="tp-badge num" aria-label={`${it.badge} unread`}>
+                  {it.badge}
+                </span>
+              )}
             </button>
           ))}
           <button
@@ -462,6 +469,7 @@ export function TopBar({
   starter,
   listSwitch,
   searchInList,
+  unread = 0,
 }: {
   me: Me;
   query: string;
@@ -485,6 +493,8 @@ export function TopBar({
   listSwitch?: ReactNode;
   /** Phones, on the table: the search is a field at the top of the list, so the bar has no search of its own. */
   searchInList?: boolean;
+  /** Conversations with something unread: a badge on the avatar (the menu button on phones). */
+  unread?: number;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const hosts = (
@@ -554,8 +564,9 @@ export function TopBar({
               )}
               <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
               {/* The main action on a phone is the labeled "Add what you know" at the foot of the list, in thumb reach. Pages reach it from the menu. */}
-              <button ref={menuRef} type="button" className="tp-iconbtn" aria-label="Menu" aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>
+              <button ref={menuRef} type="button" className="tp-iconbtn tp-has-badge" aria-label={unread ? `Menu, ${unread} unread` : "Menu"} aria-haspopup="menu" aria-expanded={false} onClick={onMenu}>
                 <IconMenu />
+                {unread > 0 && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
               </button>
             </div>
           </>
@@ -582,8 +593,18 @@ export function TopBar({
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>
         </button>
-        <button ref={menuRef} type="button" className="tp-avatar" aria-label="Your account" aria-haspopup="menu" aria-expanded={false} title="Your account" onClick={onMenu}>
+        <button
+          ref={menuRef}
+          type="button"
+          className="tp-avatar tp-has-badge"
+          aria-label={unread ? `Your account, ${unread} unread` : "Your account"}
+          aria-haspopup="menu"
+          aria-expanded={false}
+          title="Your account"
+          onClick={onMenu}
+        >
           {initials(me.name)}
+          {unread > 0 && <span className="tp-badge tp-badge-dot num" aria-hidden>{unread}</span>}
         </button>
       </div>
       {hosts}

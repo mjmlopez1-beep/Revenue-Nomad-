@@ -19,6 +19,7 @@
  * the form open inside it before the record, and focus goes back to the row on close. On a
  * phone it is modal: Tab stays inside and the page behind is inert.
  */
+import { MessageButton } from "./Messages";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
@@ -923,10 +924,11 @@ function safeHref(build: () => string): string | null {
 }
 
 /**
- * After the seat holder is unlocked: how to reach them. "Ask for an intro" goes to the team
+ * After the seat holder is unlocked: how to reach them. A member who has signed in gets a
+ * message inside Trading Post ("Message Ana", the warm path). "Ask for an intro" goes to the team
  * inbox when there is one; "Find them on LinkedIn" always works.
  */
-function Reach({ name, member, seat }: { name: string; member: boolean; seat: string }) {
+function Reach({ name, member, seat, engagementId, seatName }: { name: string; member: boolean; seat: string; engagementId: string; seatName: string | null }) {
   const ui = useUi();
   const env = useEnv();
   const to = env.contact?.intro?.trim();
@@ -939,16 +941,17 @@ function Reach({ name, member, seat }: { name: string; member: boolean; seat: st
       )
     : null;
   const li = safeHref(() => `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(name)}`);
-  if (!intro && !li) return null;
+  if (!intro && !li && !member) return null;
   return (
     <div className="tp-reach">
-      {intro && (
+      {member && <MessageButton engagementId={engagementId} name={name} company={env.company} seat={seatName} />}
+      {intro && !member && (
         <a className="btn btn-sm" href={intro}>
           Ask for an intro
         </a>
       )}
       {li && (
-        <a className={intro ? "tp-intro" : "btn btn-sm"} href={li} target="_blank" rel="noreferrer">
+        <a className={intro || member ? "tp-intro" : "btn btn-sm"} href={li} target="_blank" rel="noreferrer">
           Find them on LinkedIn <IconExternal size={11} />
         </a>
       )}
@@ -1016,7 +1019,13 @@ function EngagementCard({ e, companyId, focus }: { e: EngagementRec; companyId: 
   const fnRender = (v: string) => <span className={`chip tp-fn${v === ui.me.function ? " tp-fn-me" : ""}`}>{v}</span>;
   // Nobody needs an intro to themselves, and a hidden company has no name to put in the email.
   const reach = op && !e.yours && !(opCell?.s === "value" && opCell.member?.you) && !hidden && (
-    <Reach name={op} member={!!(opCell?.s === "value" && opCell.member)} seat={role ? `the ${role} seat` : "a fractional seat"} />
+    <Reach
+      name={op}
+      member={!!(opCell?.s === "value" && opCell.member)}
+      seat={role ? `the ${role} seat` : "a fractional seat"}
+      engagementId={e.id}
+      seatName={role ?? shown(e.cells.function)}
+    />
   );
   return (
     <article className={`tp-eng${focus ? " focus" : ""}`} id={`tp-d-${e.id}`}>

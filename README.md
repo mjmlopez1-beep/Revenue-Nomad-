@@ -105,7 +105,7 @@ See `.env.example`:
 - `RN_SUPPORT_EMAIL`, `RN_INTRO_EMAIL`: where members write for help and for an intro (`View.contact`, read at run time, never at build time)
 - `RN_CLIENT_IP_HEADER` or `RN_TRUSTED_PROXY_HOPS`: which address the rate limits and the invite rule read. Check once with `RN_LOG_IP_HEADERS=1` (logs the candidate headers of the first 20 requests), then remove it
 - `RN_SCAN=1` or `RN_CRON_SECRET`: the weekly scan of open roles (see Weekly scan above). `RN_SCAN_TEST=1` is for the test suites only
-- `RESEND_API_KEY`, `RN_EMAIL_FROM`, `RN_PUBLIC_URL`, `RN_DIGEST`, `RN_DIGEST_ALL`, `RN_EMAIL_FOOTER`: sign-in emails and the weekly email
+- `RESEND_API_KEY`, `RN_EMAIL_FROM`, `RN_PUBLIC_URL`, `RN_DIGEST`, `RN_DIGEST_ALL`, `RN_EMAIL_FOOTER`, `RN_EMAIL_REPLY_TO` (the reply_to on every email, message emails included, so a reply reaches the team and never a member): one-time sign-in links and codes, message emails and the weekly email. `RN_EMAIL_API_URL` points email at a local mock in tests
 - `RN_BACKUP_S3_ENDPOINT`, `RN_BACKUP_S3_BUCKET`, `RN_BACKUP_S3_KEY_ID`, `RN_BACKUP_S3_SECRET` (and `RN_BACKUP_S3_REGION`, `RN_BACKUP_S3_PATH_STYLE`): the off-site copy of the daily backup. `RN_LOGO_LOOKUP=off` stops logo lookups by name
 - Health check: point the host at `GET /api/health` (200 only when the seed opened, the state loaded and the data folder takes writes). `railway.json` sets it with 15 seconds to drain; Railway may ignore that file, so set the path and the drain time in the service settings too
 

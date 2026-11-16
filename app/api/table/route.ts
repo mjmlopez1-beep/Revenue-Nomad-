@@ -5,11 +5,13 @@ import {
   ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, type Action,
 } from "@/lib/table";
 import { stateVersion } from "@/lib/table";
-import { emailEnabled, sendEmail, signInEmail } from "@/lib/email";
+import { emailEnabled, sendEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
 import { guarded } from "@/lib/apiGuard";
 import { shared } from "@/lib/viewQueue";
 import { tidy, wellFormed } from "@/lib/tableFields";
+import { createSignIn, isOneTimeToken, oneTimeEmail, redeemCode, redeemLink, rotateToken } from "@/lib/signin";
+import { listConversations, unreadFor } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,25 @@ const err = (message: string, status = 400) => NextResponse.json({ error: messag
 const SLOW = "That's a lot in one minute. Give it a moment, then try again.";
 /** An action with no member behind it. The same words perform() uses. */
 const SIGNED_OUT = "You're signed out. Sign in again to add, confirm or unlock.";
+const SIGNED_OUT_READ = "You're signed out. Sign in again to see your messages.";
+/** The same answer whether or not the email belongs to a member, so nobody can test which emails are members. */
+const LINK_ON_ITS_WAY = "If that email is on Trading Post, a link is on its way.";
+const LINK_USED = "That sign-in link has expired or was already used. A link works once, for 20 minutes. Ask for a new one in Sign in.";
+const CODE_FAILED = "That code didn't work. A code works once, for 20 minutes, and stops after 5 wrong tries. Ask for a new email if you need one.";
+/** The key an email is counted under for the per-address limits (case and spaces don't make a new one). */
+const mailKey = (raw: unknown) => String(raw ?? "").trim().toLowerCase().slice(0, 120);
+
+/**
+ * Email a one-time link and code to a member, in the background: the answer doesn't wait for
+ * it, so it takes as long for an address that is nobody's.
+ */
+function sendOneTime(req: NextRequest, m: { id: string; name: string; email: string }, purpose: "signin" | "join") {
+  void (async () => {
+    const { token, code } = await createSignIn(m.id, purpose);
+    const e = oneTimeEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(token)}`, code, purpose);
+    await sendEmail(m.email, e.subject, e.text, e.html);
+  })().catch((e) => console.error("sign-in email failed", e));
+}
 
 const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-store", vary: "Accept-Encoding" };
 
@@ -113,6 +134,8 @@ async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
  * GET              the table as the signed-in member sees it (signed out: counts only).
  * GET ?people=Q    { members }: up to 8 members whose name matches (signed in only), for the seat-holder picker.
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
+ * GET ?messages=1  { conversations, unread }: the viewer's conversations (lib/messages.ts). 401 signed out.
+ * GET ?unread=1    { unread }: conversations with something unread, for the badge.
  * GET ?export=1    admins: download the runtime state (a backup).
  * GET ?as=member   admins: the table as a member sees it (so does the cookie rn_as_member=1).
  *                  Anyone else gets their own view, as without it.
@@ -133,6 +156,15 @@ export const GET = guarded(async (req: NextRequest) => {
     return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
   }
   if (limited(`get:${ip}`, 120, 60_000)) return err(SLOW, 429);
+  // Messages between members (lib/messages.ts): the viewer's conversations, or only the unread count for the badge.
+  if (req.nextUrl.searchParams.get("messages") !== null) {
+    const list = await listConversations(token);
+    return list ? sendJson(req, list) : err(SIGNED_OUT_READ, 401);
+  }
+  if (req.nextUrl.searchParams.get("unread") !== null) {
+    const unread = await unreadFor(token);
+    return unread === null ? err(SIGNED_OUT_READ, 401) : NextResponse.json({ unread }, { headers: { "cache-control": "no-store" } });
+  }
   const ref = req.nextUrl.searchParams.get("ref");
   if (ref !== null) {
     if (limited(`ref:${ip}`, 30, 60_000)) return err(SLOW, 429);
@@ -188,7 +220,11 @@ function sound<T>(x: T, depth = 0): T {
 
 /**
  * POST { signIn: tokenOrLink }        sign in with a personal link or the code at the end of it.
- * POST { emailLink: email }           email me my sign-in link (when email is switched on).
+ *                                     A one-time link from a sign-in email (lib/signin.ts) works here once.
+ * POST { emailLink: email }           email me a one-time sign-in link and code (email on). Same answer for any address.
+ * POST { signInCode: { email, code } } sign in with the 6-digit code from that email.
+ * POST { emailMe: true }              signed in: email myself a one-time link (another device).
+ * POST { rotateLink: true }           signed in: "Sign out on other devices" (a new personal token, set here).
  * POST { join: { name, email, ref } } join. With email switched on, we email a sign-in link
  *                                     (that's the email check); without it, you're in at once,
  *                                     except with an address in RN_ADMIN_EMAILS, which then needs
@@ -211,9 +247,24 @@ export const POST = guarded(async (req: NextRequest) => {
     const raw = body.signIn.trim();
     // Tokens are base64url, so a link copied with a trailing "." or inside <…> still works.
     const token = raw.match(/[?&]k=([A-Za-z0-9_-]+)/)?.[1] ?? raw.replace(/[^A-Za-z0-9_-]/g, "");
-    const m = token ? await memberForToken(token) : null;
-    if (!m) return err("That sign-in link or code didn't work. Paste the whole thing, or ask us for a new one.", 401);
+    // A personal link, else a one-time link from a sign-in email (lib/signin.ts), used up here.
+    const m = token ? (await memberForToken(token)) ?? (isOneTimeToken(token) ? await redeemLink(token) : null) : null;
+    if (!m) return err(isOneTimeToken(token) ? LINK_USED : "That sign-in link or code didn't work. Paste the whole thing, or ask us for a new one.", 401);
     // The network a member signs in from is kept (hashed) for the invite rule: see touch().
+    await touch(m.token, ip).catch((e) => console.error("sign-in network not saved", e));
+    return withSession(req, NextResponse.json({ ok: true }), m.token);
+  }
+
+  // The 6-digit code from a sign-in email, typed with the email it went to.
+  if (body.signInCode && typeof body.signInCode === "object") {
+    if (!emailEnabled()) return err("Email sign-in isn't on yet. Use the personal link we sent you.");
+    const key = mailKey(body.signInCode.email);
+    if (limited(`code:${ip}`, 20, 10 * 60_000) || limited(`code:${key}`, 10, 10 * 60_000))
+      return err("That's a lot of tries in 10 minutes. Wait 10 minutes, or open the link in the email instead.", 429);
+    const code = String(body.signInCode.code ?? "").replace(/\s/g, "");
+    if (!/^\d{6}$/.test(code)) return err("Type the 6 digits from the email.");
+    const m = await redeemCode(key, code);
+    if (!m) return err(CODE_FAILED, 401);
     await touch(m.token, ip).catch((e) => console.error("sign-in network not saved", e));
     return withSession(req, NextResponse.json({ ok: true }), m.token);
   }
@@ -221,25 +272,46 @@ export const POST = guarded(async (req: NextRequest) => {
   if (typeof body.emailLink === "string") {
     if (!emailEnabled()) return err("Email sign-in isn't on yet. Use the personal link we sent you.");
     if (limited(`email:${ip}`, 5, 60 * 60_000)) return err("That's 5 requests in an hour, which is the limit. Check your inbox, or try again in an hour.", 429);
+    // Counted for every address, member or not, so the limit says nothing about who is a member.
+    if (limited(`email:${mailKey(body.emailLink)}`, 3, 20 * 60_000))
+      return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
     const m = await memberByEmail(body.emailLink);
-    if (m) {
-      const e = signInEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(m.token)}`);
-      await sendEmail(m.email, e.subject, e.text, e.html);
-    }
-    // Same answer either way, so nobody can test which emails are members.
-    return NextResponse.json({ ok: true, sent: true });
+    // A one-time link and code (lib/signin.ts), in the background. Same answer either way.
+    if (m?.email) sendOneTime(req, m, "signin");
+    return NextResponse.json({ ok: true, sent: true, message: LINK_ON_ITS_WAY });
+  }
+
+  // Signed in: email myself a one-time link (to open Trading Post on another device).
+  if (body.emailMe === true) {
+    const me = await memberForToken(req.cookies.get(COOKIE)?.value ?? null);
+    if (!me) return err(SIGNED_OUT, 401);
+    if (!emailEnabled() || !me.email) return err("Email sign-in isn't on yet. Copy your personal link instead.");
+    if (limited(`email:${mailKey(me.email)}`, 3, 20 * 60_000)) return err("We've sent 3 links in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
+    sendOneTime(req, me, "signin");
+    return NextResponse.json({ ok: true, sent: true, message: "Sent. Check your email for a link that works once, for 20 minutes." });
+  }
+
+  // "Sign out on other devices": a new personal token. This device stays signed in with it.
+  if (body.rotateLink === true) {
+    if (limited(`rotate:${ip}`, 10, 60 * 60_000)) return err("That's 10 in an hour, which is the limit. Try again in an hour.", 429);
+    const fresh = await rotateToken(req.cookies.get(COOKIE)?.value ?? null);
+    if (!fresh) return err(SIGNED_OUT, 401);
+    return withSession(req, NextResponse.json({ ok: true, token: fresh, message: "Signed out everywhere else. Your old sign-in link stopped working, so copy the new one." }), fresh);
   }
 
   if (body.join && typeof body.join === "object") {
     if (limited(`join:${ip}`, 10, 60 * 60_000)) return err("That's 10 sign-ups from this network in an hour, which is the limit. Try again in an hour.", 429);
     // The name is cut to its 80 characters here, on a whole character (joinMember cuts by unit).
     body.join.name = tidy(body.join.name, 80);
+    // The per-address limit of the sign-in emails, counted for every address (member or not).
+    if (emailEnabled() && limited(`email:${mailKey(body.join.email)}`, 3, 20 * 60_000))
+      return err("We've sent 3 links to that email in the last 20 minutes. Check your inbox and spam, or try again later.", 429);
     try {
       // x-cron-secret: only so whoever runs the server can create the first admin while email is off (see joinMember).
       const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip, req.headers.get("x-cron-secret"));
       if (emailEnabled()) {
-        const e = signInEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(m.token)}`);
-        await sendEmail(m.email, e.subject, e.text, e.html);
+        // A one-time link to finish joining (using it proves the address), or for a member, to sign in. Same answer either way.
+        sendOneTime(req, m, m.existing ? "signin" : "join");
         return NextResponse.json({ ok: true, sent: true });
       }
       return withSession(req, NextResponse.json({ ok: true }), m.token);

@@ -68,6 +68,7 @@ import type {
   ScanSummary, View,
 } from "./tableTypes";
 import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
+import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -155,6 +156,8 @@ interface Profile {
   onboarded?: boolean;
   /** Turned the weekly email off (Your credits, or the unsubscribe link). */
   digestOff?: boolean;
+  /** Turned off the email that says a member sent them a message. */
+  messageEmailOff?: boolean;
   /** Asked to hear about Pro. */
   proInterest?: boolean;
 }
@@ -211,7 +214,8 @@ interface StoredBenchRate {
   revenue: string | null;
   at: string;
 }
-export interface State {
+/** Messages between members, one-time sign-in links and rotated tokens: see lib/messageState.ts. */
+export interface State extends MessagingState {
   /** `by` is a member id, or "scan" for a company the weekly scan added. */
   companies: (Added & { name: string })[];
   /** `source` is set for engagements the weekly scan added ("Demand scan"). */
@@ -732,8 +736,27 @@ function graph(seed: Seed, s: State): Graph {
 
 /* ---------- helpers ---------- */
 
-export const memberByToken = (seed: Seed, token: string | null | undefined, s?: State): Member | null =>
-  (token && (seed.members.find((m) => m.token === token) ?? s?.members.find((m) => m.token === token))) || null;
+/**
+ * The member a personal sign-in token belongs to. A seed member who chose "Sign out on other
+ * devices" has a new token in State.tokens, and the seed's one stops working. The member comes
+ * back with the token that works now.
+ */
+export const memberByToken = (seed: Seed, token: string | null | undefined, s?: State): Member | null => {
+  if (!token) return null;
+  const over = s?.tokens;
+  if (over) {
+    for (const m of seed.members) {
+      const t = over[m.id];
+      if (t ? t === token : m.token === token) return t ? { ...m, token: t } : m;
+    }
+  } else {
+    const m = seed.members.find((x) => x.token === token);
+    if (m) return m;
+  }
+  return s?.members.find((m) => m.token === token) ?? null;
+};
+/** A seed member with the token that works now (see memberByToken). */
+const withToken = (m: Member, s: State): Member => (s.tokens?.[m.id] ? { ...m, token: s.tokens[m.id] } : m);
 
 export async function memberForToken(token: string | null | undefined): Promise<Member | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
@@ -746,7 +769,8 @@ export async function memberByEmail(emailRaw: string): Promise<Member | null> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   // One inbox is one account, as at join: another spelling of a member's Gmail address finds that member.
   const inbox = inboxKey(email);
-  return seed.members.find((m) => m.email && inboxKey(m.email) === inbox) ?? s.members.find((m) => inboxKey(m.email) === inbox) ?? null;
+  const seeded = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
+  return (seeded ? withToken(seeded, s) : null) ?? s.members.find((m) => inboxKey(m.email) === inbox) ?? null;
 }
 
 const inviteCodes = new Map<string, string>();
@@ -1259,7 +1283,7 @@ export async function joinMember(
     const seedMember = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
     const joined = s.members.find((m) => inboxKey(m.email) === inbox);
     if (seedMember || joined) {
-      if (emailEnabled()) return { ...(seedMember ?? joined)!, existing: true }; // route emails them their link
+      if (emailEnabled()) return { ...(seedMember ? withToken(seedMember, s) : joined)!, existing: true }; // route emails them a sign-in link
       throw new ActionError("That email already belongs to a member. Sign in with your personal link.");
     }
     // An admin address nobody holds yet: typing it must not hand out admin rights.
@@ -1275,8 +1299,8 @@ export async function joinMember(
     const m = {
       id: newId("j", name), name, email, title: "Member", token: randomBytes(12).toString("base64url"), at: new Date().toISOString(), ipHash,
       ...(referrer && !sameNetwork ? { referredBy: referrer.id } : {}),
-      // With email on, the sign-in link goes only to this address: whoever uses it owns the address (see trustOf).
-      ...(emailEnabled() ? { proven: true } : {}),
+      // With email on, the one-time link to finish joining goes only to this address: using it
+      // proves the address and sets `proven` (lib/signin.ts, see trustOf).
     };
     s.members.push(m);
     keepIp(s, m.id, ipHash);
@@ -1806,6 +1830,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       added,
       unlocked,
       digest: !prof.digestOff,
+      unread: unreadCount(s, me.id),
+      messageEmail: !prof.messageEmailOff,
       proInterest: !!prof.proInterest,
       // Only the viewer's own. Nobody else's private rate ever leaves the server.
       benchRates: s.benchRates
@@ -1843,7 +1869,7 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
     email: emailEnabled(),
     contact: contactInfo(),
     ...(me && scan ? { benchmarks: benchmarks(seed, g, s, me.id), scan } : {}),
-    ...(me && scan && admin ? { admin: adminStats(seed, s, g, idx, nowMs, scan, entityOf) } : {}),
+    ...(me && scan && admin ? { admin: { ...adminStats(seed, s, g, idx, nowMs, scan, entityOf), messages: messageStats(s) }, reportedMessages: reportedMessages(s, memberName) } : {}),
   };
 }
 
@@ -2279,6 +2305,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
     void runScan(origin).catch((e) => console.error("scan failed", e));
     return { message: "Scan started. It reads several job boards, so give it a few minutes." };
   }
+  // Messages between members live in lib/messages.ts (loaded here, so the two files don't import each other at start).
+  if (typeof a?.type === "string" && a.type.startsWith("message.")) return (await import("./messages")).performMessage(token, a, origin);
   const out = await mutate((s, seed): ActionResult & { refused?: string } => {
     const me = memberByToken(seed, token, s);
     if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
@@ -3273,6 +3301,13 @@ export async function perform(token: string | null, a: Action, origin?: string):
             s.profiles[me.id] = p;
             return { message: a.digest ? "The weekly email is on. It goes out when new roles open." : "The weekly email is off. We won't send another one." };
           }
+          if (typeof a.messageEmail === "boolean") {
+            const p = { ...(s.profiles[me.id] ?? {}) };
+            if (a.messageEmail) delete p.messageEmailOff;
+            else p.messageEmailOff = true;
+            s.profiles[me.id] = p;
+            return { message: a.messageEmail ? "We'll email you when a member messages you." : "Message emails are off. New messages still show in Messages." };
+          }
           return { message: "Saved." };
         }
         default:
@@ -3320,8 +3355,20 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
   const benchRates = s.benchRates
     .map(({ fn, kind, amount, revenue }) => ({ fn, kind, amount, revenue }))
     .sort((a, b) => a.fn.localeCompare(b.fn) || a.kind.localeCompare(b.kind) || a.amount - b.amount || (a.revenue ?? "").localeCompare(b.revenue ?? ""));
-  return { ...s, ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)), benchRates };
+  // Admins never read members' conversations: they leave without their texts (the volume's daily
+  // snapshots keep them). One-time sign-in links are short-lived and stay behind.
+  const { signins: _signins, ...rest } = s; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const conversations = s.conversations?.map((c) => ({ ...c, messages: c.messages.map((m) => ({ ...m, text: "" })) }));
+  return { ...rest, ...(conversations ? { conversations } : {}), ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)), benchRates };
 }
+
+/**
+ * The parts of this file that lib/messages.ts and lib/signin.ts build on. They change the state
+ * only through `mutate` (one writer, in order), and read it through the same helpers the view uses.
+ */
+export const tableInternals = {
+  mutate, graph, memberIndex, seatHolder, signedIn, valueOf, live, cellOf, identityHidden, tracksOf, pubId, inboxKey, firstName, ID_KEY,
+};
 
 /* ---------- last seen ---------- */
 

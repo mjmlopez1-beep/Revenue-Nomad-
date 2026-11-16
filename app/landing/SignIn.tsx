@@ -2,7 +2,8 @@
 
 /**
  * Sign-in panel. Members paste their personal link or the code at the end of it.
- * With an email provider on, they can also ask for the link by email.
+ * With an email provider on, they can also ask for a one-time link by email, and type the
+ * 6-digit code from that email (for opening Trading Post on another device).
  * A dialog on desktop, a bottom sheet on phones. It always says where to get a lost link:
  * the support address when the server sends one, otherwise the member who invited them.
  * Opening it adds a history entry, so the back gesture closes it instead of leaving the site.
@@ -100,6 +101,11 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
   const [mail, setMail] = useState("");
   const [mailState, setMailState] = useState<"idle" | "busy" | "sent">("idle");
   const [mailErr, setMailErr] = useState<string | null>(null);
+  /** The 6-digit code from the sign-in email, for opening Trading Post on another device. */
+  const [digits, setDigits] = useState("");
+  const [digitsErr, setDigitsErr] = useState<string | null>(null);
+  const [digitsBusy, setDigitsBusy] = useState(false);
+  const digitsRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -176,6 +182,28 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
       return;
     }
     setMailState("sent");
+    setTimeout(() => digitsRef.current?.focus(), 30);
+  };
+
+  const signInWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (digitsBusy) return;
+    const v = digits.replace(/\D/g, "");
+    if (v.length !== 6) {
+      setDigitsErr("Type the 6 digits from the email.");
+      return;
+    }
+    setDigitsBusy(true);
+    setDigitsErr(null);
+    const r = await post({ signInCode: { email: mail.trim(), code: v } });
+    if (r.error) {
+      setDigitsBusy(false);
+      setDigitsErr(r.error);
+      return;
+    }
+    await leave();
+    await onSignedIn();
+    setDigitsBusy(false);
   };
 
   return (
@@ -232,13 +260,56 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
           <>
             <hr className="lp-or" />
             {mailState === "sent" ? (
-              <p className="lp-dialog-ok" role="status">
-                If that email has an account, your link is on its way. Give it a minute, and check spam if it doesn&apos;t show up.
-              </p>
+              <form onSubmit={signInWithCode} noValidate className="lp-dialog-form">
+                <p className="lp-dialog-ok" role="status">
+                  If that email is on Trading Post, a link is on its way. It works once, for 20 minutes. Check spam if it doesn&apos;t show up.
+                </p>
+                <label className="lp-field-label" htmlFor={`${id}-digits`}>
+                  On another device? Type the 6-digit code from the email
+                </label>
+                <div className="lp-dialog-row">
+                  <input
+                    ref={digitsRef}
+                    id={`${id}-digits`}
+                    className="input lp-dialog-input lp-code-input num"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={7}
+                    placeholder="123456"
+                    value={digits}
+                    onChange={(e) => {
+                      setDigits(e.target.value);
+                      if (digitsErr) setDigitsErr(null);
+                    }}
+                    aria-invalid={!!digitsErr}
+                    aria-describedby={digitsErr ? `${id}-digits-err` : undefined}
+                  />
+                  <button type="submit" className="btn btn-pine lp-dialog-btn" disabled={digitsBusy} aria-busy={digitsBusy}>
+                    {digitsBusy ? "Signing in" : "Sign in"}
+                  </button>
+                </div>
+                {digitsErr ? (
+                  <p className="lp-field-err" id={`${id}-digits-err`} role="alert">
+                    {digitsErr}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  className="lp-linkbtn"
+                  onClick={() => {
+                    setMailState("idle");
+                    setDigits("");
+                    setDigitsErr(null);
+                  }}
+                >
+                  Use a different email
+                </button>
+              </form>
             ) : (
               <form onSubmit={emailLink} noValidate className="lp-dialog-form">
                 <label className="lp-field-label" htmlFor={`${id}-mail`}>
-                  Or get your link by email
+                  Or email me a sign-in link
                 </label>
                 <div className="lp-dialog-row">
                   <input
@@ -257,7 +328,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, noteTone
                     aria-describedby={mailErr ? `${id}-mail-err` : undefined}
                   />
                   <button type="submit" className="btn lp-dialog-btn" disabled={mailState === "busy"} aria-busy={mailState === "busy"}>
-                    {mailState === "busy" ? "Sending" : "Email my link"}
+                    {mailState === "busy" ? "Sending" : "Email me a link"}
                   </button>
                 </div>
                 {mailErr ? (

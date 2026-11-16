@@ -40,6 +40,8 @@ import { UiCtx, CellUiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFl
 import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
+import { MessagesPage, useUnread } from "./Messages";
+import { emailMeLink } from "./Settings";
 import { FilterPanel } from "./Filters";
 import { DataTable } from "./Tables";
 import { CardList } from "./Cards";
@@ -77,12 +79,12 @@ function previousVisit(): string | null {
 /** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
 type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
-type Page = "table" | "credits" | "rates" | "seats" | "metrics";
+type Page = "table" | "credits" | "rates" | "seats" | "metrics" | "messages";
 
 /* ---------- the place in the address bar ---------- */
 
-const PAGES: Page[] = ["seats", "credits", "rates", "metrics"];
-const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics" };
+const PAGES: Page[] = ["seats", "credits", "rates", "metrics", "messages"];
+const PAGE_TITLE: Record<Page, string> = { table: "", seats: "Your seats", credits: "Your credits", rates: "Rate benchmarks", metrics: "Pilot metrics", messages: "Messages" };
 const TYPE_PARAM: Record<RecordType, string> = { companies: "companies", engagements: "seats", people: "people" };
 const TYPE_TITLE: Record<RecordType, string> = { companies: "Companies", engagements: "Seats", people: "People" };
 /** Each list's noun, one and many ("4 seats match"). */
@@ -206,6 +208,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [page, setPage] = useState<Page>(() => (start === "seats" ? "seats" : place0.p === "metrics" && !view.admin ? "table" : place0.p ?? "table"));
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
   const [moveOff, dismissMove] = useMoveDismissals();
+  /** Conversations with something unread (Messages), for the badges on the avatar and in the menu. */
+  const unread = useUnread(view.me?.unread);
 
   /* ----- overlays ----- */
   // A link or a reload with ?c= opens that company's record at once (its row is found on mount).
@@ -1329,6 +1333,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           starter={view.stats?.starter}
           listSwitch={typeSwitch}
           searchInList={phone && page === "table"}
+          unread={unread}
         />
         {me.asMember && (
           <div className="tp-asmember" role="status">
@@ -1341,7 +1346,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
 
         {page === "credits" ? (
           <main className="tp-main tp-main-page">
-            <MyCredits view={view} onBack={() => setPage("table")} />
+            <MyCredits view={view} onBack={() => setPage("table")} refresh={refresh} />
           </main>
         ) : page === "rates" ? (
           <main className="tp-main tp-main-page">
@@ -1350,6 +1355,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         ) : page === "metrics" && view.admin ? (
           <main className="tp-main tp-main-page">
             <Admin view={view} refresh={refresh} onBack={() => setPage("table")} />
+          </main>
+        ) : page === "messages" ? (
+          <main className="tp-main tp-main-page">
+            <MessagesPage onBack={() => setPage("table")} openCompany={(id) => openCompany(id)} />
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
@@ -1620,11 +1629,14 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               { label: "The table", current: page === "table", onClick: () => (setEditor(null), setDrawer(null), setPage("table")) },
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
+              { label: "Messages", badge: unread, current: page === "messages", onClick: () => (setEditor(null), setDrawer(null), setPage("messages")) },
               { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
+              // With email on: a one-time link by email, to open Trading Post on another device.
+              ...(view.email ? [{ label: "Send me a new sign-in link", onClick: () => void emailMeLink(toast) }] : []),
               // Admins only: the server builds the table as a member's (hidden companies hidden, no admin pages).
               ...(me.admin || me.asMember ? [{ label: "See it as a member", checked: !!me.asMember, onClick: () => seeAsMember(!me.asMember) }] : []),
               // Single-letter shortcuts can be switched off (speech input, stray keys). Not offered on touch screens, which have none.
