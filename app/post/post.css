@@ -43,7 +43,7 @@
 }
 .tp-small {
   font-size: 13px;
-  line-height: 18px;
+  line-height: 20px;
 }
 .tp-mt8 {
   margin-top: 8px;
@@ -498,6 +498,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 20px;
+  letter-spacing: -0.005em;
 }
 .tp-menu-item {
   display: flex;
@@ -554,9 +556,9 @@
   border-bottom: 1px solid var(--line);
 }
 .tp-credpop-n {
-  font-size: 40px;
-  line-height: 40px;
-  letter-spacing: -0.03em;
+  font-size: 32px;
+  line-height: 36px;
+  letter-spacing: -0.02em;
   color: var(--ink);
   font-weight: 800;
 }
@@ -600,10 +602,10 @@
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
-  line-height: 19px;
+  line-height: 20px;
   color: var(--body-ink);
 }
-/* "+1" and "−1" in a list of rules (the My credits page): volt earns, pine spends. */
+/* "+1" and "−1" in a list of rules (the Your credits page): volt earns, pine spends. */
 .tp-plus,
 .tp-minus {
   display: inline-block;
@@ -722,11 +724,12 @@
   border-bottom: 1px solid var(--line);
 }
 .tp-filters-title {
-  font-weight: 800;
+  font-weight: 700;
   color: var(--ink);
-  font-size: 15px;
+  font-size: 17px;
   letter-spacing: -0.01em;
   flex: 1;
+  line-height: 24px;
 }
 /* A text link that is a button: Clear all, Show all 28 industries. */
 .tp-flink {
@@ -735,7 +738,7 @@
   background: none;
   padding: 4px 2px;
   font-size: 13px;
-  line-height: 18px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--pine);
   white-space: nowrap;
@@ -753,9 +756,9 @@
 }
 /* Group titles are sentence case and ink. The labels under them are smaller and muted. */
 .tp-fgroup-h {
-  font-size: 13.5px;
+  font-size: 15px;
   line-height: 20px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.005em;
   color: var(--ink);
   margin-bottom: 8px;
@@ -764,8 +767,8 @@
   margin-bottom: 14px;
 }
 .tp-flabel {
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--muted);
   margin-bottom: 6px;
@@ -781,7 +784,7 @@
   border: 0;
   border-radius: 6px;
   background: none;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
   font-weight: 400;
   text-align: left;
@@ -892,8 +895,8 @@
   display: grid;
 }
 .tp-fnote {
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
   margin: 4px 0 8px;
 }
@@ -920,23 +923,13 @@
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--body-ink);
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 20px;
 }
 .tp-strip-t {
   flex: 1;
   min-width: 0;
   padding: 4px 0;
-}
-.tp-strip-volt {
-  background: var(--volt-soft);
-  border-color: #c4f2dc;
-  color: var(--pine);
-}
-/* Ember is never a wash. A strip that asks for attention is the same calm line in ink. */
-.tp-strip-ember {
-  color: var(--ink);
-  font-weight: 600;
 }
 .tp-strip-acts {
   display: flex;
@@ -1140,9 +1133,10 @@
 }
 .tp-check-title {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
   color: var(--ink);
+  letter-spacing: -0.005em;
 }
 .tp-check-n {
   font-size: 13px;
@@ -1361,8 +1355,16 @@
 .tp-table tbody tr:focus-visible {
   outline: none;
 }
+/*
+ * Keyboard focus on a row: the 2px volt ring, drawn inside the row (rows touch, and the table
+ * scrolls under a sticky column, so an outline would be cut off).
+ */
 .tp-table tbody tr:focus-visible td {
   background: var(--row-on);
+  box-shadow: inset 0 2px 0 var(--volt), inset 0 -2px 0 var(--volt);
+}
+.tp-table tbody tr:focus-visible td:last-child {
+  box-shadow: inset 0 2px 0 var(--volt), inset 0 -2px 0 var(--volt), inset -2px 0 0 var(--volt);
 }
 .tp-table .tp-sticky {
   position: sticky;
@@ -1376,9 +1378,8 @@
 .tp-table tbody tr.sel td.tp-sticky {
   box-shadow: inset 3px 0 0 var(--pine);
 }
-/* Keyboard focus on a row: the volt edge. */
 .tp-table tbody tr:focus-visible td.tp-sticky {
-  box-shadow: inset 3px 0 0 var(--volt);
+  box-shadow: inset 0 2px 0 var(--volt), inset 0 -2px 0 var(--volt), inset 2px 0 0 var(--volt);
 }
 .w-co {
   min-width: 240px;
@@ -1565,7 +1566,7 @@
 /* The member's own function: pine, never volt (volt means earn). */
 .tp-fn-me {
   color: var(--pine);
-  font-weight: 700;
+  font-weight: 600;
 }
 /* Mentioned only in member stories, not a fractional seat. */
 .tp-fn-story {
@@ -1764,15 +1765,15 @@
 }
 .tp-noresults h3 {
   font-size: 19px;
-  line-height: 25px;
+  line-height: 26px;
   font-weight: 700;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
 }
 .tp-noresults p {
   max-width: 46ch;
-  font-size: 14.5px;
-  line-height: 22px;
+  font-size: 15px;
+  line-height: 24px;
   color: var(--muted);
 }
 .tp-noresults-acts {
@@ -1792,23 +1793,33 @@
 /* ---------- inline editor ---------- */
 .tp-editor {
   display: grid;
+  /* One column that never grows past the popover, so a long company name is cut off instead of widening it. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 12px;
 }
 .tp-ed-head {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
   color: var(--ink);
+  letter-spacing: -0.005em;
 }
+/* The company the fact belongs to: its own line under the title, one line, cut off with the full name in the tooltip. */
 .tp-ed-co {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 400;
+  letter-spacing: 0;
   color: var(--muted);
-  margin-left: 4px;
 }
 .tp-ed-hint {
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
   margin-top: -4px;
 }
@@ -1852,7 +1863,7 @@
   gap: 6px;
 }
 .tp-chipbtn {
-  height: 30px;
+  height: 28px;
   cursor: pointer;
   transition: border-color var(--t), background var(--t), color var(--t);
 }
@@ -1872,7 +1883,7 @@
 .tp-chip-big {
   height: 40px;
   padding: 0 14px;
-  font-size: 14px;
+  font-size: 13px;
 }
 .tp-month {
   display: flex;
@@ -2083,9 +2094,9 @@
   border-top: 1px solid var(--line);
 }
 .tp-dsec-h {
-  font-size: 15px;
-  line-height: 20px;
-  font-weight: 800;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   margin-bottom: 12px;
   display: flex;
@@ -2101,7 +2112,7 @@
 .tp-dsec-note {
   margin: -4px 0 12px;
   font-size: 13px;
-  line-height: 19px;
+  line-height: 20px;
   color: var(--muted);
 }
 .tp-dsec-note.tp-mt8 {
@@ -2109,7 +2120,7 @@
 }
 .tp-about {
   font-size: 14px;
-  line-height: 21px;
+  line-height: 20px;
   color: var(--body-ink);
 }
 /* One seat: a card. 1px line, 10px corner, no shadow. */
@@ -2172,10 +2183,11 @@
 .tp-frow-l {
   font-size: 13px;
   color: var(--muted);
+  line-height: 20px;
 }
 .tp-frow-v {
   min-width: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
 }
 .tp-frow-v .tp-val {
@@ -2250,8 +2262,8 @@
   margin-left: 2px;
 }
 .tp-sublabel {
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--muted);
   margin: 14px 0 6px;
@@ -2283,9 +2295,10 @@
 .tp-person-title {
   font-weight: 700;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
   overflow-wrap: anywhere;
+  letter-spacing: -0.005em;
 }
 .tp-person-top .tp-unlockall {
   margin-left: auto;
@@ -2354,7 +2367,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  line-height: 18px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--ink);
 }
@@ -2371,8 +2384,8 @@
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
 }
 
@@ -2431,9 +2444,9 @@
 }
 .tp-modal-title {
   flex: 1;
-  font-size: 19px;
-  line-height: 26px;
-  letter-spacing: -0.015em;
+  font-size: 22px;
+  line-height: 28px;
+  letter-spacing: -0.02em;
 }
 .tp-modal-body {
   flex: 1;
@@ -2471,12 +2484,12 @@
 /* Helper copy in the add flow: a full sentence at reading size, never a caption. */
 .am-note {
   font-size: 14px;
-  line-height: 21px;
+  line-height: 20px;
   color: var(--body-ink);
 }
 .am-hint {
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
 }
 .am-hint-up {
@@ -2491,8 +2504,8 @@
 }
 .tp-find .tp-sublabel {
   margin: 4px 0 -4px;
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
 }
 .tp-matches {
   display: grid;
@@ -2552,6 +2565,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  letter-spacing: -0.005em;
 }
 .tp-match-miss {
   flex: none;
@@ -2843,7 +2857,6 @@
 .tp-sheet .tp-newco .tp-chipbtn {
   height: 44px;
   padding: 0 14px;
-  font-size: 14px;
 }
 .tp-sheet .tp-picked .tp-seg-b {
   height: 44px;
@@ -2861,7 +2874,7 @@
   }
 }
 
-/* ---------- my credits page ---------- */
+/* ---------- your credits page ---------- */
 .tp-page {
   max-width: 960px;
   margin: 0 auto;
@@ -2874,7 +2887,7 @@
   border-radius: 4px;
   background: none;
   padding: 6px 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
   font-weight: 600;
   color: var(--pine);
@@ -2908,7 +2921,7 @@
   line-height: 36px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-num);
   color: var(--ink);
 }
 .tp-stat-n.ember {
@@ -2929,8 +2942,8 @@
 }
 .cr-stat-sub {
   margin-top: 6px;
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
 }
 .cr-bar {
@@ -2995,13 +3008,13 @@
 }
 .cr-limit-h {
   margin-bottom: 4px;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: -0.005em;
 }
 .cr-note {
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 20px;
   color: var(--muted);
 }
@@ -3072,9 +3085,7 @@
 }
 /* Admins: reported facts. */
 .cr-count {
-  height: 24px;
   padding: 0 8px;
-  font-size: 13px;
 }
 .cr-review .cr-note {
   margin-bottom: 12px;
@@ -3087,7 +3098,7 @@
   gap: 12px 16px;
   padding: 12px 0;
   border-top: 1px solid var(--line);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
 }
 .tp-review-row:last-child {
@@ -3105,9 +3116,7 @@
   color: var(--ink);
 }
 .cr-review-state {
-  height: 24px;
   padding: 0 8px;
-  font-size: 13px;
 }
 .tp-review-acts {
   display: flex;
@@ -3137,16 +3146,16 @@
 .tp-ltable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
 }
 .tp-ltable thead th {
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -3323,9 +3332,9 @@
   flex: 1;
   min-width: 0;
   font-weight: 800;
-  font-size: 17px;
-  line-height: 23px;
-  letter-spacing: -0.01em;
+  font-size: 19px;
+  line-height: 26px;
+  letter-spacing: -0.015em;
   color: var(--ink);
 }
 .tp-sheet-body {
@@ -3486,7 +3495,7 @@
 .tp-pchip::after {
   content: "";
   position: absolute;
-  inset: -4px 0;
+  inset: -5px 0;
 }
 .tp-pchip:active {
   background: var(--surface-2);
@@ -3613,9 +3622,10 @@
 }
 /* The card's title. */
 .tp-pcard .tp-co-name {
-  font-size: 16px;
-  line-height: 22px;
+  font-size: 17px;
+  line-height: 24px;
   letter-spacing: -0.01em;
+  font-weight: 700;
 }
 .tp-pcard-line {
   margin-top: 10px;
@@ -3683,10 +3693,11 @@
   padding: 0 10px;
 }
 .tp-phone .add::after,
+.tp-sheet .add::after,
 .tp-rsheet .add::after {
   content: "";
   position: absolute;
-  inset: -6px -2px;
+  inset: -7px -2px;
 }
 /*
  * Phones: a locked fact always reads "Unlock · 1 credit". Plain pine text and a 44px target,
@@ -3787,6 +3798,7 @@
 .tp-rsheet .tp-dname {
   font-size: 24px;
   line-height: 30px;
+  letter-spacing: -0.025em;
 }
 .tp-rsheet .tp-dbar .tp-iconbtn {
   width: 44px;
@@ -4007,15 +4019,10 @@
   }
   .tp-page-h {
     font-size: 24px;
+    line-height: 30px;
   }
   .tp-review-row {
     grid-template-columns: 1fr;
-  }
-  .tp-rules {
-    grid-template-columns: 1fr;
-  }
-  .tp-modal-head .tp-small {
-    display: none;
   }
 }
 
@@ -4241,7 +4248,7 @@
 /* What a credit buys here, in plain text. No wash. */
 .tp-hidden-note {
   margin: 12px 0 0;
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 20px;
   color: var(--body-ink);
 }
@@ -4272,7 +4279,7 @@
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
 }
 .bm-c-med {
@@ -4288,9 +4295,9 @@
   padding: 4px 12px 8px;
   background: var(--surface-2);
   text-align: right;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -4340,12 +4347,15 @@
 .bm-fn-name {
   margin-right: 8px;
   font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
 }
 .bm-table tr.mine .tp-bm-fn {
   box-shadow: inset 3px 0 0 var(--pine);
 }
 .bm-table tr.mine .bm-fn-name {
-  font-weight: 800;
+  font-weight: 700;
 }
 .bm-chip {
   height: 24px;
@@ -4506,4 +4516,75 @@
     flex: none;
     width: 88px;
   }
+}
+
+/* ---------- phones: 44px to the thumb ---------- */
+/*
+ * Every control on a phone is at least 44px in both directions. Chips, tabs and buttons grow
+ * to it. Text controls (Confirm, Report, Show more, a link in a record header) keep their size
+ * and get a 44px hit area around them, so a dense card stays dense.
+ */
+.tp-phone .tp-rtype-b {
+  min-height: 44px;
+}
+.tp-sheet .tp-fchip,
+.tp-sheet .tp-chipbtn,
+.tp-sheet .tp-seg-b {
+  height: 44px;
+}
+.tp-rsheet .btn-sm,
+.tp-rsheet .tp-dbar .tp-followbtn,
+.tp-phone .tp-page .btn-sm {
+  min-height: 44px;
+}
+.tp-brand-phone {
+  min-height: 44px;
+}
+.tp-top-phone .tp-credits {
+  min-width: 44px;
+  justify-content: center;
+}
+.tp-search-phone,
+.tp-sheet .tp-inline-search,
+.tp-rsheet .tp-inline-search {
+  min-height: 44px;
+}
+.tp-sheet .tp-fsearch {
+  height: 44px;
+}
+.tp-phone .tp-tbtn,
+.tp-rsheet .tp-tbtn,
+.tp-sheet .tp-tbtn,
+.tp-phone .tp-flink,
+.tp-sheet .tp-flink,
+.tp-rsheet .tp-dlinks a,
+.tp-rsheet .tp-intro {
+  position: relative;
+}
+.tp-phone .tp-tbtn::after,
+.tp-rsheet .tp-tbtn::after,
+.tp-sheet .tp-tbtn::after,
+.tp-phone .tp-flink::after,
+.tp-sheet .tp-flink::after,
+.tp-rsheet .tp-dlinks a::after,
+.tp-rsheet .tp-intro::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  min-width: 44px;
+  height: 44px;
+  transform: translateY(-50%);
+}
+
+/* ---------- phones: cells ---------- */
+/* A fact on a phone is 13.5px wherever it sits (a card, a record, a page table), 13px on wider screens. */
+.tp-phone .tp-frow-v,
+.tp-phone .tp-ltable,
+.tp-phone .bm-table,
+.tp-phone .tp-pm-rows > div,
+.tp-phone .tp-pm-table,
+.tp-sheet .tp-ftoggle {
+  font-size: 13.5px;
 }

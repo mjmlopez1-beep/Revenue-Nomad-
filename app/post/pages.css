@@ -17,23 +17,14 @@
   color: var(--ink);
   white-space: nowrap;
 }
-/* The dot is the only ember a row or a card carries: this role is open now. */
-.tp-role-dot {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ember);
-  animation: tp-live 2.4s ease-out infinite;
-}
-@keyframes tp-live {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.45);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 5px rgba(255, 90, 31, 0);
-  }
+/*
+ * Ember is for two things on a screen at most. When two more urgent ones are up (a next-move
+ * card or a low balance, and the Hiring chip of an open record), the dots step back to gray.
+ * See emberTaken in TradingPost.tsx.
+ */
+.tp-ember-full .live-dot {
+  background: var(--faint);
+  animation: none;
 }
 .tp-role-date.closed {
   gap: 0;
@@ -56,17 +47,11 @@
 /* Hiring now: how fresh the open roles are. */
 .tp-scanline {
   font-size: 13px;
-  line-height: 18px;
+  line-height: 20px;
   color: var(--muted);
 }
 .tp-phone .tp-scanline {
   padding: 0 16px 10px;
-}
-
-/* ---------- numbers ---------- */
-/* Inside tabular figures the period, comma and colon stay proportional (see Num in Benchmarks.tsx). */
-.num .np {
-  font-variant-numeric: normal;
 }
 
 /* ---------- rate benchmarks ---------- */
@@ -97,7 +82,7 @@
   max-width: 640px;
   margin-top: -8px;
   font-size: 14px;
-  line-height: 21px;
+  line-height: 20px;
   color: var(--body-ink);
 }
 .tp-bm-fields {
@@ -111,8 +96,8 @@
   height: 32px;
 }
 .tp-bm-opt {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 400;
   color: var(--faint);
 }
 .tp-bm-share-foot {
@@ -151,10 +136,6 @@
 }
 .tp-phone .tp-bm-cta {
   padding: 16px;
-}
-.tp-phone .tp-bm-lead {
-  font-size: 15px;
-  line-height: 22px;
 }
 .tp-bm-mine {
   margin-top: 20px;
@@ -230,8 +211,8 @@
 }
 .tp-pm-sub {
   margin-top: 2px;
-  font-size: 12.5px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
 }
 .tp-pm-grid {
@@ -244,11 +225,6 @@
   min-width: 0;
   margin-top: 0;
   padding: 16px;
-}
-.tp-pm .tp-pm-card .tp-card-h {
-  font-size: 15px;
-  line-height: 20px;
-  letter-spacing: -0.005em;
 }
 .tp-pm-span2 {
   grid-column: span 2;
@@ -292,7 +268,7 @@
   gap: 12px;
   padding: 7px 0;
   border-top: 1px solid var(--surface-2);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
 }
 .tp-pm-rows > div:first-child {
@@ -311,15 +287,15 @@
 }
 .tp-pm-h3 {
   margin: 16px 0 0;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 700;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
   letter-spacing: 0;
   color: var(--muted);
 }
 .tp-pm-foot {
   margin-top: 8px;
-  line-height: 18px;
+  line-height: 20px;
 }
 .tp-pm-flag {
   font-weight: 600;
@@ -393,7 +369,7 @@
   width: 100%;
   margin-top: 8px;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
 }
 .tp-pm-table th,
@@ -412,9 +388,9 @@
 }
 .tp-pm-table thead th {
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 20px;
+  font-weight: 600;
   color: var(--muted);
 }
 .tp-pm-table tbody th,

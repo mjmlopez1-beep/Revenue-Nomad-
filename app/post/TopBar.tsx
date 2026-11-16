@@ -8,30 +8,16 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { LedgerRow, Me } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo } from "../ui/shared";
-import { fieldText, fmtTime, plural } from "./hooks";
+import { atTime, plural } from "./hooks";
+import { ledgerLine } from "./ledger";
 import { Anchored } from "./ui";
 
-export const REASON_LABEL: Record<string, string> = {
-  fill: "Added",
-  unlock: "Unlocked",
-  refund: "Refund, removed after review",
-  reversal: "Removed after review",
-  referral: "Invite bonus",
-  confirm: "Confirmed by members",
-};
-
-/** "Unlocked LinkedIn", "Added seat holder", "Refund, removed after review, rate". */
-export function ledgerWhat(l: LedgerRow): string {
-  const label = REASON_LABEL[l.reason] ?? l.reason;
-  const f = l.reason !== "referral" && l.field ? fieldText(l.field) : "";
-  if (!f) return label;
-  return l.reason === "refund" || l.reason === "reversal" ? `${label}, ${f}` : `${label} ${f}`;
-}
-/** Where: "at IBM", or the other member for invite bonuses. */
-export const ledgerWhere = (l: LedgerRow) => (!l.company ? "" : l.reason === "referral" ? ` · ${l.company}` : ` at ${l.company}`);
-
-export function CreditsPill({ me, onClick, btnRef }: { me: Me; onClick: () => void; btnRef?: RefObject<HTMLButtonElement | null> }) {
-  const low = me.credits <= 3;
+/**
+ * The balance. At 3 or fewer it turns ember, unless `quiet`: the next-move card is on the page
+ * and already says so, and a screen carries one urgent thing at a time.
+ */
+export function CreditsPill({ me, onClick, btnRef, quiet }: { me: Me; onClick: () => void; btnRef?: RefObject<HTMLButtonElement | null>; quiet?: boolean }) {
+  const low = me.credits <= 3 && !quiet;
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
   const prev = useRef(me.credits);
   useEffect(() => {
@@ -50,7 +36,7 @@ export function CreditsPill({ me, onClick, btnRef }: { me: Me; onClick: () => vo
       className={`tp-credits${low ? " low" : ""}`}
       onClick={onClick}
       aria-label={`You have ${plural(me.credits, "credit")}. Show where they came from.`}
-      title={low ? "You're running low. Add a fact you know to earn a credit." : undefined}
+      title={me.credits <= 3 ? "You're running low. Add a fact you know and you earn a credit." : undefined}
     >
       <span className="num tp-credits-n">{me.credits}</span>
       <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
@@ -71,11 +57,11 @@ export function EarnMeter({ me, onClick, compact }: { me: Me; onClick: () => voi
       type="button"
       className={`tp-meter${capped ? " capped" : ""}`}
       onClick={onClick}
-      title={capped ? `You've earned today's ${me.earnCap} credits. Earning reopens ${fmtTime(me.earnResetsAt)}.` : `You've earned ${me.earned24h} of the ${me.earnCap} credits you can earn in 24 hours.`}
+      title={capped ? `You've earned today's ${me.earnCap} credits. You can earn again ${atTime(me.earnResetsAt)}.` : `You've earned ${me.earned24h} of the ${me.earnCap} credits you can earn in 24 hours.`}
     >
       <span className="tp-meter-text num">
         {capped && !compact && me.earnResetsAt ? (
-          <>Earning reopens {fmtTime(me.earnResetsAt)}</>
+          <>Earn again {atTime(me.earnResetsAt)}</>
         ) : (
           <>
             <b>{capped ? me.earnCap : me.earned24h}</b> of {me.earnCap}
@@ -123,25 +109,26 @@ export function CreditsPopover({
       </div>
       <p className="tp-credpop-rules">
         {capped
-          ? `You've earned today's ${me.earnCap}. Earning reopens ${fmtTime(me.earnResetsAt)}. A credit still shows you a fact someone else added.`
+          ? `You've earned today's ${me.earnCap} credits. You can earn again ${atTime(me.earnResetsAt)}. A credit still shows you a fact someone else added.`
           : `Add a fact you know and you earn a credit, up to ${me.earnCap} a day. Spend a credit to see one someone else added.`}
       </p>
       <div className="tp-credpop-ledger">
         {ledger.length === 0 && <p className="muted tp-small">Nothing yet. Each credit you earn or spend is listed here.</p>}
-        {ledger.slice(0, 5).map((l, i) => (
-          <div key={i} className="tp-lrow">
-            <span className={`num tp-lrow-d${l.delta > 0 ? " up" : l.delta < 0 ? " down" : ""}`}>{l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "0"}</span>
-            <span className="tp-lrow-t" title={`${ledgerWhat(l)}${ledgerWhere(l)}`}>
-              {ledgerWhat(l)}
-              {l.company ? <span className="muted">{ledgerWhere(l)}</span> : null}
-              {l.delta === 0 && l.reason === "fill" && <span className="muted"> (past today&apos;s limit)</span>}
-            </span>
-            <span className="tp-lrow-at num">{timeAgo(l.at)}</span>
-          </div>
-        ))}
+        {ledger.slice(0, 5).map((l, i) => {
+          const s = ledgerLine(l, me.earnCap);
+          return (
+            <div key={i} className="tp-lrow">
+              <span className={`num tp-lrow-d${l.delta > 0 ? " up" : l.delta < 0 ? " down" : ""}`}>{l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "0"}</span>
+              <span className="tp-lrow-t" title={s.note ? `${s.text}. ${s.note}` : s.text}>
+                {s.text}
+              </span>
+              <span className="tp-lrow-at num">{timeAgo(l.at)}</span>
+            </div>
+          );
+        })}
       </div>
       <button type="button" className="btn btn-sm tp-credpop-all" onClick={onSeeAll}>
-        Open My credits
+        Open your credits
       </button>
     </Anchored>
   );
@@ -197,6 +184,7 @@ export function TopBar({
   onMenu,
   menuRef,
   onHome,
+  quietCredits,
 }: {
   me: Me;
   query: string;
@@ -209,6 +197,8 @@ export function TopBar({
   onMenu: () => void;
   menuRef: RefObject<HTMLButtonElement | null>;
   onHome: () => void;
+  /** The next-move card is on the page: a low balance stays in the bar's own colors. */
+  quietCredits?: boolean;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const search = (
@@ -267,7 +257,7 @@ export function TopBar({
               <button type="button" className="tp-iconbtn" aria-label="Search" onClick={() => setSearchOpen(true)}>
                 <IconSearch size={18} />
               </button>
-              <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} />
+              <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
               <button type="button" className="tp-iconbtn tp-iconbtn-volt" aria-label="Add what you know" onClick={onAdd}>
                 <IconPlus size={18} />
               </button>
@@ -291,7 +281,7 @@ export function TopBar({
       </button>
       <div className="tp-top-mid">{search}</div>
       <div className="tp-top-right">
-        <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} />
+        <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} quiet={quietCredits} />
         <EarnMeter me={me} onClick={onCredits} />
         <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>

@@ -7,9 +7,9 @@
  * One display heading. One volt button in view at a time: the join form's when a form is on
  * screen, the nav's when none is. The product visual is static HTML.
  */
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./landing.css";
-import { Brand, IconLock, type View } from "../ui/shared";
+import { Brand, IconLock, Num, type View } from "../ui/shared";
 import { EARN_CAP, GROUPS, REFERRAL_BONUS, type Entity } from "@/lib/tableFields";
 import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
@@ -26,24 +26,6 @@ export interface LandingProps {
 const STARTER_FALLBACK = 5;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
-
-/**
- * A count in tabular figures. This face's tabular set makes the comma as wide as a digit
- * ("1 , 024"), so the separators go back to their normal width.
- */
-function Num({ n }: { n: number }) {
-  const groups = fmt(n).split(",");
-  return (
-    <span className="num">
-      {groups.map((g, i) => (
-        <Fragment key={i}>
-          {i ? <span className="lp-sep">,</span> : null}
-          {g}
-        </Fragment>
-      ))}
-    </span>
-  );
-}
 
 /** What a member comes here to look up, and what each one costs. */
 const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
@@ -121,7 +103,7 @@ const faq = (starter: number): [string, string][] => [
   ],
   [
     `Why can I only earn ${EARN_CAP} credits a day?`,
-    "A cap takes away the reason to guess. Invite and confirmation bonuses count toward it. Anything over the cap is held and paid as room opens.",
+    "A limit takes away the reason to guess. Invite and confirmation bonuses count toward it. A bonus that would take you past it is held and paid when you have room.",
   ],
   ["Is there a limit on unlocking?", "A new account can unlock 20 things in its first 24 hours and 100 a day after that."],
   [
@@ -183,6 +165,8 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   const s = view.stats;
   // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 5).
   const starter = s.starter ?? STARTER_FALLBACK;
+  // Roles first seen in the last 7 days. A server that predates the count falls back to what is open now.
+  const opened = s.openedWeek ?? 0;
   const inviter = useInviter();
   const formInView = useFormInView(heroForm, finalForm);
 
@@ -201,7 +185,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   const proof: [number, string][] = [
     [s.companies, "companies"],
     [s.engagements, "seats on file"],
-    [s.people, "contacts"],
+    [s.people, "hiring contacts"],
     [s.members, "members"],
   ];
 
@@ -237,11 +221,18 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
         <section className="lp-hero">
           <div className="lp-wrap lp-hero-in">
             <div className="lp-hero-copy">
-              {s.openRoles > 0 ? (
+              {opened > 0 ? (
                 <p className="lp-live">
-                  <span className="lp-dot" aria-hidden />
+                  <span className="live-dot live-dot-lg" aria-hidden />
                   <span>
-                    <Num n={s.openRoles} /> open fractional {s.openRoles === 1 ? "role" : "roles"} right now
+                    <Num>{fmt(opened)}</Num> new fractional {opened === 1 ? "role" : "roles"} this week
+                  </span>
+                </p>
+              ) : s.openRoles > 0 ? (
+                <p className="lp-live">
+                  <span className="live-dot live-dot-lg" aria-hidden />
+                  <span>
+                    <Num>{fmt(s.openRoles)}</Num> open fractional {s.openRoles === 1 ? "role" : "roles"} right now
                   </span>
                 </p>
               ) : (
@@ -281,7 +272,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                 <div key={label} className="lp-proof-item">
                   <dt className="lp-proof-label">{label}</dt>
                   <dd className="lp-proof-num">
-                    <Num n={n} />
+                    <Num>{fmt(n)}</Num>
                   </dd>
                 </div>
               ))}

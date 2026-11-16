@@ -1,6 +1,6 @@
 "use client";
 
-/** Member settings shown on My credits. Today that is one switch: the weekly email of new open roles. */
+/** Member settings shown on Your credits. Today that is one switch: the weekly email of new open roles. */
 import { useEffect, useState } from "react";
 import { useUi } from "./ui";
 import "./pages.css";

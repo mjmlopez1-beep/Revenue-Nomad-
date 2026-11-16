@@ -16,9 +16,10 @@ import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import { CompanyLogo, IconCheck, IconChevron, IconPlus, fmtValue } from "../ui/shared";
 import { COMPANY_GTM, SEAT_ASK, cellKey, shown, type FactRef, type SeatInfo } from "./model";
-import { fmtTime, plural } from "./hooks";
+import { BENCH_RATE_HELP, atTime, plural } from "./hooks";
 import { earnRoom } from "./NextMove";
-import { useUi } from "./ui";
+import { MonthYear } from "./MonthYear";
+import { shortLabel, useUi } from "./ui";
 import "./seats.css";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -57,62 +58,6 @@ const companyQ = (name: string): Record<string, { q: string; hint?: string }> =>
   dealSize: { q: `How big is a typical deal at ${name}?` },
   salesCycle: { q: `How long does a deal take to close at ${name}?` },
 });
-
-/* ---------- month and year ---------- */
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const FIRST_YEAR = 1990;
-const yearOf = (v: string) => (/^\d{4}/.test(v) ? v.slice(0, 4) : "");
-const monthOf = (v: string) => (/^\d{4}-\d{2}$/.test(v) ? v.slice(5, 7) : "");
-
-/**
- * A month and a year as two plain selects, in place of the browser's month input (which shows
- * a row of dashes until it is touched). Gives "YYYY-MM", or "YYYY" when only the year is known.
- */
-export function MonthYear({ value, onChange, label, id, disabled }: { value: string; onChange: (v: string) => void; label: string; id?: string; disabled?: boolean }) {
-  const [y, setY] = useState(() => yearOf(value));
-  const [m, setM] = useState(() => monthOf(value));
-  // What this control last sent. A different value from outside (a form reset) replaces both selects.
-  const sent = useRef(value);
-  useEffect(() => {
-    if (value === sent.current) return;
-    sent.current = value;
-    setY(yearOf(value));
-    setM(monthOf(value));
-  }, [value]);
-  const now = new Date();
-  const thisYear = String(now.getFullYear());
-  const years = Array.from({ length: now.getFullYear() - FIRST_YEAR + 1 }, (_, k) => String(now.getFullYear() - k));
-  const set = (ny: string, nm: string) => {
-    // A month that has not happened yet this year can't be picked.
-    const month = ny === thisYear && nm && Number(nm) > now.getMonth() + 1 ? "" : nm;
-    setY(ny);
-    setM(month);
-    const v = ny ? (month ? `${ny}-${month}` : ny) : "";
-    sent.current = v;
-    onChange(v);
-  };
-  return (
-    <span className="my">
-      <select className="select my-m" aria-label={`${label}, month`} value={m} disabled={disabled} onChange={(e) => set(y, e.target.value)}>
-        <option value="">Month</option>
-        {MONTHS.map((name, k) => (
-          <option key={name} value={String(k + 1).padStart(2, "0")} disabled={y === thisYear && k > now.getMonth()}>
-            {name}
-          </option>
-        ))}
-      </select>
-      <select id={id} className="select my-y" aria-label={`${label}, year`} value={y} disabled={disabled} onChange={(e) => set(e.target.value, m)}>
-        <option value="">Year</option>
-        {years.map((yr) => (
-          <option key={yr} value={yr}>
-            {yr}
-          </option>
-        ))}
-      </select>
-    </span>
-  );
-}
 
 /* ---------- one question ---------- */
 
@@ -184,7 +129,7 @@ function TextAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved 
           onChange={(e) => (setV(e.target.value), setErr(null))}
         />
         {hours && <span className="ys-unit">hours a week</span>}
-        <button type="submit" className="btn btn-sm btn-primary ys-save" disabled={!v.trim() || !!busy}>
+        <button type="submit" className="btn btn-primary ys-save" disabled={!v.trim() || !!busy}>
           {busy ? "Saving" : "Save"}
         </button>
       </form>
@@ -208,7 +153,7 @@ function MonthAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved
         }}
       >
         <MonthYear value={v} label={f.label} onChange={(x) => (setV(x), setErr(null))} disabled={!!busy} />
-        <button type="submit" className="btn btn-sm btn-primary ys-save" disabled={!v || !!busy}>
+        <button type="submit" className="btn btn-primary ys-save" disabled={!v || !!busy}>
           {busy && busy !== "Ongoing" ? "Saving" : "Save"}
         </button>
         {f.kind === "monthOrOngoing" && (
@@ -249,7 +194,7 @@ function RateAsk({ t, pricing, onSaved }: { t: FactRef; pricing: string | null; 
     }
     // The medians need a monthly or an hourly figure. With no unit typed, the seat's pricing model decides.
     const read = readRate(text, pricing);
-    if (!read) return setErr("Give it as a monthly or hourly rate, like $8k/mo or $150/hr.");
+    if (!read) return setErr(BENCH_RATE_HELP);
     setErr(null);
     setBusy(true);
     const r = await ui.act({ type: "benchRate", engagementId: t.id, pricing: read.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: text }, { quiet: true });
@@ -283,7 +228,7 @@ function RateAsk({ t, pricing, onSaved }: { t: FactRef; pricing: string | null; 
         {option("bench", "Nobody", "It only counts toward the medians on Rate benchmarks. It never shows on this seat or to another member.")}
       </div>
       <Err text={err} />
-      <button type="submit" className="btn btn-sm btn-primary ys-save" disabled={!text || !who || busy}>
+      <button type="submit" className="btn btn-primary ys-save" disabled={!text || !who || busy}>
         {busy ? "Saving" : who === "bench" ? "Share privately" : who === "record" ? "Add to the seat" : "Save rate"}
         {earns && !busy && <span className="ys-plus num">+1</span>}
       </button>
@@ -390,13 +335,13 @@ function SeatCard({
       const b = c?.s === "empty" ? benchOf(f) : undefined;
       // Hours read as a bare number here: the label already says per week.
       const v = c?.s === "value" ? (f === "hours" ? c.v : fmtValue("engagement", f, c.v)) : c?.s === "reported" ? "Under review" : b ?? null;
-      return v ? [{ k: `e.${f}`, v, label: f === "hours" ? def.label : def.short ?? def.label, note: b ? "private" : null, s: just(e.id, f) }] : [];
+      return v ? [{ k: `e.${f}`, v, label: shortLabel(def), note: b ? "private" : null, s: just(e.id, f) }] : [];
     }),
     ...coAsks.flatMap((f): Known[] => {
       const c = i.c.cells[f];
       const def = fieldDef("company", f)!;
       const v = c?.s === "value" ? fmtValue("company", f, c.v) : c?.s === "reported" ? "Under review" : null;
-      return v ? [{ k: `c.${f}`, v, label: def.short ?? def.label, note: null, s: just(i.c.id, f) }] : [];
+      return v ? [{ k: `c.${f}`, v, label: shortLabel(def), note: null, s: just(i.c.id, f) }] : [];
     }),
   ];
 
@@ -461,7 +406,7 @@ function SeatCard({
                 <div key={k} className={`ys-kv${sv ? " new" : ""}`}>
                   <dt>{label}</dt>
                   <dd>
-                    <span>{v}</span>
+                    <span className="num">{v}</span>
                     {note && <span className="ys-kv-note"> {note}</span>}
                     {sv && (
                       <span className="ys-kv-new">
@@ -505,7 +450,7 @@ function SeatCard({
                       <div className="ys-later-list">
                         {later.map((x) => (
                           <button key={x.key} type="button" className="add ys-later-b" onClick={() => setPicked(x.key)}>
-                            {x.f.short ?? x.f.label}
+                            {shortLabel(x.f)}
                           </button>
                         ))}
                       </div>
@@ -656,7 +601,7 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
                   ? ""
                   : room
                     ? `You can earn ${Math.min(room, left)} more ${Math.min(room, left) === 1 ? "credit" : "credits"} today`
-                    : `You've earned today's ${me.earnCap} credits. Answers still save, and you can earn again at ${fmtTime(me.earnResetsAt)}.`}
+                    : `You've earned today's ${me.earnCap} credits. Answers still save, and you can earn again ${atTime(me.earnResetsAt)}.`}
               </span>
               <span className="ys-bar" aria-hidden>
                 <span style={{ width: `${total ? Math.round((filled / total) * 100) : 100}%` }} />

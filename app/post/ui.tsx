@@ -14,7 +14,8 @@ import type { Cell, Me } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { AddPill, IconCheck, IconSearch, IconX, LockPill, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
-import { fieldText, fmtTime, plural, thisMonth, type Layout } from "./hooks";
+import { atTime, fieldText, plural, type Layout } from "./hooks";
+import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
 
 export type AddMode = "engagement" | "person" | "facts";
@@ -83,12 +84,14 @@ const NUM_KINDS = ["number", "month", "monthOrOngoing", "phone"];
 const NUM_FIELDS = ["employees", "revenue", "rate", "hours"];
 export const isNumField = (t: FactRef) => NUM_KINDS.includes(fieldDef(t.entity, t.field)?.kind ?? "") || NUM_FIELDS.includes(t.field);
 
+/** A field inside a sentence, the way the server's messages name it: "the role", "a person's email". */
+export const sayField = (f: FieldDef) => f.say ?? `the ${fieldText(f.label)}`;
+
 /** What a locked fact is, for its tooltip and for screen readers. */
 const lockWhat = (t: FactRef) => {
   if (t.field === "identity") return "this company";
-  if (t.entity === "engagement" && t.field === "operator") return "who held the seat";
   const f = fieldDef(t.entity, t.field);
-  return f ? `the ${fieldText(f.short ?? f.label)}` : "this";
+  return f ? sayField(f) : "this";
 };
 
 /** An add pill that opens the fact editor on itself. `onPick` runs first (e.g. to close the popover it sits in). */
@@ -163,12 +166,12 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
     <Anchored anchor={anchor} onClose={onClose} width={300} className="tp-zero">
       {earn.capped ? (
         <p className="tp-zero-t">
-          You&apos;re out of credits, and you&apos;ve earned today&apos;s {ui.me.earnCap}. Earning reopens {fmtTime(ui.me.earnResetsAt)}.
+          You&apos;re out of credits, and you&apos;ve earned today&apos;s {ui.me.earnCap}. You can earn again {atTime(ui.me.earnResetsAt)}.
         </p>
       ) : ui.seats.missing > 0 ? (
         <>
           <p className="tp-zero-t">
-            You&apos;re out of credits. Your {one ? "seat is" : "seats are"} missing {plural(ui.seats.missing, "thing")}, and each one you add earns a credit.
+            You&apos;re out of credits. {plural(ui.seats.missing, "thing is", "things are")} still missing on your {one ? "seat" : "seats"}. Each one you add earns a credit.
           </p>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openSeats())}>
             Fill in your {one ? "seat" : "seats"}
@@ -408,13 +411,13 @@ export function Sheet({ title, onClose, children, footer, full }: { title: React
 
 export function earnNote(me: Me): { text: string; capped: boolean } {
   if (me.earnResetsAt || me.earned24h >= me.earnCap)
-    return { text: `This earns no credit today. Earning reopens ${fmtTime(me.earnResetsAt)}`, capped: true }; // no closing period: callers add their own
+    return { text: `This earns no credit today. You can earn again ${atTime(me.earnResetsAt)}`, capped: true }; // no closing period: callers add their own
   return { text: "+1 credit", capped: false };
 }
 
 export const labelFor = (f: FieldDef) => f.label;
-/** Short label for field lists ("Held by", "Revenue then", "Hours a week"). */
-export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.key === "hours" ? "Hours a week" : f.short ?? f.label);
+/** Short label for field lists and headers ("Held by", "Revenue then"). */
+export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.short ?? f.label);
 
 /** The input for one field kind. Calls onSave with the raw value (choice and Ongoing save at once). */
 export function FieldInput({
@@ -436,7 +439,8 @@ export function FieldInput({
 }) {
   const [q, setQ] = useState("");
   const key = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    // Enter on the Ongoing chip presses the chip. Anywhere else in the field it saves what is typed or picked.
+    if (e.key === "Enter" && !(e.target as HTMLElement).closest("button")) {
       e.preventDefault();
       onSave(value);
     }
@@ -494,18 +498,9 @@ export function FieldInput({
   }
   if (f.kind === "month" || f.kind === "monthOrOngoing")
     return (
-      <div className="tp-month">
-        <input
-          id={id}
-          className={`input num${big ? " tp-input-big" : ""}`}
-          type="month"
-          max={thisMonth()}
-          autoFocus={autoFocus}
-          value={value === "Ongoing" ? "" : value}
-          placeholder="YYYY-MM"
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={key}
-        />
+      // The same month and year control as Your seats and the Add flow. Enter on either select saves.
+      <div className="tp-month" onKeyDown={key}>
+        <MonthYear id={id} label={f.label} value={value === "Ongoing" ? "" : value} onChange={onChange} autoFocus={autoFocus} big={big} />
         {f.kind === "monthOrOngoing" && (
           <button type="button" className={`chip tp-chipbtn${value === "Ongoing" ? " chip-on" : ""}${big ? " tp-chip-big" : ""}`} onClick={() => onSave("Ongoing")}>
             Ongoing
@@ -727,7 +722,12 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
   );
   const title = (
     <span>
-      {editing ? "Edit" : "Add"} {fieldText(labelFor(f))} <span className="tp-ed-co">{company}</span>
+      {editing ? "Edit" : "Add"} {sayField(f)}
+      {company && (
+        <span className="tp-ed-co" title={company}>
+          {company}
+        </span>
+      )}
     </span>
   );
   if (ui.layout === "phone")

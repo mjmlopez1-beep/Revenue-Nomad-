@@ -15,8 +15,8 @@ import { CompanyLogo, IconCheck, IconPlus, IconSearch, IconX, fmtMonth, hue, ini
 import { COMPANY_FILL, shown, type CoInfo } from "./model";
 import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
 import { MissingFacts } from "./Drawer";
-import { MonthYear } from "./Seats";
-import { fmtTime, plural, useDebounced } from "./hooks";
+import { MonthYear } from "./MonthYear";
+import { atTime, plural, useDebounced } from "./hooks";
 
 interface Lookup {
   domain: string;
@@ -64,7 +64,7 @@ function EarnLine({ n, empty }: { n: number; empty: string }) {
   if (!room)
     return (
       <span className="am-earn">
-        You&apos;ve earned today&apos;s {me.earnCap} credits. This still saves{me.earnResetsAt ? `, and you can earn again at ${fmtTime(me.earnResetsAt)}` : ""}.
+        You&apos;ve earned today&apos;s {me.earnCap} credits. This still saves, and you can earn again {atTime(me.earnResetsAt)}.
       </span>
     );
   if (!n) return <span className="am-earn">{empty}</span>;
@@ -72,7 +72,7 @@ function EarnLine({ n, empty }: { n: number; empty: string }) {
   return (
     <span className="am-earn">
       {plural(n, "answer")}, <b>+{plural(earn, "credit")}</b>
-      {earn < n ? ` (you can earn ${room} more today)` : ""}
+      {earn < n ? `. You can earn ${room} more today.` : ""}
     </span>
   );
 }
@@ -373,7 +373,7 @@ function PersonForm({ i, engagementId, onDone }: { i: CoInfo; engagementId?: str
     <div className="tp-engform">
       <p className="am-note">
         Add someone at {i.c.name} a fractional would want to know, like the person who hires or who a seat reported to. Members spend 1 credit to see the name or a contact detail.
-        Each answer earns you 1.
+        Each answer earns 1 credit.
       </p>
       <div className="tp-form-2">
         {txt("name")}
@@ -506,7 +506,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
     </button>
   );
   const earnLine = capped
-    ? `You've earned today's ${me.earnCap} credits. What you add still saves${me.earnResetsAt ? `, and you can earn again at ${fmtTime(me.earnResetsAt)}` : ""}.`
+    ? `You've earned today's ${me.earnCap} credits. What you add still saves, and you can earn again ${atTime(me.earnResetsAt)}.`
     : "You earn 1 credit for each thing you add that we don't have yet.";
 
   const gained = done ? me.credits - done.before : 0;

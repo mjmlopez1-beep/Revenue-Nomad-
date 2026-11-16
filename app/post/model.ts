@@ -20,7 +20,7 @@ export const TABS: { key: Tab; label: string }[] = [
   { key: "friendly", label: "Fractional friendly" },
   { key: "hiring", label: "Hiring now" },
   { key: "following", label: "Following" },
-  { key: "unlocked", label: "Unlocked by me" },
+  { key: "unlocked", label: "Unlocked" },
   { key: "needs", label: "Needs facts" },
 ];
 export const SORTS: { key: SortKey; label: string }[] = [
@@ -31,7 +31,7 @@ export const SORTS: { key: SortKey; label: string }[] = [
 ];
 export const RECORD_TYPES: { key: RecordType; label: string }[] = [
   { key: "companies", label: "Companies" },
-  { key: "engagements", label: "Engagements" },
+  { key: "engagements", label: "Seats" },
   { key: "people", label: "People" },
 ];
 
@@ -173,10 +173,10 @@ export function recentSeats(i: CoInfo): number {
 
 /**
  * A plain label for how fractional friendly a company is (the score still sorts). Every tier
- * is an outline chip. The solid ember "Hiring" chip is the record header's alone (see Fit).
+ * is an outline chip. The solid ember "Hiring now" chip is the record header's alone (see Fit).
  */
 export function fitTier(f: Friendly, engs: number): { label: string; cls: string } {
-  if (f.open) return { label: "Hiring", cls: "t-hiring" };
+  if (f.open) return { label: "Hiring now", cls: "t-hiring" };
   if (f.fractional >= 2 || f.functions.length >= 2) return { label: "Repeat hirer", cls: "t-repeat" };
   if (f.recent) return { label: "Recent seat", cls: "t-recent" };
   if (f.fractional) return { label: "Past seat", cls: "t-past" };
@@ -273,8 +273,8 @@ export type ListKey =
 
 export const TOGGLE_LABEL: Record<ToggleKey, string> = {
   rateKnown: "Rate on file",
-  contactKnown: "Contact on file",
-  notMine: "No seat in my function yet",
+  contactKnown: "Hiring contact on file",
+  notMine: "No seat in your function yet",
   statusKnown: "Status on file",
   fractionalNamed: "Seat holder on file",
   emailKnown: "Email on file",

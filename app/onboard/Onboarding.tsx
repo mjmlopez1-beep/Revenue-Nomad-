@@ -11,7 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./onboard.css";
-import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconPlus, IconSearch, IconX, val, type Act, type View } from "../ui/shared";
+import { Brand, CompanyLogo, IconBriefcase, IconCheck, IconCoin, IconSearch, IconStar, IconX, val, type Act, type View } from "../ui/shared";
 import { FUNCTIONS } from "@/lib/tableFields";
 import { GOALS, type CompanyRec } from "@/lib/tableTypes";
 
@@ -29,25 +29,17 @@ const FOLLOW_TARGET = 3;
 const named = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive" ? fn : null);
 
 /**
- * What each answer is called here, and what the table opens on because of it (the app reads
- * the stored key: its first tab and filters follow from it).
+ * What the table opens on because of each answer (the app reads the stored key: its first tab
+ * and filters follow from it). The answers themselves are GOALS in lib/tableTypes.ts.
  */
-const GOAL_COPY: Record<Goal, { label: string; opens: (fn: string | null) => string }> = {
-  friendly: {
-    label: "Companies that hire fractionals",
-    opens: () => "The table opens on the companies that hire fractionals most.",
-  },
-  adjacent: {
-    label: "Companies that have not hired my function yet",
-    opens: (fn) =>
-      named(fn)
-        ? `The table opens on companies that hired other GTM functions and have no ${fn} seat on file.`
-        : "The table opens on companies that hired other GTM functions and have no seat in yours on file.",
-  },
-  intro: {
-    label: "A fractional who held the seat and can tell me about it",
-    opens: () => "The table opens on seats where the seat holder is on file.",
-  },
+const GOAL_OPENS: Record<Goal, (fn: string | null) => string> = {
+  roles: () => "The table opens on the fractional roles that are open now. We check for new ones every week.",
+  friendly: () => "The table opens on the companies that hire fractionals most.",
+  adjacent: (fn) =>
+    named(fn)
+      ? `The table opens on companies that hired other GTM functions and have no ${fn} seat on file.`
+      : "The table opens on companies that hired other GTM functions and have no seat in yours on file.",
+  intro: () => "The table opens on seats where the seat holder is on file.",
 };
 
 /**
@@ -112,12 +104,13 @@ function FollowBtn({ on, onClick, name }: { on: boolean; onClick: () => void; na
   return (
     <button
       type="button"
-      className={`ob-follow${on ? " ob-follow-on" : ""}`}
+      className={`btn ob-follow${on ? " btn-pine" : ""}`}
       onClick={onClick}
       aria-pressed={on}
       aria-label={on ? `Unfollow ${name}` : `Follow ${name}`}
     >
-      {on ? <IconCheck size={13} /> : <IconPlus size={13} />}
+      {/* The same star as Follow in a company record. */}
+      <IconStar size={13} filled={on} />
       {on ? "Following" : "Follow"}
     </button>
   );
@@ -278,7 +271,7 @@ function StepQuestions({
       <p className="ob-sub">Two answers decide what you see first. After that you pick a few companies to follow.</p>
 
       <fieldset className="ob-q">
-        <legend className="ob-h">Which seat do you hold?</legend>
+        <legend className="ob-h">Which GTM function do you work in?</legend>
         <div className="ob-chips" role="radiogroup" aria-label="Your GTM function">
           {FUNCTIONS.map((f) => (
             <button
@@ -309,17 +302,17 @@ function StepQuestions({
               onClick={() => setGoal(g.key)}
             >
               <span className="ob-radio" aria-hidden />
-              {GOAL_COPY[g.key].label}
+              {g.label}
             </button>
           ))}
         </div>
-        <p className="ob-hint">{goal ? GOAL_COPY[goal].opens(fn) : "The table opens on what you pick. Everything else is one filter away."}</p>
+        <p className="ob-hint">{goal ? GOAL_OPENS[goal](fn) : "The table opens on what you pick. Everything else is one filter away."}</p>
       </fieldset>
 
       <div className="ob-grow" />
       <div className="ob-foot">
         <span className="ob-foot-note" aria-live="polite">
-          {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your seat" : "Pick one answer for each"}
+          {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your function" : "Pick one answer for each"}
         </span>
         <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
           Show companies to follow
@@ -460,7 +453,7 @@ function StepFollow({
                       <span className="ob-result-meta">{metaOf(c)}</span>
                     </span>
                     <span className={`ob-result-act${on ? " on" : ""}`}>
-                      {on ? <IconCheck size={13} /> : <IconPlus size={13} />}
+                      <IconStar size={13} filled={on} />
                       {on ? "Following" : "Follow"}
                     </span>
                   </li>
@@ -516,7 +509,7 @@ function StepFollow({
                 <span className="ob-co-fns">
                   {c.friendly.functions.length ? (
                     c.friendly.functions.slice(0, 2).map((f) => (
-                      <span key={f} className={`chip ob-chip-sm${f === fn ? " ob-chip-mine" : ""}`}>
+                      <span key={f} className={`chip${f === fn ? " ob-chip-mine" : ""}`}>
                         {f}
                       </span>
                     ))
@@ -527,7 +520,7 @@ function StepFollow({
                   {/* An open role: a row repeats, so the dot is the only ember it carries. */}
                   {c.friendly.open > 0 ? (
                     <span className="ob-tier">
-                      <i className="ob-dot" aria-hidden />
+                      <i className="live-dot" aria-hidden />
                       Hiring now
                     </span>
                   ) : null}

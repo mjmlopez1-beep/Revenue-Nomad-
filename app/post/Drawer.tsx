@@ -7,7 +7,7 @@
  *
  * One primary action. A hidden company has Unlock company and nothing else to press until
  * it is unlocked. Any other company has Add what you know, with Unlock all beside it as an
- * outline button. The solid ember "Hiring" chip lives here, in the header, and nowhere else.
+ * outline button. The solid ember "Hiring now" chip lives here, in the header, and nowhere else.
  */
 import { useEffect, useRef, useState } from "react";
 import type { Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
@@ -18,7 +18,7 @@ import { EditPill, FactCell, Pro, YourSeat, ZeroCredits, earnNote, shortLabel, u
 import { sendSignal } from "./ProOffer";
 import { Fit, HiddenCompany, NoSeatYet } from "./Tables";
 import { RoleDate, statusText } from "./RoleDate";
-import { plural } from "./hooks";
+import { atTime, plural } from "./hooks";
 
 /** The team inbox that brokers intros (read at build time). Without it, the intro link only drafts the email. */
 const INTRO_TO = process.env.NEXT_PUBLIC_RN_INTRO_EMAIL ?? "";
@@ -170,7 +170,7 @@ function UnlockAll({ items, variant = "button", short }: { items: FactRef[]; var
       >
         <span>
           {text}
-          {short && !busy && !confirm && <span className="tp-unlockall-unit"> credits</span>}
+          {short && !busy && !confirm && <span className="tp-unlockall-unit">{n === 1 ? " credit" : " credits"}</span>}
         </span>
       </button>
       {confirm && (
@@ -411,7 +411,7 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
       <h3 className="tp-dsec-h">Still missing</h3>
       <p className="tp-dsec-note">
         {earn.capped
-          ? `You've earned today's ${ui.me.earnCap}, so adding these earns nothing until earning reopens.`
+          ? `You've earned today's ${ui.me.earnCap} credits, so adding these earns nothing. You can earn again ${atTime(ui.me.earnResetsAt)}.`
           : n === 1
             ? "Add it and you earn a credit."
             : n < fields.length

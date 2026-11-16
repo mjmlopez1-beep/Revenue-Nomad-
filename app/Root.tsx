@@ -21,7 +21,7 @@ const Onboarding = dynamic(() => import("./onboard/Onboarding"), { ssr: false, l
  * seat on file carries their name, so the first thing they see is what they can fill in.
  * The app reads it once, when it mounts.
  */
-const TradingPost = dynamic<TradingPostProps & { start?: "seats" }>(() => import("./post/TradingPost"), { ssr: false, loading });
+const TradingPost = dynamic<TradingPostProps>(() => import("./post/TradingPost"), { ssr: false, loading });
 
 /** Actions that create records: wait for the full view so the new record is there. */
 const FULL_REFRESH = new Set(["add", "addPerson", "profile"]);

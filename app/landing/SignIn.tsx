@@ -131,7 +131,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
             <input
               ref={inputRef}
               id={`${id}-code`}
-              className="input mono lp-dialog-input"
+              className="input lp-dialog-input"
               autoComplete="off"
               autoCapitalize="off"
               spellCheck={false}

@@ -511,7 +511,7 @@ section("fields", async () => {
   const ok = await m.act({ type: "fill", entity: "engagement", id: eng.id, field: "rate", value: "€6,000 per month" });
   check("rate accepts '€6,000 per month'", ok.status === 200, ok.json);
   const hrs = await m.act({ type: "fill", entity: "engagement", id: eng.id, field: "hours", value: "99" });
-  check("hours 99 says 'Hours per week. Use a whole number from 1 to 80.'", hrs.json?.error === "Hours per week. Use a whole number from 1 to 80.", hrs.json);
+  check("hours 99 says 'Hours a week. Use a whole number from 1 to 80.'", hrs.json?.error === "Hours a week. Use a whole number from 1 to 80.", hrs.json);
   const raw = `Uni \u0000‮EVIL‬ Co ${RUN}`;
   const add = await m.act({ type: "add", company: raw });
   const v2 = await m.view();
@@ -524,6 +524,7 @@ section("stats", async () => {
   const s2 = await call("GET", "/api/table", { ipAddr: anon });
   check("signed-out GET gives the same stats twice", JSON.stringify(s1.json.stats) === JSON.stringify(s2.json.stats) && s1.json.companies.length === 0);
   check(`stats.starter is ${STARTER}`, s1.json.stats.starter === STARTER, s1.json.stats);
+  check("signed-out stats say how many roles opened this week", Number.isInteger(s1.json.stats.openedWeek) && s1.json.stats.openedWeek >= 0 && s1.json.stats.openedWeek <= s1.json.stats.openRoles, s1.json.stats);
   const m = await member("Sam Stats", ip(71));
   const v = await m.view();
   check("a fresh join gets the starter credits the landing shows", v.me.credits === s1.json.stats.starter, [v.me.credits, s1.json.stats.starter]);
@@ -1092,7 +1093,7 @@ section("settings", async () => {
   const ok = await call("GET", `/api/table/unsubscribe?m=${m}&s=${sig}`, { ipAddr: ip(141) });
   if (ok.status !== 200) return skip("unsubscribe link", "the server signs with a different key (set ID_SECRET to its RN_ID_SECRET)");
   check("the unsubscribe link turns the email off", (await E.view()).me.digest === false);
-  check("the page says so, and how to turn it back on", /text\/html/.test(ok.headers.get("content-type") ?? "") && /You're unsubscribed/.test(ok.text) && /My credits/.test(ok.text), ok.text.slice(0, 200));
+  check("the page says so, and how to turn it back on", /text\/html/.test(ok.headers.get("content-type") ?? "") && /You're unsubscribed/.test(ok.text) && /Your credits/.test(ok.text), ok.text.slice(0, 200));
   check("the page has no member data", !ok.text.includes(ev.me.email) && !ok.text.includes("Eli"));
   const adm = await admin();
   if (adm) check("admins see how many opted out", (await adm.view()).admin.digest.optedOut >= 1);
@@ -1135,6 +1136,7 @@ section("scan", async () => {
   check("role and posting stay locked; function and type are derived from the title", e2?.cells.role?.s === "locked" && e2.cells.posting?.s === "locked" && e2.cells.function?.v === "Marketing" && e2.cells.type?.v === "Interim", e2?.cells);
   check("the company is hidden while the role is open", h1?.hidden === true && h1.name === "Hidden company" && h1.friendly.open === 1, { hidden: h1?.hidden, open: h1?.friendly.open });
   check("stats and the scan summary count the open roles", v1.stats.openRoles === v0.stats.openRoles + 2 && v1.scan.openNow === v0.scan.openNow + 2 && v1.scan.opened7 === v0.scan.opened7 + 2 && v1.scan.mine7 === v0.scan.mine7 + 1 && !!v1.scan.lastRunAt, { before: v0.scan, after: v1.scan });
+  check("the public counts carry the roles opened this week", v1.stats.openedWeek === v1.scan.opened7, { stats: v1.stats.openedWeek, scan: v1.scan.opened7 });
   const av = adm ? await adm.view() : null;
   const newCo = av?.companies.find((c) => c.name === coName);
   if (adm) {

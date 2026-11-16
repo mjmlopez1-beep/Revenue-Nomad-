@@ -7,11 +7,12 @@
  *   top bar     search, credits, earn meter, "Add what you know", account menu
  *   sidebar     filters with counts (overlay under 1280px, bottom sheet on phones)
  *   content     the next-move card or Get started, record type, views, active filter chips, the table (cards on phones)
- *   pages       Your seats, My credits, Rate benchmarks (each replaces the table)
+ *   pages       Your seats, Your credits, Rate benchmarks (each replaces the table)
  *   overlays    record drawer, add modal, inline fact editor, credits popover
  *
  * One primary action per view: the volt "Add what you know" in the top bar. Ember shows up
- * twice at most: the count on Hiring now, and the dot on an open role.
+ * twice at most (see `emberTaken` below): by default the count on Hiring now and the dot on an
+ * open role.
  *
  * Keyboard: "/" search, "f" filters, "a" add, Esc closes, J/K steps through records.
  * Phones and tablets: the back gesture closes the top overlay before it leaves the page.
@@ -25,7 +26,7 @@ import {
   seatsMissing, shown, sortRows,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
 } from "./model";
-import { fmtTime, useLayout, useStoredFlag, store, plural } from "./hooks";
+import { atTime, useLayout, useStoredFlag, store, plural } from "./hooks";
 import { UiCtx, FactEditor, Anchored, Pro, Sheet, type AddOpts, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
@@ -48,6 +49,8 @@ export interface TradingPostProps {
   act: Act;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Where the app opens, read once on mount. "seats" straight after onboarding, when a seat on file carries the member's name. */
+  start?: "seats";
 }
 
 const PAGE = 50;
@@ -65,7 +68,7 @@ function previousVisit(): string | null {
 type DrawerState = { id: string; rowKey: string; focus: string | null };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 
-export default function TradingPost({ view, act, refresh, signOut }: TradingPostProps) {
+export default function TradingPost({ view, act, refresh, signOut, start }: TradingPostProps) {
   const me = view.me!;
   const layout = useLayout();
   const phone = layout === "phone";
@@ -73,19 +76,20 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   const copy = useCopy();
 
   /* ----- personalised defaults from onboarding ----- */
-  const [recordType, setRecordType] = useState<RecordType>(() => (me.goal === "intro" ? "engagements" : "companies"));
-  const [tab, setTab] = useState<Tab>(() => (me.goal === "friendly" ? "friendly" : "all"));
+  const [recordType, setRecordType] = useState<RecordType>(() => (me.goal === "intro" || me.goal === "roles" ? "engagements" : "companies"));
+  const [tab, setTab] = useState<Tab>(() => (me.goal === "friendly" ? "friendly" : me.goal === "roles" ? "hiring" : "all"));
   const [filters, setFilters] = useState<Filters>(() => ({
     ...EMPTY_FILTERS,
     notMine: me.goal === "adjacent" && !!me.function,
     fractionalNamed: me.goal === "intro",
   }));
-  const [sort, setSort] = useState<SortKey>("fit");
+  // Open roles read best newest first.
+  const [sort, setSort] = useState<SortKey>(() => (me.goal === "roles" ? "newest" : "fit"));
   const [query, setQuery] = useState("");
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
   const [limit, setLimit] = useState(PAGE);
-  const [page, setPage] = useState<"table" | "credits" | "rates" | "seats" | "metrics">("table");
+  const [page, setPage] = useState<"table" | "credits" | "rates" | "seats" | "metrics">(start === "seats" ? "seats" : "table");
   const [seatFocus, setSeatFocus] = useState<string | null>(null);
   const [moveOff, dismissMove] = useMoveDismissals();
 
@@ -315,7 +319,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
       if (hit.idx >= limit) setLimit(hit.idx + 1);
       const k = cellKey(hit.t.id, hit.t.field);
       setTimeout(() => {
-        // Company cells are not on screen in the Engagements and People views (or on phone cards): use the row.
+        // Company cells are not on screen in the Seats and People views (or on phone cards): use the row.
         const el = document.querySelector<HTMLElement>(`[data-cell="${k}"]`) ?? document.querySelector<HTMLElement>(`[data-row="${hit.row.key}"]`);
         el?.scrollIntoView({ block: "center", inline: "nearest" });
         if (want === "locked") {
@@ -446,7 +450,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
   const drawerPos = drawer ? sorted.findIndex((r) => r.key === drawer.rowKey) : -1;
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
-  const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["engagement", "engagements"] : ["person", "people"];
+  const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["seat", "seats"] : ["person", "people"];
   const goHome = () => {
     setPage("table");
     setDrawer(null);
@@ -485,6 +489,19 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   const picked = guide === "check" ? null : pickMove(me, seatStats, view.scan?.mine7 ?? 0, moveOff);
   const move = picked === "roles" && tab === "hiring" ? null : picked;
   const newRoles = move === "roles" ? newRolesFor(infos, me.function) : { roles: 0, hidden: 0 };
+  /*
+   * Ember: at most two kinds on a screen. Who keeps it, in order: the next-move card, the solid
+   * Hiring chip in an open record, a low balance, the dot on an open role, the count on Hiring
+   * now. `emberTaken` counts the first three that are on screen. At 1 the tab count goes quiet,
+   * at 2 the dots do too (tp-ember-full). The card and a low balance say the same thing, so
+   * the balance stays quiet while a card is up.
+   */
+  const recordOpen = !!drawer && !!drawerInfo && page === "table";
+  const recordHot = recordOpen && drawerInfo!.c.friendly.open > 0;
+  // A phone record covers the page: only its own chip and its own balance are on screen.
+  const cardShown = !!move && page === "table" && !(phone && recordOpen);
+  const lowShown = me.credits <= 3 && !cardShown;
+  const emberTaken = (cardShown ? 1 : 0) + (recordHot ? 1 : 0) + (lowShown ? 1 : 0);
   const seeOpenRoles = () => {
     setPage("table");
     setDrawer(null);
@@ -540,7 +557,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
             </button>
           }
         >
-          Welcome back. {sinceText(since.n)}
+          {sinceText(since.n)}
         </Strip>
       )}
     </div>
@@ -591,8 +608,8 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
           onClick={() => setTab(t.key)}
         >
           {t.label}{" "}
-          {/* The count on Hiring now is the screen's one solid ember: open roles you can win today. */}
-          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? " tp-cnt-live" : ""}`}>{facets.tabs[t.key]}</span>
+          {/* The count on Hiring now is solid ember (open roles you can win today) unless something more urgent has the ember. */}
+          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 && emberTaken === 0 ? " tp-cnt-live" : ""}`}>{facets.tabs[t.key]}</span>
         </button>
       ))}
     </nav>
@@ -640,7 +657,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   /* ----- layout ----- */
   return (
     <UiCtx.Provider value={ui}>
-      <div className={`tp-app tp-${layout}`}>
+      <div className={`tp-app tp-${layout}${emberTaken >= 2 ? " tp-ember-full" : ""}`}>
         <TopBar
           me={me}
           query={query}
@@ -656,6 +673,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
           onMenu={() => setPop((p) => (p === "menu" ? null : "menu"))}
           menuRef={menuRef}
           onHome={goHome}
+          quietCredits={!!move && page === "table"}
         />
 
         {page === "credits" ? (
@@ -867,7 +885,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
             items={[
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
-              { label: "My credits", onClick: () => (setDrawer(null), setPage("credits")) },
+              { label: "Your credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
@@ -892,7 +910,7 @@ function CreditLine({ me, onShowAdd }: { me: Me; onShowAdd: () => void }) {
   if (capped)
     return (
       <Strip>
-        {me.credits <= 0 ? `You're out of credits, and you've earned today's ${me.earnCap}.` : `You've earned today's ${me.earnCap} credits.`} Earning reopens {fmtTime(me.earnResetsAt)}.
+        {me.credits <= 0 ? `You're out of credits, and you've earned today's ${me.earnCap}.` : `You've earned today's ${me.earnCap} credits.`} You can earn again {atTime(me.earnResetsAt)}.
       </Strip>
     );
   if (me.credits > 3) return null;

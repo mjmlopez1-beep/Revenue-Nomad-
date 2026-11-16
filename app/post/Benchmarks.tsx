@@ -17,35 +17,12 @@ import { useMemo, useState } from "react";
 import type { ActionResult, BenchRate, BenchmarkRow, RateStat, View } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
-import { IconChevron, IconPlus, post, useToast } from "../ui/shared";
+import { IconChevron, IconPlus, Num, post, useToast } from "../ui/shared";
 import { earnNote, useUi } from "./ui";
-import { fmtTime } from "./hooks";
+import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 
-/**
- * A number set in tabular figures. This face's tabular period, comma and colon are a full
- * digit wide ("$7 . 5k"), so they are set proportional: the digits still line up in a column.
- * Use it for a figure on its own, never for a sentence.
- */
-export function Num({ children }: { children: string | number }) {
-  const parts = String(children).split(/([.,:])/);
-  return (
-    <span className="num">
-      {parts.map((x, k) =>
-        k % 2 ? (
-          <span key={k} className="np">
-            {x}
-          </span>
-        ) : (
-          x
-        ),
-      )}
-    </span>
-  );
-}
-
 const money = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 === 0 || n >= 20000 ? 0 : 1)}k` : `$${n}`);
-const RATE_HELP = "Write it like $8k/mo or $150/hr.";
 const PRICING = ["Monthly retainer", "Hourly"] as const;
 type Pricing = (typeof PRICING)[number];
 
@@ -99,7 +76,7 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
     if (busy) return;
     if (!fn) return setErr("Pick the function the rate is for.");
     if (!rate.trim()) return setErr("Add the rate.");
-    if (!readRate(rate, pricing)) return setErr(RATE_HELP);
+    if (!readRate(rate, pricing)) return setErr(BENCH_RATE_HELP);
     setErr(null);
     setBusy(true);
     const r = await post<ActionResult>({ action: { type: "benchRate", function: fn, pricing, rate: rate.trim(), ...(revenue ? { revenue } : {}) } });
@@ -191,7 +168,7 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
         </button>
         <span className="tp-bm-earn">
           {capped
-            ? `You've earned today's ${ui.me.earnCap} credits, so this one earns nothing${ui.me.earnResetsAt ? ` until ${fmtTime(ui.me.earnResetsAt)}` : ""}. It still counts in the medians.`
+            ? `You've earned today's ${ui.me.earnCap} credits, so this one earns nothing. It still counts in the medians. You can earn again ${atTime(ui.me.earnResetsAt)}.`
             : "Earns 1 credit."}
         </span>
       </div>

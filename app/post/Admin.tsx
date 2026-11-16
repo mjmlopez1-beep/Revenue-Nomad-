@@ -8,9 +8,8 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
-import { IconChevron } from "../ui/shared";
+import { IconChevron, Num } from "../ui/shared";
 import { useUi } from "./ui";
-import { Num } from "./Benchmarks";
 import "./pages.css";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
@@ -23,7 +22,7 @@ const stamp = (iso: string | null, none: string) =>
 const PLACES: Record<string, string> = {
   zero_credits: "Out of credits, at a lock",
   hidden_company: "A hidden company's record",
-  my_credits: "My credits",
+  my_credits: "Your credits",
   hiring_tab: "The Hiring now tab",
 };
 const placeName = (k: string) => {
@@ -171,12 +170,8 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
                   {s.sources.map((x) => (
                     <tr key={x.source}>
                       <td>{x.source}</td>
-                      <td className="num">
-                  <Num>{n0(x.fetched)}</Num>
-                </td>
-                      <td className="num">
-                  <Num>{n0(x.matched)}</Num>
-                </td>
+                      <td className="num">{n0(x.fetched)}</td>
+                      <td className="num">{n0(x.matched)}</td>
                       <td className={x.error ? "tp-pm-err" : "tp-pm-none"}>{x.error || "None"}</td>
                     </tr>
                   ))}

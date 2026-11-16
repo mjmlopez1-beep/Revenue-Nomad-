@@ -152,8 +152,8 @@ export const GROUPS: GroupDef[] = [
         hint: "What the client paid. Members spend 1 credit to see it, and it counts in the rate benchmarks.",
         say: "the rate",
       },
-      { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: false, placeholder: "15", hint: "The hours a week the seat takes, on average.", say: "the hours per week" },
-      { key: "posting", label: "Job posting", short: "Posting", kind: "url", gated: true, placeholder: "Link to the job posting", say: "the job posting" },
+      { key: "hours", label: "Hours a week", kind: "number", gated: false, placeholder: "15", hint: "The hours a week the seat takes, on average.", say: "the hours a week" },
+      { key: "posting", label: "Job posting", kind: "url", gated: true, placeholder: "Link to the job posting", say: "the job posting" },
       {
         key: "revenue",
         label: "Revenue at the time",
@@ -198,9 +198,9 @@ export const FILLABLE = ALL_FIELDS.filter((x) => !x.f.identity && !x.f.system);
 export const SOURCES = ["Published engagement", "Member success story", "Demand scan", "Member added", "Clay"] as const;
 /** Plain labels for sources in the UI. */
 export const SOURCE_LABEL: Record<string, string> = {
-  "Published engagement": "Member engagement",
+  "Published engagement": "Member seat",
   "Member success story": "Member story",
-  "Demand scan": "Open role",
+  "Demand scan": "Job posting",
   "Member added": "Member added",
   Clay: "Clay",
 };

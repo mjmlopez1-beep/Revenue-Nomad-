@@ -199,6 +199,8 @@ export interface View {
     people: number;
     fractionalFriendly: number;
     openRoles: number;
+    /** Open roles first seen in the last 7 days (the landing page's live line). Older servers leave it out. */
+    openedWeek?: number;
     members: number;
     facts: number;
     /** Credits a new member starts with. */
@@ -331,7 +333,8 @@ export type ActionResult = {
 };
 
 export const GOALS = [
-  { key: "friendly", label: "Find fractional-friendly companies" },
-  { key: "adjacent", label: "See who hired fractionals in other GTM functions" },
-  { key: "intro", label: "Find a fractional who can share intel or an intro" },
+  { key: "roles", label: "Open fractional roles" },
+  { key: "friendly", label: "Companies that hire fractionals" },
+  { key: "adjacent", label: "Companies that have not hired my function yet" },
+  { key: "intro", label: "A fractional who held the seat and can tell me about it" },
 ] as const;

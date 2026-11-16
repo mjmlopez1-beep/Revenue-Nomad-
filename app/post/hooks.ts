@@ -94,10 +94,31 @@ export function fmtTime(iso: string | null | undefined): string {
   return sameDay ? t : `${d.toLocaleDateString("en-US", { weekday: "short" })} ${t}`;
 }
 
+/**
+ * When earning opens again, to finish "You can earn again ...": "at 3:14 PM", or "tomorrow at
+ * 9:05 AM". The limit is a rolling 24 hours, so it is never further off than that.
+ */
+export function atTime(iso: string | null | undefined): string {
+  if (!iso) return "within 24 hours";
+  const d = new Date(iso);
+  const t = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? `at ${t}` : `tomorrow at ${t}`;
+}
+
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** A field label in running text: lowercase, except labels with inner capitals (HQ, LinkedIn). Same rule as lower() in lib/table.ts. */
-export const fieldText = (f: string) => (/[A-Z]/.test(f.slice(1)) ? f : f.toLowerCase());
+/** A rate the benchmarks can't read. They need a monthly or an hourly figure (see readRate in lib/rates.ts). */
+export const BENCH_RATE_HELP = "Use a monthly or hourly rate, like $8k/mo or $150/hr.";
+
+/**
+ * A field label in running text: each word lowercase, except words with a capital inside
+ * (HQ, LinkedIn). "Person LinkedIn" reads "person LinkedIn". Same rule as lower() in lib/table.ts.
+ */
+export const fieldText = (f: string) =>
+  f
+    .split(" ")
+    .map((w) => (/[A-Z]/.test(w.slice(1)) ? w : w.toLowerCase()))
+    .join(" ");
 
 /** This month as YYYY-MM (the max for month inputs). */
 export const thisMonth = () => {

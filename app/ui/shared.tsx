@@ -95,12 +95,19 @@ type Toast = { id: number; text: string; err?: boolean };
 const ToastCtx = createContext<(text: string, err?: boolean) => void>(() => {});
 export const useToast = () => useContext(ToastCtx);
 
+/**
+ * How long a toast stays up. Toasts are whole sentences now, so the time grows with the words:
+ * 4.2 seconds at least (6 for an error), about a quarter of a second more per word, 10 at most.
+ */
+export const toastMs = (text: string, err?: boolean) =>
+  Math.min(10_000, Math.max(err ? 6000 : 4200, 2400 + text.trim().split(/\s+/).length * 230 + (err ? 1200 : 0)));
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const push = useCallback((text: string, err?: boolean) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t.slice(-1), { id, text, err }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), err ? 6000 : 4200);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), toastMs(text, err));
   }, []);
   return (
     <ToastCtx.Provider value={push}>
@@ -118,6 +125,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 /* ---------- formatting ---------- */
 
+/**
+ * A figure in the number face: the text face with digits that line up in a column (.num in
+ * globals.css). Commas, periods and colons keep their own width, so "$7.5k" and "1,024" read
+ * as they should.
+ */
+export function Num({ children }: { children: ReactNode }) {
+  return <span className="num">{children}</span>;
+}
+
 export const initials = (s: string) =>
   s
     .replace(/\(.*?\)/g, "")
@@ -126,7 +142,8 @@ export const initials = (s: string) =>
     .slice(0, 2)
     .map((w) => w[0].toUpperCase())
     .join("") || "?";
-const HUES = [152, 200, 265, 25, 330, 175, 45];
+/** Tints for a company with no logo. None is near ember (hue 16): orange means an open role here. */
+const HUES = [152, 200, 265, 230, 330, 175, 48];
 export const hue = (s: string) => HUES[[...s].reduce((a, c) => a + c.charCodeAt(0), 0) % HUES.length];
 
 /** "2024-03" -> "Mar 2024", "2024" -> "2024", "Ongoing" stays. */

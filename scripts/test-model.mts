@@ -1,12 +1,16 @@
 /**
  * Checks for the app's client-side read model (app/post/model.ts): the Open roles filter on
- * company, engagement and people rows, what counts as "Unlocked by me" now that hours per week
- * is free, and the dates on roles the weekly scan follows. Pure functions, no server.
+ * company, engagement and people rows, what counts as "Unlocked" now that hours per week
+ * is free, and the dates on roles the weekly scan follows. Also the credit history's sentences
+ * (app/post/ledger.ts), which must keep up with the labels the server sends, and how long a
+ * toast stays up. Pure functions, no server.
  *
  *   npx tsx scripts/test-model.mts      exits 1 on any failure
  */
 import type { Cell, CompanyRec, EngagementRec, Me, PersonRec } from "../lib/tableTypes";
-import { GROUPS } from "../lib/tableFields";
+import { ALL_FIELDS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
+import { ledgerLine } from "../app/post/ledger";
+import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, activeChips, activeCount, applyFilters, daysListed, deriveAll, hasRoleDates, isOpenSeat, rowsFor, tabTest,
 } from "../app/post/model";
@@ -117,6 +121,36 @@ const seat = unlockedTab(eng({ operator: val("Jane Smith", { member: { title: "F
 check("the member's own seat, free to them, is not an unlock", !seat.eng && !seat.company, seat);
 const own = unlockedTab(eng({ role: val("Fractional CRO", { mine: true }) }, { source: "Member added" }));
 check("a fact the member added is not an unlock", !own.eng && !own.company, own);
+
+/* ---------- the credit history, as sentences ---------- */
+
+// The server names a row's field by its label, and a person's field as "Person <label>" (ledgerLabel in lib/table.ts).
+const serverLower = (label: string) => (/[A-Z]/.test(label.slice(1)) ? label : label.toLowerCase());
+const row = (reason: string, field: string, delta = 1, company = "Acme") => ({ at: "2026-11-16T10:00:00.000Z", delta, reason, company, field });
+const unnamed = ALL_FIELDS.filter(({ f }) => !f.identity && !f.system).filter(({ entity, f }) => {
+  const label = entity === "contact" ? `Person ${serverLower(f.label)}` : f.label;
+  return !f.say || ledgerLine(row("fill", label), 25).text !== `Added ${f.say} at Acme`;
+});
+check("every field a member can add reads as a sentence in the history", unnamed.length === 0, unnamed.map((x) => `${x.entity}.${x.f.key}`));
+check("a person's LinkedIn keeps its capitals", ledgerLine(row("unlock", "Person LinkedIn", -1), 25).text === "Unlocked a person's LinkedIn at Acme" && fieldText("Person LinkedIn") === "person LinkedIn" && fieldText("HQ") === "HQ");
+check("a private rate never names a company", ledgerLine(row("fill", "Private rate", 1, ""), 25).text === "Shared a rate privately" && ledgerLine(row("Removed", "Private rate", -1, ""), 25).text === "Removed a rate you shared privately");
+check("unlocking a hidden company says so", ledgerLine(row("unlock", HIDDEN_COMPANY, -1), 25).text === "Unlocked a hidden company, Acme");
+check("an add past the limit explains its 0", /No credit/.test(ledgerLine(row("fill", "Role", 0), 25).note ?? "") && ledgerLine(row("fill", "Role", 1), 25).note === undefined);
+check(
+  "refunds, reversals, confirmations and invite bonuses read as sentences",
+  ledgerLine(row("refund", "Rate"), 25).text === "Refund for the rate at Acme, removed after review" &&
+    ledgerLine(row("reversal", "Role", -1), 25).text === "Credit taken back for the role at Acme, removed after review" &&
+    ledgerLine(row("confirm", "Industry"), 25).text === "Two members confirmed the industry at Acme" &&
+    ledgerLine(row("referral", "Invite bonus", 10, "Dana"), 25).text === "Invite bonus, with Dana",
+);
+check("a reason the server wrote out in words is shown as it is", ledgerLine(row("Topped up to 0 when starter credits changed", "", 3, ""), 25).text === "Topped up to 0 when starter credits changed");
+
+/* ---------- when earning opens again ---------- */
+
+const later = new Date();
+later.setHours(23, 59, 0, 0);
+const tomorrow = new Date(Date.now() + 86_400_000);
+check("today reads at a time, tomorrow says tomorrow", /^at \d/.test(atTime(later.toISOString())) && /^tomorrow at \d/.test(atTime(tomorrow.toISOString())) && atTime(null) === "within 24 hours", [atTime(later.toISOString()), atTime(tomorrow.toISOString())]);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

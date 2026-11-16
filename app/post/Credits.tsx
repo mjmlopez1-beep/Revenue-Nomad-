@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * "My credits": the balance, how credits work (the one place the rules are written out),
+^ * "Your credits": the balance, how credits work (the one place the rules are written out),
  * the invite link, the personal sign-in link, the weekly email switch, the admin review
  * queue, and the full history, set out like a bank statement with a running balance.
  */
 import type { LedgerRow, View } from "@/lib/tableTypes";
 import { REFERRAL_BONUS, REFERRAL_LIMIT, fieldDef } from "@/lib/tableFields";
-import { IconChevron, timeAgo, useToast } from "../ui/shared";
-import { copyText, fieldText, fmtTime, plural } from "./hooks";
+import { IconChevron, Num, timeAgo, useToast } from "../ui/shared";
+import { atTime, copyText, plural } from "./hooks";
+import { ledgerLine } from "./ledger";
 import { Pro, useUi } from "./ui";
-import { Num } from "./Benchmarks";
 import { WeeklyEmail } from "./Settings";
 import "./pages.css";
 
@@ -37,52 +37,6 @@ function LinkCard({ title, note, link, actions }: { title: string; note: string;
 }
 
 /* ---------- history ---------- */
-
-/** How a field reads inside a sentence: "the role", "who held the seat". */
-const THING: Record<string, string> = {
-  Start: "the start date",
-  End: "the end date",
-  Type: "the type of seat",
-  Status: "the seat's status",
-  "Seat holder": "who held the seat",
-  "Why they hired": "why they hired",
-  "How it was sourced": "how the seat was sourced",
-  Employees: "the employee count",
-  "Employees at the time": "the employee count at the time",
-  LinkedIn: "the LinkedIn page",
-  Name: "a person's name",
-  Title: "a person's title",
-  Relationship: "how a person is connected",
-  Email: "a person's email",
-  Phone: "a person's phone number",
-};
-const thing = (label: string) => THING[label] ?? `the ${fieldText(label)}`;
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-/** One history line as a sentence a person can follow. `note` explains an amount of 0. */
-function statement(l: LedgerRow, earnCap: number): { text: string; note?: string } {
-  const at = l.company ? ` at ${l.company}` : "";
-  const bench = /benchmarks only/i.test(l.field);
-  switch (l.reason) {
-    case "fill":
-      if (bench) return { text: "Shared a rate for the benchmarks only" };
-      return { text: `Added ${thing(l.field)}${at}`, note: l.delta === 0 ? `No credit. You had already earned that day's ${earnCap}.` : undefined };
-    case "unlock":
-      return { text: l.field === "Hidden company" ? `Unlocked a hidden company${l.company ? `, ${l.company}` : ""}` : `Unlocked ${thing(l.field)}${at}` };
-    case "refund":
-      return { text: `Refund. ${cap(thing(l.field))}${at} was removed after review.` };
-    case "reversal":
-      return { text: `${cap(thing(l.field))} you added${at} was removed after review` };
-    case "Removed":
-      return { text: "You took back a rate you shared for the benchmarks" };
-    case "referral":
-      return { text: l.company ? `Invite bonus, with ${l.company}` : "Invite bonus" };
-    case "confirm":
-      return { text: `Two members confirmed ${thing(l.field)} you added${at}` };
-    default:
-      return { text: [l.reason, l.field && l.field !== l.reason ? fieldText(l.field) : "", at.trim()].filter(Boolean).join(" ") };
-  }
-}
 
 const dayKey = (iso: string) => new Date(iso).toDateString();
 function dayLabel(iso: string): string {
@@ -125,7 +79,7 @@ function History({ ledger, credits, starter, earnCap }: { ledger: LedgerRow[]; c
           </thead>
           <tbody>
             {rows.map(({ l, after }, k) => {
-              const s = statement(l, earnCap);
+              const s = ledgerLine(l, earnCap);
               const newDay = k === 0 || dayKey(rows[k - 1].l.at) !== dayKey(l.at);
               const time = new Date(l.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
               return [
@@ -191,12 +145,12 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
       <button type="button" className="tp-back" onClick={onBack}>
         <IconChevron dir="left" /> Back to the table
       </button>
-      <h1 className="tp-page-h">My credits</h1>
+      <h1 className="tp-page-h">Your credits</h1>
       <div className="tp-stats cr-stats">
         <div className="tp-stat cr-balance">
           <div className={`tp-stat-n num${me.credits <= 3 ? " ember" : ""}`}>{me.credits}</div>
           <div className="tp-stat-l">{me.credits === 1 ? "Credit to spend" : "Credits to spend"}</div>
-          {me.credits <= 3 && <div className="cr-stat-sub">{capped ? `You can earn again at ${fmtTime(me.earnResetsAt)}.` : "Add a fact that's missing to earn more."}</div>}
+          {me.credits <= 3 && <div className="cr-stat-sub">{capped ? `You can earn again ${atTime(me.earnResetsAt)}.` : "Add a fact you know and you earn one."}</div>}
         </div>
         <div className="tp-stat">
           <div className="tp-stat-n num">
@@ -207,7 +161,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           <div className="cr-bar" role="img" aria-label={`${me.earned24h} of ${me.earnCap} credits earned in the last 24 hours`}>
             <span style={{ width: `${Math.min(100, (me.earned24h / me.earnCap) * 100)}%` }} />
           </div>
-          {capped && <div className="cr-stat-sub">That is the daily limit. You can earn again at {fmtTime(me.earnResetsAt)}.</div>}
+          {capped && <div className="cr-stat-sub">That is the daily limit. You can earn again {atTime(me.earnResetsAt)}.</div>}
           {me.held > 0 && (
             <div className="cr-stat-sub">
               {plural(me.held, "bonus credit is", "bonus credits are")} held. {me.held === 1 ? "It is" : "They are"} paid when you have room.

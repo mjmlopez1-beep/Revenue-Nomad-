@@ -8,14 +8,14 @@
  * a locked one (a small lock and a masked bar), and a missing one you can add for a credit.
  */
 import type { ReactNode } from "react";
-import { IconCheck, IconLock, IconPlus, IconUsers } from "../ui/shared";
+import { IconCheck, IconLock, IconUsers } from "../ui/shared";
 
-/** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. */
+/** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. Drawn with the app's own classes. */
 function Locked({ w = 72 }: { w?: number }) {
   return (
-    <span className="lp-locked">
+    <span className="lock-rest lp-locked">
       <IconLock size={12} />
-      <i style={{ width: w }} />
+      <span className="lock-mask" style={{ width: w }} />
     </span>
   );
 }
@@ -23,10 +23,10 @@ function Locked({ w = 72 }: { w?: number }) {
 /** The same locked fact as it looks under the pointer: one tap, one credit. */
 function Unlock() {
   return (
-    <span className="lp-unlock">
+    <span className="lock-cta lock-cta-static">
       <IconLock size={12} />
-      Unlock
-      <span className="lp-unlock-cost num">1 credit</span>
+      <span>Unlock</span>
+      <span className="lock-cost num">· 1 credit</span>
     </span>
   );
 }
@@ -34,10 +34,9 @@ function Unlock() {
 /** A missing fact: add it and earn a credit. */
 function Add() {
   return (
-    <span className="lp-add">
-      <IconPlus size={12} />
-      Add
-      <span className="lp-add-earn num">+1</span>
+    <span className="add">
+      + Add
+      <span className="plus1 num">+1</span>
     </span>
   );
 }
@@ -77,7 +76,7 @@ export function HeroRecord() {
               Software · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
             </div>
           </div>
-          <span className="lp-hiring">Hiring now</span>
+          <span className="chip chip-ember lp-hiring">Hiring now</span>
         </div>
 
         <div className="lp-rec-sec">
@@ -111,7 +110,7 @@ export function HeroRecord() {
             <Row k="Seat holder">
               <Locked w={84} />
             </Row>
-            <Row k="Hours per week">
+            <Row k="Hours a week">
               <Add />
             </Row>
           </dl>
@@ -142,7 +141,7 @@ export function HeroRecord() {
 export function DemoAdd() {
   return (
     <div className="lp-demo" aria-hidden>
-      <span className="lp-demo-k">Hours per week</span>
+      <span className="lp-demo-k">Hours a week</span>
       <Add />
       <span className="lp-demo-arrow">→</span>
       <span className="lp-demo-v num">15</span>

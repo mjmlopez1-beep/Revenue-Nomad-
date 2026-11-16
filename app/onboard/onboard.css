@@ -22,33 +22,6 @@
   outline: 2px solid var(--volt);
   outline-offset: 2px;
 }
-.ob .input:focus {
-  outline: 2px solid var(--volt);
-  outline-offset: 2px;
-  border-color: var(--pine);
-  box-shadow: none;
-}
-.ob .btn:active:not(:disabled) {
-  transform: translateY(1px);
-}
-/* Loading: the label says what is happening and a small ring turns beside it. */
-.ob .btn[aria-busy="true"] {
-  cursor: progress;
-}
-.ob .btn[aria-busy="true"]::before {
-  content: "";
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  animation: ob-spin 0.7s linear infinite;
-}
-@keyframes ob-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 /* ---------- top bar ---------- */
 .ob-top {
@@ -169,7 +142,7 @@
 .ob-h {
   padding: 0;
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 17px;
   line-height: 24px;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -177,7 +150,7 @@
 }
 .ob-hint {
   margin-top: 12px;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 20px;
   color: var(--muted);
 }
@@ -295,6 +268,7 @@
 }
 .ob-back,
 .ob-skip {
+  min-width: 44px;
   min-height: 44px;
   padding: 0 4px;
   border: 0;
@@ -527,10 +501,10 @@
   margin: 24px 0 12px;
 }
 .ob-sugg-head h2 {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 20px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: -0.005em;
   color: var(--ink);
 }
 .ob-sugg-why {
@@ -577,7 +551,7 @@
   font-size: 15px;
   line-height: 20px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.005em;
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -606,17 +580,8 @@
   overflow: hidden;
 }
 /* One chip system: 6px corner, 13px, 600. Outline is an attribute, fill is a state. */
-.ob-chip-sm.chip {
-  height: 26px;
-  padding: 0 8px;
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 600;
-}
-/* The member's own function. */
+/* The member's own function: pine text on the same outline chip, as in the table. */
 .ob-chip-mine.chip {
-  border-color: transparent;
-  background: var(--pine-8);
   color: var(--pine);
 }
 .ob-co-none,
@@ -632,47 +597,12 @@
   align-items: center;
   gap: 6px;
 }
-/* An open role: the dot is the only ember a row carries. */
-.ob-dot {
-  display: block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--ember);
-}
-/* The same width followed or not, so a card does not shift when it is tapped. */
+/* The shared button (.btn, pine once followed). The same width either way, so a card does not shift when it is tapped. */
 .ob-follow {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
   min-width: 112px;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: var(--r-btn);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 700;
-  color: var(--ink);
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-.ob-follow:hover {
-  border-color: var(--pine);
-}
-.ob-follow:active {
-  background: var(--surface-2);
-}
-.ob-follow-on,
-.ob-follow-on:hover {
-  background: var(--pine);
-  border-color: var(--pine);
-  color: #fff;
-}
-.ob-follow-on:active {
-  background: var(--pine-hover);
 }
 
 /* ---------- step 3: sign-in link ---------- */
@@ -846,11 +776,5 @@
   }
   .ob-results {
     animation: none;
-  }
-  .ob .btn[aria-busy="true"]::before {
-    animation-duration: 2s;
-  }
-  .ob .btn:active:not(:disabled) {
-    transform: none;
   }
 }

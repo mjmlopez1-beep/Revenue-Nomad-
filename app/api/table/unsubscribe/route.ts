@@ -78,6 +78,6 @@ export async function GET(req: NextRequest) {
   if (limited(`unsub:${clientIp(req)}`, 30, 60_000)) return page("Too many tries in one minute", "Wait a minute, then open the link from your email again.", 429);
   const q = req.nextUrl.searchParams;
   if (!(await unsubscribe(q.get("m"), q.get("s"))))
-    return page("That link didn't work", "It may have been cut off in your email. You can turn the weekly email off yourself under My credits.", 400);
-  return page("You're unsubscribed", "We won't send you the weekly email of new open roles again. If you change your mind, turn it back on under My credits.");
+    return page("That link didn't work", "It may have been cut off in your email. You can turn the weekly email off yourself under Your credits.", 400);
+  return page("You're unsubscribed", "We won't send you the weekly email of new open roles again. If you change your mind, turn it back on under Your credits.");
 }

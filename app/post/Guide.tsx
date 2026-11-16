@@ -1,11 +1,10 @@
 "use client";
 
-/** First-run checklist, one-line strips (first visit, since your last visit) and the credit banners. */
+/** The Get started checklist and the one-line strip (first visit, an invite bonus waiting, running low, since your last visit). */
 import type { Me } from "@/lib/tableTypes";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
-import { IconCheck, IconPlus, IconX } from "../ui/shared";
-import { fmtTime, plural } from "./hooks";
-import type { Tab } from "./model";
+import { IconCheck, IconX } from "../ui/shared";
+import { plural } from "./hooks";
 
 export function Checklist({
   me,
@@ -74,9 +73,10 @@ export function Checklist({
   );
 }
 
-export function Strip({ children, onClose, tone = "plain", actions }: { children: React.ReactNode; onClose?: () => void; tone?: "plain" | "ember" | "volt"; actions?: React.ReactNode }) {
+/** One calm line with at most one action. Never ember: the balance in the top bar and the next-move card carry that. */
+export function Strip({ children, onClose, actions }: { children: React.ReactNode; onClose?: () => void; actions?: React.ReactNode }) {
   return (
-    <div className={`tp-strip tp-strip-${tone}`} role="status">
+    <div className="tp-strip" role="status">
       <span className="tp-strip-t">{children}</span>
       {actions && <span className="tp-strip-acts">{actions}</span>}
       {onClose && (
@@ -84,126 +84,6 @@ export function Strip({ children, onClose, tone = "plain", actions }: { children
           <IconX size={14} />
         </button>
       )}
-    </div>
-  );
-}
-
-/**
- * The credit banner. Out of credits and running low are the one thing that needs the member
- * now, so the strip is outlined in ember. `quiet` when the next-move card is on the page: the
- * card carries the ember, so this strip goes plain. The daily limit is news, never ember.
- */
-export function CreditBanner({ me, onShowAdd, onInvite, quiet }: { me: Me; onShowAdd: () => void; onInvite: () => void; quiet?: boolean }) {
-  const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
-  const tone = quiet ? "plain" : "ember";
-  if (me.credits <= 0)
-    return (
-      <Strip
-        tone={tone}
-        actions={
-          <>
-            <button type="button" className="btn btn-sm btn-pine" onClick={onShowAdd}>
-              Show facts I can add
-            </button>
-            <button type="button" className="btn btn-sm" onClick={onInvite}>
-              Invite a fractional
-            </button>
-          </>
-        }
-      >
-        {capped
-          ? `You're out of credits, and you've earned today's ${me.earnCap}. You can earn again at ${fmtTime(me.earnResetsAt)}.`
-          : "You're out of credits. Add a fact that's missing and you earn one back."}
-      </Strip>
-    );
-  // Running low (and still able to earn): say so before it is a dead end.
-  if (me.credits <= 3 && !capped)
-    return (
-      <Strip
-        tone={tone}
-        actions={
-          <button type="button" className="btn btn-sm btn-pine" onClick={onShowAdd}>
-            Show facts I can add
-          </button>
-        }
-      >
-        You have {plural(me.credits, "credit")} left. Each fact you add earns another.
-      </Strip>
-    );
-  if (capped)
-    return (
-      <Strip tone="plain">
-        You&apos;ve earned today&apos;s {me.earnCap} credits. You can earn again at {fmtTime(me.earnResetsAt)}. What you add before then still saves, and any bonus is held and paid when you have room.
-      </Strip>
-    );
-  return null;
-}
-
-export function NoResults({
-  q,
-  tab,
-  noun = "companies",
-  onAdd,
-  onClear,
-  onBrowse,
-  filtered,
-}: {
-  q: string;
-  tab: Tab;
-  noun?: string;
-  onAdd: () => void;
-  onClear: () => void;
-  onBrowse: () => void;
-  filtered: boolean;
-}) {
-  if (q)
-    return (
-      <div className="tp-noresults">
-        <h3>No match for {q}</h3>
-        <p className="muted">If you know the company, add it. You earn a credit for each thing you fill in.</p>
-        <div className="tp-noresults-acts">
-          <button type="button" className="btn btn-primary" onClick={onAdd}>
-            <IconPlus size={14} /> Add {q.length > 24 ? "it" : q}
-          </button>
-          {(filtered || tab !== "all") && (
-            <button type="button" className="btn" onClick={onClear}>
-              Clear filters
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  if (filtered)
-    return (
-      <div className="tp-noresults">
-        <h3>Nothing matches these filters</h3>
-        <p className="muted">Clear a filter to see more, or add a company you know.</p>
-        <div className="tp-noresults-acts">
-          <button type="button" className="btn" onClick={onClear}>
-            Clear filters
-          </button>
-          <button type="button" className="btn btn-primary" onClick={onAdd}>
-            <IconPlus size={14} /> Add what you know
-          </button>
-        </div>
-      </div>
-    );
-  // An empty view with no filter set: say how it fills up.
-  const copy =
-    tab === "following"
-      ? { h: "You're not following any companies yet", p: "Open a company and choose Follow. New roles, rates and people there will show up here." }
-      : tab === "unlocked"
-        ? { h: "You haven't unlocked anything yet", p: "Whatever you unlock stays open for you, and it is listed here." }
-        : { h: `No ${noun} in this view yet`, p: "Browse all companies, or add one you know. You earn a credit for each thing you fill in." };
-  return (
-    <div className="tp-noresults">
-      <h3>{copy.h}</h3>
-      <p className="muted">{copy.p}</p>
-      <div className="tp-noresults-acts">
-        <button type="button" className="btn btn-pine" onClick={onBrowse}>
-          Browse all companies
-        </button>
-      </div>
     </div>
   );
 }

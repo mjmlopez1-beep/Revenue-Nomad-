@@ -135,7 +135,7 @@ interface Profile {
   goal?: string;
   title?: string;
   onboarded?: boolean;
-  /** Turned the weekly email off (My credits, or the unsubscribe link). */
+  /** Turned the weekly email off (Your credits, or the unsubscribe link). */
   digestOff?: boolean;
   /** Asked to hear about Pro. */
   proInterest?: boolean;
@@ -907,14 +907,16 @@ function friendliness(g: Graph, s: State, tracks: Tracks, companyId: string, eng
  * replaced, never changed in place, so comparing the objects is enough). Signed-out visitors
  * who arrive while the counts are being rebuilt wait for that one build.
  */
-let statsCache: { s: State; seed: Seed; stats: View["stats"] } | null = null;
+let statsCache: { s: State; seed: Seed; stats: View["stats"]; at: number } | null = null;
+/** "Opened this week" moves with the clock, so the cached counts are rebuilt at least hourly. */
+const STATS_FRESH = 60 * 60 * 1000;
 let anonBuild: { s: State; seed: Seed; p: Promise<View> } | null = null;
 
 export async function buildView(token: string | null): Promise<View> {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (me) return fullView(seed, s, me);
-  if (statsCache && statsCache.s === s && statsCache.seed === seed)
+  if (statsCache && statsCache.s === s && statsCache.seed === seed && Date.now() - statsCache.at < STATS_FRESH)
     return { demo: !!seed.demo, me: null, companies: [], stats: statsCache.stats, ledger: [], reported: [], email: emailEnabled() };
   if (!anonBuild || anonBuild.s !== s || anonBuild.seed !== seed) {
     const p = fullView(seed, s, null);
@@ -1182,12 +1184,16 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     people: peopleCount,
     fractionalFriendly: companies.filter((c) => c.friendly.tier === "High" || c.friendly.tier === "Medium").length,
     openRoles: companies.reduce((n, c) => n + c.friendly.open, 0),
+    openedWeek: 0,
     members: seed.members.length + s.members.length,
     facts,
     starter: STARTER_CREDITS,
   };
-  statsCache = { s, seed, stats };
-  const scan = me ? scanSummary(g, s, tracks, nowMs, meRec?.function ?? null) : null;
+  // Counted for everyone: the landing page says how many roles opened this week.
+  const scanAll = scanSummary(g, s, tracks, nowMs, meRec?.function ?? null);
+  stats.openedWeek = scanAll.opened7;
+  statsCache = { s, seed, stats, at: nowMs };
+  const scan = me ? scanAll : null;
   return {
     demo: !!seed.demo,
     me: meRec,

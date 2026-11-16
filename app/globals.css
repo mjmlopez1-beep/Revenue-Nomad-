@@ -8,6 +8,19 @@
  *
  * Chips are one system: 6px corners, 13px, 600. A fill is a state (selected, hiring, under
  * review). An outline is an attribute (a function, a type, a fit tier). Dashed means missing.
+ * The few solid tags (ember "Hiring", the pine "Pro", a volt "+10") are 700.
+ *
+ * Type is one scale, the same in every area:
+ *   page title      28/34, 800, -0.025em (24/30 on phones)
+ *   overlay title   22/28, 800, -0.02em: a record, a dialog (a phone sheet is 19/26)
+ *   section title   17/24, 700, -0.01em: a card, a section of a record, a question
+ *   sub-heading     15/20, 700, -0.005em: a group inside a card or a panel, a row title in a list
+ *   label           13/20, 600
+ *   cell            13/20, 400 (13.5 on phones). The company name in a table row is 14/18, 700.
+ *   caption, hint   13/20, 400, muted
+ *   interface text  14/20, 400. Reading text (landing, empty states) is 15/24.
+ *   table header    12.5/20, 600, muted
+ *   big number      32/36, 800, -0.02em, in the number face
  *
  * Area styles live next to their components:
  *   app/landing/landing.css   marketing page, join and sign-in
@@ -24,7 +37,6 @@
   --volt-soft: #e8fbf2;
   --volt-ink: #0b6b45;
   --ember: #ff5a1f;
-  --ember-soft: #fff0e8;
   --ember-ink: #b23a0a;
   --red: #d12f4a;
   --bg: #fafaf7;
@@ -176,14 +188,37 @@ img {
 .btn:active {
   background: var(--surface-2);
 }
+/* A press: one pixel down. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-/* Working: the label says what is happening ("Unlocking") and the button waits. */
+/* Working: the label says what is happening ("Unlocking"), a small ring turns beside it, and the button waits. */
 .btn[aria-busy="true"] {
   opacity: 0.7;
   cursor: progress;
+}
+.btn[aria-busy="true"]::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: btn-spin 0.7s linear infinite;
+}
+.btn-sm[aria-busy="true"]::before {
+  width: 12px;
+  height: 12px;
+}
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .btn-primary {
   background: var(--volt);
@@ -247,7 +282,7 @@ img {
 .input:focus,
 .select:focus {
   outline: 2px solid var(--volt);
-  outline-offset: 1px;
+  outline-offset: 2px;
   border-color: var(--pine);
 }
 .input:disabled,
@@ -258,6 +293,10 @@ img {
 }
 .input::placeholder {
   color: var(--faint);
+}
+/* A link or an email field is mono for what is typed into it. Its hint is a sentence, so it is not. */
+.input.mono::placeholder {
+  font-family: var(--font);
 }
 
 /* ---------- chips and pills ---------- */
@@ -275,6 +314,7 @@ img {
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 /* Selected. */
@@ -311,6 +351,33 @@ img {
 }
 
 /*
+ * A role that is open now. The dot is the only ember a row, a card or a line of text carries.
+ * It pulses slowly (never under prefers-reduced-motion, see the rule at the top).
+ */
+.live-dot {
+  flex: none;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ember);
+  animation: live-dot 2.4s ease-out infinite;
+}
+.live-dot-lg {
+  width: 8px;
+  height: 8px;
+}
+@keyframes live-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 5px rgba(255, 90, 31, 0);
+  }
+}
+
+/*
  * Locked fact. It never shows the value. At rest it is quiet: a small lock and a masked bar.
  * Hover or focus turns it into "Unlock · 1 credit", and one click spends the credit. Screens
  * without hover show the label all the time, as plain pine text, so it is still one tap.
@@ -327,7 +394,7 @@ img {
   white-space: nowrap;
 }
 .lock .lock-cost {
-  font-weight: 600;
+  font-weight: 400;
 }
 button.lock {
   position: relative;
@@ -371,8 +438,18 @@ button.lock {
   color: #fff;
 }
 .lock-cta .lock-cost {
-  font-weight: 500;
+  font-weight: 400;
   color: rgba(255, 255, 255, 0.78);
+}
+/* The same label drawn on its own, with no button under it (the landing page's example record). */
+.lock-cta-static {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 @media (hover: hover) {
   button.lock:hover .lock-cta {

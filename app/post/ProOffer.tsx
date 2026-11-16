@@ -47,7 +47,7 @@ export const PRO_DONE = "You're on the list. We'll email you when it opens.";
 
 /**
  * `listed` is Me.proInterest. `onAsk` sends pro_interest and resolves true when it was saved.
- * "card" stands on its own (My credits, the foot of Hiring now); "line" is the quiet form
+ * "card" stands on its own (Your credits, the foot of Hiring now); "line" is the quiet form
  * that sits under another action (the zero-credits popover, a hidden company's record).
  */
 export function ProOffer({

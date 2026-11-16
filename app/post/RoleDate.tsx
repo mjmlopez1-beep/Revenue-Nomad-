@@ -3,7 +3,7 @@
 /**
  * Dates on a role the weekly scan follows: "Open since Nov 3" while the posting is up, then
  * "Role closed Dec 8" with how long it was listed. Shown wherever that seat is shown (the
- * company record, the Engagements table, phone cards).
+ * company record, the Seats table, phone cards).
  *
  * The dot on an open role is the only ember a row or a card carries.
  */
@@ -26,7 +26,7 @@ export function RoleDate({ e }: { e: EngagementRec }) {
   if (!e.closed)
     return (
       <span className="tp-role-date open num" title={`We first saw this posting on ${fmtDay(e.opened)}. It was still up at the last weekly scan.`}>
-        <span className="tp-role-dot" aria-hidden />
+        <span className="live-dot" aria-hidden />
         Open since {fmtDay(e.opened)}
       </span>
     );
