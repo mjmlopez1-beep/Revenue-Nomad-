@@ -4,6 +4,8 @@
  * Dates on a role the weekly scan follows: "Open since Nov 3" while the posting is up, then
  * "Role closed Dec 8" with how long it was listed. Shown wherever that seat is shown (the
  * company record, the Engagements table, phone cards).
+ *
+ * The dot on an open role is the only ember a row or a card carries.
  */
 import type { ReactNode } from "react";
 import type { EngagementRec } from "@/lib/tableTypes";
@@ -23,21 +25,21 @@ export function RoleDate({ e }: { e: EngagementRec }) {
   if (!e.opened) return null;
   if (!e.closed)
     return (
-      <span className="tp-role-date open" title={`First seen in the weekly scan on ${fmtDay(e.opened)}`}>
+      <span className="tp-role-date open num" title={`We first saw this posting on ${fmtDay(e.opened)}. It was still up at the last weekly scan.`}>
         <span className="tp-role-dot" aria-hidden />
         Open since {fmtDay(e.opened)}
       </span>
     );
   const days = plural(daysListed(e.opened, e.closed), "day");
   return (
-    <span className="tp-role-date closed" title={`Listed ${days}, from ${fmtDay(e.opened)}`}>
+    <span className="tp-role-date closed num" title={`The posting was up for ${days}, from ${fmtDay(e.opened)}.`}>
       Role closed {fmtDay(e.closed)}
       <span className="tp-role-days"> · listed {days}</span>
     </span>
   );
 }
 
-/** A status as colored text. Closed is a quiet chip. */
+/** A status as plain text. Closed is history, so it is muted. */
 export const statusText = (v: string): ReactNode => <span className={`tp-status s-${v.split(" ")[0].toLowerCase()}`}>{v}</span>;
 
 /**

@@ -42,10 +42,11 @@
   padding: 0 0 48px;
 }
 .tp-small {
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 18px;
 }
-.tp-mt6 {
-  margin-top: 6px;
+.tp-mt8 {
+  margin-top: 8px;
 }
 .tp-bare {
   border: 0;
@@ -59,18 +60,37 @@
 .tp-bare::-webkit-search-cancel-button {
   display: none;
 }
+/* A count beside a label (a tab, a filter, a section title): the text face, tabular, quiet. */
 .tp-cnt {
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--faint);
+  font-family: var(--font-num);
+}
+/* Open roles you can win today: the one solid ember on the screen. Ink text, never white. */
+.tp-cnt-live {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-chip);
+  background: var(--ember);
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
 }
 .tp-faint {
   color: var(--faint);
+}
+/* Nothing here, and nothing to add. */
+.tp-none {
+  color: var(--line-strong);
 }
 .tp-link {
   color: var(--pine);
   text-decoration: none;
   border-bottom: 1px solid var(--pine-14);
+  transition: border-color var(--t);
 }
 .tp-link:hover {
   border-bottom-color: var(--pine);
@@ -85,9 +105,18 @@
   background: transparent;
   color: #fff;
   flex: none;
+  transition: background var(--t), color var(--t);
 }
 .tp-iconbtn:hover {
   background: rgba(255, 255, 255, 0.12);
+}
+.tp-iconbtn:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+.tp-iconbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
 }
 .tp-iconbtn-dark {
   color: var(--muted);
@@ -95,6 +124,13 @@
 .tp-iconbtn-dark:hover {
   background: var(--surface-2);
   color: var(--ink);
+}
+.tp-iconbtn-dark:active {
+  background: var(--line);
+}
+.tp-iconbtn-dark:disabled {
+  background: transparent;
+  color: var(--muted);
 }
 .tp-iconbtn-sm {
   width: 28px;
@@ -104,24 +140,38 @@
   background: var(--volt);
   color: var(--pine);
 }
-.tp-iconbtn-volt:hover {
+.tp-iconbtn-volt:hover,
+.tp-iconbtn-volt:active {
   background: var(--volt-hover);
 }
+/* A text button: Confirm, Report, Edit, Show 5 more. */
 .tp-tbtn {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   border: 0;
   background: none;
-  padding: 2px 4px;
+  padding: 2px 5px;
+  margin: 0 -5px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--muted);
+  white-space: nowrap;
+  transition: background var(--t), color var(--t);
 }
 .tp-tbtn:hover {
   color: var(--pine);
   background: var(--pine-8);
+}
+.tp-tbtn:active {
+  background: var(--pine-14);
+}
+.tp-tbtn:disabled {
+  color: var(--faint);
+  background: none;
+  cursor: progress;
 }
 .tp-tbtn-strong {
   color: var(--pine);
@@ -136,6 +186,20 @@
 }
 .tp-grow {
   flex: 1;
+}
+/* A key you can press. */
+.tp-key {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  color: var(--muted);
 }
 
 /* ---------- top bar ---------- */
@@ -157,6 +221,7 @@
   align-items: center;
   gap: 12px;
   border: 0;
+  border-radius: 6px;
   background: none;
   padding: 0;
   color: #fff;
@@ -178,7 +243,7 @@
 .tp-wordmark {
   font-weight: 800;
   font-size: 15px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   white-space: nowrap;
 }
 .tp-top-mid {
@@ -198,7 +263,7 @@
   border-radius: var(--r-btn);
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.7);
-  transition: background 0.12s;
+  transition: background var(--t), color var(--t);
 }
 .tp-search:hover {
   background: rgba(255, 255, 255, 0.14);
@@ -206,6 +271,8 @@
 .tp-search:focus-within {
   background: #fff;
   color: var(--muted);
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
 }
 .tp-search input {
   color: #fff;
@@ -214,14 +281,15 @@
   color: var(--ink);
 }
 .tp-search input::placeholder {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.62);
 }
 .tp-search:focus-within input::placeholder {
   color: var(--faint);
 }
 .tp-kbd {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 600;
   line-height: 18px;
   min-width: 20px;
   text-align: center;
@@ -242,6 +310,10 @@
   height: 24px;
   border-radius: 4px;
 }
+.tp-search-x:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
 .tp-top-right {
   display: flex;
   align-items: center;
@@ -255,35 +327,45 @@
   gap: 5px;
   height: 32px;
   padding: 0 11px;
-  align-items: center;
+  align-items: baseline;
   border-radius: var(--r-btn);
   border: 1px solid rgba(255, 255, 255, 0.22);
   background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  color: rgba(255, 255, 255, 0.82);
   font-size: 13px;
   font-weight: 600;
+  line-height: 30px;
+  transition: background var(--t), border-color var(--t);
 }
 .tp-credits:hover {
   background: rgba(255, 255, 255, 0.12);
 }
+.tp-credits:active {
+  background: rgba(255, 255, 255, 0.18);
+}
 .tp-credits-n {
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 800;
+  color: #fff;
 }
+/* 3 or fewer: an ember outline and ember figures. No ember wash. */
 .tp-credits.low {
-  border-color: rgba(255, 90, 31, 0.6);
-  background: rgba(255, 90, 31, 0.16);
-  color: #ffb08f;
+  border-color: var(--ember);
+  color: var(--ember-on-pine);
+}
+.tp-credits.low .tp-credits-n {
+  color: var(--ember-on-pine);
 }
 .tp-delta {
   position: absolute;
   left: 50%;
   top: 100%;
   transform: translateX(-50%);
-  font-family: var(--mono);
   font-size: 12px;
-  font-weight: 600;
-  padding: 1px 6px;
+  font-weight: 700;
+  font-family: var(--font-num);
+  line-height: 18px;
+  padding: 0 6px;
   border-radius: 5px;
   pointer-events: none;
   animation: tp-delta 1.4s ease-out forwards;
@@ -326,9 +408,10 @@
   border-radius: var(--r-btn);
   background: none;
   color: rgba(255, 255, 255, 0.78);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 400;
   min-width: 112px;
+  transition: background var(--t);
 }
 .tp-meter:hover {
   background: rgba(255, 255, 255, 0.08);
@@ -336,10 +419,11 @@
 .tp-meter-text {
   white-space: nowrap;
   text-align: left;
+  line-height: 16px;
 }
-.tp-meter-text .mono {
+.tp-meter-text b {
   color: #fff;
-  font-weight: 500;
+  font-weight: 700;
 }
 .tp-meter-bar {
   display: block;
@@ -355,12 +439,6 @@
   border-radius: 2px;
   transition: width 0.4s ease;
 }
-.tp-meter.capped .tp-meter-bar span {
-  background: var(--ember);
-}
-.tp-meter.capped .tp-meter-text {
-  color: #ffb08f;
-}
 .tp-add-btn {
   height: 36px;
   min-height: 36px;
@@ -374,6 +452,7 @@
   color: #fff;
   font-size: 12px;
   font-weight: 700;
+  transition: background var(--t);
 }
 .tp-avatar:hover {
   background: rgba(255, 255, 255, 0.2);
@@ -396,6 +475,13 @@
   box-shadow: var(--overlay-shadow);
   padding: 12px;
   color: var(--body-ink);
+  animation: tp-pop var(--t) ease-out;
+}
+@keyframes tp-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 .tp-menu {
   padding: 6px;
@@ -406,8 +492,12 @@
   margin-bottom: 4px;
 }
 .tp-menu-name {
+  font-size: 15px;
   font-weight: 700;
   color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tp-menu-item {
   display: flex;
@@ -422,19 +512,34 @@
   background: none;
   font-size: 14px;
   font-weight: 600;
+  color: var(--ink);
   text-align: left;
+  transition: background var(--t);
 }
-.tp-menu-item:hover {
+.tp-menu-item:hover,
+.tp-menu-item:focus-visible {
   background: var(--surface-2);
 }
+.tp-menu-item:active {
+  background: var(--line);
+}
+/* The sort in use: pine, with a check at the end of the row. */
 .tp-menu-item.on {
   color: var(--pine);
-  background: var(--pine-8);
+  font-weight: 700;
+}
+.tp-menu-item.on::after {
+  content: "";
+  width: 12px;
+  height: 6px;
+  margin: 0 2px 3px 0;
+  border-left: 2px solid var(--pine);
+  border-bottom: 2px solid var(--pine);
+  transform: rotate(-45deg);
 }
 .tp-menu-hint {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--volt-ink);
 }
 .tp-credpop {
@@ -449,24 +554,35 @@
   border-bottom: 1px solid var(--line);
 }
 .tp-credpop-n {
-  font-size: 34px;
-  line-height: 1;
+  font-size: 40px;
+  line-height: 40px;
+  letter-spacing: -0.03em;
   color: var(--ink);
-  font-weight: 500;
+  font-weight: 800;
+}
+.tp-credpop-n.low {
+  color: var(--ember-ink);
 }
 .tp-credpop-l {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--muted);
-  font-weight: 600;
   margin-top: 4px;
 }
 .tp-credpop-earn {
   width: 128px;
 }
+.tp-credpop-earn .tp-credpop-l {
+  margin-top: 0;
+}
 .tp-credpop-e {
-  font-size: 15px;
-  margin: 2px 0 6px;
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0 0 6px;
   color: var(--ink);
+}
+.tp-credpop-e b {
+  font-weight: 800;
 }
 .tp-bar {
   height: 6px;
@@ -478,30 +594,22 @@
   display: block;
   height: 100%;
   background: var(--volt);
-}
-.tp-bar.capped span {
-  background: var(--ember);
-}
-.tp-credpop-cap {
-  margin-top: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--ember-soft);
-  color: var(--ember-ink);
-  font-size: 13px;
+  transition: width 0.4s ease;
 }
 .tp-credpop-rules {
-  display: grid;
-  gap: 4px;
   padding: 12px 0;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
+  line-height: 19px;
+  color: var(--body-ink);
 }
+/* "+1" and "−1" in a list of rules (the My credits page): volt earns, pine spends. */
 .tp-plus,
 .tp-minus {
   display: inline-block;
   min-width: 26px;
-  font-weight: 600;
+  font-weight: 700;
+  font-family: var(--font-num);
 }
 .tp-plus {
   color: var(--volt-ink);
@@ -514,11 +622,12 @@
 }
 .tp-lrow {
   display: grid;
-  grid-template-columns: 30px 1fr auto;
+  grid-template-columns: 26px 1fr auto;
   gap: 8px;
   align-items: baseline;
   padding: 5px 0;
   font-size: 13px;
+  line-height: 18px;
 }
 .tp-lrow-t {
   overflow: hidden;
@@ -526,7 +635,8 @@
   white-space: nowrap;
 }
 .tp-lrow-d {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--muted);
 }
 .tp-lrow-d.up {
   color: var(--volt-ink);
@@ -535,7 +645,7 @@
   color: var(--pine);
 }
 .tp-lrow-at {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--faint);
 }
 .tp-credpop-all {
@@ -547,9 +657,13 @@
   gap: 10px;
 }
 .tp-zero-t {
-  font-size: 13.5px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--ink);
+}
+.tp-zero .btn {
+  justify-self: start;
 }
 .tp-zero-pills {
   display: flex;
@@ -571,13 +685,19 @@
   inset: 56px 0 0 0;
   z-index: 50;
   background: rgba(10, 26, 19, 0.24);
+  animation: tp-scrim var(--t) ease-out;
+}
+@keyframes tp-scrim {
+  from {
+    opacity: 0;
+  }
 }
 .tp-side-overlay {
   height: 100%;
   width: 300px;
   max-width: 88vw;
   box-shadow: var(--overlay-shadow);
-  animation: tp-slide-l 0.16s ease-out;
+  animation: tp-slide-l var(--t) ease-out;
 }
 @keyframes tp-slide-l {
   from {
@@ -604,50 +724,56 @@
 .tp-filters-title {
   font-weight: 800;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
+  letter-spacing: -0.01em;
   flex: 1;
 }
+/* A text link that is a button: Clear all, Show all 28 industries. */
 .tp-flink {
   border: 0;
+  border-radius: 4px;
   background: none;
   padding: 4px 2px;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
   color: var(--pine);
   white-space: nowrap;
 }
 .tp-flink:hover {
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .tp-fgroup {
-  padding: 14px 0 6px;
+  padding: 16px 0 8px;
   border-bottom: 1px solid var(--line);
 }
 .tp-fgroup:last-of-type {
   border-bottom: 0;
 }
+/* Group titles are sentence case and ink. The labels under them are smaller and muted. */
 .tp-fgroup-h {
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--faint);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  color: var(--ink);
   margin-bottom: 8px;
 }
 .tp-fblock {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .tp-flabel {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--muted);
   margin-bottom: 6px;
 }
 .tp-ftoggle {
   display: flex;
   align-items: center;
   gap: 9px;
-  width: 100%;
   min-height: 32px;
   padding: 0 6px;
   margin: 0 -6px;
@@ -656,12 +782,17 @@
   border-radius: 6px;
   background: none;
   font-size: 13.5px;
-  font-weight: 500;
+  line-height: 20px;
+  font-weight: 400;
   text-align: left;
   color: var(--body-ink);
+  transition: background var(--t);
 }
 .tp-ftoggle:hover {
   background: var(--surface-2);
+}
+.tp-ftoggle:active {
+  background: var(--line);
 }
 .tp-ftoggle-sm {
   min-height: 28px;
@@ -679,7 +810,10 @@
 }
 .tp-ftoggle.on {
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
+}
+.tp-ftoggle.on .tp-cnt {
+  color: var(--muted);
 }
 .tp-check {
   flex: none;
@@ -691,6 +825,10 @@
   border: 1.5px solid var(--line-strong);
   background: var(--surface);
   color: #fff;
+  transition: background var(--t), border-color var(--t);
+}
+.tp-ftoggle:hover .tp-check {
+  border-color: var(--muted);
 }
 .tp-ftoggle.on .tp-check {
   background: var(--pine);
@@ -704,12 +842,20 @@
 .tp-fchip {
   height: 28px;
   cursor: pointer;
+  transition: border-color var(--t), background var(--t), color var(--t);
 }
 .tp-fchip:hover {
   border-color: var(--pine);
 }
+.tp-fchip:active {
+  background: var(--pine-8);
+}
+.tp-fchip.chip-on:active {
+  background: var(--pine-hover);
+}
 .tp-fchip.zero {
   color: var(--faint);
+  border-color: var(--line);
   background: transparent;
 }
 .tp-fchip.chip-on .tp-cnt {
@@ -722,25 +868,34 @@
   height: 32px;
   padding: 0 10px;
   border-radius: var(--r-btn);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   color: var(--faint);
   margin-bottom: 4px;
+  transition: border-color var(--t);
+}
+.tp-fsearch:hover {
+  border-color: var(--muted);
 }
 .tp-fsearch:focus-within {
   border-color: var(--pine);
+  outline: 2px solid var(--volt);
+  outline-offset: 1px;
 }
 .tp-fsearch input {
   font-size: 13px;
   color: var(--ink);
 }
+.tp-fsearch input::placeholder {
+  color: var(--faint);
+}
 .tp-flist {
   display: grid;
 }
 .tp-fnote {
-  font-size: 12px;
-  color: var(--faint);
-  margin: 4px 0 6px;
-  line-height: 1.4;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+  margin: 4px 0 8px;
 }
 .tp-fnote-end {
   margin-top: 12px;
@@ -754,30 +909,33 @@
 .tp-banners:empty {
   display: none;
 }
+/* A calm line: what is true, and at most one thing to do about it. */
 .tp-strip {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 40px;
-  padding: 4px 6px 4px 14px;
+  min-height: 44px;
+  padding: 5px 6px 5px 14px;
   border-radius: var(--r-card);
   border: 1px solid var(--line);
   background: var(--surface);
+  color: var(--body-ink);
   font-size: 13.5px;
+  line-height: 20px;
 }
 .tp-strip-t {
   flex: 1;
   min-width: 0;
+  padding: 4px 0;
 }
 .tp-strip-volt {
   background: var(--volt-soft);
   border-color: #c4f2dc;
   color: var(--pine);
 }
+/* Ember is never a wash. A strip that asks for attention is the same calm line in ink. */
 .tp-strip-ember {
-  background: var(--ember-soft);
-  border-color: #ffd2bd;
-  color: var(--ember-ink);
+  color: var(--ink);
   font-weight: 600;
 }
 .tp-strip-acts {
@@ -796,20 +954,29 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: -4px;
+}
+.tp-chiprow .tp-flink {
+  margin-left: 4px;
 }
 .tp-filterbtn {
   min-height: 38px;
 }
-.tp-filterbtn .mono {
-  font-size: 12px;
-  font-weight: 500;
+.tp-filterbtn.on {
+  border-color: var(--pine);
+  color: var(--pine);
+}
+.tp-filterbtn-n {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-chip);
   background: var(--pine);
   color: #fff;
-  border-radius: 4px;
-  padding: 0 5px;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 18px;
+  text-align: center;
 }
+/* Companies, Engagements, People: what the table lists. */
 .tp-rtype {
   display: inline-flex;
   padding: 3px;
@@ -827,9 +994,10 @@
   border-radius: 6px;
   background: none;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
+  transition: background var(--t), color var(--t);
 }
 .tp-rtype-b:hover {
   color: var(--ink);
@@ -837,92 +1005,118 @@
 .tp-rtype-b.on {
   background: var(--surface);
   color: var(--ink);
+  font-weight: 700;
   box-shadow: 0 0 0 1px var(--line);
+}
+.tp-rtype-b.on .tp-cnt {
+  color: var(--muted);
+}
+/* Views sit on a rule. The one in use is underlined in pine. */
+.tp-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  min-height: 36px;
+  border-bottom: 1px solid var(--line);
+}
+.tp-toolbar-sp {
+  flex: 1;
 }
 .tp-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  margin-bottom: -1px;
   overflow-x: auto;
   scrollbar-width: none;
 }
+.tp-tabs::-webkit-scrollbar {
+  display: none;
+}
 .tp-tab {
   position: relative;
-  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
   padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
   background: none;
   font-size: 13.5px;
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
+  transition: color var(--t), background var(--t), border-color var(--t);
 }
 .tp-tab:hover {
   color: var(--ink);
   background: var(--surface-2);
 }
-/* The active view is an underline: pine-8 fills belong to lock pills only. */
+.tp-tab:focus-visible {
+  outline-offset: -2px;
+}
 .tp-tab.on {
   background: none;
   color: var(--ink);
-  box-shadow: inset 0 -2px 0 var(--pine);
-  border-radius: 0;
+  font-weight: 700;
+  border-bottom-color: var(--pine);
 }
-.tp-tab.on .tp-cnt {
+.tp-tab.on .tp-cnt:not(.tp-cnt-live) {
   color: var(--muted);
-}
-.tp-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-height: 32px;
-}
-.tp-toolbar-sp {
-  flex: 1;
-}
-.tp-filterbtn.on {
-  border-color: var(--pine);
-  color: var(--pine);
 }
 .tp-achip {
   height: 28px;
-  background: var(--surface);
-  border-color: var(--line-strong);
+  gap: 6px;
   color: var(--ink);
   cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.tp-achip svg {
+  color: var(--muted);
 }
 .tp-achip:hover {
   border-color: var(--pine);
+  background: var(--surface-2);
 }
 .tp-count {
   font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
-  font-weight: 600;
   white-space: nowrap;
 }
-.tp-count .mono {
+.tp-count b,
+.tp-pcount b {
   color: var(--ink);
+  font-weight: 700;
 }
 .tp-q {
   color: var(--ink);
+  font-weight: 600;
 }
 .tp-sortbtn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
+  height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-btn);
   background: var(--surface);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink);
   white-space: nowrap;
+  transition: border-color var(--t);
 }
-.tp-sortbtn:hover {
+.tp-sortbtn:hover,
+.tp-sortbtn[aria-expanded="true"] {
   border-color: var(--pine);
+}
+.tp-sortbtn-l {
+  font-weight: 400;
+  color: var(--muted);
 }
 
 /* ---------- checklist (one row on desktop, a card on phones) ---------- */
@@ -1087,7 +1281,7 @@
   pointer-events: none;
   background: linear-gradient(to right, rgba(255, 255, 255, 0), var(--surface) 85%);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--t);
 }
 .tp-frame-box.more-right .tp-frame-fade {
   opacity: 1;
@@ -1101,12 +1295,14 @@
   background: var(--surface);
   overscroll-behavior: contain;
 }
+/* Built for scanning: 13px cells on 44px rows, sentence-case headers, numbers right-aligned. */
 .tp-table {
   border-collapse: separate;
   border-spacing: 0;
   width: max-content;
   min-width: 100%;
   font-size: 13px;
+  line-height: 20px;
 }
 .tp-table th {
   position: sticky;
@@ -1116,8 +1312,8 @@
   padding: 0 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--muted);
   text-align: left;
   white-space: nowrap;
@@ -1126,12 +1322,16 @@
   height: 44px;
   padding: 0 12px;
   border-bottom: 1px solid var(--line);
-  font-family: var(--font);
   font-size: 13px;
   color: var(--ink);
   white-space: nowrap;
   vertical-align: middle;
   background: var(--surface);
+  transition: background var(--t);
+}
+.tp-table th.num,
+.tp-table td.num {
+  text-align: right;
 }
 .tp-table tr:last-child td {
   border-bottom: 0;
@@ -1141,17 +1341,17 @@
 }
 @media (hover: hover) {
   .tp-table tbody tr:hover td {
-    background: #f7f9f8;
+    background: var(--row-hover);
   }
 }
 .tp-table tbody tr.sel td {
-  background: #eef4f1;
+  background: var(--row-on);
 }
 .tp-table tbody tr:focus-visible {
   outline: none;
 }
 .tp-table tbody tr:focus-visible td {
-  background: #eef4f1;
+  background: var(--row-on);
 }
 .tp-table .tp-sticky {
   position: sticky;
@@ -1165,40 +1365,59 @@
 .tp-table tbody tr.sel td.tp-sticky {
   box-shadow: inset 3px 0 0 var(--pine);
 }
-.tp-table .num {
-  text-align: right;
+/* Keyboard focus on a row: the volt edge. */
+.tp-table tbody tr:focus-visible td.tp-sticky {
+  box-shadow: inset 3px 0 0 var(--volt);
 }
 .w-co {
   min-width: 240px;
   max-width: 240px;
 }
 .tp-table td.tp-sticky {
-  font-family: var(--font);
   max-width: 240px;
   position: sticky;
 }
 .w-fit {
-  min-width: 120px;
+  min-width: 112px;
 }
 .w-fns {
-  min-width: 190px;
+  min-width: 180px;
 }
 .w-seat {
-  min-width: 200px;
+  min-width: 176px;
 }
+/* Wide enough for "Unlock · 1 credit" to open inside its own column. */
 .w-op,
-.w-name,
+.w-name {
+  min-width: 152px;
+}
 .w-email,
 .w-li,
+.w-post {
+  min-width: 150px;
+}
 .w-phone {
-  min-width: 120px;
+  min-width: 128px;
 }
 .w-rate {
-  min-width: 100px;
+  min-width: 92px;
 }
-/* Keep the spend columns (seat, holder, rate) on screen: a long unlocked role truncates. */
-.tp-table .tp-seat .tp-cell {
-  max-width: 180px;
+.w-emp,
+.w-rev,
+.w-hrs {
+  min-width: 96px;
+}
+.w-date {
+  min-width: 84px;
+}
+.w-ppl {
+  min-width: 168px;
+}
+.w-ind {
+  min-width: 140px;
+}
+.w-hq {
+  min-width: 130px;
 }
 @media (max-width: 1279px) {
   .w-co {
@@ -1208,21 +1427,6 @@
   .tp-table td.tp-sticky {
     max-width: 200px;
   }
-  .w-seat {
-    min-width: 170px;
-  }
-  .tp-table .tp-seat .tp-cell {
-    max-width: 150px;
-  }
-}
-.w-ppl {
-  min-width: 200px;
-}
-.w-ind {
-  min-width: 140px;
-}
-.w-hq {
-  min-width: 130px;
 }
 .tp-co {
   display: flex;
@@ -1233,30 +1437,41 @@
 .tp-co-text {
   display: grid;
   min-width: 0;
-  line-height: 1.2;
 }
+/* The row's title: 14px, 700. It truncates, and the full name is in its tooltip. */
 .tp-co-name {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--font);
+  min-width: 0;
   font-weight: 700;
   font-size: 14px;
+  line-height: 18px;
+  letter-spacing: -0.005em;
   color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
+.tp-co-name-t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .tp-co-star {
+  flex: none;
   color: var(--pine);
   display: inline-flex;
 }
 .tp-co-dom {
   font-size: 12px;
+  line-height: 16px;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* A domain is the one place a row uses mono. */
+.tp-co-dom.mono {
+  font-size: 11.5px;
 }
 .tp-new {
   position: absolute;
@@ -1267,109 +1482,100 @@
   border-radius: 50%;
   background: var(--volt);
 }
-/* Fit: a plain label per tier (hover for the reason and the score). */
-.tp-tier {
-  height: 24px;
+/* Two lines in one row: the fact, and under it a date or a count. */
+.tp-stack {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 220px;
+  vertical-align: middle;
+  line-height: 18px;
+}
+.tp-stack > .tp-cell,
+.tp-stack > .tp-ppl-t {
+  max-width: 100%;
+}
+.tp-stack-sub,
+.tp-stack .tp-role-date {
   font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font);
+  line-height: 16px;
+  color: var(--muted);
 }
-.t-repeat,
+.tp-stack .tp-role-date.open {
+  color: var(--body-ink);
+}
+.tp-table .tp-stack .add {
+  height: 20px;
+}
+.tp-table .tp-stack button.lock {
+  height: 18px;
+}
+.tp-ppl-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tp-ppl-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+/* Fit: one outline chip per tier, stronger as the company hires more. Hover for the reason and the score. */
+.t-hiring,
 .t-recent {
-  background: var(--pine);
-  border-color: var(--pine);
-  color: #fff;
+  color: var(--ink);
 }
-.t-past {
+.t-repeat {
   border-color: var(--pine);
   color: var(--pine);
 }
+.t-past {
+  border-color: var(--line);
+  color: var(--muted);
+}
 .t-story,
 .t-none {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  background: transparent;
   color: var(--faint);
 }
 .tp-tier-big {
   height: 28px;
   padding: 0 10px;
-  font-size: 13px;
 }
 .tp-fns {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: var(--font);
 }
-.tp-fn {
-  height: 24px;
-  font-size: 12px;
-}
-/* The member's own function: emphasis in pine, never volt (volt means earn). */
+/* The member's own function: pine, never volt (volt means earn). */
 .tp-fn-me {
-  border-color: var(--line-strong);
-  background: var(--surface);
   color: var(--pine);
-  font-weight: 800;
+  font-weight: 700;
 }
 /* Mentioned only in member stories, not a fractional seat. */
 .tp-fn-story {
+  border-color: var(--line);
   color: var(--faint);
-  background: var(--surface-2);
-  border-color: transparent;
-  font-weight: 500;
-}
-/* Hired other functions fractionally, not the member's yet. */
-.tp-fn-gap {
-  height: 24px;
-  font-size: 12px;
-  border: 1px solid var(--pine);
-  color: var(--pine);
-  background: var(--surface);
-  font-weight: 700;
 }
 .tp-more {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted);
 }
+/* An open role has nobody in the seat yet. Quiet text: the dot on its date carries the ember. */
 .tp-open {
-  height: 24px;
-  font-family: var(--font);
-}
-.tp-seat {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tp-ppl {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.tp-ppl-n {
   color: var(--muted);
-}
-.tp-ppl-t {
-  font-family: var(--font);
-  font-weight: 600;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .tp-src {
-  font-family: var(--font);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 13px;
   color: var(--muted);
-}
-.tp-status {
-  font-family: var(--font);
-  font-weight: 600;
-}
-.tp-status.s-open {
-  color: var(--ember-ink);
 }
 .tp-status.s-active {
   color: var(--volt-ink);
+  font-weight: 600;
 }
 .tp-more-btn {
   display: flex;
@@ -1382,13 +1588,21 @@
   border-top: 1px solid var(--line);
   background: var(--surface);
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--pine);
   position: sticky;
   left: 0;
+  transition: background var(--t);
 }
 .tp-more-btn:hover {
   background: var(--surface-2);
+}
+.tp-more-btn:focus-visible {
+  outline-offset: -2px;
+}
+.tp-more-of {
+  font-weight: 400;
+  color: var(--muted);
 }
 .tp-table-companies tbody tr td:first-child,
 .tp-table-engagements tbody tr td:first-child,
@@ -1402,11 +1616,15 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
+  min-width: 0;
 }
-/* Values use the UI font; FactCell adds .mono for numbers, dates, money and addresses. */
+/* Values are the text face. FactCell adds .num to numbers, dates and money, and .mono to links and emails. */
 .tp-val {
   color: var(--ink);
   min-width: 0;
+}
+.tp-val.mono {
+  font-size: 12.5px;
 }
 .tp-val-t {
   min-width: 0;
@@ -1414,72 +1632,81 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A long role or name truncates here. The full text is in the cell's tooltip. */
 .tp-table .tp-cell {
   max-width: 240px;
+  vertical-align: middle;
+}
+.tp-table .tp-stack .tp-cell {
+  max-width: 100%;
 }
 .tp-sys {
   color: var(--body-ink);
 }
+/* One height for every chip and pill in a row, so they share a baseline. */
+.tp-table .chip,
 .tp-table .add,
-.tp-table .lock,
-.tp-table .chip,
-.tp-pcard .add,
-.tp-pcard .lock {
-  font-family: var(--font);
-}
-/* One height and 1px borders for every pill in a row, so they share a baseline. */
-.tp-table .chip,
-.tp-table .lock,
-.tp-table .add {
+.tp-table button.lock {
   height: 24px;
-  border-width: 1px;
 }
+/* An empty cell is quiet until you are on its row: "+ Add", no box. */
 .tp-table .add {
-  border-color: #dce2de;
+  margin: 0 -9px;
+  border-color: transparent;
   color: var(--faint);
-  height: 24px;
 }
 .tp-table .add .plus1 {
-  opacity: 0.75;
+  opacity: 0.55;
+  transition: opacity var(--t);
 }
 @media (hover: hover) {
-  .tp-table tr:hover .add .plus1 {
-    opacity: 1;
-  }
   .tp-table tr:hover .add {
     border-color: var(--line-strong);
     color: var(--muted);
   }
+  .tp-table tr:hover .add .plus1 {
+    opacity: 1;
+  }
+  /* The lock picks up pine on its row, so the eye finds what a credit would open. */
+  .tp-table tr:hover button.lock {
+    color: var(--pine);
+  }
+  .tp-table tr:hover .lock-mask {
+    background: var(--pine-14);
+  }
 }
-.tp-table .add:hover {
+@media (hover: none) {
+  .tp-table .add {
+    border-color: var(--line-strong);
+    color: var(--muted);
+    margin: 0;
+  }
+  .tp-table .add .plus1 {
+    opacity: 1;
+  }
+}
+.tp-table .add:hover,
+.tp-table .add:focus-visible {
   border-color: var(--pine);
   color: var(--pine);
   background: var(--surface);
 }
-.tp-table .lock {
-  height: 24px;
+/* In a right-aligned column the label grows to the left, into its own cell. */
+.tp-table td.num .lock-cta {
+  left: auto;
+  right: 0;
 }
-.lock:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
+/* Under review: a fill, because it is a state. */
 .tp-review {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: var(--r-chip);
+  border-color: transparent;
   background: var(--surface-2);
   color: var(--muted);
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 600;
-  font-style: italic;
 }
 .tp-flash {
-  animation: tp-fade 0.6s ease-out;
+  animation: tp-fade 0.3s ease-out;
 }
 .tp-flash-check {
+  flex: none;
   display: inline-grid;
   place-items: center;
   width: 16px;
@@ -1487,7 +1714,7 @@
   border-radius: 50%;
   background: var(--volt);
   color: var(--pine);
-  animation: tp-fade 0.3s ease-out;
+  animation: tp-fade var(--t) ease-out;
 }
 @keyframes tp-fade {
   from {
@@ -1495,13 +1722,16 @@
     transform: translateY(2px);
   }
 }
-.tp-pulse .lock,
-.tp-pulse .add {
-  animation: tp-pulse 1.1s ease-in-out infinite;
+/* Get started points at a fact: its lock shows the label, with a volt ring. */
+.tp-pulse button.lock .lock-rest {
+  visibility: hidden;
 }
-.tp-pulse .lock {
-  background: var(--pine);
-  color: #fff;
+.tp-pulse button.lock .lock-cta {
+  display: inline-flex;
+}
+.tp-pulse .lock-cta,
+.tp-pulse .add {
+  animation: tp-pulse 1.2s ease-in-out infinite;
 }
 @keyframes tp-pulse {
   0%,
@@ -1517,24 +1747,35 @@
 .tp-noresults {
   display: grid;
   justify-items: center;
-  gap: 8px;
-  padding: 64px 24px;
+  gap: 6px;
+  padding: 72px 24px;
   text-align: center;
 }
 .tp-noresults h3 {
-  font-size: 18px;
+  font-size: 19px;
+  line-height: 25px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.tp-noresults p {
+  max-width: 46ch;
+  font-size: 14.5px;
+  line-height: 22px;
+  color: var(--muted);
 }
 .tp-noresults-acts {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 12px;
   flex-wrap: wrap;
   justify-content: center;
 }
 .tp-empty-small {
   padding: 8px;
   font-size: 13px;
-  color: var(--faint);
+  line-height: 18px;
+  color: var(--muted);
 }
 
 /* ---------- inline editor ---------- */
@@ -1544,22 +1785,25 @@
   padding: 12px;
 }
 .tp-ed-head {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
+  line-height: 20px;
   color: var(--ink);
 }
 .tp-ed-co {
-  font-weight: 600;
+  font-weight: 400;
   color: var(--muted);
   margin-left: 4px;
 }
 .tp-ed-hint {
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 18px;
   color: var(--muted);
   margin-top: -4px;
 }
 .tp-ed-err {
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--red);
   font-weight: 600;
 }
@@ -1568,7 +1812,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 18px;
 }
 .tp-ed-keys {
   color: var(--faint);
@@ -1579,14 +1824,16 @@
   gap: 10px;
   margin-left: auto;
 }
+/* "+1 credit": volt, because it is earning. Text face, not mono. */
 .tp-earn-note {
-  font-family: var(--mono);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--volt-ink);
+  white-space: nowrap;
 }
-.tp-earn-note.capped {
-  font-family: var(--font);
-  color: var(--ember-ink);
+.tp-earn-note.capped,
+.tp-earn-note.muted {
+  font-weight: 400;
+  color: var(--muted);
 }
 .tp-chips {
   display: flex;
@@ -1596,9 +1843,20 @@
 .tp-chipbtn {
   height: 30px;
   cursor: pointer;
+  transition: border-color var(--t), background var(--t), color var(--t);
 }
 .tp-chipbtn:hover {
   border-color: var(--pine);
+}
+.tp-chipbtn:active {
+  background: var(--pine-8);
+}
+.tp-chipbtn.chip-on:active {
+  background: var(--pine-hover);
+}
+.tp-chipbtn:disabled {
+  opacity: 0.5;
+  cursor: progress;
 }
 .tp-chip-big {
   height: 40px;
@@ -1637,6 +1895,8 @@
 }
 .tp-inline-search:focus-within {
   border-color: var(--pine);
+  outline: 2px solid var(--volt);
+  outline-offset: 1px;
 }
 .tp-inline-search input {
   color: var(--ink);
@@ -1655,7 +1915,8 @@
   background: none;
   text-align: left;
   font-size: 13.5px;
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--ink);
 }
 .tp-choice-opt:hover,
 .tp-choice-opt:focus-visible {
@@ -1664,7 +1925,7 @@
 .tp-choice-opt.on {
   background: var(--pine-8);
   color: var(--pine);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* ---------- drawer ---------- */
@@ -1680,7 +1941,7 @@
   background: var(--surface);
   border-left: 1px solid var(--line);
   box-shadow: var(--overlay-shadow);
-  animation: tp-slide-r 0.16s ease-out;
+  animation: tp-slide-r var(--t) ease-out;
 }
 @keyframes tp-slide-r {
   from {
@@ -1701,25 +1962,27 @@
   flex: 1;
 }
 .tp-dpos {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   margin-left: 4px;
 }
 .tp-dkeys {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--faint);
-  margin-right: 4px;
+  margin-right: 6px;
+  white-space: nowrap;
 }
 .tp-dscroll {
   flex: 1;
   overflow-y: auto;
-  padding: 18px 20px 32px;
+  padding: 20px 20px 32px;
   overscroll-behavior: contain;
 }
+/* The record's hierarchy: the company name, one line of what it is, how fractional friendly, the one action. */
 .tp-dhead {
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
 }
 .tp-dhead-t {
   min-width: 0;
@@ -1729,43 +1992,63 @@
   flex: none;
   align-self: flex-start;
 }
+.tp-followbtn svg {
+  color: var(--muted);
+}
+.tp-following,
+.tp-following svg {
+  border-color: var(--pine);
+  color: var(--pine);
+}
 .tp-dmissing {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .tp-dmissing .tp-missing-row {
   padding-top: 0;
 }
-.tp-dlinks .add {
-  height: 24px;
-}
 .tp-dname {
   font-size: 22px;
-  line-height: 1.15;
+  line-height: 28px;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .tp-dlinks {
   display: flex;
-  gap: 12px;
-  margin-top: 3px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+  margin-top: 2px;
+  min-height: 24px;
   font-size: 13px;
+  line-height: 20px;
+}
+.tp-dlinks .mono {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.tp-dlinks .add {
+  height: 24px;
 }
 .tp-dline {
-  margin-top: 12px;
-  font-size: 13px;
+  margin-top: 14px;
+  font-size: 13.5px;
+  line-height: 20px;
   color: var(--body-ink);
 }
 .tp-dfit {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
+  gap: 6px 10px;
   margin-top: 12px;
-  padding: 10px 12px;
-  border-radius: var(--r-card);
-  background: var(--surface-2);
 }
 .tp-dfit-r {
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 20px;
   color: var(--body-ink);
 }
 .tp-dactions {
@@ -1773,41 +2056,58 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
-}
-.tp-following {
-  border-color: var(--pine);
-  color: var(--pine);
-  background: var(--surface);
+  margin-top: 16px;
 }
 .tp-unlock-short {
   align-items: center;
 }
 .tp-unlockall {
   display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 .tp-dsec {
-  margin-top: 22px;
-  padding-top: 18px;
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid var(--line);
 }
 .tp-dsec-h {
-  font-size: 14px;
-  margin-bottom: 10px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin-bottom: 12px;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
+}
+.tp-dsec-ht {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp-dsec-note {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--muted);
+}
+.tp-dsec-note.tp-mt8 {
+  margin: 8px 0 0;
 }
 .tp-about {
   font-size: 14px;
+  line-height: 21px;
   color: var(--body-ink);
 }
+/* One seat: a card. 1px line, 10px corner, no shadow. */
 .tp-eng {
   border: 1px solid var(--line);
   border-radius: var(--r-card);
-  padding: 12px 14px;
-  margin-bottom: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  scroll-margin-top: 12px;
 }
 .tp-eng.focus {
   border-color: var(--pine);
@@ -1816,18 +2116,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px;
   margin-bottom: 8px;
 }
 .tp-eng-when {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
 }
 .tp-verified {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--volt-ink);
 }
@@ -1836,7 +2137,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .tp-eng-unlock {
   margin-left: auto;
@@ -1844,12 +2145,14 @@
 .tp-flist-d {
   display: grid;
 }
+/* A fact: its label, its value, and who confirmed it. */
 .tp-frow {
+  position: relative;
   display: grid;
-  grid-template-columns: 112px 1fr auto;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
+  min-height: 36px;
   border-top: 1px solid var(--surface-2);
 }
 .tp-frow:first-child {
@@ -1858,23 +2161,39 @@
 .tp-frow-l {
   font-size: 13px;
   color: var(--muted);
-  font-weight: 600;
 }
 .tp-frow-v {
   min-width: 0;
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.tp-frow-v .tp-val {
+  padding: 6px 0;
 }
 .tp-frow-v .tp-val-t {
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.tp-frow {
-  position: relative;
+/* The whole value area is the unlock target, so the label is easy to hit. */
+.tp-frow-v .tp-cell:has(> button.lock) {
+  display: flex;
+}
+.tp-frow-v button.lock {
+  flex: 1;
+  justify-content: flex-start;
+}
+@media (hover: hover) {
+  .tp-frow:hover button.lock {
+    color: var(--pine);
+  }
+  .tp-frow:hover .lock-mask {
+    background: var(--pine-14);
+  }
 }
 .tp-meta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   justify-self: end;
 }
 .tp-meta-acts {
@@ -1884,8 +2203,8 @@
   transform: translateY(-50%);
   display: none;
   align-items: center;
-  gap: 2px;
-  padding-left: 8px;
+  gap: 10px;
+  padding-left: 12px;
   background: var(--surface);
 }
 .tp-frow:hover .tp-meta-acts,
@@ -1893,17 +2212,21 @@
 .tp-meta-acts.on {
   display: inline-flex;
 }
+.tp-meta-acts .tp-small {
+  color: var(--body-ink);
+}
 .tp-ver {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 11.5px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--volt-ink);
 }
 .tp-yours {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--faint);
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 .tp-missing-row {
   display: flex;
@@ -1912,15 +2235,20 @@
   gap: 6px;
   padding-top: 8px;
 }
+.tp-missing-row .tp-tbtn {
+  margin-left: 2px;
+}
 .tp-sublabel {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 600;
   color: var(--muted);
-  margin: 12px 0 6px;
+  margin: 14px 0 6px;
 }
 .tp-person {
-  padding: 10px 0 6px;
+  padding: 12px 0 8px;
   border-top: 1px solid var(--line);
+  scroll-margin-top: 12px;
 }
 .tp-dsec > .tp-person:first-of-type {
   border-top: 0;
@@ -1930,14 +2258,14 @@
 .tp-person-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: center;
   gap: 8px;
   margin-bottom: 4px;
 }
 .tp-person-id {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px 8px;
   align-items: center;
   min-width: 0;
 }
@@ -1945,6 +2273,8 @@
   font-weight: 700;
   color: var(--ink);
   font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
 }
 .tp-person-top .tp-unlockall {
   margin-left: auto;
@@ -1953,7 +2283,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 8px;
+}
+.tp-eng-foot:empty {
+  display: none;
+}
+/* "Add a seat", "Add a person": a ghost button whose plus lines up with the text above it. */
+.tp-addlink {
+  margin-left: -10px;
+  color: var(--pine);
 }
 .tp-intro {
   margin-left: auto;
@@ -1961,12 +2299,13 @@
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--pine);
   text-decoration: none;
 }
 .tp-intro:hover {
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .tp-intro-w {
   margin-left: auto;
@@ -1976,7 +2315,7 @@
   text-align: right;
 }
 .tp-addeng {
-  margin-top: 2px;
+  margin-top: -2px;
 }
 .tp-pform {
   margin-top: 10px;
@@ -2003,13 +2342,15 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
   color: var(--ink);
 }
 .tp-plus1 {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-num);
   color: var(--volt-ink);
 }
 .tp-dfoot {
@@ -2017,10 +2358,11 @@
   flex-wrap: wrap;
   gap: 4px 14px;
   margin-top: 24px;
-  padding-top: 14px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
 }
 
 /* ---------- add modal ---------- */
@@ -2499,6 +2841,7 @@
 }
 
 /* ---------- sheets (phones) ---------- */
+/* Like a native sheet: the page dims, the sheet rises from the bottom edge with a grabber. */
 .tp-sheet-wrap {
   position: fixed;
   inset: 0;
@@ -2506,16 +2849,18 @@
   display: flex;
   align-items: flex-end;
   background: rgba(10, 26, 19, 0.36);
+  animation: tp-scrim var(--t) ease-out;
 }
 .tp-sheet {
+  position: relative;
   width: 100%;
   max-height: 88dvh;
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border-radius: 14px 14px 0 0;
+  border-radius: 16px 16px 0 0;
   box-shadow: var(--overlay-shadow);
-  animation: tp-up 0.18s ease-out;
+  animation: tp-up 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .tp-sheet-full {
   height: 94dvh;
@@ -2523,16 +2868,26 @@
 }
 @keyframes tp-up {
   from {
-    transform: translateY(24px);
+    transform: translateY(32px);
     opacity: 0.4;
   }
+}
+.tp-sheet-grab {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: var(--line-strong);
 }
 .tp-sheet-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 56px;
-  padding: 4px 6px 4px 16px;
+  min-height: 60px;
+  padding: 12px 6px 4px 16px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
@@ -2542,15 +2897,18 @@
 }
 .tp-sheet-title {
   flex: 1;
+  min-width: 0;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 17px;
+  line-height: 23px;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 .tp-sheet-body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 14px 16px 20px;
+  padding: 16px 16px 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
@@ -2559,6 +2917,9 @@
 }
 .tp-sheet-body .tp-filters {
   padding: 0;
+}
+.tp-sheet-body .tp-fgroup:first-of-type {
+  padding-top: 0;
 }
 .tp-sheet-foot {
   flex: none;
@@ -2594,6 +2955,7 @@
 .tp-top-phone .tp-credits {
   height: 44px;
   margin: 0 4px;
+  line-height: 42px;
 }
 /* The brand gives way first so the actions always fit (320 px and up). */
 .tp-brand-phone {
@@ -2651,7 +3013,10 @@
 .tp-phone .tp-strip {
   align-items: flex-start;
   flex-wrap: wrap;
-  padding: 10px 6px 10px 12px;
+  padding: 8px 8px 8px 14px;
+}
+.tp-phone .tp-strip-t {
+  flex-basis: 60%;
 }
 .tp-phone .tp-strip-acts {
   order: 3;
@@ -2688,6 +3053,8 @@
 }
 .tp-pchip {
   height: 36px;
+  padding: 0 10px;
+  gap: 6px;
   flex: none;
   cursor: pointer;
   position: relative;
@@ -2696,6 +3063,12 @@
   content: "";
   position: absolute;
   inset: -4px 0;
+}
+.tp-pchip:active {
+  background: var(--surface-2);
+}
+.tp-pchip.chip-on:active {
+  background: var(--pine-hover);
 }
 .tp-pchip.chip-on .tp-cnt {
   color: rgba(255, 255, 255, 0.75);
@@ -2725,9 +3098,10 @@
   padding: 2px 4px;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: baseline;
+  align-content: center;
   justify-content: center;
-  column-gap: 4px;
+  column-gap: 5px;
   white-space: nowrap;
   line-height: 1.15;
 }
@@ -2763,35 +3137,36 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 8px;
+  gap: 12px;
+  padding: 8px 16px;
   font-size: 13px;
-  font-weight: 600;
+  line-height: 20px;
   color: var(--muted);
-}
-.tp-pcount .mono {
-  color: var(--ink);
 }
 .tp-pcount .tp-sortbtn {
   height: 44px;
+  flex: none;
 }
 .tp-pcount .tp-flink {
   min-height: 32px;
 }
+/* One card per record: 1px line, 10px corner, no shadow, 16px gutters. */
 .tp-cards {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 0 16px;
 }
 .tp-pcard {
-  padding: 14px 16px;
+  padding: 16px 16px 8px;
   border-radius: var(--r-card);
   background: var(--surface);
   border: 1px solid var(--line);
   cursor: pointer;
   min-width: 0;
+  transition: background var(--t);
 }
 .tp-pcard:active {
-  background: #f7f9f8;
+  background: var(--row-hover);
 }
 .tp-pcard-top {
   display: flex;
@@ -2799,17 +3174,31 @@
   gap: 10px;
   min-width: 0;
 }
+.tp-pcard-top > .tp-co,
 .tp-pcard-name {
   flex: 1;
   min-width: 0;
-  display: grid;
-  line-height: 1.25;
 }
-
+.tp-pcard-name {
+  display: grid;
+}
+.tp-pcard-top > .chip,
+.tp-pcard-top > .tp-src {
+  flex: none;
+  align-self: flex-start;
+}
+/* The card's title. */
+.tp-pcard .tp-co-name {
+  font-size: 16px;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+}
 .tp-pcard-line {
-  margin-top: 8px;
-  font-size: 13px;
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 20px;
   color: var(--body-ink);
+  font-family: var(--font-num);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2821,12 +3210,22 @@
   gap: 6px;
   margin-top: 10px;
 }
+.tp-pcard-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tp-pcard-when {
+  font-size: 13px;
+  color: var(--muted);
+}
 .tp-pfacts {
   display: grid;
-  gap: 2px;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--surface-2);
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
 }
 .tp-pfact {
   display: flex;
@@ -2835,40 +3234,90 @@
   gap: 12px;
   min-height: 44px;
   min-width: 0;
+  border-top: 1px solid var(--surface-2);
+}
+.tp-pfact:first-child {
+  border-top: 0;
 }
 .tp-pfact-l {
-  font-size: 13px;
-  font-weight: 600;
+  flex: none;
+  font-size: 13.5px;
   color: var(--muted);
 }
 .tp-pfact .tp-val {
-  font-size: 13px;
+  font-size: 13.5px;
   text-align: right;
 }
-.tp-phone .lock,
+.tp-pfact .tp-open {
+  font-size: 13.5px;
+}
 .tp-phone .add,
-.tp-sheet .lock,
 .tp-sheet .add,
-.tp-rsheet .lock,
 .tp-rsheet .add {
   position: relative;
-  height: 34px;
-  padding: 0 12px;
-  font-size: 13px;
+  height: 32px;
+  padding: 0 10px;
 }
-.tp-phone .lock::after,
 .tp-phone .add::after,
-.tp-rsheet .lock::after,
 .tp-rsheet .add::after {
   content: "";
   position: absolute;
-  inset: -5px -2px;
+  inset: -6px -2px;
+}
+/*
+ * Phones: a locked fact always reads "Unlock · 1 credit". Plain pine text and a 44px target,
+ * so three of them on a card stay quiet and each is still one tap.
+ */
+.tp-phone button.lock,
+.tp-rsheet button.lock,
+.tp-sheet button.lock {
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  color: var(--pine);
+  font-size: 13.5px;
+}
+.tp-phone button.lock .lock-rest,
+.tp-rsheet button.lock .lock-rest,
+.tp-sheet button.lock .lock-rest {
+  display: none;
+}
+.tp-phone button.lock .lock-cta,
+.tp-rsheet button.lock .lock-cta,
+.tp-sheet button.lock .lock-cta {
+  position: static;
+  transform: none;
+  display: inline-flex;
+  height: auto;
+  padding: 0;
+  background: none;
+  color: var(--pine);
+  outline: 0;
+}
+.tp-phone button.lock .lock-cost,
+.tp-rsheet button.lock .lock-cost,
+.tp-sheet button.lock .lock-cost {
+  color: var(--muted);
+}
+.tp-phone button.lock:active .lock-cta,
+.tp-rsheet button.lock:active .lock-cta {
+  opacity: 0.6;
+}
+.tp-phone button.lock:focus-visible,
+.tp-rsheet button.lock:focus-visible {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
 }
 .tp-pcard-miss {
-  margin-top: 8px;
+  padding: 12px 0 8px;
+  border-top: 1px solid var(--surface-2);
   font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.tp-pcard-miss .num {
   font-weight: 700;
-  color: var(--volt-ink);
+  color: var(--ink);
 }
 .tp-phone .tp-more-btn {
   margin: 12px 16px 0;
@@ -2893,11 +3342,27 @@
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  animation: tp-up 0.18s ease-out;
+  animation: tp-push 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* A record opens like the next screen in a native app: it slides in from the right. */
+@keyframes tp-push {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
 }
 .tp-rsheet .tp-dbar {
   height: 56px;
   padding: 0 4px;
+}
+.tp-rsheet .tp-dbar .tp-followbtn {
+  align-self: center;
+  min-height: 36px;
+  margin-right: 4px;
+}
+.tp-rsheet .tp-dname {
+  font-size: 24px;
+  line-height: 30px;
 }
 .tp-rsheet .tp-dbar .tp-iconbtn {
   width: 44px;
@@ -2916,8 +3381,11 @@
   padding: 0;
 }
 .tp-rsheet .tp-frow {
-  grid-template-columns: 96px 1fr auto;
-  padding: 6px 0;
+  grid-template-columns: 104px minmax(0, 1fr) auto;
+  padding: 0;
+}
+.tp-rsheet .tp-frow-v button.lock {
+  justify-content: flex-start;
 }
 .tp-rsheet .tp-meta {
   grid-column: auto;
@@ -2934,6 +3402,11 @@
 .tp-rsheet .tp-tbtn {
   min-height: 36px;
   padding: 0 8px;
+  margin: 0 -8px;
+}
+.tp-rsheet .tp-meta-acts {
+  gap: 20px;
+  padding-bottom: 4px;
 }
 .tp-rsheet .tp-pform-grid {
   grid-template-columns: 1fr;
@@ -2958,12 +3431,30 @@
   flex: 1;
   min-width: 0;
 }
-/* The balance stays on screen while the sheet covers the top bar. */
+/* The balance stays on screen while the sheet covers the top bar: a figure over its unit. */
 .tp-rsheet-bal {
   flex: none;
-  max-width: 64px;
-  font-size: 12.5px;
-  line-height: 1.15;
+  display: grid;
+  min-width: 44px;
+  margin-right: 4px;
+  font-size: 12px;
+  line-height: 14px;
+  color: var(--muted);
+}
+.tp-rsheet-bal b {
+  font-size: 18px;
+  line-height: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.tp-rsheet-bal.low b {
+  color: var(--ember-ink);
+}
+.tp-rsheet-none {
+  flex: 1;
+  font-size: 13px;
+  color: var(--muted);
 }
 .tp-rsheet-bar .tp-unlockall .btn,
 .tp-rsheet-bar > .btn {
@@ -2978,7 +3469,7 @@
   flex: 1;
 }
 /* A hidden company has one action (Unlock company): it takes the rest of the bar. */
-.tp-rsheet-bal + .btn-primary {
+.tp-rsheet-bal + .btn-pine {
   flex: 1;
 }
 @media (max-width: 360px) {
@@ -2988,6 +3479,10 @@
   }
   .tp-rsheet-bar .tp-unlockall .btn {
     padding: 0 10px;
+  }
+  /* "Unlock all · 5" beside the balance: the unit would not fit. */
+  .tp-unlockall-unit {
+    display: none;
   }
 }
 
@@ -3028,6 +3523,13 @@
   .tp-kbd,
   .tp-ed-keys {
     display: none;
+  }
+  /* Confirm and Report have no hover to appear on. */
+  .tp-drawer .tp-meta-acts {
+    position: static;
+    transform: none;
+    display: inline-flex;
+    padding: 0;
   }
 }
 
@@ -3107,16 +3609,18 @@
 }
 .tp-seat-list {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background: var(--surface);
   overflow: hidden;
   max-height: 248px;
   overflow-y: auto;
 }
+/* An eyebrow: the one place this popover uses capitals. */
 .tp-seat-cap {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   padding: 8px 10px 4px;
@@ -3153,14 +3657,14 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  line-height: 1.25;
+  line-height: 18px;
 }
 .tp-seat-who b {
   font-weight: 600;
   font-size: 14px;
 }
 .tp-seat-who span {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
@@ -3173,7 +3677,7 @@
   padding: 8px 6px 8px 10px;
   border: 1px solid var(--volt);
   background: var(--volt-soft);
-  border-radius: 10px;
+  border-radius: var(--r-card);
 }
 .tp-seat-linked .tp-seat-who {
   flex: 1;
@@ -3195,89 +3699,127 @@
   color: var(--ink);
 }
 .tp-seat-none {
-  font-size: 12px;
+  font-size: 12.5px;
+  line-height: 18px;
   color: var(--muted);
 }
+/* "Member" or "You" after a seat holder's name. Quiet text after a dot, not a pill. */
 .tp-member-badge {
   flex: none;
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 700;
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-  border: 1px solid rgba(46, 229, 157, 0.45);
-  vertical-align: 1px;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tp-member-badge::before {
+  content: "·";
+  margin-right: 5px;
+  color: var(--faint);
 }
 
 /* ---------- hidden company (active open role, not unlocked) ---------- */
+/* One locked thing: the lock sits where the logo would be. */
 .logo.logo-hidden {
   display: grid;
   place-items: center;
-  background: var(--pine-8);
-  color: var(--pine);
-  border-color: var(--pine-14);
-}
-.tp-co-hidden .tp-co-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--line);
+  transition: background var(--t), color var(--t), border-color var(--t);
 }
 .tp-hidden-name {
   color: var(--muted);
-  font-style: normal;
-}
-/* In the table: the name on its own line, then Unlock and what is free to know, inside a 44px row. */
-.tp-co-hidden.stacked .tp-co-name {
-  flex-wrap: nowrap;
-  font-size: 13px;
-  line-height: 16px;
-}
-.tp-co-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  margin-top: 1px;
-}
-.tp-co-sub .tp-cell {
-  flex: none;
-}
-.tp-co-sub .lock {
-  height: 22px;
-  padding: 0 7px;
-}
-.tp-co-sub .tp-co-dom {
-  flex: 1;
-  min-width: 0;
+  font-weight: 600;
 }
 .tp-co-hidden .tp-co-dom {
-  font-family: inherit;
   color: var(--muted);
+}
+/*
+ * In the table: "Hidden company", and under it what is free to know (industry, size, region).
+ * The lock is the unlock button, the same as in every other cell: point at it, or tab to it,
+ * and it opens into "Unlock company · 1 credit". The text beside it still opens the record.
+ * Screens without hover show the label all the time, in place of the second line.
+ */
+.tp-co-hidden.in-table {
+  position: relative;
+}
+.tp-co-hidden.in-table .tp-cell {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: none;
+}
+.tp-co-hidden.in-table button.lock {
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border-radius: 7px;
+}
+.tp-co-hidden.in-table .lock-rest {
+  display: none;
+}
+.tp-co-hidden.in-table .lock-cta {
+  height: 28px;
+  border-radius: 7px;
+}
+@media (hover: hover) {
+  .tp-table tbody tr:hover .logo-hidden {
+    background: var(--pine-8);
+    border-color: var(--pine-14);
+    color: var(--pine);
+  }
+}
+/* The narrower company column: the lock beside the label is enough, so the label drops its own. */
+@media (max-width: 1279px) {
+  .tp-co-hidden.in-table .lock-cta svg {
+    display: none;
+  }
+  .tp-co-hidden.in-table .lock-cta {
+    padding-left: 9px;
+  }
+}
+@media (hover: none) {
+  .tp-co-hidden.in-table .tp-co-dom {
+    display: none;
+  }
+  .tp-co-hidden.in-table .tp-cell {
+    position: static;
+    transform: none;
+  }
+  .tp-co-hidden.in-table button.lock {
+    width: auto;
+    height: 18px;
+  }
+  /* Under "Hidden company" the label can be short: "Unlock · 1 credit". */
+  .tp-co-hidden.in-table .lock-cta {
+    height: auto;
+    padding-left: 0;
+    font-size: 12.5px;
+  }
+  .tp-co-hidden.in-table .lock-cta svg,
+  .tp-co-hidden.in-table .lock-noun {
+    display: none;
+  }
 }
 /* In the record's header the name takes the row, so Follow stays at the right edge. */
 .tp-co-hidden.big {
   flex: 1;
-}
-.tp-co-hidden.big .tp-hidden-name {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--ink);
+  gap: 12px;
 }
 .tp-co-hidden.big .tp-co-dom {
-  font-size: 14px;
+  font-size: 13.5px;
+  line-height: 20px;
   margin-top: 2px;
 }
+/* What a credit buys here, in plain text. No wash. */
 .tp-hidden-note {
-  margin: 4px 0 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-  font-size: 13px;
-  line-height: 1.45;
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
 }
 
 /* ---------- rate benchmarks ---------- */

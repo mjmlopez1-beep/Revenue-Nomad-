@@ -4,6 +4,9 @@
  * App-wide context for the Trading Post app and the fact cell: one component that renders
  * any fact in its three states (value, locked, empty) plus "Under review", and the inline
  * editor that opens from an empty cell.
+ *
+ * Type: values are set in the text face. Numbers, dates, money and phone numbers get tabular
+ * figures (.num). Only links and email addresses are mono.
  */
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -67,13 +70,26 @@ export function FactValue({ t, v }: { t: FactRef; v: string }) {
         {text.replace(/^https?:\/\//, "").replace(/^www\./, "")}
       </a>
     );
+  // The column header or the row label already says "a week".
+  if (t.entity === "engagement" && t.field === "hours") return <>{v}</>;
   return <>{text}</>;
 }
 
-/** Numbers, dates, money and addresses are set in mono; words use the UI font. */
-const MONO_KINDS = ["number", "month", "monthOrOngoing", "url", "email", "phone"];
-const MONO_FIELDS = ["employees", "revenue", "rate"];
-export const isMonoField = (t: FactRef) => MONO_KINDS.includes(fieldDef(t.entity, t.field)?.kind ?? "") || MONO_FIELDS.includes(t.field);
+/** Links and email addresses are data you copy: mono. Nothing else is. */
+const MONO_KINDS = ["url", "email"];
+export const isMonoField = (t: FactRef) => MONO_KINDS.includes(fieldDef(t.entity, t.field)?.kind ?? "");
+/** Numbers, dates, money and phone numbers: the text face with tabular figures (class `num`). */
+const NUM_KINDS = ["number", "month", "monthOrOngoing", "phone"];
+const NUM_FIELDS = ["employees", "revenue", "rate", "hours"];
+export const isNumField = (t: FactRef) => NUM_KINDS.includes(fieldDef(t.entity, t.field)?.kind ?? "") || NUM_FIELDS.includes(t.field);
+
+/** What a locked fact is, for its tooltip and for screen readers. */
+const lockWhat = (t: FactRef) => {
+  if (t.field === "identity") return "this company";
+  if (t.entity === "engagement" && t.field === "operator") return "who held the seat";
+  const f = fieldDef(t.entity, t.field);
+  return f ? `the ${fieldText(f.short ?? f.label)}` : "this";
+};
 
 /** An add pill that opens the fact editor on itself. `onPick` runs first (e.g. to close the popover it sits in). */
 export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: string; onPick?: () => void }) {
@@ -99,7 +115,7 @@ export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: strin
 export function YourSeat({ id }: { id: string }) {
   const ui = useUi();
   return (
-    <button type="button" className="chip ys-yours" title="Fill in what is missing on your seat" onClick={(e) => (e.stopPropagation(), ui.openSeats(id))}>
+    <button type="button" className="chip ys-yours" title="This seat is yours. Open it to fill in what's missing." onClick={(e) => (e.stopPropagation(), ui.openSeats(id))}>
       Your seat
     </button>
   );
@@ -123,6 +139,18 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
   const ui = useUi();
   const earn = earnNote(ui.me);
   const facts = earn.capped ? [] : ui.addable(id);
+  const one = ui.seats.n === 1;
+  // This popover belongs to its cell, so the app's Esc handler doesn't know it. Close it here, and only it.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // An editor opened from one of the pills sits on top: Esc is its to take first.
+      if (e.key !== "Escape" || document.querySelector(".tp-editor")) return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
   const pills = (
     <div className="tp-zero-pills">
       {facts.map((x) => (
@@ -134,30 +162,32 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
   return (
     <Anchored anchor={anchor} onClose={onClose} width={300} className="tp-zero">
       {earn.capped ? (
-        <p className="tp-zero-t">You have 0 credits, and today&apos;s earning is used up. It reopens {fmtTime(ui.me.earnResetsAt)}.</p>
+        <p className="tp-zero-t">
+          You&apos;re out of credits, and you&apos;ve earned today&apos;s {ui.me.earnCap}. Earning reopens {fmtTime(ui.me.earnResetsAt)}.
+        </p>
       ) : ui.seats.missing > 0 ? (
         <>
           <p className="tp-zero-t">
-            You have 0 credits. Your {ui.seats.n === 1 ? "seat has" : "seats have"} {plural(ui.seats.missing, "fact")} to add, 1 credit each.
+            You&apos;re out of credits. Your {one ? "seat is" : "seats are"} missing {plural(ui.seats.missing, "thing")}, and each one you add earns a credit.
           </p>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openSeats())}>
-            Fill in your seats
+            Fill in your {one ? "seat" : "seats"}
           </button>
           {facts.length > 0 && (
             <>
-              <p className="tp-small muted">Or add one of these.</p>
+              <p className="tp-small muted">Or add one of these here.</p>
               {pills}
             </>
           )}
         </>
       ) : facts.length ? (
         <>
-          <p className="tp-zero-t">You have 0 credits. Add one of these to earn 1.</p>
+          <p className="tp-zero-t">You&apos;re out of credits. Add one of these and you earn one back.</p>
           {pills}
         </>
       ) : (
         <>
-          <p className="tp-zero-t">You have 0 credits. Add what you know about a company to earn more.</p>
+          <p className="tp-zero-t">You&apos;re out of credits. Add a seat, a rate or a hiring contact you know. Each fact earns one.</p>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openAdd())}>
             Add what you know
           </button>
@@ -169,8 +199,9 @@ export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: 
 }
 
 /**
- * A fact in one of its states. value: plain text (mono for numbers, dates, links). locked:
- * "Unlock 1", one click. empty: "+ Add +1", opens the inline editor. reported: "Under review".
+ * A fact in one of its states. value: plain text (tabular figures for numbers and dates, mono
+ * for links). locked: quiet at rest, "Unlock · 1 credit" on hover, one click. empty: "+ Add +1",
+ * opens the inline editor. reported: "Under review".
  */
 export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string }) {
   const ui = useUi();
@@ -187,7 +218,7 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
     case "value":
       return (
         <span
-          className={`${cls} tp-val${isMonoField(t) ? " mono" : ""}${ui.flash.has(k) ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`}
+          className={`${cls} tp-val${isMonoField(t) ? " mono" : isNumField(t) ? " num" : ""}${ui.flash.has(k) ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`}
           data-cell={k}
           title={fmtValue(t.entity, t.field, cell.v)}
         >
@@ -195,7 +226,7 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
           {cell.member && <MemberBadge m={cell.member} />}
           {ui.flash.has(k) && (
             <span className="tp-flash-check" aria-label="Unlocked">
-              <IconCheck size={12} />
+              <IconCheck size={11} />
             </span>
           )}
         </span>
@@ -211,6 +242,8 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
               setZero(true);
             }}
             ver={cell.ver}
+            what={lockWhat(t)}
+            noun={t.field === "identity" ? "company" : undefined}
             busy={ui.busy.has(k)}
           />
           {zero && credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
@@ -219,8 +252,8 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
     case "empty":
       if (ui.isHidden(t.id))
         return (
-          <span className={`${cls} tp-faint`} data-cell={k} title="Unlock the company to add facts here">
-            —
+          <span className={`${cls} tp-none`} data-cell={k} title="Unlock the company first. Then you can add this.">
+            –
           </span>
         );
       return (
@@ -230,7 +263,11 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
       );
     case "reported":
       return (
-        <span className="tp-review" data-cell={k} title={cell.mine ? "A member reported your fact. An admin will review it." : "Reported. Hidden until an admin reviews it."}>
+        <span
+          className="chip tp-review"
+          data-cell={k}
+          title={cell.mine ? "Another member reported this one of yours. An admin will take a look." : "A member reported this. It stays hidden until an admin reviews it."}
+        >
           Under review
         </span>
       );
@@ -352,6 +389,7 @@ export function Sheet({ title, onClose, children, footer, full }: { title: React
   return createPortal(
     <div className="tp-sheet-wrap" onClick={onClose}>
       <div className={`tp-sheet${full ? " tp-sheet-full" : ""}`} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <span className="tp-sheet-grab" aria-hidden />
         <div className="tp-sheet-head">
           <div className="tp-sheet-title">{title}</div>
           <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close" onClick={onClose}>
@@ -370,13 +408,13 @@ export function Sheet({ title, onClose, children, footer, full }: { title: React
 
 export function earnNote(me: Me): { text: string; capped: boolean } {
   if (me.earnResetsAt || me.earned24h >= me.earnCap)
-    return { text: `No credit today. Earning reopens ${fmtTime(me.earnResetsAt)}`, capped: true };
+    return { text: `This earns no credit today. Earning reopens ${fmtTime(me.earnResetsAt)}`, capped: true }; // no closing period: callers add their own
   return { text: "+1 credit", capped: false };
 }
 
 export const labelFor = (f: FieldDef) => f.label;
-/** Short label for field lists ("Held by", "Revenue then", "Hours/wk"). */
-export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.key === "hours" ? "Hours/wk" : f.short ?? f.label);
+/** Short label for field lists ("Held by", "Revenue then", "Hours a week"). */
+export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.key === "hours" ? "Hours a week" : f.short ?? f.label);
 
 /** The input for one field kind. Calls onSave with the raw value (choice and Ongoing save at once). */
 export function FieldInput({
@@ -431,7 +469,7 @@ export function FieldInput({
                 {o}
               </button>
             ))}
-            {!opts.length && <div className="tp-empty-small">No match</div>}
+            {!opts.length && <div className="tp-empty-small">Nothing on the list matches {q.trim()}.</div>}
           </div>
         </div>
       );
@@ -459,7 +497,7 @@ export function FieldInput({
       <div className="tp-month">
         <input
           id={id}
-          className={`input mono${big ? " tp-input-big" : ""}`}
+          className={`input num${big ? " tp-input-big" : ""}`}
           type="month"
           max={thisMonth()}
           autoFocus={autoFocus}
@@ -478,7 +516,7 @@ export function FieldInput({
   return (
     <input
       id={id}
-      className={`input${f.kind === "text" ? "" : " mono"}${big ? " tp-input-big" : ""}`}
+      className={`input${f.kind === "url" || f.kind === "email" ? " mono" : f.kind === "text" ? "" : " num"}${big ? " tp-input-big" : ""}`}
       type={f.kind === "number" ? "number" : f.kind === "email" ? "email" : f.kind === "phone" ? "tel" : "text"}
       inputMode={f.kind === "number" ? "numeric" : f.kind === "url" ? "url" : undefined}
       min={f.kind === "number" ? 1 : undefined}
@@ -492,10 +530,10 @@ export function FieldInput({
   );
 }
 
-/** "Member" next to a seat holder who is on Trading Post (or "You"). */
+/** "Member" after a seat holder who is on Trading Post (or "You"). Quiet text, not a chip. */
 export function MemberBadge({ m }: { m: { title: string; you?: boolean } }) {
   return (
-    <span className="tp-member-badge" title={m.you ? "This is you" : `Trading Post member${m.title ? ` · ${m.title}` : ""}`}>
+    <span className="tp-member-badge" title={m.you ? "This is you" : `On Trading Post${m.title ? ` · ${m.title}` : ""}`}>
       {m.you ? "You" : "Member"}
     </span>
   );
@@ -602,9 +640,9 @@ export function SeatHolderInput({
           </span>
           <span className="tp-seat-who">
             <b>{linked.you ? "You" : linked.name}</b>
-            <span>Trading Post member{linked.title ? ` · ${linked.title}` : ""}</span>
+            <span>On Trading Post{linked.title ? ` · ${linked.title}` : ""}</span>
           </span>
-          <button type="button" className="tp-seat-x" aria-label="Unlink member" onClick={() => onChange(value, null)}>
+          <button type="button" className="tp-seat-x" aria-label="Unlink this member" title="Unlink this member" onClick={() => onChange(value, null)}>
             <IconX size={14} />
           </button>
         </div>
@@ -650,6 +688,8 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
   if (!f) return null;
   const editing = initial !== undefined;
   const earn = editing ? { text: "Edits earn no credit", capped: false } : earnNote(ui.me);
+  // At the cap the note is a full sentence, so it gets its own line.
+  const earnShort = earn.capped ? "No credit today" : earn.text;
   const seat = t.entity === "engagement" && t.field === "operator";
   const save = async (raw: string, member: string | null = memberId) => {
     const { error, value: clean } = cleanValue(f, raw);
@@ -677,6 +717,7 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
         <FieldInput f={f} value={value} onChange={(v) => (setValue(v), setErr(null))} onSave={(v) => save(v)} autoFocus big={ui.layout === "phone"} />
       )}
       {f.hint && f.hint !== f.placeholder && <p className="tp-ed-hint">{f.hint}</p>}
+      {earn.capped && <p className="tp-ed-hint">{earn.text}.</p>}
       {err && (
         <p className="tp-ed-err" role="alert">
           {err}
@@ -696,10 +737,10 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
         onClose={onClose}
         footer={
           <div className="tp-ed-foot">
-            <span className={`tp-earn-note${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{earn.text}</span>
+            <span className={`tp-earn-note num${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{earnShort}</span>
             {simple && (
-              <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} onClick={() => save(value)}>
-                Save
+              <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
+                {saving ? "Saving" : "Save"}
               </button>
             )}
           </div>
@@ -713,12 +754,12 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       <div className="tp-ed-head">{title}</div>
       {body}
       <div className="tp-ed-foot">
-        <span className="tp-ed-keys">{simple ? "Enter to save, Esc to cancel" : "Pick one, Esc to cancel"}</span>
+        <span className="tp-ed-keys">{simple ? "Enter saves, Esc cancels" : "Pick one, or Esc to cancel"}</span>
         <span className="tp-ed-foot-r">
-          <span className={`tp-earn-note${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{saving ? "Saving" : earn.text}</span>
+          <span className={`tp-earn-note num${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{saving && !simple ? "Saving" : earnShort}</span>
           {simple && (
-            <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} onClick={() => save(value)}>
-              Save
+            <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
+              {saving ? "Saving" : "Save"}
             </button>
           )}
         </span>

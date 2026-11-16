@@ -1,9 +1,13 @@
 /*
  * Trading Post · Revenue Nomad design system v2
- * Pine = navigate and spend. Volt = earn and add (primary button fill, "+1"). Ember = only
- * urgency (low balance, the daily cap, open roles). Schibsted Grotesk for everything, 800
- * for headings, tabular figures (.num) for numbers. Red Hat Mono only for domains, links and
- * emails shown as data. Radii 6 chips, 8 buttons, 10 cards. No shadows except overlays.
+ * Pine = navigate and spend. Volt = earn and add (primary button fill, "+1"). Ember = heat:
+ * an open role, or the one thing that needs you now. Full strength, at most two per screen,
+ * never a tint (see .chip-ember). Schibsted Grotesk for everything, 800 for headings, tabular
+ * figures (.num) for numbers. Red Hat Mono only for domains, links and emails shown as data.
+ * Radii 6 chips, 8 buttons, 10 cards. No shadows except overlays. Motion is 150ms.
+ *
+ * Chips are one system: 6px corners, 13px, 600. A fill is a state (selected, hiring, under
+ * review). An outline is an attribute (a function, a type, a fit tier). Dashed means missing.
  *
  * Area styles live next to their components:
  *   app/landing/landing.css   marketing page, join and sign-in
@@ -37,8 +41,15 @@
   --r-card: 10px;
   --font: "Schibsted Grotesk Variable", "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: var(--font);
+  /* The text face with tabular digits. See .num. */
+  --font-num: "Schibsted Grotesk Figures", var(--font);
   --mono: "Red Hat Mono Variable", "Red Hat Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --overlay-shadow: 0 12px 40px rgba(10, 26, 19, 0.16), 0 2px 8px rgba(10, 26, 19, 0.08);
+  /* Ember as text on pine (ember-ink is for white). */
+  --ember-on-pine: #ff9a70;
+  --row-hover: #f6f8f7;
+  --row-on: #eef4f1;
+  --t: 0.15s;
   color-scheme: light;
 }
 
@@ -94,12 +105,39 @@ img {
   outline: 2px solid var(--volt);
   outline-offset: 2px;
 }
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 .mono {
   font-family: var(--mono);
 }
-/* Numbers, dates, counts and money: the text face with figures that line up in columns. */
+/*
+ * Numbers, dates, counts and money: the text face with figures that line up in columns.
+ *
+ * Schibsted Grotesk's tabular set also widens the comma and the period to a full digit, so
+ * `font-variant-numeric: tabular-nums` turns "$12,500" into "$12 ,500". Instead, .num puts a
+ * digits-only face in front of the family: the same file, limited to 0-9, with tabular figures
+ * on. Everything that is not a digit keeps its own width. A browser that ignores the
+ * descriptor shows proportional digits and nothing breaks.
+ */
+@font-face {
+  font-family: "Schibsted Grotesk Figures";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("~@fontsource-variable/schibsted-grotesk/files/schibsted-grotesk-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0030-0039;
+  font-feature-settings: "tnum";
+}
 .num {
-  font-variant-numeric: tabular-nums;
+  font-family: var(--font-num);
 }
 .muted {
   color: var(--muted);
@@ -127,23 +165,33 @@ img {
   color: var(--ink);
   font-weight: 700;
   font-size: 14px;
+  line-height: 20px;
   white-space: nowrap;
   text-decoration: none;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  transition: background var(--t), border-color var(--t), color var(--t), opacity var(--t);
 }
 .btn:hover {
   border-color: var(--pine);
 }
+.btn:active {
+  background: var(--surface-2);
+}
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* Working: the label says what is happening ("Unlocking") and the button waits. */
+.btn[aria-busy="true"] {
+  opacity: 0.7;
+  cursor: progress;
 }
 .btn-primary {
   background: var(--volt);
   border-color: var(--volt);
   color: var(--pine);
 }
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:active {
   background: var(--volt-hover);
   border-color: var(--volt-hover);
 }
@@ -152,7 +200,8 @@ img {
   border-color: var(--pine);
   color: #fff;
 }
-.btn-pine:hover {
+.btn-pine:hover,
+.btn-pine:active {
   background: var(--pine-hover);
   border-color: var(--pine-hover);
 }
@@ -160,7 +209,8 @@ img {
   border-color: transparent;
   background: transparent;
 }
-.btn-ghost:hover {
+.btn-ghost:hover,
+.btn-ghost:active {
   background: var(--surface-2);
   border-color: transparent;
 }
@@ -186,101 +236,234 @@ img {
   background: var(--surface);
   font-size: 14px;
 }
+.input,
+.select {
+  transition: border-color var(--t);
+}
+.input:hover,
+.select:hover {
+  border-color: var(--muted);
+}
 .input:focus,
 .select:focus {
-  outline: none;
+  outline: 2px solid var(--volt);
+  outline-offset: 1px;
   border-color: var(--pine);
-  box-shadow: 0 0 0 3px var(--pine-8);
+}
+.input:disabled,
+.select:disabled {
+  background: var(--surface-2);
+  color: var(--faint);
+  cursor: not-allowed;
 }
 .input::placeholder {
   color: var(--faint);
 }
 
 /* ---------- chips and pills ---------- */
+/* One chip: 6px corners, 13px, 600. An outline is an attribute. A fill is a state. */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   height: 26px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: var(--r-chip);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--body-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
 }
+/* Selected. */
 .chip-on {
   background: var(--pine);
   border-color: var(--pine);
   color: #fff;
 }
+/* Earned or done. */
 .chip-volt {
   background: var(--volt-soft);
   border-color: #bdefd8;
   color: var(--volt-ink);
 }
+/* Hiring now: solid ember, ink text. Once per screen (the record header, the landing example). */
 .chip-ember {
-  background: var(--ember-soft);
-  border-color: #ffc9b0;
+  background: var(--ember);
+  border-color: var(--ember);
+  color: var(--ink);
+  font-weight: 700;
+}
+/* A second mention of an open role: white, ember border, ember-ink text. */
+.chip-ember-outline {
+  background: var(--surface);
+  border-color: var(--ember);
   color: var(--ember-ink);
 }
+/* Missing or not yet. */
 .chip-outline {
   border-style: dashed;
   border-color: var(--line-strong);
+  background: transparent;
   color: var(--muted);
 }
 
-/* Locked fact: never shows a value. One click unlocks for 1 credit. */
+/*
+ * Locked fact. It never shows the value. At rest it is quiet: a small lock and a masked bar.
+ * Hover or focus turns it into "Unlock · 1 credit", and one click spends the credit. Screens
+ * without hover show the label all the time, as plain pine text, so it is still one tap.
+ * A span.lock (the landing page) is the lock and its text, with no button.
+ */
 .lock {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: var(--r-chip);
-  border: 1px solid transparent;
-  background: var(--pine-8);
-  color: var(--pine);
-  font-size: 12px;
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
 }
+.lock .lock-cost {
+  font-weight: 600;
+}
+button.lock {
+  position: relative;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 4px;
+  margin: 0 -4px;
+  border: 0;
+  border-radius: var(--r-chip);
+  background: none;
+  color: var(--faint);
+  transition: color var(--t);
+}
+.lock-rest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lock-mask {
+  display: block;
+  width: 44px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+  transition: background var(--t);
+}
+/* The label sits over the bar, so the column never changes width. */
+.lock-cta {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px 0 8px;
+  border-radius: var(--r-chip);
+  background: var(--pine);
+  color: #fff;
+}
+.lock-cta .lock-cost {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+}
 @media (hover: hover) {
-  button.lock:hover {
-    background: var(--pine);
-    color: #fff;
+  button.lock:hover .lock-cta {
+    display: inline-flex;
+  }
+  button.lock:hover .lock-rest {
+    visibility: hidden;
   }
 }
-.lock .lock-cost {
-  font-family: var(--mono);
-  font-weight: 500;
-  opacity: 0.8;
+button.lock:focus-visible .lock-cta,
+button.lock.busy .lock-cta {
+  display: inline-flex;
 }
+button.lock:focus-visible .lock-rest,
+button.lock.busy .lock-rest {
+  visibility: hidden;
+}
+/* The focus ring goes around the label, which is what you see. */
+button.lock:focus-visible {
+  outline: 0;
+}
+button.lock:focus-visible .lock-cta {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+button.lock:disabled {
+  cursor: progress;
+}
+button.lock.busy .lock-cta {
+  background: var(--pine-hover);
+}
+/* No hover (phones, tablets): the label is always there, as quiet pine text. */
+@media (hover: none) {
+  button.lock {
+    color: var(--pine);
+    padding: 0;
+    margin: 0;
+  }
+  button.lock .lock-rest {
+    display: none;
+  }
+  button.lock .lock-cta,
+  button.lock.busy .lock-cta {
+    position: static;
+    transform: none;
+    display: inline-flex;
+    height: auto;
+    padding: 0;
+    background: none;
+    color: var(--pine);
+  }
+  button.lock:focus-visible .lock-cta {
+    outline-offset: 4px;
+  }
+  button.lock .lock-cta .lock-cost {
+    color: var(--muted);
+  }
+  button.lock:active .lock-cta {
+    opacity: 0.6;
+  }
+}
+
 /* Missing fact: dashed, "+ Add" with the volt "+1". */
 .add {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 26px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: var(--r-chip);
   border: 1px dashed var(--line-strong);
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  line-height: 1;
   white-space: nowrap;
+  transition: border-color var(--t), color var(--t), background var(--t);
 }
-button.add:hover {
+button.add:hover,
+button.add:focus-visible {
   border-color: var(--pine);
+  border-style: solid;
   color: var(--pine);
+}
+button.add:active {
+  background: var(--pine-8);
 }
 .add .plus1 {
   color: var(--volt-ink);
-  font-family: var(--mono);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ---------- company logo ---------- */
@@ -333,8 +516,9 @@ button.add:hover {
   background: var(--ink);
   color: #fff;
   font-size: 14px;
+  line-height: 20px;
   box-shadow: var(--overlay-shadow);
-  animation: toast-in 0.18s ease-out;
+  animation: toast-in var(--t) ease-out;
 }
 .toast-err {
   background: var(--red);

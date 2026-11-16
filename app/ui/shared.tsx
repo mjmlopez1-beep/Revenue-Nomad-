@@ -2,7 +2,7 @@
 
 /**
  * Shared client pieces for Trading Post: the API client, toasts, company logos,
- * lock and add pills, value formatting and a small icon set.
+ * the locked cell and the add pill, value formatting and a small icon set.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Action, Cell, Me, PersonRec, View } from "@/lib/tableTypes";
@@ -83,9 +83,9 @@ export async function post<T = Record<string, unknown>>(body: unknown): Promise<
   try {
     const r = await fetch("/api/table", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
-    return r.ok ? j : { ...j, error: j.error || "Something went wrong. Try again." };
+    return r.ok ? j : { ...j, error: j.error || "That didn't go through. Try again." };
   } catch {
-    return { error: "Network problem. Check your connection and try again." } as T & { error: string };
+    return { error: "We couldn't reach Trading Post. Check your connection and try again." } as T & { error: string };
   }
 }
 
@@ -209,18 +209,36 @@ export function CompanyLogo({ name, domain, size = "md", hidden }: { name: strin
 
 /* ---------- pills ---------- */
 
-/** A locked fact. Never shows the value; one click unlocks it for 1 credit. */
-export function LockPill({ onUnlock, ver, label = "Unlock", busy }: { onUnlock?: () => void; ver?: number; label?: string; busy?: boolean }) {
-  const title = `1 credit${ver ? `. Confirmed by ${ver}.` : ""}`;
-  if (!onUnlock)
-    return (
-      <span className="lock" title={title}>
-        <IconLock /> <span className="lock-cost">1</span>
-      </span>
-    );
+/**
+ * A locked fact. It never shows the value. At rest: a small lock and a masked bar. On hover
+ * and focus (always, on touch screens): "Unlock · 1 credit". One click or tap spends the credit.
+ * `what` names the fact for the tooltip and screen readers ("the role", "this company").
+ * `noun` is added to the label where one lock stands for more ("Unlock company"). A tight
+ * spot can hide it (.lock-noun).
+ */
+export function LockPill({ onUnlock, ver, what, noun, busy }: { onUnlock: () => void; ver?: number; what?: string; noun?: string; busy?: boolean }) {
+  const say = `Unlock ${what ?? "this"} for 1 credit`;
   return (
-    <button type="button" className="lock" title={title} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
-      <IconLock /> {label} <span className="lock-cost">1</span>
+    <button
+      type="button"
+      className={`lock${busy ? " busy" : ""}`}
+      title={ver ? `${say}. Confirmed by ${ver} ${ver === 1 ? "member" : "members"}.` : say}
+      aria-label={busy ? "Unlocking" : say}
+      disabled={busy}
+      onClick={(e) => (e.stopPropagation(), onUnlock())}
+    >
+      <span className="lock-rest" aria-hidden>
+        <IconLock />
+        <span className="lock-mask" />
+      </span>
+      <span className="lock-cta" aria-hidden>
+        <IconLock />
+        <span>
+          {busy ? "Unlocking" : "Unlock"}
+          {!busy && noun && <span className="lock-noun"> {noun}</span>}
+        </span>
+        {!busy && <span className="lock-cost">· 1 credit</span>}
+      </span>
     </button>
   );
 }
