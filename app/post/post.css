@@ -1956,7 +1956,8 @@
   top: 56px;
   right: 0;
   bottom: 0;
-  z-index: 45;
+  /* Under the top bar (40), so the credit change that drops below the balance is never cut by the record. */
+  z-index: 39;
   width: 440px;
   display: flex;
   flex-direction: column;
@@ -2193,8 +2194,13 @@
 .tp-frow-v .tp-val {
   padding: 6px 0;
 }
+/* Names and roles break between words. Only an address or a link may break anywhere. */
 .tp-frow-v .tp-val-t {
   white-space: normal;
+  overflow-wrap: break-word;
+}
+.tp-frow-v .mono .tp-val-t,
+.tp-frow-v a {
   overflow-wrap: anywhere;
 }
 /* The whole value area is the unlock target, so the label is easy to hit. */
@@ -2219,21 +2225,29 @@
   gap: 8px;
   justify-self: end;
 }
+/* Confirm and Report: there for the keyboard at all times, seen on the row's hover and focus. */
 .tp-meta-acts {
   position: absolute;
   right: 0;
-  top: 50%;
+  top: 18px;
   transform: translateY(-50%);
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
   padding-left: 12px;
   background: var(--surface);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t);
 }
 .tp-frow:hover .tp-meta-acts,
 .tp-frow:focus-within .tp-meta-acts,
 .tp-meta-acts.on {
-  display: inline-flex;
+  opacity: 1;
+  pointer-events: auto;
+}
+.tp-meta-acts.off {
+  display: none;
 }
 .tp-meta-acts .tp-small {
   color: var(--body-ink);
@@ -2268,14 +2282,21 @@
   color: var(--muted);
   margin: 14px 0 6px;
 }
+/* A person: the same rows as a seat. Flat inside a seat card, a card of its own at the company. */
 .tp-person {
-  padding: 12px 0 8px;
+  padding: 4px 0 8px;
   border-top: 1px solid var(--line);
   scroll-margin-top: 12px;
 }
-.tp-dsec > .tp-person:first-of-type {
+.tp-sublabel + .tp-person {
   border-top: 0;
   padding-top: 0;
+}
+.tp-person.tp-person-box {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: 4px 16px 8px;
+  margin-bottom: 12px;
 }
 /* Title and relationship wrap on the left; Unlock all stays top right. */
 .tp-person-top {
@@ -2387,6 +2408,327 @@
   font-size: 13px;
   line-height: 20px;
   color: var(--muted);
+}
+/* The record takes focus on its title when it opens (for screen readers). The title is not a control, so no ring. */
+.tp-drawer:focus,
+.tp-rsheet:focus,
+.tp-dname:focus {
+  outline: none;
+}
+
+/* Which company this is, in the bar, wherever the record is scrolled: a 20px logo and the name. */
+.tp-dbar-co {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tp-dbar-logo {
+  flex: none;
+  display: inline-flex;
+}
+.tp-dbar-logo .logo {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 9px;
+}
+.tp-dbar-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Phones: once the name is in the bar it matters more than "4 of 587", and on narrow ones Follow keeps only its star. */
+.tp-rsheet .tp-dbar:has(.tp-dbar-co:not(.off)) .tp-dpos {
+  display: none;
+}
+@media (max-width: 379px) {
+  .tp-rsheet .tp-dbar:has(.tp-dbar-co:not(.off)) .tp-follow-t {
+    display: none;
+  }
+  .tp-rsheet .tp-dbar:has(.tp-dbar-co:not(.off)) .tp-followbtn {
+    min-width: 44px;
+    justify-content: center;
+  }
+}
+
+/* Where a fact came from, when no member has confirmed it yet. Quiet. */
+.tp-from {
+  font-size: 12.5px;
+  line-height: 20px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* Report before the member has added a fact: there, but not open yet. */
+.tp-tbtn-off,
+.tp-tbtn-off:hover {
+  color: var(--faint);
+  background: none;
+  cursor: help;
+}
+/* A closed role's posting: the link, then when it came down. */
+.tp-frow-note {
+  margin-left: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* The second step of Report and Remove, under the row it is about. */
+.tp-frow-ask {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 2px 0 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.tp-frow-ask p {
+  flex: 1 1 220px;
+}
+.tp-frow-ask-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+.tp-frow-asking .tp-meta {
+  visibility: hidden;
+}
+
+/* After the seat holder is unlocked: how to reach them, right under their name. */
+.tp-reach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 2px 0 10px 120px;
+}
+.tp-reach .tp-intro {
+  margin-left: 0;
+}
+/* An open role nobody holds: the member who took it says so. */
+.tp-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+.tp-claim-ask {
+  margin-top: 8px;
+}
+
+/* Unlock all, asking first: the price, what it buys and what is left, under the record's actions. */
+.tp-ua-ask {
+  flex-basis: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.tp-ua-ask b {
+  color: var(--ink);
+}
+.tp-ua-ask-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* In the phone bar: what it opens over what it costs. */
+.tp-ua-two {
+  display: grid;
+  justify-items: center;
+  line-height: 18px;
+}
+.tp-ua-cost {
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.tp-ua-q {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-ua-what {
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+
+/* The person form, asking before it throws away what was typed. */
+.tp-pform-discard {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.tp-pform-discard .tp-btn-red,
+.tp-fs-ask .tp-btn-red {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/*
+ * Touch screens: a fact the member can act on is one tap target (the whole row) that opens the
+ * fact sheet. Rows keep 4px inside their edges, so a free row and a lock that spends a credit are
+ * never closer than 8px.
+ */
+.tp-touchrows .tp-flist-d > .tp-frow {
+  min-height: 52px;
+  padding: 4px 0;
+}
+.tp-touchrows .tp-frow-v button.lock {
+  height: 44px;
+}
+.tp-touchrows .tp-frow-tap .tp-meta {
+  gap: 6px;
+  color: var(--muted);
+}
+.tp-frow-btn {
+  position: absolute;
+  inset: 4px 0;
+  z-index: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.tp-frow-btn:active {
+  background: var(--pine-8);
+}
+/* A link in the value stays a link. */
+.tp-frow-tap .tp-frow-v a {
+  position: relative;
+  z-index: 1;
+}
+/* "You added this" on its own line, so the value keeps the width. */
+.tp-frow-cap {
+  display: block;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.tp-touchrows .tp-reach {
+  padding-left: 0;
+}
+.tp-touchrows .tp-reach .btn {
+  min-height: 44px;
+}
+.tp-touchrows .tp-claim .btn {
+  min-height: 44px;
+}
+/* The earn line over a section's add pills. */
+.tp-dsec-note.tp-pills-note {
+  margin: 8px 0 0;
+}
+/* Narrow phones: a slimmer label and card padding, so a name or a role keeps whole words. */
+@media (max-width: 379px) {
+  .tp-touchrows .tp-flist-d > .tp-frow {
+    grid-template-columns: 88px minmax(0, 1fr) auto;
+  }
+  .tp-touchrows .tp-eng,
+  .tp-touchrows .tp-person.tp-person-box {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* The fact sheet: the fact, where it came from, and two rows to act on it. */
+.tp-fs-val {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+.tp-fs-val a {
+  overflow-wrap: anywhere;
+}
+.tp-fs-src {
+  margin-top: 4px;
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.tp-fs-rows {
+  display: grid;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.tp-fs-row {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+}
+button.tp-fs-row:active {
+  background: var(--pine-8);
+}
+.tp-fs-row b {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+}
+.tp-fs-row span {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.tp-fs-row.is-off b {
+  color: var(--muted);
+}
+.tp-fs-row.is-done b {
+  color: var(--volt-ink);
+}
+.tp-fs-red b {
+  color: var(--red);
+}
+.tp-fs-ask {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 4px;
+}
+.tp-fs-ask p {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+}
+.tp-fs-ask-acts {
+  display: flex;
+  gap: 8px;
+}
+.tp-fs-ask-acts .btn {
+  flex: 1;
 }
 
 /* ---------- add modal ---------- */
