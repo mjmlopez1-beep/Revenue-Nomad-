@@ -4,13 +4,19 @@ import { gzip } from "zlib";
 import {
   ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, type Action,
 } from "@/lib/table";
+import { stateVersion } from "@/lib/table";
 import { emailEnabled, sendEmail, signInEmail } from "@/lib/email";
 import { clientIp, limited } from "@/lib/rateLimit";
+import { guarded } from "@/lib/apiGuard";
+import { shared } from "@/lib/viewQueue";
+import { tidy, wellFormed } from "@/lib/tableFields";
 
 export const dynamic = "force-dynamic";
 
 const COOKIE = "rn_table";
 const gz = promisify(gzip);
+/** The largest request body a POST may carry. The biggest real one (Add with ten people) is a few KB. */
+const MAX_BODY = 64 * 1024;
 
 function withSession(req: NextRequest, res: NextResponse, token: string) {
   res.cookies.set(COOKIE, token, {
@@ -30,15 +36,32 @@ const origin = (req: NextRequest) =>
 
 const err = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
 
+const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-store", vary: "Accept-Encoding" };
+const wantsGzip = (req: NextRequest) => /\bgzip\b/.test(req.headers.get("accept-encoding") ?? "");
+
 /** JSON, gzipped when the client accepts it (Next doesn't compress route handlers). */
 async function sendJson(req: NextRequest, data: unknown, extra: Record<string, string> = {}) {
   const body = JSON.stringify(data);
-  const headers: Record<string, string> = { "content-type": "application/json", "cache-control": "no-store", vary: "Accept-Encoding", ...extra };
-  if (body.length > 2048 && /\bgzip\b/.test(req.headers.get("accept-encoding") ?? "")) {
+  const headers: Record<string, string> = { ...JSON_HEADERS, ...extra };
+  if (body.length > 2048 && wantsGzip(req)) {
     return new NextResponse(new Uint8Array(await gz(body, { level: 6 })), { headers: { ...headers, "content-encoding": "gzip" } });
   }
   return new NextResponse(body, { headers });
 }
+
+/**
+ * The table view, built, turned into JSON and compressed inside the view queue (lib/viewQueue.ts):
+ * at most 4 at once, the rest wait, and past 50 waiting the answer is 503 with Retry-After. One
+ * member's requests share one build while the state has not changed under it, so a tab that
+ * fires a burst of loads costs one.
+ */
+type Built = { body: string; gzipped: Uint8Array<ArrayBuffer> | null };
+const viewFlights = new Map<string, { p: Promise<Built>; started: number | null }>();
+const builtView = (token: string | null) =>
+  shared(viewFlights, token ?? "", stateVersion, async (): Promise<Built> => {
+    const body = JSON.stringify(await buildView(token));
+    return { body, gzipped: body.length > 2048 ? new Uint8Array(await gz(body, { level: 6 })) : null };
+  });
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
@@ -46,9 +69,10 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
  * GET ?ref=CODE    { inviter }: the first name of the member who sent this invite code, or null.
  * GET ?export=1    admins: download the runtime state (a backup).
  *
- * See also POST /api/table/scan (the weekly scan, for a cron) and GET /api/table/unsubscribe.
+ * See also POST /api/table/scan (the weekly scan, for a cron), GET /api/table/unsubscribe and
+ * GET /api/health. Every handler answers 503 while Trading Post cannot serve (lib/apiGuard.ts).
  */
-export async function GET(req: NextRequest) {
+export const GET = guarded(async (req: NextRequest) => {
   const ip = clientIp(req);
   const token = req.cookies.get(COOKIE)?.value ?? null;
   // The seat-holder picker searches as you type, so it has its own limit (per member).
@@ -73,7 +97,42 @@ export async function GET(req: NextRequest) {
   // weekly scan starts in the background when one is due (only with RN_SCAN=1).
   if (token) void touch(token).catch((e) => console.error("last seen not saved", e));
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
-  return sendJson(req, await buildView(token));
+  const view = await builtView(token);
+  return view.gzipped && wantsGzip(req)
+    ? new NextResponse(view.gzipped, { headers: { ...JSON_HEADERS, "content-encoding": "gzip" } })
+    : new NextResponse(view.body, { headers: JSON_HEADERS });
+});
+
+/** The request body as JSON, or null when it is not JSON. "too large" past MAX_BODY, whatever Content-Length says. */
+async function readBody(req: NextRequest): Promise<unknown | "too large"> {
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY) return "too large";
+  const reader = req.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY) {
+      void reader.cancel().catch(() => {});
+      return "too large";
+    }
+    chunks.push(value);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** Every text in what the client sent, with half characters removed (a lone surrogate breaks whoever encodes it later). */
+function sound<T>(x: T, depth = 0): T {
+  if (typeof x === "string") return wellFormed(x) as T;
+  if (!x || typeof x !== "object" || depth > 6) return x;
+  if (Array.isArray(x)) return x.map((v) => sound(v, depth + 1)) as T;
+  return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, sound(v, depth + 1)])) as T;
 }
 
 /**
@@ -83,9 +142,14 @@ export async function GET(req: NextRequest) {
  *                                     (that's the email check); without it, you're in at once.
  * POST { signOut: true }              sign out.
  * POST { action: {...} }              see Action and ActionResult in lib/tableTypes.ts.
+ *
+ * A body over 64 KB is refused (413). An action from someone who is not signed in is answered
+ * at once and never queued as a change.
  */
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null);
+export const POST = guarded(async (req: NextRequest) => {
+  const read = await readBody(req);
+  if (read === "too large") return err("That is too much to send at once. Shorten it and try again.", 413);
+  const body = sound(read) as Record<string, any> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
   if (!body || typeof body !== "object") return err("Invalid request.");
   const ip = clientIp(req);
 
@@ -113,6 +177,8 @@ export async function POST(req: NextRequest) {
 
   if (body.join && typeof body.join === "object") {
     if (limited(`join:${ip}`, 10, 60 * 60_000)) return err("Too many sign-ups from here. Try again in an hour.", 429);
+    // The name is cut to its 80 characters here, on a whole character (joinMember cuts by unit).
+    body.join.name = tidy(body.join.name, 80);
     try {
       const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip);
       if (emailEnabled()) {
@@ -133,12 +199,25 @@ export async function POST(req: NextRequest) {
     return res;
   }
 
+  // Who is acting comes first. Nobody signed in means an answer at once: nothing is queued, and
+  // the limit is on the address, since any cookie value can be made up.
   const token = req.cookies.get(COOKIE)?.value ?? null;
-  if (limited(`act:${token ?? ip}`, 240, 60_000)) return err("Slow down a little.", 429);
+  const me = await memberForToken(token);
+  if (!me) {
+    if (limited(`act:ip:${ip}`, 60, 60_000)) return err("Slow down a little.", 429);
+    return err("Join or sign in to add, confirm and unlock.");
+  }
+  if (limited(`act:${me.id}`, 240, 60_000)) return err("Slow down a little.", 429);
+  const action = body.action as Action;
+  // Profile texts are cut on a whole character here (perform cuts them by unit).
+  if (action?.type === "profile") {
+    if (typeof action.title === "string") action.title = tidy(action.title, 80);
+    if (typeof action.goal === "string") action.goal = tidy(action.goal, 40);
+  }
   try {
-    return NextResponse.json(await perform(token, body.action as Action, origin(req)));
+    return NextResponse.json(await perform(token, action, origin(req)));
   } catch (e) {
     if (e instanceof ActionError) return err(e.message);
     throw e;
   }
-}
+});

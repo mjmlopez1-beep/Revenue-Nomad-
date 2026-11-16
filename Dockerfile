@@ -24,6 +24,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/data/seed.json ./data/seed.json
 # Encrypted member seed (opened at runtime with RN_INTEL_SEED_KEY)
 COPY --from=builder /app/data/intel-seed.enc ./data/intel-seed.enc
+# Never serve the sample data from this image. If the seed does not open (RN_INTEL_SEED_KEY
+# missing or wrong), every route answers 503 and GET /api/health fails, so the deploy does not
+# go live and nobody can sign in with the sample code.
+ENV RN_REQUIRE_SEED=1
 # Job database lives here; mount a volume at /data to persist across deploys.
 ENV RN_DATA_DIR=/data
 RUN mkdir -p /data && chown -R nomad:nomad /data /app

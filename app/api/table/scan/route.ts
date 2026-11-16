@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { applyScan, runScan } from "@/lib/table";
+import { guarded, isDown } from "@/lib/apiGuard";
 
 export const dynamic = "force-dynamic";
 /** A scan reads several job boards. Give it room on hosts that cap request time. */
@@ -18,7 +19,7 @@ const origin = (req: NextRequest) =>
  * Tests only (RN_SCAN_TEST=1 on the server): a body of { roles, sources, now } is stored as
  * if a scan had found it, at the time `now`, and no job board is read.
  */
-export async function POST(req: NextRequest) {
+export const POST = guarded(async (req: NextRequest) => {
   const secret = process.env.RN_CRON_SECRET ?? "";
   const got = Buffer.from(req.headers.get("x-cron-secret") ?? "");
   const want = Buffer.from(secret);
@@ -33,7 +34,8 @@ export async function POST(req: NextRequest) {
   try {
     return NextResponse.json(await runScan(origin(req)));
   } catch (e) {
+    if (isDown(e)) throw e; // answered 503 by guarded()
     console.error("scan failed", e);
     return NextResponse.json({ error: "The scan failed. See the server log." }, { status: 500 });
   }
-}
+});

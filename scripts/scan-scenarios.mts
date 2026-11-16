@@ -1,0 +1,346 @@
+/**
+ * Scans stored on a scratch table (applyScan and runScan in lib/table.ts), one scenario a run.
+ * scripts/test-scan.mts starts each scenario in its own process, because the server module
+ * keeps its state in memory and every scenario needs a fresh table. To run one by hand:
+ *
+ *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names>
+ *
+ * It runs on a made-up seed in a temporary data folder. No network, and nothing from the real
+ * seed. Prints PASS and FAIL lines, then "##RESULT <passed> <failed>".
+ */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { collectOpenRoles, type ScanRawJob } from "../lib/scan/collect";
+import { roleKey } from "../lib/scan/clean";
+import type { ScanRole, ScanSourceResult } from "../lib/scanTypes";
+import type { CompanyRec, EngagementRec, View } from "../lib/tableTypes";
+
+let passed = 0;
+let failed = 0;
+function check(name: string, ok: boolean, detail?: unknown) {
+  if (ok) passed++;
+  else failed++;
+  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || detail === undefined ? "" : `\n      got ${typeof detail === "string" ? detail : JSON.stringify(detail)}`}`);
+}
+const eq = (name: string, got: unknown, want: unknown) => check(name, JSON.stringify(got) === JSON.stringify(want), got);
+
+const DAY = 86_400_000;
+const HOUR = 3_600_000;
+const REAL_NOW = Date.now();
+const iso = (ms: number) => new Date(ms).toISOString();
+const dayOf = (ms: number) => iso(ms).slice(0, 10);
+
+/* ---------- a scratch table ---------- */
+
+const dir = mkdtempSync(path.join(tmpdir(), "rn-scan-"));
+const seed = {
+  // Built 20 days ago, so the open role it carries is not "new this week".
+  builtAt: iso(REAL_NOW - 20 * DAY),
+  members: [
+    { id: "m1", name: "Sal Sales", email: "sal@example.com", title: "Fractional VP Sales", token: "tok-sal" },
+    { id: "m2", name: "Mo Marketing", email: "mo@example.com", title: "Fractional CMO", token: "tok-mo" },
+    { id: "m3", name: "Cy Success", email: "cy@example.com", title: "Fractional Head of Customer Success", token: "tok-cy" },
+    { id: "m9", name: "Ada Admin", email: "ada@example.com", title: "Founder", token: "tok-ada" },
+  ],
+  companies: [
+    { id: "c_oldco", fields: { name: "Oldco Freight", website: "casehost.example.com" } },
+    { id: "c_seedrole", fields: { name: "Seedrole Systems" } },
+  ],
+  engagements: [
+    { id: "e_oldco_sal", companyId: "c_oldco", fields: { source: "Published engagement", operator: "Sal Sales", function: "Sales" } },
+    { id: "e_seedrole_open", companyId: "c_seedrole", fields: { source: "Demand scan", role: "Fractional CRO", function: "Sales" } },
+  ],
+  contacts: [],
+};
+writeFileSync(path.join(dir, "seed.json"), JSON.stringify(seed));
+Object.assign(process.env, {
+  RN_DATA_DIR: dir,
+  RN_INTEL_SEED: path.join(dir, "seed.json"),
+  RN_STARTER_CREDITS: "25",
+  RN_ADMIN_EMAILS: "ada@example.com",
+  RN_LOGO_LOOKUP: "off",
+  RN_SCAN_TEST: "1", // runScan never reaches a real job board from here
+});
+for (const k of ["RESEND_API_KEY", "RN_EMAIL_FROM", "RN_REQUIRE_SEED", "RN_BACKUP_S3_ENDPOINT", "RN_DIGEST_ALL"]) delete process.env[k];
+// The server module logs what it does to the state. Keep the test output to PASS and FAIL lines.
+console.error = () => {};
+console.warn = () => {};
+console.log = ((log) => (...a: unknown[]) => (/^(PASS|FAIL|##)/.test(String(a[0])) ? log(...a) : undefined))(console.log);
+
+const t = await import("../lib/table");
+
+/** One role as a job board would hand it over. */
+const sr = (company: string, title: string, over: Partial<ScanRole> = {}): ScanRole => ({
+  key: roleKey(company, title),
+  company,
+  domain: null,
+  title,
+  function: null,
+  type: "Fractional",
+  url: `https://jobs.example.com/${encodeURIComponent(company)}/${encodeURIComponent(title)}`,
+  source: "board",
+  postedAt: null,
+  rate: null,
+  hoursPerWeek: null,
+  ...over,
+});
+const scan = (roles: ScanRole[], sources: ScanSourceResult[], atMs?: number) => t.applyScan({ roles, sources }, atMs === undefined ? undefined : iso(atMs));
+const admin = () => t.buildView("tok-ada") as Promise<View>;
+const companyOf = (v: View, name: string): CompanyRec | undefined => v.companies.find((c) => c.name === name);
+const roleOf = (v: View, name: string, n = 0): EngagementRec | undefined => companyOf(v, name)?.engagements.filter((e) => e.source === "Demand scan")[n];
+/** Every unlock a member tries, whether or not one unlock already bought the others. */
+async function unlockAll(token: string, items: { entity: "company" | "engagement"; id: string; field: string }[]) {
+  for (const it of items) await t.perform(token, { type: "unlock", ...it }).catch(() => null);
+}
+const credits = async (token: string) => (await t.buildView(token)).me!.credits;
+
+/* ---------- scenarios ---------- */
+
+/** ROB-5: the collector's cap of 60 must not close roles that are still posted. */
+async function cap() {
+  const T0 = Date.parse("2026-09-01T06:00:00Z");
+  const posting = (i: number, postedMs: number): ScanRawJob => ({
+    kind: "listing",
+    title: "Fractional VP of Sales",
+    company: `Capco${i} Robotics`,
+    url: `https://jobs.fakeboard.example.com/capco${i}/fractional-vp-sales`,
+    source: "fakeboard",
+    postedAt: iso(postedMs),
+    fractionalBoard: true,
+    description: "We are hiring a fractional VP of Sales, 15 hours per week, to build our outbound sales pipeline and lead the SDR team. $150/hr.",
+  });
+  const board = (jobs: ScanRawJob[]) => [{ name: "fakeboard", fetchJobs: async () => jobs }];
+  /** What runScan hands to applyScan: every screened role when the collector gives them, else its capped list. */
+  const store = async (jobs: ScanRawJob[], now: number) => {
+    const found = await collectOpenRoles({ sources: board(jobs), now });
+    const all = (found as { all?: ScanRole[] }).all;
+    return { found, all, r: await t.applyScan({ roles: all ?? found.roles, sources: found.sources }, iso(now)) };
+  };
+
+  const old = Array.from({ length: 60 }, (_, i) => posting(i, T0 - (i + 1) * HOUR));
+  const w0 = await store(old, T0);
+  eq("week 0: a board lists 60 roles and all 60 open", [w0.r.opened, w0.r.closed], [60, 0]);
+
+  // 40 newer roles go up. The 60 older ones are still posted.
+  const newer = Array.from({ length: 40 }, (_, i) => posting(100 + i, T0 + 6 * DAY - i * HOUR));
+  const w1 = await store([...old, ...newer], T0 + 7 * DAY);
+  eq("week 1: the collector still caps `roles` at 60 and gives every screened role in `all`", [w1.found.roles.length, w1.all?.length, w1.found.seenKeys.length], [60, 100, 100]);
+  eq("week 1: the 40 newer roles open and the 60 older ones are seen again", [w1.r.opened, w1.r.stillOpen, w1.r.closed], [40, 60, 0]);
+  const w2 = await store([...old, ...newer], T0 + 14 * DAY);
+  eq("week 2: all 100 are still posted, so none closes", [w2.r.opened, w2.r.stillOpen, w2.r.closed], [0, 100, 0]);
+  const w3 = await store([...old, ...newer], T0 + 21 * DAY);
+  eq("week 3: still none", [w3.r.stillOpen, w3.r.closed], [100, 0]);
+
+  // The cap is on roles opened for the first time in one run.
+  const fresh = Array.from({ length: 100 }, (_, i) => sr(`Freshco${i} Labs`, "Fractional CMO", { source: "bigboard" }));
+  const big = [{ source: "bigboard", fetched: 400, matched: 100 }];
+  const f1 = await scan(fresh, big, T0 + 22 * DAY);
+  eq("100 roles nobody has seen before: 60 open in this run and 40 wait", [f1.opened, f1.overCap], [60, 40]);
+  const f2 = await scan(fresh, big, T0 + 23 * DAY);
+  eq("the next run sees the 60 again and opens the other 40", [f2.stillOpen, f2.opened, f2.overCap, f2.closed], [60, 40, 0, 0]);
+
+  // runScan hands applyScan every screened role, not the collector's capped list.
+  const all100 = [...old, ...newer];
+  const run = await t
+    .runScan(undefined, { collect: () => collectOpenRoles({ sources: board(all100), now: T0 + 24 * DAY }), now: iso(T0 + 24 * DAY) } as never)
+    .catch(() => null);
+  eq("runScan passes all 100 screened roles on", [run?.result.stillOpen, run?.result.closed], [100, 0]);
+}
+
+/** ROB-6: a board that reads but matches nothing (or far less than usual) is not a clean scan, and one clean miss closes nothing. */
+async function health() {
+  const T0 = Date.parse("2026-09-01T06:00:00Z");
+  const at = (d: number) => T0 + d * DAY;
+  const A = [1, 2, 3, 4, 5].map((i) => sr(`Scanco${i} Systems`, "Fractional VP Sales", { source: "boardA", function: "Sales" }));
+  const boardA = (matched: number, over: Partial<ScanSourceResult> = {}) => [{ source: "boardA", fetched: 300, matched, ...over }];
+  const hiddenFor = async (token: string) => (await t.buildView(token)).companies.filter((c) => c.hidden).length;
+  const boardRow = async () => (await admin()).admin?.boards?.find((b) => b.source === "boardA");
+
+  eq("day 0: boardA lists 5 roles", (await scan(A, boardA(5), at(0))).opened, 5);
+  const hidden0 = await hiddenFor("tok-mo");
+  eq("day 7: boardA answers 300 listings and matches none. Nothing closes", (await scan([], boardA(0), at(7))).closed, 0);
+  eq("day 14: the same again, a second run in a row. Still nothing closes", (await scan([], boardA(0), at(14))).closed, 0);
+  eq("a member still sees those companies hidden", await hiddenFor("tok-mo"), hidden0);
+  eq("pilot metrics flag the board, with its last healthy count and day", await boardRow(), { source: "boardA", healthy: false, lastOkAt: iso(at(0)), baseline: 5 });
+  const s14 = (await t.buildView("tok-mo")).scan;
+  eq("the last scan members see is the last clean one, not the last run", [s14?.lastOkAt, s14?.lastRunAt], [iso(at(0)), iso(at(14))]);
+  eq("a board that errors is not clean either", [(await scan([], boardA(0, { fetched: 0, error: "Timed out" }), at(15))).closed, (await boardRow())?.healthy], [0, false]);
+
+  eq("day 21: a good run sees all 5 again", [(await scan(A, boardA(5), at(21))).stillOpen, (await boardRow())?.healthy], [5, true]);
+
+  // Under half the last healthy count is not clean, and does not become the new normal on the next run.
+  const r28 = await scan(A.slice(0, 2), boardA(2), at(28));
+  eq("day 28: boardA matches 2 where it matched 5. Not a clean scan", [r28.closed, (await boardRow())?.healthy, (await boardRow())?.baseline], [0, false, 5]);
+  eq("  the 3 it did not list are not marked unseen", roleOf(await admin(), "Scanco5 Systems")?.unseen, false);
+  eq("day 35: the same low count again. The baseline did not move, so nothing closes", [(await scan(A.slice(0, 2), boardA(2), at(35))).closed, (await boardRow())?.baseline], [0, 5]);
+
+  // A clean scan that misses a role: one is not enough, and two on one day count once.
+  const open35 = (await t.buildView("tok-mo")).scan!.openNow;
+  const r42 = await scan(A.slice(0, 3), boardA(3), at(42));
+  eq("day 42: boardA matches 3 of 5, a clean scan. It missed 2 roles, and one miss closes nothing", [r42.closed, (await boardRow())?.healthy, (await boardRow())?.baseline], [0, true, 3]);
+  const v42 = await admin();
+  eq("  a missed role is still open, marked unseen, with the time it was last seen", [roleOf(v42, "Scanco5 Systems")?.unseen, roleOf(v42, "Scanco5 Systems")?.closed, roleOf(v42, "Scanco5 Systems")?.lastSeen], [true, null, iso(at(21))]);
+  eq("  a role the scan did see is not", roleOf(v42, "Scanco1 Systems")?.unseen, false);
+  eq("  unseen roles are left out of open now", (await t.buildView("tok-mo")).scan!.openNow, open35 - 2);
+  eq("  the same scan an hour later is not a second miss", (await scan(A.slice(0, 3), boardA(3), at(42) + HOUR)).closed, 0);
+  eq("day 49: a second clean scan misses them. Unseen for 28 days, they close", (await scan(A.slice(0, 3), boardA(3), at(49))).closed, 2);
+  eq("  closed roles are not unseen", roleOf(await admin(), "Scanco5 Systems")?.unseen, false);
+
+  // A scan that runs late: one clean miss after a long gap still closes nothing.
+  const X = sr("Lateco Health", "Fractional CMO", { source: "boardC" });
+  const K = sr("Keeperco Health", "Fractional CMO", { source: "boardC" });
+  const boardC = (matched: number) => [{ source: "boardC", fetched: 40, matched }];
+  await scan([X, K], boardC(2), at(50));
+  eq("after a 20 day gap, one clean scan that misses a role closes nothing", (await scan([K], boardC(1), at(70))).closed, 0);
+  eq("  nor does a second scan the same day", (await scan([K], boardC(1), at(70) + 2 * HOUR)).closed, 0);
+  eq("  the next day's clean scan closes it", (await scan([K], boardC(1), at(71))).closed, 1);
+  const reopened = await scan([X, K], boardC(2), at(72));
+  eq("a closed role listed again reopens", [reopened.reopened, roleOf(await admin(), "Lateco Health")?.closed], [1, null]);
+}
+
+/** ROB-6: a board that really got smaller is trusted again after three weeks of the smaller count. */
+async function baseline() {
+  const T0 = Date.parse("2026-09-01T06:00:00Z");
+  const at = (d: number) => T0 + d * DAY;
+  const B = Array.from({ length: 10 }, (_, i) => sr(`Shrinkco${i} Media`, "Fractional Head of Growth", { source: "boardB" }));
+  const boardB = (matched: number) => [{ source: "boardB", fetched: 80, matched }];
+  const row = async () => (await admin()).admin?.boards?.find((b) => b.source === "boardB");
+
+  await scan(B, boardB(10), at(0));
+  eq("day 7: 4 of 10 is under half. Not clean", [(await scan(B.slice(0, 4), boardB(4), at(7))).closed, (await row())?.healthy, (await row())?.baseline], [0, false, 10]);
+  eq("day 14: still 4. Still not clean, and the baseline stays 10", [(await scan(B.slice(0, 4), boardB(4), at(14))).closed, (await row())?.baseline], [0, 10]);
+  eq("day 28: three weeks of 4. That is the board's size now", [(await scan(B.slice(0, 4), boardB(4), at(28))).closed, (await row())?.baseline], [0, 4]);
+  eq("day 35: 4 of 4 is a clean scan. The 6 it has not listed since day 0 get their first miss", [(await scan(B.slice(0, 4), boardB(4), at(35))).closed, (await row())?.healthy], [0, true]);
+  eq("day 42: the second clean miss closes them", (await scan(B.slice(0, 4), boardB(4), at(42))).closed, 6);
+
+  // Matching nothing at all never becomes the new normal.
+  const Z = Array.from({ length: 4 }, (_, i) => sr(`Zeroco${i} Media`, "Fractional Head of Growth", { source: "boardZ" }));
+  const boardZ = (matched: number) => [{ source: "boardZ", fetched: 80, matched }];
+  await scan(Z, boardZ(4), at(43));
+  let closed = 0;
+  for (const d of [50, 57, 64, 71, 78, 85, 92]) closed += (await scan([], boardZ(0), at(d))).closed;
+  const zeroRow = (await admin()).admin?.boards?.find((b) => b.source === "boardZ");
+  eq("a board that matches nothing for seven weeks closes nothing and keeps its baseline", [closed, zeroRow?.healthy, zeroRow?.baseline], [0, false, 4]);
+}
+
+/** LOGIC-10, ROB-14: the dates a role carries say what the scan knows, and old postings are not new this week. */
+async function dates() {
+  const before = (await t.buildView("tok-sal")).scan!;
+  const posted = REAL_NOW - 45 * DAY;
+  const roles = [
+    sr("Datesold Cloud", "Fractional VP Sales", { postedAt: iso(posted), function: "Sales" }),
+    sr("Datesnew Cloud", "Fractional VP Sales", { postedAt: iso(REAL_NOW - 3 * DAY), function: "Sales" }),
+    sr("Datesnone Cloud", "Fractional VP Sales", { function: "Sales" }),
+  ];
+  const board = (matched: number) => [{ source: "board", fetched: 50, matched }];
+  const r = await scan(roles, board(3));
+  const v = await admin();
+  const old = roleOf(v, "Datesold Cloud");
+  eq("a role carries the day the board says it was posted", old?.posted, dayOf(posted));
+  eq("  and the full time the scan first saw it, next to the day form", [old?.openedAt, old?.opened, old?.closedAt, old?.closed], [r.at, r.at.slice(0, 10), null, null]);
+  eq("  and when a scan last saw it", [old?.lastSeen, old?.unseen], [r.at, false]);
+  eq("a role with no posted date says so", roleOf(v, "Datesnone Cloud")?.posted, null);
+  const after = (await t.buildView("tok-sal")).scan!;
+  eq("a posting 45 days old is open, but not new this week", [after.openNow - before.openNow, after.opened7 - before.opened7, after.mine7 - before.mine7], [3, 2, 2]);
+  await t.touch("tok-sal"); // the weekly email only goes to members who have signed in
+  const list = await t.digestList(undefined, "https://post.example.com");
+  eq("the weekly email counts the same 2 new roles", list.find((x) => x.memberId === "m1")?.data.newRoles, 2);
+
+  const seedRole = roleOf(v, "Seedrole Systems");
+  eq("a role from the seed is dated from the day the seed was built, and is never unseen", [seedRole?.opened, seedRole?.openedAt, seedRole?.unseen], [seed.builtAt.slice(0, 10), seed.builtAt, false]);
+
+  // Two clean scans miss the undated role. It closes with a full time, and the times do not move after that.
+  const m1 = await scan(roles.slice(0, 2), board(2), REAL_NOW + 11 * DAY);
+  const v1 = await admin();
+  eq("a clean scan that misses a role marks it unseen and closes nothing", [m1.closed, roleOf(v1, "Datesnone Cloud")?.unseen, roleOf(v1, "Seedrole Systems")?.unseen], [0, true, false]);
+  const closeAt = REAL_NOW + 12 * DAY;
+  const m2 = await scan(roles.slice(0, 2), board(2), closeAt);
+  const gone = roleOf(await admin(), "Datesnone Cloud");
+  eq("the second one closes it, with the full time and the day", [m2.closed, gone?.closedAt, gone?.closed, gone?.unseen, gone?.cells.status?.s === "value" && gone.cells.status.v], [1, iso(closeAt), dayOf(closeAt), false, "Closed"]);
+}
+
+/** LOGIC-10: when a scan closes a role, unlocks made after its posting was last seen are paid back. */
+async function refunds() {
+  const now = REAL_NOW;
+  const board = (matched: number) => [{ source: "board", fetched: 60, matched }];
+  const A = sr("Refundco Alpha", "Fractional VP Sales");
+  const B = sr("Refundco Beta", "Fractional VP Sales");
+  const C1 = sr("Refundco Gamma", "Fractional VP Sales");
+  const C2 = sr("Refundco Gamma", "Fractional CMO");
+  const K = sr("Refundco Keeper", "Fractional VP Sales");
+  await scan([A, B, C1, C2, K], board(5), now - 20 * DAY);
+  const v = await admin();
+  const ids = (name: string, n = 0) => ({ co: companyOf(v, name)!.id, eng: roleOf(v, name, n)!.id });
+  const itemsFor = (x: { co: string; eng: string }) => [
+    { entity: "company" as const, id: x.co, field: "identity" },
+    { entity: "engagement" as const, id: x.eng, field: "role" },
+    { entity: "engagement" as const, id: x.eng, field: "posting" },
+  ];
+
+  // Sal pays for Alpha's company, role and posting. Mo pays for Beta's. Cy pays for Gamma's company only.
+  await unlockAll("tok-sal", itemsFor(ids("Refundco Alpha")));
+  await unlockAll("tok-mo", itemsFor(ids("Refundco Beta")));
+  await unlockAll("tok-cy", [{ entity: "company", id: ids("Refundco Gamma").co, field: "identity" }]);
+  const spent = { sal: 25 - (await credits("tok-sal")), mo: 25 - (await credits("tok-mo")), cy: 25 - (await credits("tok-cy")) };
+  check("each of them paid at least a credit", spent.sal >= 1 && spent.mo >= 1 && spent.cy === 1, spent);
+
+  // Alpha and Gamma's VP Sales role are gone from the board. Beta, Gamma's CMO role and the keeper stay up.
+  const still = [B, C2, K];
+  const s2 = await scan(still, board(3), now - 9 * DAY);
+  eq("one clean miss closes nothing and pays nothing back", [s2.closed, s2.refunded], [0, 0]);
+  const s3 = await scan(still, board(3), now - 8 * DAY);
+  eq("the second closes both roles and pays back the unlocks made after they were last seen", [s3.closed, s3.refunded], [2, spent.sal]);
+  eq("Sal has every credit back", await credits("tok-sal"), 25);
+  const rows = (await t.buildView("tok-sal")).ledger.filter((l) => /closed/.test(l.reason));
+  check(
+    "each one is a line in his ledger that says why, with the company",
+    rows.length === spent.sal && rows.every((l) => l.delta === 1 && l.reason === "Refund for a role that had closed" && l.company === "Refundco Alpha" && l.field === ""),
+    rows,
+  );
+  eq("Gamma still has an open role, so Cy's company unlock stands", await credits("tok-cy"), 24);
+  eq("the same scan again pays nothing twice", [(await scan(still, board(3), now - 8 * DAY)).refunded, await credits("tok-sal")], [0, 25]);
+
+  // Beta is seen again after Mo's unlock, then goes. Mo bought it while it was up: no refund.
+  await scan(still, board(3), now + DAY);
+  await scan([C2, K], board(2), now + 12 * DAY);
+  const s6 = await scan([C2, K], board(2), now + 13 * DAY);
+  eq("an unlock made before the posting was last seen is not paid back", [s6.closed, s6.refunded, await credits("tok-mo")], [1, 0, 25 - spent.mo]);
+}
+
+/** ROB-9, ROB-11: one company, one record, whatever the suffix or the script. */
+async function names() {
+  const T0 = Date.parse("2026-09-01T06:00:00Z");
+  const board = (matched: number) => [{ source: "board", fetched: 60, matched }];
+  const first = await scan([sr("Casingco Labs", "Fractional VP Sales")], board(1), T0);
+  eq("a new company is added once", [first.opened, first.companiesAdded], [1, 1]);
+  const second = await scan([sr("Casingco Labs", "Fractional VP Sales"), sr("Casingco Labs, Inc.", "Fractional CMO"), sr("CASINGCO LABS (YC W24)", "Fractional Head of Growth")], board(3), T0 + DAY);
+  eq("the same company with a legal suffix or a bracketed note is the same record", [second.opened, second.companiesAdded], [2, 0]);
+  eq("  with all three roles on it", companyOf(await admin(), "Casingco Labs")?.engagements.length, 3);
+
+  // No key from the board: the fallback key must not collapse names in other scripts into one.
+  const noKey = (company: string, title: string) => sr(company, title, { key: "" });
+  const third = await scan([noKey("Кириллица Компания", "Fractional VP Sales"), noKey("日本語の会社", "Fractional VP Sales"), noKey("شركة عربية", "Fractional VP Sales")], board(3), T0 + 2 * DAY);
+  eq("companies named in Cyrillic, Japanese and Arabic with the same title are three companies and three roles", [third.opened, third.companiesAdded], [3, 3]);
+  const accents = await scan([noKey("Société Générale Conseil", "Fractional CMO"), noKey("Societe Generale Conseil", "Fractional CMO")], board(2), T0 + 3 * DAY);
+  eq("an accented and an unaccented spelling are one company and one role", [accents.opened, accents.companiesAdded], [1, 1]);
+  const junk = await scan([noKey("!!!", "Fractional CMO"), noKey("🚀🚀", "Fractional CMO"), noKey("Realco Works", "???")], board(3), T0 + 4 * DAY);
+  eq("a company or a title with no letter or digit is skipped", [junk.opened, junk.companiesAdded], [0, 0]);
+  const host = await scan([sr("Some Other Name", "Fractional CMO", { domain: "https://WWW.CaseHost.Example.com/careers" })], board(1), T0 + 5 * DAY);
+  eq("a website in another case, with a path, matches the company that has that host", [host.opened, host.companiesAdded, companyOf(await admin(), "Oldco Freight")?.engagements.length], [1, 0, 2]);
+  const emoji = await scan([sr(`${"A".repeat(79)}🚀 Robotics`, `${"Fractional CMO ".repeat(8)}🚀`)], board(1), T0 + 6 * DAY);
+  const stored = (await admin()).companies.find((c) => c.name.startsWith("AAAA"));
+  eq("a name cut at its limit never ends in half a character", [emoji.opened, stored?.name.isWellFormed(), stored?.name.length], [1, true, 79]);
+}
+
+const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names };
+const name = process.argv[2] ?? "";
+try {
+  if (!SCENARIOS[name]) throw new Error(`unknown scenario "${name}". One of: ${Object.keys(SCENARIOS).join(", ")}`);
+  await SCENARIOS[name]();
+} catch (e) {
+  check(`scenario ${name} ran to the end`, false, String((e as Error)?.stack ?? e).slice(0, 800));
+}
+rmSync(dir, { recursive: true, force: true });
+console.log(`##RESULT ${passed} ${failed}`);
+process.exit(0);
