@@ -4036,6 +4036,89 @@ button.tp-fs-row:active {
     min-height: 44px;
   }
 }
+/* What limits the balance now: credits owed, or the day's unlocks running out before the credits. */
+.cr-limits {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.cr-limits p + p {
+  margin-top: 6px;
+}
+.cr-limit p + p {
+  margin-top: 8px;
+}
+/* Phones: How credits work folds into one closed row; the history comes first. */
+.cr-rulescard.cr-rules-fold {
+  display: block;
+}
+.cr-rules-sum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  margin: -12px 0;
+  list-style: none;
+  cursor: pointer;
+}
+.cr-rules-sum::-webkit-details-marker {
+  display: none;
+}
+.cr-rules-sum .tp-card-h {
+  margin: 0;
+}
+.cr-rules-sum svg {
+  flex: none;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.cr-rules-fold[open] .cr-rules-sum {
+  margin-bottom: 4px;
+}
+.cr-rules-fold[open] .cr-rules-sum svg {
+  transform: rotate(180deg);
+}
+.cr-rules-fold .cr-limit {
+  margin-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cr-rules-sum svg {
+    transition: none;
+  }
+}
+.cr-more {
+  margin-top: 8px;
+}
+.tp-phone .cr-more {
+  min-height: 44px;
+}
+/* Removing a reported fact asks first: the question replaces the three buttons. */
+.cr-review-ask {
+  align-items: center;
+  justify-content: flex-end;
+}
+.cr-review-q {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+@media (max-width: 767px) {
+  .tp-review-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cr-review-ask {
+    justify-content: flex-start;
+  }
+  .cr-review-q {
+    flex: 1 1 100%;
+  }
+}
 
 /* ---------- sheets (phones) ---------- */
 /* Like a native sheet: the page dims, the sheet rises from the bottom edge with a grabber. */
@@ -5375,7 +5458,7 @@ div.tp-pcard-when {
   width: 112px;
 }
 .bm-c-range {
-  width: 136px;
+  width: 148px;
 }
 .bm-c-n {
   width: 88px;
@@ -5472,15 +5555,25 @@ div.tp-pcard-when {
 .bm-n-of {
   color: var(--faint);
 }
-/* Not enough rates yet: how far along the group is, and what it still needs. */
-.bm-need {
+/* Not enough people yet: what the group still needs, over how far along it is. */
+.bm-table td.bm-need {
+  white-space: normal;
+  text-align: left;
   color: var(--muted);
 }
 .bm-need-in {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 6px;
+}
+.bm-need-t {
+  max-width: 30ch;
+  text-wrap: balance;
+}
+/* No range yet: quiet words where the range will go. */
+.bm-range-later {
+  color: var(--muted);
 }
 .tp-bm-bar {
   flex: none;
@@ -5591,7 +5684,18 @@ div.tp-pcard-when {
     color: var(--muted);
   }
   .bm-n::after {
-    content: " rates";
+    content: " people";
+  }
+  /* No range yet: the median and its count say enough on a phone, so the count moves up under it. */
+  .bm-table td.bm-range-none {
+    display: none;
+  }
+  .bm-table td.bm-range-none + .bm-n {
+    grid-row: 3;
+  }
+  /* Still counting: the line and its bar say it. The count beside them would say it twice. */
+  .bm-table td.bm-need + .bm-n {
+    display: none;
   }
   .bm-need-in {
     flex-direction: column-reverse;

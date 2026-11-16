@@ -2,18 +2,22 @@
 
 /**
  * Rate benchmarks: what fractionals charge by GTM function and client revenue. The medians
- * come from rates on seats, rates members shared for the benchmarks only, and Revenue
- * Nomad's Rate Index. A group shows numbers only with enough rates in it (RateStat.min: 5, or
- * 20 when the group includes Rate Index data), so no single rate can be picked out.
+ * come from rates on seats, rates members shared for the benchmarks only, and Revenue Nomad's
+ * Rate Index. Every figure counts people, not rates: each person counts once however many
+ * rates they have in a group. A figure shows a median once 5 different people are in it
+ * (RateStat.min, or 20 when it includes Rate Index data) and the range only at
+ * Benchmarks.rangeN (10). The server leaves the range out below that, so check for p25, never
+ * for n. Amounts arrive rounded, and the viewer's own rates are left out of what they see
+ * (RateStat.withoutYours).
  *
- * It is a real table: one row per function, and for each way of charging a median, the
- * middle half and the number of rates, right-aligned so they scan down the column. On phones
- * each row stacks into two columns, monthly and hourly.
+ * It is a real table: one row per function, and per month and per hour a median, the middle
+ * half and the number of people, right-aligned so they scan down the column. On phones each
+ * row stacks into two columns, per month and per hour.
  *
- * "Share a rate privately" adds a rate that counts in the medians and is never shown on a
- * seat or to another member. The member's own private rates are listed under the form.
+ * "Share a rate privately" adds a rate that counts in the medians and is never shown with the
+ * member's name or the seat. The member's own private rates are listed under the form.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionResult, BenchRate, BenchmarkRow, RateStat, View } from "@/lib/tableTypes";
 import { FUNCTIONS, RN_REVENUE } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
@@ -22,40 +26,61 @@ import { earnNote, useUi } from "./ui";
 import { BENCH_RATE_HELP, atTime } from "./hooks";
 import "./pages.css";
 
-const money = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(n % 1000 === 0 || n >= 20000 ? 0 : 1)}k` : `$${n}`);
+/** Whole dollars with separators ("$7,500", "$205"). Amounts arrive rounded to $250 or $5, so nothing is rounded again here. */
+const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const PRICING = ["Monthly retainer", "Hourly"] as const;
 type Pricing = (typeof PRICING)[number];
+/** Column captions. A monthly figure also holds hourly rates times the hours, so it is "per month", not "retainer". */
+const CAP = { m: "Per month", h: "Per hour" } as const;
 
-/** The three cells for one way of charging: median, middle half, number of rates. `side` places them on phones. */
-function Stat({ s, side, cap }: { s: RateStat; side: "m" | "h"; cap: string }) {
+/** What a figure below its floor still needs, in people. */
+function needText(s: RateStat): string {
+  const more = Math.max(1, s.min - s.n);
+  if (s.indexed) return `${more} more to reach the ${s.min} our survey promised`;
+  return s.n === 0 ? `Needs rates from ${s.min} people` : `Needs rates from ${more} more ${more === 1 ? "person" : "people"}`;
+}
+
+/** The three cells for one way of charging: median, middle half, people. `side` places them on phones. */
+function Stat({ s, side, rangeN }: { s: RateStat; side: "m" | "h"; rangeN: number }) {
+  const cap = CAP[side];
+  const yours = s.withoutYours ? "Your own rate is left out of this figure." : undefined;
   if (s.median === undefined) {
-    const need = Math.max(1, s.min - s.n);
+    const label = `${s.n} of ${s.min} people have shared a rate`;
     return (
       <>
         <td colSpan={2} className={`bm-${side} bm-need`} data-cap={cap}>
           <span className="bm-need-in">
-            <span className="tp-bm-bar" aria-hidden>
+            <span className="tp-bm-bar" role="img" aria-label={label}>
               <span style={{ width: `${Math.min(100, (s.n / s.min) * 100)}%` }} />
             </span>
-            <span className="num">{s.n === 0 ? `Needs ${s.min} rates` : `Needs ${need} more`}</span>
+            <span className="bm-need-t">{needText(s)}</span>
           </span>
         </td>
-        <td className={`num bm-${side} bm-n`}>
+        <td className={`num bm-${side} bm-n`} title={yours}>
           {s.n}
           <span className="bm-n-of"> of {s.min}</span>
         </td>
       </>
     );
   }
+  const range = s.p25 !== undefined && s.p75 !== undefined;
   return (
     <>
-      <td className={`bm-${side} bm-med`} data-cap={cap}>
+      <td className={`bm-${side} bm-med`} data-cap={cap} title={yours}>
         <Num>{money(s.median)}</Num>
       </td>
-      <td className={`bm-${side} bm-range`}>
-        <Num>{`${money(s.p25!)}–${money(s.p75!)}`}</Num>
+      <td className={`bm-${side} bm-range${range ? "" : " bm-range-none"}`}>
+        {range ? (
+          <Num>{`${money(s.p25!)}–${money(s.p75!)}`}</Num>
+        ) : (
+          <span className="bm-range-later" title={`The range shows once ${rangeN} people have a rate in this group.`}>
+            At {rangeN} people
+          </span>
+        )}
       </td>
-      <td className={`num bm-${side} bm-n`}>{s.n}</td>
+      <td className={`num bm-${side} bm-n`} title={yours}>
+        {s.n}
+      </td>
     </>
   );
 }
@@ -80,12 +105,13 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
     setErr(null);
     setBusy(true);
     const r = await post<ActionResult>({ action: { type: "benchRate", function: fn, pricing, rate: rate.trim(), ...(revenue ? { revenue } : {}) } });
+    // The server's refusals (5 a day, 3 not tied to a seat, a rate it can't read) are said as they come.
     if (r.error) {
       setBusy(false);
       return setErr(r.error);
     }
     setRate("");
-    toast(r.message || "Added to the benchmarks. Only you can see it, in the list below.");
+    toast(r.message || "Added to the benchmarks. Your rate is never shown with your name or the seat.");
     await refresh();
     setBusy(false);
   };
@@ -100,7 +126,8 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
     >
       <h2 className="tp-card-h">Share a rate privately</h2>
       <p className="tp-bm-share-lead">
-        Add a rate to the benchmarks without putting it on a seat. It counts in the medians and earns you 1 credit. No member sees it, and it is never shown with your name or a company.
+        Add a rate to the benchmarks without putting it on a seat. It counts in the medians and earns 1 credit. It is never shown with your name or the seat. Your rate joins a
+        group&apos;s number once 5 people have shared one privately in that group.
       </p>
       <div className="tp-bm-fields">
         <div className="tp-form-row">
@@ -136,6 +163,7 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
             id="tp-bm-rate"
             className="input"
             autoComplete="off"
+            maxLength={60}
             placeholder={pricing === "Hourly" ? "$150/hr" : "$8k/mo"}
             value={rate}
             aria-invalid={!!err}
@@ -167,12 +195,65 @@ function ShareRate({ refresh }: { refresh: () => Promise<void> }) {
           {busy ? "Sharing" : "Share privately"}
         </button>
         <span className="tp-bm-earn">
-          {capped
-            ? `You've earned today's ${ui.me.earnCap} credits, so this one earns nothing. It still counts in the medians. You can earn again ${atTime(ui.me.earnResetsAt)}.`
-            : "Earns 1 credit."}
+          {capped ? `You've earned ${ui.me.earnCap} today, so this one earns no credit. You can earn again ${atTime(ui.me.earnResetsAt)}.` : "Earns 1 credit."}
+          {ui.me.invitePending && " Your invite bonus comes with your first fact on a record."}
         </span>
       </div>
     </form>
+  );
+}
+
+/** One of the member's private rates, with a confirm before it goes (it takes its credit with it). */
+function MyRate({ r, co, onRemove }: { r: BenchRate; co: string | null; onRemove: (id: string) => void }) {
+  const [asking, setAsking] = useState(false);
+  const keepRef = useRef<HTMLButtonElement>(null);
+  const removeRef = useRef<HTMLButtonElement>(null);
+  const wasAsking = useRef(false);
+  useEffect(() => {
+    // Into the question when it opens, back to Remove when it closes.
+    if (asking) keepRef.current?.focus();
+    else if (wasAsking.current) removeRef.current?.focus();
+    wasAsking.current = asking;
+  }, [asking]);
+  const per = r.kind === "hourly" ? "an hour" : "a month";
+  const amount = `${money(r.amount)} ${per}`;
+  return (
+    <li className={`tp-bm-mine-row${asking ? " asking" : ""}`}>
+      <span className="tp-bm-mine-amt">
+        <Num>{money(r.amount)}</Num> {per}
+      </span>
+      <span className="tp-bm-mine-what">
+        {r.function}
+        {co && <span className="muted">, your seat at {co}</span>}
+      </span>
+      {asking ? (
+        <span
+          className="tp-bm-mine-ask"
+          role="group"
+          aria-label={`Remove your ${r.function} rate of ${amount}?`}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              setAsking(false);
+            }
+          }}
+        >
+          <span className="tp-bm-mine-q">Removing this rate takes back the 1 credit it earned.</span>
+          <span className="tp-bm-mine-acts">
+            <button type="button" className="btn btn-sm tp-btn-red" onClick={() => onRemove(r.id)}>
+              Remove it
+            </button>
+            <button ref={keepRef} type="button" className="btn btn-sm btn-ghost" onClick={() => setAsking(false)}>
+              Keep it
+            </button>
+          </span>
+        </span>
+      ) : (
+        <button ref={removeRef} type="button" className="btn btn-sm btn-ghost tp-btn-red" onClick={() => setAsking(true)} aria-label={`Remove your ${r.function} rate of ${amount}`}>
+          Remove
+        </button>
+      )}
+    </li>
   );
 }
 
@@ -201,27 +282,11 @@ function MyRates({ rates, view }: { rates: BenchRate[]; view: View }) {
   return (
     <div className="tp-bm-mine">
       <h3 className="tp-bm-mine-h">Rates you shared privately</h3>
-      <p className="tp-bm-mine-p">Only you can see this list. Remove a rate and it leaves the medians, and the credit it earned comes off your balance.</p>
+      <p className="tp-bm-mine-p">Only you can see this list. A rate you remove leaves the medians.</p>
       <ul className="tp-bm-mine-list">
-        {list.map((r) => {
-          const co = r.engagementId ? seatAt.get(r.engagementId) : null;
-          const per = r.kind === "hourly" ? "an hour" : "a month";
-          const amount = `${money(r.amount)} ${per}`;
-          return (
-            <li key={r.id} className="tp-bm-mine-row">
-              <span className="tp-bm-mine-amt">
-                <Num>{money(r.amount)}</Num> {per}
-              </span>
-              <span className="tp-bm-mine-what">
-                {r.function}
-                {co && <span className="muted">, your seat at {co}</span>}
-              </span>
-              <button type="button" className="btn btn-sm btn-ghost tp-btn-red" onClick={() => void remove(r.id)} aria-label={`Remove your ${r.function} rate of ${amount}`}>
-                Remove
-              </button>
-            </li>
-          );
-        })}
+        {list.map((r) => (
+          <MyRate key={r.id} r={r} co={r.engagementId ? seatAt.get(r.engagementId) ?? null : null} onRemove={(id) => void remove(id)} />
+        ))}
       </ul>
     </div>
   );
@@ -232,11 +297,14 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
   const [band, setBand] = useState("All");
   const b = view.benchmarks;
   if (!b) return null;
+  const rangeN = b.rangeN ?? 10;
   const mine = ui.me.function;
   // Every function the server sends, the member's own first.
   const rows: BenchmarkRow[] = b.rows.filter((r) => r.revenue === band).sort((x, y) => (x.function === mine ? -1 : y.function === mine ? 1 : 0));
-  // The higher floor, for groups that include Rate Index data.
-  const indexMin = Math.max(0, ...rows.filter((r) => r.indexed).flatMap((r) => [r.monthly.min, r.hourly.min]));
+  const stats = rows.flatMap((r) => [r.monthly, r.hourly]);
+  // Notes that apply to what is on screen.
+  const indexShown = stats.some((s) => s.indexed && s.median !== undefined);
+  const withoutYours = stats.some((s) => s.withoutYours);
   return (
     <div className="tp-page bm-page">
       <button type="button" className="tp-back" onClick={onBack}>
@@ -245,7 +313,9 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
       <h1 className="tp-page-h">Rate benchmarks</h1>
       <p className="tp-bm-lead">
         What fractionals charge, by function and by the client&apos;s revenue.{" "}
-        {b.total ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} so far, from seats, rates shared privately and Revenue Nomad's Rate Index.` : "No rates yet. Yours can be the first."}
+        {b.total
+          ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} on file so far, from seats, rates members shared privately and Revenue Nomad's Rate Index. Each person counts once in a figure, however many rates they shared.`
+          : "No rates yet. Yours can be the first."}
       </p>
       <div className="tp-bm-tools">
         <span className="tp-flabel" id="tp-bm-band">
@@ -276,10 +346,10 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
                 Function
               </th>
               <th scope="colgroup" colSpan={3} className="bm-m">
-                <span className="bm-span">Monthly retainer</span>
+                <span className="bm-span">{CAP.m}</span>
               </th>
               <th scope="colgroup" colSpan={3} className="bm-h">
-                <span className="bm-span">Hourly</span>
+                <span className="bm-span">{CAP.h}</span>
               </th>
             </tr>
             <tr className="bm-cols">
@@ -287,11 +357,11 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
                 <th key={`${side}1`} scope="col" className={`bm-${side}`}>
                   Median
                 </th>,
-                <th key={`${side}2`} scope="col" className={`bm-${side}`} title="Half of the rates in the group fall in this range">
+                <th key={`${side}2`} scope="col" className={`bm-${side}`} title="The middle half of people in the group charge within this range">
                   Middle half
                 </th>,
-                <th key={`${side}3`} scope="col" className={`bm-${side}`}>
-                  Rates
+                <th key={`${side}3`} scope="col" className={`bm-${side}`} title="Different people with a rate in this figure">
+                  People
                 </th>,
               ])}
             </tr>
@@ -303,22 +373,27 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
                   <span className="bm-fn-name">{r.function}</span>
                   {r.function === mine && <span className="chip bm-chip bm-chip-mine">Your function</span>}
                   {r.indexed && (
-                    <span className="chip bm-chip" title="Includes Revenue Nomad's Rate Index, our survey and contract data">
+                    <span className="chip bm-chip" title="Includes Revenue Nomad's Rate Index, our survey and contract data. Figures with it show at 20 people.">
                       Rate Index
                     </span>
                   )}
                 </th>
-                <Stat s={r.monthly} side="m" cap="Monthly retainer" />
-                <Stat s={r.hourly} side="h" cap="Hourly" />
+                <Stat s={r.monthly} side="m" rangeN={rangeN} />
+                <Stat s={r.hourly} side="h" rangeN={rangeN} />
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="tp-bm-note">
-        A group shows its numbers once it has {b.minN} rates{indexMin > b.minN ? `, or ${indexMin} if it includes Revenue Nomad's Rate Index survey` : ""}, so no single rate can be picked out. The middle half is
-        the range that half of the rates fall in.
-      </p>
+      <div className="tp-bm-note">
+        <p>
+          A group shows a median once {b.minN} different people have a rate in it, and the range at {rangeN}. The middle half is where the middle half of them fall. Amounts are rounded to the
+          nearest $250 a month or $5 an hour, and to the nearest $1,000 or $25 while fewer than {rangeN} people are in a figure.
+        </p>
+        {indexShown && <p>Figures marked Rate Index include our survey and contract data. The survey promised groups of 20, so those show at 20.</p>}
+        <p>Where we know the hours, an hourly rate also counts in the monthly figures (the rate times the hours a month), and a monthly retainer counts in the hourly ones.</p>
+        {withoutYours && <p>Your rate is left out of what you see here, so nothing you share can move a number you read. Other members see it in the figure.</p>}
+      </div>
 
       <section className="tp-card tp-bm-sharecard">
         <ShareRate refresh={refresh} />

@@ -9,7 +9,7 @@
  */
 import type { Cell, CompanyRec, EngagementRec, Me, PersonRec } from "../lib/tableTypes";
 import { ALL_FIELDS, GROUPS, HIDDEN_COMPANY } from "../lib/tableFields";
-import { ledgerLine } from "../app/post/ledger";
+import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
@@ -269,7 +269,11 @@ const unnamed = ALL_FIELDS.filter(({ f }) => !f.identity && !f.system).filter(({
 check("every field a member can add reads as a sentence in the history", unnamed.length === 0, unnamed.map((x) => `${x.entity}.${x.f.key}`));
 check("a person's LinkedIn keeps its capitals", ledgerLine(row("unlock", "Person LinkedIn", -1), 25).text === "Unlocked a person's LinkedIn at Acme" && fieldText("Person LinkedIn") === "person LinkedIn" && fieldText("HQ") === "HQ");
 check("a private rate never names a company", ledgerLine(row("fill", "Private rate", 1, ""), 25).text === "Shared a rate privately" && ledgerLine(row("Removed", "Private rate", -1, ""), 25).text === "Removed a rate you shared privately");
-check("unlocking a hidden company says so", ledgerLine(row("unlock", HIDDEN_COMPANY, -1), 25).text === "Unlocked a hidden company, Acme");
+// A hidden company is one purchase with its open role, and the company leads so a cut-off line keeps it.
+check(
+  "unlocking a hidden company says so",
+  ledgerLine(row("unlock", HIDDEN_COMPANY, -1), 25).text === "Unlocked Acme and its open role" && ledgerLine(row("unlock", HIDDEN_COMPANY, -1, HIDDEN_COMPANY), 25).text === "Unlocked a hidden company and its open role",
+);
 check("an add past the limit explains its 0", /No credit/.test(ledgerLine(row("fill", "Role", 0), 25).note ?? "") && ledgerLine(row("fill", "Role", 1), 25).note === undefined);
 check(
   "refunds, reversals, confirmations and invite bonuses read as sentences",
@@ -279,6 +283,21 @@ check(
     ledgerLine(row("referral", "Invite bonus", 10, "Dana"), 25).text === "Invite bonus, with Dana",
 );
 check("a reason the server wrote out in words is shown as it is", ledgerLine(row("Topped up to 0 when starter credits changed", "", 3, ""), 25).text === "Topped up to 0 when starter credits changed");
+check("a refund for a role that had closed names the company", ledgerLine(row("Refund for a role that had closed", ""), 25).text === "Refund for a role that had closed at Acme");
+check("a fact the member took back says so", ledgerLine(row("retract", "Role", -1), 25).text === "Took back the role at Acme");
+check(
+  "a 0 on a company pick list names that limit, other 0s the daily one",
+  /Only 5 answers like this/.test(ledgerLine(row("fill", "Industry", 0), 25).note ?? "") && ledgerLine(row("fill", "HQ", 0), 25).note === "No credit. You had already earned 25 today.",
+);
+{
+  const t = Date.parse("2026-11-16T12:00:00.000Z");
+  const unlocks = (n: number) => Array.from({ length: n }, () => row("unlock", "Role", -1));
+  check("no unlock line while the balance runs out first", unlockLimitLine({ credits: 5, unlocksLeft: 20 }, unlocks(5), t) === null && unlockLimitLine({ credits: 5, unlocksLeft: null }, [], t) === null);
+  check("day one: the limit binds and says so", unlockLimitLine({ credits: 7, unlocksLeft: 3 }, unlocks(22), t) === "You can unlock 3 more facts today. New accounts can unlock 25 facts on day one.");
+  check("after day one: no day-one line", unlockLimitLine({ credits: 30, unlocksLeft: 2 }, unlocks(98), t) === "You can unlock 2 more facts today.");
+  check("at the limit with credits left", /^You've used today's unlocks\. Your credits are here tomorrow\./.test(unlockLimitLine({ credits: 4, unlocksLeft: 0 }, unlocks(25), t) ?? ""));
+  check("owed reads in credits and clears with adds", owedLine(0) === null && owedLine(undefined) === null && owedLine(1) === "You owe 1 credit. A fact you added was removed after you spent what it earned. The next fact you add clears it." && /The next 3 facts you add clear it\.$/.test(owedLine(3) ?? ""));
+}
 
 /* ---------- when earning opens again ---------- */
 
