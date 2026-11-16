@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { promisify } from "util";
-import { gzip } from "zlib";
+import { brotliCompress, constants as zc, gzip } from "zlib";
 import {
   ActionError, buildView, exportState, inviterName, isAdmin, joinMember, maybeScan, memberByEmail, memberForToken, perform, searchMembers, touch, type Action,
 } from "@/lib/table";
@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 const COOKIE = "rn_table";
 const gz = promisify(gzip);
+const br = promisify(brotliCompress);
 /** The largest request body a POST may carry. The biggest real one (Add with ten people) is a few KB. */
 const MAX_BODY = 64 * 1024;
 
@@ -41,15 +42,40 @@ const SLOW = "That's a lot in one minute. Give it a moment, then try again.";
 const SIGNED_OUT = "You're signed out. Sign in again to add, confirm or unlock.";
 
 const JSON_HEADERS = { "content-type": "application/json", "cache-control": "no-store", vary: "Accept-Encoding" };
-const wantsGzip = (req: NextRequest) => /\bgzip\b/.test(req.headers.get("accept-encoding") ?? "");
 
-/** JSON, gzipped when the client accepts it (Next doesn't compress route handlers). */
+/** How an answer is compressed. Brotli when the client takes it (every current browser does over https), else gzip. */
+type Enc = "br" | "gzip";
+/** The encoding to answer in, from Accept-Encoding (a coding with q=0 is refused). Null: send it as it is. */
+function encodingFor(req: NextRequest): Enc | null {
+  const ok = new Set<string>();
+  for (const part of (req.headers.get("accept-encoding") ?? "").toLowerCase().split(",")) {
+    const [name, ...params] = part.trim().split(";");
+    const q = params.map((p) => p.trim()).find((p) => p.startsWith("q="));
+    if (name && !(q && Number(q.slice(2)) === 0)) ok.add(name.trim());
+  }
+  return ok.has("br") ? "br" : ok.has("gzip") ? "gzip" : null;
+}
+/** Smaller than this is sent as it is: compressing saves nothing worth the time. */
+const MIN_COMPRESS = 2048;
+/**
+ * Brotli quality 5: the member's table (about 1 MB of JSON) comes to about a fifth less than gzip
+ * level 6 in about the same time. Higher qualities save a few more KB for several times the CPU.
+ */
+const compress = async (body: string, enc: Enc): Promise<Uint8Array<ArrayBuffer>> =>
+  new Uint8Array(
+    enc === "br"
+      ? await br(body, {
+          params: { [zc.BROTLI_PARAM_QUALITY]: 5, [zc.BROTLI_PARAM_MODE]: zc.BROTLI_MODE_TEXT, [zc.BROTLI_PARAM_SIZE_HINT]: Buffer.byteLength(body) },
+        })
+      : await gz(body, { level: 6 }),
+  );
+
+/** JSON, compressed when the client accepts it (Next doesn't compress route handlers). */
 async function sendJson(req: NextRequest, data: unknown, extra: Record<string, string> = {}) {
   const body = JSON.stringify(data);
   const headers: Record<string, string> = { ...JSON_HEADERS, ...extra };
-  if (body.length > 2048 && wantsGzip(req)) {
-    return new NextResponse(new Uint8Array(await gz(body, { level: 6 })), { headers: { ...headers, "content-encoding": "gzip" } });
-  }
+  const enc = encodingFor(req);
+  if (enc && body.length > MIN_COMPRESS) return new NextResponse(await compress(body, enc), { headers: { ...headers, "content-encoding": enc } });
   return new NextResponse(body, { headers });
 }
 
@@ -57,15 +83,29 @@ async function sendJson(req: NextRequest, data: unknown, extra: Record<string, s
  * The table view, built, turned into JSON and compressed inside the view queue (lib/viewQueue.ts):
  * at most 4 at once, the rest wait, and past 50 waiting the answer is 503 with Retry-After. One
  * member's requests share one build while the state has not changed under it, so a tab that
- * fires a burst of loads costs one.
+ * fires a burst of loads costs one. It is compressed in the encoding the first request asked for;
+ * a request that joins it asking for another encoding compresses its own copy once.
  */
-type Built = { body: string; gzipped: Uint8Array<ArrayBuffer> | null };
+type Built = { body: string; packed: Map<Enc, Promise<Uint8Array<ArrayBuffer>>> };
 const viewFlights = new Map<string, { p: Promise<Built>; started: number | null }>();
-const builtView = (token: string | null) =>
+const builtView = (token: string | null, enc: Enc | null) =>
   shared(viewFlights, token ?? "", stateVersion, async (): Promise<Built> => {
     const body = JSON.stringify(await buildView(token));
-    return { body, gzipped: body.length > 2048 ? new Uint8Array(await gz(body, { level: 6 })) : null };
+    const built: Built = { body, packed: new Map() };
+    if (enc && body.length > MIN_COMPRESS) {
+      const p = compress(body, enc);
+      built.packed.set(enc, p);
+      await p;
+    }
+    return built;
   });
+/** The view as an answer, in the encoding this request asked for. */
+async function viewAnswer(view: Built, enc: Enc | null): Promise<NextResponse> {
+  if (!enc || view.body.length <= MIN_COMPRESS) return new NextResponse(view.body, { headers: JSON_HEADERS });
+  let p = view.packed.get(enc);
+  if (!p) view.packed.set(enc, (p = compress(view.body, enc)));
+  return new NextResponse(await p, { headers: { ...JSON_HEADERS, "content-encoding": enc } });
+}
 
 /**
  * GET              the table as the signed-in member sees it (signed out: counts only).
@@ -104,10 +144,8 @@ export const GET = guarded(async (req: NextRequest) => {
   // weekly scan starts in the background when one is due (only with RN_SCAN=1).
   if (token) void touch(token, ip).catch((e) => console.error("last seen not saved", e));
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
-  const view = await builtView(token);
-  return view.gzipped && wantsGzip(req)
-    ? new NextResponse(view.gzipped, { headers: { ...JSON_HEADERS, "content-encoding": "gzip" } })
-    : new NextResponse(view.body, { headers: JSON_HEADERS });
+  const enc = encodingFor(req);
+  return viewAnswer(await builtView(token, enc), enc);
 });
 
 /** The request body as JSON, or null when it is not JSON. "too large" past MAX_BODY, whatever Content-Length says. */

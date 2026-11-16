@@ -877,8 +877,8 @@ else {
       const still = await call("POST", "/api/table", { token: me, body: { action: { type: "nope" } }, ipAddr: junkIp });
       eq("a member behind that address is not held up by it", [still.status, still.json?.error], [400, "That didn't go through. Refresh the page and try again."]);
 
-      // Names cut on a whole character.
-      const joined = await call("POST", "/api/table", { body: { join: { name: `${"J".repeat(78)} 🚀🚀`, email: `robust-${Date.now().toString(36)}@example.com` } } });
+      // Names cut on a whole character. (A name is words of letters, so the character pair is a letter outside the basic plane: 76 + 1 + 2 + 2 units, cut at 80 inside the second.)
+      const joined = await call("POST", "/api/table", { body: { join: { name: `${"J".repeat(76)} 𠀀𠀀`, email: `robust-${Date.now().toString(36)}@example.com` } } });
       const cookie = (joined.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean);
       const joinedView = cookie ? await call("GET", "/api/table", { token: cookie }) : null;
       check("a joined name cut at 80 never ends in half a character", !!joinedView && well(joinedView.json?.me?.name) && joinedView.json.me.name.length <= 80, joinedView?.json?.me?.name ?? joined.json);

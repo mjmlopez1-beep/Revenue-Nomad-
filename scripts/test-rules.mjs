@@ -18,7 +18,8 @@
  *   STARTER        expected starter credits (default 25)
  *   CRON_SECRET    the server's RN_CRON_SECRET (default qa-cron)
  *   ONLY           comma-separated sections to run (default all): role hidden bundle status seat
- *                  report keep rate admin price twin repair closed
+ *                  report keep rate admin price twin repair dates retract company closed
+ *   SUPPORT_EMAIL, INTRO_EMAIL   the server's RN_SUPPORT_EMAIL and RN_INTRO_EMAIL (default: not set)
  */
 import { readFileSync } from "node:fs";
 
@@ -80,20 +81,20 @@ class Client {
   }
 }
 
-async function join(name, { email, headers } = {}) {
+async function join(name, { email, headers, ref } = {}) {
   const ipAddr = nextIp();
   const r = await call("POST", "/api/table", {
     ipAddr,
     headers,
-    body: { join: { name, email: email ?? `qa+${RUN}-${name.toLowerCase().replace(/\W+/g, "")}-${Math.random().toString(36).slice(2, 7)}@example.com` } },
+    body: { join: { name, email: email ?? `qa+${RUN}-${name.toLowerCase().replace(/\W+/g, "")}-${Math.random().toString(36).slice(2, 7)}@example.com`, ...(ref ? { ref } : {}) } },
   });
   const token = (r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean) ?? null;
   return { r, client: token ? new Client(name, ipAddr, token) : null };
 }
 
-/** A new member with a name nobody else in this run has (names link seats, so they must be unique). */
-async function member(name) {
-  const { r, client } = await join(name);
+/** A new member with a name nobody else in this run has (names link seats, so they must be unique). `ref`: an invite code. */
+async function member(name, { ref } = {}) {
+  const { r, client } = await join(name, { ref });
   if (!client) throw new Error(`join ${name} failed: ${r.status} ${r.text.slice(0, 200)}`);
   await client.act({ type: "profile", function: "Sales", goal: "friendly" });
   return client;
@@ -910,6 +911,239 @@ section("repair", async () => {
   check("after This isn't me, the rate the same member put on that seat is hidden for everyone too (N7)", inv.status === 200 && tNot.status === 200 && third?.cells.operator?.s === "reported" && third.cells.rate?.s === "reported" && buy.json?.error === "Nothing here is locked, so no credit was spent.", [inv.json?.error, tNot.json?.error, third?.cells.operator?.s, third?.cells.rate?.s, buy.json]);
 });
 
+/* ---------- round 5 ---------- */
+
+const OPEN_NO_DATES = "This role is still open, so it has no start or end yet.";
+const OPEN_NO_HIRE = "This role is still open, so nobody has been hired for it yet.";
+const OPEN_NO_END = "This role is still open, so it has no end yet.";
+const END_BEFORE_START = "The end month can't be before the start.";
+const ACTIVE_NO_END = "An active seat has no end month yet. Pick Ongoing, or change the status to Ended.";
+const ENDED_NOT_ACTIVE = "This seat has an end month, so it isn't active. Pick Ended, or change the end month.";
+
+// FIRST-4, DESK-10: a seat can't say what can't be true, and a guessed date on an open role earns nothing.
+section("dates", async () => {
+  if (!(await canScan())) return skip("date checks", NEED_SCAN);
+  const adm = await admin();
+  if (!adm) return skip("date checks", "no admin account (set ADMIN_TOKEN)");
+  const board = `qa-rules-dates-${RUN}`;
+  const coName = `Qa Dates Co ${RUN}`;
+  await scanPost({ roles: [posting("dates", coName, "Fractional Head of Growth", board)], sources: [{ source: board, fetched: 10, matched: 1 }] });
+  const co = companyNamed(await adm.view(), coName);
+  const eid = co?.engagements[0]?.id;
+  const D = await member("Dee Dates");
+  await D.act({ type: "unlock", entity: "company", id: co.id, field: "identity" });
+  const fill = (who, id, field, value) => who.act({ type: "fill", entity: "engagement", id, field, value });
+  for (const [field, value, want] of [
+    ["start", "2025-01", OPEN_NO_DATES],
+    ["end", "2025-06", OPEN_NO_DATES],
+    ["end", "Ongoing", OPEN_NO_DATES],
+    ["reason", "Build the function from scratch", OPEN_NO_HIRE],
+    ["sourced", "Referral", OPEN_NO_HIRE],
+  ]) {
+    const r = await fill(D, eid, field, value);
+    check(`an open role nobody holds refuses ${field} ${value}`, r.status === 400 && r.json?.error === want, r.json);
+  }
+  const viaAdd = await D.act({ type: "add", company: coName, engagementId: eid, engagementFields: { start: "2025-01", hours: "10" } });
+  check("the same through Add, and nothing else in that Add is saved", viaAdd.status === 400 && viaAdd.json?.error === OPEN_NO_DATES && engOf(await D.view(), eid)?.cells.hours?.s === "empty", viaAdd.json);
+  const rate = await fill(D, eid, "rate", "$150/hr");
+  const hours = await fill(D, eid, "hours", "20");
+  check("a posted rate and posted hours still go in on an open role", rate.status === 200 && hours.status === 200, [rate.json, hours.json]);
+  check("refused guesses earned nothing", (await D.view()).me.credits === STARTER - 1 + 2, (await D.view()).me.credits);
+
+  // Any seat: the end can't come before the start.
+  const h = host(await D.view());
+  const seat = (fields) => D.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", ...fields } });
+  const backwards = await seat({ role: `Fractional Growth Lead ${RUN}`, start: "2025-03", end: "2023-01" });
+  check("an Add with the end before the start is refused", backwards.status === 400 && backwards.json?.error === END_BEFORE_START, backwards.json);
+  const sameYear = await seat({ role: `Growth Advisor ${RUN}`, start: "2024-05", end: "2024" });
+  const sy = engOf(await D.view(), sameYear.json?.id);
+  check("an end given as a year compares by the year", sameYear.status === 200 && sy?.cells.end?.v === "2024", sameYear.json);
+  check("a dated end with no status marks the seat Ended", sy?.cells.status?.v === "Ended", sy?.cells.status);
+  const statusEarned = (await D.view()).ledger.filter((l) => l.reason === "fill" && l.field === "Status").length;
+  check("the Ended it sets earns no extra credit", statusEarned === 0, statusEarned);
+
+  // DESK-10: an active seat has no dated end, and a seat with a dated end isn't active.
+  const active = await seat({ role: `Interim Growth Lead ${RUN}`, status: "Active", start: "2024-01" });
+  const aid = active.json?.id;
+  const dated = await fill(D, aid, "end", "2024-09");
+  check("after Active, a dated end is refused", dated.status === 400 && dated.json?.error === ACTIVE_NO_END, dated.json);
+  const both = await seat({ role: `Growth Consultant ${RUN}`, status: "Active", end: "2024-09" });
+  check("Active and a dated end in one Add are refused", both.status === 400 && both.json?.error === ACTIVE_NO_END, both.json);
+  const ongoing = await fill(D, aid, "end", "Ongoing");
+  check("after Active, Ongoing goes in", ongoing.status === 200, ongoing.json);
+
+  const later = await seat({ role: `Growth Partner ${RUN}`, start: "2023-02" });
+  const lid = later.json?.id;
+  const ended = await fill(D, lid, "end", "2024-02");
+  check(
+    "a dated end on a seat with no status sets it to Ended, and says so in the cells",
+    ended.status === 200 && ended.json?.cells?.some((c) => c.field === "status" && c.cell?.v === "Ended"),
+    ended.json,
+  );
+  const moved = await fill(D, lid, "start", "2024-06");
+  check("moving your own start past the end you gave is refused", moved.status === 400 && moved.json?.error === END_BEFORE_START, moved.json);
+  const nowActive = await fill(D, lid, "status", "Active");
+  check("calling a seat with a dated end Active is refused", nowActive.status === 400 && nowActive.json?.error === ENDED_NOT_ACTIVE, nowActive.json);
+  // FIRST-15: reasons that fit a seat outside sales.
+  const why1 = await fill(D, lid, "reason", "Cover while hiring full-time");
+  const why2 = await fill(D, aid, "reason", "Build the function from scratch");
+  check("the two hire reasons for any function go in", why1.status === 200 && why2.status === 200, [why1.json, why2.json]);
+
+  // A locked end is never compared, so a refusal can't be used to guess it.
+  const O = await member("Ola Othermember");
+  const noStart = await D.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", role: `Growth Lead Two ${RUN}`, end: "2024-02" } });
+  const o = engOf(await O.view(), noStart.json?.id);
+  const guess = await fill(O, noStart.json?.id, "start", "2025-01");
+  check("another member's start is not checked against an end they can't see", o?.cells.end?.s === "locked" && guess.status === 200, [o?.cells.end?.s, guess.json]);
+
+  // A role somebody holds can have its dates.
+  const held = await D.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", role: `Growth Head ${RUN}`, status: "Open role", operator: "Pat Holder" } });
+  const hs = await fill(D, held.json?.id, "start", "2025-01");
+  const he = await fill(D, held.json?.id, "end", "2025-02");
+  check("an open role with a seat holder takes a start, but not an end while it is open", hs.status === 200 && he.status === 400 && he.json?.error === OPEN_NO_END, [hs.json, he.json]);
+});
+
+// Decision 10: Undo. A member takes back a fact they added while nobody has paid for it or confirmed it.
+section("retract", async () => {
+  const R = await member("Rio Retract");
+  const O = await member("Oz Observer");
+  const back = (who, f) => who.act({ type: "retract", entity: f.entity, id: f.id, field: f.field });
+  const f1 = freeFill(await R.view());
+  const add = await R.act(f1);
+  const r1 = await back(R, f1);
+  const v1 = await R.view();
+  check("taking back a fact you just added works", add.status === 200 && r1.status === 200 && /^Took back the .+\. The credit it earned came off your balance\.$/.test(r1.json?.message ?? ""), r1.json);
+  check("the credit comes back off, and the field is open again", r1.json?.me?.credits === STARTER && r1.json?.cells?.[0]?.cell?.s === "empty" && findCell(v1, f1.entity, f1.id, f1.field)?.s === "empty", [r1.json?.me, r1.json?.cells]);
+  check("it no longer counts toward today's earning or as a fact you added", v1.me.earned24h === 0 && v1.me.added === 0, [v1.me.earned24h, v1.me.added]);
+  check("the credit history says what happened", v1.ledger[0]?.reason?.startsWith("Took back the ") && v1.ledger[0].delta === -1 && !!v1.ledger[0].company, v1.ledger[0]);
+  const twice = await back(R, f1);
+  check("there is nothing left to take back", twice.status === 400 && twice.json?.error === "There's nothing of yours here to take back.", twice.json);
+  const again = await R.act(f1);
+  check("the field can be added again, and earns again", again.status === 200 && again.json?.me?.credits === STARTER + 1, again.json);
+
+  // Someone confirmed it: it stays.
+  const conf = await O.act({ type: "verify", entity: f1.entity, id: f1.id, field: f1.field });
+  const r2 = await back(R, f1);
+  check("a confirmed fact can't be taken back", conf.status === 200 && r2.status === 400 && r2.json?.error === "Someone already confirmed this, so it stays. You can still edit it.", r2.json);
+
+  // Someone paid for it: it stays.
+  const rv = await R.view();
+  const h = host(rv);
+  // A seat from our records with a function and no role, at a company with no open role.
+  const e =
+    rv.companies
+      .filter((c) => !c.hidden && c.friendly.open === 0 && !/^Qa /.test(c.name))
+      .flatMap((c) => c.engagements)
+      .find((x) => x.cells.role?.s === "empty" && x.cells.function?.s === "value" && !x.cells.function.system && !x.yours) ?? null;
+  const seat = await R.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Marketing", role: `Fractional CMO ${RUN}` } });
+  const sid = seat.json?.id;
+  const un = await O.act({ type: "unlock", entity: "engagement", id: sid, field: "role" });
+  const r3 = await back(R, { entity: "engagement", id: sid, field: "role" });
+  check("a fact another member unlocked can't be taken back", un.status === 200 && r3.status === 400 && r3.json?.error === "Someone already unlocked this, so it stays. You can still edit it.", [un.json?.message, r3.json]);
+
+  // A role takes the function it filled in with it.
+  if (e) {
+    const fr = await R.act({ type: "fill", entity: "engagement", id: e.id, field: "role", value: "Fractional VP Sales" });
+    const filledFn = engOf(await R.view(), e.id)?.cells.function;
+    const r4 = await back(R, { entity: "engagement", id: e.id, field: "role" });
+    const after = engOf(await R.view(), e.id);
+    check("taking back a role you added works", fr.status === 200 && r4.status === 200 && after?.cells.role?.s === "empty", [fr.json, r4.json]);
+    check("the function it filled in is untouched when it was already there", filledFn?.v === after?.cells.function?.v, [filledFn, after?.cells.function]);
+  } else skip("role on a seed seat", "no seat with a function and no role on the host");
+  const bare = await R.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { type: "Fractional", role: `Fractional Head of Partnerships ${RUN}` } });
+  const bid = bare.json?.id;
+  const bareFn = engOf(await R.view(), bid)?.cells.function;
+  const r5 = await back(R, { entity: "engagement", id: bid, field: "role" });
+  const bareAfter = engOf(await R.view(), bid);
+  check("a function read from the role goes with the role", bareFn?.v === "Partnerships" && r5.status === 200 && bareAfter?.cells.function?.s === "empty" && r5.json?.cells?.some((c) => c.field === "function"), [bareFn, bareAfter?.cells.function, r5.json]);
+  // An end takes the Ended it set with it.
+  const endSeat = await R.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Growth", role: `Growth Lead Retract ${RUN}` } });
+  await R.act({ type: "fill", entity: "engagement", id: endSeat.json?.id, field: "end", value: "2024-01" });
+  const r6 = await back(R, { entity: "engagement", id: endSeat.json?.id, field: "end" });
+  const es = engOf(await R.view(), endSeat.json?.id);
+  check("taking back a dated end takes the Ended it set with it", r6.status === 200 && es?.cells.end?.s === "empty" && es?.cells.status?.s === "empty", [r6.json, es?.cells.status]);
+  const derived = await back(R, { entity: "engagement", id: sid, field: "function" });
+  check("a fact added in the same Add is its own fill and can be taken back on its own", derived.status === 200, derived.json);
+
+  // Our records' facts were never the member's.
+  const seedFact = seedFacts(await R.view(), 1)[0];
+  const r7 = await back(R, seedFact);
+  check("a fact from our records can't be taken back", r7.status === 400 && r7.json?.error === "There's nothing of yours here to take back.", r7.json);
+
+  // The fact that paid the invite bonus stays.
+  const I = await member("Ivo Inviter");
+  const code = (await I.view()).me.inviteCode;
+  const J = await member("Jem Invitee", { ref: code });
+  const jf = freeFill(await J.view());
+  const jadd = await J.act(jf);
+  const r8 = await back(J, jf);
+  check("the fact that paid the invite bonus can't be taken back", /Your invite bonus added 10 more/.test(jadd.json?.message ?? "") && r8.status === 400 && r8.json?.error === "This fact paid your invite bonus, so it stays. You can still edit it.", [jadd.json?.message, r8.json]);
+  const jf2 = freeFill(await J.view());
+  await J.act(jf2);
+  const r9 = await back(J, jf2);
+  check("their next fact can be", r9.status === 200, r9.json);
+  check("signed out, retract is refused like every action", (await new Client("Nobody", nextIp()).act({ ...jf2, type: "retract" })).status === 400);
+});
+
+// Decision 17, WORD-6, decision 2: what the server says about a company and its seat holders.
+section("company", async () => {
+  if (!(await canScan())) return skip("company checks", NEED_SCAN);
+  const adm = await admin();
+  if (!adm) return skip("company checks", "no admin account (set ADMIN_TOKEN)");
+  const board = `qa-rules-company-${RUN}`;
+  const coName = `Qa Hiring Co ${RUN}`;
+  await scanPost({ roles: [posting("hiring", coName, "Fractional Head of Growth", board)], sources: [{ source: board, fetched: 10, matched: 1 }] });
+  const fr = companyNamed(await adm.view(), coName)?.friendly;
+  check("an open role is hiring now, not a function they hired", fr?.functions.length === 0 && fr?.hiring?.join() === "Growth" && fr?.fractional === 0 && fr?.open === 1, fr);
+  check("an open role on its own still makes a company Medium", fr?.tier === "Medium", fr);
+
+  // A seat a member added with no type is a fractional seat. One typed Full-time is not.
+  const M = await member("Mo Maker");
+  const plain = await M.act({ type: "add", company: `Qa Untyped Co ${RUN}`, engagementFields: { function: "Marketing" } });
+  const full = await M.act({ type: "add", company: `Qa Fulltime Co ${RUN}`, engagementFields: { function: "Marketing", type: "Full-time" } });
+  const mv = await M.view();
+  const pf = companyNamed(mv, `Qa Untyped Co ${RUN}`)?.friendly;
+  const ff = companyNamed(mv, `Qa Fulltime Co ${RUN}`)?.friendly;
+  check("a member-added seat with no type counts as a fractional seat in its function", plain.status === 200 && pf?.fractional === 1 && pf.functions.join() === "Marketing" && pf.hiring?.length === 0, pf);
+  check("a member-added Full-time seat does not", full.status === 200 && ff?.fractional === 0 && ff.functions.length === 0, ff);
+
+  // Decision 17: a hidden company the member paid to see is marked unlocked.
+  const U = await member("Uri Unlocker");
+  const hid = companyNamed(await adm.view(), coName);
+  const before = (await U.view()).companies.find((c) => c.id === hid.id);
+  await U.act({ type: "unlock", entity: "engagement", id: hid.engagements[0].id, field: "role" });
+  const after = (await U.view()).companies.find((c) => c.id === hid.id);
+  check("a hidden company is not marked unlocked before the member pays", before?.hidden === true && before.unlocked === undefined, [before?.hidden, before?.unlocked]);
+  check("paying for its open role marks the company unlocked", after?.hidden === false && after.unlocked === true, [after?.hidden, after?.unlocked]);
+  check("a company the member added to is not marked unlocked", companyNamed(mv, `Qa Untyped Co ${RUN}`)?.unlocked === undefined);
+
+  // View.contact is sent to everyone, from the server's environment.
+  const anon = await call("GET", "/api/table", { ipAddr: nextIp() });
+  const support = process.env.SUPPORT_EMAIL ?? null;
+  const intro = process.env.INTRO_EMAIL ?? null;
+  check("signed out, the view says where to write", anon.json?.contact && anon.json.contact.support === support && anon.json.contact.intro === intro, anon.json?.contact);
+  check("signed in too", JSON.stringify(mv.contact) === JSON.stringify({ support, intro }), mv.contact);
+
+  // Decision 2: "Member" only for a seat holder who has signed in.
+  const sm = seedHolders.length > 3 ? seedHolders[2] : null;
+  if (!sm) return skip("member tag", "needs the seed file the server runs on");
+  const seat = seedFile.engagements.find((e) => e.fields.source !== "Demand scan" && e.fields.operator && normName(e.fields.operator) === normName(sm.name));
+  const coRec = seedFile.companies.find((c) => c.id === seat?.companyId);
+  const W = await member("Wil Watcher");
+  const wc = (await W.view()).companies.find((c) => c.name === coRec?.fields.name && !c.hidden);
+  if (!wc) return skip("member tag", "the seed holder's company is hidden or missing");
+  const ops = wc.engagements.filter((e) => e.cells.operator?.s === "locked").slice(0, 4);
+  for (const e of ops) await W.act({ type: "unlock", entity: "engagement", id: e.id, field: "operator" });
+  const holderCell = () => W.view().then((v) => v.companies.find((c) => c.id === wc.id)?.engagements.map((e) => e.cells.operator).find((c) => c?.s === "value" && normName(c.v) === normName(sm.name)));
+  const before2 = await holderCell();
+  check("a seed member who never signed in is a name, not a Member", !!before2 && before2.member === undefined, before2 ? { member: before2.member } : "seat not found");
+  const holder = new Client("Seed holder", nextIp(), sm.token);
+  await holder.view();
+  await new Promise((r) => setTimeout(r, 300));
+  const after2 = await holderCell();
+  check("once they sign in, the seat holder shows as a Member", !!after2?.member && after2.member.you === false, after2 ? { member: !!after2.member } : "seat not found");
+});
+
 // LOGIC-8 point 4: the posting of a role the scan closed is free to see. Runs last: its scans are dated ahead.
 section("closed", async () => {
   if (!(await canScan())) return skip("closed role checks", NEED_SCAN);
@@ -949,6 +1183,14 @@ section("closed", async () => {
   await N.act({ type: "unlock", entity: "company", id: twoCo.id, field: "identity" });
   const n2 = await N.view();
   check("once the company is unlocked the closed posting shows, at no extra credit", engOf(n2, xe.id)?.cells.posting?.s === "value" && n2.me.credits === STARTER - 1, { posting: engOf(n2, xe.id)?.cells.posting?.s, credits: n2.me.credits });
+
+  // WORD-6: a posting that came down with nobody named as its seat holder is not a hire.
+  const of = companyNamed(await adm.view(), one)?.friendly;
+  check("a closed posting with no seat holder counts in neither functions nor fractional seats", of?.functions.length === 0 && of?.fractional === 0 && of?.hiring?.length === 0 && of?.open === 0, of);
+  check("it still says they went looking for a fractional (Medium)", of?.tier === "Medium", of);
+  // DESK-10: an end can't come before the month the role was first listed.
+  const early = await N.act({ type: "fill", entity: "engagement", id: ze.id, field: "end", value: "2020-01" });
+  check("an end before the role was first listed is refused, and says when that was", early.status === 400 && /^The end month can't be before [A-Z][a-z]{2} \d{4}, when the role was first listed\.$/.test(early.json?.error ?? ""), early.json);
 });
 
 /* ---------- run ---------- */

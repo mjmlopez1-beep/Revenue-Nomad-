@@ -11,6 +11,9 @@
 set -u
 cd "$(dirname "$0")/.."
 PORT="${PORT:-4600}"
+# The servers are started with these as RN_SUPPORT_EMAIL and RN_INTRO_EMAIL, and the checks expect them in View.contact.
+SUPPORT_EMAIL="support-qa@example.com"
+INTRO_EMAIL="intro-qa@example.com"
 TMP="$(mktemp -d)"
 fails=0
 
@@ -38,13 +41,14 @@ serve() {
   shift
   mkdir -p "$TMP/data-$name"
   RN_DATA_DIR="$TMP/data-$name" RN_STARTER_CREDITS=25 RN_ADMIN_EMAILS=admin-qa@example.com RN_SCAN_TEST=1 RN_CRON_SECRET=qa-cron RN_LOGO_LOOKUP=off \
+    RN_SUPPORT_EMAIL="$SUPPORT_EMAIL" RN_INTRO_EMAIL="$INTRO_EMAIL" \
     node node_modules/next/dist/bin/next start -p "$PORT" > "$TMP/$name.server.log" 2>&1 &
   local pid=$!
   for _ in $(seq 1 80); do
     curl -s -o /dev/null "http://localhost:$PORT/api/health" && break
     sleep 0.5
   done
-  run "$name" env BASE="http://localhost:$PORT" STARTER=25 "$@"
+  run "$name" env BASE="http://localhost:$PORT" STARTER=25 SUPPORT_EMAIL="$SUPPORT_EMAIL" INTRO_EMAIL="$INTRO_EMAIL" "$@"
   kill "$pid" 2> /dev/null
   wait "$pid" 2> /dev/null
   rm -rf "$TMP/data-$name"
