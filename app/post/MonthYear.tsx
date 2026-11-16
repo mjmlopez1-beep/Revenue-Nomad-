@@ -21,6 +21,8 @@ export function MonthYear({
   disabled,
   autoFocus,
   big,
+  invalid,
+  describedBy,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -30,6 +32,9 @@ export function MonthYear({
   autoFocus?: boolean;
   /** Taller controls, for a phone sheet. */
   big?: boolean;
+  /** The form has a problem with this date: both selects say so (aria-invalid), and point at the message. */
+  invalid?: boolean;
+  describedBy?: string;
 }) {
   const [y, setY] = useState(() => yearOf(value));
   const [m, setM] = useState(() => monthOf(value));
@@ -53,9 +58,10 @@ export function MonthYear({
     sent.current = v;
     onChange(v);
   };
+  const bad = invalid ? { "aria-invalid": true as const, "aria-describedby": describedBy } : {};
   return (
     <span className={`my${big ? " my-big" : ""}`}>
-      <select className="select my-m" aria-label={`${label}, month`} value={m} disabled={disabled} autoFocus={autoFocus} onChange={(e) => set(y, e.target.value)}>
+      <select className="select my-m" aria-label={`${label}, month`} value={m} disabled={disabled} autoFocus={autoFocus} onChange={(e) => set(y, e.target.value)} {...bad}>
         <option value="">Month</option>
         {MONTHS.map((name, k) => (
           <option key={name} value={String(k + 1).padStart(2, "0")} disabled={y === thisYear && k > now.getMonth()}>
@@ -63,7 +69,7 @@ export function MonthYear({
           </option>
         ))}
       </select>
-      <select id={id} className="select my-y" aria-label={`${label}, year`} value={y} disabled={disabled} onChange={(e) => set(e.target.value, m)}>
+      <select id={id} className="select my-y" aria-label={`${label}, year`} value={y} disabled={disabled} onChange={(e) => set(e.target.value, m)} {...bad}>
         <option value="">Year</option>
         {years.map((yr) => (
           <option key={yr} value={yr}>

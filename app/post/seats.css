@@ -414,7 +414,7 @@
   box-shadow: inset 0 0 0 1px var(--pine);
 }
 .ys-who-o:focus-within {
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus, var(--volt));
   outline-offset: 2px;
 }
 .ys-who-o input {
@@ -527,6 +527,151 @@
 }
 .ys-addseat {
   margin-top: 16px;
+}
+/* Who sees what on a seat, under the lead. */
+.ys-lead-sub {
+  max-width: 640px;
+  margin: -4px 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--muted);
+}
+/* Answers on file are buttons: the member's own reopen their question, somebody else's offer a report. */
+.ys-known-box {
+  padding: 0 16px 14px;
+}
+.ys-known-box .ys-known {
+  padding: 0;
+}
+.ys-kv-b {
+  display: inline;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+  text-decoration: underline dotted var(--line-strong);
+  text-underline-offset: 4px;
+  cursor: pointer;
+  transition: background 0.12s, text-decoration-color 0.12s;
+}
+.ys-kv-b:hover {
+  background: var(--surface-2);
+  text-decoration-color: var(--pine);
+}
+.ys-kv-b:focus-visible {
+  outline: 2px solid var(--focus, var(--volt-ink));
+  outline-offset: 1px;
+}
+.ys-kv.on .ys-kv-b {
+  background: var(--row-on);
+  text-decoration: underline solid var(--pine);
+}
+.ys-known-hint {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.ys-report {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ys-report p {
+  flex: 1 1 260px;
+  overflow-wrap: anywhere;
+}
+.ys-report-acts {
+  display: flex;
+  gap: 8px;
+}
+/* A question asked again to change an answer: the same block, marked as a change. */
+.ys-q.again {
+  background: var(--surface-2);
+}
+.ys-q.again .ys-later {
+  border-top-color: var(--line);
+}
+/* Under the rate choices: what an invited member should know. */
+.ys-who-note {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--body-ink);
+}
+/* "This isn't me": the seat leaves the list and says what happened, in its place. */
+.ys-gone {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ys-gone .ys-check {
+  margin-top: 1px;
+}
+/* Seats the member named themselves on, waiting for another member to confirm. */
+.ys-wait {
+  margin-top: 24px;
+}
+.ys-wait-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ys-wait-p {
+  max-width: 640px;
+  margin-top: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.ys-wait-list {
+  display: grid;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.ys-wait-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 16px;
+}
+.ys-wait-row + .ys-wait-row {
+  border-top: 1px solid var(--line);
+}
+.ys-wait-tag {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 /* "Your seat" on a record, a table row or a phone card. */
@@ -724,6 +869,41 @@ button.ys-yours:hover {
 }
 .tp-phone .ys-addseat {
   width: 100%;
+}
+.tp-phone .ys-known {
+  gap: 6px 16px;
+}
+/* A tap on an answer: 44px tall without moving the line it sits on. */
+.tp-phone .ys-kv-b {
+  position: relative;
+}
+.tp-phone .ys-kv-b::after {
+  content: "";
+  position: absolute;
+  inset: -12px -4px;
+}
+.tp-phone .ys-report .btn {
+  min-height: 44px;
+}
+.tp-phone .ys-wait-row {
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.tp-phone .ys-wait-row .ys-co {
+  flex: 1 1 55%;
+  min-height: 44px;
+}
+.tp-phone .ys-wait-row .ys-seat-what {
+  order: 3;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+}
+.tp-phone .ys-wait-row .ys-seat-what:empty {
+  display: none;
+}
+.tp-phone .ys-wait-list {
+  margin-left: 0;
+  margin-right: 0;
 }
 .tp-phone .ys-fill-link {
   min-height: 44px;

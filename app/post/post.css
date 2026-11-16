@@ -3542,8 +3542,98 @@ button.tp-fs-row:active {
 .tp-sheet .tp-newco .tp-form-2 {
   grid-template-columns: minmax(0, 1fr);
 }
+/* A problem with one field: a red border on it, and the message right under it. */
+.tp-engform .input[aria-invalid="true"],
+.tp-engform .select[aria-invalid="true"],
+.tp-newco .input[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red);
+}
+.tp-chips[aria-invalid="true"] .tp-chipbtn:not(.chip-on) {
+  border-color: var(--red);
+}
+.tp-chips[tabindex="-1"]:focus {
+  outline: none;
+}
+.am-ferr {
+  margin-top: -2px;
+}
+/* A problem with the whole form sits beside the button, where the earn line was, so it is always on screen. */
+.am-earn.am-earn-err {
+  color: var(--red);
+  font-weight: 600;
+}
+.tp-modal-actions .btn-primary:disabled {
+  cursor: default;
+}
+/* Nothing new went in: the panel is plain, not the volt "added". */
+.tp-done.am-done-same {
+  background: var(--surface-2);
+  color: var(--body-ink);
+}
+.am-done-same .am-done-check {
+  background: var(--line-strong);
+  color: var(--ink);
+}
+.am-done-warn {
+  font-weight: 600;
+  color: var(--red);
+}
+/* "Discard this seat?": a small dialog over the form. Keep editing is the default. */
+.am-ask-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 26, 19, 0.32);
+  animation: tp-fade 0.15s ease-out;
+}
+.am-ask {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 4px;
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--overlay-shadow);
+}
+.am-ask-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.am-ask-p {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.am-ask-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.am-ask-wrap .btn {
+  min-height: 40px;
+}
+@media (max-width: 599px) {
+  .am-ask-wrap {
+    place-items: end center;
+    padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .am-ask .btn {
+    flex: 1 1 140px;
+    min-height: 44px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .tp-modal {
+  .tp-modal,
+  .am-ask-wrap {
     animation: none;
   }
 }
