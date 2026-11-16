@@ -20,10 +20,14 @@
  * HMAC, and perform() maps it back.
  *
  * Hidden companies: a company with an active open role keeps its name, website, LinkedIn,
- * logo and About behind "Unlock company" (1 credit); see identityHidden().
+ * logo and About behind "Unlock company" (1 credit); see identityHidden(). The same credit
+ * opens the role and the posting of each open role there, whichever of them was asked for.
  *
  * Your seats: the member a seat-holder name resolves to sees their own seat free, can correct
- * what the seed or the scan say about it, and can say "this isn't me"; see seatHolder().
+ * what the seed or the scan say about it, and can say "this isn't me"; see seatHolder(). Their
+ * report on a fact on their own seat hides it for everyone at once. An open role closes only
+ * when a member picks themselves as its seat holder, and reopens if that name comes off; see
+ * reopenIfUnheld().
  *
  * Weekly scan: open roles come in from job boards with the day they were first seen, close
  * (with the date) when a clean scan stops listing them, and reopen if listed again; see
@@ -119,6 +123,8 @@ export interface FieldValue {
   /** Members who reported this value. One report hides it only for that member. */
   reporters?: string[];
   reportedBy?: string;
+  /** Members whose report an admin turned down by keeping the fact. They can't report this value again. */
+  kept?: string[];
   /** Seat holder only: the member this name was linked to when it was added. */
   memberId?: string;
 }
@@ -198,6 +204,8 @@ export interface State {
   signals: { memberId: string; name: string; where: string; at: string }[];
   /** "This isn't me": engagement ids a member said they never held, by member id. */
   notMine: Record<string, string[]>;
+  /** Open roles a member closed by picking themselves as the seat holder, for the limit of one per rolling 24 hours. Older rows are dropped. */
+  roleClaims?: { memberId: string; engagementId: string; at: string }[];
   /** Each member's last visit (written at most once per 6 hours). */
   seen: Record<string, string>;
   scan: ScanState;
@@ -673,6 +681,35 @@ function seatHolder(s: State, idx: MemberIndex, engId: string, v: FieldValue | n
   return m && !(s.notMine[m.id] ?? []).includes(engId) ? m : null;
 }
 
+/** Reopen a role that closed because a member took it: no close date, status back to "Open role". Returns whether it did. */
+function reopenFilled(s: State, engId: string, now: string): boolean {
+  let done = false;
+  for (const r of Object.values(s.scan.roles)) {
+    if (r.engagementId !== engId || !r.closedAt || r.closedBy !== "filled") continue;
+    r.closedAt = null;
+    delete r.closedBy;
+    done = true;
+  }
+  if (!done) return false;
+  const sk = fkey(engId, "status");
+  delete s.verifications[sk];
+  s.values[sk] = { value: "Open role", by: "scan", at: now, status: "live" };
+  return true;
+}
+
+/**
+ * A role closes when a member picks themselves as its seat holder, and that close can be
+ * undone. It reopens once nobody holds the seat: the name was removed (in review or by an
+ * admin), or the member it was linked to said "this isn't me". A name that is only waiting for
+ * review keeps the role closed. The weekly scan can call this for a filled role it still sees
+ * listed. Returns whether the role reopened.
+ */
+export function reopenIfUnheld(s: State, engId: string, now = new Date().toISOString()): boolean {
+  const v = s.values[fkey(engId, "operator")];
+  const held = !!v && v.status !== "removed" && !(v.memberId && (s.notMine[v.memberId] ?? []).includes(engId));
+  return held ? false : reopenFilled(s, engId, now);
+}
+
 /** Empty fillable facts on an engagement (each earns its seat holder a credit). */
 const ENG_FILLABLE = FILLABLE.filter((x) => x.entity === "engagement").map((x) => x.f.key);
 const ENG_GATED = ALL_FIELDS.filter((x) => x.entity === "engagement" && x.f.gated).map((x) => x.f.key);
@@ -710,7 +747,7 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
 
 /**
  * One field as `me` sees it. `free` shows a gated fact without an unlock: a seat holder's own
- * seat, or the status of a role the weekly scan follows (its dates already say it).
+ * seat, or the posting of a role the weekly scan closed (see postingFree).
  */
 function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Entity, key: string, idx?: MemberIndex, free = false): Cell {
   const f = fieldDef(entity, key)!;
@@ -723,16 +760,20 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (me && v.reporters?.includes(me.id)) return { s: "reported", mine: false };
   const k = fkey(node!.id, f.key);
   const vers = s.verifications[k] ?? [];
-  const ver = vers.length + (isSystem(v.by) ? 1 : 0);
+  // Only members' confirmations count. A fact from our own records or the scan says where it came from instead.
+  const ver = vers.length;
+  // (The "Active" a member's claim puts on an open role is written as the scan's, but no posting said it.)
+  const fromScan = v.by === "scan" && !(key === "status" && v.value === "Active");
+  const from = v.by === "seed" ? ({ from: "records" } as const) : fromScan ? ({ from: "posting" } as const) : {};
   if (!f.gated || mine || free || (me && (s.unlocks[k] ?? []).includes(me.id))) {
-    const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id) };
+    const out: Cell = { s: "value", v: v.value, mine, ver, iv: !!me && vers.includes(me.id), ...from };
     if (key === "operator" && idx) {
       const m = seatHolder(s, idx, node!.id, v);
       if (m) out.member = { title: m.title ?? "", you: !!me && m.id === me.id };
     }
     return out;
   }
-  return { s: "locked", ver };
+  return { s: "locked", ver, ...from };
 }
 
 export function isAdmin(m: Member | null): boolean {
@@ -844,6 +885,13 @@ function isOpenRole(e: EngNode, s: State, tracks: Tracks): boolean {
 const IDENTITY_FIELDS = new Set(["website", "linkedin", "about"]);
 /** The last part of an HQ ("Austin, TX" -> "TX"), so a hidden company keeps a region. */
 const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boolean).pop() ?? "";
+/** One company cell as a member sees it while the company is hidden: identity facts locked, HQ cut to its region. */
+const hideIdentity = (key: string, c: Cell): Cell =>
+  c.s !== "value" ? c : IDENTITY_FIELDS.has(key) ? { s: "locked", ver: 0 } : key === "hq" ? { ...c, v: hqRegion(c.v) } : c;
+/** What "Unlock company" opens on each open role at a hidden company, for the same credit. */
+const BUNDLE_FIELDS = ["role", "posting"];
+/** The posting of a role the scan closed (the listing came down) is free to see: the link no longer leads to a job. */
+const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !== "filled";
 
 /**
  * Whether a company's identity is hidden from this member. A company with an active open role
@@ -986,13 +1034,16 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     let updatedAt = touched(c.id);
     let mine = myAdds.has(c.id);
     let holdsSeat = false;
+    /** Locked postings of roles the scan closed. They open below, unless the company is hidden (the link would name it). */
+    const closedPostings: { e: EngNode; cells: Record<string, Cell> }[] = [];
     const engRecs: EngagementRec[] = engs.map((e) => {
       const cells: Record<string, Cell> = {};
-      // The seat holder sees their own seat free. A followed role's status is free for everyone.
+      // The seat holder sees their own seat free.
       const yours = !!me && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id;
       const track = tracks.get(e.id);
       if (yours) holdsSeat = true;
-      for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours || (!!track && f.key === "status"));
+      for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours);
+      if (postingFree(track) && cells.posting.s === "locked") closedPostings.push({ e, cells });
       // Function is free; derive it from the role when nobody set it.
       if (cells.function.s === "empty") {
         const fn = functionOf(live(e, s, "role"));
@@ -1031,9 +1082,13 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       !holdsSeat;
     if (hidden) {
       hiddenIds.add(c.id);
-      for (const k of IDENTITY_FIELDS) if (cells[k]?.s === "value") cells[k] = { s: "locked", ver: 0 };
-      const hq = cells.hq;
-      if (hq?.s === "value") cells.hq = { ...hq, v: hqRegion(hq.v) };
+      for (const k of [...IDENTITY_FIELDS, "hq"]) if (cells[k]) cells[k] = hideIdentity(k, cells[k]);
+    } else {
+      for (const x of closedPostings) {
+        x.cells.posting = cell(x.e, "engagement", "posting", true);
+        facts.locked--;
+        facts.known++;
+      }
     }
     companies.push({
       id: pubId(c.id),
@@ -1465,9 +1520,9 @@ export async function perform(token: string | null, a: Action, origin?: string):
     const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId);
     /** The viewer holds this seat (and hasn't said it isn't theirs). */
     const ownSeat = (engId: string) => seatHolder(s, memberIndex(seed, s), engId, valueOf(g.engagements.get(engId), s, "operator"))?.id === me.id;
-    /** Gated facts this member sees without an unlock: their own seat, and a followed role's status. */
+    /** Gated facts this member sees without an unlock: their own seat, and the posting of a role the scan closed (unless its company is hidden). */
     const freeFor = (entity: Entity, id: string, field: string) =>
-      entity === "engagement" && ((field === "status" && tracks().has(id)) || ownSeat(id));
+      entity === "engagement" && ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) || ownSeat(id));
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
       if (hiddenFor(companyId)) throw new ActionError("Unlock this company first (1 credit) to add facts here.");
@@ -1483,10 +1538,63 @@ export async function perform(token: string | null, a: Action, origin?: string):
       if (!f || f.identity || f.system) throw new ActionError("That field can't be filled.");
       return f;
     };
-    /** A changed cell for the result, as the actor now sees it. */
-    const changed = (entity: Entity, node: Node, field: string) => ({
-      entity, id: outId(entity, node.id), field, cell: cellOf(s, me, node, entity, field, memberIndex(seed, s), freeFor(entity, node.id, field)),
-    });
+    /** A changed cell for the result, as the actor now sees it. A hidden company's cells come back as the view shows them. */
+    const changed = (entity: Entity, node: Node, field: string) => {
+      const cell = cellOf(s, me, node, entity, field, memberIndex(seed, s), freeFor(entity, node.id, field));
+      const hide = entity === "company" && cell.s === "value" && (IDENTITY_FIELDS.has(field) || field === "hq") && hiddenFor(node.id);
+      return { entity, id: outId(entity, node.id), field, cell: hide ? hideIdentity(field, cell) : cell };
+    };
+    /** Each member's paid unlocks that have not been refunded, by `${memberId} ${ref}` (built when first needed). */
+    let paidUnlocks: Map<string, number> | null = null;
+    /** Give the credit back to everyone who paid to see a fact. Unlocks that came free with "Unlock company" have nothing to refund. */
+    const refundUnlockers = (k: string) => {
+      if (!paidUnlocks) {
+        paidUnlocks = new Map();
+        for (const l of s.ledger) {
+          if (l.reason !== "unlock" && l.reason !== "refund") continue;
+          const pk = `${l.memberId} ${l.ref}`;
+          paidUnlocks.set(pk, (paidUnlocks.get(pk) ?? 0) - l.delta);
+        }
+      }
+      for (const m of s.unlocks[k] ?? []) {
+        const pk = `${m} ${k}`;
+        if ((paidUnlocks.get(pk) ?? 0) <= 0) continue;
+        s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
+        paidUnlocks.set(pk, paidUnlocks.get(pk)! - 1);
+      }
+      delete s.unlocks[k];
+    };
+    /**
+     * Take a fact off the table: the field reopens, whoever added it loses what it earned and
+     * everyone who paid to see it gets the credit back. A role that closed because a member
+     * took it reopens when that member's name is the fact removed.
+     */
+    const removeFact = (k: string, cur: FieldValue) => {
+      s.values[k] = { ...cur, status: "removed" };
+      delete s.values[k].reporters;
+      delete s.verifications[k];
+      if (!isSystem(cur.by)) {
+        const paid = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && (l.reason === "fill" || l.reason === "confirm")).reduce((n, l) => n + l.delta, 0);
+        const back = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && l.reason === "reversal").reduce((n, l) => n + l.delta, 0);
+        if (paid + back > 0) s.ledger.push({ memberId: cur.by, delta: -(paid + back), reason: "reversal", ref: k, at: now });
+        s.held = s.held.filter((h) => !(h.reason === "confirm" && h.ref === k));
+      }
+      refundUnlockers(k);
+      const dot = k.lastIndexOf(".");
+      if (k.slice(dot + 1) === "operator" && reopenIfUnheld(s, k.slice(0, dot), now)) tracksNow = null;
+    };
+    /** A rate this member shared for the benchmarks only on this seat moves to the record when they add it there. It was paid once. */
+    let movedRate = false;
+    const movePrivateRate = (engId: string, k: string) => {
+      const i = s.benchRates.findIndex((b) => b.by === me.id && b.engagementId === engId);
+      if (i < 0) return false;
+      const ref = `bench.${s.benchRates[i].id}`;
+      s.benchRates.splice(i, 1);
+      // The credit it earned now belongs to the rate on the record, so removing that rate takes it back.
+      for (const l of s.ledger) if (l.memberId === me.id && l.ref === ref) l.ref = k;
+      movedRate = true;
+      return true;
+    };
     /** The member a picker choice names (a public member id, or "me" for the viewer), or null. */
     const pickedMember = (raw: unknown): Member | null => {
       if (raw === undefined || raw === null || raw === "") return null;
@@ -1533,8 +1641,17 @@ export async function perform(token: string | null, a: Action, origin?: string):
       const k = fkey(node.id, key);
       if (cur && cur.value !== value) delete s.verifications[k]; // confirmations were for the old value
       const eng = entity === "engagement" ? g.engagements.get(node.id) : undefined;
-      // Naming who took an open role our records or the scan posted fills it.
-      const fillsRole = !!eng && key === "operator" && !cur && isOpenRole(eng, s, tracks()) && isSystem(valueOf(eng, s, "status")?.by ?? "seed");
+      // An open role our records or the scan posted. Only the member who took it can name its
+      // seat holder: any other name would close the role for everyone on one member's say-so.
+      const openPosted = !!eng && key === "operator" && isOpenRole(eng, s, tracks()) && isSystem(valueOf(eng, s, "status")?.by ?? "seed");
+      if (openPosted && linked?.id !== me.id) throw new ActionError("This role is still open. If you took it, pick yourself as the seat holder.");
+      // A role a member took stays in that member's name. Renaming the seat holder would leave it closed under someone else's.
+      if (eng && key === "operator" && cur && linked?.id !== me.id && tracks().get(eng.id)?.closedBy === "filled")
+        throw new ActionError("You took this open role, so the seat holder is you. If that's wrong, use This isn't me on Your seats.");
+      // Picking yourself on it fills it, once per rolling 24 hours (reopenIfUnheld is the way back).
+      const fillsRole = openPosted && !cur;
+      if (fillsRole && (s.roleClaims ?? []).some((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY))
+        throw new ActionError("You marked an open role as yours in the last 24 hours. You can do that once a day.");
       s.values[k] = { value: value!, by: me.id, at: now, status: "live", ...(linked ? { memberId: linked.id } : {}) };
       if (fillsRole) {
         keepSeedTracks(seed, s);
@@ -1542,6 +1659,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
         delete s.verifications[sk];
         s.values[sk] = { value: "Active", by: "scan", at: now, status: "live" };
         for (const r of Object.values(s.scan.roles)) if (r.engagementId === node.id && !r.closedAt) (r.closedAt = now), (r.closedBy = "filled");
+        s.roleClaims = [...(s.roleClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < DAY), { memberId: me.id, engagementId: node.id, at: now }];
         tracksNow = null;
         alsoChanged.push({ entity, node, field: "status" });
       }
@@ -1551,6 +1669,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
         if (fn) s.values[fkey(node.id, "function")] = { value: fn, by: me.id, at: now, status: "live" };
       }
       if (cur) return 0; // editing your own value, or correcting your seat, earns nothing extra
+      if (entity === "engagement" && key === "rate" && movePrivateRate(node.id, k)) return 0; // already paid as a benchmark-only rate
       const d = awardFill(k);
       if (!d) capped = true;
       return d;
@@ -1588,12 +1707,24 @@ export async function perform(token: string | null, a: Action, origin?: string):
         case "unlockMany": {
           const items = a.type === "unlock" ? [a] : (a.items ?? []).slice(0, 60);
           const todo: { k: string; node: Node; entity: Entity; field: string }[] = [];
+          const hid = new Map<string, boolean>();
+          const hiddenNow = (companyId: string) => {
+            if (!hid.has(companyId)) hid.set(companyId, hiddenFor(companyId));
+            return hid.get(companyId)!;
+          };
+          /**
+           * Unlock company: one purchase for the name, website, LinkedIn, logo and About of a
+           * hidden company, and the role and posting of each open role there. Asking for any
+           * part of it buys the whole, once.
+           */
+          const bundle = (company: Node) => {
+            const k = fkey(company.id, "identity");
+            if (!todo.some((t) => t.k === k)) todo.push({ k, node: company, entity: "company", field: "identity" });
+          };
           for (const it of items) {
             const node = nodeOf(it.entity, it.id);
-            // Unlock company: the name, website, LinkedIn, logo and About of a hidden company.
             if (it.entity === "company" && (it.field === "identity" || IDENTITY_FIELDS.has(it.field))) {
-              const k = fkey(node.id, "identity");
-              if (hiddenFor(node.id) && !todo.some((t) => t.k === k)) todo.push({ k, node, entity: "company", field: "identity" });
+              if (hiddenNow(node.id)) bundle(node);
               continue;
             }
             const f = fieldOf(it.entity, it.field);
@@ -1601,7 +1732,13 @@ export async function perform(token: string | null, a: Action, origin?: string):
             const cur = valueOf(node, s, f.key);
             if (!cur || cur.status !== "live") continue;
             if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id) || todo.some((t) => t.k === k)) continue;
-            if (freeFor(it.entity, node.id, f.key)) continue; // your own seat, or a followed role's status: already visible
+            if (freeFor(it.entity, node.id, f.key)) continue; // your own seat, or the posting of a closed role: already visible
+            const eng = it.entity === "engagement" && BUNDLE_FIELDS.includes(f.key) ? g.engagements.get(node.id) : undefined;
+            const company = eng && isOpenRole(eng, s, tracks()) && hiddenNow(eng.companyId) ? g.companies.get(eng.companyId) : undefined;
+            if (company) {
+              bundle(company);
+              continue;
+            }
             todo.push({ k, node, entity: it.entity, field: f.key });
           }
           if (!todo.length) {
@@ -1627,12 +1764,41 @@ export async function perform(token: string | null, a: Action, origin?: string):
             s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: t.k, at: now });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
+          // What came with each company: the role and posting of its open roles, at no further charge.
+          const companies = todo.filter((t) => t.field === "identity");
+          const came: { node: Node; field: string }[] = [];
+          for (const t of companies) {
+            for (const e of g.engagements.values()) {
+              if (e.companyId !== t.node.id || !isOpenRole(e, s, tracks())) continue;
+              for (const field of BUNDLE_FIELDS) {
+                const k = fkey(e.id, field);
+                const cur = valueOf(e, s, field);
+                if (!cur || cur.status !== "live") continue;
+                if (cur.by !== me.id && !(s.unlocks[k] ?? []).includes(me.id)) s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
+                came.push({ node: e, field });
+              }
+            }
+          }
+          const others = todo.length - companies.length;
+          const cost = `−${todo.length} credit${todo.length > 1 ? "s" : ""}.`;
+          let message = `Unlocked ${todo.length} fact${todo.length > 1 ? "s" : ""}. ${cost}`;
+          if (companies.length && came.length) {
+            // Name what the credit bought: "the company, the role and the posting".
+            const n = (field: string, one: string, many: string) => {
+              const c = came.filter((x) => x.field === field).length;
+              return c === 1 ? [`the ${one}`] : c ? [`${c} ${many}`] : [];
+            };
+            const parts = [companies.length === 1 ? "the company" : `${companies.length} companies`, ...n("role", "role", "roles"), ...n("posting", "posting", "postings")];
+            const bought = `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+            message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""}` : ""}. ${cost}`;
+          } else if (todo.length === 1 && companies.length) message = `Unlocked ${g.companies.get(todo[0].node.id)?.name ?? "the company"}. ${cost}`;
           return {
-            message:
-              todo.length === 1 && todo[0].field === "identity"
-                ? `Unlocked ${g.companies.get(todo[0].node.id)?.name ?? "the company"}. −1 credit.`
-                : `Unlocked ${todo.length} fact${todo.length > 1 ? "s" : ""}. −${todo.length} credit${todo.length > 1 ? "s" : ""}.`,
-            cells: todo.filter((t) => t.field !== "identity").map((t) => changed(t.entity, t.node, t.field)),
+            message,
+            cells: [
+              ...todo.filter((t) => t.field !== "identity").map((t) => changed(t.entity, t.node, t.field)),
+              ...came.map((x) => changed("engagement", x.node, x.field)),
+              ...companies.flatMap((t) => [...IDENTITY_FIELDS, "hq"].map((field) => changed("company", t.node, field))),
+            ],
           };
         }
         case "add": {
@@ -1686,10 +1852,11 @@ export async function perform(token: string | null, a: Action, origin?: string):
             const atCompany = [...g.engagements.values()].filter((e) => e.companyId === company!.id);
             const isBlank = (e: EngNode) =>
               Object.keys(e.seedFields).every((k) => k === "source") && !Object.keys(s.values).some((k) => k.startsWith(e.id + "."));
+            // An open role is never matched by its title: a past seat with the same title is its own record.
             const existing = wantEng
               ? atCompany.find((e) => e.id === wantEng)
               : (a.newEngagement ? atCompany.find(isBlank) : atCompany.find((e) => s.engagements.some((x) => x.id === e.id && x.by === me.id))) ??
-                (role ? atCompany.find((e) => slug(live(e, s, "role") ?? "") === slug(role)) : undefined);
+                (role ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && slug(live(e, s, "role") ?? "") === slug(role)) : undefined);
             let eng: Node;
             if (existing) {
               eid = existing.id;
@@ -1777,35 +1944,50 @@ export async function perform(token: string | null, a: Action, origin?: string):
         }
         case "report": {
           // One report hides the fact for the reporter; a second member's report hides it for
-          // everyone until an admin reviews it. Only members who have added a fact can report.
+          // everyone until an admin reviews it. A free fact can be reported by members who have
+          // added a fact to a record; a fact you paid to see, or one on your own seat, always.
           const node = nodeOf(a.entity, a.id);
           const f = fieldOf(a.entity, a.field);
           const k = fkey(node.id, f.key);
           const cur = valueOf(node, s, f.key);
-          const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
+          // A hidden company's website, LinkedIn and full HQ are not on show to this member.
+          if (a.entity === "company" && (IDENTITY_FIELDS.has(f.key) || f.key === "hq") && hiddenFor(node.id)) throw new ActionError("Nothing to report here.");
+          const paid = (s.unlocks[k] ?? []).includes(me.id);
+          const own = a.entity === "engagement" && ownSeat(node.id);
+          const canSee = !f.gated || paid || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to report here.");
           if (cur.by === me.id) throw new ActionError("That's your own fact. Edit it instead.");
-          if (!s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0)) throw new ActionError("Add a fact before you report one.");
+          if (cur.kept?.includes(me.id)) throw new ActionError("An admin reviewed this fact and kept it, so you can't report it again.");
+          // A rate shared for the benchmarks only is not a fact on a record, so it doesn't count here.
+          if (!paid && !own && !s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0 && !l.ref.startsWith("bench.")))
+            throw new ActionError("Add a fact before you report one.");
           if (s.reportLog.filter((r) => r.memberId === me.id && nowMs - Date.parse(r.at) < DAY).length >= REPORT_DAILY_MAX)
             throw new ActionError(`You can report ${REPORT_DAILY_MAX} facts a day.`);
           if ((cur.reporters ?? []).includes(me.id)) return { message: "You already reported this." };
           const reporters = [...(cur.reporters ?? []), me.id];
-          s.values[k] = { ...cur, reporters, status: reporters.length >= 2 ? "reported" : "live", reportedBy: me.id };
+          // The seat holder's report on their own seat hides the fact for everyone at once.
+          s.values[k] = { ...cur, reporters, status: own || reporters.length >= 2 ? "reported" : "live", reportedBy: me.id };
           s.reportLog.push({ memberId: me.id, ref: k, at: now });
-          return { message: "Reported. An admin will review it.", cells: [changed(a.entity, node, f.key)] };
+          return {
+            message: own ? "Reported. It's hidden for everyone until an admin reviews it." : "Reported. An admin will review it.",
+            cells: [changed(a.entity, node, f.key)],
+          };
         }
         case "verify": {
           const node = nodeOf(a.entity, a.id);
           const f = fieldOf(a.entity, a.field);
           const k = fkey(node.id, f.key);
           const cur = valueOf(node, s, f.key);
+          // A hidden company's website, LinkedIn and full HQ are not on show to this member (the answer would hand them over).
+          if (a.entity === "company" && (IDENTITY_FIELDS.has(f.key) || f.key === "hq") && hiddenFor(node.id)) throw new ActionError("Nothing to confirm here.");
           const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee || cur.reporters?.includes(me.id)) throw new ActionError("Nothing to confirm here.");
           if (cur.by === me.id) throw new ActionError("You can't confirm your own fact.");
           const list = s.verifications[k] ?? [];
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
-          const n = list.length + 1 + (isSystem(cur.by) ? 1 : 0);
+          // The real count: members who confirmed it. Our own records and the scan are not confirmations.
+          const n = list.length + 1;
           // The member who added a fact earns +1 once two other members confirm it (once per fact;
           // it counts toward the daily cap and is held if the author is at it).
           if (!isSystem(cur.by) && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === k) && !s.held.some((h) => h.reason === "confirm" && h.ref === k))
@@ -1818,24 +2000,82 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const cur = s.values[k];
           if (!cur || cur.status === "removed" || (cur.status !== "reported" && !cur.reporters?.length)) throw new ActionError("Nothing to review.");
           if (a.decision === "keep") {
-            s.values[k] = { ...cur, status: "live" };
+            // The members whose report was turned down can't report this value again.
+            const kept = [...new Set([...(cur.kept ?? []), ...(cur.reporters ?? []), ...(cur.reportedBy ? [cur.reportedBy] : [])])];
+            s.values[k] = { ...cur, status: "live", ...(kept.length ? { kept } : {}) };
             delete s.values[k].reporters;
             delete s.values[k].reportedBy;
             return { message: "Kept." };
           }
           // Wrong data: the field reopens, the filler loses what it earned, unlockers get theirs back.
-          s.values[k] = { ...cur, status: "removed" };
-          delete s.values[k].reporters;
-          delete s.verifications[k];
-          if (!isSystem(cur.by)) {
-            const paid = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && (l.reason === "fill" || l.reason === "confirm")).reduce((n, l) => n + l.delta, 0);
-            const back = s.ledger.filter((l) => l.memberId === cur.by && l.ref === k && l.reason === "reversal").reduce((n, l) => n + l.delta, 0);
-            if (paid + back > 0) s.ledger.push({ memberId: cur.by, delta: -(paid + back), reason: "reversal", ref: k, at: now });
-            s.held = s.held.filter((h) => !(h.reason === "confirm" && h.ref === k));
-          }
-          for (const m of s.unlocks[k] ?? []) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
-          delete s.unlocks[k];
+          removeFact(k, cur);
           return { message: "Removed. The field is open to fill again." };
+        }
+        case "adminRemove": {
+          // An admin takes one member-added fact off the table. No report is needed.
+          if (!isAdmin(me)) throw new ActionError("Admins only.");
+          const node = nodeOf(a.entity, a.id);
+          const f = fieldDef(a.entity, String(a.field));
+          const k = fkey(node.id, String(a.field));
+          const cur = s.values[k];
+          if (!f || !cur || cur.status === "removed") throw new ActionError("Nothing to remove here.");
+          if (isSystem(cur.by)) throw new ActionError("That fact came from our records or the scan. Only a fact a member added can be removed this way.");
+          removeFact(k, cur);
+          return { message: "Removed. The field is open to fill again.", id: outId(a.entity, node.id), cells: [changed(a.entity, node, f.key)] };
+        }
+        case "adminRemoveMember": {
+          // An admin takes everything one member added off the table, with the credits it earned.
+          if (!isAdmin(me)) throw new ActionError("Admins only.");
+          const wanted = String(a.memberId ?? "");
+          const target = memberIndex(seed, s).all.find((m) => pubId(m.id) === wanted);
+          if (!target) throw new ActionError("Member not found.");
+          let facts = 0;
+          for (const k of Object.keys(s.values)) {
+            const v = s.values[k]; // read now: removing a seat holder can rewrite the status beside it
+            if (v.by !== target.id || v.status === "removed") continue;
+            removeFact(k, v);
+            facts++;
+          }
+          // Their benchmark-only rates too, each with the credit it earned.
+          let rates = 0;
+          s.benchRates = s.benchRates.filter((b) => {
+            if (b.by !== target.id) return true;
+            const ref = `bench.${b.id}`;
+            const paid = s.ledger.filter((l) => l.memberId === target.id && l.ref === ref).reduce((n, l) => n + l.delta, 0);
+            if (paid > 0) s.ledger.push({ memberId: target.id, delta: -paid, reason: "reversal", ref, at: now });
+            rates++;
+            return false;
+          });
+          // Records they made that now hold nothing go too: people first, then seats, then
+          // companies. One that anybody else added to, or that the scan follows, stays.
+          const inUse = new Set<string>();
+          for (const [k, v] of Object.entries(s.values)) if (v.status !== "removed") inUse.add(k.slice(0, k.lastIndexOf(".")));
+          for (const r of Object.values(s.scan.roles)) inUse.add(r.engagementId);
+          for (const b of s.benchRates) if (b.engagementId) inUse.add(b.engagementId);
+          let records = 0;
+          const gone = new Set<string>();
+          const dropEmpty = <T extends Added>(list: T[], ids?: Set<string>): T[] =>
+            list.filter((x) => {
+              if (x.by !== target.id || inUse.has(x.id)) return true;
+              records++;
+              ids?.add(x.id);
+              return false;
+            });
+          s.contacts = dropEmpty(s.contacts);
+          for (const p of s.contacts) {
+            if (p.engagementId) inUse.add(p.engagementId);
+            inUse.add(p.companyId ?? g.engagements.get(p.engagementId ?? "")?.companyId ?? "");
+          }
+          s.engagements = dropEmpty(s.engagements);
+          for (const e of s.engagements) inUse.add(e.companyId);
+          s.companies = dropEmpty(s.companies, gone);
+          for (const id of gone) refundUnlockers(fkey(id, "identity"));
+          if (gone.size) for (const [m, list] of Object.entries(s.follows)) s.follows[m] = list.filter((id) => !gone.has(id));
+          if (!facts && !rates && !records) return { message: `${target.name} has nothing on the table to remove.` };
+          const count = (n: number, one: string, many: string) => (n ? [`${n} ${n === 1 ? one : many}`] : []);
+          const parts = [...count(facts, "fact", "facts"), ...count(rates, "benchmark-only rate", "benchmark-only rates"), ...count(records, "empty record", "empty records")];
+          const what = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
+          return { message: `Removed ${what} that ${target.name} added. The credits they earned were taken back and unlocks were refunded.` };
         }
         case "benchRate": {
           // A rate for the benchmarks only: it counts in the medians and is never on a record.
@@ -1891,7 +2131,24 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const e = g.engagements.get(inId("engagement", a.engagementId));
           if (!e || !ownSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
           s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
-          return { message: "Got it. That seat is no longer linked to you.", id: pubId(e.id), cells: ENG_GATED.map((k) => changed("engagement", e, k)) };
+          // A name a member put on the seat is hidden for everyone until an admin decides. A name
+          // from our own records may be another person with that name, so it only unlinks.
+          const k = fkey(e.id, "operator");
+          const cur = valueOf(e, s, "operator");
+          const hide = !!cur && !isSystem(cur.by);
+          let reopened = false;
+          if (cur && hide) {
+            s.values[k] = { ...cur, status: "reported", reporters: [...new Set([...(cur.reporters ?? []), me.id])], reportedBy: me.id };
+            s.reportLog.push({ memberId: me.id, ref: k, at: now });
+            // If naming them closed an open role, it is open again.
+            reopened = reopenFilled(s, e.id, now);
+            if (reopened) tracksNow = null;
+          }
+          return {
+            message: `Got it. That seat is no longer linked to you.${hide ? " The name on that seat is hidden for everyone until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
+            id: pubId(e.id),
+            cells: [...ENG_GATED, "status"].map((f) => changed("engagement", e, f)),
+          };
         }
         case "signal": {
           const name = String(a.name);
@@ -1929,6 +2186,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
     };
 
     const out = run();
+    if (movedRate && out.message) out.message += " This rate replaces the one you shared for the benchmarks only, which already earned its credit.";
     if (refusal.message) return { message: "", refused: refusal.message };
     // The actor's new counts, so the client can update the top bar at once.
     let added = 0;

@@ -8,14 +8,20 @@ import type { Entity } from "./tableFields";
  * What one field looks like to the viewer.
  * - empty: nobody has added it yet (adding it earns a credit)
  * - locked: someone added it; unlocking costs 1 credit. Never carries the value.
- * - value: visible. `mine` = the viewer added it; `ver` = confirmations (our own
- *   records count as one); `iv` = the viewer confirmed it; `system` = set by the system.
+ * - value: visible. `mine` = the viewer added it; `ver` = confirmations by members (a fact
+ *   from our own records or the scan with none has ver 0); `iv` = the viewer confirmed it;
+ *   `system` = set by the system.
+ * - `from` (on value and locked): where a fact nobody added by hand came from. "records" is
+ *   Revenue Nomad's own records (the seed), "posting" is the job posting the weekly scan read.
+ *   Left out on a fact a member added.
  * - reported: under review. Two members' reports hide a fact for everyone until an admin
- *   reviews it; one report hides it only for that reporter (`mine` is then false).
+ *   reviews it; one report hides it only for that reporter (`mine` is then false). A report
+ *   by the seat holder on their own seat, and "This isn't me" on a name a member added, hide
+ *   the fact for everyone at once.
  */
 export type Cell =
   | { s: "empty" }
-  | { s: "locked"; ver: number }
+  | { s: "locked"; ver: number; from?: "records" | "posting" }
   | {
       s: "value";
       v: string;
@@ -23,6 +29,7 @@ export type Cell =
       ver: number;
       iv?: boolean;
       system?: boolean;
+      from?: "records" | "posting";
       /** Seat holder only: the name belongs to a Trading Post member (their title; `you` when it's the viewer). */
       member?: { title: string; you?: boolean };
     }
@@ -85,6 +92,7 @@ export interface CompanyRec {
    * The company has an active open role and the viewer hasn't unlocked it: `name` is
    * HIDDEN_COMPANY, website, LinkedIn and About come back locked, HQ is cut to its region and
    * there is no logo. Unlock with { type: "unlock", entity: "company", id, field: "identity" }.
+   * That one credit also opens the role and the posting of each open role there.
    */
   hidden?: boolean;
   /** Domain to draw the logo from (Website, or a looked-up domain). */
@@ -270,7 +278,11 @@ export type Action =
   /** `memberId` (seat holder only): the member picked from the search, which links the seat to them. */
   | { type: "fill"; entity: Entity; id: string; field: string; value: string; memberId?: string }
   | { type: "unlock"; entity: Entity; id: string; field: string }
-  /** Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. */
+  /**
+   * Unlock several facts in one go (e.g. a whole engagement). Costs 1 credit each. A hidden
+   * company is one purchase with the role and posting of each open role there: asking for the
+   * company (`identity`), such a role or such a posting buys all of them for 1 credit.
+   */
   | { type: "unlockMany"; items: { entity: Entity; id: string; field: string }[] }
   /**
    * Add a company (one click from a URL) and optionally an engagement and people there.
@@ -299,6 +311,10 @@ export type Action =
   /** Confirm a value you can see is correct (one confirmation per member per value). */
   | { type: "verify"; entity: Entity; id: string; field: string }
   | { type: "review"; entity: Entity; id: string; field: string; decision: "keep" | "remove" }
+  /** Admins: remove a fact a member added, with no report needed. Credits go back the way a review removal does. */
+  | { type: "adminRemove"; entity: Entity; id: string; field: string }
+  /** Admins: remove every fact this member added (`memberId` is a public id), their benchmark-only rates and the empty records left behind. */
+  | { type: "adminRemoveMember"; memberId: string }
   /**
    * Share a rate for the benchmarks only. It counts in the medians and is never shown on a
    * record or to another member. Earns 1 credit (inside the daily cap). One per seat.
