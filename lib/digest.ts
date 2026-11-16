@@ -1,30 +1,19 @@
 /**
- * The weekly digest email: new open roles in the member's function, what closed, and what they
- * can add. One member's numbers only. It never names a company, since open roles keep the
- * company hidden until the member unlocks it.
+ * The weekly email: new open roles in the member's function, what closed, and what they can
+ * add. One member's numbers only. It never names a company, since open roles keep the company
+ * hidden until the member unlocks it.
+ *
+ * It leads with the count and the one button. The breakdown and the member's own numbers come
+ * after, for whoever reads on. The frame is shared with the sign-in email (lib/email.ts).
  *
  * RN_EMAIL_FOOTER   optional line for the footer, such as the sender's postal address
  */
 import type { DigestData } from "./scanTypes";
-
-const PINE = "#073F2F";
-const VOLT = "#2EE59D";
-const VOLT_SOFT = "#E8FBF2";
-const EMBER = "#FF5A1F";
-const INK = "#0A1A13";
-const BODY = "#28322D";
-const MUTED = "#5B6661";
-const LINE = "#E2E6E3";
-const PAGE = "#FAFAF7";
-const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+import { MAIL, escHtml as esc, footerNote as footerLine, mailButton, mailP, mailShell, oneLine } from "./email";
 
 /** How many functions the list shows before the rest fold into one line. */
 const MAX_FUNCTIONS = 6;
 
-const esc = (s: unknown) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-/** One line of text: no control characters, no line breaks. */
-const oneLine = (s: unknown) => String(s ?? "").replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim();
 /** A whole number of things, never negative, never NaN. */
 const count = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0);
 /** Only web links go in an href. */
@@ -43,7 +32,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
   const credits = count(d.credits);
   const appUrl = link(d.appUrl);
   const unsubscribeUrl = link(d.unsubscribeUrl);
-  const footerNote = oneLine(typeof process !== "undefined" ? process.env.RN_EMAIL_FOOTER : "").slice(0, 300);
+  const footerNote = footerLine();
 
   /* ---- the words ---- */
 
@@ -54,7 +43,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
 
   let lead: string;
   if (mine > 0) {
-    if (hidden === 0) lead = "";
+    if (hidden === 0) lead = mine === 1 ? "You can already see the company." : mine === 2 ? "You can already see both companies." : `You can already see all ${mine} companies.`;
     else if (mine === 1) lead = "The company is hidden. Unlock it for 1 credit to see who is hiring.";
     else if (hidden === mine) lead = `All ${mine} companies are hidden. Unlock one for 1 credit to see who is hiring.`;
     else if (hidden === 1) lead = "1 of those companies is hidden. Unlock it for 1 credit to see who is hiring.";
@@ -63,7 +52,7 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     const none = fn && fn !== "Other" ? (newRoles === 1 ? `It is not in ${fn}. ` : `None are in ${fn}. `) : "";
     lead = `${none}${newRoles === 1 ? "The" : "Each"} company stays hidden until you unlock it for 1 credit.`;
   } else {
-    lead = "Roles that are already open are still listed.";
+    lead = "The roles that were already open are still listed.";
   }
 
   const rows = (Array.isArray(d.byFunction) ? d.byFunction : [])
@@ -77,10 +66,23 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
 
   const closedLine =
     closed === 0 ? "" : closed === 1 ? "1 role closed this week. Its company is visible again." : `${closed} roles closed this week. Their companies are visible again.`;
-  const seatsLine = missing === 0 ? "" : missing === 1 ? "Your seats are missing 1 fact. It earns a credit." : `Your seats are missing ${missing} facts. Each one earns a credit.`;
-  const creditsLine = credits === 0 ? "You have 0 credits. Every fact you add earns one." : `You have ${plural(credits, "credit")}.`;
+  const seatsLine =
+    missing === 0
+      ? ""
+      : missing === 1
+        ? "1 thing is still missing on your seats. Add it and you earn a credit."
+        : `${missing} things are still missing on your seats. Add one and you earn a credit.`;
+  // Low on credits: say how to earn, unless the seats line just did.
+  const creditsLine =
+    credits === 0
+      ? `You have 0 credits.${seatsLine ? "" : " Add a fact you know and you earn one."}`
+      : credits <= 3
+        ? `You have ${plural(credits, "credit")} left.${seatsLine ? "" : " Add a fact you know and you earn another."}`
+        : `You have ${credits} credits to spend.`;
   const cta = "See this week's roles";
-  const why = "You get this email once a week because you are a Trading Post member.";
+  const why = "You get this once a week because you're a Trading Post member.";
+  const listTitle = "New roles by function";
+  const restLabel = "Other functions";
 
   /* ---- plain text ---- */
 
@@ -88,12 +90,12 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
     `Hi ${first},`,
     "",
     heroCount > 0 ? `${heroCount} ${heroLabel.replace(" this week", " opened this week")}.${lead ? " " + lead : ""}` : `No new fractional roles opened this week. ${lead}`,
-    ...(showList ? ["", "New roles by function", ...shown.map((r) => `  ${r.function}  ${r.n}`), ...(rest ? [`  More functions  ${rest}`] : [])] : []),
+    ...(appUrl ? ["", cta, appUrl] : []),
+    ...(showList ? ["", listTitle, ...shown.map((r) => `  ${r.function}  ${r.n}`), ...(rest ? [`  ${restLabel}  ${rest}`] : [])] : []),
     ...(closedLine ? ["", closedLine] : []),
     ...(seatsLine ? ["", seatsLine] : []),
     "",
     creditsLine,
-    ...(appUrl ? ["", cta, appUrl] : []),
     "",
     "--",
     why,
@@ -103,83 +105,53 @@ export function renderDigest(d: DigestData): { subject: string; text: string; ht
 
   /* ---- HTML ---- */
 
-  const p = (body: string, style = "") => `<p style="margin:0 0 16px;font-family:${FONT};font-size:16px;line-height:24px;color:${BODY};${style}">${body}</p>`;
-
+  const num = "font-variant-numeric:tabular-nums;";
+  // The one ember element: the count of roles that are live this week.
   const hero =
     heroCount > 0
       ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px"><tr>
-<td valign="middle" style="padding:0 14px 0 0;font-family:${FONT};font-size:48px;line-height:52px;font-weight:800;color:${EMBER}">${heroCount}</td>
-<td valign="middle" style="font-family:${FONT};font-size:20px;line-height:26px;font-weight:700;color:${INK}">${esc(heroLabel)}</td>
+<td valign="middle" style="padding:0 12px 0 0;font-family:${MAIL.font};font-size:48px;line-height:52px;font-weight:800;letter-spacing:-0.03em;${num}color:${MAIL.ember}">${heroCount}</td>
+<td valign="middle" style="font-family:${MAIL.font};font-size:22px;line-height:26px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">${esc(heroLabel)}</td>
 </tr></table>`
-      : `<p style="margin:0 0 12px;font-family:${FONT};font-size:22px;line-height:28px;font-weight:800;color:${INK}">No new fractional roles this week</p>`;
+      : `<p style="margin:0 0 12px;font-family:${MAIL.font};font-size:22px;line-height:28px;font-weight:800;letter-spacing:-0.02em;color:${MAIL.ink}">No new fractional roles this week</p>`;
 
   const cell = (body: string, align: "left" | "right", bold: boolean) =>
-    `<td align="${align}" style="padding:10px 0;border-top:1px solid ${LINE};font-family:${FONT};font-size:15px;line-height:20px;color:${INK};font-weight:${bold ? 700 : 400}">${body}</td>`;
+    `<td align="${align}" style="padding:10px 0;border-top:1px solid ${MAIL.line};font-family:${MAIL.font};font-size:15px;line-height:20px;${align === "right" ? num : ""}color:${MAIL.ink};font-weight:${bold ? 700 : 400}">${body}</td>`;
   const list = showList
-    ? `<p style="margin:8px 0 6px;font-family:${FONT};font-size:13px;line-height:18px;font-weight:700;color:${MUTED}">New roles by function</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;border-bottom:1px solid ${LINE}">
+    ? `<p style="margin:0 0 8px;font-family:${MAIL.font};font-size:13px;line-height:20px;font-weight:700;color:${MAIL.muted}">${listTitle}</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;border-bottom:1px solid ${MAIL.line}">
 ${shown.map((r) => `<tr>${cell(esc(r.function), "left", r.function === fn)}${cell(String(r.n), "right", true)}</tr>`).join("\n")}${
-        rest ? `\n<tr>${cell("More functions", "left", false)}${cell(String(rest), "right", true)}</tr>` : ""
+        rest ? `\n<tr>${cell(restLabel, "left", false)}${cell(String(rest), "right", true)}</tr>` : ""
       }
 </table>`
     : "";
 
   const seats = seatsLine
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px"><tr>
-<td bgcolor="${VOLT_SOFT}" style="padding:12px 14px;border-radius:8px;font-family:${FONT};font-size:16px;line-height:24px;color:${INK}">${esc(seatsLine)}</td>
+<td bgcolor="${MAIL.voltSoft}" style="padding:12px 16px;border-radius:8px;font-family:${MAIL.font};font-size:16px;line-height:24px;color:${MAIL.ink}">${esc(seatsLine)}</td>
 </tr></table>`
     : "";
 
-  const button = appUrl
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 4px"><tr>
-<td bgcolor="${VOLT}" style="border-radius:8px"><a href="${esc(appUrl)}" style="display:inline-block;padding:14px 22px;font-family:${FONT};font-size:16px;line-height:20px;font-weight:700;color:${PINE};text-decoration:none;border-radius:8px">${esc(cta)}</a></td>
-</tr></table>`
-    : "";
-
-  const small = `font-family:${FONT};font-size:12px;line-height:18px;color:${MUTED}`;
-  const footer = [
-    esc(why),
-    unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MUTED};text-decoration:underline">Unsubscribe</a>` : "",
-    footerNote ? esc(footerNote) : "",
+  // The button comes right under the headline, so the next move shows without scrolling.
+  const body = [
+    mailP(`Hi ${esc(first)},`),
+    hero,
+    lead ? mailP(esc(lead), appUrl ? "margin-bottom:24px;" : "margin-bottom:32px;") : "",
+    appUrl ? mailButton(appUrl, cta, "margin:0 0 32px") : "",
+    list,
+    closedLine ? mailP(esc(closedLine)) : "",
+    seats,
+    mailP(esc(creditsLine), "margin-bottom:0;"),
   ]
     .filter(Boolean)
-    .map((line) => `<p style="margin:0 0 4px;${small}">${line}</p>`)
     .join("\n");
 
-  const preheader = oneLine([lead, creditsLine].filter(Boolean).join(" "));
-
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>${esc(subject)}</title>
-</head>
-<body style="margin:0;padding:0;background:${PAGE}">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${PAGE};font-size:1px;line-height:1px">${esc(preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PAGE}" style="background:${PAGE}">
-<tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;background:#FFFFFF;border:1px solid ${LINE};border-radius:10px;border-collapse:separate">
-<tr><td bgcolor="${PINE}" style="padding:18px 28px;border-radius:9px 9px 0 0;font-family:${FONT};font-size:18px;line-height:24px;font-weight:800;color:#FFFFFF">Trading Post</td></tr>
-<tr><td style="padding:28px 28px 24px">
-${p(`Hi ${esc(first)},`)}
-${hero}
-${lead ? p(esc(lead), "margin-bottom:20px;") : ""}
-${list}
-${closedLine ? p(esc(closedLine)) : ""}
-${seats}
-${p(esc(creditsLine))}
-${button}
-</td></tr>
-<tr><td style="padding:16px 28px 20px;border-top:1px solid ${LINE}">
-${footer}
-</td></tr>
-</table>
-</td></tr>
-</table>
-</body>
-</html>`.replace(/\n{2,}/g, "\n");
+  const html = mailShell({
+    title: subject,
+    preheader: oneLine([lead, creditsLine].filter(Boolean).join(" ")),
+    body,
+    footer: [esc(why), unsubscribeUrl ? `<a href="${esc(unsubscribeUrl)}" style="color:${MAIL.muted};text-decoration:underline">Unsubscribe</a>` : "", footerNote ? esc(footerNote) : ""],
+  });
 
   return { subject: oneLine(subject), text, html };
 }

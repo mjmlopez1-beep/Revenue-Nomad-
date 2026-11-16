@@ -1,9 +1,9 @@
 /**
- * Tests for the weekly scan collector (lib/scan) and the digest email (lib/digest.ts).
+ * Tests for the weekly scan collector (lib/scan), the digest email (lib/digest.ts) and the sign-in email (lib/email.ts).
  * No network: postings are fixtures, and the board parser reads a saved copy of its markup.
  *
  *   npx tsx scripts/test-scan.mts                    run the checks (exits 1 on any failure)
- *   npx tsx scripts/test-scan.mts --samples <dir>    also write two rendered digest emails there
+ *   npx tsx scripts/test-scan.mts --samples <dir>    also write the rendered emails there (two weekly, one sign-in)
  *   npx tsx scripts/test-scan.mts --live             one real scan, printing what each source returned
  */
 import { mkdirSync, writeFileSync } from "fs";
@@ -12,6 +12,7 @@ import { cleanCompany, cleanTitle, companyDomain, isRealCompany, roleKey } from 
 import { collectOpenRoles, dedupeRoles, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
 import { renderDigest } from "../lib/digest";
+import { signInEmail } from "../lib/email";
 import { ENGAGEMENT_TYPES, FUNCTIONS } from "../lib/tableFields";
 import type { DigestData, ScanRole } from "../lib/scanTypes";
 
@@ -379,18 +380,22 @@ check("greets by first name", d.text.startsWith("Hi Maya,") && d.html.includes("
 check("says how many of those companies are hidden", d.text.includes("3 of those companies are hidden") && d.html.includes("3 of those companies are hidden"));
 check("lists functions with counts", ["Sales  4", "Marketing  3", "RevOps  3", "Customer Success  2"].every((l) => d.text.includes(l)), d.text);
 check("says how many roles closed", d.text.includes("5 roles closed this week") && d.html.includes("5 roles closed this week"));
-check("has the seats line", d.text.includes("Your seats are missing 9 facts. Each one earns a credit.") && d.html.includes("Your seats are missing 9 facts. Each one earns a credit."));
-check("no seats line when nothing is missing", !/seats are missing/.test(digest({ seatFactsMissing: 0 }).text + digest({ seatFactsMissing: 0 }).html));
-check("one missing fact reads right", digest({ seatFactsMissing: 1 }).text.includes("Your seats are missing 1 fact. It earns a credit."));
-check("shows the credit balance", d.text.includes("You have 12 credits.") && d.html.includes("You have 12 credits."));
-check("one credit reads right", digest({ credits: 1 }).text.includes("You have 1 credit."));
+check("has the seats line", d.text.includes("9 things are still missing on your seats. Add one and you earn a credit.") && d.html.includes("9 things are still missing on your seats. Add one and you earn a credit."));
+check("no seats line when nothing is missing", !/missing on your seats/.test(digest({ seatFactsMissing: 0 }).text + digest({ seatFactsMissing: 0 }).html));
+check("one missing thing reads right", digest({ seatFactsMissing: 1 }).text.includes("1 thing is still missing on your seats. Add it and you earn a credit."));
+check("shows the credit balance", d.text.includes("You have 12 credits to spend.") && d.html.includes("You have 12 credits to spend."));
+check("one credit reads right, and says how to earn", digest({ credits: 1, seatFactsMissing: 0 }).text.includes("You have 1 credit left. Add a fact you know and you earn another."));
+check("3 credits or fewer says how to earn", digest({ credits: 3, seatFactsMissing: 0 }).text.includes("You have 3 credits left. Add a fact you know and you earn another.") && digest({ credits: 4, seatFactsMissing: 0 }).text.includes("You have 4 credits to spend."));
+check("with the seats line above it, a low balance does not repeat how to earn", digest({ credits: 2 }).text.includes("You have 2 credits left.\n") && !digest({ credits: 2 }).text.includes("earn another"));
 check("one closed role reads right", digest({ closedRoles: 1 }).text.includes("1 role closed this week. Its company is visible again."));
 check("all hidden reads right", digest({ newRolesMineHidden: 4 }).text.includes("All 4 companies are hidden."));
+check("the button comes before the list of functions", d.html.indexOf("See this week&#39;s roles") < d.html.indexOf("New roles by function") && d.text.indexOf("See this week's roles") < d.text.indexOf("New roles by function"));
+check("says so when every company in the member's function is already visible", digest({ newRolesMineHidden: 0 }).text.includes("You can already see all 4 companies."));
 check("has one button to the app", (d.html.match(/See this week&#39;s roles/g) ?? []).length === 1 && d.html.includes('href="https://table-pilot.up.railway.app/?k=abc123&amp;tab=roles"'), d.html.match(/<a [^>]*>/g));
 check("text has the app link", d.text.includes("See this week's roles\nhttps://table-pilot.up.railway.app/?k=abc123&tab=roles"));
 check("unsubscribe link is in the text", d.text.includes(base.unsubscribeUrl));
 check("unsubscribe link is in the HTML", d.html.includes('href="https://table-pilot.up.railway.app/api/table?unsubscribe=tok_123&amp;m=1"') && />Unsubscribe<\/a>/.test(d.html));
-check("says why they got it", d.text.includes("because you are a Trading Post member") && d.html.includes("because you are a Trading Post member"));
+check("says why they got it", d.text.includes("because you're a Trading Post member") && d.html.includes("because you&#39;re a Trading Post member"));
 check("header says Trading Post on pine", /bgcolor="#073F2F"[^>]*>Trading Post</.test(d.html));
 check("button is volt with pine text", /bgcolor="#2EE59D"[^>]*><a [^>]*color:#073F2F/.test(d.html));
 eq("ember is used once, on the count", (d.html.match(/#FF5A1F/gi) ?? []).length, 1);
@@ -425,13 +430,30 @@ const sparse = [
 check("never prints undefined, null or NaN", sparse.every((r) => !/undefined|null|NaN/.test(r.subject + r.text + r.html)), sparse.map((r) => (r.subject + r.text + r.html).match(/.{0,40}(undefined|null|NaN).{0,20}/)?.[0]));
 check("an empty name still gets a greeting", sparse[3].text.startsWith("Hi there,"));
 check("the Other bucket gets the general subject", sparse[3].subject === "12 new fractional roles this week", sparse[3].subject);
-check("a zero balance says how to earn", sparse[2].text.includes("You have 0 credits. Every fact you add earns one."));
+check("a zero balance says how to earn", sparse[2].text.includes("You have 0 credits. Add a fact you know and you earn one."));
 
 // Brand voice: no em dashes, no semicolons, no colons in running copy (links aside).
 const copy = sparse.map((r) => r.subject + "\n" + r.text).join("\n").split("\n").filter((l) => !/^https?:\/\//.test(l));
 check("copy has no em dash, semicolon or colon", copy.every((l) => !/[—;:]/.test(l)), copy.filter((l) => /[—;:]/.test(l)));
 check("copy has no banned words", !/\b(unlock the power|seamless|leverage|insights|supercharge|elevate|streamline|robust|journey|buyers?|talent)\b/i.test(copy.join("\n")));
 check("never names a company", !/Acme|Northwind|Kestrel/.test(sparse.map((r) => r.text + r.html).join("")));
+
+/* ---------- sign-in email ---------- */
+console.log("\nSign-in email");
+
+const si = signInEmail("Maya Okafor", "https://table-pilot.up.railway.app/?k=abc123&x=<1>");
+eq("subject", si.subject, "Your Trading Post sign-in link");
+check("greets by first name", si.text.startsWith("Hi Maya,") && si.html.includes("Hi Maya,"));
+check("an empty name still gets a greeting", signInEmail("", "https://example.com/?k=a").text.startsWith("Hi there,"));
+check("text carries the link on its own line", si.text.split("\n").includes("https://table-pilot.up.railway.app/?k=abc123&x=<1>"));
+check("same frame as the weekly email", /bgcolor="#073F2F"[^>]*>Trading Post</.test(si.html) && si.html.includes("max-width:560px"));
+check("one volt button with pine text, to the link", (si.html.match(/bgcolor="#2EE59D"/g) ?? []).length === 1 && /bgcolor="#2EE59D"[^>]*><a href="https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;"[^>]*color:#073F2F[^>]*>Sign in to Trading Post</.test(si.html), si.html.match(/<a [^>]*>/g));
+check("no ember in the sign-in email", !/#FF5A1F/i.test(si.html));
+check("the link is also shown as text, in mono", /font-family:ui-monospace[^>]*><a [^>]*>https:\/\/table-pilot\.up\.railway\.app\/\?k=abc123&amp;x=&lt;1&gt;<\/a>/.test(si.html));
+check("tables and inline styles only, system fonts", !/<style|<link|<script|class=|googleapis|@font-face|Schibsted|Figtree/i.test(si.html) && si.html.includes('role="presentation"'));
+check("says to keep the link private and what to do if they did not ask", si.text.includes("It works like a password.") && si.text.includes("If it wasn't you, ignore this email."));
+const siCopy = (si.subject + "\n" + si.text).split("\n").filter((l) => !/^https?:\/\//.test(l));
+check("copy has no em dash, semicolon or colon", siCopy.every((l) => !/[—;:]/.test(l)), siCopy.filter((l) => /[—;:]/.test(l)));
 
 const samples = args.indexOf("--samples");
 if (samples >= 0 && args[samples + 1]) {
@@ -444,7 +466,10 @@ if (samples >= 0 && args[samples + 1]) {
   writeFileSync(path.join(dir, "digest-roles-in-function.txt"), `Subject: ${a.subject}\n\n${a.text}\n`);
   writeFileSync(path.join(dir, "digest-none-in-function.html"), b.html);
   writeFileSync(path.join(dir, "digest-none-in-function.txt"), `Subject: ${b.subject}\n\n${b.text}\n`);
-  console.log(`\nWrote 2 sample emails to ${dir}`);
+  const c = signInEmail("Maya Okafor", "https://table-pilot.up.railway.app/?k=EXAMPLEcode123");
+  writeFileSync(path.join(dir, "sign-in.html"), c.html);
+  writeFileSync(path.join(dir, "sign-in.txt"), `Subject: ${c.subject}\n\n${c.text}\n`);
+  console.log(`\nWrote 3 sample emails to ${dir}`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

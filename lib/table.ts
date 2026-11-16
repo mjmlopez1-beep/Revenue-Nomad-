@@ -548,6 +548,15 @@ const newId = (p: string, name = "") => `${p}_${slug(name).slice(0, 20)}${Date.n
 const DAY = 24 * 60 * 60 * 1000;
 /** Label in running text: "role", but "HQ" and "LinkedIn" keep their capitals. */
 const lower = (label: string) => (/[A-Z]/.test(label.slice(1)) ? label : label.toLowerCase());
+/** A field inside a sentence, with its article: "the role", "a person's email". */
+const say = (entity: Entity, key: string) => {
+  const f = fieldDef(entity, key);
+  return f ? f.say ?? `the ${lower(f.label)}` : "that fact";
+};
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+/** An id that points at nothing (the record was removed, or the page is out of date). */
+const gone = (entity: Entity) =>
+  `We couldn't find that ${entity === "company" ? "company" : entity === "engagement" ? "seat" : "person"}. It may have been removed. Refresh the page and try again.`;
 /** Ledger reasons that count toward the daily earning cap: everything a member earns. */
 const EARNING = new Set(["fill", "referral", "confirm"]);
 /** Max facts a member can unlock per rolling 24 hours (stops scraping). */
@@ -755,13 +764,13 @@ export async function joinMember(nameRaw: unknown, emailRaw: unknown, ref?: unkn
   return mutate((s, seed) => {
     const name = stripInvisible(nameRaw).trim().replace(/\s+/g, " ").slice(0, 80);
     const email = stripInvisible(emailRaw).trim().toLowerCase().slice(0, 120);
-    if (name.length < 2) throw new ActionError("Enter your name.");
-    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("Enter a valid work email.");
+    if (name.length < 2) throw new ActionError("Enter your full name.");
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("That email doesn't look right. Check it and try again.");
     const seedMember = seed.members.find((m) => m.email && m.email.toLowerCase() === email);
     const joined = s.members.find((m) => m.email === email);
     if (seedMember || joined) {
       if (emailEnabled()) return { ...(seedMember ?? joined)!, existing: true }; // route emails them their link
-      throw new ActionError("That email is already in use. Sign in with your link.");
+      throw new ActionError("That email already belongs to a member. Sign in with your personal link.");
     }
     const code = String(ref ?? "").trim();
     const referrer = code ? seed.members.find((m) => inviteCode(m.id) === code) ?? s.members.find((m) => inviteCode(m.id) === code) : undefined;
@@ -1080,11 +1089,11 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         entity,
         id: outId(entity, id),
         field,
-        record: companyNameOf(id) || "?",
+        record: companyNameOf(id) || "Unknown company",
         label: f.label,
         value: v.value,
         companyId: pubId(companyIdOf(id)),
-        addedBy: v.by === "seed" ? "Seed data" : v.by === "scan" ? "Weekly scan" : memberName(v.by),
+        addedBy: v.by === "seed" ? "Revenue Nomad records" : v.by === "scan" ? "Weekly scan" : memberName(v.by),
         reporters: (v.reporters ?? (v.reportedBy ? [v.reportedBy] : [])).map(memberName),
         reportedAt: lastReport.get(k) ?? null,
       });
@@ -1126,10 +1135,10 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       }
       // The one-time lift to 0 when starter credits went down.
       if (l.reason === "adjust") {
-        ledger.push({ at: l.at, delta: l.delta, reason: "Balance reset to zero", company: "", field: "" });
+        ledger.push({ at: l.at, delta: l.delta, reason: "Topped up to 0 when starter credits changed", company: "", field: "" });
         continue;
       }
-      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: fieldLabel(entityOf(id), field) });
+      ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: ledgerLabel(entityOf(id), field) });
     }
     ledger.reverse();
     const prof = s.profiles[me.id] ?? {};
@@ -1194,9 +1203,11 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
 }
 
 /** How a ledger row or a stats line names a field. */
-const BENCH_LABEL = "Rate (benchmarks only)";
+const BENCH_LABEL = "Private rate";
 const fieldLabel = (entity: Entity, field: string) =>
   entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
+/** The same for a row in the credit history. A person's fields say so: "Person email", not "Email". */
+const ledgerLabel = (entity: Entity, field: string) => (entity === "contact" ? `Person ${lower(fieldLabel(entity, field))}` : fieldLabel(entity, field));
 
 /* ---------- the weekly scan, as numbers ---------- */
 
@@ -1427,17 +1438,19 @@ function addSignal(s: State, memberId: string, name: string, where: string, now:
 /** Private rates not tied to a seat that one member can share. */
 const BENCH_UNATTACHED_MAX = 3;
 const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
+/** A request the server doesn't know (an old tab after a release, most likely). */
+const UNKNOWN_ACTION = "That didn't go through. Refresh the page and try again.";
 
 export async function perform(token: string | null, a: Action, origin?: string): Promise<ActionResult> {
   if (a?.type === "scanNow") {
-    if (!isAdmin(await memberForToken(token))) throw new ActionError("Admins only.");
+    if (!isAdmin(await memberForToken(token))) throw new ActionError("Only admins can start a scan.");
     // In the background: a scan reads several job boards and can take a while.
     void runScan(origin).catch((e) => console.error("scan failed", e));
-    return { message: "Scan started." };
+    return { message: "Scan started. It reads several job boards, so give it a few minutes." };
   }
   const out = await mutate((s, seed): ActionResult & { refused?: string } => {
     const me = memberByToken(seed, token, s);
-    if (!me) throw new ActionError("Join or sign in to add, confirm and unlock.");
+    if (!me) throw new ActionError("You're signed out. Sign in again to add, confirm or unlock.");
     const now = new Date().toISOString();
     const nowMs = Date.parse(now);
     // Bonuses held at the cap are paid first, as the rolling window frees room.
@@ -1454,9 +1467,9 @@ export async function perform(token: string | null, a: Action, origin?: string):
     for (const id of g.contacts.keys()) fromPub.set(pubId(id), id);
     for (const id of g.companies.keys()) fromPub.set(pubId(id), id);
     /** The internal id for a public id the client sent. */
-    const inId = (_entity: Entity, raw: unknown): string => {
+    const inId = (entity: Entity, raw: unknown): string => {
       const internal = fromPub.get(String(raw ?? ""));
-      if (!internal) throw new ActionError("Record not found.");
+      if (!internal) throw new ActionError(gone(entity));
       return internal;
     };
     const idx0 = memberIndex(seed, s);
@@ -1470,17 +1483,17 @@ export async function perform(token: string | null, a: Action, origin?: string):
       entity === "engagement" && ((field === "status" && tracks().has(id)) || ownSeat(id));
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
-      if (hiddenFor(companyId)) throw new ActionError("Unlock this company first (1 credit) to add facts here.");
+      if (hiddenFor(companyId)) throw new ActionError("This company is hidden. Unlock it for 1 credit, then add what you know.");
     };
     const nodeOf = (entity: Entity, raw: unknown): Node => {
       const id = inId(entity, raw);
       const n = (entity === "company" ? g.companies : entity === "engagement" ? g.engagements : g.contacts).get(id);
-      if (!n) throw new ActionError("Record not found.");
+      if (!n) throw new ActionError(gone(entity));
       return n;
     };
     const fieldOf = (entity: Entity, key: string) => {
       const f = fieldDef(entity, key);
-      if (!f || f.identity || f.system) throw new ActionError("That field can't be filled.");
+      if (!f || f.identity || f.system) throw new ActionError("Members can't change that field.");
       return f;
     };
     /** A changed cell for the result, as the actor now sees it. */
@@ -1493,7 +1506,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
       const wanted = String(raw);
       if (wanted === "me") return me;
       const m = memberIndex(seed, s).all.find((x) => pubId(x.id) === wanted);
-      if (!m) throw new ActionError("That member isn't on Trading Post.");
+      if (!m) throw new ActionError("That member isn't on Trading Post. Type the seat holder's first and last name instead.");
       return m;
     };
     let capped = false;
@@ -1528,7 +1541,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
       // A seat holder can correct what our records or the scan say about their own seat.
       // What another member added still needs a report.
       const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
-      if (cur && cur.by !== me.id && !correction) throw new ActionError(`${f.label} is already filled. Confirm or report it instead.`);
+      if (cur && cur.by !== me.id && !correction)
+        throw new ActionError(`${capital(say(entity, key))} is already there. Confirm it if it's right, or report it if it's wrong.`);
       if (cur && cur.value === value && (correction || cur.memberId === linked?.id)) return 0; // unchanged (and any reports on it stand)
       const k = fkey(node.id, key);
       if (cur && cur.value !== value) delete s.verifications[k]; // confirmations were for the old value
@@ -1555,13 +1569,15 @@ export async function perform(token: string | null, a: Action, origin?: string):
       if (!d) capped = true;
       return d;
     };
-    const capNote = () => {
+    /** What to say when the daily limit stopped a credit. `some`: part of this change did earn. */
+    const capNote = (some = false) => {
       if (!capped) return "";
       const r = earning(s, me.id, nowMs).resetsAt;
       const hrs = r ? Math.max(1, Math.ceil((Date.parse(r) - nowMs) / 3_600_000)) : 24;
-      return ` You've hit today's max of ${EARN_CAP} earned credits, so this one didn't earn. Earning reopens in about ${hrs} hour${hrs === 1 ? "" : "s"}.`;
+      return ` You've reached the limit of ${EARN_CAP} credits earned in 24 hours, so ${some ? "the rest" : "this one"} earned nothing. You can earn again in about ${hrs} hour${hrs === 1 ? "" : "s"}.`;
     };
-    const credits = (n: number) => (n ? ` +${n} credit${n > 1 ? "s" : ""}.` : "");
+    const credits = (n: number) => (n ? ` You earned ${n} credit${n > 1 ? "s" : ""}.` : "");
+    const bonusNote = (n: number) => (n ? ` Your invite bonus added ${n} more.` : "");
 
     const run = (): ActionResult => {
       switch (a?.type) {
@@ -1578,7 +1594,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
           for (const c of alsoChanged) cells.push(changed(c.entity, c.node, c.field));
           return {
-            message: `${wasMine ? "Updated" : "Added"} ${lower(f.label)}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
+            message: `${wasMine ? "Updated" : "Added"} ${say(a.entity, f.key)}.${credits(earned)}${bonusNote(bonus)}${capNote()}`,
             id: outId(a.entity, node.id),
             capped,
             cells,
@@ -1605,8 +1621,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
             todo.push({ k, node, entity: it.entity, field: f.key });
           }
           if (!todo.length) {
-            if (a.type === "unlock") throw new ActionError("Nothing to unlock here.");
-            return { message: "Already visible." };
+            if (a.type === "unlock") throw new ActionError("Nothing here is locked, so no credit was spent.");
+            return { message: "You can already see all of these, so no credits were spent." };
           }
           const unlockedToday = s.ledger.filter((l) => l.memberId === me.id && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY).length;
           // Accounts in their first 24 hours get a lower limit. Seed members have no join time.
@@ -1622,23 +1638,31 @@ export async function perform(token: string | null, a: Action, origin?: string):
             refusal.message = msg;
             return { message: "" };
           }
-          if (todo.length > left) throw new ActionError(left > 0 ? `You can unlock ${left} more today.` : "You hit today's unlock limit. It resets within 24 hours.");
+          if (todo.length > left) {
+            const limit =
+              max === NEW_MEMBER_UNLOCK_MAX
+                ? `New accounts can unlock ${NEW_MEMBER_UNLOCK_MAX} facts in their first 24 hours, then ${UNLOCK_DAILY_MAX} a day.`
+                : `The limit is ${UNLOCK_DAILY_MAX} unlocks in 24 hours.`;
+            throw new ActionError(left > 0 ? `You can unlock ${left} more today. ${limit}` : `You've reached today's unlock limit. ${limit}`);
+          }
           for (const t of todo) {
             s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: t.k, at: now });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
           return {
             message:
-              todo.length === 1 && todo[0].field === "identity"
-                ? `Unlocked ${g.companies.get(todo[0].node.id)?.name ?? "the company"}. −1 credit.`
-                : `Unlocked ${todo.length} fact${todo.length > 1 ? "s" : ""}. −${todo.length} credit${todo.length > 1 ? "s" : ""}.`,
+              todo.length > 1
+                ? `Unlocked ${todo.length} facts for ${todo.length} credits.`
+                : todo[0].field === "identity"
+                  ? `Unlocked ${g.companies.get(todo[0].node.id)?.name ?? "the company"} for 1 credit.`
+                  : `Unlocked ${say(todo[0].entity, todo[0].field)} for 1 credit.`,
             cells: todo.filter((t) => t.field !== "identity").map((t) => changed(t.entity, t.node, t.field)),
           };
         }
         case "add": {
           const name = stripInvisible(a.company).trim().replace(/\s+/g, " ").slice(0, 80);
           if (name.length < 2) throw new ActionError("What's the company called?");
-          if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) throw new ActionError("Type the company's real name.");
+          if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) throw new ActionError("That's our placeholder for a company you haven't unlocked. Type the real name.");
           // Validate everything up front so a bad field never leaves a half-made record.
           const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
             Object.entries(raw ?? {})
@@ -1716,23 +1740,23 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const where = isNew
             ? `Added ${companyName}`
             : engNew
-              ? `Added a new engagement at ${companyName}`
-              : eid || earned || people.length
-                ? `${companyName} is already on Trading Post. Your details went into its record`
-                : `${companyName} is already on Trading Post`;
-          const skipped = kept ? ` ${kept} field${kept > 1 ? "s were" : " was"} already filled and left as is.` : "";
+              ? `Added a seat at ${companyName}`
+              : earned || capped || people.length
+                ? `${companyName} was already on Trading Post, so we added what you know to it`
+                : `${companyName} is already on Trading Post`; // nothing new went in (the old wording said it had)
+          const skipped = kept ? (kept > 1 ? ` ${kept} facts were already there, so we left them as they were.` : " 1 fact was already there, so we left it as it was.") : "";
           return {
-            message: `${where}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${skipped}${capNote()}`,
+            message: `${where}.${credits(earned)}${bonusNote(bonus)}${skipped}${capNote(earned > 0)}`,
             id: eid ? pubId(eid) : pubId(company.id),
             capped,
           };
         }
         case "addPerson": {
           const c = g.companies.get(fromPub.get(String(a.companyId)) ?? "");
-          if (!c) throw new ActionError("Company not found.");
+          if (!c) throw new ActionError(gone("company"));
           mustSee(c.id);
           const e = a.engagementId ? g.engagements.get(fromPub.get(String(a.engagementId)) ?? "") : null;
-          if (a.engagementId && (!e || e.companyId !== c.id)) throw new ActionError("Engagement not found.");
+          if (a.engagementId && (!e || e.companyId !== c.id)) throw new ActionError(gone("engagement"));
           const fields = Object.entries(a.person ?? {}).filter(([, v]) => String(v ?? "").trim());
           if (!fields.some(([k]) => k === "name")) throw new ActionError("Add the person's name.");
           const clean: [string, string][] = [];
@@ -1748,14 +1772,14 @@ export async function perform(token: string | null, a: Action, origin?: string):
           for (const [k, v] of clean) earned += setValue({ id: pid, seedFields: {} }, "contact", k, v);
           const bonus = earned || capped ? payReferral() : 0;
           return {
-            message: `Added ${clean.find(([k]) => k === "name")![1]} at ${c.name}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
+            message: `Added ${clean.find(([k]) => k === "name")![1]} at ${c.name}.${credits(earned)}${bonusNote(bonus)}${capNote(earned > 0)}`,
             id: pubId(pid),
             capped,
           };
         }
         case "follow": {
           const c = g.companies.get(fromPub.get(String(a.companyId)) ?? "");
-          if (!c) throw new ActionError("Company not found.");
+          if (!c) throw new ActionError(gone("company"));
           const label = hiddenFor(c.id) ? "this company" : c.name;
           const list = new Set(s.follows[me.id] ?? []);
           if (a.on) list.add(c.id);
@@ -1783,16 +1807,16 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const k = fkey(node.id, f.key);
           const cur = valueOf(node, s, f.key);
           const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
-          if (!cur || cur.status !== "live" || !canSee) throw new ActionError("Nothing to report here.");
-          if (cur.by === me.id) throw new ActionError("That's your own fact. Edit it instead.");
-          if (!s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0)) throw new ActionError("Add a fact before you report one.");
+          if (!cur || cur.status !== "live" || !canSee) throw new ActionError("There's nothing here to report. You can only report a fact you can see.");
+          if (cur.by === me.id) throw new ActionError("You added this one. Edit it instead of reporting it.");
+          if (!s.ledger.some((l) => l.memberId === me.id && l.reason === "fill" && l.delta > 0)) throw new ActionError("Reporting opens once you've added a fact of your own. Add one first.");
           if (s.reportLog.filter((r) => r.memberId === me.id && nowMs - Date.parse(r.at) < DAY).length >= REPORT_DAILY_MAX)
-            throw new ActionError(`You can report ${REPORT_DAILY_MAX} facts a day.`);
+            throw new ActionError(`You've reported ${REPORT_DAILY_MAX} facts in 24 hours, which is the limit. Try again tomorrow.`);
           if ((cur.reporters ?? []).includes(me.id)) return { message: "You already reported this." };
           const reporters = [...(cur.reporters ?? []), me.id];
           s.values[k] = { ...cur, reporters, status: reporters.length >= 2 ? "reported" : "live", reportedBy: me.id };
           s.reportLog.push({ memberId: me.id, ref: k, at: now });
-          return { message: "Reported. An admin will review it.", cells: [changed(a.entity, node, f.key)] };
+          return { message: "Reported. It's hidden for you now, and an admin will review it.", cells: [changed(a.entity, node, f.key)] };
         }
         case "verify": {
           const node = nodeOf(a.entity, a.id);
@@ -1800,8 +1824,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const k = fkey(node.id, f.key);
           const cur = valueOf(node, s, f.key);
           const canSee = !f.gated || (s.unlocks[k] ?? []).includes(me.id) || freeFor(a.entity, node.id, f.key);
-          if (!cur || cur.status !== "live" || !canSee || cur.reporters?.includes(me.id)) throw new ActionError("Nothing to confirm here.");
-          if (cur.by === me.id) throw new ActionError("You can't confirm your own fact.");
+          if (!cur || cur.status !== "live" || !canSee || cur.reporters?.includes(me.id)) throw new ActionError("There's nothing here to confirm. You can only confirm a fact you can see.");
+          if (cur.by === me.id) throw new ActionError("You added this one, so another member has to confirm it.");
           const list = s.verifications[k] ?? [];
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
@@ -1810,18 +1834,18 @@ export async function perform(token: string | null, a: Action, origin?: string):
           // it counts toward the daily cap and is held if the author is at it).
           if (!isSystem(cur.by) && list.length + 1 >= 2 && !s.ledger.some((l) => l.reason === "confirm" && l.ref === k) && !s.held.some((h) => h.reason === "confirm" && h.ref === k))
             grant(s, cur.by, 1, "confirm", k, now);
-          return { message: `Confirmed ${lower(f.label)}. ${n} confirmation${n > 1 ? "s" : ""} now.`, cells: [changed(a.entity, node, f.key)] };
+          return { message: `Confirmed ${say(a.entity, f.key)}. That makes ${n} confirmation${n > 1 ? "s" : ""}.`, cells: [changed(a.entity, node, f.key)] };
         }
         case "review": {
-          if (!isAdmin(me)) throw new ActionError("Admins only.");
+          if (!isAdmin(me)) throw new ActionError("Only admins can review reports.");
           const k = fkey(inId(a.entity, a.id), String(a.field));
           const cur = s.values[k];
-          if (!cur || cur.status === "removed" || (cur.status !== "reported" && !cur.reporters?.length)) throw new ActionError("Nothing to review.");
+          if (!cur || cur.status === "removed" || (cur.status !== "reported" && !cur.reporters?.length)) throw new ActionError("There's nothing to review on this one. It may already be settled.");
           if (a.decision === "keep") {
             s.values[k] = { ...cur, status: "live" };
             delete s.values[k].reporters;
             delete s.values[k].reportedBy;
-            return { message: "Kept." };
+            return { message: "Kept. It shows for everyone again." };
           }
           // Wrong data: the field reopens, the filler loses what it earned, unlockers get theirs back.
           s.values[k] = { ...cur, status: "removed" };
@@ -1835,7 +1859,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
           }
           for (const m of s.unlocks[k] ?? []) s.ledger.push({ memberId: m, delta: 1, reason: "refund", ref: k, at: now });
           delete s.unlocks[k];
-          return { message: "Removed. The field is open to fill again." };
+          return { message: "Removed. Anyone who unlocked it got their credit back, and it can be added again." };
         }
         case "benchRate": {
           // A rate for the benchmarks only: it counts in the medians and is never on a record.
@@ -1855,10 +1879,10 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const myFn = s.profiles[me.id]?.function ?? functionOf(s.profiles[me.id]?.title || me.title);
           if (a.engagementId) {
             const e = g.engagements.get(inId("engagement", a.engagementId));
-            if (!e) throw new ActionError("Record not found.");
-            if (!ownSeat(e.id) && !s.engagements.some((x) => x.id === e.id && x.by === me.id)) throw new ActionError("You can share a rate for a seat you held or added.");
+            if (!e) throw new ActionError(gone("engagement"));
+            if (!ownSeat(e.id) && !s.engagements.some((x) => x.id === e.id && x.by === me.id)) throw new ActionError("You can only share a rate for a seat you held or added.");
             if (valueOf(e, s, "rate")?.by === me.id) throw new ActionError("Your rate is already on this seat, so it already counts in the benchmarks.");
-            if (mine.some((b) => b.engagementId === e.id)) throw new ActionError("You already shared a rate for this seat.");
+            if (mine.some((b) => b.engagementId === e.id)) throw new ActionError("You already shared a rate for this seat. Remove it first to share a different one.");
             engagementId = e.id;
             fn = fnOf(e, s) ?? askedFn ?? myFn ?? "Other";
             revenue = live(e, s, "revenue") ?? live(g.companies.get(e.companyId), s, "revenue") ?? askedRevenue;
@@ -1874,17 +1898,17 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const earned = awardFill(`bench.${id}`);
           if (!earned) capped = true;
           const bonus = payReferral();
-          return { message: `Added to the benchmarks. Nobody sees your rate.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`, id, capped };
+          return { message: `Added to the benchmarks. Nobody sees your rate.${credits(earned)}${bonusNote(bonus)}${capNote()}`, id, capped };
         }
         case "benchRateRemove": {
           const i = s.benchRates.findIndex((b) => b.id === String(a.id) && b.by === me.id);
-          if (i < 0) throw new ActionError("Rate not found.");
+          if (i < 0) throw new ActionError("We couldn't find that rate. It may already be removed.");
           const ref = `bench.${s.benchRates[i].id}`;
           s.benchRates.splice(i, 1);
           // Take back the credit it earned.
           const paid = s.ledger.filter((l) => l.memberId === me.id && l.ref === ref).reduce((n, l) => n + l.delta, 0);
           if (paid > 0) s.ledger.push({ memberId: me.id, delta: -paid, reason: "reversal", ref, at: now });
-          return { message: `Removed your rate from the benchmarks.${paid > 0 ? ` −${paid} credit.` : ""}` };
+          return { message: `Removed your rate from the benchmarks.${paid > 0 ? ` The ${paid === 1 ? "credit" : `${paid} credits`} it earned came off your balance.` : ""}` };
         }
         case "notMine": {
           // "This isn't me": a seat matched to this member by name that they never held.
@@ -1895,7 +1919,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
         }
         case "signal": {
           const name = String(a.name);
-          if (!SIGNAL_NAMES.has(name)) throw new ActionError("Unknown action.");
+          if (!SIGNAL_NAMES.has(name)) throw new ActionError(UNKNOWN_ACTION);
           const where = String(a.where ?? "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40) || "unknown";
           if (name === "pro_interest") {
             // Once per member.
@@ -1919,12 +1943,12 @@ export async function perform(token: string | null, a: Action, origin?: string):
             if (a.digest) delete p.digestOff;
             else p.digestOff = true;
             s.profiles[me.id] = p;
-            return { message: a.digest ? "Weekly email is on." : "Weekly email is off." };
+            return { message: a.digest ? "The weekly email is on. It goes out when new roles open." : "The weekly email is off. We won't send another one." };
           }
           return { message: "Saved." };
         }
         default:
-          throw new ActionError("Unknown action.");
+          throw new ActionError(UNKNOWN_ACTION);
       }
     };
 

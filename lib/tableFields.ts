@@ -88,6 +88,11 @@ export interface FieldDef {
   placeholder?: string;
   /** One line shown in tooltips and the add form. */
   hint?: string;
+  /**
+   * The field inside a sentence, with its article: "the role", "a person's email". Toasts and
+   * errors use it ("Added the role."). Labels stay for headers and forms.
+   */
+  say?: string;
 }
 
 export interface GroupDef {
@@ -102,28 +107,28 @@ export const GROUPS: GroupDef[] = [
     label: "Company",
     fields: [
       { key: "name", label: "Company", kind: "text", gated: false, identity: true },
-      { key: "website", label: "Website", kind: "url", gated: false, placeholder: "acme.com" },
-      { key: "industry", label: "Industry", kind: "choice", gated: false, options: RN_INDUSTRIES },
-      { key: "employees", label: "Employees", kind: "choice", gated: false, options: RN_EMPLOYEES },
-      { key: "revenue", label: "Revenue", kind: "choice", gated: false, options: RN_REVENUE },
-      { key: "hq", label: "HQ", kind: "text", gated: false, placeholder: "Chicago, IL" },
-      { key: "linkedin", label: "LinkedIn", kind: "url", gated: false, placeholder: "linkedin.com/company/…" },
-      { key: "about", label: "About", kind: "text", gated: false, system: true },
-      { key: "businessModel", label: "Business model", kind: "choice", gated: false, options: BUSINESS_MODELS },
-      { key: "motion", label: "Sales motion", kind: "choice", gated: false, options: RN_MOTIONS },
-      { key: "dealSize", label: "Average deal size", short: "Deal size", kind: "choice", gated: false, options: RN_DEAL_SIZES },
-      { key: "salesCycle", label: "Average sales cycle", short: "Sales cycle", kind: "choice", gated: false, options: RN_SALES_CYCLES },
+      { key: "website", label: "Website", kind: "url", gated: false, placeholder: "acme.com", say: "the website" },
+      { key: "industry", label: "Industry", kind: "choice", gated: false, options: RN_INDUSTRIES, say: "the industry" },
+      { key: "employees", label: "Employees", kind: "choice", gated: false, options: RN_EMPLOYEES, say: "the employee count" },
+      { key: "revenue", label: "Revenue", kind: "choice", gated: false, options: RN_REVENUE, say: "the revenue range" },
+      { key: "hq", label: "HQ", kind: "text", gated: false, placeholder: "Chicago, IL", say: "the HQ" },
+      { key: "linkedin", label: "LinkedIn", kind: "url", gated: false, placeholder: "linkedin.com/company/…", say: "the LinkedIn page" },
+      { key: "about", label: "About", kind: "text", gated: false, system: true, say: "the About text" },
+      { key: "businessModel", label: "Business model", kind: "choice", gated: false, options: BUSINESS_MODELS, say: "the business model" },
+      { key: "motion", label: "Sales motion", kind: "choice", gated: false, options: RN_MOTIONS, hint: "How the company sells most of its deals.", say: "the sales motion" },
+      { key: "dealSize", label: "Average deal size", short: "Deal size", kind: "choice", gated: false, options: RN_DEAL_SIZES, say: "the average deal size" },
+      { key: "salesCycle", label: "Average sales cycle", short: "Sales cycle", kind: "choice", gated: false, options: RN_SALES_CYCLES, say: "the average sales cycle" },
     ],
   },
   {
     entity: "engagement",
     label: "Fractional engagement",
     fields: [
-      { key: "source", label: "Source", kind: "text", gated: false, system: true },
-      { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The GTM function of the seat" },
-      { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title of the seat" },
-      { key: "type", label: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES },
-      { key: "status", label: "Status", kind: "choice", gated: true, options: STATUSES },
+      { key: "source", label: "Source", kind: "text", gated: false, system: true, say: "the source" },
+      { key: "function", label: "Function", kind: "choice", gated: false, options: FUNCTIONS, hint: "The part of GTM this seat covers.", say: "the function" },
+      { key: "role", label: "Role", kind: "text", gated: true, placeholder: "Fractional VP Sales", hint: "The exact title, the way the client wrote it.", say: "the role" },
+      { key: "type", label: "Type of work", short: "Type", kind: "choice", gated: false, options: ENGAGEMENT_TYPES, say: "the type of work" },
+      { key: "status", label: "Status", kind: "choice", gated: true, options: STATUSES, hint: "Open role means the client is hiring for this seat now.", say: "the status" },
       {
         key: "operator",
         label: "Seat holder",
@@ -131,29 +136,56 @@ export const GROUPS: GroupDef[] = [
         gated: true,
         placeholder: "First and last name",
         hint: "The person's first and last name, like Jane Smith. If they're a member, pick them from the list.",
+        say: "the seat holder",
       },
-      { key: "start", label: "Start", kind: "month", gated: false },
-      { key: "end", label: "End", kind: "monthOrOngoing", gated: true },
-      { key: "reason", label: "Why they hired", short: "Why hired", kind: "choice", gated: false, options: HIRE_REASONS, hint: "What the fractional was brought in to do" },
-      { key: "sourced", label: "How it was sourced", short: "Sourced via", kind: "choice", gated: true, options: SOURCED_VIA, hint: "How the client found the fractional" },
-      { key: "pricing", label: "Pricing model", short: "Pricing", kind: "choice", gated: false, options: PRICING_MODELS },
-      { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
-      { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: false, placeholder: "15" },
-      { key: "posting", label: "Job posting", short: "Posting", kind: "url", gated: true, placeholder: "Link to the job post" },
-      { key: "revenue", label: "Revenue at the time", short: "Revenue then", kind: "choice", gated: false, options: RN_REVENUE },
-      { key: "employees", label: "Employees at the time", short: "Employees then", kind: "choice", gated: false, options: RN_EMPLOYEES },
+      { key: "start", label: "Start month", short: "Start", kind: "month", gated: false, hint: "The month the work started.", say: "the start month" },
+      { key: "end", label: "End month", short: "End", kind: "monthOrOngoing", gated: true, hint: "The month the work ended. Pick Ongoing if it's still going.", say: "the end month" },
+      { key: "reason", label: "Why they hired", short: "Why hired", kind: "choice", gated: false, options: HIRE_REASONS, hint: "What the client brought the fractional in to do.", say: "the reason they hired" },
+      { key: "sourced", label: "How it was sourced", short: "Sourced via", kind: "choice", gated: true, options: SOURCED_VIA, hint: "How the client found the fractional.", say: "how the seat was sourced" },
+      { key: "pricing", label: "Pricing model", short: "Pricing", kind: "choice", gated: false, options: PRICING_MODELS, say: "the pricing model" },
+      {
+        key: "rate",
+        label: "Rate",
+        kind: "text",
+        gated: true,
+        placeholder: "$8k/mo or $150/hr",
+        hint: "What the client paid. Members spend 1 credit to see it, and it counts in the rate benchmarks.",
+        say: "the rate",
+      },
+      { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: false, placeholder: "15", hint: "The hours a week the seat takes, on average.", say: "the hours per week" },
+      { key: "posting", label: "Job posting", short: "Posting", kind: "url", gated: true, placeholder: "Link to the job posting", say: "the job posting" },
+      {
+        key: "revenue",
+        label: "Revenue at the time",
+        short: "Revenue then",
+        kind: "choice",
+        gated: false,
+        options: RN_REVENUE,
+        hint: "The client's yearly revenue when the work started.",
+        say: "the revenue at the time",
+      },
+      {
+        key: "employees",
+        label: "Employees at the time",
+        short: "Employees then",
+        kind: "choice",
+        gated: false,
+        options: RN_EMPLOYEES,
+        hint: "How many people the client had when the work started.",
+        say: "the employee count at the time",
+      },
     ],
   },
   {
     entity: "contact",
     label: "Person",
     fields: [
-      { key: "name", label: "Name", kind: "text", gated: true, placeholder: "Jane Doe" },
-      { key: "title", label: "Title", kind: "text", gated: false, placeholder: "CEO" },
-      { key: "relationship", label: "Relationship", kind: "choice", gated: false, options: RELATIONSHIPS },
-      { key: "email", label: "Email", kind: "email", gated: true, placeholder: "jane@acme.com" },
-      { key: "phone", label: "Phone", kind: "phone", gated: true, placeholder: "+1 555 010 0000" },
-      { key: "linkedin", label: "LinkedIn", kind: "url", gated: true, placeholder: "linkedin.com/in/…" },
+      { key: "name", label: "Name", kind: "text", gated: true, placeholder: "Jane Smith", say: "a person's name" },
+      { key: "title", label: "Title", kind: "text", gated: false, placeholder: "CEO", say: "a person's title" },
+      { key: "relationship", label: "Relationship", kind: "choice", gated: false, options: RELATIONSHIPS, hint: "How this person relates to the seat or the company.", say: "a person's relationship" },
+      { key: "email", label: "Email", kind: "email", gated: true, placeholder: "jane@acme.com", say: "a person's email" },
+      { key: "phone", label: "Phone", kind: "phone", gated: true, placeholder: "+1 555 010 0000", say: "a person's phone number" },
+      { key: "linkedin", label: "LinkedIn", kind: "url", gated: true, placeholder: "linkedin.com/in/…", say: "a person's LinkedIn" },
     ],
   },
 ];
@@ -228,32 +260,33 @@ export const PERSON_NAME_RE = /^(?=.{3,60}$)\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'�
 
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
   const v = stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, 200);
-  if (!v) return { error: `${f.label} is empty.` };
+  if (!v) return { error: "It's still empty. Add something first." };
   switch (f.kind) {
     case "url": {
       const u = v.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
-      return /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u) ? { value: u } : { error: "That doesn't look like a web address." };
+      return /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u) ? { value: u } : { error: "That doesn't look like a web address. Paste the whole thing, like acme.com." };
     }
     case "email":
-      return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v) ? { value: v.toLowerCase() } : { error: "That doesn't look like an email." };
+      return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v) ? { value: v.toLowerCase() } : { error: "That doesn't look like an email address. Check it for a typo." };
     case "phone":
-      return v.replace(/\D/g, "").length >= 7 ? { value: v } : { error: "That doesn't look like a phone number." };
+      return v.replace(/\D/g, "").length >= 7 ? { value: v } : { error: "That doesn't look like a phone number. It needs at least 7 digits." };
     case "month":
     case "monthOrOngoing": {
       if (f.kind === "monthOrOngoing" && /^ongoing$/i.test(v)) return { value: "Ongoing" };
-      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(v)) return { error: f.kind === "month" ? "Use a month (YYYY-MM)." : "Pick an end month, or Ongoing." };
+      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(v)) return { error: f.kind === "month" ? "Use a year and month, like 2025-03." : "Pick the month it ended, or Ongoing if it's still going." };
       const now = new Date();
       const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      if (Number(v.slice(0, 4)) < 1970 || (v.length === 4 ? v > thisMonth.slice(0, 4) : v > thisMonth)) return { error: "That date is in the future." };
+      if (Number(v.slice(0, 4)) < 1970) return { error: "That's too far back. Pick a month from 1970 on." };
+      if (v.length === 4 ? v > thisMonth.slice(0, 4) : v > thisMonth) return { error: "That month hasn't happened yet. Pick this month or earlier." };
       return { value: v };
     }
     case "number":
-      return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use hours per week between 1 and 80." };
+      return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use a whole number from 1 to 80." };
     case "choice":
-      return f.options?.includes(v) ? { value: v } : { error: "Pick one of the options." };
+      return f.options?.includes(v) ? { value: v } : { error: "Pick one from the list." };
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
-      return v.length >= 2 ? { value: v } : { error: "Too short." };
+      return v.length >= 2 ? { value: v } : { error: "That's too short. Use at least 2 characters." };
   }
 }

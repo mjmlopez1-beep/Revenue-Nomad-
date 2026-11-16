@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const token = req.cookies.get("rn_table")?.value ?? null;
   if (!(await memberForToken(token))) {
-    return NextResponse.json({ error: "Sign in or join to add records." }, { status: 401 });
+    return NextResponse.json({ error: "You're signed out. Sign in again to add a company." }, { status: 401 });
   }
-  if (limited(`lookup:${token}`, 30, 60_000)) return NextResponse.json({ error: "Slow down a little." }, { status: 429 });
+  if (limited(`lookup:${token}`, 30, 60_000)) return NextResponse.json({ error: "That's 30 lookups in a minute, which is the limit. Give it a moment, then try again." }, { status: 429 });
   const url = req.nextUrl.searchParams.get("url") ?? "";
   const domain = normalizeDomain(url);
-  if (!domain) return NextResponse.json({ error: "That doesn't look like a website." }, { status: 400 });
+  if (!domain) return NextResponse.json({ error: "That doesn't look like a web address. Paste the whole thing, like acme.com." }, { status: 400 });
   const found = await lookupCompany(url);
   const existing = await existingCompany(domain, found?.name ?? null);
   return NextResponse.json({ domain, name: found?.name ?? null, industry: found?.industry ?? null, description: found?.description ?? null, existing });

@@ -5,8 +5,9 @@ import "@fontsource-variable/red-hat-mono/wght.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Trading Post · Revenue Nomad",
-  description: "Give to get. The shared record of fractional GTM engagements, open roles and the people behind them.",
+  title: "Trading Post · Companies that hire fractional GTM leaders",
+  description:
+    "See which companies hire fractional sales, marketing and RevOps leaders, who held each seat, what it paid and which roles are open now. Add what you know to see more. A free pilot from Revenue Nomad.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

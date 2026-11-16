@@ -29,6 +29,8 @@ const origin = (req: NextRequest) =>
   `${req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "")}://${req.headers.get("x-forwarded-host") ?? req.headers.get("host")}`;
 
 const err = (message: string, status = 400) => NextResponse.json({ error: message }, { status });
+/** Past a per-minute limit. The limits are high enough that a person only meets this by accident. */
+const SLOW = "That's a lot in one minute. Give it a moment, then try again.";
 
 /** JSON, gzipped when the client accepts it (Next doesn't compress route handlers). */
 async function sendJson(req: NextRequest, data: unknown, extra: Record<string, string> = {}) {
@@ -54,17 +56,17 @@ export async function GET(req: NextRequest) {
   // The seat-holder picker searches as you type, so it has its own limit (per member).
   const people = req.nextUrl.searchParams.get("people");
   if (people !== null) {
-    if (limited(`people:${token ?? ip}`, 120, 60_000)) return err("Slow down a little.", 429);
+    if (limited(`people:${token ?? ip}`, 120, 60_000)) return err(SLOW, 429);
     return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
   }
-  if (limited(`get:${ip}`, 120, 60_000)) return err("Slow down a little.", 429);
+  if (limited(`get:${ip}`, 120, 60_000)) return err(SLOW, 429);
   const ref = req.nextUrl.searchParams.get("ref");
   if (ref !== null) {
-    if (limited(`ref:${ip}`, 30, 60_000)) return err("Slow down a little.", 429);
+    if (limited(`ref:${ip}`, 30, 60_000)) return err(SLOW, 429);
     return NextResponse.json({ inviter: await inviterName(ref) }, { headers: { "cache-control": "no-store" } });
   }
   if (req.nextUrl.searchParams.get("export")) {
-    if (!isAdmin(await memberForToken(token))) return err("Admins only.", 403);
+    if (!isAdmin(await memberForToken(token))) return err("Only admins can download the export.", 403);
     return sendJson(req, await exportState(), {
       "content-disposition": `attachment; filename="trading-post-${new Date().toISOString().slice(0, 10)}.json"`,
     });
@@ -86,22 +88,22 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") return err("Invalid request.");
+  if (!body || typeof body !== "object") return err("That didn't go through. Refresh the page and try again.");
   const ip = clientIp(req);
 
   if (typeof body.signIn === "string") {
-    if (limited(`signin:${ip}`, 30, 10 * 60_000)) return err("Too many tries. Wait a few minutes.", 429);
+    if (limited(`signin:${ip}`, 30, 10 * 60_000)) return err("That's 30 sign-in tries in 10 minutes, which is the limit. Wait 10 minutes, then try again.", 429);
     const raw = body.signIn.trim();
     // Tokens are base64url, so a link copied with a trailing "." or inside <…> still works.
     const token = raw.match(/[?&]k=([A-Za-z0-9_-]+)/)?.[1] ?? raw.replace(/[^A-Za-z0-9_-]/g, "");
     const m = token ? await memberForToken(token) : null;
-    if (!m) return err("That sign-in link or code isn't valid.", 401);
+    if (!m) return err("That sign-in link or code didn't work. Paste the whole thing, or ask us for a new one.", 401);
     return withSession(req, NextResponse.json({ ok: true }), m.token);
   }
 
   if (typeof body.emailLink === "string") {
     if (!emailEnabled()) return err("Email sign-in isn't on yet. Use the personal link we sent you.");
-    if (limited(`email:${ip}`, 5, 60 * 60_000)) return err("Too many emails. Try again in an hour.", 429);
+    if (limited(`email:${ip}`, 5, 60 * 60_000)) return err("That's 5 requests in an hour, which is the limit. Check your inbox, or try again in an hour.", 429);
     const m = await memberByEmail(body.emailLink);
     if (m) {
       const e = signInEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(m.token)}`);
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.join && typeof body.join === "object") {
-    if (limited(`join:${ip}`, 10, 60 * 60_000)) return err("Too many sign-ups from here. Try again in an hour.", 429);
+    if (limited(`join:${ip}`, 10, 60 * 60_000)) return err("That's 10 sign-ups from this network in an hour, which is the limit. Try again in an hour.", 429);
     try {
       const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip);
       if (emailEnabled()) {
@@ -134,7 +136,7 @@ export async function POST(req: NextRequest) {
   }
 
   const token = req.cookies.get(COOKIE)?.value ?? null;
-  if (limited(`act:${token ?? ip}`, 240, 60_000)) return err("Slow down a little.", 429);
+  if (limited(`act:${token ?? ip}`, 240, 60_000)) return err(SLOW, 429);
   try {
     return NextResponse.json(await perform(token, body.action as Action, origin(req)));
   } catch (e) {

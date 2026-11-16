@@ -300,20 +300,27 @@ section("ids", async () => {
   check("person engagement ids are public", people.every((p) => p.engagementId === null || /^e_[A-Za-z0-9_-]{12}$/.test(p.engagementId)));
   const nf1 = await m.act({ type: "unlock", entity: "engagement", id: "e_aventinehillpartners_lawrencecoffee", field: "operator" });
   const nf2 = await m.act({ type: "unlock", entity: "engagement", id: "e_AAAAAAAAAAAA", field: "operator" });
-  check("internal and unknown ids get Record not found", nf1.json?.error === "Record not found." && nf2.json?.error === "Record not found.", [nf1.json, nf2.json]);
+  const GONE = "We couldn't find that seat. It may have been removed. Refresh the page and try again.";
+  check("internal and unknown ids get the same not-found answer", nf1.json?.error === GONE && nf2.json?.error === GONE, [nf1.json, nf2.json]);
 
   // Add an engagement, a person on it, and details into it, all by public id.
   const co = v.companies.find((c) => c.engagements.length > 0 && c.cells.website?.s === "value");
   const add = await m.act({ type: "add", company: co.name, newEngagement: true, engagementFields: { type: "Advisory", start: "2024-03" } });
   check("add engagement returns a public id", add.status === 200 && /^e_[A-Za-z0-9_-]{12}$/.test(add.json?.id ?? ""), add.json);
+  check("adding a seat says what happened and what it earned", /^(Added a seat at .+|.+ was already on Trading Post, so we added what you know to it)\. You earned 2 credits\.$/.test(add.json?.message ?? ""), add.json?.message);
   const eid = add.json?.id;
   const addP = await m.act({ type: "addPerson", companyId: co.id, engagementId: eid, person: { name: "Quinn Qa", title: "CEO" } });
   check("add person on that engagement", addP.status === 200 && /^p_[A-Za-z0-9_-]{12}$/.test(addP.json?.id ?? ""), addP.json);
+  check("adding a person names them and says what it earned", /^Added Quinn Qa at .+\. You earned 2 credits\.$/.test(addP.json?.message ?? ""), addP.json?.message);
   const into = await m.act({ type: "add", company: co.name, engagementId: eid, engagementFields: { hours: "12" } });
   check("add details into the engagement by id", into.status === 200 && into.json?.id === eid, into.json);
+  check("details added to a company that is already there say so", /^.+ was already on Trading Post, so we added what you know to it\. You earned 1 credit\.$/.test(into.json?.message ?? ""), into.json?.message);
+  const same = await m.act({ type: "add", company: co.name, engagementId: eid, engagementFields: { hours: "20" } });
+  check("a fact that is already there is left alone, and the answer says so", same.status === 200 && /^.+ is already on Trading Post\. 1 fact was already there, so we left it as it was\.$/.test(same.json?.message ?? ""), same.json?.message);
   const v2 = await m.view();
   const c2 = v2.companies.find((c) => c.id === co.id);
   const e2 = c2?.engagements.find((e) => e.id === eid);
+  check("the credit history says a person's name and title are a person's", ["Person name", "Person title"].every((f) => v2.ledger.some((l) => l.field === f && l.reason === "fill")), v2.ledger.slice(0, 5).map((l) => l.field));
   check("new engagement shows under its company", !!e2 && e2.cells.type?.v === "Advisory" && e2.cells.hours?.v === "12", e2?.cells);
   check("new person shows on the engagement", !!e2?.people.find((p) => p.id === addP.json?.id && p.engagementId === eid));
   const badEng = await m.act({ type: "addPerson", companyId: co.id, engagementId: "e_AAAAAAAAAAAA", person: { name: "Nope Qa" } });
@@ -336,8 +343,8 @@ section("economy", async () => {
   let a = (await A.view()).me;
   check("A earned 25 of 25 after 25 fills", a.earned24h === 25 && a.credits === STARTER + 25, a);
   const capped = await A.act(fillAct(fills[25]));
-  check("a fill at the cap says so, without Saved.", capped.status === 200 && /You've hit today's max of 25 earned credits/.test(capped.json?.message) && !/Saved\./.test(capped.json?.message), capped.json?.message);
-  check("toast after a normal fill uses a period", /^Added [^:]+\. \+1 credit\.$/.test(lastMsg), lastMsg);
+  check("a fill at the cap says so, without Saved.", capped.status === 200 && /You've reached the limit of 25 credits earned in 24 hours, so this one earned nothing\./.test(capped.json?.message) && !/Saved\./.test(capped.json?.message), capped.json?.message);
+  check("toast after a normal fill says what was added and what it earned", /^Added [^:]+\. You earned 1 credit\.$/.test(lastMsg), lastMsg);
 
   // Invite: the landing can name the inviter.
   const ref = await call("GET", `/api/table?ref=${encodeURIComponent(meA.inviteCode)}`, { ipAddr: ip(31) });
@@ -353,7 +360,7 @@ section("economy", async () => {
   const vB = await B.view();
   const bFills = pickEmpty(vB, 5);
   const first = await B.act(fillAct(bFills[0]));
-  check("B's first fact pays the invite bonus", /Invite bonus \+10\./.test(first.json?.message ?? ""), first.json);
+  check("B's first fact pays the invite bonus", /Your invite bonus added 10 more\./.test(first.json?.message ?? ""), first.json);
   for (const t of bFills.slice(1)) await B.act(fillAct(t));
   const vA2 = await A.view();
   a = vA2.me;
@@ -376,7 +383,7 @@ section("economy", async () => {
   const b2f = await B2.act(fillAct(pickEmpty(b2v, 1)[0]));
   const a3 = (await A.view()).me;
   const b2 = (await B2.view()).me;
-  check("same-network invite pays no bonus to either", !/Invite bonus/.test(b2f.json?.message ?? "") && a3.credits === a.credits && a3.held === a.held && b2.credits === STARTER + 1, { msg: b2f.json?.message, a: a3.credits, b2: b2.credits });
+  check("same-network invite pays no bonus to either", !/invite bonus/i.test(b2f.json?.message ?? "") && a3.credits === a.credits && a3.held === a.held && b2.credits === STARTER + 1, { msg: b2f.json?.message, a: a3.credits, b2: b2.credits });
   check("A's invited count ignores the same-network join", a3.invited === 1, a3.invited);
 
   // A confirmation bonus for a capped member is held too.
@@ -415,11 +422,11 @@ section("unlock", async () => {
   const r18 = await N.act({ type: "unlockMany", items: locked.slice(0, 18) });
   check("a new account unlocks 18", r18.status === 200 && r18.json?.me?.credits === STARTER - 18, r18.json);
   const r5 = await N.act({ type: "unlockMany", items: locked.slice(18, 23) });
-  check("new account: 18 + 5 says 'You can unlock 2 more today.'", r5.json?.error === "You can unlock 2 more today.", r5.json);
+  check("new account: 18 + 5 says how many are left and what the limit is", r5.json?.error === "You can unlock 2 more today. New accounts can unlock 20 facts in their first 24 hours, then 100 a day.", r5.json);
   const r2 = await N.act({ type: "unlockMany", items: locked.slice(18, 20) });
   check("new account unlocks 2 more (20)", r2.status === 200, r2.json);
   const r21 = await N.act({ type: "unlock", ...locked[20] });
-  check("new account is refused its 21st unlock", r21.json?.error === "You hit today's unlock limit. It resets within 24 hours.", r21.json);
+  check("new account is refused its 21st unlock", r21.json?.error === "You've reached today's unlock limit. New accounts can unlock 20 facts in their first 24 hours, then 100 a day.", r21.json);
 
   const S = process.env.SEED_TOKEN ? new Client("Seed Member", ip(41), process.env.SEED_TOKEN) : seedClient(1, ip(41));
   const sv = S ? await S.view() : null;
@@ -455,9 +462,9 @@ section("reports", async () => {
   const t = targets[0];
   const ref = { entity: t.entity, id: t.id, field: t.field };
   const nofill = await Fresh.act({ type: "report", ...ref });
-  check("a new account with no fills can't report", nofill.json?.error === "Add a fact before you report one.", nofill.json);
+  check("a new account with no fills can't report", nofill.json?.error === "Reporting opens once you've added a fact of your own. Add one first.", nofill.json);
   const r1 = await C.act({ type: "report", ...ref });
-  check("report answers 'Reported. An admin will review it.'", r1.json?.message === "Reported. An admin will review it." && r1.json?.cells?.[0]?.cell?.s === "reported", r1.json);
+  check("report says it is hidden for the reporter and goes to review", r1.json?.message === "Reported. It's hidden for you now, and an admin will review it." && r1.json?.cells?.[0]?.cell?.s === "reported", r1.json);
   const again = await C.act({ type: "report", ...ref });
   check("reporting twice says 'You already reported this.'", again.json?.message === "You already reported this.", again.json);
   check("the reporter sees it under review", findCell(await C.view(), ref.entity, ref.id, ref.field)?.s === "reported");
@@ -466,7 +473,7 @@ section("reports", async () => {
     const row = (await adm.view()).reported.find((r) => r.id === ref.id && r.field === ref.field);
     check(
       "admin sees the row with names, date and company",
-      !!row && row.reporters.join() === "Cal Tester" && row.addedBy === "Seed data" && !!row.reportedAt && row.companyId === t.company.id,
+      !!row && row.reporters.join() === "Cal Tester" && row.addedBy === "Revenue Nomad records" && !!row.reportedAt && row.companyId === t.company.id,
       row,
     );
   } else skip("admin report row", "no admin account (set ADMIN_TOKEN)");
@@ -474,18 +481,18 @@ section("reports", async () => {
   check("after a second report it is hidden for everyone", findCell(await E.view(), ref.entity, ref.id, ref.field)?.s === "reported");
   if (adm) {
     const keep = await adm.act({ type: "review", ...ref, decision: "keep" });
-    check("admin keep", keep.json?.message === "Kept.", keep.json);
+    check("admin keep", keep.json?.message === "Kept. It shows for everyone again.", keep.json);
     check("kept fact is visible again to its reporter", findCell(await C.view(), ref.entity, ref.id, ref.field)?.s === "value");
     check("kept fact leaves the review list", !(await adm.view()).reported.some((r) => r.id === ref.id && r.field === ref.field));
   }
   // Daily report limit: 10 in 24 hours (the first one above counts).
   let r = null;
   for (const x of targets.slice(1, 11)) r = await C.act({ type: "report", entity: x.entity, id: x.id, field: x.field });
-  check("the 11th report in a day is refused", r?.json?.error === "You can report 10 facts a day.", r?.json);
+  check("the 11th report in a day is refused", r?.json?.error === "You've reported 10 facts in 24 hours, which is the limit. Try again tomorrow.", r?.json);
   if (adm) {
     const x = targets[1];
     const rm = await adm.act({ type: "review", entity: x.entity, id: x.id, field: x.field, decision: "remove" });
-    check("admin remove", rm.json?.message === "Removed. The field is open to fill again.", rm.json);
+    check("admin remove", rm.json?.message === "Removed. Anyone who unlocked it got their credit back, and it can be added again.", rm.json);
     check("removed fact reopens", findCell(await D.view(), x.entity, x.id, x.field)?.s === "empty");
   }
 });
@@ -504,7 +511,7 @@ section("fields", async () => {
   const ok = await m.act({ type: "fill", entity: "engagement", id: eng.id, field: "rate", value: "€6,000 per month" });
   check("rate accepts '€6,000 per month'", ok.status === 200, ok.json);
   const hrs = await m.act({ type: "fill", entity: "engagement", id: eng.id, field: "hours", value: "99" });
-  check("hours 99 says 'Hours per week. Use hours per week between 1 and 80.'", hrs.json?.error === "Hours per week. Use hours per week between 1 and 80.", hrs.json);
+  check("hours 99 says 'Hours per week. Use a whole number from 1 to 80.'", hrs.json?.error === "Hours per week. Use a whole number from 1 to 80.", hrs.json);
   const raw = `Uni \u0000‮EVIL‬ Co ${RUN}`;
   const add = await m.act({ type: "add", company: raw });
   const v2 = await m.view();
@@ -583,7 +590,7 @@ section("join", async () => {
   const email = `qa+${RUN}-dup@example.com`;
   await join("Dup Tester", ip(100), { email });
   const { r: dup } = await join("Dup Tester", ip(100), { email });
-  check("joined email: 'That email is already in use. Sign in with your link.'", dup.json?.error === "That email is already in use. Sign in with your link.", dup.json);
+  check("joined email: 'That email already belongs to a member. Sign in with your personal link.'", dup.json?.error === "That email already belongs to a member. Sign in with your personal link.", dup.json);
   if (process.env.SEED_EMAIL) {
     const { r: seed } = await join("Seed Tester", ip(100), { email: process.env.SEED_EMAIL });
     check("seed member email gives the same answer", seed.json?.error === dup.json?.error, seed.json);
@@ -639,7 +646,7 @@ section("seat", async () => {
   for (const x of cellsOf(vS)) if (x.id === seats[0].id && x.field === "operator") mine = x.cell;
   check("the linked member sees the seat as theirs, free", mine?.member?.you === true && vS.me.credits === STARTER && vS.me.unlocked === 0, { mine, credits: vS.me.credits });
   const un = await S.act({ type: "unlock", entity: "engagement", id: seats[0].id, field: "operator" });
-  check("there is nothing to unlock on your own seat", un.json?.error === "Nothing to unlock here.", un.json);
+  check("there is nothing to unlock on your own seat", un.json?.error === "Nothing here is locked, so no credit was spent.", un.json);
   // Locked cells never carry the member link.
   const vT2 = await (await member("Uma Viewer", ip(73))).view();
   let locked = null;
@@ -663,7 +670,7 @@ section("hidden", async () => {
   const empty = Object.entries(c.cells).find(([, cell]) => cell.s === "empty");
   if (empty) {
     const f = await H.act({ type: "fill", entity: "company", id: c.id, field: empty[0], value: SAMPLE[`company.${empty[0]}`] ?? "Somewhere, TX" });
-    check("adding a fact at a hidden company by its id is refused", f.status === 400 && /Unlock this company first/.test(f.json?.error ?? ""), f.json);
+    check("adding a fact at a hidden company by its id is refused", f.status === 400 && /This company is hidden\. Unlock it for 1 credit/.test(f.json?.error ?? ""), f.json);
   }
   const fo = await H.act({ type: "follow", companyId: c.id, on: true });
   check("following a hidden company doesn't say its name", fo.status === 200 && /this company/.test(fo.json?.message ?? ""), fo.json);
@@ -672,8 +679,10 @@ section("hidden", async () => {
   const v2 = await H.view();
   const c2 = v2.companies.find((x) => x.id === c.id);
   check("unlocking a company costs 1 credit and reveals it", un.status === 200 && v2.me.credits === before - 1 && c2 && !c2.hidden && c2.name !== "Hidden company", { msg: un.json, credits: [before, v2.me.credits], name: c2?.name });
+  check("the answer names the company and the price", !!c2 && un.json?.message === `Unlocked ${c2.name} for 1 credit.`, un.json?.message);
   const again = await H.act({ type: "unlockMany", items: [{ entity: "company", id: c.id, field: "identity" }, { entity: "company", id: c.id, field: "website" }] });
   check("unlocking it again costs nothing", again.status === 200 && (await H.view()).me.credits === before - 1, again.json);
+  check("and says no credits were spent", again.json?.message === "You can already see all of these, so no credits were spent.", again.json?.message);
   // Someone who already knows the name can add to it by typing it, and then sees it.
   const K = await member("Kai Knows", ip(81));
   const kv = await K.view();
@@ -842,7 +851,7 @@ section("seats", async () => {
   check("the member who added the seat is not its holder", engOf(await T.view(), eid)?.yours === false);
   // What another member added still needs a report: the holder can't overwrite it.
   const over = await Y.act({ type: "fill", entity: "engagement", id: eid, field: "role", value: "Fractional CRO" });
-  check("a seat holder can't overwrite a fact another member added", over.status === 400 && /already filled/.test(over.json?.error ?? ""), over.json);
+  check("a seat holder can't overwrite a fact another member added", over.status === 400 && /already there/.test(over.json?.error ?? ""), over.json);
   const conf = await Y.act({ type: "verify", entity: "engagement", id: eid, field: "rate" });
   check("a seat holder can confirm a gated fact on their seat without unlocking it", conf.status === 200, conf.json);
   // The holder fills what's missing and earns for it.
@@ -887,7 +896,7 @@ section("seats", async () => {
     const next = seat.cells.function.v === "Other" ? "Sales" : "Other";
     const fix = await S.act({ type: "fill", entity: "engagement", id: seat.id, field: "function", value: next });
     const cell = fix.json?.cells?.[0]?.cell;
-    check("a seat holder can correct what our records say about their seat", fix.status === 200 && cell?.v === next && cell?.mine === true && /^Updated function\.$/.test(fix.json?.message ?? ""), { status: fix.status, s: cell?.s, message: fix.json?.error ?? fix.json?.message });
+    check("a seat holder can correct what our records say about their seat", fix.status === 200 && cell?.v === next && cell?.mine === true && /^Updated the function\.$/.test(fix.json?.message ?? ""), { status: fix.status, s: cell?.s, message: fix.json?.error ?? fix.json?.message });
     check("a correction earns no credit", fix.json?.me?.credits === STARTER && fix.json?.me?.added === 0, fix.json?.me);
     const back = await S.act({ type: "fill", entity: "engagement", id: seat.id, field: "function", value: seat.cells.function.v });
     check("they can edit their correction", back.status === 200, back.status);
@@ -913,12 +922,12 @@ section("benchrate", async () => {
   const rowOf = (view, fn, rev) => view.benchmarks.rows.find((r) => r.function === fn && r.revenue === rev);
   const n0 = rowOf(await M.view(), "Executive", "Under $1M").monthly.n;
   const first = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$7,777", function: "Executive", revenue: "Under $1M" });
-  check("a private rate earns 1 credit", first.status === 200 && first.json?.me?.credits === STARTER + 1 && first.json?.me?.added === 1 && /\+1 credit\./.test(first.json?.message ?? ""), first.json);
+  check("a private rate earns 1 credit", first.status === 200 && first.json?.me?.credits === STARTER + 1 && first.json?.me?.added === 1 && /You earned 1 credit\./.test(first.json?.message ?? ""), first.json);
   const vm = await M.view();
   const mineRates = vm.me.benchRates ?? [];
   check("Me.benchRates lists it", mineRates.length === 1 && mineRates[0].id === first.json?.id && mineRates[0].kind === "monthly" && mineRates[0].amount === 7777 && mineRates[0].function === "Executive" && mineRates[0].engagementId === null, mineRates);
   check("it counts in its benchmark group", rowOf(vm, "Executive", "Under $1M").monthly.n === n0 + 1);
-  check("the ledger row names no record", vm.ledger[0]?.reason === "fill" && vm.ledger[0]?.field === "Rate (benchmarks only)" && vm.ledger[0]?.company === "" && vm.ledger[0]?.delta === 1, vm.ledger[0]);
+  check("the ledger row names no record", vm.ledger[0]?.reason === "fill" && vm.ledger[0]?.field === "Private rate" && vm.ledger[0]?.company === "" && vm.ledger[0]?.delta === 1, vm.ledger[0]);
   const hourly = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$185/hr" });
   const two = (await M.view()).me.benchRates;
   check("a unit in the rate wins over the pricing model, and the function defaults to the member's", hourly.status === 200 && two.some((b) => b.kind === "hourly" && b.amount === 185 && b.function === "Sales"), two);
@@ -930,7 +939,7 @@ section("benchrate", async () => {
   const v = await M.view();
   const foreign = v.companies.flatMap((c) => c.engagements).find((e) => !e.yours);
   const notYours = await M.act({ type: "benchRate", engagementId: foreign.id, pricing: "Hourly", rate: "$150/hr" });
-  check("a private rate on a seat that isn't yours is refused", notYours.status === 400 && notYours.json?.error === "You can share a rate for a seat you held or added.", notYours.json);
+  check("a private rate on a seat that isn't yours is refused", notYours.status === 400 && notYours.json?.error === "You can only share a rate for a seat you held or added.", notYours.json);
   const hosts = v.companies.filter((c) => !c.hidden && c.friendly.open === 0);
   const seatA = await M.act({ type: "add", company: hosts[50].name, newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", revenue: "$5M–$20M" } });
   const r0 = rowOf(await M.view(), "RevOps", "$5M–$20M").hourly.n;
@@ -939,7 +948,7 @@ section("benchrate", async () => {
   const tied = vm2.me.benchRates.find((b) => b.engagementId === seatA.json?.id);
   check("a private rate on a seat you added takes its function and revenue from the record", onSeat.status === 200 && tied?.function === "RevOps" && tied.kind === "hourly" && tied.amount === 200 && rowOf(vm2, "RevOps", "$5M–$20M").hourly.n === r0 + 1, { onSeat: onSeat.json, tied });
   const dup = await M.act({ type: "benchRate", engagementId: seatA.json?.id, pricing: "Hourly", rate: "$210/hr" });
-  check("one private rate per seat", dup.status === 400 && dup.json?.error === "You already shared a rate for this seat.", dup.json);
+  check("one private rate per seat", dup.status === 400 && dup.json?.error === "You already shared a rate for this seat. Remove it first to share a different one.", dup.json);
   // Adding the public rate later doesn't count the same member twice.
   await M.act({ type: "fill", entity: "engagement", id: seatA.json?.id, field: "rate", value: "$200/hr" });
   check("a member's private and public rate on one seat count once", rowOf(await M.view(), "RevOps", "$5M–$20M").hourly.n === r0 + 1);
@@ -961,7 +970,7 @@ section("benchrate", async () => {
     check("the admin export carries private rates without who shared them or where", exp.status === 200 && out.length >= 4 && out.every((b) => !("by" in b) && !("id" in b) && !("engagementId" in b)), out[0] && Object.keys(out[0]));
   } else skip("admin benchRate privacy", "no admin account");
   const steal = await O.act({ type: "benchRateRemove", id: first.json?.id });
-  check("another member can't remove it", steal.status === 400 && steal.json?.error === "Rate not found.", steal.json);
+  check("another member can't remove it", steal.status === 400 && steal.json?.error === "We couldn't find that rate. It may already be removed.", steal.json);
 
   // Remove: the credit it earned goes back.
   const credits = (await M.view()).me.credits;
@@ -969,7 +978,7 @@ section("benchrate", async () => {
   const vm3 = await M.view();
   check("removing a private rate takes its credit back", rm.status === 200 && vm3.me.credits === credits - 1 && !vm3.me.benchRates.some((b) => b.id === first.json?.id), { rm: rm.json, credits: [credits, vm3.me.credits] });
   check("it leaves its benchmark group", rowOf(vm3, "Executive", "Under $1M").monthly.n === n0);
-  check("the ledger says it was removed", vm3.ledger[0]?.reason === "Removed" && vm3.ledger[0]?.delta === -1 && vm3.ledger[0]?.field === "Rate (benchmarks only)", vm3.ledger[0]);
+  check("the ledger says it was removed", vm3.ledger[0]?.reason === "Removed" && vm3.ledger[0]?.delta === -1 && vm3.ledger[0]?.field === "Private rate", vm3.ledger[0]);
   const rm2 = await M.act({ type: "benchRateRemove", id: first.json?.id });
   check("removing it twice is refused", rm2.status === 400, rm2.json);
   const refill = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$7k/mo" });
@@ -979,7 +988,7 @@ section("benchrate", async () => {
   const inviter = (await O.view()).me.inviteCode;
   const N = await member("Nia Newbie", ip(122), { ref: inviter });
   const nb = await N.act({ type: "benchRate", pricing: "Hourly", rate: "$160/hr" });
-  check("a private rate as a first fact pays the invite bonus", nb.status === 200 && /Invite bonus \+10\./.test(nb.json?.message ?? "") && nb.json?.me?.credits === STARTER + 11, nb.json);
+  check("a private rate as a first fact pays the invite bonus", nb.status === 200 && /Your invite bonus added 10 more\./.test(nb.json?.message ?? "") && nb.json?.me?.credits === STARTER + 11, nb.json);
 });
 
 section("pilot", async () => {
@@ -1030,7 +1039,7 @@ section("pilot", async () => {
     check("benchmarks.indexRates is the seed's Rate Index size", a3.benchmarks.indexRates === (seedFile.rateIndex?.length ?? 0), a3.benchmarks.indexRates);
   }
   const notAdmin = await W.act({ type: "scanNow" });
-  check("scanNow is for admins", notAdmin.status === 400 && notAdmin.json?.error === "Admins only.", notAdmin.json);
+  check("scanNow is for admins", notAdmin.status === 400 && notAdmin.json?.error === "Only admins can start a scan.", notAdmin.json);
   // Past 200 signals a day from one member, the rest are dropped without an error.
   const F = await member("Fay Flood", ip(133));
   const flood = await Promise.all(Array.from({ length: 205 }, () => F.act({ type: "signal", name: "pro_view", where: "flood" })));
@@ -1064,7 +1073,7 @@ section("settings", async () => {
   const E = await member("Eli Email", ip(140));
   check("the weekly email is on by default", (await E.view()).me.digest === true);
   const off = await E.act({ type: "settings", digest: false });
-  check("settings turns the weekly email off", off.status === 200 && off.json?.message === "Weekly email is off." && (await E.view()).me.digest === false, off.json);
+  check("settings turns the weekly email off", off.status === 200 && off.json?.message === "The weekly email is off. We won't send another one." && (await E.view()).me.digest === false, off.json);
   check("settings does not change onboarding", (await E.view()).me.onboarded === true);
   const on = await E.act({ type: "settings", digest: true });
   const ev = await E.view();
@@ -1138,10 +1147,11 @@ section("scan", async () => {
   const un = await G.act({ type: "unlockMany", items: [{ entity: "company", id: host.id, field: "identity" }, { entity: "engagement", id: e2.id, field: "role" }] });
   const roleCell = un.json?.cells?.find((c) => c.field === "role")?.cell;
   check("a scan value counts as one confirmation", un.status === 200 && roleCell?.v === "Interim CMO" && roleCell.ver === 1 && roleCell.mine === false, un.json);
+  check("an unlock says what it cost", /^Unlocked (2 facts for 2 credits|the role for 1 credit)\.$/.test(un.json?.message ?? ""), un.json?.message);
   const over = await G.act({ type: "fill", entity: "engagement", id: e2.id, field: "role", value: "Interim Chief Marketing Officer" });
-  check("a member can't overwrite a scan value", over.status === 400 && /already filled/.test(over.json?.error ?? ""), over.json);
+  check("a member can't overwrite a scan value", over.status === 400 && /already there/.test(over.json?.error ?? ""), over.json);
   const noUnlock = await G.act({ type: "unlock", entity: "engagement", id: e2.id, field: "status" });
-  check("there is nothing to unlock on a followed role's status", noUnlock.json?.error === "Nothing to unlock here.", noUnlock.json);
+  check("there is nothing to unlock on a followed role's status", noUnlock.json?.error === "Nothing here is locked, so no credit was spent.", noUnlock.json);
 
   // Still open.
   const s2 = await scanPost({ roles: [role1, role2], sources: cleanRun, now: at(3) });
@@ -1233,7 +1243,7 @@ section("scan", async () => {
 
   if (adm) {
     const now = await adm.act({ type: "scanNow" });
-    check("an admin can start a scan", now.status === 200 && now.json?.message === "Scan started.", now.json);
+    check("an admin can start a scan", now.status === 200 && now.json?.message === "Scan started. It reads several job boards, so give it a few minutes.", now.json);
   }
 });
 
