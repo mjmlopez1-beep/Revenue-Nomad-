@@ -1367,6 +1367,8 @@ function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
   for (const e of g.engagements.values()) {
     const v = valueOf(e, s, "rate");
     if (!v || v.status !== "live") continue;
+    // A budget posted on a job board is what a client offered, not what a fractional was paid.
+    if (isSystem(v.by) && e.source === "Demand scan") continue;
     const r = readRate(v.value, live(e, s, "pricing"));
     if (!r) continue;
     publicBy.set(e.id, v.by);
@@ -2215,7 +2217,8 @@ let digestRunning = false;
 
 /**
  * What each member's weekly email would say right now: one entry per member with an email
- * who hasn't turned it off and hasn't had one in the last 6 days. Empty in a week with no new
+ * who has signed in (or everyone on file with RN_DIGEST_ALL=1), hasn't turned it off and
+ * hasn't had one in the last 6 days. Empty in a week with no new
  * open roles. Server-side only (it holds every member's email).
  */
 export async function digestList(nowIso: string | undefined, base: string): Promise<{ memberId: string; data: DigestData }[]> {
@@ -2246,9 +2249,13 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
   }
   const byFunction = [...count].map(([fn, n]) => ({ function: fn, n })).sort((a, b) => b.n - a.n || a.function.localeCompare(b.function));
 
+  // Only members who have signed in get it, unless RN_DIGEST_ALL=1 sends it to everyone on file.
+  const everyone = process.env.RN_DIGEST_ALL === "1";
+  const joined = new Set(s.members.map((m) => m.id));
   const out: { memberId: string; data: DigestData }[] = [];
   for (const m of idx.all) {
     if (!m.email || !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(m.email)) continue;
+    if (!everyone && !s.seen[m.id] && !s.profiles[m.id] && !joined.has(m.id)) continue;
     const prof = s.profiles[m.id] ?? {};
     if (prof.digestOff) continue;
     const last = Date.parse(s.digest.members[m.id] ?? "");

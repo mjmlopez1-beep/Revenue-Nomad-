@@ -39,6 +39,7 @@ Object.assign(process.env, {
   RN_LOGO_LOOKUP: "off",
   RESEND_API_KEY: "test-key",
   RN_EMAIL_FROM: "Trading Post <post@example.com>",
+  RN_DIGEST_ALL: "1",
 });
 delete process.env.RN_DIGEST;
 
@@ -86,6 +87,10 @@ async function main() {
   const sal = list.find((x) => x.memberId === "m1")?.data;
   const mo = list.find((x) => x.memberId === "m2")?.data;
   check("everyone with an email who hasn't opted out is on the list", list.map((x) => x.memberId).sort().join() === "m1,m2,m4,m6", list.map((x) => x.memberId));
+  delete process.env.RN_DIGEST_ALL;
+  const signedIn = (await t.digestList(at(0), BASE)).map((x) => x.memberId);
+  check("without RN_DIGEST_ALL only members who have signed in are on the list", !signedIn.includes("m1") && !signedIn.includes("m2") && !signedIn.includes("m4"), signedIn);
+  process.env.RN_DIGEST_ALL = "1";
   check("new roles are counted for all functions and for the member's own", sal?.newRoles === 3 && sal.newRolesMine === 2 && mo?.newRolesMine === 1, { sal: sal?.newRolesMine, mo: mo?.newRolesMine });
   check("hidden companies are counted for that member (a seat holder sees their own company)", sal?.newRolesMineHidden === 1 && mo?.newRolesMineHidden === 1, { sal: sal?.newRolesMineHidden, mo: mo?.newRolesMineHidden });
   check("functions come most roles first", JSON.stringify(sal?.byFunction) === JSON.stringify([{ function: "Sales", n: 2 }, { function: "Marketing", n: 1 }]), sal?.byFunction);

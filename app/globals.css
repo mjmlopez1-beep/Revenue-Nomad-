@@ -1,8 +1,9 @@
 /*
  * Trading Post · Revenue Nomad design system v2
  * Pine = navigate and spend. Volt = earn and add (primary button fill, "+1"). Ember = only
- * urgency (low balance, the daily cap, open roles). Figtree for UI, 800 for headings;
- * Red Hat Mono for data. Radii 6 chips, 8 buttons, 10 cards. No shadows except overlays.
+ * urgency (low balance, the daily cap, open roles). Schibsted Grotesk for everything, 800
+ * for headings, tabular figures (.num) for numbers. Red Hat Mono only for domains, links and
+ * emails shown as data. Radii 6 chips, 8 buttons, 10 cards. No shadows except overlays.
  *
  * Area styles live next to their components:
  *   app/landing/landing.css   marketing page, join and sign-in
@@ -34,8 +35,9 @@
   --r-chip: 6px;
   --r-btn: 8px;
   --r-card: 10px;
-  --font: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "Red Hat Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font: "Schibsted Grotesk Variable", "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font);
+  --mono: "Red Hat Mono Variable", "Red Hat Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --overlay-shadow: 0 12px 40px rgba(10, 26, 19, 0.16), 0 2px 8px rgba(10, 26, 19, 0.08);
   color-scheme: light;
 }
@@ -62,10 +64,12 @@ h2,
 h3,
 h4 {
   color: var(--ink);
+  font-family: var(--font-display);
   font-weight: 800;
   line-height: 1.12;
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 p {
   margin: 0;
@@ -92,6 +96,10 @@ img {
 }
 .mono {
   font-family: var(--mono);
+}
+/* Numbers, dates, counts and money: the text face with figures that line up in columns. */
+.num {
+  font-variant-numeric: tabular-nums;
 }
 .muted {
   color: var(--muted);
