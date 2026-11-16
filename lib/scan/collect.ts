@@ -5,7 +5,11 @@
  *
  * What gets through:
  *  - listings only, never discussion threads
- *  - the crawler's bar: score at least MIN_SCORE and a real fractional signal
+ *  - work that is itself fractional, interim, freelance or contract: the title says so (or names
+ *    an advisor seat), the board lists only fractional work, or a sentence in the body says the
+ *    role itself is, with no full-time tell in the posting (workSignal in lib/crawler/score.ts).
+ *    Remote, "trusted advisor", "consultative", part-time, days or hours a week, an hourly rate
+ *    and "contract" about customers never count on their own.
  *  - GTM seats only: a fractional CFO or CTO posting is left out even when it mentions sales
  *  - posted in the last 60 days (postings with no date are kept)
  *  - a real, named company, so no "Confidential", no "A Series B startup", no job boards and no
@@ -14,9 +18,9 @@
  * hangs is reported with its error and never fails the scan.
  */
 import type { JobFunction, RawJob } from "../types";
-import type { ScanCollectResult, ScanRole, ScanSourceResult } from "../scanTypes";
+import type { ScanCollectResult, ScanRole, ScanScreenedOut, ScanSourceResult } from "../scanTypes";
 import { ENGAGEMENT_TYPES, FUNCTIONS, cut, functionOf } from "../tableFields";
-import { MIN_SCORE, scoreJob, type ScoredTags } from "../crawler/score";
+import { scoreJob, workSignal, type ScoredTags, type WorkSignal } from "../crawler/score";
 import * as remotive from "../crawler/sources/remotive";
 import * as remoteok from "../crawler/sources/remoteok";
 import * as weworkremotely from "../crawler/sources/weworkremotely";
@@ -53,19 +57,28 @@ export const STALE_DAYS = 60;
 /** How long one source gets before the scan moves on without it. Each request inside has its own 15 second limit. */
 export const SOURCE_TIMEOUT_MS = 25_000;
 
+/**
+ * bar: no GTM function anywhere in the posting. full-time: the work is not fractional, interim,
+ * freelance or contract (see workSignal). not-gtm: the title names a seat outside GTM.
+ */
 export type SkipReason = "discussion" | "bar" | "full-time" | "not-gtm" | "stale" | "company" | "title";
 
 const DAY = 24 * 3600 * 1000;
 
 /* ---------- the fractional signal ---------- */
 
-const TITLE_SIGNAL = /\b(?:fractional|interim|advis(?:or|ory|er)s?|part[\s-]?time|contract(?:or)?|freelance|consult(?:ant|ing))\b/i;
-/** Full-time tells, the same ones the crawler's scorer subtracts for. */
-const FULL_TIME =
-  /\bfull[\s-]?time\b|\bfte\b|\b(?:401k|401\(k\)|health insurance|dental|vision insurance|paid time off|parental leave|equity package|stock options|annual salary|base salary)\b|\bpto\b/i;
-/** Wording that says the role itself is fractional, not just that the word appears somewhere. */
-const ROLE_IS_FRACTIONAL =
-  /\b(?:fractional|interim|part[\s-]?time)\s+(?:role|position|engagement|basis|capacity|opportunity|contract|hire|leader|leadership|executive|exec|c[a-z]o|chief|vp|vice president|head|director|advisor|consultant)\b|\b(?:seeking|hiring|looking for|searching for|in search of|needs?|wants?)\s+an?\s+(?:[\w-]+\s+){0,2}(?:fractional|interim|part[\s-]?time)\b|\bthis (?:is an?|role is|position is)\s+(?:fractional|interim|part[\s-]?time)\b/i;
+/**
+ * The work itself is fractional, interim, freelance or contract, and which type that makes it.
+ * The title decides first. A fractional-only board's listing counts unless it is a 38+ hour week.
+ * Otherwise a sentence in the body has to say the role itself is, with no full-time tell.
+ */
+export function workOf(raw: Pick<ScanRawJob, "title" | "description" | "fractionalBoard" | "hoursPerWeek">): WorkSignal | { type: "Fractional"; where: "board" } | null {
+  const title = plain(raw.title);
+  const signal = workSignal(title, String(raw.description ?? ""));
+  if (signal?.where === "title") return signal;
+  if (raw.fractionalBoard) return raw.hoursPerWeek != null && raw.hoursPerWeek >= 38 ? null : signal ?? { type: "Fractional", where: "board" };
+  return signal;
+}
 
 /* ---------- function and type ---------- */
 
@@ -131,10 +144,21 @@ const TYPE_WORDING: [string, RegExp][] = [
   ["Project", /\b(?:contract(?:or)?|project(?:[\s-]based)?|freelance|consult(?:ant|ing)|1099)\b/i],
 ];
 
-/** Fractional, Interim or Advisory from the wording, Project for contract or project wording. The title decides before the body. */
+/** In a body, advisor and consulting words describe the job ("a trusted advisor to customers"), so only these set the type. */
+const BODY_TYPE_WORDING = TYPE_WORDING.filter(([type]) => type !== "Advisory").map(([type, re]): [string, RegExp] =>
+  type === "Project" ? [type, /\b(?:contract(?:or)?|project(?:[\s-]based)?|freelance|1099)\b/i] : [type, re]
+);
+
+/**
+ * Fractional, Interim or Advisory, or Project for freelance and contract work. What says the work
+ * is fractional decides (workSignal: the title first, then a body sentence about the role), then
+ * the title's wording, then the body's. Advisor and consulting words in a body never set it.
+ */
 export function roleType(title: string, text: string): string {
-  for (const hay of [title, text]) {
-    for (const [type, re] of TYPE_WORDING) if (re.test(hay) && ENGAGEMENT_TYPES.includes(type)) return type;
+  const signal = workSignal(title, text);
+  if (signal && ENGAGEMENT_TYPES.includes(signal.type)) return signal.type;
+  for (const [hay, wording] of [[title, TYPE_WORDING], [text, BODY_TYPE_WORDING]] as const) {
+    for (const [type, re] of wording) if (re.test(hay) && ENGAGEMENT_TYPES.includes(type)) return type;
   }
   return "Fractional";
 }
@@ -179,28 +203,36 @@ export function roleHours(raw: ScanRawJob, tags: Pick<ScoredTags, "commitment">)
 
 /* ---------- one posting ---------- */
 
-/** Turn one raw posting into a role, or say why it was left out. */
-export function screenJob(raw: ScanRawJob, now = Date.now()): { role: ScanRole; skip?: undefined } | { role?: undefined; skip: SkipReason } {
+/**
+ * Turn one raw posting into a role, or say why it was left out. A posting left out because the
+ * work is not fractional ("full-time") carries its key when it has one, so the scan can take
+ * back a role an older, looser screen let in (see applyScan).
+ */
+export function screenJob(
+  raw: ScanRawJob,
+  now = Date.now()
+): { role: ScanRole; skip?: undefined } | { role?: undefined; skip: SkipReason; key?: string } {
   if ((raw.kind || "listing") !== "listing") return { skip: "discussion" };
 
   const rawTitle = plain(raw.title);
   const body = plain(raw.description);
   const text = `${rawTitle} ${body}`;
 
-  // The crawler's bar.
-  const tags = scoreJob(raw);
-  if (tags.score < MIN_SCORE || !tags.isFractional) return { skip: "bar" };
-
-  // When the only signal is a word somewhere in the body ("you'll manage fractional contractors"),
-  // the body has to say the role itself is fractional, and carry no full-time tells.
-  const hours = roleHours(raw, tags);
-  const rate = roleRate(raw, tags, text);
-  const structured = (hours != null && hours <= 32) || (rate != null && /\/hr\b/.test(rate));
-  if (!raw.fractionalBoard && !TITLE_SIGNAL.test(rawTitle) && !structured && (FULL_TIME.test(text) || !ROLE_IS_FRACTIONAL.test(body))) {
-    return { skip: "full-time" };
+  // The work itself has to be fractional, interim, freelance or contract.
+  const work = workOf(raw);
+  if (!work) {
+    const company = cleanCompany(raw.company);
+    const key = roleKey(company, cleanTitle(raw.title, company));
+    return key.startsWith("::") || key.endsWith("::") ? { skip: "full-time" } : { skip: "full-time", key };
   }
 
+  // And in a GTM function: the title names one, or the posting talks about one and the title is not a seat outside GTM.
+  const tags = scoreJob(raw);
+  if (!gtmByTitle(rawTitle) && tags.functions.length === 0) return { skip: "bar" };
   if (!gtmByTitle(rawTitle) && NON_GTM_TITLE.test(rawTitle)) return { skip: "not-gtm" };
+
+  const hours = roleHours(raw, tags);
+  const rate = roleRate(raw, tags, text);
 
   let postedAt: string | null = null;
   const t = raw.postedAt ? new Date(raw.postedAt).getTime() : NaN;
@@ -222,7 +254,8 @@ export function screenJob(raw: ScanRawJob, now = Date.now()): { role: ScanRole; 
       domain: companyDomain(company, { companyUrl: raw.companyUrl, url: raw.url, text: String(raw.description ?? "") }),
       title,
       function: roleFunction(title, tags, raw.functionHint),
-      type: roleType(rawTitle, body), // the raw title, since cleaning drops notes like "(Contract)"
+      // From the raw title, since cleaning drops notes like "(Contract)".
+      type: work.where === "board" ? roleType(rawTitle, body) : work.type,
       url: raw.url,
       source: raw.source,
       postedAt,
@@ -299,7 +332,8 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
  * including any past the cap: that is what applyScan gets, so a role still posted is never taken
  * for gone because it did not fit this week (applyScan caps only the roles it newly opens).
  * `seenKeys` is the keys of `all`. A source with an `error` was not read at all: its roles are
- * unknown, not gone.
+ * unknown, not gone. `screenedOut` is every listing a board answered with that was left out
+ * because the work is not fractional, so applyScan can take back a role an older screen let in.
  */
 export async function collectOpenRoles(
   opts: { sources?: ScanSource[]; now?: number; timeoutMs?: number; max?: number } = {}
@@ -311,15 +345,27 @@ export async function collectOpenRoles(
   const settled = await Promise.allSettled(sources.map((src) => withTimeout(Promise.resolve().then(() => src.fetchJobs()), timeoutMs)));
 
   const kept: ScanRole[] = [];
+  const screenedOut: ScanScreenedOut[] = [];
   const results: ScanSourceResult[] = settled.map((res, i) => {
     const source = sources[i].name;
     if (res.status === "rejected") return { source, fetched: 0, matched: 0, error: errorText(res.reason) };
     const raws = Array.isArray(res.value) ? res.value : [];
-    const roles = raws.map((raw) => screenSafely(raw, now)).filter((r): r is ScanRole => r !== null);
-    kept.push(...roles);
-    return { source, fetched: raws.length, matched: roles.length };
+    let matched = 0;
+    for (const raw of raws) {
+      let out: ReturnType<typeof screenJob> | null = null;
+      try {
+        out = screenJob(raw, now);
+      } catch {
+        continue; // one bad posting is skipped, the rest of the board still counts
+      }
+      if (out.role) {
+        kept.push(out.role);
+        matched++;
+      } else if (out.skip === "full-time" && out.key) screenedOut.push({ key: out.key, url: String(raw.url ?? ""), source: String(raw.source || source) });
+    }
+    return { source, fetched: raws.length, matched };
   });
 
   const all = newestFirst(dedupeRoles(kept));
-  return { roles: all.slice(0, opts.max ?? MAX_ROLES), all, sources: results, seenKeys: all.map((r) => r.key) };
+  return { roles: all.slice(0, opts.max ?? MAX_ROLES), all, sources: results, seenKeys: all.map((r) => r.key), screenedOut };
 }
