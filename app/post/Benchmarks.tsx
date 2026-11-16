@@ -23,8 +23,8 @@ const RATE_HELP = "Use a rate like $8k/mo or $150/hr.";
 const PRICING = ["Monthly retainer", "Hourly"] as const;
 type Pricing = (typeof PRICING)[number];
 
-function Stat({ s, unit, floor }: { s: RateStat; unit: string; floor: number }) {
-  const min = s.min ?? floor;
+function Stat({ s, unit }: { s: RateStat; unit: string }) {
+  const min = s.min;
   if (s.median === undefined) {
     const need = Math.max(1, min - s.n);
     return (
@@ -216,7 +216,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
   if (!b) return null;
   const mine = ui.me.function;
   // Every function the server sends, the member's own first.
-  const rows: BenchmarkRow[] = b.rows.filter((r) => (r.revenue ?? r.size) === band).sort((x, y) => (x.function === mine ? -1 : y.function === mine ? 1 : 0));
+  const rows: BenchmarkRow[] = b.rows.filter((r) => r.revenue === band).sort((x, y) => (x.function === mine ? -1 : y.function === mine ? 1 : 0));
   const anyIndexed = rows.some((r) => r.indexed);
   return (
     <div className="tp-page">
@@ -258,10 +258,10 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
               )}
             </span>
             <span role="cell">
-              <Stat s={r.monthly} unit="mo" floor={b.minN} />
+              <Stat s={r.monthly} unit="mo" />
             </span>
             <span role="cell">
-              <Stat s={r.hourly} unit="hr" floor={b.minN} />
+              <Stat s={r.hourly} unit="hr" />
             </span>
           </div>
         ))}
@@ -273,7 +273,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
 
       <section className="tp-card tp-bm-sharecard">
         <ShareRate refresh={refresh} />
-        <MyRates rates={ui.me.benchRates ?? []} view={view} />
+        <MyRates rates={ui.me.benchRates} view={view} />
       </section>
 
       <div className="tp-bm-cta">

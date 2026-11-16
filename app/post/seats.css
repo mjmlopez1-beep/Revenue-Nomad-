@@ -478,6 +478,13 @@ button.ys-yours:hover {
 .tp-phone .ys-empty .btn {
   min-height: 44px;
 }
+/* The question takes its own line, so Remove and Keep sit side by side under it. */
+.tp-phone .ys-seat-foot {
+  padding: 8px 14px;
+}
+.tp-phone .ys-seat-foot > span {
+  flex-basis: 100%;
+}
 .tp-phone .ys-save {
   padding: 0 16px;
   font-size: 14px;

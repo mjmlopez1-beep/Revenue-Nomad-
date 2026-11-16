@@ -7,7 +7,7 @@ import "./pages.css";
 
 export function WeeklyEmail() {
   const ui = useUi();
-  const saved = ui.me.digest !== false;
+  const saved = ui.me.digest;
   // What the member just picked, shown until the server's answer arrives.
   const [picked, setPicked] = useState<boolean | null>(null);
   const on = picked ?? saved;

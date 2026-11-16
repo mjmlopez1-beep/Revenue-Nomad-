@@ -6,10 +6,10 @@
  * who the fractional reported to, worked with, or who is hiring for the seat).
  * Each value is stored once on its own record and shows everywhere it applies.
  *
- * Free fields describe the company and the shape of the work (function, type, start),
- * so the free view is useful on its own. Locked fields are the intel people trade for:
- * the exact role, status, end date, who held the seat, rate, hours, the posting, and
- * people's names and contact details. Adding a missing fact earns 1 credit (max
+ * Free fields describe the company and the shape of the work (function, type, start,
+ * hours per week), so the free view is useful on its own. Locked fields are the intel
+ * people trade for: the exact role, status, end date, who held the seat, rate, the
+ * posting, and people's names and contact details. Adding a missing fact earns 1 credit (max
  * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
 export type Entity = "company" | "engagement" | "contact";

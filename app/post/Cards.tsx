@@ -10,12 +10,12 @@ import { FactCell, YourSeat, earnNote, useUi } from "./ui";
 import { Fit, FnChips, HeldBy, HiddenCompany } from "./Tables";
 import { RoleDate } from "./RoleDate";
 
-function Head({ r, right }: { r: Row; right?: React.ReactNode }) {
+function Head({ r, right, bare }: { r: Row; right?: React.ReactNode; bare?: boolean }) {
   const i = r.i;
   if (i.c.hidden)
     return (
       <div className="tp-pcard-top">
-        <HiddenCompany i={i} />
+        <HiddenCompany i={i} bare={bare} />
         {right}
       </div>
     );
@@ -60,7 +60,8 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
   const own = heldShown && e?.yours ? undefined : i.engs.find((x) => x.yours);
   return (
     <article className="tp-pcard" onClick={() => onOpen(r)} data-row={r.key}>
-      <Head r={r} right={<Fit i={i} />} />
+      {/* The line under the header already gives a hidden company's industry, size and region. */}
+      <Head r={r} right={<Fit i={i} />} bare />
       <div className="tp-pcard-line">{line.length ? line.join(" · ") : <span className="tp-faint">Industry, size and HQ not on file</span>}</div>
       {(i.fns.length > 0 || own) && (
         <div className="tp-pcard-fns">
@@ -95,7 +96,8 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen }: { r: Row; me: M
           </Fact>
         )}
       </div>
-      {miss > 0 && (
+      {/* Facts at a hidden company can't be added until it is unlocked, so the card doesn't offer them. */}
+      {miss > 0 && !c.hidden && (
         <div className="tp-pcard-miss">
           {miss} fact{miss > 1 ? "s" : ""} missing{room && !earnNote(me).capped ? `, earn ${Math.min(miss, room)}` : ""}
         </div>

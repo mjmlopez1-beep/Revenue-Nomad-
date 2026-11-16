@@ -373,7 +373,7 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
 
   const benchBySeat = useMemo(() => {
     const m = new Map<string, string>();
-    for (const b of me.benchRates ?? []) if (b.engagementId) m.set(b.engagementId, benchText(b.kind, b.amount));
+    for (const b of me.benchRates) if (b.engagementId) m.set(b.engagementId, benchText(b.kind, b.amount));
     return m;
   }, [me.benchRates]);
 

@@ -53,17 +53,33 @@ export function HeldBy({ e }: { e: EngagementRec }) {
   return <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} />;
 }
 
-/** A company with an open role the member hasn't unlocked: what's free, plus Unlock company. */
-export function HiddenCompany({ i, big }: { i: CoInfo; big?: boolean }) {
+/**
+ * A company with an open role the member hasn't unlocked: what's free, plus Unlock company.
+ * `big` is the record's header (its own Unlock button sits below). `bare` leaves out the
+ * industry, size and region line where the same facts are printed right under it.
+ */
+export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare?: boolean }) {
+  const ui = useUi();
+  const unlock = !big && <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />;
+  const teaser = !bare && <span className="tp-co-dom">{i.teaser || "Hiring a fractional now"}</span>;
+  // In the table the name gets its own line and Unlock sits under it, so neither is cut in the 240px column.
+  const stacked = !big && ui.layout !== "phone";
   return (
-    <span className={`tp-co tp-co-hidden${big ? " big" : ""}`}>
+    <span className={`tp-co tp-co-hidden${big ? " big" : ""}${stacked ? " stacked" : ""}`}>
       <CompanyLogo name="" domain={null} hidden size={big ? "lg" : "md"} />
       <span className="tp-co-text">
         <span className="tp-co-name">
           <span className="tp-hidden-name">Hidden company</span>
-          {!big && <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />}
+          {!stacked && unlock}
         </span>
-        <span className="tp-co-dom">{i.teaser || "Hiring a fractional now"}</span>
+        {stacked ? (
+          <span className="tp-co-sub">
+            {unlock}
+            {teaser}
+          </span>
+        ) : (
+          teaser
+        )}
       </span>
     </span>
   );

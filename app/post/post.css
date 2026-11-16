@@ -2417,6 +2417,9 @@
   color: var(--body-ink);
   background: var(--surface-2);
 }
+.tp-phone .tp-linkinput {
+  min-height: 44px;
+}
 .tp-linkcard-acts {
   display: flex;
   gap: 8px;
@@ -2481,6 +2484,17 @@
   }
   .tp-ltable td:nth-child(3) {
     white-space: normal;
+  }
+}
+@media (max-width: 400px) {
+  /* The date may sit over the time, so What keeps its room and the table never scrolls sideways. */
+  .tp-ltable th,
+  .tp-ltable td {
+    padding: 8px 6px;
+  }
+  .tp-ltable td:first-child {
+    white-space: normal;
+    min-width: 62px;
   }
 }
 
@@ -2699,7 +2713,8 @@
 /* Companies, Engagements, People on the first screen. */
 .tp-phone .tp-rtype {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Sized by their labels, so "Engagements 578" stays on one line at 390px. Narrower phones wrap the count. */
+  grid-template-columns: repeat(3, auto);
   margin: 12px 16px 0;
   width: calc(100% - 32px);
 }
@@ -2715,6 +2730,12 @@
   column-gap: 4px;
   white-space: nowrap;
   line-height: 1.15;
+}
+@media (max-width: 360px) {
+  /* Too narrow for label and count side by side: stack all three the same way. */
+  .tp-phone .tp-rtype-b {
+    flex-direction: column;
+  }
 }
 /* Tap targets of at least 44px (40px for chips). */
 .tp-phone .tp-iconbtn-sm {
@@ -2954,6 +2975,10 @@
   min-width: 112px;
 }
 .tp-rsheet-bar > .tp-small {
+  flex: 1;
+}
+/* A hidden company has one action (Unlock company): it takes the rest of the bar. */
+.tp-rsheet-bal + .btn-primary {
   flex: 1;
 }
 @media (max-width: 360px) {
@@ -3204,9 +3229,37 @@
   color: var(--muted);
   font-style: normal;
 }
+/* In the table: the name on its own line, then Unlock and what is free to know, inside a 44px row. */
+.tp-co-hidden.stacked .tp-co-name {
+  flex-wrap: nowrap;
+  font-size: 13px;
+  line-height: 16px;
+}
+.tp-co-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 1px;
+}
+.tp-co-sub .tp-cell {
+  flex: none;
+}
+.tp-co-sub .lock {
+  height: 22px;
+  padding: 0 7px;
+}
+.tp-co-sub .tp-co-dom {
+  flex: 1;
+  min-width: 0;
+}
 .tp-co-hidden .tp-co-dom {
   font-family: inherit;
   color: var(--muted);
+}
+/* In the record's header the name takes the row, so Follow stays at the right edge. */
+.tp-co-hidden.big {
+  flex: 1;
 }
 .tp-co-hidden.big .tp-hidden-name {
   font-size: 22px;

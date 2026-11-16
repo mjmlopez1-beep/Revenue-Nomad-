@@ -992,7 +992,7 @@ section("pilot", async () => {
   const wv = await W.view();
   check("a member who isn't an admin gets no admin block", !("admin" in wv) && wv.me.admin === false);
   check("signed-out views get no admin or scan block", await call("GET", "/api/table", { ipAddr: ip(131) }).then((r) => !("admin" in r.json) && !("scan" in r.json)));
-  check("signed-in views carry the scan summary", !!wv.scan && ["openNow", "opened7", "closed30", "mine7"].every((k) => typeof wv.scan[k] === "number") && "lastRunAt" in wv.scan, wv.scan);
+  check("signed-in views carry the scan summary", !!wv.scan && ["openNow", "opened7", "closed30", "mine7"].every((k) => typeof wv.scan[k] === "number") && "lastRunAt" in wv.scan && typeof wv.scan.digest === "boolean", wv.scan);
   check("Me carries digest and proInterest", wv.me.digest === true && wv.me.proInterest === false && Array.isArray(wv.me.benchRates), { digest: wv.me.digest, pro: wv.me.proInterest });
 
   const view1 = await W.act({ type: "signal", name: "pro_view", where: "unlock-wall" });

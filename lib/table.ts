@@ -1221,12 +1221,15 @@ function scanSummary(g: Graph, s: State, tracks: Tracks, nowMs: number, myFuncti
       if (myFunction && fnOf(e, s) === myFunction) mine7++;
     }
   }
-  return { lastRunAt: s.scan.lastRunAt, openNow, opened7, closed30, mine7 };
+  return { lastRunAt: s.scan.lastRunAt, openNow, opened7, closed30, mine7, digest: digestOn() };
+}
+
+/** The weekly email is on: an email provider is set up and RN_DIGEST is not 0. */
+function digestOn() {
+  return emailEnabled() && process.env.RN_DIGEST !== "0";
 }
 
 /* ---------- pilot metrics (admins) ---------- */
-
-const digestOn = () => emailEnabled() && process.env.RN_DIGEST !== "0";
 
 function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: number, scan: ScanSummary, entityOf: (id: string) => Entity): AdminStats {
   // Balances of everyone who has shown up: joined, signed in, onboarded or in the ledger.
@@ -1388,7 +1391,6 @@ function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
     const row = (revenue: string, xs: RatePoint[]): BenchmarkRow => ({
       function: fn,
       revenue,
-      size: revenue, // deprecated name, kept until the app reads `revenue`
       indexed: xs.some((p) => p.index),
       monthly: rateStat(xs.filter((p) => p.kind === "monthly")),
       hourly: rateStat(xs.filter((p) => p.kind === "hourly")),

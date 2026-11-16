@@ -572,11 +572,11 @@ export interface SeatInfo {
 /** Facts still empty on a seat. `priv` holds the seats whose rate the member shared for the benchmarks only. */
 const seatMissing = (e: EngagementRec, priv: Set<string | null>) => SEAT_ASK.filter((f) => e.cells[f]?.s === "empty" && !(f === "rate" && priv.has(e.id)));
 /** How many facts the member can still add on one of their own seats. */
-export const seatMissingCount = (e: EngagementRec, me: Me) => seatMissing(e, new Set((me.benchRates ?? []).map((b) => b.engagementId))).length;
+export const seatMissingCount = (e: EngagementRec, me: Me) => seatMissing(e, new Set(me.benchRates.map((b) => b.engagementId))).length;
 
 /** The seats the viewer holds (EngagementRec.yours) and what is still missing on each. */
 export function mySeats(infos: CoInfo[], me: Me): SeatInfo[] {
-  const priv = new Set((me.benchRates ?? []).map((b) => b.engagementId));
+  const priv = new Set(me.benchRates.map((b) => b.engagementId));
   const out: SeatInfo[] = [];
   for (const i of infos) {
     let first = true;

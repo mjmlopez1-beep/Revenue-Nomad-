@@ -449,7 +449,8 @@ export function Drawer({
   const hired = [...c.friendly.functions].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : (fnCounts.get(b) ?? 0) - (fnCounts.get(a) ?? 0)));
   const storyFns = i.fns.filter((f) => !c.friendly.functions.includes(f));
   const gap = !!mine && hired.length > 0 && !hired.includes(mine);
-  const sources = [...new Set(i.engs.map((e) => SOURCE_LABEL[e.source] ?? e.source))];
+  // Where the seats came from. A role the scan found reads as a job posting, open or closed.
+  const sources = [...new Set(i.engs.map((e) => (e.source === "Demand scan" ? "Job posting" : SOURCE_LABEL[e.source] ?? e.source)))];
   const follow = () => ui.act({ type: "follow", companyId: c.id, on: !c.following });
 
   const actions = (
@@ -502,7 +503,7 @@ export function Drawer({
       <div className="tp-dscroll" ref={scroller}>
         {c.hidden ? (
           <header className="tp-dhead">
-            <HiddenCompany i={i} big />
+            <HiddenCompany i={i} big bare />
             {!phone && followBtn}
           </header>
         ) : (
@@ -629,17 +630,16 @@ export function Drawer({
       {phone && (
         <div className="tp-rsheet-bar">
           <span className="tp-rsheet-bal mono muted">{plural(ui.me.credits, "credit")}</span>
-          {i.locked.length > 0 ? (
-            <UnlockAll items={i.locked} label={(n) => `Unlock all (${n})`} />
-          ) : (
-            <span className="tp-small muted">Nothing locked here</span>
-          )}
           {c.hidden ? (
-            <UnlockCompany id={c.id} label="Unlock company" />
+            // One action while the name is hidden, as on desktop. The facts unlock after it.
+            <UnlockCompany id={c.id} label="Unlock company · 1 credit" />
           ) : (
-            <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
-              <IconPlus size={14} /> Add
-            </button>
+            <>
+              {i.locked.length > 0 ? <UnlockAll items={i.locked} label={(n) => `Unlock all (${n})`} /> : <span className="tp-small muted">Nothing locked here</span>}
+              <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
+                <IconPlus size={14} /> Add
+              </button>
+            </>
           )}
         </div>
       )}

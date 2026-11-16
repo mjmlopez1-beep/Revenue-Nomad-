@@ -117,7 +117,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           }
         />
       </div>
-      {view.email && <WeeklyEmail />}
+      {view.scan?.digest && <WeeklyEmail />}
       {me.admin && (
         <section className="tp-card">
           <h3 className="tp-card-h">

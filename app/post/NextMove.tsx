@@ -73,7 +73,7 @@ export function NextMove({
     kind === "seats"
       ? {
           chip: `+${plural(earn, "credit")}`,
-          title: `You held ${plural(seats.n, "seat")} on file.`,
+          title: seats.n === 1 ? "We have a seat you held on file." : `We have ${seats.n} seats you held on file.`,
           line:
             seats.missing > earn
               ? `${plural(seats.missing, "fact is", "facts are")} missing. Fill them in and earn ${plural(earn, "credit")} today.`
@@ -86,9 +86,13 @@ export function NextMove({
             chip: "Live",
             title: `${plural(roles.n, `new ${me.function} role`)} this week`,
             line:
-              roles.hidden > 0
-                ? `${plural(roles.hidden, "of those companies is", "of those companies are")} hidden. Unlock one for 1 credit.`
-                : "You can see every company behind them.",
+              roles.n === 1
+                ? roles.hidden > 0
+                  ? "The company is hidden. Unlock it for 1 credit."
+                  : "You can see the company behind it."
+                : roles.hidden > 0
+                  ? `${plural(roles.hidden, "of those companies is", "of those companies are")} hidden. Unlock one for 1 credit.`
+                  : "You can see every company behind them.",
             button: "See open roles",
             go: onRoles,
           }
