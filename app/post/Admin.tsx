@@ -5,6 +5,9 @@
  * scanned: four headline numbers, then one compact card per question the pilot asks, each
  * labeled the way a founder would ask it. Numbers are right-aligned with tabular figures.
  * No ember here: it is a report. Without the admin block (not an admin) the page renders nothing.
+ *
+ * Two lists let an admin act: who added the most this week (with "Remove everything this
+ * member added", behind a confirm), and the open roles members said they took.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
@@ -91,7 +94,29 @@ function Bars({ items, tone, unit, empty }: { items: { field: string; n: number 
   );
 }
 
-function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
+type BoardRow = { source: string; fetched: number | null; matched: number | null; lastOkAt: string | null; problem: string | null; error: boolean };
+
+/** The last run's boards and every board's health in one list: what it read, when it last ran clean, and what is wrong. */
+function boardRows(a: AdminStats): BoardRow[] {
+  const health = new Map((a.boards ?? []).map((b) => [b.source, b]));
+  const names = [...new Set([...a.scan.sources.map((x) => x.source), ...health.keys()])];
+  return names.map((source) => {
+    const run = a.scan.sources.find((x) => x.source === source);
+    const h = health.get(source);
+    const distrust = h && !h.healthy ? `Not trusted on the last run.${h.baseline > 0 ? ` It usually matches ${n0(h.baseline)} ${h.baseline === 1 ? "role" : "roles"}.` : ""}` : null;
+    return {
+      source,
+      fetched: run ? run.fetched : null,
+      matched: run ? run.matched : null,
+      lastOkAt: h?.lastOkAt ?? null,
+      // The board's own error, as a sentence, then the trust note.
+      problem: run?.error ? [/[.!?]$/.test(run.error.trim()) ? run.error.trim() : `${run.error.trim()}.`, distrust].filter(Boolean).join(" ") : distrust,
+      error: !!run?.error,
+    };
+  });
+}
+
+function Scan({ a, lastOkAt, refresh }: { a: AdminStats; lastOkAt: string | null | undefined; refresh: () => Promise<void> }) {
   const ui = useUi();
   const [busy, setBusy] = useState(false);
   /** How the last run from this page ended: it finished, or it is still going after two minutes. */
@@ -129,6 +154,8 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
   };
 
   const s = a.scan;
+  const boards = boardRows(a);
+  const distrusted = boards.some((b) => b.problem && !b.error);
   return (
     <Card
       title="Weekly scan for open roles"
@@ -143,13 +170,14 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
         <Rows
           items={[
             ["Last scan", stamp(s.lastRunAt, "Not yet")],
+            ...(lastOkAt !== undefined ? [["Last clean scan", s.lastRunAt && !lastOkAt ? "None yet" : stamp(lastOkAt, "Not yet")] as [string, string]] : []),
             ["Open roles now", n0(s.openNow)],
             ["Opened in the last 7 days", n0(s.opened7)],
             ["Closed in the last 30 days", n0(s.closed30)],
           ]}
         />
         <div className="tp-pm-sources">
-          {s.sources.length === 0 ? (
+          {boards.length === 0 ? (
             <p className="tp-small muted">{s.lastRunAt ? "The last scan read no job boards." : "No scan has run yet, so there are no job boards to list."}</p>
           ) : (
             <div className="tp-pm-scroll">
@@ -163,22 +191,25 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
                     <th scope="col" className="num">
                       Roles kept
                     </th>
+                    <th scope="col">Last clean scan</th>
                     <th scope="col">Problem</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {s.sources.map((x) => (
+                  {boards.map((x) => (
                     <tr key={x.source}>
                       <td>{x.source}</td>
-                      <td className="num">{n0(x.fetched)}</td>
-                      <td className="num">{n0(x.matched)}</td>
-                      <td className={x.error ? "tp-pm-err" : "tp-pm-none"}>{x.error || "None"}</td>
+                      <td className="num">{x.fetched === null ? "–" : n0(x.fetched)}</td>
+                      <td className="num">{x.matched === null ? "–" : n0(x.matched)}</td>
+                      <td>{stamp(x.lastOkAt, "Never")}</td>
+                      <td className={x.error ? "tp-pm-err" : x.problem ? "tp-pm-warn" : "tp-pm-none"}>{x.problem || "None"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+          {distrusted && <p className="tp-small muted tp-pm-foot">A board that is not trusted on a run never closes a role. Its roles stay as they were until it reads clean again.</p>}
         </div>
       </div>
       <p className="tp-small muted tp-pm-foot" role="status">
@@ -190,6 +221,216 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
               ? "The scan finished. These numbers are current."
               : "A scan reads every job board and keeps the fractional GTM roles. It can take a minute or two."}
       </p>
+    </Card>
+  );
+}
+
+type RecentAdd = NonNullable<AdminStats["recentAdds"]>[number];
+
+/** The remove-everything step: a question first, focus on the safe answer, Esc to back out. */
+function useAsk(r: RecentAdd) {
+  const ui = useUi();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const noRef = useRef<HTMLButtonElement>(null);
+  const askRef = useRef<HTMLButtonElement>(null);
+  const wasAsking = useRef(false);
+  useEffect(() => {
+    // Into the question on the safe answer, and back to the button when it closes.
+    if (asking) noRef.current?.focus();
+    else if (wasAsking.current) askRef.current?.focus();
+    wasAsking.current = asking;
+  }, [asking]);
+  const remove = async () => {
+    if (busy) return;
+    setBusy(true);
+    const res = await ui.act({ type: "adminRemoveMember", memberId: r.memberId });
+    setBusy(false);
+    if (res.ok) setAsking(false);
+  };
+  const rates = r.privateRates > 0 ? `, ${r.privateRates === 1 ? "their private rate" : `their ${n0(r.privateRates)} private rates`}` : "";
+  const button = (
+    <button ref={askRef} type="button" className="tp-tbtn tp-pm-remove" onClick={() => setAsking(true)} aria-label={`Remove everything ${r.name} added`}>
+      Remove everything this member added
+    </button>
+  );
+  const question = (
+    <div
+      className="tp-pm-ask-in"
+      role="group"
+      aria-label={`Remove everything ${r.name} added?`}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          setAsking(false);
+        }
+      }}
+    >
+      <p>
+        Remove everything {r.name} added? That is every fact they added on any record{rates}, and any record they made that is left empty. The credits they earned come off their balance,
+        and anyone who unlocked those facts gets the credit back. This can&apos;t be undone.
+      </p>
+      <div className="tp-pm-ask-acts">
+        <button type="button" className="btn btn-sm tp-btn-red" disabled={busy} onClick={() => void remove()}>
+          {busy ? "Removing" : "Remove everything"}
+        </button>
+        <button ref={noRef} type="button" className="btn btn-sm btn-ghost" disabled={busy} onClick={() => setAsking(false)}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+  return { asking, button, question };
+}
+
+/** One member in "Most facts added this week" as a table row (wider screens). */
+function AddsRow({ r }: { r: RecentAdd }) {
+  const { asking, button, question } = useAsk(r);
+  return (
+    <>
+      <tr className={asking ? "tp-pm-asking" : undefined}>
+        <th scope="row">{r.name}</th>
+        <td className="num">{n0(r.adds24h)}</td>
+        <td className="num">{n0(r.adds7)}</td>
+        <td className="num">{n0(r.privateRates)}</td>
+        <td>{stamp(r.lastAt, "–")}</td>
+        <td className="tp-pm-act">{!asking && button}</td>
+      </tr>
+      {asking && (
+        <tr className="tp-pm-ask">
+          <td colSpan={6}>{question}</td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+/** The same member as a list item (phones): the counts in a line, the action under them. */
+function AddsItem({ r }: { r: RecentAdd }) {
+  const { asking, button, question } = useAsk(r);
+  return (
+    <li className="tp-pm-item">
+      <div className="tp-pm-item-h">{r.name}</div>
+      <div className="tp-pm-item-l">
+        <Num>{n0(r.adds24h)}</Num> in the last 24 hours, <Num>{n0(r.adds7)}</Num> in 7 days
+        {r.privateRates > 0 && (
+          <>
+            , <Num>{n0(r.privateRates)}</Num> private {r.privateRates === 1 ? "rate" : "rates"}
+          </>
+        )}
+        . Last add {stamp(r.lastAt, "–")}.
+      </div>
+      {asking ? question : button}
+    </li>
+  );
+}
+
+function RecentAdds({ rows }: { rows: RecentAdd[] }) {
+  const phone = useUi().layout === "phone";
+  return (
+    <Card title="Most facts added this week" span={6}>
+      {rows.length === 0 ? (
+        <p className="tp-small muted">Nobody has added a fact in the last 7 days.</p>
+      ) : (
+        <>
+          {phone ? (
+            <ul className="tp-pm-list">
+              {rows.map((r) => (
+                <AddsItem key={r.memberId} r={r} />
+              ))}
+            </ul>
+          ) : (
+            <div className="tp-pm-scroll">
+              <table className="tp-pm-table tp-pm-people">
+                <thead>
+                  <tr>
+                    <th scope="col">Member</th>
+                    <th scope="col" className="num">
+                      Last 24 hours
+                    </th>
+                    <th scope="col" className="num">
+                      7 days
+                    </th>
+                    <th scope="col" className="num">
+                      Private rates
+                    </th>
+                    <th scope="col">Last add</th>
+                    <th scope="col">
+                      <span className="sr-only">Remove</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <AddsRow key={r.memberId} r={r} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="tp-small muted tp-pm-foot">Counts are facts on records that still stand. Private rates is how many rates the member shared for the benchmarks only, never an amount.</p>
+        </>
+      )}
+    </Card>
+  );
+}
+
+type RoleClaim = NonNullable<AdminStats["roleClaims"]>[number];
+const claimState = (c: RoleClaim) => (!c.standing ? "Name since removed" : c.closed ? "Closed the role" : "Name kept, role still open");
+const claimKey = (c: RoleClaim) => `${c.engagementId}.${c.memberId}.${c.at}`;
+
+function RoleClaims({ rows }: { rows: RoleClaim[] }) {
+  const phone = useUi().layout === "phone";
+  return (
+    <Card title="Open roles members said they took" span={6}>
+      {rows.length === 0 ? (
+        <p className="tp-small muted">Nobody has picked themselves as the seat holder of an open role in the last 30 days.</p>
+      ) : (
+        <>
+          {phone ? (
+            <ul className="tp-pm-list">
+              {rows.map((c) => (
+                <li key={claimKey(c)} className="tp-pm-item">
+                  <div className="tp-pm-item-h">
+                    {c.name}
+                    {c.company && <span className="tp-pm-item-at"> at {c.company}</span>}
+                  </div>
+                  <div className="tp-pm-item-l">
+                    {claimState(c)}. {stamp(c.at, "–")}.
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="tp-pm-scroll">
+              <table className="tp-pm-table tp-pm-people">
+                <thead>
+                  <tr>
+                    <th scope="col">Member</th>
+                    <th scope="col">Company</th>
+                    <th scope="col">When</th>
+                    <th scope="col">What happened</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => (
+                    <tr key={claimKey(c)}>
+                      <th scope="row">{c.name}</th>
+                      <td>{c.company || "–"}</td>
+                      <td>{stamp(c.at, "–")}</td>
+                      <td className={c.standing && c.closed ? undefined : "tp-pm-quiet"}>{claimState(c)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="tp-small muted tp-pm-foot">
+            A claim closes the role for everyone when the member counts (a seed member, a proven email, or a fact two members confirmed). Otherwise the name is kept and the role stays open
+            until its posting comes down.
+          </p>
+        </>
+      )}
     </Card>
   );
 }
@@ -319,7 +560,10 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           <Bars items={a.topAdded} tone="volt" unit="added" empty="Nothing has been added yet." />
         </Card>
 
-        <Scan a={a} refresh={refresh} />
+        {a.recentAdds && <RecentAdds rows={a.recentAdds} />}
+        {a.roleClaims && <RoleClaims rows={a.roleClaims} />}
+
+        <Scan a={a} lastOkAt={view.scan ? view.scan.lastOkAt ?? (a.boards ? null : undefined) : undefined} refresh={refresh} />
 
         <Card title="Weekly email">
           <Rows

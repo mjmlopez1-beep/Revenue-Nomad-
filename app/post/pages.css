@@ -65,6 +65,9 @@
   line-height: 20px;
   color: var(--muted);
 }
+.tp-bm-note p + p {
+  margin-top: 6px;
+}
 .tp-phone .tp-bm-tools .tp-fchip {
   height: 44px;
 }
@@ -185,6 +188,29 @@
 }
 .tp-phone .tp-bm-mine-row .btn {
   min-height: 44px;
+}
+/* Removing a private rate asks first: the question takes its own line under the rate. */
+.tp-bm-mine-row.asking {
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 0 10px;
+}
+.tp-bm-mine-ask {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+.tp-bm-mine-q {
+  min-width: 0;
+  color: var(--body-ink);
+}
+.tp-bm-mine-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .tp-phone .tp-bm-mine-row {
   gap: 10px;
@@ -362,7 +388,9 @@
   min-width: 0;
   margin-top: 8px;
 }
+/* Positioned, so a visually hidden header inside the table scrolls with it and never widens the page. */
 .tp-pm-scroll {
+  position: relative;
   overflow-x: auto;
 }
 .tp-pm-table {
@@ -423,6 +451,96 @@
   color: var(--red);
   white-space: normal;
   overflow-wrap: anywhere;
+}
+/* A board that answered but is not trusted: a warning in ink, not an error in red. */
+.tp-pm-table td.tp-pm-warn {
+  min-width: 200px;
+  font-weight: 600;
+  white-space: normal;
+}
+.tp-pm-table td.tp-pm-quiet {
+  color: var(--muted);
+}
+.tp-pm-people tbody th {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+/* Most facts added: one quiet remove per row, and its question on its own row under it. */
+.tp-pm-table td.tp-pm-act {
+  text-align: right;
+}
+/* Quiet at rest (a column of red would read as errors), red once you are on it. */
+.tp-pm-remove {
+  margin: 0;
+  white-space: nowrap;
+}
+.tp-pm-remove:hover,
+.tp-pm-remove:focus-visible {
+  color: var(--red);
+  background: none;
+}
+.tp-phone .tp-pm-remove {
+  min-height: 44px;
+  margin-left: -5px;
+}
+/* Phones: one member per item, the counts in a sentence and the action under them. */
+.tp-pm-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.tp-pm-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--surface-2);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.tp-pm-item:first-child {
+  border-top: 0;
+}
+.tp-pm-item-h {
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tp-pm-item-at {
+  font-weight: 400;
+  color: var(--body-ink);
+}
+.tp-pm-item-l {
+  color: var(--body-ink);
+}
+.tp-pm-item .tp-pm-ask-in {
+  margin-top: 8px;
+}
+.tp-pm-table tr.tp-pm-asking th,
+.tp-pm-table tr.tp-pm-asking td {
+  border-bottom: 0;
+}
+.tp-pm-table tr.tp-pm-ask td {
+  padding: 0 0 12px;
+  white-space: normal;
+}
+.tp-pm-ask-in {
+  display: grid;
+  gap: 10px;
+  max-width: 720px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
+}
+.tp-pm-ask-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tp-phone .tp-pm-ask-acts .btn {
+  min-height: 44px;
 }
 
 /* ---------- settings: the weekly email switch ---------- */
