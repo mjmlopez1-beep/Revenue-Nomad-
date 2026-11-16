@@ -8,6 +8,7 @@ import "./pages.css";
 export function WeeklyEmail() {
   const ui = useUi();
   const saved = ui.me.digest;
+  const fn = ui.me.function;
   // What the member just picked, shown until the server's answer arrives.
   const [picked, setPicked] = useState<boolean | null>(null);
   const on = picked ?? saved;
@@ -23,11 +24,11 @@ export function WeeklyEmail() {
   return (
     <section className="tp-card tp-set">
       <div className="tp-set-t">
-        <h3 className="tp-card-h" id="tp-set-digest">
+        <h2 className="tp-card-h" id="tp-set-digest">
           Weekly email
-        </h3>
-        <p className="tp-small muted" id="tp-set-digest-d">
-          New open roles in your function, once a week.
+        </h2>
+        <p className="cr-note" id="tp-set-digest-d">
+          {fn && fn !== "Other" ? `One email a week, after the scan, with the new open ${fn} roles and the ones that closed.` : "One email a week, after the scan, with the new open roles and the ones that closed."}
         </p>
       </div>
       <button

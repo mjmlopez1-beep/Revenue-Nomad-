@@ -1,32 +1,46 @@
 /*
- * Your seats (ys-), the next-move card (nm-) and the Pro waitlist offer (pro-).
+ * Your seats (ys-), the month and year control (my-), the next-move card (nm-), the credit
+ * banner's ember outline and the Pro waitlist offer (pro-).
  * Uses the tokens in app/globals.css and the shared classes in post.css.
+ *
+ * This file loads before post.css, so a rule here that changes one from post.css carries one
+ * more class than the rule it changes.
  */
 
 /* ---------- Your seats page ---------- */
 .tp-page.ys-page {
-  max-width: 860px;
+  max-width: 760px;
 }
 .ys-lead {
   max-width: 640px;
-  margin: -10px 0 10px;
-  color: var(--muted);
-  font-size: 14.5px;
-  line-height: 1.5;
+  margin: -4px 0 12px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--body-ink);
 }
 .ys-empty {
   display: grid;
   justify-items: start;
-  gap: 14px;
-  padding: 20px;
+  gap: 8px;
+  padding: 24px;
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--surface);
   font-size: 15px;
-  color: var(--ink);
+  line-height: 22px;
+  color: var(--body-ink);
+}
+.ys-empty-h {
+  font-size: 19px;
+  line-height: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ys-empty .btn {
+  margin-top: 8px;
 }
 
-/* The progress line stays in view while the member works down the page. */
+/* Progress stays in view while the member works down the page: how much is filled in, and what today can still earn. */
 .ys-progress {
   position: sticky;
   top: -24px;
@@ -37,47 +51,51 @@
 }
 .ys-progress-box {
   display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 6px 16px;
-  padding: 10px 14px 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px 16px;
+  padding: 12px 16px 14px;
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--surface);
 }
 .ys-progress-n {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--ink);
+  font-size: 14px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--body-ink);
 }
 .ys-progress-n strong {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.ys-progress-n .ys-check {
+  align-self: center;
 }
 .ys-progress-r {
   font-size: 13px;
+  line-height: 18px;
   color: var(--muted);
   text-align: right;
-}
-.ys-progress-r.capped {
-  color: var(--ember-ink);
-  font-weight: 600;
 }
 .ys-bar {
   grid-column: 1 / -1;
   display: block;
-  height: 4px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 3px;
   background: var(--surface-2);
   overflow: hidden;
 }
 .ys-bar span {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  min-width: 6px;
+  border-radius: 3px;
   background: var(--volt);
   transition: width 0.25s ease;
 }
@@ -88,7 +106,7 @@
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--surface);
-  scroll-margin-top: 72px;
+  scroll-margin-top: 88px;
 }
 .ys-progress + .ys-seat {
   margin-top: 4px;
@@ -100,8 +118,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 56px;
-  padding: 10px 10px 10px 14px;
+  min-height: 60px;
+  padding: 12px 12px 12px 16px;
+}
+.ys-seat-head.can-fold {
+  cursor: pointer;
+}
+.ys-seat.folded .ys-seat-head:hover {
+  background: var(--surface-2);
+  border-radius: var(--r-card);
 }
 .ys-co {
   display: inline-flex;
@@ -110,6 +135,7 @@
   min-width: 0;
   padding: 0;
   border: 0;
+  border-radius: 4px;
   background: none;
   text-align: left;
 }
@@ -117,8 +143,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15.5px;
-  font-weight: 800;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 .ys-co:hover .ys-co-name {
@@ -137,31 +165,38 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13.5px;
+  line-height: 20px;
   color: var(--body-ink);
 }
-.ys-left,
+.ys-count,
 .ys-complete {
   flex: none;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--muted);
   padding-right: 4px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ys-count b {
+  font-weight: 700;
+  color: var(--ink);
 }
 .ys-complete {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  font-weight: 600;
   color: var(--volt-ink);
 }
 
-/* Facts already on file read as compact values. */
+/* What is on file reads as compact pairs. An answer saved in this visit carries the volt check. */
 .ys-known {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 20px;
   margin: 0;
-  padding: 0 14px 12px;
+  padding: 0 16px 14px;
   font-size: 13px;
+  line-height: 20px;
 }
 .ys-kv {
   display: inline-flex;
@@ -176,152 +211,31 @@
   margin: 0;
   font-weight: 600;
   color: var(--ink);
+  overflow-wrap: anywhere;
 }
 .ys-kv-note {
-  font-weight: 500;
+  font-weight: 400;
   color: var(--muted);
 }
-
-/* What is missing, answered in place. */
-.ys-asks {
-  padding: 2px 14px;
-  border-top: 1px solid var(--line);
-}
-.ys-sub {
-  margin: 12px 0 2px;
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--ink);
-}
-.ys-ask {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 4px 12px;
-  align-items: start;
-  padding: 9px 0;
-}
-.ys-ask + .ys-ask {
-  border-top: 1px solid var(--surface-2);
-}
-.ys-ask-l {
-  padding-top: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.ys-ask-c {
-  min-width: 0;
-}
-.ys-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.ys-chip:disabled {
-  cursor: default;
-}
-.ys-chip:disabled:not(.chip-on) {
-  opacity: 0.55;
-}
-.ys-inputrow {
-  display: flex;
-  flex-wrap: wrap;
+.ys-kv-new {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: -3px;
 }
-.ys-input {
-  min-height: 34px;
-  width: auto;
-  flex: 0 1 300px;
-  min-width: 0;
+.ys-kv.new dd {
+  animation: ys-saved 1.4s ease-out;
 }
-.ys-kind-number .ys-input {
-  flex-basis: 88px;
-}
-.ys-kind-month .ys-input,
-.ys-kind-monthOrOngoing .ys-input {
-  flex-basis: 170px;
-}
-.ys-save {
-  min-height: 34px;
-}
-.ys-inputrow .ys-chip {
-  height: 34px;
-}
-.ys-err {
-  margin-top: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--red);
-}
-
-/* The rate: on the record, or in the benchmarks only. */
-.ys-rate {
-  max-width: 520px;
-}
-.ys-rate-input {
-  display: block;
-  width: 100%;
-  max-width: 220px;
-}
-.ys-rate-opts {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 8px;
-}
-.ys-opt {
-  display: grid;
-  align-content: start;
-  gap: 2px;
-  min-height: 44px;
-  padding: 8px 12px 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-btn);
-  background: var(--surface);
-  text-align: left;
-  transition: border-color 0.12s;
-}
-.ys-opt:hover:not(:disabled) {
-  border-color: var(--pine);
-}
-.ys-opt:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.ys-opt-h {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.ys-opt-plus {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--volt-ink);
-}
-.ys-opt-p {
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--muted);
-}
-
-/* A saved fact: the value, a small volt check and the credit it earned. */
-.ys-donerow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  min-height: 30px;
-}
-.ys-val {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink);
-  overflow-wrap: anywhere;
+@keyframes ys-saved {
+  from {
+    background: var(--volt-soft);
+    box-shadow: 0 0 0 4px var(--volt-soft);
+  }
+  to {
+    background: transparent;
+    box-shadow: 0 0 0 4px transparent;
+  }
 }
 .ys-check {
   flex: none;
@@ -333,16 +247,256 @@
   background: var(--volt);
   color: var(--pine);
 }
-.ys-earned {
+.ys-kv-new .ys-check {
+  width: 16px;
+  height: 16px;
+}
+.ys-plus {
   font-size: 12.5px;
+  font-weight: 700;
+  color: var(--volt-ink);
+}
+
+/* The question: one at a time, asked in a sentence, answered in place. */
+.ys-q {
+  padding: 16px 16px 14px;
+  border-top: 1px solid var(--line);
+  animation: ys-in 0.15s ease-out;
+}
+@keyframes ys-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+.ys-q-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ys-q-h {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.ys-q-earn {
+  flex: none;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--volt-ink);
 }
-.ys-earned.none,
-.ys-note {
-  font-size: 12.5px;
-  font-weight: 500;
+.ys-q-earn.none {
+  font-weight: 400;
   color: var(--muted);
+}
+.ys-q-hint {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ys-q-c {
+  margin-top: 12px;
+}
+.ys-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ys-chips .ys-chip,
+.ys-inputrow .ys-chip {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: var(--ink);
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.ys-chip:hover:not(:disabled) {
+  border-color: var(--pine);
+  background: var(--surface-2);
+}
+.ys-chip.chip-on {
+  color: #fff;
+}
+.ys-chip:disabled {
+  cursor: default;
+}
+.ys-chip:disabled:not(.chip-on) {
+  opacity: 0.55;
+}
+.ys-inputrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ys-input {
+  width: auto;
+  flex: 0 1 320px;
+  min-width: 0;
+  font-size: 15px;
+}
+.ys-kind-number .ys-input {
+  flex: 0 0 84px;
+}
+.ys-unit {
+  margin-right: 4px;
+  font-size: 14px;
+  color: var(--body-ink);
+}
+.ys-or {
+  font-size: 13px;
+  color: var(--muted);
+}
+.ys-save {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.ys-save .ys-plus {
+  color: var(--pine);
+}
+.ys-err {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+/* The rate: the figure, then who can see it, then one button that says which. */
+.ys-rate {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  max-width: 600px;
+}
+.ys-rate .ys-rate-input {
+  width: 100%;
+  max-width: 240px;
+  flex: none;
+}
+.ys-rate .ys-err {
+  margin-top: 0;
+}
+.ys-who {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+.ys-who-l {
+  grid-column: 1 / -1;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.ys-who-o {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.ys-who-o:hover {
+  border-color: var(--pine);
+}
+.ys-who-o.on {
+  border-color: var(--pine);
+  box-shadow: inset 0 0 0 1px var(--pine);
+}
+.ys-who-o:focus-within {
+  outline: 2px solid var(--volt);
+  outline-offset: 2px;
+}
+.ys-who-o input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--pine);
+}
+.ys-who-o input:focus-visible {
+  outline: none;
+}
+.ys-who-t {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.ys-who-t b {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* What else is missing on the seat: quiet dashed chips, any of which can be answered first. */
+.ys-later {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--surface-2);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted);
+}
+.ys-later-list {
+  display: contents;
+}
+.ys-skip {
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.ys-skip:hover {
+  text-decoration-thickness: 2px;
+}
+.ys-later-l {
+  margin-right: 2px;
+}
+.ys-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ys-more:hover {
+  color: var(--ink);
+}
+.ys-allin {
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--body-ink);
 }
 
 .ys-seat-foot {
@@ -351,15 +505,17 @@
   align-items: center;
   gap: 8px;
   min-height: 40px;
-  padding: 4px 14px;
+  padding: 4px 16px;
   border-top: 1px solid var(--line);
   font-size: 13px;
+  line-height: 18px;
   color: var(--body-ink);
 }
 .ys-notme {
   min-height: 32px;
   padding: 0;
   border: 0;
+  border-radius: 4px;
   background: none;
   font-size: 12.5px;
   font-weight: 600;
@@ -381,8 +537,8 @@
   border-color: var(--pine);
   background: var(--surface);
   color: var(--pine);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 700;
   cursor: pointer;
 }
 button.ys-yours:hover {
@@ -398,18 +554,42 @@ button.ys-yours:hover {
   background: none;
   font-size: 12.5px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--pine);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.ys-fill-link .mono {
-  font-weight: 600;
+
+/* ---------- month and year ---------- */
+.my {
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+.my .select {
+  width: auto;
+  min-width: 0;
+  padding: 0 6px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+.my .my-m {
+  flex: 1 1 92px;
+}
+.my .my-y {
+  flex: 1 1 84px;
+}
+.my .select:disabled {
+  opacity: 0.5;
 }
 
 /* Phones: one column, 44px targets, the progress line under the top bar. */
 /* On phones the document scrolls, so the page must not be its own scroll box (sticky would hold to it). */
 .tp-phone .ys-main {
   overflow: visible;
+}
+.tp-phone .ys-lead {
+  font-size: 15px;
+  line-height: 22px;
 }
 .tp-phone .ys-progress {
   top: 56px;
@@ -418,26 +598,29 @@ button.ys-yours:hover {
   padding: 8px 16px;
 }
 .tp-phone .ys-progress-box {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px 0;
-  padding: 9px 12px 11px;
+  padding: 10px 14px 12px;
 }
 .tp-phone .ys-progress-r {
   text-align: left;
 }
+.tp-phone .ys-progress-r:empty {
+  display: none;
+}
 .tp-phone .ys-bar {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .tp-phone .ys-seat {
-  scroll-margin-top: 150px;
+  scroll-margin-top: 160px;
 }
 .tp-phone .ys-seat-head {
   flex-wrap: wrap;
-  gap: 6px 10px;
-  padding: 12px 8px 10px 14px;
+  gap: 4px 10px;
+  padding: 8px 8px 12px 16px;
 }
 .tp-phone .ys-co {
-  flex: 1 1 60%;
+  flex: 1 1 55%;
   min-height: 44px;
 }
 .tp-phone .ys-seat-what {
@@ -445,32 +628,35 @@ button.ys-yours:hover {
   flex: 1 1 100%;
   flex-wrap: wrap;
 }
+.tp-phone .ys-seat-what:empty {
+  display: none;
+}
 .tp-phone .ys-role {
   white-space: normal;
 }
-.tp-phone .ys-ask {
-  grid-template-columns: minmax(0, 1fr);
-  padding: 12px 0;
+.tp-phone .ys-q-top {
+  flex-direction: column;
+  gap: 0;
 }
-.tp-phone .ys-ask-l {
-  padding-top: 0;
-  font-size: 13.5px;
+.tp-phone .ys-q-earn {
+  order: -1;
 }
-.tp-phone .ys-chips {
-  gap: 8px;
-}
-.tp-phone .ys-chip,
+.tp-phone .ys-chips .ys-chip,
 .tp-phone .ys-inputrow .ys-chip {
   height: 44px;
   padding: 0 14px;
-  font-size: 14px;
+  font-size: 14.5px;
 }
-.tp-phone .ys-input {
+.tp-phone .ys-input,
+.tp-phone .ys-q .my .select {
   min-height: 44px;
   font-size: 16px;
 }
 .tp-phone .ys-kind-text .ys-input {
   flex: 1 1 180px;
+}
+.tp-phone .ys-kind-month .my {
+  flex: 1 1 200px;
 }
 .tp-phone .ys-save,
 .tp-phone .ys-seat-foot .btn,
@@ -478,22 +664,57 @@ button.ys-yours:hover {
 .tp-phone .ys-empty .btn {
   min-height: 44px;
 }
+.tp-phone .ys-save {
+  padding: 0 18px;
+  font-size: 15px;
+}
+.tp-phone .ys-rate .ys-rate-input {
+  max-width: none;
+}
+.tp-phone .ys-rate .ys-save {
+  width: 100%;
+}
+.tp-phone .ys-who {
+  grid-template-columns: minmax(0, 1fr);
+}
+.tp-phone .ys-who-o {
+  min-height: 44px;
+}
+.tp-phone .ys-who-o input {
+  width: 20px;
+  height: 20px;
+  margin-top: 0;
+}
+.tp-phone .ys-later {
+  gap: 8px;
+}
+.tp-phone .ys-skip,
+.tp-phone .ys-more {
+  min-height: 44px;
+  padding: 0 4px 0 0;
+  font-size: 14px;
+}
+.tp-phone .ys-later {
+  margin-top: 12px;
+  padding-top: 4px;
+}
+/* The dashed chips are 36px with a 44px tap area. */
+.tp-phone .ys-later .ys-later-b {
+  height: 36px;
+}
+.tp-phone .ys-later .ys-later-b::after {
+  inset: -5px -2px;
+}
 /* The question takes its own line, so Remove and Keep sit side by side under it. */
 .tp-phone .ys-seat-foot {
-  padding: 8px 14px;
+  padding: 4px 16px;
 }
 .tp-phone .ys-seat-foot > span {
   flex-basis: 100%;
+  padding-top: 8px;
 }
-.tp-phone .ys-save {
-  padding: 0 16px;
-  font-size: 14px;
-}
-.tp-phone .ys-rate-input {
-  max-width: none;
-}
-.tp-phone .ys-opt {
-  padding: 10px 12px;
+.tp-phone .ys-seat-foot .btn {
+  margin-bottom: 8px;
 }
 .tp-phone .ys-notme {
   min-height: 44px;
@@ -510,20 +731,25 @@ button.ys-yours:hover {
 .tp-rsheet .ys-yours {
   height: 28px;
 }
-@media (max-width: 479px) {
-  .ys-rate-opts {
-    grid-template-columns: minmax(0, 1fr);
+@media (prefers-reduced-motion: reduce) {
+  .ys-q,
+  .ys-kv.new dd {
+    animation: none;
+  }
+  .ys-bar span {
+    transition: none;
   }
 }
 
 /* ---------- next-move card ---------- */
+/* The one urgent pattern: dark pine, a 6px ember edge, an ember chip with ink text, one volt button. */
 .nm-card {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 60px;
-  padding: 10px 8px 10px 14px;
+  gap: 16px;
+  min-height: 68px;
+  padding: 12px 8px 12px 16px;
   border-left: 6px solid var(--ember);
   border-radius: var(--r-card);
   background: var(--pine);
@@ -538,39 +764,47 @@ button.ys-yours:hover {
   border-radius: var(--r-chip);
   background: var(--ember);
   color: var(--ink);
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
   white-space: nowrap;
 }
 .nm-t {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 1px;
+  gap: 2px;
 }
 .nm-h {
-  font-size: 15.5px;
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: #fff;
 }
 .nm-p {
-  font-size: 13.5px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 20px;
   color: rgba(255, 255, 255, 0.84);
 }
-.nm-go {
+.nm-card .nm-go {
   flex: none;
+  min-height: 40px;
 }
-.nm-x {
-  color: rgba(255, 255, 255, 0.8);
+.nm-card .nm-go:active {
+  background: var(--volt-hover);
+}
+.nm-card .nm-x {
+  color: rgba(255, 255, 255, 0.72);
+}
+.nm-card .nm-x:hover {
+  color: #fff;
 }
 .tp-phone .nm-card {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px 8px;
-  padding: 10px 6px 14px 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  padding: 8px 4px 16px 14px;
 }
 .tp-phone .nm-chip {
   grid-column: 1;
@@ -584,13 +818,22 @@ button.ys-yours:hover {
 }
 .tp-phone .nm-t {
   grid-column: 1 / -1;
-  padding-right: 8px;
+  padding-right: 12px;
 }
 .tp-phone .nm-go {
   grid-column: 1 / -1;
   min-height: 44px;
-  margin-right: 8px;
+  margin: 8px 12px 0 0;
   white-space: normal;
+}
+
+/* ---------- the credit banner ---------- */
+/* Out of credits or nearly: white with an ember line and ember-ink words. Never an ember wash (post.css tints the strip). */
+.tp-banners .tp-strip.tp-strip-ember {
+  border-color: var(--ember);
+  background: var(--surface);
+  color: var(--ember-ink);
+  font-weight: 600;
 }
 
 /* Get started: the seats step is done after one fact, but there is more to earn, so it is not struck out. */
@@ -603,42 +846,64 @@ button.ys-yours:hover {
 }
 
 /* ---------- Pro waitlist offer ---------- */
+/* Calm on purpose: white, a pine tag, a plain button. Never ember. */
 .pro-card {
   display: flex;
   align-items: center;
-  gap: 12px 20px;
+  gap: 12px 16px;
   margin-top: 12px;
-  padding: 14px 16px;
+  padding: 16px 20px;
   border: 1px solid var(--line);
   border-radius: var(--r-card);
   background: var(--surface);
+}
+.pro-tag {
+  flex: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  margin-top: 1px;
+  padding: 0 8px;
+  border-radius: var(--r-chip);
+  background: var(--pine);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
 }
 .pro-card-t {
   flex: 1;
   min-width: 0;
 }
 .pro-card-h {
-  font-size: 15px;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .pro-card-p {
-  margin-top: 3px;
-  font-size: 13.5px;
-  color: var(--muted);
+  max-width: 620px;
+  margin-top: 2px;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
 }
 .pro-btn {
   flex: none;
+  color: var(--pine);
 }
 .pro-done {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--volt-ink);
 }
 .pro-card .pro-done {
   flex: 0 1 auto;
-  max-width: 300px;
+  max-width: 280px;
 }
 .pro-done svg {
   flex: none;
@@ -647,19 +912,21 @@ button.ys-yours:hover {
   display: grid;
   justify-items: start;
   gap: 2px;
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 19px;
   color: var(--muted);
 }
 .pro-line-t strong {
+  font-weight: 700;
   color: var(--ink);
 }
 .pro-link {
   min-height: 28px;
   padding: 0;
   border: 0;
+  border-radius: 4px;
   background: none;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--pine);
   text-decoration: underline;
@@ -670,7 +937,7 @@ button.ys-yours:hover {
 }
 .pro-line .pro-done {
   min-height: 28px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 /* After the add-a-fact options in the zero-credits popover. */
 .tp-zero .pro-line {
@@ -680,7 +947,7 @@ button.ys-yours:hover {
 }
 /* Under "Unlock company" in a hidden company's record. */
 .pro-under {
-  margin-top: 10px;
+  margin-top: 12px;
 }
 /* The foot of the Hiring now tab: inside the table frame on desktop, under the cards on phones. */
 .pro-foot {
@@ -692,7 +959,7 @@ button.ys-yours:hover {
 }
 .pro-foot .pro-card {
   margin-top: 0;
-  max-width: 720px;
+  max-width: 760px;
   background: var(--bg);
 }
 .tp-phone .pro-foot {
@@ -705,8 +972,22 @@ button.ys-yours:hover {
   background: var(--surface);
 }
 .tp-phone .pro-card {
-  flex-direction: column;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  padding: 16px;
+}
+.tp-phone .pro-card-t {
+  grid-column: 1 / -1;
+}
+.tp-phone .pro-tag {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.tp-phone .pro-card .pro-btn,
+.tp-phone .pro-card .pro-done {
+  grid-column: 1 / -1;
+  max-width: none;
 }
 .tp-phone .pro-btn {
   min-height: 44px;
@@ -715,12 +996,12 @@ button.ys-yours:hover {
 .tp-rsheet .pro-link,
 .tp-sheet .pro-link {
   min-height: 44px;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 @media (max-width: 767px) {
   .tp-zero .pro-link {
     min-height: 44px;
-    font-size: 13.5px;
+    font-size: 14px;
   }
   .tp-zero .btn {
     min-height: 44px;

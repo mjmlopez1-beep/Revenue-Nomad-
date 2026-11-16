@@ -2,7 +2,8 @@
 
 /**
  * The Pro waitlist offer. The pilot is free: this only measures who wants more, and where
- * they were when they asked. No price, no deadline.
+ * they were when they asked. No price, no deadline. It is calm on purpose: pine and white,
+ * never ember.
  *
  * Signals (see Action "signal" in lib/tableTypes.ts):
  *   pro_view      the offer rendered at a place, once per place per browser session
@@ -37,7 +38,11 @@ function firstView(where: string): boolean {
 }
 
 export const PRO_TITLE = "Pro is coming";
-export const PRO_LINE = "Open roles the week they post. Every hiring company unlocked. Alerts for your function.";
+/** The whole offer, where it has a card to itself. */
+export const PRO_LINE = "A paid plan that shows open roles the week they post, with the company already unlocked, and emails you when one opens in your function. There is no price yet.";
+/** The short form, under another action. */
+export const PRO_SHORT = "A paid plan with open roles the week they post and every hiring company already unlocked.";
+export const PRO_ASK = "Email me when it opens";
 export const PRO_DONE = "You're on the list. We'll email you when it opens.";
 
 /**
@@ -78,19 +83,22 @@ export function ProOffer({
     return (
       <div className="pro-line" data-pro={where}>
         <p className="pro-line-t">
-          <strong>{PRO_TITLE}.</strong> {PRO_LINE}
+          <strong>{PRO_TITLE}.</strong> {PRO_SHORT}
         </p>
         {on ? (
           done
         ) : (
           <button type="button" className="pro-link" disabled={busy} onClick={ask}>
-            Tell me when it&apos;s ready
+            {busy ? "Adding you" : PRO_ASK}
           </button>
         )}
       </div>
     );
   return (
     <section className="pro-card" aria-label={PRO_TITLE} data-pro={where}>
+      <span className="pro-tag" aria-hidden>
+        Pro
+      </span>
       <div className="pro-card-t">
         <h3 className="pro-card-h">{PRO_TITLE}</h3>
         <p className="pro-card-p">{PRO_LINE}</p>
@@ -98,8 +106,8 @@ export function ProOffer({
       {on ? (
         done
       ) : (
-        <button type="button" className="btn btn-sm pro-btn" disabled={busy} onClick={ask}>
-          Tell me when it&apos;s ready
+        <button type="button" className="btn pro-btn" disabled={busy} onClick={ask}>
+          {busy ? "Adding you" : PRO_ASK}
         </button>
       )}
     </section>

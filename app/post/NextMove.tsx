@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * The next-move card: the single most urgent thing on the page. Dark pine, a 6px ember left
- * edge, an ember chip (ink text), white text and one volt button. At most one shows, by
- * priority, and never together with the Get started strip:
+ * The next-move card: the single most urgent thing on the page, and the only ember on it.
+ * Dark pine, a 6px ember left edge, an ember chip (ink text), white text and one volt button.
+ * At most one shows, by priority, and never together with the Get started strip:
  *
- *   seats  they hold seats with missing facts and have added fewer than 3 facts so far
+ *   seats  they hold seats with something missing and have added fewer than 3 things so far
  *   roles  new open roles in their function this week
- *   low    3 credits or fewer, and their seats have facts to add
+ *   low    3 credits or fewer, and their seats have something to add
  *
  * Dismissing one hides that kind for 7 days (kept in localStorage, per browser).
  */
@@ -69,15 +69,16 @@ export function NextMove({
   onDismiss: (k: MoveKind) => void;
 }) {
   const earn = Math.min(seats.missing, earnRoom(me));
+  const things = plural(seats.missing, "thing is", "things are");
   const copy =
     kind === "seats"
       ? {
           chip: `+${plural(earn, "credit")}`,
-          title: seats.n === 1 ? "We have a seat you held on file." : `We have ${seats.n} seats you held on file.`,
+          title: seats.n === 1 ? "We have a seat under your name." : `We have ${seats.n} seats under your name.`,
           line:
-            seats.missing > earn
-              ? `${plural(seats.missing, "fact is", "facts are")} missing. Fill them in and earn ${plural(earn, "credit")} today.`
-              : `Fill in the ${plural(seats.missing, "missing fact")} and earn ${plural(earn, "credit")}.`,
+            seats.missing === 1
+              ? `1 thing is still missing on ${seats.n === 1 ? "it" : "them"}. Add it and earn a credit.`
+              : `${things} still missing on ${seats.n === 1 ? "it" : "them"}. Each one you add earns a credit${seats.missing > earn ? `, up to ${earn} today` : ""}.`,
           button: "Fill in your seats",
           go: onSeats,
         }
@@ -88,24 +89,26 @@ export function NextMove({
             line:
               roles.n === 1
                 ? roles.hidden > 0
-                  ? "The company is hidden. Unlock it for 1 credit."
-                  : "You can see the company behind it."
-                : roles.hidden > 0
-                  ? `${plural(roles.hidden, "of those companies is", "of those companies are")} hidden. Unlock one for 1 credit.`
-                  : "You can see every company behind them.",
+                  ? "The company behind it is hidden. Unlocking it costs 1 credit."
+                  : "You can already see the company behind it."
+                : roles.hidden >= roles.n
+                  ? "The companies behind them are hidden. Unlocking one costs 1 credit."
+                  : roles.hidden > 0
+                    ? `The ${roles.hidden === 1 ? "company behind 1 of them is" : `companies behind ${roles.hidden} of them are`} hidden. Unlocking one costs 1 credit.`
+                    : "You can already see the company behind each one.",
             button: "See open roles",
             go: onRoles,
           }
         : {
-            chip: `+${plural(earn, "credit")}`,
-            title: me.credits <= 0 ? "You're out of credits." : "You're almost out of credits.",
-            line: `You can add ${plural(earn, "fact")} on your ${seats.n === 1 ? "seat" : "seats"}, 1 credit each.`,
+            chip: me.credits <= 0 ? "0 credits" : `${plural(me.credits, "credit")} left`,
+            title: me.credits <= 0 ? "You're out of credits." : `You're down to ${plural(me.credits, "credit")}.`,
+            line: `Your ${seats.n === 1 ? "seat still has" : "seats still have"} ${plural(seats.missing, "thing")} to add. Each one earns a credit${seats.missing > earn ? `, up to ${earn} today` : ""}.`,
             button: "Fill in your seats",
             go: onSeats,
           };
   return (
     <section className="nm-card" aria-label="Your next move" data-move={kind}>
-      <span className="nm-chip">{copy.chip}</span>
+      <span className="nm-chip num">{copy.chip}</span>
       <div className="nm-t">
         <h2 className="nm-h">{copy.title}</h2>
         <p className="nm-p">{copy.line}</p>
