@@ -17,6 +17,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Pro, useUi } from "./ui";
 import { MessageEmail, SignInActions, WeeklyEmail } from "./Settings";
 import { ReportedMessages } from "./Messages";
+import { ConnectedApps } from "./ConnectedApps";
 import "./pages.css";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
@@ -258,7 +259,7 @@ function Review({ view }: { view: View }) {
 
 /* ---------- the page ---------- */
 
-export function MyCredits({ view, onBack, refresh }: { view: View; onBack: () => void; refresh?: () => Promise<void> }) {
+export function MyCredits({ view, onBack, refresh, onUseInClaude }: { view: View; onBack: () => void; refresh?: () => Promise<void>; onUseInClaude?: () => void }) {
   const ui = useUi();
   const me = ui.me;
   const phone = ui.layout === "phone";
@@ -433,6 +434,7 @@ export function MyCredits({ view, onBack, refresh }: { view: View; onBack: () =>
           {signinCard}
           {view.scan?.digest && <WeeklyEmail />}
           {view.email && <MessageEmail />}
+          <ConnectedApps onHowTo={onUseInClaude} />
         </>
       ) : (
         <>
@@ -443,6 +445,7 @@ export function MyCredits({ view, onBack, refresh }: { view: View; onBack: () =>
           </div>
           {view.scan?.digest && <WeeklyEmail />}
           {view.email && <MessageEmail />}
+          <ConnectedApps onHowTo={onUseInClaude} />
           {review}
           {history}
         </>

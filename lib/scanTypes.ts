@@ -70,6 +70,11 @@ export interface DigestData {
   /** Facts still missing on the member's own seats (each earns 1 credit). */
   seatFactsMissing: number;
   credits: number;
+  /**
+   * The member's saved searches (set up through the Claude connector) with new roles this week:
+   * the search's name and how many of this week's new roles match it. Only searches with a match.
+   */
+  alerts?: { name: string; n: number }[];
   appUrl: string;
   unsubscribeUrl: string;
 }

@@ -1,0 +1,147 @@
+"use client";
+
+/**
+ * "Use it in Claude": how a member connects Trading Post to Claude, ChatGPT, Claude Code or
+ * Cursor. One address (this site's /api/mcp), sign-in in the browser, no key. Page key `claude`.
+ */
+import { IconChevron } from "../ui/shared";
+import { useCopy } from "./Credits";
+import "./connect.css";
+
+const EXAMPLES = [
+  "Which companies are the best fit for me to prospect as a fractional VP Marketing?",
+  "What's the best way into Acme?",
+  "Set up alerts on fractional Marketing roles at SaaS companies from $5M to $20M.",
+  "What's new in open Sales roles this week?",
+  "What do fractional RevOps leads charge at $5M to $20M companies?",
+  "Add my seat at Acme. I was their fractional CMO from March to November 2024.",
+];
+
+function Code({ text, label, block = false }: { text: string; label: string; block?: boolean }) {
+  const copy = useCopy();
+  return (
+    <div className={`uc-code${block ? " uc-block" : ""}`}>
+      <code className="mono">{text}</code>
+      <button type="button" className="btn btn-sm" onClick={() => void copy(text, `${label} copied.`)}>
+        Copy
+      </button>
+    </div>
+  );
+}
+
+export function UseInClaude({ onBack, onCredits }: { onBack: () => void; onCredits: () => void }) {
+  const copy = useCopy();
+  const address = `${typeof window === "undefined" ? "" : window.location.origin}/api/mcp`;
+  const cursorJson = JSON.stringify({ mcpServers: { "trading-post": { url: address } } }, null, 2);
+  return (
+    <div className="tp-page uc-page">
+      <button type="button" className="tp-back" onClick={onBack}>
+        <IconChevron dir="left" /> Back to the table
+      </button>
+      <h1 className="tp-page-h">Use it in Claude</h1>
+      <p className="uc-lead">
+        Connect Trading Post to Claude and ask the table in your own words. It searches as you, sees what you&apos;ve unlocked, and can add what you know. It asks before it
+        spends a credit.
+      </p>
+
+      <section className="tp-card uc-address" aria-labelledby="uc-addr-h">
+        <h2 className="tp-card-h" id="uc-addr-h">
+          Your connector address
+        </h2>
+        <p className="cr-note">The same address works in every app. You sign in to Trading Post once in your browser, so there&apos;s no key to paste.</p>
+        <div className="uc-addr-row">
+          <input className="input mono uc-addr" readOnly value={address} aria-label="Connector address" onFocus={(e) => e.currentTarget.select()} />
+          <button type="button" className="btn btn-pine" onClick={() => void copy(address, "Address copied. Paste it into your app.")}>
+            Copy address
+          </button>
+        </div>
+      </section>
+
+      <div className="uc-grid">
+        <section className="tp-card uc-app" aria-labelledby="uc-claude">
+          <h2 className="tp-card-h" id="uc-claude">
+            Claude
+          </h2>
+          <p className="uc-where">On claude.ai and in the desktop app</p>
+          <ol className="uc-steps">
+            <li>Open Settings, then Connectors.</li>
+            <li>Pick Add custom connector.</li>
+            <li>Name it Trading Post and paste the address.</li>
+            <li>Pick Connect, sign in to Trading Post and allow it.</li>
+          </ol>
+          <p className="uc-tip">In a chat, turn Trading Post on from the tools menu if Claude doesn&apos;t use it on its own.</p>
+        </section>
+
+        <section className="tp-card uc-app" aria-labelledby="uc-chatgpt">
+          <h2 className="tp-card-h" id="uc-chatgpt">
+            ChatGPT
+          </h2>
+          <p className="uc-where">On chatgpt.com, with developer mode on</p>
+          <ol className="uc-steps">
+            <li>Open Settings, then Apps and connectors.</li>
+            <li>Under Advanced settings, turn on Developer mode.</li>
+            <li>Pick Create, name it Trading Post and paste the address. Choose OAuth for sign-in.</li>
+            <li>Sign in to Trading Post and allow it.</li>
+          </ol>
+        </section>
+
+        <section className="tp-card uc-app" aria-labelledby="uc-code">
+          <h2 className="tp-card-h" id="uc-code">
+            Claude Code
+          </h2>
+          <p className="uc-where">In your terminal</p>
+          <ol className="uc-steps">
+            <li>Run this command.</li>
+          </ol>
+          <Code text={`claude mcp add --transport http trading-post ${address}`} label="Command" />
+          <ol className="uc-steps" start={2}>
+            <li>In Claude Code, type /mcp, pick trading-post and sign in.</li>
+          </ol>
+        </section>
+
+        <section className="tp-card uc-app" aria-labelledby="uc-cursor">
+          <h2 className="tp-card-h" id="uc-cursor">
+            Cursor
+          </h2>
+          <p className="uc-where">In Cursor Settings, under MCP</p>
+          <ol className="uc-steps">
+            <li>Pick Add new MCP server, or add this to your mcp.json.</li>
+          </ol>
+          <Code text={cursorJson} label="Settings" block />
+          <ol className="uc-steps" start={2}>
+            <li>Pick Connect next to trading-post and sign in.</li>
+          </ol>
+        </section>
+      </div>
+
+      <section className="tp-card" aria-labelledby="uc-ask">
+        <h2 className="tp-card-h" id="uc-ask">
+          Things to ask
+        </h2>
+        <ul className="uc-asks">
+          {EXAMPLES.map((q) => (
+            <li key={q}>
+              <button type="button" className="uc-ask" onClick={() => void copy(q, "Question copied. Paste it into Claude.")} title="Copy this question">
+                {q}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="tp-card uc-note" aria-labelledby="uc-safe">
+        <h2 className="tp-card-h" id="uc-safe">
+          Every unlock asks you first
+        </h2>
+        <p className="cr-note">
+          Before it spends a credit, the app tells you what it costs and what you&apos;ll see, and waits for your yes. It only sees what you can see in Trading Post, and it never sees
+          your sign-in link. You can disconnect it any time in{" "}
+          <button type="button" className="ca-link" onClick={onCredits}>
+            Your credits
+          </button>
+          .
+        </p>
+      </section>
+    </div>
+  );
+}

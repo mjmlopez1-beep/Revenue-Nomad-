@@ -69,6 +69,8 @@ import type {
 } from "./tableTypes";
 import type { DigestData, ScanApplyResult, ScanCollectResult, ScanSourceResult } from "./scanTypes";
 import { messageStats, reportedMessages, unreadCount, type MessagingState } from "./messageState";
+import { emptyConnector, type ConnectorState } from "./mcp/types";
+import { alertMatches } from "./mcp/alerts";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -262,6 +264,8 @@ export interface State extends MessagingState {
   digest: { lastSentAt: string | null; sent: number; members: Record<string, string> };
   /** One-time changes already applied. starterFloor: the starter balance the floor was last applied at. */
   flags: { starterFloor?: number };
+  /** The Claude connector: connected apps (token hashes only) and saved searches. See lib/mcp. */
+  connector?: ConnectorState;
 }
 
 /* ---------- storage ---------- */
@@ -2298,8 +2302,14 @@ const LISTED_STATUS = "This role is still listed, so its status comes from the p
 /** A seat added, or a seat holder named, for anyone but the member themselves. */
 export const SEAT_SELF_ONLY = "You can add seats you held. Pick yourself as the seat holder.";
 
-export async function perform(token: string | null, a: Action, origin?: string): Promise<ActionResult> {
+/**
+ * `dryRun` (the connector's "what would this cost"): the action runs on a copy of the state and
+ * nothing is kept. The answer says what it would do, and `spent` the credits it would take. A
+ * refusal is thrown as it would be.
+ */
+export async function perform(token: string | null, a: Action, origin?: string, opts: { dryRun?: boolean } = {}): Promise<ActionResult & { spent?: number }> {
   if (a?.type === "scanNow") {
+    if (opts.dryRun) throw new ActionError(UNKNOWN_ACTION);
     if (!isAdmin(await memberForToken(token))) throw new ActionError("Only admins can start a scan.");
     // In the background: a scan reads several job boards and can take a while.
     void runScan(origin).catch((e) => console.error("scan failed", e));
@@ -2314,6 +2324,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
     const nowMs = Date.parse(now);
     // Bonuses held at the cap are paid first, as the rolling window frees room.
     releaseHeld(s, me.id, now);
+    const balBefore = balance(s, me.id);
     const g = graph(seed, s);
     // Followed roles, rebuilt after a change to them (the draft changes in place).
     let tracksNow: Tracks | null = null;
@@ -3317,6 +3328,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
 
     const out = run();
     if (movedRate && out.message) out.message += " This rate replaces the one you shared privately, which already earned its credit.";
+    // A dry run throws, so the batch keeps nothing it wrote (see flush).
+    if (opts.dryRun) throw refusal.message ? new ActionError(refusal.message) : new DryRun({ ...out, spent: balBefore - balance(s, me.id) });
     if (refusal.message) return { message: "", refused: refusal.message };
     // The actor's new counts, so the client can update the top bar at once.
     let added = 0;
@@ -3334,9 +3347,18 @@ export async function perform(token: string | null, a: Action, origin?: string):
         unlocksLeft: unlockRoom(s, me.id, nowMs).left, sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };
+  }).catch((e) => {
+    if (e instanceof DryRun) return e.result;
+    throw e;
   });
   if (out.refused) throw new ActionError(out.refused);
   return out;
+}
+/** What a dry run would have done (perform with dryRun). Thrown so the change is dropped. */
+class DryRun extends Error {
+  constructor(readonly result: ActionResult & { spent: number; refused?: string }) {
+    super("dry run");
+  }
 }
 
 /**
@@ -3802,6 +3824,33 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     count.set(fn, (count.get(fn) ?? 0) + 1);
   }
   const byFunction = [...count].map(([fn, n]) => ({ function: fn, n })).sort((a, b) => b.n - a.n || a.function.localeCompare(b.function));
+  // Saved searches (the connector's alerts) match the new roles by free facts only. The HQ a member
+  // matches on is the one they see: a hidden company's region.
+  const alertsOf = s.connector?.alerts ?? {};
+  const roleFacts = fresh.map((e) => {
+    const c = g.companies.get(e.companyId);
+    const engs = [...g.engagements.values()].filter((x) => x.companyId === e.companyId);
+    return {
+      e,
+      facts: {
+        function: fnOf(e, s),
+        industry: live(c, s, "industry"),
+        employees: live(c, s, "employees"),
+        revenue: live(c, s, "revenue"),
+        hq: live(c, s, "hq"),
+        pastHires: friendliness(g, s, tracks, e.companyId, engs, new Set()).fractional,
+      },
+    };
+  });
+  const alertCounts = (m: Member) =>
+    (alertsOf[m.id] ?? [])
+      .map((a) => ({
+        name: a.name,
+        n: roleFacts.filter(({ e, facts }) =>
+          alertMatches(a, a.hq && facts.hq && identityHidden(g, s, idx, tracks, m, e.companyId) ? { ...facts, hq: hqRegion(facts.hq) } : facts),
+        ).length,
+      }))
+      .filter((x) => x.n > 0);
 
   // Only members who have signed in get it, unless RN_DIGEST_ALL=1 sends it to everyone on file.
   const everyone = process.env.RN_DIGEST_ALL === "1";
@@ -3829,6 +3878,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         closedRoles,
         seatFactsMissing: missing.get(m.id) ?? 0,
         credits: Math.max(0, balance(s, m.id)), // as the app shows it: never below zero (see Me.owed)
+        alerts: alertCounts(m),
         appUrl: base,
         unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
       },
@@ -3875,3 +3925,27 @@ export async function sendDigests(nowIso?: string, origin?: string): Promise<num
     digestRunning = false;
   }
 }
+
+/* ---------- the Claude connector (lib/mcp) ---------- */
+
+/** The connector's part of the state, as it is now. Read only: change it with updateConnector. */
+export async function connectorState(): Promise<ConnectorState> {
+  return (await loadState()).connector ?? emptyConnector();
+}
+/** Change the connector's part of the state, through the same write queue as every action. */
+export function updateConnector<T>(fn: (c: ConnectorState, s: State) => T): Promise<T> {
+  return mutate((s) => {
+    s.connector ??= emptyConnector();
+    s.connector.clients ??= [];
+    s.connector.grants ??= [];
+    s.connector.alerts ??= {};
+    return fn(s.connector, s);
+  });
+}
+/** A member by internal id (seed or joined), or null. The connector's tokens name a member this way. */
+export async function memberById(id: string): Promise<Member | null> {
+  const [seed, s] = await Promise.all([loadSeed(), loadState()]);
+  return memberIndex(seed, s).byId.get(id) ?? null;
+}
+/** Whether the weekly email can go out at all (email set up and RN_DIGEST not 0). */
+export const digestEnabled = () => digestOn();
