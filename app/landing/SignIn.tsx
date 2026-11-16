@@ -159,7 +159,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
               <a className="mono" href={`mailto:${SUPPORT}?subject=${encodeURIComponent("Trading Post sign-in link")}`}>
                 {SUPPORT}
               </a>{" "}
-              and we will send it again.
+              and we&apos;ll send it again.
             </p>
           ) : null}
         </form>
@@ -169,7 +169,7 @@ export default function SignIn({ open, onClose, emailOn, starter, note, onSigned
             <hr className="lp-or" />
             {mailState === "sent" ? (
               <p className="lp-dialog-ok" role="status">
-                If that email has an account, your link is on its way. Give it a minute, and check spam if it does not show up.
+                If that email has an account, your link is on its way. Give it a minute, and check spam if it doesn&apos;t show up.
               </p>
             ) : (
               <form onSubmit={emailLink} noValidate className="lp-dialog-form">

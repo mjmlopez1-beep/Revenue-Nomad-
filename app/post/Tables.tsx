@@ -111,7 +111,9 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
       <CompanyLogo name="" domain={null} hidden />
       <span className="tp-co-text">
         <span className="tp-co-name">
-          <span className="tp-hidden-name">Hidden company</span>
+          <span className="tp-hidden-name" title="This company has an open role, so its name is hidden until you unlock it.">
+            Hidden company
+          </span>
         </span>
         {teaser}
         {table && <UnlockCompanyCell i={i} />}

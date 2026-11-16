@@ -109,7 +109,7 @@ export function CreditsPopover({
       </div>
       <p className="tp-credpop-rules">
         {capped
-          ? `You've earned today's ${me.earnCap} credits. You can earn again ${atTime(me.earnResetsAt)}. A credit still shows you a fact someone else added.`
+          ? `You've earned today's ${me.earnCap} credits. You can earn again ${atTime(me.earnResetsAt)}. The credits you have still unlock facts.`
           : `Add a fact you know and you earn a credit, up to ${me.earnCap} a day. Spend a credit to see one someone else added.`}
       </p>
       <div className="tp-credpop-ledger">

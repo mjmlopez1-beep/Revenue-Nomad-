@@ -97,7 +97,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
       <div className="lp-join-sent" role="status" data-place={place}>
         <p className="lp-join-sent-h">Check your inbox</p>
         <p>
-          We sent a sign-in link to <strong className="mono">{email}</strong>. Open it and you are in. It can take a minute, and it sometimes
+          We sent a sign-in link to <strong className="mono">{email}</strong>. Open it and you&apos;re in. It can take a minute, and it sometimes
           lands in spam.
         </p>
         <button type="button" className="lp-linkbtn" onClick={reset}>
@@ -146,7 +146,7 @@ export default function JoinForm({ emailOn, starter, onSignedIn, onMember, place
         </div>
         {err}
         <p className="lp-join-help" id={`${id}-help`}>
-          Use the name you work under. Members see it on seats you held. Your email is never shown.
+          Use the name you work under. It shows on seats you held, behind a lock. Your email is never shown.
         </p>
         <p className="lp-join-who">
           <span>

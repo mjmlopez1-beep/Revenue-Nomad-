@@ -28,6 +28,14 @@ const INTRO_TO = process.env.NEXT_PUBLIC_RN_INTRO_EMAIL ?? "";
 /** "a", "a and b", "a, b and c". */
 const listOf = (xs: string[]) => (xs.length <= 2 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const seatsTitle = (n: number | undefined) => (n ? `${plural(n, "seat")} on file` : undefined);
+/** Where a company's seats came from, as it reads after "From" in the record's last line. */
+const SOURCE_SAY: Record<string, string> = {
+  "Published engagement": "seats members published",
+  "Member success story": "member stories",
+  "Demand scan": "job postings",
+  "Member added": "what members added",
+  Clay: "Clay",
+};
 
 function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
   const ui = useUi();
@@ -315,10 +323,10 @@ function EngagementCard({
   const intro = op && !e.yours
     ? INTRO_TO
       ? `mailto:${INTRO_TO}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-          `Hi,\n\nCould you introduce me (${ui.me.name}) to ${op}${opMember ? ", a Trading Post member" : ""}? They held ${seat} at ${company} and I would like to hear how it went.\n\nThanks`,
+          `Hi,\n\nCould you introduce me (${ui.me.name}) to ${op}${opMember ? ", a Trading Post member" : ""}? They held ${seat} at ${company} and I'd like to hear how it went.\n\nThanks`,
         )}`
       : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-          `Hi,\n\nCould you introduce me to ${op}? They held ${seat} at ${company} and I would like to hear how it went.\n\nThanks`,
+          `Hi,\n\nCould you introduce me to ${op}? They held ${seat} at ${company} and I'd like to hear how it went.\n\nThanks`,
         )}`
     : null;
   return (
@@ -502,7 +510,7 @@ export function Drawer({
   const storyFns = i.fns.filter((f) => !c.friendly.functions.includes(f));
   const gap = !!mine && hired.length > 0 && !hired.includes(mine);
   // Where the seats came from. A role the scan found reads as a job posting, open or closed.
-  const sources = [...new Set(i.engs.map((e) => (e.source === "Demand scan" ? "Job posting" : SOURCE_LABEL[e.source] ?? e.source)))];
+  const sources = [...new Set(i.engs.map((e) => SOURCE_SAY[e.source] ?? (SOURCE_LABEL[e.source] ?? e.source).toLowerCase()))];
   const follow = () => ui.act({ type: "follow", companyId: c.id, on: !c.following });
 
   const actions = (
@@ -555,10 +563,10 @@ export function Drawer({
           </span>
         )}
         {phone && followBtn}
-        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Previous record" title="Previous record (K)" disabled={!!pos && pos.n <= 1} onClick={() => onStep(-1)}>
+        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Previous in the list" title="Previous in the list (K)" disabled={!!pos && pos.n <= 1} onClick={() => onStep(-1)}>
           <IconChevron dir="up" />
         </button>
-        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Next record" title="Next record (J)" disabled={!!pos && pos.n >= pos.of} onClick={() => onStep(1)}>
+        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Next in the list" title="Next in the list (J)" disabled={!!pos && pos.n >= pos.of} onClick={() => onStep(1)}>
           <IconChevron dir="down" />
         </button>
       </div>
@@ -602,7 +610,7 @@ export function Drawer({
         </div>
         {c.hidden && (
           <p className="tp-hidden-note">
-            This company has an open fractional role, so its name is hidden. One credit shows you the name, website and LinkedIn. The role, the rate and each hiring contact cost 1 credit more.
+            This company has an open fractional role, so its name is hidden. 1 credit unlocks the name, website and LinkedIn together. The role, the job posting and each person&apos;s name cost 1 credit each.
           </p>
         )}
         {!phone && actions}
@@ -671,7 +679,7 @@ export function Drawer({
           </h3>
           {c.people.length === 0 && !addingPerson && (
             <p className="tp-dsec-note">
-              {c.hidden ? "No hiring contacts on file here yet." : "No hiring contacts on file here yet. Add one you know and earn a credit for each fact."}
+              {c.hidden ? "Nobody is on file here yet." : "Nobody is on file here yet. Add someone you know and earn a credit for each fact."}
             </p>
           )}
           {c.people.map((p) => (
@@ -687,7 +695,7 @@ export function Drawer({
         </section>
         {line.length > 0 && <MissingFacts i={i} skip={["website", "linkedin"]} />}
         <footer className="tp-dfoot num">
-          {sources.length > 0 && <span>From {listOf(sources.map((x) => (x === "Clay" ? x : x.toLowerCase())))}</span>}
+          {sources.length > 0 && <span>From {listOf(sources)}</span>}
           {c.updatedAt && <span>Updated {timeAgo(c.updatedAt)}</span>}
           <span>
             {plural(c.facts.known + c.facts.locked, "fact")} on file, {c.facts.missing} missing

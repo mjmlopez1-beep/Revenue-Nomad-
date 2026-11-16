@@ -177,7 +177,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       });
       if (r.ok) {
         if (t.field === "identity") toast(r.message);
-        else if (firstUnlock) toast("Unlocked. It stays visible to you from now on. Add a fact you know and you earn the credit back.");
+        else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.");
         setPulse((p) => (p === k ? null : p));
         setFlash((s) => new Set(s).add(k));
         setTimeout(() => setFlash((s) => {
@@ -246,7 +246,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       setEditor(null);
       setPop(null);
       if (o?.companyId && isHidden(o.companyId)) {
-        toast("Unlock this company first. Then you can add what you know about it.");
+        toast("This company is hidden. Unlock it for 1 credit, then add what you know.");
         return;
       }
       setAddOpts(o ?? {});
@@ -271,7 +271,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     [drawer, sorted, limit, openRow],
   );
   const invite = useCallback(() => {
-    copy(inviteLink(me.inviteCode), `Invite link copied. You both get ${REFERRAL_BONUS} credits when they add their first fact.`);
+    copy(inviteLink(me.inviteCode), `Invite link copied. You each get ${REFERRAL_BONUS} credits when they add their first fact.`);
   }, [copy, me.inviteCode]);
 
   /**

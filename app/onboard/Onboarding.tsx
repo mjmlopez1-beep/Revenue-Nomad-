@@ -129,7 +129,7 @@ function SeatsNext({ n }: { n: number }) {
       </span>
       <span>
         <strong>{n === 1 ? "1 seat on file carries your name." : `${n} seats on file carry your name.`}</strong> You see everything on{" "}
-        {n === 1 ? "it" : "them"} free, and each thing you fill in earns a credit.
+        {n === 1 ? "it" : "them"} free, and each answer you add there earns a credit.
       </span>
     </p>
   );
@@ -306,7 +306,7 @@ function StepQuestions({
             </button>
           ))}
         </div>
-        <p className="ob-hint">{goal ? GOAL_OPENS[goal](fn) : "The table opens on what you pick. Everything else is one filter away."}</p>
+        <p className="ob-hint">{goal ? GOAL_OPENS[goal](fn) : "The table opens on what you pick. You can change it later with the filters."}</p>
       </fieldset>
 
       <div className="ob-grow" />
@@ -460,7 +460,7 @@ function StepFollow({
                 );
               })
             ) : (
-              <li className="ob-result-empty">Nothing called {q.trim()} is on file yet. You can add it once you are in.</li>
+              <li className="ob-result-empty">Nothing called {q.trim()} is on file yet. You can add it once you&apos;re in.</li>
             )}
           </ul>
         ) : null}
@@ -599,7 +599,7 @@ function StepLink({
       <h1 className="ob-title" tabIndex={-1} data-step-h>
         Keep your sign-in link
       </h1>
-      <p className="ob-sub">This link is how you sign in. There is no password, so save it where you will find it again.</p>
+      <p className="ob-sub">This link is how you sign in. There is no password, so save it where you&apos;ll find it again.</p>
 
       <div className="ob-linkbox">
         <div ref={boxRef} className="ob-linkbox-text mono" aria-label="Your sign-in link" tabIndex={0} onFocus={selectLink}>

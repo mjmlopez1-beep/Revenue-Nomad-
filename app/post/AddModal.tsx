@@ -256,15 +256,18 @@ function EngagementForm({ i, onDone, mine }: { i: CoInfo; onDone: (n: number, be
         <div className="tp-form-row">
           <Lbl text={mine && !asMe ? "Your first and last name" : "Who held the seat"} filled={!!v.operator?.trim()} htmlFor="tp-ef-operator" />
           {asMe ? (
-            <div className="tp-seat-linked">
-              <span className="tp-seat-av" style={{ background: `hsl(${hue(ui.me.name)} 45% 90%)`, color: `hsl(${hue(ui.me.name)} 45% 28%)` }}>
-                {initials(ui.me.name)}
-              </span>
-              <span className="tp-seat-who">
-                <b>You</b>
-                <span>It goes on Your seats when you add it</span>
-              </span>
-            </div>
+            <>
+              <div className="tp-seat-linked">
+                <span className="tp-seat-av" style={{ background: `hsl(${hue(ui.me.name)} 45% 90%)`, color: `hsl(${hue(ui.me.name)} 45% 28%)` }}>
+                  {initials(ui.me.name)}
+                </span>
+                <span className="tp-seat-who">
+                  <b>You</b>
+                  <span>It goes on Your seats when you add it</span>
+                </span>
+              </div>
+              <p className="am-hint">Members spend 1 credit to see your name on it.</p>
+            </>
           ) : mine ? (
             <input id="tp-ef-operator" className="input" placeholder="First and last name" autoComplete="name" value={v.operator ?? ""} onChange={(e) => set("operator")(e.target.value)} />
           ) : (
@@ -372,7 +375,7 @@ function PersonForm({ i, engagementId, onDone }: { i: CoInfo; engagementId?: str
   return (
     <div className="tp-engform">
       <p className="am-note">
-        Add someone at {i.c.name} a fractional would want to know, like the person who hires or who a seat reported to. Members spend 1 credit to see the name or a contact detail.
+        Add someone at {i.c.name} a fractional would want to know, like the person who hires or who a seat reported to. Members spend 1 credit to see the name, and 1 more for each contact detail.
         Each answer earns 1 credit.
       </p>
       <div className="tp-form-2">
@@ -559,14 +562,14 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                     <div className="mono tp-small muted">{lookup.existing.website ?? lookup.domain}</div>
                   </div>
                   <p className="am-exists-p">
-                    <IconCheck size={13} /> We already have {lookup.existing.name}. Add what you know to it, so there is one record of the company.
+                    <IconCheck size={13} /> We already have {lookup.existing.name}. Add what you know to it, so everything about the company stays in one place.
                   </p>
                   <div className="tp-exists-acts">
                     <button type="button" className="btn btn-sm btn-primary" onClick={() => pick(lookup.existing!.id)}>
                       Add to {lookup.existing.name.length > 22 ? "it" : lookup.existing.name}
                     </button>
                     <button type="button" className="btn btn-sm" onClick={() => (ui.openCompany(lookup.existing!.id), onClose())}>
-                      Open the record
+                      Open the company
                     </button>
                   </div>
                 </div>
@@ -655,7 +658,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
               </div>
               <div className="tp-done-acts">
                 <button type="button" className="btn btn-sm" onClick={() => (ui.openCompany(i.c.id), onClose())}>
-                  Open the record
+                  Open the company
                 </button>
                 <button type="button" className="btn btn-sm btn-ghost" onClick={onClose}>
                   Done

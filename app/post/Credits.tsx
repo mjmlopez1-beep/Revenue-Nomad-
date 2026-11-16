@@ -129,14 +129,14 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
   const invite = inviteLink(me.inviteCode);
   const signin = signInLink(me.token);
   const mail = `mailto:${encodeURIComponent(me.email)}?subject=${encodeURIComponent("My Trading Post sign-in link")}&body=${encodeURIComponent(
-    `Open this link to sign in to Trading Post on any device. Keep it private.\n\n${signin}`,
+    `Open this link to sign in to Trading Post on any device. Keep it to yourself.\n\n${signin}`,
   )}`;
   const starter = view.stats.starter;
   const paid = me.invitesPaid ?? 0;
   const rules: [string, "plus" | "minus" | "flat", string][] = [
     [String(starter), "flat", `You start with ${starter} credits.`],
     ["+1", "plus", "You add a fact that's missing, like a role, a rate, who held a seat or a hiring contact."],
-    ["−1", "minus", "You unlock a fact another member added. It stays open for you from then on."],
+    ["−1", "minus", "You unlock a fact. It stays unlocked for you from then on."],
     ["+1", "plus", "Two other members confirm a fact you added."],
     [`+${REFERRAL_BONUS}`, "plus", `Someone you invited adds their first fact. They get ${REFERRAL_BONUS} too.`],
   ];
@@ -259,7 +259,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
                 </div>
                 <div className="tp-review-acts">
                   <button type="button" className="btn btn-sm btn-ghost" onClick={() => ui.openCompany(r.companyId)}>
-                    Open the record
+                    Open the company
                   </button>
                   <button type="button" className="btn btn-sm" onClick={() => ui.act({ type: "review", entity: r.entity, id: r.id, field: r.field, decision: "keep" })}>
                     Keep it

@@ -43,7 +43,7 @@ const SEAT_Q: Record<string, { q: string; hint?: string }> = {
   type: { q: "What kind of seat was it?" },
   status: { q: "Is the seat active, or has it ended?" },
   start: { q: "When did you start?", hint: "The year is enough if you don't remember the month." },
-  end: { q: "When did it end?", hint: "Pick Ongoing if you are still in the seat." },
+  end: { q: "When did it end?", hint: "Pick Ongoing if you're still in the seat." },
   reason: { q: "Why did they bring in a fractional?" },
   sourced: { q: "How did they find you?" },
   pricing: { q: "How were you paid?" },
@@ -367,7 +367,7 @@ function SeatCard({
           if (onToggle && !(ev.target as HTMLElement).closest("button")) onToggle();
         }}
       >
-        <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company record">
+        <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company">
           <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} />
           <span className="ys-co-name">{name}</span>
         </button>
@@ -567,7 +567,7 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
       {list.length === 0 ? (
         <div className="ys-empty">
           <h2 className="ys-empty-h">We don&apos;t have a seat under your name yet</h2>
-          <p>Add one you held and it shows up here. Each thing you fill in on it earns 1 credit.</p>
+          <p>Add one you held and it shows up here. Each answer you add to it earns 1 credit.</p>
           <button type="button" className="btn btn-primary" onClick={addSeat}>
             <IconPlus size={14} /> Add a seat you held
           </button>

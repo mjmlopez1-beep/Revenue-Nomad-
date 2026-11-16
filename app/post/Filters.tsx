@@ -205,7 +205,7 @@ export function FilterPanel({
           <div className="tp-fblock">
             <ChipSet k="roleState" f={f} setF={setF} counts={l.roleState} options={LIST_OPTIONS.roleState} />
           </div>
-          <p className="tp-fnote">A role is open while its posting was still up at our last weekly scan. Closed roles stay on file with their dates.</p>
+          <p className="tp-fnote">A role is open while its job posting was still up at our last weekly scan. Closed roles stay on file with their dates.</p>
         </Group>
       )}
       <Group title="Company">

@@ -23,7 +23,7 @@ export interface LandingProps {
 }
 
 /** The server's default starter balance, used only if the view predates stats.starter. */
-const STARTER_FALLBACK = 5;
+const STARTER_FALLBACK = 25;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -31,7 +31,7 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
   {
     title: "Open fractional roles",
-    body: "We check for open fractional GTM roles every week and date each one, so you can tell a fresh opening from a stale one. The company stays hidden until you unlock it.",
+    body: "We check for open fractional GTM roles every week and date each one, so you can tell a new role from one that has sat for months. The company stays hidden until you unlock it.",
     cost: "1 credit for the company",
   },
   {
@@ -51,12 +51,12 @@ const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
   },
   {
     title: "What the seat pays",
-    body: "See median monthly and hourly rates by function and client revenue. They come from Revenue Nomad's Rate Index and the rates members share, and no single rate can be traced.",
+    body: "See median monthly and hourly rates by function and client revenue. They come from Revenue Nomad's Rate Index and the rates members share. A median shows only with enough rates behind it, so nobody can pick out yours.",
     cost: null,
   },
   {
     title: "Who does the hiring",
-    body: "See who makes the hiring call at each company. Titles are free. A name, an email or a LinkedIn profile costs a credit each.",
+    body: "See who makes the hiring call at each company. Titles are free. A name, an email, a phone number or a LinkedIn profile is 1 credit each.",
     cost: "1 credit each",
   },
 ];
@@ -68,7 +68,7 @@ const LOOKUPS: { title: string; body: string; cost: string | null }[] = [
  */
 const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[]; note?: string }[] = (
   [
-    { entity: "company", label: "The company", freeFirst: ["Name"], note: "While a company has an open role, its name, website and LinkedIn are hidden. One credit shows all three." },
+    { entity: "company", label: "The company", freeFirst: ["Name"], note: "While a company has an open role, its name, website and LinkedIn are hidden. One credit unlocks all three. When the role closes, they show for everyone again." },
     { entity: "engagement", label: "The seat", freeLast: ["Open and closed dates"] },
     { entity: "contact", label: "A hiring contact" },
   ] as { entity: Entity; label: string; freeFirst?: string[]; freeLast?: string[]; note?: string }[]
@@ -86,16 +86,16 @@ const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[];
 /** The questions, with the starter balance the server actually gives. */
 const faq = (starter: number): [string, string][] => [
   [
-    "Where do the records come from?",
-    "Engagements members published on Revenue Nomad, member success stories and a weekly check for open fractional GTM roles. Members add the rest, one thing at a time.",
+    "Where does all of this come from?",
+    "From fractional work members published on Revenue Nomad, member success stories and a weekly check for open fractional GTM roles. Members add the rest, one fact at a time.",
   ],
   [
     "What will other members see about me?",
-    "Your name and title, on seats you held, behind a lock that costs them a credit. Members can also find you by name when they add a seat you held. Your email is never shown, and what you add does not say who added it. Engagements a member marked anonymous are left out.",
+    "Your name and title show on seats you held, behind a lock that costs a member 1 credit. Members can also find you by name when they add a seat you held. Your email is never shown, and a fact you add never says who added it. Work a member marked anonymous on Revenue Nomad is left out.",
   ],
   [
     "What happens to a rate I share?",
-    "A rate you add to a seat sits behind a lock like any other locked field. You can also share one for the benchmarks only. That one counts in the medians and is never shown to anyone.",
+    "A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or you can share a rate privately. Then it counts in the medians and nobody sees it, on the seat or anywhere else.",
   ],
   [
     "What if something is wrong?",
@@ -103,9 +103,9 @@ const faq = (starter: number): [string, string][] => [
   ],
   [
     `Why can I only earn ${EARN_CAP} credits a day?`,
-    "A limit takes away the reason to guess. Invite and confirmation bonuses count toward it. A bonus that would take you past it is held and paid when you have room.",
+    `So nobody has a reason to add guesses for credits. Invite and confirmation bonuses count toward the ${EARN_CAP}. A bonus that would take you past it is held and paid when you have room.`,
   ],
-  ["Is there a limit on unlocking?", "A new account can unlock 20 things in its first 24 hours and 100 a day after that."],
+  ["Is there a limit on unlocking?", "Yes. A new account can unlock 20 facts in its first 24 hours and 100 a day after that."],
   [
     "What does it cost?",
     `Nothing. The pilot is free and you start with ${starter} credits. If you run low, add something you know or invite a fractional you trust.`,
@@ -163,7 +163,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
   const heroForm = useRef<HTMLDivElement>(null);
   const finalForm = useRef<HTMLDivElement>(null);
   const s = view.stats;
-  // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 5).
+  // stats.starter is what the server gives a new member (RN_STARTER_CREDITS, default 25).
   const starter = s.starter ?? STARTER_FALLBACK;
   // Roles first seen in the last 7 days. A server that predates the count falls back to what is open now.
   const opened = s.openedWeek ?? 0;
@@ -189,7 +189,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
     [s.members, "members"],
   ];
 
-  const joinHint = "The pilot is free. A credit shows you one locked thing, like a rate or a name. Add something you know and you earn one back.";
+  const joinHint = "The pilot is free. A credit unlocks one fact, like a rate or a name. Add something you know and you earn one back.";
 
   return (
     <div className="lp">
@@ -245,7 +245,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               </p>
               {inviter ? (
                 <p className="lp-invited">
-                  {inviter} invited you. Add one thing you know and you both get <span className="num">{REFERRAL_BONUS}</span> credits.
+                  {inviter} invited you. Add one fact you know and you each get <span className="num">{REFERRAL_BONUS}</span> credits.
                 </p>
               ) : null}
               <div className="lp-hero-form" ref={heroForm}>
@@ -278,7 +278,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
               ))}
             </dl>
             <p className="lp-proof-note">
-              It starts from engagements members published on Revenue Nomad, member stories and a weekly check for open roles. Members add the rest.
+              It starts from fractional work members published on Revenue Nomad, member success stories and a weekly check for open roles. Members add the rest.
             </p>
           </div>
         </section>
@@ -324,7 +324,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                 <div className="lp-step-body">
                   <h3>Add what you know</h3>
                   <p>
-                    Fill in something missing on a company you worked with, like the rate or the hours. Each one earns a credit, up to{" "}
+                    Add something missing on a company you worked with, like the rate or the hours a week. Each fact earns a credit, up to{" "}
                     <span className="num">{EARN_CAP}</span> a day.
                   </p>
                 </div>
@@ -333,21 +333,21 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                 <DemoUnlock />
                 <div className="lp-step-body">
                   <h3>Unlock what you need</h3>
-                  <p>One credit shows you one locked thing, such as a rate or a seat holder&apos;s name. It stays unlocked for you.</p>
+                  <p>One credit unlocks one fact, such as a rate or a seat holder&apos;s name. It stays unlocked for you.</p>
                 </div>
               </li>
               <li className="lp-step">
                 <DemoConfirm />
                 <div className="lp-step-body">
                   <h3>Confirm or report</h3>
-                  <p>Confirm what you know is right. Report what is wrong and we review it. If we remove it, your credit comes back.</p>
+                  <p>Confirm a fact you know is right. Report one that is wrong and we review it. If we remove something you unlocked, your credit comes back.</p>
                 </div>
               </li>
             </ul>
             <p className="lp-invite">
               <span className="lp-plus num">+{REFERRAL_BONUS}</span>
               <span>
-                Invite a fractional you trust. You each get <span className="num">{REFERRAL_BONUS}</span> credits when they add their first thing.
+                Invite a fractional you trust. You each get <span className="num">{REFERRAL_BONUS}</span> credits when they add their first fact.
               </span>
             </p>
           </div>
@@ -387,7 +387,7 @@ export default function Landing({ view, onSignedIn }: LandingProps) {
                   </div>
                   <div role="cell" className="lp-mx-cell">
                     <span className="lp-mx-label">
-                      <span className="num">1 credit each</span>
+                      <span className="num">{row.locked.length ? "1 credit each" : "1 credit"}</span>
                     </span>
                     {row.locked.length ? (
                       <ul className="lp-chiprow">

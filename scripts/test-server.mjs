@@ -596,6 +596,11 @@ section("join", async () => {
     const { r: seed } = await join("Seed Tester", ip(100), { email: process.env.SEED_EMAIL });
     check("seed member email gives the same answer", seed.json?.error === dup.json?.error, seed.json);
   } else skip("seed email join", "SEED_EMAIL not set");
+  // The server answers a bad name or email in the same words the join form uses for its own checks.
+  const { r: noName } = await join("J", ip(103));
+  check("a one-letter name: 'Add your first and last name.'", noName.status === 400 && noName.json?.error === "Add your first and last name.", noName.json);
+  const { r: badMail } = await join("Bad Email", ip(103), { email: "not-an-email" });
+  check("a bad email: the join form's own words", badMail.status === 400 && badMail.json?.error === "That doesn't look like an email address. Check it for a typo.", badMail.json);
   const m = await member("Sid Signin", ip(101));
   const k = m.token;
   for (const raw of [`${BASE}/?k=${k}`, k, `  ${k}  `, `${BASE}/?k=${k}.`, `<${BASE}/?k=${k}>`, `/table?k=${k}`]) {

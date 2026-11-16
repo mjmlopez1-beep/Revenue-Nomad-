@@ -255,7 +255,7 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
     case "empty":
       if (ui.isHidden(t.id))
         return (
-          <span className={`${cls} tp-none`} data-cell={k} title="Unlock the company first. Then you can add this.">
+          <span className={`${cls} tp-none`} data-cell={k} title="This company is hidden. Unlock it for 1 credit, then you can add this.">
             –
           </span>
         );

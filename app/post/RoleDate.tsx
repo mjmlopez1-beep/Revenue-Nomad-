@@ -25,14 +25,14 @@ export function RoleDate({ e }: { e: EngagementRec }) {
   if (!e.opened) return null;
   if (!e.closed)
     return (
-      <span className="tp-role-date open num" title={`We first saw this posting on ${fmtDay(e.opened)}. It was still up at the last weekly scan.`}>
+      <span className="tp-role-date open num" title={`We first saw this job posting on ${fmtDay(e.opened)}. It was still up at the last weekly scan.`}>
         <span className="live-dot" aria-hidden />
         Open since {fmtDay(e.opened)}
       </span>
     );
   const days = plural(daysListed(e.opened, e.closed), "day");
   return (
-    <span className="tp-role-date closed num" title={`The posting was up for ${days}, from ${fmtDay(e.opened)}.`}>
+    <span className="tp-role-date closed num" title={`The job posting was up for ${days}, from ${fmtDay(e.opened)}.`}>
       Role closed {fmtDay(e.closed)}
       <span className="tp-role-days"> · listed {days}</span>
     </span>

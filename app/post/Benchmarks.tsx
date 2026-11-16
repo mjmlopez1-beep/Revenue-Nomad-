@@ -245,7 +245,7 @@ export function Benchmarks({ view, refresh, onBack }: { view: View; refresh: () 
       <h1 className="tp-page-h">Rate benchmarks</h1>
       <p className="tp-bm-lead">
         What fractionals charge, by function and by the client&apos;s revenue.{" "}
-        {b.total ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} so far, from seats, private shares and Revenue Nomad's Rate Index.` : "No rates yet. Yours can be the first."}
+        {b.total ? `${b.total.toLocaleString("en-US")} ${b.total === 1 ? "rate" : "rates"} so far, from seats, rates shared privately and Revenue Nomad's Rate Index.` : "No rates yet. Yours can be the first."}
       </p>
       <div className="tp-bm-tools">
         <span className="tp-flabel" id="tp-bm-band">

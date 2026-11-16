@@ -764,8 +764,8 @@ export async function joinMember(nameRaw: unknown, emailRaw: unknown, ref?: unkn
   return mutate((s, seed) => {
     const name = stripInvisible(nameRaw).trim().replace(/\s+/g, " ").slice(0, 80);
     const email = stripInvisible(emailRaw).trim().toLowerCase().slice(0, 120);
-    if (name.length < 2) throw new ActionError("Enter your full name.");
-    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("That email doesn't look right. Check it and try again.");
+    if (name.length < 2) throw new ActionError("Add your first and last name.");
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("That doesn't look like an email address. Check it for a typo.");
     const seedMember = seed.members.find((m) => m.email && m.email.toLowerCase() === email);
     const joined = s.members.find((m) => m.email === email);
     if (seedMember || joined) {

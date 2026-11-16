@@ -28,7 +28,9 @@ export function WeeklyEmail() {
           Weekly email
         </h2>
         <p className="cr-note" id="tp-set-digest-d">
-          {fn && fn !== "Other" ? `One email a week, after the scan, with the new open ${fn} roles and the ones that closed.` : "One email a week, after the scan, with the new open roles and the ones that closed."}
+          {fn && fn !== "Other"
+            ? `One email after each weekly scan with the new open roles, ${fn} first. We skip weeks with none.`
+            : "One email after each weekly scan with the new open roles. We skip weeks with none."}
         </p>
       </div>
       <button

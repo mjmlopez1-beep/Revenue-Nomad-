@@ -130,7 +130,7 @@ export function HeroRecord() {
         </div>
       </div>
       <figcaption className="lp-visual-cap">
-        An example record. While a company has an open role, its name stays hidden until you unlock it.
+        An example company, shown unlocked. While a company has an open role, its name stays hidden until you unlock it.
       </figcaption>
     </figure>
   );
