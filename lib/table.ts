@@ -30,9 +30,9 @@
  * reopenIfUnheld().
  *
  * Weekly scan: open roles come in from job boards with the day they were first seen, close
- * (with the date) when a clean scan stops listing them, and reopen if listed again; see
- * applyScan(). Their facts are owned by "scan" and behave like seed facts. After a scan,
- * sendDigests() emails the week's new roles.
+ * (with the date) when a clean scan stops listing them, and reopen if listed again, unless a
+ * member has taken the seat as their own (selfHeld()); see applyScan(). Their facts are owned
+ * by "scan" and behave like seed facts. After a scan, sendDigests() emails the week's new roles.
  *
  * Benchmark-only rates (State.benchRates) count in the rate benchmarks and are never sent to
  * anyone but the member who shared them, admins included.
@@ -715,7 +715,9 @@ export async function memberByEmail(emailRaw: string): Promise<Member | null> {
   const email = String(emailRaw ?? "").trim().toLowerCase();
   if (!email) return null;
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
-  return seed.members.find((m) => m.email && m.email.toLowerCase() === email) ?? s.members.find((m) => m.email === email) ?? null;
+  // One inbox is one account, as at join: another spelling of a member's Gmail address finds that member.
+  const inbox = inboxKey(email);
+  return seed.members.find((m) => m.email && inboxKey(m.email) === inbox) ?? s.members.find((m) => inboxKey(m.email) === inbox) ?? null;
 }
 
 const inviteCodes = new Map<string, string>();
@@ -988,6 +990,18 @@ export function reopenIfUnheld(s: State, engId: string, now = new Date().toISOSt
   const v = s.values[fkey(engId, "operator")];
   const held = !!v && v.status !== "removed" && !(v.memberId && (s.notMine[v.memberId] ?? []).includes(engId));
   return held ? false : reopenFilled(s, engId, now);
+}
+
+/**
+ * A member says this seat is their own: they picked themselves as its seat holder, and the name
+ * still stands (not removed, and they have not said "this isn't me"). It is the one claim that
+ * closes an open role, and the weekly scan gives it the same weight on a role whose posting had
+ * come down: listed again, that role stays closed. Any other name on the seat does not outweigh
+ * a posting that is listed.
+ */
+function selfHeld(s: State, engId: string): boolean {
+  const v = s.values[fkey(engId, "operator")];
+  return !!v && v.status !== "removed" && !!v.memberId && v.memberId === v.by && !(s.notMine[v.memberId] ?? []).includes(engId);
 }
 
 /** Empty fillable facts on an engagement (each earns its seat holder a credit). */
@@ -1709,8 +1723,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     if (!r.lastAt || l.at > r.lastAt) r.lastAt = l.at;
     addsBy.set(l.memberId, r);
   }
-  const privateBy = new Map<string, number>();
-  for (const b of s.benchRates) privateBy.set(b.by, (privateBy.get(b.by) ?? 0) + 1);
+  const privateBy = benchRateCounts(s);
   const recentAdds = [...addsBy]
     .filter(([id]) => idx.byId.has(id))
     .sort(([, a], [, b]) => b.adds7 - a.adds7 || b.adds24h - a.adds24h || (b.lastAt ?? "").localeCompare(a.lastAt ?? ""))
@@ -2224,7 +2237,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
           // Already filled means an edit of your own fact or a correction on your own seat (anything else is refused).
           const wasMine = !!valueOf(node, s, f.key);
           const earned = setValue(node, a.entity, f.key, a.value, f.key === "operator" ? pickedMember(a.memberId) : null);
-          const bonus = earned || capped ? payReferral() : 0;
+          // (A private rate moved onto the record is a first fact on a record too, though it was paid before.)
+          const bonus = earned || capped || movedRate ? payReferral() : 0;
           const cells = [changed(a.entity, node, f.key)];
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
           for (const c of alsoChanged) cells.push(changed(c.entity, c.node, c.field));
@@ -2395,10 +2409,12 @@ export async function perform(token: string | null, a: Action, origin?: string):
             const isBlank = (e: EngNode) =>
               Object.keys(e.seedFields).every((k) => k === "source") && !Object.keys(s.values).some((k) => k.startsWith(e.id + "."));
             // An open role is never matched by its title: a past seat with the same title is its own record.
+            // Titles compare by textKey (any script, accents aside). An empty key matches nothing.
+            const roleKey = role ? textKey(role) : "";
             const existing = wantEng
               ? atCompany.find((e) => e.id === wantEng)
               : (a.newEngagement ? atCompany.find(isBlank) : atCompany.find((e) => s.engagements.some((x) => x.id === e.id && x.by === me.id))) ??
-                (role ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && slug(live(e, s, "role") ?? "") === slug(role)) : undefined);
+                (roleKey ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && textKey(live(e, s, "role") ?? "") === roleKey) : undefined);
             let eng: Node;
             if (existing) {
               eid = existing.id;
@@ -2421,7 +2437,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
             const node: Node = { id: pid, seedFields: {} };
             for (const [k, v] of p) earned += setValue(node, "contact", k, v);
           }
-          const bonus = earned || capped ? payReferral() : 0;
+          const bonus = earned || capped || movedRate ? payReferral() : 0;
           const where = isNew
             ? `Added ${companyName}`
             : engNew
@@ -2948,9 +2964,13 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
         delete r.missAt;
         if (!r.postedAt && raw.postedAt) r.postedAt = iso(raw.postedAt, "") || null;
         if (!r.closedAt) res.stillOpen++;
-        else if (r.closedBy !== "filled" || !live(g.engagements.get(r.engagementId), s, "operator")) {
-          // Listed again: reopen. A role a member filled stays filled while the posting lingers,
-          // unless nobody holds the seat any more (the name was removed or unlinked).
+        else if (r.closedBy === "filled") {
+          // A role a member took stays filled while its posting lingers. It reopens only when
+          // nobody holds the seat any more: the same rule a removal or "This isn't me" follows.
+          if (reopenIfUnheld(s, r.engagementId, now)) res.reopened++;
+        } else if (!selfHeld(s, r.engagementId)) {
+          // Listed again after its posting had come down: reopen, unless a member has since
+          // taken the seat as their own (a posting that lingers, or one a board bumped).
           r.closedAt = null;
           delete r.closedBy;
           put(r.engagementId, "status", "Open role");
@@ -3218,7 +3238,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
         byFunction,
         closedRoles,
         seatFactsMissing: missing.get(m.id) ?? 0,
-        credits: balance(s, m.id),
+        credits: Math.max(0, balance(s, m.id)), // as the app shows it: never below zero (see Me.owed)
         appUrl: base,
         unsubscribeUrl: `${base}/api/table/unsubscribe?m=${pubId(m.id)}&s=${unsubSig(m.id)}`,
       },

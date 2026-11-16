@@ -79,7 +79,9 @@ export const GET = guarded(async (req: NextRequest) => {
   // to find a few people, too slow to page through everyone.
   const people = req.nextUrl.searchParams.get("people");
   if (people !== null) {
-    if (limited(`people:${token ?? ip}`, 30, 60_000)) return err("Slow down a little.", 429);
+    // Keyed like the action limit: on the member, or on the address when the cookie is nobody's (any value can be made up).
+    const who = (await memberForToken(token))?.id;
+    if (limited(who ? `people:${who}` : `people:ip:${ip}`, 30, 60_000)) return err("Slow down a little.", 429);
     return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
   }
   if (limited(`get:${ip}`, 120, 60_000)) return err("Slow down a little.", 429);

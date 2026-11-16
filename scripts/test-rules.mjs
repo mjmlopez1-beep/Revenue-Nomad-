@@ -80,10 +80,11 @@ class Client {
   }
 }
 
-async function join(name, { email } = {}) {
+async function join(name, { email, headers } = {}) {
   const ipAddr = nextIp();
   const r = await call("POST", "/api/table", {
     ipAddr,
+    headers,
     body: { join: { name, email: email ?? `qa+${RUN}-${name.toLowerCase().replace(/\W+/g, "")}-${Math.random().toString(36).slice(2, 7)}@example.com` } },
   });
   const token = (r.headers.getSetCookie?.() ?? []).map((c) => c.match(/^rn_table=([^;]+)/)?.[1]).find(Boolean) ?? null;
@@ -103,7 +104,8 @@ async function admin() {
   if (adminClient !== undefined) return adminClient;
   const email = process.env.ADMIN_EMAIL || "admin-qa@example.com";
   if (process.env.ADMIN_TOKEN) return (adminClient = new Client("Admin Qa", nextIp(), process.env.ADMIN_TOKEN));
-  const { client } = await join("Admin Qa", { email });
+  // An admin address can't be claimed in the join form alone, so the cron secret goes with it.
+  const { client } = await join("Admin Qa", { email, headers: { "x-cron-secret": CRON_SECRET } });
   if (client) await client.act({ type: "profile", function: "Sales", goal: "friendly" });
   return (adminClient = client);
 }

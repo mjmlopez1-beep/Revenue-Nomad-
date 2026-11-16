@@ -263,7 +263,8 @@ export interface View {
   ledger: LedgerRow[];
   /**
    * Admins: reported facts. A fact is hidden for everyone once two members report it; until
-   * then only its reporter sees it as under review.
+   * then only its reporter sees it as under review. A seat holder's report on their own seat, and
+   * "This isn't me" on a name a member added, hide the fact at once and are listed here too.
    */
   reported: {
     entity: Entity;

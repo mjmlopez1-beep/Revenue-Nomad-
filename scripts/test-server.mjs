@@ -1091,7 +1091,8 @@ section("settings", async () => {
   const h = (x) => createHmac("sha256", key).update(x).digest("base64url");
   const m = `${ev.me.id[0]}_${h(ev.me.id).slice(0, 12)}`;
   const sig = h(`unsubscribe:${ev.me.id}`).slice(0, 22);
-  const bad = await call("GET", `/api/table/unsubscribe?m=${m}&s=${sig.slice(0, 21)}x`, { ipAddr: ip(141) });
+  // A last character that differs from the real one (a fixed "x" matched it once in 64 runs).
+  const bad = await call("GET", `/api/table/unsubscribe?m=${m}&s=${sig.slice(0, 21)}${sig[21] === "x" ? "y" : "x"}`, { ipAddr: ip(141) });
   check("a bad signature is refused", bad.status === 400 && /didn't work/.test(bad.text) && (await E.view()).me.digest === true, bad.status);
   const none = await call("GET", "/api/table/unsubscribe", { ipAddr: ip(141) });
   const wrong = await call("GET", `/api/table/unsubscribe?m=j_AAAAAAAAAAAA&s=${sig}`, { ipAddr: ip(141) });
