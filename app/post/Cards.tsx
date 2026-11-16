@@ -136,7 +136,14 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
         when && <div className="tp-pcard-when num">{when}</div>
       )}
       {c.hidden ? (
-        <HiddenLine />
+        <>
+          {e && e.cells.role?.s === "value" && (
+            <div className="tp-pfacts">
+              <Fact label="Open role">{e.cells.role.v}</Fact>
+            </div>
+          )}
+          <HiddenLine />
+        </>
       ) : (
         <div className="tp-pfacts">
           {e ? (
@@ -194,6 +201,11 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
       </div>
       {i.c.hidden ? (
         <>
+          {e.cells.role?.s === "value" && (
+            <div className="tp-pfacts">
+              <Fact label="Open role">{e.cells.role.v}</Fact>
+            </div>
+          )}
           <HiddenLine />
           {e.cells.rate?.s === "value" && (
             <div className="tp-pfacts">
