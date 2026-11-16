@@ -10,11 +10,15 @@
  *   low    3 credits or fewer, and their seats have something to add
  *
  * Dismissing one hides that kind for 7 days (kept in localStorage, per browser).
+ *
+ * On phones it is compact (the chip and the title share a line), so the list starts higher.
+ * `note` carries a second, calm line that would otherwise be a strip of its own (the daily limit).
  */
-import { useCallback, useState } from "react";
+import { useCallback, useContext, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { IconX } from "../ui/shared";
 import { plural, store } from "./hooks";
+import { UiCtx } from "./ui";
 import "./seats.css";
 
 export type MoveKind = "seats" | "roles" | "low";
@@ -58,6 +62,7 @@ export function NextMove({
   onSeats,
   onRoles,
   onDismiss,
+  note,
 }: {
   kind: MoveKind;
   me: Me;
@@ -67,7 +72,10 @@ export function NextMove({
   onSeats: () => void;
   onRoles: () => void;
   onDismiss: (k: MoveKind) => void;
+  /** One more line under the card's own, e.g. the daily limit. */
+  note?: ReactNode;
 }) {
+  const compact = useContext(UiCtx)?.layout === "phone";
   const earn = Math.min(seats.missing, earnRoom(me));
   const things = plural(seats.missing, "thing is", "things are");
   const copy =
@@ -107,11 +115,12 @@ export function NextMove({
             go: onSeats,
           };
   return (
-    <section className="nm-card" aria-label="Your next move" data-move={kind}>
+    <section className={`nm-card${compact ? " nm-compact" : ""}`} aria-label="Your next move" data-move={kind}>
       <span className="nm-chip num">{copy.chip}</span>
       <div className="nm-t">
         <h2 className="nm-h">{copy.title}</h2>
         <p className="nm-p">{copy.line}</p>
+        {note && <p className="nm-p nm-note">{note}</p>}
       </div>
       <button type="button" className="btn btn-primary nm-go" onClick={copy.go}>
         {copy.button}

@@ -2,17 +2,21 @@
 
 /**
  * App-wide context for the Trading Post app and the fact cell: one component that renders
- * any fact in its three states (value, locked, empty) plus "Under review", and the inline
- * editor that opens from an empty cell.
+ * any fact in its three states (value, locked, empty) plus "Under review", the inline editor
+ * that opens from an empty cell, and the overlays they open (popovers, menus, phone sheets).
  *
  * Type: values are set in the text face. Numbers, dates, money and phone numbers get tabular
  * figures (.num). Only links and email addresses are mono.
+ *
+ * Overlays (Anchored, Sheet): each one takes focus when it opens, keeps Tab inside while it is
+ * up (a menu closes on Tab instead), closes on Escape when it is the top one, and gives focus
+ * back to the control that opened it. The landing page's sign-in dialog is the pattern.
  */
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { Cell, Me } from "@/lib/tableTypes";
+import type { Action, Cell, Me } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
-import { AddPill, IconCheck, IconSearch, IconX, LockPill, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
+import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { atTime, fieldText, plural, type Layout } from "./hooks";
 import { MonthYear } from "./MonthYear";
@@ -87,12 +91,42 @@ export const isNumField = (t: FactRef) => NUM_KINDS.includes(fieldDef(t.entity, 
 /** A field inside a sentence, the way the server's messages name it: "the role", "a person's email". */
 export const sayField = (f: FieldDef) => f.say ?? `the ${fieldText(f.label)}`;
 
-/** What a locked fact is, for its tooltip and for screen readers. */
-const lockWhat = (t: FactRef) => {
+/** What a fact is, for a button's name and tooltip: "the role", "this company". */
+const factWhat = (t: FactRef) => {
   if (t.field === "identity") return "this company";
   const f = fieldDef(t.entity, t.field);
   return f ? sayField(f) : "this";
 };
+
+/** Where a fact nobody added by hand came from (Cell.from), when no member has confirmed it yet. */
+export const FROM_SAY: Record<string, string> = { records: "From Revenue Nomad records", posting: "From the job posting" };
+
+/**
+ * Company pick lists that earn a credit for only 5 answers a day (Me.sellEarnLeft): industry,
+ * size, revenue and the four under How they sell.
+ */
+const PICK_LIMITED = ["industry", "employees", "revenue", "businessModel", "motion", "dealSize", "salesCycle"];
+const pickLimited = (t: FactRef) => t.entity === "company" && PICK_LIMITED.includes(t.field);
+
+/** Whether adding this fact earns a credit right now, as far as the screen can tell. */
+export function earnsNow(me: Me, t: FactRef): boolean {
+  if (earnNote(me).capped) return false;
+  return !(pickLimited(t) && me.sellEarnLeft === 0);
+}
+
+/** The "+ Add" button on an empty fact. Its name says what it adds and that it earns. */
+function AddBtn({ label, what, earn, onAdd }: { label: string; what: string; earn: boolean; onAdd: () => void }) {
+  return (
+    <button type="button" className="add" aria-label={`Add ${what}${earn ? ", earns 1 credit" : ""}`} onClick={(e) => (e.stopPropagation(), onAdd())}>
+      + {label}
+      {earn && (
+        <span className="plus1" aria-hidden>
+          +1
+        </span>
+      )}
+    </button>
+  );
+}
 
 /** An add pill that opens the fact editor on itself. `onPick` runs first (e.g. to close the popover it sits in). */
 export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: string; onPick?: () => void }) {
@@ -101,9 +135,10 @@ export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: strin
   const f = fieldDef(fact.entity, fact.field);
   return (
     <span ref={ref} data-cell={cellKey(fact.id, fact.field)} className={ui.pulse === cellKey(fact.id, fact.field) ? "tp-pulse" : undefined}>
-      <AddPill
+      <AddBtn
         label={label ?? (f ? shortLabel(f) : fact.field)}
-        earn={!earnNote(ui.me).capped}
+        what={factWhat(fact)}
+        earn={earnsNow(ui.me, fact)}
         onAdd={() => {
           if (!ref.current) return;
           onPick?.();
@@ -137,83 +172,153 @@ export function Pro({ where, variant }: { where: ProWhere; variant?: "card" | "l
   );
 }
 
-/** Shown instead of spending at 0 credits: facts the member can add (their own seats first) to earn one. */
+/** "You owe 2 credits. …" when a removed fact left the balance below zero (Me.owed). */
+export const owedText = (owed: number) =>
+  `You owe ${plural(owed, "credit")}. A fact you added was removed after you spent what it earned. The next fact you add clears it.`;
+
+/**
+ * Shown instead of spending at 0 credits (the server's "You're out of credits" refusal, never
+ * the first-day unlock limit): what the member can add to earn one. Their own seats first,
+ * then a seat they held, then facts on this company if they know it. A popover on desktop, a
+ * sheet on phones.
+ */
 export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string; onClose: () => void }) {
   const ui = useUi();
   const earn = earnNote(ui.me);
   const facts = earn.capped ? [] : ui.addable(id);
   const one = ui.seats.n === 1;
-  // This popover belongs to its cell, so the app's Esc handler doesn't know it. Close it here, and only it.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      // An editor opened from one of the pills sits on top: Esc is its to take first.
-      if (e.key !== "Escape" || document.querySelector(".tp-editor")) return;
-      e.stopPropagation();
-      onClose();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
-  const pills = (
-    <div className="tp-zero-pills">
-      {facts.map((x) => (
-        // Phones edit in a bottom sheet, which sits under this popover: close it first.
-        <EditPill key={cellKey(x.id, x.field)} fact={x} onPick={ui.layout === "phone" ? onClose : undefined} />
-      ))}
-    </div>
+  const owed = ui.me.owed ?? 0;
+  const phone = ui.layout === "phone";
+  const title = "You're out of credits";
+  const primary = earn.capped
+    ? null
+    : ui.seats.missing > 0
+      ? { label: `Fill in your ${one ? "seat" : "seats"}`, go: () => (onClose(), ui.openSeats()) }
+      : { label: "Add a seat you held", go: () => (onClose(), ui.openAdd({ mode: "engagement", mine: true })) };
+  const lead = earn.capped
+    ? `You've earned today's ${ui.me.earnCap}. You can earn again ${atTime(ui.me.earnResetsAt)}.`
+    : ui.seats.missing > 0
+      ? `${plural(ui.seats.missing, "thing is", "things are")} still missing on your ${one ? "seat" : "seats"}. Each one you add earns a credit.`
+      : "Add a seat you held, with what you know about it. Each fact you add earns a credit.";
+  const pills = facts.length > 0 && (
+    <>
+      <p className="tp-small muted">{primary ? "Or, if you know this company, add one of these." : "If you know this company, add one of these."}</p>
+      <div className="tp-zero-pills">
+        {facts.map((x) => (
+          // Phones edit in a bottom sheet, which would sit under this one: close it first.
+          <EditPill key={cellKey(x.id, x.field)} fact={x} onPick={phone ? onClose : undefined} />
+        ))}
+      </div>
+    </>
   );
-  return (
-    <Anchored anchor={anchor} onClose={onClose} width={300} className="tp-zero">
-      {earn.capped ? (
-        <p className="tp-zero-t">
-          You&apos;re out of credits, and you&apos;ve earned today&apos;s {ui.me.earnCap}. You can earn again {atTime(ui.me.earnResetsAt)}.
-        </p>
-      ) : ui.seats.missing > 0 ? (
-        <>
-          <p className="tp-zero-t">
-            You&apos;re out of credits. {plural(ui.seats.missing, "thing is", "things are")} still missing on your {one ? "seat" : "seats"}. Each one you add earns a credit.
-          </p>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openSeats())}>
-            Fill in your {one ? "seat" : "seats"}
-          </button>
-          {facts.length > 0 && (
-            <>
-              <p className="tp-small muted">Or add one of these here.</p>
-              {pills}
-            </>
-          )}
-        </>
-      ) : facts.length ? (
-        <>
-          <p className="tp-zero-t">You&apos;re out of credits. Add one of these and you earn one back.</p>
-          {pills}
-        </>
-      ) : (
-        <>
-          <p className="tp-zero-t">You&apos;re out of credits. Add a seat, a rate or a hiring contact you know. Each fact earns one.</p>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openAdd())}>
-            Add what you know
-          </button>
-        </>
+  const body = (
+    <>
+      <p className="tp-zero-t">{lead}</p>
+      {owed > 0 && <p className="tp-small">{owedText(owed)}</p>}
+      {!phone && primary && (
+        <button type="button" className="btn btn-primary btn-sm" onClick={primary.go}>
+          {primary.label}
+        </button>
       )}
+      {pills}
       <Pro where="zero_credits" variant="line" />
+    </>
+  );
+  if (phone)
+    return (
+      <Sheet
+        title={title}
+        onClose={onClose}
+        className="tp-zero-sheet"
+        footer={
+          primary && (
+            <button type="button" className="btn btn-primary btn-lg tp-grow" onClick={primary.go}>
+              {primary.label}
+            </button>
+          )
+        }
+      >
+        <div className="tp-zero">{body}</div>
+      </Sheet>
+    );
+  return (
+    <Anchored anchor={anchor} onClose={onClose} width={300} className="tp-zero" label={title}>
+      <p className="tp-zero-h">{title}</p>
+      {body}
     </Anchored>
   );
 }
 
 /**
+ * A locked fact. It never shows the value. At rest: a small lock and a masked bar. On hover
+ * and focus (always, on touch screens): "Unlock · 1 credit". One click or tap spends the credit.
+ * `what` names the fact for the tooltip and screen readers ("the role", "this company"). `noun`
+ * is added to the label where one lock stands for more ("Unlock company"). At the day's unlock
+ * limit (Me.unlocksLeft 0, credits left) it reads "Unlocks again tomorrow".
+ */
+function Lock({ onUnlock, ver, from, what, noun, busy, later }: { onUnlock: () => void; ver: number; from?: string; what: string; noun?: string; busy?: boolean; later?: boolean }) {
+  const say = later ? "You've used today's unlocks. Unlocks again tomorrow" : `Unlock ${what} for 1 credit`;
+  const more = ver > 0 ? ` Confirmed by ${plural(ver, "member")}.` : from && FROM_SAY[from] ? ` ${FROM_SAY[from]}.` : "";
+  return (
+    <button type="button" className={`lock${busy ? " busy" : ""}${later ? " later" : ""}`} title={`${say}.${more}`} aria-label={busy ? "Unlocking" : say} disabled={busy} onClick={(e) => (e.stopPropagation(), onUnlock())}>
+      <span className="lock-rest" aria-hidden>
+        <IconLock />
+        <span className="lock-mask" />
+      </span>
+      <span className="lock-cta" aria-hidden>
+        <IconLock />
+        {later ? (
+          <span>Unlocks again tomorrow</span>
+        ) : (
+          <>
+            <span>
+              <span className="lock-word">{busy ? "Unlocking" : "Unlock"}</span>
+              {!busy && noun && <span className="lock-noun"> {noun}</span>}
+            </span>
+            {!busy && (
+              <span className="lock-cost">
+                <span className="lock-dot">· </span>1 credit
+              </span>
+            )}
+          </>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/**
+ * The fact just saved from the editor, so its cell takes focus when it turns into the value (the
+ * add button that had focus is gone by then). `box` is the record it was saved in, if any, so a
+ * cell for the same fact in the table behind the record does not take it.
+ */
+let focusNext: { k: string; box: Element | null; until: number } | null = null;
+
+/**
  * A fact in one of its states. value: plain text (tabular figures for numbers and dates, mono
  * for links). locked: quiet at rest, "Unlock · 1 credit" on hover, one click. empty: "+ Add +1",
  * opens the inline editor. reported: "Under review".
+ * After an unlock or a save, keyboard focus lands on the value it revealed (tabIndex -1).
  */
 export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; cell: Cell | undefined; render?: (v: string) => ReactNode; addLabel?: string }) {
   const ui = useUi();
   const ref = useRef<HTMLSpanElement>(null);
+  const refocus = useRef(false);
   const [zero, setZero] = useState(false);
   const credits = ui.me.credits;
   useEffect(() => {
     if (zero && credits > 0) setZero(false);
   }, [zero, credits]);
+  const state = cell?.s;
+  const k0 = cellKey(t.id, t.field);
+  useEffect(() => {
+    if (state !== "value") return;
+    const saved = focusNext && focusNext.k === k0 && Date.now() < focusNext.until && (!focusNext.box || focusNext.box.contains(ref.current));
+    if (!refocus.current && !saved) return;
+    refocus.current = false;
+    if (saved) focusNext = null;
+    ref.current?.focus({ preventScroll: true });
+  }, [state, k0]);
   if (!cell) return null;
   const k = cellKey(t.id, t.field);
   const cls = `tp-cell${ui.pulse === k ? " tp-pulse" : ""}`;
@@ -221,6 +326,8 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
     case "value":
       return (
         <span
+          ref={ref}
+          tabIndex={-1}
           className={`${cls} tp-val${isMonoField(t) ? " mono" : isNumField(t) ? " num" : ""}${ui.flash.has(k) ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`}
           data-cell={k}
           title={fmtValue(t.entity, t.field, cell.v)}
@@ -234,24 +341,29 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
           )}
         </span>
       );
-    case "locked":
+    case "locked": {
+      const later = ui.me.unlocksLeft === 0 && credits > 0;
       return (
         <span className={cls} data-cell={k} ref={ref}>
-          <LockPill
+          <Lock
             onUnlock={() => {
-              if (ui.me.credits > 0) return ui.unlock(t);
+              refocus.current = !!ref.current?.contains(document.activeElement);
+              if (credits > 0) return ui.unlock(t);
               // The wall: out of credits at a locked fact. Counted for the pilot, by field.
               sendSignal("wall", t.field);
               setZero(true);
             }}
             ver={cell.ver}
-            what={lockWhat(t)}
+            from={cell.from}
+            what={factWhat(t)}
             noun={t.field === "identity" ? "company" : undefined}
             busy={ui.busy.has(k)}
+            later={later}
           />
           {zero && credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
         </span>
       );
+    }
     case "empty":
       if (ui.isHidden(t.id))
         return (
@@ -261,7 +373,7 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
         );
       return (
         <span className={cls} data-cell={k} ref={ref}>
-          <AddPill label={addLabel} earn={!earnNote(ui.me).capped} onAdd={() => ref.current && ui.edit(ref.current, t)} />
+          <AddBtn label={addLabel} what={factWhat(t)} earn={earnsNow(ui.me, t)} onAdd={() => ref.current && ui.edit(ref.current, t)} />
         </span>
       );
     case "reported":
@@ -278,6 +390,99 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
 }
 
 /* ---------- overlays ---------- */
+
+const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const focusables = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+
+/** Open overlays, newest last. Only the newest answers Escape and Tab. */
+const layers: number[] = [];
+let layerSeq = 0;
+
+/**
+ * Focus for one overlay: take it on open (an `autoFocus` inside wins, then `first`, then the
+ * first control), keep Tab inside (or close on Tab, for a menu), close on Escape when this is
+ * the top overlay, and give focus back on close to whatever had it before (or to `restore()`
+ * when that control is gone, e.g. an add button that became the value it added).
+ */
+function useLayer(
+  ref: React.RefObject<HTMLElement | null>,
+  opts: { onEscape: () => void; tab?: "trap" | "close"; first?: (root: HTMLElement) => HTMLElement | null; restore?: () => HTMLElement | null },
+) {
+  const [prev] = useState<HTMLElement | null>(() => (typeof document === "undefined" ? null : (document.activeElement as HTMLElement | null)));
+  const o = useRef(opts);
+  o.current = opts;
+  useEffect(() => {
+    const id = ++layerSeq;
+    layers.push(id);
+    const raf = requestAnimationFrame(() => {
+      const root = ref.current;
+      if (!root || root.contains(document.activeElement)) return;
+      const el = o.current.first?.(root) ?? focusables(root)[0] ?? root;
+      el.focus({ preventScroll: true });
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (layers[layers.length - 1] !== id) return;
+      const root = ref.current;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        o.current.onEscape();
+      } else if (e.key === "Tab" && root) {
+        if (o.current.tab === "close") {
+          e.preventDefault();
+          e.stopPropagation();
+          o.current.onEscape();
+          return;
+        }
+        const els = focusables(root);
+        if (!els.length) return e.preventDefault();
+        const first = els[0];
+        const last = els[els.length - 1];
+        const at = document.activeElement as HTMLElement | null;
+        if (!at || !root.contains(at)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        } else if (e.shiftKey && at === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && at === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKey, true);
+      const at = layers.indexOf(id);
+      if (at >= 0) layers.splice(at, 1);
+      // Give focus back once the overlay has left the page, unless something else took it.
+      const back = (tries: number) => {
+        const a = document.activeElement;
+        if (a && a !== document.body && a.isConnected) return;
+        const target = prev && prev.isConnected && prev !== document.body ? prev : o.current.restore?.();
+        if (target) target.focus({ preventScroll: true });
+        else if (tries > 0) setTimeout(() => back(tries - 1), 150);
+      };
+      // A saved value can arrive with the background refresh, so `restore` gets a second and a half.
+      setTimeout(() => back(10), 0);
+    };
+    // Mounted once per overlay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+/** Up, Down, Home and End move between a menu's items. */
+function menuKeys(e: React.KeyboardEvent<HTMLElement>) {
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+  const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]')].filter((el) => !(el as HTMLButtonElement).disabled);
+  if (!items.length) return;
+  e.preventDefault();
+  const i = items.indexOf(document.activeElement as HTMLElement);
+  const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : e.key === "ArrowDown" ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+  items[next].focus();
+}
 
 /**
  * Swallow the click that ends the tap on a scrim, so it never lands on what is underneath.
@@ -309,9 +514,13 @@ function swallowNextClick() {
 }
 
 /**
- * A popover fixed to an anchor element; follows it on scroll, flips above when there is no room.
- * A transparent scrim under it takes the outside tap that closes it, so that tap never also
- * unlocks a fact or opens a record underneath (it covers the anchor too: tapping it just closes).
+ * A popover fixed to an anchor element; follows it on scroll, flips above when there is no room,
+ * and never runs off the bottom of the screen (it scrolls inside instead). A transparent scrim
+ * under it takes the outside tap that closes it, so that tap never also unlocks a fact or opens
+ * a record underneath (it covers the anchor too: tapping it just closes).
+ *
+ * A `.tp-menu` is a menu (items are menuitem, arrow keys move, Tab closes); anything else is a
+ * dialog that keeps Tab inside. `label` or `labelledBy` names it for screen readers.
  */
 export function Anchored({
   anchor,
@@ -320,6 +529,10 @@ export function Anchored({
   children,
   className = "",
   align = "start",
+  role,
+  label,
+  labelledBy,
+  restore,
 }: {
   anchor: HTMLElement;
   width?: number;
@@ -327,11 +540,29 @@ export function Anchored({
   children: ReactNode;
   className?: string;
   align?: "start" | "end";
+  role?: "menu" | "dialog";
+  label?: string;
+  labelledBy?: string;
+  /** Where focus goes on close when the control that opened it is gone. */
+  restore?: () => HTMLElement | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const kind = role ?? (className.split(" ").includes("tp-menu") ? "menu" : "dialog");
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  useLayer(ref, {
+    onEscape: () => closeRef.current(),
+    tab: kind === "menu" ? "close" : "trap",
+    first: kind === "menu" ? (root) => root.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])') : undefined,
+    restore,
+  });
+  // The control that opened it says so (a button only; a cell's wrapper is not a control).
+  useEffect(() => {
+    if (anchor.tagName !== "BUTTON") return;
+    anchor.setAttribute("aria-expanded", "true");
+    return () => anchor.setAttribute("aria-expanded", "false");
+  }, [anchor]);
   useLayoutEffect(() => {
     const place = () => {
       if (!anchor.isConnected) return closeRef.current();
@@ -339,12 +570,14 @@ export function Anchored({
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const w = Math.min(width, vw - 16);
-      const h = ref.current?.offsetHeight ?? 200;
+      const h = ref.current?.scrollHeight ?? 200;
       let left = align === "end" ? r.right - w : r.left;
       left = Math.max(8, Math.min(left, vw - w - 8));
       let top = r.bottom + 6;
       if (top + h > vh - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
-      setPos({ top, left });
+      // Still too tall for either side: keep it on screen and let it scroll.
+      top = Math.max(8, Math.min(top, vh - Math.min(h, vh - 16) - 8));
+      setPos({ top, left, maxHeight: vh - 16 });
     };
     place();
     window.addEventListener("scroll", place, true);
@@ -369,9 +602,21 @@ export function Anchored({
       />
       <div
         ref={ref}
+        role={kind}
+        aria-modal={kind === "dialog" ? true : undefined}
+        aria-label={labelledBy ? undefined : label ?? anchor.getAttribute("aria-label") ?? (anchor.textContent?.trim() || undefined)}
+        aria-labelledby={labelledBy}
+        tabIndex={-1}
         className={`tp-pop ${className}`}
-        style={{ width: Math.min(width, typeof window === "undefined" ? width : window.innerWidth - 16), top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
+        style={{
+          width: Math.min(width, typeof window === "undefined" ? width : window.innerWidth - 16),
+          top: pos?.top ?? -9999,
+          left: pos?.left ?? -9999,
+          maxHeight: pos?.maxHeight,
+          overflowY: "auto",
+        }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={kind === "menu" ? menuKeys : undefined}
       >
         {children}
       </div>
@@ -380,8 +625,36 @@ export function Anchored({
   );
 }
 
-/** Bottom sheet on phones. */
-export function Sheet({ title, onClose, children, footer, full }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; full?: boolean }) {
+/**
+ * A bottom sheet on phones. With `dialog`, the same content is a centered dialog on wider
+ * screens. `onClose` runs for the X, a tap on the dimmed page and Escape.
+ */
+export function Sheet({
+  title,
+  onClose,
+  children,
+  footer,
+  full,
+  dialog,
+  className = "",
+  restore,
+}: {
+  title: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  full?: boolean;
+  /** A centered dialog above 767px (phones keep the sheet). */
+  dialog?: boolean;
+  className?: string;
+  restore?: () => HTMLElement | null;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const tid = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  // The sheet itself takes focus (unless a field inside asked for it), so a screen reader starts at its title.
+  useLayer(ref, { onEscape: () => closeRef.current(), tab: "trap", restore, first: (root) => root });
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -390,11 +663,21 @@ export function Sheet({ title, onClose, children, footer, full }: { title: React
     };
   }, []);
   return createPortal(
-    <div className="tp-sheet-wrap" onClick={onClose}>
-      <div className={`tp-sheet${full ? " tp-sheet-full" : ""}`} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+    <div className={`tp-sheet-wrap${dialog ? " tp-sheet-dialog" : ""}`} onClick={onClose}>
+      <div
+        ref={ref}
+        tabIndex={-1}
+        className={`tp-sheet${full ? " tp-sheet-full" : ""}${className ? ` ${className}` : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={tid}
+        onClick={(e) => e.stopPropagation()}
+      >
         <span className="tp-sheet-grab" aria-hidden />
         <div className="tp-sheet-head">
-          <div className="tp-sheet-title">{title}</div>
+          <div className="tp-sheet-title" id={tid}>
+            {title}
+          </div>
           <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Close" onClick={onClose}>
             <IconX />
           </button>
@@ -404,6 +687,135 @@ export function Sheet({ title, onClose, children, footer, full }: { title: React
       </div>
     </div>,
     document.body,
+  );
+}
+
+/* ---------- a toast with Undo ---------- */
+
+type UndoToast = { id: number; text: string; run: () => Promise<unknown> };
+let undoNow: UndoToast | null = null;
+const undoSubs = new Set<() => void>();
+const undoSet = (u: UndoToast | null) => {
+  undoNow = u;
+  undoSubs.forEach((f) => f());
+};
+/** How long a fact a member just added can be taken back from its toast. */
+export const UNDO_MS = 10_000;
+
+/** Show "Added the HQ. You earned 1 credit." with Undo for 10 seconds. A newer one replaces it. */
+export function showUndo(text: string, run: () => Promise<unknown>) {
+  const id = Date.now() + Math.random();
+  undoSet({ id, text, run });
+  setTimeout(() => undoNow?.id === id && undoSet(null), UNDO_MS);
+}
+
+/**
+ * Renders the Undo toast inside the app's toast region (role=status, so it is announced), next
+ * to the other toasts. Mount it once (the top bar does).
+ */
+export function UndoHost() {
+  const u = useSyncExternalStore(
+    (f) => (undoSubs.add(f), () => undoSubs.delete(f)),
+    () => undoNow,
+    () => null,
+  );
+  const [busy, setBusy] = useState(false);
+  const [host, setHost] = useState<Element | null>(null);
+  useEffect(() => setHost(document.querySelector(".toasts")), [u]);
+  const undo = useCallback(async () => {
+    if (!u) return;
+    setBusy(true);
+    await u.run();
+    setBusy(false);
+    if (undoNow?.id === u.id) undoSet(null);
+  }, [u]);
+  if (!u || !host) return null;
+  return createPortal(
+    <div className="toast toast-act" key={u.id}>
+      <span className="toast-t">{u.text}</span>
+      <button type="button" className="toast-btn" disabled={busy} onClick={undo}>
+        {busy ? "Undoing" : "Undo"}
+      </button>
+    </div>,
+    host,
+  );
+}
+
+/* ---------- the fact sheet (phones) ---------- */
+
+/**
+ * Phones: a tap on a fact the member can see opens this sheet, with the value and two 44px rows,
+ * "This is right" and "This is wrong", so Confirm and Report never sit on the row next to a lock.
+ * The member's own fact gets "Edit" instead. Desktop keeps them inline in the record.
+ */
+export function FactSheet({ t, cell, label, company, onClose }: { t: FactRef; cell: Cell; label: string; company?: string; onClose: () => void }) {
+  const ui = useUi();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (cell.s !== "value") return null;
+  const canCheck = !cell.mine && !cell.member?.you && !cell.system;
+  const source = cell.ver > 0 ? `Confirmed by ${plural(cell.ver, "member")}` : cell.from && FROM_SAY[cell.from] ? FROM_SAY[cell.from] : cell.mine ? "You added this" : null;
+  const run = async (a: Action) => {
+    setBusy(true);
+    const r = await ui.act(a);
+    setBusy(false);
+    if (r.ok) onClose();
+  };
+  return (
+    <Sheet
+      title={
+        <span>
+          {label}
+          {company && <span className="tp-ed-co">{company}</span>}
+        </span>
+      }
+      onClose={onClose}
+      className="tp-fsheet"
+    >
+      <div className={`tp-fsheet-v${isMonoField(t) ? " mono" : isNumField(t) ? " num" : ""}`}>
+        <FactValue t={t} v={cell.v} />
+        {cell.member && <MemberBadge m={cell.member} />}
+      </div>
+      {source && <p className="tp-small muted">{source}</p>}
+      <div className="tp-fsheet-rows">
+        {cell.mine && (
+          <button type="button" className="tp-fsheet-row" onClick={() => (onClose(), ui.edit(document.body, t, cell.v))}>
+            Edit
+          </button>
+        )}
+        {canCheck && !asking && (
+          <>
+            {cell.iv ? (
+              <p className="tp-fsheet-row tp-fsheet-done">
+                <IconCheck size={14} /> You confirmed this
+              </p>
+            ) : (
+              <button type="button" className="tp-fsheet-row" disabled={busy} onClick={() => run({ type: "verify", ...t })}>
+                <span>This is right</span>
+                <span className="tp-fsheet-hint">Two confirmations earn the member who added it a credit</span>
+              </button>
+            )}
+            <button type="button" className="tp-fsheet-row" disabled={busy} onClick={() => setAsking(true)}>
+              <span>This is wrong</span>
+              <span className="tp-fsheet-hint">Report it for review</span>
+            </button>
+          </>
+        )}
+        {asking && (
+          <div className="tp-fsheet-ask" role="group" aria-label="Report this fact">
+            <p>Report this as wrong? It hides for you now and for everyone after a second report. You get the credit back if we remove it.</p>
+            <div className="tp-sheet-actions">
+              <button type="button" className="btn" onClick={() => setAsking(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-pine tp-grow" disabled={busy} aria-busy={busy} onClick={() => run({ type: "report", ...t })}>
+                Report it
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Sheet>
   );
 }
 
@@ -419,6 +831,9 @@ export const labelFor = (f: FieldDef) => f.label;
 /** Short label for field lists and headers ("Held by", "Revenue then"). */
 export const shortLabel = (f: FieldDef) => (f.key === "operator" ? "Held by" : f.short ?? f.label);
 
+/** ARIA for the field inside an editor: its name (the editor's title), and the error when there is one. */
+export type FieldAria = { "aria-labelledby"?: string; "aria-invalid"?: boolean; "aria-describedby"?: string };
+
 /** The input for one field kind. Calls onSave with the raw value (choice and Ongoing save at once). */
 export function FieldInput({
   f,
@@ -428,6 +843,7 @@ export function FieldInput({
   autoFocus,
   big,
   id,
+  aria,
 }: {
   f: FieldDef;
   value: string;
@@ -436,6 +852,7 @@ export function FieldInput({
   autoFocus?: boolean;
   big?: boolean;
   id?: string;
+  aria?: FieldAria;
 }) {
   const [q, setQ] = useState("");
   const key = (e: React.KeyboardEvent) => {
@@ -458,6 +875,7 @@ export function FieldInput({
               autoFocus={autoFocus}
               placeholder={`Search ${f.label.toLowerCase()}`}
               value={q}
+              {...aria}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && opts[0]) {
@@ -467,7 +885,7 @@ export function FieldInput({
               }}
             />
           </label>
-          <div className="tp-choice-list" role="listbox">
+          <div className="tp-choice-list" role="listbox" aria-labelledby={aria?.["aria-labelledby"]}>
             {opts.map((o) => (
               <button key={o} type="button" role="option" aria-selected={value === o} className={`tp-choice-opt${value === o ? " on" : ""}`} onClick={() => onSave(o)}>
                 {o}
@@ -479,7 +897,7 @@ export function FieldInput({
       );
     }
     return (
-      <div className="tp-chips" role="listbox" aria-label={f.label}>
+      <div className="tp-chips" role="listbox" aria-label={aria?.["aria-labelledby"] ? undefined : f.label} aria-labelledby={aria?.["aria-labelledby"]}>
         {f.options.map((o, idx) => (
           <button
             key={o}
@@ -499,7 +917,7 @@ export function FieldInput({
   if (f.kind === "month" || f.kind === "monthOrOngoing")
     return (
       // The same month and year control as Your seats and the Add flow. Enter on either select saves.
-      <div className="tp-month" onKeyDown={key}>
+      <div className="tp-month" onKeyDown={key} role="group" aria-labelledby={aria?.["aria-labelledby"]}>
         <MonthYear id={id} label={f.label} value={value === "Ongoing" ? "" : value} onChange={onChange} autoFocus={autoFocus} big={big} />
         {f.kind === "monthOrOngoing" && (
           <button type="button" className={`chip tp-chipbtn${value === "Ongoing" ? " chip-on" : ""}${big ? " tp-chip-big" : ""}`} onClick={() => onSave("Ongoing")}>
@@ -514,11 +932,14 @@ export function FieldInput({
       className={`input${f.kind === "url" || f.kind === "email" ? " mono" : f.kind === "text" ? "" : " num"}${big ? " tp-input-big" : ""}`}
       type={f.kind === "number" ? "number" : f.kind === "email" ? "email" : f.kind === "phone" ? "tel" : "text"}
       inputMode={f.kind === "number" ? "numeric" : f.kind === "url" ? "url" : undefined}
+      autoCapitalize={f.kind === "url" || f.kind === "email" ? "none" : undefined}
       min={f.kind === "number" ? 1 : undefined}
       max={f.kind === "number" ? 80 : undefined}
+      maxLength={200}
       autoFocus={autoFocus}
       placeholder={f.placeholder ?? ""}
       value={value}
+      {...aria}
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={key}
     />
@@ -541,7 +962,10 @@ export interface MemberHit {
   you: boolean;
 }
 
-/** Members whose name matches, as you type (debounced). */
+/**
+ * Members whose name matches, as you type. Waits 350ms after the last key: the server allows
+ * 30 searches a minute, and answers 429 past that, in which case the last list stays up.
+ */
 function useMemberSearch(q: string, off: boolean): { hits: MemberHit[]; done: boolean } {
   const [state, setState] = useState<{ q: string; hits: MemberHit[] }>({ q: "", hits: [] });
   const query = q.trim();
@@ -550,10 +974,13 @@ function useMemberSearch(q: string, off: boolean): { hits: MemberHit[]; done: bo
     const ctl = new AbortController();
     const timer = setTimeout(() => {
       fetch(`/api/table?people=${encodeURIComponent(query)}`, { signal: ctl.signal, cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : { members: [] }))
-        .then((j: { members?: MemberHit[] }) => setState({ q: query, hits: j.members ?? [] }))
+        .then(async (r) => {
+          if (r.status === 429) return setState((s) => ({ q: query, hits: s.hits }));
+          const j: { members?: MemberHit[] } = r.ok ? await r.json() : { members: [] };
+          setState({ q: query, hits: j.members ?? [] });
+        })
         .catch(() => {});
-    }, 160);
+    }, 350);
     return () => {
       clearTimeout(timer);
       ctl.abort();
@@ -566,6 +993,7 @@ function useMemberSearch(q: string, off: boolean): { hits: MemberHit[]; done: bo
 /**
  * Who held the seat: a first and last name, matched against Trading Post members as you type.
  * Picking a member links the seat to that person (`memberId`); typing again unlinks it.
+ * A combobox: the arrow keys move through the list and the highlighted name is read out.
  */
 export function SeatHolderInput({
   value,
@@ -576,6 +1004,7 @@ export function SeatHolderInput({
   autoFocus,
   big,
   id,
+  aria,
 }: {
   value: string;
   memberId: string | null;
@@ -587,9 +1016,11 @@ export function SeatHolderInput({
   autoFocus?: boolean;
   big?: boolean;
   id?: string;
+  aria?: FieldAria;
 }) {
   const [hi, setHi] = useState(-1);
   const [picked, setPicked] = useState<MemberHit | null>(null);
+  const lid = useId();
   const linked = memberId && picked?.id === memberId ? picked : null;
   const { hits, done } = useMemberSearch(value, !!linked);
   const pick = (m: MemberHit) => {
@@ -598,7 +1029,7 @@ export function SeatHolderInput({
     onChange(m.name, m.id);
     onPick?.(m);
   };
-  const words = value.trim().split(/\s+/).filter(Boolean).length;
+  const open = hits.length > 0 && !linked;
   return (
     <div className="tp-seat">
       <input
@@ -606,9 +1037,14 @@ export function SeatHolderInput({
         className={`input${big ? " tp-input-big" : ""}`}
         autoFocus={autoFocus}
         autoComplete="off"
+        maxLength={200}
         placeholder="First and last name"
+        role="combobox"
         aria-autocomplete="list"
-        aria-expanded={hits.length > 0}
+        aria-expanded={open}
+        aria-controls={open ? lid : undefined}
+        aria-activedescendant={open && hi >= 0 ? `${lid}-${hi}` : undefined}
+        {...aria}
         value={value}
         onChange={(e) => {
           setHi(-1);
@@ -629,7 +1065,7 @@ export function SeatHolderInput({
         }}
       />
       {linked ? (
-        <div className="tp-seat-linked">
+        <div className="tp-seat-linked" role="status">
           <span className="tp-seat-av" style={{ background: `hsl(${hue(linked.name)} 45% 90%)`, color: `hsl(${hue(linked.name)} 45% 28%)` }}>
             {initials(linked.name)}
           </span>
@@ -641,38 +1077,51 @@ export function SeatHolderInput({
             <IconX size={14} />
           </button>
         </div>
-      ) : hits.length > 0 ? (
-        <div className="tp-seat-list" role="listbox" aria-label="Members on Trading Post">
-          <div className="tp-seat-cap">Members on Trading Post</div>
-          {hits.map((m, i) => (
-            <button
-              key={m.id}
-              type="button"
-              role="option"
-              aria-selected={i === hi}
-              className={`tp-seat-opt${i === hi ? " on" : ""}`}
-              onMouseEnter={() => setHi(i)}
-              onClick={() => pick(m)}
-            >
-              <span className="tp-seat-av" style={{ background: `hsl(${hue(m.name)} 45% 90%)`, color: `hsl(${hue(m.name)} 45% 28%)` }}>
-                {initials(m.name)}
-              </span>
-              <span className="tp-seat-who">
-                <b>{m.name}</b>
-                <span>{m.you ? "You" : m.title || "Member"}</span>
-              </span>
-            </button>
-          ))}
+      ) : open ? (
+        <div className="tp-seat-list">
+          <div className="tp-seat-cap" aria-hidden>
+            Members on Trading Post
+          </div>
+          <div id={lid} role="listbox" aria-label="Members on Trading Post">
+            {hits.map((m, i) => (
+              <button
+                key={m.id}
+                id={`${lid}-${i}`}
+                type="button"
+                role="option"
+                tabIndex={-1}
+                aria-selected={i === hi}
+                className={`tp-seat-opt${i === hi ? " on" : ""}`}
+                onMouseEnter={() => setHi(i)}
+                onClick={() => pick(m)}
+              >
+                <span className="tp-seat-av" aria-hidden style={{ background: `hsl(${hue(m.name)} 45% 90%)`, color: `hsl(${hue(m.name)} 45% 28%)` }}>
+                  {initials(m.name)}
+                </span>
+                <span className="tp-seat-who">
+                  <b>{m.name}</b>
+                  <span>{m.you ? "You" : m.title || "Member"}</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
-        done &&
-        words >= 2 && <p className="tp-seat-none">No member by that name. You can still add them.</p>
+        done && (
+          <p className="tp-seat-none" role="status">
+            Not on the list? Type their first and last name. If they are a member, the seat links to them when you save.
+          </p>
+        )
       )}
     </div>
   );
 }
 
-/** The small editor anchored to an empty cell (a bottom sheet on phones). With `initial`, it edits the member's own value. */
+/**
+ * The small editor anchored to an empty cell (a bottom sheet on phones). With `initial`, it
+ * edits the member's own value. A new fact can be taken back for 10 seconds from its toast.
+ * Escape or a tap outside with something typed asks before it throws it away.
+ */
 export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: HTMLElement; t: FactRef; company: string; initial?: string; onClose: () => void }) {
   const ui = useUi();
   const f = fieldDef(t.entity, t.field);
@@ -680,22 +1129,55 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
   const [memberId, setMemberId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const hid = useId();
+  const eid = useId();
+  const keepRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (asking) keepRef.current?.focus();
+  }, [asking]);
   if (!f) return null;
   const editing = initial !== undefined;
-  const earn = editing ? { text: "Edits earn no credit", capped: false } : earnNote(ui.me);
-  // At the cap the note is a full sentence, so it gets its own line.
-  const earnShort = earn.capped ? "No credit today" : earn.text;
+  const earns = !editing && earnsNow(ui.me, t);
+  const capped = !editing && earnNote(ui.me).capped;
+  const note = editing
+    ? "Edits earn no credit"
+    : capped
+      ? "No credit today"
+      : earns
+        ? "+1 credit"
+        : "No credit for this one today";
   const seat = t.entity === "engagement" && t.field === "operator";
+  const dirty = !saving && value.trim() !== "" && value.trim() !== (initial ?? "").trim();
+  const tryClose = () => (dirty ? setAsking(true) : onClose());
+  // After a save the add button is gone: the cell takes focus once it shows the value (see focusNext).
+  const focusValue = () => (focusNext = { k: cellKey(t.id, t.field), box: anchor.closest(".tp-drawer, .tp-rsheet"), until: Date.now() + 4000 });
   const save = async (raw: string, member: string | null = memberId) => {
     const { error, value: clean } = cleanValue(f, raw);
     if (error) return setErr(error);
     setErr(null);
     setSaving(true);
-    const ok = await ui.fill(t, clean!, seat ? member : undefined);
+    if (editing) {
+      const ok = await ui.fill(t, clean!, seat ? member : undefined);
+      setSaving(false);
+      if (ok) onClose();
+      return;
+    }
+    focusValue();
+    const wasCapped = earnNote(ui.me).capped;
+    const resets = ui.me.earnResetsAt;
+    const r = await ui.act({ type: "fill", entity: t.entity, id: t.id, field: t.field, value: clean!, ...(seat && member ? { memberId: member } : {}) }, { quiet: true });
     setSaving(false);
-    if (ok) onClose();
+    if (!r.ok) return;
+    const said = wasCapped
+      ? `Added ${sayField(f)}. No credit this time, because you've earned today's ${ui.me.earnCap}. You can earn again ${atTime(resets)}.`
+      : r.message || `Added ${sayField(f)}.`;
+    // "retract" takes the member's own new fact back, with its credit, if nobody unlocked or confirmed it yet.
+    showUndo(said, () => ui.act({ type: "retract", entity: t.entity, id: t.id, field: t.field } as unknown as Action));
+    onClose();
   };
   const simple = f.kind !== "choice";
+  const aria: FieldAria = { "aria-labelledby": hid, "aria-invalid": err ? true : undefined, "aria-describedby": err ? eid : undefined };
   const body = (
     <>
       {seat ? (
@@ -707,22 +1189,38 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
           onEnter={() => save(value)}
           autoFocus
           big={ui.layout === "phone"}
+          aria={aria}
         />
       ) : (
-        <FieldInput f={f} value={value} onChange={(v) => (setValue(v), setErr(null))} onSave={(v) => save(v)} autoFocus big={ui.layout === "phone"} />
+        <FieldInput f={f} value={value} onChange={(v) => (setValue(v), setErr(null))} onSave={(v) => save(v)} autoFocus big={ui.layout === "phone"} aria={aria} />
       )}
       {f.hint && f.hint !== f.placeholder && <p className="tp-ed-hint">{f.hint}</p>}
-      {earn.capped && <p className="tp-ed-hint">{earn.text}.</p>}
+      {capped && <p className="tp-ed-hint">{earnNote(ui.me).text}.</p>}
+      {!capped && !editing && !earns && <p className="tp-ed-hint">Only 5 answers for a company&apos;s industry, size, revenue or how they sell earn a credit each day. This one still saves.</p>}
       {err && (
-        <p className="tp-ed-err" role="alert">
+        <p className="tp-ed-err" role="alert" id={eid}>
           {err}
         </p>
       )}
     </>
   );
+  const ask = asking && (
+    <div className="tp-ed-ask" role="group" aria-label="Throw away what you typed?">
+      <span>Throw away what you typed?</span>
+      <span className="tp-ed-foot-r">
+        <button type="button" className="btn btn-sm" onClick={onClose}>
+          Throw it away
+        </button>
+        <button ref={keepRef} type="button" className="btn btn-sm btn-pine" onClick={() => setAsking(false)}>
+          Keep editing
+        </button>
+      </span>
+    </div>
+  );
   const title = (
-    <span>
+    <span id={hid}>
       {editing ? "Edit" : "Add"} {sayField(f)}
+      {company && <span className="sr-only"> at </span>}
       {company && (
         <span className="tp-ed-co" title={company}>
           {company}
@@ -730,40 +1228,45 @@ export function FactEditor({ anchor, t, company, initial, onClose }: { anchor: H
       )}
     </span>
   );
+  const noteCls = `tp-earn-note num${capped || (!editing && !earns) ? " capped" : ""}${editing ? " muted" : ""}`;
   if (ui.layout === "phone")
     return (
       <Sheet
         title={title}
-        onClose={onClose}
+        onClose={tryClose}
         footer={
-          <div className="tp-ed-foot">
-            <span className={`tp-earn-note num${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{earnShort}</span>
-            {simple && (
-              <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
-                {saving ? "Saving" : "Save"}
-              </button>
-            )}
-          </div>
+          ask || (
+            <div className="tp-ed-foot">
+              <span className={noteCls}>{note}</span>
+              {simple && (
+                <button type="button" className="btn btn-primary btn-lg" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
+                  {saving ? "Saving" : "Save"}
+                </button>
+              )}
+            </div>
+          )
         }
       >
         {body}
       </Sheet>
     );
   return (
-    <Anchored anchor={anchor} onClose={onClose} width={f.kind === "choice" || seat ? 320 : 300} className="tp-editor">
+    <Anchored anchor={anchor} onClose={tryClose} width={f.kind === "choice" || seat ? 320 : 300} className="tp-editor" labelledBy={hid}>
       <div className="tp-ed-head">{title}</div>
       {body}
-      <div className="tp-ed-foot">
-        <span className="tp-ed-keys">{simple ? "Enter saves, Esc cancels" : "Pick one, or Esc to cancel"}</span>
-        <span className="tp-ed-foot-r">
-          <span className={`tp-earn-note num${earn.capped ? " capped" : ""}${editing ? " muted" : ""}`}>{saving && !simple ? "Saving" : earnShort}</span>
-          {simple && (
-            <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
-              {saving ? "Saving" : "Save"}
-            </button>
-          )}
-        </span>
-      </div>
+      {ask || (
+        <div className="tp-ed-foot">
+          <span className="tp-ed-keys">{simple ? "Enter saves, Esc cancels" : "Pick one, or Esc to cancel"}</span>
+          <span className="tp-ed-foot-r">
+            <span className={noteCls}>{saving && !simple ? "Saving" : note}</span>
+            {simple && (
+              <button type="button" className="btn btn-primary btn-sm" disabled={saving || !value} aria-busy={saving} onClick={() => save(value)}>
+                {saving ? "Saving" : "Save"}
+              </button>
+            )}
+          </span>
+        </div>
+      )}
     </Anchored>
   );
 }
