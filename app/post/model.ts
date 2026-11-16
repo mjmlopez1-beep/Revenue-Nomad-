@@ -6,7 +6,10 @@
  * locked (someone added it) or visible.
  */
 import type { Cell, CompanyRec, EngagementRec, Friendly, Me, PersonRec } from "@/lib/tableTypes";
-import { ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCE_LABEL, type Entity } from "@/lib/tableFields";
+import {
+  BUSINESS_MODELS, ENGAGEMENT_TYPES, FRACTIONAL_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES,
+  RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCE_LABEL, type Entity,
+} from "@/lib/tableFields";
 
 export type RecordType = "companies" | "engagements" | "people";
 export type Tab = "all" | "friendly" | "hiring" | "following" | "unlocked" | "needs";
@@ -114,7 +117,7 @@ function infoOf(c: CompanyRec): CoInfo {
     ...c.people.flatMap((p) => lockedOf("contact", p.id, p.cells)),
   ];
   const isUnlocked = (cell: Cell) => cell.s === "value" && !cell.mine && !cell.system;
-  const gatedFields = ["role", "status", "operator", "end", "rate", "hours", "posting"];
+  const gatedFields = ["role", "status", "operator", "end", "sourced", "rate", "hours", "posting"];
   const personGated = ["name", "email", "phone", "linkedin"];
   const unlockedByMe =
     engs.some((e) => gatedFields.some((f) => e.cells[f] && isUnlocked(e.cells[f]))) ||
@@ -199,6 +202,12 @@ export interface Filters {
   employees: string[];
   revenue: string[];
   hq: string[];
+  businessModel: string[];
+  motion: string[];
+  dealSize: string[];
+  salesCycle: string[];
+  reason: string[];
+  pricing: string[];
   fitMin: number;
   fn: string[];
   type: string[];
@@ -217,6 +226,12 @@ export const EMPTY_FILTERS: Filters = {
   employees: [],
   revenue: [],
   hq: [],
+  businessModel: [],
+  motion: [],
+  dealSize: [],
+  salesCycle: [],
+  reason: [],
+  pricing: [],
   fitMin: 0,
   fn: [],
   type: [],
@@ -228,7 +243,21 @@ export const EMPTY_FILTERS: Filters = {
 };
 
 export type ToggleKey = "rateKnown" | "contactKnown" | "notMine" | "statusKnown" | "fractionalNamed" | "emailKnown";
-export type ListKey = "industry" | "employees" | "revenue" | "hq" | "fn" | "type" | "source" | "relationship";
+export type ListKey =
+  | "industry"
+  | "employees"
+  | "revenue"
+  | "hq"
+  | "businessModel"
+  | "motion"
+  | "dealSize"
+  | "salesCycle"
+  | "fn"
+  | "type"
+  | "reason"
+  | "pricing"
+  | "source"
+  | "relationship";
 
 export const TOGGLE_LABEL: Record<ToggleKey, string> = {
   rateKnown: "Rate known",
@@ -243,6 +272,12 @@ export const LIST_LABEL: Record<ListKey, string> = {
   employees: "Employees",
   revenue: "Revenue",
   hq: "HQ",
+  businessModel: "Business model",
+  motion: "Sales motion",
+  dealSize: "Deal size",
+  salesCycle: "Sales cycle",
+  reason: "Why hired",
+  pricing: "Pricing",
   fn: "Function",
   type: "Type",
   source: "Source",
@@ -254,6 +289,12 @@ export const LIST_OPTIONS: Record<Exclude<ListKey, "hq">, string[]> = {
   industry: RN_INDUSTRIES,
   employees: RN_EMPLOYEES,
   revenue: RN_REVENUE,
+  businessModel: BUSINESS_MODELS,
+  motion: RN_MOTIONS,
+  dealSize: RN_DEAL_SIZES,
+  salesCycle: RN_SALES_CYCLES,
+  reason: HIRE_REASONS,
+  pricing: PRICING_MODELS,
   fn: FUNCTIONS,
   type: ENGAGEMENT_TYPES,
   source: Object.keys(SOURCE_LABEL),
@@ -308,7 +349,7 @@ export function tabTest(tab: Tab, r: Row): boolean {
       return i.c.following;
     case "unlocked":
       if (r.p) return personUnlocked(r.p);
-      if (r.e) return ["role", "status", "operator", "end", "rate", "hours", "posting"].some((f) => isUnlocked(r.e!.cells[f])) || r.e.people.some(personUnlocked);
+      if (r.e) return ["role", "status", "operator", "end", "sourced", "rate", "hours", "posting"].some((f) => isUnlocked(r.e!.cells[f])) || r.e.people.some(personUnlocked);
       return i.unlockedByMe;
     case "needs":
       return COMPANY_FILL.some((f) => i.c.cells[f]?.s === "empty");
@@ -337,7 +378,14 @@ export function optionTest(key: ListKey, opt: string): Test {
     case "employees":
     case "revenue":
     case "hq":
+    case "businessModel":
+    case "motion":
+    case "dealSize":
+    case "salesCycle":
       return (r) => shown(r.i.c.cells[key]) === opt;
+    case "reason":
+    case "pricing":
+      return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => shown(e.cells[key]) === opt);
     case "fn":
       return (r) => (r.e ? shown(r.e.cells.function) === opt : r.p ? r.i.fns.includes(opt) : r.i.fns.includes(opt));
     case "type":
@@ -370,7 +418,7 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
 }
 
 const TOGGLES: ToggleKey[] = ["rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
-const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "fn", "type", "source", "relationship"];
+const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "source", "relationship"];
 
 function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   const out: Clause[] = [];
@@ -481,4 +529,6 @@ export function sortRows(rows: Row[], sort: SortKey, needsFirst = false): Row[] 
 /* ---------- facts to add ---------- */
 
 export const COMPANY_FILL = ["website", "industry", "employees", "revenue", "hq", "linkedin"];
-export const ENG_FIELDS = ["role", "status", "operator", "start", "end", "rate", "hours", "posting", "revenue", "employees"];
+export const ENG_FIELDS = ["role", "status", "operator", "start", "end", "reason", "sourced", "pricing", "rate", "hours", "posting", "revenue", "employees"];
+/** How the company sells (Revenue Nomad's standard lists), shown as its own block. */
+export const COMPANY_GTM = ["businessModel", "motion", "dealSize", "salesCycle"];

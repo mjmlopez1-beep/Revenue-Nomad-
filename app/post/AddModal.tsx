@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ENGAGEMENT_TYPES, FUNCTIONS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, STATUSES, cleanValue, fieldDef,
+  ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
 } from "@/lib/tableFields";
 import { CompanyLogo, IconCheck, IconSearch, IconX, fmtMonth, val } from "../ui/shared";
 import { COMPANY_FILL, shown, type CoInfo } from "./model";
@@ -137,7 +137,7 @@ function NewCompany({
 
 /* ---------- step 2: what you know there ---------- */
 
-const ENG_ORDER = ["function", "role", "type", "status", "start", "end", "rate", "hours", "operator"] as const;
+const ENG_ORDER = ["function", "role", "type", "status", "reason", "sourced", "pricing", "start", "end", "rate", "hours", "operator"] as const;
 
 function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void }) {
   const ui = useUi();
@@ -203,6 +203,18 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
       <div className="tp-form-row">
         <Lbl text="Status" filled={!!v.status} />
         <Chips options={STATUSES} value={v.status ?? ""} onPick={set("status")} label="Status" />
+      </div>
+      <div className="tp-form-row">
+        <Lbl text="Why they hired" filled={!!v.reason} />
+        <Chips options={HIRE_REASONS} value={v.reason ?? ""} onPick={set("reason")} label="Why they hired" />
+      </div>
+      <div className="tp-form-row">
+        <Lbl text="How it was sourced" filled={!!v.sourced} />
+        <Chips options={SOURCED_VIA} value={v.sourced ?? ""} onPick={set("sourced")} label="How it was sourced" />
+      </div>
+      <div className="tp-form-row">
+        <Lbl text="Pricing model" filled={!!v.pricing} />
+        <Chips options={PRICING_MODELS} value={v.pricing ?? ""} onPick={set("pricing")} label="Pricing model" />
       </div>
       <div className="tp-form-2">
         <div className="tp-form-row">
@@ -394,7 +406,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
   const suggestions = useMemo(
     () =>
       infos
-        .filter((x) => x.c.facts.missing > 0)
+        .filter((x) => !x.c.hidden && x.c.facts.missing > 0)
         .sort((a, b) => Number(b.c.following) - Number(a.c.following) || b.c.friendly.score - a.c.friendly.score)
         .slice(0, 5),
     [infos],

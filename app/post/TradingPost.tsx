@@ -27,6 +27,7 @@ import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
 import { AddModal } from "./AddModal";
 import { MyCredits, inviteLink, signInLink, useCopy } from "./Credits";
+import { Benchmarks } from "./Benchmarks";
 import { Checklist, CreditBanner, NoResults, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import "./post.css";
@@ -73,7 +74,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   // The input stays instant; the list behind it renders when the main thread is free.
   const q = useDeferredValue(query);
   const [limit, setLimit] = useState(PAGE);
-  const [page, setPage] = useState<"table" | "credits">("table");
+  const [page, setPage] = useState<"table" | "credits" | "rates">("table");
 
   /* ----- overlays ----- */
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
@@ -574,6 +575,10 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
           <main className="tp-main tp-main-page">
             <MyCredits view={view} onBack={() => setPage("table")} />
           </main>
+        ) : page === "rates" ? (
+          <main className="tp-main tp-main-page">
+            <Benchmarks view={view} onBack={() => setPage("table")} />
+          </main>
         ) : phone ? (
           <main className="tp-main tp-main-phone">
             {banners}
@@ -763,6 +768,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
             items={[
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
               { label: "My credits", onClick: () => (setDrawer(null), setPage("credits")) },
+              { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
               { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. Keep it private.") },
               { label: "Sign out", onClick: () => void signOut() },

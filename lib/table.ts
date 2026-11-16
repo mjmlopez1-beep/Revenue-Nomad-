@@ -34,13 +34,14 @@ import path from "path";
 import { gunzipSync } from "zlib";
 import { createDecipheriv, createHash, createHmac, randomBytes } from "crypto";
 import { iconDomains } from "./companyIcons";
+import { readRate } from "./rates";
 import { snapshot } from "./backup";
 import { emailEnabled } from "./email";
 import {
   ALL_FIELDS, EARN_CAP, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf, stripInvisible,
-  HIDDEN_COMPANY, type Entity,
+  HIDDEN_COMPANY, LEGACY_VALUES, RN_EMPLOYEES, type Entity,
 } from "./tableFields";
-import type { Action, ActionResult, Cell, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec, View } from "./tableTypes";
+import type { Action, ActionResult, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec, View } from "./tableTypes";
 
 export type { Action, ActionResult, View } from "./tableTypes";
 
@@ -206,7 +207,11 @@ export async function loadSeed(): Promise<Seed> {
       console.error("RN_INTEL_SEED_B64 is set but could not be decoded; falling back to demo data.");
     }
   }
-  seedCache = { seed: seed ?? DEMO_SEED, at: Date.now() };
+  const out = seed ?? DEMO_SEED;
+  for (const r of [...out.companies, ...out.engagements]) {
+    for (const [k, map] of Object.entries(LEGACY_VALUES)) if (r.fields[k] && map[r.fields[k]]) r.fields[k] = map[r.fields[k]];
+  }
+  seedCache = { seed: out, at: Date.now() };
   return seedCache.seed;
 }
 
@@ -230,6 +235,11 @@ export async function loadState(): Promise<State> {
     // confirmation bonus used to be recorded as 0 and never paid. Hold it instead, so it is
     // paid as the member's daily room opens.
     s.held ??= [];
+    // Values saved under an older label (e.g. revenue "< $1M") take the current one.
+    for (const [k, v] of Object.entries(s.values)) {
+      const map = LEGACY_VALUES[k.slice(k.lastIndexOf(".") + 1)];
+      if (map?.[v.value]) v.value = map[v.value];
+    }
     for (const l of s.ledger) {
       if (l.delta !== 0 || (l.reason !== "referral" && l.reason !== "confirm")) continue;
       if (!s.held.some((h) => h.memberId === l.memberId && h.ref === l.ref && h.reason === l.reason))
@@ -847,7 +857,18 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const cells: Record<string, Cell> = {};
     for (const f of COMPANY_F) cells[f.key] = cell(c, "company", f.key);
     count(cells, COMPANY_F);
-    const hidden = identityHidden(g, s, idx, me, c.id);
+    // Same rule as identityHidden(), from what this loop already knows (that one scans every value).
+    const hidden =
+      !!me &&
+      !isAdmin(me) &&
+      engs.some((e) => isOpenRole(e, s)) &&
+      !mine &&
+      !(s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) &&
+      !s.companies.some((x) => x.id === c.id && x.by === me.id) &&
+      !engs.some((e) => {
+        const v = valueOf(e, s, "operator");
+        return !!v && v.status === "live" && seatMember(idx, v)?.id === me.id;
+      });
     if (hidden) {
       hiddenIds.add(c.id);
       for (const k of IDENTITY_FIELDS) if (cells[k]?.s === "value") cells[k] = { s: "locked", ver: 0 };
@@ -990,7 +1011,53 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     ledger,
     reported,
     email: emailEnabled(),
+    ...(me ? { benchmarks: benchmarks(g, s) } : {}),
   };
+}
+
+/* ---------- rate benchmarks ---------- */
+
+/** A group shows numbers only with at least this many rates in it. */
+export const BENCHMARK_MIN_N = 5;
+
+function rateStat(xs: number[]): RateStat {
+  if (xs.length < BENCHMARK_MIN_N) return { n: xs.length };
+  const s = [...xs].sort((a, b) => a - b);
+  const q = (p: number) => {
+    const i = (s.length - 1) * p;
+    const lo = Math.floor(i);
+    return Math.round(s[lo] + (s[Math.min(lo + 1, s.length - 1)] - s[lo]) * (i - lo));
+  };
+  return { n: s.length, p25: q(0.25), median: q(0.5), p75: q(0.75) };
+}
+
+/** Benchmarks from every live rate on file, whoever unlocked it: only totals leave the server. */
+function benchmarks(g: Graph, s: State): Benchmarks {
+  type Pt = { fn: string; size: string; kind: "monthly" | "hourly"; amount: number };
+  const pts: Pt[] = [];
+  for (const e of g.engagements.values()) {
+    const v = valueOf(e, s, "rate");
+    if (!v || v.status !== "live") continue;
+    const r = readRate(v.value, live(e, s, "pricing"));
+    if (!r) continue;
+    const fn = live(e, s, "function") ?? functionOf(live(e, s, "role")) ?? "Other";
+    const co = g.companies.get(e.companyId);
+    const size = live(e, s, "employees") ?? (co ? live(co, s, "employees") : null) ?? "Unknown";
+    pts.push({ fn, size, ...r });
+  }
+  const rows: BenchmarkRow[] = [];
+  for (const fn of FUNCTIONS) {
+    const mine = pts.filter((p) => p.fn === fn);
+    const row = (size: string, xs: Pt[]): BenchmarkRow => ({
+      function: fn,
+      size,
+      monthly: rateStat(xs.filter((p) => p.kind === "monthly").map((p) => p.amount)),
+      hourly: rateStat(xs.filter((p) => p.kind === "hourly").map((p) => p.amount)),
+    });
+    rows.push(row("All", mine));
+    for (const size of RN_EMPLOYEES) rows.push(row(size, mine.filter((p) => p.size === size)));
+  }
+  return { minN: BENCHMARK_MIN_N, total: pts.length, rows };
 }
 
 /* ---------- actions ---------- */

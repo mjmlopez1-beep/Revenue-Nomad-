@@ -183,7 +183,7 @@ for r in signup_rows:
 # Only published engagements are used, and an engagement the operator marked
 # "Company Anonymous" is never shown -- nor is that operator's success story about it.
 
-REVENUE = {"pre_revenue": "Pre-revenue", "under_1m": "< $1M", "1m_5m": "$1M–$5M",
+REVENUE = {"pre_revenue": "Pre-revenue", "under_1m": "Under $1M", "1m_5m": "$1M–$5M",
            "5m_20m": "$5M–$20M", "20m_50m": "$20M–$50M", "50m_plus": "$50M+"}
 ENG_TYPE = {"fractional": "Fractional", "fractional_gtm": "Fractional", "interim": "Interim",
             "advisory": "Advisory", "project": "Project"}
@@ -411,7 +411,7 @@ if args.domains:
 # the same company: they merge into one record (no redundant companies), keeping the record
 # with the most engagements; its engagements and people move with it.
 
-CLAY_REVENUE = {"0-500K": "< $1M", "500K-1M": "< $1M", "1M-5M": "$1M–$5M", "5M-10M": "$5M–$20M", "10M-25M": "$5M–$20M",
+CLAY_REVENUE = {"0-500K": "Under $1M", "500K-1M": "Under $1M", "1M-5M": "$1M–$5M", "5M-10M": "$5M–$20M", "10M-25M": "$5M–$20M",
                 "25M-75M": "$20M–$50M"}
 CLAY_SIZE = {"1": "1–10", "2-10": "1–10", "11-50": "11–50", "51-200": "51–200", "201-500": "201–500", "501-1,000": "501–1,000"}
 INDUSTRY_RULES = [

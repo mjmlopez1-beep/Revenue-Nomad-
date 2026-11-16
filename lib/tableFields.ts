@@ -24,7 +24,30 @@ export const RN_INDUSTRIES = [
   "Transportation & Logistics", "Web Development Service", "Wellness & Fitness",
 ];
 /** Revenue Nomad standard revenue stage buckets. */
-export const RN_REVENUE = ["Pre-revenue", "< $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"];
+export const RN_REVENUE = ["Pre-revenue", "Under $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"];
+/** Values stored under an older label, mapped to the current one when data loads. */
+export const LEGACY_VALUES: Record<string, Record<string, string>> = { revenue: { "< $1M": "Under $1M" } };
+
+/* Revenue Nomad's standard pick lists (same as the platform's buyer profile), so the data lines up. */
+export const RN_DEAL_SIZES = ["Under $15K", "$15K–$50K", "$50K–$150K", "$150K+"];
+export const RN_SALES_CYCLES = ["Under 5 days", "5–30 days", "30–90 days", "3–6 months", "6–12 months", "12+ months"];
+export const RN_MOTIONS = ["PLG", "PLG to sales", "Inside sales", "Enterprise sales", "Channel"];
+export const BUSINESS_MODELS = ["B2B", "B2C", "B2B2C"];
+
+/** How the client found the fractional for this seat. */
+export const SOURCED_VIA = ["Referral", "Investor intro", "Former colleague", "Inbound", "Platform or marketplace", "Recruiter", "Cold outreach"];
+/** What the client hired the fractional to do. */
+export const HIRE_REASONS = [
+  "Build the first sales motion",
+  "Scale an existing team",
+  "Replace a departed leader",
+  "Fix RevOps or the GTM stack",
+  "Launch a new market or product",
+  "Turn around missed targets",
+  "Prepare for a raise",
+];
+/** How the seat was paid. Rate benchmarks group by it. */
+export const PRICING_MODELS = ["Monthly retainer", "Hourly", "Project fee", "Equity and cash"];
 /** Revenue Nomad standard employee count buckets. */
 export const RN_EMPLOYEES = ["1–10", "11–50", "51–200", "201–500", "501–1,000", "1,001+"];
 /** GTM functions (role categories). Free to see, so members can filter by function without unlocking the role. */
@@ -84,6 +107,10 @@ export const GROUPS: GroupDef[] = [
       { key: "hq", label: "HQ", kind: "text", gated: false, placeholder: "Chicago, IL" },
       { key: "linkedin", label: "LinkedIn", kind: "url", gated: false, placeholder: "linkedin.com/company/…" },
       { key: "about", label: "About", kind: "text", gated: false, system: true },
+      { key: "businessModel", label: "Business model", kind: "choice", gated: false, options: BUSINESS_MODELS },
+      { key: "motion", label: "Sales motion", kind: "choice", gated: false, options: RN_MOTIONS },
+      { key: "dealSize", label: "Average deal size", short: "Deal size", kind: "choice", gated: false, options: RN_DEAL_SIZES },
+      { key: "salesCycle", label: "Average sales cycle", short: "Sales cycle", kind: "choice", gated: false, options: RN_SALES_CYCLES },
     ],
   },
   {
@@ -105,6 +132,9 @@ export const GROUPS: GroupDef[] = [
       },
       { key: "start", label: "Start", kind: "month", gated: false },
       { key: "end", label: "End", kind: "monthOrOngoing", gated: true },
+      { key: "reason", label: "Why they hired", short: "Why hired", kind: "choice", gated: false, options: HIRE_REASONS, hint: "What the fractional was brought in to do" },
+      { key: "sourced", label: "How it was sourced", short: "Sourced via", kind: "choice", gated: true, options: SOURCED_VIA, hint: "How the client found the fractional" },
+      { key: "pricing", label: "Pricing model", short: "Pricing", kind: "choice", gated: false, options: PRICING_MODELS },
       { key: "rate", label: "Rate", kind: "text", gated: true, placeholder: "$8k/mo" },
       { key: "hours", label: "Hours per week", short: "Hrs/wk", kind: "number", gated: true, placeholder: "15" },
       { key: "posting", label: "Job posting", short: "Posting", kind: "url", gated: true, placeholder: "Link to the job post" },

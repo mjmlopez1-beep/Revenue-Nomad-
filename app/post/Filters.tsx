@@ -37,6 +37,17 @@ function Toggle({ k, f, setF, n }: { k: ToggleKey; f: Filters; setF: (f: Filters
   );
 }
 
+/** A list filter that only appears once some record has a value for it (new fields start empty). */
+function ListBlock({ k, title, f, setF, counts }: { k: ListKey; title: string; f: Filters; setF: (f: Filters) => void; counts: Record<string, number> }) {
+  if (!f[k].length && !Object.values(counts).some((n) => n > 0)) return null;
+  return (
+    <div className="tp-fblock">
+      <div className="tp-flabel">{title}</div>
+      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as Exclude<ListKey, "hq">]} />
+    </div>
+  );
+}
+
 function ChipSet({ k, f, setF, counts, label = (o: string) => o, options }: { k: ListKey; f: Filters; setF: (f: Filters) => void; counts: Record<string, number>; label?: (o: string) => string; options: string[] }) {
   const sel = f[k];
   return (
@@ -197,6 +208,10 @@ export function FilterPanel({
           <ChipSet k="revenue" f={f} setF={setF} counts={l.revenue} options={LIST_OPTIONS.revenue} />
         </div>
         <Hq f={f} setF={setF} counts={l.hq} />
+        <ListBlock k="businessModel" title="Business model" f={f} setF={setF} counts={l.businessModel} />
+        <ListBlock k="motion" title="Sales motion" f={f} setF={setF} counts={l.motion} />
+        <ListBlock k="dealSize" title="Average deal size" f={f} setF={setF} counts={l.dealSize} />
+        <ListBlock k="salesCycle" title="Average sales cycle" f={f} setF={setF} counts={l.salesCycle} />
         <div className="tp-fblock">
           <div className="tp-flabel">Fit score</div>
           <div className="tp-fchips">
@@ -224,6 +239,8 @@ export function FilterPanel({
           <ChipSet k="type" f={f} setF={setF} counts={l.type} options={LIST_OPTIONS.type} />
         </div>
         <Toggle k="statusKnown" f={f} setF={setF} n={t.statusKnown} />
+        <ListBlock k="reason" title="Why they hired" f={f} setF={setF} counts={l.reason} />
+        <ListBlock k="pricing" title="Pricing model" f={f} setF={setF} counts={l.pricing} />
         <div className="tp-fblock">
           <div className="tp-flabel">Source</div>
           <ChipSet k="source" f={f} setF={setF} counts={l.source} options={LIST_OPTIONS.source} label={(o) => SOURCE_LABEL[o] ?? o} />

@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
 import { CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
-import { COMPANY_FILL, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, shown, type CoInfo, type FactRef } from "./model";
+import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, shown, type CoInfo, type FactRef } from "./model";
 import { EditPill, FactCell, earnNote, shortLabel, useUi } from "./ui";
 import { Fit, HiddenCompany } from "./Tables";
 import { plural } from "./hooks";
@@ -80,7 +80,7 @@ function FieldRow({ t, cell, label }: { t: FactRef; cell: Cell; label: string })
 }
 
 /** Empty fields people add most often come first. */
-const EMPTY_FIRST = ["role", "rate", "status"];
+const EMPTY_FIRST = ["role", "reason", "rate", "status"];
 const emptyRank = (f: string) => (EMPTY_FIRST.includes(f) ? EMPTY_FIRST.indexOf(f) : EMPTY_FIRST.length);
 
 /**
@@ -514,6 +514,12 @@ export function Drawer({
             <p className="tp-about">{about}</p>
           </section>
         )}
+        {(!c.hidden || COMPANY_GTM.some((f) => c.cells[f]?.s !== "empty")) && (
+          <section className="tp-dsec">
+            <h3 className="tp-dsec-h">How they sell</h3>
+            <FieldList entity="company" id={c.id} cells={c.cells} fields={COMPANY_GTM} />
+          </section>
+        )}
         {(hired.length > 0 || storyFns.length > 0) && (
           <section className="tp-dsec">
             <h3 className="tp-dsec-h">Functions hired</h3>
@@ -559,7 +565,7 @@ export function Drawer({
         </section>
         <section className="tp-dsec">
           <h3 className="tp-dsec-h">
-            People at {c.name} <span className="mono tp-cnt">{c.people.length}</span>
+            People at {c.hidden ? "this company" : c.name} <span className="mono tp-cnt">{c.people.length}</span>
           </h3>
           {c.people.length === 0 && !addingPerson && <p className="tp-small muted">No decision makers on file. Add one you know and earn a credit for each fact.</p>}
           {c.people.map((p) => (

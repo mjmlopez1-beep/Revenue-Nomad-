@@ -131,6 +131,29 @@ export interface LedgerRow {
   field: string;
 }
 
+/** One benchmark cell: values only once at least `minN` rates are on file, so none can be traced back. */
+export interface RateStat {
+  n: number;
+  p25?: number;
+  median?: number;
+  p75?: number;
+}
+export interface BenchmarkRow {
+  function: string;
+  /** Company size band at the time of the seat, or "All". */
+  size: string;
+  /** Monthly retainers, in dollars a month. */
+  monthly: RateStat;
+  /** Hourly rates, in dollars an hour. */
+  hourly: RateStat;
+}
+export interface Benchmarks {
+  minN: number;
+  /** Rates on file that could be read as monthly or hourly. */
+  total: number;
+  rows: BenchmarkRow[];
+}
+
 export interface View {
   demo: boolean;
   me: Me | null;
@@ -170,6 +193,8 @@ export interface View {
   }[];
   /** Whether sign-in emails can be sent (an email provider is configured). */
   email: boolean;
+  /** Rate benchmarks by function and company size (signed in only). */
+  benchmarks?: Benchmarks;
 }
 
 export type Action =

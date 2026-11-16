@@ -629,6 +629,49 @@ section("hidden", async () => {
   }
 });
 
+section("gtm", async () => {
+  const G = await member("Gia Gtm", ip(90));
+  const v = await G.view();
+  const co = v.companies.find((c) => !c.hidden && ["businessModel", "motion", "dealSize", "salesCycle"].every((k) => c.cells[k]?.s === "empty"));
+  if (!co) return fail("gtm: no company with empty GTM fields");
+  check("companies carry the new GTM fields, empty and free", ["businessModel", "motion", "dealSize", "salesCycle"].every((k) => co.cells[k]?.s === "empty"));
+  const ok = [];
+  for (const [k, val] of [["businessModel", "B2B"], ["motion", "PLG to sales"], ["dealSize", "$15K–$50K"], ["salesCycle", "30–90 days"]]) ok.push((await G.act({ type: "fill", entity: "company", id: co.id, field: k, value: val })).status);
+  check("business model, sales motion, deal size and sales cycle save from Revenue Nomad's lists", ok.every((x) => x === 200), ok);
+  const bad = await G.act({ type: "fill", entity: "company", id: v.companies.find((c) => !c.hidden && c.cells.dealSize?.s === "empty" && c.id !== co.id).id, field: "dealSize", value: "$20K" });
+  check("a deal size outside the list is refused", bad.status === 400, bad.json);
+  check("revenue uses the standard 'Under $1M' label", !JSON.stringify(v.companies.map((c) => c.cells.revenue)).includes("< $1M"));
+  const host = v.companies.filter((c) => !c.hidden && c.id !== co.id)[3];
+  const add = await G.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { function: "Sales", reason: "Build the first sales motion", sourced: "Investor intro", pricing: "Monthly retainer" } });
+  const e = (await G.view()).companies.find((c) => c.id === host.id).engagements.find((x) => x.id === add.json?.id);
+  check("an engagement takes why they hired, how it was sourced and pricing model", add.status === 200 && e?.cells.reason?.v === "Build the first sales motion" && e?.cells.sourced?.v === "Investor intro" && e?.cells.pricing?.v === "Monthly retainer", e?.cells);
+  const other = await (await member("Oli Other", ip(91))).view();
+  const oe = other.companies.find((c) => c.id === host.id).engagements.find((x) => x.id === add.json?.id);
+  check("how it was sourced is locked for others; why hired and pricing are free", oe?.cells.sourced?.s === "locked" && oe?.cells.reason?.s === "value" && oe?.cells.pricing?.s === "value", oe?.cells);
+});
+
+section("benchmarks", async () => {
+  const R = await member("Rae Rates", ip(92));
+  const v = await R.view();
+  check("signed-in views carry benchmarks", !!v.benchmarks && v.benchmarks.minN === 5 && Array.isArray(v.benchmarks.rows));
+  const anon = await call("GET", "/api/table", { ipAddr: ip(93) });
+  check("signed-out views carry no benchmarks", !anon.json?.benchmarks);
+  const rowOf = (view) => view.benchmarks.rows.find((r) => r.function === "Enablement" && r.size === "All");
+  const base = rowOf(v).monthly.n;
+  const hosts = v.companies.filter((c) => !c.hidden).slice(10, 10 + Math.max(0, 5 - base));
+  const rates = ["$6k/mo", "$8k/mo", "$9k per month", "$10k/mo", "$12,000 monthly"];
+  let i = 0;
+  for (const c of hosts) {
+    if (i === hosts.length - 1) {
+      const pre = rowOf(await R.view()).monthly;
+      check("a group with fewer than 5 rates shows no numbers", pre.median === undefined && pre.n === 4, pre);
+    }
+    await R.act({ type: "add", company: c.name, newEngagement: true, engagementFields: { function: "Enablement", pricing: "Monthly retainer", rate: rates[i++] } });
+  }
+  const m = rowOf(await R.view()).monthly;
+  check("5 rates show a median and middle half", m.n >= 5 && typeof m.median === "number" && m.p25 <= m.median && m.median <= m.p75, m);
+});
+
 section("load", async () => {
   const accounts = [];
   for (let i = 0; i < 50; i++) accounts.push(await member(`Load Tester${i}`, ip(150 + Math.floor(i / 10))));
