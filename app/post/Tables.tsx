@@ -7,6 +7,7 @@ import { SOURCE_LABEL } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconStar, fmtMonth } from "../ui/shared";
 import { fitReason, fitTier, isOpenSeat, recentSeats, shown, type CoInfo, type Row } from "./model";
 import { FactCell, earnNote, useUi } from "./ui";
+import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 
 /** How fractional friendly a company is, as a plain label. Hover for the reason and the score. */
 export function Fit({ i, big }: { i: CoInfo; big?: boolean }) {
@@ -97,7 +98,7 @@ function SeatCell({ i }: { i: CoInfo }) {
   return (
     <span className="tp-seat">
       <FactCell t={{ entity: "engagement", id: e.id, field: "role" }} cell={e.cells.role} addLabel="Add role" />
-      {start && <span className="mono tp-faint">{fmtMonth(start)}</span>}
+      {e.opened ? <RoleDate e={e} /> : start && <span className="mono tp-faint">{fmtMonth(start)}</span>}
     </span>
   );
 }
@@ -179,7 +180,7 @@ const EngRow = memo(function EngRow({ r, sel, onOpen }: { r: Row; sel: boolean; 
       <td>{cellOf("role")}</td>
       <td>{cellOf("type")}</td>
       <td>
-        <FactCell t={t("status")} cell={e.cells.status} render={(v) => <span className={`tp-status s-${v.split(" ")[0].toLowerCase()}`}>{v}</span>} />
+        {datesAreStatus(e) ? <RoleDate e={e} /> : <FactCell t={t("status")} cell={e.cells.status} render={statusText} />}
       </td>
       <td>
         <HeldBy e={e} />

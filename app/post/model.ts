@@ -69,6 +69,15 @@ export interface CoInfo {
 }
 
 const informative = (e: EngagementRec) => Object.values(e.cells).filter(known).length;
+
+/** Engagement facts that cost a credit (hours per week is free). Same list as the gated fields in lib/tableFields.ts. */
+export const ENG_GATED = ["role", "status", "operator", "end", "sourced", "rate", "posting"];
+const isUnlocked = (c?: Cell) => !!c && c.s === "value" && !c.mine && !c.system;
+/**
+ * The member spent a credit on this engagement. Their own seat is free to them, and a followed
+ * role's status is free for everyone, so neither counts.
+ */
+const engUnlocked = (e: EngagementRec) => !e.yours && ENG_GATED.some((f) => !(f === "status" && e.opened) && isUnlocked(e.cells[f]));
 const startOf = (e: EngagementRec) => shown(e.cells.start) ?? "";
 
 export function engagementsNewest(c: CompanyRec): EngagementRec[] {
@@ -116,12 +125,8 @@ function infoOf(c: CompanyRec): CoInfo {
     ...engs.flatMap(lockedInEngagement),
     ...c.people.flatMap((p) => lockedOf("contact", p.id, p.cells)),
   ];
-  const isUnlocked = (cell: Cell) => cell.s === "value" && !cell.mine && !cell.system;
-  const gatedFields = ["role", "status", "operator", "end", "sourced", "rate", "hours", "posting"];
   const personGated = ["name", "email", "phone", "linkedin"];
-  const unlockedByMe =
-    engs.some((e) => gatedFields.some((f) => e.cells[f] && isUnlocked(e.cells[f]))) ||
-    people.some(({ p }) => personGated.some((f) => p.cells[f] && isUnlocked(p.cells[f])));
+  const unlockedByMe = engs.some(engUnlocked) || people.some(({ p }) => personGated.some((f) => p.cells[f] && isUnlocked(p.cells[f])));
   const parts: string[] = [c.name, domain ?? "", ...fns];
   for (const cell of Object.values(c.cells)) if (cell.s === "value") parts.push(cell.v);
   for (const e of engs) {
@@ -148,8 +153,8 @@ export function deriveAll(companies: CompanyRec[]): CoInfo[] {
   });
 }
 
-/** An open role: nobody holds the seat yet. */
-export const isOpenSeat = (e: EngagementRec) => e.source === "Demand scan" || shown(e.cells.status) === "Open role";
+/** An open role: nobody holds the seat yet. A followed role whose posting came down is no longer one. */
+export const isOpenSeat = (e: EngagementRec) => !e.closed && (e.source === "Demand scan" || shown(e.cells.status) === "Open role");
 
 /**
  * Fractional seats (open roles included) that started in the last two years. The server sends
@@ -208,6 +213,8 @@ export interface Filters {
   salesCycle: string[];
   reason: string[];
   pricing: string[];
+  /** Roles the weekly scan follows: open now, or closed. */
+  roleState: string[];
   fitMin: number;
   fn: string[];
   type: string[];
@@ -232,6 +239,7 @@ export const EMPTY_FILTERS: Filters = {
   salesCycle: [],
   reason: [],
   pricing: [],
+  roleState: [],
   fitMin: 0,
   fn: [],
   type: [],
@@ -256,6 +264,7 @@ export type ListKey =
   | "type"
   | "reason"
   | "pricing"
+  | "roleState"
   | "source"
   | "relationship";
 
@@ -278,12 +287,23 @@ export const LIST_LABEL: Record<ListKey, string> = {
   salesCycle: "Sales cycle",
   reason: "Why hired",
   pricing: "Pricing",
+  roleState: "Open roles",
   fn: "Function",
   type: "Type",
   source: "Source",
   relationship: "Relationship",
 };
 export const FIT_STEPS = [0, 20, 40, 60, 80];
+/** Followed roles by where they stand: the posting is still up, or it came down. */
+export const ROLE_STATES = ["Open now", "Closed"];
+export const hasRoleDates = (i: CoInfo) => i.engs.some((e) => !!e.opened);
+/** A YYYY-MM-DD day as a local date, so the day shown is the day stored. */
+export const dayOf = (iso: string) => {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+/** Days between the first day a posting was seen and the day it came down (at least 1). */
+export const daysListed = (opened: string, closed: string) => Math.max(1, Math.round((dayOf(closed).getTime() - dayOf(opened).getTime()) / 86_400_000));
 
 export const LIST_OPTIONS: Record<Exclude<ListKey, "hq">, string[]> = {
   industry: RN_INDUSTRIES,
@@ -295,6 +315,7 @@ export const LIST_OPTIONS: Record<Exclude<ListKey, "hq">, string[]> = {
   salesCycle: RN_SALES_CYCLES,
   reason: HIRE_REASONS,
   pricing: PRICING_MODELS,
+  roleState: ROLE_STATES,
   fn: FUNCTIONS,
   type: ENGAGEMENT_TYPES,
   source: Object.keys(SOURCE_LABEL),
@@ -335,7 +356,6 @@ export function friendlyCo(i: CoInfo) {
   return i.c.friendly.open > 0 || i.c.friendly.tier === "High" || i.c.friendly.tier === "Medium";
 }
 
-const isUnlocked = (c?: Cell) => !!c && c.s === "value" && !c.mine && !c.system;
 const personUnlocked = (p: PersonRec) => ["name", "email", "phone", "linkedin"].some((f) => isUnlocked(p.cells[f]));
 
 export function tabTest(tab: Tab, r: Row): boolean {
@@ -349,7 +369,7 @@ export function tabTest(tab: Tab, r: Row): boolean {
       return i.c.following;
     case "unlocked":
       if (r.p) return personUnlocked(r.p);
-      if (r.e) return ["role", "status", "operator", "end", "sourced", "rate", "hours", "posting"].some((f) => isUnlocked(r.e!.cells[f])) || r.e.people.some(personUnlocked);
+      if (r.e) return engUnlocked(r.e) || r.e.people.some(personUnlocked);
       return i.unlockedByMe;
     case "needs":
       return COMPANY_FILL.some((f) => i.c.cells[f]?.s === "empty");
@@ -390,6 +410,8 @@ export function optionTest(key: ListKey, opt: string): Test {
       return (r) => (r.e ? shown(r.e.cells.function) === opt : r.p ? r.i.fns.includes(opt) : r.i.fns.includes(opt));
     case "type":
       return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => shown(e.cells.type) === opt);
+    case "roleState":
+      return (r) => (r.p ? r.i.engs : engsOf(r)).some((e) => !!e.opened && (opt === "Closed" ? !!e.closed : !e.closed));
     case "source":
       return (r) => (r.p ? r.p.source === opt : engsOf(r).some((e) => e.source === opt));
     case "relationship":
@@ -418,7 +440,7 @@ export function toggleTest(key: ToggleKey, me: Me): Test {
 }
 
 const TOGGLES: ToggleKey[] = ["rateKnown", "contactKnown", "notMine", "statusKnown", "fractionalNamed", "emailKnown"];
-const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "source", "relationship"];
+const LISTS: ListKey[] = ["industry", "employees", "revenue", "hq", "businessModel", "motion", "dealSize", "salesCycle", "fn", "type", "reason", "pricing", "roleState", "source", "relationship"];
 
 function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   const out: Clause[] = [];
@@ -501,7 +523,7 @@ export function activeChips(f: Filters): { id: string; label: string; clear: (f:
     for (const v of f[k])
       out.push({
         id: `${k}:${v}`,
-        label: `${LIST_LABEL[k]} ${k === "source" ? SOURCE_LABEL[v] ?? v : v}`,
+        label: k === "roleState" ? (v === "Closed" ? "Role closed" : "Role open now") : `${LIST_LABEL[k]} ${k === "source" ? SOURCE_LABEL[v] ?? v : v}`,
         clear: (x) => ({ ...x, [k]: x[k].filter((y) => y !== v) }),
       });
   if (f.fitMin) out.push({ id: "fit", label: `Fit ${f.fitMin}+`, clear: (x) => ({ ...x, fitMin: 0 }) });
