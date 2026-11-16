@@ -262,14 +262,27 @@ export function recentSeats(i: CoInfo): number {
  * A plain label for how fractional friendly a company is (the score still sorts). Every tier
  * is an outline chip. The solid ember "Hiring now" chip is the record header's alone (see Fit).
  */
-export function fitTier(f: Friendly, engs: number): { label: string; cls: string } {
+export function fitTier(f: Friendly, engs: number, closedPosting = false): { label: string; cls: string } {
   if (f.open) return { label: "Hiring now", cls: "t-hiring" };
   if (f.fractional >= 2 || f.functions.length >= 2) return { label: "Repeat hirer", cls: "t-repeat" };
   if (f.recent) return { label: "Recent seat", cls: "t-recent" };
   if (f.fractional) return { label: "Past seat", cls: "t-past" };
+  // They went looking for a fractional, but nobody is on file in the seat: not a hire, and not a story.
+  if (closedPosting) return { label: "Posting closed", cls: "t-past" };
   if (engs > 0) return { label: "Story only", cls: "t-story" };
   return { label: "No seats", cls: "t-none" };
 }
+
+/** A job posting the scan followed that came down with nobody named in the seat. */
+export const isClosedPosting = (e: EngagementRec) => !!e.closed && e.source === "Demand scan" && !known(e.cells.operator);
+/** The latest such posting at a company, or null. */
+export function lastClosedPosting(i: CoInfo): EngagementRec | null {
+  let best: EngagementRec | null = null;
+  for (const e of i.engs) if (isClosedPosting(e) && (!best || (e.closedAt ?? e.closed ?? "") > (best.closedAt ?? best.closed ?? ""))) best = e;
+  return best;
+}
+/** "Dec 8", in the viewer's time zone (the year when it isn't this year). */
+const shortDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}) });
 
 /** One line on why a company scores the way it does. */
 export function fitReason(i: CoInfo): string {
@@ -280,6 +293,11 @@ export function fitReason(i: CoInfo): string {
   if (seats) bits.push(`${seats} fractional seat${seats > 1 ? "s" : ""}${fns > 1 ? ` across ${fns} functions` : fns === 1 ? ` in ${f.functions[0]}` : ""}`);
   if (f.open) bits.push(`${f.open} open role${f.open > 1 ? "s" : ""} now`);
   if (!bits.length) {
+    const closed = lastClosedPosting(i);
+    if (closed) {
+      const on = closed.closedAt ? new Date(closed.closedAt) : closed.closed ? dayOf(closed.closed) : null;
+      return `A job posting here came down${on ? ` on ${shortDay(on)}` : ""}. Nobody is on file in the seat.`;
+    }
     const n = i.c.engagements.length;
     if (n) return `${n} member stor${n > 1 ? "ies mention" : "y mentions"} them. Add the seat and the score goes up.`;
     return "No seats on file yet.";
@@ -745,14 +763,17 @@ function sortBy(rows: Row[], sort: SortKey, needsFirst: boolean): Row[] {
   };
   const emp = band(RN_EMPLOYEES, "employees");
   const rev = band(RN_REVENUE, "revenue");
+  // The last tie breaks on the row's own id, never its name: unlocking a hidden company changes its
+  // name, and the row must not move while its record is open (only the Name sort reads names).
+  const byKey = (a: Row, b: Row) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
   const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
-    fit: (a, b) => score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byName(a, b),
-    newest: (a, b) => updated(b).localeCompare(updated(a)) || start(b).localeCompare(start(a)) || score(b) - score(a) || byName(a, b),
-    name: (a, b) => byName(a, b) || start(b).localeCompare(start(a)),
-    engagements: (a, b) => b.i.c.engagements.length - a.i.c.engagements.length || score(b) - score(a) || byName(a, b),
-    start: (a, b) => start(b).localeCompare(start(a)) || score(b) - score(a) || byName(a, b),
-    employees: (a, b) => emp(b) - emp(a) || score(b) - score(a) || byName(a, b),
-    revenue: (a, b) => rev(b) - rev(a) || score(b) - score(a) || byName(a, b),
+    fit: (a, b) => score(b) - score(a) || b.i.c.engagements.length - a.i.c.engagements.length || start(b).localeCompare(start(a)) || byKey(a, b),
+    newest: (a, b) => updated(b).localeCompare(updated(a)) || start(b).localeCompare(start(a)) || score(b) - score(a) || byKey(a, b),
+    name: (a, b) => byName(a, b) || start(b).localeCompare(start(a)) || byKey(a, b),
+    engagements: (a, b) => b.i.c.engagements.length - a.i.c.engagements.length || score(b) - score(a) || byKey(a, b),
+    start: (a, b) => start(b).localeCompare(start(a)) || score(b) - score(a) || byKey(a, b),
+    employees: (a, b) => emp(b) - emp(a) || score(b) - score(a) || byKey(a, b),
+    revenue: (a, b) => rev(b) - rev(a) || score(b) - score(a) || byKey(a, b),
   };
   const by = cmp[sort];
   return [...rows].sort(needsFirst ? (a, b) => b.i.c.facts.missing - a.i.c.facts.missing || by(a, b) : by);
@@ -779,8 +800,13 @@ export interface SeatInfo {
   coMissing: string[];
 }
 
-/** Facts still empty on a seat. `priv` holds the seats whose rate the member shared for the benchmarks only. */
-const seatMissing = (e: EngagementRec, priv: Set<string | null>) => SEAT_ASK.filter((f) => e.cells[f]?.s === "empty" && !(f === "rate" && priv.has(e.id)));
+/**
+ * Facts still empty on a seat. `priv` holds the seats whose rate the member shared for the
+ * benchmarks only. An Active seat has no end month yet, so its end is not missing (Your seats
+ * doesn't ask for it either).
+ */
+const seatMissing = (e: EngagementRec, priv: Set<string | null>) =>
+  SEAT_ASK.filter((f) => e.cells[f]?.s === "empty" && !(f === "rate" && priv.has(e.id)) && !(f === "end" && shown(e.cells.status) === "Active"));
 /** How many facts the member can still add on one of their own seats. */
 export const seatMissingCount = (e: EngagementRec, me: Me) => seatMissing(e, new Set(me.benchRates.map((b) => b.engagementId))).length;
 

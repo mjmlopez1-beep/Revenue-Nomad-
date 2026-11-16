@@ -15,13 +15,13 @@
  *   - an open role's role and posting are one purchase: the posting is quiet while the role is locked.
  * A lock's label never takes clicks (post.css), so only the lock's own box spends.
  */
-import { memo, useRef, type ReactNode } from "react";
+import { memo, useContext, useRef, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
 import { AddPill, CompanyLogo, IconChevron, IconLock, IconStar, fmtMonth } from "../ui/shared";
 import {
-  COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, fitReason, fitTier, isOpenRole, isUnheldOpenRole, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
+  COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
 } from "./model";
-import { FactCell, YourSeat, earnNote, useUi } from "./ui";
+import { FactCell, UiCtx, YourSeat, earnNote, useUi, type Ui } from "./ui";
 import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
 
 /**
@@ -31,7 +31,7 @@ import { RoleDate, datesAreStatus, statusText } from "./RoleDate";
  */
 export function Fit({ i, big, hot }: { i: CoInfo; big?: boolean; hot?: boolean }) {
   const f = i.c.friendly;
-  const { label, cls } = fitTier({ ...f, recent: recentSeats(i) }, i.c.engagements.length);
+  const { label, cls } = fitTier({ ...f, recent: recentSeats(i) }, i.c.engagements.length, !!lastClosedPosting(i));
   const ember = hot && f.open > 0;
   return (
     <span className={`chip tp-tier ${ember ? "chip-ember" : cls}${big ? " tp-tier-big" : ""}`} title={`${fitReason(i).replace(/\.$/, "")}. Fit score ${f.score} of 100.`}>
@@ -67,6 +67,9 @@ export function FnChips({ i, mine, max = 3, gap = true }: { i: CoInfo; mine: str
         >
           {f}
           {kind === "hiring" && <span className="tp-fn-tag"> · hiring</span>}
+          {/* Muted text alone would carry the meaning: say it for screen readers too (the tooltip says it on hover). */}
+          {kind === "story" && <span className="sr-only">, {storyWhy(i, f)}</span>}
+          {kind === "hired" && f === mine && <span className="sr-only">, your function</span>}
         </span>
       ))}
       {rest.length > 0 && (
@@ -80,11 +83,16 @@ export function FnChips({ i, mine, max = 3, gap = true }: { i: CoInfo; mine: str
 }
 
 /** Why a function is muted: only member stories mention it, or a posting for it came down with nobody named. */
-function storyTitle(i: CoInfo, fn: string) {
+const postingOnly = (i: CoInfo, fn: string) => {
   const seats = i.engs.filter((e) => shown(e.cells.function) === fn);
-  if (seats.length && seats.every((e) => e.source === "Demand scan")) return `A ${fn} job posting came down. Nobody is on file in the seat.`;
+  return seats.length > 0 && seats.every((e) => e.source === "Demand scan");
+};
+export function storyTitle(i: CoInfo, fn: string) {
+  if (postingOnly(i, fn)) return `A ${fn} job posting came down. Nobody is on file in the seat.`;
   return `A member story mentions ${fn}. No fractional ${fn} seat is on file yet.`;
 }
+/** The same, short, for a screen reader after the chip's name. */
+const storyWhy = (i: CoInfo, fn: string) => (postingOnly(i, fn) ? "from a posting that came down" : "from a member story");
 
 /** They hired fractionals in other functions, not the member's yet. Dashed, like anything missing. */
 export function NoSeatYet({ fn }: { fn: string }) {
@@ -120,12 +128,8 @@ export function UnlockCompanyCell({ i }: { i: CoInfo }) {
 
 /** Company answers whose credit counts toward the 5 a day (Me.sellEarnLeft). */
 const SELL_FIELDS = new Set(["industry", "employees", "revenue", ...COMPANY_GTM]);
-/**
- * The member holds a seat here, so its answers are not held to the 5 a day. (A company the member
- * added is exempt too, but nothing in the view says who added a company, so the "+1" stays off:
- * a missing "+1" is better than one that doesn't pay.)
- */
-export const ownCompany = (i: CoInfo) => i.engs.some((e) => e.yours);
+/** The member added this company or holds a seat here, so its answers are not held to the 5 a day. */
+export const ownCompany = (i: CoInfo) => !!i.c.added || i.engs.some((e) => e.yours);
 
 /** A locked fact that another control on the row buys, or the record: a quiet lock, never a button. */
 function Covered({ title }: { title: string }) {
@@ -328,7 +332,11 @@ const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew, gap }
     <tr {...rowProps(r, sel, onOpen)}>
       <td className="tp-sticky">
         <CompanyName i={i} following={c.following} />
-        {isNew && <span className="tp-new" title="New since your last visit" />}
+        {isNew && (
+          <span className="tp-new" title="New since your last visit">
+            <span className="sr-only">New since your last visit</span>
+          </span>
+        )}
       </td>
       <td>
         <SeatCell i={i} />
@@ -457,8 +465,19 @@ const PersonRow = memo(function PersonRow({ r, sel, onOpen }: { r: Row; sel: boo
   );
 });
 
-/** Column headers, in sentence case. `num` right-aligns the column. `tip` says what a short header means. */
-const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: SortKey }[]> = {
+/** A page of the app the shell can open (Rate benchmarks from where rates show). */
+export type AppPage = "rates" | "credits" | "seats" | "metrics";
+/**
+ * Ui.openPage, when the shell offers it (LOGIC-7). Null until then, so the links that use it
+ * stay off the screen instead of doing nothing.
+ */
+export function useOpenPage(): ((p: AppPage) => void) | null {
+  const ui = useContext(UiCtx) as (Ui & { openPage?: (p: AppPage) => void }) | null;
+  return ui?.openPage ?? null;
+}
+
+/** Column headers, in sentence case. `num` right-aligns the column. `tip` says what a short header means. `rates` links to Rate benchmarks. */
+const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: SortKey; rates?: boolean }[]> = {
   companies: [
     { label: "Company", cls: "tp-sticky w-co", sort: "name" },
     { label: "Latest seat", cls: "w-seat", sort: "start" },
@@ -469,7 +488,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "HQ", cls: "w-hq" },
     { label: "Fit", cls: "w-fit", tip: "How often they hire fractionals", sort: "fit" },
     { label: "Held by", cls: "w-op", tip: "The fractional who held the seat" },
-    { label: "Rate", cls: "w-rate num" },
+    { label: "Rate", cls: "w-rate num", rates: true },
     { label: "People", cls: "w-ppl", tip: "The decision maker on file" },
   ],
   hiringCompanies: [
@@ -494,7 +513,7 @@ const HEAD: Record<string, { label: string; cls?: string; tip?: string; sort?: S
     { label: "Held by", cls: "w-op", tip: "The fractional who held the seat" },
     { label: "Start", cls: "w-date", sort: "start" },
     { label: "End", cls: "w-date" },
-    { label: "Rate", cls: "w-rate num" },
+    { label: "Rate", cls: "w-rate num", rates: true },
     { label: "Hours a week", cls: "w-hrs num" },
     { label: "Job posting", cls: "w-post" },
   ],
@@ -550,13 +569,21 @@ export function DataTable({
 }) {
   const hiring = type !== "people" && (tab ? tab === "hiring" && allOpenRoles(rows) : allOpenRoles(rows));
   const key = hiring ? (type === "companies" ? "hiringCompanies" : "hiringEngagements") : type;
+  const openPage = useOpenPage();
   // A header that sorts is a button: name A to Z, everything else highest or newest first.
   const head: ReactNode = HEAD[key].map((h) => {
     const by = onSort && h.sort;
     const on = !!by && sort === h.sort;
     return (
       <th key={h.label} className={h.cls} scope="col" title={h.tip} aria-sort={on ? (h.sort === "name" ? "ascending" : "descending") : undefined}>
-        {by ? (
+        {h.rates && openPage ? (
+          // Where rates show, the medians are one click away (LOGIC-7).
+          <button type="button" className="tp-th-sort tp-th-link" onClick={() => openPage("rates")} title="See rate benchmarks: medians by function and client revenue">
+            {h.label}
+            <IconChevron size={12} dir="right" />
+            <span className="sr-only">. Open rate benchmarks</span>
+          </button>
+        ) : by ? (
           <button type="button" className={`tp-th-sort${on ? " on" : ""}`} onClick={() => onSort(by)} title={h.tip ? `${h.tip}. Sort by this column.` : "Sort by this column"}>
             {h.label}
             <IconChevron size={12} dir={h.sort === "name" ? "up" : "down"} />

@@ -11,6 +11,7 @@ import { IconCheck, IconChevron, IconSearch, IconX } from "../ui/shared";
 import {
   EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, namedFn, notMineLabel, placeWords, type Facets, type Filters, type ListKey, type ToggleKey,
 } from "./model";
+import { useOpenPage } from "./Tables";
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -262,6 +263,7 @@ export function FilterPanel({
   const n = activeCount(f);
   const t = facets.toggles;
   const l = facets.lists;
+  const openPage = useOpenPage();
   return (
     <div className="tp-filters">
       {head !== undefined ? (
@@ -278,6 +280,14 @@ export function FilterPanel({
       )}
       <Group title="Shortcuts">
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />
+        {openPage && (
+          <p className="tp-fnote tp-fnote-link">
+            What fractionals charge, by function and client revenue.{" "}
+            <button type="button" className="tp-flink" onClick={() => openPage("rates")}>
+              Rate benchmarks
+            </button>
+          </p>
+        )}
         <Toggle k="contactKnown" f={f} setF={setF} n={t.contactKnown} />
         {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} label={notMineLabel(me.function)} />}
         {me.function && (

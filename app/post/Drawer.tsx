@@ -23,10 +23,10 @@ import { Fragment, createContext, useContext, useEffect, useRef, useState, type 
 import type { Action, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
-import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
+import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
-import { Fit, HiddenCompany, NoSeatYet } from "./Tables";
+import { Fit, HiddenCompany, NoSeatYet, storyTitle } from "./Tables";
 import { RoleDate, fmtStamp, statusText } from "./RoleDate";
 import { atTime, plural, useMedia } from "./hooks";
 
@@ -98,14 +98,8 @@ const SELL_NOTE = "Only 5 answers a day for a company's industry, size, revenue 
 /** The day a role closed, in the viewer's time zone. */
 const closedOn = (e: EngagementRec) => (e.closedAt ? fmtStamp(e.closedAt) : e.closed ? fmtStamp(`${e.closed}T12:00:00`) : "");
 
-/**
- * Company pick lists earn without the 5 a day at a company the member holds a seat at or added.
- * Who added a company is not in the view: one the member added to that holds nothing from our
- * records or a scan is taken as theirs.
- */
-const pickExempt = (i: CoInfo) =>
-  i.engs.some((e) => e.yours) ||
-  (i.c.mine && !Object.values(i.c.cells).some((x) => (x.s === "value" || x.s === "locked") && !!x.from) && i.engs.every((e) => e.source === "Member added"));
+/** Company pick lists earn without the 5 a day at a company the member created (CompanyRec.added) or holds a seat at. */
+const pickExempt = (i: CoInfo) => !!i.c.added || i.engs.some((e) => e.yours);
 
 /** Whether adding this fact earns a credit right now (today's cap, and the 5 a day for company pick lists). */
 function earnsNow(ui: Ui, env: { exempt: boolean }, t: FactRef) {
@@ -173,9 +167,11 @@ function Provenance({ cell, source }: { cell: Cell; source: string }) {
   if (cell.s !== "value" || cell.system) return null;
   if (cell.ver > 0) {
     const say = `Confirmed by ${plural(cell.ver, "member")}`;
+    // The tick and the count are what a sighted member reads; a screen reader hears the sentence.
     return (
-      <span className="tp-ver num" title={`${source}. ${say}.`} aria-label={say}>
-        <IconCheck size={11} /> {cell.ver}
+      <span className="tp-ver num" title={`${source}. ${say}.`}>
+        <IconCheck size={11} /> <span aria-hidden>{cell.ver}</span>
+        <span className="sr-only">{say}</span>
       </span>
     );
   }
@@ -1143,7 +1139,7 @@ export function Drawer({
   const touch = phone || coarse;
   const rootRef = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
-  const headRef = useRef<HTMLElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
   const [addingPerson, setAddingPerson] = useState(false);
   // On a phone the company name joins the bar once the header has scrolled away.
   const [headGone, setHeadGone] = useState(false);
@@ -1243,17 +1239,20 @@ export function Drawer({
   const emp = val(c.cells.employees);
   const rev = val(c.cells.revenue);
   const line = [val(c.cells.industry), emp && `${emp} employees`, rev && `${rev} revenue`, val(c.cells.hq)].filter(Boolean) as string[];
-  // Functions hired fractionally, the member's own first; functions only member stories mention, muted.
+  // Functions hired fractionally, the member's own first; then the ones with an open role and no hire
+  // yet ("Hiring now"); then the ones only member stories (or a posting that came down) mention, muted.
   const fnCounts = new Map<string, number>();
   for (const e of i.engs) {
     const fn = shown(e.cells.function);
     if (fn) fnCounts.set(fn, (fnCounts.get(fn) ?? 0) + 1);
   }
   const mine = ui.me.function;
-  const hired = [...c.friendly.functions].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : (fnCounts.get(b) ?? 0) - (fnCounts.get(a) ?? 0)));
-  const storyFns = i.fns.filter((f) => !c.friendly.functions.includes(f));
-  // Never "Sales" beside "No Sales seat yet": a function a member story mentions is not a gap to point at.
-  const gap = !!mine && hired.length > 0 && !hired.includes(mine) && !storyFns.includes(mine);
+  const hired = [...i.fnState.hired].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : (fnCounts.get(b) ?? 0) - (fnCounts.get(a) ?? 0)));
+  const hiringFns = i.fnState.hiring;
+  const storyFns = i.fnState.story;
+  // Never "Sales" beside "No Sales seat yet": an open role or a member story in it is not a gap to point at.
+  const gap = !!mine && hired.length > 0 && !i.fns.includes(mine);
+  const mineNamed = namedFn(mine);
   // Where the seats came from. A role the scan found reads as a job posting, open or closed.
   const sources = [...new Set(i.engs.map((e) => SOURCE_SAY[e.source] ?? (SOURCE_LABEL[e.source] ?? e.source).toLowerCase()))];
   const follow = () => ui.act({ type: "follow", companyId: c.id, on: !c.following });
@@ -1343,12 +1342,12 @@ export function Drawer({
         </div>
         <div className="tp-dscroll" ref={scroller}>
           {c.hidden ? (
-            <header className="tp-dhead" ref={headRef}>
+            <div className="tp-dhead" ref={headRef}>
               <HiddenCompany i={i} big bare />
               {!phone && followBtn}
-            </header>
+            </div>
           ) : (
-            <header className="tp-dhead" ref={headRef}>
+            <div className="tp-dhead" ref={headRef}>
               <CompanyLogo name={c.name} domain={c.iconDomain ?? i.domain} size="lg" />
               <div className="tp-dhead-t">
                 <h2 className="tp-dname" title={c.name} tabIndex={-1}>
@@ -1372,7 +1371,7 @@ export function Drawer({
                 </div>
               </div>
               {!phone && followBtn}
-            </header>
+            </div>
           )}
           {line.length ? <div className="tp-dline num">{line.join(" · ")}</div> : <MissingFacts i={i} title={false} skip={["website", "linkedin"]} />}
           <div className="tp-dfit">
@@ -1402,24 +1401,32 @@ export function Drawer({
               <FieldList entity="company" id={c.id} cells={c.cells} fields={COMPANY_GTM} emptyNote={sellOut && gtmEmpty.length > 0 ? SELL_NOTE : undefined} />
             </section>
           )}
-          {(hired.length > 0 || storyFns.length > 0) && (
+          {(hired.length > 0 || hiringFns.length > 0 || storyFns.length > 0) && (
             <section className="tp-dsec">
-              <h3 className="tp-dsec-h">Functions hired</h3>
+              <h3 className="tp-dsec-h">{hired.length ? "Functions hired" : "Functions"}</h3>
               <div className="tp-chips">
                 {hired.map((fn) => (
                   <span key={fn} className={`chip tp-fn${fn === mine ? " tp-fn-me" : ""}`} title={seatsTitle(fnCounts.get(fn))}>
                     {fn} {(fnCounts.get(fn) ?? 0) > 1 ? <span className="num tp-cnt">{fnCounts.get(fn)}</span> : null}
+                    {fn === mine && <span className="sr-only">, your function</span>}
+                  </span>
+                ))}
+                {hiringFns.map((fn) => (
+                  <span key={fn} className="chip tp-fn tp-fn-hiring" title={`An open ${fn} role. Nobody is on file in a ${fn} seat yet.`}>
+                    {fn}
+                    <span className="tp-fn-tag"> · hiring now</span>
                   </span>
                 ))}
                 {storyFns.map((fn) => (
-                  <span key={fn} className="chip tp-fn tp-fn-story" title="A member story mentions it. No seat is on file yet.">
+                  <span key={fn} className="chip tp-fn tp-fn-story" title={storyTitle(i, fn)}>
                     {fn}
+                    <span className="tp-fn-tag"> · story</span>
                   </span>
                 ))}
                 {gap && <NoSeatYet fn={mine} />}
               </div>
-              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other GTM functions. No {mine} seat is on file yet.</p>}
-              {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">The gray ones come from member stories. No seat is on file for them yet.</p>}
+              {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other GTM functions. {mineNamed ? `No ${mineNamed} seat` : "No seat in your function"} is on file yet.</p>}
+              {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">Functions marked story come from member stories or a posting that came down. No seat is on file for them yet.</p>}
             </section>
           )}
           <section className="tp-dsec">

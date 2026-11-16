@@ -18,7 +18,7 @@
  *   STARTER        expected starter credits (default 25)
  *   CRON_SECRET    the server's RN_CRON_SECRET (default qa-cron)
  *   ONLY           comma-separated sections to run (default all): role hidden bundle status seat
- *                  report keep rate admin price twin repair dates retract company closed
+ *                  report keep rate admin price twin repair dates retract company wire closed
  *   SUPPORT_EMAIL, INTRO_EMAIL   the server's RN_SUPPORT_EMAIL and RN_INTRO_EMAIL (default: not set)
  */
 import { readFileSync } from "node:fs";
@@ -1142,6 +1142,62 @@ section("company", async () => {
   await new Promise((r) => setTimeout(r, 300));
   const after2 = await holderCell();
   check("once they sign in, the seat holder shows as a Member", !!after2?.member && after2.member.you === false, after2 ? { member: !!after2.member } : "seat not found");
+});
+
+// Round 5 wiring: the fields the client areas asked for, and the member's own seat never merged into another's.
+section("wire", async () => {
+  // CompanyRec.added: the viewer created the company (its pick lists earn without the 5 a day).
+  const A = await member("Abe Adder");
+  const B = await member("Bea Bystander");
+  const coName = `Qa Added Co ${RUN}`;
+  const made = await A.act({ type: "add", company: coName, companyFields: { industry: "SaaS" } });
+  const mine = companyNamed(await A.view(), coName);
+  const theirs = companyNamed(await B.view(), coName);
+  check("a company the member created is marked added for them", made.status === 200 && mine?.added === true, { status: made.status, added: mine?.added });
+  check("and for nobody else", !!theirs && theirs.added === undefined, theirs && { added: theirs.added });
+  const h = host(await A.view());
+  check("a company the member only added a seat to is not", (await A.act({ type: "add", company: h.name, newEngagement: true, engagementFields: { function: "Sales", type: "Fractional" } })).status === 200 && companyNamed(await A.view(), h.name)?.added === undefined);
+
+  // "Add a seat you held" (operatorMemberId "me") with the title of somebody else's seat makes the member's own seat.
+  const host2 = host(await A.view());
+  const role = "Fractional Head of RevOps";
+  const other = await A.act({ type: "add", company: host2.name, newEngagement: true, engagementFields: { function: "RevOps", role, type: "Fractional", operator: "Ola Other" } });
+  const otherId = other.json?.id;
+  const own = await B.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "RevOps", role, type: "Fractional", operator: "Bea Bystander", start: "2024-02" } });
+  const bv = await B.view();
+  const ownSeat = own.json?.id ? engOf(bv, own.json.id) : null;
+  check("a seat you held with the same title as another member's seat is its own seat", other.status === 200 && own.status === 200 && !!own.json?.id && own.json.id !== otherId && /^Added a seat at /.test(own.json?.message ?? ""), { other: other.status, own: own.json?.message, same: own.json?.id === otherId });
+  check("it is yours at once, with your name on it", ownSeat?.yours === true && ownSeat.cells.operator?.v === "Bea Bystander", ownSeat && { yours: ownSeat.yours });
+  const av = await A.view();
+  check("the other member's seat keeps its own seat holder and start", engOf(av, otherId)?.cells.operator?.v === "Ola Other" && engOf(av, otherId)?.cells.start?.s === "empty", engOf(av, otherId)?.cells.start);
+  const bench = await B.act({ type: "benchRate", engagementId: own.json?.id, pricing: "Monthly retainer", rate: "$9k/mo" });
+  check("a private rate on that seat goes in", bench.status === 200, bench.json);
+  const again = await B.act({ type: "add", company: host2.name, newEngagement: true, operatorMemberId: "me", engagementFields: { role, operator: "Bea Bystander" } });
+  check("adding the same seat of your own again goes to that seat", again.status === 200 && again.json?.id === own.json?.id, { message: again.json?.message ?? again.json?.error, same: again.json?.id === own.json?.id });
+
+  // View.reported says which facts are hidden from everyone, and a reporter's cell says they reported it.
+  const adm = await admin();
+  if (!adm) return skip("reported rows", "no admin account (set ADMIN_TOKEN)");
+  const C = await member("Cyd Caller");
+  const D = await member("Dot Caller");
+  const E = await member("Ed Elsewhere");
+  const cv = await C.view();
+  for (const who of [C, D]) await who.act(freeFill(cv));
+  const [t] = seedFacts(cv, 1);
+  const rowOf = async () => (await adm.view()).reported.find((r) => r.entity === t.entity && r.id === t.id && r.field === t.field);
+  await C.act({ type: "report", ...t });
+  const one = await rowOf();
+  const cCell = findCell(await C.view(), t.entity, t.id, t.field);
+  check("one report: listed for review, not hidden from everyone", one?.hidden === false && one.reporters.length === 1, one && { hidden: one.hidden, n: one.reporters.length });
+  check("the reporter's cell says they reported it", cCell?.s === "reported" && cCell.byMe === true, cCell);
+  await D.act({ type: "report", ...t });
+  const two = await rowOf();
+  const eCell = findCell(await E.view(), t.entity, t.id, t.field);
+  check("two reports: hidden from everyone", two?.hidden === true && two.reporters.length === 2, two && { hidden: two.hidden, n: two.reporters.length });
+  check("a member who didn't report it sees it under review, not as theirs", eCell?.s === "reported" && eCell.byMe === undefined, eCell);
+  const list = (await adm.view()).reported;
+  const firstShown = list.findIndex((r) => !r.hidden);
+  check("hidden facts come first in the review list", firstShown === -1 || list.slice(firstShown).every((r) => !r.hidden), list.map((r) => r.hidden));
 });
 
 // LOGIC-8 point 4: the posting of a role the scan closed is free to see. Runs last: its scans are dated ahead.

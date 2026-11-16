@@ -298,7 +298,7 @@ function NewCompany({
         <button type="submit" className="btn btn-primary" disabled={busy}>
           {busy ? "Adding" : "Add this company"}
         </button>
-        <EarnLine n={n} err={err} empty="The website, industry, size and revenue each earn 1 credit." />
+        <EarnLine n={n} err={err} empty={earnNote(ui.me).capped ? `You've earned today's ${ui.me.earnCap} credits. What you add still saves.` : "The website, industry, size and revenue each earn 1 credit."} />
       </div>
     </form>
   );
@@ -458,6 +458,8 @@ function EngagementForm({ i, onDone, mine, draft, setDraft }: { i: CoInfo; onDon
     }
   }, [opInvalid]);
   const emptyLine = mine ? "Pick the function or type your title to add this seat." : "Fill in the function or the role to add this seat.";
+  // Today's earning is used up: the form doesn't promise a credit per answer (the line by the button says when it opens again).
+  const earnsToday = !earnNote(ui.me).capped;
   return (
     <form
       className="tp-engform"
@@ -470,8 +472,8 @@ function EngagementForm({ i, onDone, mine, draft, setDraft }: { i: CoInfo; onDon
     >
       <p className="am-note">
         {mine
-          ? `Your seat at ${i.c.name}. Fill in what you remember and leave the rest. Each answer earns 1 credit.`
-          : `A fractional seat at ${i.c.name}, one you held or one you know about. Fill in what you know and leave the rest. Each answer earns 1 credit.`}
+          ? `Your seat at ${i.c.name}. Fill in what you remember and leave the rest.${earnsToday ? " Each answer earns 1 credit." : ""}`
+          : `A fractional seat at ${i.c.name}, one you held or one you know about. Fill in what you know and leave the rest.${earnsToday ? " Each answer earns 1 credit." : ""}`}
       </p>
       <section className="am-group" aria-label="The seat">
         <h3 className="am-h3">The seat</h3>
@@ -668,7 +670,7 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
     >
       <p className="am-note">
         Add someone at {i.c.name} a fractional would want to know, like the person who hires or who a seat reported to. Members spend 1 credit to see the name, and 1 more for each contact detail.
-        Each answer earns 1 credit.
+        {earnNote(ui.me).capped ? "" : " Each answer earns 1 credit."}
       </p>
       <div className="tp-form-2">
         {txt("name")}
@@ -702,7 +704,7 @@ function PersonForm({ i, onDone, draft, setDraft }: { i: CoInfo; onDone: (s: Sen
         <button type="submit" className="btn btn-primary" disabled={busy || !filled.length}>
           {busy ? "Adding" : "Add this person"}
         </button>
-        <EarnLine n={filled.length} err={err} empty="Start with their name. Each answer earns 1 credit." />
+        <EarnLine n={filled.length} err={err} empty={earnNote(ui.me).capped ? "Start with their name." : "Start with their name. Each answer earns 1 credit."} />
       </div>
     </form>
   );
@@ -766,7 +768,7 @@ interface Done extends Sent {
 /** The server's first sentence repeats the heading ("Added a seat at Acme."), so the panel leaves it out. */
 const restOf = (message: string, company: string) => {
   const n = company.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const head = new RegExp(`^(Added (a seat at |.*? at )?${n}\\.|${n} was already on Trading Post, so we added what you know to it\\.|That seat is already on file\\.)\\s*`);
+  const head = new RegExp(`^(Added (a seat at |.*? at )?${n}\\.|${n} was already on Trading Post, so we added what you know to it\\.|That seat (at ${n} )?is already on file\\.)\\s*`);
   return message.replace(head, "").trim();
 };
 
@@ -784,15 +786,33 @@ const FOCUSABLE = 'button:not([disabled]), input:not([disabled]):not([type="hidd
 
 /**
  * The open Add form's answer to the back gesture: true when it kept the gesture (something is
- * typed, so it put the history entry back and asks first). The listener is added when this
- * module loads, so it runs before the app's own popstate listener, which closes the top
- * overlay (TradingPost registers it when it mounts).
+ * typed, so it asks first). The popstate listener is added when this module loads, so it
+ * normally runs before the app's own (TradingPost registers it when it mounts), and it puts the
+ * history entry back. Should the app's run first, its "tp-back" event gets the same answer.
  */
-let backGuard: (() => boolean) | null = null;
-if (typeof window !== "undefined")
+let backGuard: ((putBack: boolean) => boolean) | null = null;
+/** One back gesture is answered once, whichever listener hears it first. */
+let backKept = false;
+const keepBack = (putBack: boolean) => {
+  if (backKept) return true;
+  const kept = backGuard?.(putBack) ?? false;
+  if (kept) {
+    backKept = true;
+    setTimeout(() => (backKept = false));
+  }
+  return kept;
+};
+if (typeof window !== "undefined") {
   window.addEventListener("popstate", (e) => {
-    if (backGuard?.()) e.stopImmediatePropagation();
+    if (keepBack(true)) e.stopImmediatePropagation();
   });
+  // The app asks before Back closes an overlay on phones and tablets (a cancelable "tp-back" from
+  // TradingPost). If its listener hears the popstate first, the answer is the same: keep the form,
+  // and the app puts the history entry back itself.
+  window.addEventListener("tp-back", (e) => {
+    if (keepBack(false)) e.preventDefault();
+  });
+}
 
 export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddOpts; onClose: () => void }) {
   const ui = useUi();
@@ -879,9 +899,9 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
-    backGuard = () => {
+    backGuard = (putBack) => {
       if (!dirtyRef.current || !entry.current) return false;
-      window.history.pushState(entry.current.state, "", entry.current.url);
+      if (putBack) window.history.pushState(entry.current.state, "", entry.current.url);
       setAsk({ then: () => closeRef.current() });
       return true;
     };
@@ -1111,7 +1131,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                   <>
                     <button type="button" className="am-next-b primary" onClick={onClose}>
                       <b>Back to your seats</b>
-                      <span>The new seat is there. Answer more about it and earn 1 credit each.</span>
+                      <span>{capped ? "The new seat is there. Answer more about it whenever you like." : "The new seat is there. Answer more about it and earn 1 credit each."}</span>
                     </button>
                     <button type="button" className="am-next-b" onClick={() => (setDone(null), setSelected(null), setQ(""))}>
                       <b>Add another seat you held</b>
@@ -1122,7 +1142,10 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                   <>
                     <button type="button" className="am-next-b primary" onClick={() => (setDone(null), setMode(done.what === "seat" ? "person" : "engagement"))}>
                       <b>{done.what === "seat" ? "Add a person there" : "Add a seat there"}</b>
-                      <span>{done.what === "seat" ? "Who hired for the seat, or who it reported to. 1 credit for each answer." : "A fractional seat you held or know about. 1 credit for each answer."}</span>
+                      <span>
+                        {done.what === "seat" ? "Who hired for the seat, or who it reported to." : "A fractional seat you held or know about."}
+                        {capped ? "" : " 1 credit for each answer."}
+                      </span>
                     </button>
                     <button type="button" className="am-next-b" onClick={() => (setDone(null), setMode(done.what === "seat" ? "engagement" : "person"))}>
                       <b>{done.what === "seat" ? "Add another seat" : "Add another person"}</b>

@@ -1190,9 +1190,10 @@ function cellOf(s: State, me: Member | null, node: Node | undefined, entity: Ent
   if (!v) return { s: "empty" };
   if (f.system) return { s: "value", v: v.value, ver: 0, system: true };
   const mine = !!me && v.by === me.id;
-  if (v.status === "reported") return { s: "reported", mine };
+  const byMe = !!me && !!v.reporters?.includes(me.id);
+  if (v.status === "reported") return { s: "reported", mine, ...(byMe ? { byMe } : {}) };
   // One report hides a fact only for the member who reported it.
-  if (me && v.reporters?.includes(me.id)) return { s: "reported", mine: false };
+  if (byMe) return { s: "reported", mine: false, byMe };
   const k = fkey(node!.id, f.key);
   const vers = s.verifications[k] ?? [];
   // Only members' confirmations count. A fact from our own records or the scan says where it came from instead.
@@ -1566,6 +1567,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
 
   const companies: CompanyRec[] = [];
   const hiddenIds = new Set<string>();
+  /** Companies the viewer created (the same test as exemptPick in perform). */
+  const addedByMe = new Set(me ? s.companies.filter((x) => x.by === me.id).map((x) => x.id) : []);
   let peopleCount = 0;
   for (const c of g.companies.values()) {
     const facts = { known: 0, locked: 0, missing: 0 };
@@ -1638,7 +1641,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       !engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e)) &&
       !mine &&
       !(s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) &&
-      !s.companies.some((x) => x.id === c.id && x.by === me.id) &&
+      !addedByMe.has(c.id) &&
       !holdsSeat;
     if (hidden) {
       hiddenIds.add(c.id);
@@ -1665,6 +1668,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       mine,
       // Paid to see it while it was hidden (Unlock company, or its open role's title or posting: one purchase, recorded on the company).
       ...(me && (s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) ? { unlocked: true } : {}),
+      ...(addedByMe.has(c.id) ? { added: true } : {}),
     });
   }
   companies.sort((a, b) => b.friendly.score - a.friendly.score || a.name.localeCompare(b.name));
@@ -1704,10 +1708,11 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         addedBy: v.by === "seed" ? "Revenue Nomad records" : v.by === "scan" ? "Weekly scan" : memberName(v.by),
         reporters: (v.reporters ?? (v.reportedBy ? [v.reportedBy] : [])).map(memberName),
         reportedAt: lastReport.get(k) ?? null,
+        hidden: v.status === "reported",
       });
     }
-    // Hidden ones (two or more reports) first, then the newest.
-    reported.sort((a, b) => b.reporters.length - a.reporters.length || (b.reportedAt ?? "").localeCompare(a.reportedAt ?? ""));
+    // Hidden from everyone first, then the most reported, then the newest.
+    reported.sort((a, b) => Number(!!b.hidden) - Number(!!a.hidden) || b.reporters.length - a.reporters.length || (b.reportedAt ?? "").localeCompare(a.reportedAt ?? ""));
   }
 
   const ledger: LedgerRow[] = [];
@@ -2791,13 +2796,20 @@ export async function perform(token: string | null, a: Action, origin?: string):
             const atCompany = [...g.engagements.values()].filter((e) => e.companyId === company!.id);
             const isBlank = (e: EngNode) =>
               Object.keys(e.seedFields).every((k) => k === "source") && !Object.keys(s.values).some((k) => k.startsWith(e.id + "."));
+            const madeByMe = (e: EngNode) => s.engagements.some((x) => x.id === e.id && x.by === me.id);
+            // The member's own seat ("Add a seat you held", operatorMemberId "me") is never merged into a
+            // seat somebody else holds, or one nobody is named on: it goes in as their own record, so it is
+            // theirs at once (Your seats, a private rate). Only a seat already linked to them, or a blank one
+            // they made, takes it in.
+            const selfSeat = !!seatPick && seatPick.id === me.id;
+            const mayMerge = (e: EngNode) => !selfSeat || linkedSeat(e.id) || (isBlank(e) && madeByMe(e));
             // An open role is never matched by its title: a past seat with the same title is its own record.
             // Titles compare by textKey (any script, accents aside). An empty key matches nothing.
             const roleKey = role ? textKey(role) : "";
             const existing = wantEng
               ? atCompany.find((e) => e.id === wantEng)
-              : (a.newEngagement ? atCompany.find(isBlank) : atCompany.find((e) => s.engagements.some((x) => x.id === e.id && x.by === me.id))) ??
-                (roleKey ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && textKey(live(e, s, "role") ?? "") === roleKey) : undefined);
+              : (a.newEngagement ? atCompany.find((e) => isBlank(e) && mayMerge(e)) : atCompany.find((e) => madeByMe(e) && mayMerge(e))) ??
+                (roleKey ? atCompany.find((e) => !isOpenRole(e, s, tracks()) && textKey(live(e, s, "role") ?? "") === roleKey && mayMerge(e)) : undefined);
             // A new seat (or a blank one) has to say what the work was: a name alone is not a seat.
             if ((!existing || isBlank(existing)) && !engFields.some(([k]) => k === "function" || k === "role")) throw new ActionError(SEAT_NEEDS_WHAT);
             let eng: Node;
