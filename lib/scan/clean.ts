@@ -86,7 +86,7 @@ export const companyKey = (name: unknown) => textKey(cleanCompany(name).replace(
 /** Stand-ins a board uses when the company is not named. */
 const NO_NAME = new Set(
   [
-    "unknown", "confidential", "stealth", "na", "none", "tbd", "tba", "anonymous", "undisclosed", "private", "hidden", "hiddencompany",
+    "unknown", "confidential", "stealth", "na", "none", "tbd", "tba", "anonymous", "undisclosed", "private", "hidden", "hiddencompany", "lockedcompany",
     "seelisting", "company", "companyname", "client", "ourclient", "various", "multiple", "selfemployed", "freelance", "hiring",
     "notspecified", "notdisclosed", "notprovided", "employer", "startup", "theclient", "thecompany",
   ].map(squeeze)
@@ -231,6 +231,42 @@ export function cleanTitle(raw: unknown, company?: string): string {
     if (s === before) break;
   }
   return cut(s.replace(/\s+/g, " "), 120).trim();
+}
+
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * An open role's title as a member may see it while its company is locked: cleanTitle first,
+ * then any name of the company or its domain still in it is cut out ("Fractional CMO, Acme
+ * Health" -> "Fractional CMO"). When nothing is left, `fallback` ("Fractional Marketing role").
+ */
+export function titleWithout(raw: string, company: string, domain: string | null, fallback = "Fractional role"): string {
+  let s = cleanTitle(raw, company);
+  const names = new Set<string>();
+  const full = plain(company).trim();
+  if (full.length >= 3) names.add(full);
+  const core = full.replace(/^the\s+/i, "").replace(NAME_TAIL, "").trim();
+  if (core.length >= 4) names.add(core);
+  if (domain) {
+    const host = domain.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+    if (host.includes(".")) names.add(host);
+    const label = host.split(".")[0];
+    if (label.length >= 4) names.add(label);
+  }
+  // Longest first, so "Acme Health" goes before "Acme".
+  for (const n of [...names].sort((a, b) => b.length - a.length)) {
+    s = s.replace(new RegExp(`(^|[^\\p{L}\\p{N}])${escRe(n)}(?=$|[^\\p{L}\\p{N}])`, "giu"), "$1");
+  }
+  // What a cut name leaves behind: "Fractional CMO,  " or "( ) Fractional CMO" or "CMO at".
+  s = s
+    .replace(/\(\s*\)|\[\s*\]/g, " ")
+    .replace(/\s+(?:at|@|for|with)\s*$/i, "")
+    .replace(/\s+([,:;|])/g, "$1")
+    .replace(/([,:;|\-–—·])(\s*[,:;|\-–—·])+/g, "$1")
+    .replace(/\s+/g, " ");
+  for (let i = 0; i < 3; i++) s = s.replace(TRAILING_PUNCT, "").replace(LEADING_PUNCT, "").replace(/\s+(?:at|@|for|with)$/i, "").replace(/^(?:at|@)\s+/i, "");
+  s = s.trim();
+  return /\p{L}/u.test(s) && squeeze(s).length >= 2 ? s : fallback;
 }
 
 /* ---------- the company's own website ---------- */

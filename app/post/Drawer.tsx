@@ -5,7 +5,7 @@
  * action bar). Everything about one company: header, actions, about, how they sell, functions,
  * every seat, people, and the company's own details.
  *
- * One primary action. A hidden company has "Unlock this role" and nothing else to press until
+ * One primary action. A locked company has "Unlock company, posting and rate" and nothing else to press until
  * it is unlocked. Any other company has Add to this company, with Unlock all beside it as an
  * outline button, once per record. The solid ember "Hiring now" chip lives here, in the header,
  * and nowhere else.
@@ -23,7 +23,7 @@ import { MessageButton } from "./Messages";
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import type { Action, Cell, EngagementRec, PersonRec, View } from "@/lib/tableTypes";
 import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "@/lib/tableFields";
-import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
+import { AddPill, CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, LockPill, LockedName, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
 import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, OPEN_ROLE_BUNDLE, cellKey, fitReason, isOpenSeat, namedFn, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { FactCell, FactValue, Pro, Sheet, YourSeat, ZeroCredits, earnNote, shortLabel, useUi, type Ui } from "./ui";
 import { sendSignal } from "./ProOffer";
@@ -1149,7 +1149,7 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
   if (!fields.length) return null;
   const refs = fields.map((f) => ({ entity: "company" as const, id: i.c.id, field: f }));
   const pills = (
-    <EnvCtx.Provider value={{ touch: false, phone: false, contact: null, company: i.c.name, hidden: !!i.c.hidden, exempt: env.exempt }}>
+    <EnvCtx.Provider value={{ touch: false, phone: false, contact: null, company: i.c.hidden ? "this company" : i.c.name, hidden: !!i.c.hidden, exempt: env.exempt }}>
       <div className="tp-missing-row">
         {refs.map((t) => (
           <AddFact key={t.field} t={t} label={fieldDef(t.entity, t.field)!.label} />
@@ -1201,7 +1201,7 @@ function UnlockCompany({ id, label }: { id: string; label: string }) {
 }
 
 const COMPANY_ROWS = ["website", "linkedin", "industry", "employees", "revenue", "hq"];
-const UNLOCK_ROLE = "Unlock this role · 1 credit";
+const UNLOCK_ROLE = "Unlock company, posting and rate · 1 credit";
 
 export function Drawer({
   i,
@@ -1382,7 +1382,7 @@ export function Drawer({
       <IconStar size={13} filled={c.following} /> <span className="tp-follow-t">{c.following ? "Following" : "Follow"}</span>
     </button>
   );
-  const coName = c.hidden ? "Hidden company" : c.name;
+  const coName = c.hidden ? "Locked company" : c.name;
   const showCo = !phone || headGone;
 
   return (
@@ -1415,9 +1415,9 @@ export function Drawer({
             {showCo && (
               <>
                 <span className="tp-dbar-logo">
-                  <CompanyLogo name={c.hidden ? "" : c.name} domain={c.hidden ? null : c.iconDomain ?? i.domain} hidden={c.hidden} />
+                  <CompanyLogo name={c.hidden ? "" : c.name} domain={c.hidden ? null : c.iconDomain ?? i.domain} hidden={c.hidden} seed={c.id} />
                 </span>
-                <span className="tp-dbar-name">{coName}</span>
+                <span className="tp-dbar-name">{c.hidden ? <LockedName seed={c.id} /> : coName}</span>
               </>
             )}
           </span>
@@ -1469,7 +1469,7 @@ export function Drawer({
           </div>
           {c.hidden && (
             <p className="tp-hidden-note">
-              This company is hiring a fractional now. Unlock it for 1 credit to see the company, the role, the posting and the posted rate. Contacts unlock separately. The company shows for everyone once the role closes.
+              This company is hiring a fractional now, and its role is free to see. 1 credit shows the company, the posting and the posted rate. Contacts unlock separately. Once the role closes, everyone sees the company.
             </p>
           )}
           {!phone && actions}
@@ -1524,7 +1524,7 @@ export function Drawer({
             </h3>
             {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
             {i.engs.map((e) => (
-              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.name} focus={focus === e.id} />
+              <EngagementCard key={e.id} e={e} companyId={c.id} company={c.hidden ? "this company" : c.name} focus={focus === e.id} />
             ))}
             {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
             {!c.hidden && (

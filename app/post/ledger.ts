@@ -3,7 +3,7 @@
  * popover and the Your credits page, so both say the same thing.
  *
  * The server sends each row's field as a label ("Role", "Start month", "Person email",
- * "Private rate", "Hidden company") and its reason as a key (fill, unlock, refund, reversal,
+ * "Private rate", HIDDEN_COMPANY for a company unlock) and its reason as a key (fill, unlock, refund, reversal,
  * referral, confirm, retract), or as words for the rows that have no field ("Refund for a role
  * that had closed", with the company after it).
  */
@@ -27,7 +27,9 @@ const thing = (label: string) => SAY.get(label) ?? `the ${fieldText(label)}`;
 
 /** `note` explains an amount of 0. */
 export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?: string } {
-  const at = l.company ? ` at ${l.company}` : "";
+  // A company still locked for the member arrives as HIDDEN_COMPANY. Never name it, and never say "hidden".
+  const locked = l.company === HIDDEN_COMPANY;
+  const at = locked ? " at a company that's hiring" : l.company ? ` at ${l.company}` : "";
   const priv = l.field === PRIVATE_RATE;
   switch (l.reason) {
     case "fill":
@@ -41,8 +43,8 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
               : `No credit. You had already earned ${earnCap} today.`,
       };
     case "unlock":
-      // A hidden company is one purchase with the role, posting and rate of its open roles.
-      return { text: l.field === HIDDEN_COMPANY ? `Unlocked ${l.company && l.company !== HIDDEN_COMPANY ? l.company : "a hidden company"} and its open role` : `Unlocked ${thing(l.field)}${at}` };
+      // A locked company is one purchase with the role, posting and rate of its open roles.
+      return { text: l.field === HIDDEN_COMPANY ? `Unlocked ${l.company && !locked ? l.company : "a company that's hiring"} and its open role` : `Unlocked ${thing(l.field)}${at}` };
     case "refund":
       return { text: `Refund for ${thing(l.field)}${at}, removed after review` };
     case "reversal":
@@ -52,12 +54,12 @@ export function ledgerLine(l: LedgerRow, earnCap: number): { text: string; note?
     case "Removed":
       return { text: "Removed a rate you shared privately" };
     case "referral":
-      return { text: l.company ? `Invite bonus, with ${l.company}` : "Invite bonus" };
+      return { text: l.company && !locked ? `Invite bonus, with ${l.company}` : "Invite bonus" };
     case "confirm":
       return { text: `Two members confirmed ${thing(l.field)}${at}` };
     default:
       // A reason the server already wrote out in words ("Refund for a role that had closed at Acme").
-      return { text: [l.reason, l.field && l.field !== l.reason ? fieldText(l.field) : "", at.trim()].filter(Boolean).join(" ") };
+      return { text: [l.reason, l.field && l.field !== l.reason && l.field !== HIDDEN_COMPANY ? fieldText(l.field) : "", at.trim()].filter(Boolean).join(" ") };
   }
 }
 

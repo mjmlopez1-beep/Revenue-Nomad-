@@ -68,8 +68,8 @@ export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"]
 /** "Closed" is an open role whose posting came down (the weekly scan sets it, with a date). */
 export const STATUSES = ["Open role", "Active", "Ended", "Closed"];
 
-/** What a company with an active open role is called until the member unlocks it (1 credit). */
-export const HIDDEN_COMPANY = "Hidden company";
+/** The name the server sends for a company with an active open role until the member unlocks it (1 credit). The app draws a blurred placeholder in its place and never prints this. */
+export const HIDDEN_COMPANY = "Locked company";
 
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;

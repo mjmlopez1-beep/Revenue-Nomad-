@@ -21,10 +21,10 @@
  *
  * Hidden companies: a company with an open role the scan follows (or one from our records)
  * keeps its name, website, LinkedIn, logo and About behind "Unlock company" (1 credit); see
- * identityHidden() and hidesCompany(). The same credit opens the role, the posting and the posted
- * rate of each open role there, whichever of them was asked for (hours a week are free). Where
- * the company is not hidden, the role, the posting and the rate of an open role are still one
- * purchase (BUNDLE_FIELDS).
+ * identityHidden() and hidesCompany(). The same credit opens the posting and the posted rate of
+ * each open role there, whichever of them was asked for. An open role's title and its hours a week
+ * are free (roleFree). Where the company is not hidden, the posting and the rate of an open role
+ * are still one purchase (BUNDLE_FIELDS).
  *
  * Your seats: the member a seat-holder name resolves to can say "this isn't me"; see
  * seatHolder(). When the name is good evidence (our records, another member, the seat's maker,
@@ -59,7 +59,7 @@ import { emailEnabled, sendEmail } from "./email";
 import { renderDigest } from "./digest";
 import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
 import { removeScreenedOut } from "./scan/remove";
-import { companyKey, textKey } from "./scan/clean";
+import { companyKey, textKey, titleWithout } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, GTM_FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
   stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, siteKey, type Entity,
@@ -1465,11 +1465,17 @@ const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boole
 const hideIdentity = (key: string, c: Cell): Cell =>
   c.s !== "value" ? c : IDENTITY_FIELDS.has(key) ? { s: "locked", ver: 0 } : key === "hq" ? { ...c, v: hqRegion(c.v) } : c;
 /**
- * One purchase on an open role: its role, its job posting and its posted rate. "Unlock company"
- * opens all three on each open role at a hidden company for the same credit. (Hours a week are
- * free, so they need no unlock.)
+ * One purchase on an open role: its job posting and its posted rate. "Unlock company" opens both
+ * on each open role at a locked company for the same credit. An open role's title is free (see
+ * roleFree), so members can tell whether a role is worth a credit. (Hours a week are free too.)
  */
-const BUNDLE_FIELDS = ["role", "posting", "rate"];
+const BUNDLE_FIELDS = ["posting", "rate"];
+/**
+ * An open role's title is free to see while the role is open. Once it closes or is filled, it
+ * follows the usual rule again (locked, like any past seat's role). At a locked company the
+ * title is shown without the company's name or domain in it (titleWithout).
+ */
+const roleFree = (e: EngNode | undefined, s: State, tracks: Tracks) => !!e && isOpenRole(e, s, tracks);
 /** The posting of a role the scan closed (the listing came down) is free to see: the link no longer leads to a job. */
 const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !== "filled";
 
@@ -1667,7 +1673,8 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       const track = tracks.get(e.id);
       if (yours) ownSeatAt.add(c.id);
       if (yours || (!!me && seatHolder(s, idx, e.id, op)?.id === me.id)) holdsSeat = true;
-      for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours);
+      const openTitle = roleFree(e, s, tracks);
+      for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours || (f.key === "role" && openTitle));
       if (postingFree(track) && cells.posting.s === "locked") closedPostings.push({ e, cells });
       // Function is free; derive it from the role when nobody set it.
       if (cells.function.s === "empty") {
@@ -1711,6 +1718,14 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       !holdsSeat;
     if (hidden) {
       hiddenIds.add(c.id);
+      // An open role's free title never names the locked company.
+      const site = live(c, s, "website") ?? icons[c.id] ?? null;
+      for (const er of engRecs) {
+        const rc = er.cells.role;
+        if (rc?.s !== "value" || rc.system) continue;
+        const fn = er.cells.function?.s === "value" ? er.cells.function.v : null;
+        er.cells.role = { ...rc, v: titleWithout(rc.v, c.name, site, fn ? `Fractional ${fn} role` : "Fractional role") };
+      }
       for (const k of [...IDENTITY_FIELDS, "hq"]) if (cells[k]) cells[k] = hideIdentity(k, cells[k]);
     } else {
       for (const x of closedPostings) {
@@ -2411,12 +2426,13 @@ export async function perform(token: string | null, a: Action, origin?: string, 
         pickFree.set(companyId, s.companies.some((c) => c.id === companyId && c.by === me.id) || [...g.engagements.values()].some((e) => e.companyId === companyId && ownSeat(e.id)));
       return pickFree.get(companyId)!;
     };
-    /** Gated facts this member sees without an unlock: their own seat, and the posting of a role the scan closed (unless its company is hidden). */
+    /** Gated facts this member sees without an unlock: their own seat, an open role's title, and the posting of a role the scan closed (unless its company is hidden). */
     const freeFor = (entity: Entity, id: string, field: string) =>
-      entity === "engagement" && ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) || ownSeat(id));
+      entity === "engagement" &&
+      ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) || (field === "role" && roleFree(g.engagements.get(id), s, tracks())) || ownSeat(id));
     /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
     const mustSee = (companyId: string) => {
-      if (hiddenFor(companyId)) throw new ActionError("This company is hidden. Unlock it for 1 credit, then add what you know.");
+      if (hiddenFor(companyId)) throw new ActionError("This company is locked. Unlock it for 1 credit, then add what you know.");
     };
     const nodeOf = (entity: Entity, raw: unknown): Node => {
       const id = inId(entity, raw);
@@ -2433,6 +2449,13 @@ export async function perform(token: string | null, a: Action, origin?: string, 
     const changed = (entity: Entity, node: Node, field: string) => {
       const cell = cellOf(s, me, node, entity, field, memberIndex(seed, s), freeFor(entity, node.id, field));
       const hide = entity === "company" && cell.s === "value" && (IDENTITY_FIELDS.has(field) || field === "hq") && hiddenFor(node.id);
+      if (entity === "engagement" && field === "role" && cell.s === "value" && !cell.system) {
+        const co = g.companies.get(companyOf("engagement", node.id));
+        if (co && hiddenFor(co.id)) {
+          const fn = live(node, s, "function") ?? functionOf(cell.v);
+          return { entity, id: outId(entity, node.id), field, cell: { ...cell, v: titleWithout(cell.v, co.name, live(co, s, "website") ?? null, fn ? `Fractional ${fn} role` : "Fractional role") } };
+        }
+      }
       return { entity, id: outId(entity, node.id), field, cell: hide ? hideIdentity(field, cell) : cell };
     };
     /** Each member's paid unlocks that have not been refunded, by `${memberId} ${ref}` (built when first needed). */
@@ -2863,7 +2886,7 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           const name = tidy(a.company, 80);
           if (name.length < 2) throw new ActionError("What's the company called?");
           if (!keyOfCompany(name)) throw new ActionError("That doesn't read as a company name. Type the name the company goes by.");
-          if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) throw new ActionError("That's our placeholder for a company you haven't unlocked. Type the real name.");
+          if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase() || name.toLowerCase() === "hidden company") throw new ActionError("That's our placeholder for a company you haven't unlocked. Type the real name.");
           // Validate everything up front so a bad field never leaves a half-made record.
           const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
             Object.entries(raw ?? {})
@@ -3051,7 +3074,13 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           const cur = valueOf(node, s, f.key);
           // A hidden company's website, LinkedIn and full HQ are not on show to this member.
           if (a.entity === "company" && (IDENTITY_FIELDS.has(f.key) || f.key === "hq") && hiddenFor(node.id)) throw new ActionError("There's nothing here to report. You can only report a fact you can see.");
-          const paid = (s.unlocks[k] ?? []).includes(me.id);
+          // An open role's free title counts as paid for by whoever paid for that open role (its posting or rate, or its company).
+          const paidRole =
+            a.entity === "engagement" &&
+            f.key === "role" &&
+            roleFree(node as EngNode, s, tracks()) &&
+            (holdsOpenRole(s, me, node) || (s.unlocks[fkey((node as EngNode).companyId, "identity")] ?? []).includes(me.id));
+          const paid = (s.unlocks[k] ?? []).includes(me.id) || paidRole;
           const own = a.entity === "engagement" && ownSeat(node.id);
           const canSee = !f.gated || paid || freeFor(a.entity, node.id, f.key);
           if (!cur || cur.status !== "live" || !canSee) throw new ActionError("There's nothing here to report. You can only report a fact you can see.");
@@ -3073,10 +3102,10 @@ export async function perform(token: string | null, a: Action, origin?: string, 
           s.reportLog.push({ memberId: me.id, ref: k, at: now });
           return {
             message: listed
-              ? "Reported. It's hidden for you now, and an admin will review it. Others still see it while the posting is listed."
+              ? "Reported. You won't see it now, and an admin will review it. Others still see it while the posting is listed."
               : own
-                ? "Reported. It's hidden for everyone until an admin reviews it."
-                : "Reported. It's hidden for you now, and an admin will review it.",
+                ? "Reported. Members won't see it until an admin reviews it."
+                : "Reported. You won't see it now, and an admin will review it.",
             cells: [changed(a.entity, node, f.key)],
           };
         }
@@ -3307,7 +3336,7 @@ export async function perform(token: string | null, a: Action, origin?: string, 
             if (reopened) tracksNow = null;
           }
           return {
-            message: `Got it. That seat is no longer linked to you.${ownClaim ? " Your name is off it." : hide ? " The name on that seat is hidden for everyone until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
+            message: `Got it. That seat is no longer linked to you.${ownClaim ? " Your name is off it." : hide ? " Members won't see the name on that seat until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
             id: pubId(e.id),
             cells: [...ENG_GATED, "status"].map((f) => changed("engagement", e, f)),
           };

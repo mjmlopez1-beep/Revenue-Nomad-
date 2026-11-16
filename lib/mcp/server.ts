@@ -26,15 +26,15 @@ export const INSTRUCTIONS = `Trading Post is a give-to-get table of companies th
 
 How the table works
 - Facts other members added are locked. Seeing one costs the member 1 credit ("locked, 1 credit to unlock"). Adding a missing fact earns 1 credit (up to 25 a day). Free facts (company basics, a seat's function, type, status, start, why they hired) are always visible.
-- A company with an open role is a "Hidden company" until the member unlocks it for 1 credit, which also opens its open roles. An open role's title, posting and posted rate are one purchase.
+- A company with an open role is a "Locked company" until the member unlocks it for 1 credit, which also opens the posting and posted rate of its open roles. An open role's title is free to see. Its posting and posted rate are one purchase.
 - Never spend a credit without asking. Call unlock without confirm first, tell the member what it costs and what it opens, and call it again with confirm true only after they say yes.
 
 Using it well
-- Fractional friendly means the company hired fractionals before (past seats on file). Hiring now means it has an open fractional role.
+- Fractional friendly means the company hired fractionals before (past seats on file). A repeat hirer has 2 or more fractional hires on file, or hires in 2 or more functions. Hiring now means it has an open fractional role.
 - The warmest way into a company is the fractional who held a seat there (the seat holder) and the exec who hired or managed them (people marked Hiring for the seat, Reported to or Decision maker). get_company lists these as warm_paths.
 - To find prospects for a member's function, look for companies that hired fractionals in other functions but not theirs yet (search_companies with no_function_yet), ranked by fit. A company that just hired a fractional VP Sales often needs marketing or RevOps next.
 - To see what's new, use list_open_roles with since_days 7. Saved searches (alerts) put new matches in the weekly email.
-- Always pass ids from earlier results back in follow-up calls. Say "Hidden company" rather than guessing a name.`;
+- Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name.`;
 
 function text(out: unknown, isError = false): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(out) }], ...(isError ? { isError: true } : {}) };
@@ -69,13 +69,14 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Search companies",
       description:
-        "Find companies on Trading Post, ranked like the table (best fit first: past fractional hires, functions hired, recent seats, open roles). Returns each company's id, free facts, fit, functions hired and how many facts are locked. Use it for prospecting: no_function_yet finds companies that hired fractionals in other functions but not this one yet, a common next hire. fractional_friendly keeps companies with past fractional hires or an open role. hiring_now keeps companies with an open fractional role (often hidden). Follow up with get_company.",
+        "Find companies on Trading Post, ranked like the table (best fit first: past fractional hires, functions hired, recent seats, open roles). Returns each company's id, free facts, fit, functions hired and how many facts are locked. Use it for prospecting: no_function_yet finds companies that hired fractionals in other functions but not this one yet, a common next hire. fractional_friendly keeps companies with past fractional hires or an open role. repeat_hirer keeps companies with 2 or more fractional hires, or hires in 2 or more functions. hiring_now keeps companies with an open fractional role (often locked). Follow up with get_company.",
       inputSchema: {
         query: z.string().optional().describe("Words to match in company names, domains, functions, industries and facts the member can see. Locked facts are not searchable."),
         function: fn.optional().describe(`Any seat in this function on file (hired, open or mentioned): ${list(FUNCTIONS)}`),
         function_hired: fn.optional().describe(`Companies that hired a fractional in this function: ${list(FUNCTIONS)}`),
         no_function_yet: fn.optional().describe(`Companies that hired fractionals in other functions and none in this one yet: ${list(FUNCTIONS)}`),
         fractional_friendly: z.boolean().optional().describe("Only companies with past fractional hires or an open fractional role."),
+        repeat_hirer: z.boolean().optional().describe("Only repeat hirers: 2 or more fractional hires on file, or hires in 2 or more functions. Open roles don't count as hires."),
         hiring_now: z.boolean().optional().describe("Only companies with an open fractional role now."),
         industry: many("Industries", RN_INDUSTRIES).optional(),
         employees: many("Employee counts", RN_EMPLOYEES).optional(),
@@ -113,7 +114,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "List open roles",
       description:
-        "Open fractional GTM roles from the weekly scan of job boards, newest first, with when each was first listed. Most sit at a hidden company: the company's industry, size and region show, and 1 credit opens the company with its open roles. since_days 7 answers \"what's new this week\". Filter by function and by the company's industry, size, revenue, HQ, or past fractional hires.",
+        "Open fractional GTM roles from the weekly scan of job boards, newest first, with when each was first listed. Each shows its title. Most sit at a locked company: the company's industry, size and region show, and 1 credit opens the company with the posting and posted rate of its open roles. since_days 7 answers \"what's new this week\". Filter by function and by the company's industry, size, revenue, HQ, or past fractional hires.",
       inputSchema: {
         function: fn.optional(),
         since_days: z.number().int().optional().describe("Only roles first listed in the last N days (7 for this week)."),
@@ -161,7 +162,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "Unlock",
       description:
-        'Spend credits to see locked facts. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it spends nothing and says what it would cost and open. Tell the member, and only if they say yes, call it again with the same arguments and confirm: true, which spends through the normal unlock and returns what is now visible. entity is "company", "seat" or "person". field is one field (for a seat: seat_holder, role, end, sourced, rate, posting. For a person: name, email, phone, linkedin. For a hidden company: identity) or "everything" on a company, seat or person.',
+        'Spend credits to see locked facts. ALWAYS ASK THE MEMBER FIRST. Call it without confirm: it spends nothing and says what it would cost and open. Tell the member, and only if they say yes, call it again with the same arguments and confirm: true, which spends through the normal unlock and returns what is now visible. entity is "company", "seat" or "person". field is one field (for a seat: seat_holder, role, end, sourced, rate, posting. For a person: name, email, phone, linkedin. For a locked company: identity) or "everything" on a company, seat or person.',
       inputSchema: {
         entity: z.enum(["company", "seat", "person"]),
         id: z.string().describe("The company, seat or person id."),

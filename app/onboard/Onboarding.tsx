@@ -43,7 +43,7 @@ const named = (fn: string | null) => (fn && fn !== "Other" && fn !== "Executive"
  */
 const GOAL_OPENS: Record<Goal, (fn: string | null) => string> = {
   roles: () => "The table opens on the fractional roles that are open now. We check for new ones every week.",
-  friendly: () => "The table opens on the companies that hire fractionals most.",
+  friendly: () => "The table opens on repeat hirers, the companies that hired fractionals more than once.",
   adjacent: (fn) =>
     named(fn)
       ? `The table opens on companies that hired fractionals in other functions and have no ${fn} seat on file.`

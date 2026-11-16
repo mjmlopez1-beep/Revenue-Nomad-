@@ -1854,6 +1854,30 @@ body:has(.tp-drawer) .pro-foot {
   height: 24px;
   padding: 0 10px;
 }
+/* "Hiring now" with a quiet "Unlocked" beside it: a hiring company the member paid to see. */
+.tp-tierwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.tp-pcard-top > .tp-tierwrap {
+  flex: none;
+  align-self: flex-start;
+  height: 26px;
+}
+.tp-unlocked {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--muted);
+}
+.tp-unlocked svg {
+  color: var(--pine);
+}
 .tp-fns {
   display: inline-flex;
   align-items: center;
@@ -5702,18 +5726,9 @@ button.tp-fsheet-row:disabled {
   content: none;
 }
 
-/* ---------- hidden company (active open role, not unlocked) ---------- */
-/* One locked thing: the lock sits where the logo would be. */
-.logo.logo-hidden {
-  display: grid;
-  place-items: center;
-  background: var(--surface-2);
-  color: var(--muted);
-  border-color: var(--line);
-  transition: background var(--t), color var(--t), border-color var(--t);
-}
+/* ---------- locked company (active open role, not unlocked) ---------- */
+/* The blurred tile, name and site are in globals.css (.logo-locked, .locked-name, .locked-site). */
 .tp-hidden-name {
-  color: var(--muted);
   font-weight: 600;
   /* Truncates like a company name, so a chip beside it on a 320px card never cuts it off mid-letter. */
   min-width: 0;
@@ -5747,7 +5762,26 @@ button.tp-fsheet-row:disabled {
   margin: 0;
   border-radius: 7px;
 }
+/* At rest the blurred tile shows through, with a small lock in its corner: this is what spends. */
 .tp-co-hidden.in-table .lock-rest {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--muted);
+  transition: color var(--t), border-color var(--t);
+}
+.tp-co-hidden.in-table .lock-rest svg {
+  width: 10px;
+  height: 10px;
+}
+.tp-co-hidden.in-table .lock-rest .lock-mask {
   display: none;
 }
 .tp-co-hidden.in-table .lock-cta {
@@ -5755,8 +5789,7 @@ button.tp-fsheet-row:disabled {
   border-radius: 7px;
 }
 @media (hover: hover) {
-  .tp-table tbody tr:hover .logo-hidden {
-    background: var(--pine-8);
+  .tp-table tbody tr:hover .tp-co-hidden.in-table .lock-rest {
     border-color: var(--pine-14);
     color: var(--pine);
   }

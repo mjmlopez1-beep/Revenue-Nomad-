@@ -441,7 +441,7 @@ export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef
     case "empty":
       if (ui.isHidden(t.id))
         return (
-          <span className={`${cls} tp-none`} data-cell={k} title="This company is hidden. Unlock it for 1 credit, then you can add this.">
+          <span className={`${cls} tp-none`} data-cell={k} title="This company is locked. Unlock it for 1 credit, then you can add this.">
             –
           </span>
         );
@@ -475,7 +475,7 @@ export function FactCell({ t, cell, render, addLabel = "Add", at }: { t: FactRef
               : // The reporter's own report (the server marks it byMe). Otherwise the line reads true for anyone.
                 cell.byMe
                 ? "You reported this. We'll review it."
-                : "This was reported as wrong. It stays hidden until an admin reviews it."
+                : "This was reported as wrong. Members can't see it until an admin reviews it."
           }
         >
           Under review

@@ -8,7 +8,7 @@
  * a locked one (a small lock and a masked bar), and a missing one you can add for a credit.
  */
 import type { ReactNode } from "react";
-import { IconCheck, IconLock, IconUsers } from "../ui/shared";
+import { CompanyLogo, IconCheck, IconLock, IconUsers, LockedName, LockedSite } from "../ui/shared";
 
 /** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. Drawn with the app's own classes. */
 function Locked({ w = 72 }: { w?: number }) {
@@ -62,21 +62,25 @@ function Row({ k, children }: { k: string; children: ReactNode }) {
 
 /**
  * Hero visual: one company record as a member first meets it. It has an open role, so the
- * company is hidden, as it is in the app, and one unlock shows the company, the role and the
- * posting. A seat a member held shows the three states side by side: a fact someone unlocked
+ * company is locked, as it is in the app: a blurred made-up name, site and logo. The role title
+ * is free, and one unlock shows the company, the posting and the posted rate. A seat a member held shows the three states side by side: a fact someone unlocked
  * (who held the seat, confirmed by 3), a locked one (the rate) and a missing one (hours).
  * It carries the page's one "Hiring now" chip.
  */
+/** Any fixed id, so the example card shows the same made-up name on every visit. */
+const EXAMPLE_SEED = "lp-example-record";
+
 export function HeroRecord() {
   return (
     <figure className="lp-visual">
       <div className="lp-rec" aria-hidden>
         <div className="lp-rec-head">
-          <span className="lp-mark lp-mark-hidden">
-            <IconLock size={16} />
-          </span>
+          <CompanyLogo name="" domain={null} hidden seed={EXAMPLE_SEED} size="lg" />
           <div className="lp-rec-id">
-            <div className="lp-rec-name lp-rec-name-hidden">Hidden company</div>
+            <div className="lp-rec-name">
+              <LockedName seed={EXAMPLE_SEED} />
+            </div>
+            <LockedSite seed={EXAMPLE_SEED} className="lp-rec-site" />
             <div className="lp-rec-meta num">
               Software · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
             </div>
@@ -91,7 +95,7 @@ export function HeroRecord() {
           </div>
           <dl className="lp-rows">
             <Row k="Role">
-              <Locked w={96} />
+              <span className="lp-val">Fractional Head of RevOps</span>
             </Row>
             <Row k="Job posting">
               <Unlock />
@@ -135,8 +139,8 @@ export function HeroRecord() {
         </div>
       </div>
       <figcaption className="lp-visual-cap">
-        An example record. A company with an open role stays hidden until you unlock it, and that 1 credit shows the company, the role and the
-        posting.
+        An example record. You see an open role for free. The company stays locked until you unlock it, and that 1 credit shows the company,
+        the posting and the posted rate.
       </figcaption>
     </figure>
   );

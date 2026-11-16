@@ -42,7 +42,7 @@ function lookups(intro: string | null): { title: string; body: string; cost: str
   return [
     {
       title: "Open fractional roles",
-      body: "We check for open fractional GTM roles every week and date each one, so you can tell a new role from one that has sat for months. The company stays hidden until you unlock it, and that one credit also shows the role and the job posting.",
+      body: "We check for open fractional GTM roles every week and date each one, so you can tell a new role from one that has sat for months. You see the role for free. The company stays locked until you unlock it, and that one credit also shows the job posting and the posted rate.",
       cost: "1 credit",
     },
     {
@@ -86,7 +86,7 @@ const MATRIX: { entity: Entity; label: string; free: string[]; locked: string[];
       entity: "company",
       label: "The company",
       freeFirst: ["Name"],
-      note: "While a company has an open role, its name, website and LinkedIn are hidden. One credit shows the company, the role and the job posting together. When the role closes, the company shows for everyone again.",
+      note: "While a company has an open role, its name, website and LinkedIn are locked. One credit shows the company, the job posting and the posted rate together. When the role closes, everyone sees the company again.",
     },
     { entity: "engagement", label: "The seat", freeLast: ["Open and closed dates"] },
     { entity: "contact", label: "A hiring contact" },

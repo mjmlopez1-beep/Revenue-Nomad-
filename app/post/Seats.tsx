@@ -18,7 +18,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Cell, EngagementRec } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
-import { CompanyLogo, IconCheck, IconChevron, IconPlus, fmtValue } from "../ui/shared";
+import { CompanyLogo, IconCheck, LockedName, IconChevron, IconPlus, fmtValue } from "../ui/shared";
 import { COMPANY_GTM, SEAT_ASK, cellKey, shown, type CoInfo, type FactRef, type SeatInfo } from "./model";
 import { BENCH_RATE_HELP, atTime, plural } from "./hooks";
 import { earnRoom } from "./NextMove";
@@ -352,7 +352,7 @@ function SeatCard({
   const qRef = useRef<HTMLDivElement>(null);
   const fn = shown(e.cells.function);
   const role = shown(e.cells.role);
-  const name = i.c.hidden ? "Hidden company" : i.c.name;
+  const name = i.c.hidden ? "this company" : i.c.name;
   const benchOf = (f: string) => (f === "rate" ? saved[cellKey(e.id, f)]?.bench ?? bench : undefined);
   const active_ = isActive(e);
 
@@ -452,8 +452,8 @@ function SeatCard({
         }}
       >
         <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company">
-          <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} />
-          <span className="ys-co-name">{name}</span>
+          <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} seed={i.c.id} />
+          <span className="ys-co-name">{i.c.hidden ? <LockedName seed={i.c.id} /> : name}</span>
         </button>
         <span className="ys-seat-what">
           {fn && <span className="chip tp-fn">{fn}</span>}
@@ -742,8 +742,8 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
           return (
             <li key={e.id} className="ys-wait-row">
               <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company">
-                <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} />
-                <span className="ys-co-name">{i.c.hidden ? "Hidden company" : i.c.name}</span>
+                <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} seed={i.c.id} />
+                <span className="ys-co-name">{i.c.hidden ? <LockedName seed={i.c.id} /> : i.c.name}</span>
               </button>
               <span className="ys-seat-what">
                 {wfn && <span className="chip tp-fn">{wfn}</span>}

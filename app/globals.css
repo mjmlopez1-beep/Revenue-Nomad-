@@ -663,6 +663,67 @@ button.add:active {
   font-size: 15px;
 }
 
+/*
+ * A locked company (an open role the member hasn't unlocked). Its name, site and logo are
+ * made-up letters from its public id (lockedLook in app/ui/shared.tsx), blurred so they read
+ * as a company you can't see yet. The real ones never reach the page. Never put this on real data.
+ */
+.locked-blur {
+  filter: blur(5px);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.locked-name,
+.locked-site {
+  display: inline-block;
+  max-width: 100%;
+  /* Room for the blur, so a truncating parent doesn't cut it to a hard edge. */
+  padding: 0 4px;
+  margin: 0 -4px;
+  white-space: nowrap;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+.locked-site .locked-blur {
+  color: var(--muted);
+}
+/* The logo: a soft tile in the company's own color, its letters blurred. */
+.logo.logo-locked {
+  border-color: transparent;
+  background: hsl(var(--lk, 160) 45% 90%);
+}
+.logo-locked-in {
+  filter: blur(3px);
+  color: hsl(var(--lk, 160) 40% 38%);
+  user-select: none;
+  -webkit-user-select: none;
+}
+/* No blur where it would get in the way: a plain masked bar in the text's place. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .locked-blur,
+  .logo-locked-in {
+    filter: none;
+    color: transparent !important;
+  }
+  .locked-blur {
+    border-radius: 4px;
+    background: var(--line);
+  }
+  .logo.logo-locked {
+    border-color: var(--line);
+  }
+}
+@media (forced-colors: active) {
+  .locked-blur,
+  .logo-locked-in {
+    filter: none;
+    color: transparent;
+    forced-color-adjust: none;
+    background: GrayText;
+    border-radius: 4px;
+  }
+}
+
 /* ---------- toasts ---------- */
 /*
  * Near the action, never over what it announces. Desktop: bottom center of the page, and of the

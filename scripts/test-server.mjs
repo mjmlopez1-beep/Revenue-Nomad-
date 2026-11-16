@@ -520,7 +520,7 @@ section("reports", async () => {
   const nofill = await Fresh.act({ type: "report", ...ref });
   check("a new account with no fills can't report", nofill.json?.error === "Reporting opens once you've added a fact of your own. Add one first.", nofill.json);
   const r1 = await C.act({ type: "report", ...ref });
-  check("report says it is hidden for the reporter and goes to review", r1.json?.message === "Reported. It's hidden for you now, and an admin will review it." && r1.json?.cells?.[0]?.cell?.s === "reported", r1.json);
+  check("report says it is hidden for the reporter and goes to review", r1.json?.message === "Reported. You won't see it now, and an admin will review it." && r1.json?.cells?.[0]?.cell?.s === "reported", r1.json);
   const again = await C.act({ type: "report", ...ref });
   check("reporting twice says 'You already reported this.'", again.json?.message === "You already reported this.", again.json);
   check("the reporter sees it under review", findCell(await C.view(), ref.entity, ref.id, ref.field)?.s === "reported");
@@ -743,15 +743,15 @@ section("hidden", async () => {
   check("companies with an open role come back hidden", hid.length > 0 && hid.every((c) => c.friendly.open > 0), hid.length);
   const c = hid[0];
   if (!c) return fail("hidden: no hidden company to test");
-  check("a hidden company has no name, logo, website, LinkedIn or About", c.name === "Hidden company" && c.iconDomain === null && ["website", "linkedin", "about"].every((k) => c.cells[k]?.s !== "value"), { name: c.name, icon: c.iconDomain, w: c.cells.website, l: c.cells.linkedin });
+  check("a hidden company has no name, logo, website, LinkedIn or About", c.name === "Locked company" && c.iconDomain === null && ["website", "linkedin", "about"].every((k) => c.cells[k]?.s !== "value"), { name: c.name, icon: c.iconDomain, w: c.cells.website, l: c.cells.linkedin });
   const hq = c.cells.hq;
   check("a hidden company's HQ is cut to its region", !hq || hq.s !== "value" || !hq.v.includes(","), hq);
   check("company ids are opaque", v.companies.every((x) => /^c_[A-Za-z0-9_-]{12}$/.test(x.id)), v.companies.slice(0, 3).map((x) => x.id));
-  check("open companies still show their name", v.companies.some((x) => !x.hidden && x.name !== "Hidden company"));
+  check("open companies still show their name", v.companies.some((x) => !x.hidden && x.name !== "Locked company"));
   const empty = Object.entries(c.cells).find(([, cell]) => cell.s === "empty");
   if (empty) {
     const f = await H.act({ type: "fill", entity: "company", id: c.id, field: empty[0], value: SAMPLE[`company.${empty[0]}`] ?? "Somewhere, TX" });
-    check("adding a fact at a hidden company by its id is refused", f.status === 400 && /This company is hidden\. Unlock it for 1 credit/.test(f.json?.error ?? ""), f.json);
+    check("adding a fact at a hidden company by its id is refused", f.status === 400 && /This company is locked\. Unlock it for 1 credit/.test(f.json?.error ?? ""), f.json);
   }
   const fo = await H.act({ type: "follow", companyId: c.id, on: true });
   check("following a hidden company doesn't say its name", fo.status === 200 && /this company/.test(fo.json?.message ?? ""), fo.json);
@@ -759,7 +759,7 @@ section("hidden", async () => {
   const un = await H.act({ type: "unlock", entity: "company", id: c.id, field: "identity" });
   const v2 = await H.view();
   const c2 = v2.companies.find((x) => x.id === c.id);
-  check("unlocking a company costs 1 credit and reveals it", un.status === 200 && v2.me.credits === before - 1 && c2 && !c2.hidden && c2.name !== "Hidden company", { msg: un.json, credits: [before, v2.me.credits], name: c2?.name });
+  check("unlocking a company costs 1 credit and reveals it", un.status === 200 && v2.me.credits === before - 1 && c2 && !c2.hidden && c2.name !== "Locked company", { msg: un.json, credits: [before, v2.me.credits], name: c2?.name });
   // The same credit opens the role, the posting and the rate of its open roles, and the answer names them too.
   const boughtWith = (c2?.engagements ?? []).some((e) => e.cells.role?.s === "value" || e.cells.posting?.s === "value");
   const named = (un.json?.message ?? "").startsWith(`Unlocked ${c2?.name}`) && un.json?.message.endsWith(" for 1 credit.");
@@ -786,7 +786,7 @@ section("hidden", async () => {
     const p = peopleAt(h2).find((x) => x.cells.name?.s === "locked");
     await L.act({ type: "unlock", entity: "contact", id: p.id, field: "name" });
     const lv2 = await L.view();
-    check("the ledger says Hidden company for an unlock there", lv2.ledger[0]?.company === "Hidden company", lv2.ledger[0]);
+    check("the ledger says Hidden company for an unlock there", lv2.ledger[0]?.company === "Locked company", lv2.ledger[0]);
   }
 });
 
@@ -803,7 +803,7 @@ section("asmember", async () => {
     const v = r.json;
     check(`with ${how} the admin's view is a member's: not an admin, no review list, no pilot metrics`, r.status === 200 && v?.me?.admin === false && v.me.asMember === true && !v.admin && v.reported.length === 0, { status: r.status, admin: v?.me?.admin, asMember: v?.me?.asMember, metrics: !!v?.admin });
     const open = (v?.companies ?? []).filter((c) => c.friendly.open > 0 && !c.mine && !c.unlocked);
-    if (open.length) check(`  and a company with an open role is hidden in it (${how})`, open.some((c) => c.hidden && c.name === "Hidden company"), open.length);
+    if (open.length) check(`  and a company with an open role is hidden in it (${how})`, open.some((c) => c.hidden && c.name === "Locked company"), open.length);
   }
   check("the admin's own view is back to an admin's after it", (await adm.view()).me.admin === true);
   const m = await member("Mo Member", ip(95));
@@ -1255,8 +1255,9 @@ section("scan", async () => {
   const e2 = h1?.engagements.find((e) => e.source === "Demand scan" && e.opened === dayOf(t0));
   check("the role shows under its company with the day it opened", !!e2 && e2.closed === null, h1?.engagements.map((e) => [e.source, e.opened, e.closed]));
   check("its status is a free visible value, never locked", e2?.cells.status?.s === "value" && e2.cells.status.v === "Open role", e2?.cells.status);
-  check("role and posting stay locked; function and type are derived from the title", e2?.cells.role?.s === "locked" && e2.cells.posting?.s === "locked" && e2.cells.function?.v === "Marketing" && e2.cells.type?.v === "Interim", e2?.cells);
-  check("the company is hidden while the role is open", h1?.hidden === true && h1.name === "Hidden company" && h1.friendly.open === 1, { hidden: h1?.hidden, open: h1?.friendly.open });
+  check("an open role's title is free, its posting stays locked; function and type are derived from the title", e2?.cells.role?.s === "value" && e2.cells.role.v === "Interim CMO" && e2.cells.posting?.s === "locked" && e2.cells.function?.v === "Marketing" && e2.cells.type?.v === "Interim", e2?.cells);
+  check("the free title is a scan value: it says it came from the posting, with no confirmation yet", e2?.cells.role?.ver === 0 && e2.cells.role.from === "posting" && e2.cells.role.mine === false, e2?.cells.role);
+  check("the company is hidden while the role is open", h1?.hidden === true && h1.name === "Locked company" && h1.friendly.open === 1, { hidden: h1?.hidden, open: h1?.friendly.open });
   check("stats and the scan summary count the open roles", v1.stats.openRoles === v0.stats.openRoles + 2 && v1.scan.openNow === v0.scan.openNow + 2 && v1.scan.opened7 === v0.scan.opened7 + 2 && v1.scan.mine7 === v0.scan.mine7 + 1 && !!v1.scan.lastRunAt, { before: v0.scan, after: v1.scan });
   check("the public counts carry the roles opened this week", v1.stats.openedWeek === v1.scan.opened7, { stats: v1.stats.openedWeek, scan: v1.scan.opened7 });
   const av = adm ? await adm.view() : null;
@@ -1269,16 +1270,16 @@ section("scan", async () => {
   }
   // Scan values behave like our own records: they say where they came from, and members can't overwrite them.
   const un = await G.act({ type: "unlockMany", items: [{ entity: "company", id: host.id, field: "identity" }, { entity: "engagement", id: e2.id, field: "role" }] });
-  const roleCell = un.json?.cells?.find((c) => c.field === "role")?.cell;
-  check("a scan value says it came from the posting, with no confirmation yet", un.status === 200 && roleCell?.v === "Interim CMO" && roleCell.ver === 0 && roleCell.from === "posting" && roleCell.mine === false, un.json);
-  check("an unlock says what it bought and what it cost", un.json?.message === `Unlocked ${host.name}, the role and the posting for 1 credit.`, un.json?.message);
+  const postCell = un.json?.cells?.find((c) => c.field === "posting")?.cell;
+  check("a scan value says it came from the posting, with no confirmation yet", un.status === 200 && postCell?.s === "value" && postCell.ver === 0 && postCell.from === "posting" && postCell.mine === false, un.json);
+  check("an unlock says what it bought and what it cost (the free title is not part of it)", un.json?.message === `Unlocked ${host.name} and the posting for 1 credit.`, un.json?.message);
   if (adm && newCo) {
-    // The posted rate is part of the same purchase: its lock buys the company, the role and the posting too.
+    // The posted rate is part of the same purchase: its lock buys the company and the posting too. The title was free all along.
     const e1 = newCo.engagements[0];
     const ur = await G.act({ type: "unlock", entity: "engagement", id: e1.id, field: "rate" });
     const rateCell = ur.json?.cells?.find((c) => c.id === e1.id && c.field === "rate")?.cell;
     const roleBack = ur.json?.cells?.find((c) => c.id === e1.id && c.field === "role")?.cell;
-    check("unlocking an open role's posted rate buys the company, the role and the posting with it, for 1 credit", ur.status === 200 && ur.json?.message === `Unlocked ${coName}, the role, the posting and the posted rate for 1 credit.` && rateCell?.v === "$150/hr" && roleBack?.v === "Fractional VP Sales", ur.json?.error ?? ur.json?.message);
+    check("unlocking an open role's posted rate buys the company and the posting with it, for 1 credit", ur.status === 200 && ur.json?.message === `Unlocked ${coName}, the posting and the posted rate for 1 credit.` && rateCell?.v === "$150/hr" && roleBack === undefined, ur.json?.error ?? ur.json?.message);
   }
   const over = await G.act({ type: "fill", entity: "engagement", id: e2.id, field: "role", value: "Interim Chief Marketing Officer" });
   check("a member can't overwrite a scan value", over.status === 400 && /already there|Only the person who held this seat/.test(over.json?.error ?? ""), over.json);

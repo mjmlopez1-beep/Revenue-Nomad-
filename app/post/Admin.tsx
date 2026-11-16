@@ -24,7 +24,7 @@ const stamp = (iso: string | null, none: string) =>
 /** Where the Pro offer sits. Keys the app sends get a plain name; anything else shows as words. */
 const PLACES: Record<string, string> = {
   zero_credits: "Out of credits, at a lock",
-  hidden_company: "A hidden company's record",
+  hidden_company: "A locked company's record",
   my_credits: "Your credits",
   hiring_tab: "The Hiring now tab",
 };

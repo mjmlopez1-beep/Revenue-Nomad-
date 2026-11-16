@@ -434,11 +434,19 @@ async function main() {
   const coRow = s2.out?.companies?.[0];
   check("search finds a company by name", coRow?.name === coName, s2.out);
   const s3 = await tool(at, "search_companies", { hiring_now: true, limit: 25 });
-  check("hiring_now finds hidden companies, never by name", s3.out?.companies?.length > 0 && s3.out.companies.some((c) => c.hidden && c.name === "Hidden company"), s3.out?.total);
+  check("hiring_now finds hidden companies, never by name", s3.out?.companies?.length > 0 && s3.out.companies.some((c) => c.hidden && c.name === "Locked company"), s3.out?.total);
   const s4 = await tool(at, "search_companies", { query: hiddenName });
   check("a hidden company's name finds nothing", s4.out?.total === 0, s4.out?.total);
   const s5 = await tool(at, "search_companies", { no_function_yet: "Marketing", fractional_friendly: true, limit: 25 });
   check("no_function_yet keeps companies that hired other functions and not this one", (s5.out?.companies ?? []).every((c) => c.functions_hired.length > 0 && !c.functions_hired.includes("Marketing")), s5.out?.companies?.slice(0, 3));
+  const rh = await tool(at, "search_companies", { repeat_hirer: true, limit: 25 });
+  check(
+    "repeat_hirer keeps companies with 2 or more fractional hires, or hires in 2 or more functions",
+    !rh.isError && rh.out?.companies?.length > 0 && rh.out.companies.every((c) => c.repeat_hirer === true && (c.fractional_hires >= 2 || c.functions_hired.length >= 2)),
+    rh.out?.companies?.slice(0, 3).map((c) => [c.fractional_hires, c.functions_hired]) ?? rh.text,
+  );
+  const ff = await tool(at, "search_companies", { fractional_friendly: true, limit: 25 });
+  check("fractional_friendly still works as before", !ff.isError && ff.out?.total > 0, [ff.out?.total, rh.out?.total]);
   const s6 = await tool(at, "search_companies", { function_hired: "Sales", revenue: ["$5m-$20m"], limit: 25 });
   check("function_hired and a revenue band typed loosely work", !s6.isError && (s6.out?.companies ?? []).every((c) => c.functions_hired.includes("Sales") && c.revenue === "$5M–$20M"), s6.out ?? s6.text);
   const s7 = await tool(at, "search_companies", { industry: ["Not an industry"] });
@@ -455,11 +463,11 @@ async function main() {
   check("get_company takes a visible company's name too", gByName.out?.id === coRow?.id);
   const hiddenRow = s3.out?.companies?.find((c) => c.hidden);
   const gh = await tool(at, "get_company", { company: hiddenRow?.id });
-  check("a hidden company's record keeps its name and website hidden", gh.out?.name === "Hidden company" && gh.out.hidden === true && !("website" in gh.out && !/hidden until/.test(gh.out.website)), { name: gh.out?.name, site: gh.out?.website });
+  check("a hidden company's record keeps its name and website hidden", gh.out?.name === "Locked company" && gh.out.hidden === true && !("website" in gh.out && !/locked until/.test(gh.out.website)), { name: gh.out?.name, site: gh.out?.website });
 
   const lr = await tool(at, "list_open_roles", { since_days: 7, function: "Marketing" });
-  const ourRole = lr.out?.roles?.find((r) => r.posted_hours === "15" && r.company === "Hidden company");
-  check("list_open_roles since 7 days lists this week's role at a hidden company", !!ourRole && ourRole.company_hidden && ourRole.function === "Marketing" && /hidden with the company/.test(ourRole.role) && ourRole.unlock?.call?.field === "identity", lr.out?.roles?.slice(0, 2));
+  const ourRole = lr.out?.roles?.find((r) => r.posted_hours === "15" && r.company === "Locked company");
+  check("list_open_roles since 7 days lists this week's role at a locked company, its title free", !!ourRole && ourRole.company_hidden && ourRole.function === "Marketing" && ourRole.role === "Fractional CMO" && /locked with the company/.test(ourRole.posting) && ourRole.unlock?.call?.field === "identity", lr.out?.roles?.slice(0, 2));
   const lrAll = await tool(at, "list_open_roles", { limit: 40 });
   check("list_open_roles lists open roles newest first", lrAll.out?.total >= 1 && (lrAll.out.roles ?? []).every((r, i, xs) => i === 0 || (xs[i - 1].listed_since ?? "") >= (r.listed_since ?? "")), lrAll.out?.total);
 

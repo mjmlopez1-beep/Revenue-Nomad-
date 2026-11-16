@@ -432,14 +432,17 @@ html:has(.lp) {
   font-size: 14px;
   font-weight: 800;
 }
-/* A hidden company, as the app draws one: a lock where the logo would be, the name in gray. */
-.lp-mark-hidden {
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  color: var(--muted);
+/* A locked company, as the app draws one: a blurred tile, name and site (globals.css .locked-*). */
+.lp-rec-head > .logo-lg {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
 }
-.lp-rec-name.lp-rec-name-hidden {
-  color: var(--muted);
+.lp-rec-site {
+  display: block;
+  width: fit-content;
+  font-size: 13px;
+  line-height: 20px;
 }
 .lp-rec-id {
   min-width: 0;

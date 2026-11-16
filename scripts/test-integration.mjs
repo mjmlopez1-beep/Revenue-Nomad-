@@ -271,13 +271,13 @@ section("bundle", async () => {
   const coRec = companyNamed(await adm.view(), co);
   const eid = coRec?.engagements[0]?.id;
 
-  // A new account buys it by clicking the role's lock.
+  // A new account buys it by clicking the posting's lock. The title is free.
   const M = await member("Mia Onecredit");
   const m0 = engOf(await M.view(), eid);
-  check("the company is hidden, and the role says it was not seen in the last scan", m0?.company.hidden === true && m0.unseen === true && m0.cells.role?.s === "locked" && m0.cells.posting?.s === "locked" && m0.cells.rate?.s === "locked", { hidden: m0?.company.hidden, unseen: m0?.unseen });
-  const buy = await M.act({ type: "unlock", entity: "engagement", id: eid, field: "role" });
-  check("unlocking the role buys the company, the role, the posting and the posted rate for 1 credit", buy.status === 200 && /^Unlocked .+, the role, the posting and the posted rate for 1 credit\.$/.test(buy.json?.message ?? "") && buy.json?.me?.credits === STARTER - 1 && buy.json?.cells?.some((x) => x.id === eid && x.field === "rate" && x.cell.v === "$12,000/mo"), buy.json);
-  check("the first-day limit counts that as one unlock, not four", buy.json?.me?.unlocksLeft === STARTER - 1 && buy.json?.me?.unlocked === 1, buy.json?.me);
+  check("the company is locked, the title is free, and the role says it was not seen in the last scan", m0?.company.hidden === true && m0.unseen === true && m0.cells.role?.s === "value" && m0.cells.posting?.s === "locked" && m0.cells.rate?.s === "locked", { hidden: m0?.company.hidden, unseen: m0?.unseen });
+  const buy = await M.act({ type: "unlock", entity: "engagement", id: eid, field: "posting" });
+  check("unlocking the posting buys the company, the posting and the posted rate for 1 credit", buy.status === 200 && /^Unlocked .+, the posting and the posted rate for 1 credit\.$/.test(buy.json?.message ?? "") && buy.json?.me?.credits === STARTER - 1 && buy.json?.cells?.some((x) => x.id === eid && x.field === "rate" && x.cell.v === "$12,000/mo"), buy.json);
+  check("the first-day limit counts that as one unlock, not three", buy.json?.me?.unlocksLeft === STARTER - 1 && buy.json?.me?.unlocked === 1, buy.json?.me);
 
   // Another new account spends all 25 in one go: the purchase and 24 more facts.
   const P = await member("Pat Allin");
@@ -289,11 +289,11 @@ section("bundle", async () => {
   const wall = await P.act({ type: "unlock", ...more[STARTER - 1] });
   check("at 0 credits and 0 unlocks left, the answer is about credits", wall.status === 400 && wall.json?.error === OUT, wall.json);
 
-  // A member who already sees the company (they added a fact there) pays once for the open role's title, posting and rate (LOGIC-2), here through the rate's lock.
+  // A member who already sees the company (they added a fact there) pays once for the open role's posting and rate (LOGIC-2), here through the rate's lock.
   const N = await member("Ned Twocredits");
   const fact = await N.act({ type: "add", company: co, companyFields: { industry: "SaaS" } });
   const two = await N.act({ type: "unlockMany", items: [{ entity: "engagement", id: eid, field: "rate" }, { entity: "engagement", id: eid, field: "posting" }] });
-  check("a member who already sees the company pays 1 for the role, the posting and the rate together", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 1 && two.json?.message === "Unlocked the role, the posting and the posted rate for 1 credit.", two.json?.me ?? two.json);
+  check("a member who already sees the company pays 1 for the posting and the rate together", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 1 && two.json?.message === "Unlocked the posting and the posted rate for 1 credit.", two.json?.me ?? two.json);
 
   // The second clean miss, 20 days after the posting was last seen: the role closes, and every
   // unlock made after it was last seen is paid back, row by row.
@@ -306,13 +306,13 @@ section("bundle", async () => {
   const pv2 = await P.view();
   const nv = await N.view();
   check("the member who spent everything has 1 credit again", pv2.me.credits === 1 && pv2.me.owed === 0, { credits: pv2.me.credits, owed: pv2.me.owed });
-  check("the member who paid 1 for the role, the posting and the rate gets it back", nv.me.credits === STARTER + 1 && nv.ledger.filter((l) => l.reason === CLOSED_REFUND).length === 1, nv.me.credits);
+  check("the member who paid 1 for the posting and the rate gets it back", nv.me.credits === STARTER + 1 && nv.ledger.filter((l) => l.reason === CLOSED_REFUND).length === 1, nv.me.credits);
   check("the closed role's company and posting are free to see now", engOf(await (await member("Lee Latecomer")).view(), eid)?.cells.posting?.s === "value" && engOf(nv, eid)?.company.hidden === false);
 
-  // The same role is then reported by two of them and removed. Nobody is paid a second time.
-  const r1 = await N.act({ type: "report", entity: "engagement", id: eid, field: "role" });
-  const r2 = await M.act({ type: "report", entity: "engagement", id: eid, field: "role" });
-  const rm = await adm.act({ type: "review", entity: "engagement", id: eid, field: "role", decision: "remove" });
+  // The same role's rate is then reported by two of them and removed. Nobody is paid a second time.
+  const r1 = await N.act({ type: "report", entity: "engagement", id: eid, field: "rate" });
+  const r2 = await M.act({ type: "report", entity: "engagement", id: eid, field: "rate" });
+  const rm = await adm.act({ type: "review", entity: "engagement", id: eid, field: "rate", decision: "remove" });
   const after = [(await M.view()).me.credits, (await P.view()).me.credits, (await N.view()).me.credits];
   check("an admin removal after the scan's refund pays nobody twice", r1.status === 200 && r2.status === 200 && rm.status === 200 && after[0] === STARTER && after[1] === 1 && after[2] === STARTER + 1, { statuses: [r1.status, r2.status, rm.status], after });
 });

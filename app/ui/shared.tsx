@@ -245,9 +245,83 @@ export const timeAgo = (iso: string | null | undefined) => {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
+/* ---------- a locked company ---------- */
+
+/*
+ * A company with an open role the member has not unlocked. The server never sends its name,
+ * site or logo, only HIDDEN_COMPANY and an opaque public id. What the member sees is made up
+ * here from that id alone: letters of a plausible length, blurred, so the row reads as a real
+ * company they can't see yet. Each id gets its own shape, so a page of them doesn't repeat.
+ */
+const ONSET = ["b", "br", "c", "cl", "d", "dr", "f", "fl", "g", "gr", "h", "j", "k", "l", "m", "n", "p", "pr", "r", "s", "st", "t", "tr", "v", "w", "z"];
+const VOWEL = ["a", "e", "i", "o", "u", "a", "e", "o", "ai", "ea", "io", "y"];
+const CODA = ["", "", "", "n", "r", "l", "s", "x", "m", "nd", "st", "k"];
+
+/** A small seeded random source (FNV-1a over the seed, then a 32-bit mix). */
+function seeded(seed: string) {
+  let h = 2166136261;
+  for (let k = 0; k < seed.length; k++) h = Math.imul(h ^ seed.charCodeAt(k), 16777619);
+  return () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+}
+
+type LockedLook = { name: string; site: string; hue: number; mark: string };
+const lockedCache = new Map<string, LockedLook>();
+/** A made-up name, site, tile color and two letters for a locked company, from its public id. */
+export function lockedLook(seed: string): LockedLook {
+  const hit = lockedCache.get(seed);
+  if (hit) return hit;
+  const r = seeded(seed || "locked");
+  const pick = (xs: string[]) => xs[Math.floor(r() * xs.length)];
+  const word = (min: number, max: number) => {
+    const want = min + Math.floor(r() * (max - min + 1));
+    let w = "";
+    while (w.length < want - 1) w += pick(ONSET) + pick(VOWEL);
+    w = (w + pick(CODA)).slice(0, max);
+    return w[0].toUpperCase() + w.slice(1);
+  };
+  const first = word(4, 10);
+  const name = r() < 0.3 ? `${first} ${word(3, 6)}` : first;
+  const look = { name, site: `${first.toLowerCase()}${pick([".com", ".com", ".com", ".io", ".co"])}`, hue: Math.floor(r() * 360), mark: initials(name) };
+  lockedCache.set(seed, look);
+  return look;
+}
+
+/** What a screen reader hears in place of a locked company's name. */
+export const LOCKED_SAY = "Company locked, 1 credit";
+
+/**
+ * A locked company's name: made-up letters, blurred, that nobody can select or read aloud,
+ * and a visually hidden label for screen readers. `seed` is the company's public id.
+ */
+export function LockedName({ seed, className }: { seed: string; className?: string }) {
+  return (
+    <span className={`locked-name${className ? ` ${className}` : ""}`}>
+      <span className="locked-blur" aria-hidden>
+        {lockedLook(seed).name}
+      </span>
+      <span className="sr-only">{LOCKED_SAY}</span>
+    </span>
+  );
+}
+
+/** A locked company's website line: a made-up domain, blurred. Silent for screen readers (the name already says it). */
+export function LockedSite({ seed, className }: { seed: string; className?: string }) {
+  return (
+    <span className={`locked-site mono${className ? ` ${className}` : ""}`} aria-hidden>
+      <span className="locked-blur">{lockedLook(seed).site}</span>
+    </span>
+  );
+}
+
 /* ---------- company logo ---------- */
 
-export function CompanyLogo({ name, domain, size = "md", hidden }: { name: string; domain: string | null; size?: "md" | "lg"; hidden?: boolean }) {
+/** `hidden`: a locked company's logo, a soft colored tile with blurred letters. `seed` (its public id) picks the color. */
+export function CompanyLogo({ name, domain, size = "md", hidden, seed }: { name: string; domain: string | null; size?: "md" | "lg"; hidden?: boolean; seed?: string }) {
   const sources = useMemo(
     () =>
       domain
@@ -258,12 +332,14 @@ export function CompanyLogo({ name, domain, size = "md", hidden }: { name: strin
   const [idx, setIdx] = useState(0);
   useEffect(() => setIdx(0), [domain]);
   const cls = `logo${size === "lg" ? " logo-lg" : ""}`;
-  if (hidden)
+  if (hidden) {
+    const look = lockedLook(seed ?? name);
     return (
-      <span className={`${cls} logo-hidden`} aria-hidden>
-        <IconLock size={size === "lg" ? 18 : 14} />
+      <span className={`${cls} logo-locked`} aria-hidden style={{ ["--lk" as string]: look.hue }}>
+        <span className="logo-locked-in">{look.mark}</span>
       </span>
     );
+  }
   if (idx >= sources.length)
     return (
       <span className={cls} aria-hidden style={{ background: `hsl(${hue(name)} 55% 93%)`, color: `hsl(${hue(name)} 45% 28%)`, borderColor: "transparent" }}>

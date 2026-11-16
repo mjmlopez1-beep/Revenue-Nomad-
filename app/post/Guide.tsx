@@ -53,8 +53,8 @@ export function Checklist({
           more: true,
         }
       : { done: me.added > 0, label: addLabel ?? "Add a fact", hint: "earns 1 credit", go: onAdd, open: false, more: false };
-  // The first unlock shows what a credit buys: who held a seat (an open role, for a member looking for roles).
-  const unlockLabel = me.goal === "roles" ? "See an open role" : "See who held a seat";
+  // The first unlock shows what a credit buys: who held a seat (who is hiring for an open role, for a member looking for roles).
+  const unlockLabel = me.goal === "roles" ? "See who is hiring" : "See who held a seat";
   const steps = [
     { done: me.unlocked > 0, label: unlockLabel, hint: "costs 1 credit", go: onUnlock, open: false, more: false },
     give,

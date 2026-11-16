@@ -35,7 +35,7 @@ export function faqItems(starter: number): [string, string][] {
     ],
     [
       "What if something is wrong?",
-      "Report it. It is hidden for you right away, and for everyone once a second member reports it, until we review it. A seat holder's report on their own seat hides it at once. A job posting that is still listed stays up for others while we check. If we remove a fact, the member who added it loses that credit and everyone who unlocked it gets theirs back.",
+      "Report it. You stop seeing it right away, and so does everyone once a second member reports it, until we review it. A seat holder's report on their own seat hides it at once. A job posting that is still listed stays up for others while we check. If we remove a fact, the member who added it loses that credit and everyone who unlocked it gets theirs back.",
     ],
     [
       `Why can I only earn ${EARN_CAP} credits a day?`,

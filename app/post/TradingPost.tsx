@@ -31,7 +31,7 @@ import type { Cell } from "@/lib/tableTypes";
 import type { Me } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconPlus, IconSearch, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
-  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, tabOf, sortFor, sortsFor, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
   notMineLabel, rowsFor, seatsMissing, shown, sortRows,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
@@ -142,7 +142,8 @@ const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
 function defaultsFor(me: Me) {
   return {
     t: (me.goal === "intro" || me.goal === "roles" ? "engagements" : "companies") as RecordType,
-    v: (me.goal === "friendly" ? "friendly" : me.goal === "roles" ? "hiring" : "all") as Tab,
+    // The goal key "friendly" is stored on profiles, so it stays. It opens on Repeat hirers now.
+    v: (me.goal === "friendly" ? "repeat" : me.goal === "roles" ? "hiring" : "all") as Tab,
     // Open roles read best newest first.
     s: (me.goal === "roles" ? "newest" : "fit") as SortKey,
     f: { ...EMPTY_FILTERS, notMine: me.goal === "adjacent" && !!me.function, fractionalNamed: me.goal === "intro" } as Filters,
@@ -154,7 +155,8 @@ function readPlace(me: Me) {
   const d = defaultsFor(me);
   const q = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
   const t = (Object.keys(TYPE_PARAM) as RecordType[]).find((k) => TYPE_PARAM[k] === q.get("t")) ?? d.t;
-  const v = TABS.find((x) => x.key === q.get("v"))?.key ?? d.v;
+  // An old link's v=friendly opens Repeat hirers, the tab that replaced it.
+  const v = tabOf(q.get("v")) ?? d.v;
   const s = SORTS.find((x) => x.key === q.get("s"))?.key ?? d.s;
   const f = q.has("f") ? decodeFilters(q.get("f") === "-" ? "" : q.get("f")!) : d.f;
   const p = PAGES.find((x) => x === q.get("p")) ?? null;
@@ -547,7 +549,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     setEditor(null);
     setPop(null);
     if (o?.companyId && isHidden(o.companyId)) {
-      toast("This company is hidden. Unlock it for 1 credit, then add what you know.");
+      toast("This company is locked. Unlock it for 1 credit, then add what you know.");
       return;
     }
     setAddOpts(o ?? {});
@@ -965,7 +967,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const noun = recordType === "companies" ? ["company", "companies"] : recordType === "engagements" ? ["seat", "seats"] : ["person", "people"];
 
   // The tab's title says where the member is.
-  const docTitle = page !== "table" ? PAGE_TITLE[page] : recordOpen && drawerInfo ? drawerInfo.c.name : TYPE_TITLE[recordType];
+  const docTitle = page !== "table" ? PAGE_TITLE[page] : recordOpen && drawerInfo ? (drawerInfo.c.hidden ? "Locked company" : drawerInfo.c.name) : TYPE_TITLE[recordType];
   useEffect(() => {
     document.title = `${docTitle} · Trading Post`;
   }, [docTitle]);
@@ -1210,11 +1212,17 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           type="button"
           className={phone ? `chip tp-pchip${tab === t.key ? " chip-on" : ""}` : `tp-tab${tab === t.key ? " on" : ""}`}
           aria-pressed={tab === t.key}
+          title={t.hint}
           onClick={() => setTab(t.key)}
         >
-          {t.label}{" "}
-          {/* The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
-          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{facets.tabs[t.key]}</span>
+          {t.label}
+          {/* All has no count: it is everything. The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
+          {t.key !== "all" && (
+            <>
+              {" "}
+              <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{facets.tabs[t.key]}</span>
+            </>
+          )}
         </button>
       ));
   // Phones: what to list (Companies, Seats or People, a short menu) is the list's title in the top bar, so it needs no row of its own (decision 16).
@@ -1606,7 +1614,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             anchor={editor.el}
             t={editor.t}
             initial={editor.initial}
-            company={ownerOf.get(editor.t.id)?.c.name ?? ""}
+            company={ownerOf.get(editor.t.id)?.c.hidden ? "this company" : ownerOf.get(editor.t.id)?.c.name ?? ""}
             ownRate={ownRateOf(editor.t)}
             onClose={() => setEditor(null)}
           />
@@ -1820,9 +1828,9 @@ function Empty({
       h = "Nothing is missing here";
       p = "Every company has its website, industry, size, revenue, HQ and LinkedIn on file.";
       actions = [all];
-    } else if (tab === "friendly") {
-      h = `No fractional-friendly ${noun} yet`;
-      p = "A company is listed here once it has an open fractional role or a fit score of 30 or more.";
+    } else if (tab === "repeat") {
+      h = `No repeat hirers in these ${noun} yet`;
+      p = "A company is listed here once it has 2 or more fractional hires on file, or hires in 2 or more functions. Open roles don't count as hires.";
       actions = [all];
     } else {
       h = `No ${noun} on file yet`;

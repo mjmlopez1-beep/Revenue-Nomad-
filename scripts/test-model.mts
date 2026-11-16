@@ -13,7 +13,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
-  fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, tabTest, toggleTest,
+  fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, sortFor, sortsFor, SORTS, TABS, repeatHirer, tabOf, tabTest, toggleTest,
 } from "../app/post/model";
 
 let passed = 0;
@@ -188,23 +188,43 @@ check("a fact the member added is not an unlock", !own.eng && !own.company, own)
 /* ---------- what Unlock all buys, one entry per purchase ---------- */
 
 {
-  const role = eng({ role: LOCKED, posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  // An open role's title is free (the server sends it as a value). Its posting and rate are one purchase.
+  const role = eng({ role: val("Fractional CMO"), posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   const past = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
   const visible = deriveAll([co("Seen Co", [role, past])])[0];
   const fields = (refs: { field: string }[]) => refs.map((t) => t.field).sort().join();
-  check("an open role's role, posting and rate are one purchase", fields(lockedInEngagement(role)) === "role");
+  check("an open role's posting and rate are one purchase", fields(lockedInEngagement(role)) === "posting");
   check("Unlock all at a visible company: the open role once and the past seat's two", visible.locked.length === 3, visible.locked);
-  const role2 = eng({ role: LOCKED, posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
+  const role2 = eng({ role: val("Fractional CMO"), posting: LOCKED, rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   const past2 = eng({ role: LOCKED, operator: LOCKED }, { source: "Published engagement" });
   const hc = { ...co("Hidden", [role2, past2]), hidden: true } as CompanyRec;
   hc.cells = { ...hc.cells, website: LOCKED, linkedin: LOCKED, about: LOCKED };
   const hidden = deriveAll([hc])[0];
-  check("Unlock all at a hidden company: the company (with the role, posting and rate) and the past seat's two", fields(hidden.locked) === "identity,operator,role", hidden.locked);
-  check("at a hidden company the open role's role and posting are quiet on a row", !!coverOf(hidden, role2, "role") && !!coverOf(hidden, role2, "posting") && !!coverOf(hidden, role2, "rate"));
-  check("at a visible company the posting and the rate are quiet while the role is locked", coverOf(visible, role, "role") === null && !!coverOf(visible, role, "posting") && !!coverOf(visible, role, "rate"));
+  check("Unlock all at a locked company: the company (with the posting and rate) and the past seat's two", fields(hidden.locked) === "identity,operator,role", hidden.locked);
+  check("at a locked company the open role's posting and rate are quiet on a row", !!coverOf(hidden, role2, "posting") && !!coverOf(hidden, role2, "rate"));
+  check("at a visible company the rate is quiet while the posting is locked", coverOf(visible, role, "posting") === null && !!coverOf(visible, role, "rate"));
   const rateOnly = eng({ role: val("Fractional CMO"), posting: val("https://jobs.example.com/x"), rate: LOCKED, status: val("Open role", { system: true }) }, { opened: "2026-11-03", closed: null });
   check("an open role with only its rate locked: the rate's lock is the one that spends", coverOf(deriveAll([co("Rate Co", [rateOnly])])[0], rateOnly, "rate") === null && fields(lockedInEngagement(rateOnly)) === "rate");
   check("an open role nobody holds can't have a start or end yet", isUnheldOpenRole(role) && !isUnheldOpenRole(past) && NOT_YET_ON_OPEN_ROLE.join() === "start,end,reason,sourced");
+}
+
+/* ---------- Repeat hirers (the tab that replaced Fractional friendly) ---------- */
+
+{
+  const withF = (name: string, fractional: number, functions: string[], engs: EngagementRec[] = []) => {
+    const c = co(name, engs);
+    c.friendly = { ...c.friendly, fractional, functions };
+    return c;
+  };
+  const open = eng({ status: val("Open role", { system: true }), function: val("Sales") }, { opened: "2026-11-03", closed: null });
+  const [two, fns, one, openOnly] = deriveAll([withF("Two Hires", 2, ["Sales"]), withF("Two Functions", 1, ["Sales", "Marketing"]), withF("One Hire", 1, ["Sales"]), withF("Open Only", 0, [], [open])]);
+  const rowOf = (i: typeof two) => rowsFor("companies", [i])[0];
+  check("Repeat hirers: 2 or more fractional hires", tabTest("repeat", rowOf(two)) && repeatHirer(two));
+  check("Repeat hirers: hires in 2 or more functions", tabTest("repeat", rowOf(fns)));
+  check("Repeat hirers: one hire is not enough", !tabTest("repeat", rowOf(one)));
+  check("Repeat hirers: an open role is not a hire", !tabTest("repeat", rowOf(openOnly)) && tabTest("hiring", rowOf(openOnly)));
+  check("the tab is labelled Repeat hirers, with a one-line hint, and Fractional friendly is gone", TABS.some((t) => t.key === "repeat" && t.label === "Repeat hirers" && !!t.hint) && !TABS.some((t) => /friendly/i.test(t.label)));
+  check("an old v=friendly address opens Repeat hirers", tabOf("friendly") === "repeat" && tabOf("hiring") === "hiring" && tabOf("nope") === null && tabOf(null) === null);
 }
 
 /* ---------- functions: hired, hiring now, and stories ---------- */
@@ -333,10 +353,19 @@ const unnamed = ALL_FIELDS.filter(({ f }) => !f.identity && !f.system).filter(({
 check("every field a member can add reads as a sentence in the history", unnamed.length === 0, unnamed.map((x) => `${x.entity}.${x.f.key}`));
 check("a person's LinkedIn keeps its capitals", ledgerLine(row("unlock", "Person LinkedIn", -1), 25).text === "Unlocked a person's LinkedIn at Acme" && fieldText("Person LinkedIn") === "person LinkedIn" && fieldText("HQ") === "HQ");
 check("a private rate never names a company", ledgerLine(row("fill", "Private rate", 1, ""), 25).text === "Shared a rate privately" && ledgerLine(row("Removed", "Private rate", -1, ""), 25).text === "Removed a rate you shared privately");
-// A hidden company is one purchase with its open role, and the company leads so a cut-off line keeps it.
+// A locked company is one purchase with its open role, and the company leads so a cut-off line keeps it.
 check(
-  "unlocking a hidden company says so",
-  ledgerLine(row("unlock", HIDDEN_COMPANY, -1), 25).text === "Unlocked Acme and its open role" && ledgerLine(row("unlock", HIDDEN_COMPANY, -1, HIDDEN_COMPANY), 25).text === "Unlocked a hidden company and its open role",
+  "unlocking a locked company says so, and never names one still locked",
+  ledgerLine(row("unlock", HIDDEN_COMPANY, -1), 25).text === "Unlocked Acme and its open role" &&
+    ledgerLine(row("unlock", HIDDEN_COMPANY, -1, HIDDEN_COMPANY), 25).text === "Unlocked a company that's hiring and its open role" &&
+    ledgerLine(row("unlock", "Rate", -1, HIDDEN_COMPANY), 25).text === "Unlocked the rate at a company that's hiring",
+);
+check(
+  "no credit history line says hidden or prints the placeholder",
+  ["fill", "unlock", "refund", "reversal", "retract", "referral", "confirm", "Refund for a role that had closed"].every((r) => {
+    const t = ledgerLine(row(r, r === "unlock" ? HIDDEN_COMPANY : "Role", -1, HIDDEN_COMPANY), 25).text;
+    return !/hidden/i.test(t) && !t.includes(HIDDEN_COMPANY);
+  }),
 );
 check("an add past the limit explains its 0", /No credit/.test(ledgerLine(row("fill", "Role", 0), 25).note ?? "") && ledgerLine(row("fill", "Role", 1), 25).note === undefined);
 check(

@@ -12,12 +12,13 @@ import {
 } from "@/lib/tableFields";
 
 export type RecordType = "companies" | "engagements" | "people";
-export type Tab = "all" | "friendly" | "hiring" | "following" | "unlocked" | "needs";
+export type Tab = "all" | "repeat" | "hiring" | "following" | "unlocked" | "needs";
 export type SortKey = "fit" | "newest" | "name" | "engagements" | "start" | "employees" | "revenue" | "fn" | "title" | "hq";
 
-export const TABS: { key: Tab; label: string }[] = [
+/** `hint` is the tab's one line of explanation (its tooltip). */
+export const TABS: { key: Tab; label: string; hint?: string }[] = [
   { key: "all", label: "All" },
-  { key: "friendly", label: "Fractional friendly" },
+  { key: "repeat", label: "Repeat hirers", hint: "Companies with 2 or more fractional hires on file, or hires in 2 or more functions. Open roles don't count as hires." },
   { key: "hiring", label: "Hiring now" },
   { key: "following", label: "Following" },
   { key: "unlocked", label: "Unlocked" },
@@ -134,7 +135,7 @@ export function lockedOf(entity: Entity, id: string, cells: Record<string, Cell>
  */
 export const isOpenRole = (e: EngagementRec) => (e.opened ? !e.closed : isOpenSeat(e));
 /** What one credit opens on an open role, together. Same list as BUNDLE_FIELDS in lib/table.ts. */
-export const OPEN_ROLE_BUNDLE = ["role", "posting", "rate"];
+export const OPEN_ROLE_BUNDLE = ["posting", "rate"];
 /** The one lock that spends for an open role: the first of its role, posting and rate still locked. */
 export const bundleLead = (e: EngagementRec) => OPEN_ROLE_BUNDLE.find((f) => e.cells[f]?.s === "locked") ?? null;
 /** An open role nobody holds yet: it has no start, end, why hired or how sourced. */
@@ -151,10 +152,10 @@ export const NOT_YET_ON_OPEN_ROLE = ["start", "end", "reason", "sourced"];
 export function coverOf(i: CoInfo, e: EngagementRec | null | undefined, field: string): string | null {
   if (i.c.hidden) {
     if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field))
-      return "Comes with the company. Unlock the company for 1 credit and you see its name, the role, the job posting and the posted rate.";
+      return "Comes with the company. Unlock the company for 1 credit and you see its name, the job posting and the posted rate.";
     return "Open the record to unlock this.";
   }
-  if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field) && bundleLead(e) !== field) return "Comes with this open role. One credit opens the role, the job posting and the posted rate.";
+  if (e && isOpenRole(e) && OPEN_ROLE_BUNDLE.includes(field) && bundleLead(e) !== field) return "Comes with this open role. One credit opens the job posting and the posted rate.";
   return null;
 }
 
@@ -238,7 +239,8 @@ function infoOf(c: CompanyRec): CoInfo {
   const personGated = ["name", "email", "phone", "linkedin"];
   const unlockedByMe =
     !!c.unlocked || engs.some(engUnlocked) || people.some(({ p }) => personGated.some((g) => p.cells[g] && isUnlocked(p.cells[g])));
-  const nameHay = [c.name, domain ?? ""].join(" ").toLowerCase();
+  // A locked company has no name to search (the server sends a placeholder).
+  const nameHay = c.hidden ? "" : [c.name, domain ?? ""].join(" ").toLowerCase();
   const parts: string[] = [nameHay, ...fns, ...textOf(c.cells)];
   for (const e of engs) parts.push(...textOf(e.cells));
   for (const { p } of people) parts.push(...textOf(p.cells));
@@ -487,6 +489,20 @@ const engsOf = (r: Row) => (r.e ? [r.e] : r.p ? [] : r.i.engs);
 const peopleOf = (r: Row) => (r.p ? [r.p] : r.e ? r.e.people : r.i.people.map((x) => x.p));
 const personKnown = (p: PersonRec) => ["name", "email", "phone", "linkedin"].some((f) => known(p.cells[f]));
 
+/** An old address's tab key to today's: "friendly" was the tab Repeat hirers replaced. */
+export const tabOf = (v: string | null): Tab | null => (v === "friendly" ? "repeat" : TABS.find((x) => x.key === v)?.key ?? null);
+
+/**
+ * A repeat hirer: 2 or more fractional hires on file, or fractional hires in 2 or more
+ * functions. Only hires count (Friendly.fractional and .functions leave out open roles and
+ * postings), so an open role alone never makes one.
+ */
+export function repeatHirer(i: CoInfo) {
+  const f = i.c.friendly;
+  return f.fractional >= 2 || f.functions.length >= 2;
+}
+
+/** Fractional friendly (an open role, or a fit tier of Medium or better). The MCP fractional_friendly filter still uses it. */
 export function friendlyCo(i: CoInfo) {
   return i.c.friendly.open > 0 || i.c.friendly.tier === "High" || i.c.friendly.tier === "Medium";
 }
@@ -496,8 +512,8 @@ const personUnlocked = (p: PersonRec) => ["name", "email", "phone", "linkedin"].
 export function tabTest(tab: Tab, r: Row): boolean {
   const i = r.i;
   switch (tab) {
-    case "friendly":
-      return friendlyCo(i);
+    case "repeat":
+      return repeatHirer(i);
     case "hiring":
       // A seat row (and a person tied to a seat) is in Hiring now when that seat is an open role.
       if (r.e) return isOpenRole(r.e);

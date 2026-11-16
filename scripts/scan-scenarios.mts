@@ -350,7 +350,7 @@ async function small() {
     [0, true, null, 0],
   );
   // A member buys it after the posting was gone.
-  await t.perform("tok-cy", { type: "unlock", entity: "engagement", id: e.id, field: "role" });
+  await t.perform("tok-cy", { type: "unlock", entity: "engagement", id: e.id, field: "posting" });
   eq("a member pays 1 credit for it", await credits("tok-cy"), 24);
   const closed = await scan([], tiny(0), now + DAY);
   eq("the second answer without it closes it, and pays the member back (before, it stayed open for good)", [closed.closed, closed.refunded, roleOf(await admin(), "Smallco Labs")?.cells.status?.s === "value" && roleOf(await admin(), "Smallco Labs")?.cells.status.v, await credits("tok-cy")], [1, 1, "Closed", 25]);

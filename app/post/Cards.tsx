@@ -6,15 +6,15 @@
  * about this record: a value, the member's own seat, an open seat, or the one lock worth a tap
  * (the role, the name). What every card would repeat stays off the card.
  *
- * The card itself opens the record, and a tap meant for it never spends a credit. A hidden
+ * The card itself opens the record, and a tap meant for it never spends a credit. A locked
  * company's card has no unlock button at all: its record's sticky bar holds the one unlock.
  */
 import { memo } from "react";
 import type { Me } from "@/lib/tableTypes";
-import { AddPill, CompanyLogo, IconLock, IconStar, fmtMonth, val } from "../ui/shared";
+import { AddPill, CompanyLogo, IconLock, IconStar, LockedName, LockedSite, fmtMonth, val } from "../ui/shared";
 import { coverOf, isOpenRole, isUnheldOpenRole, type Row, type Tab } from "./model";
 import { YourSeat, earnNote, useCellUi } from "./ui";
-import { Fit, FnChips, HeldBy, RowFact } from "./Tables";
+import { Fit, FnChips, HeldBy, LOCKED_TIP, RowFact, UnlockedTag } from "./Tables";
 import { RoleDate } from "./RoleDate";
 
 /**
@@ -31,14 +31,17 @@ function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (
     return (
       <div className="tp-pcard-top">
         <span className="tp-co tp-co-hidden">
-          <CompanyLogo name="" domain={null} hidden />
+          <CompanyLogo name="" domain={null} hidden seed={i.c.id} />
           <span className="tp-co-text">
             <h3 className="tp-pcard-h">
-              <button type="button" className="tp-pcard-open tp-co-name" onClick={open} title="This company has an open role, so its name is hidden until you unlock it.">
-                <span className="tp-hidden-name">Hidden company</span>
+              <button type="button" className="tp-pcard-open tp-co-name" onClick={open} title={LOCKED_TIP}>
+                <span className="tp-hidden-name">
+                  <LockedName seed={i.c.id} />
+                </span>
                 <span className="sr-only">. Open the record to see what unlocking it shows.</span>
               </button>
             </h3>
+            <LockedSite seed={i.c.id} className="tp-co-dom" />
           </span>
         </span>
         {right}
@@ -61,6 +64,8 @@ function Head({ r, right, onOpen }: { r: Row; right?: React.ReactNode; onOpen: (
           </button>
         </h3>
         {i.domain && <span className="tp-co-dom mono">{i.domain}</span>}
+        {/* A company card says it beside its Hiring now chip (Fit). Seat and person cards say it here. */}
+        {!right && i.c.unlocked && i.c.friendly.open > 0 && <UnlockedTag />}
       </div>
       {right}
     </div>
@@ -78,14 +83,14 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 
 /**
  * What a hidden company's card holds back, as plain text. Not a button: the card opens the
- * record, and the record's sticky bar has "Unlock this role · 1 credit".
+ * record, and the record's sticky bar has "Unlock company, posting and rate · 1 credit".
  */
 function HiddenLine() {
   return (
     <div className="tp-pcard-hidden">
       <IconLock />
       <span>
-        Company, role, posting and rate <span className="tp-pcard-hidden-cost">· 1 credit together</span>
+        Company, posting and rate <span className="tp-pcard-hidden-cost">· 1 credit together</span>
       </span>
     </div>
   );
@@ -97,7 +102,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
   const ui = useCellUi();
   const i = r.i;
   const c = i.c;
-  const at = c.hidden ? "the hidden company" : c.name;
+  const at = c.hidden ? "this company" : c.name;
   const open = i.engs.find(isOpenRole) ?? null;
   // A hidden company is about its open role. Any other company leads with its latest seat.
   const e = c.hidden ? open ?? i.latest : i.latest;
@@ -170,7 +175,7 @@ const CompanyCard = memo(function CompanyCard({ r, me, onOpen, miss: showMiss }:
 const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpen: (r: Row) => void }) {
   const e = r.e!;
   const i = r.i;
-  const at = i.c.hidden ? "the hidden company" : i.c.name;
+  const at = i.c.hidden ? "this company" : i.c.name;
   const t = (field: string) => ({ entity: "engagement" as const, id: e.id, field });
   const fn = val(e.cells.function);
   const type = val(e.cells.type);
@@ -220,7 +225,7 @@ const EngCard = memo(function EngCard({ r, me, onOpen }: { r: Row; me: Me; onOpe
 const PersonCard = memo(function PersonCard({ r, onOpen }: { r: Row; onOpen: (r: Row) => void }) {
   const p = r.p!;
   const i = r.i;
-  const at = i.c.hidden ? "the hidden company" : i.c.name;
+  const at = i.c.hidden ? "this company" : i.c.name;
   const t = (field: string) => ({ entity: "contact" as const, id: p.id, field });
   const title = val(p.cells.title);
   const rel = val(p.cells.relationship);

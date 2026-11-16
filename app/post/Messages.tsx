@@ -12,7 +12,8 @@
  */
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ConversationRec, MessageRec, ReportedMessage } from "@/lib/tableTypes";
-import { IconChevron, initials, post, useToast } from "../ui/shared";
+import { IconChevron, LockedName, initials, post, useToast } from "../ui/shared";
+import { HIDDEN_COMPANY } from "@/lib/tableFields";
 import { Sheet, useUi } from "./ui";
 import { useLayout } from "./hooks";
 import "./messages.css";
@@ -62,7 +63,7 @@ const seatDetail = (c: ConversationRec) => [c.about.seat, c.about.years].filter(
 /** The line above the first message: why this conversation exists. */
 function contextLine(c: ConversationRec): string {
   const d = seatDetail(c);
-  const at = `${c.about.company || "a company"}${d ? ` (${d})` : ""}`;
+  const at = `${c.about.company && c.about.company !== HIDDEN_COMPANY ? c.about.company : "a company that's hiring"}${d ? ` (${d})` : ""}`;
   return c.started ? `You wrote to ${c.with.first} about their seat at ${at}.` : `${c.with.first} unlocked your seat at ${at} and wants to talk.`;
 }
 
@@ -176,7 +177,7 @@ export function MessagesPage({ onBack, openCompany }: { onBack: () => void; open
                 <span className="ms-row-when num">{when(c.updatedAt)}</span>
               </span>
               <span className="ms-row-about">
-                {c.about.company}
+                {c.about.company === HIDDEN_COMPANY ? <LockedName seed={c.about.companyId} /> : c.about.company}
                 {c.about.seat ? ` · ${c.about.seat}` : ""}
               </span>
               <span className="ms-row-last">
@@ -354,7 +355,13 @@ function Thread({
             {c.with.name}
           </h2>
           <p className="ms-head-sub">
-            {[c.with.title, c.about.company].filter(Boolean).join(" · ")}
+            {[c.with.title, c.about.company === HIDDEN_COMPANY ? "" : c.about.company].filter(Boolean).join(" · ")}
+            {c.about.company === HIDDEN_COMPANY && (
+              <>
+                {c.with.title ? " · " : ""}
+                <LockedName seed={c.about.companyId} />
+              </>
+            )}
             {c.about.company && (
               <>
                 {" · "}

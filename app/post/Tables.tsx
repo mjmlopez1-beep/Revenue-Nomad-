@@ -17,7 +17,7 @@
  */
 import { memo, useContext, useRef, useState, type ReactNode } from "react";
 import type { Cell, EngagementRec, Me } from "@/lib/tableTypes";
-import { AddPill, CompanyLogo, IconChevron, IconLock, IconStar, fmtMonth } from "../ui/shared";
+import { AddPill, CompanyLogo, IconCheck, IconChevron, IconLock, IconStar, LockedName, LockedSite, fmtMonth } from "../ui/shared";
 import {
   COMPANY_GTM, NOT_YET_ON_OPEN_ROLE, coverOf, fitReason, fitTier, isOpenRole, isUnheldOpenRole, lastClosedPosting, namedFn, recentSeats, shown, type CoInfo, type FactRef, type Row, type SortKey, type Tab,
 } from "./model";
@@ -33,9 +33,27 @@ export function Fit({ i, big, hot }: { i: CoInfo; big?: boolean; hot?: boolean }
   const f = i.c.friendly;
   const { label, cls } = fitTier({ ...f, recent: recentSeats(i) }, i.c.engagements.length, !!lastClosedPosting(i));
   const ember = hot && f.open > 0;
-  return (
+  const chip = (
     <span className={`chip tp-tier ${ember ? "chip-ember" : cls}${big ? " tp-tier-big" : ""}`} title={`${fitReason(i).replace(/\.$/, "")}. Fit score ${f.score} of 100.`}>
       {label}
+    </span>
+  );
+  // A hiring company the member paid to see: say so beside the chip, or it looks like one that was never locked.
+  if (big || !(f.open > 0 && i.c.unlocked && !i.c.hidden)) return chip;
+  return (
+    <span className="tp-tierwrap">
+      {chip}
+      <UnlockedTag />
+    </span>
+  );
+}
+
+/** A quiet mark on a hiring company the member unlocked. Others still see it locked. */
+export function UnlockedTag() {
+  return (
+    <span className="tp-unlocked" title="You unlocked this company, so you see its name. It stays locked for other members until the role closes.">
+      <IconCheck size={11} />
+      Unlocked
     </span>
   );
 }
@@ -200,9 +218,13 @@ export function RowFact({
   return <FactCell t={t} cell={cell} render={render} addLabel={addLabel} at={at} />;
 }
 
+/** The tooltip on a locked company's name. */
+export const LOCKED_TIP = "This company is hiring a fractional now. Unlock it to see the company.";
+
 /**
- * A company with an open role the member hasn't unlocked: a lock where the logo would be, and
- * what is free to know (industry, size, region) where the domain would be.
+ * A company with an open role the member hasn't unlocked: a blurred tile where the logo would
+ * be, a blurred made-up name (LockedName, from the public id only), and what is free to know
+ * (industry, size, region) where the domain would be. The record's header adds a blurred site.
  *   table   the lock is the button, and only its own 28px box spends. Point at it, or tab to
  *           it, and its label reads "Unlock company · 1 credit". The name and the line under it
  *           open the record, so a click meant for the record never spends a credit.
@@ -216,9 +238,12 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
   if (big)
     return (
       <span className="tp-co tp-co-hidden big">
-        <CompanyLogo name="" domain={null} hidden size="lg" />
+        <CompanyLogo name="" domain={null} hidden seed={i.c.id} size="lg" />
         <span className="tp-co-text">
-          <h2 className="tp-dname">Hidden company</h2>
+          <h2 className="tp-dname">
+            <LockedName seed={i.c.id} />
+          </h2>
+          <LockedSite seed={i.c.id} className="tp-co-dom" />
           {teaser}
         </span>
       </span>
@@ -226,11 +251,11 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
   const table = ui.layout !== "phone";
   return (
     <span className={`tp-co tp-co-hidden${table ? " in-table" : ""}`}>
-      <CompanyLogo name="" domain={null} hidden />
+      <CompanyLogo name="" domain={null} hidden seed={i.c.id} />
       <span className="tp-co-text">
         <span className="tp-co-name">
-          <span className="tp-hidden-name" title="This company has an open role, so its name is hidden until you unlock it.">
-            Hidden company
+          <span className="tp-hidden-name" title={LOCKED_TIP}>
+            <LockedName seed={i.c.id} />
           </span>
         </span>
         {teaser}
@@ -240,7 +265,11 @@ export function HiddenCompany({ i, big, bare }: { i: CoInfo; big?: boolean; bare
   );
 }
 
-function CompanyName({ i, following }: { i: CoInfo; following?: boolean }) {
+/**
+ * `tagged`: a hiring company the member unlocked says "Unlocked" beside its name. The companies
+ * table says it beside its Hiring now chip instead (Fit), so it passes false.
+ */
+function CompanyName({ i, following, tagged = true }: { i: CoInfo; following?: boolean; tagged?: boolean }) {
   if (i.c.hidden) return <HiddenCompany i={i} />;
   return (
     <span className="tp-co">
@@ -253,6 +282,7 @@ function CompanyName({ i, following }: { i: CoInfo; following?: boolean }) {
               <IconStar size={11} filled />
             </span>
           )}
+          {tagged && i.c.unlocked && i.c.friendly.open > 0 && <UnlockedTag />}
         </span>
         {i.domain && (
           <span className="tp-co-dom mono" title={i.domain}>
@@ -341,7 +371,7 @@ const CompanyRow = memo(function CompanyRow({ r, mine, sel, onOpen, isNew, gap }
   return (
     <tr {...rowProps(r, sel, onOpen)}>
       <td className="tp-sticky">
-        <CompanyName i={i} following={c.following} />
+        <CompanyName i={i} following={c.following} tagged={false} />
         {isNew && (
           <span className="tp-new" title="New since your last visit">
             <span className="sr-only">New since your last visit</span>

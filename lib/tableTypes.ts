@@ -250,7 +250,7 @@ export interface ConversationRec {
   about: {
     companyId: string;
     engagementId: string;
-    /** The company as the viewer sees it ("Hidden company" while it is hidden for them). */
+    /** The company as the viewer sees it (HIDDEN_COMPANY, "Locked company", while it is locked for them). */
     company: string;
     /** The seat as the viewer can see it: its role, else its function, else null. */
     seat: string | null;
@@ -596,7 +596,7 @@ export type ActionResult = {
 
 export const GOALS = [
   { key: "roles", label: "Open fractional roles" },
-  { key: "friendly", label: "Companies that hire fractionals" },
+  { key: "friendly", label: "Companies that hire fractionals again" },
   { key: "adjacent", label: "Companies that have not hired my function yet" },
   { key: "intro", label: "A fractional who held the seat and can tell me about it" },
 ] as const;

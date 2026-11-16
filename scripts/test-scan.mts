@@ -10,7 +10,7 @@ import { spawnSync } from "child_process";
 import { mkdirSync, writeFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { cleanCompany, cleanTitle, companyDomain, isRealCompany, roleKey } from "../lib/scan/clean";
+import { cleanCompany, cleanTitle, companyDomain, isRealCompany, roleKey, titleWithout } from "../lib/scan/clean";
 import { collectOpenRoles, dedupeRoles, MAX_ROLES, roleFunction, rolesFromRaw, roleType, screenJob, type ScanRawJob } from "../lib/scan/collect";
 import { hoursFromText, parseFractionalJobs } from "../lib/scan/sources/fractionaljobs";
 import { renderDigest } from "../lib/digest";
@@ -302,6 +302,20 @@ const titles: [string, string, string?][] = [
 ];
 for (const [raw, want, company] of titles) eq(`title "${raw}"`, cleanTitle(raw, company), want);
 
+// An open role's title is free while its company is locked, so the title must never name the company.
+const withouts: [string, string, string | null, string][] = [
+  ["Fractional CMO at Acme Health", "Acme Health", null, "Fractional CMO"],
+  ["Acme Health: Fractional CMO", "Acme Health", null, "Fractional CMO"],
+  ["Fractional CMO, Acme Health (Remote)", "Acme Health", null, "Fractional CMO"],
+  ["Fractional Acme Health CMO", "Acme Health", null, "Fractional CMO"],
+  ["Fractional VP Sales for acmehealth.com", "Acme Health", "acmehealth.com", "Fractional VP Sales"],
+  ["Acmehealth Fractional RevOps Lead", "Acme Health", "https://www.acmehealth.com/jobs", "Fractional RevOps Lead"],
+  ["Fractional CMO", "Acme Health", "acmehealth.com", "Fractional CMO"],
+  ["Acme Health", "Acme Health", null, "Fractional role"],
+  ["Head of Growth (Fractional)", "Growthly", "growthly.io", "Head of Growth (Fractional)"],
+];
+for (const [raw, co, dom, want] of withouts) eq(`a free title never names its locked company: "${raw}"`, titleWithout(raw, co, dom), want);
+
 eq("key squeezes everything but letters and digits", roleKey("Acme & Sons", "Fractional VP, Sales (EMEA)"), "acmesons::fractionalvpsalesemea");
 check("a real company name passes", isRealCompany("A Place for Mom") && isRealCompany("Acme Robotics") && isRealCompany("Fieldstone Talent"));
 
@@ -472,7 +486,7 @@ eq("subject: nothing new", digest({ newRoles: 0, newRolesMine: 0, newRolesMineHi
 
 const d = digest();
 check("greets by first name", d.text.startsWith("Hi Maya,") && d.html.includes("Hi Maya,"));
-check("says how many of the companies are hidden", d.text.includes("3 of the 4 companies are hidden") && d.html.includes("3 of the 4 companies are hidden"));
+check("says how many of the companies are hidden", d.text.includes("3 of the 4 companies are locked") && d.html.includes("3 of the 4 companies are locked"));
 check("lists functions with counts", ["Sales  4", "Marketing  3", "RevOps  3", "Customer Success  2"].every((l) => d.text.includes(l)), d.text);
 check("says how many roles closed", d.text.includes("5 roles closed this week") && d.html.includes("5 roles closed this week"));
 check("has the seats line", d.text.includes("9 things are still missing on your seats. Add one and you earn a credit.") && d.html.includes("9 things are still missing on your seats. Add one and you earn a credit."));
@@ -483,7 +497,7 @@ check("one credit reads right, and says how to earn", digest({ credits: 1, seatF
 check("3 credits or fewer says how to earn", digest({ credits: 3, seatFactsMissing: 0 }).text.includes("You have 3 credits left. Add a fact you know and you earn another.") && digest({ credits: 4, seatFactsMissing: 0 }).text.includes("You have 4 credits to spend."));
 check("with the seats line above it, a low balance does not repeat how to earn", digest({ credits: 2 }).text.includes("You have 2 credits left.\n") && !digest({ credits: 2 }).text.includes("earn another"));
 check("one closed role reads right", digest({ closedRoles: 1 }).text.includes("1 role closed this week. Its company is visible again."));
-check("all hidden reads right", digest({ newRolesMineHidden: 4 }).text.includes("All 4 companies are hidden."));
+check("all hidden reads right", digest({ newRolesMineHidden: 4 }).text.includes("All 4 companies are locked."));
 check("the button comes before the list of functions", d.html.indexOf("See this week&#39;s roles") < d.html.indexOf("New roles by function") && d.text.indexOf("See this week's roles") < d.text.indexOf("New roles by function"));
 check("says so when every company in the member's function is already visible", digest({ newRolesMineHidden: 0 }).text.includes("You can already see all 4 companies."));
 check("has one button to the app", (d.html.match(/See this week&#39;s roles/g) ?? []).length === 1 && d.html.includes('href="https://table-pilot.up.railway.app/?k=abc123&amp;tab=roles"'), d.html.match(/<a [^>]*>/g));

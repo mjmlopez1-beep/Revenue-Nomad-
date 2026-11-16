@@ -11,7 +11,7 @@ import { ActionError, connectorState, digestEnabled, inviteCode, perform, update
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
-  EMPTY_FILTERS, applyFilters, fitReason, fitTier, isOpenRole, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  EMPTY_FILTERS, applyFilters, fitReason, fitTier, friendlyCo, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   type CoInfo, type FactRef, type Filters,
 } from "@/app/post/model";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
@@ -30,8 +30,8 @@ export class ToolProblem extends Error {}
 /* ---------- how cells read ---------- */
 
 export const LOCKED = "locked, 1 credit to unlock";
-const LOCKED_ROLE = "locked, 1 credit opens this open role's title, job posting and posted rate together";
-const LOCKED_WITH_COMPANY = "hidden with the company, 1 credit unlocks the company and this";
+const LOCKED_ROLE = "locked, 1 credit opens this open role's job posting and posted rate together";
+const LOCKED_WITH_COMPANY = "locked with the company, 1 credit unlocks the company and this";
 const REVIEW = "under review";
 
 /** Output keys (what a model reads and sends back) and the field each one is. */
@@ -76,12 +76,14 @@ function companySummary(i: CoInfo): ToolOut {
   return {
     id: c.id,
     name: c.name,
-    ...(c.hidden ? { hidden: true, hidden_note: "Hidden while it has an open role. Unlock the company for 1 credit to see its name, and its open roles come with it." } : {}),
+    ...(c.hidden ? { hidden: true, hidden_note: "Locked while it has an open role. Unlock the company for 1 credit to see its name, and the posting and posted rate of its open roles come with it." } : {}),
     ...readAll(c.cells, { industry: "industry", employees: "employees", revenue: "revenue", hq: "hq" }),
     fit: fitOf(i),
     fit_score: c.friendly.score,
     why: fitReason(i),
     functions_hired: i.fnState.hired,
+    fractional_hires: c.friendly.fractional,
+    ...(repeatHirer(i) ? { repeat_hirer: true } : {}),
     ...(i.fnState.hiring.length ? { hiring_now: i.fnState.hiring } : {}),
     seats: i.engs.length,
     ...(c.friendly.open ? { open_roles: c.friendly.open } : {}),
@@ -99,7 +101,7 @@ function personOut(p: PersonRec, seatId?: string | null): ToolOut {
 
 function seatOut(e: EngagementRec, i: CoInfo, mv: MemberView): ToolOut {
   const open = isOpenRole(e);
-  const lockedFor = (field: string) => (open && ["role", "posting", "rate"].includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
+  const lockedFor = (field: string) => (open && ["posting", "rate"].includes(field) ? (i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE) : LOCKED);
   const facts = readAll(e.cells, SEAT_KEYS, lockedFor);
   const holder = e.cells.operator;
   if (holder?.s === "value" && holder.member) facts.seat_holder += holder.member.you ? " (you)" : ` (on Trading Post${holder.member.title ? `, ${holder.member.title}` : ""})`;
@@ -166,7 +168,7 @@ const purchases = (i: CoInfo) => i.locked.length;
 
 function companyOut(i: CoInfo, mv: MemberView): ToolOut {
   const c = i.c;
-  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "hidden until you unlock the company (1 credit)" : LOCKED));
+  const facts = readAll(c.cells, COMPANY_KEYS, (f) => (c.hidden && ["website", "linkedin", "about"].includes(f) ? "locked until you unlock the company (1 credit)" : LOCKED));
   return {
     ...companySummary(i),
     ...facts,
@@ -234,6 +236,8 @@ export interface SearchArgs {
   function_hired?: string;
   no_function_yet?: string;
   fractional_friendly?: boolean;
+  /** 2 or more fractional hires on file, or hires in 2 or more functions (the app's Repeat hirers). */
+  repeat_hirer?: boolean;
   hiring_now?: boolean;
   industry?: string[];
   employees?: string[];
@@ -265,11 +269,12 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
   if (a.function) f.fn = [listValue("function", FUNCTIONS, a.function)];
   const hired = a.function_hired ? listValue("function_hired", FUNCTIONS, a.function_hired) : null;
   const notYet = a.no_function_yet ? listValue("no_function_yet", FUNCTIONS, a.no_function_yet) : null;
-  const tab = a.hiring_now ? "hiring" : a.following ? "following" : a.unlocked ? "unlocked" : a.fractional_friendly ? "friendly" : "all";
+  const tab = a.hiring_now ? "hiring" : a.following ? "following" : a.unlocked ? "unlocked" : a.repeat_hirer ? "repeat" : "all";
   const q = String(a.query ?? "").slice(0, 200);
   let rows = applyFilters(rowsFor("companies", mv.infos), f, tab, q, me).rows;
-  // The tab covers one of these; the others are checked here.
-  if (a.hiring_now && a.fractional_friendly) rows = rows.filter((r) => r.i.c.friendly.fractional > 0);
+  // The tab covers one of these; the others are checked here. fractional_friendly keeps its old meaning (the app no longer has that tab).
+  if (a.fractional_friendly) rows = a.hiring_now ? rows.filter((r) => r.i.c.friendly.fractional > 0) : rows.filter((r) => friendlyCo(r.i));
+  if (a.repeat_hirer && tab !== "repeat") rows = rows.filter((r) => repeatHirer(r.i));
   if (a.following && tab !== "following") rows = rows.filter((r) => r.i.c.following);
   if (a.unlocked && tab !== "unlocked") rows = rows.filter((r) => r.i.unlockedByMe);
   if (hired) rows = rows.filter((r) => r.i.fnState.hired.includes(hired));
@@ -330,7 +335,7 @@ function openRoles(mv: MemberView, a: RoleArgs) {
 function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
   const lockedRole = i.c.hidden ? LOCKED_WITH_COMPANY : LOCKED_ROLE;
   const facts = readAll(e.cells, { function: "function", role: "role", type: "type", status: "status", posted_rate: "rate", posted_hours: "hours", posting: "posting" }, (f) =>
-    ["role", "posting", "rate"].includes(f) ? lockedRole : LOCKED,
+    ["posting", "rate"].includes(f) ? lockedRole : LOCKED,
   );
   return {
     seat_id: e.id,
@@ -344,8 +349,8 @@ function roleOut(i: CoInfo, e: EngagementRec): ToolOut {
     ...(i.c.friendly.fractional ? { past_fractional_hires: i.c.friendly.fractional } : {}),
     unlock: i.c.hidden
       ? { cost: "1 credit opens the company and its open roles", call: { entity: "company", id: i.c.id, field: "identity" } }
-      : e.cells.role?.s === "locked" || e.cells.posting?.s === "locked" || e.cells.rate?.s === "locked"
-        ? { cost: "1 credit opens the role, the posting and the posted rate", call: { entity: "seat", id: e.id, field: "role" } }
+      : e.cells.posting?.s === "locked" || e.cells.rate?.s === "locked"
+        ? { cost: "1 credit opens the posting and the posted rate", call: { entity: "seat", id: e.id, field: e.cells.posting?.s === "locked" ? "posting" : "rate" } }
         : "nothing locked",
   };
 }
@@ -436,7 +441,7 @@ function unlockFind(mv: MemberView, entityRaw: string, id: string, fieldRaw: str
     const i = companyInfo(mv, id);
     if (all) return { items: i.locked, what: `everything locked at ${i.c.name}`, id: i.c.id };
     const field = ["identity", "name"].includes(fieldRaw) ? "identity" : fieldFrom(COMPANY_KEYS, fieldRaw);
-    if (!field) throw new ToolProblem(`On a company, field is "everything", "identity" (a hidden company's name) or one of: ${Object.keys(COMPANY_KEYS).join(", ")}`);
+    if (!field) throw new ToolProblem(`On a company, field is "everything", "identity" (a locked company's name) or one of: ${Object.keys(COMPANY_KEYS).join(", ")}`);
     if (field === "identity" || (i.c.hidden && ["website", "linkedin", "about"].includes(field)))
       return { items: i.c.hidden ? [{ entity: "company", id: i.c.id, field: "identity" }] : [], what: "the company and its open roles", id: i.c.id };
     return { items: i.c.cells[field]?.s === "locked" ? [{ entity: "company", id: i.c.id, field }] : [], what: `the ${outKey(COMPANY_KEYS, field)}`, id: i.c.id };
@@ -627,7 +632,7 @@ export async function addMySeat(ctx: Ctx, a: SeatArgs): Promise<ToolOut> {
   let website = a.website;
   const known = mv.byId.get(name);
   if (known) {
-    if (known.c.hidden) throw new ToolProblem("That company is hidden for you, so send its real name in company instead of the id.");
+    if (known.c.hidden) throw new ToolProblem("That company is locked for you, so send its real name in company instead of the id.");
     name = known.c.name;
     website ??= shown(known.c.cells.website) ?? undefined;
   }
