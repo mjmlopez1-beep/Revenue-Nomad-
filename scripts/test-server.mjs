@@ -750,9 +750,12 @@ section("benchmarks", async () => {
   const addRate = (who, host, fn, rev, extra) =>
     who.act({ type: "add", company: host.name, newEngagement: true, engagementFields: { function: fn, ...(rev === "All" ? {} : { revenue: rev }), ...extra } });
 
-  // The plain floor: a group with no Rate Index data shows numbers at 5 rates.
+  // A floor counts people, and a new account's rate does not count toward it yet, so the
+  // rates below come from seed members, one each (scripts/test-bench.mjs has the full rules).
+  const T = seedFile ? Array.from({ length: 10 }, (_, i) => seedClient(11 + i, ip(170 + i))).filter(Boolean) : [];
+  // The plain floor: a group with no Rate Index data shows numbers at 5 contributors.
   const plain = rows.find((r) => !r.indexed && r.revenue !== "All" && r.monthly.n === 0) ?? rows.find((r) => !r.indexed && r.monthly.n < 5);
-  if (plain) {
+  if (plain && T.length === 10) {
     const rates = ["$6k/mo", "$8k/mo", "$9k per month", "$10k/mo", "$12,000 monthly"];
     const need = 5 - plain.monthly.n;
     for (let i = 0; i < need; i++) {
@@ -760,15 +763,15 @@ section("benchmarks", async () => {
         const pre = rowOf(await R.view(), plain.function, plain.revenue).monthly;
         check("a group with 4 rates shows no numbers", pre.median === undefined && pre.n === 4, pre);
       }
-      await addRate(R, hosts[10 + i], plain.function, plain.revenue, { pricing: "Monthly retainer", rate: rates[i] });
+      await addRate(T[i], hosts[10 + i], plain.function, plain.revenue, { pricing: "Monthly retainer", rate: rates[i] });
     }
     const m = rowOf(await R.view(), plain.function, plain.revenue).monthly;
-    check("5 rates show a median and middle half", m.n === 5 && m.min === 5 && typeof m.median === "number" && m.p25 <= m.median && m.median <= m.p75, m);
-  } else skip("plain floor of 5", "every group already has Rate Index data or 5 rates");
+    check("5 contributors show a median, and the range waits for 10", m.n === 5 && m.min === 5 && typeof m.median === "number" && m.p25 === undefined && m.p75 === undefined, m);
+  } else skip("plain floor of 5", T.length === 10 ? "every group already has Rate Index data or 5 rates" : "no seed file the server knows");
 
   // The Rate Index floor: a group with Rate Index data shows numbers only at 20 rates.
   const idx = rows.find((r) => r.indexed && r.revenue !== "All" && r.hourly.min === 20 && r.hourly.n >= 10 && r.hourly.n < 20);
-  if (idx) {
+  if (idx && T.length === 10 && idx.hourly.n >= 15) {
     const I = await member("Ina Index", ip(94));
     check("a Rate Index group below 20 shows no numbers", idx.hourly.median === undefined && idx.hourly.min === 20, idx.hourly);
     const need = 20 - idx.hourly.n;
@@ -777,22 +780,25 @@ section("benchmarks", async () => {
         const pre = rowOf(await I.view(), idx.function, idx.revenue).hourly;
         check("a Rate Index group with 19 rates still shows no numbers", pre.n === 19 && pre.median === undefined, pre);
       }
-      await addRate(I, hosts[20], idx.function, idx.revenue, { pricing: "Hourly", rate: `$${140 + i * 5}/hr` });
+      await addRate(T[5 + i], hosts[20], idx.function, idx.revenue, { pricing: "Hourly", rate: `$${140 + i * 5}/hr` });
     }
     const h = rowOf(await I.view(), idx.function, idx.revenue).hourly;
-    check("a Rate Index group shows numbers at 20 rates", h.n === 20 && h.min === 20 && typeof h.median === "number" && h.p25 <= h.median && h.median <= h.p75, h);
+    // Once it shows, the count also takes in rates from new accounts that were waiting.
+    check("a Rate Index group shows numbers at 20 rates", h.n >= 20 && h.min === 20 && typeof h.median === "number" && h.p25 <= h.median && h.median <= h.p75, h);
     check("that group is marked as including Rate Index data", rowOf(await I.view(), idx.function, idx.revenue).indexed === true);
   } else skip("Rate Index floor of 20", "the seed has no Rate Index group with 10 to 19 hourly rates (add a small rateIndex to the test seed)");
   if (seedFile?.rateIndex?.length) {
     check("Rate Index points count in the benchmarks", rows.some((r) => r.indexed) && v.benchmarks.total >= seedFile.rateIndex.length, v.benchmarks.total);
-    // An index entry with hours a month gives a monthly point too.
-    const withHours = seedFile.rateIndex.filter((x) => x.hours && x.hourly * x.hours >= 1000 && x.hourly * x.hours <= 150000).length;
-    const monthlyAll = rows.filter((r) => r.revenue === "All").reduce((n, r) => n + r.monthly.n, 0);
-    check("Rate Index entries with hours a month give monthly points", monthlyAll >= withHours, { monthlyAll, withHours });
+    // An index entry with hours a month gives a monthly point too (counted where the figure counts Rate Index data).
+    const idxAll = rows.filter((r) => r.revenue === "All" && r.monthly.indexed);
+    const withHours = seedFile.rateIndex.filter((x) => idxAll.some((r) => r.function === x.fn) && x.hours && x.hourly * x.hours >= 1000 && x.hourly * x.hours <= 150000).length;
+    const monthlyAll = idxAll.reduce((n, r) => n + r.monthly.n, 0);
+    check("Rate Index entries with hours a month give monthly points", idxAll.length > 0 && monthlyAll >= withHours, { monthlyAll, withHours });
   } else skip("Rate Index totals", "the seed here has no rateIndex");
 
   // Hours on the record give the other kind too: $150/hr at 10 hours a week is about $6,500 a month.
-  const D = await member("Dov Derived", ip(95));
+  if (T.length < 10) return skip("hours and revenue band checks", "no seed file the server knows");
+  const D = T[8];
   const dFn = "Executive";
   const dRev = "Pre-revenue";
   const before = rowOf(await D.view(), dFn, dRev);
@@ -801,7 +807,7 @@ section("benchmarks", async () => {
   const after = rowOf(await D.view(), dFn, dRev);
   check("an hourly rate with hours a week counts as hourly and as monthly", der.status === 200 && after.hourly.n === before.hourly.n + 1 && after.monthly.n === before.monthly.n + 1, { before, after });
   check("it counts in the All row too", rowOf(await D.view(), dFn, "All").hourly.n === beforeAll.hourly.n + 1);
-  const mo = await addRate(D, hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" });
+  const mo = await addRate(T[9], hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" });
   const after2 = rowOf(await D.view(), dFn, dRev);
   check("a monthly rate with no hours counts once", mo.status === 200 && after2.monthly.n === after.monthly.n + 1 && after2.hourly.n === after.hourly.n, after2);
   // The band comes from the engagement's revenue at the time, else the company's.
@@ -917,7 +923,7 @@ section("benchrate", async () => {
   const vm = await M.view();
   const mineRates = vm.me.benchRates ?? [];
   check("Me.benchRates lists it", mineRates.length === 1 && mineRates[0].id === first.json?.id && mineRates[0].kind === "monthly" && mineRates[0].amount === 7777 && mineRates[0].function === "Executive" && mineRates[0].engagementId === null, mineRates);
-  check("it counts in its benchmark group", rowOf(vm, "Executive", "Under $1M").monthly.n === n0 + 1);
+  check("a new account's rate does not count toward its group's floor yet", rowOf(vm, "Executive", "Under $1M").monthly.n === n0);
   check("the ledger row names no record", vm.ledger[0]?.reason === "fill" && vm.ledger[0]?.field === "Rate (benchmarks only)" && vm.ledger[0]?.company === "" && vm.ledger[0]?.delta === 1, vm.ledger[0]);
   const hourly = await M.act({ type: "benchRate", pricing: "Monthly retainer", rate: "$185/hr" });
   const two = (await M.view()).me.benchRates;
@@ -932,17 +938,18 @@ section("benchrate", async () => {
   const notYours = await M.act({ type: "benchRate", engagementId: foreign.id, pricing: "Hourly", rate: "$150/hr" });
   check("a private rate on a seat that isn't yours is refused", notYours.status === 400 && notYours.json?.error === "You can share a rate for a seat you held or added.", notYours.json);
   const hosts = v.companies.filter((c) => !c.hidden && c.friendly.open === 0);
-  const seatA = await M.act({ type: "add", company: hosts[50].name, newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", revenue: "$5M–$20M" } });
-  const r0 = rowOf(await M.view(), "RevOps", "$5M–$20M").hourly.n;
+  // A seat you added counts as tied to you once it has a role and names you (a blank one counts toward the 3).
+  const seatA = await M.act({ type: "add", company: hosts[50].name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "RevOps", type: "Fractional", revenue: "$5M–$20M", role: "Fractional RevOps lead", operator: "typed over" } });
+  const t0 = (await M.view()).benchmarks.total;
   const onSeat = await M.act({ type: "benchRate", engagementId: seatA.json?.id, pricing: "Hourly", rate: "$200/hr", function: "Marketing", revenue: "$50M+" });
   const vm2 = await M.view();
   const tied = vm2.me.benchRates.find((b) => b.engagementId === seatA.json?.id);
-  check("a private rate on a seat you added takes its function and revenue from the record", onSeat.status === 200 && tied?.function === "RevOps" && tied.kind === "hourly" && tied.amount === 200 && rowOf(vm2, "RevOps", "$5M–$20M").hourly.n === r0 + 1, { onSeat: onSeat.json, tied });
+  check("a private rate on a seat you added takes its function and revenue from the record", onSeat.status === 200 && tied?.function === "RevOps" && tied.kind === "hourly" && tied.amount === 200 && vm2.benchmarks.total === t0 + 1, { onSeat: onSeat.json, tied });
   const dup = await M.act({ type: "benchRate", engagementId: seatA.json?.id, pricing: "Hourly", rate: "$210/hr" });
   check("one private rate per seat", dup.status === 400 && dup.json?.error === "You already shared a rate for this seat.", dup.json);
   // Adding the public rate later doesn't count the same member twice.
   await M.act({ type: "fill", entity: "engagement", id: seatA.json?.id, field: "rate", value: "$200/hr" });
-  check("a member's private and public rate on one seat count once", rowOf(await M.view(), "RevOps", "$5M–$20M").hourly.n === r0 + 1);
+  check("a member's private and public rate on one seat count once", (await M.view()).benchmarks.total === t0 + 1);
   const seatB = await M.act({ type: "add", company: hosts[51].name, newEngagement: true, engagementFields: { function: "RevOps", type: "Fractional", rate: "$9k/mo" } });
   const pub = await M.act({ type: "benchRate", engagementId: seatB.json?.id, pricing: "Monthly retainer", rate: "$9k/mo" });
   check("a private rate is refused when your rate is already on the seat", pub.status === 400 && /already on this seat/.test(pub.json?.error ?? ""), pub.json);
