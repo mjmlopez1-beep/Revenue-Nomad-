@@ -12,8 +12,10 @@ import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } fro
 import type { LedgerRow, Me, View } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo, useToast } from "../ui/shared";
 import { atTime, copyText, plural } from "./hooks";
-import { ledgerLine } from "./ledger";
+import { ledgerLine, owedLine, unlockLimitLine } from "./ledger";
 import { Anchored, Sheet, UndoHost, owedText } from "./ui";
+import { Questions } from "../landing/Questions";
+import { mailto } from "../landing/contact";
 
 /** Where to ask for help, from the server (View.contact). Either address can be missing. */
 export type Contact = View["contact"] | null;
@@ -107,16 +109,6 @@ export function EarnMeter({ me, onClick, compact }: { me: Me; onClick: () => voi
   );
 }
 
-/** The unlock limit, when it binds before the balance does (Me.unlocksLeft). */
-function unlockLine(me: Me): string | null {
-  const left = me.unlocksLeft;
-  if (typeof left !== "number" || left >= me.credits) return null;
-  // On day one the limit is 25: everything unlocked so far was unlocked today.
-  const dayOne = left + me.unlocked <= 25;
-  if (left <= 0) return `You've used today's unlocks. Your ${plural(me.credits, "credit")} ${me.credits === 1 ? "is" : "are"} here tomorrow.${dayOne ? " New accounts can unlock 25 facts on day one." : ""}`;
-  return `You can unlock ${plural(left, "more fact", "more facts")} today.${dayOne ? " New accounts can unlock 25 facts on day one." : ""}`;
-}
-
 export function CreditsPopover({
   me,
   ledger,
@@ -131,8 +123,9 @@ export function CreditsPopover({
   onSeeAll: () => void;
 }) {
   const capped = capOf(me);
-  const owed = me.owed ?? 0;
-  const unlocks = unlockLine(me);
+  // The same lines as Your credits (ledger.ts), so the two never say different things. Day one is read from the ledger.
+  const owed = owedLine(me.owed);
+  const unlocks = unlockLimitLine(me, ledger);
   return (
     <Anchored anchor={anchor} onClose={onClose} width={340} className="tp-credpop" align="end" label="Your credits">
       <div className="tp-credpop-top">
@@ -156,7 +149,7 @@ export function CreditsPopover({
             ? `You've earned today's ${me.earnCap} credits. You can earn again ${atTime(me.earnResetsAt)}. The credits you have still unlock facts.`
             : `Add a fact you know and you earn a credit, up to ${me.earnCap} a day. Spend a credit to see one someone else added.`}
         </p>
-        {owed > 0 && <p className="tp-credpop-warn">{owedText(owed)}</p>}
+        {owed && <p className="tp-credpop-warn">{owed}</p>}
         {unlocks && <p>{unlocks}</p>}
         {!capped && me.sellEarnLeft === 0 && <p>Answers for a company&apos;s industry, size, revenue or how they sell earn no more credits today. A role, a rate or who held a seat still earns.</p>}
       </div>
@@ -194,36 +187,14 @@ const setHelp = (on: boolean) => {
 export const openHelp = () => setHelp(true);
 
 /**
- * The landing page's questions, said for a member who is signed in, with today's rules. Keep
- * them in step with the questions on the landing page (app/landing/Landing.tsx).
+ * Questions only a signed-in member asks. The rest are the landing page's own (Questions in
+ * app/landing/Questions.tsx), rendered here as they are, so the two never say different things.
  */
-const HELP: [string, string][] = [
-  [
-    "What will other members see about me?",
-    "Your name and title show on seats you held, behind a lock that costs a member 1 credit. Members can also find you by name when they add a seat you held. Your email is never shown, and a fact you add never says who added it.",
-  ],
-  [
-    "What happens to a rate I share?",
-    "A rate you add to a seat sits behind a lock, and a member spends 1 credit to see it. It also counts in the rate benchmarks. Or share it for the benchmarks only. Then it counts in the medians and is never shown with your name or the seat. A median shows only once 5 different people have a rate in the group.",
-  ],
-  [
-    "What does a credit buy?",
-    "One fact someone else added: a role, a rate, who held a seat, or a hiring contact's name, email, phone or LinkedIn. A hidden company is one credit for the company, its open role and the job posting together. What you unlock stays unlocked for you.",
-  ],
+const APP_HELP: [string, string][] = [
   [
     "Can I take back something I added?",
     "Yes, for 10 seconds. Press Undo on the message that says it was added, and the credit goes back too. After that you can edit it from the company's record.",
   ],
-  [
-    "What if something is wrong?",
-    "Report it. It hides for you at once, and for everyone after a second report, until we review it. If we remove it, the member who added it loses that credit and everyone who unlocked it gets theirs back.",
-  ],
-  [
-    "Why can I only earn 25 credits a day?",
-    "So nobody has a reason to add guesses for credits. Answers for a company's industry, size, revenue and how they sell earn for 5 a day. Invite and confirmation bonuses count toward the 25, and a bonus that would take you past it waits until you have room.",
-  ],
-  ["Is there a limit on unlocking?", "Yes. A new account can unlock 25 facts on day one and 100 a day after that."],
-  ["What does it cost?", "Nothing. The pilot is free. If you run low, add something you know or invite a fractional you trust."],
 ];
 
 const KEYS: [string, string][] = [
@@ -235,9 +206,10 @@ const KEYS: [string, string][] = [
   ["?", "This list"],
 ];
 
-export function HelpSheet({ me, contact, emailOn, onClose }: { me: Me; contact?: Contact; emailOn?: boolean; onClose: () => void }) {
+export function HelpSheet({ me, contact, emailOn, starter, onClose }: { me: Me; contact?: Contact; emailOn?: boolean; starter?: number; onClose: () => void }) {
   const toast = useToast();
-  const support = contact?.support ?? null;
+  const support = contact?.support?.trim() || null;
+  const write = support ? mailto(support, "Trading Post feedback") : null;
   const copy = async () => {
     const ok = await copyText(signInLink(me.token));
     toast(ok ? "Sign-in link copied. It signs in as you, so keep it to yourself." : "That didn't copy. Open Your credits and copy the link from there.", !ok);
@@ -249,12 +221,19 @@ export function HelpSheet({ me, contact, emailOn, onClose }: { me: Me; contact?:
         <h3 id="tp-help-q" className="tp-help-h">
           Questions
         </h3>
-        {HELP.map(([q, a]) => (
-          <details key={q} className="tp-help-qa">
-            <summary>{q}</summary>
-            <p>{a}</p>
-          </details>
-        ))}
+        {/* The landing page's questions; the email line is in "Tell us what to fix" below. */}
+        <Questions starter={starter ?? 25} support={null} />
+        <div className="lp-faq tp-help-more">
+          {APP_HELP.map(([q, a]) => (
+            <details key={q} className="lp-qa">
+              <summary>
+                <span>{q}</span>
+                <span className="lp-qa-icon" aria-hidden />
+              </summary>
+              <p>{a}</p>
+            </details>
+          ))}
+        </div>
       </section>
       <section className="tp-help-sec" aria-labelledby="tp-help-link">
         <h3 id="tp-help-link" className="tp-help-h">
@@ -276,16 +255,22 @@ export function HelpSheet({ me, contact, emailOn, onClose }: { me: Me; contact?:
           </h3>
           <p>
             A question, something that looks wrong, or an idea for the pilot. Email{" "}
-            <a className="mono" href={`mailto:${support}`}>
-              {support}
-            </a>{" "}
+            {write ? (
+              <a className="mono" href={write}>
+                {support}
+              </a>
+            ) : (
+              <span className="mono">{support}</span>
+            )}{" "}
             and a person reads it.
           </p>
-          <div>
-            <a className="btn btn-sm btn-pine" href={`mailto:${support}?subject=${encodeURIComponent("Trading Post feedback")}`}>
-              Email the Trading Post team
-            </a>
-          </div>
+          {write && (
+            <div>
+              <a className="btn btn-sm btn-pine" href={write}>
+                Email the Trading Post team
+              </a>
+            </div>
+          )}
         </section>
       )}
       <section className="tp-help-sec tp-help-keys" aria-labelledby="tp-help-k">
@@ -312,7 +297,7 @@ export function HelpSheet({ me, contact, emailOn, onClose }: { me: Me; contact?:
 }
 
 /** The help sheet, mounted by the top bar. Opens from the menu, or with ? when focus is not in a field. */
-function HelpHost({ me, contact, emailOn }: { me: Me; contact?: Contact; emailOn?: boolean }) {
+function HelpHost({ me, contact, emailOn, starter }: { me: Me; contact?: Contact; emailOn?: boolean; starter?: number }) {
   const open = useSyncExternalStore(
     (f) => (helpSubs.add(f), () => helpSubs.delete(f)),
     () => helpOpen,
@@ -333,7 +318,7 @@ function HelpHost({ me, contact, emailOn }: { me: Me; contact?: Contact; emailOn
       setHelp(false);
     };
   }, []);
-  return open ? <HelpSheet me={me} contact={contact} emailOn={emailOn} onClose={() => setHelp(false)} /> : null;
+  return open ? <HelpSheet me={me} contact={contact} emailOn={emailOn} starter={starter} onClose={() => setHelp(false)} /> : null;
 }
 
 /* ---------- the account menu ---------- */
@@ -466,6 +451,7 @@ export function TopBar({
   quietCredits,
   contact,
   emailOn,
+  starter,
 }: {
   me: Me;
   query: string;
@@ -483,11 +469,13 @@ export function TopBar({
   /** View.contact and View.email, for the help sheet. */
   contact?: Contact;
   emailOn?: boolean;
+  /** View.stats.starter: the credits a new member starts with, for the help sheet's answers. */
+  starter?: number;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const hosts = (
     <>
-      <HelpHost me={me} contact={contact} emailOn={emailOn} />
+      <HelpHost me={me} contact={contact} emailOn={emailOn} starter={starter} />
       <UndoHost />
     </>
   );
@@ -498,8 +486,8 @@ export function TopBar({
         ref={searchRef}
         className="tp-bare"
         type="search"
-        placeholder={phone ? "Search" : "Search companies, functions, people"}
-        aria-label="Search companies, functions and people"
+        placeholder={phone ? "Search" : "Search companies, functions, industries"}
+        aria-label="Search companies, functions and industries"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {

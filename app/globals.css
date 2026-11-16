@@ -492,8 +492,13 @@ button.lock {
   background: var(--line);
   transition: background var(--t);
 }
-/* The label sits over the bar, so the column never changes width. */
+/*
+ * The label sits over the bar, so the column never changes width. It takes no clicks: where it
+ * spills past its button (into the next column) a click lands on what is under it, never on
+ * the lock (DESK-1, V1-M1). The button under it is still the whole target.
+ */
 .lock-cta {
+  pointer-events: none;
   position: absolute;
   z-index: 1;
   left: 0;

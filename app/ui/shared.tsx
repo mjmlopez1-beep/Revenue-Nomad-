@@ -10,7 +10,13 @@ import { fieldDef, type Entity } from "@/lib/tableFields";
 
 export type { Action, Cell, View } from "@/lib/tableTypes";
 export type ActResult = { ok: boolean; message: string; id?: string; capped?: boolean };
-export type Act = (a: Action, opts?: { quiet?: boolean }) => Promise<ActResult>;
+/**
+ * Run an action. `quiet`: no toast for the success message (the caller says it). `silentError`:
+ * no toast for a refusal either, for a caller that shows the error in place (a form under its
+ * button). The result carries the message either way.
+ */
+export type ActOpts = { quiet?: boolean; silentError?: boolean };
+export type Act = (a: Action, opts?: ActOpts) => Promise<ActResult>;
 
 /** One cell an action changed. */
 export type CellPatch = { id: string; field: string; cell: Cell; entity?: string };
@@ -145,14 +151,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast${t.err ? " toast-err" : ""}${t.action ? " toast-has-act" : ""}`}>
-            {t.text}
+          // A toast with an action has the same look as the Undo toast (globals.css .toast-act, .toast-btn).
+          <div key={t.id} className={`toast${t.err ? " toast-err" : ""}${t.action ? " toast-act" : ""}`}>
+            {t.action ? <span className="toast-t">{t.text}</span> : t.text}
             {t.action && (
               <button
                 type="button"
-                className="toast-act"
-                // The toast stack ignores the pointer so it never blocks the page; its one button takes it.
-                style={{ pointerEvents: "auto", marginLeft: 8, padding: "0 4px", minHeight: 32, border: 0, background: "none", color: "inherit", font: "inherit", fontWeight: 700, textDecoration: "underline", cursor: "pointer" }}
+                className="toast-btn"
                 onClick={() => {
                   drop(t.id);
                   t.action!.onClick();

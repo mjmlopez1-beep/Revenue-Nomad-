@@ -19,6 +19,7 @@ import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { IconCheck, IconLock, IconSearch, IconX, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
 import { atTime, fieldText, plural, type Layout } from "./hooks";
+import { owedLine } from "./ledger";
 import { MonthYear } from "./MonthYear";
 import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
 
@@ -32,14 +33,23 @@ export interface AddOpts {
   mine?: boolean;
 }
 
+/** A page that replaces the table. */
+export type AppPage = "rates" | "credits" | "seats" | "metrics";
+
 export interface Ui {
   me: Me;
   act: Act;
   layout: Layout;
-  busy: Set<string>;
-  flash: Set<string>;
-  pulse: string | null;
-  unlock: (t: FactRef) => void;
+  /**
+   * Per-cell flags, read at render time from the store below (cellFlags). They are not part of
+   * the context's identity: a cell that shows one reads it with useCellFlags, so an unlock
+   * re-renders that cell, not every cell on the screen.
+   */
+  readonly busy: Set<string>;
+  readonly flash: Set<string>;
+  readonly pulse: string | null;
+  /** `onWall` runs instead of an error toast when the server answers that the member is out of credits. */
+  unlock: (t: FactRef, opts?: { onWall?: () => void }) => void;
   unlockMany: (items: FactRef[]) => Promise<boolean>;
   /** Open the fact editor on an element. With `initial`, it edits the member's own value. */
   edit: (el: HTMLElement, t: FactRef, initial?: string) => void;
@@ -55,6 +65,10 @@ export interface Ui {
   seats: { n: number; missing: number };
   /** Open the Your seats page, at one seat when given. */
   openSeats: (engagementId?: string) => void;
+  /** Open a page in place of the table (Rate benchmarks from a rate, say). Closes the record. */
+  openPage: (p: AppPage) => void;
+  /** View.contact: where members write for help (support) and for an intro to a seat holder (intro). */
+  contact: { support: string | null; intro: string | null } | null;
 }
 
 export const UiCtx = createContext<Ui | null>(null);
@@ -62,6 +76,42 @@ export function useUi(): Ui {
   const u = useContext(UiCtx);
   if (!u) throw new Error("UiCtx missing");
   return u;
+}
+
+/* ---------- per-cell flags: unlocking, just unlocked, pointed at ---------- */
+
+type Flags = { busy: Set<string>; flash: Set<string>; pulse: string | null };
+let flagsNow: Flags = { busy: new Set(), flash: new Set(), pulse: null };
+const flagSubs = new Set<() => void>();
+/**
+ * Which cells are unlocking (busy), just showed their value (flash) and are pointed at by Get
+ * started (pulse). Kept outside React state so the Ui context keeps its identity when they change.
+ */
+export const cellFlags = {
+  get: (): Flags => flagsNow,
+  set(change: Partial<Flags> | ((f: Flags) => Partial<Flags>)) {
+    flagsNow = { ...flagsNow, ...(typeof change === "function" ? change(flagsNow) : change) };
+    flagSubs.forEach((f) => f());
+  },
+  subscribe(f: () => void) {
+    flagSubs.add(f);
+    return () => {
+      flagSubs.delete(f);
+    };
+  },
+};
+/** One cell's flags. Only the cells whose flags changed render again. */
+export function useCellFlags(k: string): { busy: boolean; flash: boolean; pulse: boolean } {
+  const s = useSyncExternalStore(
+    cellFlags.subscribe,
+    () => `${flagsNow.busy.has(k) ? 1 : 0}${flagsNow.flash.has(k) ? 1 : 0}${flagsNow.pulse === k ? 1 : 0}`,
+    () => "000",
+  );
+  return { busy: s[0] === "1", flash: s[1] === "1", pulse: s[2] === "1" };
+}
+/** Every flag, for the app shell: it renders again when any flag changes (so the record does too). */
+export function useAllFlags(): Flags {
+  return useSyncExternalStore(cellFlags.subscribe, cellFlags.get, cellFlags.get);
 }
 
 /* ---------- values ---------- */
@@ -133,8 +183,9 @@ export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: strin
   const ui = useUi();
   const ref = useRef<HTMLSpanElement>(null);
   const f = fieldDef(fact.entity, fact.field);
+  const { pulse } = useCellFlags(cellKey(fact.id, fact.field));
   return (
-    <span ref={ref} data-cell={cellKey(fact.id, fact.field)} className={ui.pulse === cellKey(fact.id, fact.field) ? "tp-pulse" : undefined}>
+    <span ref={ref} data-cell={cellKey(fact.id, fact.field)} className={pulse ? "tp-pulse" : undefined}>
       <AddBtn
         label={label ?? (f ? shortLabel(f) : fact.field)}
         what={factWhat(fact)}
@@ -172,9 +223,8 @@ export function Pro({ where, variant }: { where: ProWhere; variant?: "card" | "l
   );
 }
 
-/** "You owe 2 credits. …" when a removed fact left the balance below zero (Me.owed). */
-export const owedText = (owed: number) =>
-  `You owe ${plural(owed, "credit")}. A fact you added was removed after you spent what it earned. The next fact you add clears it.`;
+/** "You owe 2 credits. …" when a removed fact left the balance below zero (Me.owed). The same words as Your credits (ledger.ts owedLine). */
+export const owedText = (owed: number) => owedLine(owed) ?? "";
 
 /**
  * Shown instead of spending at 0 credits (the server's "You're out of credits" refusal, never
@@ -306,11 +356,16 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
   const refocus = useRef(false);
   const [zero, setZero] = useState(false);
   const credits = ui.me.credits;
+  // A credit earned while the zero-credits popover is up (from one of its pills) closes it. The
+  // balance on screen can be behind the server's (the popover also opens on the server's refusal).
+  const lastCredits = useRef(credits);
   useEffect(() => {
-    if (zero && credits > 0) setZero(false);
+    if (zero && credits > lastCredits.current) setZero(false);
+    lastCredits.current = credits;
   }, [zero, credits]);
   const state = cell?.s;
   const k0 = cellKey(t.id, t.field);
+  const flags = useCellFlags(k0);
   useEffect(() => {
     if (state !== "value") return;
     const saved = focusNext && focusNext.k === k0 && Date.now() < focusNext.until && (!focusNext.box || focusNext.box.contains(ref.current));
@@ -320,21 +375,21 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
     ref.current?.focus({ preventScroll: true });
   }, [state, k0]);
   if (!cell) return null;
-  const k = cellKey(t.id, t.field);
-  const cls = `tp-cell${ui.pulse === k ? " tp-pulse" : ""}`;
+  const k = k0;
+  const cls = `tp-cell${flags.pulse ? " tp-pulse" : ""}`;
   switch (cell.s) {
     case "value":
       return (
         <span
           ref={ref}
           tabIndex={-1}
-          className={`${cls} tp-val${isMonoField(t) ? " mono" : isNumField(t) ? " num" : ""}${ui.flash.has(k) ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`}
+          className={`${cls} tp-val${isMonoField(t) ? " mono" : isNumField(t) ? " num" : ""}${flags.flash ? " tp-flash" : ""}${cell.system ? " tp-sys" : ""}`}
           data-cell={k}
           title={fmtValue(t.entity, t.field, cell.v)}
         >
           <span className="tp-val-t">{render ? render(cell.v) : <FactValue t={t} v={cell.v} />}</span>
           {cell.member && <MemberBadge m={cell.member} />}
-          {ui.flash.has(k) && (
+          {flags.flash && (
             <span className="tp-flash-check" aria-label="Unlocked">
               <IconCheck size={11} />
             </span>
@@ -348,7 +403,8 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
           <Lock
             onUnlock={() => {
               refocus.current = !!ref.current?.contains(document.activeElement);
-              if (credits > 0) return ui.unlock(t);
+              // The server can still answer "You're out of credits" (another tab spent them): then the popover opens, not a toast. The server counts that wall itself.
+              if (credits > 0) return ui.unlock(t, { onWall: () => setZero(true) });
               // The wall: out of credits at a locked fact. Counted for the pilot, by field.
               sendSignal("wall", t.field);
               setZero(true);
@@ -357,10 +413,10 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
             from={cell.from}
             what={factWhat(t)}
             noun={t.field === "identity" ? "company" : undefined}
-            busy={ui.busy.has(k)}
+            busy={flags.busy}
             later={later}
           />
-          {zero && credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
+          {zero && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
         </span>
       );
     }
@@ -381,7 +437,14 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
         <span
           className="chip tp-review"
           data-cell={k}
-          title={cell.mine ? "Another member reported this one of yours. An admin will take a look." : "A member reported this. It stays hidden until an admin reviews it."}
+          title={
+            cell.mine
+              ? "Another member reported this one of yours. An admin will take a look."
+              : // The reporter's own report, when the server marks it (byMe). Otherwise the line reads true for anyone.
+                (cell as { byMe?: boolean }).byMe
+                ? "You reported this. We'll review it."
+                : "This was reported as wrong. It stays hidden until an admin reviews it."
+          }
         >
           Under review
         </span>
@@ -391,8 +454,10 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
 
 /* ---------- overlays ---------- */
 
-const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-const focusables = (root: HTMLElement) => [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+/** What Tab can reach inside an overlay, in order. A folded group (a closed details) offers only its title. */
+const focusables = (root: HTMLElement) =>
+  [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 && !el.closest("details:not([open]) > :not(summary)"));
 
 /** Open overlays, newest last. Only the newest answers Escape and Tab. */
 const layers: number[] = [];
@@ -404,7 +469,7 @@ let layerSeq = 0;
  * the top overlay, and give focus back on close to whatever had it before (or to `restore()`
  * when that control is gone, e.g. an add button that became the value it added).
  */
-function useLayer(
+export function useLayer(
   ref: React.RefObject<HTMLElement | null>,
   opts: { onEscape: () => void; tab?: "trap" | "close"; first?: (root: HTMLElement) => HTMLElement | null; restore?: () => HTMLElement | null },
 ) {
@@ -662,19 +727,51 @@ export function Sheet({
       document.body.style.overflow = prev;
     };
   }, []);
+  /*
+   * The grabber works: drag the top of the sheet (the grabber or the title row) down past 80px
+   * and it closes, the same as the X (so a form with something typed still asks first). A
+   * shorter drag springs back. Buttons in the title row stay buttons.
+   */
+  const drag = useRef<{ y: number; id: number } | null>(null);
+  const [dy, setDy] = useState(0);
+  const dragOn = {
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button !== 0 || (e.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+      if (dialog && window.matchMedia("(min-width: 768px)").matches) return; // a centered dialog has no grabber
+      drag.current = { y: e.clientY, id: e.pointerId };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {}
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      if (drag.current?.id === e.pointerId) setDy(Math.max(0, e.clientY - drag.current.y));
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (drag.current?.id !== e.pointerId) return;
+      const moved = e.clientY - drag.current.y;
+      drag.current = null;
+      setDy(0);
+      if (moved > 80) closeRef.current();
+    },
+    onPointerCancel: () => {
+      drag.current = null;
+      setDy(0);
+    },
+  };
   return createPortal(
     <div className={`tp-sheet-wrap${dialog ? " tp-sheet-dialog" : ""}`} onClick={onClose}>
       <div
         ref={ref}
         tabIndex={-1}
-        className={`tp-sheet${full ? " tp-sheet-full" : ""}${className ? ` ${className}` : ""}`}
+        className={`tp-sheet${full ? " tp-sheet-full" : ""}${dy ? " dragging" : ""}${className ? ` ${className}` : ""}`}
+        style={dy ? { transform: `translateY(${dy}px)` } : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby={tid}
         onClick={(e) => e.stopPropagation()}
       >
-        <span className="tp-sheet-grab" aria-hidden />
-        <div className="tp-sheet-head">
+        <span className="tp-sheet-grab" aria-hidden {...dragOn} />
+        <div className="tp-sheet-head" {...dragOn}>
           <div className="tp-sheet-title" id={tid}>
             {title}
           </div>
@@ -1005,6 +1102,8 @@ export function SeatHolderInput({
   big,
   id,
   aria,
+  invalid,
+  describedBy,
 }: {
   value: string;
   memberId: string | null;
@@ -1017,6 +1116,10 @@ export function SeatHolderInput({
   big?: boolean;
   id?: string;
   aria?: FieldAria;
+  /** The form found a problem with this field (aria-invalid). */
+  invalid?: boolean;
+  /** The id of the line that says what is wrong (aria-describedby). */
+  describedBy?: string;
 }) {
   const [hi, setHi] = useState(-1);
   const [picked, setPicked] = useState<MemberHit | null>(null);
@@ -1045,6 +1148,8 @@ export function SeatHolderInput({
         aria-controls={open ? lid : undefined}
         aria-activedescendant={open && hi >= 0 ? `${lid}-${hi}` : undefined}
         {...aria}
+        {...(invalid ? { "aria-invalid": true } : {})}
+        {...(describedBy ? { "aria-describedby": describedBy } : {})}
         value={value}
         onChange={(e) => {
           setHi(-1);
