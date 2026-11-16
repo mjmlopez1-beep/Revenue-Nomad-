@@ -151,7 +151,7 @@ export const GROUPS: GroupDef[] = [
         kind: "text",
         gated: true,
         placeholder: "$8k/mo or $150/hr",
-        hint: "What the client paid. Members spend 1 credit to see it, and it counts in the rate benchmarks.",
+        hint: "What the client paid. Members spend 1 credit to see it. It never says who added it.",
         say: "the rate",
       },
       { key: "hours", label: "Hours a week", kind: "number", gated: false, placeholder: "15", hint: "The hours a week the seat takes, on average.", say: "the hours a week" },

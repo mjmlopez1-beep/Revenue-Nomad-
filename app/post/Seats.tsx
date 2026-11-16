@@ -595,7 +595,7 @@ function SeatCard({
           {active ? (
             <div className={`ys-q${editing ? " again" : ""}`} key={`${editing ? "again:" : ""}${active.key}`} ref={qRef} data-ask={cellKey(active.t.id, active.t.field)}>
               <div className="ys-q-top">
-                <h3 className="ys-q-h">{active.q}</h3>
+                <h2 className="ys-q-h">{active.q}</h2>
                 <span className={`ys-q-earn num${earns && !editing ? "" : " none"}`}>{editing ? "Changes earn no credit" : earns ? "+1 credit" : "No credit today"}</span>
               </div>
               {active.hint && !editing && <p className="ys-q-hint">{active.hint}</p>}
@@ -696,6 +696,11 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
   }
   const byId = useMemo(() => new Map(seats.map((s) => [s.e.id, s])), [seats]);
   const list = order.current.map((id) => byId.get(id)).filter((s): s is SeatInfo => !!s && !gone.has(s.e.id));
+  // Where seats under their name came from (FIRST-1): ours were matched by name to work they published with us.
+  const matched = list.filter((s) => s.e.source === "Published engagement" || s.e.source === "Member success story").length;
+  const matchedLine = matched
+    ? ` We matched ${matched === list.length ? (matched === 1 ? "it" : "them") : `${matched} of them`} by name to the fractional work you published on Revenue Nomad.`
+    : "";
   const waiting = useMemo(() => (infos ? waitingSeats(infos) : []), [infos]);
   // One seat is open to start, so one question is on screen: the seat the member came for, else the first with something missing.
   const [open, setOpen] = useState<Set<string>>(() => {
@@ -805,7 +810,8 @@ export function Seats({ seats, focus, onBack, infos }: { seats: SeatInfo[]; focu
       ) : (
         <>
           <p className="ys-lead">
-            We have {plural(list.length, "seat")} under your name. Each answer earns 1 credit and goes on the seat for other members. Your rate is the one thing you can keep private.
+            We have {plural(list.length, "seat")} under your name.{matchedLine} Each answer earns 1 credit and goes on the seat for other members. Your rate is the one thing you can
+            keep private.
           </p>
           <p className="ys-lead-sub">
             Members spend 1 credit to see your name on a seat, and 1 each for its title, end month, how you were found and the rate. Everything else here is free for every member to see.

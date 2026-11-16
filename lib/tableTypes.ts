@@ -17,7 +17,8 @@ import type { Entity } from "./tableFields";
  * - reported: under review. Two members' reports hide a fact for everyone until an admin
  *   reviews it; one report hides it only for that reporter (`mine` is then false). A report
  *   by the seat holder on their own seat, and "This isn't me" on a name a member added, hide
- *   the fact for everyone at once.
+ *   the fact for everyone at once. `byMe`: the viewer is one of the members who reported it
+ *   (so the screen can say "You reported this"). Left out otherwise.
  */
 export type Cell =
   | { s: "empty" }
@@ -37,7 +38,7 @@ export type Cell =
        */
       member?: { title: string; you?: boolean };
     }
-  | { s: "reported"; mine: boolean };
+  | { s: "reported"; mine: boolean; byMe?: boolean };
 
 export interface PersonRec {
   id: string;
@@ -138,6 +139,11 @@ export interface CompanyRec {
   updatedAt: string | null;
   /** The viewer added something here. */
   mine: boolean;
+  /**
+   * The viewer created this company (added it to Trading Post). Its pick lists earn without the
+   * daily limit of 5 (Me.sellEarnLeft), as on a company where they hold a seat. Left out otherwise.
+   */
+  added?: boolean;
   /**
    * The viewer paid to see this company while it was hidden (Unlock company, or the role or the
    * posting of its open role, which is the same purchase). Left out otherwise, also for a company
@@ -314,6 +320,12 @@ export interface View {
     addedBy: string;
     /** Names of the members who reported it. */
     reporters: string[];
+    /**
+     * Hidden from every member until an admin decides: two reports, a seat holder's report on
+     * their own seat, or "This isn't me" on a name a member added. False while it is hidden only
+     * for its reporters (one report, or a posting that is still listed).
+     */
+    hidden?: boolean;
     /** ISO time of the latest report. */
     reportedAt: string | null;
   }[];

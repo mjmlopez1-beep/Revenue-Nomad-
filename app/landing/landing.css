@@ -29,7 +29,8 @@
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 0 32px;
+  /* A phone on its side keeps the content clear of the notch (env() is 0 without viewport-fit=cover). */
+  padding: 0 max(32px, env(safe-area-inset-right)) 0 max(32px, env(safe-area-inset-left));
 }
 .lp a {
   text-decoration: none;
@@ -43,7 +44,7 @@ html:has(.lp) {
 }
 /* Focus: 2px volt with offset everywhere. On white a pine edge sits under it so the ring reads. */
 .lp :focus-visible {
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -1116,7 +1117,7 @@ html:has(.lp) {
 }
 @media (max-width: 640px) {
   .lp-wrap {
-    padding: 0 16px;
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   }
   .lp-nav-in {
     height: 56px;
@@ -1277,5 +1278,12 @@ html:has(.lp) {
   .lp-scrim,
   .lp-dialog {
     animation: none;
+  }
+}
+
+/* iOS zooms the page into a field under 16px. Any touch screen, a tablet in the sign-in dialog too (PHONE-9). */
+@media (pointer: coarse) {
+  .lp-dialog-input.input {
+    font-size: 16px;
   }
 }

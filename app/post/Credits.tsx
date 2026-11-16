@@ -174,7 +174,8 @@ function ReviewRow({ r }: { r: View["reported"][number] }) {
     wasAsking.current = asking;
   }, [asking]);
   const kind = fieldDef(r.entity, r.field)?.kind;
-  const hidden = r.reporters.length >= 2;
+  // The server says whether it is hidden from everyone (a seat holder's one report is, two reports on a listed posting are not).
+  const hidden = r.hidden ?? r.reporters.length >= 2;
   const decide = async (decision: "keep" | "remove") => {
     if (busy) return;
     setBusy(true);

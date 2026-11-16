@@ -17,15 +17,6 @@
   color: var(--ink);
   white-space: nowrap;
 }
-/*
- * Ember is for two things on a screen at most. When two more urgent ones are up (a next-move
- * card or a low balance, and the Hiring chip of an open record), the dots step back to gray.
- * See emberTaken in TradingPost.tsx.
- */
-.tp-ember-full .live-dot {
-  background: var(--faint);
-  animation: none;
-}
 .tp-role-date.closed {
   gap: 0;
   color: var(--muted);

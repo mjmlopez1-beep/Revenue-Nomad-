@@ -13,7 +13,7 @@ import { ledgerLine, owedLine, unlockLimitLine } from "../app/post/ledger";
 import { atTime, fieldText } from "../app/post/hooks";
 import {
   EMPTY_FILTERS, ENG_GATED, LIST_OPTIONS, NOT_YET_ON_OPEN_ROLE, activeChips, activeCount, applyFilters, coverOf, daysListed, deriveAll, hasRoleDates, isOpenSeat, isUnheldOpenRole,
-  listedDays, lockedInEngagement, namedFn, notMineLabel, placeWords, rowsFor, searchWords, sortRows, tabTest, toggleTest,
+  fitReason, fitTier, listedDays, lockedInEngagement, mySeats, namedFn, notMineLabel, placeWords, rowsFor, searchWords, seatMissingCount, sortRows, tabTest, toggleTest,
 } from "../app/post/model";
 
 let passed = 0;
@@ -255,6 +255,43 @@ check("a fact the member added is not an unlock", !own.eng && !own.company, own)
   check("most employees first, unknown last", by("employees") === "Big,Mid,Small,Unknown", by("employees"));
   check("most revenue first, unknown last", by("revenue") === "Small,Mid,Big,Unknown", by("revenue"));
   check("latest start first", by("start") === "Big,Mid,Small,Unknown", by("start"));
+}
+
+/* ---------- ties break on the row, never its name ---------- */
+
+{
+  // Two rows that tie on every sort key: unlocking a hidden company changes its name, and the row must not move.
+  const a = co(HIDDEN_COMPANY, [eng({}, { source: "Published engagement" })]);
+  const b = co("Aardvark Labs", [eng({}, { source: "Published engagement" })]);
+  const keys = (cs: CompanyRec[], k: "fit" | "newest" | "engagements") => sortRows(rowsFor("companies", deriveAll(cs)), k).map((r) => r.key).join();
+  const before = (["fit", "newest", "engagements"] as const).map((k) => keys([a, b], k));
+  const renamed = { ...a, name: "Zephyr Health" };
+  const after = (["fit", "newest", "engagements"] as const).map((k) => keys([renamed, b], k));
+  check("a tie keeps its order when a company's name changes (fit, newest, most seats)", JSON.stringify(before) === JSON.stringify(after), { before, after });
+  check("the Name sort still reads names", sortRows(rowsFor("companies", deriveAll([renamed, b])), "name").map((r) => r.i.c.name).join() === "Aardvark Labs,Zephyr Health");
+}
+
+/* ---------- a posting that came down with nobody in the seat ---------- */
+
+{
+  const gone = eng({ function: val("Sales", { system: true }), status: val("Closed", { system: true }), role: LOCKED }, { opened: "2026-10-01", closed: "2026-10-20", closedAt: "2026-10-20T12:00:00.000Z" });
+  const c = co("Gone Co", [gone]);
+  c.friendly = { score: 30, tier: "Medium", fractional: 0, open: 0, functions: [], hiring: [], operators: 0, recent: 0 };
+  const [i] = deriveAll([c]);
+  check("only a closed posting: the fit reads Posting closed, not Story only or Past seat", fitTier(c.friendly, 1, true).label === "Posting closed" && fitTier(c.friendly, 1).label === "Story only");
+  check("its reason says when the posting came down", /^A job posting here came down on Oct 20\b/.test(fitReason(i)), fitReason(i));
+}
+
+/* ---------- Your seats: what is still missing ---------- */
+
+{
+  const mine = (status: Cell) => eng({ function: val("Sales"), role: val("VP Sales"), status, end: EMPTY }, { source: "Published engagement", yours: true });
+  const active = mine(val("Active"));
+  const ended = mine(val("Ended"));
+  const meSeats = { function: "Sales", benchRates: [] } as unknown as Me;
+  check("an Active seat's end month is not missing (Your seats doesn't ask for it)", seatMissingCount(active, meSeats) === seatMissingCount(ended, meSeats) - 1, [seatMissingCount(active, meSeats), seatMissingCount(ended, meSeats)]);
+  const seats = mySeats(deriveAll([co("Held Co", [active])]), meSeats);
+  check("Fill in your seats counts no end on an Active seat", seats.length === 1 && !seats[0].missing.includes("end"), seats[0]?.missing);
 }
 
 /* ---------- the credit history, as sentences ---------- */

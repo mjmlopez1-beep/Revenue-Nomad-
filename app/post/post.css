@@ -872,6 +872,9 @@ body:has(.tp-drawer) .pro-foot {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.tp-fnote-link .tp-flink {
+  padding: 0;
+}
 .tp-fgroup {
   padding: 16px 0 8px;
   border-bottom: 1px solid var(--line);
@@ -996,7 +999,7 @@ body:has(.tp-drawer) .pro-foot {
   height: 32px;
   padding: 0 10px;
   border-radius: var(--r-btn);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-input);
   color: var(--faint);
   margin-bottom: 4px;
   transition: border-color var(--t);
@@ -1006,8 +1009,8 @@ body:has(.tp-drawer) .pro-foot {
 }
 .tp-fsearch:focus-within {
   border-color: var(--pine);
-  outline: 2px solid var(--volt);
-  outline-offset: 1px;
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 .tp-fsearch input {
   font-size: 13px;
@@ -1469,6 +1472,16 @@ body:has(.tp-drawer) .pro-foot {
 .tp-check-card:not(.vertical) .tp-check-x {
   margin-left: auto;
 }
+/* A step's name never breaks inside a word ("Invite a fractiona / l"). Only its hint may wrap. */
+.tp-check-card.vertical .tp-step-l {
+  overflow-wrap: normal;
+}
+/* On the card, each step says what it costs or earns on a second line (FIRST-12). */
+.tp-check-card.vertical .tp-step-h {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+}
 
 /* ---------- table ---------- */
 .tp-frame-box {
@@ -1564,10 +1577,10 @@ body:has(.tp-drawer) .pro-foot {
  */
 .tp-table tbody tr:focus-visible td {
   background: var(--row-on);
-  box-shadow: inset 0 2px 0 var(--volt), inset 0 -2px 0 var(--volt);
+  box-shadow: inset 0 2px 0 var(--focus), inset 0 -2px 0 var(--focus);
 }
 .tp-table tbody tr:focus-visible td:last-child {
-  box-shadow: inset 0 2px 0 var(--volt), inset 0 -2px 0 var(--volt), inset -2px 0 0 var(--volt);
+  box-shadow: inset 0 2px 0 var(--focus), inset 0 -2px 0 var(--focus), inset -2px 0 0 var(--focus);
 }
 .tp-table .tp-sticky {
   position: sticky;
@@ -1582,7 +1595,7 @@ body:has(.tp-drawer) .pro-foot {
   box-shadow: inset 3px 0 0 var(--pine);
 }
 .tp-table tbody tr:focus-visible td.tp-sticky {
-  box-shadow: inset 0 2px 0 var(--volt), inset 0 -2px 0 var(--volt), inset 2px 0 0 var(--volt);
+  box-shadow: inset 0 2px 0 var(--focus), inset 0 -2px 0 var(--focus), inset 2px 0 0 var(--focus);
 }
 .w-co {
   min-width: 240px;
@@ -1871,7 +1884,6 @@ body:has(.tp-drawer) .pro-foot {
   color: var(--faint);
 }
 .tp-table .add .plus1 {
-  opacity: 0.55;
   transition: opacity var(--t);
 }
 @media (hover: hover) {
@@ -1890,9 +1902,10 @@ body:has(.tp-drawer) .pro-foot {
     background: var(--pine-14);
   }
 }
+/* Touch screens (tablets too): no hover to wait for, so "+ Add" reads at rest. No box: a dashed box on every empty cell is a wall. */
 @media (hover: none) {
   .tp-table .add {
-    border-color: var(--line-strong);
+    border-color: transparent;
     color: var(--muted);
     margin: 0;
   }
@@ -2061,8 +2074,9 @@ body:has(.tp-drawer) .pro-foot {
 .tp-pfact .tp-lockwait .lock-mask {
   display: none;
 }
-/* An open role in a function with no hire on file yet: the same outline chip, and it says so. */
-.tp-fn-hiring .tp-fn-tag {
+/* An open role in a function with no hire on file yet: the same outline chip, and it says so. So does a story chip in the record. */
+.tp-fn-hiring .tp-fn-tag,
+.tp-fn-story .tp-fn-tag {
   font-weight: 400;
   color: var(--muted);
 }
@@ -2105,6 +2119,21 @@ body:has(.tp-drawer) .pro-foot {
 }
 th.num .tp-th-sort {
   flex-direction: row-reverse;
+}
+/* The Rate header opens Rate benchmarks: its chevron points right, and shows on hover like a sort's. */
+th.num .tp-th-link {
+  flex-direction: row;
+}
+.tp-th-link {
+  color: var(--pine);
+}
+.tp-th-link:focus-visible svg {
+  opacity: 1;
+}
+/* Phone cards: at 320 a "No Marketing yet" chip no longer pushes the card wider than the screen. The chips wrap. */
+.tp-pcard .tp-fns {
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 /* ---------- inline editor ---------- */
@@ -2557,7 +2586,12 @@ th.num .tp-th-sort {
   gap: 8px;
   justify-self: end;
 }
-/* Confirm and Report: there for the keyboard at all times, seen on the row's hover and focus. */
+/*
+ * Confirm and Report: there for the keyboard at all times, seen on the row's hover and focus.
+ * In the 440px record they take their own room at the end of the row, so they never sit over
+ * the value (a seat holder's "Member" tag ends there). In the narrower record (under 1280) that
+ * room would squeeze a name into broken words, so they show over the end of the row instead.
+ */
 .tp-meta-acts {
   position: absolute;
   right: 0;
@@ -2571,6 +2605,15 @@ th.num .tp-th-sort {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--t);
+}
+@media (min-width: 1280px) {
+  .tp-drawer .tp-meta-acts {
+    position: static;
+    transform: none;
+    margin-left: auto;
+    padding-left: 0;
+    background: none;
+  }
 }
 .tp-frow:hover .tp-meta-acts,
 .tp-frow:focus-within .tp-meta-acts,

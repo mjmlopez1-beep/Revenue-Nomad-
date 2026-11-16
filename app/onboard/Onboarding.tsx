@@ -92,6 +92,11 @@ function metaOf(c: CompanyRec): string {
 
 /** The member held a seat here (the seat on file carries their name). */
 const isMine = (c: CompanyRec) => c.engagements.some((e) => e.yours);
+/**
+ * Every GTM function on file at a company: the ones it hired fractionally, then the ones with an
+ * open role and no hire yet (friendly.hiring). "Hired in other functions" reads hires alone.
+ */
+const fnsOf = (c: CompanyRec) => [...c.friendly.functions, ...(c.friendly.hiring ?? []).filter((f) => !c.friendly.functions.includes(f))];
 
 const SUGGESTIONS = 6;
 
@@ -120,10 +125,10 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { tit
     b.engagements.length - a.engagements.length ||
     Number(!!b.iconDomain) - Number(!!a.iconDomain) ||
     a.name.localeCompare(b.name);
-  const fnBonus = (c: CompanyRec) => (fn && c.friendly.functions.includes(fn) ? 1 : 0);
+  const fnBonus = (c: CompanyRec) => (fn && fnsOf(c).includes(fn) ? 1 : 0);
   /** Companies with no functions on file say little; keep them only to fill the six. */
   const withFunctions = (list: CompanyRec[]) => {
-    const kept = list.filter((c) => c.friendly.functions.length > 0);
+    const kept = list.filter((c) => fnsOf(c).length > 0);
     return kept.length >= SUGGESTIONS ? kept : list;
   };
   let pool = companies.filter((c) => !isMine(c));
@@ -137,7 +142,7 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { tit
     title = "A member held a seat here";
   } else {
     pool = withFunctions(pool).sort((a, b) => fnBonus(b) - fnBonus(a) || byScore(a, b));
-    if (pool[0] && fnBonus(pool[0]) && named(fn)) title = `Hired a fractional in ${fn}`;
+    if (pool[0] && fn && named(fn) && pool[0].friendly.functions.includes(fn)) title = `Hired a fractional in ${fn}`;
   }
   if (own.length) title = own.length >= SUGGESTIONS ? "Where you held a seat" : "Where you held a seat, then more";
   return { title, list: [...own, ...pool].slice(0, SUGGESTIONS) };
@@ -647,6 +652,7 @@ function StepFollow({
           const on = follows.includes(c.id);
           const meta = metaOf(c);
           const mine = isMine(c);
+          const fns = fnsOf(c);
           return (
             <li key={c.id} className={`ob-co${on ? " ob-co-on" : ""}`}>
               <div className="ob-co-top">
@@ -664,8 +670,8 @@ function StepFollow({
                 <span className="ob-co-fns">
                   {/* An attribute, so an outline chip: the member held a seat here. */}
                   {mine ? <span className="chip ob-your-seat">Your seat</span> : null}
-                  {c.friendly.functions.length ? (
-                    c.friendly.functions.slice(0, mine ? 1 : 2).map((f) => (
+                  {fns.length ? (
+                    fns.slice(0, mine ? 1 : 2).map((f) => (
                       <span key={f} className={`chip${f === fn ? " ob-chip-mine" : ""}`}>
                         {f}
                       </span>
@@ -673,7 +679,7 @@ function StepFollow({
                   ) : mine ? null : (
                     <span className="ob-co-none">No functions on file yet</span>
                   )}
-                  {c.friendly.functions.length > (mine ? 1 : 2) ? <span className="ob-co-more num">+{c.friendly.functions.length - (mine ? 1 : 2)}</span> : null}
+                  {fns.length > (mine ? 1 : 2) ? <span className="ob-co-more num">+{fns.length - (mine ? 1 : 2)}</span> : null}
                   {/* An open role: a row repeats, so the dot is the only ember it carries. */}
                   {c.friendly.open > 0 ? (
                     <span className="ob-tier">
