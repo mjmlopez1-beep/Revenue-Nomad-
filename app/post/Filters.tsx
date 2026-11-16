@@ -4,12 +4,12 @@
  * Filter groups (sidebar on desktop, overlay on tablet, bottom sheet on phones). Every option
  * shows a count: a number in the text face, right-aligned, so a column of them lines up.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { SOURCE_LABEL } from "@/lib/tableFields";
-import { IconCheck, IconSearch, IconX } from "../ui/shared";
+import { IconCheck, IconChevron, IconSearch, IconX } from "../ui/shared";
 import {
-  EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, type Facets, type Filters, type ListKey, type ToggleKey,
+  EMPTY_FILTERS, FIT_STEPS, LIST_OPTIONS, TOGGLE_LABEL, activeCount, namedFn, notMineLabel, placeWords, type Facets, type Filters, type ListKey, type ToggleKey,
 } from "./model";
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
@@ -40,24 +40,46 @@ function Toggle({ k, f, setF, n, label }: { k: ToggleKey; f: Filters; setF: (f: 
   );
 }
 
-/** A list filter that only appears once some record has a value for it (new fields start empty). */
-function ListBlock({ k, title, f, setF, counts }: { k: ListKey; title: string; f: Filters; setF: (f: Filters) => void; counts: Record<string, number> }) {
+/**
+ * A list filter. It only appears once some record in view has a value for it, and an option
+ * with nothing behind it is left out unless it is selected (a filter that finds nothing isn't
+ * worth a slot).
+ */
+function ListBlock({ k, title, f, setF, counts, label }: { k: ListKey; title: string; f: Filters; setF: (f: Filters) => void; counts: Record<string, number>; label?: (o: string) => string }) {
   if (!f[k].length && !Object.values(counts).some((n) => n > 0)) return null;
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">{title}</div>
-      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as Exclude<ListKey, "hq">]} />
+      <ChipSet k={k} f={f} setF={setF} counts={counts} options={LIST_OPTIONS[k as Exclude<ListKey, "hq">]} label={label} />
     </div>
   );
 }
 
-function ChipSet({ k, f, setF, counts, label = (o: string) => o, options }: { k: ListKey; f: Filters; setF: (f: Filters) => void; counts: Record<string, number>; label?: (o: string) => string; options: string[] }) {
+function ChipSet({
+  k,
+  f,
+  setF,
+  counts,
+  label = (o: string) => o,
+  options,
+  keepZero,
+}: {
+  k: ListKey;
+  f: Filters;
+  setF: (f: Filters) => void;
+  counts: Record<string, number>;
+  label?: (o: string) => string;
+  options: string[];
+  /** Show options with a count of 0 too (Open now and Closed are a pair). */
+  keepZero?: boolean;
+}) {
   const sel = f[k];
   return (
     <div className="tp-fchips">
       {options.map((o) => {
         const on = sel.includes(o);
         const n = counts[o] ?? 0;
+        if (!n && !on && !keepZero) return null;
         return (
           <button
             key={o}
@@ -124,10 +146,32 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
   );
 }
 
+/**
+ * HQ by place. Type a city, state or country and press Enter (or pick the first line) to match
+ * every spelling of it: "california" catches "San Diego, CA" and "Venice , Ca". The lines under
+ * it are the HQs on file that contain what was typed.
+ */
 function Hq({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; counts: Record<string, number> }) {
   const [q, setQ] = useState("");
   const all = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const sugg = all.filter(([v]) => !f.hq.includes(v) && v.toLowerCase().includes(q.toLowerCase())).slice(0, q ? 8 : 4);
+  const typed = q.trim();
+  const want = placeWords(typed);
+  // Every HQ on file that is in the typed place, by its words ("ca" reads as California).
+  const inPlace = want.length
+    ? all.filter(([v]) => {
+        const have = new Set(placeWords(v));
+        return want.every((w) => have.has(w));
+      })
+    : [];
+  const placeN = inPlace.reduce((n, [, c]) => n + c, 0);
+  const already = f.hq.some((v) => v.toLowerCase() === typed.toLowerCase());
+  const offerPlace = !!typed && !already && placeN > 0;
+  const sugg = all.filter(([v]) => !f.hq.includes(v) && (typed ? inPlace.some(([x]) => x === v) || v.toLowerCase().includes(typed.toLowerCase()) : true)).slice(0, typed ? 6 : 4);
+  const addPlace = () => {
+    if (!offerPlace) return;
+    setF({ ...f, hq: [...f.hq, typed] });
+    setQ("");
+  };
   return (
     <div className="tp-fblock">
       <div className="tp-flabel">HQ</div>
@@ -142,9 +186,30 @@ function Hq({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; count
       )}
       <label className="tp-fsearch">
         <IconSearch size={13} />
-        <input className="tp-bare" placeholder="City or state" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search by HQ city or state" />
+        <input
+          className="tp-bare"
+          placeholder="City, state or country"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addPlace();
+            }
+          }}
+          aria-label="Filter by HQ city, state or country. Press Enter to add it."
+          enterKeyHint="done"
+        />
       </label>
       <div className="tp-flist">
+        {offerPlace && (
+          <button type="button" className="tp-ftoggle tp-ftoggle-sm tp-fplace" onClick={addPlace}>
+            <span className="tp-ftoggle-l">
+              Anywhere in <b>{typed}</b>
+            </span>
+            <span className="tp-cnt num">{placeN}</span>
+          </button>
+        )}
         {sugg.map(([v, n]) => (
           <button key={v} type="button" className="tp-ftoggle tp-ftoggle-sm" onClick={() => (setF({ ...f, hq: [...f.hq, v] }), setQ(""))}>
             <span className="tp-ftoggle-l">{v}</span>
@@ -152,9 +217,26 @@ function Hq({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; count
           </button>
         ))}
         {!all.length && <p className="tp-fnote">No company has an HQ on file yet.</p>}
-        {all.length > 0 && !sugg.length && q && <p className="tp-fnote">No HQ on file matches {q}.</p>}
+        {all.length > 0 && !sugg.length && !offerPlace && typed && <p className="tp-fnote">No HQ on file is in {typed}.</p>}
       </div>
     </div>
+  );
+}
+
+/** A group that starts folded (Seat, People): open while one of its filters is on. */
+function Fold({ title, on, children }: { title: string; on: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(on);
+  useEffect(() => {
+    if (on) setOpen(true);
+  }, [on]);
+  return (
+    <details className="tp-fgroup tp-ffold" open={open} onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="tp-fgroup-h">
+        {title}
+        <IconChevron size={14} dir={open ? "up" : "down"} />
+      </summary>
+      {children}
+    </details>
   );
 }
 
@@ -197,27 +279,25 @@ export function FilterPanel({
       <Group title="Shortcuts">
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />
         <Toggle k="contactKnown" f={f} setF={setF} n={t.contactKnown} />
-        {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} label={`No ${me.function} seat yet`} />}
-        {me.function && <p className="tp-fnote">Companies that hired fractionals in other GTM functions and have no {me.function} seat on file.</p>}
+        {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} label={notMineLabel(me.function)} />}
+        {me.function && (
+          <p className="tp-fnote">
+            Companies that hired fractionals in other GTM functions and have no {namedFn(me.function) ? `${me.function} seat` : "seat in your function"} on file.
+          </p>
+        )}
       </Group>
       {(hasRoles || f.roleState.length > 0) && (
         <Group title="Open roles">
           <div className="tp-fblock">
-            <ChipSet k="roleState" f={f} setF={setF} counts={l.roleState} options={LIST_OPTIONS.roleState} />
+            <ChipSet k="roleState" f={f} setF={setF} counts={l.roleState} options={LIST_OPTIONS.roleState} keepZero />
           </div>
-          <p className="tp-fnote">A role is open while its job posting was still up at our last weekly scan. Closed roles stay on file with their dates.</p>
+          <p className="tp-fnote">Open now means the job posting was listed at the last clean scan of its board. Closed roles stay on file with their dates.</p>
         </Group>
       )}
       <Group title="Company">
         <Industry f={f} setF={setF} counts={l.industry} hasIndustry={hasIndustry} />
-        <div className="tp-fblock">
-          <div className="tp-flabel">Employees</div>
-          <ChipSet k="employees" f={f} setF={setF} counts={l.employees} options={LIST_OPTIONS.employees} />
-        </div>
-        <div className="tp-fblock">
-          <div className="tp-flabel">Revenue</div>
-          <ChipSet k="revenue" f={f} setF={setF} counts={l.revenue} options={LIST_OPTIONS.revenue} />
-        </div>
+        <ListBlock k="employees" title="Employees" f={f} setF={setF} counts={l.employees} />
+        <ListBlock k="revenue" title="Revenue" f={f} setF={setF} counts={l.revenue} />
         <Hq f={f} setF={setF} counts={l.hq} />
         <ListBlock k="businessModel" title="Business model" f={f} setF={setF} counts={l.businessModel} />
         <ListBlock k="motion" title="Sales motion" f={f} setF={setF} counts={l.motion} />
@@ -240,31 +320,19 @@ export function FilterPanel({
           </div>
         </div>
       </Group>
-      <Group title="Seat">
-        <div className="tp-fblock">
-          <div className="tp-flabel">Function</div>
-          <ChipSet k="fn" f={f} setF={setF} counts={l.fn} options={LIST_OPTIONS.fn} />
-        </div>
-        <div className="tp-fblock">
-          <div className="tp-flabel">Type</div>
-          <ChipSet k="type" f={f} setF={setF} counts={l.type} options={LIST_OPTIONS.type} />
-        </div>
+      <Fold title="Seat" on={f.fn.length + f.type.length + f.reason.length + f.pricing.length + f.source.length > 0 || f.statusKnown}>
+        <ListBlock k="fn" title="Function" f={f} setF={setF} counts={l.fn} />
+        <ListBlock k="type" title="Type" f={f} setF={setF} counts={l.type} />
         <Toggle k="statusKnown" f={f} setF={setF} n={t.statusKnown} />
         <ListBlock k="reason" title="Why they hired" f={f} setF={setF} counts={l.reason} />
         <ListBlock k="pricing" title="Pricing model" f={f} setF={setF} counts={l.pricing} />
-        <div className="tp-fblock">
-          <div className="tp-flabel">Source</div>
-          <ChipSet k="source" f={f} setF={setF} counts={l.source} options={LIST_OPTIONS.source} label={(o) => SOURCE_LABEL[o] ?? o} />
-        </div>
-      </Group>
-      <Group title="People">
+        <ListBlock k="source" title="Source" f={f} setF={setF} counts={l.source} label={(o) => SOURCE_LABEL[o] ?? o} />
+      </Fold>
+      <Fold title="People" on={f.fractionalNamed || f.emailKnown || f.relationship.length > 0}>
         <Toggle k="fractionalNamed" f={f} setF={setF} n={t.fractionalNamed} />
         <Toggle k="emailKnown" f={f} setF={setF} n={t.emailKnown} />
-        <div className="tp-fblock">
-          <div className="tp-flabel">Relationship</div>
-          <ChipSet k="relationship" f={f} setF={setF} counts={l.relationship} options={LIST_OPTIONS.relationship} />
-        </div>
-      </Group>
+        <ListBlock k="relationship" title="Relationship" f={f} setF={setF} counts={l.relationship} />
+      </Fold>
       <p className="tp-fnote tp-fnote-end">A filter can tell that a locked fact is on file. It never reads what the fact says.</p>
     </div>
   );

@@ -1,16 +1,18 @@
 "use client";
 
 /**
- * Dates on a role the weekly scan follows: "Open since Nov 3" while the posting is up, then
- * "Role closed Dec 8" with how long it was listed. Shown wherever that seat is shown (the
- * company record, the Seats table, phone cards).
+ * Dates on a role the weekly scan follows, in the viewer's own time zone. While the posting is
+ * listed: "Posted Oct 2" when the job board gives the day, else "Seen open since Nov 15" (the
+ * day our scan first saw it). When the last clean scan of its board did not list it: "Not seen
+ * in the last scan". Once it comes down: "Role closed Dec 8 · listed 35 days". Shown wherever
+ * that seat is shown (the company record, the tables, phone cards).
  *
  * The dot on an open role is the only ember a row or a card carries.
  */
 import type { ReactNode } from "react";
 import type { EngagementRec } from "@/lib/tableTypes";
 import { plural } from "./hooks";
-import { dayOf, daysListed, shown } from "./model";
+import { dayOf, listedDays, shown } from "./model";
 import "./pages.css";
 
 const short = (d: Date) =>
@@ -21,19 +23,34 @@ export const fmtDay = (iso: string) => short(dayOf(iso));
 /** The same, for a full timestamp, in the viewer's time zone. */
 export const fmtStamp = (iso: string) => short(new Date(iso));
 
+/** When the role was first seen and when it came down: the full times when the server sends them, else the UTC days. */
+const firstSeen = (e: EngagementRec) => (e.openedAt ? new Date(e.openedAt) : e.opened ? dayOf(e.opened) : null);
+const cameDown = (e: EngagementRec) => (e.closedAt ? new Date(e.closedAt) : e.closed ? dayOf(e.closed) : null);
+
 export function RoleDate({ e }: { e: EngagementRec }) {
-  if (!e.opened) return null;
-  if (!e.closed)
+  const seen = firstSeen(e);
+  if (!seen) return null;
+  const seenOn = short(seen);
+  const down = cameDown(e);
+  if (!down) {
+    if (e.unseen)
+      return (
+        <span className="tp-role-date unseen num" title={`First seen on ${seenOn}. The last clean scan of its job board didn't list it, so it may have closed.`}>
+          Not seen in the last scan
+        </span>
+      );
+    const posted = e.posted ? short(dayOf(e.posted)) : null;
     return (
-      <span className="tp-role-date open num" title={`We first saw this job posting on ${fmtDay(e.opened)}. It was still up at the last weekly scan.`}>
+      <span className="tp-role-date open num" title={posted ? `Posted ${posted}. First seen on ${seenOn}.` : `First seen on ${seenOn}`}>
         <span className="live-dot" aria-hidden />
-        Open since {fmtDay(e.opened)}
+        {posted ? `Posted ${posted}` : `Seen open since ${seenOn}`}
       </span>
     );
-  const days = plural(daysListed(e.opened, e.closed), "day");
+  }
+  const days = plural(listedDays(e), "day");
   return (
-    <span className="tp-role-date closed num" title={`The job posting was up for ${days}, from ${fmtDay(e.opened)}.`}>
-      Role closed {fmtDay(e.closed)}
+    <span className="tp-role-date closed num" title={`The job posting was listed for ${days}, from ${seenOn}.`}>
+      Role closed {short(down)}
       <span className="tp-role-days"> · listed {days}</span>
     </span>
   );
