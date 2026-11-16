@@ -3185,3 +3185,44 @@
   border: 1px solid rgba(46, 229, 157, 0.45);
   vertical-align: 1px;
 }
+
+/* ---------- hidden company (active open role, not unlocked) ---------- */
+.logo.logo-hidden {
+  display: grid;
+  place-items: center;
+  background: var(--pine-8);
+  color: var(--pine);
+  border-color: var(--pine-14);
+}
+.tp-co-hidden .tp-co-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tp-hidden-name {
+  color: var(--muted);
+  font-style: normal;
+}
+.tp-co-hidden .tp-co-dom {
+  font-family: inherit;
+  color: var(--muted);
+}
+.tp-co-hidden.big .tp-hidden-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tp-co-hidden.big .tp-co-dom {
+  font-size: 14px;
+  margin-top: 2px;
+}
+.tp-hidden-note {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--volt-soft);
+  color: var(--volt-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}

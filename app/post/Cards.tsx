@@ -7,10 +7,17 @@ import { SOURCE_LABEL } from "@/lib/tableFields";
 import { AddPill, CompanyLogo, IconStar, fmtMonth, val } from "../ui/shared";
 import type { Row } from "./model";
 import { FactCell, earnNote, useUi } from "./ui";
-import { Fit, FnChips, HeldBy } from "./Tables";
+import { Fit, FnChips, HeldBy, HiddenCompany } from "./Tables";
 
 function Head({ r, right }: { r: Row; right?: React.ReactNode }) {
   const i = r.i;
+  if (i.c.hidden)
+    return (
+      <div className="tp-pcard-top">
+        <HiddenCompany i={i} />
+        {right}
+      </div>
+    );
   return (
     <div className="tp-pcard-top">
       <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />

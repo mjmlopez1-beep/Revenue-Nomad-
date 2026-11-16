@@ -152,7 +152,8 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
         return n;
       });
       if (r.ok) {
-        if (firstUnlock) toast("Unlocked. It stays visible to you. Add a fact to earn the credit back.");
+        if (t.field === "identity") toast(r.message);
+        else if (firstUnlock) toast("Unlocked. It stays visible to you. Add a fact to earn the credit back.");
         setPulse((p) => (p === k ? null : p));
         setFlash((s) => new Set(s).add(k));
         setTimeout(() => setFlash((s) => {
@@ -191,7 +192,7 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   const addable = useCallback(
     (id: string): FactRef[] => {
       const i = ownerOf.get(id);
-      if (!i) return [];
+      if (!i || i.c.hidden) return [];
       const out: FactRef[] = [];
       for (const f of COMPANY_FILL) if (i.c.cells[f]?.s === "empty") out.push({ entity: "company", id: i.c.id, field: f });
       for (const e of i.engs) for (const f of ["function", "type", "start"]) if (e.cells[f]?.s === "empty") out.push({ entity: "engagement", id: e.id, field: f });
@@ -207,11 +208,20 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
     setDrawer({ id, rowKey: row?.key ?? id, focus: focus ?? null });
     setPage("table");
   }, []);
-  const openAdd = useCallback((o?: AddOpts) => {
-    setEditor(null);
-    setPop(null);
-    setAddOpts(o ?? {});
-  }, []);
+  /** A record at a company whose name is hidden until the member unlocks it. */
+  const isHidden = useCallback((id: string) => !!ownerOf.get(id)?.c.hidden, [ownerOf]);
+  const openAdd = useCallback(
+    (o?: AddOpts) => {
+      setEditor(null);
+      setPop(null);
+      if (o?.companyId && isHidden(o.companyId)) {
+        toast("Unlock this company first (1 credit) to add facts here.");
+        return;
+      }
+      setAddOpts(o ?? {});
+    },
+    [isHidden, toast],
+  );
   const openRow = useCallback((r: Row) => {
     setEditor(null);
     setDrawer({ id: r.i.c.id, rowKey: r.key, focus: r.p ? r.p.id : r.e ? r.e.id : null });
@@ -397,8 +407,8 @@ export default function TradingPost({ view, act, signOut }: TradingPostProps) {
   }, [showTable, list, noRows]);
 
   const ui: Ui = useMemo(
-    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable }),
-    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable],
+    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden }),
+    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden],
   );
 
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;

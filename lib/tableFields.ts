@@ -38,6 +38,9 @@ export const ENGAGEMENT_TYPES = ["Fractional", "Interim", "Advisory", "Project",
 export const FRACTIONAL_TYPES = ["Fractional", "Interim", "Advisory", "Project"];
 export const STATUSES = ["Open role", "Active", "Ended"];
 
+/** What a company with an active open role is called until the member unlocks it (1 credit). */
+export const HIDDEN_COMPANY = "Hidden company";
+
 /** Max credits a member can earn in any rolling 24 hours: fills, invite and confirmation bonuses together. Bonuses past it are held and paid as room opens. */
 export const EARN_CAP = 25;
 /** Credits for inviting a fellow fractional, paid to both once the new member adds their first fact. */

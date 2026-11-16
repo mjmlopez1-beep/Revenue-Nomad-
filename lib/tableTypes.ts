@@ -68,6 +68,12 @@ export interface Friendly {
 export interface CompanyRec {
   id: string;
   name: string;
+  /**
+   * The company has an active open role and the viewer hasn't unlocked it: `name` is
+   * HIDDEN_COMPANY, website, LinkedIn and About come back locked, HQ is cut to its region and
+   * there is no logo. Unlock with { type: "unlock", entity: "company", id, field: "identity" }.
+   */
+  hidden?: boolean;
   /** Domain to draw the logo from (Website, or a looked-up domain). */
   iconDomain: string | null;
   /** Keyed by company field: website, industry, employees, revenue, hq, linkedin, about. */

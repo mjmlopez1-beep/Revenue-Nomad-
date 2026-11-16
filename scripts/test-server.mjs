@@ -159,7 +159,7 @@ function pickEmpty(view, n, { free = false, entity } = {}) {
   for (const x of cellsOf(view)) {
     if (out.length >= n) break;
     const col = `${x.entity}.${x.field}`;
-    if (x.cell.s !== "empty" || !SAMPLE[col] || (free && !FREE.has(col)) || (entity && x.entity !== entity)) continue;
+    if (x.cell.s !== "empty" || !SAMPLE[col] || (free && !FREE.has(col)) || (entity && x.entity !== entity) || x.company.hidden) continue;
     const k = `${x.id}.${x.field}`;
     if (claimed.has(k)) continue;
     claimed.add(k);
@@ -544,14 +544,15 @@ section("seat", async () => {
   const short = await call("GET", "/api/table?people=s", { token: T.token, ipAddr: T.ip });
   check("a one-letter search returns nothing", short.json?.members?.length === 0, short.json);
 
-  const vT = await T.view();
+  // Fresh engagements to fill (the few empty seat holders on file are open roles).
+  const v0 = await T.view();
+  const hosts = v0.companies.filter((c) => !c.hidden).slice(-3);
   const seats = [];
-  for (const x of cellsOf(vT)) if (x.entity === "engagement" && x.field === "operator" && x.cell.s === "empty" && !claimed.has(`${x.id}.operator`)) {
-    claimed.add(`${x.id}.operator`);
-    seats.push(x);
-    if (seats.length >= 3) break;
+  for (const c of hosts) {
+    const r = await T.act({ type: "add", company: c.name, newEngagement: true, engagementFields: { function: "Marketing", type: "Advisory", start: "2024-06" } });
+    if (r.status !== 200 || !r.json?.id) return fail("seat: add engagement", r.json);
+    seats.push({ id: r.json.id });
   }
-  if (seats.length < 3) return fail("seat: need 3 empty seat-holder cells", seats.length);
   const one = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "Jane" });
   check("a one-word seat holder is refused with a first-and-last-name message", one.status === 400 && /first and last name/.test(one.json?.error ?? ""), one.json);
   const mail = await T.act({ type: "fill", entity: "engagement", id: seats[0].id, field: "operator", value: "jane@acme.com" });
@@ -578,6 +579,54 @@ section("seat", async () => {
   let locked = null;
   for (const x of cellsOf(vT2)) if (x.id === seats[0].id && x.field === "operator") locked = x.cell;
   check("a locked seat holder carries no member hint", locked?.s === "locked" && !("member" in locked), locked);
+});
+
+section("hidden", async () => {
+  // A company with an active open role hides its identity until unlocked (1 credit).
+  const H = await member("Hana Hidden", ip(80));
+  const v = await H.view();
+  const hid = v.companies.filter((c) => c.hidden);
+  check("companies with an open role come back hidden", hid.length > 0 && hid.every((c) => c.friendly.open > 0), hid.length);
+  const c = hid[0];
+  if (!c) return fail("hidden: no hidden company to test");
+  check("a hidden company has no name, logo, website, LinkedIn or About", c.name === "Hidden company" && c.iconDomain === null && ["website", "linkedin", "about"].every((k) => c.cells[k]?.s !== "value"), { name: c.name, icon: c.iconDomain, w: c.cells.website, l: c.cells.linkedin });
+  const hq = c.cells.hq;
+  check("a hidden company's HQ is cut to its region", !hq || hq.s !== "value" || !hq.v.includes(","), hq);
+  check("company ids are opaque", v.companies.every((x) => /^c_[A-Za-z0-9_-]{12}$/.test(x.id)), v.companies.slice(0, 3).map((x) => x.id));
+  check("open companies still show their name", v.companies.some((x) => !x.hidden && x.name !== "Hidden company"));
+  const empty = Object.entries(c.cells).find(([, cell]) => cell.s === "empty");
+  if (empty) {
+    const f = await H.act({ type: "fill", entity: "company", id: c.id, field: empty[0], value: SAMPLE[`company.${empty[0]}`] ?? "Somewhere, TX" });
+    check("adding a fact at a hidden company by its id is refused", f.status === 400 && /Unlock this company first/.test(f.json?.error ?? ""), f.json);
+  }
+  const fo = await H.act({ type: "follow", companyId: c.id, on: true });
+  check("following a hidden company doesn't say its name", fo.status === 200 && /this company/.test(fo.json?.message ?? ""), fo.json);
+  const before = (await H.view()).me.credits;
+  const un = await H.act({ type: "unlock", entity: "company", id: c.id, field: "identity" });
+  const v2 = await H.view();
+  const c2 = v2.companies.find((x) => x.id === c.id);
+  check("unlocking a company costs 1 credit and reveals it", un.status === 200 && v2.me.credits === before - 1 && c2 && !c2.hidden && c2.name !== "Hidden company", { msg: un.json, credits: [before, v2.me.credits], name: c2?.name });
+  const again = await H.act({ type: "unlockMany", items: [{ entity: "company", id: c.id, field: "identity" }, { entity: "company", id: c.id, field: "website" }] });
+  check("unlocking it again costs nothing", again.status === 200 && (await H.view()).me.credits === before - 1, again.json);
+  // Someone who already knows the name can add to it by typing it, and then sees it.
+  const K = await member("Kai Knows", ip(81));
+  const kv = await K.view();
+  check("the company is still hidden for another member", kv.companies.find((x) => x.id === c.id)?.hidden === true);
+  const add = await K.act({ type: "add", company: c2.name, newEngagement: true, engagementFields: { function: "Sales", type: "Fractional", start: "2025-01" } });
+  const kc = (await K.view()).companies.find((x) => x.id === c.id);
+  check("adding by typing the real name works and reveals it to that member", add.status === 200 && kc && !kc.hidden, { add: add.json, hidden: kc?.hidden });
+  const fake = await K.act({ type: "add", company: "Hidden company", newEngagement: true, engagementFields: { function: "Sales" } });
+  check("the placeholder name can't be added as a company", fake.status === 400, fake.json);
+  // The ledger never names a hidden company.
+  const L = await member("Lea Ledger", ip(82));
+  const lv = await L.view();
+  const h2 = lv.companies.find((x) => x.hidden && x.engagements.some((e) => e.cells.role?.s === "locked"));
+  if (h2) {
+    const e = h2.engagements.find((x) => x.cells.role?.s === "locked");
+    await L.act({ type: "unlock", entity: "engagement", id: e.id, field: "role" });
+    const lv2 = await L.view();
+    check("the ledger says Hidden company for an unlock there", lv2.ledger[0]?.company === "Hidden company", lv2.ledger[0]);
+  }
 });
 
 section("load", async () => {

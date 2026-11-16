@@ -170,7 +170,7 @@ export const timeAgo = (iso: string | null | undefined) => {
 
 /* ---------- company logo ---------- */
 
-export function CompanyLogo({ name, domain, size = "md" }: { name: string; domain: string | null; size?: "md" | "lg" }) {
+export function CompanyLogo({ name, domain, size = "md", hidden }: { name: string; domain: string | null; size?: "md" | "lg"; hidden?: boolean }) {
   const sources = useMemo(
     () =>
       domain
@@ -181,6 +181,12 @@ export function CompanyLogo({ name, domain, size = "md" }: { name: string; domai
   const [idx, setIdx] = useState(0);
   useEffect(() => setIdx(0), [domain]);
   const cls = `logo${size === "lg" ? " logo-lg" : ""}`;
+  if (hidden)
+    return (
+      <span className={`${cls} logo-hidden`} aria-hidden>
+        <IconLock size={size === "lg" ? 18 : 14} />
+      </span>
+    );
   if (idx >= sources.length)
     return (
       <span className={cls} aria-hidden style={{ background: `hsl(${hue(name)} 55% 93%)`, color: `hsl(${hue(name)} 45% 28%)`, borderColor: "transparent" }}>

@@ -51,7 +51,24 @@ export function HeldBy({ e }: { e: EngagementRec }) {
   return <FactCell t={{ entity: "engagement", id: e.id, field: "operator" }} cell={e.cells.operator} />;
 }
 
+/** A company with an open role the member hasn't unlocked: what's free, plus Unlock company. */
+export function HiddenCompany({ i, big }: { i: CoInfo; big?: boolean }) {
+  return (
+    <span className={`tp-co tp-co-hidden${big ? " big" : ""}`}>
+      <CompanyLogo name="" domain={null} hidden size={big ? "lg" : "md"} />
+      <span className="tp-co-text">
+        <span className="tp-co-name">
+          <span className="tp-hidden-name">Hidden company</span>
+          {!big && <FactCell t={{ entity: "company", id: i.c.id, field: "identity" }} cell={{ s: "locked", ver: 0 }} />}
+        </span>
+        <span className="tp-co-dom">{i.teaser || "Hiring a fractional now"}</span>
+      </span>
+    </span>
+  );
+}
+
 function CompanyName({ i, following }: { i: CoInfo; following?: boolean }) {
+  if (i.c.hidden) return <HiddenCompany i={i} />;
   return (
     <span className="tp-co">
       <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} />

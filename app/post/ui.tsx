@@ -36,6 +36,8 @@ export interface Ui {
   fill: (t: FactRef, value: string, memberId?: string | null) => Promise<boolean>;
   openCompany: (id: string, focus?: string) => void;
   openAdd: (o?: AddOpts) => void;
+  /** The record belongs to a company hidden until the member unlocks it (no adding there). */
+  isHidden: (id: string) => boolean;
   /** Up to 3 empty facts at the company that owns this record (a company, engagement or person id). */
   addable: (id: string) => FactRef[];
 }
@@ -157,6 +159,12 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
         </span>
       );
     case "empty":
+      if (ui.isHidden(t.id))
+        return (
+          <span className={`${cls} tp-faint`} data-cell={k} title="Unlock the company to add facts here">
+            —
+          </span>
+        );
       return (
         <span className={cls} data-cell={k} ref={ref}>
           <AddPill label={addLabel} earn={!earnNote(ui.me).capped} onAdd={() => ref.current && ui.edit(ref.current, t)} />

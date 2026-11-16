@@ -54,7 +54,9 @@ function fitTier(c: CompanyRec): { label: string; cls: string; rank: number } | 
 }
 
 /** Six suggestions that match what the member came for. */
-function suggest(companies: CompanyRec[], goal: Goal | null, fn: string | null): { title: string; list: CompanyRec[] } {
+function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null): { title: string; list: CompanyRec[] } {
+  // Hidden companies (an open role, not yet unlocked) have no name to follow by.
+  const companies = all.filter((c) => !c.hidden);
   const rank = new Map(companies.map((c) => [c.id, fitTier(c)?.rank ?? 0]));
   // Many companies tie on score, so recent evidence breaks the tie before name order does.
   const byScore = (a: CompanyRec, b: CompanyRec) =>
@@ -305,6 +307,7 @@ function StepFollow({
     const starts: CompanyRec[] = [];
     const has: CompanyRec[] = [];
     for (const c of companies) {
+      if (c.hidden) continue;
       const n = c.name.toLowerCase();
       if (n.startsWith(t)) starts.push(c);
       else if (n.includes(t)) has.push(c);

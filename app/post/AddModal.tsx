@@ -359,7 +359,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
     const s = q.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "");
     if (!s) return [];
     return infos
-      .filter((x) => x.c.name.toLowerCase().includes(s) || (x.domain ?? "").includes(s))
+      .filter((x) => !x.c.hidden && (x.c.name.toLowerCase().includes(s) || (x.domain ?? "").includes(s)))
       .sort((a, b) => Number(b.c.name.toLowerCase().startsWith(s)) - Number(a.c.name.toLowerCase().startsWith(s)) || b.c.friendly.score - a.c.friendly.score)
       .slice(0, 6);
   }, [q, infos]);

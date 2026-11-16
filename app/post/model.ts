@@ -60,6 +60,8 @@ export interface CoInfo {
   /** Every locked fact at the company (for Unlock all). */
   locked: FactRef[];
   unlockedByMe: boolean;
+  /** Hidden company only: industry, size and region, shown in place of the name's subline. */
+  teaser: string;
   hay: string;
 }
 
@@ -103,8 +105,11 @@ function infoOf(c: CompanyRec): CoInfo {
     engs.find((e) => startOf(e)) ??
     [...engs].sort((a, b) => informative(b) - informative(a))[0] ??
     null;
+  // A hidden company's website, LinkedIn and About are one unlock: the company itself.
+  const coLocked = lockedOf("company", c.id, c.cells).filter((t) => !(c.hidden && ["website", "linkedin", "about"].includes(t.field)));
   const locked = [
-    ...lockedOf("company", c.id, c.cells),
+    ...(c.hidden ? [{ entity: "company" as const, id: c.id, field: "identity" }] : []),
+    ...coLocked,
     ...engs.flatMap(lockedInEngagement),
     ...c.people.flatMap((p) => lockedOf("contact", p.id, p.cells)),
   ];
@@ -121,7 +126,10 @@ function infoOf(c: CompanyRec): CoInfo {
     for (const cell of Object.values(e.cells)) if (cell.s === "value") parts.push(cell.v);
   }
   for (const { p } of people) for (const cell of Object.values(p.cells)) if (cell.s === "value") parts.push(cell.v);
-  return { c, domain, fns, people, latest, engs, locked, unlockedByMe, hay: parts.join(" ").toLowerCase() };
+  const teaser = c.hidden
+    ? [shown(c.cells.industry), shown(c.cells.employees) && `${shown(c.cells.employees)} employees`, shown(c.cells.hq)].filter(Boolean).join(" · ")
+    : "";
+  return { c, domain, fns, people, latest, engs, locked, unlockedByMe, teaser, hay: parts.join(" ").toLowerCase() };
 }
 
 /** Derived info per company object. A patched view keeps unchanged companies, so their info (and rows) keep identity too. */

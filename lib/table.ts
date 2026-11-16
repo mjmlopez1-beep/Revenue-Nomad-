@@ -15,9 +15,12 @@
  * remove a bad fact, which takes the credit back from whoever added it and refunds
  * everyone who unlocked it.
  *
- * Ids: engagement and person ids are built from names (e_{company}_{seatholder}_{role},
- * p_{company}_{person}), so they never leave the server. The client sees pubId(id), an
- * opaque HMAC, and perform() maps it back. Company ids only carry the public company name.
+ * Ids: every id is built from names (c_{company}, e_{company}_{seatholder}_{role},
+ * p_{company}_{person}), so none leaves the server. The client sees pubId(id), an opaque
+ * HMAC, and perform() maps it back.
+ *
+ * Hidden companies: a company with an active open role keeps its name, website, LinkedIn,
+ * logo and About behind "Unlock company" (1 credit); see identityHidden().
  *
  * Storage:
  *  - intel-seed.json (private, git-ignored, scripts/build-intel-seed.py): members (for
@@ -35,7 +38,7 @@ import { snapshot } from "./backup";
 import { emailEnabled } from "./email";
 import {
   ALL_FIELDS, EARN_CAP, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf, stripInvisible,
-  type Entity,
+  HIDDEN_COMPANY, type Entity,
 } from "./tableFields";
 import type { Action, ActionResult, Cell, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec, View } from "./tableTypes";
 
@@ -440,7 +443,7 @@ const pubId = (id: string) => {
   return p;
 };
 /** The id the client sees for a record: company ids as they are, the rest as pubId. */
-const outId = (entity: Entity, id: string) => (entity === "company" ? id : pubId(id));
+const outId = (_entity: Entity, id: string) => pubId(id);
 
 const fkey = (id: string, field: string) => `${id}.${field}`;
 const slug = (s: string) => s.toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, "");
@@ -658,10 +661,43 @@ export async function existingCompany(domain: string | null, name: string | null
     (name && [...g.companies.values()].find((c) => slug(c.name) === slug(name))) ||
     null;
   if (!c) return null;
-  return { id: c.id, name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
+  return { id: pubId(c.id), name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
 }
 
 const SOURCE_FRACTIONAL = new Set(["Published engagement", "Demand scan"]);
+
+/** An open fractional seat right now: status Open role, or a scanned posting nobody has marked filled. */
+function isOpenRole(e: EngNode, s: State): boolean {
+  const status = live(e, s, "status");
+  return status ? status === "Open role" : e.source === "Demand scan";
+}
+
+/** Company facts that would give a hidden company away. HQ is cut to its region instead. */
+const IDENTITY_FIELDS = new Set(["website", "linkedin", "about"]);
+/** The last part of an HQ ("Austin, TX" -> "TX"), so a hidden company keeps a region. */
+const hqRegion = (hq: string) => hq.split(",").map((x) => x.trim()).filter(Boolean).pop() ?? "";
+
+/**
+ * Whether a company's identity is hidden from this member. A company with an active open role
+ * is gated: its name, website, LinkedIn, logo and About cost 1 credit ("Unlock company"),
+ * because the name alone is enough to find the role. It stays visible to admins, to members
+ * who unlocked it or added anything there, and to the member who held a seat there.
+ */
+function identityHidden(g: Graph, s: State, idx: MemberIndex, me: Member | null, companyId: string): boolean {
+  if (!me || isAdmin(me)) return false;
+  const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
+  if (!engs.some((e) => isOpenRole(e, s))) return false;
+  if ((s.unlocks[fkey(companyId, "identity")] ?? []).includes(me.id)) return false;
+  if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return false;
+  const ids = new Set<string>([companyId, ...engs.map((e) => e.id)]);
+  for (const p of g.contacts.values()) if (p.companyId === companyId) ids.add(p.id);
+  for (const [k, v] of Object.entries(s.values)) if (v.by === me.id && ids.has(k.slice(0, k.lastIndexOf(".")))) return false;
+  for (const e of engs) {
+    const v = valueOf(e, s, "operator");
+    if (v && v.status === "live" && seatMember(idx, v)?.id === me.id) return false;
+  }
+  return true;
+}
 
 function friendliness(g: Graph, s: State, companyId: string, engs: EngNode[], operators: Set<string>): Friendly {
   let fractional = 0;
@@ -673,7 +709,7 @@ function friendliness(g: Graph, s: State, companyId: string, engs: EngNode[], op
   for (const e of engs) {
     const type = live(e, s, "type");
     const status = live(e, s, "status");
-    const isOpen = e.source === "Demand scan" || status === "Open role";
+    const isOpen = isOpenRole(e, s);
     const isFractional = isOpen || SOURCE_FRACTIONAL.has(e.source) || (!!type && FRACTIONAL_TYPES.includes(type));
     if (isOpen) open++;
     if (isFractional) {
@@ -759,6 +795,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
   );
 
   const companies: CompanyRec[] = [];
+  const hiddenIds = new Set<string>();
   let peopleCount = 0;
   for (const c of g.companies.values()) {
     const facts = { known: 0, locked: 0, missing: 0 };
@@ -810,10 +847,18 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const cells: Record<string, Cell> = {};
     for (const f of COMPANY_F) cells[f.key] = cell(c, "company", f.key);
     count(cells, COMPANY_F);
+    const hidden = identityHidden(g, s, idx, me, c.id);
+    if (hidden) {
+      hiddenIds.add(c.id);
+      for (const k of IDENTITY_FIELDS) if (cells[k]?.s === "value") cells[k] = { s: "locked", ver: 0 };
+      const hq = cells.hq;
+      if (hq?.s === "value") cells.hq = { ...hq, v: hqRegion(hq.v) };
+    }
     companies.push({
-      id: c.id,
-      name: c.name,
-      iconDomain: icons[c.id] ?? null,
+      id: pubId(c.id),
+      name: hidden ? HIDDEN_COMPANY : c.name,
+      hidden,
+      iconDomain: hidden ? null : icons[c.id] ?? null,
       cells,
       friendly: friendliness(g, s, c.id, engs, operators),
       engagements: engRecs,
@@ -835,7 +880,10 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
   const entityOf = (id: string): Entity =>
     g.companies.has(id) ? "company" : g.engagements.has(id) ? "engagement" : g.contacts.has(id) ? "contact" : id.startsWith("e_") ? "engagement" : id.startsWith("c_") ? "company" : "contact";
   const companyIdOf = (id: string) => (g.companies.has(id) ? id : g.engagements.get(id)?.companyId ?? g.contacts.get(id)?.companyId ?? "");
-  const companyNameOf = (id: string) => g.companies.get(companyIdOf(id))?.name ?? "";
+  const companyNameOf = (id: string) => {
+    const cid = companyIdOf(id);
+    return hiddenIds.has(cid) ? HIDDEN_COMPANY : g.companies.get(cid)?.name ?? "";
+  };
   if (isAdmin(me)) {
     const lastReport = new Map<string, string>();
     for (const r of s.reportLog) if (r.at > (lastReport.get(r.ref) ?? "")) lastReport.set(r.ref, r.at);
@@ -854,7 +902,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         record: companyNameOf(id) || "?",
         label: f.label,
         value: v.value,
-        companyId: companyIdOf(id),
+        companyId: pubId(companyIdOf(id)),
         addedBy: v.by === "seed" ? "Seed data" : memberName(v.by),
         reporters: (v.reporters ?? (v.reportedBy ? [v.reportedBy] : [])).map(memberName),
         reportedAt: lastReport.get(k) ?? null,
@@ -962,13 +1010,20 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
     const fromPub = new Map<string, string>();
     for (const id of g.engagements.keys()) fromPub.set(pubId(id), id);
     for (const id of g.contacts.keys()) fromPub.set(pubId(id), id);
-    /** The internal id for an id the client sent (companies as they are, the rest public ids). */
-    const inId = (entity: Entity, raw: unknown): string => {
-      const id = String(raw ?? "");
-      if (entity === "company") return id;
-      const internal = fromPub.get(id);
+    for (const id of g.companies.keys()) fromPub.set(pubId(id), id);
+    /** The internal id for a public id the client sent. */
+    const inId = (_entity: Entity, raw: unknown): string => {
+      const internal = fromPub.get(String(raw ?? ""));
       if (!internal) throw new ActionError("Record not found.");
       return internal;
+    };
+    const idx0 = memberIndex(seed, s);
+    const companyOf = (entity: Entity, id: string) =>
+      entity === "company" ? id : entity === "engagement" ? g.engagements.get(id)?.companyId ?? "" : g.contacts.get(id)?.companyId ?? "";
+    const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, me, companyId);
+    /** Adding facts by clicking into a hidden company would reveal it for free. Typing its name in Add still works. */
+    const mustSee = (companyId: string) => {
+      if (hiddenFor(companyId)) throw new ActionError("Unlock this company first (1 credit) to add facts here.");
     };
     const nodeOf = (entity: Entity, raw: unknown): Node => {
       const id = inId(entity, raw);
@@ -1045,6 +1100,7 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
       switch (a?.type) {
         case "fill": {
           const node = nodeOf(a.entity, a.id);
+          mustSee(companyOf(a.entity, node.id));
           const f = fieldOf(a.entity, a.field);
           const hadFunction = a.entity === "engagement" && !!valueOf(node, s, "function");
           const wasMine = valueOf(node, s, f.key)?.by === me.id;
@@ -1065,6 +1121,12 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const todo: { k: string; node: Node; entity: Entity; field: string }[] = [];
           for (const it of items) {
             const node = nodeOf(it.entity, it.id);
+            // Unlock company: the name, website, LinkedIn, logo and About of a hidden company.
+            if (it.entity === "company" && (it.field === "identity" || IDENTITY_FIELDS.has(it.field))) {
+              const k = fkey(node.id, "identity");
+              if (hiddenFor(node.id) && !todo.some((t) => t.k === k)) todo.push({ k, node, entity: "company", field: "identity" });
+              continue;
+            }
             const f = fieldOf(it.entity, it.field);
             const k = fkey(node.id, f.key);
             const cur = valueOf(node, s, f.key);
@@ -1093,13 +1155,17 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
           return {
-            message: `Unlocked ${todo.length} fact${todo.length > 1 ? "s" : ""}. −${todo.length} credit${todo.length > 1 ? "s" : ""}.`,
-            cells: todo.map((t) => changed(t.entity, t.node, t.field)),
+            message:
+              todo.length === 1 && todo[0].field === "identity"
+                ? `Unlocked ${g.companies.get(todo[0].node.id)?.name ?? "the company"}. −1 credit.`
+                : `Unlocked ${todo.length} fact${todo.length > 1 ? "s" : ""}. −${todo.length} credit${todo.length > 1 ? "s" : ""}.`,
+            cells: todo.filter((t) => t.field !== "identity").map((t) => changed(t.entity, t.node, t.field)),
           };
         }
         case "add": {
           const name = stripInvisible(a.company).trim().replace(/\s+/g, " ").slice(0, 80);
           if (name.length < 2) throw new ActionError("What's the company called?");
+          if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) throw new ActionError("Type the company's real name.");
           // Validate everything up front so a bad field never leaves a half-made record.
           const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
             Object.entries(raw ?? {})
@@ -1184,13 +1250,14 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           const skipped = kept ? ` ${kept} field${kept > 1 ? "s were" : " was"} already filled and left as is.` : "";
           return {
             message: `${where}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${skipped}${capNote()}`,
-            id: eid ? pubId(eid) : company.id,
+            id: eid ? pubId(eid) : pubId(company.id),
             capped,
           };
         }
         case "addPerson": {
-          const c = g.companies.get(String(a.companyId));
+          const c = g.companies.get(fromPub.get(String(a.companyId)) ?? "");
           if (!c) throw new ActionError("Company not found.");
+          mustSee(c.id);
           const e = a.engagementId ? g.engagements.get(fromPub.get(String(a.engagementId)) ?? "") : null;
           if (a.engagementId && (!e || e.companyId !== c.id)) throw new ActionError("Engagement not found.");
           const fields = Object.entries(a.person ?? {}).filter(([, v]) => String(v ?? "").trim());
@@ -1214,13 +1281,14 @@ export async function perform(token: string | null, a: Action): Promise<ActionRe
           };
         }
         case "follow": {
-          const c = g.companies.get(String(a.companyId));
+          const c = g.companies.get(fromPub.get(String(a.companyId)) ?? "");
           if (!c) throw new ActionError("Company not found.");
+          const label = hiddenFor(c.id) ? "this company" : c.name;
           const list = new Set(s.follows[me.id] ?? []);
           if (a.on) list.add(c.id);
           else list.delete(c.id);
           s.follows[me.id] = [...list];
-          return { message: a.on ? `Following ${c.name}.` : `Stopped following ${c.name}.` };
+          return { message: a.on ? `Following ${label}.` : `Stopped following ${label}.` };
         }
         case "profile": {
           const p = { ...(s.profiles[me.id] ?? {}) };

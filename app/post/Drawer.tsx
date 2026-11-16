@@ -11,7 +11,7 @@ import { RELATIONSHIPS, SOURCE_LABEL, cleanValue, fieldDef, type Entity } from "
 import { CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, IconX, fmtMonth, hrefFor, timeAgo, val } from "../ui/shared";
 import { COMPANY_FILL, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, shown, type CoInfo, type FactRef } from "./model";
 import { EditPill, FactCell, earnNote, shortLabel, useUi } from "./ui";
-import { Fit } from "./Tables";
+import { Fit, HiddenCompany } from "./Tables";
 import { plural } from "./hooks";
 
 /** The team inbox that brokers intros (read at build time). Without it, the intro link only drafts the email. */
@@ -91,7 +91,7 @@ function FieldList({ entity, id, cells, fields, openSeat }: { entity: Entity; id
   const ui = useUi();
   const present = fields.filter((f) => cells[f] && cells[f].s !== "empty");
   const empty = fields
-    .filter((f) => cells[f]?.s === "empty" && !(openSeat && (f === "operator" || f === "end")))
+    .filter((f) => cells[f]?.s === "empty" && !(openSeat && (f === "operator" || f === "end")) && !ui.isHidden(id))
     .sort((a, b) => emptyRank(a) - emptyRank(b));
   const pulseHidden = empty.slice(3).some((f) => ui.pulse === cellKey(id, f));
   const [more, setMore] = useState(pulseHidden);
@@ -315,9 +315,11 @@ function EngagementCard({
         <AddPersonForm companyId={companyId} engagementId={e.id} onDone={() => setAdding(false)} />
       ) : (
         <div className="tp-eng-foot">
-          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAdding(true)}>
-            <IconPlus size={13} /> Add someone on this seat
-          </button>
+          {!ui.isHidden(e.id) && (
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAdding(true)}>
+              <IconPlus size={13} /> Add someone on this seat
+            </button>
+          )}
           {intro && (
             <span className="tp-intro-w">
               <a className="tp-intro" href={intro}>
@@ -341,7 +343,7 @@ function InlineFact({ t }: { t: FactRef }) {
 
 export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?: boolean; skip?: string[] }) {
   const ui = useUi();
-  const fields = COMPANY_FILL.filter((f) => i.c.cells[f]?.s === "empty" && !skip.includes(f));
+  const fields = i.c.hidden ? [] : COMPANY_FILL.filter((f) => i.c.cells[f]?.s === "empty" && !skip.includes(f));
   if (!fields.length) return null;
   const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
   const earn = earnNote(ui.me);
@@ -417,10 +419,18 @@ export function Drawer({
 
   const actions = (
     <div className="tp-dactions">
-      <UnlockAll items={i.locked} />
-      <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
-        <IconPlus size={14} /> Add what you know
-      </button>
+      {c.hidden ? (
+        <button type="button" className="btn btn-primary" onClick={() => ui.unlock({ entity: "company", id: c.id, field: "identity" })}>
+          Unlock company · 1 credit
+        </button>
+      ) : (
+        <>
+          <UnlockAll items={i.locked} />
+          <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
+            <IconPlus size={14} /> Add what you know
+          </button>
+        </>
+      )}
     </div>
   );
   const followBtn = (
@@ -457,6 +467,12 @@ export function Drawer({
         </button>
       </div>
       <div className="tp-dscroll" ref={scroller}>
+        {c.hidden ? (
+          <header className="tp-dhead">
+            <HiddenCompany i={i} big />
+            {!phone && followBtn}
+          </header>
+        ) : (
         <header className="tp-dhead">
           <CompanyLogo name={c.name} domain={c.iconDomain ?? i.domain} size="lg" />
           <div className="tp-dhead-t">
@@ -480,6 +496,12 @@ export function Drawer({
           </div>
           {!phone && followBtn}
         </header>
+        )}
+        {c.hidden && (
+          <p className="tp-hidden-note">
+            This company is hiring a fractional now. Unlock it for 1 credit to see the name, website and LinkedIn. Role, rate and contacts unlock separately.
+          </p>
+        )}
         {line.length ? <div className="tp-dline">{line.join(" · ")}</div> : <MissingFacts i={i} title={false} skip={["website", "linkedin"]} />}
         <div className="tp-dfit">
           <Fit i={i} big />
@@ -568,9 +590,15 @@ export function Drawer({
           ) : (
             <span className="tp-small muted">Nothing locked here</span>
           )}
-          <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
-            <IconPlus size={14} /> Add
-          </button>
+          {c.hidden ? (
+            <button type="button" className="btn btn-primary" onClick={() => ui.unlock({ entity: "company", id: c.id, field: "identity" })}>
+              Unlock company
+            </button>
+          ) : (
+            <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
+              <IconPlus size={14} /> Add
+            </button>
+          )}
         </div>
       )}
     </div>
