@@ -3,7 +3,11 @@
 /**
  * The record drawer (440px, right) and its phone twin (full-screen sheet with a sticky
  * action bar). Everything about one company: header, actions, about, functions, every
- * engagement, people, and the missing facts to add.
+ * seat, people, and what is still missing.
+ *
+ * One primary action. A hidden company has Unlock company and nothing else to press until
+ * it is unlocked. Any other company has Add what you know, with Unlock all beside it as an
+ * outline button. The solid ember "Hiring" chip lives here, in the header, and nowhere else.
  */
 import { useEffect, useRef, useState } from "react";
 import type { Cell, EngagementRec, PersonRec } from "@/lib/tableTypes";
@@ -12,7 +16,7 @@ import { CompanyLogo, IconCheck, IconChevron, IconExternal, IconPlus, IconStar, 
 import { COMPANY_FILL, COMPANY_GTM, ENG_FIELDS, cellKey, fitReason, isOpenSeat, lockedInEngagement, lockedOf, seatMissingCount, shown, type CoInfo, type FactRef } from "./model";
 import { EditPill, FactCell, Pro, YourSeat, ZeroCredits, earnNote, shortLabel, useUi } from "./ui";
 import { sendSignal } from "./ProOffer";
-import { Fit, HiddenCompany } from "./Tables";
+import { Fit, HiddenCompany, NoSeatYet } from "./Tables";
 import { RoleDate, statusText } from "./RoleDate";
 import { plural } from "./hooks";
 
@@ -20,6 +24,10 @@ import { plural } from "./hooks";
 const INTRO_TO = process.env.NEXT_PUBLIC_RN_INTRO_EMAIL ?? "";
 
 /* ---------- small pieces ---------- */
+
+/** "a", "a and b", "a, b and c". */
+const listOf = (xs: string[]) => (xs.length <= 2 ? xs.join(" and ") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
+const seatsTitle = (n: number | undefined) => (n ? `${plural(n, "seat")} on file` : undefined);
 
 function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
   const ui = useUi();
@@ -31,11 +39,11 @@ function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
   return (
     <span className="tp-meta">
       {cell.ver > 0 && (
-        <span className="tp-ver mono" title={`Confirmed by ${plural(cell.ver, "member")}`}>
+        <span className="tp-ver num" title={`${plural(cell.ver, "member")} confirmed this`}>
           <IconCheck size={11} /> {cell.ver}
         </span>
       )}
-      {cell.mine && <span className="tp-yours">Yours</span>}
+      {cell.mine && <span className="tp-yours">You added this</span>}
       {cell.mine && (
         <button type="button" className="tp-tbtn" onClick={(e) => ui.edit(e.currentTarget, t, cell.v)}>
           Edit
@@ -44,22 +52,22 @@ function Meta({ t, cell }: { t: FactRef; cell: Cell }) {
       {canCheck && !reporting && (
         <span className="tp-meta-acts">
           {cell.iv ? (
-            <span className="tp-yours">You confirmed</span>
+            <span className="tp-yours">You confirmed this</span>
           ) : (
-            <button type="button" className="tp-tbtn" onClick={() => ui.act({ type: "verify", ...t })}>
+            <button type="button" className="tp-tbtn" title="You know this is right. Two confirmations earn the member who added it a credit." onClick={() => ui.act({ type: "verify", ...t })}>
               Confirm
             </button>
           )}
-          <button type="button" className="tp-tbtn" onClick={() => setReporting(true)}>
+          <button type="button" className="tp-tbtn" title="You know this is wrong" onClick={() => setReporting(true)}>
             Report
           </button>
         </span>
       )}
       {reporting && (
         <span className="tp-meta-acts on">
-          <span className="tp-small">Hide it for review?</span>
+          <span className="tp-small">Report this as wrong?</span>
           <button type="button" className="tp-tbtn tp-tbtn-red" onClick={() => (ui.act({ type: "report", ...t }), setReporting(false))}>
-            Report
+            Report it
           </button>
           <button type="button" className="tp-tbtn" onClick={() => setReporting(false)}>
             Cancel
@@ -88,7 +96,7 @@ const emptyRank = (f: string) => (EMPTY_FIRST.includes(f) ? EMPTY_FIRST.indexOf(
 
 /**
  * Known and locked fields as a list; the empty ones as a compact row of add pills (three,
- * then "N more to add"). An open seat never asks who held it or when it ended.
+ * then "Show N more"). An open seat never asks who held it or when it ended.
  */
 function FieldList({ entity, id, cells, fields, openSeat }: { entity: Entity; id: string; cells: Record<string, Cell>; fields: string[]; openSeat?: boolean }) {
   const ui = useUi();
@@ -115,7 +123,7 @@ function FieldList({ entity, id, cells, fields, openSeat }: { entity: Entity; id
           ))}
           {empty.length > 3 && !all && (
             <button type="button" className="tp-tbtn" onClick={() => setMore(true)}>
-              {empty.length - 3} more to add
+              Show {empty.length - 3} more
             </button>
           )}
         </div>
@@ -124,14 +132,23 @@ function FieldList({ entity, id, cells, fields, openSeat }: { entity: Entity; id
   );
 }
 
-function UnlockAll({ items, label, small }: { items: FactRef[]; label?: (n: number) => string; small?: boolean }) {
+/**
+ * Unlock every locked fact in a record, a seat or a person at once. In the record's actions
+ * it is an outline button (Add what you know is the primary). Inside a card it is a text link.
+ */
+function UnlockAll({ items, variant = "button", short }: { items: FactRef[]; variant?: "button" | "link" | "bar"; short?: boolean }) {
   const ui = useUi();
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const n = items.length;
   if (!n) return null;
   // Not enough credits: say what is missing (touch screens never show a disabled button's title).
-  if (ui.me.credits < n) return <span className="tp-unlockall tp-unlock-short tp-small muted">Need {plural(n - ui.me.credits, "more credit", "more credits")}</span>;
+  if (ui.me.credits < n)
+    return (
+      <span className="tp-unlockall tp-unlock-short tp-small muted">
+        {variant === "link" ? `You need ${plural(n, "credit")} to unlock all` : `Unlocking all ${n} takes ${plural(n, "credit")}. You have ${ui.me.credits}.`}
+      </span>
+    );
   const run = async () => {
     if (n > 10 && !confirm) return setConfirm(true);
     setBusy(true);
@@ -139,14 +156,25 @@ function UnlockAll({ items, label, small }: { items: FactRef[]; label?: (n: numb
     setBusy(false);
     setConfirm(false);
   };
-  const text = confirm ? `Spend ${n} credits` : label ? label(n) : `Unlock all (${n} credit${n > 1 ? "s" : ""})`;
+  const cost = plural(n, "credit");
+  const text = busy ? "Unlocking" : confirm ? `Yes, spend ${cost}` : short ? `Unlock all · ${n}` : `Unlock all · ${cost}`;
   return (
     <span className="tp-unlockall">
-      <button type="button" className={`btn btn-pine${small ? " btn-sm" : ""}`} disabled={busy} title={`${n} locked fact${n > 1 ? "s" : ""}, 1 credit each`} onClick={run}>
-        {busy ? "Unlocking" : text}
+      <button
+        type="button"
+        className={variant === "link" ? "tp-tbtn tp-tbtn-strong" : "btn"}
+        disabled={busy}
+        aria-busy={busy}
+        title={`${n} locked ${n === 1 ? "fact" : "facts"}, 1 credit each`}
+        onClick={run}
+      >
+        <span>
+          {text}
+          {short && !busy && !confirm && <span className="tp-unlockall-unit"> credits</span>}
+        </span>
       </button>
       {confirm && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConfirm(false)}>
+        <button type="button" className={variant === "link" ? "tp-tbtn" : "btn btn-ghost"} onClick={() => setConfirm(false)}>
           Cancel
         </button>
       )}
@@ -166,9 +194,9 @@ function PersonCard({ p }: { p: PersonRec }) {
       <div className="tp-person-top">
         <span className="tp-person-id">
           <span className="tp-person-title">{title ?? <FactCell t={t("title")} cell={p.cells.title} addLabel="Title" />}</span>
-          {rel ? <span className="chip">{rel}</span> : <FactCell t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
+          {rel ? <span className="chip tp-fn">{rel}</span> : <FactCell t={t("relationship")} cell={p.cells.relationship} addLabel="Relationship" />}
         </span>
-        {locked.length > 1 && <UnlockAll items={locked} small label={(n) => `Unlock all (${n})`} />}
+        {locked.length > 1 && <UnlockAll items={locked} variant="link" />}
       </div>
       <FieldList entity="contact" id={p.id} cells={p.cells} fields={["name", "email", "linkedin", "phone"]} />
     </div>
@@ -184,7 +212,7 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
   const filled = Object.values(v).filter((x) => x.trim()).length;
   const room = Math.max(0, ui.me.earnCap - ui.me.earned24h);
   const submit = async () => {
-    if (!v.name?.trim()) return setErr("Add the person's name.");
+    if (!v.name?.trim()) return setErr("Add their name first.");
     for (const [k, x] of Object.entries(v)) {
       if (!x.trim()) continue;
       const { error } = cleanValue(fieldDef("contact", k)!, x);
@@ -223,7 +251,7 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
         </label>
         <label>
           <span className="tp-lbl">Phone</span>
-          <input className="input mono" type="tel" inputMode="tel" placeholder={fld("phone").placeholder} value={v.phone ?? ""} onChange={(e) => set("phone")(e.target.value)} />
+          <input className="input num" type="tel" inputMode="tel" placeholder={fld("phone").placeholder} value={v.phone ?? ""} onChange={(e) => set("phone")(e.target.value)} />
         </label>
       </div>
       <span className="tp-lbl">Relationship</span>
@@ -234,10 +262,14 @@ function AddPersonForm({ companyId, engagementId, onDone }: { companyId: string;
           </button>
         ))}
       </div>
-      {err && <p className="tp-ed-err">{err}</p>}
+      {err && (
+        <p className="tp-ed-err" role="alert">
+          {err}
+        </p>
+      )}
       <div className="tp-pform-foot">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
-          Add person {filled > 0 && room > 0 && <span className="mono">+{Math.min(filled, room)}</span>}
+        <button type="submit" className="btn btn-primary btn-sm" disabled={busy} aria-busy={busy}>
+          {busy ? "Adding" : "Add this person"} {!busy && filled > 0 && room > 0 && <span className="num">+{Math.min(filled, room)}</span>}
         </button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={onDone}>
           Cancel
@@ -275,13 +307,15 @@ function EngagementCard({
   const locked = lockedInEngagement(e);
   const start = shown(e.cells.start);
   const toFill = e.yours ? seatMissingCount(e, ui.me) : 0;
+  // Nothing can be added at a hidden company, so an empty function or type shows nothing.
+  const hidden = ui.isHidden(e.id);
   const subject = op ? `Intro to ${op} about ${company}` : "";
   const seat = role ? `the ${role} seat` : "a fractional seat";
   // Nobody needs an intro to themselves.
   const intro = op && !e.yours
     ? INTRO_TO
       ? `mailto:${INTRO_TO}?cc=${encodeURIComponent(ui.me.email)}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
-          `Please introduce me (${ui.me.name}) to ${op}${opMember ? " (a Trading Post member)" : ""}, who held ${seat} at ${company}.`,
+          `Hi,\n\nCould you introduce me (${ui.me.name}) to ${op}${opMember ? ", a Trading Post member" : ""}? They held ${seat} at ${company} and I would like to hear how it went.\n\nThanks`,
         )}`
       : `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(
           `Hi,\n\nCould you introduce me to ${op}? They held ${seat} at ${company} and I would like to hear how it went.\n\nThanks`,
@@ -297,21 +331,25 @@ function EngagementCard({
             <IconCheck size={11} /> Confirmed by the client
           </span>
         )}
-        {start && <span className="tp-eng-when mono">{fmtMonth(start)}</span>}
+        {start && <span className="tp-eng-when num">{fmtMonth(start)}</span>}
       </div>
       <div className="tp-eng-chips">
-        {fn?.s === "value" ? <span className="chip tp-fn">{fn.v}</span> : <FactCell t={t("function")} cell={fn} addLabel="Function" />}
-        {type?.s === "value" ? <span className="chip">{type.v}</span> : <FactCell t={t("type")} cell={type} addLabel="Type" />}
+        {fn?.s === "value" ? (
+          <span className={`chip tp-fn${fn.v === ui.me.function ? " tp-fn-me" : ""}`}>{fn.v}</span>
+        ) : hidden ? null : (
+          <FactCell t={t("function")} cell={fn} addLabel="Function" />
+        )}
+        {type?.s === "value" ? <span className="chip tp-fn">{type.v}</span> : hidden ? null : <FactCell t={t("type")} cell={type} addLabel="Type" />}
         {locked.length > 1 && !hideUnlockAll && (
           <span className="tp-eng-unlock">
-            <UnlockAll items={locked} small label={(n) => `Unlock all (${n})`} />
+            <UnlockAll items={locked} variant="link" />
           </span>
         )}
       </div>
       <FieldList entity="engagement" id={e.id} cells={e.cells} fields={ENG_FIELDS} openSeat={isOpenSeat(e)} />
       {toFill > 0 && (
         <button type="button" className="ys-fill-link" onClick={() => ui.openSeats(e.id)}>
-          Fill in {toFill} missing
+          Fill in the {toFill === 1 ? "one thing" : `${toFill} things`} missing on your seat
         </button>
       )}
       {e.people.length > 0 && (
@@ -326,8 +364,8 @@ function EngagementCard({
         <AddPersonForm companyId={companyId} engagementId={e.id} onDone={() => setAdding(false)} />
       ) : (
         <div className="tp-eng-foot">
-          {!ui.isHidden(e.id) && (
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAdding(true)}>
+          {!hidden && (
+            <button type="button" className="btn btn-sm btn-ghost tp-addlink" onClick={() => setAdding(true)}>
               <IconPlus size={13} /> Add someone on this seat
             </button>
           )}
@@ -370,8 +408,16 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
   if (!title) return <div className="tp-dmissing">{pills}</div>;
   return (
     <section className="tp-dsec">
-      <h3 className="tp-dsec-h">{earn.capped ? "Missing company facts" : `Add these and earn up to ${plural(n, "credit")}`}</h3>
-      {earn.capped && <p className="tp-small muted">You hit today&apos;s {ui.me.earnCap}. Facts you add now still earn a bonus, held until your room opens, when others confirm them.</p>}
+      <h3 className="tp-dsec-h">Still missing</h3>
+      <p className="tp-dsec-note">
+        {earn.capped
+          ? `You've earned today's ${ui.me.earnCap}, so adding these earns nothing until earning reopens.`
+          : n === 1
+            ? "Add it and you earn a credit."
+            : n < fields.length
+              ? `Each one you add earns a credit. You can earn ${n} more today.`
+              : "Each one you add earns a credit."}
+      </p>
       {pills}
     </section>
   );
@@ -379,24 +425,30 @@ export function MissingFacts({ i, title = true, skip = [] }: { i: CoInfo; title?
 
 /* ---------- the drawer ---------- */
 
-/** Unlock a hidden company for 1 credit. At 0 credits it shows how to earn one instead (and counts the wall). */
+/**
+ * Unlock a hidden company for 1 credit: the record's one action until it is unlocked. Pine,
+ * because it spends. At 0 credits it shows how to earn one instead (and counts the wall).
+ */
 function UnlockCompany({ id, label }: { id: string; label: string }) {
   const ui = useUi();
   const ref = useRef<HTMLButtonElement>(null);
   const [zero, setZero] = useState(false);
+  const busy = ui.busy.has(cellKey(id, "identity"));
   return (
     <>
       <button
         ref={ref}
         type="button"
-        className="btn btn-primary"
+        className="btn btn-pine"
+        disabled={busy}
+        aria-busy={busy}
         onClick={() => {
           if (ui.me.credits > 0) return ui.unlock({ entity: "company", id, field: "identity" });
           sendSignal("wall", "identity");
           setZero(true);
         }}
       >
-        {label}
+        {busy ? "Unlocking" : label}
       </button>
       {zero && ui.me.credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={id} onClose={() => setZero(false)} />}
     </>
@@ -459,16 +511,22 @@ export function Drawer({
         <UnlockCompany id={c.id} label="Unlock company · 1 credit" />
       ) : (
         <>
-          <UnlockAll items={i.locked} />
           <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
             <IconPlus size={14} /> Add what you know
           </button>
+          <UnlockAll items={i.locked} />
         </>
       )}
     </div>
   );
   const followBtn = (
-    <button type="button" className={`btn btn-sm tp-followbtn${c.following ? " tp-following" : ""}`} onClick={follow} aria-pressed={c.following}>
+    <button
+      type="button"
+      className={`btn btn-sm tp-followbtn${c.following ? " tp-following" : ""}`}
+      onClick={follow}
+      aria-pressed={c.following}
+      title={c.following ? "Stop following this company" : "Following is free. New facts here show up in your Following view."}
+    >
       <IconStar size={13} filled={c.following} /> {c.following ? "Following" : "Follow"}
     </button>
   );
@@ -486,17 +544,21 @@ export function Drawer({
           </button>
         )}
         {pos && (
-          <span className="tp-dpos mono">
+          <span className="tp-dpos num">
             {pos.n} of {pos.of}
           </span>
         )}
         <span className="tp-dbar-sp" />
-        {!phone && <span className="tp-dkeys">J K to move</span>}
+        {!phone && (
+          <span className="tp-dkeys">
+            <kbd className="tp-key">J</kbd> <kbd className="tp-key">K</kbd> to step
+          </span>
+        )}
         {phone && followBtn}
-        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Previous record (K)" onClick={() => onStep(-1)}>
+        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Previous record" title="Previous record (K)" disabled={!!pos && pos.n <= 1} onClick={() => onStep(-1)}>
           <IconChevron dir="up" />
         </button>
-        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Next record (J)" onClick={() => onStep(1)}>
+        <button type="button" className="tp-iconbtn tp-iconbtn-dark" aria-label="Next record" title="Next record (J)" disabled={!!pos && pos.n >= pos.of} onClick={() => onStep(1)}>
           <IconChevron dir="down" />
         </button>
       </div>
@@ -510,7 +572,9 @@ export function Drawer({
         <header className="tp-dhead">
           <CompanyLogo name={c.name} domain={c.iconDomain ?? i.domain} size="lg" />
           <div className="tp-dhead-t">
-            <h2 className="tp-dname">{c.name}</h2>
+            <h2 className="tp-dname" title={c.name}>
+              {c.name}
+            </h2>
             <div className="tp-dlinks">
               {website ? (
                 <a className="tp-link mono" href={hrefFor("company", "website", website)!} target="_blank" rel="noreferrer">
@@ -531,16 +595,16 @@ export function Drawer({
           {!phone && followBtn}
         </header>
         )}
+        {line.length ? <div className="tp-dline num">{line.join(" · ")}</div> : <MissingFacts i={i} title={false} skip={["website", "linkedin"]} />}
+        <div className="tp-dfit">
+          <Fit i={i} big hot />
+          <span className="tp-dfit-r num">{fitReason(i)}</span>
+        </div>
         {c.hidden && (
           <p className="tp-hidden-note">
-            This company is hiring a fractional now. Unlock it for 1 credit to see the name, website and LinkedIn. Role, rate and contacts unlock separately.
+            This company has an open fractional role, so its name is hidden. One credit shows you the name, website and LinkedIn. The role, the rate and each hiring contact cost 1 credit more.
           </p>
         )}
-        {line.length ? <div className="tp-dline">{line.join(" · ")}</div> : <MissingFacts i={i} title={false} skip={["website", "linkedin"]} />}
-        <div className="tp-dfit">
-          <Fit i={i} big />
-          <span className="tp-dfit-r">{fitReason(i)}</span>
-        </div>
         {!phone && actions}
         {c.hidden && (
           <div className="pro-under">
@@ -564,30 +628,26 @@ export function Drawer({
             <h3 className="tp-dsec-h">Functions hired</h3>
             <div className="tp-chips">
               {hired.map((fn) => (
-                <span key={fn} className={`chip tp-fn${fn === mine ? " tp-fn-me" : ""}`}>
-                  {fn} {fnCounts.get(fn) ? <span className="mono tp-cnt">{fnCounts.get(fn)}</span> : null}
+                <span key={fn} className={`chip tp-fn${fn === mine ? " tp-fn-me" : ""}`} title={seatsTitle(fnCounts.get(fn))}>
+                  {fn} {(fnCounts.get(fn) ?? 0) > 1 ? <span className="num tp-cnt">{fnCounts.get(fn)}</span> : null}
                 </span>
               ))}
               {storyFns.map((fn) => (
-                <span key={fn} className="chip tp-fn tp-fn-story" title="From member stories">
-                  {fn} {fnCounts.get(fn) ? <span className="mono tp-cnt">{fnCounts.get(fn)}</span> : null}
+                <span key={fn} className="chip tp-fn tp-fn-story" title="A member story mentions it. No seat is on file yet.">
+                  {fn}
                 </span>
               ))}
-              {gap && (
-                <span className="chip tp-fn-gap" title={`No ${mine} seat on file. They hired other GTM functions fractionally.`}>
-                  No {mine} yet
-                </span>
-              )}
+              {gap && <NoSeatYet fn={mine} />}
             </div>
-            {gap && <p className="tp-small muted tp-mt6">No {mine} seat on file. They hired other GTM functions fractionally.</p>}
-            {storyFns.length > 0 && <p className="tp-small muted tp-mt6">Muted ones come from member stories.</p>}
+            {gap && <p className="tp-dsec-note tp-mt8">They hired fractionals in other GTM functions. No {mine} seat is on file yet.</p>}
+            {storyFns.length > 0 && <p className="tp-dsec-note tp-mt8">The gray ones come from member stories. No seat is on file for them yet.</p>}
           </section>
         )}
         <section className="tp-dsec">
           <h3 className="tp-dsec-h">
-            Engagements <span className="mono tp-cnt">{i.engs.length}</span>
+            Seats <span className="num tp-cnt">{i.engs.length}</span>
           </h3>
-          {i.engs.length === 0 && <p className="tp-small muted">No one has added an engagement here yet. Be first and earn up to 10 credits.</p>}
+          {i.engs.length === 0 && <p className="tp-dsec-note">No seats on file here yet. Add one you know and earn a credit for each fact.</p>}
           {i.engs.map((e) => (
             <EngagementCard
               key={e.id}
@@ -598,44 +658,55 @@ export function Drawer({
               hideUnlockAll={lockedInEngagement(e).length === i.locked.length}
             />
           ))}
-          <button type="button" className="btn btn-sm btn-ghost tp-addeng" onClick={() => ui.openAdd({ companyId: c.id, mode: "engagement" })}>
-            <IconPlus size={13} /> Add engagement
-          </button>
+          {/* Nothing can be added to a hidden company until it is unlocked, so nothing offers to. */}
+          {!c.hidden && (
+            <button type="button" className="btn btn-sm btn-ghost tp-addlink tp-addeng" onClick={() => ui.openAdd({ companyId: c.id, mode: "engagement" })}>
+              <IconPlus size={13} /> Add a seat
+            </button>
+          )}
         </section>
         <section className="tp-dsec">
           <h3 className="tp-dsec-h">
-            People at {c.hidden ? "this company" : c.name} <span className="mono tp-cnt">{c.people.length}</span>
+            <span className="tp-dsec-ht">People at {c.hidden ? "this company" : c.name}</span> <span className="num tp-cnt">{c.people.length}</span>
           </h3>
-          {c.people.length === 0 && !addingPerson && <p className="tp-small muted">No decision makers on file. Add one you know and earn a credit for each fact.</p>}
+          {c.people.length === 0 && !addingPerson && (
+            <p className="tp-dsec-note">
+              {c.hidden ? "No hiring contacts on file here yet." : "No hiring contacts on file here yet. Add one you know and earn a credit for each fact."}
+            </p>
+          )}
           {c.people.map((p) => (
             <PersonCard key={p.id} p={p} />
           ))}
-          {addingPerson ? (
+          {c.hidden ? null : addingPerson ? (
             <AddPersonForm companyId={c.id} engagementId={null} onDone={() => setAddingPerson(false)} />
           ) : (
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAddingPerson(true)}>
-              <IconPlus size={13} /> Add decision maker
+            <button type="button" className="btn btn-sm btn-ghost tp-addlink" onClick={() => setAddingPerson(true)}>
+              <IconPlus size={13} /> Add a person
             </button>
           )}
         </section>
         {line.length > 0 && <MissingFacts i={i} skip={["website", "linkedin"]} />}
-        <footer className="tp-dfoot">
-          {sources.length > 0 && <span>From {sources.join(", ").toLowerCase()}</span>}
+        <footer className="tp-dfoot num">
+          {sources.length > 0 && <span>From {listOf(sources.map((x) => (x === "Clay" ? x : x.toLowerCase())))}</span>}
           {c.updatedAt && <span>Updated {timeAgo(c.updatedAt)}</span>}
           <span>
-            {c.facts.known + c.facts.locked} facts on file, {c.facts.missing} missing
+            {plural(c.facts.known + c.facts.locked, "fact")} on file, {c.facts.missing} missing
           </span>
         </footer>
       </div>
       {phone && (
         <div className="tp-rsheet-bar">
-          <span className="tp-rsheet-bal mono muted">{plural(ui.me.credits, "credit")}</span>
+          {/* The balance stays on screen while the sheet covers the top bar. */}
+          <span className={`tp-rsheet-bal${ui.me.credits <= 3 ? " low" : ""}`} aria-label={plural(ui.me.credits, "credit")}>
+            <b className="num">{ui.me.credits}</b>
+            <span>{ui.me.credits === 1 ? "credit" : "credits"}</span>
+          </span>
           {c.hidden ? (
             // One action while the name is hidden, as on desktop. The facts unlock after it.
             <UnlockCompany id={c.id} label="Unlock company · 1 credit" />
           ) : (
             <>
-              {i.locked.length > 0 ? <UnlockAll items={i.locked} label={(n) => `Unlock all (${n})`} /> : <span className="tp-small muted">Nothing locked here</span>}
+              {i.locked.length > 0 ? <UnlockAll items={i.locked} variant="bar" short /> : <span className="tp-rsheet-none">Nothing locked here</span>}
               <button type="button" className="btn btn-primary" onClick={() => ui.openAdd({ companyId: c.id })}>
                 <IconPlus size={14} /> Add
               </button>

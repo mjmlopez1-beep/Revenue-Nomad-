@@ -1,6 +1,10 @@
 "use client";
 
-/** Pine top bar: brand, search, credits pill, earn meter, "Add what you know", avatar menu. */
+/**
+ * Pine top bar: brand, search, credits pill, earn meter, "Add what you know", avatar menu.
+ * Every number here (the balance, "0 of 25 today", the ledger) is the text face with tabular
+ * figures, never mono.
+ */
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { LedgerRow, Me } from "@/lib/tableTypes";
 import { Brand, IconPlus, IconSearch, IconX, IconMenu, initials, timeAgo } from "../ui/shared";
@@ -45,9 +49,10 @@ export function CreditsPill({ me, onClick, btnRef }: { me: Me; onClick: () => vo
       type="button"
       className={`tp-credits${low ? " low" : ""}`}
       onClick={onClick}
-      aria-label={`${me.credits} credits. Open credits.`}
+      aria-label={`You have ${plural(me.credits, "credit")}. Show where they came from.`}
+      title={low ? "You're running low. Add a fact you know to earn a credit." : undefined}
     >
-      <span className="mono tp-credits-n">{me.credits}</span>
+      <span className="num tp-credits-n">{me.credits}</span>
       <span className="tp-credits-l">credit{me.credits === 1 ? "" : "s"}</span>
       {delta && (
         <span key={delta.id} className={`tp-delta${delta.n > 0 ? " up" : " down"}`} aria-hidden>
@@ -62,15 +67,18 @@ export function EarnMeter({ me, onClick, compact }: { me: Me; onClick: () => voi
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   const pct = Math.min(100, (me.earned24h / me.earnCap) * 100);
   return (
-    <button type="button" className={`tp-meter${capped ? " capped" : ""}`} onClick={onClick} title="Credits earned in the last 24 hours">
-      <span className="tp-meter-text">
-        {capped ? (
-          <>
-            <span className="mono">{me.earnCap}</span> earned{compact ? "" : `, reopens ${fmtTime(me.earnResetsAt)}`}
-          </>
+    <button
+      type="button"
+      className={`tp-meter${capped ? " capped" : ""}`}
+      onClick={onClick}
+      title={capped ? `You've earned today's ${me.earnCap} credits. Earning reopens ${fmtTime(me.earnResetsAt)}.` : `You've earned ${me.earned24h} of the ${me.earnCap} credits you can earn in 24 hours.`}
+    >
+      <span className="tp-meter-text num">
+        {capped && !compact && me.earnResetsAt ? (
+          <>Earning reopens {fmtTime(me.earnResetsAt)}</>
         ) : (
           <>
-            <span className="mono">{me.earned24h}</span> of <span className="mono">{me.earnCap}</span>
+            <b>{capped ? me.earnCap : me.earned24h}</b> of {me.earnCap}
             {compact ? "" : " today"}
           </>
         )}
@@ -100,44 +108,40 @@ export function CreditsPopover({
     <Anchored anchor={anchor} onClose={onClose} width={340} className="tp-credpop" align="end">
       <div className="tp-credpop-top">
         <div>
-          <div className="tp-credpop-n mono">{me.credits}</div>
-          <div className="tp-credpop-l">credits to spend</div>
+          <div className={`tp-credpop-n num${me.credits <= 3 ? " low" : ""}`}>{me.credits}</div>
+          <div className="tp-credpop-l">{me.credits === 1 ? "credit" : "credits"} to spend</div>
         </div>
         <div className="tp-credpop-earn">
           <div className="tp-credpop-l">Earned today</div>
-          <div className="mono tp-credpop-e">
-            {me.earned24h} <span className="muted">/ {me.earnCap}</span>
+          <div className="num tp-credpop-e">
+            <b>{me.earned24h}</b> <span className="muted">of {me.earnCap}</span>
           </div>
           <div className={`tp-bar${capped ? " capped" : ""}`}>
             <span style={{ width: `${Math.min(100, (me.earned24h / me.earnCap) * 100)}%` }} />
           </div>
         </div>
       </div>
-      {capped && <p className="tp-credpop-cap">You earned today&apos;s {me.earnCap}. Earning reopens {fmtTime(me.earnResetsAt)}.</p>}
-      <div className="tp-credpop-rules">
-        <p>
-          <span className="tp-plus mono">+1</span> Add a missing fact, earn 1. Up to {me.earnCap} a day.
-        </p>
-        <p>
-          <span className="tp-minus mono">−1</span> Unlock a fact, spend 1.
-        </p>
-      </div>
+      <p className="tp-credpop-rules">
+        {capped
+          ? `You've earned today's ${me.earnCap}. Earning reopens ${fmtTime(me.earnResetsAt)}. A credit still shows you a fact someone else added.`
+          : `Add a fact you know and you earn a credit, up to ${me.earnCap} a day. Spend a credit to see one someone else added.`}
+      </p>
       <div className="tp-credpop-ledger">
-        {ledger.length === 0 && <p className="muted tp-small">No activity yet. Unlock or add a fact to start.</p>}
+        {ledger.length === 0 && <p className="muted tp-small">Nothing yet. Each credit you earn or spend is listed here.</p>}
         {ledger.slice(0, 5).map((l, i) => (
           <div key={i} className="tp-lrow">
-            <span className={`mono tp-lrow-d${l.delta > 0 ? " up" : l.delta < 0 ? " down" : ""}`}>{l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "0"}</span>
-            <span className="tp-lrow-t">
+            <span className={`num tp-lrow-d${l.delta > 0 ? " up" : l.delta < 0 ? " down" : ""}`}>{l.delta > 0 ? `+${l.delta}` : l.delta < 0 ? `−${-l.delta}` : "0"}</span>
+            <span className="tp-lrow-t" title={`${ledgerWhat(l)}${ledgerWhere(l)}`}>
               {ledgerWhat(l)}
               {l.company ? <span className="muted">{ledgerWhere(l)}</span> : null}
-              {l.delta === 0 && l.reason === "fill" && <span className="muted"> (daily max reached)</span>}
+              {l.delta === 0 && l.reason === "fill" && <span className="muted"> (past today&apos;s limit)</span>}
             </span>
-            <span className="tp-lrow-at mono">{timeAgo(l.at)}</span>
+            <span className="tp-lrow-at num">{timeAgo(l.at)}</span>
           </div>
         ))}
       </div>
       <button type="button" className="btn btn-sm tp-credpop-all" onClick={onSeeAll}>
-        My credits and invite link
+        Open My credits
       </button>
     </Anchored>
   );
@@ -158,7 +162,7 @@ export function AvatarMenu({
     <Anchored anchor={anchor} onClose={onClose} width={260} className="tp-menu" align="end">
       <div className="tp-menu-me">
         <div className="tp-menu-name">{me.name}</div>
-        <div className="muted tp-small">
+        <div className="muted tp-small num">
           {me.function ? `${me.function} · ` : ""}
           {plural(me.added, "fact")} added
         </div>
@@ -174,7 +178,7 @@ export function AvatarMenu({
           }}
         >
           <span>{it.label}</span>
-          {it.hint && <span className="tp-menu-hint">{it.hint}</span>}
+          {it.hint && <span className="tp-menu-hint num">{it.hint}</span>}
         </button>
       ))}
     </Anchored>
@@ -215,7 +219,7 @@ export function TopBar({
         className="tp-bare"
         type="search"
         placeholder={phone ? "Search" : "Search companies, functions, people"}
-        aria-label="Search"
+        aria-label="Search companies, functions and people"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
@@ -234,7 +238,9 @@ export function TopBar({
             <IconX size={14} />
           </button>
         ) : (
-          <kbd className="tp-kbd">/</kbd>
+          <kbd className="tp-kbd" title="Press / to search">
+            /
+          </kbd>
         ))}
     </label>
   );
@@ -287,11 +293,11 @@ export function TopBar({
       <div className="tp-top-right">
         <CreditsPill me={me} onClick={onCredits} btnRef={creditsRef} />
         <EarnMeter me={me} onClick={onCredits} />
-        <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd}>
+        <button type="button" className="btn btn-primary tp-add-btn" onClick={onAdd} title="Add a seat, a rate or a hiring contact (A)">
           <IconPlus size={16} /> <span className="tp-add-long">Add what you know</span>
           <span className="tp-add-short">Add</span>
         </button>
-        <button ref={menuRef} type="button" className="tp-avatar" aria-label="Account menu" onClick={onMenu}>
+        <button ref={menuRef} type="button" className="tp-avatar" aria-label="Your account" title="Your account" onClick={onMenu}>
           {initials(me.name)}
         </button>
       </div>

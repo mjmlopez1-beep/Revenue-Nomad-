@@ -1,6 +1,9 @@
 "use client";
 
-/** Filter groups (sidebar on desktop, overlay on tablet, bottom sheet on phones). Every option shows a count. */
+/**
+ * Filter groups (sidebar on desktop, overlay on tablet, bottom sheet on phones). Every option
+ * shows a count: a number in the text face, right-aligned, so a column of them lines up.
+ */
 import { useState, type ReactNode } from "react";
 import type { Me } from "@/lib/tableTypes";
 import { SOURCE_LABEL } from "@/lib/tableFields";
@@ -18,7 +21,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Toggle({ k, f, setF, n }: { k: ToggleKey; f: Filters; setF: (f: Filters) => void; n: number }) {
+function Toggle({ k, f, setF, n, label }: { k: ToggleKey; f: Filters; setF: (f: Filters) => void; n: number; label?: string }) {
   const on = f[k];
   return (
     <button
@@ -31,8 +34,8 @@ function Toggle({ k, f, setF, n }: { k: ToggleKey; f: Filters; setF: (f: Filters
       <span className="tp-check" aria-hidden>
         {on && <IconCheck size={11} />}
       </span>
-      <span className="tp-ftoggle-l">{TOGGLE_LABEL[k]}</span>
-      <span className="tp-cnt mono">{n}</span>
+      <span className="tp-ftoggle-l">{label ?? TOGGLE_LABEL[k]}</span>
+      <span className="tp-cnt num">{n}</span>
     </button>
   );
 }
@@ -63,7 +66,7 @@ function ChipSet({ k, f, setF, counts, label = (o: string) => o, options }: { k:
             className={`chip tp-fchip${on ? " chip-on" : ""}${!n && !on ? " zero" : ""}`}
             onClick={() => setF({ ...f, [k]: on ? sel.filter((x) => x !== o) : [...sel, o] })}
           >
-            {label(o)} <span className="tp-cnt mono">{n}</span>
+            {label(o)} <span className="tp-cnt num">{n}</span>
           </button>
         );
       })}
@@ -103,17 +106,18 @@ function Industry({ f, setF, counts, hasIndustry }: { f: Filters; setF: (f: Filt
                 {on && <IconCheck size={11} />}
               </span>
               <span className="tp-ftoggle-l">{o}</span>
-              <span className="tp-cnt mono">{n}</span>
+              <span className="tp-cnt num">{n}</span>
             </button>
           );
         })}
+        {!list.length && !!q && <p className="tp-fnote">No industry on the list matches {q}.</p>}
         {!list.length && !q && (
-          <p className="tp-fnote">{hasIndustry ? "No industries in these results." : "No industries on file yet. Add one to a company to filter by it."}</p>
+          <p className="tp-fnote">{hasIndustry ? "None of these companies has an industry on file." : "No company has an industry on file yet. Add one and you can filter by it."}</p>
         )}
       </div>
       {!q && (
         <button type="button" className="tp-flink" onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `Show all ${LIST_OPTIONS.industry.length}`}
+          {all ? "Show fewer" : `Show all ${LIST_OPTIONS.industry.length} industries`}
         </button>
       )}
     </div>
@@ -130,7 +134,7 @@ function Hq({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; count
       {f.hq.length > 0 && (
         <div className="tp-fchips">
           {f.hq.map((v) => (
-            <button key={v} type="button" className="chip chip-on tp-fchip" onClick={() => setF({ ...f, hq: f.hq.filter((x) => x !== v) })} aria-label={`Remove ${v}`}>
+            <button key={v} type="button" className="chip chip-on tp-fchip" onClick={() => setF({ ...f, hq: f.hq.filter((x) => x !== v) })} aria-label={`Remove the filter ${v}`}>
               {v} <IconX size={11} />
             </button>
           ))}
@@ -138,17 +142,17 @@ function Hq({ f, setF, counts }: { f: Filters; setF: (f: Filters) => void; count
       )}
       <label className="tp-fsearch">
         <IconSearch size={13} />
-        <input className="tp-bare" placeholder="City or state" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search HQ" />
+        <input className="tp-bare" placeholder="City or state" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search by HQ city or state" />
       </label>
       <div className="tp-flist">
         {sugg.map(([v, n]) => (
           <button key={v} type="button" className="tp-ftoggle tp-ftoggle-sm" onClick={() => (setF({ ...f, hq: [...f.hq, v] }), setQ(""))}>
             <span className="tp-ftoggle-l">{v}</span>
-            <span className="tp-cnt mono">{n}</span>
+            <span className="tp-cnt num">{n}</span>
           </button>
         ))}
-        {!all.length && <p className="tp-fnote">No HQs on file yet.</p>}
-        {all.length > 0 && !sugg.length && q && <p className="tp-fnote">No HQ matches {q}.</p>}
+        {!all.length && <p className="tp-fnote">No company has an HQ on file yet.</p>}
+        {all.length > 0 && !sugg.length && q && <p className="tp-fnote">No HQ on file matches {q}.</p>}
       </div>
     </div>
   );
@@ -190,22 +194,18 @@ export function FilterPanel({
           )}
         </div>
       )}
-      <Group title="Quick">
+      <Group title="Shortcuts">
         <Toggle k="rateKnown" f={f} setF={setF} n={t.rateKnown} />
         <Toggle k="contactKnown" f={f} setF={setF} n={t.contactKnown} />
-        {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} />}
-        {me.function && (
-          <p className="tp-fnote">
-            No seat in my function yet shows companies that hired other GTM functions fractionally but have no {me.function} seat on file.
-          </p>
-        )}
+        {me.function && <Toggle k="notMine" f={f} setF={setF} n={t.notMine} label={`No ${me.function} seat yet`} />}
+        {me.function && <p className="tp-fnote">Companies that hired fractionals in other GTM functions and have no {me.function} seat on file.</p>}
       </Group>
       {(hasRoles || f.roleState.length > 0) && (
         <Group title="Open roles">
           <div className="tp-fblock">
             <ChipSet k="roleState" f={f} setF={setF} counts={l.roleState} options={LIST_OPTIONS.roleState} />
           </div>
-          <p className="tp-fnote">Open now means the posting was still up at the last weekly scan. Closed roles keep their dates.</p>
+          <p className="tp-fnote">A role is open while its posting was still up at our last weekly scan. Closed roles stay on file with their dates.</p>
         </Group>
       )}
       <Group title="Company">
@@ -234,13 +234,13 @@ export function FilterPanel({
                 className={`chip tp-fchip${f.fitMin === s ? " chip-on" : ""}${!facets.fit[s] && f.fitMin !== s ? " zero" : ""}`}
                 onClick={() => setF({ ...f, fitMin: s })}
               >
-                {s ? `${s}+` : "Any"} <span className="tp-cnt mono">{facets.fit[s]}</span>
+                {s ? `${s}+` : "Any"} <span className="tp-cnt num">{facets.fit[s]}</span>
               </button>
             ))}
           </div>
         </div>
       </Group>
-      <Group title="Engagement">
+      <Group title="Seat">
         <div className="tp-fblock">
           <div className="tp-flabel">Function</div>
           <ChipSet k="fn" f={f} setF={setF} counts={l.fn} options={LIST_OPTIONS.fn} />
@@ -265,7 +265,7 @@ export function FilterPanel({
           <ChipSet k="relationship" f={f} setF={setF} counts={l.relationship} options={LIST_OPTIONS.relationship} />
         </div>
       </Group>
-      <p className="tp-fnote tp-fnote-end">Locked facts filter by whether they are on file, never by value.</p>
+      <p className="tp-fnote tp-fnote-end">A filter can tell that a locked fact is on file. It never reads what the fact says.</p>
     </div>
   );
 }

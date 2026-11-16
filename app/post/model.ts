@@ -24,10 +24,10 @@ export const TABS: { key: Tab; label: string }[] = [
   { key: "needs", label: "Needs facts" },
 ];
 export const SORTS: { key: SortKey; label: string }[] = [
-  { key: "fit", label: "Fit" },
-  { key: "newest", label: "Newest intel" },
+  { key: "fit", label: "Best fit" },
+  { key: "newest", label: "Recently updated" },
   { key: "name", label: "Name" },
-  { key: "engagements", label: "Most engagements" },
+  { key: "engagements", label: "Most seats" },
 ];
 export const RECORD_TYPES: { key: RecordType; label: string }[] = [
   { key: "companies", label: "Companies" },
@@ -171,9 +171,12 @@ export function recentSeats(i: CoInfo): number {
   }).length;
 }
 
-/** A plain label for how fractional friendly a company is (the score still sorts). */
+/**
+ * A plain label for how fractional friendly a company is (the score still sorts). Every tier
+ * is an outline chip. The solid ember "Hiring" chip is the record header's alone (see Fit).
+ */
 export function fitTier(f: Friendly, engs: number): { label: string; cls: string } {
-  if (f.open) return { label: "Hiring", cls: "chip-ember" };
+  if (f.open) return { label: "Hiring", cls: "t-hiring" };
   if (f.fractional >= 2 || f.functions.length >= 2) return { label: "Repeat hirer", cls: "t-repeat" };
   if (f.recent) return { label: "Recent seat", cls: "t-recent" };
   if (f.fractional) return { label: "Past seat", cls: "t-past" };
@@ -191,7 +194,7 @@ export function fitReason(i: CoInfo): string {
   if (f.open) bits.push(`${f.open} open role${f.open > 1 ? "s" : ""} now`);
   if (!bits.length) {
     const n = i.c.engagements.length;
-    if (n) return `${n} member stor${n > 1 ? "ies" : "y"} on file. Add the seat details to raise the score.`;
+    if (n) return `${n} member stor${n > 1 ? "ies mention" : "y mentions"} them. Add the seat and the score goes up.`;
     return "No seats on file yet.";
   }
   return bits.join(", ");
@@ -269,12 +272,12 @@ export type ListKey =
   | "relationship";
 
 export const TOGGLE_LABEL: Record<ToggleKey, string> = {
-  rateKnown: "Rate known",
-  contactKnown: "Contact known",
+  rateKnown: "Rate on file",
+  contactKnown: "Contact on file",
   notMine: "No seat in my function yet",
-  statusKnown: "Status known",
-  fractionalNamed: "Seat holder named",
-  emailKnown: "Email known",
+  statusKnown: "Status on file",
+  fractionalNamed: "Seat holder on file",
+  emailKnown: "Email on file",
 };
 export const LIST_LABEL: Record<ListKey, string> = {
   industry: "Industry",
@@ -285,7 +288,7 @@ export const LIST_LABEL: Record<ListKey, string> = {
   motion: "Sales motion",
   dealSize: "Deal size",
   salesCycle: "Sales cycle",
-  reason: "Why hired",
+  reason: "Why they hired",
   pricing: "Pricing",
   roleState: "Open roles",
   fn: "Function",

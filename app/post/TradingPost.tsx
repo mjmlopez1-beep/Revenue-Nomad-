@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Trading Post, signed in. A give-to-get intel table for fractional GTM operators.
+ * Trading Post, signed in. The shared record of fractional GTM work: who hired, for which
+ * seat, who held it, at what rate.
  *
  *   top bar     search, credits, earn meter, "Add what you know", account menu
  *   sidebar     filters with counts (overlay under 1280px, bottom sheet on phones)
@@ -9,18 +10,22 @@
  *   pages       Your seats, My credits, Rate benchmarks (each replaces the table)
  *   overlays    record drawer, add modal, inline fact editor, credits popover
  *
+ * One primary action per view: the volt "Add what you know" in the top bar. Ember shows up
+ * twice at most: the count on Hiring now, and the dot on an open role.
+ *
  * Keyboard: "/" search, "f" filters, "a" add, Esc closes, J/K steps through records.
  * Phones and tablets: the back gesture closes the top overlay before it leaves the page.
  */
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Cell } from "@/lib/tableTypes";
-import { IconChevron, IconFilter, IconX, useToast, type Act, type View } from "../ui/shared";
+import type { Me } from "@/lib/tableTypes";
+import { IconChevron, IconFilter, IconPlus, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
   COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, hasRoleDates, mySeats, newRolesFor, rowsFor,
   seatsMissing, shown, sortRows,
   type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
 } from "./model";
-import { useLayout, useStoredFlag, store, plural } from "./hooks";
+import { fmtTime, useLayout, useStoredFlag, store, plural } from "./hooks";
 import { UiCtx, FactEditor, Anchored, Pro, Sheet, type AddOpts, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
@@ -34,7 +39,7 @@ import { MyCredits, inviteLink, signInLink, useCopy } from "./Credits";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
 import { fmtStamp } from "./RoleDate";
-import { Checklist, CreditBanner, NoResults, Strip, sinceText } from "./Guide";
+import { Checklist, Strip, sinceText } from "./Guide";
 import { REFERRAL_BONUS } from "@/lib/tableFields";
 import "./post.css";
 
@@ -139,6 +144,8 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   const list = useDeferredValue(listData);
   const nFilters = activeCount(filters);
   const chips = activeChips(filters);
+  // The sidebar names the member's function ("No Sales seat yet"), so the chip does too.
+  const chipLabel = (c: { id: string; label: string }) => (c.id === "notMine" && me.function ? `No ${me.function} seat yet` : c.label);
 
   useEffect(() => {
     setLimit(PAGE);
@@ -166,7 +173,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
       });
       if (r.ok) {
         if (t.field === "identity") toast(r.message);
-        else if (firstUnlock) toast("Unlocked. It stays visible to you. Add a fact to earn the credit back.");
+        else if (firstUnlock) toast("Unlocked. It stays visible to you from now on. Add a fact you know and you earn the credit back.");
         setPulse((p) => (p === k ? null : p));
         setFlash((s) => new Set(s).add(k));
         setTimeout(() => setFlash((s) => {
@@ -235,7 +242,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
       setEditor(null);
       setPop(null);
       if (o?.companyId && isHidden(o.companyId)) {
-        toast("Unlock this company first (1 credit) to add facts here.");
+        toast("Unlock this company first. Then you can add what you know about it.");
         return;
       }
       setAddOpts(o ?? {});
@@ -302,7 +309,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
       setDrawer(null);
       const hit = firstFact(want);
       if (!hit) {
-        toast(want === "locked" ? "No locked facts in this view. Clear filters to see more." : "Every fact in this view is filled. Clear filters to see more.");
+        toast(want === "locked" ? "Nothing is locked in this view. Clear your filters to see more." : "Nothing is missing in this view. Clear your filters to see more.");
         return;
       }
       if (hit.idx >= limit) setLimit(hit.idx + 1);
@@ -450,6 +457,11 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
     setTab("all");
     setQuery("");
   };
+  /** Keep the search, drop the view and the filters that narrow it. */
+  const searchAll = () => {
+    setFilters(EMPTY_FILTERS);
+    setTab("all");
+  };
 
   /* ----- pieces ----- */
   const checklist = (
@@ -498,25 +510,24 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
       )}
       {guide === "credits" ? (
         // When the card already says to fill in the seats, the strip would say it twice.
-        move === "roles" || !move ? <CreditBanner me={me} onShowAdd={() => showFact("empty")} onInvite={invite} quiet={!!move} /> : null
+        move === "roles" || !move ? <CreditLine me={me} onShowAdd={() => showFact("empty")} /> : null
       ) : guide === "invite" ? (
         <Strip
-          tone="volt"
           actions={
-            <button type="button" className="btn btn-sm btn-pine" onClick={() => showFact("empty")}>
-              Show facts I can add
+            <button type="button" className="btn btn-sm" onClick={() => showFact("empty")}>
+              Show me one to add
             </button>
           }
         >
-          Add your first fact to get your {REFERRAL_BONUS} invite credits.
+          Your {REFERRAL_BONUS} invite credits arrive when you add your first fact.
         </Strip>
       ) : guide === "check" ? (
         checklist
       ) : (
         guide === "intro" &&
         !move && (
-          <Strip tone="volt" onClose={hideIntro}>
-            You have {plural(me.credits, "credit")}. Unlock a fact for 1. Add one and earn 1, up to {me.earnCap} a day.
+          <Strip onClose={hideIntro}>
+            You have {plural(me.credits, "credit")}. Spend one to see a fact someone else added. Add a fact you know and you earn one, up to {me.earnCap} a day.
           </Strip>
         )
       )}
@@ -525,7 +536,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
           onClose={() => setSinceOff(true)}
           actions={
             <button type="button" className="btn btn-sm" onClick={() => (setTab("following"), setRecordType("companies"), setSinceOff(true))}>
-              See them
+              Show them
             </button>
           }
         >
@@ -538,7 +549,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   const sortMenu = (
     <>
       <button ref={sortRef} type="button" className="tp-sortbtn" onClick={() => setSortOpen((x) => !x)} aria-haspopup="menu" aria-expanded={sortOpen}>
-        <span className="muted">Sort</span> {SORTS.find((s) => s.key === sort)!.label} <IconChevron size={12} />
+        <span className="tp-sortbtn-l">Sort</span> {SORTS.find((s) => s.key === sort)!.label} <IconChevron size={12} />
       </button>
       {sortOpen && sortRef.current && (
         <Anchored anchor={sortRef.current} onClose={() => setSortOpen(false)} width={200} className="tp-menu" align="end">
@@ -560,10 +571,10 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   );
 
   const recordSwitch = (
-    <div className="tp-rtype" role="tablist" aria-label="Record type">
+    <div className="tp-rtype" role="tablist" aria-label="What to list">
       {RECORD_TYPES.map((t) => (
         <button key={t.key} type="button" role="tab" aria-selected={recordType === t.key} className={`tp-rtype-b${recordType === t.key ? " on" : ""}`} onClick={() => setRecordType(t.key)}>
-          {t.label} <span className="mono tp-cnt">{totals[t.key]}</span>
+          {t.label} <span className="num tp-cnt">{totals[t.key]}</span>
         </button>
       ))}
     </div>
@@ -579,26 +590,32 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
           aria-pressed={tab === t.key}
           onClick={() => setTab(t.key)}
         >
-          {t.label} <span className="mono tp-cnt">{facets.tabs[t.key]}</span>
+          {t.label}{" "}
+          {/* The count on Hiring now is the screen's one solid ember: open roles you can win today. */}
+          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? " tp-cnt-live" : ""}`}>{facets.tabs[t.key]}</span>
         </button>
       ))}
     </nav>
   );
 
   const empty = sorted.length === 0 && (
-    <NoResults
+    <Empty
       q={q.trim()}
       tab={tab}
       noun={noun[1]}
       filtered={nFilters > 0}
-      onClear={clearAll}
-      onBrowse={() => setTab("all")}
+      onClearFilters={() => setFilters(EMPTY_FILTERS)}
+      onSearchAll={searchAll}
+      onBrowse={clearAll}
       onAdd={() => openAdd({ query: q.trim() || undefined })}
     />
   );
   const more = sorted.length > limit && (
     <button type="button" className="tp-more-btn" onClick={() => setLimit((l) => l + PAGE)}>
-      Show {Math.min(PAGE, sorted.length - limit)} more <span className="mono muted">{limit} of {sorted.length}</span>
+      Show {Math.min(PAGE, sorted.length - limit)} more{" "}
+      <span className="num tp-more-of">
+        {limit} of {sorted.length} shown
+      </span>
     </button>
   );
 
@@ -615,7 +632,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
   // Hiring now: say how fresh the open roles are.
   const scanLine = tab === "hiring" && view.scan && (
     <p className="tp-scanline">
-      Open roles are scanned weekly. {view.scan.lastRunAt ? `Last scan ${fmtStamp(view.scan.lastRunAt)}.` : "The first scan runs this week."}
+      We check job boards for open fractional roles every week. {view.scan.lastRunAt ? `Last checked ${fmtStamp(view.scan.lastRunAt)}.` : "The first check runs this week."}
     </p>
   );
   const qt = q.trim();
@@ -671,14 +688,14 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
               <span>
                 {qt && tab !== "all" ? (
                   <>
-                    <span className="mono">{sorted.length}</span> of <span className="mono">{facets.tabs.all}</span> matching <span className="tp-q">{qt}</span>{" "}
+                    <b className="num">{sorted.length}</b> of <span className="num">{facets.tabs.all}</span> matching <span className="tp-q">{qt}</span>{" "}
                     <button type="button" className="tp-flink" onClick={() => setTab("all")}>
                       Show all
                     </button>
                   </>
                 ) : (
                   <>
-                    <span className="mono">{sorted.length}</span> {sorted.length === 1 ? noun[0] : noun[1]}
+                    <b className="num">{sorted.length}</b> {sorted.length === 1 ? noun[0] : noun[1]}
                     {qt && (
                       <>
                         {" "}
@@ -707,7 +724,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
                         Clear all
                       </button>
                     )}
-                    <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-label="Hide filters (F)" title="Hide filters (F)" onClick={() => setSideDocked(false)}>
+                    <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm" aria-label="Hide filters" title="Hide filters (F)" onClick={() => setSideDocked(false)}>
                       <IconChevron dir="left" />
                     </button>
                   </div>,
@@ -718,8 +735,8 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
               {banners}
               <div className="tp-head">
                 {!(layout === "desktop" && sideDocked) && (
-                  <button type="button" className={`btn tp-filterbtn${nFilters ? " on" : ""}`} onClick={toggleFilters} title="Filters (F)">
-                    <IconFilter size={14} /> Filters{nFilters ? <span className="mono">{nFilters}</span> : null}
+                  <button type="button" className={`btn tp-filterbtn${nFilters ? " on" : ""}`} onClick={toggleFilters} title="Show filters (F)">
+                    <IconFilter size={14} /> Filters{nFilters ? <span className="num tp-filterbtn-n">{nFilters}</span> : null}
                   </button>
                 )}
                 {recordSwitch}
@@ -728,7 +745,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
                 {tabs}
                 <span className="tp-toolbar-sp" />
                 <span className="tp-count">
-                  <span className="mono">{sorted.length}</span> {sorted.length === 1 ? noun[0] : noun[1]}
+                  <b className="num">{sorted.length}</b> {sorted.length === 1 ? noun[0] : noun[1]}
                   {qt && (
                     <>
                       {" "}
@@ -741,8 +758,8 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
               {chips.length > 0 && (
                 <div className="tp-chiprow" aria-label="Active filters">
                   {chips.map((c) => (
-                    <button key={c.id} type="button" className="chip tp-achip" onClick={() => setFilters(c.clear(filters))} aria-label={`Remove filter ${c.label}`}>
-                      {c.label} <IconX size={11} />
+                    <button key={c.id} type="button" className="chip tp-achip" onClick={() => setFilters(c.clear(filters))} aria-label={`Remove the filter ${chipLabel(c)}`} title="Remove this filter">
+                      {chipLabel(c)} <IconX size={11} />
                     </button>
                   ))}
                   <button type="button" className="tp-flink" onClick={() => setFilters(EMPTY_FILTERS)}>
@@ -791,7 +808,7 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
           <Sheet
             title={
               <span>
-                Filters {nFilters > 0 && <span className="mono tp-cnt">{nFilters}</span>}
+                Filters {nFilters > 0 && <span className="num tp-cnt">{nFilters}</span>}
               </span>
             }
             onClose={() => setSideOverlay(false)}
@@ -849,17 +866,122 @@ export default function TradingPost({ view, act, refresh, signOut }: TradingPost
             onClose={() => setPop(null)}
             items={[
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
-              { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} to fill` : undefined, onClick: () => openSeats() },
+              { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
               { label: "My credits", onClick: () => (setDrawer(null), setPage("credits")) },
               { label: "Rate benchmarks", onClick: () => (setDrawer(null), setPage("rates")) },
               ...(me.admin && view.admin ? [{ label: "Pilot metrics", onClick: () => (setDrawer(null), setPage("metrics")) }] : []),
-              { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, onClick: invite },
-              { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. Keep it private.") },
+              { label: "Invite a fractional", hint: `+${REFERRAL_BONUS} credits each`, onClick: invite },
+              { label: "Copy my sign-in link", onClick: () => copy(signInLink(me.token), "Sign-in link copied. It signs in as you, so keep it to yourself.") },
               { label: "Sign out", onClick: () => void signOut() },
             ]}
           />
         )}
       </div>
     </UiCtx.Provider>
+  );
+}
+
+/* ---------- the credit line and the empty states ---------- */
+
+/**
+ * Running low, out, or at today's cap: one calm line with one action. No ember here. The
+ * balance in the top bar already carries it.
+ */
+function CreditLine({ me, onShowAdd }: { me: Me; onShowAdd: () => void }) {
+  const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
+  if (capped)
+    return (
+      <Strip>
+        {me.credits <= 0 ? `You're out of credits, and you've earned today's ${me.earnCap}.` : `You've earned today's ${me.earnCap} credits.`} Earning reopens {fmtTime(me.earnResetsAt)}.
+      </Strip>
+    );
+  if (me.credits > 3) return null;
+  return (
+    <Strip
+      actions={
+        <button type="button" className="btn btn-sm" onClick={onShowAdd}>
+          Show me one to add
+        </button>
+      }
+    >
+      {me.credits <= 0 ? "You're out of credits." : `You have ${plural(me.credits, "credit")} left.`} Add a fact you know and you earn one{me.credits <= 0 ? " back" : ""}.
+    </Strip>
+  );
+}
+
+/** Nothing to list. Each one says what is true and gives one thing to do next. */
+function Empty({
+  q,
+  tab,
+  noun,
+  filtered,
+  onAdd,
+  onClearFilters,
+  onSearchAll,
+  onBrowse,
+}: {
+  q: string;
+  tab: Tab;
+  noun: string;
+  filtered: boolean;
+  onAdd: () => void;
+  onClearFilters: () => void;
+  onSearchAll: () => void;
+  onBrowse: () => void;
+}) {
+  const narrowed = filtered || tab !== "all";
+  let h: string;
+  let p: string;
+  let action: { label: string; go: () => void; primary?: boolean };
+  if (q && narrowed) {
+    h = `Nothing in this view matches ${q}`;
+    p = `Your ${filtered ? "filters" : "view"} may be hiding it. Search all ${noun} instead.`;
+    action = { label: `Search all ${noun}`, go: onSearchAll };
+  } else if (q) {
+    h = `We have nothing on ${q} yet`;
+    p = "If you know them, add them. You earn a credit for each fact.";
+    action = { label: q.length > 24 ? "Add it" : `Add ${q}`, go: onAdd, primary: true };
+  } else if (filtered) {
+    h = `No ${noun} match these filters`;
+    p = "Take one off, or clear them all.";
+    action = { label: "Clear filters", go: onClearFilters };
+  } else {
+    const all = { label: "See all companies", go: onBrowse };
+    if (tab === "following") {
+      h = "You're not following any companies yet";
+      p = "Open a company and choose Follow. When someone adds a fact there, you'll see it here. Following is free.";
+      action = all;
+    } else if (tab === "unlocked") {
+      h = "You haven't unlocked anything yet";
+      p = "What you unlock stays visible to you, and its company is listed here.";
+      action = all;
+    } else if (tab === "hiring") {
+      h = "No open fractional roles right now";
+      p = "We check job boards every week. New roles are listed here as we find them.";
+      action = all;
+    } else if (tab === "needs") {
+      h = "Nothing is missing here";
+      p = "Every company has its website, industry, size, revenue, HQ and LinkedIn on file.";
+      action = all;
+    } else if (tab === "friendly") {
+      h = `No fractional-friendly ${noun} yet`;
+      p = "A company is listed here once it has an open fractional role or a fit score of 30 or more.";
+      action = all;
+    } else {
+      h = `No ${noun} on file yet`;
+      p = "Add a company you know. You earn a credit for each fact.";
+      action = { label: "Add what you know", go: onAdd, primary: true };
+    }
+  }
+  return (
+    <div className="tp-noresults">
+      <h3>{h}</h3>
+      <p>{p}</p>
+      <div className="tp-noresults-acts">
+        <button type="button" className={`btn${action.primary ? " btn-primary" : ""}`} onClick={action.go}>
+          {action.primary && <IconPlus size={14} />} {action.label}
+        </button>
+      </div>
+    </div>
   );
 }

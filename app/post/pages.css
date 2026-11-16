@@ -12,62 +12,51 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--font);
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--ink);
   white-space: nowrap;
 }
+/* The dot is the only ember a row or a card carries: this role is open now. */
 .tp-role-dot {
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--ember);
+  animation: tp-live 2.4s ease-out infinite;
+}
+@keyframes tp-live {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 5px rgba(255, 90, 31, 0);
+  }
 }
 .tp-role-date.closed {
   gap: 0;
-  font-weight: 500;
   color: var(--muted);
 }
 .tp-role-days {
   white-space: pre;
-}
-/*
- * The Latest seat cell sits on one line: the role, then its date. (post.css uses .tp-seat a
- * second time for the seat-holder picker, which stacks, and that rule wins without this one.)
- */
-.tp-table .tp-seat {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  width: auto;
-}
-.tp-table .tp-seat > * {
-  width: auto;
 }
 /* The companies table keeps the seat column narrow: the days listed are on the record. */
 .tp-table-companies .tp-role-days {
   display: none;
 }
 .tp-pcard-role {
-  margin-top: 8px;
+  margin-top: 10px;
 }
-/* Closed is history, so it is the quietest status. */
+/* Closed is history, so it is the quietest status: muted text. */
 .tp-status.s-closed {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: var(--r-chip);
-  background: var(--surface-2);
   color: var(--muted);
-  font-size: 12px;
 }
 /* Hiring now: how fresh the open roles are. */
 .tp-scanline {
-  font-size: 12.5px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--muted);
 }
 .tp-phone .tp-scanline {
