@@ -19,9 +19,23 @@ const KEEP_DAYS = 14;
 let lastUpload = 0;
 /** The day whose snapshot is already on disk, so later writes that day skip the disk checks. */
 let snappedDay: string | null = null;
+/** A daily snapshot's file name. */
+export const BACKUP_FILE = /^intel-\d{4}-\d{2}-\d{2}\.json$/;
+
+const today = () => new Date().toISOString().slice(0, 10);
+/** The day on which nothing is uploaded off-site (see holdUploads). */
+let heldDay: string | null = null;
+/**
+ * Keep today's off-site copy as it is. Called when this process started from an empty state or
+ * from a backup: what is in memory may be older or emptier than the copy already uploaded today,
+ * and that copy may be the best one left. Uploads start again tomorrow, under tomorrow's name.
+ */
+export function holdUploads(): void {
+  heldDay = today();
+}
 
 export async function snapshot(dataDir: string, json: string): Promise<void> {
-  const day = new Date().toISOString().slice(0, 10);
+  const day = today();
   if (snappedDay !== day) {
     const dir = path.join(dataDir, "backups");
     const file = path.join(dir, `intel-${day}.json`);
@@ -32,7 +46,7 @@ export async function snapshot(dataDir: string, json: string): Promise<void> {
         await fs.access(file);
       } catch {
         await fs.writeFile(file, json, "utf8");
-        const files = (await fs.readdir(dir)).filter((f) => /^intel-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+        const files = (await fs.readdir(dir)).filter((f) => BACKUP_FILE.test(f)).sort();
         for (const old of files.slice(0, Math.max(0, files.length - KEEP_DAYS))) await fs.unlink(path.join(dir, old)).catch(() => {});
       }
       snappedDay = day;
@@ -40,7 +54,7 @@ export async function snapshot(dataDir: string, json: string): Promise<void> {
       console.error("backup snapshot failed", e);
     }
   }
-  if (s3Configured() && Date.now() - lastUpload > 60 * 60 * 1000) {
+  if (s3Configured() && heldDay !== day && Date.now() - lastUpload > 60 * 60 * 1000) {
     lastUpload = Date.now();
     putObject(`backups/intel-${day}.json`, json).catch((e) => console.error("backup upload failed", e));
   }

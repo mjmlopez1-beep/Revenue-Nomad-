@@ -15,7 +15,7 @@
  */
 import type { JobFunction, RawJob } from "../types";
 import type { ScanCollectResult, ScanRole, ScanSourceResult } from "../scanTypes";
-import { ENGAGEMENT_TYPES, FUNCTIONS, functionOf } from "../tableFields";
+import { ENGAGEMENT_TYPES, FUNCTIONS, cut, functionOf } from "../tableFields";
 import { MIN_SCORE, scoreJob, type ScoredTags } from "../crawler/score";
 import * as remotive from "../crawler/sources/remotive";
 import * as remoteok from "../crawler/sources/remoteok";
@@ -146,13 +146,12 @@ const MONTHLY_RATE = new RegExp(`${MONEY}(?:\\s*(?:[-–—]|to)\\s*(?:${MONEY}|
 
 /** "$150 - $200 /hour" -> "$150–$200/hr". */
 function tidyRate(raw: string): string {
-  return plain(raw)
+  const tidied = plain(raw)
     .replace(/\s*[-–—]\s*(?=[$€£\d])/g, "–")
     .replace(/\s*(?:\/|\bper\b|\ban?\b)\s*(?=(?:hour|hr|month|mo|week|wk|day|year|yr)\b)/gi, "/")
     .replace(/\/hours?\b/gi, "/hr")
-    .replace(/\/months?\b/gi, "/mo")
-    .slice(0, 60)
-    .trim();
+    .replace(/\/months?\b/gi, "/mo");
+  return cut(tidied, 60).trim();
 }
 
 /** The rate as posted, when one is stated with a currency: the board's own field, the crawler's hourly tag, or a monthly retainer in the text. */
@@ -296,13 +295,15 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * Run the scan. `roles` is capped at MAX_ROLES. `seenKeys` has the key of every role that passed,
- * including any past the cap, so whoever closes roles can tell "no longer posted" from "did not
- * fit this week". A source with an `error` was not read at all: its roles are unknown, not gone.
+ * Run the scan. `roles` is capped at MAX_ROLES. `all` has every role that passed, newest first,
+ * including any past the cap: that is what applyScan gets, so a role still posted is never taken
+ * for gone because it did not fit this week (applyScan caps only the roles it newly opens).
+ * `seenKeys` is the keys of `all`. A source with an `error` was not read at all: its roles are
+ * unknown, not gone.
  */
 export async function collectOpenRoles(
   opts: { sources?: ScanSource[]; now?: number; timeoutMs?: number; max?: number } = {}
-): Promise<ScanCollectResult & { seenKeys: string[] }> {
+): Promise<ScanCollectResult & { all: ScanRole[]; seenKeys: string[] }> {
   const sources = opts.sources ?? SCAN_SOURCES;
   const now = opts.now ?? Date.now();
   const timeoutMs = opts.timeoutMs ?? SOURCE_TIMEOUT_MS;
@@ -320,5 +321,5 @@ export async function collectOpenRoles(
   });
 
   const all = newestFirst(dedupeRoles(kept));
-  return { roles: all.slice(0, opts.max ?? MAX_ROLES), sources: results, seenKeys: all.map((r) => r.key) };
+  return { roles: all.slice(0, opts.max ?? MAX_ROLES), all, sources: results, seenKeys: all.map((r) => r.key) };
 }

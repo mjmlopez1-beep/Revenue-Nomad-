@@ -60,6 +60,21 @@ export interface EngagementRec {
    */
   opened?: string | null;
   closed?: string | null;
+  /**
+   * The same two moments as full ISO times, to show in the viewer's own time zone. `opened` is
+   * the day the scan first saw the posting, which is not the day it was posted.
+   */
+  openedAt?: string | null;
+  closedAt?: string | null;
+  /** The ISO day the job board says the role was posted, when it gives one. */
+  posted?: string | null;
+  /** ISO time a scan last saw the posting listed. */
+  lastSeen?: string | null;
+  /**
+   * Still open on file, but a clean scan of its board has run since it was last seen and did
+   * not list it ("Not seen in the last scan"). Left out of ScanSummary.openNow.
+   */
+  unseen?: boolean;
 }
 
 export interface Friendly {
@@ -237,7 +252,13 @@ export interface View {
 
 export interface ScanSummary {
   lastRunAt: string | null;
-  /** Open roles on file now, opened in the last 7 days, and closed in the last 30. */
+  /** The last run in which at least one job board answered cleanly. This is the "last scan" members see. */
+  lastOkAt?: string | null;
+  /**
+   * Open roles on file now (not counting those a clean scan no longer saw), opened in the last
+   * 7 days (first seen this week, and posted in the last 14 days when the board gives a date),
+   * and closed in the last 30.
+   */
   openNow: number;
   opened7: number;
   closed30: number;
@@ -259,6 +280,12 @@ export interface AdminStats {
   topUnlocked: { field: string; n: number }[];
   topAdded: { field: string; n: number }[];
   scan: { lastRunAt: string | null; openNow: number; opened7: number; closed30: number; sources: { source: string; fetched: number; matched: number; error?: string }[] };
+  /**
+   * Each job board the scan reads. `healthy` is false when its last run failed, matched nothing,
+   * or matched under half of `baseline` (its last healthy count). Roles from a board that is not
+   * healthy are never closed on its word.
+   */
+  boards?: { source: string; healthy: boolean; lastOkAt: string | null; baseline: number }[];
   digest: { enabled: boolean; lastSentAt: string | null; sent: number; optedOut: number };
   /** Members linked to a seat on file, and facts still missing on those seats. */
   seats: { linkedMembers: number; factsMissing: number };

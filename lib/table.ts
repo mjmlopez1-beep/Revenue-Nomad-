@@ -46,13 +46,14 @@ import { gunzipSync } from "zlib";
 import { createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { iconDomains } from "./companyIcons";
 import { readRate } from "./rates";
-import { snapshot } from "./backup";
+import { BACKUP_FILE, holdUploads, snapshot } from "./backup";
 import { emailEnabled, sendEmail } from "./email";
 import { renderDigest } from "./digest";
-import { collectOpenRoles } from "./scan/collect";
+import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
+import { companyKey, textKey } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, type Entity,
+  stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, type Entity,
 } from "./tableFields";
 import type {
   Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
@@ -129,6 +130,8 @@ export interface LedgerEntry {
   reason: "fill" | "unlock" | "refund" | "reversal" | "referral" | "confirm" | "adjust";
   ref: string;
   at: string;
+  /** Refunds only. closed: the scan found the role had closed, and this unlock was made after its posting was last seen. */
+  why?: "closed";
 }
 interface Profile {
   function?: string;
@@ -153,6 +156,21 @@ interface RoleTrack {
   /** The board that last listed it, or "seed" for open roles that came with the seed. */
   source: string;
   postedAt?: string | null;
+  /** Clean scans of its board that did not list it since it was last seen (at most one counted per 12 hours), and when the last was counted. */
+  misses?: number;
+  missAt?: string;
+}
+/** One job board, as the scan has known it. */
+interface BoardHealth {
+  /** Roles it matched on its last healthy run. A run that matches under half of this is not trusted. */
+  baseline: number;
+  lastOkAt: string | null;
+  /** Its last run was clean: it answered, matched something, and at least half its baseline. */
+  healthy: boolean;
+  /** Since when it has matched something, but under half its baseline, on every run. */
+  lowSince?: string;
+  /** The last run that named it. */
+  at?: string;
 }
 interface ScanState {
   lastRunAt: string | null;
@@ -160,6 +178,9 @@ interface ScanState {
   sources: ScanSourceResult[];
   /** Keyed by the posting's key (company and title). */
   roles: Record<string, RoleTrack>;
+  /** The last run in which at least one board answered cleanly. */
+  lastOkAt?: string | null;
+  boards?: Record<string, BoardHealth>;
 }
 interface StoredBenchRate {
   id: string;
@@ -227,6 +248,22 @@ async function readJson<T>(file: string): Promise<T | null> {
   }
 }
 
+/**
+ * Trading Post cannot serve right now: the state file is damaged and no backup could be read
+ * ("state"), or RN_REQUIRE_SEED=1 and the member seed did not load ("seed"). Every route answers
+ * 503 (lib/apiGuard.ts) and nothing is written while it stands. The message is for the log.
+ */
+export class Unavailable extends Error {
+  readonly unavailable = true;
+  constructor(readonly why: "state" | "seed", detail: string) {
+    super(detail);
+    this.name = "Unavailable";
+  }
+}
+/** How long a failed load of the seed or the state stands before the files are read again. */
+const DOWN_RETRY_MS = 10_000;
+const errCode = (e: unknown) => (e as NodeJS.ErrnoException)?.code ?? String(e);
+
 /** Used only when no private seed is present, so the page still runs. */
 const DEMO_SEED: Seed = {
   builtAt: new Date(0).toISOString(),
@@ -249,8 +286,13 @@ const DEMO_SEED: Seed = {
 };
 
 let seedCache: { seed: Seed; at: number } | null = null;
+/** RN_REQUIRE_SEED=1 (set in the Dockerfile): refuse to run on the demo seed. A deploy with a missing or wrong seed key then fails its health check instead of serving sample data. */
+const REQUIRE_SEED = process.env.RN_REQUIRE_SEED === "1";
+let seedDown: { error: Unavailable; until: number } | null = null;
+let seedNoted = false;
 export async function loadSeed(): Promise<Seed> {
   if (seedCache && Date.now() - seedCache.at < 60_000) return seedCache.seed;
+  if (seedDown && Date.now() < seedDown.until) throw seedDown.error;
   let seed: Seed | null = null;
   for (const p of SEED_CANDIDATES) {
     seed = await readJson<Seed>(p);
@@ -281,6 +323,23 @@ export async function loadSeed(): Promise<Seed> {
       console.error("RN_INTEL_SEED_B64 is set but could not be decoded; falling back to demo data.");
     }
   }
+  if (!seed && REQUIRE_SEED) {
+    const error = new Unavailable("seed", "RN_REQUIRE_SEED=1 and the member seed did not load. Check RN_INTEL_SEED_KEY and data/intel-seed.enc.");
+    if (!seedDown) console.error(`SEED MISSING: ${error.message} Every route answers 503 until it loads.`);
+    seedDown = { error, until: Date.now() + DOWN_RETRY_MS };
+    throw error;
+  }
+  seedDown = null;
+  if (seed && !seedNoted) {
+    seedNoted = true;
+    // Public ids and unsubscribe links are signed with RN_ID_SECRET. Without it they fall back to
+    // the key that opens the seed (or, with neither, to a constant anyone can read in this file).
+    if (!process.env.RN_ID_SECRET)
+      console.warn(
+        "RN_ID_SECRET is not set. Public ids and unsubscribe links are signed with the seed key instead (or a public default when there is none). " +
+          "Give RN_ID_SECRET the seed key's current value, so no id or link already sent changes, and keep it when the seed key is replaced.",
+      );
+  }
   const out = seed ?? DEMO_SEED;
   for (const r of [...out.companies, ...out.engagements]) {
     for (const [k, map] of Object.entries(LEGACY_VALUES)) if (r.fields[k] && map[r.fields[k]]) r.fields[k] = map[r.fields[k]];
@@ -303,10 +362,111 @@ const EMPTY_STATE = (): State => ({
  */
 let stateCache: State | null = null;
 let stateLoading: Promise<State> | null = null;
+
+const BACKUP_DIR = path.join(DATA_DIR, "backups");
+/** Where the state in memory came from: the state file, a first start, or a backup (named) after the file was damaged or lost. */
+let stateFrom: { origin: "file" | "new" | "backup"; backup?: string } | null = null;
+let stateDown: { error: Unavailable; until: number } | null = null;
+/** Writes that reached the disk since this process started. A reader can tell whether a view it began is still current. */
+let commits = 0;
+export const stateVersion = () => commits;
+
+/** Enough of a shape check to tell a state file from one that is cut short, emptied or not ours. */
+function isState(x: unknown): x is Partial<State> {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return false;
+  const o = x as Record<string, unknown>;
+  for (const k of ["companies", "engagements", "contacts", "members", "ledger"]) if (o[k] !== undefined && !Array.isArray(o[k])) return false;
+  for (const k of ["values", "unlocks", "profiles", "scan", "digest", "flags"])
+    if (o[k] !== undefined && (!o[k] || typeof o[k] !== "object" || Array.isArray(o[k]))) return false;
+  return true;
+}
+
+type StateRead = { kind: "ok"; state: Partial<State> } | { kind: "missing" } | { kind: "damaged"; why: string; unread?: boolean };
+async function readState(file: string): Promise<StateRead> {
+  let text: string;
+  try {
+    text = await fs.readFile(file, "utf8");
+  } catch (e) {
+    return errCode(e) === "ENOENT" ? { kind: "missing" } : { kind: "damaged", why: `could not be read (${errCode(e)})`, unread: true };
+  }
+  try {
+    const x: unknown = JSON.parse(text);
+    return isState(x) ? { kind: "ok", state: x } : { kind: "damaged", why: "does not hold a Trading Post state" };
+  } catch {
+    return { kind: "damaged", why: `is not valid JSON (${text.length} characters, it may be cut short)` };
+  }
+}
+
+/**
+ * Read the state file. Only a missing file with no backups next to it is a first start. When
+ * the file cannot be read or parsed, the newest backup that parses is loaded in its place and
+ * the damaged file is kept as intel.json.corrupt-<time>. The same backup is used when the file
+ * is gone but backups exist. With no usable backup this throws Unavailable and touches nothing:
+ * an empty table must never take the place of a damaged one, because the first write would then
+ * erase what members added.
+ */
+async function readStateOrRecover(): Promise<Partial<State>> {
+  let r = await readState(STATE_PATH);
+  if (r.kind === "damaged" && r.unread) {
+    // A read error can pass (too many open files). Look once more before calling the file damaged.
+    await new Promise((done) => setTimeout(done, 200));
+    r = await readState(STATE_PATH);
+  }
+  if (r.kind === "ok") {
+    stateFrom = { origin: "file" };
+    return r.state;
+  }
+  const backups = (await fs.readdir(BACKUP_DIR).catch(() => [] as string[])).filter((f) => BACKUP_FILE.test(f)).sort().reverse();
+  if (r.kind === "missing" && !backups.length) {
+    stateFrom = { origin: "new" };
+    holdUploads(); // an empty start (a volume that is not mounted looks the same) never replaces today's off-site copy
+    return {};
+  }
+  const what = r.kind === "damaged" ? `${STATE_PATH} ${r.why}` : `${STATE_PATH} is gone but ${BACKUP_DIR} has backups, so this is not a first start`;
+  for (const f of backups) {
+    const b = await readState(path.join(BACKUP_DIR, f));
+    if (b.kind !== "ok") {
+      // Said once, not on every retry while the state is down.
+      if (!stateDown) console.error(`backups/${f} ${b.kind === "damaged" ? b.why : "is gone"}. Trying an older one.`);
+      continue;
+    }
+    // The damaged file steps aside only now that a backup takes its place. While nothing can, it
+    // stays where it is, so a restart finds it again and never mistakes this for a first start.
+    if (r.kind === "damaged") {
+      const aside = `${STATE_PATH}.corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+      try {
+        await fs.rename(STATE_PATH, aside);
+      } catch (e) {
+        throw new Unavailable("state", `${what} and could not be moved aside (${errCode(e)}). Nothing was changed.`);
+      }
+      console.error(`STATE DAMAGED: ${what}. It is kept as ${aside}.`);
+    } else console.error(`STATE MISSING: ${what}.`);
+    console.error(`STATE RESTORED from backups/${f}. Anything members did after that backup was written is not in it. Off-site uploads wait until tomorrow, so today's copy is kept.`);
+    stateFrom = { origin: "backup", backup: f };
+    holdUploads();
+    return b.state;
+  }
+  throw new Unavailable(
+    "state",
+    `${what}, and no backup could be read. Nothing was changed. Trading Post answers 503 and writes nothing until a good intel.json is put back ` +
+      `(to start empty on purpose, remove the damaged file and the backups folder).`,
+  );
+}
+
+/** A failed load stands for a short while, then the files are read again: someone may have put a good one back. */
+function stateFailed(e: unknown): never {
+  stateLoading = null;
+  const error = e instanceof Unavailable ? e : new Unavailable("state", `the state could not be loaded (${e instanceof Error ? e.message : String(e)})`);
+  if (!stateDown) console.error(`STATE DOWN: ${error.message}`);
+  stateDown = { error, until: Date.now() + DOWN_RETRY_MS };
+  throw error;
+}
+
 export async function loadState(): Promise<State> {
   if (stateCache) return stateCache;
+  if (stateDown && Date.now() < stateDown.until) throw stateDown.error;
   stateLoading ??= (async () => {
-    const s: State = { ...EMPTY_STATE(), ...((await readJson<Partial<State>>(STATE_PATH)) ?? {}) };
+    const s: State = { ...EMPTY_STATE(), ...(await readStateOrRecover()) };
     // One-time repair, safe to leave in place (it only touches 0 rows): a capped invite or
     // confirmation bonus used to be recorded as 0 and never paid. Hold it instead, so it is
     // paid as the member's daily room opens.
@@ -332,9 +492,32 @@ export async function loadState(): Promise<State> {
     }
     s.flags.starterFloor = STARTER_CREDITS;
     stateCache = s;
+    stateDown = null;
     return s;
-  })();
+  })().catch(stateFailed);
   return stateLoading;
+}
+
+let diskProbe: { ok: boolean; at: number } | null = null;
+/**
+ * For GET /api/health: the real seed loaded, the state loaded (from its file, a first start, or
+ * a backup) and the data folder takes writes. It never writes the state. The disk check writes
+ * one small probe file and removes it, at most once in 15 seconds.
+ */
+export async function health(): Promise<{ ok: boolean; seed: "ok" | "demo" | "missing"; state: "ok" | "restored" | "down"; disk: "ok" | "failed" }> {
+  const seed = await loadSeed().then((x) => (x.demo ? ("demo" as const) : ("ok" as const)), () => "missing" as const);
+  const state = await loadState().then(() => (stateFrom?.origin === "backup" ? ("restored" as const) : ("ok" as const)), () => "down" as const);
+  if (!diskProbe || Date.now() - diskProbe.at > 15_000) {
+    const probe = path.join(DATA_DIR, `.health-${process.pid}`);
+    const ok = await fs
+      .mkdir(DATA_DIR, { recursive: true })
+      .then(() => fs.writeFile(probe, "ok"))
+      .then(() => fs.unlink(probe))
+      .then(() => true, () => false);
+    diskProbe = { ok, at: Date.now() };
+  }
+  const disk = diskProbe.ok ? ("ok" as const) : ("failed" as const);
+  return { ok: seed === "ok" && state !== "down" && disk === "ok", seed, state, disk };
 }
 
 /**
@@ -417,16 +600,25 @@ async function flush(): Promise<void> {
       };
       let draft = structuredClone(committed);
       let done: { job: Job; out: unknown }[] = [];
+      // A change that threw may have written part of itself into the draft (bonuses held at the
+      // cap are paid before the action is checked). The draft is rebuilt without it, but only
+      // when something still depends on it: the next change in the batch, or the write.
+      let spoiled = false;
+      const rebuild = () => {
+        ({ draft, done } = replay(done.map((d) => d.job)));
+        spoiled = false;
+      };
       for (const job of batch) {
+        if (spoiled) rebuild();
         try {
           done.push({ job, out: job.fn(draft, seed) });
         } catch (e) {
           job.reject(e);
-          // The failed change may have written part of itself into the draft: rebuild it.
-          ({ draft, done } = replay(done.map((d) => d.job)));
+          spoiled = true;
         }
       }
       if (!done.length) continue;
+      if (spoiled) rebuild();
       try {
         if (!dirReady) {
           await fs.mkdir(DATA_DIR, { recursive: true });
@@ -434,9 +626,17 @@ async function flush(): Promise<void> {
         }
         const json = JSON.stringify(draft);
         const tmp = STATE_PATH + ".tmp";
-        await fs.writeFile(tmp, json, "utf8");
+        // On the disk before the rename, so a host crash leaves the old file or the new one, never a cut one.
+        const fh = await fs.open(tmp, "w");
+        try {
+          await fh.writeFile(json, "utf8");
+          await fh.sync();
+        } finally {
+          await fh.close();
+        }
         await fs.rename(tmp, STATE_PATH);
         stateCache = draft;
+        commits++;
         await snapshot(DATA_DIR, json);
       } catch (e) {
         dirReady = false;
@@ -778,14 +978,31 @@ export async function joinMember(nameRaw: unknown, emailRaw: unknown, ref?: unkn
 
 /* ---------- read model ---------- */
 
+/**
+ * The key a company is matched by, never shown and never part of an id: see companyKey() in
+ * lib/scan/clean.ts. "Acme, Inc.", "ACME (YC W24)" and "The Acme" are one company, a name in
+ * another script keeps a key of its own, and an empty key (no letter or digit) matches nothing.
+ */
+const companyKeys = new Map<string, string>();
+const keyOfCompany = (name: string) => {
+  let k = companyKeys.get(name);
+  if (k === undefined) {
+    k = companyKey(name);
+    if (companyKeys.size > 20_000) companyKeys.clear();
+    companyKeys.set(name, k);
+  }
+  return k;
+};
+
 /** For the add form: is a company with this website (or name) already on Trading Post? */
 export async function existingCompany(domain: string | null, name: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const g = graph(seed, s);
-  const d = domain?.replace(/^www\./, "");
+  const d = hostOf(domain);
+  const key = name ? keyOfCompany(name) : "";
   const c =
-    (d && [...g.companies.values()].find((c) => live(c, s, "website")?.replace(/^www\./, "") === d)) ||
-    (name && [...g.companies.values()].find((c) => slug(c.name) === slug(name))) ||
+    (d && [...g.companies.values()].find((c) => hostOf(live(c, s, "website")) === d)) ||
+    (key && [...g.companies.values()].find((c) => keyOfCompany(c.name) === key)) ||
     null;
   if (!c) return null;
   return { id: pubId(c.id), name: c.name, website: live(c, s, "website"), industry: live(c, s, "industry") };
@@ -829,6 +1046,28 @@ function tracksOf(seed: Seed, s: State): Tracks {
 function keepSeedTracks(seed: Seed, s: State): void {
   for (const { key, ...r } of seedTracks(seed, s)) s.scan.roles[key] = r;
 }
+
+/**
+ * Still open on file, but its own board answered cleanly since it was last seen and did not
+ * list it. Seed roles have no board the scan reads, so they are never unseen.
+ */
+const isUnseen = (t: RoleTrack) => !t.closedAt && t.source !== "seed" && (t.misses ?? 0) > 0;
+/** What the scan knows about a role's dates, as full times (the day forms `opened` and `closed` stay as they were). */
+const roleTimes = (t: RoleTrack) => ({
+  openedAt: t.firstSeen,
+  closedAt: t.closedAt,
+  posted: t.postedAt ? t.postedAt.slice(0, 10) : null,
+  lastSeen: t.lastSeen,
+  unseen: isUnseen(t),
+});
+/** A posting this old was not new when the scan first saw it. */
+const NEW_POSTED_WITHIN = 14 * DAY;
+/** New this week: first seen in the last 7 days and, when the board gives a date, posted in the last 14. */
+const newThisWeek = (t: RoleTrack, nowMs: number) => {
+  if (nowMs - Date.parse(t.firstSeen) >= 7 * DAY) return false;
+  const posted = Date.parse(t.postedAt ?? "");
+  return !Number.isFinite(posted) || nowMs - posted <= NEW_POSTED_WITHIN;
+};
 
 /**
  * An open fractional seat right now: status Open role, or a scanned posting nobody has marked
@@ -1008,7 +1247,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       if (myAdds.has(e.id) || ePeopleNodes.some((p) => myAdds.has(p.id))) mine = true;
       return {
         id: pubId(e.id), source: e.source, verified: e.verified, cells, people: ePeople, updatedAt: eu, yours,
-        ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null } : {}),
+        ...(track ? { opened: track.firstSeen.slice(0, 10), closed: track.closedAt ? track.closedAt.slice(0, 10) : null, ...roleTimes(track) } : {}),
       };
     });
     const coPeopleNodes = people.filter((p) => !p.engagementId || !g.engagements.has(p.engagementId));
@@ -1129,6 +1368,11 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         ledger.push({ at: l.at, delta: l.delta, reason: "Balance reset to zero", company: "", field: "" });
         continue;
       }
+      // A credit back for an unlock on a role that had already closed (applyScan).
+      if (l.reason === "refund" && l.why === "closed") {
+        ledger.push({ at: l.at, delta: l.delta, reason: CLOSED_REFUND, company: companyNameOf(id), field: "" });
+        continue;
+      }
       ledger.push({ at: l.at, delta: l.delta, reason: l.reason, company: companyNameOf(id), field: fieldLabel(entityOf(id), field) });
     }
     ledger.reverse();
@@ -1195,6 +1439,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
 
 /** How a ledger row or a stats line names a field. */
 const BENCH_LABEL = "Rate (benchmarks only)";
+/** The ledger line for an unlock paid back because the role had closed. The company follows it ("… at Acme"). */
+const CLOSED_REFUND = "Refund for a role that had closed";
 const fieldLabel = (entity: Entity, field: string) =>
   entity === "company" && field === "identity" ? HIDDEN_COMPANY : fieldDef(entity, field)?.label ?? field;
 
@@ -1211,18 +1457,31 @@ function scanSummary(g: Graph, s: State, tracks: Tracks, nowMs: number, myFuncti
   let closed30 = 0;
   let mine7 = 0;
   for (const e of g.engagements.values()) {
-    if (isOpenRole(e, s, tracks)) openNow++;
     const t = tracks.get(e.id);
+    // A role a clean scan no longer saw is not counted as open, or as new.
+    const open = isOpenRole(e, s, tracks) && !(t && isUnseen(t));
+    if (open) openNow++;
     if (!t) continue;
     if (t.closedAt) {
       if (nowMs - Date.parse(t.closedAt) < 30 * DAY) closed30++;
-    } else if (nowMs - Date.parse(t.firstSeen) < WEEK && isOpenRole(e, s, tracks)) {
+    } else if (open && newThisWeek(t, nowMs)) {
       opened7++;
       if (myFunction && fnOf(e, s) === myFunction) mine7++;
     }
   }
-  return { lastRunAt: s.scan.lastRunAt, openNow, opened7, closed30, mine7, digest: digestOn() };
+  return { lastRunAt: s.scan.lastRunAt, lastOkAt: lastOkOf(s.scan), openNow, opened7, closed30, mine7, digest: digestOn() };
 }
+
+/** A board read cleanly on a run when it answered with listings and some of them matched (the rule before baselines were kept). */
+const answeredClean = (x: ScanSourceResult) => !x.error && x.fetched > 0 && x.matched > 0;
+/** The last run in which at least one board answered cleanly. States written before this was kept get it from their last run. */
+const lastOkOf = (scan: ScanState): string | null =>
+  scan.lastOkAt !== undefined ? scan.lastOkAt : scan.lastRunAt && scan.sources.some(answeredClean) ? scan.lastRunAt : null;
+/** Each board the scan has read, for Pilot metrics. */
+const scanBoards = (scan: ScanState): NonNullable<AdminStats["boards"]> =>
+  Object.entries(scan.boards ?? {})
+    .map(([source, b]) => ({ source, healthy: b.healthy, lastOkAt: b.lastOkAt, baseline: b.baseline }))
+    .sort((a, b) => a.source.localeCompare(b.source));
 
 /** The weekly email is on: an email provider is set up and RN_DIGEST is not 0. */
 function digestOn() {
@@ -1302,6 +1561,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     topUnlocked: top("unlock"),
     topAdded: top("fill"),
     scan: { lastRunAt: scan.lastRunAt, openNow: scan.openNow, opened7: scan.opened7, closed30: scan.closed30, sources: s.scan.sources },
+    boards: scanBoards(s.scan),
     digest: { enabled: digestOn(), lastSentAt: s.digest.lastSentAt, sent: s.digest.sent, optedOut: Object.values(s.profiles).filter((p) => p.digestOff).length },
     seats: { linkedMembers: linked.size, factsMissing },
     benchmarks: { memberRates, privateRates: s.benchRates.length, indexRates: seed.rateIndex?.length ?? 0 },
@@ -1636,8 +1896,9 @@ export async function perform(token: string | null, a: Action, origin?: string):
           };
         }
         case "add": {
-          const name = stripInvisible(a.company).trim().replace(/\s+/g, " ").slice(0, 80);
+          const name = tidy(a.company, 80);
           if (name.length < 2) throw new ActionError("What's the company called?");
+          if (!keyOfCompany(name)) throw new ActionError("That doesn't read as a company name. Type the name the company goes by.");
           if (name.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) throw new ActionError("Type the company's real name.");
           // Validate everything up front so a bad field never leaves a half-made record.
           const pick = (entity: Entity, raw: Record<string, string> | undefined) =>
@@ -1657,11 +1918,13 @@ export async function perform(token: string | null, a: Action, origin?: string):
           for (const p of people) if (!p.some(([k]) => k === "name")) throw new ActionError("Each person needs a name.");
           const wantEng = a.engagementId ? inId("engagement", a.engagementId) : null;
 
-          // Same company = same website, else same name.
-          const siteOf = (c: Node) => live(c, s, "website")?.replace(/^www\./, "");
+          // Same company = same website (the host, whatever its case or path), else same name
+          // (legal suffixes, bracketed notes, accents and case aside).
+          const siteHost = hostOf(site);
+          const nameKey = keyOfCompany(name);
           let company: Node | undefined =
-            (site && [...g.companies.values()].find((c) => siteOf(c) === site.replace(/^www\./, ""))) ||
-            [...g.companies.values()].find((c) => slug(c.name) === slug(name));
+            (siteHost && [...g.companies.values()].find((c) => hostOf(live(c, s, "website")) === siteHost)) ||
+            [...g.companies.values()].find((c) => keyOfCompany(c.name) === nameKey);
           const isNew = !company;
           if (!company) {
             const id = newId("c", name);
@@ -1977,15 +2240,23 @@ export async function touch(token: string | null | undefined): Promise<void> {
 
 /* ---------- the weekly scan: open roles, opened and closed with dates ---------- */
 
-/** A followed role closes when a clean scan of its board hasn't listed it for this long. */
+/** A followed role can close once its posting has not been seen for this long … */
 const CLOSE_AFTER = 10 * DAY;
+/** … and this many clean scans of its own board have missed it. */
+const CLOSE_MISSES = 2;
+/** Scans closer together than this count as one miss, so running the scan twice in a day closes nothing. */
+const MISS_GAP = 12 * 60 * 60 * 1000;
 /** Open roles that came with the seed close this long after the seed was built, unless a scan sees them. */
 const SEED_ROLE_LIFE = 35 * DAY;
-/** Whatever the board's health, nothing stays open this long unseen (as long as some board answered). */
+/** Whatever the board's health, nothing stays open this long unseen (as long as some board answered cleanly). */
 const STALE_AFTER = 60 * DAY;
+/** A board that matched something, but under half its baseline, on every run for this long takes the new count as its baseline. */
+const BASELINE_RESET_AFTER = 21 * DAY;
+/** A board no run has named for this long is forgotten. */
+const BOARD_FORGET_AFTER = 90 * DAY;
 const SCAN_MAX_ROLES = 2000;
 
-const squeeze = (raw: unknown, max: number) => stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, max);
+const squeeze = (raw: unknown, max: number) => tidy(raw, max);
 /** "https://www.Acme.com/jobs" -> "acme.com", or null. */
 const hostOf = (raw: unknown) => {
   const h = String(raw ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0];
@@ -1994,20 +2265,32 @@ const hostOf = (raw: unknown) => {
 const urlKey = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[/?#]+$/, "");
 
 /**
- * Store one scan. A posting seen again stays open; a closed one seen again reopens; a new one
- * gets its company (matched by website, then by name, else added) and an engagement whose
- * facts belong to "scan". An open role the scan did not see closes once its board has answered
- * cleanly and it was last listed more than 10 days ago, so a board outage closes nothing.
+ * Store one scan. `found.roles` is every posting that passed the screen, newest first, not only
+ * the ones that fit under a cap: a posting seen again stays open (and a closed one reopens)
+ * however many there are, and only roles opened for the first time are capped, at `maxNew` a run.
+ * A new one gets its company (matched by website, then by name, else added) and an engagement
+ * whose facts belong to "scan".
+ *
+ * Closing takes more than one quiet scan. A board counts as clean on a run only when it answered,
+ * matched at least one role, and matched at least half of what it matched on its last clean run
+ * (its baseline, which a run that is not clean never changes). An open role closes when its own
+ * board has been clean and missed it on 2 scans at least 12 hours apart and it was last listed
+ * more than 10 days ago. So an outage, a board that reads but matches nothing, and two scans on
+ * one day all close nothing. When a role closes, unlocks of its role and posting (and of its
+ * company, if no open role is left there) made after it was last listed are paid back.
  * `nowIso` is the scan's time (tests pass one to move the clock).
  */
-export async function applyScan(found: ScanCollectResult, nowIso?: string): Promise<ScanApplyResult> {
+export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNew: number = MAX_ROLES): Promise<ScanApplyResult> {
   return mutate((s, seed): ScanApplyResult => {
     const now = iso(nowIso, new Date().toISOString());
     const nowMs = Date.parse(now);
     const g = graph(seed, s);
     keepSeedTracks(seed, s);
     const roles = s.scan.roles;
+    const okBefore = lastOkOf(s.scan);
     const res: ScanApplyResult = { at: now, opened: 0, stillOpen: 0, closed: 0, reopened: 0, companiesAdded: 0 };
+    let overCap = 0;
+    let refunded = 0;
 
     const keyOfEng = new Map<string, string>();
     const keyOfUrl = new Map<string, string>();
@@ -2020,7 +2303,8 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
     for (const c of g.companies.values()) {
       const h = hostOf(live(c, s, "website"));
       if (h && !byHost.has(h)) byHost.set(h, c);
-      if (!byName.has(slug(c.name))) byName.set(slug(c.name), c);
+      const nk = keyOfCompany(c.name);
+      if (nk && !byName.has(nk)) byName.set(nk, c);
     }
     const engsAt = new Map<string, EngNode[]>();
     for (const e of g.engagements.values()) engsAt.set(e.companyId, [...(engsAt.get(e.companyId) ?? []), e]);
@@ -2031,7 +2315,7 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
       if (s.values[k]?.value !== value) delete s.verifications[k]; // confirmations were for the old value
       s.values[k] = { value, by: "scan", at: now, status: "live" };
     };
-    const roleSlug = (e: Node) => slug(live(e, s, "role") ?? "");
+    const roleSlug = (e: Node) => textKey(live(e, s, "role") ?? "");
     const openNow = (e: EngNode) => {
       const k = keyOfEng.get(e.id);
       if (k && roles[k].closedAt) return false;
@@ -2043,18 +2327,20 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
     for (const raw of (Array.isArray(found?.roles) ? found.roles : []).slice(0, SCAN_MAX_ROLES)) {
       const company = squeeze(raw?.company, 80);
       const title = squeeze(raw?.title, 120);
-      if (company.length < 2 || title.length < 2 || company.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) continue;
+      // Compared by key. A name or a title with no letter or digit has an empty key, which would match every other one.
+      const coKey = keyOfCompany(company);
+      const titleKey = textKey(title);
+      if (company.length < 2 || title.length < 2 || !coKey || !titleKey || company.toLowerCase() === HIDDEN_COMPANY.toLowerCase()) continue;
       // A link too long to store whole loses its query string (tracking codes) rather than its end.
-      const link = String(raw.url ?? "").trim();
-      const url = cleanValue(def("posting"), link.length > 200 ? link.split(/[?#]/)[0] : link).value ?? "";
+      const url = cleanValue(def("posting"), String(raw.url ?? "").trim()).value ?? "";
       const source = squeeze(raw.source, 60) || "scan";
-      const key = squeeze(raw.key, 200) || `${slug(company)}:${slug(title)}`;
+      const key = squeeze(raw.key, 200) || `${coKey}:${titleKey}`;
       const domain = hostOf(raw.domain);
-      let co = (domain ? byHost.get(domain) : undefined) ?? byName.get(slug(company));
+      let co = (domain ? byHost.get(domain) : undefined) ?? byName.get(coKey);
 
       // The same posting: by its key, by its link, or the same title on a followed role at that company.
       let k = roles[key] ? key : url ? keyOfUrl.get(urlKey(url)) : undefined;
-      if (!k && co) k = (engsAt.get(co.id) ?? []).filter((e) => keyOfEng.has(e.id) && roleSlug(e) === slug(title)).map((e) => keyOfEng.get(e.id))[0];
+      if (!k && co) k = (engsAt.get(co.id) ?? []).filter((e) => keyOfEng.has(e.id) && roleSlug(e) === titleKey).map((e) => keyOfEng.get(e.id))[0];
       if (k && !g.engagements.has(roles[k].engagementId)) {
         delete roles[k]; // its record is gone (the seed was rebuilt)
         k = undefined;
@@ -2066,9 +2352,13 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
         r.lastSeen = now;
         r.source = source;
         if (url) r.url = url;
+        delete r.misses;
+        delete r.missAt;
+        if (!r.postedAt && raw.postedAt) r.postedAt = iso(raw.postedAt, "") || null;
         if (!r.closedAt) res.stillOpen++;
-        else if (r.closedBy !== "filled") {
-          // Listed again: reopen. (A role a member filled stays filled while the posting lingers.)
+        else if (r.closedBy !== "filled" || !live(g.engagements.get(r.engagementId), s, "operator")) {
+          // Listed again: reopen. A role a member filled stays filled while the posting lingers,
+          // unless nobody holds the seat any more (the name was removed or unlinked).
           r.closedAt = null;
           delete r.closedBy;
           put(r.engagementId, "status", "Open role");
@@ -2077,12 +2367,17 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
         continue;
       }
 
+      // New to us. Only these are capped: the newest come first, the rest wait for a later run.
+      if (res.opened >= maxNew) {
+        overCap++;
+        continue;
+      }
       if (!co) {
         const id = newId("c", company);
         s.companies.push({ id, name: company, by: "scan", at: now });
         co = { id, seedFields: { name: company }, name: company };
         g.companies.set(id, co);
-        byName.set(slug(company), co);
+        byName.set(coKey, co);
         res.companiesAdded++;
       }
       if (domain && !valueOf(co, s, "website")) {
@@ -2090,7 +2385,7 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
         if (!byHost.has(domain)) byHost.set(domain, co);
       }
       // An open role a member already added under this title becomes the followed one.
-      let e = (engsAt.get(co.id) ?? []).find((x) => !keyOfEng.has(x.id) && openNow(x) && roleSlug(x) === slug(title));
+      let e = (engsAt.get(co.id) ?? []).find((x) => !keyOfEng.has(x.id) && openNow(x) && roleSlug(x) === titleKey);
       if (!e) {
         const id = newId("e", company);
         s.engagements.push({ id, companyId: co.id, by: "scan", at: now, source: "Demand scan" });
@@ -2126,25 +2421,77 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string): Prom
       matched: Math.max(0, Math.round(Number(x?.matched) || 0)),
       ...(x?.error ? { error: squeeze(x.error, 200) } : {}),
     }));
-    // Boards that answered with listings. Only their roles can close on the 10-day rule.
-    const clean = new Set(sources.filter((x) => !x.error && x.fetched > 0).map((x) => x.source));
+    // Boards that answered cleanly on this run. Only their own roles can be counted as missed.
+    const boards = (s.scan.boards ??= {});
+    const clean = new Set<string>();
+    for (const x of sources) {
+      const b = (boards[x.source] ??= { baseline: 0, lastOkAt: null, healthy: false });
+      b.at = now;
+      const answered = !x.error && x.fetched > 0;
+      b.healthy = answered && x.matched > 0 && x.matched * 2 >= b.baseline;
+      if (b.healthy) {
+        b.baseline = x.matched;
+        b.lastOkAt = now;
+        delete b.lowSince;
+        clean.add(x.source);
+      } else if (answered && x.matched > 0) {
+        // Fewer than half, but not none. If that holds on every run for three weeks, the board got smaller.
+        b.lowSince ??= now;
+        if (nowMs - Date.parse(b.lowSince) >= BASELINE_RESET_AFTER) {
+          b.baseline = x.matched;
+          delete b.lowSince;
+        }
+      } else if (answered) delete b.lowSince; // listings but no match at all: a reader that broke, not a smaller board
+    }
+    for (const [name, b] of Object.entries(boards)) if (nowMs - Date.parse(b.at ?? now) > BOARD_FORGET_AFTER) delete boards[name];
+
+    const closedNow: RoleTrack[] = [];
     for (const [k, r] of Object.entries(roles)) {
       if (r.closedAt || seen.has(k)) continue;
       const e = g.engagements.get(r.engagementId);
       if (!e) continue;
       const unseen = nowMs - Date.parse(r.lastSeen);
-      const due =
-        r.source === "seed" ? clean.size > 0 && unseen > SEED_ROLE_LIFE : (clean.has(r.source) && unseen > CLOSE_AFTER) || (clean.size > 0 && unseen > STALE_AFTER);
+      let due = clean.size > 0 && unseen > (r.source === "seed" ? SEED_ROLE_LIFE : STALE_AFTER);
+      if (r.source !== "seed" && clean.has(r.source)) {
+        if (!r.missAt || nowMs - Date.parse(r.missAt) >= MISS_GAP) {
+          r.misses = (r.misses ?? 0) + 1;
+          r.missAt = now;
+        }
+        if ((r.misses ?? 0) >= CLOSE_MISSES && unseen > CLOSE_AFTER) due = true;
+      }
       if (!due) continue;
       r.closedAt = now;
       r.closedBy = "scan";
       const status = live(e, s, "status");
       if (!status || status === "Open role") put(e.id, "status", "Closed");
       res.closed++;
+      closedNow.push(r);
     }
+
+    if (closedNow.length) {
+      // An unlock made after the posting was last seen paid for a role that was already gone.
+      const since = new Map<string, string>(); // ledger ref -> unlocks later than this are paid back
+      for (const r of closedNow) {
+        since.set(fkey(r.engagementId, "role"), r.lastSeen);
+        since.set(fkey(r.engagementId, "posting"), r.lastSeen);
+        // The company too, when this left it with no open role. It was last known to be hiring when any of its roles was last seen.
+        if ((engsAt.get(r.companyId) ?? []).some(openNow)) continue;
+        const last = Object.values(roles).filter((x) => x.companyId === r.companyId).map((x) => x.lastSeen).sort().pop();
+        since.set(fkey(r.companyId, "identity"), last ?? r.lastSeen);
+      }
+      for (const l of [...s.ledger]) {
+        const from = l.reason === "unlock" ? since.get(l.ref) : undefined;
+        if (from === undefined || l.at <= from || l.delta >= 0) continue;
+        if (s.ledger.some((x) => x.reason === "refund" && x.memberId === l.memberId && x.ref === l.ref && x.at >= l.at)) continue; // already paid back
+        s.ledger.push({ memberId: l.memberId, delta: -l.delta, reason: "refund", ref: l.ref, at: now, why: "closed" });
+        refunded++;
+      }
+    }
+
     s.scan.lastRunAt = now;
+    s.scan.lastOkAt = clean.size ? now : okBefore;
     s.scan.sources = sources;
-    return res;
+    return { ...res, overCap, refunded };
   });
 }
 
@@ -2157,20 +2504,25 @@ export interface ScanRun {
 let scanFlight: Promise<ScanRun> | null = null;
 let scanTriedAt = 0;
 
-/** Scan the job boards, store what was found, then send the weekly email. One at a time: a second call joins the first. */
-export function runScan(origin?: string): Promise<ScanRun> {
+/**
+ * Scan the job boards, store what was found, then send the weekly email. One at a time: a second call joins the first.
+ * `from` is for tests: boards to read in place of the real ones, and the scan's time.
+ */
+export function runScan(origin?: string, from: { collect?: () => ReturnType<typeof collectOpenRoles>; now?: string } = {}): Promise<ScanRun> {
   scanFlight ??= (async () => {
     const t0 = Date.now();
     scanTriedAt = t0;
     try {
       // Tests never reach a job board.
-      const found = process.env.RN_SCAN_TEST === "1" ? { roles: [], sources: [] } : await collectOpenRoles();
-      const result = await applyScan(found);
+      const found = from.collect ? await from.collect() : process.env.RN_SCAN_TEST === "1" ? { roles: [], all: [], sources: [] } : await collectOpenRoles();
+      // Every role that passed the screen, not the capped list: a role still posted must be seen to stay open.
+      const result = await applyScan({ roles: found.all, sources: found.sources }, from.now);
       const digests = await sendDigests(result.at, origin).catch((e) => (console.error("digest failed", e), 0));
       const failed = found.sources.filter((x) => x.error).length;
       console.log(
-        `scan: ${found.roles.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
-          `closed ${result.closed}, reopened ${result.reopened}, companies added ${result.companiesAdded}, emails ${digests}, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
+        `scan: ${found.all.length} roles from ${found.sources.length} sources (${failed} failed), opened ${result.opened}, still open ${result.stillOpen}, ` +
+          `closed ${result.closed}, reopened ${result.reopened}, companies added ${result.companiesAdded}, left for a later run ${result.overCap ?? 0}, ` +
+          `unlocks paid back ${result.refunded ?? 0}, emails ${digests}, ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
       return { result, sources: found.sources, digests };
     } finally {
@@ -2239,7 +2591,7 @@ export async function digestList(nowIso: string | undefined, base: string): Prom
     if (!t) continue;
     if (t.closedAt) {
       if (nowMs - Date.parse(t.closedAt) < WEEK) closedRoles++;
-    } else if (nowMs - Date.parse(t.firstSeen) < WEEK && isOpenRole(e, s, tracks)) fresh.push(e);
+    } else if (newThisWeek(t, nowMs) && isOpenRole(e, s, tracks) && !isUnseen(t)) fresh.push(e);
   }
   if (!fresh.length) return [];
   const count = new Map<string, number>();
@@ -2305,7 +2657,7 @@ export async function sendDigests(nowIso?: string, origin?: string): Promise<num
         // Someone may have unsubscribed while the run was going.
         if ((await loadState()).profiles[memberId]?.digestOff) continue;
         const mail = renderDigest(data);
-        if (!(await sendEmail(data.email, mail.subject, mail.text, mail.html))) continue;
+        if (!(await sendEmail(data.email, mail.subject, mail.text, mail.html, { unsubscribeUrl: data.unsubscribeUrl }))) continue;
         sent++;
         await mutate((draft) => {
           draft.digest.members[memberId] = now;

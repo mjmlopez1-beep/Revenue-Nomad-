@@ -1157,11 +1157,15 @@ section("scan", async () => {
   check("a role unseen for 9 days stays open", exact(s3.json?.result?.closed, 0) && (await stillOpenHere()), s3.json);
   // A board outage closes nothing, and neither does another board's clean run.
   const s4 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0, error: "timeout" }], now: at(14) });
-  const s5 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0 }, { source: "other-board", fetched: 30, matched: 0 }], now: at(14) });
+  const s5 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0 }, { source: "other-board", fetched: 30, matched: 3 }], now: at(14) });
   check("a board outage closes nothing", s4.json?.result?.closed === 0 && exact(s5.json?.result?.closed, 0), [s4.json, s5.json]);
   check("the roles are still open after the outage", (await stillOpenHere()) && (!seedQuiet || (await V.view()).scan.openNow === v1.scan.openNow));
-  // Close: unseen for more than 10 days, in a clean run of its board.
-  const s6 = await scanPost({ roles: [], sources: [{ source: board, fetched: 9, matched: 0 }], now: at(14) });
+  // Close: two clean runs of its board miss it, and it has been unseen for more than 10 days. A run
+  // is clean only when the board matched something, so another role on the board stays listed.
+  const keeper = { ...role1, key: `qakeeper${RUN}:cro`, company: `Qa Keeper Co ${RUN}`, domain: null, title: "Fractional CRO", url: `https://jobs.example.com/qa/${RUN}/keeper` };
+  const missRun = [{ source: board, fetched: 9, matched: 1 }];
+  await scanPost({ roles: [keeper], sources: missRun, now: at(13) }); // the first miss closes nothing (scripts/scan-scenarios.mts checks that)
+  const s6 = await scanPost({ roles: [keeper], sources: missRun, now: at(14) });
   check("a role unseen for more than 10 days closes", exact(s6.json?.result?.closed, 2), s6.json);
   const v6 = await V.view();
   const h6 = v6.companies.find((c) => c.id === host.id);
@@ -1169,7 +1173,8 @@ section("scan", async () => {
   check("a closed role carries the day it closed and status Closed", e6?.closed === dayOf(t0 + 14 * DAY_MS) && e6.opened === dayOf(t0) && e6.cells.status?.s === "value" && e6.cells.status.v === "Closed", { closed: e6?.closed, status: e6?.cells.status });
   check("a closed role is not open: the company shows again", h6?.hidden === false && h6.name === host.name && h6.friendly.open === 0, { hidden: h6?.hidden, open: h6?.friendly.open });
   check("the history stays on the record", !!e6 && e6.source === "Demand scan" && e6.cells.function?.v === "Marketing");
-  if (seedQuiet) check("stats and the scan summary follow", v6.stats.openRoles === v0.stats.openRoles && v6.scan.openNow === v0.scan.openNow && v6.scan.closed30 === v0.scan.closed30 + 2, { stats: v6.stats.openRoles, scan: v6.scan });
+  // One more open role than at the start: the one that stayed listed.
+  if (seedQuiet) check("stats and the scan summary follow", v6.stats.openRoles === v0.stats.openRoles + 1 && v6.scan.openNow === v0.scan.openNow + 1 && v6.scan.closed30 === v0.scan.closed30 + 2, { stats: v6.stats.openRoles, scan: v6.scan });
   else skip("stats after closing", "the seed is old enough that its own open roles closed during this test");
   if (adm) check("the company the scan added shows too", (await V.view()).companies.find((c) => c.id === newCo?.id)?.hidden === false);
 
@@ -1223,7 +1228,7 @@ section("scan", async () => {
     const late = Math.max(t0 + 17 * DAY_MS, built + 37 * DAY_MS);
     const s9 = await scanPost({ roles: [], sources: [{ source: "other-board", fetched: 0, matched: 0, error: "down" }], now: new Date(late).toISOString() });
     check("a scan where every board failed doesn't close seed roles", s9.json?.result?.closed === 0, s9.json);
-    const s10 = await scanPost({ roles: [], sources: [{ source: "other-board", fetched: 30, matched: 0 }], now: new Date(late).toISOString() });
+    const s10 = await scanPost({ roles: [], sources: [{ source: "other-board", fetched: 30, matched: 3 }], now: new Date(late).toISOString() });
     const lv = await V.view();
     const after = seedOpen.map((e) => engOf(lv, e.id));
     check("seed roles close 35 days after the seed was built", s10.json?.result?.closed >= stillOpen.length && after.every((e) => e?.closed && e.cells.status?.v === "Closed"), { closed: s10.json?.result?.closed, n: stillOpen.length });

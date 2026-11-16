@@ -226,14 +226,52 @@ export function employeesBucket(n: number | null | undefined): string | null {
 /** A person's first and last name: two or more words of letters (with ' - . allowed), no digits or emails. */
 export const PERSON_NAME_RE = /^(?=.{3,60}$)\p{L}[\p{L}'’.-]*(?: \p{L}[\p{L}'’.-]*)+$/u;
 
+/** Half of a character pair on its own (what a cut in the middle of an emoji leaves behind). */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+/** Text with no half characters in it, so it can always be shown, encoded and stored. */
+export const wellFormed = (s: string) => s.replace(LONE_SURROGATE, "");
+/** The first `max` units of a text, never ending in half a character. */
+export const cut = (s: string, max: number) => wellFormed(s.slice(0, max));
+/** What a member typed, tidied: invisible characters out, spaces collapsed, cut to `max` whole characters. */
+export const tidy = (raw: unknown, max: number) => cut(stripInvisible(raw).trim().replace(/\s+/g, " "), max).trim();
+
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+/** "3/2025", "2025-3", "Mar 2025", "March 2025" and "2025-03-15" as "2025-03". Anything else comes back as it was. */
+function asMonth(v: string): string {
+  const ym = (y: string, m: number) => (m >= 1 && m <= 12 ? `${y}-${String(m).padStart(2, "0")}` : v);
+  let m = v.match(/^(\d{1,2})[/-](\d{4})$/);
+  if (m) return ym(m[2], Number(m[1]));
+  m = v.match(/^(\d{4})[/-](\d{1,2})(?:-\d{1,2})?$/);
+  if (m) return ym(m[1], Number(m[2]));
+  m = v.match(/^([A-Za-z]{3,9})\.?,? (\d{4})$/);
+  if (m) {
+    const word = m[1].toLowerCase();
+    return ym(m[2], MONTHS.findIndex((full) => word === full.slice(0, 3) || (word.length > 3 && full.startsWith(word))) + 1);
+  }
+  return v;
+}
+/** The latest moment that is "now" somewhere on Earth: members ahead of UTC are already in the next month. */
+const AHEAD_MS = 14 * 60 * 60 * 1000;
+
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
-  const v = stripInvisible(raw).trim().replace(/\s+/g, " ").slice(0, 200);
+  // The app only ever sends text (or a number for hours). Anything else is not a value.
+  if (raw !== null && raw !== undefined && typeof raw !== "string" && typeof raw !== "number") return { error: "Type this in as text." };
+  const whole = stripInvisible(raw).trim().replace(/\s+/g, " ");
+  if (!whole) return { error: `${f.label} is empty.` };
+  if (f.kind === "url") {
+    let u = wellFormed(whole).replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
+    // A link too long to keep whole loses its tracking codes, never its end.
+    if (u.length > 200) u = u.split(/[?#]/)[0].replace(/\/$/, "");
+    if (u.length > 200) return { error: "That link is too long. Paste the short link." };
+    if (!/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u)) return { error: "That doesn't look like a web address." };
+    // The host never depends on case. A company's website is its host and nothing after it.
+    const slash = u.indexOf("/");
+    const host = (slash < 0 ? u : u.slice(0, slash)).toLowerCase();
+    return { value: f.key === "website" || slash < 0 ? host : host + u.slice(slash) };
+  }
+  const v = cut(whole, 200).trim();
   if (!v) return { error: `${f.label} is empty.` };
   switch (f.kind) {
-    case "url": {
-      const u = v.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
-      return /^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u) ? { value: u } : { error: "That doesn't look like a web address." };
-    }
     case "email":
       return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v) ? { value: v.toLowerCase() } : { error: "That doesn't look like an email." };
     case "phone":
@@ -241,11 +279,13 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     case "month":
     case "monthOrOngoing": {
       if (f.kind === "monthOrOngoing" && /^ongoing$/i.test(v)) return { value: "Ongoing" };
-      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(v)) return { error: f.kind === "month" ? "Use a month (YYYY-MM)." : "Pick an end month, or Ongoing." };
-      const now = new Date();
-      const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-      if (Number(v.slice(0, 4)) < 1970 || (v.length === 4 ? v > thisMonth.slice(0, 4) : v > thisMonth)) return { error: "That date is in the future." };
-      return { value: v };
+      const m = asMonth(v);
+      if (!/^\d{4}(-(0[1-9]|1[0-2]))?$/.test(m)) return { error: f.kind === "month" ? "Use a month (YYYY-MM)." : "Pick an end month, or Ongoing." };
+      if (Number(m.slice(0, 4)) < 1970) return { error: "That date is too far back. Use 1970 or later." };
+      // Compared with the month that has already started somewhere on Earth, so nobody ahead of UTC is refused.
+      const thisMonth = new Date(Date.now() + AHEAD_MS).toISOString().slice(0, 7);
+      if (m.length === 4 ? m > thisMonth.slice(0, 4) : m > thisMonth) return { error: "That date is in the future." };
+      return { value: m };
     }
     case "number":
       return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use hours per week between 1 and 80." };
@@ -254,6 +294,7 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
+      if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 3) return { error: "Use the seat's title, like Fractional VP Sales." };
       return v.length >= 2 ? { value: v } : { error: "Too short." };
   }
 }
