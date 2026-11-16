@@ -38,10 +38,14 @@ function firstView(where: string): boolean {
 }
 
 export const PRO_TITLE = "Pro is coming";
-/** The whole offer, where it has a card to itself. */
-export const PRO_LINE = "A paid plan that shows open roles the week they post, with the company already unlocked, and emails you when one opens in your function. There is no price yet.";
+/**
+ * What Pro would add over the free pilot, and only that. The weekly scan and the weekly email
+ * are already free, so the offer is the one thing that still costs: every open role comes
+ * unlocked, with its company and its job posting.
+ */
+export const PRO_LINE = "A paid plan where every open role comes unlocked, with the company and the job posting, so open roles never cost you a credit. There is no price yet.";
 /** The short form, under another action. */
-export const PRO_SHORT = "A paid plan with open roles the week they post and every hiring company already unlocked.";
+export const PRO_SHORT = "A paid plan where every open role comes unlocked, company and posting included.";
 export const PRO_ASK = "Email me when it opens";
 export const PRO_DONE = "You're on the list. We'll email you when it opens.";
 

@@ -44,10 +44,17 @@
   --surface-2: #f3f5f4;
   --line: #e2e6e3;
   --line-strong: #cdd4d0;
+  /* The edge of a field you type in: 3.4:1 on white and on the page (WCAG 1.4.11). */
+  --line-input: #808a85;
   --ink: #0a1a13;
   --body-ink: #28322d;
   --muted: #5b6661;
-  --faint: #8a948f;
+  /* The quietest text. 4.5:1 on white, the page, the gray surface and the selected row. */
+  --faint: #68716c;
+  /* The keyboard focus ring. On light surfaces, the volt green taken dark enough to reach 3:1
+     on white, the page, the gray surface and a selected row. Dark surfaces (the top bar, the
+     next-move card, toasts) set it back to volt, which is 7:1 on pine. */
+  --focus: #14a069;
   --r-chip: 6px;
   --r-btn: 8px;
   --r-card: 10px;
@@ -114,8 +121,17 @@ img {
   max-width: 100%;
 }
 :focus-visible {
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+/* On pine and ink the volt itself is the ring. */
+.tp-top,
+.nm-card,
+.toast,
+.lp-nav,
+.lp-hero,
+.lp-final {
+  --focus: var(--volt);
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -266,10 +282,28 @@ img {
   width: 100%;
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-input);
   border-radius: var(--r-btn);
   background: var(--surface);
   font-size: 14px;
+}
+/* The app's own chevron, not the browser's arrow (the same 2px stroke as the Sort button). */
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235B6661' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+}
+.select:disabled {
+  background-image: none;
+}
+/* Phones and other touch screens: 16px in every field, so iOS never zooms the page on focus. */
+@media (max-width: 767px), (pointer: coarse) {
+  .input,
+  .select,
+  textarea {
+    font-size: 16px;
+  }
 }
 .input,
 .select {
@@ -281,7 +315,7 @@ img {
 }
 .input:focus,
 .select:focus {
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-color: var(--pine);
 }
@@ -352,29 +386,66 @@ img {
 
 /*
  * A role that is open now. The dot is the only ember a row, a card or a line of text carries.
- * It pulses slowly (never under prefers-reduced-motion, see the rule at the top).
+ * It pulses slowly: a ring that grows and fades, drawn with transform and opacity only, so the
+ * browser hands it to the compositor and an idle page does no work. Dots in a list pulse three
+ * times and then sit still. None of it moves under prefers-reduced-motion.
  */
 .live-dot {
   flex: none;
+  position: relative;
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--ember);
-  animation: live-dot 2.4s ease-out infinite;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ember);
+  opacity: 0;
+  pointer-events: none;
+  animation: live-ring 2.4s ease-out infinite;
+}
+.tp-table .live-dot::after,
+.tp-pcard .live-dot::after {
+  animation-iteration-count: 3;
 }
 .live-dot-lg {
   width: 8px;
   height: 8px;
 }
-@keyframes live-dot {
+@keyframes live-ring {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 90, 31, 0.45);
+    transform: scale(1);
+    opacity: 0.45;
   }
   70%,
   100% {
-    box-shadow: 0 0 0 5px rgba(255, 90, 31, 0);
+    transform: scale(2.6);
+    opacity: 0;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+/*
+ * When two more urgent things already hold the ember (see emberTaken in TradingPost.tsx), the
+ * dot steps back to an ember-ink ring: still the open-role mark, no fill and no pulse.
+ */
+.tp-app.tp-ember-full .live-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ember-ink);
+  animation: none;
+}
+.tp-app.tp-ember-full .live-dot::after {
+  animation: none;
+  opacity: 0;
 }
 
 /*
@@ -472,7 +543,7 @@ button.lock:focus-visible {
   outline: 0;
 }
 button.lock:focus-visible .lock-cta {
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 button.lock:disabled {
@@ -480,6 +551,11 @@ button.lock:disabled {
 }
 button.lock.busy .lock-cta {
   background: var(--pine-hover);
+}
+/* At the day's unlock limit: the label says when, in gray, not as an offer. */
+button.lock.later .lock-cta {
+  background: var(--surface-2);
+  color: var(--muted);
 }
 /* No hover (phones, tablets): the label is always there, as quiet pine text. */
 @media (hover: none) {
@@ -510,6 +586,23 @@ button.lock.busy .lock-cta {
   button.lock:active .lock-cta {
     opacity: 0.6;
   }
+  /*
+   * A table on a touch screen (a tablet): a lock icon and "1 credit" in muted text, so a page
+   * of rows is not a wall of "Unlock" labels. Still one tap, and the cost still shows. Phone
+   * cards and the record keep the full label.
+   */
+  .tp-table button.lock .lock-cta {
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .tp-table button.lock .lock-word,
+  .tp-table button.lock .lock-dot {
+    display: none;
+  }
+}
+/* In a two-line cell the label stays inside its own line instead of covering the one above. */
+.tp-stack button.lock .lock-cta {
+  height: 20px;
 }
 
 /* Missing fact: dashed, "+ Add" with the volt "+1". */
@@ -566,24 +659,39 @@ button.add:active {
 }
 
 /* ---------- toasts ---------- */
-/* Bottom left on desktop, under the top bar on phones. Taps pass through to the buttons below. */
+/*
+ * Near the action, never over what it announces. Desktop: bottom center of the page, and of the
+ * table beside an open record. Phones: at the bottom, above the record's bar or a sheet's
+ * footer when one is up, where the thumb already is. Taps pass through to what is below,
+ * except on a toast's own button (Undo).
+ */
 .toasts {
   position: fixed;
   z-index: 100;
-  left: 20px;
-  bottom: 20px;
-  transform: none;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
   display: grid;
   gap: 8px;
-  width: min(360px, calc(100vw - 40px));
+  width: min(420px, calc(100vw - 40px));
   pointer-events: none;
+}
+@media (min-width: 768px) {
+  body:has(.tp-drawer) .toasts {
+    left: calc((100vw - 440px) / 2);
+  }
 }
 @media (max-width: 767px) {
   .toasts {
-    top: calc(64px + env(safe-area-inset-top));
-    bottom: auto;
+    top: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom));
     left: 16px;
+    transform: none;
     width: calc(100vw - 32px);
+  }
+  body:has(.tp-rsheet-bar) .toasts,
+  body:has(.tp-sheet-foot) .toasts {
+    bottom: calc(84px + env(safe-area-inset-bottom));
   }
 }
 .toast {
@@ -599,6 +707,42 @@ button.add:active {
 }
 .toast-err {
   background: var(--red);
+}
+/* A toast with one action: "Added the HQ. +1 credit" and Undo at the end of the line. */
+.toast-act {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.toast-act .toast-t {
+  flex: 1;
+  min-width: 0;
+}
+.toast-btn {
+  pointer-events: auto;
+  flex: none;
+  min-height: 32px;
+  padding: 0 10px;
+  margin: -6px -6px -6px 0;
+  border: 0;
+  border-radius: var(--r-btn);
+  background: transparent;
+  color: var(--volt);
+  font-size: 14px;
+  font-weight: 700;
+}
+.toast-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.toast-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .toast-btn {
+    min-height: 44px;
+    margin: -12px -8px -12px 0;
+  }
 }
 @keyframes toast-in {
   from {

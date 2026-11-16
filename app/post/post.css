@@ -294,7 +294,7 @@
 .tp-search:focus-within {
   background: #fff;
   color: var(--muted);
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .tp-search input {
@@ -461,6 +461,63 @@
   background: var(--volt);
   border-radius: 2px;
   transition: width 0.4s ease;
+}
+/*
+ * The next-move card on phones (its own styles are in seats.css), compact so the list starts
+ * higher: the title on the first line, the line under it, then the ember chip and the volt
+ * button side by side ("+25 credits" next to "Fill in your seats").
+ */
+.tp-phone .nm-card.nm-compact {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 12px 4px 12px 12px;
+}
+.tp-phone .nm-compact .nm-t {
+  display: contents;
+}
+.tp-phone .nm-compact .nm-h {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding-right: 40px;
+  font-size: 15px;
+  line-height: 20px;
+}
+/* The close button keeps its 44px target in the corner, out of the rows. */
+.tp-phone .nm-compact .nm-x {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.tp-phone .nm-compact .nm-p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  padding-right: 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.tp-phone .nm-compact .nm-note {
+  grid-row: 3;
+}
+.tp-phone .nm-compact .nm-chip {
+  grid-column: 1;
+  grid-row: 4;
+  margin-top: 6px;
+}
+.tp-phone .nm-compact .nm-go {
+  grid-column: 2 / -1;
+  grid-row: 4;
+  margin: 6px 12px 0 0;
+}
+.nm-note {
+  padding-top: 4px;
+}
+/* "Earned 25 of 25 today" and "Earned 1 of 25 today" take the same room, so the search beside it never moves. */
+.tp-meter {
+  flex: none;
+  width: 156px;
+  min-width: 0;
 }
 .tp-add-btn {
   height: 36px;
@@ -681,11 +738,17 @@
   display: grid;
   gap: 10px;
 }
+.tp-zero-h {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
 .tp-zero-t {
   font-size: 14px;
   line-height: 20px;
-  font-weight: 600;
-  color: var(--ink);
+  color: var(--body-ink);
 }
 .tp-zero .btn {
   justify-self: start;
@@ -694,6 +757,45 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+/* The account menu: a line above Sign out, and Sign out's question in place of the items. */
+.tp-menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--line);
+}
+.tp-menu-item:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+.tp-menu-ask {
+  display: grid;
+  gap: 8px;
+  padding: 6px 10px 8px;
+}
+.tp-menu-ask-t {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-menu-ask-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
+}
+.tp-credpop-rules p + p {
+  margin-top: 8px;
+}
+.tp-credpop-warn {
+  font-weight: 600;
+  color: var(--ink);
+}
+/* One Pro offer at a time: the zero-credits popover's line replaces the one under a record's button, and an open record hides the card at the foot of the table. */
+body:has(.tp-zero) .pro-under,
+body:has(.tp-drawer) .pro-foot {
+  display: none;
 }
 
 /* ---------- sidebar filters ---------- */
@@ -1973,13 +2075,13 @@
   gap: 8px;
   height: 36px;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line-input);
   border-radius: var(--r-btn);
   color: var(--faint);
 }
 .tp-inline-search:focus-within {
   border-color: var(--pine);
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 .tp-inline-search input {
@@ -2010,6 +2112,21 @@
   background: var(--pine-8);
   color: var(--pine);
   font-weight: 600;
+}
+/* Escape or a tap outside with something typed: this question replaces the footer. */
+.tp-ed-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-sheet .tp-ed-ask .btn {
+  min-height: 44px;
 }
 
 /* ---------- drawer ---------- */
@@ -3427,6 +3544,209 @@
 }
 .tp-sheet-actions .btn {
   min-height: 48px;
+}
+.tp-sheet-foot > .btn {
+  width: 100%;
+}
+/* The sheet takes focus when it opens so a screen reader starts at its title. The panel is not a control, so no ring. */
+.tp-sheet:focus {
+  outline: none;
+}
+/* Touch screens: 16px in every field in a sheet or a popover, so iOS never zooms the page. */
+@media (max-width: 767px), (pointer: coarse) {
+  .tp-sheet input:not([type="checkbox"]):not([type="radio"]),
+  .tp-sheet select,
+  .tp-pop input,
+  .tp-pop select,
+  .tp-bare {
+    font-size: 16px;
+  }
+}
+/* A sheet that is a centered dialog above phone width (Questions and feedback). */
+@media (min-width: 768px) {
+  .tp-sheet-wrap.tp-sheet-dialog {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .tp-sheet-dialog .tp-sheet {
+    width: min(600px, 100%);
+    max-height: min(760px, 90vh);
+    border-radius: var(--r-card);
+  }
+  .tp-sheet-dialog .tp-sheet-grab {
+    display: none;
+  }
+  .tp-sheet-dialog .tp-sheet-head {
+    padding: 12px 8px 8px 20px;
+  }
+  .tp-sheet-dialog .tp-sheet-body {
+    padding: 16px 20px 24px;
+  }
+}
+.tp-help .tp-sheet-body {
+  gap: 20px;
+}
+.tp-help-sec {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 21px;
+}
+.tp-help-sec + .tp-help-sec {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.tp-help-h {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+.tp-help-qa + .tp-help-qa {
+  border-top: 1px solid var(--line);
+}
+.tp-help-qa summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 6px 0;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-help-qa summary::-webkit-details-marker {
+  display: none;
+}
+.tp-help-qa summary::after {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform var(--t);
+}
+.tp-help-qa[open] summary::after {
+  transform: rotate(-135deg) translateY(-2px);
+}
+.tp-help-qa p {
+  padding: 0 0 12px;
+  color: var(--body-ink);
+}
+.tp-help-keys dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.tp-help-keys dl > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.tp-help-keys dt {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  width: 72px;
+}
+.tp-help-keys dd {
+  margin: 0;
+}
+.tp-help-kbd {
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid var(--line-input);
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  color: var(--ink);
+}
+@media (pointer: coarse) {
+  .tp-help-keys {
+    display: none;
+  }
+}
+/* At 0 credits on a phone: a sheet, with the way to earn one as the full-width button. */
+.tp-zero-sheet .tp-zero {
+  gap: 12px;
+}
+.tp-sheet .tp-zero-pills .add {
+  min-height: 44px;
+  padding: 0 12px;
+}
+/* The fact sheet: the value, where it came from, then a 52px row per action. */
+.tp-fsheet-v {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.tp-fsheet-rows {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+.tp-fsheet-row {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  text-align: left;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--ink);
+}
+button.tp-fsheet-row:active {
+  background: var(--surface-2);
+}
+button.tp-fsheet-row:disabled {
+  opacity: 0.5;
+}
+.tp-fsheet-hint {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.tp-fsheet-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--volt-ink);
+}
+.tp-fsheet-ask {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+/* Get started at 320px: the invite step reads "Invite", so no word breaks inside itself. */
+@media (max-width: 359px) {
+  .tp-step-more {
+    display: none;
+  }
 }
 
 /* ---------- phone ---------- */

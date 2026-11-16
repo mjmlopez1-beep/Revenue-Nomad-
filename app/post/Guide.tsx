@@ -27,10 +27,11 @@ export function Checklist({
   onSeats?: () => void;
 }) {
   const paid = me.invitesPaid ?? 0;
-  // A member with seats on file gives there first: it is what they know best.
+  // A member with seats on file gives there first: it is what they know best. The step stays open
+  // while their seats still have something to add, so one answer never reads as finished.
   const give =
     seats && onSeats
-      ? { done: me.added > 0, label: "Fill in your seats", hint: seats === 1 ? "earns 1 credit" : `earns up to ${seats} credits`, go: onSeats, open: true, more: true }
+      ? { done: false, label: "Fill in your seats", hint: seats === 1 ? "earns 1 credit" : `earns up to ${seats} credits`, go: onSeats, open: true, more: true }
       : { done: me.added > 0, label: "Add a fact", hint: "earns 1 credit", go: onAdd, open: false, more: false };
   const steps = [
     { done: me.unlocked > 0, label: "Unlock a fact", hint: "costs 1 credit", go: onUnlock, open: false, more: false },
@@ -62,7 +63,16 @@ export function Checklist({
               <span className="tp-step-dot" aria-hidden>
                 {s.done ? <IconCheck size={11} /> : <span className="num">{k + 1}</span>}
               </span>
-              <span className="tp-step-l">{s.label}</span>
+              <span className="tp-step-l">
+                {/* Under 360px the invite step reads "Invite" (the rest is .tp-step-more), so no word breaks inside itself. */}
+                {k === 2 ? (
+                  <>
+                    Invite<span className="tp-step-more">{s.label.slice("Invite".length)}</span>
+                  </>
+                ) : (
+                  s.label
+                )}
+              </span>
               <span className="tp-step-h num">{s.hint}</span>
             </button>
           </li>
