@@ -2,20 +2,23 @@
 
 /**
  * "Your seats": the seats on file that are matched to the member (EngagementRec.yours), and
- * what is still missing on each. The main place members give. Every missing fact is answered
- * in place: pick lists are chips where one tap saves, dates and numbers are one input. A rate
- * can go on the record or count in the benchmarks only. After a save the row keeps its place
- * and shows the value, so the page never jumps.
+ * what is still missing on each. The main place members give.
+ *
+ * Each seat asks one question at a time. A pick list saves on one tap, a text or date answer
+ * has one Save, and the next question takes its place. What is still to come sits under the
+ * question as quiet chips, so nothing is hidden and any of them can be answered first. A rate
+ * goes on the seat (members unlock it) or counts in the benchmarks only (nobody sees it).
+ * Answered questions join the "on file" line of the card, so the page never jumps.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Cell } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { readRate } from "@/lib/rates";
 import { CompanyLogo, IconCheck, IconChevron, IconPlus, fmtValue } from "../ui/shared";
-import { SEAT_ASK, cellKey, shown, type FactRef, type SeatInfo } from "./model";
-import { fmtTime, plural, thisMonth } from "./hooks";
+import { COMPANY_GTM, SEAT_ASK, cellKey, shown, type FactRef, type SeatInfo } from "./model";
+import { fmtTime, plural } from "./hooks";
 import { earnRoom } from "./NextMove";
-import { isMonoField, useUi } from "./ui";
+import { useUi } from "./ui";
 import "./seats.css";
 
 /** What a save in this visit earned. `bench` is the rate as shared for the benchmarks only. */
@@ -32,7 +35,88 @@ const optionsFor = (t: FactRef, f: FieldDef) => (t.entity === "engagement" && t.
 const money = (n: number) => `$${n.toLocaleString("en-US")}`;
 const benchText = (kind: "monthly" | "hourly", amount: number) => `${money(amount)} ${kind === "hourly" ? "an hour" : "a month"}`;
 
-/** Save one fact. `busy` is the value on its way. */
+/** How each missing thing is asked, the way one fractional would ask another. */
+const SEAT_Q: Record<string, { q: string; hint?: string }> = {
+  function: { q: "Which function was the seat in?" },
+  role: { q: "What was your title?" },
+  type: { q: "What kind of seat was it?" },
+  status: { q: "Is the seat active, or has it ended?" },
+  start: { q: "When did you start?", hint: "The year is enough if you don't remember the month." },
+  end: { q: "When did it end?", hint: "Pick Ongoing if you are still in the seat." },
+  reason: { q: "Why did they bring in a fractional?" },
+  sourced: { q: "How did they find you?" },
+  pricing: { q: "How were you paid?" },
+  rate: { q: "What did you charge?" },
+  hours: { q: "About how many hours a week?" },
+  revenue: { q: "What was their revenue when you started?" },
+  employees: { q: "How many people worked there then?" },
+};
+const companyQ = (name: string): Record<string, { q: string; hint?: string }> => ({
+  businessModel: { q: `Who does ${name} sell to?` },
+  motion: { q: `How does ${name} sell?` },
+  dealSize: { q: `How big is a typical deal at ${name}?` },
+  salesCycle: { q: `How long does a deal take to close at ${name}?` },
+});
+
+/* ---------- month and year ---------- */
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const FIRST_YEAR = 1990;
+const yearOf = (v: string) => (/^\d{4}/.test(v) ? v.slice(0, 4) : "");
+const monthOf = (v: string) => (/^\d{4}-\d{2}$/.test(v) ? v.slice(5, 7) : "");
+
+/**
+ * A month and a year as two plain selects, in place of the browser's month input (which shows
+ * a row of dashes until it is touched). Gives "YYYY-MM", or "YYYY" when only the year is known.
+ */
+export function MonthYear({ value, onChange, label, id, disabled }: { value: string; onChange: (v: string) => void; label: string; id?: string; disabled?: boolean }) {
+  const [y, setY] = useState(() => yearOf(value));
+  const [m, setM] = useState(() => monthOf(value));
+  // What this control last sent. A different value from outside (a form reset) replaces both selects.
+  const sent = useRef(value);
+  useEffect(() => {
+    if (value === sent.current) return;
+    sent.current = value;
+    setY(yearOf(value));
+    setM(monthOf(value));
+  }, [value]);
+  const now = new Date();
+  const thisYear = String(now.getFullYear());
+  const years = Array.from({ length: now.getFullYear() - FIRST_YEAR + 1 }, (_, k) => String(now.getFullYear() - k));
+  const set = (ny: string, nm: string) => {
+    // A month that has not happened yet this year can't be picked.
+    const month = ny === thisYear && nm && Number(nm) > now.getMonth() + 1 ? "" : nm;
+    setY(ny);
+    setM(month);
+    const v = ny ? (month ? `${ny}-${month}` : ny) : "";
+    sent.current = v;
+    onChange(v);
+  };
+  return (
+    <span className="my">
+      <select className="select my-m" aria-label={`${label}, month`} value={m} disabled={disabled} onChange={(e) => set(y, e.target.value)}>
+        <option value="">Month</option>
+        {MONTHS.map((name, k) => (
+          <option key={name} value={String(k + 1).padStart(2, "0")} disabled={y === thisYear && k > now.getMonth()}>
+            {name}
+          </option>
+        ))}
+      </select>
+      <select id={id} className="select my-y" aria-label={`${label}, year`} value={y} disabled={disabled} onChange={(e) => set(e.target.value, m)}>
+        <option value="">Year</option>
+        {years.map((yr) => (
+          <option key={yr} value={yr}>
+            {yr}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+/* ---------- one question ---------- */
+
+/** Save one answer. `busy` is the value on its way. */
 function useFill(t: FactRef, onSaved: OnSaved) {
   const ui = useUi();
   const [busy, setBusy] = useState<string | null>(null);
@@ -73,11 +157,11 @@ function ChoiceAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSave
   );
 }
 
-/** Role, hours, start and end: one input and Save. End also offers Ongoing in one tap. */
-function InputAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved }) {
+/** Title and hours: one input and Save. */
+function TextAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved }) {
   const [v, setV] = useState("");
   const { busy, err, setErr, save } = useFill(t, onSaved);
-  const month = f.kind === "month" || f.kind === "monthOrOngoing";
+  const hours = f.kind === "number";
   return (
     <>
       <form
@@ -89,23 +173,51 @@ function InputAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved
         }}
       >
         <input
-          className={`input ys-input${f.kind === "text" ? "" : " mono"}`}
-          type={month ? "month" : f.kind === "number" ? "number" : "text"}
-          inputMode={f.kind === "number" ? "numeric" : undefined}
-          min={f.kind === "number" ? 1 : undefined}
-          max={month ? thisMonth() : f.kind === "number" ? 80 : undefined}
-          placeholder={month ? "YYYY-MM" : f.placeholder ?? ""}
+          className="input ys-input"
+          type={hours ? "number" : "text"}
+          inputMode={hours ? "numeric" : undefined}
+          min={hours ? 1 : undefined}
+          max={hours ? 80 : undefined}
+          placeholder={f.placeholder ?? ""}
           aria-label={f.label}
           value={v}
           onChange={(e) => (setV(e.target.value), setErr(null))}
         />
-        <button type="submit" className="btn btn-sm ys-save" disabled={!v.trim() || !!busy}>
+        {hours && <span className="ys-unit">hours a week</span>}
+        <button type="submit" className="btn btn-sm btn-primary ys-save" disabled={!v.trim() || !!busy}>
+          {busy ? "Saving" : "Save"}
+        </button>
+      </form>
+      <Err text={err} />
+    </>
+  );
+}
+
+/** Start and end: a month and a year, and Save. The end also takes Ongoing in one tap. */
+function MonthAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved }) {
+  const [v, setV] = useState("");
+  const { busy, err, setErr, save } = useFill(t, onSaved);
+  return (
+    <>
+      <form
+        className="ys-inputrow ys-kind-month"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (v) save(v);
+        }}
+      >
+        <MonthYear value={v} label={f.label} onChange={(x) => (setV(x), setErr(null))} disabled={!!busy} />
+        <button type="submit" className="btn btn-sm btn-primary ys-save" disabled={!v || !!busy}>
           {busy && busy !== "Ongoing" ? "Saving" : "Save"}
         </button>
         {f.kind === "monthOrOngoing" && (
-          <button type="button" className={`chip tp-chipbtn ys-chip${busy === "Ongoing" ? " chip-on" : ""}`} disabled={!!busy} onClick={() => save("Ongoing")}>
-            Ongoing
-          </button>
+          <>
+            <span className="ys-or">or</span>
+            <button type="button" className={`chip tp-chipbtn ys-chip${busy === "Ongoing" ? " chip-on" : ""}`} disabled={!!busy} onClick={() => save("Ongoing")}>
+              Ongoing
+            </button>
+          </>
         )}
       </form>
       <Err text={err} />
@@ -113,100 +225,95 @@ function InputAsk({ t, f, onSaved }: { t: FactRef; f: FieldDef; onSaved: OnSaved
   );
 }
 
-/** The rate goes on the record (others unlock it) or counts in the benchmarks only (nobody sees it). */
+/** The rate, and who can see it: members who unlock it on the seat, or nobody (it counts in the benchmarks only). */
 function RateAsk({ t, pricing, onSaved }: { t: FactRef; pricing: string | null; onSaved: OnSaved }) {
   const ui = useUi();
+  const name = useId();
   const [v, setV] = useState("");
-  const [busy, setBusy] = useState<"record" | "bench" | null>(null);
+  const [who, setWho] = useState<"record" | "bench" | null>(null);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const earns = earnRoom(ui.me) > 0;
   const text = v.trim();
-  const record = async () => {
-    const { value, error } = cleanValue(fieldDef("engagement", "rate")!, text);
-    if (error) return setErr(error);
-    setErr(null);
-    setBusy("record");
-    const r = await ui.act({ type: "fill", entity: "engagement", id: t.id, field: "rate", value: value! }, { quiet: true });
-    setBusy(null);
-    if (r.ok) onSaved(t, { earned: !r.capped });
-  };
-  const bench = async () => {
+  const save = async () => {
+    if (!text || !who || busy) return;
+    if (who === "record") {
+      const { value, error } = cleanValue(fieldDef("engagement", "rate")!, text);
+      if (error) return setErr(error);
+      setErr(null);
+      setBusy(true);
+      const r = await ui.act({ type: "fill", entity: "engagement", id: t.id, field: "rate", value: value! }, { quiet: true });
+      setBusy(false);
+      if (r.ok) onSaved(t, { earned: !r.capped });
+      return;
+    }
     // The medians need a monthly or an hourly figure. With no unit typed, the seat's pricing model decides.
     const read = readRate(text, pricing);
-    if (!read) return setErr("Use a monthly or hourly rate, like $8k/mo or $150/hr.");
+    if (!read) return setErr("Give it as a monthly or hourly rate, like $8k/mo or $150/hr.");
     setErr(null);
-    setBusy("bench");
-    const r = await ui.act(
-      { type: "benchRate", engagementId: t.id, pricing: read.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: text },
-      { quiet: true },
-    );
-    setBusy(null);
+    setBusy(true);
+    const r = await ui.act({ type: "benchRate", engagementId: t.id, pricing: read.kind === "hourly" ? "Hourly" : "Monthly retainer", rate: text }, { quiet: true });
+    setBusy(false);
     if (r.ok) onSaved(t, { earned: !r.capped, bench: benchText(read.kind, read.amount) });
   };
-  const plus = earns ? <span className="ys-opt-plus mono">+1</span> : null;
+  const option = (k: "record" | "bench", title: string, line: string) => (
+    <label className={`ys-who-o${who === k ? " on" : ""}`}>
+      <input type="radio" name={name} checked={who === k} disabled={busy} onChange={() => (setWho(k), setErr(null))} />
+      <span className="ys-who-t">
+        <b>{title}</b>
+        <span>{line}</span>
+      </span>
+    </label>
+  );
   return (
-    <div className="ys-rate">
-      <input
-        className="input mono ys-input ys-rate-input"
-        placeholder="$8k/mo or $150/hr"
-        aria-label="Rate"
-        value={v}
-        onChange={(e) => (setV(e.target.value), setErr(null))}
-      />
-      <div className="ys-rate-opts">
-        <button type="button" className="ys-opt" disabled={!text || !!busy} onClick={record}>
-          <span className="ys-opt-h">
-            {busy === "record" ? "Saving" : "Add to the record"} {plus}
-          </span>
-          <span className="ys-opt-p">Other members unlock it for 1 credit.</span>
-        </button>
-        <button type="button" className="ys-opt" disabled={!text || !!busy} onClick={bench}>
-          <span className="ys-opt-h">
-            {busy === "bench" ? "Saving" : "Benchmark only"} {plus}
-          </span>
-          <span className="ys-opt-p">Counts in the medians. Never shown to anyone.</span>
-        </button>
+    <form
+      className="ys-rate"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+    >
+      <input className="input ys-input ys-rate-input" placeholder="$8k/mo or $150/hr" aria-label="Rate" autoComplete="off" value={v} onChange={(e) => (setV(e.target.value), setErr(null))} />
+      <div className="ys-who" role="radiogroup" aria-labelledby={`${name}l`}>
+        <span className="ys-who-l" id={`${name}l`}>
+          Who can see it?
+        </span>
+        {option("record", "Members who unlock it", "It goes on this seat. A member spends 1 credit to see it.")}
+        {option("bench", "Nobody", "It only counts toward the medians on Rate benchmarks. It never shows on this seat or to another member.")}
       </div>
       <Err text={err} />
-    </div>
+      <button type="submit" className="btn btn-sm btn-primary ys-save" disabled={!text || !who || busy}>
+        {busy ? "Saving" : who === "bench" ? "Share privately" : who === "record" ? "Add to the seat" : "Save rate"}
+        {earns && !busy && <span className="ys-plus num">+1</span>}
+      </button>
+    </form>
   );
 }
 
-/** One fact asked for: its control while it is empty, then the value, a volt check and what it earned. */
-function Ask({ t, cell, saved, bench, pricing, onSaved }: { t: FactRef; cell: Cell | undefined; saved?: Saved; bench?: string; pricing?: string | null; onSaved: OnSaved }) {
-  const f = fieldDef(t.entity, t.field);
-  if (!f || !cell) return null;
-  const benchOnly = cell.s === "empty" ? saved?.bench ?? bench : undefined;
-  const done = cell.s !== "empty" || !!benchOnly;
-  return (
-    <div className={`ys-ask${done ? " ys-ask-done" : ""}`} data-ask={cellKey(t.id, t.field)}>
-      <span className="ys-ask-l">{f.label}</span>
-      <div className="ys-ask-c">
-        {done ? (
-          <span className="ys-donerow">
-            <span className={`ys-val${isMonoField(t) ? " mono" : ""}`}>
-              {cell.s === "value" ? fmtValue(t.entity, t.field, cell.v) : benchOnly ? benchOnly : "Under review"}
-            </span>
-            <span className="ys-check" aria-label="Saved">
-              <IconCheck size={11} />
-            </span>
-            {benchOnly && <span className="ys-note">In the benchmarks only. Nobody sees it.</span>}
-            {saved && <span className={`ys-earned${saved.earned ? " mono" : " none"}`}>{saved.earned ? "+1" : "Saved. No credit today."}</span>}
-          </span>
-        ) : t.field === "rate" ? (
-          <RateAsk t={t} pricing={pricing ?? null} onSaved={onSaved} />
-        ) : f.kind === "choice" ? (
-          <ChoiceAsk t={t} f={f} onSaved={onSaved} />
-        ) : (
-          <InputAsk t={t} f={f} onSaved={onSaved} />
-        )}
-      </div>
-    </div>
-  );
+/* ---------- one seat ---------- */
+
+/** A fact on file, as the card lists it. `s` is set when it was saved in this visit. */
+interface Known {
+  k: string;
+  v: string;
+  label: string;
+  note: string | null;
+  s?: Saved;
+}
+
+interface Item {
+  key: string;
+  t: FactRef;
+  f: FieldDef;
+  cell: Cell;
+  q: string;
+  hint?: string;
 }
 
 function SeatCard({
   s,
+  total,
   left,
   asks,
   coAsks,
@@ -219,9 +326,10 @@ function SeatCard({
   onGone,
 }: {
   s: SeatInfo;
-  /** Facts still to fill on this seat. */
+  /** Everything this seat can hold, and how much of it is still empty. */
+  total: number;
   left: number;
-  /** Facts that were missing when the page opened: they keep their row after they are filled. */
+  /** What was missing when the page opened. */
   asks: string[];
   coAsks: string[];
   saved: Record<string, Saved>;
@@ -238,45 +346,105 @@ function SeatCard({
   const { i, e } = s;
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState<string[]>([]);
+  // Phones keep the list of other questions folded until asked for: it is six rows of chips there.
+  const [listed, setListed] = useState(false);
+  const showList = listed || ui.layout !== "phone";
+  const qRef = useRef<HTMLDivElement>(null);
   const fn = shown(e.cells.function);
   const role = shown(e.cells.role);
-  const et = (field: string): FactRef => ({ entity: "engagement", id: e.id, field });
-  const ct = (field: string): FactRef => ({ entity: "company", id: i.c.id, field });
-  // Facts that were already on file when the page opened, as compact values (function and role are in the header).
-  const known = SEAT_ASK.filter((f) => !asks.includes(f) && f !== "function" && f !== "role")
-    .map((f) => {
+  const name = i.c.hidden ? "Hidden company" : i.c.name;
+  const benchOf = (f: string) => (f === "rate" ? saved[cellKey(e.id, f)]?.bench ?? bench : undefined);
+
+  // The questions for this seat, in order: the seat first, then how the company sells.
+  const coQ = companyQ(name);
+  const ask = (entity: "engagement" | "company", id: string, field: string, cell: Cell | undefined, qs: Record<string, { q: string; hint?: string }>): Item[] => {
+    const f = fieldDef(entity, field);
+    return f && cell ? [{ key: `${entity[0]}.${field}`, t: { entity, id, field }, f, cell, q: qs[field]?.q ?? f.label, hint: qs[field]?.hint }] : [];
+  };
+  const items = [...asks.flatMap((f) => ask("engagement", e.id, f, e.cells[f], SEAT_Q)), ...coAsks.flatMap((f) => ask("company", i.c.id, f, i.c.cells[f], coQ))];
+  const todo = items.filter((x) => x.cell.s === "empty" && !(x.t.entity === "engagement" && benchOf(x.t.field)));
+  const queue = [...todo.filter((x) => !skipped.includes(x.key)), ...todo.filter((x) => skipped.includes(x.key))];
+  const active = queue.find((x) => x.key === picked) ?? queue[0] ?? null;
+  const later = queue.filter((x) => x !== active);
+
+  // After an answer, a keyboard lands on the next question (the control it used is gone). Touch screens stay put, so no keyboard pops up.
+  const activeKey = active?.key ?? null;
+  const lastKey = useRef(activeKey);
+  useEffect(() => {
+    if (lastKey.current === activeKey) return;
+    const had = lastKey.current;
+    lastKey.current = activeKey;
+    if (!had || !qRef.current || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    if (document.activeElement && document.activeElement !== document.body && !qRef.current.closest(".ys-seat")?.contains(document.activeElement)) return;
+    qRef.current.querySelector<HTMLElement>("input:not([type=radio]), select, button.ys-chip")?.focus({ preventScroll: true });
+  }, [activeKey]);
+
+  // What is on file, as compact values. Function and title are in the header unless they were just added.
+  const just = (id: string, f: string): Saved | undefined => saved[cellKey(id, f)];
+  const known: Known[] = [
+    ...SEAT_ASK.filter((f) => (f !== "function" && f !== "role") || just(e.id, f)).flatMap((f): Known[] => {
       const c = e.cells[f];
       const def = fieldDef("engagement", f)!;
+      const b = c?.s === "empty" ? benchOf(f) : undefined;
       // Hours read as a bare number here: the label already says per week.
-      const v = c?.s === "value" ? (f === "hours" ? c.v : fmtValue("engagement", f, c.v)) : c?.s === "reported" ? "Under review" : f === "rate" && bench ? bench : null;
-      return v ? { f, v, label: f === "hours" ? def.label : def.short ?? def.label, note: c?.s === "empty" ? "benchmarks only" : null } : null;
-    })
-    .filter((x): x is { f: string; v: string; label: string; note: string | null } => !!x);
+      const v = c?.s === "value" ? (f === "hours" ? c.v : fmtValue("engagement", f, c.v)) : c?.s === "reported" ? "Under review" : b ?? null;
+      return v ? [{ k: `e.${f}`, v, label: f === "hours" ? def.label : def.short ?? def.label, note: b ? "private" : null, s: just(e.id, f) }] : [];
+    }),
+    ...coAsks.flatMap((f): Known[] => {
+      const c = i.c.cells[f];
+      const def = fieldDef("company", f)!;
+      const v = c?.s === "value" ? fmtValue("company", f, c.v) : c?.s === "reported" ? "Under review" : null;
+      return v ? [{ k: `c.${f}`, v, label: def.short ?? def.label, note: null, s: just(i.c.id, f) }] : [];
+    }),
+  ];
+
   const remove = async () => {
     setBusy(true);
     const r = await ui.act({ type: "notMine", engagementId: e.id });
     setBusy(false);
     if (r.ok) onGone(e.id);
   };
-  const name = i.c.hidden ? "Hidden company" : i.c.name;
+  const skip = () => {
+    if (!active) return;
+    setSkipped((x) => [...x.filter((k) => k !== active.key), active.key]);
+    setPicked(null);
+  };
+  const earns = earnRoom(ui.me) > 0;
+  const filled = total - left;
   return (
     <article className={`ys-seat${focus ? " focus" : ""}${open ? "" : " folded"}`} id={`ys-${e.id}`} aria-label={`Your seat at ${name}`}>
-      <header className="ys-seat-head">
+      <header
+        className={`ys-seat-head${onToggle ? " can-fold" : ""}`}
+        onClick={(ev) => {
+          // The whole header folds the card. The chevron does the same for a keyboard.
+          if (onToggle && !(ev.target as HTMLElement).closest("button")) onToggle();
+        }}
+      >
         <button type="button" className="ys-co" onClick={() => ui.openCompany(i.c.id, e.id)} title="Open the company record">
           <CompanyLogo name={i.c.name} domain={i.c.iconDomain ?? i.domain} hidden={i.c.hidden} />
           <span className="ys-co-name">{name}</span>
         </button>
         <span className="ys-seat-what">
           {fn && <span className="chip tp-fn">{fn}</span>}
-          {role && <span className="ys-role">{role}</span>}
+          {role && (
+            <span className="ys-role" title={role}>
+              {role}
+            </span>
+          )}
         </span>
         {left > 0 ? (
-          <span className="ys-left">
-            <span className="mono">{left}</span> to fill
+          <span className="ys-count num">
+            <b>{filled}</b> of {total}
+            <span className="sr-only"> filled in</span>
           </span>
         ) : (
           <span className="ys-complete">
-            <IconCheck size={12} /> Complete
+            <span className="ys-check" aria-hidden>
+              <IconCheck size={11} />
+            </span>
+            Complete
           </span>
         )}
         {onToggle && (
@@ -289,36 +457,74 @@ function SeatCard({
         <>
           {known.length > 0 && (
             <dl className="ys-known">
-              {known.map(({ f, v, label, note }) => (
-                <div key={f} className="ys-kv">
+              {known.map(({ k, v, label, note, s: sv }) => (
+                <div key={k} className={`ys-kv${sv ? " new" : ""}`}>
                   <dt>{label}</dt>
                   <dd>
-                    <span className={isMonoField(et(f)) ? "mono" : undefined}>{v}</span>
+                    <span>{v}</span>
                     {note && <span className="ys-kv-note"> {note}</span>}
+                    {sv && (
+                      <span className="ys-kv-new">
+                        <span className="ys-check" role="img" aria-label="Saved">
+                          <IconCheck size={10} />
+                        </span>
+                        {sv.earned && <span className="ys-plus num">+1</span>}
+                      </span>
+                    )}
                   </dd>
                 </div>
               ))}
             </dl>
           )}
-          {asks.length > 0 && (
-            <div className="ys-asks">
-              {asks.map((f) => (
-                <Ask key={f} t={et(f)} cell={e.cells[f]} saved={saved[cellKey(e.id, f)]} bench={f === "rate" ? bench : undefined} pricing={shown(e.cells.pricing)} onSaved={onSaved} />
-              ))}
+          {active ? (
+            <div className="ys-q" key={active.key} ref={qRef} data-ask={cellKey(active.t.id, active.t.field)}>
+              <div className="ys-q-top">
+                <h3 className="ys-q-h">{active.q}</h3>
+                <span className={`ys-q-earn num${earns ? "" : " none"}`}>{earns ? "+1 credit" : "No credit today"}</span>
+              </div>
+              {active.hint && <p className="ys-q-hint">{active.hint}</p>}
+              <div className="ys-q-c">
+                {active.t.field === "rate" && active.t.entity === "engagement" ? (
+                  <RateAsk t={active.t} pricing={shown(e.cells.pricing)} onSaved={onSaved} />
+                ) : active.f.kind === "choice" ? (
+                  <ChoiceAsk t={active.t} f={active.f} onSaved={onSaved} />
+                ) : active.f.kind === "month" || active.f.kind === "monthOrOngoing" ? (
+                  <MonthAsk t={active.t} f={active.f} onSaved={onSaved} />
+                ) : (
+                  <TextAsk t={active.t} f={active.f} onSaved={onSaved} />
+                )}
+              </div>
+              {later.length > 0 && (
+                <div className="ys-later">
+                  <button type="button" className="ys-skip" onClick={skip}>
+                    Skip
+                  </button>
+                  {showList ? (
+                    <>
+                      <span className="ys-later-l">or answer another first</span>
+                      <div className="ys-later-list">
+                        {later.map((x) => (
+                          <button key={x.key} type="button" className="add ys-later-b" onClick={() => setPicked(x.key)}>
+                            {x.f.short ?? x.f.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <button type="button" className="ys-more" aria-expanded={false} onClick={() => setListed(true)}>
+                      or pick from {later.length} more <IconChevron size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-          {coAsks.length > 0 && (
-            <div className="ys-asks ys-asks-co">
-              <h3 className="ys-sub">How {name} sells</h3>
-              {coAsks.map((f) => (
-                <Ask key={f} t={ct(f)} cell={i.c.cells[f]} saved={saved[cellKey(i.c.id, f)]} onSaved={onSaved} />
-              ))}
-            </div>
+          ) : (
+            <p className="ys-allin">That is everything for this seat. Thank you.</p>
           )}
           <footer className="ys-seat-foot">
             {confirm ? (
               <>
-                <span>Take this seat off your list?</span>
+                <span>Take this seat off your list? We matched it by name, so it may be someone else&apos;s.</span>
                 <button type="button" className="btn btn-sm" disabled={busy} onClick={remove}>
                   {busy ? "Removing" : "Remove this seat"}
                 </button>
@@ -338,16 +544,13 @@ function SeatCard({
   );
 }
 
-/** Cards fold once a member has more seats than this. */
-const FOLD_OVER = 3;
-
 export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: string | null; onBack: () => void }) {
   const ui = useUi();
   const me = ui.me;
   const [gone, setGone] = useState<Set<string>>(() => new Set());
   const [saved, setSaved] = useState<Record<string, Saved>>({});
   // What was missing on each seat when it first showed, and the order the seats showed in. Both
-  // stay put for the visit, so a saved fact keeps its row and nothing reorders under the member.
+  // stay put for the visit, so nothing reorders under the member.
   const frozen = useRef(new Map<string, { asks: string[]; co: string[] }>());
   const order = useRef<string[]>([]);
   for (const s of seats) {
@@ -357,12 +560,12 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
   }
   const byId = useMemo(() => new Map(seats.map((s) => [s.e.id, s])), [seats]);
   const list = order.current.map((id) => byId.get(id)).filter((s): s is SeatInfo => !!s && !gone.has(s.e.id));
+  // One seat is open to start, so one question is on screen: the seat the member came for, else the first with something missing.
   const [open, setOpen] = useState<Set<string>>(() => {
-    if (seats.length <= FOLD_OVER) return new Set(seats.map((s) => s.e.id));
-    const first = seats.filter((s) => s.missing.length + s.coMissing.length > 0).slice(0, FOLD_OVER);
-    return new Set([...first.map((s) => s.e.id), ...(focus ? [focus] : [])]);
+    const first = seats.find((s) => s.missing.length + s.coMissing.length > 0) ?? seats[0];
+    return new Set(focus ? [focus] : first ? [first.e.id] : []);
   });
-  const folding = list.length > FOLD_OVER;
+  const folding = list.length > 1;
 
   useEffect(() => {
     if (!focus) return;
@@ -370,6 +573,14 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
     const t = setTimeout(() => document.getElementById(`ys-${focus}`)?.scrollIntoView({ block: "start" }), 30);
     return () => clearTimeout(t);
   }, [focus]);
+  // A seat added during the visit ("Add a seat you held") arrives open.
+  const seen = useRef(new Set(seats.map((s) => s.e.id)));
+  useEffect(() => {
+    const fresh = seats.filter((s) => !seen.current.has(s.e.id)).map((s) => s.e.id);
+    if (!fresh.length) return;
+    for (const id of fresh) seen.current.add(id);
+    setOpen((o) => new Set([...o, ...fresh]));
+  }, [seats]);
 
   const benchBySeat = useMemo(() => {
     const m = new Map<string, string>();
@@ -380,13 +591,27 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
   const onSaved: OnSaved = (t, s) => setSaved((o) => ({ ...o, [cellKey(t.id, t.field)]: s }));
   // A rate shared for the benchmarks only is done as soon as it saves (the member's list of them arrives with the next sync).
   const leftOf = (s: SeatInfo) => s.missing.filter((f) => !saved[cellKey(s.e.id, f)]?.bench).length + s.coMissing.length;
+  // Everything a seat can hold: its own facts, and how the company sells (asked once per company, on the first seat there).
+  const totalOf = (s: SeatInfo) => {
+    const firstThere = seats.find((x) => x.i.c.id === s.i.c.id) === s;
+    const co = firstThere && !s.i.c.hidden ? COMPANY_GTM.filter((f) => s.i.c.cells[f]).length : 0;
+    return SEAT_ASK.filter((f) => s.e.cells[f]).length + co;
+  };
   const left = list.reduce((n, s) => n + leftOf(s), 0);
-  const total = list.reduce((n, s) => {
-    const fz = frozen.current.get(s.e.id);
-    return n + (fz ? fz.asks.length + fz.co.length : 0);
-  }, 0);
+  const total = list.reduce((n, s) => n + totalOf(s), 0);
+  const filled = Math.max(0, total - left);
   const room = earnRoom(me);
   const addSeat = () => ui.openAdd({ mine: true });
+
+  // When an answer finishes the seat being worked on, the next seat with something missing opens.
+  const openTodo = list.some((s) => (!folding || open.has(s.e.id)) && leftOf(s) > 0);
+  const nextTodo = list.find((s) => leftOf(s) > 0)?.e.id ?? null;
+  const lastLeft = useRef(left);
+  useEffect(() => {
+    const answered = left < lastLeft.current;
+    lastLeft.current = left;
+    if (answered && !openTodo && nextTodo) setOpen((o) => new Set(o).add(nextTodo));
+  }, [left, openTodo, nextTodo]);
 
   return (
     <div className="tp-page ys-page">
@@ -396,7 +621,8 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
       <h1 className="tp-page-h">Your seats</h1>
       {list.length === 0 ? (
         <div className="ys-empty">
-          <p>No seat on file is matched to your name yet.</p>
+          <h2 className="ys-empty-h">We don&apos;t have a seat under your name yet</h2>
+          <p>Add one you held and it shows up here. Each thing you fill in on it earns 1 credit.</p>
           <button type="button" className="btn btn-primary" onClick={addSeat}>
             <IconPlus size={14} /> Add a seat you held
           </button>
@@ -404,35 +630,36 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
       ) : (
         <>
           <p className="ys-lead">
-            We matched {plural(list.length, "seat")} to you by name. Each missing fact you add earns 1 credit.
+            We have {plural(list.length, "seat")} under your name. Each answer earns 1 credit and goes on the seat for other members. Your rate is the one thing you can keep private.
           </p>
           <div className="ys-progress">
             <div className="ys-progress-box" role="status">
               <span className="ys-progress-n">
                 {left > 0 ? (
                   <>
-                    <strong className="mono">{left}</strong> {left === 1 ? "fact" : "facts"} missing
+                    <strong className="num">
+                      {filled} of {total}
+                    </strong>{" "}
+                    filled in
                   </>
                 ) : (
                   <>
                     <span className="ys-check" aria-hidden>
                       <IconCheck size={11} />
                     </span>{" "}
-                    Every fact on your seats is filled in
+                    All {total} filled in. Thank you.
                   </>
                 )}
               </span>
-              <span className={`ys-progress-r${room ? "" : " capped"}`}>
-                {room ? (
-                  <>
-                    You can still earn <span className="mono">{room}</span> today
-                  </>
-                ) : (
-                  `You earned today's ${me.earnCap}. Facts still save. Earning reopens ${fmtTime(me.earnResetsAt)}.`
-                )}
+              <span className="ys-progress-r">
+                {left === 0
+                  ? ""
+                  : room
+                    ? `You can earn ${Math.min(room, left)} more ${Math.min(room, left) === 1 ? "credit" : "credits"} today`
+                    : `You've earned today's ${me.earnCap} credits. Answers still save, and you can earn again at ${fmtTime(me.earnResetsAt)}.`}
               </span>
               <span className="ys-bar" aria-hidden>
-                <span style={{ width: `${total ? Math.round(((total - left) / total) * 100) : 100}%` }} />
+                <span style={{ width: `${total ? Math.round((filled / total) * 100) : 100}%` }} />
               </span>
             </div>
           </div>
@@ -442,6 +669,7 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
               <SeatCard
                 key={s.e.id}
                 s={s}
+                total={totalOf(s)}
                 left={leftOf(s)}
                 asks={fz.asks}
                 coAsks={fz.co}
@@ -465,7 +693,7 @@ export function Seats({ seats, focus, onBack }: { seats: SeatInfo[]; focus: stri
             );
           })}
           <button type="button" className="btn ys-addseat" onClick={addSeat}>
-            <IconPlus size={14} /> Add a seat we don&apos;t have
+            <IconPlus size={14} /> Add a seat that isn&apos;t here
           </button>
         </>
       )}

@@ -31,19 +31,19 @@ export function Checklist({
   // A member with seats on file gives there first: it is what they know best.
   const give =
     seats && onSeats
-      ? { done: me.added > 0, label: "Fill in your seats", hint: `+${plural(seats, "credit")}`, go: onSeats, open: true, more: true }
-      : { done: me.added > 0, label: "Add a fact", hint: "+1 credit", go: onAdd, open: false, more: false };
+      ? { done: me.added > 0, label: "Fill in your seats", hint: seats === 1 ? "earns 1 credit" : `earns up to ${seats} credits`, go: onSeats, open: true, more: true }
+      : { done: me.added > 0, label: "Add a fact", hint: "earns 1 credit", go: onAdd, open: false, more: false };
   const steps = [
-    { done: me.unlocked > 0, label: "Unlock a fact", hint: "1 credit", go: onUnlock, open: false, more: false },
+    { done: me.unlocked > 0, label: "Unlock a fact", hint: "costs 1 credit", go: onUnlock, open: false, more: false },
     give,
     // Done once an invitee's first fact paid the bonus, not when they merely joined.
-    { done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `+${REFERRAL_BONUS} each`, go: onInvite, open: true, more: false },
+    { done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `${REFERRAL_BONUS} credits each`, go: onInvite, open: true, more: false },
   ];
   const n = steps.filter((s) => s.done).length;
   const next = steps.findIndex((s) => !s.done);
   // Dismissable at any time; the X sits at the end of the row (top right on phones).
   const close = (
-    <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm tp-check-x" aria-label="Hide checklist" onClick={onDismiss}>
+    <button type="button" className="tp-iconbtn tp-iconbtn-dark tp-iconbtn-sm tp-check-x" aria-label="Hide Get started" title="Hide Get started" onClick={onDismiss}>
       <IconX size={14} />
     </button>
   );
@@ -51,8 +51,8 @@ export function Checklist({
     <section className={`tp-check-card${vertical ? " vertical" : ""}`} aria-label="Get started">
       <div className="tp-check-head">
         <span className="tp-check-title">Get started</span>
-        <span className="mono tp-check-n">
-          {n} of {steps.length}
+        <span className="tp-check-n num">
+          {n} of {steps.length} done
         </span>
         {vertical && close}
       </div>
@@ -61,10 +61,10 @@ export function Checklist({
           <li key={k}>
             <button type="button" className={`tp-step${s.done ? " done" : ""}${s.done && s.more ? " ys-more" : ""}${k === next ? " next" : ""}`} onClick={s.go} disabled={s.done && !s.open}>
               <span className="tp-step-dot" aria-hidden>
-                {s.done ? <IconCheck size={11} /> : <span className="mono">{k + 1}</span>}
+                {s.done ? <IconCheck size={11} /> : <span className="num">{k + 1}</span>}
               </span>
               <span className="tp-step-l">{s.label}</span>
-              <span className="tp-step-h mono">{s.hint}</span>
+              <span className="tp-step-h num">{s.hint}</span>
             </button>
           </li>
         ))}
@@ -88,7 +88,11 @@ export function Strip({ children, onClose, tone = "plain", actions }: { children
   );
 }
 
-/** `quiet` when the next-move card is on the page: it carries the ember, so this strip goes plain. */
+/**
+ * The credit banner. Out of credits and running low are the one thing that needs the member
+ * now, so the strip is outlined in ember. `quiet` when the next-move card is on the page: the
+ * card carries the ember, so this strip goes plain. The daily limit is news, never ember.
+ */
 export function CreditBanner({ me, onShowAdd, onInvite, quiet }: { me: Me; onShowAdd: () => void; onInvite: () => void; quiet?: boolean }) {
   const capped = !!me.earnResetsAt || me.earned24h >= me.earnCap;
   const tone = quiet ? "plain" : "ember";
@@ -107,7 +111,9 @@ export function CreditBanner({ me, onShowAdd, onInvite, quiet }: { me: Me; onSho
           </>
         }
       >
-        You are out of credits. Add a fact to earn one back.
+        {capped
+          ? `You're out of credits, and you've earned today's ${me.earnCap}. You can earn again at ${fmtTime(me.earnResetsAt)}.`
+          : "You're out of credits. Add a fact that's missing and you earn one back."}
       </Strip>
     );
   // Running low (and still able to earn): say so before it is a dead end.
@@ -121,13 +127,13 @@ export function CreditBanner({ me, onShowAdd, onInvite, quiet }: { me: Me; onSho
           </button>
         }
       >
-        {plural(me.credits, "credit")} left. Add a fact to earn more.
+        You have {plural(me.credits, "credit")} left. Each fact you add earns another.
       </Strip>
     );
   if (capped)
     return (
-      <Strip tone={tone}>
-        You earned today&apos;s {me.earnCap}. Earning reopens at {fmtTime(me.earnResetsAt)}. Facts you add now still earn a bonus, held until your room opens, when others confirm them.
+      <Strip tone="plain">
+        You&apos;ve earned today&apos;s {me.earnCap} credits. You can earn again at {fmtTime(me.earnResetsAt)}. What you add before then still saves, and any bonus is held and paid when you have room.
       </Strip>
     );
   return null;
@@ -154,7 +160,7 @@ export function NoResults({
     return (
       <div className="tp-noresults">
         <h3>No match for {q}</h3>
-        <p className="muted">Add it and earn a credit for each fact.</p>
+        <p className="muted">If you know the company, add it. You earn a credit for each thing you fill in.</p>
         <div className="tp-noresults-acts">
           <button type="button" className="btn btn-primary" onClick={onAdd}>
             <IconPlus size={14} /> Add {q.length > 24 ? "it" : q}
@@ -171,7 +177,7 @@ export function NoResults({
     return (
       <div className="tp-noresults">
         <h3>Nothing matches these filters</h3>
-        <p className="muted">Clear a filter, or add a company you know and earn a credit for each fact.</p>
+        <p className="muted">Clear a filter to see more, or add a company you know.</p>
         <div className="tp-noresults-acts">
           <button type="button" className="btn" onClick={onClear}>
             Clear filters
@@ -182,13 +188,13 @@ export function NoResults({
         </div>
       </div>
     );
-  // An empty view with no filter set: say how it fills up, not that a filter is in the way.
+  // An empty view with no filter set: say how it fills up.
   const copy =
     tab === "following"
-      ? { h: "You are not following any companies yet", p: "Open a company and click Follow to see its new facts here." }
+      ? { h: "You're not following any companies yet", p: "Open a company and choose Follow. New roles, rates and people there will show up here." }
       : tab === "unlocked"
-        ? { h: "Nothing unlocked yet", p: "Facts you unlock stay visible to you and collect here." }
-        : { h: `No ${noun} in this view yet`, p: "Browse all companies, or add one you know and earn a credit for each fact." };
+        ? { h: "You haven't unlocked anything yet", p: "Whatever you unlock stays open for you, and it is listed here." }
+        : { h: `No ${noun} in this view yet`, p: "Browse all companies, or add one you know. You earn a credit for each thing you fill in." };
   return (
     <div className="tp-noresults">
       <h3>{copy.h}</h3>
@@ -202,4 +208,4 @@ export function NoResults({
   );
 }
 
-export const sinceText = (n: number) => `${plural(n, "company", "companies")} you follow ${n === 1 ? "has" : "have"} new facts since your last visit.`;
+export const sinceText = (n: number) => `${plural(n, "company", "companies")} you follow ${n === 1 ? "has" : "have"} something new since your last visit.`;

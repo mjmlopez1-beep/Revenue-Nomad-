@@ -1124,9 +1124,9 @@
   flex: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 3px 4px 3px 12px;
+  gap: 12px;
+  min-height: 48px;
+  padding: 4px 4px 4px 16px;
   border-radius: var(--r-card);
   border: 1px solid var(--line);
   background: var(--surface);
@@ -1134,17 +1134,19 @@
 }
 .tp-check-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   flex: none;
 }
 .tp-check-title {
-  font-weight: 800;
-  font-size: 13.5px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--ink);
 }
 .tp-check-n {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 20px;
   color: var(--muted);
 }
 .tp-steps {
@@ -1152,22 +1154,25 @@
   margin: 0;
   padding: 0;
   display: flex;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 .tp-step {
   display: flex;
   align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 9px;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-btn);
   background: none;
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 20px;
   font-weight: 600;
+  color: var(--body-ink);
   text-align: left;
   white-space: nowrap;
+  transition: background 0.12s;
 }
 .tp-step:hover:not(:disabled) {
   background: var(--surface-2);
@@ -1179,11 +1184,13 @@
   flex: none;
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   border: 1.5px solid var(--line-strong);
-  font-size: 10.5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
   color: var(--muted);
 }
 .tp-step.next {
@@ -1200,6 +1207,7 @@
 }
 .tp-step.next .tp-step-l {
   color: var(--pine);
+  font-weight: 700;
 }
 .tp-step.done .tp-step-dot {
   background: var(--volt);
@@ -1212,44 +1220,47 @@
   text-decoration-color: var(--line-strong);
 }
 .tp-step-h {
-  font-size: 11.5px;
-  color: var(--faint);
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--muted);
 }
 .tp-step.next .tp-step-h {
   color: var(--pine);
-  opacity: 0.7;
 }
 .tp-check-card.vertical {
   display: block;
-  padding: 10px 0 10px 12px;
+  padding: 12px 0 12px 16px;
 }
 .tp-check-card.vertical .tp-check-head {
+  align-items: center;
   margin-bottom: 8px;
-  padding-right: 12px;
+  padding-right: 8px;
 }
 .tp-check-card.vertical .tp-check-title {
+  font-size: 15px;
+}
+.tp-check-card.vertical .tp-check-n {
   flex: 1;
 }
 .tp-check-card.vertical .tp-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: visible;
-  gap: 6px;
-  padding-right: 12px;
+  gap: 8px;
+  padding-right: 16px;
 }
 .tp-check-card.vertical .tp-step {
   width: 100%;
   white-space: normal;
   height: auto;
   min-height: 44px;
-  padding: 6px 8px;
+  padding: 8px;
   border: 1px solid var(--line);
-  line-height: 1.2;
+  line-height: 18px;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 6px;
   overflow-wrap: anywhere;
 }
 .tp-check-card.vertical .tp-step.next {
@@ -2376,7 +2387,7 @@
   background: rgba(10, 26, 19, 0.32);
 }
 .tp-modal {
-  width: 560px;
+  width: 600px;
   max-width: 100%;
   max-height: calc(100vh - 8vh - 16px);
   max-height: calc(100dvh - 8vh - 16px);
@@ -2385,7 +2396,7 @@
   background: var(--surface);
   border-radius: 12px;
   box-shadow: var(--overlay-shadow);
-  animation: tp-fade 0.14s ease-out;
+  animation: tp-fade 0.15s ease-out;
 }
 .tp-modal-body,
 .tp-sheet-body {
@@ -2394,12 +2405,16 @@
 .tp-modal .tp-modal-actions,
 .tp-sheet .tp-modal-actions {
   position: sticky;
-  bottom: -20px;
+  bottom: -24px;
   z-index: 2;
   margin: 0 -2px;
-  padding: 12px 2px 16px;
+  padding: 12px 2px 20px;
   background: var(--surface);
   border-top: 1px solid var(--line);
+}
+.tp-sheet .tp-modal-actions {
+  bottom: -20px;
+  padding-bottom: 16px;
 }
 .tp-newco .tp-modal-actions {
   border-top: 0;
@@ -2411,26 +2426,26 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 12px 14px 20px;
+  padding: 14px 12px 14px 24px;
   border-bottom: 1px solid var(--line);
 }
 .tp-modal-title {
-  font-size: 17px;
-  flex: none;
-}
-.tp-modal-head .tp-small {
   flex: 1;
+  font-size: 19px;
+  line-height: 26px;
+  letter-spacing: -0.015em;
 }
 .tp-modal-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 16px 20px 20px;
+  padding: 20px 24px 24px;
   overscroll-behavior: contain;
 }
 .tp-find {
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 }
 .tp-find-input {
   display: flex;
@@ -2453,6 +2468,32 @@
 .tp-find-hint {
   margin-top: -2px;
 }
+/* Helper copy in the add flow: a full sentence at reading size, never a caption. */
+.am-note {
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--body-ink);
+}
+.am-hint {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.am-hint-up {
+  margin-top: -6px;
+}
+.am-h3 {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+.tp-find .tp-sublabel {
+  margin: 4px 0 -4px;
+  font-size: 12.5px;
+  line-height: 18px;
+}
 .tp-matches {
   display: grid;
   border: 1px solid var(--line);
@@ -2462,20 +2503,24 @@
 .tp-match {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  padding: 8px 12px;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 14px 8px 12px;
   border: 0;
   border-top: 1px solid var(--line);
   background: var(--surface);
   text-align: left;
   width: 100%;
+  transition: background 0.12s;
 }
 .tp-match:first-child {
   border-top: 0;
 }
 .tp-match:hover {
   background: var(--surface-2);
+}
+.tp-match:focus-visible {
+  outline-offset: -2px;
 }
 .tp-match-new {
   border: 1px dashed var(--line-strong);
@@ -2492,7 +2537,6 @@
   border-radius: 7px;
   background: var(--volt-soft);
   color: var(--volt-ink);
-  font-weight: 800;
   flex: none;
 }
 .tp-match-t {
@@ -2501,6 +2545,8 @@
   flex: 1;
 }
 .tp-match-n {
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 700;
   color: var(--ink);
   overflow: hidden;
@@ -2508,6 +2554,7 @@
   white-space: nowrap;
 }
 .tp-match-miss {
+  flex: none;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -2515,30 +2562,52 @@
   display: grid;
   gap: 8px;
 }
+/* The company is already on file: say so, and offer the two things to do about it. */
 .tp-exists {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px 12px;
-  padding: 12px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-card);
 }
 .tp-exists-t {
   min-width: 0;
 }
+.am-exists-p {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-btn);
+  background: var(--volt-soft);
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--pine);
+}
+.am-exists-p svg {
+  flex: none;
+  margin-top: 3px;
+}
 .tp-exists-acts {
   grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
 }
 .tp-newco {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-card);
+}
+.am-newco-h {
+  display: grid;
+  gap: 2px;
 }
 .tp-newco-head {
   display: flex;
@@ -2547,7 +2616,7 @@
 }
 .tp-newco-names {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
@@ -2562,25 +2631,35 @@
   display: grid;
   gap: 6px;
   min-width: 0;
+  align-content: start;
 }
 .tp-form-2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 .tp-modal-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   flex-wrap: wrap;
   padding-top: 4px;
 }
-.tp-modal-actions .btn .mono {
-  font-weight: 500;
+/* What the form will earn, beside its button. */
+.am-earn {
+  flex: 1 1 200px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.am-earn b {
+  font-weight: 700;
+  color: var(--volt-ink);
 }
 .tp-picked {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 .tp-picked-head {
   display: flex;
@@ -2591,21 +2670,130 @@
   flex: 1;
   min-width: 0;
 }
+.am-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.am-sub > * + *::before {
+  content: "·";
+  margin: 0 6px;
+  color: var(--faint);
+}
+.am-change {
+  flex: none;
+  min-height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+/* A seat is asked about in three short groups, so the form reads top to bottom. */
+.tp-engform {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.am-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.am-note + .am-group {
+  padding-top: 0;
+  border-top: 0;
+}
+.tp-engform .tp-month {
+  flex-wrap: wrap;
+}
+.tp-engform .tp-month .my {
+  flex: 1 1 170px;
+}
+.tp-engform .tp-form-2 .my {
+  display: flex;
+}
+/* After adding: what was saved and earned, then what to do next. */
+.tp-done-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
 .tp-done {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: var(--r-btn);
   background: var(--volt-soft);
   color: var(--pine);
-  font-weight: 600;
-  font-size: 13.5px;
 }
-/* After adding: the result and the next steps replace the form. */
-.tp-done-panel {
+.am-done-check {
+  flex: none;
   display: grid;
-  gap: 12px;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--volt);
+  color: var(--pine);
+}
+.am-done-t {
+  display: grid;
+  gap: 2px;
+  font-size: 13.5px;
+  line-height: 20px;
+}
+.am-done-t b {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tp-done-panel .am-h3 {
+  margin-top: 4px;
+}
+.am-next {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.am-next-b {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-btn);
+  background: var(--surface);
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s;
+}
+.am-next-b b {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.am-next-b span {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.am-next-b:hover {
+  border-color: var(--pine);
+}
+.am-next-b.primary {
+  border-color: var(--volt);
+  background: var(--volt);
+}
+.am-next-b.primary b,
+.am-next-b.primary span {
+  color: var(--pine);
+}
+.am-next-b.primary:hover {
+  border-color: var(--volt-hover);
+  background: var(--volt-hover);
 }
 .tp-done-acts {
   display: flex;
@@ -2622,28 +2810,55 @@
 }
 .tp-seg-b {
   flex: 1;
-  height: 32px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border: 0;
   border-radius: 6px;
   background: none;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
+  transition: color 0.12s, background 0.12s;
+}
+.tp-seg-b:hover {
+  color: var(--ink);
 }
 .tp-seg-b.on {
   background: var(--surface);
   color: var(--ink);
+  font-weight: 700;
   box-shadow: 0 0 0 1px var(--line);
-}
-.tp-engform {
-  display: grid;
-  gap: 14px;
 }
 .tp-picked .tp-dsec {
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
+}
+/* The add flow in a phone sheet: 44px targets, one column. */
+.tp-sheet .tp-engform .tp-chipbtn,
+.tp-sheet .tp-newco .tp-chipbtn {
+  height: 44px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+.tp-sheet .tp-picked .tp-seg-b {
+  height: 44px;
+}
+.tp-sheet .tp-picked-head .am-change {
+  min-height: 44px;
+}
+.tp-sheet .tp-engform .tp-form-2,
+.tp-sheet .tp-newco .tp-form-2 {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tp-modal {
+    animation: none;
+  }
 }
 
 /* ---------- my credits page ---------- */
@@ -2656,61 +2871,139 @@
   align-items: center;
   gap: 4px;
   border: 0;
+  border-radius: 4px;
   background: none;
   padding: 6px 0;
   font-size: 13.5px;
-  font-weight: 700;
+  line-height: 20px;
+  font-weight: 600;
   color: var(--pine);
 }
+.tp-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .tp-page-h {
+  margin: 8px 0 16px;
   font-size: 28px;
-  margin: 8px 0 18px;
+  line-height: 34px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
 }
 .tp-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 .tp-stat {
-  padding: 16px;
+  min-width: 0;
+  padding: 16px 20px 18px;
   border-radius: var(--r-card);
   background: var(--surface);
   border: 1px solid var(--line);
 }
+/* Big numbers: the text face at 800 with figures that line up. */
 .tp-stat-n {
-  font-size: 30px;
-  line-height: 1.1;
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
 .tp-stat-n.ember {
-  color: var(--ember);
+  color: var(--ember-ink);
 }
 .tp-stat-of {
-  font-size: 16px;
-  color: var(--faint);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
 }
 .tp-stat-l {
+  margin: 4px 0 0;
   font-size: 13px;
-  color: var(--muted);
+  line-height: 20px;
   font-weight: 600;
-  margin: 4px 0 8px;
+  color: var(--muted);
 }
-.tp-rules {
+.cr-stat-sub {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
+}
+.cr-bar {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.cr-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--volt);
+}
+/* How credits work: the rule book, written once. */
+.cr-rulescard {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px 24px;
-  margin: 16px 0;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 0 32px;
+}
+.cr-rulescard .tp-card-h {
+  grid-column: 1 / -1;
+}
+.cr-rules {
+  margin: 4px 0 0;
+}
+.cr-rules > div {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 9px 0;
+  border-top: 1px solid var(--surface-2);
+  font-size: 14px;
+  line-height: 20px;
+}
+.cr-rules > div:first-child {
+  border-top: 0;
+}
+.cr-rules dt {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.cr-rules dt.plus {
+  color: var(--volt-ink);
+}
+.cr-rules dd {
+  margin: 0;
+  color: var(--body-ink);
+}
+.cr-limit {
+  align-self: start;
+  margin-top: 4px;
+  padding: 14px 16px 16px;
+  border-radius: var(--r-btn);
+  background: var(--surface-2);
   font-size: 13.5px;
+  line-height: 20px;
+  color: var(--body-ink);
 }
-/* Wrapped lines start under the text, not under the number. */
-.tp-rules p {
-  display: grid;
-  grid-template-columns: 4ch 1fr;
-  column-gap: 8px;
+.cr-limit-h {
+  margin-bottom: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
-.tp-rules .tp-plus,
-.tp-rules .tp-minus {
-  min-width: 34px;
+.cr-note {
+  font-size: 13.5px;
+  line-height: 20px;
+  color: var(--muted);
 }
 .tp-rsheet .tp-followbtn {
   min-height: 40px;
@@ -2733,11 +3026,12 @@
 }
 .tp-linkcards {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
+  margin-top: 12px;
 }
 .tp-card {
-  padding: 16px;
+  padding: 20px;
   border-radius: var(--r-card);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -2745,98 +3039,228 @@
 }
 .tp-linkcards .tp-card {
   margin-top: 0;
+  display: flex;
+  flex-direction: column;
 }
 .tp-card-h {
-  font-size: 15px;
-  margin-bottom: 4px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .tp-linkinput {
-  margin: 12px 0 10px;
+  margin: 12px 0;
   font-size: 13px;
   color: var(--body-ink);
   background: var(--surface-2);
+  text-overflow: ellipsis;
+}
+.tp-linkcard .cr-note {
+  flex: 1;
 }
 .tp-phone .tp-linkinput {
   min-height: 44px;
 }
 .tp-linkcard-acts {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+/* Admins: reported facts. */
+.cr-count {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+.cr-review .cr-note {
+  margin-bottom: 12px;
+  max-width: 640px;
 }
 .tp-review-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 12px 16px;
+  padding: 12px 0;
   border-top: 1px solid var(--line);
   font-size: 13.5px;
+  line-height: 20px;
+}
+.tp-review-row:last-child {
+  padding-bottom: 0;
+}
+.cr-review-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--body-ink);
+}
+.cr-review-h strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+.cr-review-state {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 13px;
 }
 .tp-review-acts {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .tp-review-v {
+  margin-top: 2px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 .tp-review-who {
   display: block;
   margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--muted);
 }
+/* History reads like a statement: a day, then each line with its amount and the balance after it. */
 .tp-ledger-scroll {
   overflow-x: auto;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 .tp-ltable {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
+  line-height: 20px;
 }
-.tp-ltable th {
+.tp-ltable thead th {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
   text-align: left;
   font-size: 12px;
-  color: var(--muted);
+  line-height: 16px;
   font-weight: 700;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--line);
+  color: var(--muted);
   white-space: nowrap;
 }
 .tp-ltable td {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--surface-2);
+  vertical-align: top;
+}
+.tp-ltable thead th:first-child,
+.tp-ltable td:first-child {
+  padding-left: 0;
+}
+.tp-ltable thead th:last-child,
+.tp-ltable td:last-child {
+  padding-right: 0;
+}
+.tp-ltable thead th.num,
+.tp-ltable .cr-amt,
+.tp-ltable .cr-bal {
+  text-align: right;
   white-space: nowrap;
 }
-.tp-ltable .num {
-  text-align: right;
+.cr-day th {
+  padding: 18px 0 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--ink);
 }
-/* Phones fold the Company column into the What cell ("Unlocked role at Common Ground"). */
-.tp-ledger-co {
+.tp-ltable tbody .cr-day:first-child th {
+  padding-top: 12px;
+}
+.cr-time {
+  width: 88px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.cr-what {
+  color: var(--ink);
+}
+.cr-what-note {
+  color: var(--muted);
+}
+.cr-what-time {
   display: none;
 }
-@media (max-width: 767px) {
-  .tp-ltable th:nth-child(4),
-  .tp-ltable td:nth-child(4) {
-    display: none;
+.cr-amt {
+  width: 76px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.cr-amt.up {
+  color: var(--volt-ink);
+}
+.cr-bal {
+  width: 76px;
+  color: var(--muted);
+}
+.cr-open td {
+  border-bottom: 0;
+  color: var(--muted);
+}
+.cr-open .cr-what {
+  color: var(--body-ink);
+}
+.tp-ledger > .cr-note {
+  margin-bottom: 4px;
+}
+@media (max-width: 899px) {
+  .cr-rulescard {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .tp-ledger-co {
-    display: inline;
-  }
-  .tp-ltable td:nth-child(3) {
-    white-space: normal;
+  .cr-limit {
+    margin-top: 12px;
   }
 }
-@media (max-width: 400px) {
-  /* The date may sit over the time, so What keeps its room and the table never scrolls sideways. */
-  .tp-ltable th,
-  .tp-ltable td {
-    padding: 8px 6px;
+@media (max-width: 767px) {
+  .tp-card {
+    padding: 16px;
   }
-  .tp-ltable td:first-child {
-    white-space: normal;
-    min-width: 62px;
+  .tp-stat {
+    padding: 14px 16px 16px;
+  }
+  .tp-stat-n {
+    font-size: 28px;
+    line-height: 32px;
+  }
+  /* Phones: the time moves under the line it belongs to, so the amount and balance keep their columns. */
+  .tp-ltable thead th:first-child,
+  .tp-ltable td.cr-time {
+    display: none;
+  }
+  .tp-ltable thead th:nth-child(2),
+  .tp-ltable td.cr-what {
+    padding-left: 0;
+  }
+  .cr-what-time {
+    display: block;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted);
+  }
+  .cr-amt,
+  .cr-bal {
+    width: 56px;
+  }
+  .tp-ltable td {
+    padding: 9px 6px;
+  }
+  .tp-review-acts .btn,
+  .tp-linkcard-acts .btn {
+    min-height: 44px;
   }
 }
 
@@ -3824,80 +4248,154 @@
 
 /* ---------- rate benchmarks ---------- */
 .tp-bm-lead {
-  color: var(--muted);
   max-width: 680px;
-  margin: 4px 0 18px;
-  line-height: 1.5;
+  margin: -4px 0 20px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--body-ink);
 }
 .tp-bm-tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 8px 12px;
+  margin-bottom: 12px;
 }
 .tp-bm {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-card);
   background: var(--surface);
   overflow: hidden;
 }
-.tp-bm-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 1.1fr) 1fr 1fr;
-  gap: 16px;
-  align-items: center;
-  padding: 12px 16px;
-  border-top: 1px solid var(--line);
+/* A table to scan: one row per function, numbers right-aligned in columns of tabular figures. */
+.bm-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13.5px;
+  line-height: 20px;
 }
-.tp-bm-head {
-  border-top: 0;
+.bm-c-med {
+  width: 112px;
+}
+.bm-c-range {
+  width: 136px;
+}
+.bm-c-n {
+  width: 88px;
+}
+.bm-table thead th {
+  padding: 4px 12px 8px;
   background: var(--surface-2);
+  text-align: right;
   font-size: 12px;
-  font-weight: 600;
+  line-height: 16px;
+  font-weight: 700;
   color: var(--muted);
+  white-space: nowrap;
 }
-.tp-bm-row.mine {
-  background: var(--volt-soft);
+.bm-table thead .bm-th-fn {
+  padding: 10px 12px 8px 16px;
+  text-align: left;
+  vertical-align: bottom;
 }
-.tp-bm-fn {
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.tp-bm-val {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.tp-bm-val b {
-  font-size: 18px;
+/* The two ways of charging sit over their three columns, each with a rule under it. */
+.bm-table thead .bm-groups th.bm-m,
+.bm-table thead .bm-groups th.bm-h {
+  padding: 10px 16px 0 36px;
+  text-align: left;
   color: var(--ink);
 }
-.tp-bm-unit {
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 500;
+.bm-span {
+  display: block;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-strong);
 }
-.tp-bm-need {
+.bm-table thead .bm-cols th:nth-child(3n + 1),
+.bm-table td.bm-med,
+.bm-table td.bm-need {
+  padding-left: 36px;
+}
+.bm-table thead .bm-cols th:nth-child(3n),
+.bm-table td.bm-n {
+  padding-right: 16px;
+}
+.bm-table tbody th,
+.bm-table td {
+  height: 52px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  vertical-align: middle;
+}
+.bm-table td {
+  text-align: right;
+  white-space: nowrap;
+}
+.bm-table tbody th.tp-bm-fn {
+  padding-left: 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+}
+.bm-fn-name {
+  margin-right: 8px;
+  font-size: 14px;
+}
+.bm-table tr.mine .tp-bm-fn {
+  box-shadow: inset 3px 0 0 var(--pine);
+}
+.bm-table tr.mine .bm-fn-name {
+  font-weight: 800;
+}
+.bm-chip {
+  height: 24px;
+  margin: 2px 6px 2px 0;
+  padding: 0 8px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.bm-chip-mine {
+  border-color: var(--pine);
+  color: var(--pine);
+}
+.bm-med {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.bm-range {
+  color: var(--body-ink);
+}
+.bm-n {
+  color: var(--muted);
+}
+.bm-n-of {
+  color: var(--faint);
+}
+/* Not enough rates yet: how far along the group is, and what it still needs. */
+.bm-need {
+  color: var(--muted);
+}
+.bm-need-in {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: 12.5px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .tp-bm-bar {
+  flex: none;
   display: block;
-  width: 120px;
-  max-width: 100%;
-  height: 6px;
-  border-radius: 999px;
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
   background: var(--surface-2);
   overflow: hidden;
 }
 .tp-bm-bar span {
   display: block;
   height: 100%;
+  border-radius: 2px;
   background: var(--volt);
 }
 .tp-bm-cta {
@@ -3905,25 +4403,107 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-top: 18px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: var(--pine-8);
+  gap: 12px 16px;
+  margin-top: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 21px;
 }
 .tp-bm-cta p {
+  flex: 1 1 320px;
   margin: 0;
-  max-width: 520px;
+  max-width: 560px;
 }
-@media (max-width: 640px) {
-  .tp-bm-row {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 12px;
+/* Narrow screens: each function is a block, monthly on the left and hourly on the right. */
+@media (max-width: 899px) {
+  .bm-table,
+  .bm-table tbody {
+    display: block;
   }
-  .tp-bm-head span:first-child {
+  .bm-table thead,
+  .bm-table colgroup {
     display: none;
   }
-  .tp-bm-fn {
+  .bm-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 16px;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--line);
+  }
+  .bm-table tbody tr:first-child {
+    border-top: 0;
+  }
+  .bm-table tbody th,
+  .bm-table td,
+  .bm-table td.bm-med,
+  .bm-table td.bm-need,
+  .bm-table td.bm-n {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+    text-align: left;
+  }
+  .bm-table tbody th.tp-bm-fn {
     grid-column: 1 / -1;
+    grid-row: 1;
+    padding: 0 0 8px;
+  }
+  .bm-table tr.mine {
+    box-shadow: inset 3px 0 0 var(--pine);
+  }
+  .bm-table tr.mine .tp-bm-fn {
+    box-shadow: none;
+  }
+  .bm-m {
+    grid-column: 1;
+  }
+  .bm-h {
+    grid-column: 2;
+  }
+  .bm-med {
+    grid-row: 2;
+    font-size: 20px;
+    line-height: 26px;
+  }
+  .bm-range {
+    grid-row: 3;
+  }
+  .bm-n {
+    grid-row: 4;
+  }
+  .bm-need {
+    grid-row: 2 / span 2;
+    white-space: normal;
+  }
+  .bm-med::before,
+  .bm-need::before {
+    content: attr(data-cap);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+  .bm-n::after {
+    content: " rates";
+  }
+  .bm-need-in {
+    flex-direction: column-reverse;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 3px 0 5px;
+    font-size: 14px;
+    color: var(--body-ink);
+  }
+  .bm-need-in .tp-bm-bar {
+    flex: none;
+    width: 88px;
   }
 }

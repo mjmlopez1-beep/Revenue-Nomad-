@@ -2,13 +2,15 @@
 
 /**
  * Pilot metrics, for admins. Everything comes from View.admin (AdminStats). Laid out to be
- * scanned: four headline numbers, then one compact card per question the pilot asks. Without
- * the admin block (not an admin) the page renders nothing.
+ * scanned: four headline numbers, then one compact card per question the pilot asks, each
+ * labeled the way a founder would ask it. Numbers are right-aligned with tabular figures.
+ * No ember here: it is a report. Without the admin block (not an admin) the page renders nothing.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AdminStats, View } from "@/lib/tableTypes";
 import { IconChevron } from "../ui/shared";
 import { useUi } from "./ui";
+import { Num } from "./Benchmarks";
 import "./pages.css";
 
 const n0 = (n: number) => n.toLocaleString("en-US");
@@ -17,17 +19,26 @@ const ratio = (adds: number, unlocks: number) => (unlocks > 0 ? (adds / unlocks)
 const pct = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : "–");
 const stamp = (iso: string | null, none: string) =>
   iso ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : none;
-/** Place names arrive as short keys ("zero_popover"); show them as words. */
+/** Where the Pro offer sits. Keys the app sends get a plain name; anything else shows as words. */
+const PLACES: Record<string, string> = {
+  zero_credits: "Out of credits, at a lock",
+  hidden_company: "A hidden company's record",
+  my_credits: "My credits",
+  hiring_tab: "The Hiring now tab",
+};
 const placeName = (k: string) => {
+  if (PLACES[k]) return PLACES[k];
   const s = k.replace(/[_-]+/g, " ").trim();
   return s ? s[0].toUpperCase() + s.slice(1) : "Unknown";
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function Tile({ value, label, sub, ember }: { value: ReactNode; label: string; sub?: string; ember?: boolean }) {
+function Tile({ value, label, sub }: { value: string; label: string; sub?: string }) {
   return (
     <div className="tp-stat">
-      <div className={`tp-stat-n mono${ember ? " ember" : ""}`}>{value}</div>
+      <div className="tp-stat-n">
+        <Num>{value}</Num>
+      </div>
       <div className="tp-stat-l">{label}</div>
       {sub && <div className="tp-pm-sub">{sub}</div>}
     </div>
@@ -53,8 +64,7 @@ function Rows({ items }: { items: [label: string, value: ReactNode][] }) {
       {items.map(([label, value]) => (
         <div key={label}>
           <dt>{label}</dt>
-          {/* Numbers and dates are set in mono; words ("Not yet", "Off") use the UI font. */}
-          <dd className={typeof value === "string" && /\d/.test(value) ? "mono" : undefined}>{value}</dd>
+          <dd>{typeof value === "string" ? <Num>{value}</Num> : value}</dd>
         </div>
       ))}
     </dl>
@@ -73,7 +83,9 @@ function Bars({ items, tone, unit, empty }: { items: { field: string; n: number 
           <span className="tp-pm-bar-track" aria-hidden>
             <span className={`tp-pm-bar ${tone}`} style={{ width: `${Math.max(2, (x.n / max) * 100)}%` }} />
           </span>
-          <span className="mono tp-pm-bar-n">{n0(x.n)}</span>
+          <span className="tp-pm-bar-n">
+            <Num>{n0(x.n)}</Num>
+          </span>
         </li>
       ))}
     </ol>
@@ -120,7 +132,7 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
   const s = a.scan;
   return (
     <Card
-      title="Open-role scan"
+      title="Weekly scan for open roles"
       span={6}
       action={
         <button type="button" className="btn btn-sm btn-pine" disabled={busy} onClick={() => void run()}>
@@ -131,36 +143,40 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
       <div className="tp-pm-scan">
         <Rows
           items={[
-            ["Last run", stamp(s.lastRunAt, "Not yet")],
-            ["Open now", n0(s.openNow)],
-            ["Opened in 7 days", n0(s.opened7)],
-            ["Closed in 30 days", n0(s.closed30)],
+            ["Last scan", stamp(s.lastRunAt, "Not yet")],
+            ["Open roles now", n0(s.openNow)],
+            ["Opened in the last 7 days", n0(s.opened7)],
+            ["Closed in the last 30 days", n0(s.closed30)],
           ]}
         />
         <div className="tp-pm-sources">
           {s.sources.length === 0 ? (
-            <p className="tp-small muted">{s.lastRunAt ? "The last scan read no job boards." : "No scan has run yet, so there are no sources to show."}</p>
+            <p className="tp-small muted">{s.lastRunAt ? "The last scan read no job boards." : "No scan has run yet, so there are no job boards to list."}</p>
           ) : (
             <div className="tp-pm-scroll">
               <table className="tp-pm-table">
                 <thead>
                   <tr>
-                    <th scope="col">Source</th>
+                    <th scope="col">Job board</th>
                     <th scope="col" className="num">
-                      Fetched
+                      Postings read
                     </th>
                     <th scope="col" className="num">
-                      Matched
+                      Roles kept
                     </th>
-                    <th scope="col">Error</th>
+                    <th scope="col">Problem</th>
                   </tr>
                 </thead>
                 <tbody>
                   {s.sources.map((x) => (
                     <tr key={x.source}>
                       <td>{x.source}</td>
-                      <td className="num mono">{n0(x.fetched)}</td>
-                      <td className="num mono">{n0(x.matched)}</td>
+                      <td className="num">
+                  <Num>{n0(x.fetched)}</Num>
+                </td>
+                      <td className="num">
+                  <Num>{n0(x.matched)}</Num>
+                </td>
                       <td className={x.error ? "tp-pm-err" : "tp-pm-none"}>{x.error || "None"}</td>
                     </tr>
                   ))}
@@ -174,10 +190,10 @@ function Scan({ a, refresh }: { a: AdminStats; refresh: () => Promise<void> }) {
         {busy
           ? "Reading the job boards. This page updates when the scan finishes."
           : ended === "slow"
-            ? "The scan is still running. Reload this page in a few minutes to see it."
+            ? "The scan is still running. Reload this page in a few minutes to see the result."
             : ended === "done"
-              ? "Scan finished. These numbers are current."
-              : "A scan reads every job board and can take a minute or two."}
+              ? "The scan finished. These numbers are current."
+              : "A scan reads every job board and keeps the fractional GTM roles. It can take a minute or two."}
       </p>
     </Card>
   );
@@ -202,9 +218,9 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
 
       <div className="tp-stats">
         <Tile value={n0(a.members.active7)} label="Members active this week" sub={`${n0(a.members.active30)} in the last 30 days`} />
-        <Tile value={ratio(act.adds, act.unlocks)} label="Facts added per fact unlocked" sub={`${n0(act.adds)} added, ${n0(act.unlocks)} unlocked`} />
-        <Tile value={n0(a.credits.atZero)} label="Members at zero credits" sub={`${n0(a.credits.low)} more at 1 to 3`} ember={a.credits.atZero > 0} />
-        <Tile value={n0(a.pro.interested)} label="Pro waitlist" sub={`${n0(a.pro.views)} views of the offer`} />
+        <Tile value={ratio(act.adds, act.unlocks)} label="Facts added per unlock" sub={`${n0(act.adds)} added, ${n0(act.unlocks)} unlocked`} />
+        <Tile value={n0(a.credits.atZero)} label={a.credits.atZero === 1 ? "Member out of credits" : "Members out of credits"} sub={`${n0(a.credits.low)} more with 1 to 3 left`} />
+        <Tile value={n0(a.pro.interested)} label="On the Pro waitlist" sub={`${n0(a.pro.views)} saw the offer`} />
       </div>
 
       <div className="tp-pm-grid">
@@ -214,32 +230,32 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
               ["On the member list", n0(a.members.total)],
               ["Joined since launch", n0(a.members.joined)],
               ["Finished onboarding", n0(a.members.onboarded)],
-              ["Active in 7 days", n0(a.members.active7)],
-              ["Active in 30 days", n0(a.members.active30)],
+              ["Active in the last 7 days", n0(a.members.active7)],
+              ["Active in the last 30 days", n0(a.members.active30)],
             ]}
           />
         </Card>
-        <Card title="Credits">
+        <Card title="Credit balances">
           <Rows
             items={[
-              ["At zero", n0(a.credits.atZero)],
-              ["At 1 to 3", n0(a.credits.low)],
+              ["Out of credits", n0(a.credits.atZero)],
+              ["1 to 3 left", n0(a.credits.low)],
               ["Median balance", n0(a.credits.median)],
             ]}
           />
-          <p className="tp-small muted tp-pm-foot">Counts members who have signed in or joined, not the whole list.</p>
+          <p className="tp-small muted tp-pm-foot">Only members who have signed in or joined are counted.</p>
         </Card>
-        <Card title="The wall">
+        <Card title="Tried to unlock with 0 credits">
           <Rows
             items={[
-              ["Members who hit it", n0(a.walls.members)],
-              ["Times it was hit", n0(a.walls.hits)],
+              ["Members it happened to", n0(a.walls.members)],
+              ["Times it happened", n0(a.walls.hits)],
             ]}
           />
-          <p className="tp-small muted tp-pm-foot">Hitting the wall is trying to unlock a fact with zero credits.</p>
+          <p className="tp-small muted tp-pm-foot">A member with no credits tapped a lock. This is demand the credits did not cover.</p>
         </Card>
 
-        <Card title="Giving and getting" span={3}>
+        <Card title="Added and unlocked" span={3}>
           <table className="tp-pm-table">
             <thead>
               <tr>
@@ -257,18 +273,30 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
             <tbody>
               <tr>
                 <th scope="row">Facts added</th>
-                <td className="num mono">{n0(act.adds)}</td>
-                <td className="num mono">{n0(act.adds7)}</td>
+                <td className="num">
+                  <Num>{n0(act.adds)}</Num>
+                </td>
+                <td className="num">
+                  <Num>{n0(act.adds7)}</Num>
+                </td>
               </tr>
               <tr>
                 <th scope="row">Facts unlocked</th>
-                <td className="num mono">{n0(act.unlocks)}</td>
-                <td className="num mono">{n0(act.unlocks7)}</td>
+                <td className="num">
+                  <Num>{n0(act.unlocks)}</Num>
+                </td>
+                <td className="num">
+                  <Num>{n0(act.unlocks7)}</Num>
+                </td>
               </tr>
               <tr>
-                <th scope="row">Added per unlocked</th>
-                <td className="num mono">{ratio(act.adds, act.unlocks)}</td>
-                <td className="num mono">{ratio(act.adds7, act.unlocks7)}</td>
+                <th scope="row">Added per unlock</th>
+                <td className="num">
+                  <Num>{ratio(act.adds, act.unlocks)}</Num>
+                </td>
+                <td className="num">
+                  <Num>{ratio(act.adds7, act.unlocks7)}</Num>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -276,12 +304,12 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
         <Card title="Pro waitlist" span={3}>
           <Rows
             items={[
-              ["Interested", n0(a.pro.interested)],
-              ["Views of the offer", n0(a.pro.views)],
-              ["Conversion", pct(a.pro.interested, a.pro.views)],
+              ["Asked to hear about Pro", n0(a.pro.interested)],
+              ["Saw the offer", n0(a.pro.views)],
+              ["Asked, out of those who saw it", pct(a.pro.interested, a.pro.views)],
             ]}
           />
-          <h3 className="tp-pm-h3">By place</h3>
+          <h3 className="tp-pm-h3">Where they asked</h3>
           {places.length ? (
             <Rows items={places.map(([k, n]) => [placeName(k), n0(n)])} />
           ) : (
@@ -289,11 +317,11 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
           )}
         </Card>
 
-        <Card title="Most unlocked" span={3}>
-          <Bars items={a.topUnlocked} tone="pine" unit="unlocks" empty="No facts unlocked yet." />
+        <Card title="What members unlock most" span={3}>
+          <Bars items={a.topUnlocked} tone="pine" unit="unlocks" empty="Nothing has been unlocked yet." />
         </Card>
-        <Card title="Most added" span={3}>
-          <Bars items={a.topAdded} tone="volt" unit="added" empty="No facts added yet." />
+        <Card title="What members add most" span={3}>
+          <Bars items={a.topAdded} tone="volt" unit="added" empty="Nothing has been added yet." />
         </Card>
 
         <Scan a={a} refresh={refresh} />
@@ -304,25 +332,25 @@ export function Admin({ view, refresh, onBack }: { view: View; refresh: () => Pr
               ["Sending", <span key="s" className={`tp-pm-flag${a.digest.enabled ? " on" : ""}`}>{a.digest.enabled ? "On" : "Off"}</span>],
               ["Last sent", stamp(a.digest.lastSentAt, "Not yet")],
               ["Emails sent", n0(a.digest.sent)],
-              ["Opted out", n0(a.digest.optedOut)],
+              ["Members who turned it off", n0(a.digest.optedOut)],
             ]}
           />
-          {!a.digest.enabled && <p className="tp-small muted tp-pm-foot">It starts once email sending is set up.</p>}
+          {!a.digest.enabled && <p className="tp-small muted tp-pm-foot">It starts going out once email sending is set up.</p>}
         </Card>
-        <Card title="Seats">
+        <Card title="Your seats">
           <Rows
             items={[
-              ["Members linked to a seat", n0(a.seats.linkedMembers)],
-              ["Facts missing on those seats", n0(a.seats.factsMissing)],
+              ["Members matched to a seat", n0(a.seats.linkedMembers)],
+              ["Facts still missing on those seats", n0(a.seats.factsMissing)],
             ]}
           />
         </Card>
-        <Card title="Benchmarks">
+        <Card title="Rates in the benchmarks">
           <Rows
             items={[
-              ["Rates on records", n0(a.benchmarks.memberRates)],
-              ["Rates shared privately", n0(a.benchmarks.privateRates)],
-              ["Rate Index rates", n0(a.benchmarks.indexRates)],
+              ["On seats", n0(a.benchmarks.memberRates)],
+              ["Shared privately", n0(a.benchmarks.privateRates)],
+              ["From the Rate Index", n0(a.benchmarks.indexRates)],
             ]}
           />
         </Card>
