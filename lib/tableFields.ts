@@ -253,6 +253,68 @@ function asMonth(v: string): string {
 /** The latest moment that is "now" somewhere on Earth: members ahead of UTC are already in the next month. */
 const AHEAD_MS = 14 * 60 * 60 * 1000;
 
+/**
+ * Hosts that many companies share (social profiles, site builders, job boards). A website there
+ * keeps its path, and two companies are never matched by the host alone: linkedin.com/company/a
+ * and linkedin.com/company/b are two companies. A subdomain counts too (sites.google.com).
+ */
+const SHARED_HOSTS = [
+  "linkedin.com", "twitter.com", "x.com", "facebook.com", "fb.com", "instagram.com", "threads.net", "tiktok.com", "youtube.com",
+  "github.com", "gitlab.com", "medium.com", "google.com", "notion.site", "notion.so", "linktr.ee", "wellfound.com", "angel.co",
+  "crunchbase.com", "about.me", "behance.net", "dribbble.com", "producthunt.com", "ycombinator.com", "glassdoor.com", "indeed.com",
+  "lever.co", "greenhouse.io", "ashbyhq.com", "workable.com", "bit.ly", "wix.com", "squarespace.com", "carrd.co",
+];
+export const isSharedHost = (host: string) => SHARED_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+/**
+ * What two company websites are compared by, never shown: the host ("acme.com"), or on a shared
+ * host the host and the path ("linkedin.com/company/acme"). Null when there is nothing to match
+ * on (no host, or a shared host with no path).
+ */
+export function siteKey(raw: unknown): string | null {
+  const s = String(raw ?? "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  const cut = s.search(/[/?#]/);
+  const host = (cut < 0 ? s : s.slice(0, cut)).toLowerCase();
+  if (!/^[\w-]+(\.[\w-]+)*\.[a-z]{2,}$/.test(host)) return null;
+  if (!isSharedHost(host)) return host;
+  const pathPart = (cut < 0 ? "" : s.slice(cut)).split(/[?#]/)[0].replace(/\/+$/, "").toLowerCase();
+  return pathPart ? host + pathPart : null;
+}
+
+/** Query parameters that only say where a click came from. A long link loses these first. */
+const TRACKING_PARAM = /^(utm_.*|gclid|gbraid|wbraid|dclid|fbclid|msclkid|mc_[ce]id|igshid|_hs(enc|mi)|hsctatracking|trk|trkinfo|refid|trackingid|lipi|ref|ref_?src|referrer|from|src|source|tk|si|spm|campaign|medium|cmpid|sc_cid|gh_src|lever-(source|origin)|lever-source\[\]|mkt_tok|_ga|_gl|yclid|ttclid|share_id)$/i;
+/** Query parameters that say which job a link is for. When a link is still too long, only these stay. */
+const JOB_PARAM = /^(jk|vjk|gh_jid|currentjobid|jobid|job_?id|jid|id|posting_?id|req(uisition)?_?id|pid|position_?id|opening_?id|ashby_jid|lever_?id)$/i;
+/** A query with some parameters left out (`keep` says which stay). Keeps their order and how they were written. */
+function keepParams(query: string, keep: (name: string) => boolean): string {
+  return query
+    .split("&")
+    .filter((p) => p && keep(decodeURIComponentSafe(p.split("=")[0])))
+    .join("&");
+}
+const decodeURIComponentSafe = (s: string) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+/**
+ * A link over 200 characters: drop the tracking codes, then, if it is still too long, every
+ * parameter that does not name the job. The path and a fragment (a hash-routed page) stay.
+ */
+function shortenLink(u: string): string {
+  const hash = u.indexOf("#");
+  const frag = hash < 0 ? "" : u.slice(hash);
+  const rest = hash < 0 ? u : u.slice(0, hash);
+  const q = rest.indexOf("?");
+  if (q < 0) return u;
+  const base = rest.slice(0, q).replace(/\/$/, "");
+  const join = (query: string) => `${base}${query ? `?${query}` : ""}${frag}`;
+  let out = join(keepParams(rest.slice(q + 1), (n) => !TRACKING_PARAM.test(n)));
+  if (out.length > 200) out = join(keepParams(rest.slice(q + 1), (n) => JOB_PARAM.test(n)));
+  return out;
+}
+
 export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?: string } {
   // The app only ever sends text (or a number for hours). Anything else is not a value.
   if (raw !== null && raw !== undefined && typeof raw !== "string" && typeof raw !== "number") return { error: "Type this in as text." };
@@ -260,14 +322,19 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
   if (!whole) return { error: `${f.label} is empty.` };
   if (f.kind === "url") {
     let u = wellFormed(whole).replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/$/, "");
-    // A link too long to keep whole loses its tracking codes, never its end.
-    if (u.length > 200) u = u.split(/[?#]/)[0].replace(/\/$/, "");
+    // A link too long to keep whole loses its tracking codes, never the part that names the job.
+    if (u.length > 200) u = shortenLink(u);
     if (u.length > 200) return { error: "That link is too long. Paste the short link." };
     if (!/^[\w.-]+\.[a-z]{2,}(\/\S*)?$/i.test(u)) return { error: "That doesn't look like a web address." };
-    // The host never depends on case. A company's website is its host and nothing after it.
+    // The host never depends on case. A company's website is its host and nothing after it,
+    // except on a host many companies share (linkedin.com/company/acme), where the path names the company.
     const slash = u.indexOf("/");
     const host = (slash < 0 ? u : u.slice(0, slash)).toLowerCase();
-    return { value: f.key === "website" || slash < 0 ? host : host + u.slice(slash) };
+    if (f.key === "website") {
+      const pathPart = slash < 0 ? "" : u.slice(slash).split(/[?#]/)[0].replace(/\/+$/, "");
+      return { value: isSharedHost(host) && pathPart ? host + pathPart : host };
+    }
+    return { value: slash < 0 ? host : host + u.slice(slash) };
   }
   const v = cut(whole, 200).trim();
   if (!v) return { error: `${f.label} is empty.` };
@@ -294,7 +361,9 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
-      if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 3) return { error: "Use the seat's title, like Fractional VP Sales." };
+      // Two letters is a title ("GM", "AE", "VP"), and so is one Han, Kana or Hangul character (営業).
+      if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 2 && !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(v))
+        return { error: "Use the seat's title, like Fractional VP Sales." };
       return v.length >= 2 ? { value: v } : { error: "Too short." };
   }
 }

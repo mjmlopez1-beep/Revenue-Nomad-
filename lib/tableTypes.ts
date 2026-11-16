@@ -196,16 +196,20 @@ export interface LedgerRow {
 /**
  * One benchmark figure. It counts people, not rows: a member counts once per group however many
  * rates they have in it (with the middle of them), a Rate Index row counts once, and so does a
- * record of ours. Amounts are rounded: dollars a month to the nearest 250, dollars an hour to
- * the nearest 5.
+ * record of ours. Amounts are rounded: dollars a month to the nearest 250 and dollars an hour to
+ * the nearest 5, or to the nearest 1,000 and 25 while the figure has fewer than
+ * `Benchmarks.rangeN` contributors.
+ *
+ * Only contributors who count are in a figure at all: seed members, our records, Rate Index rows,
+ * and joined accounts that proved their email or had a fact confirmed by two members. A viewer's
+ * own rates are left out of the figures that viewer sees (`withoutYours`).
  */
 export interface RateStat {
   /**
    * Different contributors. When `median` is sent: everyone in the figure. Below the floor:
-   * the trusted contributors counted toward `min`, for the progress line ("3 of 5"), so
-   * `min - n` more are needed. A joined account under 7 days old is not trusted yet, so its rate
-   * does not move this count. Rates shared privately and rates on records are counted apart
-   * (the larger count is sent): a private rate joins a figure only with 5 private ones in it.
+   * the contributors counted toward `min`, for the progress line ("3 of 5"), so `min - n` more
+   * are needed. Rates shared privately and rates on records are counted apart (the larger count
+   * is sent): a private rate joins a figure only with 5 private ones in it.
    */
   n: number;
   /** Trusted contributors this figure needs before it shows numbers: 5, or 20 when it counts Rate Index data. */
@@ -222,6 +226,11 @@ export interface RateStat {
   p25?: number;
   median?: number;
   p75?: number;
+  /**
+   * The viewer has a rate in this group, and it is left out of what they see here (n included),
+   * so nothing they share can move a number they can read. Other members' figures include it.
+   */
+  withoutYours?: boolean;
 }
 export interface BenchmarkRow {
   function: string;
@@ -321,6 +330,14 @@ export interface AdminStats {
    * benchmark-only rates the member has on file, never an amount. `memberId` is a public id.
    */
   recentAdds?: { memberId: string; name: string; adds24h: number; adds7: number; privateRates: number; lastAt: string | null }[];
+  /**
+   * Members who picked themselves as the seat holder of an open role in the last 30 days, newest
+   * first. `closed`: the claim closed the role for everyone (the account counts: a seed member,
+   * a proven email, or a fact two members confirmed). Otherwise the name was kept and the role
+   * stayed open. `standing`: the name is still on the seat. `company` is the real name (admins
+   * see every company). `memberId` and `engagementId` are public ids.
+   */
+  roleClaims?: { memberId: string; name: string; company: string; engagementId: string; at: string; closed: boolean; standing: boolean }[];
   /** Members who hit zero credits while trying to unlock, and how many times. */
   walls: { members: number; hits: number };
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */

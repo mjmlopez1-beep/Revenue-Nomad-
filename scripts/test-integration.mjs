@@ -160,6 +160,22 @@ async function seedSignIn(m) {
   return new Client("Seed Member", ipAddr, m.token);
 }
 
+/**
+ * Make a joined member's word count (lib/table.ts trustOf): they add a free fact and two seed
+ * members confirm it. A claim on an open role closes it only from an account that counts.
+ * It pays the member 2 credits (the fact, and the confirmation bonus). False without the seed.
+ */
+async function vouch(who) {
+  const [a, b] = [seedMember(30), seedMember(31)];
+  if (!a || !b) return false;
+  const f = pickEmpty(await who.view());
+  const r = await who.act(f);
+  let ok = r.status === 200;
+  for (const m of [a, b]) ok = (await (await seedSignIn(m)).act({ type: "verify", entity: f.entity, id: f.id, field: f.field })).status === 200 && ok;
+  return ok;
+}
+const NEED_SEED = "needs the seed file the server runs on (two seed members vouch for the member who claims the role)";
+
 /* ---------- test scans ---------- */
 
 /** Store a test scan (the server must run with RN_SCAN_TEST=1 and RN_CRON_SECRET). */
@@ -273,16 +289,16 @@ section("bundle", async () => {
   const wall = await P.act({ type: "unlock", ...more[STARTER - 1] });
   check("at 0 credits and 0 unlocks left, the answer is about credits", wall.status === 400 && wall.json?.error === OUT, wall.json);
 
-  // A member who already sees the company (they added a fact there) pays for the role and the posting one by one.
+  // A member who already sees the company (they added a fact there) pays once for the open role's title and posting (LOGIC-2).
   const N = await member("Ned Twocredits");
   const fact = await N.act({ type: "add", company: co, companyFields: { industry: "SaaS" } });
   const two = await N.act({ type: "unlockMany", items: [{ entity: "engagement", id: eid, field: "role" }, { entity: "engagement", id: eid, field: "posting" }] });
-  check("a member who already sees the company pays 1 each for the role and the posting", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 2, two.json?.me ?? two.json);
+  check("a member who already sees the company pays 1 for the role and the posting together", fact.status === 200 && two.status === 200 && two.json?.me?.credits === STARTER + 1 - 1 && two.json?.message === "Unlocked the role and the posting. −1 credit.", two.json?.me ?? two.json);
 
   // The second clean miss, 20 days after the posting was last seen: the role closes, and every
   // unlock made after it was last seen is paid back, row by row.
   const s3 = await scanPost({ ...rest, now: soon() });
-  check("the scan closes the role and pays back 4 unlocks (1, 1 and 2)", s3.json?.result?.closed === 1 && s3.json?.result?.refunded === 4, s3.json?.result);
+  check("the scan closes the role and pays back 3 unlocks (1 each)", s3.json?.result?.closed === 1 && s3.json?.result?.refunded === 3, s3.json?.result);
   const mv = await M.view();
   const mRefunds = mv.ledger.filter((l) => l.reason === CLOSED_REFUND);
   check("the one-credit purchase comes back as 1 credit, not 3", mv.me.credits === STARTER && mRefunds.length === 1 && mRefunds[0].delta === 1, { credits: mv.me.credits, refunds: mRefunds.length });
@@ -290,7 +306,7 @@ section("bundle", async () => {
   const pv2 = await P.view();
   const nv = await N.view();
   check("the member who spent everything has 1 credit again", pv2.me.credits === 1 && pv2.me.owed === 0, { credits: pv2.me.credits, owed: pv2.me.owed });
-  check("the member who paid 2 gets 2 back", nv.me.credits === STARTER + 1 && nv.ledger.filter((l) => l.reason === CLOSED_REFUND).length === 2, nv.me.credits);
+  check("the member who paid 1 for the role and the posting gets it back", nv.me.credits === STARTER + 1 && nv.ledger.filter((l) => l.reason === CLOSED_REFUND).length === 1, nv.me.credits);
   check("the closed role's company and posting are free to see now", engOf(await (await member("Lee Latecomer")).view(), eid)?.cells.posting?.s === "value" && engOf(nv, eid)?.company.hidden === false);
 
   // The same role is then reported by two of them and removed. Nobody is paid a second time.
@@ -321,6 +337,7 @@ section("claim", async () => {
   };
   const eid = (await look()).id;
   const T = await member("Tia Taker");
+  if (!(await vouch(T))) return skip("claimed role against the scan", NEED_SEED);
   await T.act({ type: "unlock", entity: "company", id: coId, field: "identity" });
   const claim = await T.act({ type: "fill", entity: "engagement", id: eid, field: "operator", value: "Tia Taker", memberId: "me" });
   const b1 = await look();
@@ -346,7 +363,7 @@ section("claim", async () => {
   const b4 = await look();
   check("when an admin removes the name the role is open again and the company hidden", rm.status === 200 && b4.status === "Open role" && b4.closed === null && b4.hidden === true && b4.holder === "empty", { status: rm.status, b4 });
   const credits = [(await T.view()).me.credits, (await R1.view()).me.credits, (await R2.view()).me.credits];
-  check("the claim's credit is taken back and both reporters get their unlock back", credits[0] === STARTER - 1 && credits[1] === STARTER && credits[2] === STARTER, credits);
+  check("the claim's credit is taken back and both reporters get their unlock back", credits[0] === STARTER + 1 && credits[1] === STARTER && credits[2] === STARTER, credits);
   const s4 = await scanPost(listed);
   check("the next scan counts it as still open", s4.json?.result?.reopened === 0 && s4.json?.result?.stillOpen === 4 && (await look()).status === "Open role", s4.json?.result);
 });
@@ -374,6 +391,8 @@ section("relist", async () => {
   const otherId = companyNamed(av, otherCo)?.engagements[0]?.id;
 
   const U = await member("Uma Owner");
+  // Her claim keeps a listed role closed only on an account that counts.
+  if (!(await vouch(U))) return skip("relisted roles", NEED_SEED);
   const V = await member("Vic Voucher");
   const own = await U.act({ type: "fill", entity: "engagement", id: mineId, field: "operator", value: "Uma Owner", memberId: "me" });
   const typed = await V.act({ type: "fill", entity: "engagement", id: otherId, field: "operator", value: "Jane Thirdparty" });

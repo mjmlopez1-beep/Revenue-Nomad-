@@ -18,7 +18,7 @@
  *   STARTER        expected starter credits (default 25)
  *   CRON_SECRET    the server's RN_CRON_SECRET (default qa-cron)
  *   ONLY           comma-separated sections to run (default all): role hidden bundle status seat
- *                  report keep rate admin closed
+ *                  report keep rate admin price twin repair closed
  */
 import { readFileSync } from "node:fs";
 
@@ -223,6 +223,24 @@ function host(view) {
   return c;
 }
 
+/**
+ * Make a joined member's word count (lib/table.ts trustOf): they add a free fact and two seed
+ * members confirm it. A claim on an open role closes it only from an account that counts. It
+ * pays the member 2 credits (the fact, and the confirmation bonus). False without the seed file.
+ */
+const vouchers = seedFile
+  ? seedFile.members.filter((m) => m.token && !seedHolders.some((h) => h.id === m.id)).slice(-2).map((m) => new Client("Voucher", nextIp(), m.token))
+  : [];
+async function vouch(who) {
+  if (vouchers.length < 2) return false;
+  const f = freeFill(await who.view());
+  const r = await who.act(f);
+  let ok = r.status === 200;
+  for (const v of vouchers) ok = (await v.act({ type: "verify", entity: f.entity, id: f.id, field: f.field })).status === 200 && ok;
+  return ok;
+}
+const NEED_SEED = "needs the seed file the server runs on (two seed members vouch for the member who claims the role)";
+
 /* ---------- sections ---------- */
 
 const sections = {};
@@ -272,6 +290,28 @@ section("role", async () => {
   check("after four tries the role is open and the company hidden", isOpen(await look(B)), await look(B));
   check("refused tries earn nothing", (await look(A)).credits === STARTER - 1, (await look(A)).credits);
 
+  // ECON-2: a claim from an account nobody has vouched for keeps the name and leaves the role open.
+  const N = await member("Nia Newcomer");
+  // Through Add, which needs no unlock: the posting is on a public board, so its company's name is no secret.
+  const nClaim = await N.act({ type: "add", company: coName, engagementId: eid, operatorMemberId: "me", engagementFields: { operator: "Nia Newcomer" } });
+  check(
+    "a new account's claim is saved and says the role stays open for others",
+    nClaim.status === 200 && /\+1 credit\. Others still see the role as open until its posting comes down\./.test(nClaim.json?.message ?? ""),
+    nClaim.json,
+  );
+  check("the role stays open and the company hidden for everyone (ECON-2)", isOpen(await look(B)), await look(B));
+  const sN = await scanPost(listed);
+  check("a scan that still lists it keeps it open", sN.json?.result?.stillOpen >= 1 && sN.json.result.reopened === 0 && isOpen(await look(B)), sN.json?.result);
+  const nRow = (await adm.view()).admin?.roleClaims?.find((c) => c.engagementId === eid);
+  check("pilot metrics list the claim, and that it did not close the role", !!nRow && nRow.name === "Nia Newcomer" && nRow.closed === false && nRow.standing === true && !!nRow.at, nRow);
+  // N5: taking a claim back takes the name off, so the seat is free for whoever really took it.
+  const nNot = await N.act({ type: "notMine", engagementId: eid });
+  check("this isn't me on their own claim takes the name off the seat", nNot.status === 200 && /Your name is off it\./.test(nNot.json?.message ?? "") && (await look(B)).holder === "empty" && isOpen(await look(B)), [nNot.json?.message, await look(B)]);
+  check("and takes back the credit the claim earned", (await look(N)).credits === STARTER, (await look(N)).credits);
+  const nAgain = await name(N, "x", "me");
+  check("their second claim the same day is refused", nAgain.status === 400 && /once a day/.test(nAgain.json?.error ?? ""), nAgain.json);
+  if (!(await vouch(A))) return skip("claims that close the role", NEED_SEED);
+
   // A past seat with the same title is its own record. It never lands on the open role.
   const E = await member("Eve Earlier");
   const past = await E.act({ type: "add", company: coName, operatorMemberId: "me", engagementFields: { role: "Fractional CMO", operator: "Eve Earlier", start: "2023-03", end: "2024-01" } });
@@ -303,7 +343,7 @@ section("role", async () => {
   check("the admin removes the name", rm.status === 200 && rm.json?.message === "Removed. The field is open to fill again.", rm.json);
   const back = await look(B);
   check("removing the seat holder reopens the role", isOpen(back) && back.holder === "empty", back);
-  check("the member who took it loses the credit, the reporters get theirs back", (await look(A)).credits === STARTER - 1 && (await look(C)).credits === STARTER, [(await look(A)).credits, (await look(C)).credits]);
+  check("the member who took it loses the credit, the reporters get theirs back", (await look(A)).credits === STARTER + 1 && (await look(C)).credits === STARTER, [(await look(A)).credits, (await look(C)).credits]);
   const s3 = await scanPost(listed);
   check("a rescan that still lists the role finds it open", s3.json?.result?.stillOpen >= 1 && s3.json.result.opened === 0 && s3.json.result.reopened === 0 && isOpen(await look(B)), s3.json);
 
@@ -313,14 +353,17 @@ section("role", async () => {
 
   // "This isn't me" undoes a claim.
   const F = await member("Flo Fickle");
+  await vouch(F);
   const fClaim = await F.act({ type: "add", company: coName, engagementId: eid, operatorMemberId: "me", engagementFields: { operator: "Flo Fickle" } });
   check("another member can take the role through Add", fClaim.status === 200 && isClosed(await look(B)), fClaim.json);
+  const fRow = (await adm.view()).admin?.roleClaims?.find((c) => c.engagementId === eid && c.name === "Flo Fickle");
+  check("pilot metrics list a claim that closed the role", !!fRow && fRow.closed === true && fRow.standing === true, fRow);
   const notMe = await F.act({ type: "notMine", engagementId: eid });
   check("this isn't me reopens the role and says so", notMe.status === 200 && /The role is open again\./.test(notMe.json?.message ?? "") && notMe.json?.cells?.find((c) => c.field === "status")?.cell?.v === "Open role", notMe.json);
   const afterNot = await look(B);
-  check("after this isn't me the role is open and the name is hidden for everyone", isOpen(afterNot) && afterNot.holder === "reported", afterNot);
+  check("after this isn't me the role is open and their name is off the seat (N5)", isOpen(afterNot) && afterNot.holder === "empty", afterNot);
   const row = (await adm.view()).reported.find((r) => r.id === eid && r.field === "operator");
-  check("the admin's review list has the name", !!row && row.reporters.join() === "Flo Fickle" && row.addedBy === "Flo Fickle", row);
+  check("nothing is left waiting for the admin, and the claim's credit is taken back", !row && (await look(F)).credits === STARTER + 2, [row, (await look(F)).credits]);
   // The old way to keep it closed: unlink, then rename the seat holder to someone who isn't a member.
   const swap = await F.act({ type: "fill", entity: "engagement", id: eid, field: "operator", value: "Jane Madeup" });
   check("after this isn't me they can't put another name on the role", swap.status === 400 && swap.json?.error === STILL_OPEN && isOpen(await look(B)), swap.json);
@@ -330,12 +373,14 @@ section("role", async () => {
   // An admin removal with no report does the same.
   const G = await member("Gus Grabber");
   await G.act({ type: "unlock", entity: "company", id: coId, field: "identity" });
+  await vouch(G);
   const gClaim = await name(G, "x", "me");
   check("a third member takes the role", gClaim.status === 200 && isClosed(await look(B)), gClaim.json);
   const direct = await adm.act({ type: "adminRemove", entity: "engagement", id: eid, field: "operator" });
   check("adminRemove on the seat holder reopens the role", direct.status === 200 && isOpen(await look(B)), direct.json);
-  check("and takes back the credit the claim earned", (await look(G)).credits === STARTER - 1, (await look(G)).credits);
+  check("and takes back the credit the claim earned", (await look(G)).credits === STARTER + 1, (await look(G)).credits);
   const I = await member("Ike Inventor");
+  await vouch(I);
   const iClaim = await I.act({ type: "add", company: coName, engagementId: eid, operatorMemberId: "me", engagementFields: { operator: "Ike Inventor" } });
   check("a fourth member takes the role", iClaim.status === 200 && isClosed(await look(B)), iClaim.json);
   const sweep = await adm.act({ type: "adminRemoveMember", memberId: await adm.pick("Ike Inventor") });
@@ -691,6 +736,178 @@ section("admin", async () => {
   await adm.act({ type: "adminRemoveMember", memberId: await adm.pick("Lou Litter") });
   const kept = companyNamed(await N.view(), shared);
   check("a company another member added a fact to stays, with that fact", kept?.cells.hq?.v === "Boise, ID" && kept.cells.industry?.s === "empty" && (await N.view()).me.credits === STARTER + 1, kept?.cells);
+});
+
+// Repair round, LOGIC-2: one price for an open role, whoever the member is and in whatever order they buy.
+section("price", async () => {
+  if (!(await canScan())) return skip("open role price checks", NEED_SCAN);
+  const adm = await admin();
+  if (!adm) return skip("open role price checks", "no admin account (set ADMIN_TOKEN)");
+  const board = `qa-rules-price-${RUN}`;
+  const coName = `Qa Price Co ${RUN}`;
+  const p1 = posting("price1", coName, "Fractional VP Sales", board);
+  const keep = posting("pricekeep", `Qa Price Keeper ${RUN}`, "Fractional CMO", board);
+  await scanPost({ roles: [p1, keep], sources: [{ source: board, fetched: 10, matched: 2 }] });
+  const coId = companyNamed(await adm.view(), coName)?.id;
+  const e1 = companyNamed(await adm.view(), coName)?.engagements[0]?.id;
+  const cellsBack = (r, id) => ["role", "posting"].map((f) => r.json?.cells?.find((c) => c.id === id && c.field === f)?.cell?.s);
+
+  // Bought the company and its open role last week. Then the scan adds a second role there.
+  const W = await member("Wes Weekbefore");
+  await W.act({ type: "unlock", entity: "company", id: coId, field: "identity" });
+  const p2 = posting("price2", coName, "Fractional CMO", board);
+  await scanPost({ roles: [p1, p2, keep], sources: [{ source: board, fetched: 10, matched: 3 }] });
+  const e2 = companyNamed(await adm.view(), coName)?.engagements.find((e) => e.id !== e1)?.id;
+  const w = await W.act({ type: "unlockMany", items: [{ entity: "engagement", id: e2, field: "role" }, { entity: "engagement", id: e2, field: "posting" }, { entity: "company", id: coId, field: "identity" }] });
+  check(
+    "a member who already sees the company pays 1 for a new open role's title and posting together (LOGIC-2)",
+    w.status === 200 && w.json?.message === "Unlocked the role and the posting. −1 credit." && w.json?.me?.credits === STARTER - 2,
+    w.json?.error ?? [w.json?.message, w.json?.me?.credits],
+  );
+  check("  and both come back", cellsBack(w, e2).every((x) => x === "value"), cellsBack(w, e2));
+
+  // Sees the company because they added a fact there: the title alone brings the posting.
+  const A = await member("Ada Added");
+  await A.act({ type: "add", company: coName, companyFields: { hq: "Austin, TX" } });
+  const aRole = await A.act({ type: "unlock", entity: "engagement", id: e1, field: "role" });
+  const aPost = await A.act({ type: "unlock", entity: "engagement", id: e1, field: "posting" });
+  check(
+    "a member the company is not hidden from pays 1 for an open role's title, and its posting comes with it",
+    aRole.status === 200 && aRole.json?.message === "Unlocked the role and the posting. −1 credit." && aPost.json?.error === "Nothing to unlock here." && (await A.view()).me.credits === STARTER,
+    [aRole.json?.error ?? aRole.json?.message, aPost.json, (await A.view()).me.credits],
+  );
+
+  // Bought while a claim had closed the role, then the claim came off.
+  if (vouchers.length < 2) return skip("bought while closed", NEED_SEED);
+  const soloName = `Qa Price Solo Co ${RUN}`;
+  const p3 = posting("price3", soloName, "Fractional RevOps Lead", board);
+  await scanPost({ roles: [p1, p2, p3, keep], sources: [{ source: board, fetched: 10, matched: 4 }] });
+  const solo = companyNamed(await adm.view(), soloName);
+  const e3 = solo?.engagements[0]?.id;
+  const K = await member("Kai Claimer");
+  await vouch(K);
+  const kClaim = await K.act({ type: "add", company: soloName, engagementId: e3, operatorMemberId: "me", engagementFields: { operator: "Kai Claimer" } });
+  const M = await member("Moe Midway");
+  const L = await member("Lia Linkonly");
+  const mRole = await M.act({ type: "unlock", entity: "engagement", id: e3, field: "role" });
+  const mPost = await M.act({ type: "unlock", entity: "engagement", id: e3, field: "posting" });
+  const lPost = await L.act({ type: "unlock", entity: "engagement", id: e3, field: "posting" });
+  check("while the claim holds, the role and the posting of the closed role are separate facts", kClaim.status === 200 && mRole.status === 200 && mPost.status === 200 && lPost.status === 200 && (await M.view()).me.credits === STARTER - 2, [kClaim.json?.error, mRole.json?.error, mPost.json?.error, (await M.view()).me.credits]);
+  await K.act({ type: "notMine", engagementId: e3 });
+  const mv = await M.view();
+  check("when the role reopens, a member who paid for its title and posting still sees the company (no third credit)", companyNamed(mv, soloName)?.hidden === false && mv.me.credits === STARTER - 2, { hidden: mv.companies.find((c) => c.id === solo?.id)?.hidden, credits: mv.me.credits });
+  const mCo = await M.act({ type: "unlock", entity: "company", id: solo?.id, field: "identity" });
+  check("  and there is nothing more to buy", mCo.json?.error === "Nothing to unlock here.", mCo.json);
+  const lRole = await L.act({ type: "unlock", entity: "engagement", id: e3, field: "role" });
+  check(
+    "a member who paid only for the posting gets the title at no charge",
+    lRole.status === 200 && lRole.json?.message === "Unlocked the role. No charge, since you had already paid for this open role." && lRole.json?.me?.credits === STARTER - 1 && cellsBack(lRole, e3)[0] === "value",
+    lRole.json?.error ?? [lRole.json?.message, lRole.json?.me?.credits],
+  );
+});
+
+// Repair round, LOGIC-3: a second account with a member's exact name does not take their seats.
+section("twin", async () => {
+  const sm = seedHolders[1];
+  const S = sm ? new Client("Seed Holder", nextIp(), sm.token) : null;
+  const sv = S ? await S.view() : null;
+  if (!sv?.me) return skip("a member's twin", "no seed file the server knows");
+  const mine0 = sv.companies.flatMap((c) => c.engagements).filter((e) => e.yours);
+  const { client: X } = await join(sm.name, { email: `qa+${RUN}-twin-${Math.random().toString(36).slice(2, 8)}@example.com` });
+  check("a new account can still join with a member's exact name", !!X);
+  if (!X) return;
+  const sv1 = await S.view();
+  const mine1 = sv1.companies.flatMap((c) => c.engagements.map((e) => ({ ...e, company: c }))).filter((e) => e.yours);
+  check("the member's seats stay theirs (LOGIC-3)", mine0.length > 0 && mine1.length === mine0.length, [mine0.length, mine1.length]);
+  const own = mine1.find((e) => e.cells.operator?.s === "value" && !e.cells.operator.mine);
+  check("their own name on their seat is still theirs to see", !!own && own.cells.operator.member?.you === true, own?.cells.operator?.s);
+  const xv = await X.view();
+  check("the new account holds none of those seats", mine1.every((e) => engOf(xv, e.id)?.yours !== true));
+  const xNot = await X.act({ type: "notMine", engagementId: own?.id });
+  check("and can't say This isn't me on them", xNot.status === 400 && xNot.json?.error === "That seat isn't linked to you.", xNot.json);
+  // Someone puts a rate on the member's seat. The member still hides it at once.
+  const Z = await member("Zoe Stranger");
+  const zv = await Z.view();
+  const target = mine1.find((e) => e.cells.rate?.s === "empty" && !e.company.hidden && engOf(zv, e.id) && !engOf(zv, e.id).company.hidden);
+  if (!target) return skip("twin: the holder's report", "the member's seats all have a rate or a hidden company");
+  const put = await Z.act({ type: "fill", entity: "engagement", id: target.id, field: "rate", value: "$2k/mo" });
+  const rep = await S.act({ type: "report", entity: "engagement", id: target.id, field: "rate" });
+  check("the holder's report on a fact on their own seat still hides it for everyone", put.status === 200 && rep.status === 200 && rep.json?.message === "Reported. It's hidden for everyone until an admin reviews it." && engOf(await Z.view(), target.id)?.cells.rate?.s === "reported", [put.json?.error, rep.json]);
+  const not = await S.act({ type: "notMine", engagementId: own.id });
+  check("and This isn't me still works for them", not.status === 200, not.json);
+});
+
+// Repair round: open roles a member adds (N1, N3), reports on a listed role (N2), naming yourself on someone else's seat (N4), This isn't me first (N7).
+section("repair", async () => {
+  if (!(await canScan())) return skip("repair round checks", NEED_SCAN);
+  const adm = await admin();
+  if (!adm) return skip("repair round checks", "no admin account (set ADMIN_TOKEN)");
+  const board = `qa-rules-repair-${RUN}`;
+  const keep = posting("repkeep", `Qa Repair Keeper ${RUN}`, "Fractional CMO", board);
+  const B = await member("Bea Bystander");
+
+  // N3: a member's word that a seat is open shows it as open and hides nothing.
+  const P = await member("Pre Registrar");
+  const hostCo = host(await P.view());
+  // (A title of its own: Add puts details into a seat there with the same title.)
+  const fake = await P.act({ type: "add", company: hostCo.name, newEngagement: true, engagementFields: { function: "Sales", role: `Fractional Sales Lead ${RUN}`, status: "Open role" } });
+  const bv = await B.view();
+  check("a member-added open role does not hide a company that was free a minute before (N3)", fake.status === 200 && companyNamed(bv, hostCo.name)?.hidden === false && engOf(bv, fake.json?.id)?.cells.status?.v === "Open role", { status: fake.status, hidden: companyNamed(bv, hostCo.name)?.hidden, msg: fake.json?.message, cell: engOf(bv, fake.json?.id)?.cells.status });
+
+  // N1: a member adds the role before the scan finds it, then marks it ended.
+  const preName = `Qa Prereg Co ${RUN}`;
+  const pre = await P.act({ type: "add", company: preName, engagementFields: { function: "Marketing", role: "Fractional VP Marketing", status: "Open role" } });
+  const listed = { roles: [posting("prereg", preName, "Fractional VP Marketing", board), keep], sources: [{ source: board, fetched: 10, matched: 2 }] };
+  await scanPost(listed);
+  const adopted = engOf(await B.view(), pre.json?.id);
+  check("the scan takes the member's seat as the role it follows, and its status is the posting's", !!adopted && adopted.company.hidden === true && adopted.cells.status?.v === "Open role" && adopted.cells.status.from === "posting" && !!adopted.opened, adopted && { hidden: adopted.company.hidden, status: adopted.cells.status, opened: adopted.opened });
+  const ended = await P.act({ type: "fill", entity: "engagement", id: pre.json?.id, field: "status", value: "Ended" });
+  const after = engOf(await B.view(), pre.json?.id);
+  check("the member who added it can't close it for everyone by editing the status (N1)", ended.status === 400 && after?.company.hidden === true && after.cells.status?.v === "Open role" && after.closed === null, [ended.json, after?.cells.status?.v]);
+  const rm = await adm.act({ type: "adminRemove", entity: "engagement", id: pre.json?.id, field: "status" });
+  check("its status is the scan's now, so there is no member fact to remove", rm.status === 400 && engOf(await B.view(), pre.json?.id)?.closed === null, rm.json);
+
+  // N2: two members who bought a listed role report its title and its link.
+  const roleName = `Qa Reported Co ${RUN}`;
+  await scanPost({ roles: [...listed.roles, posting("reported", roleName, "Fractional Head of Growth", board)], sources: [{ source: board, fetched: 10, matched: 3 }] });
+  const rc = companyNamed(await adm.view(), roleName);
+  const re = rc?.engagements[0]?.id;
+  for (const n of ["Rex Reporter", "Roz Reporter"]) {
+    const R = await member(n);
+    await R.act({ type: "unlock", entity: "company", id: rc?.id, field: "identity" });
+    for (const field of ["role", "posting"]) await R.act({ type: "report", entity: "engagement", id: re, field });
+  }
+  const Q = await member("Quin Later");
+  const q = await Q.act({ type: "unlock", entity: "engagement", id: re, field: "posting" });
+  const qe = engOf(await Q.view(), re);
+  check("two reports don't blank a listed role's title and link for others (N2)", q.status === 200 && qe?.cells.role?.s === "value" && qe.cells.posting?.s === "value", [q.json?.error ?? q.json?.message, qe?.cells.role?.s, qe?.cells.posting?.s]);
+  const rows = (await adm.view()).reported.filter((r) => r.id === re);
+  check("  the admin's review list still has both, with both reporters", rows.length === 2 && rows.every((r) => r.reporters.length === 2), rows.map((r) => [r.field, r.reporters.length]));
+
+  // N4: naming yourself on a seat somebody else made, with no holder on it.
+  const Mk = await member("Max Maker");
+  const mHost = host(await Mk.view());
+  const made = await Mk.act({ type: "add", company: mHost.name, newEngagement: true, engagementFields: { function: "Sales", role: "Fractional VP Sales", rate: "$8k/mo", end: "2024-06", sourced: "Referral" } });
+  const Sn = await member("Sid Selfnamer");
+  const self = await Sn.act({ type: "fill", entity: "engagement", id: made.json?.id, field: "operator", value: "x", memberId: "me" });
+  const sSeat = engOf(await Sn.view(), made.json?.id);
+  check("naming yourself on someone else's seat shows you none of its locked facts free (N4)", self.status === 200 && sSeat?.yours === false && sSeat.cells.rate?.s === "locked" && (await Sn.view()).me.credits === STARTER + 1, [self.json?.error, sSeat?.yours, sSeat?.cells.rate?.s]);
+  const sRep = await Sn.act({ type: "report", entity: "engagement", id: made.json?.id, field: "end" });
+  check("  and gives no power to hide them for everyone", sRep.status === 400 && engOf(await B.view(), made.json?.id)?.cells.end?.s === "locked", [sRep.json, engOf(await B.view(), made.json?.id)?.cells.end?.s]);
+
+  // N7: a seat made up about a member, with a rate. The member says This isn't me before reporting anything.
+  const Tg = await member("Tia Target");
+  await Tg.view();
+  const Iv = await member("Ivo Inventor");
+  const iHost = host(await Iv.view());
+  const inv = await Iv.act({
+    type: "add", company: iHost.name, newEngagement: true, operatorMemberId: await Iv.pick("Tia Target"),
+    engagementFields: { function: "Sales", role: "Fractional VP Sales", operator: "Tia Target", rate: "$1k/mo" },
+  });
+  const tNot = await Tg.act({ type: "notMine", engagementId: inv.json?.id });
+  const third = engOf(await B.view(), inv.json?.id);
+  const buy = await B.act({ type: "unlock", entity: "engagement", id: inv.json?.id, field: "rate" });
+  check("after This isn't me, the rate the same member put on that seat is hidden for everyone too (N7)", inv.status === 200 && tNot.status === 200 && third?.cells.operator?.s === "reported" && third.cells.rate?.s === "reported" && buy.json?.error === "Nothing to unlock here.", [inv.json?.error, tNot.json?.error, third?.cells.operator?.s, third?.cells.rate?.s, buy.json]);
 });
 
 // LOGIC-8 point 4: the posting of a role the scan closed is free to see. Runs last: its scans are dated ahead.

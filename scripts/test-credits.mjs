@@ -9,7 +9,8 @@
  * RN_SCAN_TEST=1 and RN_CRON_SECRET=qa-cron. It creates about 60 test accounts.
  *
  * What it covers:
- *   sell      the four "How they sell" pick lists: 5 earn a day, 20 save a day
+ *   sell      the four "How they sell" pick lists: 5 earn a day, 20 save a day, and an Add past it
+ *   picks     industry, employees and revenue share that limit, except on a company the member added
  *   flood     150 facts a day on records, not counting the member's own seats
  *   adds      Pilot metrics: the members who added the most this week
  *   invites   5 different invitees per 30 days, same-network invites, private rates, Gmail addresses
@@ -147,6 +148,10 @@ async function seedSignIn(m, ipAddr) {
 
 const SELL = { businessModel: "B2B", motion: "Inside sales", dealSize: "$15K–$50K", salesCycle: "30–90 days" };
 const PLAIN = { hq: "Austin, TX", industry: "SaaS", employees: "11–50", revenue: "$1M–$5M", linkedin: "linkedin.com/company/qa-credits" };
+/** Company facts typed in, not picked from a list: the pick-list limits don't apply to them. */
+const TYPED = { hq: PLAIN.hq, linkedin: PLAIN.linkedin };
+/** A company's other pick lists, which share the How they sell limits. */
+const PICKS = { industry: PLAIN.industry, employees: PLAIN.employees, revenue: PLAIN.revenue };
 const claimed = new Set();
 /** n empty company cells nobody in this run has picked yet, from the given fields. Hidden companies are left out. */
 function pickEmpty(view, n, values = PLAIN) {
@@ -270,10 +275,10 @@ section("sell", async () => {
   check("the 6th saves and earns nothing", sixth.status === 200 && sixth.json?.cells?.[0]?.cell?.s === "value" && sixth.json?.me?.credits === STARTER + 5 && sixth.json?.capped === true, sixth.json);
   check(
     "its message says why, and what still earns",
-    /^Added [^.]+\. Only 5 answers under How they sell earn a credit each day, so this one didn't earn\. A role, a rate or who held the seat still earns\.$/.test(sixth.json?.message ?? "") && !/hit today's max/.test(sixth.json?.message ?? ""),
+    /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day, so this one didn't earn\. A role, a rate or who held the seat still earns\.$/.test(sixth.json?.message ?? "") && !/hit today's max/.test(sixth.json?.message ?? ""),
     sixth.json?.message,
   );
-  const other = await F.act(fillAct(pickEmpty(v, 1)[0]));
+  const other = await F.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
   check("another kind of fact still earns after that", other.status === 200 && /\+1 credit\.$/.test(other.json?.message ?? "") && other.json?.me?.credits === STARTER + 6, other.json);
   for (let i = 6; i < 20; i++) {
     r = await F.act(fillAct(sells[i]));
@@ -283,16 +288,47 @@ section("sell", async () => {
   const over = await F.act(fillAct(sells[20]));
   check(
     "the 21st in a day is refused until tomorrow",
-    over.status === 400 && over.json?.error === "You've added 20 answers under How they sell today. Add more tomorrow. A role, a rate or who held the seat can go in now.",
+    over.status === 400 && over.json?.error === "You've added 20 answers today for a company's industry, size, revenue or how they sell. Add more tomorrow. A role, a rate or who held the seat can go in now.",
     over.json,
   );
-  const viaAdd = await F.act({ type: "add", company: sells[21].company.name, companyFields: { [sells[21].field]: sells[21].value } });
-  check("the Add form can't carry one past the limit either", viaAdd.status === 400 && /20 answers under How they sell/.test(viaAdd.json?.error ?? ""), viaAdd.json);
   const v2 = await F.view();
   const c21 = v2.companies.find((c) => c.id === sells[20].id);
   check("a refused answer is not saved", c21?.cells[sells[20].field]?.s === "empty" && v2.me.added === 21, { cell: c21?.cells[sells[20].field]?.s, added: v2.me.added });
-  const still = await F.act(fillAct(pickEmpty(v, 1)[0]));
+  const still = await F.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
   check("other facts still go in past it", still.status === 200 && still.json?.me?.credits === STARTER + 7, still.json);
+  // Repair round (N6): an Add that carries one more answer saves the rest of the form, and says what it left out.
+  const viaAdd = await F.act({
+    type: "add", company: sells[21].company.name, companyFields: { [sells[21].field]: sells[21].value }, newEngagement: true, operatorMemberId: "me",
+    engagementFields: { function: "Sales", role: `Fractional Sales Lead ${RUN}`, operator: "typed over", rate: "$8k/mo" },
+  });
+  const c22 = (await F.view()).companies.find((c) => c.id === sells[21].id);
+  check(
+    "an Add with one answer past the limit saves the role, the rate and the seat holder, and leaves that answer out (N6)",
+    viaAdd.status === 200 && /so one of those wasn't saved\. Add it tomorrow\./.test(viaAdd.json?.message ?? "") && viaAdd.json?.me?.credits === STARTER + 11 && c22?.cells[sells[21].field]?.s === "empty",
+    viaAdd.json?.error ?? [viaAdd.json?.message, viaAdd.json?.me?.credits, c22?.cells[sells[21].field]?.s],
+  );
+});
+
+section("picks", async () => {
+  // ECON-5 (repair round): industry, employees and revenue share the 5 a day with How they sell, except on a company the member added.
+  const H = await member("Hal Picker");
+  const v = await H.view();
+  const picks = pickEmpty(v, 6, PICKS);
+  let r;
+  for (let i = 0; i < 5; i++) r = await H.act(fillAct(picks[i]));
+  check("5 answers for industry, employees or revenue earn a credit each", r.json?.me?.credits === STARTER + 5 && r.json?.me?.sellEarnLeft === 0, r.json?.me);
+  const sixth = await H.act(fillAct(picks[5]));
+  check(
+    "the 6th saves for no credit, on the same daily count as How they sell (ECON-5)",
+    sixth.status === 200 && sixth.json?.me?.credits === STARTER + 5 && /^Added [^.]+\. Only 5 answers for a company's industry, size, revenue or how they sell earn a credit each day/.test(sixth.json?.message ?? ""),
+    sixth.json,
+  );
+  const sell = await H.act(fillAct(pickEmpty(v, 1, SELL)[0]));
+  check("a How they sell answer after them earns nothing either", sell.status === 200 && sell.json?.me?.credits === STARTER + 5, sell.json?.me);
+  const own = await H.act({ type: "add", company: `Qa Own Picks Co ${RUN}`, companyFields: { ...PICKS, businessModel: "B2B" } });
+  check("on a company the member adds, those answers still earn", own.status === 200 && own.json?.me?.credits === STARTER + 9 && !/didn't earn/.test(own.json?.message ?? ""), own.json);
+  const typed = await H.act(fillAct(pickEmpty(v, 1, TYPED)[0]));
+  check("a typed fact still earns", typed.status === 200 && typed.json?.me?.credits === STARTER + 10, typed.json?.me);
 });
 
 section("flood", async () => {
@@ -302,7 +338,8 @@ section("flood", async () => {
   // A seat G holds, added first: facts on it don't count toward the 150.
   const seat = await G.act({ type: "add", company: hostsOf(v)[hostN++].name, newEngagement: true, operatorMemberId: "me", engagementFields: { function: "Sales", type: "Fractional", operator: "typed over" } });
   if (seat.status !== 200) return fail("flood: add own seat", seat.json);
-  const fills = pickEmpty(v, 151);
+  // Typed facts, so the pick-list limits stay out of the way of this one.
+  const fills = pickEmpty(v, 151, TYPED);
   let r;
   for (let i = 0; i < 150; i++) {
     r = await G.act(fillAct(fills[i]));

@@ -276,9 +276,9 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     // Fields.
     const seat = (await t.buildView("tok-a")).companies.find((c) => c.name === "Fillco 1")!.engagements[0];
     const fill = (field: string, value: unknown) => attempt(() => t.perform("tok-a", { type: "fill", entity: "engagement", id: seat.id, field, value } as never));
-    const two = await fill("role", "ab");
-    const digits = await fill("role", "VP 12345");
-    check("a role needs at least 3 letters", !two.ok && !digits.ok, [two.ok, digits.ok]);
+    const one = await fill("role", "a");
+    const digits = await fill("role", "1 2345");
+    check("a role needs at least 2 letters", !one.ok && !digits.ok, [one.ok, digits.ok]);
     const obj = await fill("role", { a: 1 });
     const list = await fill("role", ["Fractional CMO"]);
     check("a value that is not text is refused", !obj.ok && !list.ok && /text/.test(String((obj as { e: unknown }).e)), [obj.ok ? obj.v : String(obj.e), list.ok]);
@@ -292,6 +292,67 @@ const CHILDREN: Record<string, () => Promise<void>> = {
     check("a link that is still too long is refused, with what to do", !seat2.ok && /too long/.test(String(seat2.e)), seat2.ok ? "saved" : String(seat2.e));
   },
 
+
+  /** Health checks that come together while the disk check is due (repair round: they raced on one probe file). */
+  async healthRace() {
+    const t: Table = await import("../lib/table");
+    const health = fn(t.health, "health");
+    const burst = async () => (await Promise.all(Array.from({ length: 20 }, () => health()))).filter((h) => h.ok && h.disk === "ok").length;
+    eq("20 health checks at once on a fresh start all say ok", await burst(), 20);
+    const realNow = Date.now;
+    Date.now = () => realNow() + 16_000; // the disk check is due again
+    try {
+      eq("and 20 more when the disk check is due again", await burst(), 20);
+      const one = await health();
+      eq("the next single check is ok too", [one.ok, one.disk], [true, "ok"]);
+    } finally {
+      Date.now = realNow;
+    }
+    eq("no probe file is left behind", readdirSync(process.env.RN_DATA_DIR!).filter((f) => f.startsWith(".health-")), []);
+  },
+
+  /** Company websites on hosts many companies share, names in scripts that write vowels as marks, and short role titles (repair round). */
+  async addMore() {
+    const t: Table = await import("../lib/table");
+    const add = (company: string, extra: Record<string, unknown> = {}) => attempt(() => t.perform("tok-a", { type: "add", company, ...extra } as never));
+    const adminCompany = async (name: string) => (await t.buildView("tok-ada")).companies.find((c) => c.name === name);
+    const count = async () => (await t.buildView("tok-a")).stats.companies;
+
+    const n0 = await count();
+    await add("Alpha Widgets", { website: "linkedin.com/company/alpha-widgets" });
+    const beta = await add("Beta Gadgets", { website: "https://www.linkedin.com/company/beta-gadgets/", engagementFields: { function: "Sales", type: "Fractional" } });
+    check("a second company on a LinkedIn page is its own record", beta.ok && /^Added Beta Gadgets\./.test(beta.v.message) && (await count()) - n0 === 2, beta.ok ? beta.v.message : String(beta.e));
+    eq("  and its seat is on its own record", [(await adminCompany("Beta Gadgets"))?.engagements.length, (await adminCompany("Alpha Widgets"))?.engagements.length], [1, 0]);
+    eq("  the website keeps the page's path", ((await adminCompany("Beta Gadgets"))?.cells.website as { v?: string })?.v, "linkedin.com/company/beta-gadgets");
+    await add("Gamma Sites", { website: "https://sites.google.com/view/gamma-sites" });
+    await add("Delta Sites", { website: "sites.google.com/view/delta-sites" });
+    await add("Epsilon Notes", { website: "epsilon.notion.site" });
+    await add("Zeta Notes", { website: "zeta.notion.site" });
+    eq("two Google Sites pages and two Notion sites are four companies", (await count()) - n0, 6);
+    const again = await add("Alpha Widgets Group", { website: "https://www.linkedin.com/company/Alpha-Widgets?trk=x" });
+    check("the same LinkedIn page in another case still finds its company", again.ok && /Alpha Widgets is already on Trading Post/.test(again.v.message) && (await count()) - n0 === 6, again.ok ? again.v.message : String(again.e));
+
+    const n1 = await count();
+    await add("काम");
+    const kam = await add("कम");
+    await add("กิน");
+    await add("กัน");
+    check("Hindi and Thai names that differ only in a vowel sign are four records", kam.ok && !/already on Trading Post/.test(kam.v.message) && (await count()) - n1 === 4, kam.ok ? kam.v.message : String(kam.e));
+    await add("Société Marquée");
+    await add("Societe Marquee");
+    eq("an accented and an unaccented Latin spelling are still one record", (await count()) - n1, 5);
+
+    const seat = (await t.buildView("tok-a")).companies.find((c) => c.name === "Fillco 2")!;
+    const made = await attempt(() => t.perform("tok-a", { type: "add", company: "Fillco 2", newEngagement: true, engagementFields: { function: "Sales" } } as never));
+    const engId = made.ok ? made.v.id : null;
+    const fill = (value: string) => attempt(() => t.perform("tok-a", { type: "fill", entity: "engagement", id: engId, field: "role", value } as never));
+    const ok: string[] = [];
+    for (const title of ["GM", "AE", "BD", "VP", "CS", "CX", "PR", "営業", "销售", "CMO"]) if ((await fill(title)).ok) ok.push(title);
+    eq("short real titles are taken as a role", ok, ["GM", "AE", "BD", "VP", "CS", "CX", "PR", "営業", "销售", "CMO"]);
+    const one = await fill("a");
+    const digits = await fill("1 2345");
+    check("one letter, or digits alone, is still not a title", !!seat && !one.ok && !digits.ok, [one.ok, digits.ok]);
+  },
   /** The weekly email carries one-click unsubscribe headers. */
   async digest() {
     const sent: { to: string; text: string; headers?: Record<string, string> }[] = [];
@@ -428,10 +489,51 @@ console.log("\nWhat members can type");
   const hq = clean("company", "hq", `${"x".repeat(199)}🚀 and more`).value;
   eq("text cut at 200 never ends in half a character", [well(hq), hq?.length], [true, 199]);
   eq("a lone half character from the client is dropped", clean("company", "hq", "Austin\ud83d, TX").value, "Austin, TX");
-  check("a role needs 3 letters", !!clean("engagement", "role", "ab").error && !!clean("engagement", "role", "1234 5").error && clean("engagement", "role", "CMO").value === "CMO", clean("engagement", "role", "ab"));
   const tidy = fn(F.tidy, "tidy");
   const t80 = await attempt(() => tidy(`  ${"n".repeat(79)}🚀   Smith `, 80));
   eq("tidy() cuts a name on a whole character", t80.ok ? [well(t80.v), t80.v.length] : String(t80.e), [true, 79]);
+  // Repair round: long job links keep the part that names the job (ROB-12).
+  const indeed = `https://www.indeed.com/viewjob?jk=4f2a9c1b7e3d5a60&from=serp&vjs=3&tk=${"1h2k3m4n5p6q7r8s".repeat(6)}&advn=${"9".repeat(30)}&adid=${"7".repeat(30)}`;
+  const li = `https://www.linkedin.com/jobs/search/?currentJobId=4012345678&geoId=103644278&keywords=${"fractional%20vp%20sales%20".repeat(4)}&origin=JOB_SEARCH_PAGE_JOB_FILTER&refresh=true&trk=${"public_jobs".repeat(5)}`;
+  const gh = `https://acme-robotics.com/careers?gh_jid=4567890&gh_src=${"a1b2c3d4e5".repeat(12)}&utm_source=${"x".repeat(40)}`;
+  const hashed = `https://jobs.example.com/careers?utm_source=${"y".repeat(200)}#/job/12345`;
+  const got = [indeed, li, gh, hashed].map((x) => clean("engagement", "posting", x).value ?? "");
+  check(
+    "a long Indeed, LinkedIn or Greenhouse link keeps its job id, and a hash-routed one its page",
+    got[0].startsWith("indeed.com/viewjob?jk=4f2a9c1b7e3d5a60") &&
+      got[1].startsWith("linkedin.com/jobs/search?currentJobId=4012345678") &&
+      got[2] === "acme-robotics.com/careers?gh_jid=4567890" &&
+      got[3] === "jobs.example.com/careers#/job/12345" &&
+      got.every((x) => x.length <= 200 && !/utm_|trk=|gh_src|tk=/.test(x)),
+    got,
+  );
+  eq("a link whose own path is too long is still refused", clean("engagement", "posting", `https://jobs.example.com/${"b".repeat(190)}?jk=1&${"utm_x=1&".repeat(5)}`), { error: "That link is too long. Paste the short link." });
+  eq("a link of 200 characters or less keeps every parameter", clean("engagement", "posting", "Jobs.Example.com/Acme/Role?id=7&utm_source=x").value, "jobs.example.com/Acme/Role?id=7&utm_source=x");
+
+  // Websites on hosts many companies share keep their path, and are matched by it (repair round).
+  eq(
+    "a website on a shared host keeps its path, and other websites are still the host",
+    ["https://www.linkedin.com/company/Beta-Gadgets/?trk=x", "sites.google.com/view/delta", "zeta.notion.site", "acme.com/about"].map((x) => clean("company", "website", x).value),
+    ["linkedin.com/company/Beta-Gadgets", "sites.google.com/view/delta", "zeta.notion.site", "acme.com"],
+  );
+  const keys = await attempt(() =>
+    ["linkedin.com/company/alpha", "https://www.LinkedIn.com/company/Alpha/", "linkedin.com/company/beta", "twitter.com", "google.com", "acme.com/careers"].map((x) => fn(F.siteKey, "siteKey")(x)),
+  );
+  eq(
+    "two LinkedIn pages never share a key, and a shared host with no path has none",
+    keys.ok ? keys.v : String(keys.e),
+    ["linkedin.com/company/alpha", "linkedin.com/company/alpha", "linkedin.com/company/beta", null, null, "acme.com"],
+  );
+
+  // Short role titles (repair round).
+  check(
+    "a role needs 2 letters, or one Han, Kana or Hangul character",
+    ["GM", "AE", "BD", "VP", "CS", "CX", "PR", "営業", "销售", "CMO"].every((x) => clean("engagement", "role", x).value === x) &&
+      !!clean("engagement", "role", "a").error &&
+      !!clean("engagement", "role", "1234 5").error,
+    ["GM", "営業", "a", "1234 5"].map((x) => clean("engagement", "role", x)),
+  );
+
 }
 
 /* ---------- one company, one key (lib/scan/clean.ts) ---------- */
@@ -456,6 +558,12 @@ console.log("\nOne company, one key");
     eq("accents do not split a company", key.v.accents[0], key.v.accents[1]);
     eq("a name with no letter or digit has an empty key", key.v.empty, ["", "", "", ""]);
   }
+  const scriptsMarked = await attempt(() => {
+    const companyKey = fn(C.companyKey, "companyKey");
+    return [["काम", "कम"], ["กิน", "กัน"], ["কাম", "কম"], ["கால்", "கல்"], ["がっこう", "かっこう"]].map(([a, b]) => companyKey(a) !== companyKey(b) && !!companyKey(a) && !!companyKey(b));
+  });
+  eq("names that differ only in a vowel sign (Hindi, Thai, Bengali, Tamil) or a Kana mark keep keys of their own (ROB-11)", scriptsMarked.ok ? scriptsMarked.v : String(scriptsMarked.e), [true, true, true, true, true]);
+
 }
 
 /* ---------- the view queue (lib/viewQueue.ts) ---------- */
@@ -587,6 +695,35 @@ console.log("\nA state file cut short, and every backup cut short");
   child("refuse", d, { ...S3_ENV, EXPECT_BACKUPS: "1" });
 }
 
+
+console.log("\nA state file that is valid JSON but holds no state ({}), with a backup");
+{
+  const d = preparedDir("emptyobj");
+  writeFileSync(path.join(d, "intel.json"), "{}");
+  child("restored", d, { ...S3_ENV, EXPECT_ASIDE: "2" });
+}
+
+console.log("\nAnother app's JSON put back as the state file, with a backup");
+{
+  const d = preparedDir("foreign");
+  const body = '{"acme.com":{"name":"Acme"}}';
+  writeFileSync(path.join(d, "intel.json"), body);
+  child("restored", d, { ...S3_ENV, EXPECT_ASIDE: String(body.length) });
+}
+
+console.log("\nA state file that holds no state ({}), with no backup");
+{
+  const d = preparedDir("emptynobackup");
+  writeFileSync(path.join(d, "intel.json"), "{}");
+  rmSync(path.join(d, "backups"), { recursive: true });
+  child("refuse", d, S3_ENV);
+}
+
+console.log("\nHealth checks that come together");
+child("healthRace", freshDir("healthrace"));
+
+console.log("\nShared hosts, marked scripts and short titles, on a table");
+child("addMore", freshDir("addmore"));
 console.log("\nA change that fails");
 child("flush", freshDir("flush"));
 

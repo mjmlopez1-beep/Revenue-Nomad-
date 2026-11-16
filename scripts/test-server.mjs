@@ -166,6 +166,25 @@ function seedClient(n, ipAddr) {
   return m ? new Client("Seed Member", ipAddr, m.token) : null;
 }
 
+/**
+ * Make a joined member's word count (lib/table.ts trustOf): they add a free fact and two seed
+ * members confirm it. A claim on an open role closes it only from an account that counts.
+ * Takes companies from the end of the list, away from the ones other checks use. Returns
+ * whether it could (it needs the seed file the server runs on).
+ */
+let vouchN = 0;
+async function vouch(who) {
+  const a = seedClient(40, ip(236));
+  const b = seedClient(41, ip(237));
+  if (!a || !b) return false;
+  const v = await who.view();
+  const c = [...v.companies].reverse().filter((x) => !x.hidden && !x.mine && x.cells.hq?.s === "empty")[vouchN++];
+  if (!c) return false;
+  const fill = await who.act({ type: "fill", entity: "company", id: c.id, field: "hq", value: "Austin, TX" });
+  const ok = [await a.act({ type: "verify", entity: "company", id: c.id, field: "hq" }), await b.act({ type: "verify", entity: "company", id: c.id, field: "hq" })];
+  return fill.status === 200 && ok.every((r) => r.status === 200);
+}
+
 /** Store a test scan (the server must run with RN_SCAN_TEST=1 and RN_CRON_SECRET). */
 const scanPost = (body, secret = CRON_SECRET) =>
   call("POST", "/api/table/scan", { ipAddr: ip(240), body, headers: secret === null ? {} : { "x-cron-secret": secret } });
@@ -810,21 +829,24 @@ section("benchmarks", async () => {
   const D = T[8];
   const dFn = "Executive";
   const dRev = "Pre-revenue";
-  const before = rowOf(await D.view(), dFn, dRev);
-  const beforeAll = rowOf(await D.view(), dFn, "All");
+  // (Seen by another member: a member's own rates are left out of the benchmarks they see.)
+  const before = rowOf(await R.view(), dFn, dRev);
+  const beforeAll = rowOf(await R.view(), dFn, "All");
   const der = await addRate(D, hosts[30], dFn, dRev, { pricing: "Hourly", rate: "$150/hr", hours: "10" });
-  const after = rowOf(await D.view(), dFn, dRev);
+  const after = rowOf(await R.view(), dFn, dRev);
   check("an hourly rate with hours a week counts as hourly and as monthly", der.status === 200 && after.hourly.n === before.hourly.n + 1 && after.monthly.n === before.monthly.n + 1, { before, after });
-  check("it counts in the All row too", rowOf(await D.view(), dFn, "All").hourly.n === beforeAll.hourly.n + 1);
+  check("it counts in the All row too", rowOf(await R.view(), dFn, "All").hourly.n === beforeAll.hourly.n + 1);
+  const own = rowOf(await D.view(), dFn, dRev);
+  check("the member who shared it sees the group without their own rate, and is told so", own.hourly.n === before.hourly.n && own.hourly.withoutYours === true, own.hourly);
   const mo = await addRate(T[9], hosts[31], dFn, dRev, { pricing: "Monthly retainer", rate: "$8k/mo" });
-  const after2 = rowOf(await D.view(), dFn, dRev);
+  const after2 = rowOf(await R.view(), dFn, dRev);
   check("a monthly rate with no hours counts once", mo.status === 200 && after2.monthly.n === after.monthly.n + 1 && after2.hourly.n === after.hourly.n, after2);
   // The band comes from the engagement's revenue at the time, else the company's.
   const coBand = hosts.find((c) => c.cells.revenue?.s === "value" && c.cells.revenue.v !== dRev && !c.mine);
   if (coBand) {
-    const b0 = rowOf(await D.view(), dFn, coBand.cells.revenue.v).monthly.n;
+    const b0 = rowOf(await R.view(), dFn, coBand.cells.revenue.v).monthly.n;
     await D.act({ type: "add", company: coBand.name, newEngagement: true, engagementFields: { function: dFn, pricing: "Monthly retainer", rate: "$7k/mo" } });
-    check("with no revenue on the seat, the company's revenue band is used", rowOf(await D.view(), dFn, coBand.cells.revenue.v).monthly.n === b0 + 1);
+    check("with no revenue on the seat, the company's revenue band is used", rowOf(await R.view(), dFn, coBand.cells.revenue.v).monthly.n === b0 + 1);
   }
 });
 
@@ -872,20 +894,25 @@ section("seats", async () => {
   const host3 = v0.companies.filter((c) => !c.hidden && c.friendly.open === 0)[42];
   const blank = await T.act({ type: "add", company: host3.name, newEngagement: true, engagementFields: { function: "Marketing", type: "Advisory" } });
   const viaFill = await Y.act({ type: "fill", entity: "engagement", id: blank.json?.id, field: "operator", value: "anything", memberId: "me" });
-  check('fill with memberId "me" links the seat to the viewer', viaFill.status === 200 && viaFill.json?.cells?.[0]?.cell?.member?.you === true && engOf(await Y.view(), blank.json?.id)?.yours === true, viaFill.json);
+  check('fill with memberId "me" links the seat to the viewer', viaFill.status === 200 && viaFill.json?.cells?.[0]?.cell?.member?.you === true, viaFill.json);
+  // On a seat somebody else made, naming yourself is not enough to see it free: another member confirms the name first.
+  check("on a seat another member made, naming yourself does not make it yours yet", engOf(await Y.view(), blank.json?.id)?.yours === false, engOf(await Y.view(), blank.json?.id)?.yours);
+  await U.act({ type: "unlock", entity: "engagement", id: blank.json?.id, field: "operator" });
+  const vouchName = await U.act({ type: "verify", entity: "engagement", id: blank.json?.id, field: "operator" });
+  check("once another member confirms the name, it is", vouchName.status === 200 && engOf(await Y.view(), blank.json?.id)?.yours === true, vouchName.json);
 
   // "This isn't me".
   const not = await Y.act({ type: "notMine", engagementId: eid });
   const ey2 = engOf(await Y.view(), eid);
   check("notMine unlinks the seat", not.status === 200 && ey2?.yours === false, { not: not.json?.message, yours: ey2?.yours });
-  check("after notMine the seat is locked for them like anyone else, and the name a member added is under review", GATED.every((k) => ey2?.cells[k]?.s === (k === "operator" ? "reported" : "locked")), ey2 && GATED.map((k) => ey2.cells[k]?.s));
+  check("after notMine the name a member added is under review, with the other locked facts that member put on the seat", GATED.every((k) => ey2?.cells[k]?.s === "reported"), ey2 && GATED.map((k) => ey2.cells[k]?.s));
   check("notMine returns the cells as they now look", not.json?.cells?.find((c) => c.field === "operator")?.cell?.s === "reported", not.json?.cells?.map((c) => [c.field, c.cell.s]));
   const again = await Y.act({ type: "notMine", engagementId: eid });
   check("notMine on a seat that isn't yours is refused", again.status === 400 && again.json?.error === "That seat isn't linked to you.", again.json);
   const unl = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "operator" });
   check("after notMine nobody can buy the name a member put on that seat", unl.status === 400 && unl.json?.error === "Nothing to unlock here." && engOf(await U.view(), eid)?.cells.operator?.s === "reported", unl.json);
-  const pay = await Y.act({ type: "unlock", entity: "engagement", id: eid, field: "role" });
-  check("after notMine unlocking a fact there costs a credit again", pay.status === 200 && pay.json?.me?.unlocked === 1, pay.json);
+  const pay = await U.act({ type: "unlock", entity: "engagement", id: eid, field: "rate" });
+  check("nor the rate that member put there", pay.status === 400 && pay.json?.error === "Nothing to unlock here.", pay.json);
 
   // A real linked seat holder from the seed: free to see, and they can correct our own records.
   const sm = seedHolders[0];
@@ -1115,6 +1142,9 @@ section("scan", async () => {
   const adm = await admin();
   const V = await member("Val Viewer", ip(160));
   const G = await member("Gil Guest", ip(161));
+  // Their claims on open roles below close them, so their word must count.
+  const counted = (await vouch(V)) && (await vouch(G));
+  if (!counted) return skip("scan checks", "needs the seed file the server runs on (two seed members vouch for the claimers)");
   const t0 = Date.now();
   const at = (days) => new Date(t0 + days * DAY_MS).toISOString();
   const v0 = await V.view();
@@ -1176,7 +1206,8 @@ section("scan", async () => {
   const s4 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0, error: "timeout" }], now: at(14) });
   const s5 = await scanPost({ roles: [], sources: [{ source: board, fetched: 0, matched: 0 }, { source: "other-board", fetched: 30, matched: 3 }], now: at(14) });
   check("a board outage closes nothing", s4.json?.result?.closed === 0 && exact(s5.json?.result?.closed, 0), [s4.json, s5.json]);
-  check("the roles are still open after the outage", (await stillOpenHere()) && (!seedQuiet || (await V.view()).scan.openNow === v1.scan.openNow));
+  // Since day 12 the board answered without them, so they are not counted in open now (and day 12 was a clean run of a small board).
+  check("the roles are still open after the outage, and left out of open now", (await stillOpenHere()) && (!seedQuiet || (await V.view()).scan.openNow === v1.scan.openNow - 2), (await V.view()).scan);
   // Close: two clean runs of its board miss it, and it has been unseen for more than 10 days. A run
   // is clean only when the board matched something, so another role on the board stays listed.
   const keeper = { ...role1, key: `qakeeper${RUN}:cro`, company: `Qa Keeper Co ${RUN}`, domain: null, title: "Fractional CRO", url: `https://jobs.example.com/qa/${RUN}/keeper` };

@@ -36,12 +36,14 @@ function codePoint(n: number): string {
 export const squeeze = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 
 /**
- * A name as it is compared, never as it is shown or stored: accents and marks dropped, lowercase,
+ * A name as it is compared, never as it is shown or stored: Latin accents dropped, lowercase,
  * letters and digits of any script kept. "Société Générale" and "Societe Generale" match, and a
- * name in Cyrillic or Japanese keeps a key of its own. Empty for a name with no letter or digit.
+ * name in Cyrillic or Japanese keeps a key of its own. Only the Latin accents go (U+0300 to
+ * U+036F): in Hindi, Thai, Bengali or Tamil a vowel is written as a mark, and काम and कम are two
+ * words. Empty for a name with no letter or digit.
  */
 export const textKey = (s: string) =>
-  String(s ?? "").normalize("NFKD").replace(/\p{M}+/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]+/g, "").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "").replace(/^\p{M}+/u, "");
 
 /** The posting's stable key: company and title, squeezed and joined by "::". The same role on two boards shares it. */
 export function roleKey(company: string, title: string): string {

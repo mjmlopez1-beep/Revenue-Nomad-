@@ -19,15 +19,18 @@
  * p_{company}_{person}), so none leaves the server. The client sees pubId(id), an opaque
  * HMAC, and perform() maps it back.
  *
- * Hidden companies: a company with an active open role keeps its name, website, LinkedIn,
- * logo and About behind "Unlock company" (1 credit); see identityHidden(). The same credit
- * opens the role and the posting of each open role there, whichever of them was asked for.
+ * Hidden companies: a company with an open role the scan follows (or one from our records)
+ * keeps its name, website, LinkedIn, logo and About behind "Unlock company" (1 credit); see
+ * identityHidden() and hidesCompany(). The same credit opens the role and the posting of each
+ * open role there, whichever of them was asked for. Where the company is not hidden, the role
+ * and the posting of an open role are still one purchase.
  *
- * Your seats: the member a seat-holder name resolves to sees their own seat free, can correct
- * what the seed or the scan say about it, and can say "this isn't me"; see seatHolder(). Their
- * report on a fact on their own seat hides it for everyone at once. An open role closes only
- * when a member picks themselves as its seat holder, and reopens if that name comes off; see
- * reopenIfUnheld().
+ * Your seats: the member a seat-holder name resolves to can say "this isn't me"; see
+ * seatHolder(). When the name is good evidence (our records, another member, the seat's maker,
+ * a confirmation) they also see their own seat free, can correct what the seed or the scan say
+ * about it, and their report on a fact there hides it for everyone at once; see seatOwner(). An
+ * open role closes only when a member picks themselves as its seat holder on an account that
+ * counts (trustOf), and reopens if that name comes off; see reopenIfUnheld().
  *
  * Weekly scan: open roles come in from job boards with the day they were first seen, close
  * (with the date) when a clean scan stops listing them, and reopen if listed again, unless a
@@ -57,7 +60,7 @@ import { MAX_ROLES, collectOpenRoles } from "./scan/collect";
 import { companyKey, textKey } from "./scan/clean";
 import {
   ALL_FIELDS, EARN_CAP, ENGAGEMENT_TYPES, FILLABLE, FRACTIONAL_TYPES, FUNCTIONS, REFERRAL_BONUS, REFERRAL_LIMIT, cleanValue, fieldDef, functionOf,
-  stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, type Entity,
+  stripInvisible, tidy, HIDDEN_COMPANY, LEGACY_VALUES, RN_REVENUE, siteKey, type Entity,
 } from "./tableFields";
 import type {
   Action, ActionResult, AdminStats, BenchRate, BenchmarkRow, Benchmarks, Cell, RateStat, CompanyRec, EngagementRec, Friendly, LedgerRow, Me, PersonRec,
@@ -165,6 +168,8 @@ interface RoleTrack {
   /** Clean scans of its board that did not list it since it was last seen (at most one counted per 12 hours), and when the last was counted. */
   misses?: number;
   missAt?: string;
+  /** Its board answered with listings since it was last seen and did not list it (clean run or not). It is not counted as open while this stands. */
+  absentAt?: string;
 }
 /** One job board, as the scan has known it. */
 interface BoardHealth {
@@ -173,6 +178,8 @@ interface BoardHealth {
   lastOkAt: string | null;
   /** Its last run was clean: it answered, matched something, and at least half its baseline. */
   healthy: boolean;
+  /** Listings it answered with on its last healthy run. A board that lists a role or two is clean at 0 matches when it answers with about as many. */
+  fetched?: number;
   /** Since when it has matched something, but under half its baseline, on every run. */
   lowSince?: string;
   /** The last run that named it. */
@@ -209,7 +216,8 @@ export interface State {
   /** Members who confirmed a value is correct, keyed like values. */
   verifications: Record<string, string[]>;
   /** People who joined from the landing page (seed members sign in with their link). */
-  members: (Member & { at: string; referredBy?: string; ipHash?: string })[];
+  /** proven: joined while sign-in links went by email, so the link proved the address (see trustOf). */
+  members: (Member & { at: string; referredBy?: string; ipHash?: string; proven?: boolean })[];
   /**
    * Each member's recent networks as hashes (never the address), newest last, at most IP_KEEP.
    * Seed members too. Written at sign-in and on visits. An invite that joins from one of the
@@ -231,8 +239,12 @@ export interface State {
   signals: { memberId: string; name: string; where: string; at: string }[];
   /** "This isn't me": engagement ids a member said they never held, by member id. */
   notMine: Record<string, string[]>;
-  /** Open roles a member closed by picking themselves as the seat holder, for the limit of one per rolling 24 hours. Older rows are dropped. */
-  roleClaims?: { memberId: string; engagementId: string; at: string }[];
+  /**
+   * Open roles a member picked themselves on as the seat holder, for the limit of one per rolling
+   * 24 hours and the admin's list. closed: the claim closed the role (the account counts, see
+   * trustOf). Rows older than 30 days are dropped.
+   */
+  roleClaims?: { memberId: string; engagementId: string; at: string; closed?: boolean }[];
   /** Each member's last visit (written at most once per 6 hours). */
   seen: Record<string, string>;
   scan: ScanState;
@@ -389,6 +401,9 @@ export const stateVersion = () => commits;
 function isState(x: unknown): x is Partial<State> {
   if (!x || typeof x !== "object" || Array.isArray(x)) return false;
   const o = x as Record<string, unknown>;
+  // Every state Trading Post has written holds a ledger and the values. A file without them ("{}",
+  // or another app's JSON put back by mistake) is not ours, and booting it would start an empty table.
+  if (!Array.isArray(o.ledger) || !o.values || typeof o.values !== "object" || Array.isArray(o.values)) return false;
   for (const k of ["companies", "engagements", "contacts", "members", "ledger"]) if (o[k] !== undefined && !Array.isArray(o[k])) return false;
   for (const k of ["values", "unlocks", "profiles", "scan", "digest", "flags"])
     if (o[k] !== undefined && (!o[k] || typeof o[k] !== "object" || Array.isArray(o[k]))) return false;
@@ -513,24 +528,32 @@ export async function loadState(): Promise<State> {
 }
 
 let diskProbe: { ok: boolean; at: number } | null = null;
+/** The disk check under way, shared by every health call that arrives while it runs. */
+let diskProbing: Promise<void> | null = null;
+let probeN = 0;
 /**
  * For GET /api/health: the real seed loaded, the state loaded (from its file, a first start, or
  * a backup) and the data folder takes writes. It never writes the state. The disk check writes
- * one small probe file and removes it, at most once in 15 seconds.
+ * one small probe file and removes it, at most once in 15 seconds. Calls that come together
+ * wait for the same check (each with its own file, so two can never trip over one another).
  */
 export async function health(): Promise<{ ok: boolean; seed: "ok" | "demo" | "missing"; state: "ok" | "restored" | "down"; disk: "ok" | "failed" }> {
   const seed = await loadSeed().then((x) => (x.demo ? ("demo" as const) : ("ok" as const)), () => "missing" as const);
   const state = await loadState().then(() => (stateFrom?.origin === "backup" ? ("restored" as const) : ("ok" as const)), () => "down" as const);
   if (!diskProbe || Date.now() - diskProbe.at > 15_000) {
-    const probe = path.join(DATA_DIR, `.health-${process.pid}`);
-    const ok = await fs
-      .mkdir(DATA_DIR, { recursive: true })
-      .then(() => fs.writeFile(probe, "ok"))
-      .then(() => fs.unlink(probe))
-      .then(() => true, () => false);
-    diskProbe = { ok, at: Date.now() };
+    diskProbing ??= (async () => {
+      const probe = path.join(DATA_DIR, `.health-${process.pid}-${++probeN}`);
+      const ok = await fs
+        .mkdir(DATA_DIR, { recursive: true })
+        .then(() => fs.writeFile(probe, "ok"))
+        .then(() => fs.unlink(probe))
+        .then(() => true, () => false);
+      diskProbe = { ok, at: Date.now() };
+      diskProbing = null;
+    })();
+    await diskProbing;
   }
-  const disk = diskProbe.ok ? ("ok" as const) : ("failed" as const);
+  const disk = diskProbe?.ok ? ("ok" as const) : ("failed" as const);
   return { ok: seed === "ok" && state !== "down" && disk === "ok", seed, state, disk };
 }
 
@@ -775,6 +798,8 @@ const UNLOCK_DAILY_MAX = 100;
 const NEW_MEMBER_UNLOCK_MAX = Math.max(25, STARTER_CREDITS);
 /** Reports a member can make per rolling 24 hours. */
 const REPORT_DAILY_MAX = 10;
+/** How long a claim on an open role stays on file (State.roleClaims): the limit needs 24 hours, the admin's list 30 days. */
+const CLAIM_KEEP = 30 * DAY;
 /** Field keys any record can have (values under other keys are ignored). */
 const FIELD_KEYS = new Set(ALL_FIELDS.map((x) => x.f.key));
 
@@ -832,16 +857,26 @@ const heldFor = (s: State, memberId: string) => s.held.reduce((n, h) => n + (h.m
 
 /* ---------- limits beside the daily earning cap ---------- */
 
-/** The four "How they sell" pick lists on a company. One click each and easy to guess, so they have their own limits. */
-const SELL_FIELDS = new Set(["businessModel", "motion", "dealSize", "salesCycle"]);
-/** "How they sell" answers that earn a credit, per member per rolling 24 hours. More still save, for no credit. */
+/**
+ * A company's pick lists: industry, employees, revenue and the four "How they sell" lists. One
+ * click each and easy to guess, so they share their own limits. On a company the member added,
+ * or where they hold a seat, they are not limited (see pickExempt).
+ */
+const SELL_FIELDS = new Set(["businessModel", "motion", "dealSize", "salesCycle", "industry", "employees", "revenue"]);
+/** A ledger ref for a company pick-list answer (engagements have a revenue and employees "at the time" too; those are not counted). */
+const isPickRef = (ref: string) => ref.startsWith("c_") && SELL_FIELDS.has(refField(ref));
+/** Pick-list answers that earn a credit, per member per rolling 24 hours. More still save, for no credit. */
 const SELL_EARN_MAX = 5;
-/** "How they sell" answers a member can save per rolling 24 hours. */
+/** Pick-list answers a member can save per rolling 24 hours. */
 const SELL_SAVE_MAX = 20;
+/** What the pick-list limits are about, in running text. */
+const PICKS = "a company's industry, size, revenue or how they sell";
 /** Facts a member can add to records per rolling 24 hours, not counting their own seats (a backstop against a flood). */
 const FILL_DAILY_MAX = 150;
-/** What still earns once the "How they sell" answers have stopped. */
+/** What still earns once the pick-list answers have stopped. */
 const SELL_STILL_EARNS = "A role, a rate or who held the seat still earns.";
+/** The refusal past SELL_SAVE_MAX pick-list answers in a day. */
+const SELL_FULL = `You've added ${SELL_SAVE_MAX} answers today for ${PICKS}. Add more tomorrow. A role, a rate or who held the seat can go in now.`;
 
 const refField = (ref: string) => ref.slice(ref.lastIndexOf(".") + 1);
 const refRecord = (ref: string) => ref.slice(0, Math.max(0, ref.lastIndexOf(".")));
@@ -850,16 +885,22 @@ const refRecord = (ref: string) => ref.slice(0, Math.max(0, ref.lastIndexOf(".")
 const fillsToday = (s: State, memberId: string, nowMs: number) =>
   s.ledger.filter((l) => l.memberId === memberId && l.reason === "fill" && !l.ref.startsWith("bench.") && nowMs - Date.parse(l.at) < DAY);
 
-/** "How they sell" answers a member saved, and was paid for, in the rolling 24 hours before `nowMs`. */
-function sellToday(s: State, memberId: string, nowMs: number): { saved: number; earned: number } {
+/** Company pick-list answers a member saved, and was paid for, in the rolling 24 hours before `nowMs`, leaving out companies `exempt` names. */
+function sellToday(s: State, memberId: string, nowMs: number, exempt: (companyId: string) => boolean = () => false): { saved: number; earned: number } {
   let saved = 0;
   let earned = 0;
   for (const l of fillsToday(s, memberId, nowMs)) {
-    if (!SELL_FIELDS.has(refField(l.ref))) continue;
+    if (!isPickRef(l.ref) || exempt(refRecord(l.ref))) continue;
     saved++;
     if (l.delta > 0) earned++;
   }
   return { saved, earned };
+}
+
+/** Companies whose pick lists a member fills without the daily limits: ones they added, and ones where they hold a seat (`seatAt`). */
+function pickExempt(s: State, memberId: string, seatAt: Set<string>): (companyId: string) => boolean {
+  const added = new Set(s.companies.filter((c) => c.by === memberId).map((c) => c.id));
+  return (companyId) => added.has(companyId) || seatAt.has(companyId);
 }
 
 /**
@@ -926,6 +967,9 @@ interface MemberIndex {
   byId: Map<string, Member>;
   byName: Map<string, Member[]>;
   all: Member[];
+  /** Seed members, and when each joined account joined, for two members who share a name (see seatMember). */
+  seedIds: Set<string>;
+  joinedAt: Map<string, string>;
 }
 let memberIndexCache: { seed: Seed; s: State; idx: MemberIndex } | null = null;
 /** Every member (seed and joined), by id and by normalized name. Rebuilt when the state changes. */
@@ -938,19 +982,26 @@ function memberIndex(seed: Seed, s: State): MemberIndex {
     const k = normName(m.name);
     byName.set(k, [...(byName.get(k) ?? []), m]);
   }
-  const idx = { byId, byName, all };
+  const idx = { byId, byName, all, seedIds: new Set(seed.members.map((m) => m.id)), joinedAt: new Map(s.members.map((m) => [m.id, m.at])) };
   memberIndexCache = { seed, s, idx };
   return idx;
 }
 
 /**
- * The member a seat-holder value points to: the one picked when it was added, else the one
- * member whose name matches exactly (two members with the same name match neither).
+ * The member a seat-holder value points to: the one picked when it was added, else the member
+ * whose name matches exactly. A later account with the same name never takes the match from the
+ * member who had it (joining asks only for a name): a seed member wins, two seed members with one
+ * name match neither, and among joined accounts the one that joined first.
  */
 function seatMember(idx: MemberIndex, v: FieldValue): Member | null {
   if (v.memberId) return idx.byId.get(v.memberId) ?? null;
-  const same = idx.byName.get(normName(v.value)) ?? [];
-  return same.length === 1 ? same[0] : null;
+  const key = normName(v.value);
+  if (!key) return null;
+  const same = idx.byName.get(key) ?? [];
+  if (same.length <= 1) return same[0] ?? null;
+  const seeded = same.filter((m) => idx.seedIds.has(m.id));
+  if (seeded.length) return seeded.length === 1 ? seeded[0] : null;
+  return [...same].sort((a, b) => (idx.joinedAt.get(a.id) ?? "").localeCompare(idx.joinedAt.get(b.id) ?? ""))[0];
 }
 
 /**
@@ -963,17 +1014,79 @@ function seatHolder(s: State, idx: MemberIndex, engId: string, v: FieldValue | n
   return m && !(s.notMine[m.id] ?? []).includes(engId) ? m : null;
 }
 
-/** Reopen a role that closed because a member took it: no close date, status back to "Open role". Returns whether it did. */
+/**
+ * Accounts whose say-so counts where one account could otherwise change what everyone sees: a
+ * claim that closes an open role, and a rate toward a benchmark. Joining takes only a name and
+ * an address, and an account's age proves nothing, so a joined account counts only once
+ * something vouches for it. It joined while sign-in links went by email (the link proved the
+ * address), or two members who count confirmed a fact it added. Seed members always count.
+ */
+let trustCache: { seed: Seed; s: State; f: (memberId: string) => boolean } | null = null;
+function trustOf(seed: Seed, s: State): (memberId: string) => boolean {
+  if (trustCache && trustCache.seed === seed && trustCache.s === s) return trustCache.f;
+  const base = new Set<string>(seed.members.map((m) => m.id));
+  for (const m of s.members) if (m.proven) base.add(m.id);
+  const vouched = new Set<string>();
+  for (const [k, list] of Object.entries(s.verifications)) {
+    if (list.length < 2) continue;
+    const v = s.values[k];
+    if (!v || v.status !== "live" || isSystem(v.by) || base.has(v.by) || vouched.has(v.by)) continue;
+    if (list.filter((x) => x !== v.by && base.has(x)).length >= 2) vouched.add(v.by);
+  }
+  const f = (memberId: string) => base.has(memberId) || vouched.has(memberId);
+  // A draft inside mutate() changes in place, so only the committed state is kept.
+  if (s === stateCache) trustCache = { seed, s, f };
+  return f;
+}
+
+/**
+ * The seat holder who sees their seat free, can correct it and can hide a fact on it at once.
+ * Being named is not enough when a member named themselves on a seat somebody else made (that
+ * would hand them its rate and the power to hide it). One of these must hold: our records or the
+ * scan name them, another member named them, they made the seat, another member confirmed the
+ * name, or the seat is an open role the scan follows and they took it on an account that counts.
+ */
+function seatOwner(
+  s: State, idx: MemberIndex, trusted: (memberId: string) => boolean, tracks: Tracks, engId: string, v: FieldValue | null, createdBy: string | undefined,
+): Member | null {
+  const m = seatHolder(s, idx, engId, v);
+  if (!m || !v) return null;
+  if (isSystem(v.by) || v.by !== m.id || createdBy === m.id) return m;
+  if ((s.verifications[fkey(engId, "operator")] ?? []).some((x) => x !== m.id)) return m;
+  return trusted(m.id) && tracks.has(engId) ? m : null;
+}
+
+/**
+ * Reopen a role that closed because a member took it: no close date, status back to "Open role".
+ * Returns whether it did. A role whose posting has been gone a long while does not come back as
+ * open: it was last listed more than CLOSE_AFTER ago and its board has scanned cleanly since (a
+ * seed role, SEED_ROLE_LIFE ago and any clean scan since). That one closes as the scan would
+ * have closed it, while the claim kept it filled.
+ */
 function reopenFilled(s: State, engId: string, now: string): boolean {
+  const nowMs = Date.parse(now);
   let done = false;
+  let gone = false;
   for (const r of Object.values(s.scan.roles)) {
     if (r.engagementId !== engId || !r.closedAt || r.closedBy !== "filled") continue;
+    const unseen = nowMs - Date.parse(r.lastSeen);
+    const cleanSince = r.source === "seed" ? s.scan.lastOkAt ?? null : s.scan.boards?.[r.source]?.lastOkAt ?? null;
+    if (cleanSince && cleanSince > r.lastSeen && unseen > (r.source === "seed" ? SEED_ROLE_LIFE : CLOSE_AFTER)) {
+      r.closedBy = "scan";
+      r.closedAt = now;
+      gone = true;
+      continue;
+    }
     r.closedAt = null;
     delete r.closedBy;
     done = true;
   }
-  if (!done) return false;
   const sk = fkey(engId, "status");
+  if (gone && !done) {
+    delete s.verifications[sk];
+    s.values[sk] = { value: "Closed", by: "scan", at: now, status: "live" };
+  }
+  if (!done) return false;
   delete s.verifications[sk];
   s.values[sk] = { value: "Open role", by: "scan", at: now, status: "live" };
   return true;
@@ -1135,6 +1248,8 @@ export async function joinMember(
     const m = {
       id: newId("j", name), name, email, title: "Member", token: randomBytes(12).toString("base64url"), at: new Date().toISOString(), ipHash,
       ...(referrer && !sameNetwork ? { referredBy: referrer.id } : {}),
+      // With email on, the sign-in link goes only to this address: whoever uses it owns the address (see trustOf).
+      ...(emailEnabled() ? { proven: true } : {}),
     };
     s.members.push(m);
     keepIp(s, m.id, ipHash);
@@ -1165,10 +1280,10 @@ const keyOfCompany = (name: string) => {
 export async function existingCompany(domain: string | null, name: string | null) {
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const g = graph(seed, s);
-  const d = hostOf(domain);
+  const d = siteKey(domain);
   const key = name ? keyOfCompany(name) : "";
   const c =
-    (d && [...g.companies.values()].find((c) => hostOf(live(c, s, "website")) === d)) ||
+    (d && [...g.companies.values()].find((c) => siteKey(live(c, s, "website")) === d)) ||
     (key && [...g.companies.values()].find((c) => keyOfCompany(c.name) === key)) ||
     null;
   if (!c) return null;
@@ -1218,7 +1333,7 @@ function keepSeedTracks(seed: Seed, s: State): void {
  * Still open on file, but its own board answered cleanly since it was last seen and did not
  * list it. Seed roles have no board the scan reads, so they are never unseen.
  */
-const isUnseen = (t: RoleTrack) => !t.closedAt && t.source !== "seed" && (t.misses ?? 0) > 0;
+const isUnseen = (t: RoleTrack) => !t.closedAt && t.source !== "seed" && ((t.misses ?? 0) > 0 || !!t.absentAt);
 /** What the scan knows about a role's dates, as full times (the day forms `opened` and `closed` stay as they were). */
 const roleTimes = (t: RoleTrack) => ({
   openedAt: t.firstSeen,
@@ -1237,13 +1352,31 @@ const newThisWeek = (t: RoleTrack, nowMs: number) => {
 };
 
 /**
- * An open fractional seat right now: status Open role, or a scanned posting nobody has marked
- * filled. A followed role that closed (the posting came down, or the seat was filled) is not open.
+ * An open fractional seat right now. A role the scan follows is open until its track closes (the
+ * posting came down, or a member took the seat): its status says so, but a member who wrote a
+ * status on it before the scan found it does not decide. Any other seat is open when its status
+ * is Open role (or it is a scanned posting with no status).
  */
 function isOpenRole(e: EngNode, s: State, tracks: Tracks): boolean {
-  if (tracks.get(e.id)?.closedAt) return false;
+  const t = tracks.get(e.id);
+  if (t) return !t.closedAt;
   const status = live(e, s, "status");
   return status ? status === "Open role" : e.source === "Demand scan";
+}
+/**
+ * An open role that hides its company: one the scan follows, or one from our records. A member
+ * who marks a seat Open role shows it as an open role, and hides nothing until a scan lists it.
+ */
+function hidesCompany(e: EngNode, s: State, tracks: Tracks): boolean {
+  if (!isOpenRole(e, s, tracks)) return false;
+  return tracks.has(e.id) || isSystem(valueOf(e, s, "status")?.by ?? "seed");
+}
+/** The member holds the role or the posting of this open role (paid for it, or added it): it was bought once, with whatever else that purchase opens. */
+function holdsOpenRole(s: State, me: Member, e: Node): boolean {
+  return BUNDLE_FIELDS.some((field) => {
+    const v = valueOf(e, s, field);
+    return !!v && v.status === "live" && (v.by === me.id || (s.unlocks[fkey(e.id, field)] ?? []).includes(me.id));
+  });
 }
 
 /** Company facts that would give a hidden company away. HQ is cut to its region instead. */
@@ -1267,7 +1400,9 @@ const postingFree = (t: RoleTrack | undefined) => !!t?.closedAt && t.closedBy !=
 function identityHidden(g: Graph, s: State, idx: MemberIndex, tracks: Tracks, me: Member | null, companyId: string): boolean {
   if (!me || isAdmin(me)) return false;
   const engs = [...g.engagements.values()].filter((e) => e.companyId === companyId);
-  if (!engs.some((e) => isOpenRole(e, s, tracks))) return false;
+  if (!engs.some((e) => hidesCompany(e, s, tracks))) return false;
+  // Paid for an open role's title or posting there already (say while the role was closed): the company came with it.
+  if (engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e))) return false;
   if ((s.unlocks[fkey(companyId, "identity")] ?? []).includes(me.id)) return false;
   if (s.companies.some((c) => c.id === companyId && c.by === me.id)) return false;
   const ids = new Set<string>([companyId, ...engs.map((e) => e.id)]);
@@ -1367,6 +1502,10 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
   const myAdds = new Set<string>();
   if (me) for (const [k, v] of Object.entries(s.values)) if (v.by === me.id) myAdds.add(k.split(".")[0]);
   const following = new Set(me ? s.follows[me.id] ?? [] : []);
+  const trusted = trustOf(seed, s);
+  const madeBy = new Map(s.engagements.map((e) => [e.id, e.by]));
+  /** Companies where the viewer holds a seat as its owner (their company pick lists are not limited, see pickExempt). */
+  const ownSeatAt = new Set<string>();
 
   const icons = await iconDomains(
     [...g.companies.values()].map((c) => ({ id: c.id, name: c.name, website: live(c, s, "website") })),
@@ -1403,10 +1542,12 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const closedPostings: { e: EngNode; cells: Record<string, Cell> }[] = [];
     const engRecs: EngagementRec[] = engs.map((e) => {
       const cells: Record<string, Cell> = {};
-      // The seat holder sees their own seat free.
-      const yours = !!me && seatHolder(s, idx, e.id, valueOf(e, s, "operator"))?.id === me.id;
+      // The seat holder sees their own seat free (see seatOwner for who counts as its holder).
+      const op = valueOf(e, s, "operator");
+      const yours = !!me && seatOwner(s, idx, trusted, tracks, e.id, op, madeBy.get(e.id))?.id === me.id;
       const track = tracks.get(e.id);
-      if (yours) holdsSeat = true;
+      if (yours) ownSeatAt.add(c.id);
+      if (yours || (!!me && seatHolder(s, idx, e.id, op)?.id === me.id)) holdsSeat = true;
       for (const f of ENG_F) cells[f.key] = cell(e, "engagement", f.key, yours);
       if (postingFree(track) && cells.posting.s === "locked") closedPostings.push({ e, cells });
       // Function is free; derive it from the role when nobody set it.
@@ -1415,8 +1556,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
         if (fn) cells.function = { s: "value", v: fn, ver: 0, system: true };
       }
       count(cells, ENG_F);
-      const op = live(e, s, "operator");
-      if (op) operators.add(op.toLowerCase());
+      const opName = live(e, s, "operator");
+      if (opName) operators.add(opName.toLowerCase());
       const ePeopleNodes = people.filter((p) => p.engagementId === e.id);
       const ePeople = ePeopleNodes.map(toPerson);
       const eu = maxIso(touched(e.id), ...ePeopleNodes.map((p) => touched(p.id)));
@@ -1440,7 +1581,8 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     const hidden =
       !!me &&
       !isAdmin(me) &&
-      engs.some((e) => isOpenRole(e, s, tracks)) &&
+      engs.some((e) => hidesCompany(e, s, tracks)) &&
+      !engs.some((e) => isOpenRole(e, s, tracks) && holdsOpenRole(s, me, e)) &&
       !mine &&
       !(s.unlocks[fkey(c.id, "identity")] ?? []).includes(me.id) &&
       !s.companies.some((x) => x.id === c.id && x.by === me.id) &&
@@ -1570,7 +1712,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       onboarded: !!prof.onboarded,
       ...shownBalance(balance(s, me.id)),
       unlocksLeft: unlockRoom(s, me.id, nowMs).left,
-      sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs).earned),
+      sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, pickExempt(s, me.id, ownSeatAt)).earned),
       earned24h: earned,
       earnCap: EARN_CAP,
       earnResetsAt: resetsAt,
@@ -1615,7 +1757,7 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
     ledger,
     reported,
     email: emailEnabled(),
-    ...(me && scan ? { benchmarks: benchmarks(seed, g, s), scan } : {}),
+    ...(me && scan ? { benchmarks: benchmarks(seed, g, s, me.id), scan } : {}),
     ...(me && scan && isAdmin(me) ? { admin: adminStats(seed, s, g, idx, nowMs, scan, entityOf) } : {}),
   };
 }
@@ -1765,6 +1907,21 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     credits: { atZero: balances.filter((b) => b <= 0).length, low: balances.filter((b) => b >= 1 && b <= 3).length, median },
     activity: { adds, unlocks, adds7, unlocks7 },
     recentAdds,
+    roleClaims: (s.roleClaims ?? [])
+      .filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP && idx.byId.has(c.memberId) && g.engagements.has(c.engagementId))
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .map((c) => {
+        const op = s.values[fkey(c.engagementId, "operator")];
+        return {
+          memberId: pubId(c.memberId),
+          name: idx.byId.get(c.memberId)!.name,
+          company: g.companies.get(g.engagements.get(c.engagementId)!.companyId)?.name ?? "",
+          engagementId: pubId(c.engagementId),
+          at: c.at,
+          closed: c.closed !== false,
+          standing: !!op && op.status !== "removed" && op.by === c.memberId && op.memberId === c.memberId,
+        };
+      }),
     walls: { members: walled.size, hits },
     pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
     topUnlocked: top("unlock"),
@@ -1779,26 +1936,16 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
 
 /* ---------- rate benchmarks ---------- */
 
-/** A group shows numbers only with rates from at least this many trusted contributors. */
+/** A group shows numbers only with rates from at least this many contributors. */
 export const BENCHMARK_MIN_N = 5;
 /** A figure that includes Rate Index data needs this many (the survey promised groups of 20). */
 export const BENCHMARK_INDEX_MIN_N = 20;
-/** The range (p25 to p75) is sent only at this many trusted contributors. Below it, the median alone. */
+/** The range (p25 to p75) is sent only at this many contributors. Below it, the median alone. */
 export const BENCHMARK_RANGE_N = 10;
-/** A joined account's rates count toward a group's floor once the account is this old. */
-const BENCH_TRUST_AGE = 7 * DAY;
-/** What leaves the server is rounded: dollars a month to the nearest 250, dollars an hour to the nearest 5. */
+/** What leaves the server is rounded: dollars a month to the nearest 250, dollars an hour to the nearest 5 ... */
 const BENCH_ROUND = { monthly: 250, hourly: 5 } as const;
-
-/**
- * Whose rates count toward a group's floor: seed members, and joined accounts at least 7 days
- * old. Joining takes only an email, so a new account's rate can't help a group reach its floor.
- */
-function benchTrust(seed: Seed, s: State, nowMs: number): (memberId: string) => boolean {
-  const seedIds = new Set(seed.members.map((m) => m.id));
-  const joinedAt = new Map(s.members.map((m) => [m.id, Date.parse(m.at)]));
-  return (id) => seedIds.has(id) || nowMs - (joinedAt.get(id) ?? Infinity) >= BENCH_TRUST_AGE;
-}
+/** ... and wider while a figure has fewer than BENCHMARK_RANGE_N contributors, where one person moves it most. */
+const BENCH_ROUND_WIDE = { monthly: 1000, hourly: 25 } as const;
 
 /** Benchmark-only rates on file per member (a count, never an amount), for the admin's list of recent adds. */
 export function benchRateCounts(s: State): Map<string, number> {
@@ -1810,11 +1957,10 @@ export function benchRateCounts(s: State): Map<string, number> {
 /**
  * One rate. `who` is its contributor: "m:<member id>" for a rate a member shared or put on a
  * record, "r:<engagement id>" for a rate from our own records, "x:<row>" for a Rate Index row.
- * `index` marks a point from the Rate Index. `trusted` contributors count toward the floor.
- * `priv` marks a rate shared for the benchmarks only (a rate on a record is not private: any
- * member can unlock it for a credit).
+ * `index` marks a point from the Rate Index. `priv` marks a rate shared for the benchmarks only
+ * (a rate on a record is not private: any member can unlock it for a credit).
  */
-type RatePoint = { fn: string; revenue: string | null; kind: "monthly" | "hourly"; amount: number; index: boolean; who: string; trusted: boolean; priv: boolean };
+type RatePoint = { fn: string; revenue: string | null; kind: "monthly" | "hourly"; amount: number; index: boolean; who: string; priv: boolean };
 
 const quantile = (sorted: number[], p: number) => {
   const i = (sorted.length - 1) * p;
@@ -1824,55 +1970,48 @@ const quantile = (sorted: number[], p: number) => {
 
 /**
  * One benchmark figure, counted in people and not in rows. Each contributor counts once, with
- * the middle of their rates in the group, so one account can never fill a group or pad it.
+ * the middle of their rates in the group, so one account can never fill a group or pad it. Only
+ * contributors who count are in it at all (see benchPoints()).
  *
  * A figure is the first of these that holds:
- *  - with Rate Index data, when the Rate Index rows and the trusted contributors together
- *    reach 20 (the survey promised groups of 20)
- *  - from member rates and our own records, when 5 trusted members shared a rate privately.
- *    The survey rows are left out, so survey data never shows in a group under 20.
- *  - from rates on records alone, when those come from 5 trusted contributors.
+ *  - with Rate Index data, when the Rate Index rows and the contributors together reach 20 (the
+ *    survey promised groups of 20)
+ *  - from member rates and our own records, when 5 members shared a rate privately. The survey
+ *    rows are left out, so survey data never shows in a group under 20.
+ *  - from rates on records alone, when those come from 5 contributors.
  * A rate on a record is no cover for a private one, because any member can unlock it for a
  * credit and take it out of the sum. So private rates and survey rows join a figure only as a
  * crowd of 5 of their own (a median over 4 unlocked rates and 1 private one would give the
  * private one away), and the range needs 10 of them. Until then they wait.
- *
- * Rates from accounts that are not trusted yet join a figure only once it shows without them,
- * and all of them together weigh as one contributor (the middle of their rates). So any number
- * of throwaway accounts moves a figure no further than one member can.
  * Below the floor, `n` and `min` describe the nearest floor ("3 of 5").
  */
 function rateStat(pts: RatePoint[], kind: "monthly" | "hourly"): RateStat {
-  const by = new Map<string, { amounts: number[]; index: boolean; trusted: boolean; priv: boolean }>();
+  const by = new Map<string, { amounts: number[]; index: boolean; priv: boolean }>();
   for (const p of pts) {
     const c = by.get(p.who);
     if (c) c.amounts.push(p.amount), (c.priv ||= p.priv);
-    else by.set(p.who, { amounts: [p.amount], index: p.index, trusted: p.trusted, priv: p.priv });
+    else by.set(p.who, { amounts: [p.amount], index: p.index, priv: p.priv });
   }
   const all = [...by.values()].map((c) => ({ ...c, amount: quantile(c.amounts.sort((a, b) => a - b), 0.5) }));
   const own = all.filter((c) => !c.index);
   const open = own.filter((c) => !c.priv);
-  const trustedIn = (xs: typeof all) => xs.filter((c) => c.trusted).length;
   const survey = all.length - own.length;
-  const openT = trustedIn(open);
-  const privT = trustedIn(own) - openT;
-  const indexed = survey > 0 && survey + privT + openT >= BENCHMARK_INDEX_MIN_N && survey + privT >= BENCHMARK_MIN_N;
-  const used = indexed ? all : privT >= BENCHMARK_MIN_N ? own : openT >= BENCHMARK_MIN_N ? open : null;
+  const openN = open.length;
+  const privN = own.length - openN;
+  const indexed = survey > 0 && survey + privN + openN >= BENCHMARK_INDEX_MIN_N && survey + privN >= BENCHMARK_MIN_N;
+  const used = indexed ? all : privN >= BENCHMARK_MIN_N ? own : openN >= BENCHMARK_MIN_N ? open : null;
   if (!used) {
     const viaIndex = survey > 0 && BENCHMARK_INDEX_MIN_N - survey <= BENCHMARK_MIN_N;
-    return viaIndex ? { n: survey + privT + openT, min: BENCHMARK_INDEX_MIN_N, indexed: true } : { n: Math.max(privT, openT), min: BENCHMARK_MIN_N, indexed: false };
+    return viaIndex ? { n: survey + privN + openN, min: BENCHMARK_INDEX_MIN_N, indexed: true } : { n: Math.max(privN, openN), min: BENCHMARK_MIN_N, indexed: false };
   }
-  const s = used.filter((c) => c.trusted).map((c) => c.amount);
-  const trusted = s.length;
-  const fresh = used.filter((c) => !c.trusted).map((c) => c.amount).sort((a, b) => a - b);
-  if (fresh.length) s.push(quantile(fresh, 0.5));
-  s.sort((a, b) => a - b);
-  const unit = BENCH_ROUND[kind];
-  const q = (p: number) => Math.round(quantile(s, p) / unit) * unit;
-  const stat: RateStat = { n: trusted + fresh.length, min: indexed ? BENCHMARK_INDEX_MIN_N : BENCHMARK_MIN_N, indexed, median: q(0.5) };
+  const xs = used.map((c) => c.amount).sort((a, b) => a - b);
+  const n = xs.length;
+  const unit = (n < BENCHMARK_RANGE_N ? BENCH_ROUND_WIDE : BENCH_ROUND)[kind];
+  const q = (p: number) => Math.round(quantile(xs, p) / unit) * unit;
+  const stat: RateStat = { n, min: indexed ? BENCHMARK_INDEX_MIN_N : BENCHMARK_MIN_N, indexed, median: q(0.5) };
   // The private rates and survey rows in the figure (none when it is made of rates on records alone).
-  const hidden = used === open ? 0 : privT + (indexed ? survey : 0);
-  if (trusted >= BENCHMARK_RANGE_N && (hidden === 0 || hidden >= BENCHMARK_RANGE_N)) (stat.p25 = q(0.25)), (stat.p75 = q(0.75));
+  const hidden = used === open ? 0 : privN + (indexed ? survey : 0);
+  if (n >= BENCHMARK_RANGE_N && (hidden === 0 || hidden >= BENCHMARK_RANGE_N)) (stat.p25 = q(0.25)), (stat.p75 = q(0.75));
   return stat;
 }
 
@@ -1880,32 +2019,34 @@ function rateStat(pts: RatePoint[], kind: "monthly" | "hourly"): RateStat {
 const WEEKS_A_MONTH = 52 / 12;
 const inRange = (kind: "monthly" | "hourly", amount: number) => (kind === "hourly" ? amount >= 25 && amount <= 1500 : amount >= 1000 && amount <= 150_000);
 
-/** `at`: an account turns trusted with time alone, so the kept result is rebuilt every 10 minutes. */
-let benchCache: { seed: Seed; s: State; b: Benchmarks; at: number } | null = null;
+/** Every rate point that counts, with the number of rates on file, kept until the state or the seed changes. */
+let benchPointsCache: { seed: Seed; s: State; pts: RatePoint[]; total: number } | null = null;
+/** The benchmarks as a member with no rate of their own sees them (the same for all of them). */
+let benchCache: { seed: Seed; s: State; b: Benchmarks } | null = null;
 
 /**
- * Benchmarks by function and client revenue band, from three places: every live rate on a
- * record (whoever unlocked it), rates members shared for the benchmarks only, and Revenue
- * Nomad's Rate Index. Only medians and ranges leave the server, counted in people (see
- * rateStat) and rounded. The same for every viewer, so it is kept until the state or the seed
- * changes.
+ * The rate points the benchmarks are made of, from three places: every live rate on a record
+ * (whoever unlocked it), rates members shared for the benchmarks only, and Revenue Nomad's Rate
+ * Index. A member's rate is a point only when the member counts (trustOf): joining takes only an
+ * email, and four throwaway accounts around one honest rate would otherwise make a group of five
+ * whose median is that rate. `total` counts every rate on file, theirs included.
  */
-function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
-  const nowMs = Date.now();
-  if (benchCache && benchCache.s === s && benchCache.seed === seed && nowMs - benchCache.at < 10 * 60 * 1000) return benchCache.b;
+function benchPoints(seed: Seed, g: Graph, s: State): { pts: RatePoint[]; total: number } {
+  if (benchPointsCache && benchPointsCache.s === s && benchPointsCache.seed === seed) return benchPointsCache;
   const pts: RatePoint[] = [];
   let total = 0;
-  const trustedMember = benchTrust(seed, s, nowMs);
+  const trusted = trustOf(seed, s);
   /** One rate: its own point, and the other kind too when the hours a month are known. */
-  const add = (fnRaw: string | null, revenueRaw: string | null, r: { kind: "monthly" | "hourly"; amount: number }, hoursMonth: number | null, index: boolean, who: string, trusted: boolean, priv = false) => {
+  const add = (fnRaw: string | null, revenueRaw: string | null, r: { kind: "monthly" | "hourly"; amount: number }, hoursMonth: number | null, index: boolean, who: string, counts: boolean, priv = false) => {
+    total++;
+    if (!counts) return;
     const fn = fnRaw && FUNCTIONS.includes(fnRaw) ? fnRaw : functionOf(fnRaw) ?? "Other";
     const revenue = revenueRaw && RN_REVENUE.includes(revenueRaw) ? revenueRaw : null;
-    total++;
-    pts.push({ fn, revenue, kind: r.kind, amount: r.amount, index, who, trusted, priv });
+    pts.push({ fn, revenue, kind: r.kind, amount: r.amount, index, who, priv });
     if (!hoursMonth || hoursMonth <= 0) return;
     const other = r.kind === "hourly" ? ("monthly" as const) : ("hourly" as const);
     const amount = Math.round(r.kind === "hourly" ? r.amount * hoursMonth : r.amount / hoursMonth);
-    if (inRange(other, amount)) pts.push({ fn, revenue, kind: other, amount, index, who, trusted, priv });
+    if (inRange(other, amount)) pts.push({ fn, revenue, kind: other, amount, index, who, priv });
   };
   const hoursMonthOf = (e: Node) => {
     const h = Number(live(e, s, "hours"));
@@ -1934,13 +2075,13 @@ function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
     publicBy.set(e.id, v.by);
     // The contributor is whoever put the rate there: a member, or the record itself when it is ours.
     const ours = isSystem(v.by);
-    add(fnOf(e, s), revenueOf(e), r, hoursMonthOf(e), false, ours ? `r:${e.id}` : `m:${v.by}`, ours || trustedMember(v.by));
+    add(fnOf(e, s), revenueOf(e), r, hoursMonthOf(e), false, ours ? `r:${e.id}` : `m:${v.by}`, ours || trusted(v.by));
   }
   for (const b of s.benchRates) {
     const e = b.engagementId ? g.engagements.get(b.engagementId) : undefined;
     // The same member's rate is already on the record: count it once.
     if (e && publicBy.get(e.id) === b.by) continue;
-    add(b.fn, b.revenue, { kind: b.kind, amount: b.amount }, e ? ownHoursMonth(e, b.by) : null, false, `m:${b.by}`, trustedMember(b.by), true);
+    add(b.fn, b.revenue, { kind: b.kind, amount: b.amount }, e ? ownHoursMonth(e, b.by) : null, false, `m:${b.by}`, trusted(b.by), true);
   }
   for (const [i, x] of (seed.rateIndex ?? []).entries()) {
     const hourly = Number(x?.hourly);
@@ -1948,21 +2089,45 @@ function benchmarks(seed: Seed, g: Graph, s: State): Benchmarks {
     const hours = Number(x.hours);
     add(String(x.fn ?? ""), x.revenue ?? null, { kind: "hourly", amount: Math.round(hourly) }, Number.isFinite(hours) && hours > 0 ? hours : null, true, `x:${i}`, true);
   }
+  const out = { seed, s, pts, total };
+  if (s === stateCache) benchPointsCache = out;
+  return out;
+}
 
+/**
+ * Benchmarks by function and client revenue band. Only medians and ranges leave the server,
+ * counted in people (see rateStat) and rounded.
+ *
+ * A member's own rates are left out of what that member sees (`withoutYours` marks those
+ * figures). Otherwise one account could share a low rate, read the median, swap it for a high
+ * one and read it again, and the two medians together give away the rates next to the middle.
+ * With its own rate left out, nothing it shares moves a number it can see.
+ */
+function benchmarks(seed: Seed, g: Graph, s: State, viewerId?: string): Benchmarks {
+  const { pts, total } = benchPoints(seed, g, s);
+  const who = viewerId ? `m:${viewerId}` : "";
+  const mine = who ? pts.filter((p) => p.who === who) : [];
+  if (!mine.length && benchCache && benchCache.s === s && benchCache.seed === seed) return benchCache.b;
+  const use = mine.length ? pts.filter((p) => p.who !== who) : pts;
   const rows: BenchmarkRow[] = [];
   for (const fn of FUNCTIONS) {
-    const mine = pts.filter((p) => p.fn === fn);
-    const row = (revenue: string, xs: RatePoint[]): BenchmarkRow => {
-      const monthly = rateStat(xs.filter((p) => p.kind === "monthly"), "monthly");
-      const hourly = rateStat(xs.filter((p) => p.kind === "hourly"), "hourly");
+    const inFn = use.filter((p) => p.fn === fn);
+    const myFn = mine.filter((p) => p.fn === fn);
+    const row = (revenue: string, xs: RatePoint[], my: RatePoint[]): BenchmarkRow => {
+      const stat = (kind: "monthly" | "hourly") => {
+        const st = rateStat(xs.filter((p) => p.kind === kind), kind);
+        return my.some((p) => p.kind === kind) ? { ...st, withoutYours: true } : st;
+      };
+      const monthly = stat("monthly");
+      const hourly = stat("hourly");
       // Marked Rate Index only when a figure shows survey data or is counting toward the 20.
       return { function: fn, revenue, indexed: !!(monthly.indexed || hourly.indexed), monthly, hourly };
     };
-    rows.push(row("All", mine));
-    for (const revenue of RN_REVENUE) rows.push(row(revenue, mine.filter((p) => p.revenue === revenue)));
+    rows.push(row("All", inFn, myFn));
+    for (const revenue of RN_REVENUE) rows.push(row(revenue, inFn.filter((p) => p.revenue === revenue), myFn.filter((p) => p.revenue === revenue)));
   }
   const b = { minN: BENCHMARK_MIN_N, rangeN: BENCHMARK_RANGE_N, total, rows };
-  if (s === stateCache) benchCache = { seed, s, b, at: nowMs };
+  if (!mine.length && s === stateCache) benchCache = { seed, s, b };
   return b;
 }
 
@@ -2026,8 +2191,21 @@ export async function perform(token: string | null, a: Action, origin?: string):
     const companyOf = (entity: Entity, id: string) =>
       entity === "company" ? id : entity === "engagement" ? g.engagements.get(id)?.companyId ?? "" : g.contacts.get(id)?.companyId ?? "";
     const hiddenFor = (companyId: string) => identityHidden(g, s, idx0, tracks(), me, companyId);
-    /** The viewer holds this seat (and hasn't said it isn't theirs). */
-    const ownSeat = (engId: string) => seatHolder(s, memberIndex(seed, s), engId, valueOf(g.engagements.get(engId), s, "operator"))?.id === me.id;
+    /** Accounts that count (trustOf), worked out once per action. */
+    let trustNow: ((memberId: string) => boolean) | null = null;
+    const trusted = (memberId: string) => (trustNow ??= trustOf(seed, s))(memberId);
+    /** The seat-holder name on this seat resolves to the viewer (and they haven't said it isn't theirs). */
+    const linkedSeat = (engId: string) => seatHolder(s, memberIndex(seed, s), engId, valueOf(g.engagements.get(engId), s, "operator"))?.id === me.id;
+    /** The viewer holds this seat as its owner: they see it free, correct it and hide a fact on it at once (see seatOwner). */
+    const ownSeat = (engId: string) =>
+      seatOwner(s, memberIndex(seed, s), trusted, tracks(), engId, valueOf(g.engagements.get(engId), s, "operator"), s.engagements.find((x) => x.id === engId)?.by)?.id === me.id;
+    /** Companies whose pick lists this member fills without the daily limits: one they added, or one where they hold a seat. */
+    const pickFree = new Map<string, boolean>();
+    const exemptPick = (companyId: string) => {
+      if (!pickFree.has(companyId))
+        pickFree.set(companyId, s.companies.some((c) => c.id === companyId && c.by === me.id) || [...g.engagements.values()].some((e) => e.companyId === companyId && ownSeat(e.id)));
+      return pickFree.get(companyId)!;
+    };
     /** Gated facts this member sees without an unlock: their own seat, and the posting of a role the scan closed (unless its company is hidden). */
     const freeFor = (entity: Entity, id: string, field: string) =>
       entity === "engagement" && ((field === "posting" && postingFree(tracks().get(id)) && !hiddenFor(companyOf("engagement", id))) || ownSeat(id));
@@ -2089,7 +2267,10 @@ export async function perform(token: string | null, a: Action, origin?: string):
       }
       refundUnlockers(k);
       const dot = k.lastIndexOf(".");
-      if (k.slice(dot + 1) === "operator" && reopenIfUnheld(s, k.slice(0, dot), now)) tracksNow = null;
+      if (k.slice(dot + 1) === "operator") {
+        reopenIfUnheld(s, k.slice(0, dot), now);
+        tracksNow = null; // it may have reopened, or closed for good when its posting was long gone
+      }
     };
     /** A rate this member shared for the benchmarks only on this seat moves to the record when they add it there. It was paid once. */
     let movedRate = false;
@@ -2113,6 +2294,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
       return m;
     };
     let capped = false;
+    /** A claim on an open role was saved, and the role stays open (the account does not count yet, see trustOf). */
+    let claimKept = false;
     /** Cells a fill changed besides its own (a filled open role's status). */
     const alsoChanged: { entity: Entity; node: Node; field: string }[] = [];
     /** A fill saved for no credit because it was a "How they sell" answer past the ones that earn today. */
@@ -2121,16 +2304,15 @@ export async function perform(token: string | null, a: Action, origin?: string):
      * Pay a fill, within the rolling 24 hour cap. Records a 0 entry when it earns nothing (so a
      * later reversal knows). Two limits sit beside the cap, and a fill past either hard limit is
      * refused (the throw drops the whole action, so nothing half-saved stays):
-     *  - "How they sell" answers: SELL_EARN_MAX earn a day, SELL_SAVE_MAX save a day.
+     *  - a company's pick-list answers: SELL_EARN_MAX earn a day, SELL_SAVE_MAX save a day.
      *  - FILL_DAILY_MAX facts a day on records, not counting the member's own seats.
      */
     const awardFill = (ref: string) => {
       let earns = true;
       if (!ref.startsWith("bench.")) {
-        if (SELL_FIELDS.has(refField(ref))) {
-          const sell = sellToday(s, me.id, nowMs);
-          if (sell.saved >= SELL_SAVE_MAX)
-            throw new ActionError(`You've added ${SELL_SAVE_MAX} answers under How they sell today. Add more tomorrow. A role, a rate or who held the seat can go in now.`);
+        if (isPickRef(ref) && !exemptPick(refRecord(ref))) {
+          const sell = sellToday(s, me.id, nowMs, exemptPick);
+          if (sell.saved >= SELL_SAVE_MAX) throw new ActionError(SELL_FULL);
           if (sell.earned >= SELL_EARN_MAX) (earns = false), (sellCapped = true);
         }
         const today = fillsToday(s, me.id, nowMs);
@@ -2179,29 +2361,40 @@ export async function perform(token: string | null, a: Action, origin?: string):
       // What another member added still needs a report.
       const correction = !!cur && isSystem(cur.by) && entity === "engagement" && ownSeat(node.id);
       if (cur && cur.by !== me.id && !correction) throw new ActionError(`${f.label} is already filled. Confirm or report it instead.`);
+      // Picking yourself takes back an earlier "This isn't me" on this seat.
+      const relink = key === "operator" && linked?.id === me.id && (s.notMine[me.id] ?? []).includes(node.id);
+      // The same seat holder again changes nothing: say so rather than "Updated".
+      if (key === "operator" && cur && cur.status === "live" && cur.value === value && cur.memberId === linked?.id && !relink)
+        throw new ActionError(linked?.id === me.id ? "You're already the seat holder here." : "That's already the seat holder here.");
+      if (relink) s.notMine[me.id] = s.notMine[me.id].filter((id) => id !== node.id);
       if (cur && cur.value === value && (correction || cur.memberId === linked?.id)) return 0; // unchanged (and any reports on it stand)
       const k = fkey(node.id, key);
       if (cur && cur.value !== value) delete s.verifications[k]; // confirmations were for the old value
       const eng = entity === "engagement" ? g.engagements.get(node.id) : undefined;
       // An open role our records or the scan posted. Only the member who took it can name its
       // seat holder: any other name would close the role for everyone on one member's say-so.
-      const openPosted = !!eng && key === "operator" && isOpenRole(eng, s, tracks()) && isSystem(valueOf(eng, s, "status")?.by ?? "seed");
+      const openPosted = !!eng && key === "operator" && hidesCompany(eng, s, tracks());
       if (openPosted && linked?.id !== me.id) throw new ActionError("This role is still open. If you took it, pick yourself as the seat holder.");
       // A role a member took stays in that member's name. Renaming the seat holder would leave it closed under someone else's.
       if (eng && key === "operator" && cur && linked?.id !== me.id && tracks().get(eng.id)?.closedBy === "filled")
         throw new ActionError("You took this open role, so the seat holder is you. If that's wrong, use This isn't me on Your seats.");
       // Picking yourself on it fills it, once per rolling 24 hours (reopenIfUnheld is the way back).
-      const fillsRole = openPosted && !cur;
-      if (fillsRole && (s.roleClaims ?? []).some((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY))
+      // Only an account that counts (trustOf) closes the role. Anyone else's name is kept, and
+      // the role stays open for everyone until the scan sees its posting come down.
+      const claimsRole = openPosted && !cur;
+      if (claimsRole && (s.roleClaims ?? []).some((c) => c.memberId === me.id && nowMs - Date.parse(c.at) < DAY))
         throw new ActionError("You marked an open role as yours in the last 24 hours. You can do that once a day.");
+      const fillsRole = claimsRole && trusted(me.id);
+      if (claimsRole && !fillsRole) claimKept = true;
       s.values[k] = { value: value!, by: me.id, at: now, status: "live", ...(linked ? { memberId: linked.id } : {}) };
+      if (claimsRole)
+        s.roleClaims = [...(s.roleClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < CLAIM_KEEP), { memberId: me.id, engagementId: node.id, at: now, closed: fillsRole }];
       if (fillsRole) {
         keepSeedTracks(seed, s);
         const sk = fkey(node.id, "status");
         delete s.verifications[sk];
         s.values[sk] = { value: "Active", by: "scan", at: now, status: "live" };
         for (const r of Object.values(s.scan.roles)) if (r.engagementId === node.id && !r.closedAt) (r.closedAt = now), (r.closedBy = "filled");
-        s.roleClaims = [...(s.roleClaims ?? []).filter((c) => nowMs - Date.parse(c.at) < DAY), { memberId: me.id, engagementId: node.id, at: now }];
         tracksNow = null;
         alsoChanged.push({ entity, node, field: "status" });
       }
@@ -2218,14 +2411,17 @@ export async function perform(token: string | null, a: Action, origin?: string):
     };
     const capNote = () => {
       if (!capped) return "";
-      // Under the daily cap, so the reason was the "How they sell" limit: say that, and what still earns.
+      // Under the daily cap, so the reason was the pick-list limit: say that, and what still earns.
       if (sellCapped && earning(s, me.id, nowMs).earned < EARN_CAP)
-        return ` Only ${SELL_EARN_MAX} answers under How they sell earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
+        return ` Only ${SELL_EARN_MAX} answers for ${PICKS} earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
       const r = earning(s, me.id, nowMs).resetsAt;
       const hrs = r ? Math.max(1, Math.ceil((Date.parse(r) - nowMs) / 3_600_000)) : 24;
       return ` You've hit today's max of ${EARN_CAP} earned credits, so this one didn't earn. Earning reopens in about ${hrs} hour${hrs === 1 ? "" : "s"}.`;
     };
     const credits = (n: number) => (n ? ` +${n} credit${n > 1 ? "s" : ""}.` : "");
+    /** Said when a claim on an open role was saved and the role stays open (claimKept). */
+    const claimNote = () =>
+      claimKept ? " Others still see the role as open until its posting comes down. Once two members confirm a fact you added, a claim like this closes the role at once." : "";
 
     const run = (): ActionResult => {
       switch (a?.type) {
@@ -2243,7 +2439,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
           if (a.entity === "engagement" && f.key === "role" && !hadFunction && valueOf(node, s, "function")) cells.push(changed(a.entity, node, "function"));
           for (const c of alsoChanged) cells.push(changed(c.entity, c.node, c.field));
           return {
-            message: `${wasMine ? "Updated" : "Added"} ${lower(f.label)}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}`,
+            message: `${wasMine ? "Updated" : "Added"} ${lower(f.label)}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}${claimNote()}`,
             id: outId(a.entity, node.id),
             capped,
             cells,
@@ -2252,7 +2448,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
         case "unlock":
         case "unlockMany": {
           const items = a.type === "unlock" ? [a] : (a.items ?? []).slice(0, 60);
-          const todo: { k: string; node: Node; entity: Entity; field: string }[] = [];
+          const todo: { k: string; node: Node; entity: Entity; field: string; pair?: boolean }[] = [];
           const hid = new Map<string, boolean>();
           const hiddenNow = (companyId: string) => {
             if (!hid.has(companyId)) hid.set(companyId, hiddenFor(companyId));
@@ -2267,6 +2463,18 @@ export async function perform(token: string | null, a: Action, origin?: string):
             const k = fkey(company.id, "identity");
             if (!todo.some((t) => t.k === k)) todo.push({ k, node: company, entity: "company", field: "identity" });
           };
+          /** This member sees this fact already: they added it or paid for it. */
+          const has = (node: Node, field: string) => {
+            const v = valueOf(node, s, field);
+            return !!v && v.status === "live" && (v.by === me.id || (s.unlocks[fkey(node.id, field)] ?? []).includes(me.id));
+          };
+          /**
+           * An open role at a company the member can see: its role and its posting are one purchase
+           * as well, whoever the member is. One credit buys both, and a member who already holds one
+           * of the two gets the other at no charge.
+           */
+          const pairs = new Set<string>();
+          const free: { node: Node; field: string }[] = [];
           for (const it of items) {
             const node = nodeOf(it.entity, it.id);
             if (it.entity === "company" && (it.field === "identity" || IDENTITY_FIELDS.has(it.field))) {
@@ -2280,69 +2488,86 @@ export async function perform(token: string | null, a: Action, origin?: string):
             if (!f.gated || cur.by === me.id || (s.unlocks[k] ?? []).includes(me.id) || todo.some((t) => t.k === k)) continue;
             if (freeFor(it.entity, node.id, f.key)) continue; // your own seat, or the posting of a closed role: already visible
             const eng = it.entity === "engagement" && BUNDLE_FIELDS.includes(f.key) ? g.engagements.get(node.id) : undefined;
-            const company = eng && isOpenRole(eng, s, tracks()) && hiddenNow(eng.companyId) ? g.companies.get(eng.companyId) : undefined;
-            if (company) {
-              bundle(company);
+            if (eng && isOpenRole(eng, s, tracks())) {
+              if (hiddenNow(eng.companyId)) {
+                bundle(g.companies.get(eng.companyId)!);
+                continue;
+              }
+              if (pairs.has(eng.id)) continue;
+              pairs.add(eng.id);
+              if (has(eng, f.key === "role" ? "posting" : "role")) free.push({ node, field: f.key });
+              else todo.push({ k, node, entity: it.entity, field: f.key, pair: true });
               continue;
             }
             todo.push({ k, node, entity: it.entity, field: f.key });
           }
-          if (!todo.length) {
+          if (!todo.length && !free.length) {
             if (a.type === "unlock") throw new ActionError("Nothing to unlock here.");
             return { message: "Already visible." };
           }
-          // What this unlock costs: 1 credit per fact.
+          // What this unlock costs: 1 credit per fact, with each company and each open role one purchase.
           const need = todo.length;
-          // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
-          const { left, firstDay } = unlockRoom(s, me.id, nowMs);
-          const bal = balance(s, me.id);
-          // Out of credits (0, or owing after a removal) is the wall whatever the daily limit says.
-          // Short of credits comes first too, unless the limit binds as tightly (earning more wouldn't help then).
-          if (bal <= 0 || (bal < need && bal < left)) {
-            const msg = bal > 0 ? `That needs ${need} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.";
-            // The wall: counted for the pilot, so the refusal is returned (a throw would drop the count).
-            if (!addSignal(s, me.id, "wall", "server", now)) throw new ActionError(msg);
-            refusal.message = msg;
-            return { message: "" };
+          if (need) {
+            // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
+            const { left, firstDay } = unlockRoom(s, me.id, nowMs);
+            const bal = balance(s, me.id);
+            // Out of credits (0, or owing after a removal) is the wall whatever the daily limit says.
+            // Short of credits comes first too, unless the limit binds as tightly (earning more wouldn't help then).
+            if (bal <= 0 || (bal < need && bal < left)) {
+              const msg = bal > 0 ? `That needs ${need} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.";
+              // The wall: counted for the pilot, so the refusal is returned (a throw would drop the count).
+              if (!addSignal(s, me.id, "wall", "server", now)) throw new ActionError(msg);
+              refusal.message = msg;
+              return { message: "" };
+            }
+            if (need > left)
+              throw new ActionError(
+                left > 0
+                  ? `You can unlock ${left} more today.`
+                  : firstDay
+                    ? `New accounts can unlock ${NEW_MEMBER_UNLOCK_MAX} facts on day one. Your ${bal} credit${bal === 1 ? " is" : "s are"} here tomorrow.`
+                    : "You hit today's unlock limit. It resets within 24 hours.",
+              );
           }
-          if (need > left)
-            throw new ActionError(
-              left > 0
-                ? `You can unlock ${left} more today.`
-                : firstDay
-                  ? `New accounts can unlock ${NEW_MEMBER_UNLOCK_MAX} facts on day one. Your ${bal} credit${bal === 1 ? " is" : "s are"} here tomorrow.`
-                  : "You hit today's unlock limit. It resets within 24 hours.",
-            );
           for (const t of todo) {
             s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: t.k, at: now });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
           }
-          // What came with each company: the role and posting of its open roles, at no further charge.
+          /** Open a fact at no further charge. False when there is nothing there. */
+          const give = (node: Node, field: string) => {
+            const k = fkey(node.id, field);
+            const cur = valueOf(node, s, field);
+            if (!cur || cur.status !== "live") return false;
+            if (cur.by !== me.id && !(s.unlocks[k] ?? []).includes(me.id)) s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
+            return true;
+          };
+          // What came with each purchase: a company's open roles (role and posting), the other half of an open role, and halves already paid for.
           const companies = todo.filter((t) => t.field === "identity");
           const came: { node: Node; field: string }[] = [];
           for (const t of companies) {
             for (const e of g.engagements.values()) {
               if (e.companyId !== t.node.id || !isOpenRole(e, s, tracks())) continue;
-              for (const field of BUNDLE_FIELDS) {
-                const k = fkey(e.id, field);
-                const cur = valueOf(e, s, field);
-                if (!cur || cur.status !== "live") continue;
-                if (cur.by !== me.id && !(s.unlocks[k] ?? []).includes(me.id)) s.unlocks[k] = [...(s.unlocks[k] ?? []), me.id];
-                came.push({ node: e, field });
-              }
+              for (const field of BUNDLE_FIELDS) if (give(e, field)) came.push({ node: e, field });
             }
           }
-          const others = todo.length - companies.length;
-          const cost = `−${todo.length} credit${todo.length > 1 ? "s" : ""}.`;
-          let message = `Unlocked ${todo.length} fact${todo.length > 1 ? "s" : ""}. ${cost}`;
-          if (companies.length && came.length) {
+          const paired = todo.filter((t) => t.pair);
+          for (const t of paired) {
+            const other = t.field === "role" ? "posting" : "role";
+            if (give(t.node, other)) came.push({ node: t.node, field: other });
+          }
+          for (const x of free) if (give(x.node, x.field)) came.push(x);
+          const others = todo.length - companies.length - paired.length;
+          const cost = need ? `−${need} credit${need > 1 ? "s" : ""}.` : "No charge, since you had already paid for this open role.";
+          let message = `Unlocked ${need} fact${need > 1 ? "s" : ""}. ${cost}`;
+          if (paired.length || free.length || (companies.length && came.length)) {
             // Name what the credit bought: "the company, the role and the posting".
+            const opened = new Set([...paired, ...came].filter((x) => BUNDLE_FIELDS.includes(x.field)).map((x) => `${x.node.id}.${x.field}`));
             const n = (field: string, one: string, many: string) => {
-              const c = came.filter((x) => x.field === field).length;
+              const c = [...opened].filter((k) => k.endsWith(`.${field}`)).length;
               return c === 1 ? [`the ${one}`] : c ? [`${c} ${many}`] : [];
             };
-            const parts = [companies.length === 1 ? "the company" : `${companies.length} companies`, ...n("role", "role", "roles"), ...n("posting", "posting", "postings")];
-            const bought = `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+            const parts = [...(companies.length ? [companies.length === 1 ? "the company" : `${companies.length} companies`] : []), ...n("role", "role", "roles"), ...n("posting", "posting", "postings")];
+            const bought = parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? `${need} facts`;
             message = `Unlocked ${bought}${others ? `, plus ${others} more fact${others > 1 ? "s" : ""}` : ""}. ${cost}`;
           } else if (todo.length === 1 && companies.length) message = `Unlocked ${g.companies.get(todo[0].node.id)?.name ?? "the company"}. ${cost}`;
           return {
@@ -2377,12 +2602,13 @@ export async function perform(token: string | null, a: Action, origin?: string):
           for (const p of people) if (!p.some(([k]) => k === "name")) throw new ActionError("Each person needs a name.");
           const wantEng = a.engagementId ? inId("engagement", a.engagementId) : null;
 
-          // Same company = same website (the host, whatever its case or path), else same name
-          // (legal suffixes, bracketed notes, accents and case aside).
-          const siteHost = hostOf(site);
+          // Same company = same website (the host, whatever its case or path, or on a host many
+          // companies share, the host and the path), else same name (legal suffixes, bracketed
+          // notes, accents and case aside).
+          const siteHost = siteKey(site);
           const nameKey = keyOfCompany(name);
           let company: Node | undefined =
-            (siteHost && [...g.companies.values()].find((c) => hostOf(live(c, s, "website")) === siteHost)) ||
+            (siteHost && [...g.companies.values()].find((c) => siteKey(live(c, s, "website")) === siteHost)) ||
             [...g.companies.values()].find((c) => keyOfCompany(c.name) === nameKey);
           const isNew = !company;
           if (!company) {
@@ -2393,9 +2619,17 @@ export async function perform(token: string | null, a: Action, origin?: string):
           }
           const companyName = g.companies.get(company.id)!.name;
           let earned = 0;
+          // A pick-list answer past the day's limit is left out, and the rest of the form still goes in.
+          let picksLeftOut = 0;
           // Company fields only fill gaps; the company record is shared.
-          for (const [k, v] of site ? [["website", site] as const, ...coFields] : coFields)
-            if (!valueOf(company, s, k)) earned += setValue(company, "company", k, v);
+          for (const [k, v] of site ? [["website", site] as const, ...coFields] : coFields) {
+            if (valueOf(company, s, k)) continue;
+            if (isPickRef(fkey(company.id, k)) && !exemptPick(company.id) && sellToday(s, me.id, nowMs, exemptPick).saved >= SELL_SAVE_MAX) {
+              picksLeftOut++;
+              continue;
+            }
+            earned += setValue(company, "company", k, v);
+          }
 
           // An engagement is only made when there's engagement detail (or "+ engagement").
           // Not duplicated: the member's own engagement there, or one with the same role, or an
@@ -2446,8 +2680,11 @@ export async function perform(token: string | null, a: Action, origin?: string):
                 ? `${companyName} is already on Trading Post. Your details went into its record`
                 : `${companyName} is already on Trading Post`;
           const skipped = kept ? ` ${kept} field${kept > 1 ? "s were" : " was"} already filled and left as is.` : "";
+          const leftOut = picksLeftOut
+            ? ` You've added ${SELL_SAVE_MAX} answers today for ${PICKS}, so ${picksLeftOut === 1 ? "one of those wasn't" : `${picksLeftOut} of those weren't`} saved. Add ${picksLeftOut === 1 ? "it" : "them"} tomorrow.`
+            : "";
           return {
-            message: `${where}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${skipped}${capNote()}`,
+            message: `${where}.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${skipped}${leftOut}${capNote()}${claimNote()}`,
             id: eid ? pubId(eid) : pubId(company.id),
             capped,
           };
@@ -2523,11 +2760,19 @@ export async function perform(token: string | null, a: Action, origin?: string):
             throw new ActionError(`You can report ${REPORT_DAILY_MAX} facts a day.`);
           if ((cur.reporters ?? []).includes(me.id)) return { message: "You already reported this." };
           const reporters = [...(cur.reporters ?? []), me.id];
+          // What the posting says about a role that is still listed stays up for everyone else: reports
+          // send it to an admin, but two members can't blank the title or the link of a live opening.
+          const track = a.entity === "engagement" ? tracks().get(node.id) : undefined;
+          const listed = isSystem(cur.by) && !!track && !track.closedAt;
           // The seat holder's report on their own seat hides the fact for everyone at once.
-          s.values[k] = { ...cur, reporters, status: own || reporters.length >= 2 ? "reported" : "live", reportedBy: me.id };
+          s.values[k] = { ...cur, reporters, status: !listed && (own || reporters.length >= 2) ? "reported" : "live", reportedBy: me.id };
           s.reportLog.push({ memberId: me.id, ref: k, at: now });
           return {
-            message: own ? "Reported. It's hidden for everyone until an admin reviews it." : "Reported. An admin will review it.",
+            message: listed
+              ? "Reported. An admin will review it. It stays up for others while the posting is listed."
+              : own
+                ? "Reported. It's hidden for everyone until an admin reviews it."
+                : "Reported. An admin will review it.",
             cells: [changed(a.entity, node, f.key)],
           };
         }
@@ -2544,6 +2789,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
           const list = s.verifications[k] ?? [];
           if (list.includes(me.id)) return { message: "You already confirmed this." };
           s.verifications[k] = [...list, me.id];
+          trustNow = null; // a confirmation can make the fact's author count (trustOf)
           // The real count: members who confirmed it. Our own records and the scan are not confirmations.
           const n = list.length + 1;
           // The member who added a fact earns +1 once two other members confirm it (once per fact;
@@ -2670,7 +2916,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
           if (a.engagementId) {
             const e = g.engagements.get(inId("engagement", a.engagementId));
             if (!e) throw new ActionError("Record not found.");
-            if (!ownSeat(e.id) && !s.engagements.some((x) => x.id === e.id && x.by === me.id)) throw new ActionError("You can share a rate for a seat you held or added.");
+            // Named on it is enough to share a rate there. It counts as tied to the seat only when the seat is theirs (tied()).
+            if (!linkedSeat(e.id) && !s.engagements.some((x) => x.id === e.id && x.by === me.id)) throw new ActionError("You can share a rate for a seat you held or added.");
             if (valueOf(e, s, "rate")?.by === me.id) throw new ActionError("Your rate is already on this seat, so it already counts in the benchmarks.");
             if (mine.some((b) => b.engagementId === e.id)) throw new ActionError("You already shared a rate for this seat.");
             engagementId = e.id;
@@ -2693,7 +2940,8 @@ export async function perform(token: string | null, a: Action, origin?: string):
           if (!earned) capped = true;
           const bonus = payReferral();
           // A new account's rate can't help a group reach its floor (see benchTrust), so say when it starts to.
-          const young = benchTrust(seed, s, nowMs)(me.id) ? "" : " Until your account is 7 days old it counts only in groups that already show numbers.";
+          // A rate from an account that does not count yet is in no figure (see benchPoints), so say when it will be.
+          const young = trusted(me.id) ? "" : " Your rate counts in the benchmarks once two members confirm a fact you added.";
           return { message: `Added to the benchmarks. Your rate is never shown with your name or the seat.${credits(earned)}${bonus ? ` Invite bonus +${bonus}.` : ""}${capNote()}${young}`, id, capped };
         }
         case "benchRateRemove": {
@@ -2709,23 +2957,37 @@ export async function perform(token: string | null, a: Action, origin?: string):
         case "notMine": {
           // "This isn't me": a seat matched to this member by name that they never held.
           const e = g.engagements.get(inId("engagement", a.engagementId));
-          if (!e || !ownSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
+          if (!e || !linkedSeat(e.id)) throw new ActionError("That seat isn't linked to you.");
           s.notMine[me.id] = [...(s.notMine[me.id] ?? []), e.id];
           // A name a member put on the seat is hidden for everyone until an admin decides. A name
           // from our own records may be another person with that name, so it only unlinks.
           const k = fkey(e.id, "operator");
           const cur = valueOf(e, s, "operator");
-          const hide = !!cur && !isSystem(cur.by);
+          const wasClosed = !!tracks().get(e.id)?.closedAt;
+          // Their own claim on an open role the scan follows: taking it back clears the name, as an
+          // admin removal would (the credit it earned goes back), so the seat is free for whoever took it.
+          const ownClaim = !!cur && cur.by === me.id && cur.memberId === me.id && tracks().has(e.id);
+          const hide = !!cur && !isSystem(cur.by) && !ownClaim;
           let reopened = false;
-          if (cur && hide) {
+          if (cur && ownClaim) {
+            removeFact(k, cur);
+            reopened = wasClosed && !tracks().get(e.id)?.closedAt;
+          } else if (cur && hide) {
             s.values[k] = { ...cur, status: "reported", reporters: [...new Set([...(cur.reporters ?? []), me.id])], reportedBy: me.id };
             s.reportLog.push({ memberId: me.id, ref: k, at: now });
+            // Whatever else the same member put on that seat behind a lock (a rate, an end date) goes to review with the name.
+            for (const field of ENG_GATED) {
+              const fk = fkey(e.id, field);
+              const fv = s.values[fk];
+              if (field === "operator" || !fv || fv.status !== "live" || fv.by !== cur.by) continue;
+              s.values[fk] = { ...fv, status: "reported", reporters: [...new Set([...(fv.reporters ?? []), me.id])], reportedBy: me.id };
+            }
             // If naming them closed an open role, it is open again.
             reopened = reopenFilled(s, e.id, now);
             if (reopened) tracksNow = null;
           }
           return {
-            message: `Got it. That seat is no longer linked to you.${hide ? " The name on that seat is hidden for everyone until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
+            message: `Got it. That seat is no longer linked to you.${ownClaim ? " Your name is off it." : hide ? " The name on that seat is hidden for everyone until an admin reviews it." : ""}${reopened ? " The role is open again." : ""}`,
             id: pubId(e.id),
             cells: [...ENG_GATED, "status"].map((f) => changed("engagement", e, f)),
           };
@@ -2781,7 +3043,7 @@ export async function perform(token: string | null, a: Action, origin?: string):
       ...out,
       me: {
         ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked,
-        unlocksLeft: unlockRoom(s, me.id, nowMs).left, sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs).earned),
+        unlocksLeft: unlockRoom(s, me.id, nowMs).left, sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs, exemptPick).earned),
       },
     };
   });
@@ -2858,6 +3120,8 @@ const MISS_GAP = 12 * 60 * 60 * 1000;
 const SEED_ROLE_LIFE = 35 * DAY;
 /** Whatever the board's health, nothing stays open this long unseen (as long as some board answered cleanly). */
 const STALE_AFTER = 60 * DAY;
+/** A board whose clean runs match this many roles or fewer can scan clean at 0 matches (see applyScan). */
+const SMALL_BOARD = 2;
 /** A board that matched something, but under half its baseline, on every run for this long takes the new count as its baseline. */
 const BASELINE_RESET_AFTER = 21 * DAY;
 /** A board no run has named for this long is forgotten. */
@@ -2909,7 +3173,7 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
     const byHost = new Map<string, CompanyNode>();
     const byName = new Map<string, CompanyNode>();
     for (const c of g.companies.values()) {
-      const h = hostOf(live(c, s, "website"));
+      const h = siteKey(live(c, s, "website"));
       if (h && !byHost.has(h)) byHost.set(h, c);
       const nk = keyOfCompany(c.name);
       if (nk && !byName.has(nk)) byName.set(nk, c);
@@ -2926,10 +3190,13 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
     const roleSlug = (e: Node) => textKey(live(e, s, "role") ?? "");
     const openNow = (e: EngNode) => {
       const k = keyOfEng.get(e.id);
-      if (k && roles[k].closedAt) return false;
+      if (k) return !roles[k].closedAt; // a followed role: its track decides (see isOpenRole)
       const status = live(e, s, "status");
       return status ? status === "Open role" : e.source === "Demand scan";
     };
+    const trusted = trustOf(seed, s);
+    /** The seat is taken by a claim that counts: a member picked themselves, on an account that counts. */
+    const claimed = (engId: string) => selfHeld(s, engId) && trusted(s.values[fkey(engId, "operator")].memberId!);
 
     const seen = new Set<string>();
     for (const raw of (Array.isArray(found?.roles) ? found.roles : []).slice(0, SCAN_MAX_ROLES)) {
@@ -2943,7 +3210,8 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
       const url = cleanValue(def("posting"), String(raw.url ?? "").trim()).value ?? "";
       const source = squeeze(raw.source, 60) || "scan";
       const key = squeeze(raw.key, 200) || `${coKey}:${titleKey}`;
-      const domain = hostOf(raw.domain);
+      // A board's link to a host many companies share (a LinkedIn page) names no company by its host.
+      const domain = siteKey(raw.domain) === hostOf(raw.domain) ? hostOf(raw.domain) : null;
       let co = (domain ? byHost.get(domain) : undefined) ?? byName.get(coKey);
 
       // The same posting: by its key, by its link, or the same title on a followed role at that company.
@@ -2962,13 +3230,19 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
         if (url) r.url = url;
         delete r.misses;
         delete r.missAt;
+        delete r.absentAt;
         if (!r.postedAt && raw.postedAt) r.postedAt = iso(raw.postedAt, "") || null;
-        if (!r.closedAt) res.stillOpen++;
-        else if (r.closedBy === "filled") {
-          // A role a member took stays filled while its posting lingers. It reopens only when
-          // nobody holds the seat any more: the same rule a removal or "This isn't me" follows.
-          if (reopenIfUnheld(s, r.engagementId, now)) res.reopened++;
-        } else if (!selfHeld(s, r.engagementId)) {
+        if (!r.closedAt) {
+          res.stillOpen++;
+          // A listed role is an open role, whatever status a member wrote on it.
+          const st = valueOf(g.engagements.get(r.engagementId), s, "status");
+          if (!st || st.value !== "Open role" || !isSystem(st.by)) put(r.engagementId, "status", "Open role");
+        } else if (r.closedBy === "filled") {
+          // A role a member took stays filled while its posting lingers. It reopens when nobody
+          // holds the seat any more (the same rule a removal or "This isn't me" follows), or when
+          // the claim came from an account that does not count (see trustOf).
+          if (reopenIfUnheld(s, r.engagementId, now) || (!claimed(r.engagementId) && reopenFilled(s, r.engagementId, now))) res.reopened++;
+        } else if (!claimed(r.engagementId)) {
           // Listed again after its posting had come down: reopen, unless a member has since
           // taken the seat as their own (a posting that lingers, or one a board bumped).
           r.closedAt = null;
@@ -2996,8 +3270,10 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
         put(co.id, "website", domain);
         if (!byHost.has(domain)) byHost.set(domain, co);
       }
-      // An open role a member already added under this title becomes the followed one.
+      // An open role a member already added under this title becomes the followed one. Its status is
+      // the scan's from now on (below), so the member who added it can't close it by editing that.
       let e = (engsAt.get(co.id) ?? []).find((x) => !keyOfEng.has(x.id) && openNow(x) && roleSlug(x) === titleKey);
+      const adopted = !!e;
       if (!e) {
         const id = newId("e", company);
         s.engagements.push({ id, companyId: co.id, by: "scan", at: now, source: "Demand scan" });
@@ -3015,7 +3291,8 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
       fill("role", title);
       fill("function", raw.function && FUNCTIONS.includes(raw.function) ? raw.function : functionOf(title));
       fill("type", raw.type && ENGAGEMENT_TYPES.includes(raw.type) ? raw.type : /\binterim\b/i.test(title) ? "Interim" : /\bfractional\b/i.test(title) ? "Fractional" : null);
-      fill("status", "Open role");
+      if (adopted) put(eng.id, "status", "Open role");
+      else fill("status", "Open role");
       fill("posting", url);
       fill("rate", raw.rate);
       const hours = Math.round(Number(raw.hoursPerWeek));
@@ -3036,15 +3313,26 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
     // Boards that answered cleanly on this run. Only their own roles can be counted as missed.
     const boards = (s.scan.boards ??= {});
     const clean = new Set<string>();
+    /** Boards that answered with listings on this run, clean or not. A role of theirs they did not list is not counted as open. */
+    const answeredNow = new Set<string>();
     for (const x of sources) {
       const b = (boards[x.source] ??= { baseline: 0, lastOkAt: null, healthy: false });
       b.at = now;
       const answered = !x.error && x.fetched > 0;
+      if (answered) answeredNow.add(x.source);
       b.healthy = answered && x.matched > 0 && x.matched * 2 >= b.baseline;
+      // A board that only ever lists a role or two matches none when its one posting comes down.
+      // That run is clean when it answered with about as many listings as on its last clean run.
+      const quiet = !b.healthy && answered && x.matched === 0 && b.baseline > 0 && b.baseline <= SMALL_BOARD && !!b.fetched && x.fetched * 2 >= b.fetched;
       if (b.healthy) {
         b.baseline = x.matched;
+        b.fetched = x.fetched;
         b.lastOkAt = now;
         delete b.lowSince;
+        clean.add(x.source);
+      } else if (quiet) {
+        b.healthy = true;
+        b.lastOkAt = now;
         clean.add(x.source);
       } else if (answered && x.matched > 0) {
         // Fewer than half, but not none. If that holds on every run for three weeks, the board got smaller.
@@ -3062,6 +3350,7 @@ export async function applyScan(found: ScanCollectResult, nowIso?: string, maxNe
       if (r.closedAt || seen.has(k)) continue;
       const e = g.engagements.get(r.engagementId);
       if (!e) continue;
+      if (r.source !== "seed" && answeredNow.has(r.source)) r.absentAt ??= now;
       const unseen = nowMs - Date.parse(r.lastSeen);
       let due = clean.size > 0 && unseen > (r.source === "seed" ? SEED_ROLE_LIFE : STALE_AFTER);
       if (r.source !== "seed" && clean.has(r.source)) {

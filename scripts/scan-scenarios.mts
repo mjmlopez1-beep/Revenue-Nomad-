@@ -3,7 +3,7 @@
  * scripts/test-scan.mts starts each scenario in its own process, because the server module
  * keeps its state in memory and every scenario needs a fresh table. To run one by hand:
  *
- *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names>
+ *   npx tsx scripts/scan-scenarios.mts <cap|health|baseline|dates|refunds|names|small|claimgone>
  *
  * It runs on a made-up seed in a temporary data folder. No network, and nothing from the real
  * seed. Prints PASS and FAIL lines, then "##RESULT <passed> <failed>".
@@ -168,21 +168,22 @@ async function health() {
   eq("a board that errors is not clean either", [(await scan([], boardA(0, { fetched: 0, error: "Timed out" }), at(15))).closed, (await boardRow())?.healthy], [0, false]);
 
   eq("day 21: a good run sees all 5 again", [(await scan(A, boardA(5), at(21))).stillOpen, (await boardRow())?.healthy], [5, true]);
+  const open21 = (await t.buildView("tok-mo")).scan!.openNow;
 
   // Under half the last healthy count is not clean, and does not become the new normal on the next run.
   const r28 = await scan(A.slice(0, 2), boardA(2), at(28));
   eq("day 28: boardA matches 2 where it matched 5. Not a clean scan", [r28.closed, (await boardRow())?.healthy, (await boardRow())?.baseline], [0, false, 5]);
-  eq("  the 3 it did not list are not marked unseen", roleOf(await admin(), "Scanco5 Systems")?.unseen, false);
+  // The board answered and did not list them: whatever the run's health, they are not counted as open (LOGIC-10).
+  eq("  the 3 it did not list are marked unseen and left out of open now, and stay open", [roleOf(await admin(), "Scanco5 Systems")?.unseen, roleOf(await admin(), "Scanco5 Systems")?.closed, (await t.buildView("tok-mo")).scan!.openNow], [true, null, open21 - 3]);
   eq("day 35: the same low count again. The baseline did not move, so nothing closes", [(await scan(A.slice(0, 2), boardA(2), at(35))).closed, (await boardRow())?.baseline], [0, 5]);
 
   // A clean scan that misses a role: one is not enough, and two on one day count once.
-  const open35 = (await t.buildView("tok-mo")).scan!.openNow;
   const r42 = await scan(A.slice(0, 3), boardA(3), at(42));
   eq("day 42: boardA matches 3 of 5, a clean scan. It missed 2 roles, and one miss closes nothing", [r42.closed, (await boardRow())?.healthy, (await boardRow())?.baseline], [0, true, 3]);
   const v42 = await admin();
   eq("  a missed role is still open, marked unseen, with the time it was last seen", [roleOf(v42, "Scanco5 Systems")?.unseen, roleOf(v42, "Scanco5 Systems")?.closed, roleOf(v42, "Scanco5 Systems")?.lastSeen], [true, null, iso(at(21))]);
   eq("  a role the scan did see is not", roleOf(v42, "Scanco1 Systems")?.unseen, false);
-  eq("  unseen roles are left out of open now", (await t.buildView("tok-mo")).scan!.openNow, open35 - 2);
+  eq("  unseen roles are left out of open now", (await t.buildView("tok-mo")).scan!.openNow, open21 - 2);
   eq("  the same scan an hour later is not a second miss", (await scan(A.slice(0, 3), boardA(3), at(42) + HOUR)).closed, 0);
   eq("day 49: a second clean scan misses them. Unseen for 28 days, they close", (await scan(A.slice(0, 3), boardA(3), at(49))).closed, 2);
   eq("  closed roles are not unseen", roleOf(await admin(), "Scanco5 Systems")?.unseen, false);
@@ -333,7 +334,59 @@ async function names() {
   eq("a name cut at its limit never ends in half a character", [emoji.opened, stored?.name.isWellFormed(), stored?.name.length], [1, true, 79]);
 }
 
-const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names };
+/** LOGIC-10 (repair round): a board that only ever lists one role. Its posting comes down, and the board answers with its usual listings and matches none. */
+async function small() {
+  const now = REAL_NOW;
+  const one = sr("Smallco Labs", "Fractional VP Sales", { source: "tinyboard" });
+  const tiny = (matched: number, fetched = 12) => [{ source: "tinyboard", fetched, matched }];
+  const open0 = (await t.buildView("tok-mo")).scan!.openNow;
+  eq("a board lists one role", (await scan([one], tiny(1), now - 20 * DAY)).opened, 1);
+  const e = roleOf(await admin(), "Smallco Labs")!;
+  const gone = await scan([], tiny(0), now - 10 * DAY);
+  const v = await admin();
+  eq(
+    "the next week it answers 12 listings and none is that role: unseen, out of open now, nothing closes",
+    [gone.closed, roleOf(v, "Smallco Labs")?.unseen, roleOf(v, "Smallco Labs")?.closed, (await t.buildView("tok-mo")).scan!.openNow - open0],
+    [0, true, null, 0],
+  );
+  // A member buys it after the posting was gone.
+  await t.perform("tok-cy", { type: "unlock", entity: "engagement", id: e.id, field: "role" });
+  eq("a member pays 1 credit for it", await credits("tok-cy"), 24);
+  const closed = await scan([], tiny(0), now + DAY);
+  eq("the second answer without it closes it, and pays the member back (before, it stayed open for good)", [closed.closed, closed.refunded, roleOf(await admin(), "Smallco Labs")?.cells.status?.s === "value" && roleOf(await admin(), "Smallco Labs")?.cells.status.v, await credits("tok-cy")], [1, 1, "Closed", 25]);
+  // A board with one listing that answers with far fewer listings than usual is not trusted to close anything.
+  const other = sr("Othersmall Labs", "Fractional CMO", { source: "tinyboard2" });
+  await scan([other], [{ source: "tinyboard2", fetched: 40, matched: 1 }], now + 2 * DAY);
+  await scan([], [{ source: "tinyboard2", fetched: 5, matched: 0 }], now + 13 * DAY);
+  const half = await scan([], [{ source: "tinyboard2", fetched: 5, matched: 0 }], now + 20 * DAY);
+  eq("a small board that answers with a fraction of its usual listings closes nothing", [half.closed, roleOf(await admin(), "Othersmall Labs")?.closed, roleOf(await admin(), "Othersmall Labs")?.unseen], [0, null, true]);
+}
+
+/** N12 (repair round): This isn't me on a role whose posting has been gone a long while closes it, rather than bringing it back as open. */
+async function claimgone() {
+  const now = REAL_NOW;
+  const role = sr("Claimgone Health", "Fractional CMO", { source: "boardG" });
+  const keep = [1, 2, 3].map((i) => sr(`Claimkeep${i} Health`, "Fractional CMO", { source: "boardG" }));
+  const board = (matched: number) => [{ source: "boardG", fetched: 40, matched }];
+  await scan([role, ...keep], board(4), now - 30 * DAY);
+  const v0 = await admin();
+  const e = roleOf(v0, "Claimgone Health")!;
+  const claim = await t.perform("tok-sal", { type: "add", company: "Claimgone Health", engagementId: e.id, operatorMemberId: "me", engagementFields: { operator: "Sal Sales" } } as never);
+  eq("a member takes the open role and it closes", [!!claim.message, roleOf(await admin(), "Claimgone Health")?.cells.status?.s === "value" && roleOf(await admin(), "Claimgone Health")?.cells.status.v], [true, "Active"]);
+  // Its posting comes down and stays down through two clean scans, two weeks apart.
+  await scan(keep, board(3), now - 20 * DAY);
+  await scan(keep, board(3), now - 6 * DAY);
+  const not = await t.perform("tok-sal", { type: "notMine", engagementId: e.id });
+  const after = roleOf(await admin(), "Claimgone Health");
+  const forMo = (await t.buildView("tok-mo")).companies.find((c) => c.engagements.some((x) => x.id === e.id));
+  eq(
+    "then This isn't me closes it as the scan would have, instead of reopening it",
+    [/open again/.test(not.message), after?.closed !== null, after?.cells.status?.s === "value" && after.cells.status.v, forMo?.hidden],
+    [false, true, "Closed", false],
+  );
+}
+
+const SCENARIOS: Record<string, () => Promise<void>> = { cap, health, baseline, dates, refunds, names, small, claimgone };
 const name = process.argv[2] ?? "";
 try {
   if (!SCENARIOS[name]) throw new Error(`unknown scenario "${name}". One of: ${Object.keys(SCENARIOS).join(", ")}`);

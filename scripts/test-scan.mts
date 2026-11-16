@@ -448,6 +448,8 @@ const SCENARIOS: [string, string][] = [
   ["dates", "What a role's dates say"],
   ["refunds", "Unlocks on a role that had closed"],
   ["names", "One company, one record"],
+  ["small", "A board that lists one role"],
+  ["claimgone", "This isn't me on a role whose posting is long gone"],
 ];
 for (const [name, title] of SCENARIOS) {
   console.log(`\nStored scans: ${title}`);
