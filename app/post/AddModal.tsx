@@ -8,9 +8,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
+  ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PERSON_NAME_RE, PRICING_MODELS, RELATIONSHIPS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE, SOURCED_VIA, STATUSES, cleanValue, fieldDef,
 } from "@/lib/tableFields";
-import { CompanyLogo, IconCheck, IconSearch, IconX, fmtMonth, val } from "../ui/shared";
+import { CompanyLogo, IconCheck, IconSearch, IconX, fmtMonth, hue, initials, val } from "../ui/shared";
 import { COMPANY_FILL, shown, type CoInfo } from "./model";
 import { SeatHolderInput, Sheet, earnNote, useUi, type AddMode, type AddOpts } from "./ui";
 import { MissingFacts } from "./Drawer";
@@ -139,9 +139,13 @@ function NewCompany({
 
 const ENG_ORDER = ["function", "role", "type", "status", "reason", "sourced", "pricing", "start", "end", "rate", "hours", "operator"] as const;
 
-function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void }) {
+/** `mine`: a seat the member held. They are the seat holder, and the seat goes on their Your seats page. */
+function EngagementForm({ i, onDone, mine }: { i: CoInfo; onDone: (n: number) => void; mine?: boolean }) {
   const ui = useUi();
-  const [v, setV] = useState<Record<string, string>>({});
+  // Their name as the seat holder, when it reads as a first and last name. Otherwise they type it.
+  const asMe = mine && PERSON_NAME_RE.test(ui.me.name.trim());
+  const blank: Record<string, string> = asMe ? { operator: ui.me.name.trim() } : {};
+  const [v, setV] = useState<Record<string, string>>(blank);
   const [seatMember, setSeatMember] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -163,11 +167,11 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
       website: shown(i.c.cells.website) ?? undefined,
       newEngagement: true,
       engagementFields: fields,
-      ...(fields.operator && seatMember ? { operatorMemberId: seatMember } : {}),
+      ...(fields.operator && (mine || seatMember) ? { operatorMemberId: mine ? "me" : seatMember! } : {}),
     });
     setBusy(false);
     if (r.ok) {
-      setV({});
+      setV(blank);
       setSeatMember(null);
       onDone(filled.length);
     }
@@ -202,7 +206,7 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
       </div>
       <div className="tp-form-row">
         <Lbl text="Status" filled={!!v.status} />
-        <Chips options={STATUSES} value={v.status ?? ""} onPick={set("status")} label="Status" />
+        <Chips options={mine ? STATUSES.filter((x) => x === "Active" || x === "Ended") : STATUSES} value={v.status ?? ""} onPick={set("status")} label="Status" />
       </div>
       <div className="tp-form-row">
         <Lbl text="Why they hired" filled={!!v.reason} />
@@ -244,18 +248,32 @@ function EngagementForm({ i, onDone }: { i: CoInfo; onDone: (n: number) => void 
         {txt("hours", true, "number")}
       </div>
       <div className="tp-form-row">
-        <Lbl text="Who held the seat" filled={!!v.operator?.trim()} htmlFor="tp-ef-operator" />
-        <SeatHolderInput
-          id="tp-ef-operator"
-          value={v.operator ?? ""}
-          memberId={seatMember}
-          onChange={(x, m) => (set("operator")(x), setSeatMember(m))}
-        />
+        <Lbl text={mine && !asMe ? "Your first and last name" : "Who held the seat"} filled={!!v.operator?.trim()} htmlFor="tp-ef-operator" />
+        {asMe ? (
+          <div className="tp-seat-linked">
+            <span className="tp-seat-av" style={{ background: `hsl(${hue(ui.me.name)} 45% 90%)`, color: `hsl(${hue(ui.me.name)} 45% 28%)` }}>
+              {initials(ui.me.name)}
+            </span>
+            <span className="tp-seat-who">
+              <b>You</b>
+              <span>This seat goes on your seats</span>
+            </span>
+          </div>
+        ) : mine ? (
+          <input id="tp-ef-operator" className="input" placeholder="First and last name" autoComplete="name" value={v.operator ?? ""} onChange={(e) => set("operator")(e.target.value)} />
+        ) : (
+          <SeatHolderInput
+            id="tp-ef-operator"
+            value={v.operator ?? ""}
+            memberId={seatMember}
+            onChange={(x, m) => (set("operator")(x), setSeatMember(m))}
+          />
+        )}
       </div>
       {err && <p className="tp-ed-err">{err}</p>}
       <div className="tp-modal-actions">
         <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}>
-          {busy ? "Adding" : "Add engagement"} {filled.length > 0 && room > 0 && <span className="mono">+{Math.min(filled.length, room)}</span>}
+          {busy ? "Adding" : mine ? "Add this seat" : "Add engagement"} {filled.length > 0 && room > 0 && <span className="mono">+{Math.min(filled.length, room)}</span>}
         </button>
         <span className="tp-small muted">{room ? `Each field earns 1. ${plural(room, "credit")} left to earn today.` : earnNote(ui.me).text}</span>
       </div>
@@ -431,8 +449,12 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
               aria-label="Company name or website"
             />
           </label>
-          {!q && <p className="tp-small muted tp-find-hint">Type a company name, or paste its website to add a new one in one click.</p>}
-          {!q && suggestions.length > 0 && (
+          {!q && (
+            <p className="tp-small muted tp-find-hint">
+              {opts.mine ? "Type the company where you held the seat, or paste its website to add a new one in one click." : "Type a company name, or paste its website to add a new one in one click."}
+            </p>
+          )}
+          {!q && !opts.mine && suggestions.length > 0 && (
             <>
               <div className="tp-sublabel">{suggestions.some((s) => s.c.following) ? "Companies you follow that need facts" : "Top companies that need facts"}</div>
               <div className="tp-matches">
@@ -528,17 +550,32 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
                 <IconCheck size={14} /> {done}
               </div>
               <div className="tp-done-acts">
-                <button type="button" className="btn btn-primary" onClick={() => (setDone(null), setMode("engagement"))}>
-                  Add another engagement
-                </button>
-                <button type="button" className="btn" onClick={() => (setDone(null), setMode("person"))}>
-                  Add a person there
-                </button>
+                {opts.mine ? (
+                  <>
+                    <button type="button" className="btn btn-primary" onClick={onClose}>
+                      Back to your seats
+                    </button>
+                    <button type="button" className="btn" onClick={() => (setDone(null), setSelected(null), setQ(""))}>
+                      Add another seat
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-primary" onClick={() => (setDone(null), setMode("engagement"))}>
+                      Add another engagement
+                    </button>
+                    <button type="button" className="btn" onClick={() => (setDone(null), setMode("person"))}>
+                      Add a person there
+                    </button>
+                  </>
+                )}
                 <button type="button" className="btn btn-ghost" onClick={() => (ui.openCompany(i.c.id), onClose())}>
                   Open record
                 </button>
               </div>
             </div>
+          ) : opts.mine ? (
+            <EngagementForm i={i} mine onDone={(n) => setDone(`Seat added with ${plural(n, "fact")}. It is on your seats now.`)} />
           ) : (
             <>
               <div className="tp-seg" role="tablist" aria-label="What to add">
@@ -564,7 +601,7 @@ export function AddModal({ infos, opts, onClose }: { infos: CoInfo[]; opts: AddO
     </>
   );
 
-  const title = i ? "Add what you know" : "Add what you know";
+  const title = opts.mine ? "Add a seat you held" : "Add what you know";
   if (ui.layout === "phone")
     return (
       <Sheet title={title} onClose={onClose} full>

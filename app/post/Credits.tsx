@@ -6,7 +6,7 @@ import { REFERRAL_BONUS } from "@/lib/tableFields";
 import { IconChevron, timeAgo, useToast } from "../ui/shared";
 import { copyText, fmtTime } from "./hooks";
 import { ledgerWhat, ledgerWhere } from "./TopBar";
-import { useUi } from "./ui";
+import { Pro, useUi } from "./ui";
 
 export const inviteLink = (code: string) => `${window.location.origin}/?ref=${code}`;
 export const signInLink = (token: string) => `${window.location.origin}/?k=${token}`;
@@ -187,6 +187,7 @@ export function MyCredits({ view, onBack }: { view: View; onBack: () => void }) 
           </div>
         )}
       </section>
+      <Pro where="my_credits" />
     </div>
   );
 }

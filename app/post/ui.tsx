@@ -11,7 +11,8 @@ import type { Cell, Me } from "@/lib/tableTypes";
 import { cleanValue, fieldDef, type FieldDef } from "@/lib/tableFields";
 import { AddPill, IconCheck, IconSearch, IconX, LockPill, fmtValue, hrefFor, hue, initials, type Act } from "../ui/shared";
 import { cellKey, type FactRef } from "./model";
-import { fieldText, fmtTime, thisMonth, type Layout } from "./hooks";
+import { fieldText, fmtTime, plural, thisMonth, type Layout } from "./hooks";
+import { ProOffer, sendSignal, type ProWhere } from "./ProOffer";
 
 export type AddMode = "engagement" | "person" | "facts";
 export interface AddOpts {
@@ -19,6 +20,8 @@ export interface AddOpts {
   mode?: AddMode;
   query?: string;
   engagementId?: string;
+  /** A seat the member held: the new engagement is linked to them as seat holder. */
+  mine?: boolean;
 }
 
 export interface Ui {
@@ -40,6 +43,10 @@ export interface Ui {
   isHidden: (id: string) => boolean;
   /** Up to 3 empty facts at the company that owns this record (a company, engagement or person id). */
   addable: (id: string) => FactRef[];
+  /** The member's own seats: how many, and the facts still missing on them. */
+  seats: { n: number; missing: number };
+  /** Open the Your seats page, at one seat when given. */
+  openSeats: (engagementId?: string) => void;
 }
 
 export const UiCtx = createContext<Ui | null>(null);
@@ -88,24 +95,65 @@ export function EditPill({ fact, label, onPick }: { fact: FactRef; label?: strin
   );
 }
 
-/** Shown instead of spending at 0 credits: facts the member can add here to earn one. */
-function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string; onClose: () => void }) {
+/** "Your seat": the member is the linked seat holder. Opens that seat on the Your seats page. */
+export function YourSeat({ id }: { id: string }) {
+  const ui = useUi();
+  return (
+    <button type="button" className="chip ys-yours" title="Fill in what is missing on your seat" onClick={(e) => (e.stopPropagation(), ui.openSeats(id))}>
+      Your seat
+    </button>
+  );
+}
+
+/** The Pro waitlist offer, wired to the signed-in member. */
+export function Pro({ where, variant }: { where: ProWhere; variant?: "card" | "line" }) {
+  const ui = useUi();
+  return (
+    <ProOffer
+      where={where}
+      variant={variant}
+      listed={!!ui.me.proInterest}
+      onAsk={async (w) => (await ui.act({ type: "signal", name: "pro_interest", where: w }, { quiet: true })).ok}
+    />
+  );
+}
+
+/** Shown instead of spending at 0 credits: facts the member can add (their own seats first) to earn one. */
+export function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string; onClose: () => void }) {
   const ui = useUi();
   const earn = earnNote(ui.me);
   const facts = earn.capped ? [] : ui.addable(id);
+  const pills = (
+    <div className="tp-zero-pills">
+      {facts.map((x) => (
+        // Phones edit in a bottom sheet, which sits under this popover: close it first.
+        <EditPill key={cellKey(x.id, x.field)} fact={x} onPick={ui.layout === "phone" ? onClose : undefined} />
+      ))}
+    </div>
+  );
   return (
-    <Anchored anchor={anchor} onClose={onClose} width={280} className="tp-zero">
+    <Anchored anchor={anchor} onClose={onClose} width={300} className="tp-zero">
       {earn.capped ? (
         <p className="tp-zero-t">You have 0 credits, and today&apos;s earning is used up. It reopens {fmtTime(ui.me.earnResetsAt)}.</p>
+      ) : ui.seats.missing > 0 ? (
+        <>
+          <p className="tp-zero-t">
+            You have 0 credits. Your {ui.seats.n === 1 ? "seat has" : "seats have"} {plural(ui.seats.missing, "fact")} to add, 1 credit each.
+          </p>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => (onClose(), ui.openSeats())}>
+            Fill in your seats
+          </button>
+          {facts.length > 0 && (
+            <>
+              <p className="tp-small muted">Or add one of these.</p>
+              {pills}
+            </>
+          )}
+        </>
       ) : facts.length ? (
         <>
           <p className="tp-zero-t">You have 0 credits. Add one of these to earn 1.</p>
-          <div className="tp-zero-pills">
-            {facts.map((x) => (
-              // Phones edit in a bottom sheet, which sits under this popover: close it first.
-              <EditPill key={cellKey(x.id, x.field)} fact={x} onPick={ui.layout === "phone" ? onClose : undefined} />
-            ))}
-          </div>
+          {pills}
         </>
       ) : (
         <>
@@ -115,6 +163,7 @@ function ZeroCredits({ anchor, id, onClose }: { anchor: HTMLElement; id: string;
           </button>
         </>
       )}
+      <Pro where="zero_credits" variant="line" />
     </Anchored>
   );
 }
@@ -154,7 +203,16 @@ export function FactCell({ t, cell, render, addLabel = "Add" }: { t: FactRef; ce
     case "locked":
       return (
         <span className={cls} data-cell={k} ref={ref}>
-          <LockPill onUnlock={() => (ui.me.credits <= 0 ? setZero(true) : ui.unlock(t))} ver={cell.ver} busy={ui.busy.has(k)} />
+          <LockPill
+            onUnlock={() => {
+              if (ui.me.credits > 0) return ui.unlock(t);
+              // The wall: out of credits at a locked fact. Counted for the pilot, by field.
+              sendSignal("wall", t.field);
+              setZero(true);
+            }}
+            ver={cell.ver}
+            busy={ui.busy.has(k)}
+          />
           {zero && credits <= 0 && ref.current && <ZeroCredits anchor={ref.current} id={t.id} onClose={() => setZero(false)} />}
         </span>
       );
