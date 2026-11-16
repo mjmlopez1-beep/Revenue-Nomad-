@@ -6,8 +6,9 @@
  * At most one shows, by priority, and never together with the Get started strip:
  *
  *   seats  they hold seats with something missing and have added fewer than 3 things so far
+ *   low    3 credits or fewer, and their seats have something to add (before new roles: a
+ *          member who can't afford an unlock should see where to earn first)
  *   roles  new open roles in their function this week
- *   low    3 credits or fewer, and their seats have something to add
  *
  * Dismissing one hides that kind for 7 days (kept in localStorage, per browser).
  *
@@ -49,8 +50,8 @@ export function pickMove(me: Me, seats: { n: number; missing: number }, newRoles
   // Filling seats is only the next move while it still earns today.
   const canFill = seats.missing > 0 && earnRoom(me) > 0;
   if (canFill && me.added < 3 && !off.has("seats")) return "seats";
-  if (newRoles > 0 && me.function && !off.has("roles")) return "roles";
   if (canFill && me.credits <= 3 && !off.has("low")) return "low";
+  if (newRoles > 0 && me.function && !off.has("roles")) return "roles";
   return null;
 }
 

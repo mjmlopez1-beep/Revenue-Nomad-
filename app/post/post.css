@@ -79,6 +79,19 @@
   line-height: 18px;
   text-align: center;
 }
+/* The same count while something more urgent holds the ember: an ember outline, never gray (DSGN-14). */
+.tp-cnt-quiet {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--ember);
+  border-radius: var(--r-chip);
+  background: none;
+  color: var(--ember-ink);
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
 .tp-faint {
   color: var(--faint);
 }
@@ -711,10 +724,13 @@
   font-size: 13px;
   line-height: 18px;
 }
+/* Two lines at most, so the company at the end of a row is read, not cut (WORD-11). */
 .tp-lrow-t {
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: break-word;
 }
 .tp-lrow-d {
   font-weight: 700;
@@ -1220,7 +1236,7 @@ body:has(.tp-drawer) .pro-foot {
   font-weight: 700;
   border-bottom-color: var(--pine);
 }
-.tp-tab.on .tp-cnt:not(.tp-cnt-live) {
+.tp-tab.on .tp-cnt:not(.tp-cnt-live):not(.tp-cnt-quiet) {
   color: var(--muted);
 }
 .tp-achip {
@@ -4152,8 +4168,10 @@ button.tp-fs-row:active {
     opacity: 0.4;
   }
 }
+/* The grabber and the title row drag the sheet down to close it (Sheet in ui.tsx). */
 .tp-sheet-grab {
   position: absolute;
+  z-index: 1;
   top: 6px;
   left: 50%;
   width: 36px;
@@ -4161,6 +4179,21 @@ button.tp-fs-row:active {
   margin-left: -18px;
   border-radius: 2px;
   background: var(--line-strong);
+  touch-action: none;
+  cursor: grab;
+}
+/* A thumb-sized grip around the 4px bar. */
+.tp-sheet-grab::before {
+  content: "";
+  position: absolute;
+  inset: -6px -32px -10px;
+}
+.tp-sheet-head {
+  touch-action: none;
+}
+.tp-sheet.dragging {
+  animation: none;
+  transition: none;
 }
 .tp-sheet-head {
   display: flex;
@@ -4271,40 +4304,42 @@ button.tp-fs-row:active {
   font-weight: 700;
   letter-spacing: -0.005em;
 }
-.tp-help-qa + .tp-help-qa {
-  border-top: 1px solid var(--line);
+/* The landing page's questions (lp-faq, lp-qa from app/landing/questions.css), sized for the sheet. */
+.tp-help .lp-faq {
+  border-top: 0;
 }
-.tp-help-qa summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+.tp-help .lp-qa:last-child {
+  border-bottom: 0;
+}
+.tp-help .tp-help-more .lp-qa:first-child {
+  border-top: 0;
+}
+.tp-help .lp-faq:first-of-type .lp-qa:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.tp-help .lp-qa summary {
   min-height: 44px;
-  padding: 6px 0;
-  cursor: pointer;
-  list-style: none;
+  padding: 10px 0;
+  gap: 12px;
+  font-size: 15px;
+  line-height: 21px;
   font-weight: 600;
-  color: var(--ink);
+  letter-spacing: 0;
 }
-.tp-help-qa summary::-webkit-details-marker {
-  display: none;
-}
-.tp-help-qa summary::after {
-  content: "";
-  flex: none;
-  width: 8px;
-  height: 8px;
+.tp-help .lp-qa-icon {
+  width: 12px;
+  height: 12px;
   margin-right: 4px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform var(--t);
 }
-.tp-help-qa[open] summary::after {
-  transform: rotate(-135deg) translateY(-2px);
+.tp-help .lp-qa-icon::before,
+.tp-help .lp-qa-icon::after {
+  top: 5px;
+  width: 12px;
 }
-.tp-help-qa p {
+.tp-help .lp-qa p {
   padding: 0 0 12px;
+  font-size: 14px;
+  line-height: 21px;
   color: var(--body-ink);
 }
 .tp-help-keys dl {
@@ -4517,10 +4552,15 @@ button.tp-fsheet-row:disabled {
   align-items: center;
   gap: 8px;
   height: 56px;
+  /* The notch on a phone on its side is .tp-main-phone's padding (viewport-fit=cover). */
   padding: 0 0 0 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
   margin-top: 8px;
+  /* The chip row scrolls inside itself and never widens the page, even with larger text spacing (A11Y-12). */
+  min-width: 0;
+  max-width: 100vw;
+  overflow: hidden;
 }
 .tp-pchips-scroll {
   display: flex;
@@ -4530,6 +4570,9 @@ button.tp-fsheet-row:disabled {
   padding-right: 16px;
   flex: 1;
   min-width: 0;
+  /* More views to the right: the row fades out at its edge (PHONE-16). */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
 }
 .tp-pchips-scroll::-webkit-scrollbar {
   display: none;
@@ -4563,8 +4606,11 @@ button.tp-fsheet-row:disabled {
 .tp-phone .tp-step {
   min-height: 44px;
 }
+/* What each step costs or earns stays on phones, as a second line (FIRST-12). */
 .tp-phone .tp-step-h {
-  display: none;
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
 }
 /* Companies, Engagements, People on the first screen. */
 .tp-phone .tp-rtype {
@@ -4694,6 +4740,12 @@ button.tp-fsheet-row:disabled {
   gap: 6px;
   margin-top: 10px;
 }
+/* The function chips wrap inside the card, so "No Marketing yet" never widens a 320px page (A11Y-12). */
+.tp-pcard-fns .tp-fns {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
 .tp-pcard-title {
   font-size: 14px;
   line-height: 20px;
@@ -4790,7 +4842,7 @@ button.tp-fsheet-row:disabled {
 }
 .tp-phone button.lock:focus-visible,
 .tp-rsheet button.lock:focus-visible {
-  outline: 2px solid var(--volt);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .tp-pcard-miss {
@@ -4860,12 +4912,6 @@ button.tp-fsheet-row:disabled {
 .tp-rsheet .tp-frow {
   min-height: 44px;
 }
-.tp-rsheet .tp-meta-acts {
-  position: static;
-  transform: none;
-  display: inline-flex;
-  padding: 0;
-}
 .tp-rsheet .tp-frow {
   grid-template-columns: 104px minmax(0, 1fr) auto;
   padding: 0;
@@ -4877,11 +4923,6 @@ button.tp-fsheet-row:disabled {
   grid-column: auto;
   justify-self: end;
 }
-/* Confirm and Report go on their own line; a locked row stays one line high. */
-.tp-rsheet .tp-frow:has(.tp-meta-acts) .tp-meta {
-  grid-column: 2 / -1;
-  justify-self: start;
-}
 .tp-rsheet .tp-dactions .btn {
   min-height: 44px;
 }
@@ -4889,10 +4930,6 @@ button.tp-fsheet-row:disabled {
   min-height: 36px;
   padding: 0 8px;
   margin: 0 -8px;
-}
-.tp-rsheet .tp-meta-acts {
-  gap: 20px;
-  padding-bottom: 4px;
 }
 .tp-rsheet .tp-pform-grid {
   grid-template-columns: 1fr;
@@ -5105,19 +5142,11 @@ button.tp-fsheet-row:disabled {
   }
 }
 
-/* Touch screens: no keyboard hints. */
+/* Touch screens: no keyboard hints. (The record shows none there, and its facts open the fact sheet for Confirm and Report.) */
 @media (hover: none) and (pointer: coarse) {
-  .tp-dkeys,
   .tp-kbd,
   .tp-ed-keys {
     display: none;
-  }
-  /* Confirm and Report have no hover to appear on. */
-  .tp-drawer .tp-meta-acts {
-    position: static;
-    transform: none;
-    display: inline-flex;
-    padding: 0;
   }
 }
 
@@ -5141,8 +5170,26 @@ button.tp-fsheet-row:disabled {
   }
 }
 @media (max-width: 1199px) {
-  .tp-step-h {
-    display: none;
+  /*
+   * Get started in one row: too narrow for each step's cost beside its label, so it goes under
+   * the label, smaller (FIRST-12). The steps keep their width; the row grows to 44px steps.
+   */
+  .tp-check-card:not(.vertical) .tp-step {
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 8px;
+    height: auto;
+    min-height: 44px;
+    padding: 4px 10px 4px 8px;
+  }
+  .tp-check-card:not(.vertical) .tp-step-dot {
+    grid-row: span 2;
+    align-self: center;
+  }
+  .tp-check-card:not(.vertical) .tp-step-h {
+    grid-column: 2;
+    font-size: 12px;
+    line-height: 16px;
   }
 }
 @media (max-width: 1100px) {

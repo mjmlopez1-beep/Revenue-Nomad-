@@ -14,7 +14,10 @@ export function Checklist({
   onDismiss,
   vertical,
   seats,
+  seatsHeld,
+  seatsLeft,
   onSeats,
+  addLabel,
 }: {
   me: Me;
   onUnlock: () => void;
@@ -22,19 +25,38 @@ export function Checklist({
   onInvite: () => void;
   onDismiss: () => void;
   vertical?: boolean;
-  /** Credits the member can earn today by filling in their own seats (0 when they hold none, or all are full). */
+  /** Credits the member can earn today by filling in their own seats (0 when none can earn now). */
   seats?: number;
+  /** Seats on file under the member's name, and the facts still missing on them. */
+  seatsHeld?: number;
+  seatsLeft?: number;
   onSeats?: () => void;
+  /** What step 2 does for a member with no seats ("Add a seat you held", or "Add a fact" when a company they know has a gap). */
+  addLabel?: string;
 }) {
   const paid = me.invitesPaid ?? 0;
-  // A member with seats on file gives there first: it is what they know best. The step stays open
-  // while their seats still have something to add, so one answer never reads as finished.
+  /*
+   * A member with seats on file gives there first: it is what they know best. The step is done
+   * only once nothing is missing on them, so one answer never reads as finished, and the hint
+   * says how many are left and what they earn today.
+   */
+  const left = seatsLeft ?? 0;
+  const earn = seats ?? 0;
   const give =
-    seats && onSeats
-      ? { done: false, label: "Fill in your seats", hint: seats === 1 ? "earns 1 credit" : `earns up to ${seats} credits`, go: onSeats, open: true, more: true }
-      : { done: me.added > 0, label: "Add a fact", hint: "earns 1 credit", go: onAdd, open: false, more: false };
+    seatsHeld && onSeats
+      ? {
+          done: left === 0,
+          label: "Fill in your seats",
+          hint: left === 0 ? "all filled in" : earn >= left ? `${left} left, 1 credit each` : earn > 0 ? `${left} left, earns up to ${earn}` : `${left} left to fill`,
+          go: onSeats,
+          open: true,
+          more: true,
+        }
+      : { done: me.added > 0, label: addLabel ?? "Add a fact", hint: "earns 1 credit", go: onAdd, open: false, more: false };
+  // The first unlock shows what a credit buys: who held a seat (an open role, for a member looking for roles).
+  const unlockLabel = me.goal === "roles" ? "See an open role" : "See who held a seat";
   const steps = [
-    { done: me.unlocked > 0, label: "Unlock a fact", hint: "costs 1 credit", go: onUnlock, open: false, more: false },
+    { done: me.unlocked > 0, label: unlockLabel, hint: "costs 1 credit", go: onUnlock, open: false, more: false },
     give,
     // Done once an invitee's first fact paid the bonus, not when they merely joined.
     { done: paid > 0, label: me.invited > paid ? `Invite a fractional, ${me.invited} joined` : "Invite a fractional", hint: `${REFERRAL_BONUS} credits each`, go: onInvite, open: true, more: false },

@@ -33,6 +33,18 @@ const readHint = () => {
     return false;
   }
 };
+/**
+ * The last view this browser loaded had no member in it, or it never loaded one: draw the
+ * landing page at once, with its counts filled in when the view arrives. Blocked storage counts
+ * as a member. A member whose storage was cleared sees the landing page for a moment, once.
+ */
+const lastSawVisitor = () => {
+  try {
+    return window.localStorage.getItem(HINT) !== "1";
+  } catch {
+    return false;
+  }
+};
 const writeHint = (member: boolean) => {
   try {
     window.localStorage.setItem(HINT, member ? "1" : "0");
@@ -187,6 +199,10 @@ function App() {
   const [view, setView] = useState<View | null>(null);
   /** Why the first load failed (nothing on screen yet). */
   const [failed, setFailed] = useState<string | null>(null);
+  // A ?k= sign-in link that failed: the landing page opens Sign in with this message.
+  const [signInError, setSignInError] = useState<string | null>(null);
+  // A visitor (as far as this browser knows) gets the landing page before the view arrives.
+  const [guest, setGuest] = useState(false);
   const toast = useToast();
   // Only the newest refresh may set the view, so a slow one never undoes a later patch.
   const gen = useRef(0);
@@ -270,9 +286,10 @@ function App() {
           localStorage.setItem("tp_ref", ref);
         } catch {}
       }
+      if (!k && lastSawVisitor()) setGuest(true);
       if (k) {
         const r = await post({ signIn: k });
-        if (r.error) toast(r.error, true);
+        if (r.error) setSignInError(r.error);
       }
       if (k || ref) {
         url.searchParams.delete("k");
@@ -305,7 +322,7 @@ function App() {
       if (flip) setView((v) => (v ? { ...v, companies: v.companies.map((c) => (c.id === flip.companyId ? { ...c, following: flip.on } : c)) } : v));
       const r = await post<{ message: string; id?: string; capped?: boolean } & ActPatch>({ action: a });
       if (r.error) {
-        toast(r.error, true);
+        if (!opts?.silentError) toast(r.error, true);
         sync(); // replaces any background sync this action superseded, and undoes a flip that failed
         return { ok: false, message: r.error };
       }
@@ -344,10 +361,12 @@ function App() {
           Try again
         </button>
       </Skeleton>
+    ) : guest ? (
+      <Landing view={null} onSignedIn={refresh} />
     ) : (
       <Skeleton />
     );
-  if (!view.me) return <Landing view={view} onSignedIn={refresh} />;
+  if (!view.me) return <Landing view={view} onSignedIn={refresh} signInError={signInError} />;
   if (onboarding) return <Onboarding view={view} act={act} onDone={onboarded} />;
   // Straight from onboarding, a member with seats under their name starts on those seats.
   const start = firstRun.current && view.companies.some((c) => c.engagements.some((e) => e.yours)) ? "seats" : undefined;

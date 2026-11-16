@@ -31,12 +31,12 @@ import type { Cell } from "@/lib/tableTypes";
 import type { Me } from "@/lib/tableTypes";
 import { IconChevron, IconFilter, IconPlus, IconX, useToast, type Act, type View } from "../ui/shared";
 import {
-  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
-  rowsFor, seatsMissing, shown, sortRows,
-  type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab,
+  COMPANY_FILL, EMPTY_FILTERS, RECORD_TYPES, SORTS, TABS, activeChips, activeCount, applyFilters, cellKey, coverOf, deriveAll, hasRoleDates, isOpenSeat, mySeats, newRolesFor,
+  notMineLabel, rowsFor, seatsMissing, shown, sortRows,
+  type CoInfo, type FactRef, type Filters, type RecordType, type Row, type SortKey, type Tab, type ToggleKey,
 } from "./model";
 import { atTime, useLayout, useMedia, useStable, useStoredFlag, store, plural } from "./hooks";
-import { UiCtx, FactEditor, Anchored, Pro, Sheet, type AddOpts, type Ui } from "./ui";
+import { UiCtx, FactEditor, Anchored, Pro, Sheet, cellFlags, useAllFlags, useLayer, type AddOpts, type AppPage, type Ui } from "./ui";
 import { Seats } from "./Seats";
 import { NextMove, earnRoom, pickMove, useMoveDismissals } from "./NextMove";
 import { AvatarMenu, CreditsPopover, TopBar } from "./TopBar";
@@ -45,7 +45,7 @@ import { DataTable } from "./Tables";
 import { CardList } from "./Cards";
 import { Drawer } from "./Drawer";
 import { AddModal } from "./AddModal";
-import { MyCredits, inviteLink, signInLink, useCopy } from "./Credits";
+import { MyCredits, inviteLink, signInLink, useCopy, useShareInvite } from "./Credits";
 import { Benchmarks } from "./Benchmarks";
 import { Admin } from "./Admin";
 import { fmtStamp } from "./RoleDate";
@@ -74,7 +74,8 @@ function previousVisit(): string | null {
   return lastVisit;
 }
 
-type DrawerState = { id: string; rowKey: string; focus: string | null };
+/** `returnTo`: the page the record was opened from (the review queue in Your credits, say). Closing the record goes back there. */
+type DrawerState = { id: string; rowKey: string; focus: string | null; returnTo?: Page };
 type EditorState = { el: HTMLElement; t: FactRef; initial?: string };
 type Page = "table" | "credits" | "rates" | "seats" | "metrics";
 
@@ -118,6 +119,13 @@ function decodeFilters(s: string): Filters {
   }
   return f as unknown as Filters;
 }
+
+/**
+ * Filters an onboarding answer turns on ("No Sales seat yet" for a member after adjacent seats,
+ * "Seat holder on file" for one after an intro). They narrow the All view only: the other views
+ * and their counts ignore them, so Hiring now never reads 0 because of an answer given once.
+ */
+const PRESET_KEYS: ToggleKey[] = ["notMine", "fractionalNamed"];
 
 /** Where a member lands with nothing in the address bar: set by their onboarding answers. */
 function defaultsFor(me: Me) {
@@ -199,9 +207,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [sortOpen, setSortOpen] = useState(false);
   const [sideDocked, setSideDocked] = useState(true);
   const [sideOverlay, setSideOverlay] = useState(false);
-  const [busy, setBusy] = useState<Set<string>>(() => new Set());
-  const [flash, setFlash] = useState<Set<string>>(() => new Set());
-  const [pulse, setPulse] = useState<string | null>(null);
+  // Unlocking, just unlocked and pointed-at cells live in a store (cellFlags), so the Ui context keeps its identity and only those cells render again.
+  // The shell subscribes too: the record reads them through ui.busy and ui.pulse.
+  useAllFlags();
   const [introOff, hideIntro] = useStoredFlag("tp_intro_off");
   const [checkOff, hideCheck] = useStoredFlag("tp_check_off");
   const [sinceOff, setSinceOff] = useState(false);
@@ -242,8 +250,41 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const seatMissing = useMemo(() => seatsMissing(seats), [seats]);
   const seatStats = useMemo(() => ({ n: seatN, missing: seatMissing }), [seatN, seatMissing]);
   const allRows = useMemo(() => rowsFor(recordType, infos), [recordType, infos]);
-  const { rows: filtered, facets } = useMemo(() => applyFilters(allRows, filters, tab, q, me), [allRows, filters, tab, q, me]);
-  const sortedLive = useMemo(() => sortRows(filtered, sort, tab === "needs"), [filtered, sort, tab]);
+  /* The onboarding preset (PRESET_KEYS) narrows the All view only. */
+  const [preset, setPreset] = useState<ToggleKey[]>(() => {
+    const d = defaultsFor(me).f;
+    return PRESET_KEYS.filter((k) => d[k] && place0.f[k]);
+  });
+  const presetOn = useMemo(() => preset.filter((k) => filters[k]), [preset, filters]);
+  // Turned off once, it is gone: turned on again, it is the member's own filter.
+  useEffect(() => {
+    if (preset.some((k) => !filters[k])) setPreset((p) => p.filter((k) => filters[k]));
+  }, [preset, filters]);
+  const unpreset = useMemo(
+    () => (presetOn.length ? ({ ...filters, ...Object.fromEntries(presetOn.map((k) => [k, false])) } as Filters) : filters),
+    [filters, presetOn],
+  );
+  /** The filters that apply to this view. */
+  const eff = tab === "all" ? filters : unpreset;
+  const { rows: filtered, facets: facets0 } = useMemo(() => applyFilters(allRows, eff, tab, q, me), [allRows, eff, tab, q, me]);
+  // With the preset on, All counts with it and every other view without it.
+  const otherTabs = useMemo(
+    () => (presetOn.length ? applyFilters(allRows, tab === "all" ? unpreset : filters, tab, q, me).facets.tabs : null),
+    [presetOn, allRows, tab, unpreset, filters, q, me],
+  );
+  const facets = useMemo(
+    () => (otherTabs ? { ...facets0, tabs: tab === "all" ? { ...otherTabs, all: facets0.tabs.all } : { ...facets0.tabs, all: otherTabs.all } } : facets0),
+    [facets0, otherTabs, tab],
+  );
+  /** Filters changed from a view the preset doesn't narrow: the preset stays for All, unless the member set that filter here themselves. */
+  const setEff = (nf: Filters) => {
+    if (tab === "all" || !presetOn.length) return setFilters(nf);
+    const took = presetOn.filter((k) => nf[k]);
+    if (took.length) setPreset((p) => p.filter((k) => !took.includes(k)));
+    setFilters({ ...nf, ...Object.fromEntries(presetOn.filter((k) => !took.includes(k)).map((k) => [k, true])) } as Filters);
+  };
+  // Name matches come first while searching (decision 13).
+  const sortedLive = useMemo(() => sortRows(filtered, sort, tab === "needs", q), [filtered, sort, tab, q]);
   /*
    * While a record is open, the rows keep the order they had when it opened: unlocking a hidden
    * company renames it, and "1 of 7" must not turn into "3 of 7" under the member. A new sort,
@@ -268,10 +309,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // The record type travels with its rows, so a deferred list never renders rows of another type.
   const listData = useMemo(() => ({ type: recordType, rows: visible }), [recordType, visible]);
   const list = useDeferredValue(listData);
-  const nFilters = activeCount(filters);
-  const chips = activeChips(filters);
+  const nFilters = activeCount(eff);
+  const chips = activeChips(eff);
   // The sidebar names the member's function ("No Sales seat yet"), so the chip does too.
-  const chipLabel = (c: { id: string; label: string }) => (c.id === "notMine" && me.function ? `No ${me.function} seat yet` : c.label);
+  const chipLabel = (c: { id: string; label: string }) => (c.id === "notMine" && me.function ? notMineLabel(me.function) : c.label);
 
   /* ----- a new list starts at its top ----- */
   const listChanged = useRef(false);
@@ -289,6 +330,19 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     const top = Math.max(0, a.getBoundingClientRect().top + window.scrollY - 56);
     if (window.scrollY > top + 1) window.scrollTo({ top });
   }, [recordType, tab, fKey, q, sort]);
+
+  /* ----- phones: the view in use is always fully on screen in its scrolling row ----- */
+  useEffect(() => {
+    if (!phone) return;
+    const row = document.querySelector<HTMLElement>(".tp-pchips-scroll");
+    const on = row?.querySelector<HTMLElement>(".chip-on");
+    if (!row || !on) return;
+    const a = on.getBoundingClientRect();
+    const b = row.getBoundingClientRect();
+    // Clear of the faded right edge (24px), and never under the Filters button on the left.
+    if (a.right > b.right - 24) row.scrollLeft += a.right - b.right + 24;
+    else if (a.left < b.left) row.scrollLeft -= b.left - a.left + 8;
+  }, [tab, phone, page]);
 
   /* ----- a page opens at its top; the table comes back where it was ----- */
   const tableY = useRef(0);
@@ -328,41 +382,35 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
    * Ui context never re-render for a new callback, and no callback holds an old table.
    */
   const firstUnlock = me.unlocked === 0;
-  const unlock = useStable(async (t: FactRef) => {
+  const flagOn = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which], ...keys]) }));
+  const flagOff = (which: "busy" | "flash", keys: string[]) => cellFlags.set((f) => ({ [which]: new Set([...f[which]].filter((k) => !keys.includes(k))) }));
+  const unlock = useStable(async (t: FactRef, opts?: { onWall?: () => void }) => {
     const k = cellKey(t.id, t.field);
-    setBusy((s) => new Set(s).add(k));
-    const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field }, { quiet: true });
-    setBusy((s) => {
-      const n = new Set(s);
-      n.delete(k);
-      return n;
-    });
-    if (r.ok) {
-      // A plain unlock speaks through the cell. One that bought more (the company, the role and the posting) or cost nothing says so.
-      const plain = /^Unlocked the [^,]+ for 1 credit\.$/.test(r.message) && !/ and /.test(r.message);
-      if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message);
-      else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.");
-      setPulse((p) => (p === k ? null : p));
-      setFlash((s) => new Set(s).add(k));
-      setTimeout(
-        () =>
-          setFlash((s) => {
-            const n = new Set(s);
-            n.delete(k);
-            return n;
-          }),
-        2200,
-      );
+    flagOn("busy", [k]);
+    const r = await act({ type: "unlock", entity: t.entity, id: t.id, field: t.field }, { quiet: true, silentError: true });
+    flagOff("busy", [k]);
+    if (!r.ok) {
+      // Out of credits on the server (the balance here was behind another tab): the zero-credits popover says what to add, not a red toast.
+      if (opts?.onWall && /^You're out of credits/.test(r.message)) opts.onWall();
+      else toast(r.message, true);
+      return;
     }
+    // A plain unlock speaks through the cell. One that bought more (the company, the role and the posting) or cost nothing says so.
+    const plain = /^Unlocked [^,]+ for 1 credit\.$/.test(r.message) && !/ and /.test(r.message);
+    if (t.field === "identity" || (/^Unlocked/.test(r.message) && !plain)) toast(r.message);
+    else if (firstUnlock) toast("Unlocked, and it stays unlocked for you. Add a fact you know and you earn the credit back.");
+    cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {}));
+    flagOn("flash", [k]);
+    setTimeout(() => flagOff("flash", [k]), 2200);
   });
   const unlockMany = useStable(async (items: FactRef[]) => {
     const keys = items.map((t) => cellKey(t.id, t.field));
-    setBusy((s) => new Set([...s, ...keys]));
+    flagOn("busy", keys);
     const r = await act({ type: "unlockMany", items: items.map(({ entity, id, field }) => ({ entity, id, field })) });
-    setBusy((s) => new Set([...s].filter((k) => !keys.includes(k))));
+    flagOff("busy", keys);
     if (r.ok) {
-      setFlash((s) => new Set([...s, ...keys]));
-      setTimeout(() => setFlash((s) => new Set([...s].filter((k) => !keys.includes(k)))), 2200);
+      flagOn("flash", keys);
+      setTimeout(() => flagOff("flash", keys), 2200);
     }
     return r.ok;
   });
@@ -385,8 +433,21 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   });
   const openCompany = useStable((id: string, focus?: string) => {
     const row = sorted.find((r) => r.i.c.id === id && (!focus || r.key === focus)) ?? sorted.find((r) => r.i.c.id === id);
-    setDrawer({ id, rowKey: row?.key ?? id, focus: focus ?? null });
+    // Opened from a page (the review queue, Your seats): closing the record goes back to it.
+    setDrawer({ id, rowKey: row?.key ?? id, focus: focus ?? null, returnTo: page !== "table" ? page : drawer?.returnTo });
     setPage("table");
+  });
+  /** Close the record, back to the page it was opened from, if any. */
+  const closeDrawer = useStable(() => {
+    const back = drawer?.returnTo;
+    setDrawer(null);
+    if (back) setPage(back);
+  });
+  const openPage = useStable((p: AppPage) => {
+    setEditor(null);
+    setPop(null);
+    setDrawer(null);
+    setPage(p === "metrics" && !view.admin ? "table" : p);
   });
   const openSeats = useStable((engagementId?: string) => {
     setEditor(null);
@@ -408,7 +469,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   });
   const openRow = useStable((r: Row) => {
     setEditor(null);
-    setDrawer({ id: r.i.c.id, rowKey: r.key, focus: r.p ? r.p.id : r.e ? r.e.id : null });
+    // J and K keep the page the record came from.
+    setDrawer((d) => ({ id: r.i.c.id, rowKey: r.key, focus: r.p ? r.p.id : r.e ? r.e.id : null, returnTo: d?.returnTo }));
   });
   /** A record stepped to with J/K: its row scrolls into view once the list has drawn it. */
   const scrollToRow = useRef<string | null>(null);
@@ -430,25 +492,32 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     scrollToRow.current = null;
     el.scrollIntoView({ block: "nearest" });
   }, [list, drawer?.rowKey]);
+  const shareInvite = useShareInvite();
+  // Phones and tablets open the share sheet (Messages, WhatsApp, LinkedIn). It copies the link where there is none.
   const invite = useStable(() => {
-    copy(inviteLink(me.inviteCode), `Invite link copied. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat.`);
+    if (phone || touch) void shareInvite(inviteLink(me.inviteCode));
+    else copy(inviteLink(me.inviteCode), `Invite link copied. You each get ${REFERRAL_BONUS} credits when they add their first fact to a company or a seat.`);
   });
 
   /**
    * The fact the guided steps point at. Adding: free company facts only (industry, size, HQ,
    * revenue), never a guess at a role, rate or who held a seat. Unlocking: who held the seat
    * first (the fact a credit is most worth), then the rate, then the role. A member looking for
-   * roles is pointed at an open role in their function. Followed companies first, then seats
-   * in the member's own function, then the current sort. `only` limits the rows looked at.
+   * roles is pointed at an open role in their function (at a hidden company, its one lock opens
+   * the company, the role and the posting). Followed companies first, then seats in the
+   * member's own function, then the current sort. `only` limits the rows looked at. A lock that
+   * another control buys is skipped, and so is a hidden company where its row has no lock
+   * (phones and touch tablets).
    */
   const firstFact = useStable((want: Cell["s"], only?: (r: Row) => boolean): { t: FactRef; row: Row; idx: number } | null => {
     const fnOf = (r: Row) => shown((r.e ?? r.i.latest)?.cells.function);
     const mineFn = (r: Row) => (me.function && fnOf(r) === me.function ? 1 : 0);
     const roles = me.goal === "roles" && want === "locked";
     const openMine = (r: Row) => (roles && (r.e ? [r.e] : r.i.engs).some((e) => isOpenSeat(e) && shown(e.cells.function) === me.function) ? 1 : 0);
+    const lockless = phone || touch;
     const order = sorted
       .map((r, idx) => ({ r, idx }))
-      .filter(({ r }) => !only || only(r))
+      .filter(({ r }) => (!only || only(r)) && !(want === "locked" && r.i.c.hidden && (lockless || !roles || me.unlocksLeft === 0)))
       .sort((a, b) => openMine(b.r) - openMine(a.r) || Number(b.r.i.c.following) - Number(a.r.i.c.following) || mineFn(b.r) - mineFn(a.r) || a.idx - b.idx);
     const lockedFields = roles ? ["role", "operator", "rate"] : ["operator", "rate", "role"];
     for (const { r, idx } of order) {
@@ -457,12 +526,13 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         for (const f of ["industry", "employees", "hq", "revenue"]) cands.push([{ entity: "company", id: r.i.c.id, field: f }, r.i.c.cells[f]]);
       } else if (r.p) {
         for (const f of ["name", "email", "linkedin", "phone"]) cands.push([{ entity: "contact", id: r.p.id, field: f }, r.p.cells[f]]);
+      } else if (r.i.c.hidden) {
+        // Looking for roles: the hidden company's lock opens it with its open role and the posting, for 1 credit.
+        cands.push([{ entity: "company", id: r.i.c.id, field: "identity" }, { s: "locked", ver: 0 }]);
       } else {
-        // An open role in the member's function, else the latest seat.
+        // An open role in the member's function, else the latest seat. (A phone card shows its role only: pointAt opens the record for the rest.)
         const e = (openMine(r) ? (r.e ? r.e : r.i.engs.find((x) => isOpenSeat(x) && shown(x.cells.function) === me.function)) : null) ?? r.e ?? r.i.latest;
-        // A phone company card shows the role, then the rate (or who held the seat when no rate is on file).
-        const onCard = (f: string) => !phone || r.e || f === "role" || (f === "rate" ? e?.cells.rate?.s !== "empty" || e?.cells.operator?.s === "empty" : e?.cells.rate?.s === "empty" && e?.cells.operator?.s !== "empty");
-        if (e) for (const f of lockedFields) if (onCard(f)) cands.push([{ entity: "engagement", id: e.id, field: f }, e.cells[f]]);
+        if (e) for (const f of lockedFields) if (!coverOf(r.i, e, f)) cands.push([{ entity: "engagement", id: e.id, field: f }, e.cells[f]]);
       }
       const hit = cands.find(([, c]) => c?.s === want);
       if (hit) return { t: hit[0], row: r, idx };
@@ -473,14 +543,24 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const pointAt = useStable((want: "locked" | "empty", hit: { t: FactRef; row: Row; idx: number }) => {
     if (hit.idx >= limit) setLimit(hit.idx + 1);
     const k = cellKey(hit.t.id, hit.t.field);
+    const pulseIt = () => {
+      cellFlags.set({ pulse: k });
+      setTimeout(() => cellFlags.set((f) => (f.pulse === k ? { pulse: null } : {})), 6000);
+    };
     setTimeout(() => {
+      const cell = document.querySelector<HTMLElement>(`[data-cell="${k}"]`);
+      // A phone card shows a seat's role only. Who held it and the rate are in the record: open it at that seat and point there.
+      if (!cell && want === "locked" && phone && hit.t.entity === "engagement") {
+        setDrawer({ id: hit.row.i.c.id, rowKey: hit.row.key, focus: hit.t.id });
+        setTimeout(pulseIt, 350);
+        return;
+      }
       // Company cells are not on screen in the Seats and People views (or on phone cards): use the row.
-      const el = document.querySelector<HTMLElement>(`[data-cell="${k}"]`) ?? document.querySelector<HTMLElement>(`[data-row="${CSS.escape(hit.row.key)}"]`);
-      el?.scrollIntoView({ block: "center", inline: "nearest" });
-      if (want === "locked") {
-        setPulse(k);
-        setTimeout(() => setPulse((p) => (p === k ? null : p)), 6000);
-      } else if (el || phone) setTimeout(() => setEditor({ el: el ?? document.body, t: hit.t }), 250); // phones edit in a sheet
+      const el = cell ?? document.querySelector<HTMLElement>(`[data-row="${CSS.escape(hit.row.key)}"]`);
+      // Centered across too, so a lock's label in the last columns opens inside the frame.
+      el?.scrollIntoView({ block: "center", inline: "center" });
+      if (want === "locked") pulseIt();
+      else if (el || phone) setTimeout(() => setEditor({ el: el ?? document.body, t: hit.t }), 250); // phones edit in a sheet
     }, 60);
   });
   /*
@@ -529,7 +609,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     else if (pop) setPop(null);
     else if (sortOpen) setSortOpen(false);
     else if (addOpts) setAddOpts(null);
-    else if (drawer) setDrawer(null);
+    else if (drawer) closeDrawer();
     else if (sideOverlay) setSideOverlay(false);
     else if (page !== "table") setPage("table");
   });
@@ -637,8 +717,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       close--;
     }
     if (close > 0 && navOpen) {
+      // Back from a record opened from a page goes back to that page.
+      const back = page === "table" ? drawer?.returnTo : undefined;
       setDrawer(null);
-      setPage("table");
+      setPage(back ?? "table");
     } else if (d > depth) {
       // Forward onto a record or a page.
       const x = readPlace(me);
@@ -676,7 +758,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
         toggleFilters();
       } else if (e.key === "a") {
         e.preventDefault();
-        openAdd();
+        // With a record open, Add starts on its company (a hidden company has nothing to add yet).
+        openAdd(s.drawer && !isHidden(s.drawer.id) ? { companyId: s.drawer.id } : undefined);
       } else if (s.drawer && e.key === "j") {
         e.preventDefault();
         step(1);
@@ -730,9 +813,39 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
     };
   }, [showTable, list, noRows]);
 
+  // One object for as long as the addresses are the same (every refresh brings a new View.contact).
+  const support = view.contact?.support ?? null;
+  const intro = view.contact?.intro ?? null;
+  const contact = useMemo(() => ({ support, intro }), [support, intro]);
   const ui: Ui = useMemo(
-    () => ({ me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seats: seatStats, openSeats }),
-    [me, act, layout, busy, flash, pulse, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats],
+    () => ({
+      me,
+      act,
+      layout,
+      // Read when a component renders. A change re-renders the cells it concerns (useCellFlags) and this shell, never the whole table.
+      get busy() {
+        return cellFlags.get().busy;
+      },
+      get flash() {
+        return cellFlags.get().flash;
+      },
+      get pulse() {
+        return cellFlags.get().pulse;
+      },
+      unlock,
+      unlockMany,
+      edit,
+      fill,
+      openCompany,
+      openAdd,
+      addable,
+      isHidden,
+      seats: seatStats,
+      openSeats,
+      openPage,
+      contact,
+    }),
+    [me, act, layout, unlock, unlockMany, edit, fill, openCompany, openAdd, addable, isHidden, seatStats, openSeats, openPage, contact],
   );
 
   const drawerInfo = drawer ? byId.get(drawer.id) ?? null : null;
@@ -772,16 +885,38 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       onInvite={invite}
       onDismiss={hideCheck}
       seats={Math.min(seatStats.missing, earnRoom(me))}
+      seatsHeld={seatStats.n}
+      seatsLeft={seatStats.missing}
       onSeats={() => openSeats()}
+      addLabel={addTarget === "seat" ? "Add a seat you held" : "Add a fact"}
     />
   );
 
+  /*
+   * The slot above the list (Get started, the next-move card, the credit line) is chosen from
+   * the balance as it was when this list or page opened. An unlock that takes the balance to 3
+   * never pushes the rows down under the pointer: the slot catches up on the next page, view,
+   * sort, search or filter change, or a reload. Dismissing something still hides it at once.
+   */
+  const slotKey = `${page}|${listKey}`;
+  const slotSnap = useRef<{ key: string; me: Me } | null>(null);
+  if (!slotSnap.current || slotSnap.current.key !== slotKey) slotSnap.current = { key: slotKey, me };
+  const slotMe = slotSnap.current.me;
+  const slotCapped = !!slotMe.earnResetsAt || slotMe.earned24h >= slotMe.earnCap;
   // The guidance slot holds one thing: credits running out, then a waiting invite bonus, then Get started, then the first-visit strip.
   const guide: "credits" | "invite" | "check" | "intro" | null =
-    me.credits <= 3 || capped ? "credits" : me.invitePending && me.added === 0 ? "invite" : !checkOff ? "check" : !introOff && me.added + me.unlocked === 0 ? "intro" : null;
+    slotMe.credits <= 3 || slotCapped
+      ? "credits"
+      : slotMe.invitePending && slotMe.added === 0
+        ? "invite"
+        : !checkOff
+          ? "check"
+          : !introOff && slotMe.added + slotMe.unlocked === 0
+            ? "intro"
+            : null;
   // The next-move card: the single most urgent thing. Never together with Get started, whose second step points at the seats instead.
   // The roles card has done its job once the member is looking at Hiring now.
-  const picked = guide === "check" ? null : pickMove(me, seatStats, view.scan?.mine7 ?? 0, moveOff);
+  const picked = guide === "check" ? null : pickMove(slotMe, seatStats, view.scan?.mine7 ?? 0, moveOff);
   const move = picked === "roles" && tab === "hiring" ? null : picked;
   const newRoles = move === "roles" ? newRolesFor(infos, me.function) : { roles: 0, hidden: 0 };
   /*
@@ -808,10 +943,12 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
 
   // Credits running low or out. With the roles card up, it is a line inside the card, not a second banner.
   const creditLine = guide === "credits" && (move === "roles" || !move);
+  // CreditLine draws nothing once the balance is back above 3 (and earning is open): the card then has no last line.
+  const noteNow = creditLine && (capped || me.credits <= 3);
   const banners = (
     <div className="tp-banners">
       {move && (
-        <div className={`tp-move${creditLine ? " has-note" : ""}`}>
+        <div className={`tp-move${noteNow ? " has-note" : ""}`}>
           <NextMove
             kind={move}
             me={me}
@@ -906,8 +1043,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           onClick={() => setTab(t.key)}
         >
           {t.label}{" "}
-          {/* The count on Hiring now is solid ember (open roles you can win today) unless something more urgent has the ember. */}
-          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 && emberTaken === 0 ? " tp-cnt-live" : ""}`}>{facets.tabs[t.key]}</span>
+          {/* The count on Hiring now is solid ember (open roles you can win today). When something more urgent has the ember, it steps back to an ember outline. */}
+          <span className={`num tp-cnt${t.key === "hiring" && facets.tabs.hiring > 0 ? (emberTaken === 0 ? " tp-cnt-live" : " tp-cnt-quiet") : ""}`}>{facets.tabs[t.key]}</span>
         </button>
       ))}
     </nav>
@@ -947,7 +1084,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   );
 
   const filterPanel = (head?: React.ReactNode) => (
-    <FilterPanel f={filters} setF={setFilters} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} />
+    <FilterPanel f={eff} setF={setEff} facets={facets} me={me} head={head} hasIndustry={hasIndustry} hasRoles={hasRoles} />
   );
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
@@ -990,6 +1127,9 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           menuRef={menuRef}
           onHome={goHome}
           quietCredits={!!move && page === "table"}
+          contact={contact}
+          emailOn={view.email}
+          starter={view.stats?.starter}
         />
 
         {page === "credits" ? (
@@ -1006,7 +1146,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           </main>
         ) : page === "seats" ? (
           <main className="tp-main tp-main-page ys-main">
-            <Seats seats={seats} focus={seatFocus} onBack={() => setPage("table")} />
+            <Seats seats={seats} infos={infos} focus={seatFocus} onBack={() => setPage("table")} />
           </main>
         ) : phone ? (
           <main className="tp-main tp-main-phone">
@@ -1047,7 +1187,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             </p>
             {scanLine}
             <div id="tp-results" tabIndex={-1} className="tp-presults">
-              {empty || <CardList type={list.type} rows={list.rows} me={me} onOpen={openRow} />}
+              {empty || <CardList type={list.type} rows={list.rows} me={me} onOpen={openRow} tab={tab} />}
             </div>
             {more}
             {proFoot}
@@ -1102,7 +1242,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
               {chips.length > 0 && (
                 <div className="tp-chiprow" aria-label="Active filters">
                   {chips.map((c) => (
-                    <button key={c.id} type="button" className="chip tp-achip" onClick={() => setFilters(c.clear(filters))} aria-label={`Remove the filter ${chipLabel(c)}`} title="Remove this filter">
+                    <button key={c.id} type="button" className="chip tp-achip" onClick={() => setEff(c.clear(eff))} aria-label={`Remove the filter ${chipLabel(c)}`} title="Remove this filter">
                       {chipLabel(c)} <IconX size={11} />
                     </button>
                   ))}
@@ -1116,7 +1256,18 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                 <div className="tp-frame" ref={frameRef} id="tp-results" tabIndex={-1}>
                   {empty || (
                     <>
-                      <DataTable type={list.type} rows={list.rows} me={me} selected={drawer?.rowKey ?? null} onOpen={openRow} newSince={since.at} />
+                      <DataTable
+                        type={list.type}
+                        rows={list.rows}
+                        me={me}
+                        selected={drawer?.rowKey ?? null}
+                        onOpen={openRow}
+                        newSince={since.at}
+                        tab={tab}
+                        notMine={eff.notMine}
+                        sort={sort}
+                        onSort={setSort}
+                      />
                       {more}
                       {proFoot}
                     </>
@@ -1130,9 +1281,8 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
 
         {/* filters as an overlay (tablet) or bottom sheet (phone) */}
         {sideOverlay && page === "table" && !phone && (
-          <div className="tp-side-wrap" onMouseDown={(e) => e.target === e.currentTarget && setSideOverlay(false)}>
-            <aside className="tp-side tp-side-overlay" aria-label="Filters">
-              {filterPanel(
+          <SidePanel onClose={() => setSideOverlay(false)}>
+            {filterPanel(
                 <div className="tp-filters-head">
                   <span className="tp-filters-title">Filters</span>
                   {nFilters > 0 && (
@@ -1145,8 +1295,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                   </button>
                 </div>,
               )}
-            </aside>
-          </div>
+          </SidePanel>
         )}
         {sideOverlay && phone && (
           <Sheet
@@ -1194,10 +1343,11 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
           <Drawer
             i={drawerInfo}
             focus={drawer.focus}
-            onClose={() => setDrawer(null)}
+            onClose={closeDrawer}
             onStep={step}
             pos={drawerPos >= 0 ? { n: drawerPos + 1, of: sorted.length } : null}
             phone={phone}
+            contact={contact}
           />
         )}
         {addOpts && <AddModal infos={infos} opts={addOpts} onClose={() => setAddOpts(null)} />}
@@ -1225,6 +1375,10 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
             me={me}
             anchor={menuRef.current}
             onClose={() => setPop(null)}
+            // Sign out asks first while email sign-in is off: the link is then the only way back.
+            onSignOut={signOut}
+            emailOn={view.email}
+            contact={contact}
             items={[
               ...(phone ? [{ label: "Add what you know", onClick: () => openAdd() }] : []),
               { label: "Your seats", hint: seatStats.missing ? `${seatStats.missing} missing` : undefined, onClick: () => openSeats() },
@@ -1248,12 +1402,35 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
                     },
                   ]
                 : []),
-              { label: "Sign out", onClick: () => void signOut() },
             ]}
           />
         )}
       </div>
     </UiCtx.Provider>
+  );
+}
+
+/* ---------- the filters over the table (tablets) ---------- */
+
+/**
+ * Under 1280px the filters open over the table. A dialog like every other overlay: focus moves
+ * to its close button, Tab stays inside, Esc and a tap beside it close it, and focus goes back
+ * to the Filters button.
+ */
+function SidePanel({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLElement>(null);
+  useLayer(ref, {
+    onEscape: onClose,
+    tab: "trap",
+    first: (root) => root.querySelector<HTMLElement>('[aria-label="Close filters"]'),
+    restore: () => document.querySelector<HTMLElement>(".tp-filterbtn"),
+  });
+  return (
+    <div className="tp-side-wrap" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <aside ref={ref} className="tp-side tp-side-overlay" role="dialog" aria-modal="true" aria-label="Filters" tabIndex={-1}>
+        {children}
+      </aside>
+    </div>
   );
 }
 
