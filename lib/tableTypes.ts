@@ -136,7 +136,17 @@ export interface Me {
   /** What they came for (onboarding). */
   goal: string | null;
   onboarded: boolean;
+  /** Never negative. When the ledger is below zero (a fact was removed after its credit was spent) the shortfall is in `owed`. */
   credits: number;
+  /** Credits owed when the ledger is below zero, else 0. Earning pays it off first. */
+  owed?: number;
+  /**
+   * Unlocks left today under the daily limit: 100 in any 24 hours, 25 in an account's first 24
+   * hours (null = no limit in play). Lower than `credits` means the limit binds before the balance.
+   */
+  unlocksLeft?: number | null;
+  /** Answers under "How they sell" (business model, sales motion, deal size, sales cycle) that can still earn a credit today: 5 a day. */
+  sellEarnLeft?: number;
   /** Credits earned in the last 24 hours, and the cap. */
   earned24h: number;
   earnCap: number;
@@ -281,6 +291,12 @@ export interface AdminStats {
   credits: { atZero: number; low: number; median: number };
   /** Facts added and unlocked, all time and in the last 7 days. */
   activity: { adds: number; unlocks: number; adds7: number; unlocks7: number };
+  /**
+   * The 20 members with the most facts added in the last 7 days, most first. Counts facts on
+   * records that still stand (a removed fact drops out). `privateRates` is how many
+   * benchmark-only rates the member has on file, never an amount. `memberId` is a public id.
+   */
+  recentAdds?: { memberId: string; name: string; adds24h: number; adds7: number; privateRates: number; lastAt: string | null }[];
   /** Members who hit zero credits while trying to unlock, and how many times. */
   walls: { members: number; hits: number };
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
@@ -370,7 +386,7 @@ export type ActionResult = {
   id?: string;
   capped?: boolean;
   cells?: { entity: Entity; id: string; field: string; cell: Cell }[];
-  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked">;
+  me?: Pick<Me, "credits" | "earned24h" | "earnResetsAt" | "held" | "added" | "unlocked" | "owed" | "unlocksLeft" | "sellEarnLeft">;
 };
 
 export const GOALS = [

@@ -210,6 +210,12 @@ export interface State {
   verifications: Record<string, string[]>;
   /** People who joined from the landing page (seed members sign in with their link). */
   members: (Member & { at: string; referredBy?: string; ipHash?: string })[];
+  /**
+   * Each member's recent networks as hashes (never the address), newest last, at most IP_KEEP.
+   * Seed members too. Written at sign-in and on visits. An invite that joins from one of the
+   * inviter's networks earns no bonus.
+   */
+  ips?: Record<string, string[]>;
   ledger: LedgerEntry[];
   profiles: Record<string, Profile>;
   follows: Record<string, string[]>;
@@ -760,8 +766,11 @@ const lower = (label: string) => (/[A-Z]/.test(label.slice(1)) ? label : label.t
 const EARNING = new Set(["fill", "referral", "confirm"]);
 /** Max facts a member can unlock per rolling 24 hours (stops scraping). */
 const UNLOCK_DAILY_MAX = 100;
-/** The same limit in an account's first 24 hours (throwaway accounts). */
-const NEW_MEMBER_UNLOCK_MAX = 20;
+/**
+ * The same limit in an account's first 24 hours (throwaway accounts). Never under the starter
+ * credits, so a new member can always spend what they were given on day one.
+ */
+const NEW_MEMBER_UNLOCK_MAX = Math.max(25, STARTER_CREDITS);
 /** Reports a member can make per rolling 24 hours. */
 const REPORT_DAILY_MAX = 10;
 /** Field keys any record can have (values under other keys are ignored). */
@@ -818,6 +827,77 @@ function releaseHeld(s: State, memberId: string, now: string): void {
 }
 
 const heldFor = (s: State, memberId: string) => s.held.reduce((n, h) => n + (h.memberId === memberId ? h.delta : 0), 0);
+
+/* ---------- limits beside the daily earning cap ---------- */
+
+/** The four "How they sell" pick lists on a company. One click each and easy to guess, so they have their own limits. */
+const SELL_FIELDS = new Set(["businessModel", "motion", "dealSize", "salesCycle"]);
+/** "How they sell" answers that earn a credit, per member per rolling 24 hours. More still save, for no credit. */
+const SELL_EARN_MAX = 5;
+/** "How they sell" answers a member can save per rolling 24 hours. */
+const SELL_SAVE_MAX = 20;
+/** Facts a member can add to records per rolling 24 hours, not counting their own seats (a backstop against a flood). */
+const FILL_DAILY_MAX = 150;
+/** What still earns once the "How they sell" answers have stopped. */
+const SELL_STILL_EARNS = "A role, a rate or who held the seat still earns.";
+
+const refField = (ref: string) => ref.slice(ref.lastIndexOf(".") + 1);
+const refRecord = (ref: string) => ref.slice(0, Math.max(0, ref.lastIndexOf(".")));
+
+/** A member's fills on records in the rolling 24 hours before `nowMs` (benchmark-only rates are not on a record). */
+const fillsToday = (s: State, memberId: string, nowMs: number) =>
+  s.ledger.filter((l) => l.memberId === memberId && l.reason === "fill" && !l.ref.startsWith("bench.") && nowMs - Date.parse(l.at) < DAY);
+
+/** "How they sell" answers a member saved, and was paid for, in the rolling 24 hours before `nowMs`. */
+function sellToday(s: State, memberId: string, nowMs: number): { saved: number; earned: number } {
+  let saved = 0;
+  let earned = 0;
+  for (const l of fillsToday(s, memberId, nowMs)) {
+    if (!SELL_FIELDS.has(refField(l.ref))) continue;
+    saved++;
+    if (l.delta > 0) earned++;
+  }
+  return { saved, earned };
+}
+
+/**
+ * Unlocks a member has left today: UNLOCK_DAILY_MAX in any rolling 24 hours, and
+ * NEW_MEMBER_UNLOCK_MAX while the account is in its first 24 hours (seed members have no join time).
+ */
+function unlockRoom(s: State, memberId: string, nowMs: number): { left: number; firstDay: boolean } {
+  let used = 0;
+  for (const l of s.ledger) if (l.memberId === memberId && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY) used++;
+  const joinedAt = s.members.find((m) => m.id === memberId)?.at;
+  const firstDay = !!joinedAt && nowMs - Date.parse(joinedAt) < DAY;
+  return { left: Math.max(0, (firstDay ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX) - used), firstDay };
+}
+
+/** What a member sees of their balance: never a negative number. A shortfall is shown as credits owed. */
+const shownBalance = (bal: number) => ({ credits: Math.max(0, bal), owed: Math.max(0, -bal) });
+
+/* ---------- a member's networks (for the invite rule) ---------- */
+
+/** How many recent networks are kept per member. */
+const IP_KEEP = 5;
+/** A network as it is stored: a hash, never the address. */
+const ipHashOf = (ip: string) => createHash("sha256").update("rn-ip:" + ip).digest("hex").slice(0, 16);
+/** Remember a network for a member: newest last, at most IP_KEEP. */
+function keepIp(s: State, memberId: string, hash: string): void {
+  const all = (s.ips ??= {});
+  all[memberId] = [...(all[memberId] ?? []).filter((h) => h !== hash), hash].slice(-IP_KEEP);
+}
+/** Every network on file for a member: the recent list, and the one a joined account signed up from. */
+const networksOf = (s: State, memberId: string) =>
+  new Set([...(s.ips?.[memberId] ?? []), ...s.members.filter((m) => m.id === memberId && m.ipHash).map((m) => m.ipHash!)]);
+
+/** Gmail delivers a.b+tag@gmail.com and ab@googlemail.com to one inbox, so they compare as one address. Other addresses compare as typed. */
+function inboxKey(emailRaw: string): string {
+  const email = emailRaw.trim().toLowerCase();
+  const at = email.lastIndexOf("@");
+  const domain = email.slice(at + 1);
+  if (at < 1 || (domain !== "gmail.com" && domain !== "googlemail.com")) return email;
+  return `${email.slice(0, at).split("+")[0].replace(/\./g, "")}@gmail.com`;
+}
 
 /** Effective value: a runtime value wins over the seed value. */
 function valueOf(node: Node | undefined, s: State, field: string): FieldValue | null {
@@ -924,7 +1004,12 @@ function missingOnSeat(e: Node, s: State): number {
   return n;
 }
 
-/** Members whose name matches a search, for the seat-holder picker. Signed-in members only. */
+/**
+ * Members whose name matches a search, for the seat-holder picker. Signed-in members only, and
+ * it lists only members who have signed in themselves (a visit, a profile, or a joined
+ * account) plus the searcher, so the picker is not a directory of everyone we invited. A seat
+ * still links to someone who has not signed in when their exact full name is typed (seatMember).
+ */
 export async function searchMembers(token: string | null, q: string): Promise<{ id: string; name: string; title: string; you: boolean }[]> {
   const seed = await loadSeed();
   const s = await loadState();
@@ -933,8 +1018,11 @@ export async function searchMembers(token: string | null, q: string): Promise<{ 
   const words = normName(String(q ?? "").slice(0, 60)).split(" ").filter(Boolean);
   if (!words.length || words.join("").length < 2) return [];
   const idx = memberIndex(seed, s);
+  const joined = new Set(s.members.map((m) => m.id));
+  const signedIn = (id: string) => id === me.id || joined.has(id) || !!s.seen[id] || !!s.profiles[id] || !!s.ips?.[id]?.length;
   const hits: { m: Member; score: number }[] = [];
   for (const m of idx.all) {
+    if (!signedIn(m.id)) continue;
     const parts = normName(m.name).split(" ");
     // Every typed word must start one of the name's words ("jan sm" finds Jane Smith).
     if (!words.every((w) => parts.some((p) => p.startsWith(w)))) continue;
@@ -986,32 +1074,56 @@ export function isAdmin(m: Member | null): boolean {
 /**
  * Join with a name and email. An email that already belongs to a member can't be claimed
  * (they sign in with their link, or ask for one by email), so nobody can take over an
- * account by typing someone's email; the answer is the same for seed and joined members, so
- * it doesn't tell anyone who is a member. `ref` is an invite code from a fellow member. An
- * invite from an account that joined from the same network earns no bonus (it is most
- * likely the same person with a second email).
+ * account by typing someone's email. The answer is the same for a seed member's address and
+ * a joined member's, so it doesn't say which kind of member they are. It does say the address
+ * is taken: while email sign-in is off, a new address is signed in on the spot and a member's
+ * is refused, so anyone who knows a person's exact address can tell they are a member (the
+ * route allows 10 joins an hour per network). With email sign-in on, both get the same answer
+ * and an email.
+ *
+ * Gmail addresses compare without dots and plus tags (inboxKey), so one inbox is one account.
+ *
+ * An address in RN_ADMIN_EMAILS that is not a member yet can't join while email sign-in is
+ * off: admin rights follow the address, and nothing would prove who typed it. With email on,
+ * the emailed link proves it. `operatorSecret` (the x-cron-secret header) equal to
+ * RN_CRON_SECRET also lets it through, so whoever runs the server can create the first admin.
+ *
+ * `ref` is an invite code from a fellow member. An invite that joins from a network the
+ * inviter has used (their recent sign-ins and visits, seed members included) earns no bonus:
+ * it is most likely the same person with a second email.
  */
-export async function joinMember(nameRaw: unknown, emailRaw: unknown, ref?: unknown, ip = "local"): Promise<Member & { existing?: boolean }> {
+export async function joinMember(
+  nameRaw: unknown, emailRaw: unknown, ref?: unknown, ip = "local", operatorSecret?: string | null,
+): Promise<Member & { existing?: boolean }> {
   const ipHash = createHash("sha256").update("rn-ip:" + ip).digest("hex").slice(0, 16);
   return mutate((s, seed) => {
     const name = stripInvisible(nameRaw).trim().replace(/\s+/g, " ").slice(0, 80);
     const email = stripInvisible(emailRaw).trim().toLowerCase().slice(0, 120);
     if (name.length < 2) throw new ActionError("Enter your name.");
     if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) throw new ActionError("Enter a valid work email.");
-    const seedMember = seed.members.find((m) => m.email && m.email.toLowerCase() === email);
-    const joined = s.members.find((m) => m.email === email);
+    const inbox = inboxKey(email);
+    const seedMember = seed.members.find((m) => m.email && inboxKey(m.email) === inbox);
+    const joined = s.members.find((m) => inboxKey(m.email) === inbox);
     if (seedMember || joined) {
       if (emailEnabled()) return { ...(seedMember ?? joined)!, existing: true }; // route emails them their link
       throw new ActionError("That email is already in use. Sign in with your link.");
     }
+    // An admin address nobody holds yet: typing it must not hand out admin rights.
+    const adminAddress = (process.env.RN_ADMIN_EMAILS || "").split(",").some((x) => x.trim() && inboxKey(x) === inbox);
+    if (adminAddress && !emailEnabled()) {
+      const want = Buffer.from(process.env.RN_CRON_SECRET ?? "");
+      const got = Buffer.from(String(operatorSecret ?? ""));
+      if (!want.length || got.length !== want.length || !timingSafeEqual(got, want)) throw new ActionError("That email is already in use. Sign in with your link.");
+    }
     const code = String(ref ?? "").trim();
     const referrer = code ? seed.members.find((m) => inviteCode(m.id) === code) ?? s.members.find((m) => inviteCode(m.id) === code) : undefined;
-    const sameNetwork = !!referrer && s.members.some((m) => m.id === referrer.id && m.ipHash === ipHash);
+    const sameNetwork = !!referrer && networksOf(s, referrer.id).has(ipHash);
     const m = {
       id: newId("j", name), name, email, title: "Member", token: randomBytes(12).toString("base64url"), at: new Date().toISOString(), ipHash,
       ...(referrer && !sameNetwork ? { referredBy: referrer.id } : {}),
     };
     s.members.push(m);
+    keepIp(s, m.id, ipHash);
     memberIndexCache = null; // the draft changed in place: later jobs in this batch must see the new member
     return m;
   });
@@ -1442,7 +1554,9 @@ async function fullView(seed: Seed, s: State, me: Member | null): Promise<View> 
       function: prof.function ?? functionOf(me.title),
       goal: prof.goal ?? null,
       onboarded: !!prof.onboarded,
-      credits: balance(s, me.id),
+      ...shownBalance(balance(s, me.id)),
+      unlocksLeft: unlockRoom(s, me.id, nowMs).left,
+      sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs).earned),
       earned24h: earned,
       earnCap: EARN_CAP,
       earnResetsAt: resetsAt,
@@ -1577,6 +1691,32 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     else if (l.reason === "unlock") (unlocks++, recent && unlocks7++);
   }
 
+  // Who added the most this week, so a flood of guesses is easy to spot. Only facts on records
+  // that still stand count (the newest fill of each), so a member whose facts were removed drops out.
+  const addsBy = new Map<string, { adds24h: number; adds7: number; lastAt: string | null }>();
+  const counted = new Set<string>();
+  for (let i = s.ledger.length - 1; i >= 0; i--) {
+    const l = s.ledger[i];
+    if (l.reason !== "fill" || l.ref.startsWith("bench.") || counted.has(l.ref)) continue;
+    const v = s.values[l.ref];
+    if (!v || v.by !== l.memberId || v.status === "removed") continue;
+    counted.add(l.ref);
+    const age = nowMs - Date.parse(l.at);
+    if (age >= WEEK) continue;
+    const r = addsBy.get(l.memberId) ?? { adds24h: 0, adds7: 0, lastAt: null };
+    r.adds7++;
+    if (age < DAY) r.adds24h++;
+    if (!r.lastAt || l.at > r.lastAt) r.lastAt = l.at;
+    addsBy.set(l.memberId, r);
+  }
+  const privateBy = new Map<string, number>();
+  for (const b of s.benchRates) privateBy.set(b.by, (privateBy.get(b.by) ?? 0) + 1);
+  const recentAdds = [...addsBy]
+    .filter(([id]) => idx.byId.has(id))
+    .sort(([, a], [, b]) => b.adds7 - a.adds7 || b.adds24h - a.adds24h || (b.lastAt ?? "").localeCompare(a.lastAt ?? ""))
+    .slice(0, 20)
+    .map(([id, r]) => ({ memberId: pubId(id), name: idx.byId.get(id)!.name, adds24h: r.adds24h, adds7: r.adds7, privateRates: privateBy.get(id) ?? 0, lastAt: r.lastAt }));
+
   const walled = new Set<string>();
   let hits = 0;
   let views = 0;
@@ -1611,6 +1751,7 @@ function adminStats(seed: Seed, s: State, g: Graph, idx: MemberIndex, nowMs: num
     },
     credits: { atZero: balances.filter((b) => b <= 0).length, low: balances.filter((b) => b >= 1 && b <= 3).length, median },
     activity: { adds, unlocks, adds7, unlocks7 },
+    recentAdds,
     walls: { members: walled.size, hits },
     pro: { interested: Object.values(s.profiles).filter((p) => p.proInterest).length, views, byWhere },
     topUnlocked: top("unlock"),
@@ -1867,23 +2008,57 @@ export async function perform(token: string | null, a: Action, origin?: string):
     let capped = false;
     /** Cells a fill changed besides its own (a filled open role's status). */
     const alsoChanged: { entity: Entity; node: Node; field: string }[] = [];
-    /** Pay a fill, within the rolling 24 hour cap. Records a 0 entry when capped (so a later reversal knows). */
+    /** A fill saved for no credit because it was a "How they sell" answer past the ones that earn today. */
+    let sellCapped = false;
+    /**
+     * Pay a fill, within the rolling 24 hour cap. Records a 0 entry when it earns nothing (so a
+     * later reversal knows). Two limits sit beside the cap, and a fill past either hard limit is
+     * refused (the throw drops the whole action, so nothing half-saved stays):
+     *  - "How they sell" answers: SELL_EARN_MAX earn a day, SELL_SAVE_MAX save a day.
+     *  - FILL_DAILY_MAX facts a day on records, not counting the member's own seats.
+     */
     const awardFill = (ref: string) => {
-      const d = EARN_CAP - earning(s, me.id, nowMs).earned > 0 ? 1 : 0;
+      let earns = true;
+      if (!ref.startsWith("bench.")) {
+        if (SELL_FIELDS.has(refField(ref))) {
+          const sell = sellToday(s, me.id, nowMs);
+          if (sell.saved >= SELL_SAVE_MAX)
+            throw new ActionError(`You've added ${SELL_SAVE_MAX} answers under How they sell today. Add more tomorrow. A role, a rate or who held the seat can go in now.`);
+          if (sell.earned >= SELL_EARN_MAX) (earns = false), (sellCapped = true);
+        }
+        const today = fillsToday(s, me.id, nowMs);
+        if (today.length >= FILL_DAILY_MAX && !ownSeat(refRecord(ref)) && today.filter((l) => !ownSeat(refRecord(l.ref))).length >= FILL_DAILY_MAX)
+          throw new ActionError(`You've added ${FILL_DAILY_MAX} facts today, and that's the daily limit. Add more tomorrow. You can still fill in the seats you hold.`);
+      }
+      const d = earns && EARN_CAP - earning(s, me.id, nowMs).earned > 0 ? 1 : 0;
       s.ledger.push({ memberId: me.id, delta: d, reason: "fill", ref, at: now });
       return d;
     };
-    /** The invite bonus, to both once the invitee adds a first fact. It counts toward the cap; any excess is held. */
+    /**
+     * The invite bonus, to both once the invitee adds a first fact to a record (a benchmark-only
+     * rate is not on a record, so the bonus waits). It counts toward the cap; any excess is held.
+     * The inviter is paid for REFERRAL_LIMIT different invitees per 30 days.
+     */
     const payReferral = () => {
+      if (a?.type === "benchRate") return 0;
       const joined = s.members.find((m) => m.id === me.id);
       if (!joined?.referredBy || s.referralPaid.includes(me.id)) return 0;
       s.referralPaid.push(me.id);
-      const recent = s.ledger.filter(
-        (l) => l.memberId === joined.referredBy && l.reason === "referral" && l.delta > 0 && nowMs - Date.parse(l.at) < 30 * DAY,
-      ).length;
-      const held = (id: string) => s.held.filter((h) => h.memberId === id && h.reason === "referral" && nowMs - Date.parse(h.at) < 30 * DAY).length;
-      if (recent + held(joined.referredBy) < REFERRAL_LIMIT) grant(s, joined.referredBy, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
-      return grant(s, me.id, REFERRAL_BONUS, "referral", `${joined.referredBy}.referral`, now);
+      const inviter = joined.referredBy;
+      // Count invitees, not rows: a bonus split by the daily cap leaves a ledger row and a held
+      // row, and later releases add more. The inviter's own row for having been invited is not an invite.
+      const ownReferrer = s.members.find((m) => m.id === inviter)?.referredBy;
+      const firstPaid = new Map<string, number>();
+      const note = (ref: string, at: string) => {
+        const invitee = refRecord(ref);
+        if (!ref.endsWith(".referral") || invitee === ownReferrer) return;
+        firstPaid.set(invitee, Math.min(firstPaid.get(invitee) ?? Infinity, Date.parse(at)));
+      };
+      for (const l of s.ledger) if (l.memberId === inviter && l.reason === "referral" && l.delta > 0) note(l.ref, l.at);
+      for (const h of s.held) if (h.memberId === inviter && h.reason === "referral") note(h.ref, h.at);
+      const recent = [...firstPaid.values()].filter((t) => nowMs - t < 30 * DAY).length;
+      if (recent < REFERRAL_LIMIT) grant(s, inviter, REFERRAL_BONUS, "referral", `${me.id}.referral`, now);
+      return grant(s, me.id, REFERRAL_BONUS, "referral", `${inviter}.referral`, now);
     };
     /** Set a value. Returns credits earned (0 when editing your own value or at the daily cap). */
     /** Set a value. `member` (seat holder only) links it to a member, whose name becomes the value. */
@@ -1936,6 +2111,9 @@ export async function perform(token: string | null, a: Action, origin?: string):
     };
     const capNote = () => {
       if (!capped) return "";
+      // Under the daily cap, so the reason was the "How they sell" limit: say that, and what still earns.
+      if (sellCapped && earning(s, me.id, nowMs).earned < EARN_CAP)
+        return ` Only ${SELL_EARN_MAX} answers under How they sell earn a credit each day, so this one didn't earn. ${SELL_STILL_EARNS}`;
       const r = earning(s, me.id, nowMs).resetsAt;
       const hrs = r ? Math.max(1, Math.ceil((Date.parse(r) - nowMs) / 3_600_000)) : 24;
       return ` You've hit today's max of ${EARN_CAP} earned credits, so this one didn't earn. Earning reopens in about ${hrs} hour${hrs === 1 ? "" : "s"}.`;
@@ -2005,21 +2183,28 @@ export async function perform(token: string | null, a: Action, origin?: string):
             if (a.type === "unlock") throw new ActionError("Nothing to unlock here.");
             return { message: "Already visible." };
           }
-          const unlockedToday = s.ledger.filter((l) => l.memberId === me.id && l.reason === "unlock" && nowMs - Date.parse(l.at) < DAY).length;
-          // Accounts in their first 24 hours get a lower limit. Seed members have no join time.
-          const joinedAt = s.members.find((m) => m.id === me.id)?.at;
-          const max = joinedAt && nowMs - Date.parse(joinedAt) < DAY ? NEW_MEMBER_UNLOCK_MAX : UNLOCK_DAILY_MAX;
-          const left = Math.max(0, max - unlockedToday);
+          // What this unlock costs: 1 credit per fact.
+          const need = todo.length;
+          // Accounts in their first 24 hours get a lower daily limit (unlockRoom).
+          const { left, firstDay } = unlockRoom(s, me.id, nowMs);
           const bal = balance(s, me.id);
-          // Credits first, unless the daily limit binds as tightly (earning more wouldn't help then).
-          if (bal < todo.length && bal < left) {
-            const msg = bal ? `That needs ${todo.length} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.";
+          // Out of credits (0, or owing after a removal) is the wall whatever the daily limit says.
+          // Short of credits comes first too, unless the limit binds as tightly (earning more wouldn't help then).
+          if (bal <= 0 || (bal < need && bal < left)) {
+            const msg = bal > 0 ? `That needs ${need} credits and you have ${bal}. Add a missing fact to earn more.` : "You're out of credits. Add a missing fact to earn one.";
             // The wall: counted for the pilot, so the refusal is returned (a throw would drop the count).
             if (!addSignal(s, me.id, "wall", "server", now)) throw new ActionError(msg);
             refusal.message = msg;
             return { message: "" };
           }
-          if (todo.length > left) throw new ActionError(left > 0 ? `You can unlock ${left} more today.` : "You hit today's unlock limit. It resets within 24 hours.");
+          if (need > left)
+            throw new ActionError(
+              left > 0
+                ? `You can unlock ${left} more today.`
+                : firstDay
+                  ? `New accounts can unlock ${NEW_MEMBER_UNLOCK_MAX} facts on day one. Your ${bal} credit${bal === 1 ? " is" : "s are"} here tomorrow.`
+                  : "You hit today's unlock limit. It resets within 24 hours.",
+            );
           for (const t of todo) {
             s.ledger.push({ memberId: me.id, delta: -1, reason: "unlock", ref: t.k, at: now });
             s.unlocks[t.k] = [...(s.unlocks[t.k] ?? []), me.id];
@@ -2460,7 +2645,13 @@ export async function perform(token: string | null, a: Action, origin?: string):
       else if (l.reason === "unlock") unlocked++;
     }
     const { earned, resetsAt } = earning(s, me.id, nowMs);
-    return { ...out, me: { credits: balance(s, me.id), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked } };
+    return {
+      ...out,
+      me: {
+        ...shownBalance(balance(s, me.id)), earned24h: earned, earnResetsAt: resetsAt, held: heldFor(s, me.id), added, unlocked,
+        unlocksLeft: unlockRoom(s, me.id, nowMs).left, sellEarnLeft: Math.max(0, SELL_EARN_MAX - sellToday(s, me.id, nowMs).earned),
+      },
+    };
   });
   if (out.refused) throw new ActionError(out.refused);
   return out;
@@ -2470,10 +2661,19 @@ export async function perform(token: string | null, a: Action, origin?: string):
  * Admin export of the runtime state (for backups and audits). Rates shared for the benchmarks
  * only go out without who shared them or which seat they are about: no admin view shows a
  * member's private rate. (The daily snapshots on the data volume keep the full state.)
+ *
+ * Two more things would link a rate back to its member, so both go: the rows leave in a fixed
+ * order (by function, kind and amount, not the order they were shared in, which the ledger
+ * mirrors), and the ledger rows for those rates lose the rate's id (their ref reads "bench").
+ * Sign-in tokens and emails stay: this file is the only copy off the volume, and a restored
+ * member with no token could not get back in. Treat the file like a password list.
  */
 export async function exportState(): Promise<Omit<State, "benchRates"> & { benchRates: Pick<StoredBenchRate, "fn" | "kind" | "amount" | "revenue">[] }> {
   const s = await loadState();
-  return { ...s, benchRates: s.benchRates.map(({ fn, kind, amount, revenue }) => ({ fn, kind, amount, revenue })) };
+  const benchRates = s.benchRates
+    .map(({ fn, kind, amount, revenue }) => ({ fn, kind, amount, revenue }))
+    .sort((a, b) => a.fn.localeCompare(b.fn) || a.kind.localeCompare(b.kind) || a.amount - b.amount || (a.revenue ?? "").localeCompare(b.revenue ?? ""));
+  return { ...s, ledger: s.ledger.map((l) => (l.ref.startsWith("bench.") ? { ...l, ref: "bench" } : l)), benchRates };
 }
 
 /* ---------- last seen ---------- */
@@ -2481,19 +2681,37 @@ export async function exportState(): Promise<Omit<State, "benchRates"> & { bench
 const SEEN_EVERY = 6 * 60 * 60 * 1000;
 const seenAt = new Map<string, number>();
 
-/** Record a member's visit (for the pilot's active counts). Written at most once per 6 hours per member. */
-export async function touch(token: string | null | undefined): Promise<void> {
+/** Networks being written right now (member id and hash), so a burst of requests queues one write. */
+const ipWriting = new Set<string>();
+
+/**
+ * Record a member's visit (for the pilot's active counts) and the network it came from (for
+ * the invite rule, see State.ips). The visit is written at most once per 6 hours per member.
+ * A network that is not on the member's list yet is written at once; one already there moves
+ * to the newest place with the next visit write.
+ */
+export async function touch(token: string | null | undefined, ip?: string): Promise<void> {
   if (!token) return;
   const [seed, s] = await Promise.all([loadSeed(), loadState()]);
   const me = memberByToken(seed, token, s);
   if (!me) return;
   const now = Date.now();
   const last = seenAt.get(me.id) ?? Date.parse(s.seen[me.id] ?? "");
-  if (Number.isFinite(last) && now - last < SEEN_EVERY) return;
-  seenAt.set(me.id, now);
-  await mutate((d) => {
-    d.seen[me.id] = new Date(now).toISOString();
-  });
+  const due = !(Number.isFinite(last) && now - last < SEEN_EVERY);
+  const hash = ip ? ipHashOf(ip) : null;
+  const key = `${me.id}:${hash}`;
+  const newIp = !!hash && !(s.ips?.[me.id] ?? []).includes(hash) && !ipWriting.has(key);
+  if (!due && !newIp) return;
+  if (due) seenAt.set(me.id, now);
+  if (newIp) ipWriting.add(key);
+  try {
+    await mutate((d) => {
+      if (due) d.seen[me.id] = new Date(now).toISOString();
+      if (hash) keepIp(d, me.id, hash);
+    });
+  } finally {
+    if (newIp) ipWriting.delete(key);
+  }
 }
 
 /* ---------- the weekly scan: open roles, opened and closed with dates ---------- */

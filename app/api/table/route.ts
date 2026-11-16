@@ -75,10 +75,11 @@ const builtView = (token: string | null) =>
 export const GET = guarded(async (req: NextRequest) => {
   const ip = clientIp(req);
   const token = req.cookies.get(COOKIE)?.value ?? null;
-  // The seat-holder picker searches as you type, so it has its own limit (per member).
+  // The seat-holder picker searches as you type, so it has its own limit (per member): enough
+  // to find a few people, too slow to page through everyone.
   const people = req.nextUrl.searchParams.get("people");
   if (people !== null) {
-    if (limited(`people:${token ?? ip}`, 120, 60_000)) return err("Slow down a little.", 429);
+    if (limited(`people:${token ?? ip}`, 30, 60_000)) return err("Slow down a little.", 429);
     return NextResponse.json({ members: await searchMembers(token, people) }, { headers: { "cache-control": "no-store" } });
   }
   if (limited(`get:${ip}`, 120, 60_000)) return err("Slow down a little.", 429);
@@ -95,7 +96,7 @@ export const GET = guarded(async (req: NextRequest) => {
   }
   // Neither holds the page up: the visit is noted (at most once per 6 hours per member), and a
   // weekly scan starts in the background when one is due (only with RN_SCAN=1).
-  if (token) void touch(token).catch((e) => console.error("last seen not saved", e));
+  if (token) void touch(token, ip).catch((e) => console.error("last seen not saved", e));
   void maybeScan(origin(req)).catch((e) => console.error("scan check failed", e));
   const view = await builtView(token);
   return view.gzipped && wantsGzip(req)
@@ -139,7 +140,9 @@ function sound<T>(x: T, depth = 0): T {
  * POST { signIn: tokenOrLink }        sign in with a personal link or the code at the end of it.
  * POST { emailLink: email }           email me my sign-in link (when email is switched on).
  * POST { join: { name, email, ref } } join. With email switched on, we email a sign-in link
- *                                     (that's the email check); without it, you're in at once.
+ *                                     (that's the email check); without it, you're in at once,
+ *                                     except with an address in RN_ADMIN_EMAILS, which then needs
+ *                                     the header x-cron-secret: RN_CRON_SECRET.
  * POST { signOut: true }              sign out.
  * POST { action: {...} }              see Action and ActionResult in lib/tableTypes.ts.
  *
@@ -160,6 +163,8 @@ export const POST = guarded(async (req: NextRequest) => {
     const token = raw.match(/[?&]k=([A-Za-z0-9_-]+)/)?.[1] ?? raw.replace(/[^A-Za-z0-9_-]/g, "");
     const m = token ? await memberForToken(token) : null;
     if (!m) return err("That sign-in link or code isn't valid.", 401);
+    // The network a member signs in from is kept (hashed) for the invite rule: see touch().
+    await touch(m.token, ip).catch((e) => console.error("sign-in network not saved", e));
     return withSession(req, NextResponse.json({ ok: true }), m.token);
   }
 
@@ -180,7 +185,8 @@ export const POST = guarded(async (req: NextRequest) => {
     // The name is cut to its 80 characters here, on a whole character (joinMember cuts by unit).
     body.join.name = tidy(body.join.name, 80);
     try {
-      const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip);
+      // x-cron-secret: only so whoever runs the server can create the first admin while email is off (see joinMember).
+      const m = await joinMember(body.join.name, body.join.email, body.join.ref, ip, req.headers.get("x-cron-secret"));
       if (emailEnabled()) {
         const e = signInEmail(m.name, `${origin(req)}/?k=${encodeURIComponent(m.token)}`);
         await sendEmail(m.email, e.subject, e.text, e.html);
