@@ -1717,15 +1717,17 @@ let anonBuild: { s: State; seed: Seed; p: Promise<View> } | null = null;
 
 /**
  * One company for the landing page's "Try it" preview (lib/preview.ts): the record as a
- * signed-out visitor's build has it, with what the preview needs to keep the company out of
- * what it sends. `name` and `site` are only for scrubbing role titles and never leave the server.
- * `seed` is an opaque HMAC of the internal id (not the public id), for the blurred made-up name.
+ * signed-out visitor's build has it. `name` and `site` scrub role titles when the preview keeps
+ * an open role's company back (PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off). `seed` is an opaque HMAC
+ * of the internal id (not the public id), a stable key for the page. `rnHolders`: public ids of
+ * the seats whose holder is a Revenue Nomad member (a seed member), never who they are.
  */
 export interface PreviewCompany {
   rec: CompanyRec;
   name: string;
   site: string | null;
   seed: string;
+  rnHolders: Set<string>;
 }
 /** The companies of the latest signed-out build, kept with the state and seed they came from. */
 let anonCompanies: { s: State; seed: Seed; list: PreviewCompany[]; at: number } | null = null;
@@ -1950,7 +1952,14 @@ async function fullView(seed: Seed, s: State, me: Member | null, asMember = fals
       ...(addedByMe.has(c.id) ? { added: true } : {}),
     };
     companies.push(rec);
-    if (forPreview) forPreview.push({ rec, name: c.name, site: live(c, s, "website") ?? icons[c.id] ?? null, seed: previewSeed(c.id) });
+    if (forPreview)
+      forPreview.push({
+        rec,
+        name: c.name,
+        site: live(c, s, "website") ?? icons[c.id] ?? null,
+        seed: previewSeed(c.id),
+        rnHolders: new Set(engs.filter((e) => seatHolder(s, idx, e.id, valueOf(e, s, "operator"))).map((e) => pubId(e.id))),
+      });
   }
   companies.sort((a, b) => b.friendly.score - a.friendly.score || a.name.localeCompare(b.name));
 

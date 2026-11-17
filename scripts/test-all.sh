@@ -59,8 +59,10 @@ serve server node scripts/test-server.mjs
 serve rules node scripts/test-rules.mjs
 serve credits node scripts/test-credits.mjs
 serve integration node scripts/test-integration.mjs
-# The landing page's "Try it" preview: counts and free facts only, never a company, person, posting or rate.
+# The landing page's "Try it" preview and example record: real companies, never a person, email, phone, posting or rate.
 serve preview node scripts/test-preview.mjs
+# The same with open-role companies kept back (lib/preview.ts PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off, a test-server-only override).
+RN_PREVIEW_OPEN_ROLE_COMPANIES=0 serve preview-lock env PREVIEW_LOCKED=1 node scripts/test-preview.mjs
 # The Claude connector. RN_MCP_TEST=1: 2-second tokens for one test app, a short refresh grace, and metadata documents over http on localhost.
 RN_MCP_TEST=1 serve mcp node scripts/test-mcp.mjs
 run scan npx tsx scripts/test-scan.mts

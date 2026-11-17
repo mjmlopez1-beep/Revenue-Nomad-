@@ -6,7 +6,8 @@
  *      they go by when they message, and what they are looking for. A member with seats on file
  *      hears where those came from and who can see their name, since most of them arrive by
  *      personal link and skip the landing page.
- *   2. Who they hunt: their ideal client (industries, size, revenue, where). Every part optional.
+ *   2. Who they hunt: their Ideal Fractional Profile, the companies they want as clients (industries,
+ *      size, revenue, where). Every part optional.
  *   3. Find your seats: they type past and current clients, and claim the seats we found there
  *      ("Not on Trading Post yet", with the "Is this you?" check), or add one we don't have.
  *   4. Follow companies (type-ahead plus 6 suggestions that fit their clients and function, never
@@ -144,11 +145,11 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null, icp: I
   const theirs = new Set(clients);
   const companies = all.filter((c) => !c.hidden && !isFirm(c) && !isMine(c) && !theirs.has(c.id));
   if (!icpEmpty(icp)) {
-    // Their clients first: the companies that match, ranked by best fit for their function.
+    // Their Ideal Fractional Profile first: the companies that match, ranked by best fit for their function.
     const me = { icp, function: fn };
     const fits = icpTest(icp!);
     const infos = deriveAll(companies);
-    // Confirmed matches of their clients before maybes (a part not on file), then best fit.
+    // Confirmed matches of their profile before maybes (a part not on file), then best fit.
     const score = new Map(infos.map((i) => {
       const b = bestFit(i, me);
       return [i.c.id, b.score + (b.match === "match" ? 2000 : b.match === "maybe" ? 1000 : 0)];
@@ -157,7 +158,7 @@ function suggest(all: CompanyRec[], goal: Goal | null, fn: string | null, icp: I
     const ranked = (pool.length >= SUGGESTIONS ? pool : companies).sort(
       (a, b) => (score.get(b.id) ?? 0) - (score.get(a.id) ?? 0) || b.friendly.score - a.friendly.score || a.name.localeCompare(b.name),
     );
-    return { title: named(fn) ? `Like your clients, with no fractional ${fn} yet` : "Like your clients", list: ranked.slice(0, SUGGESTIONS) };
+    return { title: named(fn) ? `Fit your Ideal Fractional Profile, with no fractional ${fn} yet` : "Fit your Ideal Fractional Profile", list: ranked.slice(0, SUGGESTIONS) };
   }
   const own: CompanyRec[] = [];
   const rank = new Map(companies.map((c) => [c.id, fitRank(c)]));
@@ -232,7 +233,7 @@ export default function Onboarding({ view, act, onDone, onSkip }: OnboardingProp
   const toast = useToast();
   const first = (me.name || "").trim().split(/\s+/)[0] || "there";
   const linkStep = me.id.startsWith("j_") && !view.email;
-  // 1 who you are, 2 your clients, 3 find your seats, 4 follow, 5 keep your link.
+  // 1 who you are, 2 your Ideal Fractional Profile, 3 find your seats, 4 follow, 5 keep your link.
   const total = linkStep ? 5 : 4;
   const { support } = contactOf(view);
 
@@ -582,14 +583,14 @@ function StepQuestions({
           {ready ? "" : fn ? "Pick what you are looking for" : goal ? "Pick your function" : "Two answers decide what you see first"}
         </span>
         <button type="submit" className="btn btn-pine btn-lg ob-next" disabled={!ready}>
-          Pick your clients
+          Next: your profile
         </button>
       </div>
     </form>
   );
 }
 
-/* ---------- step 2: who your clients are (optional) ---------- */
+/* ---------- step 2: your Ideal Fractional Profile, the companies you want as clients (optional) ---------- */
 
 function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: CompanyRec[]; icp: Icp; setIcp: (v: Icp) => void; onBack: () => void; onNext: () => void }) {
   const industries = useMemo(() => industriesByCount(companies), [companies]);
@@ -597,9 +598,9 @@ function StepClients({ companies, icp, setIcp, onBack, onNext }: { companies: Co
   return (
     <div>
       <h1 className="ob-title" tabIndex={-1} data-step-h>
-        Who are your clients?
+        Your Ideal Fractional Profile
       </h1>
-      <p className="ob-sub">The table opens on companies like these, and the best fits for your function come first. Pick as many as fit, or skip it.</p>
+      <p className="ob-sub">The companies you want as clients. The table opens on companies like these, and the best fits for your function come first. Pick as many as fit, or skip it.</p>
       <IcpFields value={icp} onChange={setIcp} industries={industries} countries={countries} headingClass="ob-h" />
       <div className="ob-grow" />
       <div className="ob-foot ob-foot-follow">

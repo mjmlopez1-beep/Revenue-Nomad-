@@ -11,7 +11,7 @@ import { ActionError, connectorState, digestEnabled, inviteCode, perform, update
 import type { Action, Cell, EngagementRec, PersonRec, RateStat } from "../tableTypes";
 import { FUNCTIONS, PRICING_MODELS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, BUSINESS_MODELS, ENGAGEMENT_TYPES, HIRE_REASONS, SOURCED_VIA, STATUSES, RELATIONSHIPS, type Entity } from "../tableFields";
 import {
-  EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
+  EMPTY_FILTERS, applyFilters, countryOf, fitReason, fitTier, friendlyCo, icpEmpty, icpLabel, isOpenRole, repeatHirer, lastClosedPosting, lockedInEngagement, lockedOf, mySeats, rowsFor, shown, sortRows,
   type CoInfo, type FactRef, type Filters,
 } from "@/app/post/model";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
@@ -435,6 +435,10 @@ export async function myAccount(ctx: Ctx): Promise<ToolOut> {
   return {
     name: me.name,
     ...(me.function ? { function: me.function } : {}),
+    // The companies they want as clients. Empty parts mean any.
+    ideal_fractional_profile: icpEmpty(me.icp)
+      ? "Not set. The member sets it in Your profile on Trading Post."
+      : { industries: me.icp!.industries, employees: me.icp!.employees, revenue: me.icp!.revenue, countries: me.icp!.countries, summary: icpLabel(me.icp) },
     credits: me.credits,
     ...(me.owed ? { owed: me.owed } : {}),
     earned_today: `${me.earned24h} of ${me.earnCap}`,

@@ -150,7 +150,7 @@ function defaultsFor(me: Me) {
     v: (me.goal === "friendly" ? "repeat" : me.goal === "roles" ? "hiring" : "all") as Tab,
     // With an ideal client on file, the best fit for them comes first. Open roles read best newest first.
     s: (!icpEmpty(me.icp) ? "best" : me.goal === "roles" ? "newest" : "fit") as SortKey,
-    // The table opens on their ideal client (the "Your clients" pill).
+    // The table opens on their ideal client (the Ideal Fractional Profile pill).
     f: { ...EMPTY_FILTERS, notMine: me.goal === "adjacent" && !!me.function, fractionalNamed: me.goal === "intro", icp: !icpEmpty(me.icp) } as Filters,
   };
 }
@@ -274,7 +274,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   const [checkOff, hideCheck] = useStoredFlag("tp_check_off");
   const [sinceOff, setSinceOff] = useState(false);
   const [keysOff, setKeysOff] = useState(() => store.get("tp_keys_off") === "1");
-  /** The "Your clients" sheet and the "Save this view" sheet. */
+  /** The "Your profile" sheet (with the Ideal Fractional Profile) and the "Save this view" sheet. */
   const [icpOpen, setIcpOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
 
@@ -1350,7 +1350,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
   // Hiring now: say how fresh the open roles are. "Last scan" is the last one that read the boards cleanly.
   const scan = view.scan;
   // Hiring now leads with the member's function: how many came in this week there and elsewhere, and one tap for every function.
-  // Counted inside the "Your clients" pill while it is on, so the line agrees with the list under it.
+  // Counted inside the Ideal Fractional Profile pill while it is on, so the line agrees with the list under it.
   const weekFit = eff.icp && !icpEmpty(me.icp) ? icpTest(me.icp!) : null;
   const week = hireFn ? rolesThisWeek(infos, hireFn, (i) => !isFirm(i.c) && (!weekFit || weekFit(i.c))) : null;
   const fnLine = hireFn && fnSplit && !qt && (fnSplit.mine.length > 0 || allFns) && (
@@ -1378,7 +1378,7 @@ export default function TradingPost({ view, act, refresh, signOut, start }: Trad
       </p>
     </>
   );
-  /* ----- who the member hunts: the "Your clients" pill and saved views ----- */
+  /* ----- who the member hunts: the Ideal Fractional Profile pill and saved views ----- */
   const icpOn = eff.icp && !icpEmpty(me.icp);
   const pill = page === "table" && !qt && (
     <IcpPill

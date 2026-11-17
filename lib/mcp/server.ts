@@ -34,6 +34,7 @@ Using it well
 - Fractional friendly means the company hired fractionals before (past seats on file). A repeat hirer has 2 or more fractional hires on file, or hires in 2 or more functions. Hiring now means it has an open fractional role.
 - The warmest way into a company is the fractional who held a seat there (the seat holder) and the exec who hired or managed them (people marked Hiring for the seat, Reported to or Decision maker). get_company lists these as warm_paths.
 - To find prospects for a member's function, look for companies that hired fractionals in other functions but not theirs yet (search_companies with no_function_yet), ranked by fit. A company that just hired a fractional VP Sales often needs marketing or RevOps next.
+- A member's Ideal Fractional Profile (IFP) is the companies they want as clients: industries, company size, revenue and countries. my_account returns it. Use it to fill search_companies filters when they ask what fits them.
 - To see what's new, use list_open_roles with since_days 7. Saved searches (alerts) put new matches in the weekly email.
 - Always pass ids from earlier results back in follow-up calls. Say "a locked company" rather than guessing a name.`;
 
@@ -153,7 +154,7 @@ export function makeServer(ctx: T.Ctx): McpServer {
     {
       title: "My account",
       description:
-        "The member's credits, what they earned today and the daily cap, unlocks left today, the seats they hold on file with what is still missing on each (adding those earns credits), the companies they follow, their saved searches and their invite link (+10 credits each when a fractional they invite adds a first fact). Check it before suggesting an unlock.",
+        "The member's credits, their Ideal Fractional Profile (the industries, company sizes, revenue and countries of the companies they want as clients), what they earned today and the daily cap, unlocks left today, the seats they hold on file with what is still missing on each (adding those earns credits), the companies they follow, their saved searches and their invite link (+10 credits each when a fractional they invite adds a first fact). Check it before suggesting an unlock.",
       inputSchema: {},
       annotations: { title: "My account", ...READ },
     },

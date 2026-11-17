@@ -1,4 +1,4 @@
-/* Who the member hunts: the ideal client chips, the "Your clients" pill, saved views. hunt- classes. */
+/* Who the member hunts: the Ideal Fractional Profile chips, its pill over the table, saved views. hunt- classes. */
 
 .hunt-fields {
   display: grid;
@@ -122,7 +122,7 @@
   text-underline-offset: 3px;
 }
 
-/* A maybe under "Your clients": what isn't on file, under the name in the desktop table. */
+/* A maybe under the Ideal Fractional Profile: what isn't on file, under the name in the desktop table. */
 .hunt-unknown {
   display: block;
   font-size: 12px;
@@ -295,7 +295,7 @@
   }
 }
 
-/* "Your profile": the Your clients part under title and function. */
+/* "Your profile": the Ideal Fractional Profile part under title and function. */
 .hunt-sub {
   margin: 22px 0 8px;
   padding-top: 18px;
@@ -314,4 +314,23 @@
 .hunt-q-title {
   display: grid;
   gap: 8px;
+}
+
+/* "Ideal Fractional Profile" in full, and "IFP" only on a phone-width pill (IfpName in Hunt.tsx).
+   The full words stay for screen readers. */
+.ifp-short {
+  display: none;
+}
+@media (max-width: 520px) {
+  .hunt-pill .ifp-long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .hunt-pill .ifp-short {
+    display: inline;
+  }
 }

@@ -1,5 +1,5 @@
 /**
- * Who a member hunts: their ideal client (Profile.icp) and their saved views. Pure functions,
+ * Who a member hunts: their Ideal Fractional Profile (Profile.icp, the companies they want as clients) and their saved views. Pure functions,
  * no Node imports, so lib/table.ts calls them from inside its write queue.
  *
  * Saved views live in the same store as the Claude connector's saved searches
@@ -17,12 +17,12 @@ const textList = (raw: unknown, max: number, len: number) =>
   [...new Set((Array.isArray(raw) ? raw : []).map((v) => stripInvisible(String(v ?? "")).replace(/[<>]/g, "").trim().slice(0, len)).filter(Boolean))].slice(0, max);
 
 /**
- * An ideal client from loose input. Pick-list values come back in their list's spelling and
+ * An Ideal Fractional Profile from loose input. Pick-list values come back in their list's spelling and
  * anything not on the list is dropped (a list can change under a saved answer). Null clears it.
  */
 export function cleanIcp(raw: unknown): Icp | null {
   if (raw === null) return null;
-  if (!raw || typeof raw !== "object") throw new HuntError("Pick your clients from the lists.");
+  if (!raw || typeof raw !== "object") throw new HuntError("Pick your Ideal Fractional Profile from the lists.");
   const r = raw as Record<string, unknown>;
   const pick = (v: unknown, list: readonly string[]) =>
     [...new Set((Array.isArray(v) ? v : []).slice(0, 40).map((x) => pickFrom(list, x)).filter((x): x is string => !!x))];

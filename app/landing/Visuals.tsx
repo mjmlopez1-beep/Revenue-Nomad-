@@ -1,14 +1,19 @@
 "use client";
 
 /**
- * Static product visuals for the landing page, drawn in HTML and CSS. Every company and person
- * here is made up; none of it is member data. Nothing in here is clickable.
+ * Product visuals for the landing page, drawn in HTML and CSS. Nothing in here is clickable.
+ *
+ * The hero's record is a real company from the table (lib/preview.ts PreviewExample): its free
+ * facts, an open role when it has one, and a past seat whose holder is on file. It never names
+ * the seat holder or anyone else, and nothing on it is blurred. The small "how credits work"
+ * demos below are generic: no company in them.
  *
  * A fact is drawn in one of three states, the same three the app has: a value you can see,
  * a locked one (a small lock and a masked bar), and a missing one you can add for a credit.
  */
 import type { ReactNode } from "react";
-import { CompanyLogo, IconCheck, IconLock, IconUsers, LockedName, LockedSite } from "../ui/shared";
+import { CompanyLogo, IconCheck, IconLock } from "../ui/shared";
+import type { PreviewExample } from "./TryIt";
 
 /** A locked fact at rest: quiet, no value, no button. `w` is the width of the masked bar. Drawn with the app's own classes. */
 function Locked({ w = 72 }: { w?: number }) {
@@ -60,72 +65,117 @@ function Row({ k, children }: { k: string; children: ReactNode }) {
   );
 }
 
-/**
- * Hero visual: one company record as a member first meets it. It has an open role, so the
- * company is locked, as it is in the app: a blurred made-up name, site and logo. The role title
- * is free. Under it, a past seat with who held it (unlocked, confirmed by 3) and the two ways
- * to reach them: a message inside Trading Post, or an intro from us when the intro address is set.
- * It carries the page's one "Hiring now" chip.
- */
-/** Any fixed id, so the example card shows the same made-up name on every visit. */
-const EXAMPLE_SEED = "lp-example-record";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "Mar 2024" from "2024-03". */
+const monthLabel = (m: string | null) => {
+  if (!m) return null;
+  const [y, n] = m.split("-").map(Number);
+  return y && n ? `${MONTHS[n - 1]} ${y}` : null;
+};
+/** "Nov 3" from an ISO day. */
+const dayLabel = (d: string | null) => {
+  if (!d) return null;
+  const [, m, n] = d.slice(0, 10).split("-").map(Number);
+  return m && n ? `${MONTHS[m - 1]} ${n}` : null;
+};
 
-/** The two ways to reach a seat holder, drawn like the record's buttons. Not clickable. */
+/** What a member can do once they unlock the seat holder, drawn like the record's buttons. Not clickable. */
 function ReachOut({ intro }: { intro: boolean }) {
   return (
-    <div className="lp-reach">
-      <span className="lp-fake-btn lp-fake-btn-pine">Message Dana</span>
-      {intro ? <span className="lp-fake-btn">Ask for an intro</span> : <span className="lp-fake-btn">LinkedIn</span>}
+    <div className="lp-reach-wrap">
+      <span className="lp-reach-k">What members can do</span>
+      <div className="lp-reach">
+        <span className="lp-fake-btn lp-fake-btn-pine">Message the seat holder</span>
+        <span className="lp-fake-btn">{intro ? "Ask for an intro" : "Find them on LinkedIn"}</span>
+      </div>
     </div>
   );
 }
 
-export function HeroRecord({ intro = true }: { intro?: boolean }) {
+/** The record's shape while the example is on its way: quiet bars, no made-up company. */
+function RecordLoading() {
+  return (
+    <div className="lp-rec lp-rec-loading" aria-hidden>
+      <div className="lp-rec-head">
+        <span className="lp-try-skel-logo lp-rec-skel-logo" />
+        <div className="lp-rec-id">
+          <span className="lp-try-skel-line lp-rec-skel-name" />
+          <span className="lp-try-skel-line lp-try-skel-short" />
+        </div>
+      </div>
+      {[0, 1].map((n) => (
+        <div key={n} className="lp-rec-sec">
+          <span className="lp-try-skel-line" />
+          <span className="lp-try-skel-line lp-try-skel-short" />
+          <span className="lp-try-skel-line" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Hero visual: one real company record as a member first meets it. The company's free facts,
+ * its open role when it has one (title free, posting behind a credit), and a past seat whose
+ * holder is on file, with what a member can do next. It carries the page's one "Hiring now"
+ * chip when the company is hiring. `example` undefined: still loading. Null: nothing fits.
+ */
+export function HeroRecord({ example, intro = true }: { example: PreviewExample | null | undefined; intro?: boolean }) {
+  if (example === null) return null;
+  if (!example)
+    return (
+      <figure className="lp-visual">
+        <RecordLoading />
+        <figcaption className="lp-visual-cap">A real record from the table.</figcaption>
+      </figure>
+    );
+  const { company: co, open, seat } = example;
+  const started = monthLabel(seat.start);
   return (
     <figure className="lp-visual">
       <div className="lp-rec" aria-hidden>
         <div className="lp-rec-head">
-          <CompanyLogo name="" domain={null} hidden seed={EXAMPLE_SEED} size="lg" />
+          <CompanyLogo name={co.name} domain={co.logo} size="lg" />
           <div className="lp-rec-id">
-            <div className="lp-rec-name">
-              <LockedName seed={EXAMPLE_SEED} />
-            </div>
-            <LockedSite seed={EXAMPLE_SEED} className="lp-rec-site" />
+            <div className={`lp-rec-name${open ? " lp-rec-name-chip" : ""}`}>{co.name}</div>
+            {co.domain ? <span className="mono lp-rec-site">{co.domain}</span> : null}
             <div className="lp-rec-meta num">
-              SaaS · 51–200 people<span className="lp-rec-meta-x"> · $5M–$20M</span>
+              {[co.industry, co.employees && `${co.employees} people`].filter(Boolean).join(" · ")}
+              {co.revenue ? <span className="lp-rec-meta-x"> · {co.revenue}</span> : null}
             </div>
           </div>
-          <span className="chip chip-ember lp-hiring">Hiring now</span>
+          {open ? <span className="chip chip-ember lp-hiring">Hiring now</span> : null}
         </div>
+
+        {open ? (
+          <div className="lp-rec-sec">
+            <div className="lp-rec-k">
+              <span>{open.function} role · Open now</span>
+              {dayLabel(open.when) ? <span className="lp-rec-when num">Open since {dayLabel(open.when)}</span> : null}
+            </div>
+            <dl className="lp-rows">
+              <Row k="Role">
+                <span className="lp-val lp-val-wrap">{open.title}</span>
+              </Row>
+              <Row k="Job posting">
+                <Unlock />
+              </Row>
+            </dl>
+          </div>
+        ) : null}
 
         <div className="lp-rec-sec">
           <div className="lp-rec-k">
-            <span>RevOps seat · Fractional</span>
-            <span className="lp-rec-when num">Open since Nov 3</span>
+            <span>{seat.function} seat · Fractional</span>
+            {started ? <span className="lp-rec-when num">Started {started}</span> : null}
           </div>
           <dl className="lp-rows">
-            <Row k="Role">
-              <span className="lp-val">Fractional Head of RevOps</span>
-            </Row>
-            <Row k="Job posting">
-              <Unlock />
-            </Row>
-          </dl>
-        </div>
-
-        <div className="lp-rec-sec">
-          <div className="lp-rec-k">
-            <span>Sales seat · Fractional</span>
-            <span className="lp-rec-when num">Mar 2024 to Aug 2025</span>
-          </div>
-          <dl className="lp-rows">
-            <Row k="Role">
-              <span className="lp-val">Fractional VP Sales</span>
-            </Row>
             <Row k="Seat holder">
-              <Confirmed n={3} />
-              <span className="lp-val">Dana Whitfield</span>
-              <span className="chip lp-member">Member</span>
+              <span className="lp-val">On file</span>
+              {seat.rnMember ? <span className="chip lp-member">Revenue Nomad member</span> : null}
+            </Row>
+            <Row k="Name">
+              <Unlock />
             </Row>
             <Row k="Rate">
               <Locked w={84} />
@@ -133,47 +183,13 @@ export function HeroRecord({ intro = true }: { intro?: boolean }) {
           </dl>
           <ReachOut intro={intro} />
         </div>
-
-        <div className="lp-rec-sec">
-          <div className="lp-rec-k">
-            <span>Hiring contact</span>
-          </div>
-          <div className="lp-person">
-            <span className="lp-avatar">
-              <IconUsers size={13} />
-            </span>
-            <span className="lp-person-title">Chief Revenue Officer</span>
-            <Locked w={56} />
-          </div>
-        </div>
       </div>
       <figcaption className="lp-visual-cap">
-        An example record. The open role is free to see. Dana held the Sales seat here, so you can ask her how it went before you pitch for the RevOps role.
+        {open
+          ? `A real record from the table. ${co.name} is hiring for ${open.function} now, and the fractional who held its ${seat.function} seat is on file. Ask them how it went before you pitch.`
+          : `A real record from the table. The fractional who held ${co.name}'s ${seat.function} seat is on file. Ask them how it went before you pitch for the next one.`}
       </figcaption>
     </figure>
-  );
-}
-
-/**
- * The feature card's picture: a seat holder someone unlocked, and the first message to them.
- * Made up, like every visual here.
- */
-export function IntroVisual({ intro = true }: { intro?: boolean }) {
-  return (
-    <div className="lp-intro" aria-hidden>
-      <div className="lp-intro-who">
-        <span className="lp-intro-av">DW</span>
-        <div className="lp-intro-id">
-          <span className="lp-intro-name">Dana Whitfield</span>
-          <span className="lp-intro-meta num">Held the Sales seat · Mar 2024 to Aug 2025</span>
-        </div>
-        <span className="chip lp-member">Member</span>
-      </div>
-      <p className="lp-intro-msg">
-        Hi Dana, I&apos;m talking to them about their open RevOps role. You held the Sales seat there. How did the engagement go, and who made the call?
-      </p>
-      <ReachOut intro={intro} />
-    </div>
   );
 }
 

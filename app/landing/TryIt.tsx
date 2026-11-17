@@ -2,31 +2,46 @@
 
 /**
  * "Try it" on the landing page: the visitor picks their function, and optionally an industry
- * and a country, and sees real numbers from the table and a few sample rows. The rows come from
- * GET /api/table?preview=1 (lib/preview.ts), which sends free facts only. Each company is drawn
- * the way the app draws a locked one: a blurred made-up name from an opaque seed.
+ * real numbers from the table and a few sample rows. The rows come from
+ * GET /api/table?preview=1 (lib/preview.ts): real companies with their logo and domain, role
+ * titles and dates, never a person, a posting link or a rate. While lib/preview.ts keeps
+ * open-role companies back, those rows say the company unlocks with 1 credit. Nothing is blurred.
+ * The same answer carries the hero's example record, handed up with `onExample`.
  *
  * The section is up before any answer arrives: the counts are quiet bars until they land.
  * The picked function is kept in localStorage (tp_try_fn) so onboarding starts with it.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CompanyLogo, LockedName, Num } from "../ui/shared";
+import { CompanyLogo, IconLock, Num } from "../ui/shared";
 import { GTM_FUNCTIONS } from "@/lib/tableFields";
 
 /** Read by app/onboard/Onboarding.tsx. */
 const TRY_FN_KEY = "tp_try_fn";
 const DEFAULT_FN = "Sales";
 
+/** What GET /api/table?preview=1 sends (lib/preview.ts PreviewAnswer). */
+export interface PreviewCompany {
+  name: string;
+  domain: string | null;
+  logo: string | null;
+}
 interface PreviewRow {
   seed: string;
   kind: "open" | "hired";
+  company: PreviewCompany | null;
   title: string;
   function: string;
   when: string | null;
   industry: string | null;
   employees: string | null;
+  revenue: string | null;
   country: string | null;
   holder?: boolean;
+}
+export interface PreviewExample {
+  company: PreviewCompany & { industry: string | null; employees: string | null; revenue: string | null; country: string | null };
+  open: { title: string; function: string; when: string | null } | null;
+  seat: { function: string; start: string | null; rnMember: boolean };
 }
 interface PreviewAnswer {
   fn: string;
@@ -34,6 +49,8 @@ interface PreviewAnswer {
   country: string | null;
   counts: { hired: number; notYet: number; hiring: number; holders: number; repeat: number; anyHire: number };
   rows: PreviewRow[];
+  example?: PreviewExample | null;
+  openRoleCompanies?: boolean;
   options: { functions: string[]; industries: string[]; countries: string[] };
 }
 
@@ -94,9 +111,11 @@ export interface TryItProps {
   primary: boolean;
   /** The button's row, so the page can tell when it is on screen. */
   ctaRef?: React.RefObject<HTMLDivElement | null>;
+  /** The hero's example record, from the first answer that carries one (null when none fits). */
+  onExample?: (x: PreviewExample | null) => void;
 }
 
-export default function TryIt({ onJoin, primary, ctaRef }: TryItProps) {
+export default function TryIt({ onJoin, primary, ctaRef, onExample }: TryItProps) {
   const [fn, setFn] = useState(DEFAULT_FN);
   const [industry, setIndustry] = useState("");
   const [country, setCountry] = useState("");
@@ -124,6 +143,7 @@ export default function TryIt({ onJoin, primary, ctaRef }: TryItProps) {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((a: PreviewAnswer) => {
         if (c.signal.aborted || !a?.counts) return;
+        if (a.example !== undefined) onExample?.(a.example);
         setAnswer(a);
         setFailed(false);
         setBusy(false);
@@ -133,6 +153,8 @@ export default function TryIt({ onJoin, primary, ctaRef }: TryItProps) {
         setFailed(true);
         setBusy(false);
       });
+    // onExample is the page's state setter: stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -250,10 +272,26 @@ export default function TryIt({ onJoin, primary, ctaRef }: TryItProps) {
                     {(rows.length ? rows : Array.from({ length: 4 }, () => null)).map((r, n) =>
                       r ? (
                         <li key={`${r.seed}-${n}`} className="lp-try-row">
-                          <CompanyLogo name="" domain={null} hidden seed={r.seed} />
+                          {r.company ? (
+                            <CompanyLogo name={r.company.name} domain={r.company.logo} />
+                          ) : (
+                            <span className="logo lp-try-logo-kept" aria-hidden>
+                              <IconLock size={13} />
+                            </span>
+                          )}
                           <div className="lp-try-co">
-                            <LockedName seed={r.seed} className="lp-try-name" />
-                            <span className="lp-try-meta">{[r.industry, r.employees && `${r.employees} people`, r.country].filter(Boolean).join(" · ") || "No company details yet"}</span>
+                            {r.company ? (
+                              <span className="lp-try-name" title={r.company.name}>
+                                {r.company.name}
+                              </span>
+                            ) : (
+                              <span className="lp-try-name lp-try-name-kept">Company unlocks with 1 credit</span>
+                            )}
+                            <span className="lp-try-meta">
+                              {r.company?.domain ? <span className="mono lp-try-domain">{r.company.domain}</span> : null}
+                              {r.company?.domain ? " · " : ""}
+                              {[r.industry, r.employees && `${r.employees} people`, r.revenue, r.country].filter(Boolean).join(" · ") || "No company details yet"}
+                            </span>
                           </div>
                           <div className="lp-try-role">
                             <span className="lp-try-title">{r.title}</span>
@@ -286,9 +324,13 @@ export default function TryIt({ onJoin, primary, ctaRef }: TryItProps) {
 
           <div className="lp-try-foot" ref={ctaRef}>
             <button type="button" className={`btn btn-lg lp-try-cta${primary ? " btn-primary" : " btn-pine"}`} onClick={onJoin}>
-              Join free to see these companies
+              {answer?.openRoleCompanies === false ? "Join free to see these companies" : "Join free to see who held these seats"}
             </button>
-            <p className="lp-try-note">One credit shows a company, its job posting and the posted rate. Another shows who held a seat.</p>
+            <p className="lp-try-note">
+              {answer?.openRoleCompanies === false
+                ? "One credit shows a company with an open role, its job posting and the posted rate. Another shows who held a seat."
+                : "One credit shows who held a seat. Another shows an open role's job posting and posted rate."}
+            </p>
           </div>
         </div>
       </div>

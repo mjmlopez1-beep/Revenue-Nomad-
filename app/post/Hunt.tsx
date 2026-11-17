@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Who the member hunts. Their ideal client (Me.icp) as chips to pick (onboarding and the Edit
- * sheet share IcpFields), the pine "Your clients" pill over the table, and saved views: "Save
+ * Who the member hunts. Their Ideal Fractional Profile (IFP, Me.icp: the companies they want as
+ * clients) as chips to pick (onboarding and the Edit sheet share IcpFields), the pine "Your Ideal
+ * Fractional Profile" pill over the table, and saved views: "Save
  * this view" with its weekly email, and the saved views as chips at the top of the filters.
  * Saved views share one store with the Claude connector's saved searches (lib/hunt.ts).
  */
@@ -56,7 +57,7 @@ function Chips({ options, on, toggle, label, name }: { options: string[]; on: (o
 
 const flip = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
-/** The ideal client as chips: industries, company size, client revenue and where. Every part is optional. */
+/** The Ideal Fractional Profile as chips: industries, company size, client revenue and where. Every part is optional. */
 export function IcpFields({
   value,
   onChange,
@@ -162,30 +163,48 @@ export function IcpFields({
 }
 
 /**
- * The pine pill over the list. On: "Your clients Software · 11–200 · $5M–$20M · US", with Edit
- * and Show everyone. Off: the same clients, one tap to narrow again. No clients yet: a way to set them.
+ * "Ideal Fractional Profile" (IFP): the companies a fractional wants as clients. Written out in
+ * full, and as "IFP" only where a phone can't fit the words (hunt.css shows one or the other).
+ */
+export function IfpName({ short = "IFP" }: { short?: string }) {
+  return (
+    <>
+      <span className="ifp-long">Ideal Fractional Profile</span>
+      <span className="ifp-short" aria-hidden>
+        {short}
+      </span>
+    </>
+  );
+}
+
+/**
+ * The pine pill over the list. On: "Your Ideal Fractional Profile Software · 11–200 · $5M–$20M · US",
+ * with Edit and Show everyone. Off: the same profile, one tap to narrow again. None yet: a way to set it.
  */
 export function IcpPill({ icp, on, everyone, shownN, onToggle, onEdit }: { icp: Icp | null | undefined; on: boolean; everyone: number; shownN: number; onToggle: () => void; onEdit: () => void }) {
   const label = icpLabel(icp);
   if (icpEmpty(icp))
     return (
-      <div className="hunt-pill hunt-pill-off" role="group" aria-label="Your clients">
-        <span className="hunt-pill-text">Tell us who your clients are and the table leads with companies like them.</span>
+      <div className="hunt-pill hunt-pill-off" role="group" aria-label="Your Ideal Fractional Profile">
+        <span className="hunt-pill-text">Set your Ideal Fractional Profile, the companies you want as clients, and the table leads with companies like them.</span>
         <button type="button" className="hunt-pill-btn" onClick={onEdit}>
-          Pick your clients
+          Set it up
         </button>
       </div>
     );
   return (
-    <div className={`hunt-pill${on ? "" : " hunt-pill-off"}`} role="group" aria-label="Your clients">
+    <div className={`hunt-pill${on ? "" : " hunt-pill-off"}`} role="group" aria-label="Your Ideal Fractional Profile">
       <span className="hunt-pill-text">
         {on ? (
           <>
-            <span className="hunt-pill-k">Your clients</span> <b>{label}</b>
+            <span className="hunt-pill-k">
+              Your <IfpName />
+            </span>{" "}
+            <b>{label}</b>
           </>
         ) : (
           <>
-            <span className="hunt-pill-k">Showing everyone.</span> Your clients are <b>{label}</b>
+            <span className="hunt-pill-k">Showing everyone.</span> Your <IfpName /> is <b>{label}</b>
           </>
         )}
       </span>
@@ -193,15 +212,15 @@ export function IcpPill({ icp, on, everyone, shownN, onToggle, onEdit }: { icp: 
         <button type="button" className="hunt-pill-btn hunt-pill-edit" onClick={onEdit}>
           Edit
         </button>
-        <button type="button" className="hunt-pill-btn" aria-pressed={!on} onClick={onToggle} title={on ? `${everyone} without your clients filter` : `${shownN} shown`}>
-          {on ? "Show everyone" : "Show your clients"}
+        <button type="button" className="hunt-pill-btn" aria-pressed={!on} onClick={onToggle} title={on ? `${everyone} without your Ideal Fractional Profile` : `${shownN} shown`}>
+          {on ? "Show everyone" : "Show your matches"}
         </button>
       </span>
     </div>
   );
 }
 
-/** What a member tells us about themselves: title, function and ideal client. */
+/** What a member tells us about themselves: title, function and Ideal Fractional Profile. */
 export interface ProfileEdit {
   title: string;
   fn: string | null;
@@ -209,9 +228,9 @@ export interface ProfileEdit {
 }
 
 /**
- * "Your profile" in a sheet (a dialog on wider screens): title, function and ideal client.
- * The function decides what the table points out and leads with; the ideal client narrows it.
- * Opened from the account menu and from the "Your clients" pill.
+ * "Your profile" in a sheet (a dialog on wider screens): title, function and Ideal Fractional Profile.
+ * The function decides what the table points out and leads with; the profile narrows it.
+ * Opened from the account menu and from the Ideal Fractional Profile pill.
  */
 export function IcpSheet({
   icp,
@@ -275,11 +294,11 @@ export function IcpSheet({
         </fieldset>
       </div>
       <div className="hunt-sub">
-        <div className="hunt-h">Your clients</div>
-        <p className="hunt-lead">The table leads with companies like these. Pick as many as fit. Leave a part empty for any.</p>
+        <div className="hunt-h">Your Ideal Fractional Profile</div>
+        <p className="hunt-lead">The companies you want as clients. The table leads with companies like these. Pick as many as fit, and leave a part empty for any.</p>
         {!icpEmpty(v) && (
           <button type="button" className="btn btn-sm" onClick={() => setV(EMPTY_ICP)}>
-            Clear your clients
+            Clear your Ideal Fractional Profile
           </button>
         )}
       </div>

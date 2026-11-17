@@ -3,10 +3,12 @@
 /**
  * Trading Post landing page (signed out). In order: the warm intro and what it costs (hero, with
  * the join form), "Try it" with the visitor's own function (real counts and sample rows from
- * GET /api/table?preview=1), the numbers, what you can do with it, how it works (credits, with
- * the free and locked fields folded away), questions, and the join form again.
+ * GET /api/table?preview=1), the numbers, what you can do with it (a tabbed showcase of real
+ * screenshots, Showcase.tsx), how it works (credits, with the free and locked fields folded
+ * away), questions, and the join form again. The hero's record is a real company from the same
+ * preview answer. Nothing on the page is blurred.
  * One display heading. One volt button in view at a time: the join form's when a form is on
- * screen, Try it's button when only that is, the nav's when none is. The visuals are static HTML.
+ * screen, Try it's button when only that is, the nav's when none is.
  *
  * It renders before the view arrives (`view` null): everything but the counts is fixed copy,
  * so the page is up at once and the counts fill in when the view lands.
@@ -19,8 +21,9 @@ import JoinForm from "./JoinForm";
 import SignIn from "./SignIn";
 import { Questions } from "./Questions";
 import { contactOf, mailto, signInFailText } from "./contact";
-import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord, IntroVisual } from "./Visuals";
-import TryIt from "./TryIt";
+import { DemoAdd, DemoConfirm, DemoUnlock, HeroRecord } from "./Visuals";
+import TryIt, { type PreviewExample } from "./TryIt";
+import Showcase from "./Showcase";
 
 export interface LandingProps {
   /**
@@ -43,73 +46,6 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 
 /** Revenue Nomad's network, as the page says it. */
 const NETWORK = "500+";
-
-/** What a fractional can do with Trading Post, one card each, in the product's own words. */
-function uses(): { title: string; body: string; cost: string | null; earn?: boolean }[] {
-  return [
-    {
-      title: "Hiring now",
-      body: "Open fractional, interim and contract roles across functions. We check every week and date each one, so a new role stands apart from one that has sat for months. The role title is free.",
-      cost: "1 credit shows the company",
-    },
-    {
-      title: "Repeat hirers",
-      body: "Companies that hire fractionals, with the function and start of every seat on file. Repeat hirers have 2 or more fractional hires.",
-      cost: null,
-    },
-    {
-      title: "No fractional in your function yet",
-      body: "A company that hired a fractional CMO and a RevOps lead may need sales next. One filter shows the companies that hire fractionals but haven't hired yours.",
-      cost: null,
-    },
-    {
-      title: "Rate benchmarks",
-      body: "What the seat pays. Median monthly and hourly rates by function and client revenue, from Revenue Nomad's Rate Index and the rates members share.",
-      cost: null,
-    },
-    {
-      title: "Who does the hiring",
-      body: "The hiring contacts at each company. Their titles are free. A name, a LinkedIn profile, an email or a phone number is 1 credit each.",
-      cost: "1 credit each",
-    },
-    {
-      title: "Your clients and best fit",
-      body: "Set your ideal client by industry, size, revenue and country. Your clients shows the companies that fit, and Best fit for you puts the likeliest first.",
-      cost: null,
-    },
-    {
-      title: "Search everything",
-      body: "Search companies, seats and people, including what a company does. Type pharma and you get the pharma companies.",
-      cost: null,
-    },
-    {
-      title: "Saved views",
-      body: "Save a search as a view. Each week we email you what's new in it.",
-      cost: null,
-    },
-    {
-      title: "Alerts in Slack",
-      body: "From Integrations, get a post in Slack, or any tool by webhook, when a new open role fits your function or a saved view, when someone writes to you, or when someone unlocks your seat.",
-      cost: null,
-    },
-    {
-      title: "Use it from Claude",
-      body: "Connect Trading Post to Claude and ask it things. Which companies fit me best to prospect? What do fractional RevOps leads charge at $5M to $20M companies?",
-      cost: null,
-    },
-    {
-      title: "Messages",
-      body: "Write to other members inside Trading Post about a company, a seat or a rate. You get an email when someone writes back.",
-      cost: null,
-    },
-    {
-      title: "Your seats",
-      body: "Claim the seats you held. Everything on your own seat is free to you, and each thing you add that wasn't on file earns a credit.",
-      cost: "Earns credits",
-      earn: true,
-    },
-  ];
-}
 
 /**
  * Free and locked fields, read from the field definitions so this page can't drift from what
@@ -215,6 +151,8 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
   const opened = s?.openedWeek ?? 0;
   const inviter = useInviter();
   const tryCta = useRef<HTMLDivElement>(null);
+  /** The hero's real example record: undefined until Try it's first answer lands. */
+  const [example, setExample] = useState<PreviewExample | null | undefined>(undefined);
   const [heroIn, finalIn, tryIn] = useInView(heroForm, finalForm, tryCta);
   const formInView = heroIn || finalIn;
 
@@ -318,13 +256,13 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
               <p className="lp-hero-by">Built by Revenue Nomad, the network of {NETWORK} fractionals.</p>
             </div>
             <div className="lp-hero-visual">
-              <HeroRecord intro={!!intro} />
+              <HeroRecord example={example} intro={!!intro} />
             </div>
           </div>
         </section>
 
         {/* ---------- try it: the visitor's own function, real numbers ---------- */}
-        <TryIt onJoin={toJoin} primary={!formInView} ctaRef={tryCta} />
+        <TryIt onJoin={toJoin} primary={!formInView} ctaRef={tryCta} onExample={setExample} />
 
         {/* ---------- proof ---------- */}
         <section className="lp-proof" aria-label="Trading Post in numbers" aria-busy={!s}>
@@ -350,41 +288,9 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
           <div className="lp-wrap">
             <div className="lp-sec-head">
               <h2 className="lp-h2">What you can do with it</h2>
-              <p className="lp-lead">Everything here works in the pilot today.</p>
+              <p className="lp-lead">Screens from the pilot as it works today.</p>
             </div>
-            <article className="lp-feature">
-              <div className="lp-feature-copy">
-                <h3>The fractional who held the seat</h3>
-                <p>
-                  Find a company you want, then see who held the seat there before you. Unlock them for 1 credit, message them inside Trading Post
-                  {intro ? " or ask us for a warm intro" : " or find them on LinkedIn"}, and hear how the engagement went before your first call.
-                </p>
-                <p className="lp-feature-small">Most seat holders are Revenue Nomad members.</p>
-                <span className="chip lp-cost lp-cost-locked lp-feature-cost">
-                  <IconLock size={12} />
-                  <span className="num">1 credit</span>
-                </span>
-              </div>
-              <IntroVisual intro={!!intro} />
-            </article>
-            <ul className="lp-uses">
-              {uses().map((u) => (
-                <li key={u.title} className="lp-use">
-                  <h3>{u.title}</h3>
-                  <p>{u.body}</p>
-                  {u.earn ? (
-                    <span className="chip lp-cost lp-cost-earn">{u.cost}</span>
-                  ) : u.cost ? (
-                    <span className="chip lp-cost lp-cost-locked">
-                      <IconLock size={12} />
-                      <span className="num">{u.cost}</span>
-                    </span>
-                  ) : (
-                    <span className="chip lp-cost">Free</span>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <Showcase intro={!!intro} />
           </div>
         </section>
 

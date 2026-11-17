@@ -1,16 +1,21 @@
 #!/usr/bin/env node
 /**
- * The landing page's "Try it" (GET /api/table?preview=1, lib/preview.ts) never gives a company
- * away: no company name, website, domain, LinkedIn or public id, no person, seat holder or
- * hiring contact, no job posting link and no rate, for every function, industry and country
- * it offers. Run against a throwaway server on a FRESH data dir:
+ * The landing page's "Try it" and example record (GET /api/table?preview=1, lib/preview.ts)
+ * show real companies (name, domain, logo, industry, size, revenue, country), role titles and
+ * dates, and never a person: no seat holder, hiring contact or member name, no email, no phone,
+ * no person's LinkedIn, no job posting link and no rate, for every function, industry and
+ * country it offers. No public id either. Run against a throwaway server on a FRESH data dir:
  *
  *   BASE=http://localhost:4600 node scripts/test-preview.mjs
  *
  * The server needs RN_ADMIN_EMAILS=admin-qa@example.com, RN_SCAN_TEST=1 and RN_CRON_SECRET (as
- * scripts/test-all.sh starts it). An admin sees every company by name, so the list of names to
- * look for comes from the admin's view, plus the private seed (people and seat holders) when
+ * scripts/test-all.sh starts it). The admin's view has every person, posting and rate, so the
+ * list to look for comes from it, plus the private seed (people, seat holders and members) when
  * data/intel-seed.json is there. Nothing from either is printed.
+ *
+ * PREVIEW_LOCKED=1: the server runs with RN_PREVIEW_OPEN_ROLE_COMPANIES=0 (open-role companies
+ * kept back, lib/preview.ts PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off), and the checks expect that:
+ * no company on an open-role row, titles scrubbed of the company, and no open-role company named.
  */
 import { readFileSync } from "node:fs";
 
@@ -22,6 +27,7 @@ let ipN = 0;
 // A fresh address per request: the preview allows 60 a minute per address, and this sends hundreds.
 const nextIp = () => `${IP_BASE.split(".").slice(0, 2).join(".")}.${(++ipN >> 8) & 255}.${ipN & 255}`;
 
+const LOCKED = process.env.PREVIEW_LOCKED === "1";
 let failures = 0;
 let passes = 0;
 const pass = (name) => (passes++, console.log(`PASS ${name}`));
@@ -90,6 +96,7 @@ async function main() {
   const companies = adminView?.companies ?? [];
   check("the admin's view lists companies by name (the list to look for)", companies.length > 0 && companies.some((c) => c.name === co), companies.length);
 
+  /** Companies with an open role: named only while open-role companies are shown. */
   const names = new Set();
   const hosts = new Set();
   const ids = new Set();
@@ -99,11 +106,13 @@ async function main() {
     const v = String(n ?? "").trim().toLowerCase();
     if (v.length >= 4) names.add(v);
   };
+  const isOpen = (e) => (e.opened ? !e.closed : e.cells?.status?.v === "Open role");
   for (const c of companies) {
-    addName(c.name);
+    if ((c.engagements ?? []).some(isOpen)) {
+      addName(c.name);
+      for (const v of [c.iconDomain, c.cells?.website?.v]) if (v && host(v).includes(".")) hosts.add(host(v));
+    }
     ids.add(c.id);
-    for (const v of [c.iconDomain, c.cells?.website?.v]) if (v && host(v).includes(".")) hosts.add(host(v));
-    if (c.cells?.linkedin?.v) links.add(String(c.cells.linkedin.v).toLowerCase());
     for (const e of c.engagements ?? []) {
       ids.add(e.id);
       for (const f of ["operator", "posting", "rate"]) if (e.cells?.[f]?.s === "value" && e.cells[f].v) (f === "operator" ? people : links).add(String(e.cells[f].v).toLowerCase());
@@ -112,11 +121,6 @@ async function main() {
     for (const p of c.people ?? []) for (const f of ["name", "email", "phone", "linkedin"]) if (p.cells?.[f]?.s === "value") people.add(String(p.cells[f].v).toLowerCase());
   }
   if (seedFile) {
-    for (const c of seedFile.companies ?? []) {
-      addName(c.fields?.name);
-      if (c.fields?.website && host(c.fields.website).includes(".")) hosts.add(host(c.fields.website));
-      if (c.fields?.linkedin) links.add(String(c.fields.linkedin).toLowerCase());
-    }
     for (const e of seedFile.engagements ?? []) {
       if (e.fields?.operator) people.add(String(e.fields.operator).toLowerCase());
       for (const f of ["posting", "rate"]) if (e.fields?.[f]) links.add(String(e.fields[f]).toLowerCase());
@@ -125,6 +129,7 @@ async function main() {
     for (const m of seedFile.members ?? []) for (const v of [m.name, m.email, m.token]) if (v) people.add(String(v).toLowerCase());
   }
   hosts.add(site);
+  // A word shorter than 5 letters (a first name alone) can be part of anything; whole names and contacts are what count.
   for (const s of [...people]) if (s.length < 5) people.delete(s);
   for (const s of [...links]) if (s.length < 6) links.delete(s);
 
@@ -133,8 +138,12 @@ async function main() {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const nameRes = [...names].map((n) => [n, new RegExp(`(^|[^\\p{L}\\p{N}])${esc(n)}($|[^\\p{L}\\p{N}])`, "iu")]);
 
-  const ROW_KEYS = new Set(["seed", "kind", "title", "function", "when", "industry", "employees", "country", "holder"]);
-  const TOP_KEYS = new Set(["fn", "industry", "country", "counts", "rows", "options"]);
+  const ROW_KEYS = new Set(["seed", "kind", "company", "title", "function", "when", "industry", "employees", "revenue", "country", "holder"]);
+  const CO_KEYS = new Set(["name", "domain", "logo"]);
+  const EX_KEYS = { top: new Set(["company", "open", "seat"]), company: new Set(["name", "domain", "logo", "industry", "employees", "revenue", "country"]), open: new Set(["title", "function", "when"]), seat: new Set(["function", "start", "rnMember"]) };
+  const TOP_KEYS = new Set(["fn", "industry", "country", "counts", "rows", "example", "openRoleCompanies", "options"]);
+  let namedRows = 0;
+  let openRows = 0;
   let answers = 0;
   let rowsSeen = 0;
   const leaks = [];
@@ -147,18 +156,37 @@ async function main() {
     for (const k of Object.keys(a)) if (!TOP_KEYS.has(k)) shape.push(`${label}: key ${k}`);
     if (!Array.isArray(a.rows) || a.rows.length > 6) shape.push(`${label}: ${a.rows?.length} rows`);
     const low = text.toLowerCase();
-    for (const h of hosts) if (low.includes(h)) leaks.push(`${label}: a company domain`);
     for (const id of ids) if (text.includes(`"${id}"`)) leaks.push(`${label}: a public id`);
-    for (const p of people) if (low.includes(p)) leaks.push(`${label}: a person or member`);
-    for (const l of links) if (low.includes(l)) leaks.push(`${label}: a link or rate`);
-    if (/https?:|www\.|@/.test(low)) leaks.push(`${label}: a link or an email`);
+    for (const p of people) if (low.includes(p)) leaks.push(`${label}: a person, member or contact detail`);
+    for (const l of links) if (low.includes(l)) leaks.push(`${label}: a posting link, a rate or a LinkedIn page`);
+    if (/https?:|www\.|linkedin\.com\/|@/.test(low)) leaks.push(`${label}: a link or an email`);
+    if (a.openRoleCompanies !== !LOCKED) shape.push(`${label}: openRoleCompanies is ${a.openRoleCompanies}`);
+    if (LOCKED) {
+      // Open-role companies kept back: not named anywhere in the answer, not even in a title.
+      for (const h of hosts) if (low.includes(h)) leaks.push(`${label}: an open-role company's domain`);
+      for (const [n, re] of nameRes) if (!allowed.has(n) && re.test(low)) leaks.push(`${label}: an open-role company's name`);
+    }
+    const ex = a.example;
+    if (ex) {
+      for (const k of Object.keys(ex)) if (!EX_KEYS.top.has(k)) shape.push(`${label}: example key ${k}`);
+      for (const part of ["company", "open", "seat"]) for (const k of Object.keys(ex[part] ?? {})) if (!EX_KEYS[part].has(k)) shape.push(`${label}: example ${part} key ${k}`);
+      if (typeof ex.company?.name !== "string" || !ex.company.name || typeof ex.seat?.rnMember !== "boolean") shape.push(`${label}: example shape`);
+      if (LOCKED && ex.open) shape.push(`${label}: example has an open role while open-role companies are kept back`);
+    }
     for (const r of a.rows ?? []) {
       rowsSeen++;
       for (const k of Object.keys(r)) if (!ROW_KEYS.has(k)) shape.push(`${label}: row key ${k}`);
       if (typeof r.seed !== "string" || ids.has(r.seed)) shape.push(`${label}: seed is not opaque`);
-      // Titles are the one free text: no company's name in them as a whole word, unless it is
-      // one of the words the free fields use anyway (a company called "Growth").
-      for (const [n, re] of nameRes) if (!allowed.has(n) && re.test(words(r.title))) leaks.push(`${label}: a company name in a title`);
+      if (r.company) {
+        namedRows++;
+        for (const k of Object.keys(r.company)) if (!CO_KEYS.has(k)) shape.push(`${label}: company key ${k}`);
+        if (typeof r.company.name !== "string" || !r.company.name) shape.push(`${label}: a company with no name`);
+        for (const d of [r.company.domain, r.company.logo]) if (d !== null && !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(d))) shape.push(`${label}: a domain that is not a bare domain`);
+      }
+      if (r.kind === "open") {
+        openRows++;
+        if (LOCKED ? r.company !== null : !r.company) shape.push(`${label}: open-role row company ${JSON.stringify(r.company)}`);
+      } else if (!r.company && !LOCKED) shape.push(`${label}: a past seat with no company`);
     }
   };
 
@@ -171,10 +199,20 @@ async function main() {
   inspect("Sales", first.json, first.text);
 
   const sales = first.json?.rows ?? [];
-  check("the scrubbed test role is among the Sales rows", sales.some((r) => r.kind === "open" && /fractional vp sales/i.test(r.title)), JSON.stringify(sales.map((r) => r.title)));
-  check("its title keeps no trace of the company or its site", !sales.some((r) => /zephyrquill/i.test(r.title)));
+  const mine = sales.find((r) => r.kind === "open" && /fractional vp sales/i.test(r.title));
+  check("the test role is among the Sales rows", !!mine, JSON.stringify(sales.map((r) => r.title)));
   const mk = await preview({ fn: "Marketing" });
-  check("a title that starts with the company's name loses it", mk.status === 200 && !/zephyrquill/i.test(mk.text), (mk.json?.rows ?? []).map((r) => r.title).join(" | "));
+  if (LOCKED) {
+    check("open-role companies kept back: its title keeps no trace of the company or its site", !sales.some((r) => /zephyrquill/i.test(r.title)));
+    check("open-role companies kept back: the row has no company", mine?.company === null, JSON.stringify(mine?.company));
+    check("open-role companies kept back: a title that starts with the company's name loses it", mk.status === 200 && !/zephyrquill/i.test(mk.text), (mk.json?.rows ?? []).map((r) => r.title).join(" | "));
+  } else {
+    check("open-role companies shown: the row names its company and domain", mine?.company?.name === co && mine.company.domain === site, JSON.stringify(mine?.company));
+    check("open-role companies shown: no posting link and no posted rate with it", !/jobs\.example\.com|\$175\/hr|\$9k\/mo/i.test(first.text + mk.text));
+  }
+  check("a past seat's row says only that a seat holder is on file", sales.filter((r) => r.kind === "hired").every((r) => r.title === "Fractional Sales seat" && (r.holder === undefined || typeof r.holder === "boolean")));
+  const ex = first.json?.example;
+  check("the example record is a real company with a seat holder on file, nobody named", ex === null || (typeof ex?.company?.name === "string" && typeof ex.seat?.function === "string" && !("holder" in ex.seat) && !("name" in ex.seat)), JSON.stringify(ex)?.slice(0, 200));
 
   // Every function alone, with each country, and with each industry.
   for (const fn of opts.functions) {
@@ -191,9 +229,10 @@ async function main() {
       });
     }
   }
-  check(`no company name, domain, id, person, link or rate in any of ${answers} answers (${rowsSeen} rows)`, leaks.length === 0, `${leaks.length} found, first ${leaks.slice(0, 3).join("; ")}`);
+  check(`no person, email, phone, LinkedIn, posting, rate or id in any of ${answers} answers (${rowsSeen} rows)${LOCKED ? ", and no open-role company" : ""}`, leaks.length === 0, `${leaks.length} found, first ${leaks.slice(0, 3).join("; ")}`);
   check("every answer has only the fields the preview promises", shape.length === 0, shape.slice(0, 5).join("; "));
-  check("the answers covered rows of both kinds", rowsSeen > 0);
+  check("the answers covered rows of both kinds", rowsSeen > 0 && openRows > 0 && rowsSeen > openRows, `${rowsSeen} rows, ${openRows} open`);
+  check(LOCKED ? "past seats name their company" : "rows name their company", namedRows > 0 && (LOCKED || namedRows === rowsSeen), `${namedRows} of ${rowsSeen}`);
 
   // Counts hang together.
   const c = first.json?.counts ?? {};

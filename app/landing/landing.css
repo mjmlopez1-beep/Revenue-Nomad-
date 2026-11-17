@@ -629,28 +629,6 @@ html:has(.lp) {
 }
 
 /* what you can look up */
-.lp-uses {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-.lp-use {
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--surface);
-}
-.lp-use p {
-  margin: 8px 0 16px;
-  font-size: 15px;
-  line-height: 24px;
-  color: var(--muted);
-}
 .lp-cost {
   align-self: flex-start;
   margin-top: auto;
@@ -1061,9 +1039,6 @@ html:has(.lp) {
     max-width: 520px;
     width: 100%;
   }
-  .lp-uses {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .lp-steps {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1216,14 +1191,9 @@ html:has(.lp) {
     font-size: 16px;
     line-height: 24px;
   }
-  .lp-uses {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
   .lp-steps {
     gap: 12px;
   }
-  .lp-use,
   .lp-step-body {
     padding: 24px 16px;
   }
@@ -1580,93 +1550,9 @@ html:has(.lp) {
   color: var(--muted);
 }
 
-/* ---------- what you can do: the seat holder, wide, then the rest ---------- */
+/* ---------- what you can do: the showcase (Showcase.tsx) ---------- */
 #uses {
   scroll-margin-top: 0;
-}
-.lp-feature {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
-  gap: 32px;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 32px;
-  border-radius: var(--r-card);
-  background: var(--pine);
-  color: #fff;
-}
-.lp-feature h3 {
-  font-size: 22px;
-  line-height: 28px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: #fff;
-}
-.lp-feature-copy p {
-  margin-top: 8px;
-  max-width: 34em;
-  font-size: 16px;
-  line-height: 26px;
-  color: var(--on-pine);
-}
-.lp-feature-copy .lp-feature-small {
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--on-pine-quiet);
-}
-.lp-feature-cost.chip {
-  margin-top: 16px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-.lp-intro {
-  padding: 16px;
-  border-radius: var(--r-card);
-  background: var(--surface);
-  color: var(--body-ink);
-}
-.lp-intro-who {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.lp-intro-av {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--volt-soft);
-  color: var(--volt-ink);
-  font-size: 13px;
-  font-weight: 800;
-}
-.lp-intro-id {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.lp-intro-name {
-  font-size: 15px;
-  line-height: 22px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.lp-intro-meta {
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--muted);
-}
-.lp-intro-msg {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: 10px 10px 10px 2px;
-  background: var(--bg);
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--body-ink);
 }
 .lp-cost-earn.chip {
   border-color: transparent;
@@ -1715,9 +1601,6 @@ html:has(.lp) {
 }
 
 @media (max-width: 960px) {
-  .lp-feature {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .lp-try-counts {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
@@ -1777,14 +1660,6 @@ html:has(.lp) {
   .lp-try-cta.btn-lg {
     width: 100%;
   }
-  .lp-feature {
-    padding: 24px 16px;
-    gap: 24px;
-  }
-  .lp-feature h3 {
-    font-size: 20px;
-    line-height: 26px;
-  }
   .lp-hero-by {
     margin-top: 12px;
   }
@@ -1793,5 +1668,271 @@ html:has(.lp) {
   .lp-try-body,
   .lp-try-chip.chip {
     transition: none;
+  }
+}
+
+/* ---------- try it: real companies on the rows ---------- */
+.lp-try-domain {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* An open role's company kept back (lib/preview.ts PREVIEW_SHOWS_OPEN_ROLE_COMPANIES off): plain words, never a blur. */
+.lp-try-logo-kept {
+  display: inline-grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: transparent;
+}
+.lp-try-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lp-try-name-kept {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------- hero record: a real company ---------- */
+.lp-rec-name {
+  padding-right: 0;
+  overflow-wrap: anywhere;
+}
+.lp-rec-name.lp-rec-name-chip {
+  padding-right: 96px;
+}
+.lp-val-wrap {
+  white-space: normal;
+  text-align: right;
+}
+.lp-reach-wrap {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+.lp-reach-k {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.lp-reach-wrap .lp-reach {
+  margin-top: 8px;
+}
+.lp-rec-loading .lp-rec-sec,
+.lp-rec-loading .lp-rec-id {
+  display: grid;
+  gap: 8px;
+}
+.lp-rec-skel-logo {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.lp-rec-skel-name {
+  width: 55%;
+  height: 16px;
+}
+
+/* ---------- what you can do: tabs over a swipeable track of real screens ---------- */
+.lp-show-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+/* One row of tabs. Where it doesn't fit, it scrolls sideways rather than leave one tab on a row of its own. */
+.lp-show-tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 6px;
+  /* Room for the focus ring, which the scroller would clip. */
+  padding: 4px;
+  margin: -4px;
+}
+.lp-show-tabs::-webkit-scrollbar {
+  display: none;
+}
+.lp-show-tab {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+.lp-show-tab:hover {
+  border-color: var(--pine);
+}
+.lp-show-tab.is-on {
+  background: var(--pine);
+  border-color: var(--pine);
+  color: #fff;
+}
+/* The time left on the slide in view, as a thin line along the bottom of its tab. */
+.lp-show-tick {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: var(--volt);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.lp-show.is-running .lp-show-tick {
+  animation: lp-show-tick 6s linear forwards;
+}
+@keyframes lp-show-tick {
+  to {
+    transform: scaleX(1);
+  }
+}
+.lp-show-pause {
+  flex: none;
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pine);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.lp-show-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.lp-show-track::-webkit-scrollbar {
+  display: none;
+}
+.lp-show-slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  gap: 32px;
+  align-items: center;
+  padding: 32px;
+}
+.lp-show-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lp-show-copy h3 {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  color: var(--ink);
+}
+.lp-show-copy p {
+  font-size: 16px;
+  line-height: 26px;
+  color: var(--body-ink);
+}
+.lp-show-copy .lp-cost {
+  margin-top: 4px;
+}
+.lp-show-shot {
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(10, 26, 19, 0.04), 0 8px 24px rgba(10, 26, 19, 0.06);
+}
+.lp-show-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.lp-show-more {
+  margin-top: 16px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--muted);
+}
+.lp-show-more-k {
+  font-weight: 700;
+  color: var(--ink);
+}
+@media (max-width: 960px) {
+  .lp-show-slide {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+    padding: 24px;
+  }
+}
+@media (max-width: 640px) {
+  /* One row of tabs that scrolls sideways, so the slide stays near the top of the screen. */
+  .lp-show-bar {
+    margin: 0 -16px 12px;
+  }
+  .lp-show-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0 16px;
+    scroll-padding: 0 16px;
+  }
+  .lp-show-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .lp-show-tab {
+    flex: none;
+  }
+  .lp-show-pause {
+    display: none;
+  }
+  .lp-show-slide {
+    padding: 20px 16px;
+  }
+  .lp-show-copy h3 {
+    font-size: 19px;
+    line-height: 25px;
+  }
+  .lp-show-copy p {
+    font-size: 15px;
+    line-height: 24px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-show-tab {
+    transition: none;
+  }
+  .lp-show.is-running .lp-show-tick {
+    animation: none;
   }
 }

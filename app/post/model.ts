@@ -360,7 +360,7 @@ export interface Filters {
   /** Countries (CompanyRec.country), and US states or regions under them. */
   country: string[];
   region: string[];
-  /** Narrow to the member's ideal client (Me.icp). The "Your clients" pill, not a chip. */
+  /** Narrow to the member's Ideal Fractional Profile (Me.icp). The pill over the table, not a chip. */
   icp: boolean;
 }
 
@@ -761,7 +761,7 @@ function clauses(f: Filters, tab: Tab, q: string, me: Me): Clause[] {
   if (tab !== "all") out.push({ group: "tab", test: (r) => tabTest(tab, r) });
   // A fractional firm (agency, marketplace) is not a client: a guard, should a record ever carry firm.
   out.push({ group: "firms", test: (r) => !isFirm(r.i.c) });
-  // The member's ideal client, while the "Your clients" pill is on.
+  // The member's Ideal Fractional Profile, while its pill is on.
   const icp = f.icp ? me.icp : null;
   if (icp && !icpEmpty(icp)) {
     const t = icpTest(icp);
@@ -881,7 +881,7 @@ export function activeCount(f: Filters): number {
   return n;
 }
 
-/** No filters, keeping the "Your clients" pill as it is (Clear all clears filters, not who the member hunts). */
+/** No filters, keeping the Ideal Fractional Profile pill as it is (Clear all clears filters, not who the member hunts). */
 export const clearedFilters = (f: Filters): Filters => ({ ...EMPTY_FILTERS, icp: f.icp });
 
 /** Removable chips for the active filters. */

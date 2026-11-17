@@ -22,6 +22,10 @@ export function faqItems(starter: number, intro = false): [string, string][] {
       `Unlock who held the seat for 1 credit. If they are a member, message them inside Trading Post. If not, find them on LinkedIn${intro ? " or ask us for an intro" : ""}. Most seat holders are Revenue Nomad members.`,
     ],
     [
+      "What is an Ideal Fractional Profile?",
+      "Your Ideal Fractional Profile is the companies you want as clients: their industry, size, revenue and country. Set it when you join, or any time in Your profile. The table then leads with companies that fit it, and Best fit for you puts the likeliest first.",
+    ],
+    [
       "Which functions does it cover?",
       "Sales, marketing, RevOps, customer success, partnerships, growth, product marketing, enablement and AI GTM, plus finance, technology, operations, people, product and legal seats where we have them. We check for open roles every week.",
     ],

@@ -237,7 +237,7 @@ export interface Me {
   unread?: number;
   /** An email when a member messages them (on unless they turned it off). Sent only while email is on. */
   messageEmail?: boolean;
-  /** Who they hunt (onboarding, and the "Your clients" pill over the table). Null until they say. */
+  /** Who they hunt (onboarding, and the Ideal Fractional Profile pill over the table). Null until they say. */
   icp?: Icp | null;
   /**
    * Their saved views and saved searches, newest last. One list with the Claude connector's
@@ -247,7 +247,7 @@ export interface Me {
 }
 
 /**
- * A member's ideal client. Each list is "any of these", and an empty list means any. Values are
+ * A member's Ideal Fractional Profile (IFP): the companies they want as clients. Each list is "any of these", and an empty list means any. Values are
  * the pick lists' spelling (RN_INDUSTRIES, RN_EMPLOYEES, RN_REVENUE); countries as the company
  * records spell them ("United States"). An empty `countries` is "Anywhere".
  */
