@@ -248,9 +248,10 @@ function pickExample(infos: Source["infos"], open: boolean): { x: PreviewExample
   return best ? { x: best.x, seed: best.seed } : null;
 }
 
-/** The company without its open roles that fail the seniority bar: outside GTM and below Director. */
+/** The company without the open roles our scan found that fail the seniority bar: outside GTM and below Director. */
 function withoutOffBar(p: PreviewCompany): PreviewCompany {
-  const offBar = (e: EngagementRec) => isOpenRole(e) && !keepsNonGtm(e.cells.role?.s === "value" && !e.cells.role.system ? e.cells.role.v : null, fnOf(e));
+  // Only roles our scan found: a role a member added, or one from Revenue Nomad's engagement data, always stays.
+  const offBar = (e: EngagementRec) => isOpenRole(e) && e.source === "Demand scan" && !keepsNonGtm(e.cells.role?.s === "value" && !e.cells.role.system ? e.cells.role.v : null, fnOf(e));
   return p.rec.engagements.some(offBar) ? { ...p, rec: { ...p.rec, engagements: p.rec.engagements.filter((e) => !offBar(e)) } } : p;
 }
 
