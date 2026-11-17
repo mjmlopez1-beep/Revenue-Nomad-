@@ -1576,10 +1576,11 @@ export function Drawer({
               <Pro where="hidden_company" variant="line" />
             </div>
           )}
-          {about && (
+          {/* About: a hidden company's About is part of what the unlock shows, so it says nothing until then. */}
+          {!c.hidden && (
             <section className="tp-dsec">
               <h3 className="tp-dsec-h">About</h3>
-              <p className="tp-about">{about}</p>
+              {about ? <p className="tp-about">{about}</p> : <p className="tp-about tp-faint">No About on file yet.</p>}
             </section>
           )}
           {(!c.hidden || COMPANY_GTM.some((f) => c.cells[f]?.s !== "empty")) && (

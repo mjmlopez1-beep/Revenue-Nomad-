@@ -194,8 +194,7 @@ export default function Landing({ view, onSignedIn, signInError = null, signInNo
       <header className="lp-nav">
         <div className="lp-wrap lp-nav-in">
           <a href="#top" className="lp-nav-brand" aria-label="Merlin by Revenue Nomad">
-            <Brand dark size={30} />
-            <span className="lp-nav-product">by Revenue Nomad</span>
+            <Brand kind="lockup" dark size={54} />
           </a>
           <nav className="lp-nav-links" aria-label="Sections">
             <a href="#try">Try it</a>

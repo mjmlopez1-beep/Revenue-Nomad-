@@ -1110,7 +1110,7 @@ html:has(.lp) {
     flex: none;
   }
   .lp-nav-brand img {
-    height: 26px !important;
+    height: 40px !important;
     width: auto !important;
     max-width: none;
     flex: none;
@@ -1252,7 +1252,7 @@ html:has(.lp) {
 @media (max-width: 380px) {
   /* Too narrow for the whole logo beside Sign in and the button: the mark alone, as in the app's top bar, never a squashed logo. */
   .lp-nav-brand img {
-    height: 22px !important;
+    height: 34px !important;
   }
   .lp-nav-signin,
   .lp-nav-get.btn {
