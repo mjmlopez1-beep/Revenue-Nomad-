@@ -16,7 +16,7 @@ import { request } from "node:https";
 import { isIP } from "node:net";
 import type { Readable } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
-import { RN_INDUSTRIES } from "./tableFields";
+import { industryOf } from "./industryMap";
 
 export interface LookupResult {
   domain: string;
@@ -135,7 +135,8 @@ const INDUSTRY_RULES: [RegExp, string][] = [
 ];
 
 export function suggestIndustry(text: string): string | null {
-  for (const [re, tag] of INDUSTRY_RULES) if (re.test(text) && RN_INDUSTRIES.includes(tag)) return tag;
+  // Each rule names one of our earlier tags: the site's own words pick today's closest value (lib/industryMap.ts).
+  for (const [re, tag] of INDUSTRY_RULES) if (re.test(text)) return industryOf(tag, text, true);
   return null;
 }
 

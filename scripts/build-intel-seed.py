@@ -611,3 +611,7 @@ print(f"contacts: {len(contacts)} ({clay_people} decision makers from Clay)")
 print(f"clay: {clay_used} companies enriched; {merged_by_domain} merged as same-domain duplicates")
 print(f"rate index: {len(old_rate_index or [])} points carried over" + ("" if old_rate_index else " (run scripts/add-rate-index.mjs to add them)"))
 print(f"wrote {SEED_PATH}")
+
+# Standard values, places and fractional firms (lib/firmRemoval.ts): the same cleanup the app and the seat scan use.
+import subprocess
+subprocess.run(["node", "--import", "tsx", "scripts/clean-intel-seed.mts", "--seed", SEED_PATH], check=True)

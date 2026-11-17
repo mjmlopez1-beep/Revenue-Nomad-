@@ -66,6 +66,8 @@ run digest npx tsx scripts/test-digest.ts
 run messages npx tsx scripts/test-messages.mjs
 run signin env SIGNIN_PORT="$PORT" npx tsx scripts/test-signin.mjs
 run model npx tsx scripts/test-model.mts
+# Clean company data: HQ country and region, standard industry, employees and revenue values, fractional firms removed, research firmographics, place filters.
+run geo npx tsx scripts/test-geo.mts
 run bench npx tsx scripts/test-bench.mjs
 # The seat scan (scripts/add-seat-scan.mjs) and claiming its seats, on a made-up seed, with its own server.
 run seatscan env SEATSCAN_PORT="$PORT" npx tsx scripts/test-seatscan.mts

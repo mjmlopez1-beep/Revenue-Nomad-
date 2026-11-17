@@ -22,7 +22,7 @@ import type { Entity } from "./tableFields";
  */
 export type Cell =
   | { s: "empty" }
-  | { s: "locked"; ver: number; from?: "records" | "posting" }
+  | { s: "locked"; ver: number; from?: "records" | "posting" | "research" }
   | {
       s: "value";
       v: string;
@@ -30,7 +30,8 @@ export type Cell =
       ver: number;
       iv?: boolean;
       system?: boolean;
-      from?: "records" | "posting";
+      /** Where a fact came from when no member added it: our records, the job posting, or Revenue Nomad research (a company the weekly scan added, filled from our records). */
+      from?: "records" | "posting" | "research";
       /** The viewer spent a credit to see this value (it counts in their Unlocked list). Free values never carry it. */
       paid?: boolean;
       /** Seat holder only: the viewer claimed this seat from the seat scan (claimSeat), so it reads "You claimed this". */
@@ -139,6 +140,14 @@ export interface CompanyRec {
   iconDomain: string | null;
   /** Keyed by company field: website, industry, employees, revenue, hq, linkedin, about. */
   cells: Record<string, Cell>;
+  /**
+   * The country the HQ names ("United States", "United Kingdom"), read from the HQ however it
+   * was typed (lib/geo.ts normalizeHq). Null when there is no HQ or it names no place. Sent for a
+   * hidden company too (the HQ cell keeps only its region there).
+   */
+  country?: string | null;
+  /** The US state ("California") or the region or province ("Ontario", "England") the HQ names, else null. */
+  region?: string | null;
   friendly: Friendly;
   engagements: EngagementRec[];
   /** Company-level people (decision makers). People tied to an engagement are under that engagement. */
@@ -474,6 +483,11 @@ export interface AdminStats {
    */
   seatClaims?: { memberId: string; name: string; company: string; engagementId: string; at: string; standing: boolean }[];
   /** Members who hit zero credits while trying to unlock, and how many times. */
+  /**
+   * Fractional firms, agencies or marketplaces still on the table because a member holds a seat
+   * there (lib/firmRemoval.ts). Every other firm is removed. `companyId` is a public id.
+   */
+  firmReview?: { companyId: string; company: string; reason: string; at: string }[];
   walls: { members: number; hits: number };
   /** Pro waitlist: who asked, who saw the offer, and where they clicked. */
   pro: { interested: number; views: number; byWhere: Record<string, number> };

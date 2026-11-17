@@ -569,8 +569,8 @@ async function main() {
   check("my_account lists the member's seats with what is missing", accSeats.out?.seats_on_file?.some((s) => s.seat_id === own.out?.seat_id && Array.isArray(s.missing)), accSeats.out?.seats_on_file);
 
   /* alerts */
-  const sv = await tool(at, "alerts", { action: "save", function: "Marketing", industry: ["saas", "Software"], revenue: ["$5M-$20M"] });
-  check("alerts save keeps a saved search with a readable name", !sv.isError && /^Fractional Marketing roles at SaaS or Software companies, \$5M–\$20M$/.test(sv.out?.saved_search?.name ?? "") && /Email isn't set up/.test(sv.out.delivery), sv.out ?? sv.text);
+  const sv = await tool(at, "alerts", { action: "save", function: "Marketing", industry: ["saas", "fintech"], revenue: ["$5M-$20M"] });
+  check("alerts save keeps a saved search with a readable name", !sv.isError && /^Fractional Marketing roles at SaaS or Fintech companies, \$5M–\$20M$/.test(sv.out?.saved_search?.name ?? "") && /Email isn't set up/.test(sv.out.delivery), sv.out ?? sv.text);
   const sv2 = await tool(at, "alerts", { action: "save", name: "CMO roles", function: "Marketing" });
   check("a saved search counts the open roles that match now", sv2.out?.saved_search?.open_now >= 1 && sv2.out.open_now.length >= 1, sv2.out?.saved_search);
   const ls = await tool(at, "alerts", { action: "list" });

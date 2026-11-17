@@ -824,6 +824,26 @@ section("gtm", async () => {
   const bad = await G.act({ type: "fill", entity: "company", id: v.companies.find((c) => !c.hidden && c.cells.dealSize?.s === "empty" && c.id !== co.id).id, field: "dealSize", value: "$20K" });
   check("a deal size outside the list is refused", bad.status === 400, bad.json);
   check("revenue uses the standard 'Under $1M' label", !JSON.stringify(v.companies.map((c) => c.cells.revenue)).includes("< $1M"));
+  {
+    // Every industry, employee count and revenue band in the view is one of Revenue Nomad's standard values.
+    const { execFileSync } = await import("node:child_process");
+    const read = 'import("./lib/tableFields.ts").then((m) => console.log(JSON.stringify({ RN_INDUSTRIES: m.RN_INDUSTRIES, RN_EMPLOYEES: m.RN_EMPLOYEES, RN_REVENUE: m.RN_REVENUE })))';
+    const { RN_INDUSTRIES, RN_EMPLOYEES, RN_REVENUE } = JSON.parse(execFileSync(process.execPath, ["--import", "tsx", "-e", read], { encoding: "utf8" }));
+    const lists = RN_INDUSTRIES ? { industry: RN_INDUSTRIES, employees: RN_EMPLOYEES, revenue: RN_REVENUE } : null;
+    const off = [];
+    if (lists)
+      for (const c of v.companies) {
+        for (const [f, list] of Object.entries(lists)) if (c.cells[f]?.s === "value" && !list.includes(c.cells[f].v)) off.push(`company ${f} ${c.cells[f].v}`);
+        for (const e of c.engagements) for (const f of ["employees", "revenue"]) if (e.cells[f]?.s === "value" && !lists[f].includes(e.cells[f].v)) off.push(`seat ${f} ${e.cells[f].v}`);
+      }
+    check("every company and seat industry, employee count and revenue in the view is on its standard list", !!lists && off.length === 0, off.slice(0, 10));
+    check("RN_INDUSTRIES is Revenue Nomad's 110 industries", RN_INDUSTRIES?.length === 110 && RN_INDUSTRIES.includes("SaaS") && RN_INDUSTRIES.includes("IT Services") && !RN_INDUSTRIES.includes("Software"));
+    const withHq = v.companies.filter((c) => !c.hidden && c.cells.hq?.s === "value");
+    check("companies carry country and region from their HQ", withHq.length > 0 && withHq.filter((c) => c.country).length / withHq.length > 0.95 && v.companies.every((c) => "country" in c && "region" in c), withHq.length);
+    const us = withHq.filter((c) => c.country === "United States");
+    check("HQs typed as CA, California and United States all read as the United States", us.some((c) => /, CA$/.test(c.cells.hq.v)) && us.some((c) => /California$/.test(c.cells.hq.v)) && us.length > withHq.length / 2);
+    check("the view has no firm flag (firms are removed, not tagged)", v.companies.every((c) => !("firm" in c)));
+  }
   const host = v.companies.filter((c) => !c.hidden && c.id !== co.id)[3];
   const add = await G.act({ type: "add", company: host.name, newEngagement: true, operatorMemberId: "me", engagementFields: { operator: G.name, function: "Sales", reason: "Build the first sales motion", sourced: "Investor intro", pricing: "Monthly retainer" } });
   const e = (await G.view()).companies.find((c) => c.id === host.id).engagements.find((x) => x.id === add.json?.id);

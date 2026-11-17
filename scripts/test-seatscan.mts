@@ -113,10 +113,10 @@ check("an existing company matched by website keeps its own values", nw?.fields.
 check("an existing company gets only what it lacked", nw?.fields.linkedin === "linkedin.com/company/northwind-fixture" && nw?.fields.revenue === "$5M–$20M", nw?.fields);
 check("the Northwind seat is at Northwind", fnOf("fx-aaa111") && scanSeats.find((e: { id: string }) => e.id === "e_ss_fxaaa111")?.companyId === "c_northwindlabs");
 const bf = co("Bluefin Analytics");
-check("a new company: website host, LinkedIn, industry, employees and revenue mapped", bf?.fields.website === "bluefin.example.com" && bf?.fields.linkedin === "linkedin.com/company/bluefin-fixture" && bf?.fields.industry === "Software" && bf?.fields.employees === "11–50" && bf?.fields.revenue === "$1M–$5M", bf?.fields);
+check("a new company: website host, LinkedIn, industry (Software Development at an analytics company is Data & Analytics), employees and revenue mapped", bf?.fields.website === "bluefin.example.com" && bf?.fields.linkedin === "linkedin.com/company/bluefin-fixture" && bf?.fields.industry === "Data & Analytics" && bf?.fields.employees === "11–50" && bf?.fields.revenue === "$1M–$5M", bf?.fields);
 check("two seats at one company (matched by name, Inc. aside)", scanSeats.filter((e: { companyId: string }) => e.companyId === bf?.id).length === 2);
 check("employees from a range, revenue en dash", co("Corvid Freight")?.fields.employees === "51–200" && co("Corvid Freight")?.fields.revenue === "$20M–$50M" && co("Dunmore Robotics")?.fields.employees === "1,001+");
-check("an industry no rule is sure of is left empty", !co("Dunmore Robotics")?.fields.industry && co("Corvid Freight")?.fields.industry === "Transportation & Logistics");
+check("an industry no rule is sure of is left empty", !co("Dunmore Robotics")?.fields.industry && co("Corvid Freight")?.fields.industry === "Freight & Trucking");
 const second = runScript();
 check("a second run adds nothing and changes nothing", line(second.stdout, /seats added: (\d+)/) === "0" && line(second.stdout, /updated: (\d+)/) === "0" && line(second.stdout, /companies created: (\d+)/) === "0", second.stdout);
 check("a second run leaves the seed as it was (apart from nothing)", JSON.stringify(JSON.parse(readFileSync(seedPath, "utf8")).engagements) === JSON.stringify(s1.engagements));

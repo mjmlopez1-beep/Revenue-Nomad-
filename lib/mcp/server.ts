@@ -12,6 +12,7 @@ import { BUSY_MESSAGE, DOWN_MESSAGE, isBusy, isDown } from "../apiGuard";
 import { limited } from "../rateLimit";
 import { touch } from "../table";
 import { BUSINESS_MODELS, ENGAGEMENT_TYPES, FUNCTIONS, HIRE_REASONS, PRICING_MODELS, RELATIONSHIPS, RN_DEAL_SIZES, RN_EMPLOYEES, RN_INDUSTRIES, RN_MOTIONS, RN_REVENUE, RN_SALES_CYCLES, SOURCED_VIA, STATUSES } from "../tableFields";
+import { COUNTRIES_FIRST } from "../geo";
 import * as T from "./tools";
 
 export const PER_MINUTE = 60;
@@ -81,7 +82,9 @@ export function makeServer(ctx: T.Ctx): McpServer {
         industry: many("Industries", RN_INDUSTRIES).optional(),
         employees: many("Employee counts", RN_EMPLOYEES).optional(),
         revenue: many("Yearly revenue bands", RN_REVENUE).optional(),
-        hq: z.string().optional().describe('A place: "Texas", "Austin, TX", "United Kingdom".'),
+        hq: z.string().optional().describe('A place: "Texas", "Austin, TX", "United Kingdom". A country or a state alone matches every HQ in it, however it was typed.'),
+        country: z.string().optional().describe(`A country: ${list(COUNTRIES_FIRST.slice(0, 12))} and more. "US", "USA" and "UK" work too.`),
+        region: z.string().optional().describe('A US state or a region or province: "California", "TX", "Ontario", "England".'),
         business_model: z.string().optional().describe(list(BUSINESS_MODELS)),
         sales_motion: z.string().optional().describe(list(RN_MOTIONS)),
         deal_size: z.string().optional().describe(list(RN_DEAL_SIZES)),

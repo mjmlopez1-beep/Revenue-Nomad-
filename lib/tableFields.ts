@@ -12,21 +12,165 @@
  * posting, and people's names and contact details. Adding a missing fact earns 1 credit (max
  * EARN_CAP per rolling 24 hours); unlocking a locked fact someone else added costs 1.
  */
+import { STANDARD_FIELDS, toStandard } from "./industryMap";
+
 export type Entity = "company" | "engagement" | "contact";
 export type FieldKind = "text" | "url" | "email" | "phone" | "month" | "monthOrOngoing" | "number" | "choice";
 
-/** Revenue Nomad standard industry tags (the Talent Signup form's list). */
+/**
+ * Revenue Nomad's standard industry list (the platform's list, its 110 active industries in its
+ * own order). Every industry value on Trading Post is one of these: lib/industryMap.ts maps
+ * anything else (an older tag, a LinkedIn, Clay or Crunchbase industry) onto it, or leaves it
+ * empty. RN_INDUSTRY_SLUGS keeps the platform's slug for each, for a sync with the platform.
+ */
 export const RN_INDUSTRIES = [
-  "Agriculture", "Arts", "Construction", "Consumer Goods", "Corporate Services", "Design", "Education",
-  "Energy & Mining", "Entertainment", "Finance", "Financial Services", "Hardware & Networking", "Health Care",
-  "Legal", "Manufacturing", "Media & Communications", "Nonprofit", "Public Administration", "Public Safety",
-  "Real Estate", "Recreation & Travel", "Retail", "SaaS", "Software", "Software & IT Services",
-  "Transportation & Logistics", "Web Development Service", "Wellness & Fitness",
+  "SaaS", "Education", "Fintech", "Health Care", "E-Commerce", "Marketplace", "Deep Tech / AI", "Media & Content", "Professional Services",
+  "Hardware / IoT", "Enterprise Software", "Developer Tools", "Cybersecurity", "EdTech", "Climate / Clean Tech",
+  "Healthcare Providers & Health Systems", "Insurance & Health Plans", "Pharma & Biotech", "Medical Devices & Diagnostics",
+  "Veterinary & Animal Health", "Banking & Credit Unions", "Wealth Management & Advisory", "Private Equity & Venture Capital", "Mortgage & Lending",
+  "Accounting & Tax", "Payments & Fintech Infrastructure", "Restaurants", "Catering & Institutional Food Service", "Food & Beverage CPG",
+  "Food Distribution & Supply", "Hotels & Resorts", "Vacation Rentals & Short-Term Rental", "Travel & Tourism", "Theme Parks & Attractions",
+  "Sports, Events & Live Entertainment", "Gaming & Casinos", "SMB Software", "Data & Analytics", "Telecommunications & Connectivity", "IT Services",
+  "Marketing Teams & CMOs", "Sales Organizations & CROs", "Customer Success & Support", "Advertising & Media Agencies", "Commercial Real Estate",
+  "Residential Real Estate", "Property Management", "Self-Storage", "General Contractors & Builders", "Specialty Trades & Subcontractors",
+  "Home Services", "Architecture, Engineering & Design", "Aerospace & Defense", "Precision & Contract Manufacturing", "Automotive",
+  "Industrial Manufacturing", "Electronics & Semiconductor", "Industrial Automation & IoT", "Packaging", "Industrial Distribution",
+  "Building Materials & Supply", "General & Specialty Wholesale", "E-Commerce & D2C", "Brick & Mortar Retail", "Consumer Goods & CPG (Non-Food)",
+  "Luxury & Premium Brands", "Pet Industry", "Cannabis & Hemp", "K-12 Schools & Districts", "Higher Education", "Corporate Learning & Training",
+  "Childcare & Early Education", "Oil & Gas", "Utilities (Electric, Gas, Water)", "Renewable Energy & Cleantech", "Environmental Services",
+  "Freight & Trucking", "Warehousing & Fulfillment", "Procurement & Supply Chain Leaders", "Maritime & Aviation Logistics",
+  "Airlines & Aviation Services", "Federal Government", "State & Local Government", "Government Contractors", "Nonprofit & Associations",
+  "Religious & Faith-Based", "Digital Media & Publishing", "Gaming & Interactive Entertainment", "Creator Economy & Social",
+  "Research, Data & Information Services", "Law Firms & Legal Departments", "Consulting & Advisory", "Staffing & Recruiting",
+  "Cleaning, Security & Facilities Services", "Auto Dealerships", "Auto Repair & Aftermarket", "Fleet & Vehicle Management",
+  "Salons, Spas & Beauty Services", "Fitness & Wellness", "Personal Services", "Franchise Systems & Multi-Unit Operators",
+  "Senior Living & Assisted Living", "Home Care & Aging Services", "Farming & Agribusiness", "AgTech & Food Innovation",
+  "Funeral Homes & Cemeteries", "Print, Signage & Promotional Products", "Data Centers & Colocation", "Coworking & Flexible Workspace",
+  "Equipment Rental & Leasing",
 ];
+export const RN_INDUSTRY_SLUGS: Record<string, string> = {
+  "SaaS": "saas",
+  "Education": "education",
+  "Fintech": "fintech",
+  "Health Care": "healthcare",
+  "E-Commerce": "ecommerce",
+  "Marketplace": "marketplace",
+  "Deep Tech / AI": "deeptech",
+  "Media & Content": "media",
+  "Professional Services": "professional_svc",
+  "Hardware / IoT": "hardware",
+  "Enterprise Software": "enterprise_sw",
+  "Developer Tools": "developer_tools",
+  "Cybersecurity": "cybersecurity",
+  "EdTech": "edtech",
+  "Climate / Clean Tech": "climate",
+  "Healthcare Providers & Health Systems": "healthcare_providers_and_health_systems",
+  "Insurance & Health Plans": "insurance_and_health_plans",
+  "Pharma & Biotech": "pharma_and_biotech",
+  "Medical Devices & Diagnostics": "medical_devices_and_diagnostics",
+  "Veterinary & Animal Health": "veterinary_and_animal_health",
+  "Banking & Credit Unions": "banking_and_credit_unions",
+  "Wealth Management & Advisory": "wealth_management_and_advisory",
+  "Private Equity & Venture Capital": "private_equity_and_venture_capital",
+  "Mortgage & Lending": "mortgage_and_lending",
+  "Accounting & Tax": "accounting_and_tax",
+  "Payments & Fintech Infrastructure": "payments_and_fintech_infrastructure",
+  "Restaurants": "restaurants_qsr_fast_casual_full_service",
+  "Catering & Institutional Food Service": "catering_and_institutional_food_service",
+  "Food & Beverage CPG": "food_and_beverage_cpg",
+  "Food Distribution & Supply": "food_distribution_and_supply",
+  "Hotels & Resorts": "hotels_and_resorts",
+  "Vacation Rentals & Short-Term Rental": "vacation_rentals_and_short_term_rental",
+  "Travel & Tourism": "travel_and_tourism",
+  "Theme Parks & Attractions": "theme_parks_and_attractions",
+  "Sports, Events & Live Entertainment": "sports_events_and_live_entertainment",
+  "Gaming & Casinos": "gaming_and_casinos",
+  "SMB Software": "smb_software",
+  "Data & Analytics": "data_and_analytics",
+  "Telecommunications & Connectivity": "telecommunications_and_connectivity",
+  "IT Services": "it_services_and_systems_integrators",
+  "Marketing Teams & CMOs": "marketing_teams_and_cmos",
+  "Sales Organizations & CROs": "sales_organizations_and_cros",
+  "Customer Success & Support": "customer_success_and_support",
+  "Advertising & Media Agencies": "advertising_and_media_agencies",
+  "Commercial Real Estate": "commercial_real_estate",
+  "Residential Real Estate": "residential_real_estate",
+  "Property Management": "property_management",
+  "Self-Storage": "self_storage",
+  "General Contractors & Builders": "general_contractors_and_builders",
+  "Specialty Trades & Subcontractors": "specialty_trades_and_subcontractors",
+  "Home Services": "home_services",
+  "Architecture, Engineering & Design": "architecture_engineering_and_design",
+  "Aerospace & Defense": "aerospace_and_defense",
+  "Precision & Contract Manufacturing": "precision_and_contract_manufacturing",
+  "Automotive": "automotive",
+  "Industrial Manufacturing": "industrial_manufacturing",
+  "Electronics & Semiconductor": "electronics_and_semiconductor",
+  "Industrial Automation & IoT": "industrial_automation_and_iot",
+  "Packaging": "packaging",
+  "Industrial Distribution": "industrial_distribution",
+  "Building Materials & Supply": "building_materials_and_supply",
+  "General & Specialty Wholesale": "general_and_specialty_wholesale",
+  "E-Commerce & D2C": "e_commerce_and_d2c",
+  "Brick & Mortar Retail": "brick_and_mortar_retail",
+  "Consumer Goods & CPG (Non-Food)": "consumer_goods_and_cpg_non_food",
+  "Luxury & Premium Brands": "luxury_and_premium_brands",
+  "Pet Industry": "pet_industry",
+  "Cannabis & Hemp": "cannabis_and_hemp",
+  "K-12 Schools & Districts": "k_12_schools_and_districts",
+  "Higher Education": "higher_education",
+  "Corporate Learning & Training": "corporate_learning_and_training",
+  "Childcare & Early Education": "childcare_and_early_education",
+  "Oil & Gas": "oil_and_gas",
+  "Utilities (Electric, Gas, Water)": "utilities_electric_gas_water",
+  "Renewable Energy & Cleantech": "renewable_energy_and_cleantech",
+  "Environmental Services": "environmental_services",
+  "Freight & Trucking": "freight_and_trucking",
+  "Warehousing & Fulfillment": "warehousing_and_fulfillment",
+  "Procurement & Supply Chain Leaders": "procurement_and_supply_chain_leaders",
+  "Maritime & Aviation Logistics": "maritime_and_aviation_logistics",
+  "Airlines & Aviation Services": "airlines_and_aviation_services",
+  "Federal Government": "federal_government",
+  "State & Local Government": "state_and_local_government",
+  "Government Contractors": "government_contractors",
+  "Nonprofit & Associations": "nonprofit_and_associations",
+  "Religious & Faith-Based": "religious_and_faith_based",
+  "Digital Media & Publishing": "digital_media_and_publishing",
+  "Gaming & Interactive Entertainment": "gaming_and_interactive_entertainment",
+  "Creator Economy & Social": "creator_economy_and_social",
+  "Research, Data & Information Services": "research_data_and_information_services",
+  "Law Firms & Legal Departments": "law_firms_and_legal_departments",
+  "Consulting & Advisory": "consulting_and_advisory",
+  "Staffing & Recruiting": "staffing_and_recruiting",
+  "Cleaning, Security & Facilities Services": "cleaning_security_and_facilities_services",
+  "Auto Dealerships": "auto_dealerships",
+  "Auto Repair & Aftermarket": "auto_repair_and_aftermarket",
+  "Fleet & Vehicle Management": "fleet_and_vehicle_management",
+  "Salons, Spas & Beauty Services": "salons_spas_and_beauty_services",
+  "Fitness & Wellness": "fitness_and_wellness",
+  "Personal Services": "personal_services",
+  "Franchise Systems & Multi-Unit Operators": "franchise_systems_and_multi_unit_operators",
+  "Senior Living & Assisted Living": "senior_living_and_assisted_living",
+  "Home Care & Aging Services": "home_care_and_aging_services",
+  "Farming & Agribusiness": "farming_and_agribusiness",
+  "AgTech & Food Innovation": "agtech_and_food_innovation",
+  "Funeral Homes & Cemeteries": "funeral_homes_and_cemeteries",
+  "Print, Signage & Promotional Products": "print_signage_and_promotional_products",
+  "Data Centers & Colocation": "data_centers_and_colocation",
+  "Coworking & Flexible Workspace": "coworking_and_flexible_workspace",
+  "Equipment Rental & Leasing": "equipment_rental_and_leasing",
+};
 /** Revenue Nomad standard revenue stage buckets. */
 export const RN_REVENUE = ["Pre-revenue", "Under $1M", "$1M–$5M", "$5M–$20M", "$20M–$50M", "$50M+"];
-/** Values stored under an older label, mapped to the current one when data loads. */
+/** Values stored under an older label, mapped to the current one when data loads. (Any other value of a standard list is mapped by lib/industryMap.ts.) */
 export const LEGACY_VALUES: Record<string, Record<string, string>> = { revenue: { "< $1M": "Under $1M" } };
+/**
+ * A value of industry, employees or revenue as its standard value ("< $1M" -> "Under $1M",
+ * "51-200" -> "51–200", "IT Services and IT Consulting" -> "Software & IT Services"). A value
+ * nothing maps comes back as it was (callers that need a standard value use toStandard). Any
+ * other field: as it was.
+ */
+export const currentValue = (field: string, v: string): string => (STANDARD_FIELDS.has(field) ? toStandard(field, v) ?? v : v);
 
 /* Revenue Nomad's standard pick lists (same as the platform's buyer profile), so the data lines up. */
 export const RN_DEAL_SIZES = ["Under $15K", "$15K–$50K", "$50K–$150K", "$150K+"];
@@ -396,14 +540,22 @@ export function cleanValue(f: FieldDef, raw: unknown): { value?: string; error?:
     }
     case "number":
       return /^\d{1,2}$/.test(v) && Number(v) >= 1 && Number(v) <= 80 ? { value: v } : { error: "Use a whole number from 1 to 80." };
-    case "choice":
-      return f.options?.includes(v) ? { value: v } : { error: "Pick one from the list." };
+    case "choice": {
+      // Industry, employees and revenue take the closest standard value ("< $1M", "51-200", "Software Development").
+      const now = STANDARD_FIELDS.has(f.key) ? toStandard(f.key, v) ?? v : v;
+      return f.options?.includes(now) ? { value: now } : { error: "Pick one from the list." };
+    }
     default:
       if (f.key === "rate" && !(/\d/.test(v) && RATE_RE.test(v))) return { error: "Use a rate like $8k/mo or $150/hr." };
       if (f.key === "operator" && !PERSON_NAME_RE.test(v)) return { error: "Use their first and last name, like Jane Smith." };
       // Two letters is a title ("GM", "AE", "VP"), and so is one Han, Kana or Hangul character (営業).
       if (f.key === "role" && (v.match(/\p{L}/gu) ?? []).length < 2 && !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(v))
         return { error: "Use the seat's title, like Fractional VP Sales." };
+      // An HQ keeps the way it was typed, without a space before a comma ("Venice , CA" is "Venice, CA").
+      if (f.key === "hq") {
+        const hq = v.replace(/\s+,/g, ",").replace(/,(?=\S)/g, ", ");
+        return hq.length >= 2 ? { value: hq } : { error: "That's too short. Use at least 2 characters." };
+      }
       return v.length >= 2 ? { value: v } : { error: "That's too short. Use at least 2 characters." };
   }
 }

@@ -33,7 +33,10 @@ if (!process.env.RN_SEAT_SCAN_TSX) {
   process.exit(r.status ?? 1);
 }
 const { companyKey, textKey } = await import("../lib/scan/clean.ts");
-const { siteKey, FUNCTIONS, RN_INDUSTRIES, RN_REVENUE } = await import("../lib/tableFields.ts");
+const { siteKey, FUNCTIONS } = await import("../lib/tableFields.ts");
+const { employeeBand, industryOf, revenueBand } = await import("../lib/industryMap.ts");
+// Fractional firms, agencies and marketplaces are not clients (lib/firms.ts): never added, and the cleanup drops any the seed has.
+const { companyFirm, cleanSeed } = await import("../lib/firmRemoval.ts");
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -77,7 +80,7 @@ function parseCsv(text) {
   return body.map((r) => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? "").trim()])));
 }
 
-/* ---------- mappings (the same as scripts/build-intel-seed.py) ---------- */
+/* ---------- mappings ---------- */
 
 /** The file's function labels, as Trading Post's functions. */
 const FUNCTION_MAP = {
@@ -86,58 +89,10 @@ const FUNCTION_MAP = {
   "Sales Enablement": "Enablement", Enablement: "Enablement", Technology: "Technology", Finance: "Finance", Operations: "Operations",
   "People/HR": "People", People: "People", Product: "Product", Executive: "Executive", Legal: "Legal", Other: "Other",
 };
-const INDUSTRY_RULES = [
-  [/health, wellness|fitness|wellness/, "Wellness & Fitness"],
-  [/hospital|health ?care|medical|pharma|biotech|life science|mental health|dental|veterinary/, "Health Care"],
-  [/bank|financial|insurance|capital market|investment|venture capital|credit|fintech|funds/, "Financial Services"],
-  [/accounting/, "Finance"],
-  [/computer hardware|networking|semiconductor|telecommunications equipment|electronics manufacturing|wireless|appliances/, "Hardware & Networking"],
-  [/software|it services|information technology|technology, information|internet|computer and network security|data infrastructure|it system/, "Software & IT Services"],
-  [/retail|e-commerce|online and mail order/, "Retail"],
-  [/consumer|food|beverage|cosmetic|personal care|apparel|luxury|furniture|sporting goods|tobacco|wine/, "Consumer Goods"],
-  [/construction|building|civil engineering|contractors/, "Construction"],
-  [/real estate|leasing/, "Real Estate"],
-  [/manufactur|machinery|automotive|aviation|aerospace|defense|chemical|plastics|packaging|industrial|mechanical|electrical equipment/, "Manufacturing"],
-  [/transport|logistics|freight|shipping|truck|warehous|maritime|airlines|railroad|delivery/, "Transportation & Logistics"],
-  [/education|e-learning|higher ed|school|training/, "Education"],
-  [/advertising|marketing|media|publishing|broadcast|newspaper|public relations|telecommunications|online audio|writing|journalism/, "Media & Communications"],
-  [/entertainment|games|gaming|music|movies|film|animation|sports|spectator/, "Entertainment"],
-  [/non-?profit|civic|philanthrop|fundraising|religious/, "Nonprofit"],
-  [/law|legal/, "Legal"],
-  [/oil|gas|mining|energy|utilities|renewable|solar|electric power/, "Energy & Mining"],
-  [/hospitality|travel|leisure|hotel|recreation|restaurants|events/, "Recreation & Travel"],
-  [/staffing|recruiting|human resources|outsourc|business consulting|consulting|executive search|professional services|management consulting|facilities/, "Corporate Services"],
-  [/design|architecture/, "Design"],
-  [/farming|agricultur|ranching|fisheries/, "Agriculture"],
-  [/government|public policy|legislative|armed forces/, "Public Administration"],
-  [/public safety|law enforcement|security and investigations/, "Public Safety"],
-  [/arts|museums|fine art|performing/, "Arts"],
-];
-/** A LinkedIn industry as one of RN_INDUSTRIES, or null when no rule is sure. "Software Development" is Software (there is no description to tell SaaS apart). */
-function rnIndustry(raw) {
-  const s = String(raw ?? "").toLowerCase();
-  if (!s) return null;
-  for (const [re, tag] of INDUSTRY_RULES) {
-    if (!re.test(s)) continue;
-    const out = tag === "Software & IT Services" && s.includes("software development") ? "Software" : tag;
-    return RN_INDUSTRIES.includes(out) ? out : null;
-  }
-  return null;
-}
-const SIZE = { "2-10": "1–10", "11-50": "11–50", "51-200": "51–200", "201-500": "201–500", "501-1000": "501–1,000", "501-1,000": "501–1,000" };
-function rnEmployees(count, range) {
-  const n = Number(String(count ?? "").replace(/,/g, ""));
-  if (Number.isFinite(n) && n > 0)
-    return n <= 10 ? "1–10" : n <= 50 ? "11–50" : n <= 200 ? "51–200" : n <= 500 ? "201–500" : n <= 1000 ? "501–1,000" : "1,001+";
-  const r = String(range ?? "").trim();
-  if (SIZE[r]) return SIZE[r];
-  return /^\d/.test(r) && Number(r.split(/[-+]/)[0].replace(/,/g, "")) > 1000 ? "1,001+" : null;
-}
-/** "$1M-$5M" -> "$1M–$5M", only when it is one of RN_REVENUE. */
-function rnRevenue(raw) {
-  const v = String(raw ?? "").trim().replace(/\s*-\s*/g, "–");
-  return RN_REVENUE.includes(v) ? v : null;
-}
+/** A LinkedIn industry, an employee count or range and a revenue band, as Revenue Nomad's standard values (lib/industryMap.ts), or null. */
+const rnIndustry = (raw, company) => industryOf(raw, company);
+const rnEmployees = (count, range) => employeeBand(count) ?? employeeBand(range);
+const rnRevenue = (raw) => revenueBand(raw);
 const host = (u) => {
   const s = String(u ?? "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
   const h = s.split(/[/?#]/)[0].toLowerCase();
@@ -227,6 +182,10 @@ for (const r of rows) {
     drop(why);
     continue;
   }
+  if (companyFirm(company)) {
+    drop("fractional firm, agency or marketplace (lib/firms.ts)");
+    continue;
+  }
   const fn = FUNCTION_MAP[String(r.function ?? "").trim()] ?? FUNCTION_MAP[String(r.role_category ?? "").trim()] ?? null;
   if (fn && !FUNCTIONS.includes(fn)) throw new Error(`function ${fn} is not in FUNCTIONS`);
 
@@ -235,7 +194,7 @@ for (const r of rows) {
   const want = {
     website: site,
     linkedin: /linkedin\.com\//i.test(r.company_linkedin_url ?? "") ? cleanUrl(r.company_linkedin_url) : null,
-    industry: rnIndustry(r.company_industry),
+    industry: rnIndustry(r.company_industry, company),
     employees: rnEmployees(r.company_employee_count, r.company_employee_range),
     revenue: rnRevenue(r.company_rn_revenue_bucket),
   };
@@ -282,6 +241,8 @@ for (const r of rows) {
   } else unchanged++;
 }
 
+// Labels, places, and firms the file only shows as one together (several fractionals at one small company).
+const cleaned = cleanSeed(seed);
 seed.companies.sort((a, b) => (a.fields.name ?? "").toLowerCase().localeCompare((b.fields.name ?? "").toLowerCase()));
 writeFileSync(seedPath, JSON.stringify(seed, null, 1));
 
@@ -293,5 +254,6 @@ console.log(`companies matched: ${matched.size} (${filledOnExisting} empty field
 console.log(`companies created: ${created.size}`);
 console.log(`seats added: ${added}, updated: ${updated}, unchanged: ${unchanged}`);
 console.log(`by function: ${Object.entries(fnCount).sort((a, b) => b[1] - a[1]).map(([f, n]) => `${f} ${n}`).join(", ")}`);
+console.log(`firms the cleanup removed: ${cleaned.removed.companies} companies, ${cleaned.removed.seats} seats (${cleaned.kept.length} kept for admin review)`);
 console.log(`seed now: ${seed.companies.length} companies, ${seed.engagements.length} seats`);
 if (!noSeal && seedPath === "data/intel-seed.json") execFileSync(process.execPath, ["scripts/seal-intel-seed.mjs"], { stdio: "inherit" });

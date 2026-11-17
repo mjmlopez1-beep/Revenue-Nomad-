@@ -15,6 +15,7 @@ import {
   type CoInfo, type FactRef, type Filters,
 } from "@/app/post/model";
 import { ALERT_MAX, alertMatches, cleanCriteria, describeAlert, pickFrom, type RoleFacts, type SavedSearch } from "./alerts";
+import { COUNTRIES_FIRST, inPlace, placeFilter } from "../geo";
 import { forgetView, memberView, type MemberView } from "./view";
 
 export interface Ctx {
@@ -78,6 +79,8 @@ function companySummary(i: CoInfo): ToolOut {
     name: c.name,
     ...(c.hidden ? { hidden: true, hidden_note: "Locked while it has an open role. Unlock the company for 1 credit to see its name, and the posting and posted rate of its open roles come with it." } : {}),
     ...readAll(c.cells, { industry: "industry", employees: "employees", revenue: "revenue", hq: "hq" }),
+    ...(c.country ? { country: c.country } : {}),
+    ...(c.region ? { region: c.region } : {}),
     fit: fitOf(i),
     fit_score: c.friendly.score,
     why: fitReason(i),
@@ -226,6 +229,8 @@ const roleFacts = (i: CoInfo, e: EngagementRec): RoleFacts => ({
   revenue: shown(i.c.cells.revenue),
   hq: shown(i.c.cells.hq),
   pastHires: i.c.friendly.fractional,
+  country: i.c.country ?? null,
+  region: i.c.region ?? null,
 });
 
 const clampLimit = (raw: unknown, def: number, max: number) => Math.max(1, Math.min(max, Math.floor(Number(raw) || def)));
@@ -243,6 +248,10 @@ export interface SearchArgs {
   employees?: string[];
   revenue?: string[];
   hq?: string;
+  /** A country ("United States", "UK", "Canada"): every company whose HQ is there, however the HQ was typed. */
+  country?: string;
+  /** A US state or a region or province ("California", "TX", "Ontario"). */
+  region?: string;
   business_model?: string;
   sales_motion?: string;
   deal_size?: string;
@@ -265,13 +274,31 @@ export async function searchCompanies(ctx: Ctx, a: SearchArgs): Promise<ToolOut>
   if (a.sales_motion) f.motion = [listValue("sales_motion", RN_MOTIONS, a.sales_motion)];
   if (a.deal_size) f.dealSize = [listValue("deal_size", RN_DEAL_SIZES, a.deal_size)];
   if (a.sales_cycle) f.salesCycle = [listValue("sales_cycle", RN_SALES_CYCLES, a.sales_cycle)];
-  if (a.hq?.trim()) f.hq = [a.hq.trim().slice(0, 60)];
+  // A place: a country or a region given as hq ("United States", "Texas") matches by the HQ's country and region, however it was typed.
+  let place: { country: string | null; region: string | null } | null = null;
+  if (a.hq?.trim()) {
+    place = placeFilter(a.hq.trim().slice(0, 60));
+    if (!place) f.hq = [a.hq.trim().slice(0, 60)];
+  }
+  if (a.country !== undefined && a.country !== null && String(a.country).trim()) {
+    const c = placeFilter(String(a.country).slice(0, 60));
+    if (!c?.country || c.region) throw new ToolProblem(`country "${String(a.country).slice(0, 40)}" isn't a country we know. Try one of: ${COUNTRIES_FIRST.slice(0, 12).join(", ")}`);
+    if (place?.country && place.country !== c.country) throw new ToolProblem("hq and country name two different countries. Use one.");
+    place = { country: c.country, region: place?.region ?? null };
+  }
+  if (a.region !== undefined && a.region !== null && String(a.region).trim()) {
+    const r = placeFilter(String(a.region).slice(0, 60));
+    const inCountry = r?.region && (!place?.country || r.country === place.country) ? r : place?.country ? placeFilter(`${String(a.region).slice(0, 60)}, ${place.country}`) : null;
+    if (!inCountry?.region) throw new ToolProblem(`region "${String(a.region).slice(0, 40)}" isn't a state, region or province we know${place?.country ? ` in ${place.country}` : ""}.`);
+    place = { country: inCountry.country, region: inCountry.region };
+  }
   if (a.function) f.fn = [listValue("function", FUNCTIONS, a.function)];
   const hired = a.function_hired ? listValue("function_hired", FUNCTIONS, a.function_hired) : null;
   const notYet = a.no_function_yet ? listValue("no_function_yet", FUNCTIONS, a.no_function_yet) : null;
   const tab = a.hiring_now ? "hiring" : a.following ? "following" : a.unlocked ? "unlocked" : a.repeat_hirer ? "repeat" : "all";
   const q = String(a.query ?? "").slice(0, 200);
   let rows = applyFilters(rowsFor("companies", mv.infos), f, tab, q, me).rows;
+  if (place) rows = rows.filter((r) => inPlace({ country: r.i.c.country ?? null, region: r.i.c.region ?? null }, place!));
   // The tab covers one of these; the others are checked here. fractional_friendly keeps its old meaning (the app no longer has that tab).
   if (a.fractional_friendly) rows = a.hiring_now ? rows.filter((r) => r.i.c.friendly.fractional > 0) : rows.filter((r) => friendlyCo(r.i));
   if (a.repeat_hirer && tab !== "repeat") rows = rows.filter((r) => repeatHirer(r.i));

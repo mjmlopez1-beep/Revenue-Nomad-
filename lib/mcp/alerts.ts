@@ -8,6 +8,8 @@
  * locked value or a hidden company.
  */
 import { FUNCTIONS, RN_EMPLOYEES, RN_INDUSTRIES, RN_REVENUE } from "../tableFields";
+import { toStandard } from "../industryMap";
+import { inPlace, placeFilter } from "../geo";
 
 export interface SavedSearch {
   id: string;
@@ -34,6 +36,9 @@ export interface RoleFacts {
   hq: string | null;
   /** Fractional hires on file at the company (Friendly.fractional). */
   pastHires: number;
+  /** The country and region the HQ names (CompanyRec.country, .region), when known. */
+  country?: string | null;
+  region?: string | null;
 }
 
 /** Saved searches a member can keep. */
@@ -46,7 +51,12 @@ const squash = (v: string) => v.toLowerCase().replace(/[‐-―−-]/g, "-").rep
 export function pickFrom(list: readonly string[], raw: unknown): string | null {
   const want = squash(String(raw ?? ""));
   if (!want) return null;
-  return list.find((x) => squash(x) === want) ?? null;
+  const hit = list.find((x) => squash(x) === want);
+  if (hit) return hit;
+  // Industry, employees and revenue read as their closest standard value ("< $1M", "51-200", "Software Development").
+  const field = list === RN_INDUSTRIES ? "industry" : list === RN_REVENUE ? "revenue" : list === RN_EMPLOYEES ? "employees" : null;
+  const std = field ? toStandard(field, raw) : null;
+  return std && list.includes(std) ? std : null;
 }
 
 const US: Record<string, string> = {
@@ -77,6 +87,9 @@ export function alertMatches(a: SavedSearch, r: RoleFacts): boolean {
   if (a.revenue?.length && !(r.revenue && a.revenue.includes(r.revenue))) return false;
   if (a.fractionalFriendly && r.pastHires < 1) return false;
   if (a.hq) {
+    // A country or a region ("United States", "UK", "Texas") matches every HQ in it, however that HQ was typed.
+    const place = placeFilter(a.hq);
+    if (place && (r.country || r.region)) return inPlace({ country: r.country ?? null, region: r.region ?? null }, place);
     const want = placeWords(a.hq);
     const have = new Set(placeWords(r.hq ?? ""));
     if (!want.length || !want.every((w) => have.has(w))) return false;
